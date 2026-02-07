@@ -1,5 +1,5 @@
 """
-Tests for forge_ai.gui.dialogs module.
+Tests for enigma_engine.gui.dialogs module.
 
 Tests GUI dialog functionality including:
 - Model manager dialog
@@ -25,13 +25,13 @@ class TestModelManagerDialog:
     
     def test_dialog_class_exists(self):
         """Test ModelManagerDialog class exists."""
-        from forge_ai.gui.dialogs.model_manager import ModelManagerDialog
+        from enigma_engine.gui.dialogs.model_manager import ModelManagerDialog
         
         assert ModelManagerDialog is not None
     
     def test_dialog_interface(self):
         """Test dialog has required interface."""
-        from forge_ai.gui.dialogs.model_manager import ModelManagerDialog
+        from enigma_engine.gui.dialogs.model_manager import ModelManagerDialog
         
         # Should have model management methods
         assert hasattr(ModelManagerDialog, 'list_models')
@@ -44,13 +44,13 @@ class TestThemeEditorDialog:
     
     def test_dialog_class_exists(self):
         """Test ThemeEditorDialog class exists."""
-        from forge_ai.gui.dialogs.theme_editor import ThemeEditorDialog
+        from enigma_engine.gui.dialogs.theme_editor import ThemeEditorDialog
         
         assert ThemeEditorDialog is not None
     
     def test_theme_loading(self):
         """Test theme loading functionality."""
-        from forge_ai.gui.dialogs.theme_editor import ThemeEditorDialog
+        from enigma_engine.gui.dialogs.theme_editor import ThemeEditorDialog
         
         # Should have theme methods
         assert hasattr(ThemeEditorDialog, 'load_theme')
@@ -64,7 +64,7 @@ class TestFontSelectorDialog:
         """Test FontSelectorDialog class exists."""
         import importlib
         try:
-            mod = importlib.import_module('forge_ai.gui.dialogs.font_selector')
+            mod = importlib.import_module('enigma_engine.gui.dialogs.font_selector')
             if hasattr(mod, 'FontSelectorDialog'):
                 assert mod.FontSelectorDialog is not None
             else:
@@ -80,7 +80,7 @@ class TestLoadingDialog:
         """Test LoadingDialog class exists."""
         import importlib
         try:
-            mod = importlib.import_module('forge_ai.gui.dialogs.loading')
+            mod = importlib.import_module('enigma_engine.gui.dialogs.loading')
             if hasattr(mod, 'LoadingDialog'):
                 assert mod.LoadingDialog is not None
             else:
@@ -92,7 +92,7 @@ class TestLoadingDialog:
         """Test progress update interface."""
         import importlib
         try:
-            mod = importlib.import_module('forge_ai.gui.dialogs.loading')
+            mod = importlib.import_module('enigma_engine.gui.dialogs.loading')
             if hasattr(mod, 'LoadingDialog'):
                 # Should have progress methods
                 assert hasattr(mod.LoadingDialog, 'set_progress') or True  # May not exist
@@ -109,7 +109,7 @@ class TestCommandPaletteDialog:
         """Test CommandPaletteDialog class exists."""
         import importlib
         try:
-            mod = importlib.import_module('forge_ai.gui.dialogs.command_palette')
+            mod = importlib.import_module('enigma_engine.gui.dialogs.command_palette')
             if hasattr(mod, 'CommandPalette'):
                 assert mod.CommandPalette is not None
             else:
@@ -121,7 +121,7 @@ class TestCommandPaletteDialog:
         """Test command registration."""
         import importlib
         try:
-            mod = importlib.import_module('forge_ai.gui.dialogs.command_palette')
+            mod = importlib.import_module('enigma_engine.gui.dialogs.command_palette')
             if hasattr(mod, 'CommandPalette'):
                 # Just check class exists
                 assert mod.CommandPalette is not None
@@ -136,7 +136,7 @@ class TestAnnotationDialog:
     
     def test_dialog_class_exists(self):
         """Test AnnotationDialog class exists."""
-        from forge_ai.gui.dialogs.annotation_dialog import AnnotationDialog
+        from enigma_engine.gui.dialogs.annotation_dialog import AnnotationDialog
         
         assert AnnotationDialog is not None
 
@@ -146,7 +146,7 @@ class TestExpressionMappingDialog:
     
     def test_dialog_class_exists(self):
         """Test ExpressionMappingDialog class exists."""
-        from forge_ai.gui.dialogs.expression_mapping import ExpressionMappingDialog
+        from enigma_engine.gui.dialogs.expression_mapping import ExpressionMappingDialog
         
         assert ExpressionMappingDialog is not None
 
@@ -157,7 +157,7 @@ class TestDialogInit:
     def test_all_dialogs_importable(self):
         """Test all dialogs can be imported."""
         import importlib
-        from forge_ai.gui.dialogs import (
+        from enigma_engine.gui.dialogs import (
             ModelManagerDialog,
             ThemeEditorDialog,
         )
@@ -168,7 +168,7 @@ class TestDialogInit:
         
         # Optional dialogs - check if they exist
         try:
-            dialogs = importlib.import_module('forge_ai.gui.dialogs')
+            dialogs = importlib.import_module('enigma_engine.gui.dialogs')
             # These may or may not exist
             font_sel = getattr(dialogs, 'FontSelectorDialog', None)
             loading = getattr(dialogs, 'LoadingDialog', None)

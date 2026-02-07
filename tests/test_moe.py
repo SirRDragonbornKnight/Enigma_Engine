@@ -8,7 +8,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from forge_ai.core.moe import (
+from enigma_engine.core.moe import (
     MoEConfig,
     Router,
     RouterType,

@@ -20,7 +20,7 @@ def demo_basic_usage():
         import importlib.util
         spec = importlib.util.spec_from_file_location(
             'hotkey_manager',
-            'forge_ai/core/hotkey_manager.py'
+            'enigma_engine/core/hotkey_manager.py'
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
@@ -70,7 +70,7 @@ def demo_default_hotkeys():
         import importlib.util
         spec = importlib.util.spec_from_file_location(
             'hotkey_manager',
-            'forge_ai/core/hotkey_manager.py'
+            'enigma_engine/core/hotkey_manager.py'
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
@@ -95,7 +95,7 @@ def demo_actions():
         import importlib.util
         spec = importlib.util.spec_from_file_location(
             'hotkey_actions',
-            'forge_ai/core/hotkey_actions.py'
+            'enigma_engine/core/hotkey_actions.py'
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
@@ -151,7 +151,7 @@ def demo_config_integration():
         import importlib.util
         spec = importlib.util.spec_from_file_location(
             'defaults',
-            'forge_ai/config/defaults.py'
+            'enigma_engine/config/defaults.py'
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
@@ -207,8 +207,8 @@ def main():
     print("\n" + "=" * 60)
     print("DEMONSTRATION COMPLETE")
     print("=" * 60)
-    print("\nTo use hotkeys in ForgeAI:")
-    print("  1. Launch ForgeAI GUI: python run.py --gui")
+    print("\nTo use hotkeys in Enigma AI Engine:")
+    print("  1. Launch Enigma AI Engine GUI: python run.py --gui")
     print("  2. Go to Settings tab")
     print("  3. Scroll to Global Hotkeys section")
     print("  4. Enable/disable or rebind hotkeys")

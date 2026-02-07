@@ -18,7 +18,7 @@ def test_learning_engine():
     """Test the learning engine can record feedback."""
     print("Testing Learning Engine...")
     
-    from forge_ai.core.self_improvement import get_learning_engine
+    from enigma_engine.core.self_improvement import get_learning_engine
     
     # Create a test engine
     engine = get_learning_engine("test_model")
@@ -41,7 +41,7 @@ def test_training_scheduler():
     """Test the training scheduler monitors examples."""
     print("\nTesting Training Scheduler...")
     
-    from forge_ai.learning.training_scheduler import get_training_scheduler
+    from enigma_engine.learning.training_scheduler import get_training_scheduler
     
     # Create scheduler
     scheduler = get_training_scheduler("test_model")
@@ -59,7 +59,7 @@ def test_configuration():
     """Test self-improvement configuration is loaded."""
     print("\nTesting Configuration...")
     
-    from forge_ai.config import CONFIG
+    from enigma_engine.config import CONFIG
     
     assert "self_improvement" in CONFIG, "Config should have self_improvement section"
     
@@ -78,8 +78,8 @@ def test_integration():
     """Test the full integration flow."""
     print("\nTesting Integration Flow...")
     
-    from forge_ai.core.self_improvement import get_learning_engine
-    from forge_ai.learning.training_scheduler import get_training_scheduler
+    from enigma_engine.core.self_improvement import get_learning_engine
+    from enigma_engine.learning.training_scheduler import get_training_scheduler
     
     model_name = "integration_test_model"
     

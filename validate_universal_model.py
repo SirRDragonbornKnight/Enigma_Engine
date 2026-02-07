@@ -70,11 +70,11 @@ def check_dependencies():
         issues.append("Install PyTorch: pip install torch")
     
     try:
-        from forge_ai.core.model import Forge, ForgeConfig, create_model
-        print_success("ForgeAI core modules available")
+        from enigma_engine.core.model import Forge, ForgeConfig, create_model
+        print_success("Enigma AI Engine core modules available")
     except ImportError as e:
-        print_error(f"ForgeAI import failed: {e}")
-        issues.append("Check forge_ai installation")
+        print_error(f"Enigma AI Engine import failed: {e}")
+        issues.append("Check enigma_engine installation")
     
     # Optional dependencies
     optional_deps = {
@@ -99,7 +99,7 @@ def test_backward_compatibility():
     print_header("2. Testing Backward Compatibility")
     
     try:
-        from forge_ai.core.model import create_model
+        from enigma_engine.core.model import create_model
         import torch
         
         # Test 1: Basic model creation
@@ -126,7 +126,7 @@ def test_rope_scaling():
     print_header("3. Testing RoPE Scaling (Extended Context)")
     
     try:
-        from forge_ai.core.model import ForgeConfig, Forge
+        from enigma_engine.core.model import ForgeConfig, Forge
         import torch
         
         # Test linear scaling
@@ -186,7 +186,7 @@ def test_multimodal():
     print_header("4. Testing Multi-Modal Integration")
     
     try:
-        from forge_ai.core.model import ForgeConfig, Forge
+        from enigma_engine.core.model import ForgeConfig, Forge
         import torch
         
         # Test vision projection
@@ -243,7 +243,7 @@ def test_speculative_decoding():
     print_header("5. Testing Speculative Decoding")
     
     try:
-        from forge_ai.core.model import create_model
+        from enigma_engine.core.model import create_model
         
         # Create draft and main models
         draft_model = create_model('nano')
@@ -271,7 +271,7 @@ def test_universal_loading():
     print_header("6. Testing Universal Loading Methods")
     
     try:
-        from forge_ai.core.model import Forge
+        from enigma_engine.core.model import Forge
         
         # Check methods exist
         methods = [
@@ -302,7 +302,7 @@ def test_lora_support():
     print_header("7. Testing LoRA Adapter Support")
     
     try:
-        from forge_ai.core.model import create_model
+        from enigma_engine.core.model import create_model
         
         model = create_model('small')
         
@@ -330,7 +330,7 @@ def test_config_features():
     print_header("8. Testing Configuration Features")
     
     try:
-        from forge_ai.core.model import ForgeConfig
+        from enigma_engine.core.model import ForgeConfig
         
         # Test MoE config
         config = ForgeConfig(
@@ -413,9 +413,9 @@ def print_troubleshooting_guide():
     print_info("For CPU: pip install torch --index-url https://download.pytorch.org/whl/cpu")
     print_info("For CUDA: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118\n")
     
-    print(f"{BOLD}2. Import Error: No module named 'forge_ai'{RESET}")
+    print(f"{BOLD}2. Import Error: No module named 'enigma_engine'{RESET}")
     print_info("Solution: Make sure you're running from the project root directory")
-    print_info("Or: export PYTHONPATH=/path/to/Forge_AI:$PYTHONPATH\n")
+    print_info("Or: export PYTHONPATH=/path/to/enigma_engine:$PYTHONPATH\n")
     
     print(f"{BOLD}3. HuggingFace Model Loading Fails{RESET}")
     print_info("Solution: pip install transformers")
@@ -430,7 +430,7 @@ def print_troubleshooting_guide():
     print_info("Usage: model = Forge.from_gguf('model.gguf')\n")
     
     print(f"{BOLD}6. LoRA Adapters Don't Load{RESET}")
-    print_info("Solution: Ensure lora_utils module exists in forge_ai/core/")
+    print_info("Solution: Ensure lora_utils module exists in enigma_engine/core/")
     print_info("Or: Implement lora_utils.py with load_lora_weights() function\n")
     
     print(f"{BOLD}7. Out of Memory Errors{RESET}")
@@ -459,12 +459,12 @@ def print_quick_start():
     print_header("Quick Start Examples")
     
     print(f"{BOLD}Basic Usage (Backward Compatible):{RESET}\n")
-    print_info("from forge_ai.core.model import create_model")
+    print_info("from enigma_engine.core.model import create_model")
     print_info("model = create_model('small')")
     print_info("output = model.generate(input_ids)\n")
     
     print(f"{BOLD}Extended Context with RoPE Scaling:{RESET}\n")
-    print_info("from forge_ai.core.model import ForgeConfig, Forge")
+    print_info("from enigma_engine.core.model import ForgeConfig, Forge")
     print_info("config = ForgeConfig(")
     print_info("    vocab_size=8000, dim=512, n_layers=8,")
     print_info("    max_seq_len=8192,  # Extended context")

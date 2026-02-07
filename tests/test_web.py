@@ -1,5 +1,5 @@
 """
-Tests for forge_ai.web module.
+Tests for enigma_engine.web module.
 
 Tests web server functionality including:
 - FastAPI server setup
@@ -21,13 +21,13 @@ class TestWebServerCreation:
         """Test that server requires FastAPI."""
         # Mock FastAPI not available
         with patch.dict('sys.modules', {'fastapi': None}):
-            from forge_ai.web.server import FASTAPI_AVAILABLE
+            from enigma_engine.web.server import FASTAPI_AVAILABLE
             # Note: FASTAPI_AVAILABLE is set at import time
     
     @pytest.mark.skipif(True, reason="Requires FastAPI")
     def test_server_creation(self):
         """Test creating web server."""
-        from forge_ai.web.server import ForgeWebServer
+        from enigma_engine.web.server import ForgeWebServer
         
         server = ForgeWebServer(host="127.0.0.1", port=8080)
         assert server is not None
@@ -36,7 +36,7 @@ class TestWebServerCreation:
     @pytest.mark.skipif(True, reason="Requires FastAPI")
     def test_server_cors_setup(self):
         """Test CORS middleware is configured."""
-        from forge_ai.web.server import ForgeWebServer
+        from enigma_engine.web.server import ForgeWebServer
         
         server = ForgeWebServer()
         # CORS should be configured
@@ -48,14 +48,14 @@ class TestWebAuth:
     
     def test_auth_creation(self):
         """Test creating auth manager."""
-        from forge_ai.web.auth import WebAuth
+        from enigma_engine.web.auth import WebAuth
         
         auth = WebAuth()
         assert auth is not None
     
     def test_token_generation(self):
         """Test generating auth tokens."""
-        from forge_ai.web.auth import WebAuth
+        from enigma_engine.web.auth import WebAuth
         
         auth = WebAuth()
         token = auth.generate_token()
@@ -65,7 +65,7 @@ class TestWebAuth:
     
     def test_token_verification(self):
         """Test verifying auth tokens."""
-        from forge_ai.web.auth import WebAuth
+        from enigma_engine.web.auth import WebAuth
         
         auth = WebAuth()
         token = auth.generate_token()
@@ -78,7 +78,7 @@ class TestWebAuth:
     
     def test_token_expiration(self):
         """Test token expiration."""
-        from forge_ai.web.auth import WebAuth
+        from enigma_engine.web.auth import WebAuth
         import time
         
         # Use token_lifetime_hours (actual param name), set to very short
@@ -95,7 +95,7 @@ class TestWebDiscovery:
     
     def test_get_local_ip(self):
         """Test getting local IP address."""
-        from forge_ai.web.discovery import get_local_ip
+        from enigma_engine.web.discovery import get_local_ip
         
         ip = get_local_ip()
         assert ip is not None
@@ -104,7 +104,7 @@ class TestWebDiscovery:
     
     def test_discovery_creation(self):
         """Test creating discovery service."""
-        from forge_ai.web.discovery import LocalDiscovery
+        from enigma_engine.web.discovery import LocalDiscovery
         
         discovery = LocalDiscovery()
         assert discovery is not None
@@ -116,9 +116,9 @@ class TestWebEndpoints:
     @pytest.fixture
     def mock_app(self):
         """Create mock Flask/FastAPI test client."""
-        from forge_ai.web.server import ForgeWebServer
+        from enigma_engine.web.server import ForgeWebServer
         
-        with patch('forge_ai.web.server.FASTAPI_AVAILABLE', True):
+        with patch('enigma_engine.web.server.FASTAPI_AVAILABLE', True):
             server = ForgeWebServer(require_auth=False)
             return server.app
     
@@ -137,7 +137,7 @@ class TestWebSocket:
     
     def test_connection_manager(self):
         """Test WebSocket connection manager."""
-        from forge_ai.web.server import ConnectionManager
+        from enigma_engine.web.server import ConnectionManager
         
         manager = ConnectionManager()
         assert manager is not None
@@ -149,7 +149,7 @@ class TestRequestModels:
     
     def test_chat_message_model(self):
         """Test ChatMessage model."""
-        from forge_ai.web.server import ChatMessage
+        from enigma_engine.web.server import ChatMessage
         
         msg = ChatMessage(content="Hello")
         assert msg.content == "Hello"
@@ -157,7 +157,7 @@ class TestRequestModels:
     
     def test_generate_image_request(self):
         """Test GenerateImageRequest model."""
-        from forge_ai.web.server import GenerateImageRequest
+        from enigma_engine.web.server import GenerateImageRequest
         
         req = GenerateImageRequest(prompt="A sunset")
         assert req.prompt == "A sunset"
@@ -170,7 +170,7 @@ class TestTelemetryDashboard:
     
     def test_dashboard_creation(self):
         """Test creating telemetry dashboard."""
-        from forge_ai.web.telemetry_dashboard import TelemetryDashboard, TelemetryCollector, TelemetryConfig
+        from enigma_engine.web.telemetry_dashboard import TelemetryDashboard, TelemetryCollector, TelemetryConfig
         
         config = TelemetryConfig()
         collector = TelemetryCollector(config)
@@ -179,7 +179,7 @@ class TestTelemetryDashboard:
     
     def test_collector_creation(self):
         """Test creating telemetry collector."""
-        from forge_ai.web.telemetry_dashboard import TelemetryCollector, TelemetryConfig
+        from enigma_engine.web.telemetry_dashboard import TelemetryCollector, TelemetryConfig
         
         config = TelemetryConfig()
         collector = TelemetryCollector(config)
@@ -191,14 +191,14 @@ class TestFlaskApp:
     
     def test_app_exists(self):
         """Test Flask app can be imported."""
-        from forge_ai.web import app as web_app
+        from enigma_engine.web import app as web_app
         
         # The app module should exist
         assert web_app is not None
     
     def test_run_web_function(self):
         """Test run_web entry point."""
-        from forge_ai.web.app import run_web
+        from enigma_engine.web.app import run_web
         
         # Should exist and be callable
         assert callable(run_web)

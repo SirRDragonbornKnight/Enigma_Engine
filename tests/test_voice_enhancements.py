@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 
 # Test voice identity
-from forge_ai.voice.voice_identity import (
+from enigma_engine.voice.voice_identity import (
     AIVoiceIdentity,
     discover_voice,
     describe_voice,
@@ -14,7 +14,7 @@ from forge_ai.voice.voice_identity import (
 )
 
 # Test voice effects
-from forge_ai.voice.voice_effects import (
+from enigma_engine.voice.voice_effects import (
     VoiceEffects,
     apply_effect,
     apply_effects,
@@ -23,29 +23,29 @@ from forge_ai.voice.voice_effects import (
 )
 
 # Test dynamic adapter
-from forge_ai.voice.dynamic_adapter import (
+from enigma_engine.voice.dynamic_adapter import (
     DynamicVoiceAdapter,
     adapt_voice_for_emotion,
     adapt_voice_for_context
 )
 
 # Test voice customizer
-from forge_ai.voice.voice_customizer import (
+from enigma_engine.voice.voice_customizer import (
     VoiceCustomizer,
     import_voice_profile,
     export_voice_profile
 )
 
 # Test audio analyzer
-from forge_ai.voice.audio_analyzer import AudioAnalyzer
+from enigma_engine.voice.audio_analyzer import AudioAnalyzer
 
 # Test smart wake words
-from forge_ai.voice.trigger_phrases import (
+from enigma_engine.voice.trigger_phrases import (
     SmartWakeWords,
     suggest_wake_phrases
 )
 
-from forge_ai.voice import VoiceProfile
+from enigma_engine.voice import VoiceProfile
 
 
 class TestVoiceIdentity:
@@ -327,11 +327,11 @@ class TestSmartWakeWords:
         """Test basic wake phrase suggestions."""
         smart = SmartWakeWords()
         
-        suggestions = smart.suggest_wake_phrases("ForgeAI", num_suggestions=5)
+        suggestions = smart.suggest_wake_phrases("Enigma AI Engine", num_suggestions=5)
         
         assert len(suggestions) > 0
-        # Should contain the AI name (ForgeAI) in suggestions
-        assert any("forgeai" in s.lower() for s in suggestions)
+        # Should contain the AI name (Enigma AI Engine) in suggestions
+        assert any("Enigma AI Engine" in s.lower() for s in suggestions)
     
     def test_categorize_wake_phrase(self):
         """Test wake phrase categorization."""
@@ -393,7 +393,7 @@ class TestVoiceIntegration:
         """Test personality and voice integration."""
         # Import at the end to avoid torch import issues in other tests
         try:
-            from forge_ai.core.personality import AIPersonality
+            from enigma_engine.core.personality import AIPersonality
             
             personality = AIPersonality("test_model")
             personality.voice_preferences = {

@@ -8,8 +8,8 @@ This PR successfully implements all requirements from the problem statement for 
 
 ### AI Voice Discovery
 ```python
-from forge_ai.voice import discover_voice
-from forge_ai.core.personality import load_personality
+from enigma_engine.voice import discover_voice
+from enigma_engine.core.personality import load_personality
 
 personality = load_personality("my_model")
 voice = discover_voice(personality)
@@ -17,21 +17,21 @@ voice = discover_voice(personality)
 
 ### Natural Language Voice Descriptions
 ```python
-from forge_ai.voice import describe_voice
+from enigma_engine.voice import describe_voice
 
 voice = describe_voice("I want a warm, calm voice that speaks slowly")
 ```
 
 ### Dynamic Voice Adaptation
 ```python
-from forge_ai.voice import adapt_voice_for_emotion
+from enigma_engine.voice import adapt_voice_for_emotion
 
 happy_voice = adapt_voice_for_emotion("happy", base_voice)
 ```
 
 ### Smart Wake Words
 ```python
-from forge_ai.voice import suggest_wake_phrases
+from enigma_engine.voice import suggest_wake_phrases
 
 suggestions = suggest_wake_phrases("Enigma", personality)
 ```
@@ -175,16 +175,16 @@ The voice system is now production-ready and provides a solid foundation for:
 ## Files Changed Summary
 
 ```
- forge_ai/core/personality.py           |   4 +-
- forge_ai/voice/__init__.py             | 136 +++++++-
- forge_ai/voice/audio_analyzer.py       | 415 ++++++++++++++++++++++
- forge_ai/voice/dynamic_adapter.py      | 485 ++++++++++++++++++++++++++
- forge_ai/voice/trigger_phrases.py      | 241 ++++++++++++-
- forge_ai/voice/voice_customizer.py     | 450 ++++++++++++++++++++++++
- forge_ai/voice/voice_effects.py        | 430 +++++++++++++++++++++++
- forge_ai/voice/voice_generator.py      |  76 +++--
- forge_ai/voice/voice_identity.py       | 580 +++++++++++++++++++++++++++++++
- forge_ai/voice/voice_profile.py        |  19 +-
+ enigma_engine/core/personality.py           |   4 +-
+ enigma_engine/voice/__init__.py             | 136 +++++++-
+ enigma_engine/voice/audio_analyzer.py       | 415 ++++++++++++++++++++++
+ enigma_engine/voice/dynamic_adapter.py      | 485 ++++++++++++++++++++++++++
+ enigma_engine/voice/trigger_phrases.py      | 241 ++++++++++++-
+ enigma_engine/voice/voice_customizer.py     | 450 ++++++++++++++++++++++++
+ enigma_engine/voice/voice_effects.py        | 430 +++++++++++++++++++++++
+ enigma_engine/voice/voice_generator.py      |  76 +++--
+ enigma_engine/voice/voice_identity.py       | 580 +++++++++++++++++++++++++++++++
+ enigma_engine/voice/voice_profile.py        |  19 +-
  docs/ENHANCED_VOICE_SYSTEM.md        | 759 +++++++++++++++++++++++++++++++++++++++
  examples/voice_system_demo.py        | 219 +++++++++++++
  tests/test_voice_enhancements.py     | 406 +++++++++++++++++++++

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The ForgeAI Engine now includes a powerful **Tool Use System** that allows the AI to execute external capabilities (image generation, vision, avatar control, file operations, etc.) naturally during conversations.
+The Enigma AI Engine Engine now includes a powerful **Tool Use System** that allows the AI to execute external capabilities (image generation, vision, avatar control, file operations, etc.) naturally during conversations.
 
 When trained on tool use examples, the AI learns to:
 1. **Recognize** when a tool is needed
@@ -14,7 +14,7 @@ When trained on tool use examples, the AI learns to:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     ForgeAI Model                         │
+│                     Enigma AI Engine Model                         │
 │              (Trained on tool use examples)                 │
 └────────────────────────┬────────────────────────────────────┘
                          │
@@ -33,7 +33,7 @@ When trained on tool use examples, the AI learns to:
                          │ as <tool_result> tags
                          ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                   ForgeAI Model                           │
+│                   Enigma AI Engine Model                           │
 │          (Continues generation with results)                │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -301,8 +301,8 @@ Get content from a webpage.
 Train the AI on tool use examples:
 
 ```python
-from forge_ai.core.tokenizer import train_tokenizer
-from forge_ai.core.trainer import train_model
+from enigma_engine.core.tokenizer import train_tokenizer
+from enigma_engine.core.trainer import train_model
 
 # Train tokenizer on tool use data
 tokenizer = train_tokenizer(
@@ -324,8 +324,8 @@ train_model(
 Initialize the inference engine with tool support:
 
 ```python
-from forge_ai.core.inference import ForgeEngine
-from forge_ai.modules import ModuleManager
+from enigma_engine.core.inference import ForgeEngine
+from enigma_engine.modules import ModuleManager
 
 # Initialize module manager
 manager = ModuleManager()
@@ -339,7 +339,7 @@ manager.load('avatar')            # For avatar control
 
 # Create inference engine with tools enabled
 engine = ForgeEngine(
-    model_path="models/forge_ai.pth",
+    model_path="models/enigma_engine.pth",
     enable_tools=True,
     module_manager=manager
 )
@@ -370,7 +370,7 @@ print(response)
 You can also execute tools directly:
 
 ```python
-from forge_ai.tools import ToolExecutor
+from enigma_engine.tools import ToolExecutor
 
 executor = ToolExecutor(module_manager=manager)
 
@@ -388,7 +388,7 @@ print(result)
 
 ### 1. Define the Tool
 
-Add to `forge_ai/tools/tool_definitions.py`:
+Add to `enigma_engine/tools/tool_definitions.py`:
 
 ```python
 MY_TOOL = ToolDefinition(
@@ -418,7 +418,7 @@ ALL_TOOLS = [
 
 ### 2. Implement Execution
 
-Add to `forge_ai/tools/tool_executor.py`:
+Add to `enigma_engine/tools/tool_executor.py`:
 
 ```python
 def _execute_my_tool(self, module, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -613,7 +613,7 @@ To contribute new tools:
 ---
 
 For more information, see:
-- `forge_ai/tools/tool_definitions.py` - Tool schemas
-- `forge_ai/tools/tool_executor.py` - Execution logic
-- `forge_ai/core/inference.py` - Integration with AI
+- `enigma_engine/tools/tool_definitions.py` - Tool schemas
+- `enigma_engine/tools/tool_executor.py` - Execution logic
+- `enigma_engine/core/inference.py` - Integration with AI
 - `data/tool_training_data.txt` - Training examples

@@ -1,7 +1,7 @@
 """
-Robot Integration Example for ForgeAI
+Robot Integration Example for Enigma AI Engine
 
-This example shows how to connect ForgeAI to physical robots.
+This example shows how to connect Enigma AI Engine to physical robots.
 Copy and modify for your specific hardware.
 
 SUPPORTED INTERFACES:
@@ -20,8 +20,8 @@ Or import in your own code:
 import time
 from typing import Dict, Optional
 
-# ForgeAI imports
-from forge_ai.tools.robot_tools import (
+# Enigma AI Engine imports
+from enigma_engine.tools.robot_tools import (
     RobotInterface,
     RobotController,
     RobotState,
@@ -30,7 +30,7 @@ from forge_ai.tools.robot_tools import (
     NetworkRobotInterface,
     SimulatedRobotInterface,
 )
-from forge_ai.tools.robot_modes import (
+from enigma_engine.tools.robot_modes import (
     RobotModeController,
     RobotMode,
     CameraConfig,
@@ -399,12 +399,12 @@ def create_simulated_robot() -> RobotController:
 
 
 # =============================================================================
-# USAGE WITH FORGEAI
+# USAGE WITH Enigma AI Engine
 # =============================================================================
 
-def setup_forgeai_robot(controller: RobotController, use_camera: bool = False):
+def setup_Enigma AI Engine_robot(controller: RobotController, use_camera: bool = False):
     """
-    Connect robot controller to ForgeAI's systems.
+    Connect robot controller to Enigma AI Engine's systems.
     
     Args:
         controller: Your configured RobotController
@@ -441,7 +441,7 @@ def setup_forgeai_robot(controller: RobotController, use_camera: bool = False):
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("ForgeAI Robot Example")
+    print("Enigma AI Engine Robot Example")
     print("=" * 60)
     
     # Use simulated robot for testing (no hardware needed)
@@ -451,8 +451,8 @@ if __name__ == "__main__":
     print("\n[2] Connecting...")
     controller.connect("sim")
     
-    print("\n[3] Setting up ForgeAI integration...")
-    mode_ctrl = setup_forgeai_robot(controller, use_camera=False)
+    print("\n[3] Setting up Enigma AI Engine integration...")
+    mode_ctrl = setup_Enigma AI Engine_robot(controller, use_camera=False)
     
     print("\n[4] Testing movements...")
     robot = controller._robots["sim"]

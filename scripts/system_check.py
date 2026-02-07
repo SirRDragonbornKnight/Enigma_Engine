@@ -28,7 +28,7 @@ def print_test(name, passed, details=""):
     return passed
 
 def main():
-    print_header("ForgeAI Pre-Training System Check")
+    print_header("Enigma AI Engine Pre-Training System Check")
     print("Testing each component to see what works...")
     
     results = {}
@@ -45,13 +45,13 @@ def main():
         results['pytorch'] = print_test("PyTorch", False, str(e))
     
     try:
-        from forge_ai.core.model import create_model, MODEL_PRESETS
+        from enigma_engine.core.model import create_model, MODEL_PRESETS
         results['model'] = print_test("Forge Model", True, f"{len(MODEL_PRESETS)} presets available")
     except Exception as e:
         results['model'] = print_test("Forge Model", False, str(e))
     
     try:
-        from forge_ai.core.tokenizer import get_tokenizer
+        from enigma_engine.core.tokenizer import get_tokenizer
         tok = get_tokenizer()
         test_encode = tok.encode("Hello world")
         results['tokenizer'] = print_test("Tokenizer", True, f"Encoded 'Hello world' -> {len(test_encode)} tokens")
@@ -64,7 +64,7 @@ def main():
     print_header("2. Model Creation Test")
     
     try:
-        from forge_ai.core.model import create_model
+        from enigma_engine.core.model import create_model
         import torch
         
         # Create a tiny model to test
@@ -94,7 +94,7 @@ def main():
     print_header("3. Tool Router Test")
     
     try:
-        from forge_ai.core.tool_router import get_router, classify_intent
+        from enigma_engine.core.tool_router import get_router, classify_intent
         
         # Test intent classification
         test_cases = [
@@ -126,7 +126,7 @@ def main():
     print_header("4. Tool Executor Test")
     
     try:
-        from forge_ai.tools.tool_executor import ToolExecutor
+        from enigma_engine.tools.tool_executor import ToolExecutor
         
         executor = ToolExecutor()
         results['executor_init'] = print_test("Tool Executor Init", True)
@@ -186,7 +186,7 @@ def main():
     print_header("7. Memory System Check")
     
     try:
-        from forge_ai.memory.manager import ConversationManager
+        from enigma_engine.memory.manager import ConversationManager
         
         manager = ConversationManager()
         manager.add_message("user", "Hello test")

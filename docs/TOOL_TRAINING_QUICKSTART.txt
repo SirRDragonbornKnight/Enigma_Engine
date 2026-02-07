@@ -1,6 +1,6 @@
 ================================================================================
                     TOOL TRAINING QUICK START
-                       ForgeAI Guide
+                       Enigma AI Engine Guide
 ================================================================================
 
 This is a quick-start guide. For detailed info, see:

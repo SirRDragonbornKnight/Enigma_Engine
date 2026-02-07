@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Unified Orchestration System enables ForgeAI to coordinate multiple AI models and capabilities seamlessly. This allows:
+The Unified Orchestration System enables Enigma AI Engine to coordinate multiple AI models and capabilities seamlessly. This allows:
 - Using multiple specialized models together (chat + vision + code)
 - Running everything on a single PC with models cooperating
 - Models handing off tasks to each other automatically
@@ -59,7 +59,7 @@ Tracks what each model/tool can do.
 
 **Example:**
 ```python
-from forge_ai.core import get_capability_registry
+from enigma_engine.core import get_capability_registry
 
 registry = get_capability_registry()
 
@@ -88,7 +88,7 @@ Manages loaded models efficiently with:
 
 **Example:**
 ```python
-from forge_ai.core import get_model_pool
+from enigma_engine.core import get_model_pool
 
 pool = get_model_pool()
 
@@ -121,7 +121,7 @@ Enables models to work together and hand off tasks.
 
 **Example:**
 ```python
-from forge_ai.core import get_orchestrator
+from enigma_engine.core import get_orchestrator
 
 orchestrator = get_orchestrator()
 
@@ -156,7 +156,7 @@ Central coordinator for all AI models and capabilities.
 
 **Example:**
 ```python
-from forge_ai.core import get_orchestrator
+from enigma_engine.core import get_orchestrator
 
 orchestrator = get_orchestrator()
 
@@ -235,7 +235,7 @@ Enables asynchronous and parallel task execution with background workers.
 
 **Example:**
 ```python
-from forge_ai.core import get_offloader, get_orchestrator
+from enigma_engine.core import get_offloader, get_orchestrator
 
 offloader = get_offloader()
 orchestrator = get_orchestrator()
@@ -251,7 +251,7 @@ task_id = offloader.submit_task(
 )
 
 # Check task status
-from forge_ai.core import TaskStatus
+from enigma_engine.core import TaskStatus
 status = offloader.get_task_status(task_id)
 if status == TaskStatus.COMPLETED:
     task = offloader.get_task(task_id)
@@ -280,7 +280,7 @@ offloader.shutdown(wait=True, timeout=10)
 
 ### 6. Standalone Tools (`standalone_tools.py`)
 
-Use ForgeAI capabilities WITHOUT needing a full chat/LLM system.
+Use Enigma AI Engine capabilities WITHOUT needing a full chat/LLM system.
 
 **Available Tools:**
 - `image` - Generate images
@@ -298,7 +298,7 @@ Use ForgeAI capabilities WITHOUT needing a full chat/LLM system.
 
 **Example:**
 ```python
-from forge_ai import use_tool
+from enigma_engine import use_tool
 
 # Generate an image without chat
 image = use_tool("image", prompt="A sunset over mountains", width=512, height=512)
@@ -316,7 +316,7 @@ use_tool("tts", text="Hello world", output_file="hello.wav")
 text = use_tool("stt", audio_file="recording.wav")
 
 # List all available tools
-from forge_ai.core.standalone_tools import list_available_tools
+from enigma_engine.core.standalone_tools import list_available_tools
 tools = list_available_tools()
 print(f"Available tools: {tools}")
 ```
@@ -354,10 +354,10 @@ Add to `forge_config.json` or use environment variables:
 
 ## Integration with Module Manager
 
-The orchestration system automatically integrates with ForgeAI's module manager. When modules are loaded, they're automatically registered with the capability registry:
+The orchestration system automatically integrates with Enigma AI Engine's module manager. When modules are loaded, they're automatically registered with the capability registry:
 
 ```python
-from forge_ai.modules import ModuleManager
+from enigma_engine.modules import ModuleManager
 
 manager = ModuleManager()
 
@@ -460,7 +460,7 @@ The orchestrator includes intelligent memory management:
 
 ```python
 # Configure memory limits
-from forge_ai.core import OrchestratorConfig
+from enigma_engine.core import OrchestratorConfig
 
 config = OrchestratorConfig(
     max_loaded_models=3,
@@ -484,11 +484,11 @@ orchestrator = get_orchestrator(config)
 ## API Reference
 
 See individual module documentation:
-- `forge_ai/core/capability_registry.py`
-- `forge_ai/core/model_pool.py`
-- `forge_ai/core/collaboration.py`
-- `forge_ai/core/orchestrator.py`
-- `forge_ai/core/standalone_tools.py`
+- `enigma_engine/core/capability_registry.py`
+- `enigma_engine/core/model_pool.py`
+- `enigma_engine/core/collaboration.py`
+- `enigma_engine/core/orchestrator.py`
+- `enigma_engine/core/standalone_tools.py`
 
 ## Testing
 

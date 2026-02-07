@@ -1,130 +1,73 @@
-# ForgeAI Suggestions
+# Enigma AI Engine Suggestions
 
-Remaining improvements for the ForgeAI codebase.
+Remaining improvements for the Enigma AI Engine codebase.
 
-**Last Updated:** February 6, 2026
-
----
-
-## AI Training & Routing Enhancements
-
-### AI Data Trainer (Lightweight)
-- [x] **Data Trainer** - Lightweight `forge_ai/tools/data_trainer.py` with:
-  - **CharacterTrainer**: Scan for character dialogue, extract personality traits, vocabulary, speech patterns
-  - **TaskTrainer**: Generate training data for images, avatar, tools, code (loads examples from JSON)
-  - No hardcoded examples - all training data loaded from external JSON files on demand
-  - Generate character-specific training datasets automatically
-  - Example: "Train AI as Sherlock Holmes" -> find all Sherlock lines -> create fine-tuning dataset
-
-- [x] **Character Trainer Tab** - Add `forge_ai/gui/tabs/character_trainer_tab.py`:
-  - UI to input character name/prompt and data source
-  - Preview extracted character data before training
-  - Train specialized models for specific characters
-  - Save character profiles with associated model weights
-
-- [x] **Router AI Trainer** - Extend `forge_ai/core/tool_router.py`:
-  - Add ability to train the router itself from within the router
-  - Self-improvement: router learns from successful/failed routes
-  - Train sub-routers for specific domains (games, code, creative)
-  - Recursive training: use trained AIs to generate training data for other AIs
-
-### Unified Prompt System
-- [x] **Global prompt manager** - Create `forge_ai/core/prompt_manager.py`:
-  - Single source of truth for all AI system prompts
-  - Every generation module should use this (image_tab, code_tab, audio_tab, etc.)
-  - Currently: persona.py, prompt_templates.py, tool_prompts.py are separate
-  - Needed: unified `PromptManager.get_system_prompt(module_name, persona_id)` API
-
-- [x] **Prompt inheritance** - Extend `forge_ai/core/persona.py`:
-  - Base prompts that all personas inherit from
-  - Module-specific prompt overrides (image AI vs code AI vs chat AI)
-  - Safety prompts that are always appended
-  - Dynamic prompt injection based on context
-
-- [x] **Prompt validation** - Add prompt validation before model calls:
-  - Check prompt length limits
-  - Validate variable substitution
-  - Warn about conflicting instructions
-  - Test prompt effectiveness with sample inputs
-
-### Training Data Tools
-- [x] **Data curator** - Add `forge_ai/tools/data_curator.py`:
-  - Scan and index all training data files
-  - Search by topic, character, style, or sentiment
-  - Tag and categorize data automatically
-  - Detect duplicate or low-quality entries
-  - Merge/split datasets with smart deduplication
-
-- [x] **Character extractor** - Extract characters from datasets:
-  - Parse dialogue format: "CHARACTER: dialogue text"
-  - Build character vocabulary profiles
-  - Track character relationships and interactions
-  - Generate character summary cards
-
-- [ ] **Auto-trainer pipeline** - Automated training workflow:
-  - Input: character name + data sources
-  - Output: fine-tuned model + persona config
-  - Steps: extract → filter → validate → train → test → deploy
+**Last Updated:** February 7, 2026
 
 ---
 
-## Recent Updates - Additional Suggestions
+## Trainer AI for Generating Training Data
 
-### Module System
-- [ ] **Module dependency visualization** - Show module dependency graph in GUI
-- [ ] **Module conflict detection** - Warn before loading conflicting modules
-- [ ] **Module profiles** - Save/load sets of modules as profiles (e.g., "lightweight", "full")
-
-### Networking & Multi-Device
-- [ ] **Remote model training** - Train on one device, use on another
-- [ ] **Model sync** - Auto-sync model weights across devices
-- [ ] **Distributed inference** - Split model across multiple devices
-
-### User Experience
-- [ ] **Quick persona switch** - Hotkey to switch between personas
-- [ ] **Prompt history** - Save and reuse successful prompts
-- [ ] **Training data preview** - Preview what data will be used before training
-
-### Code Generation
-- [ ] **Language-specific code AIs** - Specialized models for Python, JS, Rust, etc.
-- [ ] **Code style learning** - Learn from user's codebase style
-- [ ] **Project context injection** - Include project structure in code prompts
-
-### Avatar System
-- [ ] **Avatar emotion recognition** - Avatar reacts to conversation sentiment
-- [ ] **Multi-avatar support** - Multiple avatars for different personas
-- [ ] **Avatar voice sync** - Lip sync avatar with TTS output
+### Pretrained Base Model for Distribution
+- [ ] **Create base model for GitHub releases**:
+  - Train "small" (~27M params) model on curated dataset
+  - Include in releases so users don't start from scratch
+  - Document what it was trained on
 
 ---
 
-## GUI Organization
+## Router + ModuleManager Integration
 
-### Sidebar Reorganization
-Current problem: Related features are scattered across different sections (30+ items).
+### Connect Tool Router to Module System
+- [ ] **Have router check ModuleManager for capability availability**:
+  - Router should query ModuleManager to see which modules are loaded
+  - Route to available providers based on loaded modules (e.g., `image_gen_local` vs `image_gen_api`)
+  - Fall back gracefully when a module isn't loaded
+  - Currently router uses `get_provider()` from tabs which works, but deeper integration would be cleaner
 
-- [ ] **Reorganize sidebar by TASK not type** - Group related features together:
-  ```
-  CHAT:     Chat, History
-  MY AI:    Persona, Training, Learning, Scale  (all "building your AI")
-  CREATE:   Image, Code, Video, Audio, 3D, GIF
-  CONTROL:  Avatar, Game, Robot, Screen, Camera
-  TOOLS:    Modules, Router, Tools, Compare
-  SYSTEM:   Terminal, Logs, Files, Settings, Network
-  ```
+### Benefits
+- Single source of truth for what's available
+- Better error messages ("Image generation not available - enable in Modules tab")
+- Dynamic routing based on loaded modules
+- Cleaner architecture
 
-- [ ] **Remove duplicate navigation** - Avatar tab has sub-tabs for Game/Robot, but those are also separate sidebar items. Pick one approach.
+---
 
-- [ ] **Make Training visible** - Currently hidden as sub-tab inside AI tab, should be in main sidebar under "MY AI"
+## Completed Items (Archived)
 
-### Training Tab Enhancements
-- [x] **Add system prompt editor to Training tab** - Edit the AI's system prompt alongside training:
-  - Text area to edit system prompt
-  - Preview how prompt affects responses
-  - Save prompt with model/persona
-  - Currently prompt editing is only in Persona tab - should also be accessible from Training
+<details>
+<summary>Click to expand completed suggestions</summary>
 
-- [ ] **Unified "Build Your AI" workflow** - Single tab/wizard that combines:
-  - System prompt (persona/personality)
-  - Training data selection
-  - Training controls
-  - Testing the result
+### First-Run Setup Wizard (Done)
+- [x] Fix "Unknown" CPU bug - Added fallbacks using `os.cpu_count()` and `platform.processor()`
+- [x] AI Name Input Page - Added wizard page after Welcome with name suggestions
+
+### Training Data Generator (Done)
+- [x] Training Data Generator Tab - New "Data Gen" tab in MY AI section:
+  - Load HuggingFace models (TinyLlama, Phi-2, Phi-3, Mistral, Qwen)
+  - Input topics/domains to generate Q&A pairs
+  - Support for Q&A, conversations, and instructions formats
+  - Save in Enigma training format, JSONL, or JSON
+
+### Already Implemented Features
+- [x] Hardware detection with `DeviceProfiler` (device_profiles.py)
+- [x] Model size recommendations based on hardware
+- [x] HuggingFace model loading (huggingface_loader.py)
+- [x] Model hub with download/upload (hub/model_hub.py)
+- [x] Stop training functionality (enhanced_window.py)
+- [x] Checkpoint saving every N epochs (training.py)
+- [x] AI name through persona system
+- [x] Data Trainer with CharacterTrainer and TaskTrainer
+- [x] Character Trainer Tab with UI
+- [x] Training data generation tools
+
+### Code Quality (Done)
+- [x] Replace QThread.terminate() with cooperative flags
+- [x] Clean up temporary attachment files
+
+### Module System (Done)
+- [x] Module dependency visualization
+- [x] Module conflict detection
+- [x] Module profiles
+
+</details>

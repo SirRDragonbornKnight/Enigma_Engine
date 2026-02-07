@@ -37,7 +37,7 @@ The Terminal tab now shows AI's thinking process for **BOTH** local Forge models
 The AI now has internal wants, goals, and motivations that influence its behavior.
 
 **Location:** 
-- Core: `forge_ai/core/wants_system.py`
+- Core: `enigma_engine/core/wants_system.py`
 - Initialized: When model loads (line 2286)
 - Used: During chat responses (line 4760)
 
@@ -81,7 +81,7 @@ motivation_prompt = wants.get_motivation_prompt()
 The AI learns to CREATE designs from training data instead of picking from presets.
 
 **Location:**
-- Core: `forge_ai/core/learned_generator.py`
+- Core: `enigma_engine/core/learned_generator.py`
 - Initialized: When model loads (line 2293)
 - Auto-learns: From `data/specialized/wants_and_learned_design_training.txt`
 
@@ -188,7 +188,7 @@ avatar = generator.generate_avatar_from_personality(
 ## Accessing Systems
 
 ### Terminal Tab
-1. Launch ForgeAI: `python run.py --gui`
+1. Launch Enigma AI Engine: `python run.py --gui`
 2. Load a model (Forge or HuggingFace)
 3. Click **Terminal** in sidebar
 4. Go back to **Chat** and send messages
@@ -196,7 +196,7 @@ avatar = generator.generate_avatar_from_personality(
 
 ### Wants System (Programmatic)
 ```python
-from forge_ai.core.wants_system import get_wants_system
+from enigma_engine.core.wants_system import get_wants_system
 
 wants = get_wants_system("my_model")
 
@@ -211,7 +211,7 @@ for goal in wants.get_active_goals():
 
 ### Learned Generator (Programmatic)
 ```python
-from forge_ai.core.learned_generator import AILearnedGenerator
+from enigma_engine.core.learned_generator import AILearnedGenerator
 
 gen = AILearnedGenerator("my_model", data_dir)
 
@@ -272,16 +272,16 @@ All systems are **lightweight** and respect the module system:
 
 ## Files Changed
 
-1. `forge_ai/gui/enhanced_window.py`
+1. `enigma_engine/gui/enhanced_window.py`
    - Added terminal logging to AIGenerationWorker (lines 120-252)
    - Integrated wants system (lines 2286-2298, 4760-4770)
    - Integrated learned generator (lines 2293-2303)
    - Added topic extraction (lines 4403-4423)
 
-2. `forge_ai/core/wants_system.py` - NEW
+2. `enigma_engine/core/wants_system.py` - NEW
    - AI wants and motivation system
 
-3. `forge_ai/core/learned_generator.py` - NEW
+3. `enigma_engine/core/learned_generator.py` - NEW
    - AI learned design generation
 
 4. `data/specialized/wants_and_learned_design_training.txt` - NEW
@@ -309,7 +309,7 @@ All systems are **lightweight** and respect the module system:
 
 3. **Check AI's Wants:**
    ```python
-   from forge_ai.core.wants_system import get_wants_system
+   from enigma_engine.core.wants_system import get_wants_system
    wants = get_wants_system("my_model")
    print(wants.get_motivation_prompt())
    ```

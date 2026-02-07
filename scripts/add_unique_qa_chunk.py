@@ -606,13 +606,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Append a chunk of unique Q&A pairs to a training file (no repeated questions)."
     )
+    
+    # Default to data/training.txt in project root
+    default_file = Path(__file__).parent.parent / "data" / "training.txt"
+    
     parser.add_argument(
         "--file",
-        default=str(
-            Path(
-                r"c:\Users\sirkn_gbhnunq\Documents\GitHub\enigma_engine_sacrifice_1\data\your_training_data.txt"
-            )
-        ),
+        default=str(default_file),
         help="Path to training data file.",
     )
     parser.add_argument("--add", type=int, default=500, help="How many new pairs to add.")

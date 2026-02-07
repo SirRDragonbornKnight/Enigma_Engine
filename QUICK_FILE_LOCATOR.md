@@ -1,4 +1,4 @@
-# ForgeAI - Quick File Locator 🔍
+# Enigma AI Engine - Quick File Locator 🔍
 
 Find the file you need in seconds!
 
@@ -9,9 +9,9 @@ Find the file you need in seconds!
 | What | File |
 |------|------|
 | Start | `python run.py --gui` (or `--run` for terminal) |
-| Engine | `forge_ai/core/inference.py` |
-| Model | `forge_ai/core/model.py` |
-| GUI | `forge_ai/gui/tabs/chat_tab.py` |
+| Engine | `enigma_engine/core/inference.py` |
+| Model | `enigma_engine/core/model.py` |
+| GUI | `enigma_engine/gui/tabs/chat_tab.py` |
 
 ---
 
@@ -19,7 +19,7 @@ Find the file you need in seconds!
 
 | What | File |
 |------|------|
-| Tab | `forge_ai/gui/tabs/image_tab.py` |
+| Tab | `enigma_engine/gui/tabs/image_tab.py` |
 | Output | `outputs/images/` |
 
 **Providers:**
@@ -36,8 +36,8 @@ Find the file you need in seconds!
 
 | What | File |
 |------|------|
-| Tab | `forge_ai/gui/tabs/code_tab.py` |
-| Router | `forge_ai/core/tool_router.py` |
+| Tab | `enigma_engine/gui/tabs/code_tab.py` |
+| Router | `enigma_engine/core/tool_router.py` |
 
 ---
 
@@ -45,7 +45,7 @@ Find the file you need in seconds!
 
 | What | File |
 |------|------|
-| Tab | `forge_ai/gui/tabs/video_tab.py` |
+| Tab | `enigma_engine/gui/tabs/video_tab.py` |
 | Output | `outputs/videos/` |
 
 ---
@@ -54,9 +54,9 @@ Find the file you need in seconds!
 
 | What | File |
 |------|------|
-| Voice | `forge_ai/voice/voice_generator.py` |
-| Simple | `forge_ai/voice/tts_simple.py` |
-| Tab | `forge_ai/gui/tabs/audio_tab.py` |
+| Voice | `enigma_engine/voice/voice_generator.py` |
+| Simple | `enigma_engine/voice/tts_simple.py` |
+| Tab | `enigma_engine/gui/tabs/audio_tab.py` |
 
 ---
 
@@ -65,9 +65,9 @@ Find the file you need in seconds!
 | What | File |
 |------|------|
 | Command | `python run.py --train` |
-| Trainer | `forge_ai/core/training.py` |
+| Trainer | `enigma_engine/core/training.py` |
 | Data | `data/training.txt` |
-| Tab | `forge_ai/gui/tabs/training_tab.py` |
+| Tab | `enigma_engine/gui/tabs/training_tab.py` |
 
 ---
 
@@ -75,10 +75,10 @@ Find the file you need in seconds!
 
 | What | File |
 |------|------|
-| Control | `forge_ai/avatar/controller.py` |
-| Autonomous | `forge_ai/avatar/autonomous.py` |
-| Desktop | `forge_ai/avatar/desktop_pet.py` |
-| Tab | `forge_ai/gui/tabs/avatar_tab.py` |
+| Control | `enigma_engine/avatar/controller.py` |
+| Autonomous | `enigma_engine/avatar/autonomous.py` |
+| Desktop | `enigma_engine/avatar/desktop_pet.py` |
+| Tab | `enigma_engine/gui/tabs/avatar_tab.py` |
 
 ---
 
@@ -86,9 +86,9 @@ Find the file you need in seconds!
 
 | What | File |
 |------|------|
-| Manager | `forge_ai/modules/manager.py` |
-| Registry | `forge_ai/modules/registry.py` |
-| Tab | `forge_ai/gui/tabs/modules_tab.py` |
+| Manager | `enigma_engine/modules/manager.py` |
+| Registry | `enigma_engine/modules/registry.py` |
+| Tab | `enigma_engine/gui/tabs/modules_tab.py` |
 | Config | `data/module_config.json` |
 
 ---
@@ -97,9 +97,9 @@ Find the file you need in seconds!
 
 | What | File |
 |------|------|
-| Manager | `forge_ai/memory/manager.py` |
+| Manager | `enigma_engine/memory/manager.py` |
 | Storage | `data/conversations/*.json` |
-| Search | `forge_ai/memory/vector_db.py` |
+| Search | `enigma_engine/memory/vector_db.py` |
 
 ---
 
@@ -108,8 +108,8 @@ Find the file you need in seconds!
 | What | File |
 |------|------|
 | Command | `python run.py --serve` |
-| Server | `forge_ai/comms/api_server.py` |
-| Network | `forge_ai/comms/network.py` |
+| Server | `enigma_engine/comms/api_server.py` |
+| Network | `enigma_engine/comms/network.py` |
 
 **Endpoints:**
 | Method | URL | Purpose |
@@ -124,9 +124,9 @@ Find the file you need in seconds!
 
 | What | File |
 |------|------|
-| Executor | `forge_ai/tools/tool_executor.py` |
-| Definitions | `forge_ai/tools/tool_definitions.py` |
-| Router | `forge_ai/core/tool_router.py` |
+| Executor | `enigma_engine/tools/tool_executor.py` |
+| Definitions | `enigma_engine/tools/tool_definitions.py` |
+| Router | `enigma_engine/core/tool_router.py` |
 
 **Built-in tools:**
 | File | Purpose |
@@ -146,7 +146,7 @@ Find the file you need in seconds!
 | `show_help` | Display contextual help |
 | `optimize_for_hardware` | Auto-configure for system |
 
-**GUI State Manager:** `forge_ai/gui/gui_state.py`
+**GUI State Manager:** `enigma_engine/gui/gui_state.py`
 
 ---
 
@@ -154,8 +154,8 @@ Find the file you need in seconds!
 
 | What | File |
 |------|------|
-| Config | `forge_ai/config/` |
-| Paths | `forge_ai/__init__.py` |
+| Config | `enigma_engine/config/` |
+| Paths | `enigma_engine/__init__.py` |
 | GUI | `data/gui_settings.json` |
 | AI | `data/ai_self_config.json` |
 
@@ -164,7 +164,7 @@ Find the file you need in seconds!
 ## 📂 Folder Overview
 
 ```
-forge_ai/
+enigma_engine/
 ├── core/      🧠 AI brain (model, inference, training)
 ├── gui/       🖥️ User interface
 │   └── tabs/  📑 All tab panels
@@ -198,31 +198,31 @@ outputs/
 
 ```python
 # AI Brain
-from forge_ai.core.model import Forge, create_model, get_model, register_model
-from forge_ai.core.inference import ForgeEngine
-from forge_ai.core.tokenizer import get_tokenizer, TokenizerProtocol, encode_text, decode_tokens
-from forge_ai.core.training import train_model
-from forge_ai.core.tool_router import ToolRouter, get_router
+from enigma_engine.core.model import Forge, create_model, get_model, register_model
+from enigma_engine.core.inference import ForgeEngine
+from enigma_engine.core.tokenizer import get_tokenizer, TokenizerProtocol, encode_text, decode_tokens
+from enigma_engine.core.training import train_model
+from enigma_engine.core.tool_router import ToolRouter, get_router
 
 # Modules
-from forge_ai.modules import ModuleManager
+from enigma_engine.modules import ModuleManager
 
 # Memory
-from forge_ai.memory.manager import ConversationManager
-from forge_ai.memory.vector_db import SimpleVectorDB
+from enigma_engine.memory.manager import ConversationManager
+from enigma_engine.memory.vector_db import SimpleVectorDB
 
 # Voice
-from forge_ai.voice.voice_generator import AIVoiceGenerator
+from enigma_engine.voice.voice_generator import AIVoiceGenerator
 
 # Avatar
-from forge_ai.avatar import get_avatar
-from forge_ai.avatar.autonomous import AutonomousAvatar
+from enigma_engine.avatar import get_avatar
+from enigma_engine.avatar.autonomous import AutonomousAvatar
 
 # Network
-from forge_ai.comms.api_server import create_api_server
+from enigma_engine.comms.api_server import create_api_server
 
 # Config
-from forge_ai.config import CONFIG
+from enigma_engine.config import CONFIG
 ```
 
 ---

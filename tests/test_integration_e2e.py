@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-End-to-End Integration Tests for ForgeAI.
+End-to-End Integration Tests for Enigma AI Engine.
 
 These tests verify the complete flow from module loading through
 inference to tool execution.
@@ -21,7 +21,7 @@ class TestModuleToInferenceFlow:
     
     def test_module_manager_singleton(self):
         """Test that ModuleManager is a singleton."""
-        from forge_ai.modules.manager import ModuleManager
+        from enigma_engine.modules.manager import ModuleManager
         
         manager1 = ModuleManager()
         manager2 = ModuleManager()
@@ -31,7 +31,7 @@ class TestModuleToInferenceFlow:
     
     def test_load_core_modules(self):
         """Test loading core modules (model, tokenizer)."""
-        from forge_ai.modules.manager import ModuleManager
+        from enigma_engine.modules.manager import ModuleManager
         
         manager = ModuleManager()
         
@@ -46,7 +46,7 @@ class TestModuleToInferenceFlow:
     
     def test_module_provides_inference_capability(self):
         """Test that loaded modules provide their capabilities."""
-        from forge_ai.modules.manager import ModuleManager
+        from enigma_engine.modules.manager import ModuleManager
         
         manager = ModuleManager()
         
@@ -57,7 +57,7 @@ class TestModuleToInferenceFlow:
     
     def test_module_conflict_detection(self):
         """Test that conflicting modules are detected."""
-        from forge_ai.modules.manager import ModuleManager
+        from enigma_engine.modules.manager import ModuleManager
         
         manager = ModuleManager()
         
@@ -75,7 +75,7 @@ class TestInferenceToToolFlow:
     
     def test_engine_with_tool_routing(self):
         """Test engine can route to tools when enabled."""
-        from forge_ai.core.inference import ForgeEngine
+        from enigma_engine.core.inference import ForgeEngine
         
         try:
             engine = ForgeEngine()
@@ -88,7 +88,7 @@ class TestInferenceToToolFlow:
     def test_tool_router_classification(self):
         """Test tool router can classify intents."""
         try:
-            from forge_ai.core.tool_router import classify_intent
+            from enigma_engine.core.tool_router import classify_intent
             
             # Test classification
             result = classify_intent("What is 2 + 2?")
@@ -102,7 +102,7 @@ class TestInferenceToToolFlow:
     
     def test_tool_executor_basic(self):
         """Test basic tool execution."""
-        from forge_ai.tools.tool_executor import ToolExecutor
+        from enigma_engine.tools.tool_executor import ToolExecutor
         
         executor = ToolExecutor()
         
@@ -112,7 +112,7 @@ class TestInferenceToToolFlow:
     
     def test_tool_result_type(self):
         """Test tool results have proper structure."""
-        from forge_ai.tools.result import ToolResult
+        from enigma_engine.tools.result import ToolResult
         
         # Create a result using the factory method
         result = ToolResult.ok(
@@ -129,7 +129,7 @@ class TestEndToEndPipeline:
     
     def test_chat_to_response_flow(self):
         """Test complete chat flow from input to response."""
-        from forge_ai.core.inference import ForgeEngine
+        from enigma_engine.core.inference import ForgeEngine
         
         try:
             engine = ForgeEngine()
@@ -145,7 +145,7 @@ class TestEndToEndPipeline:
     
     def test_chat_with_history_context(self):
         """Test that history provides context."""
-        from forge_ai.core.inference import ForgeEngine
+        from enigma_engine.core.inference import ForgeEngine
         
         try:
             engine = ForgeEngine()
@@ -167,7 +167,7 @@ class TestEndToEndPipeline:
     
     def test_generate_with_system_prompt(self):
         """Test generation with system prompt."""
-        from forge_ai.core.inference import ForgeEngine
+        from enigma_engine.core.inference import ForgeEngine
         
         try:
             engine = ForgeEngine()
@@ -185,7 +185,7 @@ class TestEndToEndPipeline:
     
     def test_streaming_token_output(self):
         """Test streaming output yields tokens."""
-        from forge_ai.core.inference import ForgeEngine
+        from enigma_engine.core.inference import ForgeEngine
         
         try:
             engine = ForgeEngine()
@@ -205,7 +205,7 @@ class TestToolIntegration:
     
     def test_tool_registry_loading(self):
         """Test tool registry loads tools properly."""
-        from forge_ai.tools.tool_registry import ToolRegistry
+        from enigma_engine.tools.tool_registry import ToolRegistry
         
         registry = ToolRegistry()
         
@@ -216,7 +216,7 @@ class TestToolIntegration:
     def test_tool_definitions_structure(self):
         """Test tool definitions have proper structure."""
         try:
-            from forge_ai.tools.tool_definitions import get_all_tools
+            from enigma_engine.tools.tool_definitions import get_all_tools
             
             tools = get_all_tools()
             
@@ -228,7 +228,7 @@ class TestToolIntegration:
     
     def test_tool_permissions_check(self):
         """Test tool permission system."""
-        from forge_ai.tools.permissions import ToolPermissionManager
+        from enigma_engine.tools.permissions import ToolPermissionManager
         
         pm = ToolPermissionManager()
         
@@ -238,7 +238,7 @@ class TestToolIntegration:
     def test_tool_caching(self):
         """Test tool result caching."""
         try:
-            from forge_ai.tools.cache import ToolCache
+            from enigma_engine.tools.cache import ToolCache
             
             cache = ToolCache()
             
@@ -257,7 +257,7 @@ class TestMemoryIntegration:
     
     def test_conversation_storage(self):
         """Test conversation storage and retrieval."""
-        from forge_ai.memory.manager import ConversationManager
+        from enigma_engine.memory.manager import ConversationManager
         
         cm = ConversationManager()
         
@@ -276,7 +276,7 @@ class TestMemoryIntegration:
     def test_vector_search_integration(self):
         """Test vector search over memories."""
         try:
-            from forge_ai.memory.vector_db import SimpleVectorDB
+            from enigma_engine.memory.vector_db import SimpleVectorDB
             
             db = SimpleVectorDB(dim=64)  # Provide required dim argument
             
@@ -297,7 +297,7 @@ class TestModuleStatePersistence:
     
     def test_module_state_save_load(self, tmp_path):
         """Test saving and loading module states."""
-        from forge_ai.modules.manager import ModuleManager
+        from enigma_engine.modules.manager import ModuleManager
         
         manager = ModuleManager()
         
@@ -313,7 +313,7 @@ class TestModuleStatePersistence:
     
     def test_module_info_complete(self):
         """Test module info has required fields."""
-        from forge_ai.modules.manager import ModuleManager
+        from enigma_engine.modules.manager import ModuleManager
         
         manager = ModuleManager()
         
@@ -330,7 +330,7 @@ class TestErrorHandling:
     
     def test_invalid_module_handling(self):
         """Test handling of invalid module names."""
-        from forge_ai.modules.manager import ModuleManager
+        from enigma_engine.modules.manager import ModuleManager
         
         manager = ModuleManager()
         
@@ -342,7 +342,7 @@ class TestErrorHandling:
     
     def test_inference_error_recovery(self):
         """Test inference recovers from errors gracefully."""
-        from forge_ai.core.inference import ForgeEngine
+        from enigma_engine.core.inference import ForgeEngine
         
         try:
             engine = ForgeEngine()
@@ -360,7 +360,7 @@ class TestErrorHandling:
     
     def test_tool_error_contains_info(self):
         """Test tool errors contain useful information."""
-        from forge_ai.tools.result import ToolResult
+        from enigma_engine.tools.result import ToolResult
         
         # Use the proper API for failure results
         error_result = ToolResult.fail(
@@ -377,7 +377,7 @@ class TestConcurrency:
     def test_concurrent_inference(self):
         """Test multiple concurrent inference requests."""
         import threading
-        from forge_ai.core.inference import ForgeEngine
+        from enigma_engine.core.inference import ForgeEngine
         
         try:
             engine = ForgeEngine()

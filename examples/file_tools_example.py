@@ -1,7 +1,7 @@
 """
-File Tools Example for ForgeAI
+File Tools Example for Enigma AI Engine
 
-This example shows how to use ForgeAI's file operations.
+This example shows how to use Enigma AI Engine's file operations.
 The AI can read, write, list, move, and delete files safely.
 
 CAPABILITIES:
@@ -653,16 +653,16 @@ def search_content(directory: str, text: str) -> List[Dict]:
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("ForgeAI File Tools Example")
+    print("Enigma AI Engine File Tools Example")
     print("=" * 60)
     
     # Test directory
-    test_dir = Path.home() / ".forge_ai" / "file_test"
+    test_dir = Path.home() / ".enigma_engine" / "file_test"
     test_dir.mkdir(parents=True, exist_ok=True)
     
     # Test file writing
     print("\n[1] Testing file write...")
-    result = write_file(str(test_dir / "test.txt"), "Hello from ForgeAI!\nLine 2\nLine 3")
+    result = write_file(str(test_dir / "test.txt"), "Hello from Enigma AI Engine!\nLine 2\nLine 3")
     print(f"  Write: {result}")
     
     # Test file reading
@@ -690,9 +690,9 @@ if __name__ == "__main__":
     
     # Test content search
     print("\n[6] Testing content search...")
-    write_file(str(test_dir / "search_test.txt"), "This contains the word ForgeAI")
-    results = search_content(str(test_dir), "ForgeAI")
-    print(f"  Found 'ForgeAI' in {len(results)} files")
+    write_file(str(test_dir / "search_test.txt"), "This contains the word Enigma AI Engine")
+    results = search_content(str(test_dir), "Enigma AI Engine")
+    print(f"  Found 'Enigma AI Engine' in {len(results)} files")
     
     # Test security
     print("\n[7] Testing security blocks...")

@@ -1,14 +1,14 @@
-# How to Add a New Avatar to ForgeAI
+# How to Add a New Avatar to Enigma AI Engine
 
 ## Quick Start
 
-There are **3 ways** to add avatars to ForgeAI:
+There are **3 ways** to add avatars to Enigma AI Engine:
 
 ### Method 1: Add Existing Files (Easiest)
 
 1. **Locate the avatars folder:**
    ```
-   /home/pi/ForgeAI/data/avatar/
+   /home/pi/Enigma AI Engine/data/avatar/
    ```
 
 2. **Place your avatar files:**
@@ -22,7 +22,7 @@ There are **3 ways** to add avatars to ForgeAI:
      - **For bone control**: Use rigged models (GLB/GLTF/FBX with skeleton)
 
 3. **Refresh in GUI:**
-   - Open ForgeAI GUI
+   - Open Enigma AI Engine GUI
    - Go to **Avatar** tab
    - Click dropdown menu
    - Your avatar should appear!
@@ -31,7 +31,7 @@ There are **3 ways** to add avatars to ForgeAI:
 
 ### Method 2: Use Built-in Avatar Creator (GUI)
 
-1. **Open ForgeAI GUI:**
+1. **Open Enigma AI Engine GUI:**
    ```bash
    python run.py --gui
    ```
@@ -59,21 +59,21 @@ There are **3 ways** to add avatars to ForgeAI:
 
 ### Method 3: Install Avatar Bundle (.fav file)
 
-ForgeAI uses `.fav` (ForgeAI Avatar) bundle format for sharing avatars.
+Enigma AI Engine uses `.fav` (Enigma AI Engine Avatar) bundle format for sharing avatars.
 
 1. **Get a .fav bundle:**
    - Download from community
    - Create your own (see below)
 
 2. **Install via GUI:**
-   - Open ForgeAI GUI → Avatar tab
+   - Open Enigma AI Engine GUI → Avatar tab
    - Click "Install Avatar Bundle"
    - Select `.fav` file
    - Avatar installed to `data/avatar/installed/`
 
 3. **Install via code:**
    ```python
-   from forge_ai.avatar.avatar_bundle import install_avatar
+   from enigma_engine.avatar.avatar_bundle import install_avatar
    
    avatar_dir = install_avatar("path/to/avatar.fav")
    print(f"Installed to: {avatar_dir}")
@@ -144,9 +144,9 @@ To use the AI bone control system, your 3D model needs a skeleton:
    - Check: Include → Skinning
    - Export GLB
 
-5. **Place in ForgeAI:**
+5. **Place in Enigma AI Engine:**
    ```bash
-   cp my_rigged_model.glb /home/pi/ForgeAI/data/avatar/models/
+   cp my_rigged_model.glb /home/pi/Enigma AI Engine/data/avatar/models/
    ```
 
 6. **Load in GUI:**
@@ -163,7 +163,7 @@ Share your avatars with others!
 ### Via Code
 
 ```python
-from forge_ai.avatar.avatar_bundle import AvatarBundle
+from enigma_engine.avatar.avatar_bundle import AvatarBundle
 from pathlib import Path
 
 # Create bundle
@@ -273,17 +273,17 @@ Look for:
 
 ```bash
 # 1. Create avatar folder (if needed)
-mkdir -p ~/ForgeAI/data/avatar/models
-mkdir -p ~/ForgeAI/data/avatar/images
+mkdir -p ~/Enigma AI Engine/data/avatar/models
+mkdir -p ~/Enigma AI Engine/data/avatar/images
 
 # 2. Add a 2D image avatar
-cp my_cool_image.png ~/ForgeAI/data/avatar/images/
+cp my_cool_image.png ~/Enigma AI Engine/data/avatar/images/
 
 # 3. Add a 3D model
-cp rigged_character.glb ~/ForgeAI/data/avatar/models/
+cp rigged_character.glb ~/Enigma AI Engine/data/avatar/models/
 
 # 4. Start GUI
-cd ~/ForgeAI
+cd ~/Enigma AI Engine
 python run.py --gui
 
 # 5. Select avatar in Avatar tab dropdown

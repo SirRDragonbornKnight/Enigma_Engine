@@ -1,7 +1,7 @@
 """
-Slack Bot Template for ForgeAI
+Slack Bot Template for Enigma AI Engine
 
-A ready-to-deploy Slack bot that integrates with ForgeAI.
+A ready-to-deploy Slack bot that integrates with Enigma AI Engine.
 
 Features:
 - Chat with AI in channels or DMs
@@ -59,8 +59,8 @@ class SlackBotConfig:
     max_response_length: int = 3000
 
 
-class ForgeAIClient:
-    """Client for communicating with ForgeAI API"""
+class Enigma AI EngineClient:
+    """Client for communicating with Enigma AI Engine API"""
     
     def __init__(self, api_url: str, api_key: str = ""):
         self.api_url = api_url.rstrip('/')
@@ -173,7 +173,7 @@ def create_slack_bot(config: SlackBotConfig) -> Optional['App']:
     
     # Store config and AI client
     app.forge_config = config
-    app.forge_client = ForgeAIClient(config.forge_api_url, config.forge_api_key)
+    app.forge_client = Enigma AI EngineClient(config.forge_api_url, config.forge_api_key)
     app.thread_contexts: Dict[str, str] = {}  # thread_ts -> conversation_id
     
     # ==================== Message Handlers ====================
@@ -192,7 +192,7 @@ def create_slack_bot(config: SlackBotConfig) -> Optional['App']:
             say("Hi! How can I help you?", thread_ts=thread_ts)
             return
         
-        # Get response from ForgeAI
+        # Get response from Enigma AI Engine
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
@@ -222,7 +222,7 @@ def create_slack_bot(config: SlackBotConfig) -> Optional['App']:
         
         thread_ts = event.get("thread_ts") or event.get("ts")
         
-        # Get response from ForgeAI
+        # Get response from Enigma AI Engine
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
@@ -360,7 +360,7 @@ def create_slack_bot(config: SlackBotConfig) -> Optional['App']:
         ack()
         
         help_text = """
-*ForgeAI Slack Bot Commands:*
+*Enigma AI Engine Slack Bot Commands:*
 
 - `/forge <message>` - Chat with the AI
 - `/imagine <description>` - Generate an image
@@ -369,7 +369,7 @@ def create_slack_bot(config: SlackBotConfig) -> Optional['App']:
 - `/forgehelp` - Show this help message
 
 *Tips:*
-- Mention @ForgeAI in any channel to chat
+- Mention @Enigma AI Engine in any channel to chat
 - DM the bot for private conversations
 - Start threads to maintain context
         """
@@ -416,7 +416,7 @@ def create_slack_bot(config: SlackBotConfig) -> Optional['App']:
                 "type": "header",
                 "text": {
                     "type": "plain_text",
-                    "text": "Welcome to ForgeAI"
+                    "text": "Welcome to Enigma AI Engine"
                 }
             },
             {
@@ -465,7 +465,7 @@ def create_slack_bot(config: SlackBotConfig) -> Optional['App']:
                 "elements": [
                     {
                         "type": "mrkdwn",
-                        "text": "Powered by ForgeAI | Type `/forgehelp` for more commands"
+                        "text": "Powered by Enigma AI Engine | Type `/forgehelp` for more commands"
                     }
                 ]
             }
@@ -526,7 +526,7 @@ def run_bot(config: SlackBotConfig):
     app = create_slack_bot(config)
     if app:
         handler = SocketModeHandler(app, config.app_token)
-        logger.info("Starting ForgeAI Slack Bot...")
+        logger.info("Starting Enigma AI Engine Slack Bot...")
         handler.start()
 
 

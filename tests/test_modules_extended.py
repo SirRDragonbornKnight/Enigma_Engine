@@ -18,17 +18,17 @@ from unittest.mock import Mock, patch
 # Add parent to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from forge_ai.modules import (
+from enigma_engine.modules import (
     ModuleManager, Module, ModuleInfo, ModuleState, 
     ModuleCategory, ModuleHealth
 )
-from forge_ai.modules.sandbox import (
+from enigma_engine.modules.sandbox import (
     ModuleSandbox, SandboxConfig, SandboxViolationError,
     create_default_sandbox_config
 )
-from forge_ai.modules.docs import ModuleDocGenerator
-from forge_ai.modules.updater import ModuleUpdater, ModuleUpdate
-from forge_ai.modules.registry import register_all
+from enigma_engine.modules.docs import ModuleDocGenerator
+from enigma_engine.modules.updater import ModuleUpdater, ModuleUpdate
+from enigma_engine.modules.registry import register_all
 
 
 class TestModuleHealthChecks(unittest.TestCase):
@@ -283,7 +283,7 @@ class TestModuleDocGenerator(unittest.TestCase):
         markdown = self.doc_gen.generate_all_markdown()
         
         self.assertIsInstance(markdown, str)
-        self.assertIn('# ForgeAI', markdown)
+        self.assertIn('# Enigma AI Engine', markdown)
         self.assertIn('Module Documentation', markdown)
         self.assertIn('Table of Contents', markdown)
         
@@ -334,7 +334,7 @@ class TestModuleDocGenerator(unittest.TestCase):
             
             self.assertTrue(output_path.exists())
             content = output_path.read_text(encoding='utf-8')
-            self.assertIn('ForgeAI', content)
+            self.assertIn('Enigma AI Engine', content)
             self.assertGreater(len(content), 100)
     
     def test_export_to_file_mermaid(self):

@@ -27,7 +27,7 @@ def main():
     parser.add_argument("--min-freq", type=int, default=2,
                         help="Minimum pair frequency for merging (default: 2)")
     parser.add_argument("--output", "-o", type=str, default=None,
-                        help="Output path (default: forge_ai/vocab_model/bpe_vocab.json)")
+                        help="Output path (default: enigma_engine/vocab_model/bpe_vocab.json)")
     
     args = parser.parse_args()
     
@@ -61,13 +61,13 @@ def main():
     print(f"\nTotal: {total_chars:,} characters from {len(texts)} file(s)")
     
     # Train tokenizer
-    from forge_ai.core.bpe_tokenizer import BPETokenizer
+    from enigma_engine.core.bpe_tokenizer import BPETokenizer
     
     tokenizer = BPETokenizer()
     tokenizer.train(texts, vocab_size=args.vocab_size, min_frequency=args.min_freq, verbose=True)
     
     # Save
-    output_path = args.output or "forge_ai/vocab_model/bpe_vocab.json"
+    output_path = args.output or "enigma_engine/vocab_model/bpe_vocab.json"
     tokenizer.save(Path(output_path))
     
     # Test it

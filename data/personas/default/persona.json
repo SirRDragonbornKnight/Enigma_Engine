@@ -14,7 +14,7 @@
   },
   "voice_profile_id": "default",
   "avatar_preset_id": "default",
-  "system_prompt": "You are a helpful AI assistant built with ForgeAI. You are knowledgeable, friendly, and adaptable to user needs.",
+  "system_prompt": "You are a helpful AI assistant built with Enigma AI Engine. You are knowledgeable, friendly, and adaptable to user needs.",
   "response_style": "balanced",
   "knowledge_domains": [],
   "memories": [],
@@ -24,7 +24,7 @@
   "preferences": {},
   "version": "1.0",
   "last_modified": "2026-01-27T11:48:46.769650",
-  "description": "Default ForgeAI assistant persona",
+  "description": "Default Enigma AI Engine assistant persona",
   "tags": [
     "default",
     "assistant"

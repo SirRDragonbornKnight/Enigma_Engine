@@ -7,7 +7,7 @@ Tests the ToT reasoning components: ThoughtTree, ThoughtNode, ToTReasoner.
 import pytest
 import time
 
-from forge_ai.core.tree_of_thoughts import (
+from enigma_engine.core.tree_of_thoughts import (
     SearchStrategy,
     NodeState,
     ThoughtNode,

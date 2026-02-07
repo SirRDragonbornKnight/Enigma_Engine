@@ -23,7 +23,7 @@ def test_imports():
         # Test hotkey manager
         spec = importlib.util.spec_from_file_location(
             'hotkey_manager',
-            'forge_ai/core/hotkey_manager.py'
+            'enigma_engine/core/hotkey_manager.py'
         )
         hotkey_manager = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(hotkey_manager)
@@ -32,7 +32,7 @@ def test_imports():
         # Test hotkey actions
         spec = importlib.util.spec_from_file_location(
             'hotkey_actions',
-            'forge_ai/core/hotkey_actions.py'
+            'enigma_engine/core/hotkey_actions.py'
         )
         hotkey_actions = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(hotkey_actions)
@@ -42,7 +42,7 @@ def test_imports():
         if sys.platform == 'win32':
             spec = importlib.util.spec_from_file_location(
                 'windows',
-                'forge_ai/core/hotkeys/windows.py'
+                'enigma_engine/core/hotkeys/windows.py'
             )
             windows = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(windows)
@@ -50,7 +50,7 @@ def test_imports():
         elif sys.platform == 'darwin':
             spec = importlib.util.spec_from_file_location(
                 'macos',
-                'forge_ai/core/hotkeys/macos.py'
+                'enigma_engine/core/hotkeys/macos.py'
             )
             macos = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(macos)
@@ -58,7 +58,7 @@ def test_imports():
         else:
             spec = importlib.util.spec_from_file_location(
                 'linux',
-                'forge_ai/core/hotkeys/linux.py'
+                'enigma_engine/core/hotkeys/linux.py'
             )
             linux = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(linux)
@@ -78,7 +78,7 @@ def test_default_hotkeys():
         import importlib.util
         spec = importlib.util.spec_from_file_location(
             'hotkey_manager',
-            'forge_ai/core/hotkey_manager.py'
+            'enigma_engine/core/hotkey_manager.py'
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
@@ -109,7 +109,7 @@ def test_manager_creation():
         import importlib.util
         spec = importlib.util.spec_from_file_location(
             'hotkey_manager',
-            'forge_ai/core/hotkey_manager.py'
+            'enigma_engine/core/hotkey_manager.py'
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
@@ -135,7 +135,7 @@ def test_actions_creation():
         import importlib.util
         spec = importlib.util.spec_from_file_location(
             'hotkey_actions',
-            'forge_ai/core/hotkey_actions.py'
+            'enigma_engine/core/hotkey_actions.py'
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
@@ -170,7 +170,7 @@ def test_config_integration():
         import importlib.util
         spec = importlib.util.spec_from_file_location(
             'defaults',
-            'forge_ai/config/defaults.py'
+            'enigma_engine/config/defaults.py'
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)

@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
     from PyQt5.QtWidgets import QApplication, QPushButton, QVBoxLayout, QWidget, QLabel
     from PyQt5.QtCore import Qt
-    from forge_ai.gui.overlay import AIOverlay, OverlayMode, OverlayPosition, OVERLAY_THEMES
+    from enigma_engine.gui.overlay import AIOverlay, OverlayMode, OverlayPosition, OVERLAY_THEMES
     
     HAS_PYQT = True
 except ImportError as e:

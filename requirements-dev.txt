@@ -1,4 +1,4 @@
-# ForgeAI Development Requirements
+# Enigma AI Engine Development Requirements
 # Install with: pip install -r requirements-dev.txt
 
 # Include base requirements

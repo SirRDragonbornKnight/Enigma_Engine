@@ -1,4 +1,4 @@
-# ForgeAI - Quick Start Guide
+# Enigma AI Engine - Quick Start Guide
 # Last Updated: January 2026
 
 ## Getting Started

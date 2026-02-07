@@ -2,7 +2,7 @@
 
 ## Overview
 
-All training data files in the ForgeAI AI Engine follow standardized formats to ensure consistency and proper model training. This guide documents the official formats.
+All training data files in the Enigma AI Engine AI Engine follow standardized formats to ensure consistency and proper model training. This guide documents the official formats.
 
 ## File Structure
 
@@ -206,7 +206,7 @@ grep '"tool":' data/*.txt | head -5
 
 ### Test with Tokenizer
 ```python
-from forge_ai.core.tokenizer import get_tokenizer
+from enigma_engine.core.tokenizer import get_tokenizer
 
 tokenizer = get_tokenizer()
 with open('data/tool_training_data.txt', 'r') as f:
@@ -253,6 +253,6 @@ Done!
 
 **Last Updated**: January 2026
 
-**Maintained By**: ForgeAI Engine Development Team
+**Maintained By**: Enigma AI Engine Engine Development Team
 
 **Questions?** See `docs/TOOL_USE.md` for usage documentation

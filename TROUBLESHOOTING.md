@@ -27,7 +27,7 @@ This script will:
 ### 1. Basic Functionality Test
 
 ```python
-from forge_ai.core.model import create_model
+from enigma_engine.core.model import create_model
 import torch
 
 # Create model
@@ -47,7 +47,7 @@ print(f"✓ Generation: {output.shape}")
 ### 2. RoPE Scaling Test
 
 ```python
-from forge_ai.core.model import ForgeConfig, Forge
+from enigma_engine.core.model import ForgeConfig, Forge
 import torch
 
 # Test dynamic NTK scaling
@@ -72,7 +72,7 @@ print(f"✓ Long sequence: {logits.shape}")
 ### 3. Multi-Modal Test
 
 ```python
-from forge_ai.core.model import ForgeConfig, Forge
+from enigma_engine.core.model import ForgeConfig, Forge
 import torch
 
 config = ForgeConfig(
@@ -119,12 +119,12 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 ```
 
-### Issue 2: ModuleNotFoundError: No module named 'forge_ai'
+### Issue 2: ModuleNotFoundError: No module named 'enigma_engine'
 
 **Solution:**
 ```bash
 # Make sure you're in the project root directory
-cd /path/to/Forge_AI
+cd /path/to/enigma_engine
 
 # Set PYTHONPATH
 export PYTHONPATH=$(pwd):$PYTHONPATH
@@ -145,7 +145,7 @@ ImportError: HuggingFace model loading requires transformers library.
 pip install transformers
 
 # Then use:
-from forge_ai.core.model import Forge
+from enigma_engine.core.model import Forge
 model = Forge.from_huggingface("microsoft/phi-2")
 ```
 
@@ -161,7 +161,7 @@ ImportError: Safetensors loading requires safetensors library.
 pip install safetensors
 
 # Then use:
-from forge_ai.core.model import Forge
+from enigma_engine.core.model import Forge
 model = Forge.from_safetensors("model.safetensors")
 ```
 
@@ -177,7 +177,7 @@ ImportError: GGUF model loading requires gguf library.
 pip install gguf
 
 # Then use:
-from forge_ai.core.model import Forge
+from enigma_engine.core.model import Forge
 model = Forge.from_gguf("model.gguf")
 ```
 
@@ -190,10 +190,10 @@ ImportError: LoRA support requires lora_utils module
 
 **Solution:**
 
-The `lora_utils` module needs to be implemented in `forge_ai/core/lora_utils.py`. Here's a minimal implementation:
+The `lora_utils` module needs to be implemented in `enigma_engine/core/lora_utils.py`. Here's a minimal implementation:
 
 ```python
-# forge_ai/core/lora_utils.py
+# enigma_engine/core/lora_utils.py
 import torch
 
 def load_lora_weights(path):
@@ -314,7 +314,7 @@ pytest tests/test_universal_model.py::TestRoPEScaling::test_rope_scaling_model_c
 ### Validate RoPE Scaling
 
 ```python
-from forge_ai.core.model import ForgeConfig, Forge
+from enigma_engine.core.model import ForgeConfig, Forge
 
 # Test all three scaling types
 for scaling_type in ['linear', 'dynamic', 'yarn']:
@@ -333,7 +333,7 @@ for scaling_type in ['linear', 'dynamic', 'yarn']:
 ### Validate Multi-Modal
 
 ```python
-from forge_ai.core.model import ForgeConfig, Forge
+from enigma_engine.core.model import ForgeConfig, Forge
 import torch
 
 # Vision + Text
@@ -372,7 +372,7 @@ print("✓ Vision + Audio + Text")
 ### Validate Speculative Decoding
 
 ```python
-from forge_ai.core.model import create_model
+from enigma_engine.core.model import create_model
 import torch
 
 draft = create_model('nano')
@@ -395,7 +395,7 @@ print("✓ Speculative decoding disabled")
 ### Validate Universal Loading
 
 ```python
-from forge_ai.core.model import Forge
+from enigma_engine.core.model import Forge
 
 # Check all methods exist
 methods = [
@@ -418,7 +418,7 @@ for method in methods:
 ```python
 import time
 import torch
-from forge_ai.core.model import ForgeConfig, Forge
+from enigma_engine.core.model import ForgeConfig, Forge
 
 # Standard model
 config = ForgeConfig(vocab_size=1241, dim=256, n_layers=4, n_heads=4, max_seq_len=1024)
@@ -454,7 +454,7 @@ print(f"Overhead: {(time_extended/time_standard - 1)*100:.1f}%")
 ```python
 import time
 import torch
-from forge_ai.core.model import create_model
+from enigma_engine.core.model import create_model
 
 draft = create_model('nano')
 model = create_model('small')
@@ -487,7 +487,7 @@ print(f"Speedup: {speedup:.2f}x")
 2. **Check documentation:**
    - `UNIVERSAL_MODEL_GUIDE.md` - Comprehensive usage guide
    - `UNIVERSAL_MODEL_IMPLEMENTATION.md` - Technical details
-   - Inline docstrings in `forge_ai/core/model.py`
+   - Inline docstrings in `enigma_engine/core/model.py`
 
 3. **Run interactive demo:**
    ```bash

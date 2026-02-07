@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tests for the ForgeAI tool system.
+Tests for the Enigma AI Engine tool system.
 
 Run with: pytest tests/test_tools.py -v
 """
@@ -16,14 +16,14 @@ class TestToolRegistry:
     
     def test_registry_loads(self):
         """Test tool registry loads."""
-        from forge_ai.tools import get_registry
+        from enigma_engine.tools import get_registry
         registry = get_registry()
         assert registry is not None
         assert hasattr(registry, 'tools')
     
     def test_list_tools(self):
         """Test listing all tools."""
-        from forge_ai.tools import get_registry
+        from enigma_engine.tools import get_registry
         registry = get_registry()
         tools = list(registry.tools.keys())
         assert len(tools) > 0
@@ -34,7 +34,7 @@ class TestToolRegistry:
     
     def test_get_tool_by_name(self):
         """Test getting a tool by name."""
-        from forge_ai.tools import get_registry
+        from enigma_engine.tools import get_registry
         registry = get_registry()
         tool = registry.get("get_system_info")
         assert tool is not None
@@ -42,21 +42,21 @@ class TestToolRegistry:
     
     def test_tool_not_found(self):
         """Test executing a non-existent tool."""
-        from forge_ai.tools import execute_tool
+        from enigma_engine.tools import execute_tool
         result = execute_tool("nonexistent_tool_xyz")
         assert result["success"] is False
         assert "not found" in result.get("error", "").lower()
     
     def test_execute_tool(self):
         """Test executing a tool."""
-        from forge_ai.tools import execute_tool
+        from enigma_engine.tools import execute_tool
         result = execute_tool("get_system_info")
         assert isinstance(result, dict)
         assert "success" in result
     
     def test_tool_to_dict(self):
         """Test tool export to dict for AI consumption."""
-        from forge_ai.tools import get_registry
+        from enigma_engine.tools import get_registry
         registry = get_registry()
         tool = registry.get("get_system_info")
         tool_dict = tool.to_dict()
@@ -70,7 +70,7 @@ class TestSystemTools:
     
     def test_get_system_info(self):
         """Test system info tool returns expected data."""
-        from forge_ai.tools import execute_tool
+        from enigma_engine.tools import execute_tool
         result = execute_tool("get_system_info")
         assert result.get("success") is True
         info = result.get("info", {})
@@ -81,14 +81,14 @@ class TestSystemTools:
     
     def test_run_command_safe(self):
         """Test running a safe command."""
-        from forge_ai.tools import execute_tool
+        from enigma_engine.tools import execute_tool
         result = execute_tool("run_command", command="echo hello")
         assert result.get("success") is True
         assert "hello" in result.get("stdout", "")
     
     def test_run_command_blocked(self):
         """Test that dangerous commands are blocked."""
-        from forge_ai.tools import execute_tool
+        from enigma_engine.tools import execute_tool
         result = execute_tool("run_command", command="rm -rf /")
         assert result.get("success") is False
         assert "blocked" in result.get("error", "").lower()
@@ -99,7 +99,7 @@ class TestFileTools:
     
     def test_list_directory(self, tmp_path):
         """Test listing directory."""
-        from forge_ai.tools import execute_tool
+        from enigma_engine.tools import execute_tool
         
         # Create temp files
         (tmp_path / "test.txt").write_text("hello")
@@ -111,7 +111,7 @@ class TestFileTools:
     
     def test_read_file(self, tmp_path):
         """Test reading file content."""
-        from forge_ai.tools import execute_tool
+        from enigma_engine.tools import execute_tool
         
         # Create temp file
         test_file = tmp_path / "test.txt"
@@ -124,7 +124,7 @@ class TestFileTools:
     
     def test_read_file_not_found(self, tmp_path):
         """Test reading non-existent file."""
-        from forge_ai.tools import execute_tool
+        from enigma_engine.tools import execute_tool
         
         result = execute_tool("read_file", path=str(tmp_path / "nonexistent.txt"))
         assert result.get("success") is False
@@ -132,7 +132,7 @@ class TestFileTools:
     
     def test_write_file(self, tmp_path):
         """Test writing file content."""
-        from forge_ai.tools import execute_tool
+        from enigma_engine.tools import execute_tool
         
         test_file = tmp_path / "output.txt"
         result = execute_tool("write_file", path=str(test_file), content="Test content")
@@ -141,7 +141,7 @@ class TestFileTools:
     
     def test_write_file_append(self, tmp_path):
         """Test appending to file."""
-        from forge_ai.tools import execute_tool
+        from enigma_engine.tools import execute_tool
         
         test_file = tmp_path / "append.txt"
         test_file.write_text("Line 1\n")
@@ -153,7 +153,7 @@ class TestFileTools:
     
     def test_move_file(self, tmp_path):
         """Test moving/renaming a file."""
-        from forge_ai.tools import execute_tool
+        from enigma_engine.tools import execute_tool
         
         src = tmp_path / "source.txt"
         dst = tmp_path / "destination.txt"
@@ -166,7 +166,7 @@ class TestFileTools:
     
     def test_delete_file(self, tmp_path):
         """Test deleting a file."""
-        from forge_ai.tools import execute_tool
+        from enigma_engine.tools import execute_tool
         
         test_file = tmp_path / "to_delete.txt"
         test_file.write_text("delete me")
@@ -181,20 +181,20 @@ class TestVision:
     
     def test_screen_capture_init(self):
         """Test screen capture initialization."""
-        from forge_ai.tools.vision import ScreenCapture
+        from enigma_engine.tools.vision import ScreenCapture
         capture = ScreenCapture()
         assert capture is not None
         assert hasattr(capture, '_backend')
     
     def test_screen_vision_init(self):
         """Test screen vision initialization."""
-        from forge_ai.tools.vision import ScreenVision
+        from enigma_engine.tools.vision import ScreenVision
         vision = ScreenVision()
         assert vision is not None
     
     def test_capture_screen(self):
         """Test screen capture on systems with display."""
-        from forge_ai.tools.vision import ScreenCapture
+        from enigma_engine.tools.vision import ScreenCapture
         capture = ScreenCapture()
         
         if capture._backend == "none":
@@ -215,7 +215,7 @@ class TestWebTools:
     
     def test_web_search_structure(self):
         """Test web search returns proper structure."""
-        from forge_ai.tools import execute_tool
+        from enigma_engine.tools import execute_tool
         result = execute_tool("web_search", query="test")
         # Should return dict even if search fails
         assert isinstance(result, dict)
@@ -223,7 +223,7 @@ class TestWebTools:
     
     def test_web_search_empty_query(self):
         """Test web search with empty query."""
-        from forge_ai.tools import execute_tool
+        from enigma_engine.tools import execute_tool
         result = execute_tool("web_search", query="")
         assert result.get("success") is False
         assert "empty" in result.get("error", "").lower()
@@ -234,27 +234,27 @@ class TestToolDefinitions:
     
     def test_get_all_tools(self):
         """Test getting all tool definitions."""
-        from forge_ai.tools import get_all_tools
+        from enigma_engine.tools import get_all_tools
         tools = get_all_tools()
         assert isinstance(tools, list)
         assert len(tools) > 0
     
     def test_get_tools_by_category(self):
         """Test filtering tools by category."""
-        from forge_ai.tools import get_tools_by_category
+        from enigma_engine.tools import get_tools_by_category
         gen_tools = get_tools_by_category("generation")
         assert isinstance(gen_tools, list)
     
     def test_get_available_tools_for_prompt(self):
         """Test getting tool descriptions for AI prompt."""
-        from forge_ai.tools import get_available_tools_for_prompt
+        from enigma_engine.tools import get_available_tools_for_prompt
         prompt_text = get_available_tools_for_prompt()
         assert isinstance(prompt_text, str)
         assert len(prompt_text) > 0
     
     def test_tool_definition_schema(self):
         """Test tool definition exports proper schema."""
-        from forge_ai.tools import get_tool_definition
+        from enigma_engine.tools import get_tool_definition
         tool_def = get_tool_definition("generate_image")
         if tool_def:
             schema = tool_def.get_schema()
@@ -267,13 +267,13 @@ class TestToolExecutor:
     
     def test_executor_init(self):
         """Test tool executor initialization."""
-        from forge_ai.tools import ToolExecutor
+        from enigma_engine.tools import ToolExecutor
         executor = ToolExecutor()
         assert executor is not None
     
     def test_execute_tool_from_text(self):
         """Test parsing and executing tool calls from text."""
-        from forge_ai.tools import execute_tool_from_text
+        from enigma_engine.tools import execute_tool_from_text
         # This tests the text parsing capability
         text = '<tool>get_system_info</tool>'
         modified_text, results = execute_tool_from_text(text)
@@ -286,7 +286,7 @@ class TestInteractiveTools:
     
     def test_create_checklist(self, tmp_path):
         """Test creating a checklist."""
-        from forge_ai.tools.interactive_tools import ChecklistManager
+        from enigma_engine.tools.interactive_tools import ChecklistManager
         manager = ChecklistManager(storage_path=tmp_path / "checklists.json")
         result = manager.create_checklist("Test List", ["Item 1", "Item 2"])
         assert result["success"] is True
@@ -295,7 +295,7 @@ class TestInteractiveTools:
     
     def test_list_checklists(self, tmp_path):
         """Test listing checklists."""
-        from forge_ai.tools.interactive_tools import ChecklistManager
+        from enigma_engine.tools.interactive_tools import ChecklistManager
         manager = ChecklistManager(storage_path=tmp_path / "checklists.json")
         manager.create_checklist("List 1", ["A", "B"])
         manager.create_checklist("List 2", ["C"])

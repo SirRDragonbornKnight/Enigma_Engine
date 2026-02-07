@@ -1,5 +1,5 @@
 """
-Tests for forge_ai.plugins module.
+Tests for enigma_engine.plugins module.
 
 Tests plugin system functionality including:
 - Plugin loading and unloading
@@ -20,13 +20,13 @@ class TestPluginInstallation:
     
     def test_installation_class_exists(self):
         """Test PluginInstaller class exists."""
-        from forge_ai.plugins.installation import PluginInstaller
+        from enigma_engine.plugins.installation import PluginInstaller
         
         assert PluginInstaller is not None
     
     def test_installer_creation(self):
         """Test creating plugin installer with required args."""
-        from forge_ai.plugins.installation import PluginInstaller
+        from enigma_engine.plugins.installation import PluginInstaller
         
         with tempfile.TemporaryDirectory() as tmpdir:
             plugins_dir = Path(tmpdir) / "plugins"
@@ -35,7 +35,7 @@ class TestPluginInstallation:
     
     def test_install_from_path(self):
         """Test installer has install method."""
-        from forge_ai.plugins.installation import PluginInstaller
+        from enigma_engine.plugins.installation import PluginInstaller
         
         with tempfile.TemporaryDirectory() as tmpdir:
             plugins_dir = Path(tmpdir) / "plugins"
@@ -46,7 +46,7 @@ class TestPluginInstallation:
     
     def test_uninstall_plugin(self):
         """Test installer has uninstall method."""
-        from forge_ai.plugins.installation import PluginInstaller
+        from enigma_engine.plugins.installation import PluginInstaller
         
         with tempfile.TemporaryDirectory() as tmpdir:
             plugins_dir = Path(tmpdir) / "plugins"
@@ -61,13 +61,13 @@ class TestPluginMarketplace:
     
     def test_marketplace_class_exists(self):
         """Test PluginMarketplace class exists."""
-        from forge_ai.plugins.marketplace import PluginMarketplace
+        from enigma_engine.plugins.marketplace import PluginMarketplace
         
         assert PluginMarketplace is not None
     
     def test_marketplace_creation(self):
         """Test creating marketplace with required args."""
-        from forge_ai.plugins.marketplace import PluginMarketplace
+        from enigma_engine.plugins.marketplace import PluginMarketplace
         
         with tempfile.TemporaryDirectory() as tmpdir:
             data_dir = Path(tmpdir) / "marketplace"
@@ -76,7 +76,7 @@ class TestPluginMarketplace:
     
     def test_search_plugins(self):
         """Test marketplace has search method."""
-        from forge_ai.plugins.marketplace import PluginMarketplace
+        from enigma_engine.plugins.marketplace import PluginMarketplace
         
         with tempfile.TemporaryDirectory() as tmpdir:
             data_dir = Path(tmpdir) / "marketplace"
@@ -91,19 +91,19 @@ class TestPluginSigning:
     
     def test_signing_class_exists(self):
         """Test PluginSigner class exists."""
-        from forge_ai.plugins.signing import PluginSigner
+        from enigma_engine.plugins.signing import PluginSigner
         
         assert PluginSigner is not None
     
     def test_key_manager_exists(self):
         """Test KeyManager class exists."""
-        from forge_ai.plugins.signing import KeyManager
+        from enigma_engine.plugins.signing import KeyManager
         
         assert KeyManager is not None
     
     def test_signer_creation_with_key_manager(self):
         """Test creating plugin signer with key manager."""
-        from forge_ai.plugins.signing import PluginSigner, KeyManager
+        from enigma_engine.plugins.signing import PluginSigner, KeyManager
         
         with tempfile.TemporaryDirectory() as tmpdir:
             key_dir = Path(tmpdir) / "keys"
@@ -120,7 +120,7 @@ class TestPluginTemplates:
         """Test plugin templates module exists."""
         import importlib
         try:
-            templates = importlib.import_module('forge_ai.plugins.templates')
+            templates = importlib.import_module('enigma_engine.plugins.templates')
             assert templates is not None
         except ImportError:
             pytest.skip("templates module not available")
@@ -129,7 +129,7 @@ class TestPluginTemplates:
         """Test available template types."""
         import importlib
         try:
-            templates = importlib.import_module('forge_ai.plugins.templates')
+            templates = importlib.import_module('enigma_engine.plugins.templates')
             if hasattr(templates, 'TEMPLATE_TYPES'):
                 assert len(templates.TEMPLATE_TYPES) > 0
             else:
@@ -143,7 +143,7 @@ class TestPluginManifest:
     
     def test_manifest_creation(self):
         """Test creating plugin manifest with required fields."""
-        from forge_ai.plugins.installation import PluginManifest, PluginType
+        from enigma_engine.plugins.installation import PluginManifest, PluginType
         
         manifest = PluginManifest(
             name="Test Plugin",
@@ -160,7 +160,7 @@ class TestPluginManifest:
     
     def test_manifest_serialization(self):
         """Test manifest serialization."""
-        from forge_ai.plugins.installation import PluginManifest, PluginType
+        from enigma_engine.plugins.installation import PluginManifest, PluginType
         
         manifest = PluginManifest(
             name="SerializeTest",
@@ -177,7 +177,7 @@ class TestPluginManifest:
     
     def test_manifest_from_dict(self):
         """Test creating manifest from dict."""
-        from forge_ai.plugins.installation import PluginManifest, PluginType
+        from enigma_engine.plugins.installation import PluginManifest, PluginType
         
         data = {
             'name': 'TestFromDict',
@@ -197,7 +197,7 @@ class TestPluginDependencies:
     
     def test_installer_has_dependency_methods(self):
         """Test installer has dependency-related methods."""
-        from forge_ai.plugins.installation import PluginInstaller
+        from enigma_engine.plugins.installation import PluginInstaller
         
         with tempfile.TemporaryDirectory() as tmpdir:
             plugins_dir = Path(tmpdir) / "plugins"
@@ -213,13 +213,13 @@ class TestPluginRegistry:
     
     def test_registry_class_exists(self):
         """Test PluginRegistry class exists."""
-        from forge_ai.plugins.marketplace import PluginRegistry
+        from enigma_engine.plugins.marketplace import PluginRegistry
         
         assert PluginRegistry is not None
     
     def test_registry_creation(self):
         """Test creating plugin registry."""
-        from forge_ai.plugins.marketplace import PluginRegistry
+        from enigma_engine.plugins.marketplace import PluginRegistry
         
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_dir = Path(tmpdir) / "cache"

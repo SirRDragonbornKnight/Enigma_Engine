@@ -1,6 +1,6 @@
 # Information Directory
 
-This directory contains data files used by ForgeAI.
+This directory contains data files used by Enigma AI Engine.
 
 ## Contents
 

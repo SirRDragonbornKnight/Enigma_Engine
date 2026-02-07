@@ -1,11 +1,29 @@
-# Getting Started with ForgeAI
+# Getting Started with Enigma AI Engine
 
 ## Quick Start (5 Minutes)
 
 ### 1. Install Dependencies
+
+**Option A: Automatic installer (recommended)**
+```bash
+python install.py --standard
+```
+This auto-detects your hardware (CPU, GPU, Raspberry Pi) and installs the right packages.
+
+**Option B: Manual install**
 ```bash
 pip install -r requirements.txt
 ```
+
+**Platform-specific notes:**
+
+| Platform | Extra Steps |
+|----------|-------------|
+| **Linux (Ubuntu/Debian)** | `sudo apt install python3-pyqt5 portaudio19-dev libespeak-ng1` |
+| **Linux (NVIDIA GPU)** | Ensure NVIDIA drivers + CUDA are installed first |
+| **Raspberry Pi** | `sudo apt install python3-pyqt5 python3-pyaudio espeak-ng` |
+| **macOS** | `brew install portaudio espeak-ng` |
+| **Windows** | Most deps install via pip automatically |
 
 ### 2. Launch the GUI
 ```bash
@@ -155,7 +173,7 @@ A: I'd be happy to help! Please provide your order number and I'll look into it.
 
 ## Voice Customization
 
-ForgeAI supports full voice customization - you're not stuck with the Windows default!
+Enigma AI Engine supports full voice customization - you're not stuck with the Windows default!
 
 ### Change Voice in GUI
 1. Go to **Settings** tab
@@ -171,7 +189,7 @@ ForgeAI supports full voice customization - you're not stuck with the Windows de
 
 ### Let AI Create Its Own Voice
 ```python
-from forge_ai.voice.voice_generator import AIVoiceGenerator
+from enigma_engine.voice.voice_generator import AIVoiceGenerator
 
 generator = AIVoiceGenerator()
 voice = generator.generate_for_personality(personality_traits)

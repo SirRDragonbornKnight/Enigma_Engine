@@ -1,7 +1,7 @@
 """
 Tests for authentication and user account systems.
 
-Tests forge_ai/auth/accounts.py and forge_ai/security/authentication.py
+Tests enigma_engine/auth/accounts.py and enigma_engine/security/authentication.py
 """
 
 import time
@@ -17,7 +17,7 @@ class TestPasswordHasher:
     
     def test_hash_password_returns_salt_and_hash(self):
         """Test that hash_password returns both salt and hash."""
-        from forge_ai.auth.accounts import PasswordHasher
+        from enigma_engine.auth.accounts import PasswordHasher
         
         salt, key = PasswordHasher.hash_password("test_password")
         
@@ -28,7 +28,7 @@ class TestPasswordHasher:
     
     def test_same_password_different_salt(self):
         """Test that same password with different salt gives different hash."""
-        from forge_ai.auth.accounts import PasswordHasher
+        from enigma_engine.auth.accounts import PasswordHasher
         
         salt1, hash1 = PasswordHasher.hash_password("test_password")
         salt2, hash2 = PasswordHasher.hash_password("test_password")
@@ -40,7 +40,7 @@ class TestPasswordHasher:
     
     def test_verify_password_correct(self):
         """Test password verification with correct password."""
-        from forge_ai.auth.accounts import PasswordHasher
+        from enigma_engine.auth.accounts import PasswordHasher
         
         password = "my_secure_password_123!"
         salt, stored_hash = PasswordHasher.hash_password(password)
@@ -49,7 +49,7 @@ class TestPasswordHasher:
     
     def test_verify_password_incorrect(self):
         """Test password verification with incorrect password."""
-        from forge_ai.auth.accounts import PasswordHasher
+        from enigma_engine.auth.accounts import PasswordHasher
         
         password = "correct_password"
         wrong_password = "wrong_password"
@@ -59,7 +59,7 @@ class TestPasswordHasher:
     
     def test_empty_password_handling(self):
         """Test handling of empty password."""
-        from forge_ai.auth.accounts import PasswordHasher
+        from enigma_engine.auth.accounts import PasswordHasher
         
         # Should not raise, even for empty password
         salt, key = PasswordHasher.hash_password("")
@@ -68,7 +68,7 @@ class TestPasswordHasher:
     
     def test_unicode_password(self):
         """Test handling of unicode characters in password."""
-        from forge_ai.auth.accounts import PasswordHasher
+        from enigma_engine.auth.accounts import PasswordHasher
         
         password = "密码パスワード🔐"
         salt, key = PasswordHasher.hash_password(password)
@@ -81,7 +81,7 @@ class TestUserProfile:
     
     def test_create_user_profile(self):
         """Test creating a basic user profile."""
-        from forge_ai.auth.accounts import UserProfile, UserRole
+        from enigma_engine.auth.accounts import UserProfile, UserRole
         
         profile = UserProfile(
             user_id="user_123",
@@ -96,7 +96,7 @@ class TestUserProfile:
     
     def test_user_profile_to_dict(self):
         """Test converting user profile to dictionary."""
-        from forge_ai.auth.accounts import UserProfile, UserRole
+        from enigma_engine.auth.accounts import UserProfile, UserRole
         
         profile = UserProfile(
             user_id="user_123",
@@ -113,7 +113,7 @@ class TestUserProfile:
     
     def test_user_profile_from_dict(self):
         """Test creating user profile from dictionary."""
-        from forge_ai.auth.accounts import UserProfile, UserRole
+        from enigma_engine.auth.accounts import UserProfile, UserRole
         
         data = {
             "user_id": "user_456",
@@ -133,7 +133,7 @@ class TestSession:
     
     def test_create_session(self):
         """Test creating a session."""
-        from forge_ai.auth.accounts import Session
+        from enigma_engine.auth.accounts import Session
         
         session = Session(
             session_id="sess_123",
@@ -146,7 +146,7 @@ class TestSession:
     
     def test_session_expiration(self):
         """Test session expiration logic."""
-        from forge_ai.auth.accounts import Session
+        from enigma_engine.auth.accounts import Session
         
         # Create an already-expired session
         session = Session(
@@ -159,7 +159,7 @@ class TestSession:
     
     def test_session_not_expired(self):
         """Test that fresh session is not expired."""
-        from forge_ai.auth.accounts import Session
+        from enigma_engine.auth.accounts import Session
         
         session = Session(
             session_id="sess_fresh",
@@ -174,7 +174,7 @@ class TestAPIKey:
     
     def test_create_api_key(self):
         """Test creating an API key."""
-        from forge_ai.auth.accounts import APIKey
+        from enigma_engine.auth.accounts import APIKey
         
         api_key = APIKey(
             key_id="key_123",
@@ -195,7 +195,7 @@ class TestUserRole:
     
     def test_user_roles_exist(self):
         """Test that expected user roles exist."""
-        from forge_ai.auth.accounts import UserRole
+        from enigma_engine.auth.accounts import UserRole
         
         assert UserRole.GUEST
         assert UserRole.USER
@@ -204,7 +204,7 @@ class TestUserRole:
     
     def test_role_values(self):
         """Test role string values."""
-        from forge_ai.auth.accounts import UserRole
+        from enigma_engine.auth.accounts import UserRole
         
         assert UserRole.GUEST.value == "guest"
         assert UserRole.USER.value == "user"
@@ -216,14 +216,14 @@ class TestSecurityAuthentication:
     
     def test_auth_provider_enum(self):
         """Test AuthProvider enum values."""
-        from forge_ai.security.authentication import AuthProvider
+        from enigma_engine.security.authentication import AuthProvider
         
         assert AuthProvider.LOCAL.value == "local"
         assert AuthProvider.API_KEY.value == "api_key"
     
     def test_user_to_dict_excludes_sensitive(self):
         """Test that User.to_dict excludes sensitive data by default."""
-        from forge_ai.security.authentication import User, UserRole, AuthProvider
+        from enigma_engine.security.authentication import User, UserRole, AuthProvider
         
         user = User(
             id="user_123",
@@ -241,7 +241,7 @@ class TestSecurityAuthentication:
     
     def test_user_to_dict_includes_sensitive_when_requested(self):
         """Test that User.to_dict includes sensitive data when requested."""
-        from forge_ai.security.authentication import User
+        from enigma_engine.security.authentication import User
         
         user = User(
             id="user_123",
@@ -258,7 +258,7 @@ class TestSecurityAuthentication:
     
     def test_user_from_dict(self):
         """Test creating User from dictionary."""
-        from forge_ai.security.authentication import User, UserRole
+        from enigma_engine.security.authentication import User, UserRole
         
         data = {
             "id": "u_789",
@@ -279,7 +279,7 @@ class TestInputSanitization:
     def test_sanitizer_module_exists(self):
         """Test that input sanitizer exists."""
         try:
-            from forge_ai.utils.input_sanitizer import sanitize
+            from enigma_engine.utils.input_sanitizer import sanitize
             # If it exists, test basic functionality
             result = sanitize("<script>alert('xss')</script>")
             assert "<script>" not in result.sanitized
@@ -290,7 +290,7 @@ class TestInputSanitization:
     def test_script_tags_removed(self):
         """Test that script tags are sanitized."""
         try:
-            from forge_ai.utils.input_sanitizer import sanitize_html
+            from enigma_engine.utils.input_sanitizer import sanitize_html
             result = sanitize_html("<p>Hello</p><script>evil()</script>")
             assert "<script>" not in result
             assert "Hello" in result

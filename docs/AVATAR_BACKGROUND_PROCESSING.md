@@ -75,7 +75,7 @@ A: Hello! 👋
 **What happens:**
 1. AI learns the pattern: "wave hello" → call tool + say "Hello!"
 2. During inference, AI outputs both text and tool call
-3. ForgeAI separates them:
+3. Enigma AI Engine separates them:
    - Text → Chat window + TTS
    - Tool call → Background execution
 4. User experiences natural conversation with avatar gestures
@@ -93,7 +93,7 @@ A: Hello! 👋
 
 ---
 
-## How ForgeAI Processes It
+## How Enigma AI Engine Processes It
 
 ### Inference Flow
 
@@ -102,7 +102,7 @@ A: Hello! 👋
 # AI generates:
 response = "Hello! 👋\n<tool_call>{...}</tool_call>"
 
-# ForgeAI splits processing:
+# Enigma AI Engine splits processing:
 
 # 1. Extract visible text
 visible_text = "Hello! 👋"  # → Show in chat
@@ -175,10 +175,10 @@ python test_avatar_tool_system.py
 - **Tag-based** (old): `data/specialized/avatar_control_training.txt` (kept for reference)
 
 ### Implementation
-- **Tool Executor**: `forge_ai/tools/tool_executor.py` - Executes tools silently
-- **Tool Definitions**: `forge_ai/tools/tool_definitions.py` - Defines `control_avatar_bones` tool
-- **Avatar Control**: `forge_ai/avatar/bone_control.py` - Actual bone manipulation
-- **AI Integration**: `forge_ai/avatar/ai_control.py` - Connects AI to avatar
+- **Tool Executor**: `enigma_engine/tools/tool_executor.py` - Executes tools silently
+- **Tool Definitions**: `enigma_engine/tools/tool_definitions.py` - Defines `control_avatar_bones` tool
+- **Avatar Control**: `enigma_engine/avatar/bone_control.py` - Actual bone manipulation
+- **AI Integration**: `enigma_engine/avatar/ai_control.py` - Connects AI to avatar
 
 ### Testing
 - **Visualizer**: `test_avatar_tool_system.py` - Shows background processing

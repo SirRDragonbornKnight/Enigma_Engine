@@ -5,7 +5,7 @@ import pytest
 from pathlib import Path
 import tempfile
 
-from forge_ai.core.personality import (
+from enigma_engine.core.personality import (
     AIPersonality,
     PersonalityTraits
 )

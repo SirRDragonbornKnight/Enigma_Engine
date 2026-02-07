@@ -1,6 +1,6 @@
-# 📖 ForgeAI - Complete GUI Guide
+# 📖 Enigma AI Engine - Complete GUI Guide
 
-**Everything you need to know to use the ForgeAI GUI, organized for easy reading and skimming.**
+**Everything you need to know to use the Enigma AI Engine GUI, organized for easy reading and skimming.**
 
 ---
 

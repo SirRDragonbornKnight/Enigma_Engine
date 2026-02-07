@@ -1,11 +1,11 @@
 """
-Example: Task Offloading with ForgeAI Orchestrator
+Example: Task Offloading with Enigma AI Engine Orchestrator
 
 This example demonstrates how to use the task offloading system
 for asynchronous and parallel task execution.
 """
 
-from forge_ai.core import (
+from enigma_engine.core import (
     get_orchestrator,
     get_offloader,
     OrchestratorConfig,
@@ -206,7 +206,7 @@ if __name__ == "__main__":
     # Note: These examples require actual models to be registered
     # In real usage, you would register Forge models or HuggingFace models
     
-    print("\n🚀 ForgeAI Task Offloading Examples\n")
+    print("\n🚀 Enigma AI Engine Task Offloading Examples\n")
     print("Note: These examples require models to be registered.")
     print("They demonstrate the API but may not execute without models.\n")
     

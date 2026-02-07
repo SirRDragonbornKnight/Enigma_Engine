@@ -1,5 +1,5 @@
 """
-ForgeAI Setup Script
+Enigma AI Engine Setup Script
 
 Install with: pip install -e .
 Or for full install: pip install -e .[full]
@@ -25,14 +25,14 @@ def read_requirements():
     return reqs
 
 setup(
-    name="forge-ai",
+    name="enigma-engine",
     version="1.1.0",
-    description="Personal AI Framework - Train and deploy your own AI with GUI, voice, vision, and more",
+    description="Enigma AI Engine - Personal AI Framework to train and deploy your own AI with GUI, voice, vision, and more",
     long_description=open("README.md").read() if __import__("os").path.exists("README.md") else "",
     long_description_content_type="text/markdown",
     author="SirRDragonbornKnight",
     author_email="sirknighth3@gmail.com",
-    url="https://github.com/SirRDragonbornKnight/Forge_AI",
+    url="https://github.com/SirRDragonbornKnight/enigma_engine",
     packages=find_packages(),
     python_requires=">=3.9",
     install_requires=[
@@ -94,7 +94,7 @@ setup(
     entry_points={
         "console_scripts": [
             # Main CLI (Ollama-style)
-            "forge=forge_ai.cli.main:main",
+            "forge=enigma_engine.cli.main:main",
             # Legacy commands
             "forge-ai=run:main",
             "forge-ai-train=run:train",
@@ -104,7 +104,7 @@ setup(
     },
     include_package_data=True,
     package_data={
-        "forge_ai": [
+        "enigma_engine": [
             "vocab_model/*",
             "data/*",
             "py.typed",

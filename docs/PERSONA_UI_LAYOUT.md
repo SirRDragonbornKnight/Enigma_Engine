@@ -26,14 +26,14 @@ The Persona tab is located in the "MODEL" section of the sidebar, between "Chat"
 │  └─────────────────┘ │  │ SYSTEM PROMPT                       │   │
 │                       │  │                                     │   │
 │  [Set as Current  ]   │  │ You are a helpful AI assistant     │   │
-│                       │  │ built with ForgeAI...              │   │
+│                       │  │ built with Enigma AI Engine...              │   │
 │  [Copy Persona    ]   │  │                                     │   │
 │                       │  └─────────────────────────────────────┘   │
 │  [Delete          ]   │                                             │
 │                       │  ┌─────────────────────────────────────┐   │
 │  ┌───────────────────┐│  │ DESCRIPTION                         │   │
 │  │ IMPORT/EXPORT     ││  │                                     │   │
-│  │                   ││  │ Default ForgeAI assistant persona   │   │
+│  │                   ││  │ Default Enigma AI Engine assistant persona   │   │
 │  │ [Import from File]││  │                                     │   │
 │  │ [Export to File  ]││  └─────────────────────────────────────┘   │
 │  │ [Load Template   ]││                                             │
@@ -52,7 +52,7 @@ The Persona tab is located in the "MODEL" section of the sidebar, between "Chat"
   - "Delete" (red) - Remove persona (disabled for default)
 
 ### Import/Export Section
-- **Import from File**: Load a .forge-ai file
+- **Import from File**: Load a .enigma-engine file
 - **Export to File**: Save current persona to share
 - **Load Template**: Import pre-made templates
 
@@ -80,7 +80,7 @@ The persona indicator:
 
 ## Color Scheme
 
-Following the existing ForgeAI dark theme:
+Following the existing Enigma AI Engine dark theme:
 - **Primary (green)**: #a6e3a1 - Active/confirm buttons
 - **Secondary (blue)**: #89b4fa - Standard/action buttons
 - **Danger (red)**: #f38ba8 - Delete button

@@ -15,8 +15,8 @@ from pathlib import Path
 import json
 import time
 
-from forge_ai.core.autonomous import AutonomousMode
-from forge_ai.core.self_improvement import LearningSource, Priority
+from enigma_engine.core.autonomous import AutonomousMode
+from enigma_engine.core.self_improvement import LearningSource, Priority
 
 
 class TestEnhancedReflection:
@@ -34,7 +34,7 @@ class TestEnhancedReflection:
     @pytest.fixture
     def mock_conversations(self, autonomous_mode):
         """Create mock conversation files."""
-        from forge_ai.memory.manager import ConversationManager
+        from enigma_engine.memory.manager import ConversationManager
         
         conv_manager = ConversationManager(model_name=autonomous_mode.model_name)
         

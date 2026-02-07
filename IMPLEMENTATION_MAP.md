@@ -4,7 +4,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                         FORGEAI GUI                                  │
+│                         Enigma AI Engine GUI                                  │
 │  ┌────────────────────────────────────────────────────────────┐    │
 │  │  enhanced_window.py (MODIFIED)                              │    │
 │  │    • Imports LearningTab                                   │    │
@@ -85,9 +85,9 @@
 ### New Files (5)
 | File | Lines | Purpose |
 |------|-------|---------|
-| `forge_ai/gui/widgets/feedback_widget.py` | 211 | Feedback collection UI |
-| `forge_ai/learning/training_scheduler.py` | 396 | Automatic training scheduler |
-| `forge_ai/gui/tabs/learning_tab.py` | 536 | Metrics dashboard tab |
+| `enigma_engine/gui/widgets/feedback_widget.py` | 211 | Feedback collection UI |
+| `enigma_engine/learning/training_scheduler.py` | 396 | Automatic training scheduler |
+| `enigma_engine/gui/tabs/learning_tab.py` | 536 | Metrics dashboard tab |
 | `SELF_IMPROVEMENT_INTEGRATION.md` | 242 | Technical documentation |
 | `SELF_IMPROVEMENT_QUICKSTART.md` | 285 | User guide |
 
@@ -96,17 +96,17 @@
 ### Modified Files (2)
 | File | Changes | Purpose |
 |------|---------|---------|
-| `forge_ai/config/defaults.py` | +47 lines | Add self_improvement config |
-| `forge_ai/gui/enhanced_window.py` | +3 lines | Integrate Learning tab |
+| `enigma_engine/config/defaults.py` | +47 lines | Add self_improvement config |
+| `enigma_engine/gui/enhanced_window.py` | +3 lines | Integrate Learning tab |
 
 **Total: 50 lines modified**
 
 ### Existing Files (Verified)
 | File | Status | Notes |
 |------|--------|-------|
-| `forge_ai/core/self_improvement.py` | ✅ Complete | 804 lines, production-ready |
-| `forge_ai/core/autonomous.py` | ✅ Real impl | Not stubs, fully functional |
-| `forge_ai/gui/tabs/chat_tab.py` | ✅ Integrated | Feedback already connected |
+| `enigma_engine/core/self_improvement.py` | ✅ Complete | 804 lines, production-ready |
+| `enigma_engine/core/autonomous.py` | ✅ Real impl | Not stubs, fully functional |
+| `enigma_engine/gui/tabs/chat_tab.py` | ✅ Integrated | Feedback already connected |
 
 ## 🔄 Data Flow
 
@@ -254,7 +254,7 @@ Tests verify:
    - OR wait for auto-training (24 hours)
 
 4. **Integrate LoRA training** (future):
-   - Connect to `forge_ai/core/training.py`
+   - Connect to `enigma_engine/core/training.py`
    - Implement actual training execution
    - Load trained adapters
 

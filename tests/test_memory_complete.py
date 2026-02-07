@@ -24,7 +24,7 @@ class TestMemoryDatabase:
     
     def test_database_init(self):
         """Test database initialization."""
-        from forge_ai.memory.memory_db import MemoryDatabase
+        from enigma_engine.memory.memory_db import MemoryDatabase
         
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "test.db"
@@ -36,7 +36,7 @@ class TestMemoryDatabase:
     
     def test_add_and_get(self):
         """Test adding and retrieving memories."""
-        from forge_ai.memory.memory_db import MemoryDatabase
+        from enigma_engine.memory.memory_db import MemoryDatabase
         
         with tempfile.TemporaryDirectory() as tmpdir:
             db = MemoryDatabase(Path(tmpdir) / "test.db")
@@ -58,7 +58,7 @@ class TestMemoryDatabase:
     
     def test_search(self):
         """Test memory search."""
-        from forge_ai.memory.memory_db import MemoryDatabase
+        from enigma_engine.memory.memory_db import MemoryDatabase
         
         with tempfile.TemporaryDirectory() as tmpdir:
             db = MemoryDatabase(Path(tmpdir) / "test.db")
@@ -82,8 +82,8 @@ class TestRAGSystem:
     
     def test_rag_init(self):
         """Test RAG system initialization."""
-        from forge_ai.memory.rag import RAGSystem
-        from forge_ai.memory.vector_db import SimpleVectorDB
+        from enigma_engine.memory.rag import RAGSystem
+        from enigma_engine.memory.vector_db import SimpleVectorDB
         
         vector_db = SimpleVectorDB(dim=128)
         rag = RAGSystem(vector_db)
@@ -93,8 +93,8 @@ class TestRAGSystem:
     
     def test_document_chunking(self):
         """Test document chunking."""
-        from forge_ai.memory.rag import RAGSystem
-        from forge_ai.memory.vector_db import SimpleVectorDB
+        from enigma_engine.memory.rag import RAGSystem
+        from enigma_engine.memory.vector_db import SimpleVectorDB
         
         vector_db = SimpleVectorDB(dim=128)
         rag = RAGSystem(vector_db)
@@ -112,7 +112,7 @@ class TestEmbeddings:
     
     def test_embedding_generator(self):
         """Test embedding generator."""
-        from forge_ai.memory.embeddings import EmbeddingGenerator
+        from enigma_engine.memory.embeddings import EmbeddingGenerator
         
         # Should fall back to hash-based embeddings if sentence-transformers not available
         embedder = EmbeddingGenerator(model="local")
@@ -122,7 +122,7 @@ class TestEmbeddings:
     
     def test_embed_text(self):
         """Test text embedding."""
-        from forge_ai.memory.embeddings import EmbeddingGenerator
+        from enigma_engine.memory.embeddings import EmbeddingGenerator
         
         embedder = EmbeddingGenerator(model="local")
         
@@ -132,8 +132,8 @@ class TestEmbeddings:
     
     def test_auto_embedding_vector_db(self):
         """Test auto-embedding vector DB."""
-        from forge_ai.memory.embeddings import AutoEmbeddingVectorDB, EmbeddingGenerator
-        from forge_ai.memory.vector_db import SimpleVectorDB
+        from enigma_engine.memory.embeddings import AutoEmbeddingVectorDB, EmbeddingGenerator
+        from enigma_engine.memory.vector_db import SimpleVectorDB
         
         vector_db = SimpleVectorDB(dim=128)
         embedder = EmbeddingGenerator(model="local")
@@ -152,8 +152,8 @@ class TestConsolidation:
     
     def test_consolidator_init(self):
         """Test consolidator initialization."""
-        from forge_ai.memory.consolidation import MemoryConsolidator
-        from forge_ai.memory.categorization import MemoryCategorization
+        from enigma_engine.memory.consolidation import MemoryConsolidator
+        from enigma_engine.memory.categorization import MemoryCategorization
         
         memory_system = MemoryCategorization()
         consolidator = MemoryConsolidator(memory_system)
@@ -163,8 +163,8 @@ class TestConsolidation:
     
     def test_merge_similar_memories(self):
         """Test merging similar memories."""
-        from forge_ai.memory.consolidation import MemoryConsolidator
-        from forge_ai.memory.categorization import MemoryCategorization, MemoryType
+        from enigma_engine.memory.consolidation import MemoryConsolidator
+        from enigma_engine.memory.categorization import MemoryCategorization, MemoryType
         
         memory_system = MemoryCategorization()
         
@@ -185,7 +185,7 @@ class TestAsyncMemory:
         """Test async database operations (sync wrapper)."""
         try:
             import asyncio
-            from forge_ai.memory.async_memory import AsyncMemoryDatabase
+            from enigma_engine.memory.async_memory import AsyncMemoryDatabase
             
             async def run_test():
                 with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
@@ -215,8 +215,8 @@ class TestMemorySearch:
     
     def test_search_init(self):
         """Test search initialization."""
-        from forge_ai.memory.search import MemorySearch
-        from forge_ai.memory.memory_db import MemoryDatabase
+        from enigma_engine.memory.search import MemorySearch
+        from enigma_engine.memory.memory_db import MemoryDatabase
         
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             db = MemoryDatabase(Path(tmpdir) / "test.db")
@@ -234,8 +234,8 @@ class TestDeduplication:
     
     def test_deduplicator_init(self):
         """Test deduplicator initialization."""
-        from forge_ai.memory.deduplication import MemoryDeduplicator
-        from forge_ai.memory.categorization import MemoryCategorization
+        from enigma_engine.memory.deduplication import MemoryDeduplicator
+        from enigma_engine.memory.categorization import MemoryCategorization
         
         memory_system = MemoryCategorization()
         dedup = MemoryDeduplicator(memory_system)
@@ -244,8 +244,8 @@ class TestDeduplication:
     
     def test_find_duplicates(self):
         """Test finding duplicates."""
-        from forge_ai.memory.deduplication import MemoryDeduplicator
-        from forge_ai.memory.categorization import MemoryCategorization, MemoryType
+        from enigma_engine.memory.deduplication import MemoryDeduplicator
+        from enigma_engine.memory.categorization import MemoryCategorization, MemoryType
         import time
         
         memory_system = MemoryCategorization()
@@ -269,8 +269,8 @@ class TestExportImport:
     
     def test_export_compressed(self):
         """Test compressed export."""
-        from forge_ai.memory.export_import import MemoryExporter
-        from forge_ai.memory.categorization import MemoryCategorization, MemoryType
+        from enigma_engine.memory.export_import import MemoryExporter
+        from enigma_engine.memory.categorization import MemoryCategorization, MemoryType
         
         memory_system = MemoryCategorization()
         memory_system.add_memory("Test memory", MemoryType.SHORT_TERM)
@@ -293,8 +293,8 @@ class TestVisualization:
     
     def test_visualizer_init(self):
         """Test visualizer initialization."""
-        from forge_ai.memory.visualization import MemoryVisualizer
-        from forge_ai.memory.categorization import MemoryCategorization
+        from enigma_engine.memory.visualization import MemoryVisualizer
+        from enigma_engine.memory.categorization import MemoryCategorization
         
         memory_system = MemoryCategorization()
         viz = MemoryVisualizer(memory_system)
@@ -303,8 +303,8 @@ class TestVisualization:
     
     def test_generate_timeline(self):
         """Test timeline generation."""
-        from forge_ai.memory.visualization import MemoryVisualizer
-        from forge_ai.memory.categorization import MemoryCategorization, MemoryType
+        from enigma_engine.memory.visualization import MemoryVisualizer
+        from enigma_engine.memory.categorization import MemoryCategorization, MemoryType
         
         memory_system = MemoryCategorization()
         memory_system.add_memory("Test 1", MemoryType.SHORT_TERM)
@@ -319,8 +319,8 @@ class TestVisualization:
     
     def test_export_html(self):
         """Test HTML export."""
-        from forge_ai.memory.visualization import MemoryVisualizer
-        from forge_ai.memory.categorization import MemoryCategorization, MemoryType
+        from enigma_engine.memory.visualization import MemoryVisualizer
+        from enigma_engine.memory.categorization import MemoryCategorization, MemoryType
         
         memory_system = MemoryCategorization()
         memory_system.add_memory("Test", MemoryType.SHORT_TERM)
@@ -340,8 +340,8 @@ class TestAnalytics:
     
     def test_analytics_init(self):
         """Test analytics initialization."""
-        from forge_ai.memory.analytics import MemoryAnalytics
-        from forge_ai.memory.categorization import MemoryCategorization
+        from enigma_engine.memory.analytics import MemoryAnalytics
+        from enigma_engine.memory.categorization import MemoryCategorization
         
         memory_system = MemoryCategorization()
         analytics = MemoryAnalytics(memory_system)
@@ -350,8 +350,8 @@ class TestAnalytics:
     
     def test_get_statistics(self):
         """Test statistics generation."""
-        from forge_ai.memory.analytics import MemoryAnalytics
-        from forge_ai.memory.categorization import MemoryCategorization, MemoryType
+        from enigma_engine.memory.analytics import MemoryAnalytics
+        from enigma_engine.memory.categorization import MemoryCategorization, MemoryType
         
         memory_system = MemoryCategorization()
         memory_system.add_memory("Test", MemoryType.SHORT_TERM, importance=0.8)
@@ -364,8 +364,8 @@ class TestAnalytics:
     
     def test_generate_report(self):
         """Test report generation."""
-        from forge_ai.memory.analytics import MemoryAnalytics
-        from forge_ai.memory.categorization import MemoryCategorization, MemoryType
+        from enigma_engine.memory.analytics import MemoryAnalytics
+        from enigma_engine.memory.categorization import MemoryCategorization, MemoryType
         
         memory_system = MemoryCategorization()
         memory_system.add_memory("Test", MemoryType.SHORT_TERM)
@@ -384,7 +384,7 @@ class TestEncryption:
     def test_encryption_init(self):
         """Test encryption initialization."""
         try:
-            from forge_ai.memory.encryption import MemoryEncryption
+            from enigma_engine.memory.encryption import MemoryEncryption
             
             encryption = MemoryEncryption()
             
@@ -397,7 +397,7 @@ class TestEncryption:
     def test_encrypt_decrypt(self):
         """Test encryption and decryption."""
         try:
-            from forge_ai.memory.encryption import MemoryEncryption
+            from enigma_engine.memory.encryption import MemoryEncryption
             
             encryption = MemoryEncryption()
             
@@ -417,8 +417,8 @@ class TestBackup:
     
     def test_backup_scheduler_init(self):
         """Test backup scheduler initialization."""
-        from forge_ai.memory.backup import MemoryBackupScheduler
-        from forge_ai.memory.categorization import MemoryCategorization
+        from enigma_engine.memory.backup import MemoryBackupScheduler
+        from enigma_engine.memory.categorization import MemoryCategorization
         
         with tempfile.TemporaryDirectory() as tmpdir:
             memory_system = MemoryCategorization()
@@ -429,8 +429,8 @@ class TestBackup:
     
     def test_create_backup(self):
         """Test creating a backup."""
-        from forge_ai.memory.backup import MemoryBackupScheduler
-        from forge_ai.memory.categorization import MemoryCategorization, MemoryType
+        from enigma_engine.memory.backup import MemoryBackupScheduler
+        from enigma_engine.memory.categorization import MemoryCategorization, MemoryType
         
         with tempfile.TemporaryDirectory() as tmpdir:
             memory_system = MemoryCategorization()
@@ -445,8 +445,8 @@ class TestBackup:
     
     def test_list_backups(self):
         """Test listing backups."""
-        from forge_ai.memory.backup import MemoryBackupScheduler
-        from forge_ai.memory.categorization import MemoryCategorization, MemoryType
+        from enigma_engine.memory.backup import MemoryBackupScheduler
+        from enigma_engine.memory.categorization import MemoryCategorization, MemoryType
         
         with tempfile.TemporaryDirectory() as tmpdir:
             memory_system = MemoryCategorization()
@@ -471,7 +471,7 @@ class TestBackwardCompatibility:
         from pathlib import Path
         
         # Temporarily override CONFIG for this test
-        from forge_ai.config import CONFIG
+        from enigma_engine.config import CONFIG
         
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             # Save original path
@@ -483,10 +483,10 @@ class TestBackwardCompatibility:
                 
                 # Force reload of memory_db module to pick up new path
                 import sys
-                if 'forge_ai.memory.memory_db' in sys.modules:
-                    del sys.modules['forge_ai.memory.memory_db']
+                if 'enigma_engine.memory.memory_db' in sys.modules:
+                    del sys.modules['enigma_engine.memory.memory_db']
                 
-                from forge_ai.memory.memory_db import add_memory, recent
+                from enigma_engine.memory.memory_db import add_memory, recent
                 
                 # These should still work
                 add_memory("Legacy test", source="test")

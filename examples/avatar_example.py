@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-ForgeAI Desktop Pet / Avatar Example
+Enigma AI Engine Desktop Pet / Avatar Example
 =====================================
 
-Complete example showing how to use ForgeAI's avatar system including:
+Complete example showing how to use Enigma AI Engine's avatar system including:
 - Desktop pet that walks along screen edges
 - Lip sync for realistic speaking
 - Emotion synchronization
@@ -211,7 +211,7 @@ class DesktopPetSimulator:
     """
     Simulated desktop pet for testing without PyQt5.
     
-    In real usage, use forge_ai.avatar.desktop_pet.DesktopPet
+    In real usage, use enigma_engine.avatar.desktop_pet.DesktopPet
     which provides a full graphical desktop companion.
     """
     
@@ -615,17 +615,17 @@ def example_priority_control():
 
 
 def example_real_forge():
-    """Using actual ForgeAI avatar system."""
+    """Using actual Enigma AI Engine avatar system."""
     print("\n" + "="*60)
-    print("Example 6: Real ForgeAI Integration")
+    print("Example 6: Real Enigma AI Engine Integration")
     print("="*60)
     
-    print("For actual ForgeAI desktop pet:")
+    print("For actual Enigma AI Engine desktop pet:")
     print("""
-    from forge_ai.avatar.desktop_pet import DesktopPet
-    from forge_ai.avatar.lip_sync import LipSync
-    from forge_ai.avatar.emotion_sync import EmotionSync
-    from forge_ai.avatar.controller import AvatarController, ControlPriority
+    from enigma_engine.avatar.desktop_pet import DesktopPet
+    from enigma_engine.avatar.lip_sync import LipSync
+    from enigma_engine.avatar.emotion_sync import EmotionSync
+    from enigma_engine.avatar.controller import AvatarController, ControlPriority
     
     # Create and start desktop pet
     pet = DesktopPet()
@@ -653,7 +653,7 @@ def example_real_forge():
 # =============================================================================
 
 if __name__ == "__main__":
-    print("ForgeAI Desktop Pet / Avatar Examples")
+    print("Enigma AI Engine Desktop Pet / Avatar Examples")
     print("="*60)
     
     example_basic_pet()
@@ -700,5 +700,5 @@ Key Components:
 
 For real desktop pet:
     pip install PyQt5
-    from forge_ai.avatar.desktop_pet import DesktopPet
+    from enigma_engine.avatar.desktop_pet import DesktopPet
 """)

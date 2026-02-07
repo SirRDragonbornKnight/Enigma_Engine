@@ -8,7 +8,7 @@ A transparent, always-on-top window for AI interaction while gaming or using oth
 
 ### Enable Overlay
 
-1. Open ForgeAI
+1. Open Enigma AI Engine
 2. Go to **Settings** tab
 3. Find **AI Overlay** section
 4. Click **Show Overlay**
@@ -133,7 +133,7 @@ Click-through: ON
 
 ### Python API
 ```python
-from forge_ai.gui.overlay import AIOverlay, OverlayMode
+from enigma_engine.gui.overlay import AIOverlay, OverlayMode
 
 # Create overlay
 overlay = AIOverlay()

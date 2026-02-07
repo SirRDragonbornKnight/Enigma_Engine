@@ -1,7 +1,7 @@
 """
 Platform Installer Builder
 
-Build platform-specific installers for ForgeAI.
+Build platform-specific installers for Enigma AI Engine.
 Supports MSI/EXE (Windows), DMG (macOS), AppImage/Flatpak (Linux).
 
 FILE: scripts/build_installers.py
@@ -34,10 +34,10 @@ class Platform(Enum):
 @dataclass
 class BuildConfig:
     """Configuration for installer builds."""
-    app_name: str = "ForgeAI"
+    app_name: str = "Enigma AI Engine"
     version: str = "1.0.0"
     description: str = "AI Framework with Modular Design"
-    author: str = "ForgeAI Team"
+    author: str = "Enigma AI Engine Team"
     license: str = "MIT"
     
     # Paths
@@ -109,7 +109,7 @@ a = Analysis(
     pathex=['{self.config.source_dir}'],
     binaries=[],
     datas=[
-        ('forge_ai', 'forge_ai'),
+        ('enigma_engine', 'enigma_engine'),
         ('data', 'data'),
         ('models', 'models'),
     ],
@@ -341,7 +341,7 @@ block_cipher = None
 a = Analysis(
     ['run.py'],
     pathex=['{self.config.source_dir}'],
-    datas=[('forge_ai', 'forge_ai'), ('data', 'data')],
+    datas=[('enigma_engine', 'enigma_engine'), ('data', 'data')],
     hiddenimports=['torch', 'numpy', 'PyQt5'],
 )
 
@@ -373,7 +373,7 @@ app = BUNDLE(
     coll,
     name='{self.config.app_name}.app',
     icon='{self.config.icon_icns}' if '{self.config.icon_icns}' else None,
-    bundle_identifier='com.forgeai.app',
+    bundle_identifier='com.Enigma AI Engine.app',
     info_plist={{
         'CFBundleShortVersionString': '{self.config.version}',
         'CFBundleVersion': '{self.config.version}',
@@ -423,7 +423,7 @@ app = BUNDLE(
         self._run_command([
             "pkgbuild",
             "--root", str(app_path.parent),
-            "--identifier", "com.forgeai.app",
+            "--identifier", "com.Enigma AI Engine.app",
             "--version", self.config.version,
             "--install-location", "/Applications",
             str(pkg_path)
@@ -484,7 +484,7 @@ Comment={self.config.description}
 HERE="$(dirname "$(readlink -f "${0}")")"
 export PATH="${HERE}/usr/bin:${PATH}"
 export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"
-exec "${HERE}/usr/bin/forgeai" "$@"
+exec "${HERE}/usr/bin/Enigma AI Engine" "$@"
 '''
         
         apprun_path = appdir / "AppRun"
@@ -499,7 +499,7 @@ exec "${HERE}/usr/bin/forgeai" "$@"
         self._run_command([
             "pyinstaller",
             "--onedir",
-            "--name", "forgeai",
+            "--name", "Enigma AI Engine",
             "--distpath", str(usr_bin),
             "run.py"
         ])
@@ -523,11 +523,11 @@ exec "${HERE}/usr/bin/forgeai" "$@"
     def _build_flatpak(self) -> Path:
         """Build Flatpak package."""
         manifest = {
-            "app-id": "com.forgeai.app",
+            "app-id": "com.Enigma AI Engine.app",
             "runtime": "org.freedesktop.Platform",
             "runtime-version": "22.08",
             "sdk": "org.freedesktop.Sdk",
-            "command": "forgeai",
+            "command": "Enigma AI Engine",
             "finish-args": [
                 "--share=network",
                 "--socket=x11",
@@ -537,7 +537,7 @@ exec "${HERE}/usr/bin/forgeai" "$@"
             ],
             "modules": [
                 {
-                    "name": "forgeai",
+                    "name": "Enigma AI Engine",
                     "buildsystem": "simple",
                     "build-commands": [
                         "pip3 install --prefix=/app ."
@@ -552,7 +552,7 @@ exec "${HERE}/usr/bin/forgeai" "$@"
             ]
         }
         
-        manifest_path = self.config.build_dir / "com.forgeai.app.json"
+        manifest_path = self.config.build_dir / "com.Enigma AI Engine.app.json"
         manifest_path.write_text(json.dumps(manifest, indent=2))
         
         # Build
@@ -594,8 +594,8 @@ Description: {self.config.description}
         
         # Copy application
         shutil.copytree(
-            self.config.source_dir / "forge_ai",
-            opt_dir / "forge_ai"
+            self.config.source_dir / "enigma_engine",
+            opt_dir / "enigma_engine"
         )
         
         # Build
@@ -684,7 +684,7 @@ def main():
     """CLI entry point."""
     import argparse
     
-    parser = argparse.ArgumentParser(description="Build ForgeAI installers")
+    parser = argparse.ArgumentParser(description="Build Enigma AI Engine installers")
     parser.add_argument("--platform", choices=["windows", "macos", "linux"],
                         help="Target platform")
     parser.add_argument("--type", help="Installer type (exe, msi, dmg, pkg, appimage, deb, rpm)")

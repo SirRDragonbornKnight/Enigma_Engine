@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ForgeAI Cleanup Script
+Enigma AI Engine Cleanup Script
 ----------------------
 Removes temporary files, caches, and optionally large downloadable models
 to reduce disk space usage.
@@ -164,7 +164,7 @@ def cleanup(root_dir, deep=False, dry_run=False):
     return total_saved
 
 def main():
-    parser = argparse.ArgumentParser(description='ForgeAI Cleanup Script')
+    parser = argparse.ArgumentParser(description='Enigma AI Engine Cleanup Script')
     parser.add_argument('--deep', action='store_true', 
                         help='Include downloadable models (can be re-downloaded)')
     parser.add_argument('--dry-run', action='store_true',

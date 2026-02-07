@@ -1,5 +1,5 @@
 """
-ForgeAI - Example Scripts
+Enigma AI Engine - Example Scripts
 
 This directory contains example scripts demonstrating various Enigma features:
 

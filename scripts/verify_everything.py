@@ -3,7 +3,7 @@
 FULL SYSTEM VERIFICATION
 ========================
 
-This tests EVERYTHING to make sure ForgeAI is ready:
+This tests EVERYTHING to make sure Enigma AI Engine is ready:
 1. Core model creation and inference
 2. Tool execution (all tools)
 3. Tool routing (keyword detection)
@@ -55,7 +55,7 @@ def print_header(title):
 
 
 def main():
-    print_header("ForgeAI FULL SYSTEM VERIFICATION")
+    print_header("Enigma AI Engine FULL SYSTEM VERIFICATION")
     print("Testing every component to ensure the system is ready...")
     
     # =========================================================================
@@ -71,7 +71,7 @@ def main():
     
     @test("Forge Model Creation", critical=True)
     def test_model():
-        from forge_ai.core.model import create_model
+        from enigma_engine.core.model import create_model
         model = create_model('nano')
         params = sum(p.numel() for p in model.parameters())
         del model
@@ -80,7 +80,7 @@ def main():
     
     @test("Tokenizer", critical=True)
     def test_tokenizer():
-        from forge_ai.core.tokenizer import get_tokenizer
+        from enigma_engine.core.tokenizer import get_tokenizer
         tok = get_tokenizer()
         encoded = tok.encode("Hello world, how are you?")
         decoded = tok.decode(encoded)
@@ -90,7 +90,7 @@ def main():
     @test("Forward Pass", critical=True)
     def test_forward():
         import torch
-        from forge_ai.core.model import create_model
+        from enigma_engine.core.model import create_model
         model = create_model('nano')
         x = torch.randint(0, 1000, (1, 10))
         with torch.no_grad():
@@ -101,7 +101,7 @@ def main():
     
     @test("Training Config", critical=True)
     def test_training_config():
-        from forge_ai.core.training import TrainingConfig
+        from enigma_engine.core.training import TrainingConfig
         config = TrainingConfig(epochs=5, batch_size=2)
         return f"epochs={config.epochs}, batch={config.batch_size}, lr={config.learning_rate}"
     test_training_config()
@@ -113,14 +113,14 @@ def main():
     
     @test("Tool Executor Init")
     def test_executor_init():
-        from forge_ai.tools.tool_executor import ToolExecutor
+        from enigma_engine.tools.tool_executor import ToolExecutor
         executor = ToolExecutor()
         return "Initialized"
     test_executor_init()
     
     @test("Tool Call Parsing")
     def test_parsing():
-        from forge_ai.tools.tool_executor import ToolExecutor
+        from enigma_engine.tools.tool_executor import ToolExecutor
         executor = ToolExecutor()
         text = '<tool_call>{"tool": "test", "params": {"x": 1}}</tool_call>'
         calls = executor.parse_tool_calls(text)
@@ -129,7 +129,7 @@ def main():
     
     @test("List Directory Tool")
     def test_list_dir():
-        from forge_ai.tools.tool_executor import ToolExecutor
+        from enigma_engine.tools.tool_executor import ToolExecutor
         executor = ToolExecutor()
         result = executor.execute("list_directory", {"path": "."})
         items = result.get("items", [])
@@ -138,7 +138,7 @@ def main():
     
     @test("Read File Tool")
     def test_read_file():
-        from forge_ai.tools.tool_executor import ToolExecutor
+        from enigma_engine.tools.tool_executor import ToolExecutor
         executor = ToolExecutor()
         result = executor.execute("read_file", {"path": "README.md"})
         success = result.get("success", False) or "content" in result
@@ -147,7 +147,7 @@ def main():
     
     @test("Write File Tool")
     def test_write_file():
-        from forge_ai.tools.tool_executor import ToolExecutor
+        from enigma_engine.tools.tool_executor import ToolExecutor
         executor = ToolExecutor()
         test_path = "outputs/.test_write"
         result = executor.execute("write_file", {"path": test_path, "content": "test"})
@@ -161,14 +161,14 @@ def main():
     
     @test("Tool Router Loading")
     def test_router_load():
-        from forge_ai.core.tool_router import get_router
+        from enigma_engine.core.tool_router import get_router
         router = get_router()
         return "Router loaded"
     test_router_load()
     
     @test("Intent Detection (Keywords)")
     def test_intent():
-        from forge_ai.core.tool_router import get_router
+        from enigma_engine.core.tool_router import get_router
         router = get_router()
         
         tests = [
@@ -189,7 +189,7 @@ def main():
     
     @test("Auto-Route Function")
     def test_auto_route():
-        from forge_ai.core.tool_router import get_router
+        from enigma_engine.core.tool_router import get_router
         router = get_router()
         # This should route to chat since no other tool matches well
         result = router.auto_route("hello how are you")
@@ -198,13 +198,13 @@ def main():
     
     @test("Universal Router Import")
     def test_universal_import():
-        from forge_ai.core.universal_router import UniversalToolRouter, chat_with_tools
+        from enigma_engine.core.universal_router import UniversalToolRouter, chat_with_tools
         return "Imported"
     test_universal_import()
     
     @test("Universal Router Detection")
     def test_universal_detect():
-        from forge_ai.core.universal_router import get_universal_router
+        from enigma_engine.core.universal_router import get_universal_router
         router = get_universal_router()
         tests = [("draw a cat", "image"), ("list files", "list_directory")]
         passed = sum(1 for p, e in tests if router.detect_intent(p) == e)
@@ -213,7 +213,7 @@ def main():
     
     @test("Universal chat_with_tools")
     def test_universal_chat():
-        from forge_ai.core.universal_router import chat_with_tools
+        from enigma_engine.core.universal_router import chat_with_tools
         def dummy(x): return "fallback"
         result = chat_with_tools("list files in data", dummy)
         return "Tool executed" if "Found" in result or "items" in str(result) else result[:50]
@@ -242,7 +242,7 @@ def main():
     
     @test("Image Tool Definition")
     def test_image_def():
-        from forge_ai.tools.tool_definitions import get_tool_definition
+        from enigma_engine.tools.tool_definitions import get_tool_definition
         tool = get_tool_definition("generate_image")
         if tool:
             return f"Tool defined with {len(tool.parameters)} parameters"
@@ -265,7 +265,7 @@ def main():
     
     @test("HuggingFace Loader Import")
     def test_hf_import():
-        from forge_ai.core.huggingface_loader import HuggingFaceModel, HAVE_TRANSFORMERS
+        from enigma_engine.core.huggingface_loader import HuggingFaceModel, HAVE_TRANSFORMERS
         if not HAVE_TRANSFORMERS:
             raise Exception("Transformers not available in loader")
         return f"Available models: {list(HuggingFaceModel.SUGGESTED_MODELS.keys())}"
@@ -273,7 +273,7 @@ def main():
     
     @test("HuggingFace Model Info (no download)")
     def test_hf_info():
-        from forge_ai.core.huggingface_loader import get_huggingface_model_info
+        from enigma_engine.core.huggingface_loader import get_huggingface_model_info
         info = get_huggingface_model_info("gpt2")
         if info.get("error"):
             raise Exception(info["error"])
@@ -294,7 +294,7 @@ def main():
     
     @test("Web Search Tool Definition")
     def test_web_search_def():
-        from forge_ai.tools.tool_definitions import get_tool_definition
+        from enigma_engine.tools.tool_definitions import get_tool_definition
         tool = get_tool_definition("web_search")
         if tool:
             return "Tool defined"
@@ -308,13 +308,13 @@ def main():
     
     @test("ForgeEngine Import")
     def test_engine_import():
-        from forge_ai.core.inference import ForgeEngine
+        from enigma_engine.core.inference import ForgeEngine
         return "Imported"
     test_engine_import()
     
     @test("ForgeEngine with Tools")
     def test_engine_tools():
-        from forge_ai.core.inference import ForgeEngine
+        from enigma_engine.core.inference import ForgeEngine
         # Just test that it can be configured with tools enabled
         # Don't actually load a model (that requires a trained model)
         return "enable_tools parameter available"

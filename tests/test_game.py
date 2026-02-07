@@ -9,7 +9,7 @@ class TestGameProfiles:
     
     def test_create_game_profile(self):
         """Test creating a game profile."""
-        from forge_ai.game.profiles import GameProfile, GameGenre
+        from enigma_engine.game.profiles import GameProfile, GameGenre
         
         profile = GameProfile(
             game_id="test_game",
@@ -25,7 +25,7 @@ class TestGameProfiles:
     
     def test_game_genre_enum(self):
         """Test game genre enumeration."""
-        from forge_ai.game.profiles import GameGenre
+        from enigma_engine.game.profiles import GameGenre
         
         # Check common genres exist
         assert GameGenre.FPS.value == "fps"
@@ -36,7 +36,7 @@ class TestGameProfiles:
     
     def test_profile_manager_get_all(self):
         """Test profile manager returns all profiles."""
-        from forge_ai.game.profiles import GameProfileManager
+        from enigma_engine.game.profiles import GameProfileManager
         
         manager = GameProfileManager()
         profiles = manager.get_all_profiles()
@@ -45,7 +45,7 @@ class TestGameProfiles:
     
     def test_profile_manager_create_profile(self):
         """Test profile manager can create profiles."""
-        from forge_ai.game.profiles import GameProfileManager, GameGenre
+        from enigma_engine.game.profiles import GameProfileManager, GameGenre
         
         manager = GameProfileManager()
         
@@ -65,7 +65,7 @@ class TestGameOverlay:
     
     def test_overlay_config(self):
         """Test overlay configuration dataclass."""
-        from forge_ai.game.overlay import OverlayConfig, OverlayPosition, OverlayMode
+        from enigma_engine.game.overlay import OverlayConfig, OverlayPosition, OverlayMode
         
         config = OverlayConfig(
             position=OverlayPosition.TOP_RIGHT,
@@ -79,7 +79,7 @@ class TestGameOverlay:
     
     def test_overlay_position_enum(self):
         """Test overlay position enumeration."""
-        from forge_ai.game.overlay import OverlayPosition
+        from enigma_engine.game.overlay import OverlayPosition
         
         assert OverlayPosition.TOP_LEFT.value == "top_left"
         assert OverlayPosition.TOP_RIGHT.value == "top_right"
@@ -88,7 +88,7 @@ class TestGameOverlay:
     
     def test_overlay_mode_enum(self):
         """Test overlay mode enumeration."""
-        from forge_ai.game.overlay import OverlayMode
+        from enigma_engine.game.overlay import OverlayMode
         
         # These are the actual values from the enum
         assert OverlayMode.COMPACT.value == "compact"
@@ -102,7 +102,7 @@ class TestGameStats:
     
     def test_create_game_session(self):
         """Test creating a game session."""
-        from forge_ai.game.stats import GameSession
+        from enigma_engine.game.stats import GameSession
         import time
         
         session = GameSession(
@@ -117,14 +117,14 @@ class TestGameStats:
     
     def test_session_tracker_creation(self):
         """Test creating session tracker."""
-        from forge_ai.game.stats import SessionTracker
+        from enigma_engine.game.stats import SessionTracker
         
         tracker = SessionTracker()
         assert tracker is not None
     
     def test_game_session_end(self):
         """Test ending a game session."""
-        from forge_ai.game.stats import GameSession
+        from enigma_engine.game.stats import GameSession
         import time
         
         session = GameSession(
@@ -142,7 +142,7 @@ class TestGameAdvice:
     
     def test_create_game_context(self):
         """Test creating game context."""
-        from forge_ai.game.advice import GameContext
+        from enigma_engine.game.advice import GameContext
         
         context = GameContext(
             game_id="test_game",
@@ -160,7 +160,7 @@ class TestGameAdvice:
     
     def test_game_context_defaults(self):
         """Test game context default values."""
-        from forge_ai.game.advice import GameContext
+        from enigma_engine.game.advice import GameContext
         
         context = GameContext(game_id="test_game")
         
@@ -176,14 +176,14 @@ class TestGameDetection:
     
     def test_detector_creation(self):
         """Test creating game detector."""
-        from forge_ai.game.profiles import GameDetector
+        from enigma_engine.game.profiles import GameDetector
         
         detector = GameDetector()
         assert detector is not None
     
     def test_running_games(self):
         """Test detecting running games."""
-        from forge_ai.game.profiles import GameDetector, GameProfileManager
+        from enigma_engine.game.profiles import GameDetector, GameProfileManager
         
         detector = GameDetector()
         manager = GameProfileManager()
@@ -195,11 +195,11 @@ class TestGameDetection:
 
 
 class TestGameModeIntegration:
-    """Test game mode integration with ForgeAI."""
+    """Test game mode integration with Enigma AI Engine."""
     
     def test_profile_manager_with_profiles(self):
         """Test profile manager initializes with builtin profiles."""
-        from forge_ai.game.profiles import GameProfileManager, BUILTIN_PROFILES
+        from enigma_engine.game.profiles import GameProfileManager, BUILTIN_PROFILES
         
         manager = GameProfileManager()
         
@@ -214,7 +214,7 @@ class TestGameModeIntegration:
     
     def test_overlay_settings_dataclass(self):
         """Test overlay settings in profile."""
-        from forge_ai.game.profiles import OverlaySettings
+        from enigma_engine.game.profiles import OverlaySettings
         
         settings = OverlaySettings(
             position_x=20,
@@ -229,7 +229,7 @@ class TestGameModeIntegration:
     
     def test_ai_behavior_dataclass(self):
         """Test AI behavior settings."""
-        from forge_ai.game.profiles import AIBehavior
+        from enigma_engine.game.profiles import AIBehavior
         
         behavior = AIBehavior(
             system_prompt="You are a gaming assistant",

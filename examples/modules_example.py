@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-ForgeAI Module System Example
+Enigma AI Engine Module System Example
 ==============================
 
-Complete example showing how to use ForgeAI's module system including:
+Complete example showing how to use Enigma AI Engine's module system including:
 - Loading and unloading modules
 - Handling dependencies and conflicts
 - Creating custom modules
 - Module configuration
 
-The module system is the core of ForgeAI - everything is a toggleable
+The module system is the core of Enigma AI Engine - everything is a toggleable
 module that can be enabled/disabled based on your needs and hardware.
 
 Dependencies:
@@ -69,7 +69,7 @@ class ModuleInfo:
 
 class Module:
     """
-    Base class for ForgeAI modules.
+    Base class for Enigma AI Engine modules.
     
     All modules inherit from this and implement load/unload.
     """
@@ -292,7 +292,7 @@ class VoiceOutputModule(Module):
 
 class ModuleManager:
     """
-    Central module manager for ForgeAI.
+    Central module manager for Enigma AI Engine.
     
     Handles:
     - Loading/unloading modules
@@ -684,15 +684,15 @@ def example_status():
 
 
 def example_forge_integration():
-    """Real ForgeAI integration."""
+    """Real Enigma AI Engine integration."""
     print("\n" + "="*60)
-    print("Example 7: ForgeAI Integration")
+    print("Example 7: Enigma AI Engine Integration")
     print("="*60)
     
-    print("For actual ForgeAI module system:")
+    print("For actual Enigma AI Engine module system:")
     print("""
-    from forge_ai.modules import ModuleManager
-    from forge_ai.modules.registry import (
+    from enigma_engine.modules import ModuleManager
+    from enigma_engine.modules.registry import (
         ModelModule, TokenizerModule, ImageGenLocalModule
     )
     
@@ -719,7 +719,7 @@ def example_forge_integration():
 # =============================================================================
 
 if __name__ == "__main__":
-    print("ForgeAI Module System Examples")
+    print("Enigma AI Engine Module System Examples")
     print("="*60)
     
     example_basic_loading()

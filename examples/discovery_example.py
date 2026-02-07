@@ -3,7 +3,7 @@
 Example: Device Discovery
 
 This script demonstrates how to use the DeviceDiscovery system
-to find other ForgeAI instances on your network.
+to find other Enigma AI Engine instances on your network.
 """
 
 import sys
@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 def example_broadcast_discovery():
     """Example 1: Quick UDP broadcast discovery."""
-    from forge_ai.comms.discovery import DeviceDiscovery
+    from enigma_engine.comms.discovery import DeviceDiscovery
     
     print("\n" + "="*60)
     print("Example 1: Broadcast Discovery (Fast)")
@@ -40,7 +40,7 @@ def example_broadcast_discovery():
             print()
     else:
         print("No devices found.")
-        print("Make sure other ForgeAI instances are running with:")
+        print("Make sure other Enigma AI Engine instances are running with:")
         print("  - Server started")
         print("  - Discovery listener enabled")
         print("  - Same network/subnet")
@@ -48,7 +48,7 @@ def example_broadcast_discovery():
 
 def example_full_scan():
     """Example 2: Full network scan."""
-    from forge_ai.comms.discovery import DeviceDiscovery
+    from enigma_engine.comms.discovery import DeviceDiscovery
     
     print("\n" + "="*60)
     print("Example 2: Full Network Scan (Thorough)")
@@ -77,7 +77,7 @@ def example_full_scan():
 
 def example_with_callback():
     """Example 3: Discovery with callback."""
-    from forge_ai.comms.discovery import DeviceDiscovery
+    from enigma_engine.comms.discovery import DeviceDiscovery
     import time
     
     print("\n" + "="*60)
@@ -111,7 +111,7 @@ def example_with_callback():
 
 def example_server_mode():
     """Example 4: Running as a discoverable server."""
-    from forge_ai.comms.discovery import DeviceDiscovery
+    from enigma_engine.comms.discovery import DeviceDiscovery
     import socket
     import time
     
@@ -155,7 +155,7 @@ def example_server_mode():
 def main():
     """Main menu."""
     print("\n" + "="*60)
-    print("ForgeAI Device Discovery Examples")
+    print("Enigma AI Engine Device Discovery Examples")
     print("="*60)
     
     print("\nSelect an example:")

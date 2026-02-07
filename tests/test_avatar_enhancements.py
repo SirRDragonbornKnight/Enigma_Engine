@@ -6,7 +6,7 @@ from pathlib import Path
 import tempfile
 import json
 
-from forge_ai.avatar import (
+from enigma_engine.avatar import (
     AvatarController,
     AIAvatarIdentity,
     AvatarAppearance,
@@ -14,7 +14,7 @@ from forge_ai.avatar import (
     LipSync,
     AvatarCustomizer,
 )
-from forge_ai.core.personality import AIPersonality
+from enigma_engine.core.personality import AIPersonality
 
 
 class TestAvatarAppearance:

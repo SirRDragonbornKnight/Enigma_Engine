@@ -1,14 +1,14 @@
 # 📱 Enigma Mobile Apps
 
-This directory contains starter templates and guides for building mobile apps that connect to your ForgeAI Engine.
+This directory contains starter templates and guides for building mobile apps that connect to your Enigma AI Engine Engine.
 
 ## Quick Start
 
 ### 1. Start the Mobile API Server
 
 ```bash
-# From the ForgeAI root directory
-python -c "from forge_ai.mobile.api import run_mobile_api; run_mobile_api()"
+# From the Enigma AI Engine root directory
+python -c "from enigma_engine.mobile.api import run_mobile_api; run_mobile_api()"
 ```
 
 This will start the API server on `http://0.0.0.0:5001`
@@ -259,7 +259,7 @@ sudo ufw allow 5001/tcp
 ### Adding Basic API Key Authentication
 
 ```python
-# In forge_ai/mobile/api.py, add before each route:
+# In enigma_engine/mobile/api.py, add before each route:
 
 API_KEY = "your-secret-key"
 

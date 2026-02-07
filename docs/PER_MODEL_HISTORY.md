@@ -8,7 +8,7 @@ Each AI model now has **its own separate conversation history**! This means conv
 
 ### Before (Shared History):
 ```
-ForgeAI/
+Enigma AI Engine/
 ├── data/
 │   └── conversations/          ← ALL models shared this
 │       ├── chat_today.json
@@ -20,7 +20,7 @@ ForgeAI/
 
 ### After (Per-Model History):
 ```
-ForgeAI/
+Enigma AI Engine/
 └── models/
     ├── artemis/
     │   ├── weights.pth
@@ -42,7 +42,7 @@ ForgeAI/
 ### ConversationManager Now Accepts `model_name`
 
 ```python
-from forge_ai.memory.manager import ConversationManager
+from enigma_engine.memory.manager import ConversationManager
 
 # Per-model storage (recommended)
 manager = ConversationManager(model_name="artemis")
@@ -214,7 +214,7 @@ models/jarvis/
 ### Save Conversation to Specific AI
 
 ```python
-from forge_ai.memory.manager import ConversationManager
+from enigma_engine.memory.manager import ConversationManager
 
 messages = [
     {"role": "user", "text": "Hello!", "ts": 1234567890},
@@ -310,7 +310,7 @@ Make sure you're using the correct model name:
 
 ```python
 # Check available models
-from forge_ai.core.model_registry import ModelRegistry
+from enigma_engine.core.model_registry import ModelRegistry
 registry = ModelRegistry()
 models = registry.list_models()
 print(f"Available models: {models}")
@@ -335,6 +335,6 @@ chmod -R u+w models/artemis/conversations/
 
 ## 📚 See Also
 
-- [Memory System Documentation](../forge_ai/memory/README.md)
+- [Memory System Documentation](../enigma_engine/memory/README.md)
 - [Model Registry Guide](MODEL_REGISTRY.md)
 - [GUI Guide](GUI_GUIDE.md)

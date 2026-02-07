@@ -1,10 +1,10 @@
 # Local vs Cloud Modules
 
-ForgeAI is designed to be an **"open black box"** - completely transparent about what runs locally vs what connects to external services.
+Enigma AI Engine is designed to be an **"open black box"** - completely transparent about what runs locally vs what connects to external services.
 
 ## � LOCAL-FIRST DESIGN
 
-**ForgeAI prioritizes local execution by default.** All generation tabs (image, code, video, audio, embeddings, 3D) will automatically use local providers. Cloud providers are only used if explicitly configured.
+**Enigma AI Engine prioritizes local execution by default.** All generation tabs (image, code, video, audio, embeddings, 3D) will automatically use local providers. Cloud providers are only used if explicitly configured.
 
 This means:
 - **Zero data sent to cloud services by default**
@@ -78,7 +78,7 @@ These modules connect to external cloud services:
 
 ## 🔒 Local-Only Mode (Default)
 
-**By default, ForgeAI runs in local-only mode** for maximum privacy.
+**By default, Enigma AI Engine runs in local-only mode** for maximum privacy.
 
 ### What This Means
 - Cloud modules **cannot** be loaded
@@ -91,7 +91,7 @@ These modules connect to external cloud services:
 To use cloud services, you must explicitly disable local-only mode:
 
 ```python
-from forge_ai.modules import ModuleManager
+from enigma_engine.modules import ModuleManager
 
 # Create manager with cloud modules enabled
 manager = ModuleManager(local_only=False)
@@ -112,7 +112,7 @@ When loading cloud modules, you'll see a warning:
 
 ### Command: List Local-Only Modules
 ```python
-from forge_ai.modules import registry
+from enigma_engine.modules import registry
 
 # Get all local modules
 local_modules = registry.list_local_modules()
@@ -122,7 +122,7 @@ for module in local_modules:
 
 ### Command: List Cloud Modules
 ```python
-from forge_ai.modules import registry
+from enigma_engine.modules import registry
 
 # Get all cloud modules
 cloud_modules = registry.list_cloud_modules()
@@ -132,7 +132,7 @@ for module in cloud_modules:
 
 ### Check If Module Is Local
 ```python
-from forge_ai.modules import registry
+from enigma_engine.modules import registry
 
 module_class = registry.get_module('image_gen_local')
 info = module_class.get_info()
@@ -223,4 +223,4 @@ A: `web_tools` accesses the internet for web browsing but doesn't send data to t
 
 ---
 
-**Remember**: ForgeAI's default is **local-only** for your privacy and security. Cloud modules require explicit opt-in.
+**Remember**: Enigma AI Engine's default is **local-only** for your privacy and security. Cloud modules require explicit opt-in.

@@ -1,4 +1,4 @@
-# HuggingFace Models in ForgeAI - How They Work
+# HuggingFace Models in Enigma AI Engine - How They Work
 
 ## What Are HuggingFace Models?
 
@@ -10,15 +10,15 @@ Examples:
 - **Mistral** by Mistral AI (efficient & capable)
 - **DialoGPT** by Microsoft (conversation specialist)
 
-## How ForgeAI Uses Them
+## How Enigma AI Engine Uses Them
 
-ForgeAI acts as a **wrapper** around HuggingFace models - it loads them and adds ForgeAI features on top.
+Enigma AI Engine acts as a **wrapper** around HuggingFace models - it loads them and adds Enigma AI Engine features on top.
 
 ### Architecture Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     FORGEAI LAYER                           │
+│                     Enigma AI Engine LAYER                           │
 │  ┌───────────────────────────────────────────────────────┐  │
 │  │ • Terminal logging                                    │  │
 │  │ • Wants system (motivation tracking)                  │  │
@@ -42,12 +42,12 @@ ForgeAI acts as a **wrapper** around HuggingFace models - it loads them and adds
 │  │  (GPT-2, Llama, Mistral, etc.)                        │  │
 │  │  • This is "their brain"                              │  │
 │  │  • Pre-trained by the model creator                   │  │
-│  │  • ForgeAI doesn't modify this                        │  │
+│  │  • Enigma AI Engine doesn't modify this                        │  │
 │  └───────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## What ForgeAI Features Work with HF Models
+## What Enigma AI Engine Features Work with HF Models
 
 ### ✅ Features That WORK with HuggingFace Models
 
@@ -99,11 +99,11 @@ ForgeAI acts as a **wrapper** around HuggingFace models - it loads them and adds
 ### ❌ Features That DON'T WORK with HuggingFace Models
 
 1. **Training** ❌
-   - You CANNOT train HF models in ForgeAI
+   - You CANNOT train HF models in Enigma AI Engine
    - They're pre-trained and frozen
    - Training only works on local Forge models
    
-   **Why:** HF models are often huge (7B-70B+ parameters) and require specialized training infrastructure. ForgeAI's training is for small custom models.
+   **Why:** HF models are often huge (7B-70B+ parameters) and require specialized training infrastructure. Enigma AI Engine's training is for small custom models.
 
 2. **Fine-tuning** ❌
    - Cannot fine-tune on your data
@@ -122,8 +122,8 @@ ForgeAI acts as a **wrapper** around HuggingFace models - it loads them and adds
 ### Loading Process
 
 ```python
-# 1. ForgeAI creates wrapper
-from forge_ai.core.huggingface_loader import HuggingFaceModel
+# 1. Enigma AI Engine creates wrapper
+from enigma_engine.core.huggingface_loader import HuggingFaceModel
 
 # 2. Wrapper loads model from HuggingFace Hub
 model = HuggingFaceModel("gpt2")
@@ -138,7 +138,7 @@ model.load()  # Downloads from internet if not cached
 ```python
 # User types: "Tell me a joke"
 
-# 1. ForgeAI adds context (wants, system prompts, etc.)
+# 1. Enigma AI Engine adds context (wants, system prompts, etc.)
 full_prompt = f"""
 {personality_prompt}
 {wants.get_motivation_prompt()}
@@ -153,7 +153,7 @@ AI:
 # 3. HF model generates tokens
 response = model.generate(full_prompt, max_new_tokens=200)
 
-# 4. ForgeAI processes response
+# 4. Enigma AI Engine processes response
 # - Logs to terminal
 # - Learns wants from response
 # - Executes any tool calls
@@ -165,7 +165,7 @@ response = model.generate(full_prompt, max_new_tokens=200)
 
 ### What Gets Saved
 
-When using HF models, ForgeAI saves:
+When using HF models, Enigma AI Engine saves:
 - ✅ Conversation history
 - ✅ Wants/motivations learned from chats
 - ✅ Learned design patterns
@@ -177,7 +177,7 @@ When using HF models, ForgeAI saves:
 ### Example 1: Loading GPT-2
 
 ```bash
-# Launch ForgeAI
+# Launch Enigma AI Engine
 python run.py --gui
 
 # In GUI:
@@ -189,7 +189,7 @@ python run.py --gui
 # What happens:
 # - Downloads GPT-2 from HuggingFace (if not cached)
 # - Loads into memory
-# - Wraps with ForgeAI features
+# - Wraps with Enigma AI Engine features
 # - Initializes wants system for "gpt2"
 # - Initializes learned generator for "gpt2"
 # - Ready to chat!
@@ -208,7 +208,7 @@ python run.py --gui
 [DEBUG] Learning from interaction (topic: science)
 
 # The HF model (GPT-2) does the thinking
-# ForgeAI tracks and logs everything around it
+# Enigma AI Engine tracks and logs everything around it
 ```
 
 ### Example 3: Wants System with HF Model
@@ -237,14 +237,14 @@ python run.py --gui
 # HF model generates:
 response = "I'll create that for you! <tool_call>{...}</tool_call>"
 
-# ForgeAI processes:
+# Enigma AI Engine processes:
 # 1. Detects tool call in response
 # 2. Executes generate_image tool
 # 3. Shows result to user
 # 4. Logs everything to terminal
 
 # The HF model doesn't run the tool
-# ForgeAI intercepts and executes it
+# Enigma AI Engine intercepts and executes it
 ```
 
 ## Key Differences: Forge vs HuggingFace Models
@@ -262,7 +262,7 @@ response = "I'll create that for you! <tool_call>{...}</tool_call>"
 | **Voice** | ✅ Works | ✅ Works |
 | **Avatar** | ✅ Works | ✅ Works |
 | **Memory** | ✅ Works | ✅ Works |
-| **Fine-tuning** | ✅ Anytime | ❌ Not in ForgeAI |
+| **Fine-tuning** | ✅ Anytime | ❌ Not in Enigma AI Engine |
 | **Customization** | ✅ Full control | ❌ Use as-is |
 
 ## The "Wrapper" Analogy
@@ -274,7 +274,7 @@ Think of it like this:
 - You can't change how they think
 - But they're really good at cooking (generating text)
 
-**ForgeAI = Restaurant Manager**
+**Enigma AI Engine = Restaurant Manager**
 - Takes orders (user input)
 - Adds context (wants, personality, tools)
 - Gives orders to chef (prompts to HF model)
@@ -282,11 +282,11 @@ Think of it like this:
 - Tracks customer preferences (wants system)
 - Handles payments/logistics (tools, memory, etc.)
 
-The chef (HF model) does the actual cooking (text generation), but the restaurant (ForgeAI) provides everything around it!
+The chef (HF model) does the actual cooking (text generation), but the restaurant (Enigma AI Engine) provides everything around it!
 
 ## Technical Details
 
-### File: `forge_ai/core/huggingface_loader.py`
+### File: `enigma_engine/core/huggingface_loader.py`
 
 ```python
 class HuggingFaceModel:
@@ -338,7 +338,7 @@ self._is_hf_model = is_huggingface
 if is_huggingface:
     # HuggingFaceModel is already loaded and ready
     self.engine.model = model  # This is a HuggingFaceModel wrapper
-    # Use model's tokenizer OR custom ForgeAI tokenizer
+    # Use model's tokenizer OR custom Enigma AI Engine tokenizer
 else:
     # Local Forge model
     self.engine.model = model
@@ -352,8 +352,8 @@ self.learned_generator = AILearnedGenerator(self.current_model_name)
 
 ## Summary
 
-**HuggingFace models in ForgeAI:**
-- ✅ Are wrapped by ForgeAI features
+**HuggingFace models in Enigma AI Engine:**
+- ✅ Are wrapped by Enigma AI Engine features
 - ✅ Get terminal logging
 - ✅ Get wants/motivation tracking
 - ✅ Get learned generation
@@ -362,11 +362,11 @@ self.learned_generator = AILearnedGenerator(self.current_model_name)
 - ❌ Cannot be trained/modified
 - ❌ Are "read-only" brains
 
-**ForgeAI adds value by:**
+**Enigma AI Engine adds value by:**
 - Making HF models easier to use
 - Adding features HF doesn't have (wants, tools, avatar)
 - Providing a consistent interface
 - Tracking learning around the model
 - Logging everything for visibility
 
-You get the power of professional pre-trained models (HF) with the flexibility and features of ForgeAI!
+You get the power of professional pre-trained models (HF) with the flexibility and features of Enigma AI Engine!

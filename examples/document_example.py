@@ -1,5 +1,5 @@
 """
-Document Tools Example for ForgeAI
+Document Tools Example for Enigma AI Engine
 
 This example shows how to read various document formats.
 The AI can read PDFs, eBooks, Word docs, and more.
@@ -466,7 +466,7 @@ def summarize_document(path: str, max_sentences: int = 10) -> str:
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("ForgeAI Document Tools Example")
+    print("Enigma AI Engine Document Tools Example")
     print("=" * 60)
     
     # Check available libraries
@@ -481,12 +481,12 @@ if __name__ == "__main__":
     print("\n[2] Testing text file reading...")
     
     # Create a test file
-    test_dir = Path.home() / ".forge_ai" / "test"
+    test_dir = Path.home() / ".enigma_engine" / "test"
     test_dir.mkdir(parents=True, exist_ok=True)
     test_file = test_dir / "test_document.txt"
     
     test_content = """
-    This is a test document for ForgeAI.
+    This is a test document for Enigma AI Engine.
     
     It contains multiple paragraphs and sentences.
     The document tools can read various formats including

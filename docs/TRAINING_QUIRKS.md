@@ -1,6 +1,6 @@
-# ForgeAI Training Quirks & Common Issues
+# Enigma AI Engine Training Quirks & Common Issues
 
-This document explains the **weird things** in ForgeAI that need special attention during training and usage.
+This document explains the **weird things** in Enigma AI Engine that need special attention during training and usage.
 
 ## 🔴 Critical Issues
 
@@ -16,7 +16,7 @@ This document explains the **weird things** in ForgeAI that need special attenti
 **Fix:**
 ```python
 # Make sure to use the proper inference path
-from forge_ai.core.inference import ForgeEngine
+from enigma_engine.core.inference import ForgeEngine
 
 engine = ForgeEngine()
 engine.load_model("your_model")
@@ -78,7 +78,7 @@ response = engine.generate(
 **Fix:**
 Use the right model for each feature. See Model Manager tab or:
 ```python
-from forge_ai.core.ai_integration import AIIntegration
+from enigma_engine.core.ai_integration import AIIntegration
 
 ai = AIIntegration()
 ai.setup_feature("vision", "huggingface:Qwen/Qwen2-VL-2B-Instruct")
@@ -278,7 +278,7 @@ This checks:
 
 ```python
 # Check integration status
-from forge_ai.core.ai_integration import print_integration_status
+from enigma_engine.core.ai_integration import print_integration_status
 print_integration_status()
 
 # Validate training data

@@ -2,7 +2,7 @@
 
 ## Overview
 
-This PR adds comprehensive support for deploying ForgeAI on resource-constrained devices (especially Raspberry Pi) and enables AI-to-AI collaboration across multiple devices.
+This PR adds comprehensive support for deploying Enigma AI Engine on resource-constrained devices (especially Raspberry Pi) and enables AI-to-AI collaboration across multiple devices.
 
 ## Key Features
 
@@ -10,7 +10,7 @@ This PR adds comprehensive support for deploying ForgeAI on resource-constrained
 
 #### A. QuantizationConfig Dataclass
 ```python
-from forge_ai.core.model import QuantizationConfig
+from enigma_engine.core.model import QuantizationConfig
 
 config = QuantizationConfig(
     mode="int8",           # none, dynamic, int8, int4
@@ -27,7 +27,7 @@ config = QuantizationConfig(
 
 #### C. Memory-Efficient Loading
 ```python
-from forge_ai.core.model import Forge
+from enigma_engine.core.model import Forge
 
 # Memory-mapped loading for low-RAM devices
 model = Forge.load_mmap("model.pth", device="cpu")
@@ -41,7 +41,7 @@ model = Forge.auto_configure()  # Detects Pi, applies optimal settings
 
 #### D. Hardware Detection
 ```python
-from forge_ai.core.hardware_detection import detect_hardware, get_optimal_config
+from enigma_engine.core.hardware_detection import detect_hardware, get_optimal_config
 
 # Detect hardware capabilities
 profile = detect_hardware()
@@ -59,7 +59,7 @@ config = get_optimal_config(profile)
 
 #### A. Network Integration
 ```python
-from forge_ai.core.tool_router import get_router
+from enigma_engine.core.tool_router import get_router
 
 # Enable networking in the router
 router = get_router(use_specialized=True, enable_networking=True)
@@ -100,7 +100,7 @@ result = router.route_intelligently("video", {"prompt": "animation"})
 
 #### D. AI Collaboration Protocol
 ```python
-from forge_ai.comms.ai_collaboration import AICollaborationProtocol
+from enigma_engine.comms.ai_collaboration import AICollaborationProtocol
 
 protocol = AICollaborationProtocol(node_name="my_pi")
 protocol.connect_to_network(network_node)
@@ -124,7 +124,7 @@ result = protocol.request_collaboration(
 ### 3. Auto-Detection in Inference (inference.py)
 
 ```python
-from forge_ai.core.inference import ForgeEngine
+from enigma_engine.core.inference import ForgeEngine
 
 # Auto-detect hardware and configure optimally
 engine = ForgeEngine(model_size="auto")
@@ -137,13 +137,13 @@ engine = ForgeEngine(model_size="auto")
 
 | File | Changes |
 |------|---------|
-| `forge_ai/core/model.py` | Added `QuantizationConfig`, Pi presets, `quantize()`, `from_pretrained_quantized()`, `load_mmap()`, `auto_configure()` |
-| `forge_ai/core/hardware_detection.py` | **NEW** - Hardware detection for Pi/edge devices |
-| `forge_ai/core/tool_router.py` | Added networking, remote execution, smart routing, AI collaboration |
-| `forge_ai/core/inference.py` | Added `model_size="auto"` support with hardware detection |
-| `forge_ai/comms/ai_collaboration.py` | **NEW** - AI-to-AI collaboration protocol |
-| `forge_ai/core/__init__.py` | Export new hardware detection functions |
-| `forge_ai/comms/__init__.py` | Export AI collaboration classes |
+| `enigma_engine/core/model.py` | Added `QuantizationConfig`, Pi presets, `quantize()`, `from_pretrained_quantized()`, `load_mmap()`, `auto_configure()` |
+| `enigma_engine/core/hardware_detection.py` | **NEW** - Hardware detection for Pi/edge devices |
+| `enigma_engine/core/tool_router.py` | Added networking, remote execution, smart routing, AI collaboration |
+| `enigma_engine/core/inference.py` | Added `model_size="auto"` support with hardware detection |
+| `enigma_engine/comms/ai_collaboration.py` | **NEW** - AI-to-AI collaboration protocol |
+| `enigma_engine/core/__init__.py` | Export new hardware detection functions |
+| `enigma_engine/comms/__init__.py` | Export AI collaboration classes |
 
 ## Architecture
 
@@ -195,7 +195,7 @@ engine = ForgeEngine(model_size="auto")
 
 ```python
 # On Raspberry Pi 4
-from forge_ai.core.inference import ForgeEngine
+from enigma_engine.core.inference import ForgeEngine
 
 # Auto-detects Pi 4, uses pi_4 preset with int8 quantization
 engine = ForgeEngine(model_size="auto")
@@ -208,7 +208,7 @@ print(response)
 
 ```python
 # On Pi (coordinator)
-from forge_ai.core.tool_router import get_router
+from enigma_engine.core.tool_router import get_router
 
 router = get_router(enable_networking=True)
 router.connect_to_ai("192.168.1.100:5000", "desktop")
@@ -222,7 +222,7 @@ result = router.route_intelligently("image", {"prompt": "sunset over mountains"}
 
 ```python
 # Split a batch job across multiple AIs
-from forge_ai.comms.ai_collaboration import get_collaboration_protocol
+from enigma_engine.comms.ai_collaboration import get_collaboration_protocol
 
 protocol = get_collaboration_protocol("coordinator")
 protocol.connect_to_network(node)
@@ -240,16 +240,16 @@ Run the following tests to verify the implementation:
 
 ```bash
 # Test hardware detection
-python -c "from forge_ai.core.hardware_detection import detect_hardware; print(detect_hardware())"
+python -c "from enigma_engine.core.hardware_detection import detect_hardware; print(detect_hardware())"
 
 # Test model presets
-python -c "from forge_ai.core.model import MODEL_PRESETS; print('pi_4' in MODEL_PRESETS)"
+python -c "from enigma_engine.core.model import MODEL_PRESETS; print('pi_4' in MODEL_PRESETS)"
 
 # Test auto-detection in inference
-python -c "from forge_ai.core.inference import ForgeEngine; print('auto mode available')"
+python -c "from enigma_engine.core.inference import ForgeEngine; print('auto mode available')"
 
 # Test AI collaboration protocol
-python -c "from forge_ai.comms.ai_collaboration import AICollaborationProtocol; print(AICollaborationProtocol('test'))"
+python -c "from enigma_engine.comms.ai_collaboration import AICollaborationProtocol; print(AICollaborationProtocol('test'))"
 ```
 
 ## Backwards Compatibility
@@ -281,4 +281,4 @@ No new required dependencies. Optional quantization features require:
 1. **ONNX Export** - Export Pi-optimized models to ONNX for edge deployment
 2. **TensorRT** - GPU acceleration for NVIDIA Jetson devices
 3. **Federated Learning** - Train across multiple devices while preserving privacy
-4. **Mesh Networking** - Auto-discovery of ForgeAI instances on local network
+4. **Mesh Networking** - Auto-discovery of Enigma AI Engine instances on local network

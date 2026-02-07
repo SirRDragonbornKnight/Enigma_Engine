@@ -56,11 +56,11 @@
   },
   
   "notes": [
-    "1. Install Blender addon: forge_ai/avatar/blender_bridge.py contains BLENDER_ADDON_CODE",
-    "2. Or run: from forge_ai.avatar import save_blender_addon; save_blender_addon()",
+    "1. Install Blender addon: enigma_engine/avatar/blender_bridge.py contains BLENDER_ADDON_CODE",
+    "2. Or run: from enigma_engine.avatar import save_blender_addon; save_blender_addon()",
     "3. In Blender: Edit > Preferences > Add-ons > Install > Select the saved .py file",
-    "4. Enable 'ForgeAI Avatar Bridge' addon",
-    "5. In Blender sidebar (N key) > ForgeAI tab > Click 'Start Server'",
-    "6. Then connect from ForgeAI"
+    "4. Enable 'Enigma AI Engine Avatar Bridge' addon",
+    "5. In Blender sidebar (N key) > Enigma AI Engine tab > Click 'Start Server'",
+    "6. Then connect from Enigma AI Engine"
   ]
 }

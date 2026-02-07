@@ -1,7 +1,7 @@
 """
-Audio Generation Example for ForgeAI
+Audio Generation Example for Enigma AI Engine
 
-This example shows how to use ForgeAI's audio/TTS capabilities.
+This example shows how to use Enigma AI Engine's audio/TTS capabilities.
 Generate speech from text using local or cloud providers.
 
 SUPPORTED PROVIDERS:
@@ -27,7 +27,7 @@ from abc import ABC, abstractmethod
 # OUTPUT DIRECTORY
 # =============================================================================
 
-AUDIO_OUTPUT_DIR = Path.home() / ".forge_ai" / "outputs" / "audio"
+AUDIO_OUTPUT_DIR = Path.home() / ".enigma_engine" / "outputs" / "audio"
 AUDIO_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -255,7 +255,7 @@ class ElevenLabsTTS(TTSProvider):
     Get API key at: https://elevenlabs.io
     """
     
-    CONFIG_FILE = Path.home() / ".forge_ai" / "elevenlabs.json"
+    CONFIG_FILE = Path.home() / ".enigma_engine" / "elevenlabs.json"
     
     def __init__(self, api_key: str = None, voice_id: str = None):
         self.api_key = api_key or self._load_api_key()
@@ -493,7 +493,7 @@ def list_voices() -> List[Dict[str, str]]:
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("ForgeAI Audio Example")
+    print("Enigma AI Engine Audio Example")
     print("=" * 60)
     
     # Initialize controller
@@ -511,7 +511,7 @@ if __name__ == "__main__":
     
     # Test speech
     print("\n[3] Testing speech...")
-    test_text = "Hello! This is ForgeAI speaking."
+    test_text = "Hello! This is Enigma AI Engine speaking."
     
     if controller._active_provider:
         print(f"Speaking: '{test_text}'")
@@ -522,7 +522,7 @@ if __name__ == "__main__":
     
     # Test file generation
     print("\n[4] Testing file generation...")
-    output = controller.generate("This is a test audio file from ForgeAI.")
+    output = controller.generate("This is a test audio file from Enigma AI Engine.")
     
     if output:
         print(f"Generated: {output}")

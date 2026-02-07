@@ -17,7 +17,7 @@ class TestWeightUpdate:
     
     def test_weight_update_creation(self):
         """Test creating a weight update."""
-        from forge_ai.learning import WeightUpdate
+        from enigma_engine.learning import WeightUpdate
         
         update = WeightUpdate(
             update_id="test123",
@@ -34,7 +34,7 @@ class TestWeightUpdate:
     
     def test_weight_update_signature(self):
         """Test signature creation and verification."""
-        from forge_ai.learning import WeightUpdate
+        from enigma_engine.learning import WeightUpdate
         
         update = WeightUpdate(
             update_id="test123",
@@ -54,7 +54,7 @@ class TestWeightUpdate:
     
     def test_weight_update_serialization(self):
         """Test converting weight update to/from dict."""
-        from forge_ai.learning import WeightUpdate
+        from enigma_engine.learning import WeightUpdate
         
         original = WeightUpdate(
             update_id="test123",
@@ -82,7 +82,7 @@ class TestFederatedLearning:
     
     def test_federated_learning_init(self):
         """Test initializing federated learning."""
-        from forge_ai.learning import FederatedLearning, FederatedMode, PrivacyLevel
+        from enigma_engine.learning import FederatedLearning, FederatedMode, PrivacyLevel
         
         fl = FederatedLearning(
             model_name="test_model",
@@ -97,7 +97,7 @@ class TestFederatedLearning:
     
     def test_device_id_generation(self):
         """Test device ID generation."""
-        from forge_ai.learning import FederatedLearning, FederatedMode, PrivacyLevel
+        from enigma_engine.learning import FederatedLearning, FederatedMode, PrivacyLevel
         
         fl = FederatedLearning(
             model_name="test_model",
@@ -110,7 +110,7 @@ class TestFederatedLearning:
     
     def test_train_local_round(self):
         """Test creating weight update from training."""
-        from forge_ai.learning import FederatedLearning, FederatedMode, PrivacyLevel
+        from enigma_engine.learning import FederatedLearning, FederatedMode, PrivacyLevel
         
         fl = FederatedLearning(
             model_name="test_model",
@@ -133,7 +133,7 @@ class TestFederatedLearning:
     
     def test_get_stats(self):
         """Test getting federated learning statistics."""
-        from forge_ai.learning import FederatedLearning, FederatedMode, PrivacyLevel
+        from enigma_engine.learning import FederatedLearning, FederatedMode, PrivacyLevel
         
         fl = FederatedLearning(
             model_name="test_model",
@@ -155,7 +155,7 @@ class TestDifferentialPrivacy:
     
     def test_differential_privacy_init(self):
         """Test initializing differential privacy."""
-        from forge_ai.learning import DifferentialPrivacy
+        from enigma_engine.learning import DifferentialPrivacy
         
         dp = DifferentialPrivacy(epsilon=1.0, delta=1e-5)
         assert dp.epsilon == 1.0
@@ -165,7 +165,7 @@ class TestDifferentialPrivacy:
         """Test adding noise to weights."""
         pytest.importorskip("numpy")
         import numpy as np
-        from forge_ai.learning import DifferentialPrivacy
+        from enigma_engine.learning import DifferentialPrivacy
         
         dp = DifferentialPrivacy(epsilon=1.0, delta=1e-5)
         
@@ -185,7 +185,7 @@ class TestDifferentialPrivacy:
     
     def test_privacy_level_description(self):
         """Test getting privacy level description."""
-        from forge_ai.learning import DifferentialPrivacy
+        from enigma_engine.learning import DifferentialPrivacy
         
         dp_strong = DifferentialPrivacy(epsilon=0.1, delta=1e-5)
         dp_weak = DifferentialPrivacy(epsilon=15.0, delta=1e-5)
@@ -199,7 +199,7 @@ class TestSecureAggregator:
     
     def test_aggregator_init(self):
         """Test initializing aggregator."""
-        from forge_ai.learning import SecureAggregator
+        from enigma_engine.learning import SecureAggregator
         
         aggregator = SecureAggregator()
         assert aggregator is not None
@@ -208,7 +208,7 @@ class TestSecureAggregator:
         """Test simple averaging aggregation."""
         pytest.importorskip("numpy")
         import numpy as np
-        from forge_ai.learning import SecureAggregator, AggregationMethod, WeightUpdate
+        from enigma_engine.learning import SecureAggregator, AggregationMethod, WeightUpdate
         
         aggregator = SecureAggregator()
         
@@ -241,7 +241,7 @@ class TestSecureAggregator:
         """Test weighted averaging aggregation."""
         pytest.importorskip("numpy")
         import numpy as np
-        from forge_ai.learning import SecureAggregator, AggregationMethod, WeightUpdate
+        from enigma_engine.learning import SecureAggregator, AggregationMethod, WeightUpdate
         
         aggregator = SecureAggregator()
         
@@ -277,7 +277,7 @@ class TestFederatedCoordinator:
     
     def test_coordinator_init(self):
         """Test initializing coordinator."""
-        from forge_ai.learning import FederatedCoordinator, CoordinatorMode
+        from enigma_engine.learning import FederatedCoordinator, CoordinatorMode
         
         coordinator = FederatedCoordinator(
             mode=CoordinatorMode.CENTRALIZED,
@@ -290,7 +290,7 @@ class TestFederatedCoordinator:
     
     def test_device_registration(self):
         """Test registering devices."""
-        from forge_ai.learning import FederatedCoordinator
+        from enigma_engine.learning import FederatedCoordinator
         
         coordinator = FederatedCoordinator()
         
@@ -302,7 +302,7 @@ class TestFederatedCoordinator:
     
     def test_start_round(self):
         """Test starting a training round."""
-        from forge_ai.learning import FederatedCoordinator
+        from enigma_engine.learning import FederatedCoordinator
         
         coordinator = FederatedCoordinator()
         
@@ -319,7 +319,7 @@ class TestFederatedCoordinator:
         """Test accepting weight updates."""
         pytest.importorskip("numpy")
         import numpy as np
-        from forge_ai.learning import FederatedCoordinator, WeightUpdate
+        from enigma_engine.learning import FederatedCoordinator, WeightUpdate
         
         # Use min_participants=2 so round doesn't immediately finalize
         coordinator = FederatedCoordinator(min_participants=2)
@@ -344,7 +344,7 @@ class TestFederatedDataFilter:
     
     def test_filter_init(self):
         """Test initializing data filter."""
-        from forge_ai.learning import FederatedDataFilter
+        from enigma_engine.learning import FederatedDataFilter
         
         filter = FederatedDataFilter()
         assert filter is not None
@@ -352,7 +352,7 @@ class TestFederatedDataFilter:
     
     def test_should_include(self):
         """Test filtering decisions."""
-        from forge_ai.learning import FederatedDataFilter, TrainingExample
+        from enigma_engine.learning import FederatedDataFilter, TrainingExample
         
         filter = FederatedDataFilter()
         
@@ -378,7 +378,7 @@ class TestFederatedDataFilter:
     
     def test_sanitize(self):
         """Test sanitizing personal information."""
-        from forge_ai.learning import FederatedDataFilter, TrainingExample
+        from enigma_engine.learning import FederatedDataFilter, TrainingExample
         
         filter = FederatedDataFilter()
         
@@ -400,7 +400,7 @@ class TestTrustManager:
     
     def test_trust_manager_init(self):
         """Test initializing trust manager."""
-        from forge_ai.learning import TrustManager
+        from enigma_engine.learning import TrustManager
         
         trust_mgr = TrustManager()
         assert trust_mgr is not None
@@ -410,7 +410,7 @@ class TestTrustManager:
         """Test verifying updates."""
         pytest.importorskip("numpy")
         import numpy as np
-        from forge_ai.learning import TrustManager, WeightUpdate
+        from enigma_engine.learning import TrustManager, WeightUpdate
         
         trust_mgr = TrustManager()
         
@@ -430,7 +430,7 @@ class TestTrustManager:
         """Test detecting poisoning attacks."""
         pytest.importorskip("numpy")
         import numpy as np
-        from forge_ai.learning import TrustManager, WeightUpdate
+        from enigma_engine.learning import TrustManager, WeightUpdate
         
         trust_mgr = TrustManager()
         
@@ -469,7 +469,7 @@ class TestTrustManager:
         """Test device reputation system."""
         pytest.importorskip("numpy")
         import numpy as np
-        from forge_ai.learning import TrustManager, WeightUpdate
+        from enigma_engine.learning import TrustManager, WeightUpdate
         
         trust_mgr = TrustManager()
         

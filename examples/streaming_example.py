@@ -8,11 +8,11 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from forge_ai.core.inference import ForgeEngine
+from enigma_engine.core.inference import ForgeEngine
 
 
 def main():
-    print("Loading ForgeAI...")
+    print("Loading Enigma AI Engine...")
     engine = ForgeEngine()
     
     prompt = "In a land far away, there lived a"

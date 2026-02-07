@@ -3,9 +3,9 @@ requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "forge-ai"
+name = "enigma-engine"
 version = "1.1.0"
-description = "Personal AI Framework - Train and deploy your own AI with GUI, voice, vision, camera, and 26+ tools"
+description = "Enigma AI Engine - Personal AI Framework to train and deploy your own AI with GUI, voice, vision, camera, and 26+ tools"
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
@@ -58,7 +58,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["forge_ai"]
+source = ["enigma_engine"]
 omit = [
     "*/tests/*",
     "*/examples/*",

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ForgeAI Voice Cloning Example
+Enigma AI Engine Voice Cloning Example
 ==============================
 
 Complete example showing how to use voice cloning including:
@@ -494,7 +494,7 @@ def example_voice_manager():
     
     # Quick speak
     output = manager.quick_speak(
-        "Welcome to ForgeAI voice cloning!",
+        "Welcome to Enigma AI Engine voice cloning!",
         voice="assistant"
     )
 
@@ -537,15 +537,15 @@ Tips for High-Quality Voice Cloning:
 
 
 def example_forge_integration():
-    """ForgeAI integration."""
+    """Enigma AI Engine integration."""
     print("\n" + "="*60)
-    print("Example 6: ForgeAI Integration")
+    print("Example 6: Enigma AI Engine Integration")
     print("="*60)
     
-    print("For actual ForgeAI voice cloning:")
+    print("For actual Enigma AI Engine voice cloning:")
     print("""
-    from forge_ai.voice.voice_clone import VoiceCloner, VoiceProfile
-    from forge_ai.gui.tabs.voice_clone_tab import VoiceCloneTab
+    from enigma_engine.voice.voice_clone import VoiceCloner, VoiceProfile
+    from enigma_engine.gui.tabs.voice_clone_tab import VoiceCloneTab
     
     # Programmatic usage
     cloner = VoiceCloner()
@@ -563,7 +563,7 @@ def example_forge_integration():
         voice_name="my_voice"
     )
     
-    # GUI usage - Voice Clone tab in ForgeAI
+    # GUI usage - Voice Clone tab in Enigma AI Engine
     python run.py --gui
     # Go to Voice Clone tab to:
     # - Record voice samples from microphone
@@ -579,7 +579,7 @@ def example_forge_integration():
 # =============================================================================
 
 if __name__ == "__main__":
-    print("ForgeAI Voice Cloning Examples")
+    print("Enigma AI Engine Voice Cloning Examples")
     print("="*60)
     
     example_basic_cloning()

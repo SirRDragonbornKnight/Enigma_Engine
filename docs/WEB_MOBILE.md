@@ -51,16 +51,16 @@ Access at: `http://localhost:8080`
 
 ### Customization
 
-Templates: `forge_ai/web/templates/`
-Styles: `forge_ai/web/static/css/style.css`
-Scripts: `forge_ai/web/static/js/app.js`
+Templates: `enigma_engine/web/templates/`
+Styles: `enigma_engine/web/static/css/style.css`
+Scripts: `enigma_engine/web/static/js/app.js`
 
 ## Mobile API
 
 ### Quick Start
 
 ```python
-from forge_ai.mobile.api import run_mobile_api
+from enigma_engine.mobile.api import run_mobile_api
 
 run_mobile_api(host='0.0.0.0', port=5001)
 ```
@@ -195,7 +195,7 @@ For production:
 ### Add Basic API Key
 
 ```python
-# In forge_ai/web/app.py or forge_ai/mobile/api.py
+# In enigma_engine/web/app.py or enigma_engine/mobile/api.py
 
 API_KEY = "your-secret-key"
 
@@ -213,7 +213,7 @@ def check_api_key():
 python run.py --web
 
 # Terminal 2: Mobile API
-python -c "from forge_ai.mobile.api import run_mobile_api; run_mobile_api()"
+python -c "from enigma_engine.mobile.api import run_mobile_api; run_mobile_api()"
 ```
 
 Access:

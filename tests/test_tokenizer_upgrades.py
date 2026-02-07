@@ -3,7 +3,7 @@ Tests for Enigma Tokenizer
 ==========================
 
 Tests for the ForgeTokenizer (AdvancedBPETokenizer alias) with:
-  - Special tokens in ForgeAI's [E:token] format
+  - Special tokens in Enigma AI Engine's [E:token] format
   - Streaming encode support
   - Improved unicode handling
 """
@@ -13,7 +13,7 @@ import tempfile
 from pathlib import Path
 import json
 
-from forge_ai.core.advanced_tokenizer import ForgeTokenizer
+from enigma_engine.core.advanced_tokenizer import ForgeTokenizer
 
 # Alias for backwards compatibility tests
 AdvancedBPETokenizer = ForgeTokenizer
@@ -26,7 +26,7 @@ class TestTokenizerSpecialTokens:
         """Test that all tool-related special tokens are defined."""
         tokenizer = ForgeTokenizer()
         
-        # Tool invocation tokens (ForgeAI's [E:token] format)
+        # Tool invocation tokens (Enigma AI Engine's [E:token] format)
         assert '[E:tool]' in tokenizer.special_tokens
         assert '[E:tool_out]' in tokenizer.special_tokens
         assert '[E:tool_end]' in tokenizer.special_tokens
@@ -47,7 +47,7 @@ class TestTokenizerSpecialTokens:
         """Test conversation role tokens."""
         tokenizer = ForgeTokenizer()
         
-        # ForgeAI uses [E:token] format
+        # Enigma AI Engine uses [E:token] format
         assert '[E:system]' in tokenizer.special_tokens
         assert '[E:user]' in tokenizer.special_tokens
         assert '[E:assistant]' in tokenizer.special_tokens

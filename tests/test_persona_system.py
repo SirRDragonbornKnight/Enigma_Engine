@@ -6,7 +6,7 @@ import tempfile
 import json
 from pathlib import Path
 
-from forge_ai.core.persona import (
+from enigma_engine.core.persona import (
     AIPersona,
     PersonaManager,
     get_persona_manager
@@ -169,7 +169,7 @@ class TestPersonaManager:
             "description": "Test import",
             "tags": ["imported"],
             "exported_at": "2024-01-01T00:00:00",
-            "exported_from": "ForgeAI",
+            "exported_from": "Enigma AI Engine",
             "format_version": "1.0"
         }
         

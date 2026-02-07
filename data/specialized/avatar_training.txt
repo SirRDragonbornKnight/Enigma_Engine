@@ -1,4 +1,4 @@
-# Avatar Training Data for ForgeAI
+# Avatar Training Data for Enigma AI Engine
 # This file contains training examples for AI avatar control
 # Format: Q: (question) A: (answer with tool calls)
 

@@ -1,7 +1,7 @@
 """
-Game Integration Example for ForgeAI
+Game Integration Example for Enigma AI Engine
 
-This example shows how to connect ForgeAI to games.
+This example shows how to connect Enigma AI Engine to games.
 The AI can play games, control characters, or act as an NPC.
 
 SUPPORTED CONNECTIONS:
@@ -268,7 +268,7 @@ class ScreenCaptureGameInterface(GameInterface):
     Control games via screen capture and input simulation.
     
     Works with ANY game - no API needed!
-    Uses ForgeAI's vision to understand what's on screen.
+    Uses Enigma AI Engine's vision to understand what's on screen.
     
     Requirements:
         pip install pyautogui pillow mss
@@ -436,12 +436,12 @@ class SimulatedGameInterface(GameInterface):
 
 
 # =============================================================================
-# FORGEAI GAME CONTROLLER
+# Enigma AI Engine GAME CONTROLLER
 # =============================================================================
 
 class ForgeGameController:
     """
-    Main controller for ForgeAI game integration.
+    Main controller for Enigma AI Engine game integration.
     Manages game connections and AI interaction.
     """
     
@@ -531,7 +531,7 @@ def create_simulated_game() -> ForgeGameController:
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("ForgeAI Game Example")
+    print("Enigma AI Engine Game Example")
     print("=" * 60)
     
     # Use simulated game for testing
@@ -549,7 +549,7 @@ if __name__ == "__main__":
     controller.send("move", direction="forward")
     controller.send("move", direction="right")
     controller.send("attack")
-    controller.send("say", message="Hello from ForgeAI!")
+    controller.send("say", message="Hello from Enigma AI Engine!")
     
     print("\n[5] Getting updated state...")
     state = controller.get_state()

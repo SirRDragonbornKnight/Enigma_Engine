@@ -9,9 +9,9 @@ This demonstrates the workflow for:
 NO NEED TO COPY THE ENGINE - one engine, many models!
 """
 
-from forge_ai.core.model_registry import ModelRegistry
-from forge_ai.core.model_config import print_model_info
-from forge_ai.core.trainer import ForgeTrainer, train_model_by_name
+from enigma_engine.core.model_registry import ModelRegistry
+from enigma_engine.core.model_config import print_model_info
+from enigma_engine.core.trainer import ForgeTrainer, train_model_by_name
 
 # =============================================================================
 # STEP 1: See available model sizes

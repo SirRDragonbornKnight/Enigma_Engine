@@ -14,8 +14,8 @@ from pathlib import Path
 # Add parent to path for running from examples dir
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from forge_ai.modules import registry
-from forge_ai.modules.manager import ModuleManager
+from enigma_engine.modules import registry
+from enigma_engine.modules.manager import ModuleManager
 
 print("="*70)
 print("EXAMPLE: Local vs Cloud Module Usage")

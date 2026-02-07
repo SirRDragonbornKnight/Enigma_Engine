@@ -1,15 +1,15 @@
-# Forge_AI - New Features Implementation Summary
+# enigma_engine - New Features Implementation Summary
 
 ## Overview
 
-Added critical features from the roadmap to make Forge_AI competitive with vLLM, Ollama, and LangChain combined.
+Added critical features from the roadmap to make enigma_engine competitive with vLLM, Ollama, and LangChain combined.
 
 ## Implemented Features
 
 ### 1. OpenAI-Compatible API (/v1/chat/completions)
-**File:** [forge_ai/comms/openai_api.py](forge_ai/comms/openai_api.py)
+**File:** [enigma_engine/comms/openai_api.py](enigma_engine/comms/openai_api.py)
 
-Drop-in replacement for OpenAI API. Any tool that works with OpenAI works with Forge_AI.
+Drop-in replacement for OpenAI API. Any tool that works with OpenAI works with enigma_engine.
 
 ```python
 # Use with OpenAI SDK
@@ -41,7 +41,7 @@ forge serve
 ---
 
 ### 2. CLI Commands (Ollama-style)
-**File:** [forge_ai/cli/main.py](forge_ai/cli/main.py)
+**File:** [enigma_engine/cli/main.py](enigma_engine/cli/main.py)
 
 Simple commands that just work:
 
@@ -75,7 +75,7 @@ forge rm mymodel
 ---
 
 ### 3. PagedAttention (vLLM-style memory management)
-**File:** [forge_ai/core/paged_attention.py](forge_ai/core/paged_attention.py)
+**File:** [enigma_engine/core/paged_attention.py](enigma_engine/core/paged_attention.py)
 
 Memory-efficient KV-cache management. Allocates fixed "pages" instead of pre-allocating max sequence length.
 
@@ -85,7 +85,7 @@ Memory-efficient KV-cache management. Allocates fixed "pages" instead of pre-all
 - Near-zero memory waste
 
 ```python
-from forge_ai.core.paged_attention import PagedKVCache
+from enigma_engine.core.paged_attention import PagedKVCache
 
 cache = PagedKVCache(
     num_layers=12,
@@ -103,7 +103,7 @@ k, v = cache.read(seq_id=0, layer=0)
 ---
 
 ### 4. Continuous Batching
-**File:** [forge_ai/core/continuous_batching.py](forge_ai/core/continuous_batching.py)
+**File:** [enigma_engine/core/continuous_batching.py](enigma_engine/core/continuous_batching.py)
 
 Add/remove requests mid-batch instead of waiting for all sequences to finish.
 
@@ -113,7 +113,7 @@ Add/remove requests mid-batch instead of waiting for all sequences to finish.
 - Near-optimal GPU utilization
 
 ```python
-from forge_ai.core.continuous_batching import InferenceServer
+from enigma_engine.core.continuous_batching import InferenceServer
 
 server = InferenceServer(model, tokenizer, max_batch_size=32)
 server.start()
@@ -129,12 +129,12 @@ for token in server.generate_stream("Tell me a story"):
 ---
 
 ### 5. GGML Quantization (Q4_K_M, Q5_K, Q6_K)
-**File:** [forge_ai/core/quantization.py](forge_ai/core/quantization.py) (updated)
+**File:** [enigma_engine/core/quantization.py](enigma_engine/core/quantization.py) (updated)
 
 Support for llama.cpp's quantization formats.
 
 ```python
-from forge_ai.core.quantization import ggml_quantize, GGMLQuantType
+from enigma_engine.core.quantization import ggml_quantize, GGMLQuantType
 
 # Quantize model
 model = ggml_quantize(model, quant_type=GGMLQuantType.Q4_K_M)
@@ -153,12 +153,12 @@ forge quantize mymodel --bits 4
 ---
 
 ### 6. DPO Training (Direct Preference Optimization)
-**File:** [forge_ai/core/dpo_training.py](forge_ai/core/dpo_training.py)
+**File:** [enigma_engine/core/dpo_training.py](enigma_engine/core/dpo_training.py)
 
 Simpler alternative to RLHF. Aligns models with human preferences.
 
 ```python
-from forge_ai.core.dpo_training import DPOTrainer, DPOConfig
+from enigma_engine.core.dpo_training import DPOTrainer, DPOConfig
 
 # Preference data format
 preferences = [
@@ -176,12 +176,12 @@ results = trainer.train(preferences, epochs=3)
 ---
 
 ### 7. RAG Pipeline (Retrieval-Augmented Generation)
-**File:** [forge_ai/core/rag_pipeline.py](forge_ai/core/rag_pipeline.py)
+**File:** [enigma_engine/core/rag_pipeline.py](enigma_engine/core/rag_pipeline.py)
 
 Built-in RAG for grounding LLM responses in documents.
 
 ```python
-from forge_ai.core.rag_pipeline import RAGPipeline
+from enigma_engine.core.rag_pipeline import RAGPipeline
 
 # Create pipeline
 rag = RAGPipeline()
@@ -209,7 +209,7 @@ print(answer.sources)
 
 - **run.py** - Added `--api-type` argument for OpenAI-compatible server
 - **setup.py** - Added `forge` CLI entry point
-- **forge_ai/comms/__init__.py** - (existing file structure)
+- **enigma_engine/comms/__init__.py** - (existing file structure)
 
 ## Installation
 
@@ -226,12 +226,12 @@ forge --help
 ---
 
 ### 8. ZeRO Optimizer (Stage 2)
-**File:** [forge_ai/core/zero_optimizer.py](forge_ai/core/zero_optimizer.py)
+**File:** [enigma_engine/core/zero_optimizer.py](enigma_engine/core/zero_optimizer.py)
 
 Train 8x larger models by partitioning optimizer states across GPUs.
 
 ```python
-from forge_ai.core.zero_optimizer import create_zero_optimizer
+from enigma_engine.core.zero_optimizer import create_zero_optimizer
 
 optimizer = create_zero_optimizer(model, lr=1e-4, stage=2)
 
@@ -263,12 +263,12 @@ docker-compose up --scale forge-api=3
 ---
 
 ### 10. Metal Backend (Apple Silicon)
-**File:** [forge_ai/core/metal_backend.py](forge_ai/core/metal_backend.py)
+**File:** [enigma_engine/core/metal_backend.py](enigma_engine/core/metal_backend.py)
 
 Native Apple Silicon support via MPS/MLX.
 
 ```python
-from forge_ai.core.metal_backend import MetalBackend
+from enigma_engine.core.metal_backend import MetalBackend
 
 backend = MetalBackend()
 model = backend.prepare_model(model)
@@ -278,12 +278,12 @@ output = backend.generate(model, input_ids)
 ---
 
 ### 11. Plugin System
-**File:** [forge_ai/core/plugin_system.py](forge_ai/core/plugin_system.py)
+**File:** [enigma_engine/core/plugin_system.py](enigma_engine/core/plugin_system.py)
 
-Extend Forge_AI with custom backends, trainers, tools, and hooks.
+Extend enigma_engine with custom backends, trainers, tools, and hooks.
 
 ```python
-from forge_ai.core.plugin_system import ForgePlugin, PluginMetadata, register_plugin
+from enigma_engine.core.plugin_system import ForgePlugin, PluginMetadata, register_plugin
 
 @register_plugin
 class MyPlugin(ForgePlugin):
@@ -296,12 +296,12 @@ class MyPlugin(ForgePlugin):
 ---
 
 ### 12. EXL2 Quantization
-**File:** [forge_ai/core/exl2_quantization.py](forge_ai/core/exl2_quantization.py)
+**File:** [enigma_engine/core/exl2_quantization.py](enigma_engine/core/exl2_quantization.py)
 
 Advanced per-layer adaptive quantization (better than GPTQ).
 
 ```python
-from forge_ai.core.exl2_quantization import quantize_model_exl2
+from enigma_engine.core.exl2_quantization import quantize_model_exl2
 
 quantized = quantize_model_exl2(
     model, tokenizer, 
@@ -313,12 +313,12 @@ quantized = quantize_model_exl2(
 ---
 
 ### 13. Prometheus Metrics
-**File:** [forge_ai/core/metrics.py](forge_ai/core/metrics.py)
+**File:** [enigma_engine/core/metrics.py](enigma_engine/core/metrics.py)
 
 Full observability with Prometheus-compatible metrics.
 
 ```python
-from forge_ai.core.metrics import get_metrics
+from enigma_engine.core.metrics import get_metrics
 
 metrics = get_metrics()
 
@@ -332,12 +332,12 @@ print(metrics.export())
 ---
 
 ### 14. Benchmarking Suite
-**File:** [forge_ai/core/benchmark.py](forge_ai/core/benchmark.py)
+**File:** [enigma_engine/core/benchmark.py](enigma_engine/core/benchmark.py)
 
 Comprehensive performance testing.
 
 ```python
-from forge_ai.core.benchmark import Benchmark
+from enigma_engine.core.benchmark import Benchmark
 
 bench = Benchmark(model, tokenizer)
 report = bench.run_all()
@@ -347,12 +347,12 @@ bench.print_report(report)
 ---
 
 ### 15. Model Merging
-**File:** [forge_ai/core/model_merge.py](forge_ai/core/model_merge.py)
+**File:** [enigma_engine/core/model_merge.py](enigma_engine/core/model_merge.py)
 
 Combine models using LERP, SLERP, TIES, DARE, or Task Arithmetic.
 
 ```python
-from forge_ai.core.model_merge import merge_models
+from enigma_engine.core.model_merge import merge_models
 
 merged = merge_models(
     [model_a, model_b, model_c],
@@ -364,12 +364,12 @@ merged = merge_models(
 ---
 
 ### 16. Speculative Decoding
-**File:** [forge_ai/core/speculative_decoding.py](forge_ai/core/speculative_decoding.py)
+**File:** [enigma_engine/core/speculative_decoding.py](enigma_engine/core/speculative_decoding.py)
 
 2-3x faster inference using a small draft model to predict tokens.
 
 ```python
-from forge_ai.core.speculative_decoding import SpeculativeDecoder
+from enigma_engine.core.speculative_decoding import SpeculativeDecoder
 
 decoder = SpeculativeDecoder(
     target_model=big_model,
@@ -383,12 +383,12 @@ output = decoder.generate(input_ids, max_new_tokens=100)
 ---
 
 ### 17. LoRA/QLoRA Training
-**File:** [forge_ai/core/lora_training.py](forge_ai/core/lora_training.py)
+**File:** [enigma_engine/core/lora_training.py](enigma_engine/core/lora_training.py)
 
 Efficient fine-tuning with 10-100x fewer trainable parameters.
 
 ```python
-from forge_ai.core.lora_training import LoRAModel, LoRATrainer, LoRAConfig
+from enigma_engine.core.lora_training import LoRAModel, LoRATrainer, LoRAConfig
 
 config = LoRAConfig(rank=8, alpha=16, target_modules=["q_proj", "v_proj"])
 lora_model = LoRAModel(base_model, config)
@@ -400,12 +400,12 @@ lora_model.save_adapter("my_adapter")
 ---
 
 ### 18. Tensor Parallelism
-**File:** [forge_ai/core/tensor_parallel.py](forge_ai/core/tensor_parallel.py)
+**File:** [enigma_engine/core/tensor_parallel.py](enigma_engine/core/tensor_parallel.py)
 
 Distribute models across multiple GPUs.
 
 ```python
-from forge_ai.core.tensor_parallel import parallelize_model, ParallelState
+from enigma_engine.core.tensor_parallel import parallelize_model, ParallelState
 
 state = ParallelState(world_size=4)
 model = parallelize_model(model, state)
@@ -414,12 +414,12 @@ model = parallelize_model(model, state)
 ---
 
 ### 19. WebSocket Streaming API
-**File:** [forge_ai/comms/websocket_api.py](forge_ai/comms/websocket_api.py)
+**File:** [enigma_engine/comms/websocket_api.py](enigma_engine/comms/websocket_api.py)
 
 Real-time token streaming via WebSocket.
 
 ```python
-from forge_ai.comms.websocket_api import WebSocketServer
+from enigma_engine.comms.websocket_api import WebSocketServer
 
 server = WebSocketServer(model, tokenizer, port=8765)
 server.start()
@@ -430,12 +430,12 @@ server.start()
 ---
 
 ### 20. Rate Limiting & Authentication
-**File:** [forge_ai/comms/auth.py](forge_ai/comms/auth.py)
+**File:** [enigma_engine/comms/auth.py](enigma_engine/comms/auth.py)
 
 Production API security with rate limiting and API keys.
 
 ```python
-from forge_ai.comms.auth import APIKeyManager, RateLimiter, AuthMiddleware
+from enigma_engine.comms.auth import APIKeyManager, RateLimiter, AuthMiddleware
 
 key_manager = APIKeyManager("keys.json")
 api_key = key_manager.create_key("my-app", rate_limit=100)
@@ -447,12 +447,12 @@ auth = AuthMiddleware(key_manager, rate_limiter)
 ---
 
 ### 21. Evaluation Suite
-**File:** [forge_ai/core/evaluation.py](forge_ai/core/evaluation.py)
+**File:** [enigma_engine/core/evaluation.py](enigma_engine/core/evaluation.py)
 
 Comprehensive model evaluation with BLEU, ROUGE, perplexity, and benchmarks.
 
 ```python
-from forge_ai.core.evaluation import Evaluator, BenchmarkRunner
+from enigma_engine.core.evaluation import Evaluator, BenchmarkRunner
 
 evaluator = Evaluator(model, tokenizer)
 results = evaluator.evaluate_all(test_texts)
@@ -464,12 +464,12 @@ hellaswag = runner.run_hellaswag("data/hellaswag.jsonl")
 ---
 
 ### 22. Dataset Utilities
-**File:** [forge_ai/core/datasets.py](forge_ai/core/datasets.py)
+**File:** [enigma_engine/core/datasets.py](enigma_engine/core/datasets.py)
 
 Flexible data loading for training and evaluation.
 
 ```python
-from forge_ai.core.datasets import TextDataset, InstructionDataset, StreamingDataset
+from enigma_engine.core.datasets import TextDataset, InstructionDataset, StreamingDataset
 
 # Load from various formats
 dataset = TextDataset.from_jsonl("data.jsonl", tokenizer)
@@ -480,12 +480,12 @@ streaming = StreamingDataset(["data/*.jsonl"], tokenizer)
 ---
 
 ### 23. Configuration Management
-**File:** [forge_ai/core/config_manager.py](forge_ai/core/config_manager.py)
+**File:** [enigma_engine/core/config_manager.py](enigma_engine/core/config_manager.py)
 
 Unified config with YAML/TOML/JSON support and environment overrides.
 
 ```python
-from forge_ai.core.config_manager import ConfigManager, load_config
+from enigma_engine.core.config_manager import ConfigManager, load_config
 
 config = load_config("config.yaml")
 print(config.model.hidden_size)
@@ -495,12 +495,12 @@ config.update(**{"training.learning_rate": 1e-5})
 ---
 
 ### 24. Gradient Checkpointing
-**File:** [forge_ai/core/checkpointing.py](forge_ai/core/checkpointing.py)
+**File:** [enigma_engine/core/checkpointing.py](enigma_engine/core/checkpointing.py)
 
 Memory-efficient training by trading compute for memory.
 
 ```python
-from forge_ai.core.checkpointing import checkpoint_model
+from enigma_engine.core.checkpointing import checkpoint_model
 
 model = checkpoint_model(model, checkpoint_ratio=0.5)
 # Now uses ~50% less memory at cost of ~20% more compute
@@ -509,12 +509,12 @@ model = checkpoint_model(model, checkpoint_ratio=0.5)
 ---
 
 ### 25. Multi-Level Caching
-**File:** [forge_ai/core/caching.py](forge_ai/core/caching.py)
+**File:** [enigma_engine/core/caching.py](enigma_engine/core/caching.py)
 
 LRU, disk, Redis, and semantic similarity caching for inference.
 
 ```python
-from forge_ai.core.caching import InferenceCache
+from enigma_engine.core.caching import InferenceCache
 
 cache = InferenceCache(backend='redis', host='localhost')
 
@@ -526,12 +526,12 @@ def generate(prompt):
 ---
 
 ### 26. Health Monitoring
-**File:** [forge_ai/core/health.py](forge_ai/core/health.py)
+**File:** [enigma_engine/core/health.py](enigma_engine/core/health.py)
 
 Production health checks and system metrics.
 
 ```python
-from forge_ai.core.health import HealthChecker, create_health_routes
+from enigma_engine.core.health import HealthChecker, create_health_routes
 
 checker = HealthChecker(model)
 app = create_health_routes(app, checker)

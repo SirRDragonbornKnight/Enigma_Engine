@@ -26,7 +26,7 @@ python run.py --run --new-instance
 ### In Python Code
 
 ```python
-from forge_ai.core.instance_manager import InstanceManager
+from enigma_engine.core.instance_manager import InstanceManager
 
 # Create instance
 with InstanceManager(instance_id="bot1") as manager:
@@ -84,7 +84,7 @@ for msg in messages:
 
 ## Lock Storage
 
-Instance locks are stored in `~/.forge_ai/locks/`:
+Instance locks are stored in `~/.enigma_engine/locks/`:
 - `instance_{id}.lock` - Instance registration
 - `model_{name}.lock` - Model locks
 - `messages/` - Inter-instance messages
@@ -94,7 +94,7 @@ Instance locks are stored in `~/.forge_ai/locks/`:
 Stale locks (from crashed processes) are automatically removed:
 
 ```python
-from forge_ai.core.instance_manager import cleanup_stale_locks
+from enigma_engine.core.instance_manager import cleanup_stale_locks
 
 cleanup_stale_locks()
 ```
@@ -128,7 +128,7 @@ python run.py --run --instance chat
 python run.py --web --instance web
 
 # Terminal 2: Mobile API
-python -c "from forge_ai.mobile.api import run_mobile_api; run_mobile_api()"
+python -c "from enigma_engine.mobile.api import run_mobile_api; run_mobile_api()"
 ```
 
 ## Best Practices
@@ -157,7 +157,7 @@ python -c "from forge_ai.mobile.api import run_mobile_api; run_mobile_api()"
 ## Example: Coordinated Training
 
 ```python
-from forge_ai.core.instance_manager import InstanceManager
+from enigma_engine.core.instance_manager import InstanceManager
 
 # Instance 1: Data preparation
 with InstanceManager("prep") as manager:
@@ -178,5 +178,5 @@ with InstanceManager("trainer") as manager:
 
 ## See Also
 
-- [Instance Manager API](../forge_ai/core/instance_manager.py)
+- [Instance Manager API](../enigma_engine/core/instance_manager.py)
 - [Web Dashboard](WEB_MOBILE.md)

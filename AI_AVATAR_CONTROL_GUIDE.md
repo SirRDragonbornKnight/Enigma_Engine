@@ -11,15 +11,15 @@ A complete AI model integration for natural avatar control through bone animatio
    - Covers gestures, emotions, body language
    - Format: User asks → AI responds with bone control tags
 
-2. **AI Control System** (`forge_ai/avatar/ai_control.py`)
+2. **AI Control System** (`enigma_engine/avatar/ai_control.py`)
    - Parses bone control commands from AI responses
    - Executes bone movements with proper priority
    - Predefined gestures (nod, wave, shrug, etc.)
 
-3. **Tool Definition** (`forge_ai/tools/avatar_control_tool.py`)
+3. **Tool Definition** (`enigma_engine/tools/avatar_control_tool.py`)
    - New tool: `control_avatar_bones`
    - AI can call it like any other tool
-   - Integrated with ForgeAI tool system
+   - Integrated with Enigma AI Engine tool system
 
 4. **Training Script** (`scripts/train_avatar_control.py`)
    - One-command training
@@ -30,7 +30,7 @@ A complete AI model integration for natural avatar control through bone animatio
 ### Step 1: Train the Avatar Control Model
 
 ```bash
-cd /home/pi/ForgeAI
+cd /home/pi/Enigma AI Engine
 python scripts/train_avatar_control.py
 ```
 
@@ -38,7 +38,7 @@ This creates a small, fast model specialized in avatar bone control (~27M params
 
 ### Step 2: Load Model & Enable Avatar
 
-1. Open ForgeAI GUI
+1. Open Enigma AI Engine GUI
 2. Go to **Model Manager** tab
 3. Load the `avatar_control` model
 4. Go to **Modules** tab
@@ -175,7 +175,7 @@ python scripts/train_avatar_control.py
 ### With Chat System
 
 ```python
-from forge_ai.avatar.ai_control import process_ai_response
+from enigma_engine.avatar.ai_control import process_ai_response
 
 # In your chat loop:
 ai_response = model.generate(user_input)
@@ -190,7 +190,7 @@ Already integrated! The AI can call `control_avatar_bones` like any tool.
 ### With Autonomous System
 
 ```python
-from forge_ai.avatar.ai_control import get_ai_avatar_control
+from enigma_engine.avatar.ai_control import get_ai_avatar_control
 
 ai_control = get_ai_avatar_control()
 
@@ -226,7 +226,7 @@ ai_control.execute_gesture("nod")
 ### Custom Animations
 
 ```python
-from forge_ai.avatar.ai_control import get_ai_avatar_control, BoneCommand
+from enigma_engine.avatar.ai_control import get_ai_avatar_control, BoneCommand
 
 ai_control = get_ai_avatar_control()
 
@@ -250,7 +250,7 @@ ai_control.reset_pose()  # Returns all bones to 0,0,0
 ### Direct Bone Control
 
 ```python
-from forge_ai.avatar.bone_control import get_bone_controller
+from enigma_engine.avatar.bone_control import get_bone_controller
 
 bone_controller = get_bone_controller()
 pitch, yaw, roll = bone_controller.move_bone("head", pitch=20, yaw=0, roll=0)

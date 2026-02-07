@@ -1,7 +1,7 @@
 """
-Camera Integration Example for ForgeAI
+Camera Integration Example for Enigma AI Engine
 
-This example shows how to use cameras with ForgeAI.
+This example shows how to use cameras with Enigma AI Engine.
 Cameras enable vision, face tracking, object detection, etc.
 
 SUPPORTED CAMERAS:
@@ -485,7 +485,7 @@ class ScreenCamera(CameraInterface):
 
 class CameraController:
     """
-    Main camera controller for ForgeAI.
+    Main camera controller for Enigma AI Engine.
     Manages multiple cameras and provides unified interface.
     """
     
@@ -533,7 +533,7 @@ class CameraController:
 
 
 # =============================================================================
-# VISION HELPERS (for use with ForgeAI)
+# VISION HELPERS (for use with Enigma AI Engine)
 # =============================================================================
 
 def detect_faces(frame, return_boxes: bool = True):
@@ -638,7 +638,7 @@ def create_screen_camera(region: Optional[Tuple[int, int, int, int]] = None) -> 
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("ForgeAI Camera Example")
+    print("Enigma AI Engine Camera Example")
     print("=" * 60)
     
     # Try to use USB webcam, fall back to screen capture

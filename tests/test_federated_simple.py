@@ -13,7 +13,7 @@ def test_imports():
     print("Testing imports...")
     
     try:
-        from forge_ai.learning import (
+        from enigma_engine.learning import (
             FederatedLearning,
             WeightUpdate,
             FederatedMode,
@@ -38,7 +38,7 @@ def test_weight_update():
     """Test WeightUpdate class."""
     print("\nTesting WeightUpdate...")
     
-    from forge_ai.learning import WeightUpdate
+    from enigma_engine.learning import WeightUpdate
     from datetime import datetime
     
     try:
@@ -73,7 +73,7 @@ def test_federated_learning():
     """Test FederatedLearning class."""
     print("\nTesting FederatedLearning...")
     
-    from forge_ai.learning import FederatedLearning, FederatedMode, PrivacyLevel
+    from enigma_engine.learning import FederatedLearning, FederatedMode, PrivacyLevel
     
     try:
         fl = FederatedLearning(
@@ -102,7 +102,7 @@ def test_differential_privacy():
     """Test DifferentialPrivacy class."""
     print("\nTesting DifferentialPrivacy...")
     
-    from forge_ai.learning import DifferentialPrivacy
+    from enigma_engine.learning import DifferentialPrivacy
     
     try:
         dp = DifferentialPrivacy(epsilon=1.0, delta=1e-5)
@@ -135,7 +135,7 @@ def test_secure_aggregator():
     """Test SecureAggregator class."""
     print("\nTesting SecureAggregator...")
     
-    from forge_ai.learning import SecureAggregator, AggregationMethod
+    from enigma_engine.learning import SecureAggregator, AggregationMethod
     
     try:
         aggregator = SecureAggregator()
@@ -155,7 +155,7 @@ def test_coordinator():
     """Test FederatedCoordinator class."""
     print("\nTesting FederatedCoordinator...")
     
-    from forge_ai.learning import FederatedCoordinator, CoordinatorMode
+    from enigma_engine.learning import FederatedCoordinator, CoordinatorMode
     
     try:
         coordinator = FederatedCoordinator(
@@ -186,7 +186,7 @@ def test_data_filter():
     """Test FederatedDataFilter class."""
     print("\nTesting FederatedDataFilter...")
     
-    from forge_ai.learning import FederatedDataFilter, TrainingExample
+    from enigma_engine.learning import FederatedDataFilter, TrainingExample
     
     try:
         filter = FederatedDataFilter()
@@ -216,7 +216,7 @@ def test_trust_manager():
     """Test TrustManager class."""
     print("\nTesting TrustManager...")
     
-    from forge_ai.learning import TrustManager
+    from enigma_engine.learning import TrustManager
     
     try:
         trust_mgr = TrustManager()

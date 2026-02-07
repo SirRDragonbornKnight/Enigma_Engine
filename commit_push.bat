@@ -1,6 +1,6 @@
 @echo off
-cd /d "C:\Users\sirkn_gbhnunq\Documents\GitHub\Forge_AI"
+REM Navigate to project directory (assumes script is in project root)
+cd /d "%~dp0"
 git add -A
-git commit -m "Avatar: Add 3D rotation, loading overlay, quick switch"
+git commit -m "Update"
 git push
-del "%~f0"

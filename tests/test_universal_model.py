@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tests for Universal Model enhancements in forge_ai/core/model.py
+Tests for Universal Model enhancements in enigma_engine/core/model.py
 
 Run with: pytest tests/test_universal_model.py -v
 """
@@ -17,14 +17,14 @@ class TestBackwardCompatibility:
     
     def test_create_model_basic(self):
         """Test basic model creation still works."""
-        from forge_ai.core.model import create_model
+        from enigma_engine.core.model import create_model
         model = create_model('small')
         assert model is not None
         assert model.num_parameters > 0
     
     def test_forge_config_basic(self):
         """Test basic ForgeConfig creation."""
-        from forge_ai.core.model import ForgeConfig
+        from enigma_engine.core.model import ForgeConfig
         config = ForgeConfig(
             vocab_size=1000,
             dim=256,
@@ -38,14 +38,14 @@ class TestBackwardCompatibility:
     
     def test_forge_init_basic(self):
         """Test Forge class can be initialized."""
-        from forge_ai.core.model import Forge, ForgeConfig
+        from enigma_engine.core.model import Forge, ForgeConfig
         config = ForgeConfig(vocab_size=1000, dim=128, n_layers=2, n_heads=4)
         model = Forge(config=config)
         assert model.vocab_size == 1000
     
     def test_forward_pass(self):
         """Test model forward pass works."""
-        from forge_ai.core.model import create_model
+        from enigma_engine.core.model import create_model
         model = create_model('tiny')
         input_ids = torch.randint(0, 1000, (1, 10))
         logits = model(input_ids)
@@ -53,7 +53,7 @@ class TestBackwardCompatibility:
     
     def test_generate(self):
         """Test generation works."""
-        from forge_ai.core.model import create_model
+        from enigma_engine.core.model import create_model
         model = create_model('nano')
         input_ids = torch.randint(0, 1000, (1, 5))
         output = model.generate(input_ids, max_new_tokens=5)
@@ -65,7 +65,7 @@ class TestRoPEScaling:
     
     def test_rope_scaling_config_linear(self):
         """Test linear RoPE scaling configuration."""
-        from forge_ai.core.model import ForgeConfig
+        from enigma_engine.core.model import ForgeConfig
         config = ForgeConfig(
             vocab_size=1000,
             dim=128,
@@ -79,7 +79,7 @@ class TestRoPEScaling:
     
     def test_rope_scaling_config_dynamic(self):
         """Test dynamic NTK RoPE scaling configuration."""
-        from forge_ai.core.model import ForgeConfig
+        from enigma_engine.core.model import ForgeConfig
         config = ForgeConfig(
             vocab_size=1000,
             dim=128,
@@ -92,7 +92,7 @@ class TestRoPEScaling:
     
     def test_rope_scaling_config_yarn(self):
         """Test YaRN RoPE scaling configuration."""
-        from forge_ai.core.model import ForgeConfig
+        from enigma_engine.core.model import ForgeConfig
         config = ForgeConfig(
             vocab_size=1000,
             dim=128,
@@ -105,7 +105,7 @@ class TestRoPEScaling:
     
     def test_rope_scaling_model_creation(self):
         """Test model can be created with RoPE scaling."""
-        from forge_ai.core.model import Forge, ForgeConfig
+        from enigma_engine.core.model import Forge, ForgeConfig
         config = ForgeConfig(
             vocab_size=1000,
             dim=128,
@@ -122,7 +122,7 @@ class TestRoPEScaling:
     
     def test_invalid_rope_scaling_type(self):
         """Test that invalid RoPE scaling type raises error."""
-        from forge_ai.core.model import ForgeConfig
+        from enigma_engine.core.model import ForgeConfig
         with pytest.raises(ValueError, match="rope_scaling_type must be one of"):
             ForgeConfig(
                 vocab_size=1000,
@@ -138,7 +138,7 @@ class TestMultiModal:
     
     def test_vision_projection_config(self):
         """Test vision projection configuration."""
-        from forge_ai.core.model import ForgeConfig
+        from enigma_engine.core.model import ForgeConfig
         config = ForgeConfig(
             vocab_size=1000,
             dim=256,
@@ -150,7 +150,7 @@ class TestMultiModal:
     
     def test_audio_projection_config(self):
         """Test audio projection configuration."""
-        from forge_ai.core.model import ForgeConfig
+        from enigma_engine.core.model import ForgeConfig
         config = ForgeConfig(
             vocab_size=1000,
             dim=256,
@@ -162,7 +162,7 @@ class TestMultiModal:
     
     def test_vision_projection_layer(self):
         """Test vision projection layer is created."""
-        from forge_ai.core.model import Forge, ForgeConfig
+        from enigma_engine.core.model import Forge, ForgeConfig
         config = ForgeConfig(
             vocab_size=1000,
             dim=256,
@@ -177,7 +177,7 @@ class TestMultiModal:
     
     def test_audio_projection_layer(self):
         """Test audio projection layer is created."""
-        from forge_ai.core.model import Forge, ForgeConfig
+        from enigma_engine.core.model import Forge, ForgeConfig
         config = ForgeConfig(
             vocab_size=1000,
             dim=256,
@@ -190,7 +190,7 @@ class TestMultiModal:
     
     def test_forward_multimodal_text_only(self):
         """Test multimodal forward with text only."""
-        from forge_ai.core.model import Forge, ForgeConfig
+        from enigma_engine.core.model import Forge, ForgeConfig
         config = ForgeConfig(
             vocab_size=1000,
             dim=128,
@@ -205,7 +205,7 @@ class TestMultiModal:
     
     def test_forward_multimodal_vision(self):
         """Test multimodal forward with vision features."""
-        from forge_ai.core.model import Forge, ForgeConfig
+        from enigma_engine.core.model import Forge, ForgeConfig
         config = ForgeConfig(
             vocab_size=1000,
             dim=128,
@@ -229,7 +229,7 @@ class TestMoEConfig:
     
     def test_moe_config(self):
         """Test MoE configuration parameters."""
-        from forge_ai.core.model import ForgeConfig
+        from enigma_engine.core.model import ForgeConfig
         config = ForgeConfig(
             vocab_size=1000,
             dim=256,
@@ -245,7 +245,7 @@ class TestMoEConfig:
     
     def test_moe_config_validation(self):
         """Test MoE config validation."""
-        from forge_ai.core.model import ForgeConfig
+        from enigma_engine.core.model import ForgeConfig
         # Should raise error if num_experts_per_token > num_experts
         with pytest.raises(ValueError):
             ForgeConfig(
@@ -264,7 +264,7 @@ class TestEnhancedKVCache:
     
     def test_sliding_window_config(self):
         """Test sliding window attention configuration."""
-        from forge_ai.core.model import ForgeConfig
+        from enigma_engine.core.model import ForgeConfig
         config = ForgeConfig(
             vocab_size=1000,
             dim=256,
@@ -276,7 +276,7 @@ class TestEnhancedKVCache:
     
     def test_paged_attention_config(self):
         """Test paged attention configuration."""
-        from forge_ai.core.model import ForgeConfig
+        from enigma_engine.core.model import ForgeConfig
         config = ForgeConfig(
             vocab_size=1000,
             dim=256,
@@ -288,7 +288,7 @@ class TestEnhancedKVCache:
     
     def test_kv_cache_dtype_config(self):
         """Test KV-cache dtype configuration."""
-        from forge_ai.core.model import ForgeConfig
+        from enigma_engine.core.model import ForgeConfig
         config = ForgeConfig(
             vocab_size=1000,
             dim=256,
@@ -304,31 +304,31 @@ class TestUniversalLoading:
     
     def test_from_any_method_exists(self):
         """Test from_any classmethod exists."""
-        from forge_ai.core.model import Forge
+        from enigma_engine.core.model import Forge
         assert hasattr(Forge, 'from_any')
         assert callable(Forge.from_any)
     
     def test_from_huggingface_method_exists(self):
         """Test from_huggingface classmethod exists."""
-        from forge_ai.core.model import Forge
+        from enigma_engine.core.model import Forge
         assert hasattr(Forge, 'from_huggingface')
         assert callable(Forge.from_huggingface)
     
     def test_from_safetensors_method_exists(self):
         """Test from_safetensors classmethod exists."""
-        from forge_ai.core.model import Forge
+        from enigma_engine.core.model import Forge
         assert hasattr(Forge, 'from_safetensors')
         assert callable(Forge.from_safetensors)
     
     def test_from_gguf_method_exists(self):
         """Test from_gguf classmethod exists."""
-        from forge_ai.core.model import Forge
+        from enigma_engine.core.model import Forge
         assert hasattr(Forge, 'from_gguf')
         assert callable(Forge.from_gguf)
     
     def test_from_onnx_method_exists(self):
         """Test from_onnx classmethod exists."""
-        from forge_ai.core.model import Forge
+        from enigma_engine.core.model import Forge
         assert hasattr(Forge, 'from_onnx')
         assert callable(Forge.from_onnx)
 
@@ -338,13 +338,13 @@ class TestLoRASupport:
     
     def test_load_lora_method_exists(self):
         """Test load_lora method exists."""
-        from forge_ai.core.model import Forge
+        from enigma_engine.core.model import Forge
         assert hasattr(Forge, 'load_lora')
         assert callable(Forge.load_lora)
     
     def test_merge_lora_method_exists(self):
         """Test merge_lora method exists."""
-        from forge_ai.core.model import Forge
+        from enigma_engine.core.model import Forge
         assert hasattr(Forge, 'merge_lora')
         assert callable(Forge.merge_lora)
 
@@ -354,7 +354,7 @@ class TestSpeculativeDecoding:
     
     def test_enable_speculative_decoding(self):
         """Test enabling speculative decoding."""
-        from forge_ai.core.model import create_model
+        from enigma_engine.core.model import create_model
         draft_model = create_model('nano')
         main_model = create_model('small')
         
@@ -365,7 +365,7 @@ class TestSpeculativeDecoding:
     
     def test_disable_speculative_decoding(self):
         """Test disabling speculative decoding."""
-        from forge_ai.core.model import create_model
+        from enigma_engine.core.model import create_model
         draft_model = create_model('nano')
         main_model = create_model('small')
         
@@ -375,7 +375,7 @@ class TestSpeculativeDecoding:
     
     def test_generate_speculative_method_exists(self):
         """Test generate_speculative method exists."""
-        from forge_ai.core.model import Forge
+        from enigma_engine.core.model import Forge
         assert hasattr(Forge, 'generate_speculative')
         assert callable(Forge.generate_speculative)
 
@@ -385,7 +385,7 @@ class TestConfigSerialization:
     
     def test_config_to_dict(self):
         """Test config can be serialized to dict."""
-        from forge_ai.core.model import ForgeConfig
+        from enigma_engine.core.model import ForgeConfig
         config = ForgeConfig(
             vocab_size=1000,
             dim=256,
@@ -404,7 +404,7 @@ class TestConfigSerialization:
     
     def test_config_from_dict(self):
         """Test config can be loaded from dict."""
-        from forge_ai.core.model import ForgeConfig
+        from enigma_engine.core.model import ForgeConfig
         config_dict = {
             'vocab_size': 1000,
             'dim': 256,

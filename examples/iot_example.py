@@ -1,7 +1,7 @@
 """
-IoT and Home Automation Example for ForgeAI
+IoT and Home Automation Example for Enigma AI Engine
 
-This example shows how to connect ForgeAI to smart home devices.
+This example shows how to connect Enigma AI Engine to smart home devices.
 Control lights, switches, sensors, and more!
 
 SUPPORTED PLATFORMS:
@@ -32,7 +32,7 @@ from typing import Dict, Any, List, Optional
 # CONFIGURATION
 # =============================================================================
 
-IOT_CONFIG_DIR = Path.home() / ".forge_ai" / "iot"
+IOT_CONFIG_DIR = Path.home() / ".enigma_engine" / "iot"
 IOT_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -601,7 +601,7 @@ class SimulatedDevice:
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("ForgeAI IoT Example")
+    print("Enigma AI Engine IoT Example")
     print("=" * 60)
     
     # Test simulated device

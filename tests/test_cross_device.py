@@ -3,7 +3,7 @@
 Cross-Device Compatibility Test Suite
 ================================================================================
 
-Tests ForgeAI functionality across different device configurations:
+Tests Enigma AI Engine functionality across different device configurations:
 - Embedded (Raspberry Pi)
 - Mobile (Phone/Tablet)
 - Desktop (Standard PC)
@@ -24,7 +24,7 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 import pytest
 
-# Add forge_ai to path if running directly
+# Add enigma_engine to path if running directly
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
@@ -147,12 +147,12 @@ class TestCoreImports:
     
     def test_config_import(self):
         """Config should always import."""
-        from forge_ai.config import CONFIG
+        from enigma_engine.config import CONFIG
         assert CONFIG is not None
     
     def test_builtin_import(self):
         """Builtins should always import (no dependencies)."""
-        from forge_ai.builtin import (
+        from enigma_engine.builtin import (
             BuiltinTTS, BuiltinEmbeddings, BuiltinCodeGen,
             BuiltinImageGen, BuiltinChat, BuiltinVideoGen
         )
@@ -166,13 +166,13 @@ class TestCoreImports:
     
     def test_core_import(self):
         """Core module should import."""
-        from forge_ai.core import Forge, ForgeConfig, create_model
+        from enigma_engine.core import Forge, ForgeConfig, create_model
         assert callable(create_model)
     
     def test_gaming_mode_import(self):
         """Gaming mode should import."""
         try:
-            from forge_ai.core.gaming_mode import (
+            from enigma_engine.core.gaming_mode import (
                 GamingMode, GamingPriority, get_gaming_mode
             )
             assert callable(GamingMode)
@@ -182,7 +182,7 @@ class TestCoreImports:
     def test_adaptive_engine_import(self):
         """Adaptive engine should import."""
         try:
-            from forge_ai.core.adaptive_engine import (
+            from enigma_engine.core.adaptive_engine import (
                 AdaptiveEngine, AdaptiveConfig, get_adaptive_engine
             )
             assert callable(AdaptiveEngine)
@@ -199,13 +199,13 @@ class TestBuiltinFallbacks:
     
     def test_builtin_tts_initialize(self):
         """BuiltinTTS should initialize."""
-        from forge_ai.builtin import BuiltinTTS
+        from enigma_engine.builtin import BuiltinTTS
         tts = BuiltinTTS()
         assert tts.load() == True
     
     def test_builtin_embeddings_generate(self):
         """BuiltinEmbeddings should generate embeddings."""
-        from forge_ai.builtin import BuiltinEmbeddings
+        from enigma_engine.builtin import BuiltinEmbeddings
         emb = BuiltinEmbeddings()
         emb.load()
         result = emb.embed("test text")
@@ -214,7 +214,7 @@ class TestBuiltinFallbacks:
     
     def test_builtin_image_generate(self):
         """BuiltinImageGen should generate images."""
-        from forge_ai.builtin import BuiltinImageGen
+        from enigma_engine.builtin import BuiltinImageGen
         gen = BuiltinImageGen(width=64, height=64)  # Small for speed
         gen.load()
         result = gen.generate("test image")
@@ -223,7 +223,7 @@ class TestBuiltinFallbacks:
     
     def test_builtin_code_generate(self):
         """BuiltinCodeGen should generate code."""
-        from forge_ai.builtin import BuiltinCodeGen
+        from enigma_engine.builtin import BuiltinCodeGen
         gen = BuiltinCodeGen()
         gen.load()
         result = gen.generate("hello world function", language="python")
@@ -232,7 +232,7 @@ class TestBuiltinFallbacks:
     
     def test_builtin_chat_respond(self):
         """BuiltinChat should respond."""
-        from forge_ai.builtin import BuiltinChat
+        from enigma_engine.builtin import BuiltinChat
         chat = BuiltinChat()
         chat.load()
         result = chat.chat("hello")  # Use chat() method, not respond()
@@ -250,7 +250,7 @@ class TestGamingMode:
     def test_gaming_mode_creation(self):
         """GamingMode should create without error."""
         try:
-            from forge_ai.core.gaming_mode import GamingMode
+            from enigma_engine.core.gaming_mode import GamingMode
             gm = GamingMode()
             assert gm is not None
         except ImportError:
@@ -259,7 +259,7 @@ class TestGamingMode:
     def test_gaming_profile_defaults(self):
         """Default gaming profiles should be defined."""
         try:
-            from forge_ai.core.gaming_mode import DEFAULT_GAMING_PROFILES
+            from enigma_engine.core.gaming_mode import DEFAULT_GAMING_PROFILES
             assert "competitive_fps" in DEFAULT_GAMING_PROFILES
             assert "singleplayer_rpg" in DEFAULT_GAMING_PROFILES
         except ImportError:
@@ -268,7 +268,7 @@ class TestGamingMode:
     def test_gaming_resource_limits(self):
         """Resource limits should be configurable."""
         try:
-            from forge_ai.core.gaming_mode import GamingMode, GamingProfile
+            from enigma_engine.core.gaming_mode import GamingMode, GamingProfile
             gm = GamingMode()
             
             # Should start with full limits
@@ -280,7 +280,7 @@ class TestGamingMode:
     def test_gaming_mode_can_generate(self):
         """can_generate should return appropriate values."""
         try:
-            from forge_ai.core.gaming_mode import GamingMode
+            from enigma_engine.core.gaming_mode import GamingMode
             gm = GamingMode()
             
             # Without active game, should allow generation
@@ -300,7 +300,7 @@ class TestAdaptiveEngine:
     def test_adaptive_engine_creation(self):
         """AdaptiveEngine should create without error."""
         try:
-            from forge_ai.core.adaptive_engine import AdaptiveEngine, AdaptiveConfig
+            from enigma_engine.core.adaptive_engine import AdaptiveEngine, AdaptiveConfig
             config = AdaptiveConfig(
                 enable_gaming_mode=False,  # Disable for testing
                 enable_distributed=False,
@@ -313,7 +313,7 @@ class TestAdaptiveEngine:
     def test_adaptive_mode_detection(self):
         """Mode detection should work."""
         try:
-            from forge_ai.core.adaptive_engine import AdaptiveEngine, AdaptiveConfig, AdaptiveMode
+            from enigma_engine.core.adaptive_engine import AdaptiveEngine, AdaptiveConfig, AdaptiveMode
             config = AdaptiveConfig(
                 enable_gaming_mode=False,
                 enable_distributed=False,
@@ -328,7 +328,7 @@ class TestAdaptiveEngine:
     def test_adaptive_status(self):
         """get_status should return valid status."""
         try:
-            from forge_ai.core.adaptive_engine import AdaptiveEngine, AdaptiveConfig
+            from enigma_engine.core.adaptive_engine import AdaptiveEngine, AdaptiveConfig
             config = AdaptiveConfig(
                 enable_gaming_mode=False,
                 enable_distributed=False,
@@ -352,7 +352,7 @@ class TestDeviceProfiles:
     def test_device_profiler_import(self):
         """DeviceProfiler should import."""
         try:
-            from forge_ai.core.device_profiles import DeviceProfiler, DeviceClass
+            from enigma_engine.core.device_profiles import DeviceProfiler, DeviceClass
             assert DeviceClass is not None
         except ImportError:
             pytest.skip("Device profiles not available")
@@ -360,7 +360,7 @@ class TestDeviceProfiles:
     def test_profile_settings_exist(self):
         """ProfileSettings should be configurable."""
         try:
-            from forge_ai.core.device_profiles import ProfileSettings, DeviceClass
+            from enigma_engine.core.device_profiles import ProfileSettings, DeviceClass
             
             # Create settings manually (use actual dataclass field names)
             settings = ProfileSettings(
@@ -385,7 +385,7 @@ class TestDistributed:
     def test_distributed_node_import(self):
         """DistributedNode should import."""
         try:
-            from forge_ai.comms.distributed import DistributedNode, NodeRole
+            from enigma_engine.comms.distributed import DistributedNode, NodeRole
             assert callable(DistributedNode)
         except ImportError:
             pytest.skip("Distributed module not available")
@@ -393,7 +393,7 @@ class TestDistributed:
     def test_node_role_enum(self):
         """NodeRole enum should have expected values."""
         try:
-            from forge_ai.comms.distributed import NodeRole
+            from enigma_engine.comms.distributed import NodeRole
             assert hasattr(NodeRole, "INFERENCE_CLIENT")
             assert hasattr(NodeRole, "INFERENCE_SERVER")
         except ImportError:
@@ -402,7 +402,7 @@ class TestDistributed:
     def test_protocol_message(self):
         """ProtocolMessage should serialize/deserialize."""
         try:
-            from forge_ai.comms.distributed import ProtocolMessage, MessageType
+            from enigma_engine.comms.distributed import ProtocolMessage, MessageType
             
             msg = ProtocolMessage(
                 msg_type=MessageType.PING,
@@ -428,7 +428,7 @@ class TestMemoryEfficiency:
     def test_low_power_engine_import(self):
         """LowPowerEngine should import."""
         try:
-            from forge_ai.core.low_power_inference import LowPowerEngine
+            from enigma_engine.core.low_power_inference import LowPowerEngine
             assert callable(LowPowerEngine)
         except ImportError:
             pytest.skip("Low power engine not available")
@@ -436,7 +436,7 @@ class TestMemoryEfficiency:
     def test_style_config_device_aware(self):
         """StyleConfig should adapt to device."""
         try:
-            from forge_ai.gui.tabs.unified_patterns import StyleConfig, DeviceUIClass
+            from enigma_engine.gui.tabs.unified_patterns import StyleConfig, DeviceUIClass
             config = StyleConfig()
             
             # Should have reasonable defaults
@@ -453,7 +453,7 @@ class TestMemoryEfficiency:
 
 def main():
     """Run tests directly."""
-    print("ForgeAI Cross-Device Compatibility Tests")
+    print("Enigma AI Engine Cross-Device Compatibility Tests")
     print("=" * 60)
     
     # Run pytest with verbose output

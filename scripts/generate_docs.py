@@ -658,12 +658,12 @@ class DocGenerator:
 
 
 def generate_docs(
-    source: str = "forge_ai",
+    source: str = "enigma_engine",
     output: str = "docs/api",
     format: str = "md"
 ) -> List[Path]:
     """
-    Generate documentation for ForgeAI.
+    Generate documentation for Enigma AI Engine.
     
     Args:
         source: Source directory
@@ -695,8 +695,8 @@ def main():
     """CLI entry point."""
     import argparse
     
-    parser = argparse.ArgumentParser(description="Generate ForgeAI documentation")
-    parser.add_argument("--source", default="forge_ai", help="Source directory")
+    parser = argparse.ArgumentParser(description="Generate Enigma AI Engine documentation")
+    parser.add_argument("--source", default="enigma_engine", help="Source directory")
     parser.add_argument("--output", default="docs/api", help="Output directory")
     parser.add_argument("--format", choices=["md", "html", "json"], default="md")
     

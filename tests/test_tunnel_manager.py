@@ -5,7 +5,7 @@ Test tunnel manager module.
 import pytest
 import time
 from unittest.mock import Mock, patch, MagicMock
-from forge_ai.comms.tunnel_manager import (
+from enigma_engine.comms.tunnel_manager import (
     TunnelManager,
     TunnelProvider,
     TunnelConfig,
@@ -102,8 +102,8 @@ class TestTunnelManager:
     def test_singleton_get_tunnel_manager(self):
         """Test singleton pattern for get_tunnel_manager."""
         # Clear singleton
-        import forge_ai.comms.tunnel_manager
-        forge_ai.comms.tunnel_manager._tunnel_manager = None
+        import enigma_engine.comms.tunnel_manager
+        enigma_engine.comms.tunnel_manager._tunnel_manager = None
         
         manager1 = get_tunnel_manager()
         manager2 = get_tunnel_manager()
@@ -146,12 +146,12 @@ class TestTunnelConfig:
 class TestHelperFunctions:
     """Test helper functions."""
     
-    @patch('forge_ai.comms.tunnel_manager.TunnelManager.start_tunnel')
+    @patch('enigma_engine.comms.tunnel_manager.TunnelManager.start_tunnel')
     def test_create_tunnel(self, mock_start):
         """Test create_tunnel helper function."""
         # Clear singleton
-        import forge_ai.comms.tunnel_manager
-        forge_ai.comms.tunnel_manager._tunnel_manager = None
+        import enigma_engine.comms.tunnel_manager
+        enigma_engine.comms.tunnel_manager._tunnel_manager = None
         
         mock_start.return_value = "https://test.com"
         

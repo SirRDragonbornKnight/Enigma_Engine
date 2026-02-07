@@ -2,7 +2,7 @@
 
 Replace 'Hello!' with any prompt to test your AI's responses.
 """
-from forge_ai.core.inference import ForgeEngine
+from enigma_engine.core.inference import ForgeEngine
 
 if __name__ == "__main__":
     engine = ForgeEngine()

@@ -1,4 +1,4 @@
-# ForgeAI - How Files Connect 🔗
+# Enigma AI Engine - How Files Connect 🔗
 
 This shows how each file talks to other files.
 
@@ -6,7 +6,7 @@ This shows how each file talks to other files.
 
 ## 🚀 The Startup Flow
 
-When you run ForgeAI, here's what happens:
+When you run Enigma AI Engine, here's what happens:
 
 ```
 run.py

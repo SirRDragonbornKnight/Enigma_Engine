@@ -2,7 +2,7 @@
 
 ## Overview
 
-ForgeAI includes a self-evolving personality system that allows your AI to develop its own unique character over time through interactions.
+Enigma AI Engine includes a self-evolving personality system that allows your AI to develop its own unique character over time through interactions.
 
 ## Features
 
@@ -18,7 +18,7 @@ ForgeAI includes a self-evolving personality system that allows your AI to devel
 ### Creating a Personality
 
 ```python
-from forge_ai.core.personality import AIPersonality
+from enigma_engine.core.personality import AIPersonality
 
 # Create new personality
 personality = AIPersonality("my_model")
@@ -31,7 +31,7 @@ personality = AIPersonality.create_preset("my_model", "friendly")
 ### Loading Existing Personality
 
 ```python
-from forge_ai.core.personality import load_personality
+from enigma_engine.core.personality import load_personality
 
 personality = load_personality("my_model")
 print(personality.get_personality_description())
@@ -154,7 +154,7 @@ To train your model with personality awareness, include examples from:
 Personality automatically influences voice profile generation:
 
 ```python
-from forge_ai.voice.voice_generator import generate_voice_for_personality
+from enigma_engine.voice.voice_generator import generate_voice_for_personality
 
 voice_profile = generate_voice_for_personality(personality)
 ```
@@ -178,8 +178,8 @@ Access personality settings at `/settings` in the web dashboard.
 ## Example: Complete Workflow
 
 ```python
-from forge_ai.core.personality import AIPersonality
-from forge_ai.core.inference import InferenceEngine
+from enigma_engine.core.personality import AIPersonality
+from enigma_engine.core.inference import InferenceEngine
 
 # Setup
 model = "my_chatbot"

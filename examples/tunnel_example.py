@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Example: Expose ForgeAI API server to the internet using tunnel.
+Example: Expose Enigma AI Engine API server to the internet using tunnel.
 
 This example shows how to:
-1. Start the ForgeAI API server
+1. Start the Enigma AI Engine API server
 2. Create a tunnel to expose it publicly
 3. Share the public URL
 
@@ -18,7 +18,7 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from forge_ai.comms.tunnel_manager import TunnelManager, get_tunnel_manager
+from enigma_engine.comms.tunnel_manager import TunnelManager, get_tunnel_manager
 import time
 
 
@@ -124,13 +124,13 @@ def example_localtunnel():
 
 
 def example_module_system():
-    """Example using ForgeAI module system."""
+    """Example using Enigma AI Engine module system."""
     print("=" * 60)
     print("Example 4: Using Module System")
     print("=" * 60)
     
     try:
-        from forge_ai.modules import ModuleManager
+        from enigma_engine.modules import ModuleManager
         
         # Create module manager
         manager = ModuleManager()
@@ -175,13 +175,13 @@ def example_module_system():
             
     except ImportError as e:
         print(f"\n✗ Import error: {e}")
-        print("Make sure ForgeAI is properly installed")
+        print("Make sure Enigma AI Engine is properly installed")
 
 
 def main():
     """Run examples."""
     print("\n" + "=" * 60)
-    print("ForgeAI Tunnel Examples")
+    print("Enigma AI Engine Tunnel Examples")
     print("=" * 60)
     print("\nChoose an example:")
     print("  1. Basic tunnel (ngrok, no auth)")

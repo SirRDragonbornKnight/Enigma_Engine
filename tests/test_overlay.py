@@ -20,14 +20,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Import only non-Qt components for testing
 # The full overlay window requires PyQt5 which may not be available in CI
-from forge_ai.gui.overlay.overlay_modes import (
+from enigma_engine.gui.overlay.overlay_modes import (
     OverlayMode, OverlayPosition, OverlaySettings,
     MinimalOverlay, CompactOverlay, FullOverlay
 )
-from forge_ai.gui.overlay.overlay_themes import (
+from enigma_engine.gui.overlay.overlay_themes import (
     OverlayTheme, OVERLAY_THEMES, get_theme
 )
-from forge_ai.gui.overlay.overlay_compatibility import OverlayCompatibility
+from enigma_engine.gui.overlay.overlay_compatibility import OverlayCompatibility
 
 
 class TestOverlayModes(unittest.TestCase):

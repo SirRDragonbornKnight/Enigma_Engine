@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test script for ForgeAI Web Server
+Test script for Enigma AI Engine Web Server
 
 Run this to test the web interface without the full GUI.
 """
@@ -8,12 +8,12 @@ Run this to test the web interface without the full GUI.
 import sys
 from pathlib import Path
 
-# Add forge_ai to path
+# Add enigma_engine to path
 sys.path.insert(0, str(Path(__file__).parent))
 
 def main():
     print("="*60)
-    print("ForgeAI Web Server Test")
+    print("Enigma AI Engine Web Server Test")
     print("="*60)
     
     # Check dependencies
@@ -42,8 +42,8 @@ def main():
     # Import web server
     print("\n2. Importing web server...")
     try:
-        from forge_ai.web.server import create_web_server
-        from forge_ai.web.discovery import get_local_ip
+        from enigma_engine.web.server import create_web_server
+        from enigma_engine.web.discovery import get_local_ip
         print("   ✓ Web server imported successfully")
     except Exception as e:
         print(f"   ✗ Failed to import: {e}")

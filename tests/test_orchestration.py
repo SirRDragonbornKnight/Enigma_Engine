@@ -8,20 +8,20 @@ import pytest
 import tempfile
 from pathlib import Path
 
-from forge_ai.core.capability_registry import (
+from enigma_engine.core.capability_registry import (
     CapabilityRegistry,
     Capability,
     ModelCapabilityEntry,
     BUILT_IN_CAPABILITIES,
 )
-from forge_ai.core.model_pool import ModelPool, ModelPoolConfig, ModelEntry
-from forge_ai.core.collaboration import (
+from enigma_engine.core.model_pool import ModelPool, ModelPoolConfig, ModelEntry
+from enigma_engine.core.collaboration import (
     ModelCollaboration,
     CollaborationType,
     CollaborationRequest,
     CollaborationResponse,
 )
-from forge_ai.core.orchestrator import (
+from enigma_engine.core.orchestrator import (
     ModelOrchestrator,
     OrchestratorConfig,
     Task,

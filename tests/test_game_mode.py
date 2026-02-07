@@ -18,7 +18,7 @@ class TestProcessMonitor(unittest.TestCase):
     
     def setUp(self):
         """Set up test fixtures."""
-        from forge_ai.core.process_monitor import ProcessMonitor
+        from enigma_engine.core.process_monitor import ProcessMonitor
         self.monitor = ProcessMonitor()
     
     def test_initialization(self):
@@ -53,7 +53,7 @@ class TestResourceLimits(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures."""
         try:
-            from forge_ai.core.resource_limiter import ResourceLimits
+            from enigma_engine.core.resource_limiter import ResourceLimits
             self.ResourceLimits = ResourceLimits
             self.has_psutil = True
         except ImportError:
@@ -94,10 +94,10 @@ class TestGameMode(unittest.TestCase):
         # We can't fully test without mocking dependencies
         pass
     
-    @patch('forge_ai.core.game_mode.get_process_monitor')
+    @patch('enigma_engine.core.game_mode.get_process_monitor')
     def test_game_mode_status(self, mock_get_monitor):
         """Test game mode status reporting."""
-        from forge_ai.core.game_mode import GameMode
+        from enigma_engine.core.game_mode import GameMode
         
         # Mock the process monitor
         mock_monitor = Mock()
@@ -113,10 +113,10 @@ class TestGameMode(unittest.TestCase):
         self.assertIn('aggressive', status)
         self.assertIn('active', status)
     
-    @patch('forge_ai.core.game_mode.get_process_monitor')
+    @patch('enigma_engine.core.game_mode.get_process_monitor')
     def test_game_mode_enable_disable(self, mock_get_monitor):
         """Test enabling and disabling game mode."""
-        from forge_ai.core.game_mode import GameMode
+        from enigma_engine.core.game_mode import GameMode
         
         mock_monitor = Mock()
         mock_monitor.get_running_games.return_value = set()

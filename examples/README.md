@@ -1,6 +1,6 @@
-# ForgeAI Examples
+# Enigma AI Engine Examples
 
-This directory contains comprehensive examples for all ForgeAI features.
+This directory contains comprehensive examples for all Enigma AI Engine features.
 
 ## Quick Start
 
@@ -72,11 +72,11 @@ Each example follows this pattern:
 ```python
 # 1. Simulated classes (for standalone testing)
 class SimulatedClass:
-    """Works without ForgeAI installed"""
+    """Works without Enigma AI Engine installed"""
     pass
 
-# 2. Real ForgeAI imports (commented)
-# from forge_ai.module import RealClass
+# 2. Real Enigma AI Engine imports (commented)
+# from enigma_engine.module import RealClass
 
 # 3. Example functions
 def example_basic_usage():
@@ -90,26 +90,26 @@ if __name__ == "__main__":
 
 ## Running Examples
 
-### Without ForgeAI Installed
+### Without Enigma AI Engine Installed
 Examples use simulated classes by default:
 ```bash
 python examples/robot_example.py
 ```
 
-### With ForgeAI Installed
+### With Enigma AI Engine Installed
 Uncomment the real imports:
 ```python
 # Change from:
-# from forge_ai.tools.robot_tools import RobotInterface
+# from enigma_engine.tools.robot_tools import RobotInterface
 
 # To:
-from forge_ai.tools.robot_tools import RobotInterface
+from enigma_engine.tools.robot_tools import RobotInterface
 ```
 
 ## Component Map
 
 ```
-ForgeAI Components:
+Enigma AI Engine Components:
 ├── Core
 │   ├── model.py        → Training, inference
 │   ├── tokenizer.py    → Text processing  

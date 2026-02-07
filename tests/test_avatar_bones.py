@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from forge_ai.avatar.bone_control import (
+from enigma_engine.avatar.bone_control import (
     BoneController, 
     BoneLimits, 
     BoneState,
@@ -22,7 +22,7 @@ from forge_ai.avatar.bone_control import (
     DEFAULT_BONE_LIMITS,
     get_bone_controller,
 )
-from forge_ai.avatar.controller import AvatarController, ControlPriority
+from enigma_engine.avatar.controller import AvatarController, ControlPriority
 
 
 class TestBoneLimits:
@@ -265,7 +265,7 @@ class TestBoneControllerSingleton:
     def test_get_bone_controller_returns_same_instance(self):
         """Test that get_bone_controller returns singleton."""
         # Reset singleton for test
-        import forge_ai.avatar.bone_control as bc
+        import enigma_engine.avatar.bone_control as bc
         bc._bone_controller = None
         
         controller1 = get_bone_controller()
@@ -477,7 +477,7 @@ class TestToolBasedAvatarControl:
     
     def test_avatar_control_tool_exists(self):
         """Test that avatar control tool is defined."""
-        from forge_ai.tools.tool_definitions import get_tool_definition
+        from enigma_engine.tools.tool_definitions import get_tool_definition
         
         tool = get_tool_definition("control_avatar_bones")
         assert tool is not None
@@ -485,7 +485,7 @@ class TestToolBasedAvatarControl:
     
     def test_avatar_control_tool_parameters(self):
         """Test avatar control tool has correct parameters."""
-        from forge_ai.tools.tool_definitions import get_tool_definition
+        from enigma_engine.tools.tool_definitions import get_tool_definition
         
         tool = get_tool_definition("control_avatar_bones")
         param_names = [p.name for p in tool.parameters]
@@ -495,7 +495,7 @@ class TestToolBasedAvatarControl:
     
     def test_tool_executor_handles_avatar_tool(self):
         """Test that tool executor can handle avatar control."""
-        from forge_ai.tools.tool_executor import ToolExecutor
+        from enigma_engine.tools.tool_executor import ToolExecutor
         
         executor = ToolExecutor()
         

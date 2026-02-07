@@ -22,7 +22,7 @@ def demo_capability_registry():
     print("1. CAPABILITY REGISTRY - Track What Each Model Can Do")
     print("="*70)
     
-    from forge_ai.core import get_capability_registry
+    from enigma_engine.core import get_capability_registry
     
     registry = get_capability_registry()
     
@@ -75,7 +75,7 @@ def demo_model_pool():
     print("2. MODEL POOL - Efficient Model Lifecycle Management")
     print("="*70)
     
-    from forge_ai.core import get_model_pool, ModelPoolConfig
+    from enigma_engine.core import get_model_pool, ModelPoolConfig
     
     # Configure the pool
     config = ModelPoolConfig(
@@ -112,7 +112,7 @@ def demo_collaboration():
     print("3. MODEL COLLABORATION - Models Working Together")
     print("="*70)
     
-    from forge_ai.core import get_collaboration
+    from enigma_engine.core import get_collaboration
     
     collaboration = get_collaboration()
     
@@ -135,7 +135,7 @@ def demo_orchestrator():
     print("4. ORCHESTRATOR - Central Intelligence Coordinator")
     print("="*70)
     
-    from forge_ai.core import get_orchestrator, OrchestratorConfig
+    from enigma_engine.core import get_orchestrator, OrchestratorConfig
     
     # Configure orchestrator
     config = OrchestratorConfig(
@@ -205,7 +205,7 @@ def demo_standalone_tools():
     print("5. STANDALONE TOOLS - Use AI Without LLM")
     print("="*70)
     
-    from forge_ai.core.standalone_tools import list_available_tools, get_tool_info
+    from enigma_engine.core.standalone_tools import list_available_tools, get_tool_info
     
     print("\n🛠️  Available standalone tools:")
     tools = list_available_tools()
@@ -215,7 +215,7 @@ def demo_standalone_tools():
         print(f"   • {tool:15s} - {desc}")
     
     print("\n💡 Example usage:")
-    print("   from forge_ai import use_tool")
+    print("   from enigma_engine import use_tool")
     print()
     print("   # Generate image without chat")
     print('   use_tool("image", prompt="sunset", width=512, height=512)')
@@ -233,7 +233,7 @@ def demo_task_offloading():
     print("6. TASK OFFLOADING - Async & Parallel Execution")
     print("="*70)
     
-    from forge_ai.core import get_orchestrator, TaskStatus
+    from enigma_engine.core import get_orchestrator, TaskStatus
     
     orchestrator = get_orchestrator()
     
@@ -312,10 +312,10 @@ def main():
         print("="*70)
         print("\n📚 For more information, see:")
         print("   docs/ORCHESTRATION_GUIDE.md")
-        print("   forge_ai/core/orchestrator.py")
-        print("   forge_ai/core/task_offloader.py")
+        print("   enigma_engine/core/orchestrator.py")
+        print("   enigma_engine/core/task_offloader.py")
         print("   examples/task_offloading_example.py")
-        print("   forge_ai/core/standalone_tools.py")
+        print("   enigma_engine/core/standalone_tools.py")
         print()
         
     except Exception as e:

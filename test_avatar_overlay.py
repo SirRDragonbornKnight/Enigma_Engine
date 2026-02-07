@@ -15,8 +15,8 @@ from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QColor
 
 # Import the avatar system
-from forge_ai.gui.tabs.avatar.avatar_display import AvatarOverlayWindow
-from forge_ai.avatar.renderers.default_sprites import generate_sprite
+from enigma_engine.gui.tabs.avatar.avatar_display import AvatarOverlayWindow
+from enigma_engine.avatar.renderers.default_sprites import generate_sprite
 from PyQt5.QtSvg import QSvgRenderer
 from PyQt5.QtGui import QPixmap, QPainter
 from PyQt5.QtCore import QByteArray

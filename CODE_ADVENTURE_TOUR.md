@@ -1,6 +1,6 @@
-# ForgeAI - Code Adventure Tour
+# Enigma AI Engine - Code Adventure Tour
 
-**Your epic journey through the ForgeAI codebase!**
+**Your epic journey through the Enigma AI Engine codebase!**
 
 Think of this like a "Choose Your Own Adventure" book. Each chapter corresponds
 to a major part of the system. The files themselves contain detailed chapter
@@ -10,9 +10,9 @@ comments - this guide shows you the path between them.
 
 ## The Story So Far...
 
-ForgeAI is a kingdom of modular AI components. Everything is optional, everything
+Enigma AI Engine is a kingdom of modular AI components. Everything is optional, everything
 connects, and YOU decide what to enable. From a tiny Raspberry Pi to a massive
-datacenter, ForgeAI adapts.
+datacenter, Enigma AI Engine adapts.
 
 ---
 
@@ -31,7 +31,7 @@ Your journey begins at: **`run.py`** (The Front Gate)
 
 ## Chapter Guide
 
-### Chapter 1: The Forge (`forge_ai/core/model.py`)
+### Chapter 1: The Forge (`enigma_engine/core/model.py`)
 *"Where minds are born"*
 
 The neural network itself. This is where the AI "thinking" happens - embeddings,
@@ -41,7 +41,7 @@ attention, and all the matrix math that makes intelligence emerge from numbers.
 
 ---
 
-### Chapter 2: The Oracle (`forge_ai/core/inference.py`)
+### Chapter 2: The Oracle (`enigma_engine/core/inference.py`)
 *"Speaking with your AI"*
 
 The Forge is a brain in a jar. The Oracle (ForgeEngine) is how you TALK to it.
@@ -51,10 +51,10 @@ Takes your text, runs it through the brain, returns intelligent responses.
 
 ---
 
-### Chapter 3: The Dispatcher (`forge_ai/core/tool_router.py`)
+### Chapter 3: The Dispatcher (`enigma_engine/core/tool_router.py`)
 *"Every request finds its destination"*
 
-When you say "draw a cat" vs "write a poem", how does ForgeAI know the
+When you say "draw a cat" vs "write a poem", how does Enigma AI Engine know the
 difference? The tool router analyzes your intent and sends you to the
 right specialist.
 
@@ -62,7 +62,7 @@ right specialist.
 
 ---
 
-### Chapter 4: The Training Grounds (`forge_ai/core/training.py`)
+### Chapter 4: The Training Grounds (`enigma_engine/core/training.py`)
 *"Where AIs grow stronger"*
 
 Teaching your AI new things. Load training data, run epochs, watch the
@@ -70,7 +70,7 @@ loss decrease as your AI learns.
 
 ---
 
-### Chapter 5: The Castle (`forge_ai/gui/enhanced_window.py`)
+### Chapter 5: The Castle (`enigma_engine/gui/enhanced_window.py`)
 *"Your command center"*
 
 The main GUI window. Every button, every tab, every theme change flows
@@ -78,7 +78,7 @@ through here. The largest file because it connects EVERYTHING.
 
 ---
 
-### Chapter 6: The Art Studio (`forge_ai/gui/tabs/image_tab.py`)
+### Chapter 6: The Art Studio (`enigma_engine/gui/tabs/image_tab.py`)
 *"Painting with AI"*
 
 Generate images from text descriptions. Supports placeholder art, Stable
@@ -86,7 +86,7 @@ Diffusion, DALL-E 3, and Replicate providers.
 
 ---
 
-### Chapter 7: The Library (`forge_ai/memory/manager.py`)
+### Chapter 7: The Library (`enigma_engine/memory/manager.py`)
 *"Where memories are preserved"*
 
 Conversation storage. Your AI remembers past chats, can search by meaning
@@ -94,7 +94,7 @@ Conversation storage. Your AI remembers past chats, can search by meaning
 
 ---
 
-### Chapter 8: The Network Tower (`forge_ai/comms/api_server.py`)
+### Chapter 8: The Network Tower (`enigma_engine/comms/api_server.py`)
 *"Connecting to the world"*
 
 REST API server. Let other programs talk to your AI. Multi-device networking.
@@ -102,7 +102,7 @@ Remote access capabilities.
 
 ---
 
-### The Armory (`forge_ai/modules/`)
+### The Armory (`enigma_engine/modules/`)
 *"Toggle any capability"*
 
 The module system. Load and unload features as needed. Prevents conflicts,
@@ -114,7 +114,7 @@ manages dependencies, adapts to your hardware.
 
 ---
 
-## 🖥️ Chapter 2: The Interface (`forge_ai/gui/`)
+## 🖥️ Chapter 2: The Interface (`enigma_engine/gui/`)
 
 This folder contains the visual application.
 
@@ -129,7 +129,7 @@ The main application window.
 - Model selection
 - Theme switching
 
-### Tabs (`forge_ai/gui/tabs/`)
+### Tabs (`enigma_engine/gui/tabs/`)
 
 | File | Purpose |
 |------|---------|
@@ -146,7 +146,7 @@ The main application window.
 
 ---
 
-## 💾 Chapter 3: Memory (`forge_ai/memory/`)
+## 💾 Chapter 3: Memory (`enigma_engine/memory/`)
 
 Saves conversations so the AI remembers things.
 
@@ -157,7 +157,7 @@ Saves and loads chat history.
 
 **How to use:**
 ```python
-from forge_ai.memory.manager import ConversationManager
+from enigma_engine.memory.manager import ConversationManager
 manager = ConversationManager()
 manager.save_conversation("my_chat", messages)
 data = manager.load_conversation("my_chat")
@@ -178,7 +178,7 @@ Searches memories by meaning, not just keywords.
 
 ---
 
-## 🌐 Chapter 4: Networking (`forge_ai/comms/`)
+## 🌐 Chapter 4: Networking (`enigma_engine/comms/`)
 
 Connect your AI to the internet or other devices.
 
@@ -197,7 +197,7 @@ python run.py --serve
 ---
 
 ### `network.py`
-Connect multiple computers running ForgeAI.
+Connect multiple computers running Enigma AI Engine.
 
 **Class:** `ForgeNode`
 
@@ -207,7 +207,7 @@ Connect multiple computers running ForgeAI.
 
 ---
 
-## 🔧 Chapter 5: Tools (`forge_ai/tools/`)
+## 🔧 Chapter 5: Tools (`enigma_engine/tools/`)
 
 Actions the AI can perform.
 
@@ -235,7 +235,7 @@ Runs AI tool calls safely.
 
 ---
 
-## 🎭 Chapter 6: Avatar (`forge_ai/avatar/`)
+## 🎭 Chapter 6: Avatar (`enigma_engine/avatar/`)
 
 Create a virtual character that reacts and moves.
 
@@ -246,7 +246,7 @@ Main avatar control.
 
 **How to use:**
 ```python
-from forge_ai.avatar import get_avatar
+from enigma_engine.avatar import get_avatar
 avatar = get_avatar()
 avatar.enable()
 avatar.set_expression("happy")
@@ -266,7 +266,7 @@ Makes the avatar act on its own!
 
 **How to use:**
 ```python
-from forge_ai.avatar.autonomous import AutonomousAvatar
+from enigma_engine.avatar.autonomous import AutonomousAvatar
 auto = AutonomousAvatar(avatar)
 auto.start()   # Avatar does its own thing!
 auto.stop()    # Back to manual control
@@ -274,7 +274,7 @@ auto.stop()    # Back to manual control
 
 ---
 
-## ⚙️ Chapter 7: Modules (`forge_ai/modules/`)
+## ⚙️ Chapter 7: Modules (`enigma_engine/modules/`)
 
 Turn features on and off like switches.
 
@@ -290,7 +290,7 @@ Loads and unloads modules.
 
 **How to use:**
 ```python
-from forge_ai.modules import ModuleManager
+from enigma_engine.modules import ModuleManager
 
 manager = ModuleManager()
 manager.load('model')
@@ -329,7 +329,7 @@ Lists all available modules.
 
 ---
 
-## 🔊 Chapter 8: Voice (`forge_ai/voice/`)
+## 🔊 Chapter 8: Voice (`enigma_engine/voice/`)
 
 Let the AI speak and listen.
 
@@ -354,7 +354,7 @@ Creates voice settings based on personality.
 
 ---
 
-## 🎭 Chapter 9: Avatar Control (`forge_ai/avatar/`)
+## 🎭 Chapter 9: Avatar Control (`enigma_engine/avatar/`)
 
 Make your AI control a virtual character with natural body language.
 
@@ -390,7 +390,7 @@ Direct bone manipulation for rigged 3D models.
 
 **How to use:**
 ```python
-from forge_ai.avatar.bone_control import get_bone_controller
+from enigma_engine.avatar.bone_control import get_bone_controller
 
 controller = get_bone_controller()
 controller.move_bone("head", pitch=15, yaw=0, roll=0)  # Nod
@@ -440,33 +440,33 @@ Fallback behaviors when bone control isn't active.
 ```
 
 **Files:**
-- `forge_ai/tools/avatar_control_tool.py` - Tool definition
-- `forge_ai/tools/tool_executor.py` - Executes tool calls
+- `enigma_engine/tools/avatar_control_tool.py` - Tool definition
+- `enigma_engine/tools/tool_executor.py` - Executes tool calls
 
 ---
 
 ## 📖 Quick Reference: What to Read First
 
 **Understand the AI brain:**
-1. `forge_ai/core/model.py`
-2. `forge_ai/core/inference.py`
+1. `enigma_engine/core/model.py`
+2. `enigma_engine/core/inference.py`
 
 **Build a chat app:**
-1. `forge_ai/gui/tabs/chat_tab.py`
-2. `forge_ai/core/inference.py`
+1. `enigma_engine/gui/tabs/chat_tab.py`
+2. `enigma_engine/core/inference.py`
 
 **Add a new feature:**
-1. `forge_ai/modules/registry.py`
-2. `forge_ai/modules/manager.py`
+1. `enigma_engine/modules/registry.py`
+2. `enigma_engine/modules/manager.py`
 
 **Create an API:**
-1. `forge_ai/comms/api_server.py`
+1. `enigma_engine/comms/api_server.py`
 
 **Make an avatar:**
-1. `forge_ai/avatar/controller.py` - Priority system
-2. `forge_ai/avatar/bone_control.py` - PRIMARY control
-3. `forge_ai/avatar/ai_control.py` - AI command parsing
-4. `forge_ai/avatar/autonomous.py` - Fallback behaviors
+1. `enigma_engine/avatar/controller.py` - Priority system
+2. `enigma_engine/avatar/bone_control.py` - PRIMARY control
+3. `enigma_engine/avatar/ai_control.py` - AI command parsing
+4. `enigma_engine/avatar/autonomous.py` - Fallback behaviors
 
 **Train avatar AI:**
 1. `data/specialized/avatar_control_training.txt` - Training examples

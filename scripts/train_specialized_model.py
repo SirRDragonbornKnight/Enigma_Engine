@@ -27,10 +27,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 try:
     import torch
-    from forge_ai.core.model import create_model, MODEL_PRESETS
-    from forge_ai.core.tokenizer import get_tokenizer, train_tokenizer
-    from forge_ai.core.training import Trainer, TrainingConfig, train_model
-    from forge_ai.config import CONFIG
+    from enigma_engine.core.model import create_model, MODEL_PRESETS
+    from enigma_engine.core.tokenizer import get_tokenizer, train_tokenizer
+    from enigma_engine.core.training import Trainer, TrainingConfig, train_model
+    from enigma_engine.config import CONFIG
 except ImportError as e:
     print(f"Error: Required dependencies not installed: {e}")
     print("Please install requirements: pip install -r requirements.txt")
@@ -73,6 +73,27 @@ MODEL_TYPE_CONFIG = {
         "output_dir": "models/specialized",
         "output_name": "math_{size}.pth",
     },
+    "trainer": {
+        "description": "Meta-AI that generates training data for other models",
+        "default_size": "small",
+        "recommended_epochs": 60,
+        "output_dir": "models/specialized",
+        "output_name": "trainer_{size}.pth",
+    },
+    "avatar": {
+        "description": "Avatar control model (converts commands to bone movements)",
+        "default_size": "tiny",
+        "recommended_epochs": 50,
+        "output_dir": "models/specialized",
+        "output_name": "avatar_{size}.pth",
+    },
+    "chat": {
+        "description": "General conversation model",
+        "default_size": "small",
+        "recommended_epochs": 40,
+        "output_dir": "models/specialized",
+        "output_name": "chat_{size}.pth",
+    },
 }
 
 
@@ -101,11 +122,11 @@ def get_shared_tokenizer():
         if config_path.exists():
             with open(config_path, 'r') as f:
                 config = json.load(f)
-                tokenizer_path = config.get("shared_tokenizer", "forge_ai/vocab_model/bpe_vocab.json")
+                tokenizer_path = config.get("shared_tokenizer", "enigma_engine/vocab_model/bpe_vocab.json")
         else:
-            tokenizer_path = "forge_ai/vocab_model/bpe_vocab.json"
+            tokenizer_path = "enigma_engine/vocab_model/bpe_vocab.json"
     except Exception:
-        tokenizer_path = "forge_ai/vocab_model/bpe_vocab.json"
+        tokenizer_path = "enigma_engine/vocab_model/bpe_vocab.json"
     
     vocab_file = Path(__file__).parent.parent / tokenizer_path
     

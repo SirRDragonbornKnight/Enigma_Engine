@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Create Windows Desktop Shortcut for ForgeAI
+Create Windows Desktop Shortcut for Enigma AI Engine
 
 Creates a shortcut on the desktop with:
-- ForgeAI icon
+- Enigma AI Engine icon
 - Direct launch to GUI
 - Proper working directory
 
@@ -17,7 +17,7 @@ from pathlib import Path
 
 
 def create_windows_shortcut():
-    """Create a Windows desktop shortcut for ForgeAI."""
+    """Create a Windows desktop shortcut for Enigma AI Engine."""
     try:
         import winshell
         from win32com.client import Dispatch
@@ -30,12 +30,12 @@ def create_windows_shortcut():
     # Paths
     project_root = Path(__file__).parent.parent.resolve()
     desktop = Path(winshell.desktop())
-    shortcut_path = desktop / "ForgeAI.lnk"
+    shortcut_path = desktop / "Enigma AI Engine.lnk"
     
     # Icon path
     icon_path = project_root / "data" / "icons" / "forge.ico"
     if not icon_path.exists():
-        icon_path = project_root / "forge_ai" / "gui" / "icons" / "forge.ico"
+        icon_path = project_root / "enigma_engine" / "gui" / "icons" / "forge.ico"
     
     # Python executable
     python_exe = sys.executable
@@ -48,7 +48,7 @@ def create_windows_shortcut():
     shortcut.Targetpath = python_exe
     shortcut.Arguments = f'"{project_root / "run.py"}" --gui'
     shortcut.WorkingDirectory = str(project_root)
-    shortcut.Description = "ForgeAI - Your AI Companion"
+    shortcut.Description = "Enigma AI Engine - Your AI Companion"
     
     if icon_path.exists():
         shortcut.IconLocation = str(icon_path)
@@ -61,7 +61,7 @@ def create_windows_shortcut():
 
 
 def create_start_menu_entry():
-    """Create a Start Menu entry for ForgeAI."""
+    """Create a Start Menu entry for Enigma AI Engine."""
     try:
         import winshell
         from win32com.client import Dispatch
@@ -72,15 +72,15 @@ def create_start_menu_entry():
     
     # Start Menu Programs folder
     start_menu = Path(winshell.programs())
-    forge_folder = start_menu / "ForgeAI"
+    forge_folder = start_menu / "Enigma AI Engine"
     forge_folder.mkdir(exist_ok=True)
     
-    shortcut_path = forge_folder / "ForgeAI.lnk"
+    shortcut_path = forge_folder / "Enigma AI Engine.lnk"
     
     # Icon path
     icon_path = project_root / "data" / "icons" / "forge.ico"
     if not icon_path.exists():
-        icon_path = project_root / "forge_ai" / "gui" / "icons" / "forge.ico"
+        icon_path = project_root / "enigma_engine" / "gui" / "icons" / "forge.ico"
     
     python_exe = sys.executable
     
@@ -89,7 +89,7 @@ def create_start_menu_entry():
     shortcut.Targetpath = python_exe
     shortcut.Arguments = f'"{project_root / "run.py"}" --gui'
     shortcut.WorkingDirectory = str(project_root)
-    shortcut.Description = "ForgeAI - Your AI Companion"
+    shortcut.Description = "Enigma AI Engine - Your AI Companion"
     
     if icon_path.exists():
         shortcut.IconLocation = str(icon_path)
@@ -107,7 +107,7 @@ def main():
         return
     
     print("=" * 50)
-    print("  ForgeAI Shortcut Creator")
+    print("  Enigma AI Engine Shortcut Creator")
     print("=" * 50)
     print()
     
@@ -123,9 +123,9 @@ def main():
         print(f"  Could not create Start Menu entry: {e}")
     
     print("\n" + "=" * 50)
-    print("  Done! You can now launch ForgeAI from:")
+    print("  Done! You can now launch Enigma AI Engine from:")
     print("  - Desktop shortcut")
-    print("  - Start Menu > ForgeAI")
+    print("  - Start Menu > Enigma AI Engine")
     print("=" * 50)
 
 

@@ -13,7 +13,7 @@ class TestPromptTemplate(unittest.TestCase):
     
     def test_default_template(self):
         """Default template should have expected values."""
-        from forge_ai.core.prompt_builder import PromptTemplate
+        from enigma_engine.core.prompt_builder import PromptTemplate
         
         t = PromptTemplate()
         self.assertEqual(t.system_prefix, "System: ")
@@ -23,7 +23,7 @@ class TestPromptTemplate(unittest.TestCase):
     
     def test_template_to_dict(self):
         """Template should serialize to dict."""
-        from forge_ai.core.prompt_builder import PromptTemplate
+        from enigma_engine.core.prompt_builder import PromptTemplate
         
         t = PromptTemplate(user_prefix="Q: ", assistant_prefix="A: ")
         d = t.to_dict()
@@ -34,7 +34,7 @@ class TestPromptTemplate(unittest.TestCase):
     
     def test_template_from_dict(self):
         """Template should deserialize from dict."""
-        from forge_ai.core.prompt_builder import PromptTemplate
+        from enigma_engine.core.prompt_builder import PromptTemplate
         
         d = {"user_prefix": "Human: ", "assistant_prefix": "Bot: "}
         t = PromptTemplate.from_dict(d)
@@ -48,14 +48,14 @@ class TestPromptBuilder(unittest.TestCase):
     
     def test_builder_creation(self):
         """Should create builder with default template."""
-        from forge_ai.core.prompt_builder import PromptBuilder
+        from enigma_engine.core.prompt_builder import PromptBuilder
         
         builder = PromptBuilder()
         self.assertIsNotNone(builder.template)
     
     def test_build_simple_prompt(self):
         """Should build a simple chat prompt."""
-        from forge_ai.core.prompt_builder import PromptBuilder
+        from enigma_engine.core.prompt_builder import PromptBuilder
         
         builder = PromptBuilder()
         prompt = builder.build_chat_prompt("Hello!")
@@ -65,7 +65,7 @@ class TestPromptBuilder(unittest.TestCase):
     
     def test_build_prompt_with_system(self):
         """Should include system prompt."""
-        from forge_ai.core.prompt_builder import PromptBuilder
+        from enigma_engine.core.prompt_builder import PromptBuilder
         
         builder = PromptBuilder()
         prompt = builder.build_chat_prompt(
@@ -78,7 +78,7 @@ class TestPromptBuilder(unittest.TestCase):
     
     def test_build_prompt_with_history(self):
         """Should include conversation history."""
-        from forge_ai.core.prompt_builder import PromptBuilder
+        from enigma_engine.core.prompt_builder import PromptBuilder
         
         builder = PromptBuilder()
         history = [
@@ -93,7 +93,7 @@ class TestPromptBuilder(unittest.TestCase):
     
     def test_extract_response_simple(self):
         """Should extract AI response from generated text."""
-        from forge_ai.core.prompt_builder import PromptBuilder
+        from enigma_engine.core.prompt_builder import PromptBuilder
         
         builder = PromptBuilder()
         output = "User: Hello!\nAssistant: Hi there! How can I help?"
@@ -103,7 +103,7 @@ class TestPromptBuilder(unittest.TestCase):
     
     def test_extract_response_with_stop_sequence(self):
         """Should stop at stop sequences."""
-        from forge_ai.core.prompt_builder import PromptBuilder
+        from enigma_engine.core.prompt_builder import PromptBuilder
         
         builder = PromptBuilder()
         output = "Assistant: Hello!\nUser: Another message"
@@ -113,7 +113,7 @@ class TestPromptBuilder(unittest.TestCase):
     
     def test_get_stop_sequences(self):
         """Should return stop sequences for current template."""
-        from forge_ai.core.prompt_builder import PromptBuilder
+        from enigma_engine.core.prompt_builder import PromptBuilder
         
         builder = PromptBuilder()
         stops = builder.get_stop_sequences()
@@ -123,7 +123,7 @@ class TestPromptBuilder(unittest.TestCase):
     
     def test_set_template(self):
         """Should allow changing template."""
-        from forge_ai.core.prompt_builder import PromptBuilder
+        from enigma_engine.core.prompt_builder import PromptBuilder
         
         builder = PromptBuilder("default")
         builder.set_template("simple")
@@ -134,7 +134,7 @@ class TestPromptBuilder(unittest.TestCase):
     
     def test_format_training_example(self):
         """Should format training examples correctly."""
-        from forge_ai.core.prompt_builder import PromptBuilder
+        from enigma_engine.core.prompt_builder import PromptBuilder
         
         builder = PromptBuilder()
         example = builder.format_training_example(
@@ -151,7 +151,7 @@ class TestPresetTemplates(unittest.TestCase):
     
     def test_chatml_template(self):
         """ChatML template should use special tokens."""
-        from forge_ai.core.prompt_builder import PromptBuilder
+        from enigma_engine.core.prompt_builder import PromptBuilder
         
         builder = PromptBuilder("chatml")
         prompt = builder.build_chat_prompt("Test")
@@ -161,7 +161,7 @@ class TestPresetTemplates(unittest.TestCase):
     
     def test_simple_template(self):
         """Simple template should use Q/A format."""
-        from forge_ai.core.prompt_builder import PromptBuilder
+        from enigma_engine.core.prompt_builder import PromptBuilder
         
         builder = PromptBuilder("simple")
         prompt = builder.build_chat_prompt("Test")
@@ -175,7 +175,7 @@ class TestConvenienceFunctions(unittest.TestCase):
     
     def test_get_prompt_builder_singleton(self):
         """get_prompt_builder should return same instance."""
-        from forge_ai.core.prompt_builder import get_prompt_builder
+        from enigma_engine.core.prompt_builder import get_prompt_builder
         
         b1 = get_prompt_builder()
         b2 = get_prompt_builder()
@@ -184,7 +184,7 @@ class TestConvenienceFunctions(unittest.TestCase):
     
     def test_build_chat_prompt_function(self):
         """Convenience function should work."""
-        from forge_ai.core.prompt_builder import build_chat_prompt
+        from enigma_engine.core.prompt_builder import build_chat_prompt
         
         prompt = build_chat_prompt("Hello")
         
@@ -193,7 +193,7 @@ class TestConvenienceFunctions(unittest.TestCase):
     
     def test_extract_response_function(self):
         """Convenience function should work."""
-        from forge_ai.core.prompt_builder import extract_response
+        from enigma_engine.core.prompt_builder import extract_response
         
         response = extract_response("Assistant: Test response")
         
@@ -205,7 +205,7 @@ class TestRoleNormalization(unittest.TestCase):
     
     def test_human_role_normalized(self):
         """'human' role should be treated as 'user'."""
-        from forge_ai.core.prompt_builder import PromptBuilder
+        from enigma_engine.core.prompt_builder import PromptBuilder
         
         builder = PromptBuilder()
         history = [{"role": "human", "content": "Hi"}]
@@ -215,7 +215,7 @@ class TestRoleNormalization(unittest.TestCase):
     
     def test_bot_role_normalized(self):
         """'bot' role should be treated as 'assistant'."""
-        from forge_ai.core.prompt_builder import PromptBuilder
+        from enigma_engine.core.prompt_builder import PromptBuilder
         
         builder = PromptBuilder()
         history = [{"role": "bot", "content": "Hello"}]

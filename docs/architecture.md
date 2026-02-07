@@ -1,4 +1,4 @@
-# ForgeAI Engine - Architecture
+# Enigma AI Engine Engine - Architecture
 
 *Last Updated: January 2026*
 
@@ -11,10 +11,10 @@ Enigma Engine is a **fully modular AI framework** where everything is a toggleab
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                           MODULE MANAGER                                 │
-│              forge_ai/modules/manager.py - Central Control                 │
+│              enigma_engine/modules/manager.py - Central Control                 │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                           MODULE REGISTRY                                │
-│          forge_ai/modules/registry.py - All Available Modules              │
+│          enigma_engine/modules/registry.py - All Available Modules              │
 ├──────────────┬──────────────┬──────────────┬───────────────────────────┤
 │    CORE      │  GENERATION  │   MEMORY     │    PERCEPTION/OUTPUT      │
 │  - model     │  - image_gen │  - memory    │  - voice_input/output     │
@@ -31,7 +31,7 @@ Enigma Engine is a **fully modular AI framework** where everything is a toggleab
 
 ## Core Packages
 
-### forge_ai.core
+### enigma_engine.core
 The brain of the system - contains:
 - **model.py**: Enigma transformer with RoPE, RMSNorm, SwiGLU, GQA, KV-cache
 - **inference.py**: High-performance generation engine with streaming
@@ -39,49 +39,49 @@ The brain of the system - contains:
 - **tokenizer.py**: Unified tokenizer interface
 - **advanced_tokenizer.py**: Custom BPE with `[E:token]` format
 
-### forge_ai.modules
+### enigma_engine.modules
 Module system for dynamic capability loading:
 - **manager.py**: ModuleManager - central controller
 - **registry.py**: All available modules with metadata
 - **base.py**: BaseModule abstract class
 
-### forge_ai.memory
+### enigma_engine.memory
 Conversation storage and retrieval:
 - **manager.py**: ConversationManager
 - **memory_db.py**: SQLite persistence
 - **vector_db.py**: FAISS/Pinecone vector search
 - **categorization.py**: Memory type classification
 
-### forge_ai.gui
+### enigma_engine.gui
 PyQt5-based graphical interface:
 - **enhanced_window.py**: Main window with all tabs
 - **theme_system.py**: Dark/Light/Shadow/Midnight themes
 - **tabs/**: Individual capability tabs (chat, training, image, video, etc.)
 
-### forge_ai.comms
+### enigma_engine.comms
 Networking and API:
 - **api_server.py**: Flask REST API
 - **remote.py**: Remote client for distributed setups
 - **network.py**: Multi-device synchronization
 
-### forge_ai.voice
+### enigma_engine.voice
 Speech capabilities:
 - **tts.py**: Text-to-speech (pyttsx3, ElevenLabs)
 - **stt.py**: Speech-to-text (Vosk, SpeechRecognition)
 - **voice_profile.py**: Custom voice configurations
 
-### forge_ai.avatar
+### enigma_engine.avatar
 Visual character system:
 - **controller.py**: Avatar state management
 - **animation.py**: Gesture and expression control
 
-### forge_ai.tools
+### enigma_engine.tools
 AI capabilities:
 - **vision.py**: Screen capture, image analysis
 - **web.py**: URL safety, web search
 - **file_ops.py**: File system operations
 
-### forge_ai.utils
+### enigma_engine.utils
 Helper utilities:
 - **system_messages.py**: Formatted output
 - **text_formatting.py**: Code highlighting, markdown

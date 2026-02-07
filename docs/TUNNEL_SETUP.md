@@ -1,6 +1,6 @@
 # Tunnel Management Guide
 
-ForgeAI includes a tunnel management system that allows you to expose your local ForgeAI server to the internet. This is useful for:
+Enigma AI Engine includes a tunnel management system that allows you to expose your local Enigma AI Engine server to the internet. This is useful for:
 
 - Remote access from anywhere
 - Mobile app connections
@@ -67,7 +67,7 @@ python run.py --tunnel --tunnel-region eu
 ### Using Python API
 
 ```python
-from forge_ai.comms.tunnel_manager import TunnelManager
+from enigma_engine.comms.tunnel_manager import TunnelManager
 
 # Create tunnel manager
 manager = TunnelManager(
@@ -87,7 +87,7 @@ manager.stop_tunnel()
 ### Using Module System
 
 ```python
-from forge_ai.modules import ModuleManager
+from enigma_engine.modules import ModuleManager
 
 manager = ModuleManager()
 
@@ -116,17 +116,17 @@ Set these in your `.env` file or environment:
 
 ```bash
 # ngrok settings
-FORGEAI_TUNNEL_PROVIDER=ngrok
-FORGEAI_TUNNEL_TOKEN=your_ngrok_token_here
-FORGEAI_TUNNEL_REGION=us
+Enigma AI Engine_TUNNEL_PROVIDER=ngrok
+Enigma AI Engine_TUNNEL_TOKEN=your_ngrok_token_here
+Enigma AI Engine_TUNNEL_REGION=us
 
 # Or for localtunnel
-FORGEAI_TUNNEL_PROVIDER=localtunnel
+Enigma AI Engine_TUNNEL_PROVIDER=localtunnel
 ```
 
 ### Config File
 
-Edit `forge_ai/config/__init__.py`:
+Edit `enigma_engine/config/__init__.py`:
 
 ```python
 CONFIG = {
@@ -296,10 +296,10 @@ Tunnel works seamlessly with:
 
 ## Support
 
-- GitHub Issues: https://github.com/SirRDragonbornKnight/Forge_AI/issues
+- GitHub Issues: https://github.com/SirRDragonbornKnight/enigma_engine/issues
 - Discord: [Join our community]
 - Documentation: See `docs/` folder
 
 ## License
 
-Same as ForgeAI (see LICENSE file)
+Same as Enigma AI Engine (see LICENSE file)

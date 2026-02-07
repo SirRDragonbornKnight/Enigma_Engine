@@ -41,8 +41,8 @@ class TestTrainingPipeline:
     
     def test_create_model_and_tokenizer(self, small_model_config):
         """Test model and tokenizer can be created."""
-        from forge_ai.core.model import create_model
-        from forge_ai.core.tokenizer import get_tokenizer
+        from enigma_engine.core.model import create_model
+        from enigma_engine.core.tokenizer import get_tokenizer
         
         model = create_model(
             small_model_config['size'],
@@ -58,7 +58,7 @@ class TestTrainingPipeline:
     
     def test_tokenizer_roundtrip(self, sample_training_data):
         """Test tokenizer can encode and decode text."""
-        from forge_ai.core.tokenizer import get_tokenizer
+        from enigma_engine.core.tokenizer import get_tokenizer
         
         tokenizer = get_tokenizer(vocab_size=1000)
         
@@ -73,9 +73,9 @@ class TestTrainingPipeline:
     
     def test_full_training_loop(self, sample_training_data, small_model_config):
         """Test complete training pipeline."""
-        from forge_ai.core.model import create_model
-        from forge_ai.core.tokenizer import get_tokenizer
-        from forge_ai.core.training import Trainer, TrainingConfig
+        from enigma_engine.core.model import create_model
+        from enigma_engine.core.tokenizer import get_tokenizer
+        from enigma_engine.core.training import Trainer, TrainingConfig
         
         # Create model and tokenizer
         model = create_model(
@@ -120,9 +120,9 @@ class TestTrainingPipeline:
     
     def test_training_reduces_loss(self, sample_training_data, small_model_config):
         """Test that training actually reduces loss over time."""
-        from forge_ai.core.model import create_model
-        from forge_ai.core.tokenizer import get_tokenizer
-        from forge_ai.core.training import Trainer, TrainingConfig
+        from enigma_engine.core.model import create_model
+        from enigma_engine.core.tokenizer import get_tokenizer
+        from enigma_engine.core.training import Trainer, TrainingConfig
         
         model = create_model(
             small_model_config['size'],
@@ -151,9 +151,9 @@ class TestTrainingPipeline:
     
     def test_model_save_and_load(self, sample_training_data, small_model_config):
         """Test model can be saved and loaded after training."""
-        from forge_ai.core.model import create_model
-        from forge_ai.core.tokenizer import get_tokenizer
-        from forge_ai.core.training import Trainer, TrainingConfig
+        from enigma_engine.core.model import create_model
+        from enigma_engine.core.tokenizer import get_tokenizer
+        from enigma_engine.core.training import Trainer, TrainingConfig
         
         model = create_model(
             small_model_config['size'],
@@ -197,10 +197,10 @@ class TestTrainingPipeline:
     
     def test_inference_after_training(self, sample_training_data, small_model_config):
         """Test model can generate text after training."""
-        from forge_ai.core.model import create_model
-        from forge_ai.core.tokenizer import get_tokenizer
-        from forge_ai.core.training import Trainer, TrainingConfig
-        from forge_ai.core.inference import ForgeEngine
+        from enigma_engine.core.model import create_model
+        from enigma_engine.core.tokenizer import get_tokenizer
+        from enigma_engine.core.training import Trainer, TrainingConfig
+        from enigma_engine.core.inference import ForgeEngine
         
         model = create_model(
             small_model_config['size'],
@@ -240,7 +240,7 @@ class TestTrainingConfigValidation:
     
     def test_default_config(self):
         """Test default configuration is valid."""
-        from forge_ai.core.training import TrainingConfig
+        from enigma_engine.core.training import TrainingConfig
         
         config = TrainingConfig()
         
@@ -251,7 +251,7 @@ class TestTrainingConfigValidation:
     
     def test_config_from_device_profile(self):
         """Test device-aware configuration."""
-        from forge_ai.core.training import TrainingConfig
+        from enigma_engine.core.training import TrainingConfig
         
         config = TrainingConfig.from_device_profile()
         
@@ -261,7 +261,7 @@ class TestTrainingConfigValidation:
     
     def test_config_override(self):
         """Test configuration can be overridden."""
-        from forge_ai.core.training import TrainingConfig
+        from enigma_engine.core.training import TrainingConfig
         
         config = TrainingConfig(
             epochs=100,
@@ -290,9 +290,9 @@ class TestQATraining:
     
     def test_qa_dataset_detection(self, qa_training_data):
         """Test Q&A format is auto-detected."""
-        from forge_ai.core.model import create_model
-        from forge_ai.core.tokenizer import get_tokenizer
-        from forge_ai.core.training import Trainer, TrainingConfig
+        from enigma_engine.core.model import create_model
+        from enigma_engine.core.tokenizer import get_tokenizer
+        from enigma_engine.core.training import Trainer, TrainingConfig
         
         model = create_model('nano', vocab_size=1000)
         tokenizer = get_tokenizer(vocab_size=1000)

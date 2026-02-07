@@ -1,4 +1,4 @@
-# ForgeAI
+# Enigma AI Engine
 
 [![Python Version](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -11,7 +11,7 @@
 
 ## What is this?
 
-ForgeAI is a complete framework for building, training, and running your own AI assistant. It's designed to be:
+Enigma AI Engine is a complete framework for building, training, and running your own AI assistant. It's designed to be:
 
 - **Easy to use** - GUI interface, no coding required to get started
 - **Educational** - See exactly how your AI learns and works
@@ -24,8 +24,8 @@ ForgeAI is a complete framework for building, training, and running your own AI 
 
 ```bash
 # Clone the repository
-git clone https://github.com/SirRDragonbornKnight/Forge_AI.git
-cd Forge_AI
+git clone https://github.com/SirRDragonbornKnight/enigma_engine.git
+cd enigma_engine
 
 # Option A: Use the installer (recommended)
 python install.py --standard
@@ -120,7 +120,7 @@ Choose based on your hardware:
 ### Quick Chat with Your AI
 
 ```python
-from forge_ai.core.inference import ForgeEngine
+from enigma_engine.core.inference import ForgeEngine
 
 # Load model and chat
 engine = ForgeEngine()
@@ -133,9 +133,9 @@ print(response)
 ### Training a New Model
 
 ```python
-from forge_ai.core.model import create_model
-from forge_ai.core.training import Trainer, TrainingConfig
-from forge_ai.core.tokenizer import get_tokenizer
+from enigma_engine.core.model import create_model
+from enigma_engine.core.training import Trainer, TrainingConfig
+from enigma_engine.core.tokenizer import get_tokenizer
 
 # Create model and tokenizer
 model = create_model("small")
@@ -158,7 +158,7 @@ trainer.save("models/my_trained_ai")
 ### Using the Module System
 
 ```python
-from forge_ai.modules import ModuleManager
+from enigma_engine.modules import ModuleManager
 
 # Initialize manager (auto-discovers all modules)
 manager = ModuleManager()
@@ -183,8 +183,8 @@ manager.unload('image_gen_local')
 ### Saving and Loading Conversations
 
 ```python
-from forge_ai.memory.manager import ConversationManager
-from forge_ai.memory.export import export_conversation
+from enigma_engine.memory.manager import ConversationManager
+from enigma_engine.memory.export import export_conversation
 
 # Save conversations
 conv_mgr = ConversationManager()
@@ -200,7 +200,7 @@ export_conversation(conv_mgr.messages, "chat.html", format="html")
 ### Using System Prompts
 
 ```python
-from forge_ai.prompts.system_prompts import get_prompt, list_prompts
+from enigma_engine.prompts.system_prompts import get_prompt, list_prompts
 
 # See available prompts
 print(list_prompts())  # ['assistant', 'coder', 'tutor', ...]
@@ -213,7 +213,7 @@ print(system_prompt)
 ### Benchmarking Performance
 
 ```python
-from forge_ai.utils.benchmark_inference import quick_benchmark
+from enigma_engine.utils.benchmark_inference import quick_benchmark
 
 # Quick benchmark of current model
 report = quick_benchmark("models/my_ai")
@@ -224,12 +224,12 @@ print(f"Memory: {report.peak_memory_mb:.0f} MB")
 ## Project Structure
 
 ```
-forge_ai/
+enigma_engine/
 ├── run.py              # Main entry point
 ├── data/               # Training data goes here
 │   └── training.txt    # Consolidated training data
 ├── models/             # Your trained AI models
-├── forge_ai/
+├── enigma_engine/
 │   ├── core/          # AI model & training
 │   ├── gui/           # User interface
 │   ├── voice/         # Speech features
@@ -256,14 +256,14 @@ python run.py --serve   # Start API server
 - **Avatar** - Visual representation of your AI
 - **Voice** - Text-to-speech responses
 - **Multi-AI** - Run multiple AI models
-- **Multi-Device Network** - Connect multiple ForgeAI instances across devices
+- **Multi-Device Network** - Connect multiple Enigma AI Engine instances across devices
 - **Specialized Models** - Train task-specific models (routing, vision, code)
 - **Themes** - Dark, Light, Shadow, Midnight
 - **🌐 Tunnel Management** - Expose your AI to the internet for remote access
 
 ### Remote Access with Tunnels 🌐
 
-Expose your ForgeAI server to the internet for remote access from anywhere:
+Expose your Enigma AI Engine server to the internet for remote access from anywhere:
 
 ```bash
 # Quick start with ngrok
@@ -289,9 +289,9 @@ See `docs/TUNNEL_SETUP.md` for complete guide.
 
 ### Multi-Device Networking 🌐
 
-Connect multiple ForgeAI instances across devices for distributed AI:
+Connect multiple Enigma AI Engine instances across devices for distributed AI:
 
-- **Auto-Discovery** - Find other ForgeAI nodes on your network (UDP broadcast + network scan)
+- **Auto-Discovery** - Find other Enigma AI Engine nodes on your network (UDP broadcast + network scan)
 - **Remote Connections** - Connect devices on same network or via manual IP entry
 - **AI-to-AI Conversations** - Let different AI instances talk to each other
 - **Model Sharing** - Export/import models across devices
@@ -314,7 +314,7 @@ See `docs/multi_device_guide.md` for complete guide.
 
 ### Specialized Model System 🎯
 
-ForgeAI supports training **specialized smaller models** for specific tasks:
+Enigma AI Engine supports training **specialized smaller models** for specific tasks:
 
 - **Intent Router** (~1M params) - Classify user requests (nano model, instant)
 - **Vision Captioning** (~5M params) - Describe images from features (tiny model)
@@ -331,7 +331,7 @@ python scripts/train_specialized_model.py \
     --model-size nano
 
 # Use in code
-from forge_ai.core.inference import ForgeEngine
+from enigma_engine.core.inference import ForgeEngine
 engine = ForgeEngine(use_routing=True)
 response = engine.generate("write a sort function")  # Routes to code model
 ```
@@ -379,11 +379,11 @@ This is normal for a new AI! Go to the Train tab and train it.
 
 ## Privacy & Local-First Design
 
-ForgeAI is an **"open black box"** - completely transparent about what runs locally vs what requires cloud services.
+Enigma AI Engine is an **"open black box"** - completely transparent about what runs locally vs what requires cloud services.
 
 ### 100% Local by Default
 
-**ForgeAI runs in local-only mode by default.** This means:
+**Enigma AI Engine runs in local-only mode by default.** This means:
 - ✅ No API keys required
 - ✅ No data leaves your machine
 - ✅ Works completely offline

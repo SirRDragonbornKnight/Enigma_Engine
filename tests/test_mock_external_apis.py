@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Mock External API Tests for ForgeAI.
+Mock External API Tests for Enigma AI Engine.
 
 Tests for image_tab, audio_tab, and other modules that call external APIs.
 Uses unittest.mock to simulate API responses without making real calls.
@@ -50,7 +50,7 @@ class TestOpenAIImageMock:
         
         # Test the generation
         try:
-            from forge_ai.gui.tabs.image_tab import OpenAIImage
+            from enigma_engine.gui.tabs.image_tab import OpenAIImage
             
             provider = OpenAIImage(api_key="test-key")
             result = provider.generate("A sunset over mountains")
@@ -73,7 +73,7 @@ class TestOpenAIImageMock:
         mock_client.images.generate.side_effect = Exception("API rate limit exceeded")
         
         try:
-            from forge_ai.gui.tabs.image_tab import OpenAIImage
+            from enigma_engine.gui.tabs.image_tab import OpenAIImage
             
             provider = OpenAIImage(api_key="test-key")
             
@@ -95,7 +95,7 @@ class TestReplicateImageMock:
         mock_run.return_value = ["https://example.com/output.png"]
         
         try:
-            from forge_ai.gui.tabs.image_tab import ReplicateImage
+            from enigma_engine.gui.tabs.image_tab import ReplicateImage
             
             provider = ReplicateImage(api_key="test-key")
             result = provider.generate("A beautiful landscape")
@@ -110,7 +110,7 @@ class TestReplicateImageMock:
         mock_run.return_value = ["https://example.com/output.png"]
         
         try:
-            from forge_ai.gui.tabs.image_tab import ReplicateImage
+            from enigma_engine.gui.tabs.image_tab import ReplicateImage
             
             provider = ReplicateImage(api_key="test-key")
             result = provider.generate(
@@ -144,7 +144,7 @@ class TestElevenLabsMock:
         mock_post.return_value = mock_response
         
         try:
-            from forge_ai.gui.tabs.audio_tab import ElevenLabsTTS
+            from enigma_engine.gui.tabs.audio_tab import ElevenLabsTTS
             
             provider = ElevenLabsTTS(api_key="test-key")
             # Test that import works and provider can be created
@@ -162,7 +162,7 @@ class TestElevenLabsMock:
         mock_post.return_value = mock_response
         
         try:
-            from forge_ai.gui.tabs.audio_tab import ElevenLabsTTS
+            from enigma_engine.gui.tabs.audio_tab import ElevenLabsTTS
             
             provider = ElevenLabsTTS(api_key="invalid-key")
             
@@ -182,7 +182,7 @@ class TestReplicateAudioMock:
         mock_run.return_value = "https://example.com/audio.mp3"
         
         try:
-            from forge_ai.gui.tabs.audio_tab import ReplicateAudio
+            from enigma_engine.gui.tabs.audio_tab import ReplicateAudio
             
             provider = ReplicateAudio(api_key="test-key")
             result = provider.generate("ambient music")
@@ -219,7 +219,7 @@ class TestOpenAICodeMock:
         mock_client.chat.completions.create.return_value = mock_response
         
         try:
-            from forge_ai.gui.tabs.code_tab import OpenAICode
+            from enigma_engine.gui.tabs.code_tab import OpenAICode
             
             provider = OpenAICode(api_key="test-key")
             code = provider.generate("Write a hello world function")
@@ -244,7 +244,7 @@ class TestOpenAICodeMock:
         mock_client.chat.completions.create.return_value = mock_response
         
         try:
-            from forge_ai.gui.tabs.code_tab import OpenAICode
+            from enigma_engine.gui.tabs.code_tab import OpenAICode
             
             provider = OpenAICode(api_key="test-key")
             code = provider.generate("Hello world", language="javascript")
@@ -280,7 +280,7 @@ class TestOpenAIEmbeddingMock:
         mock_client.embeddings.create.return_value = mock_response
         
         try:
-            from forge_ai.gui.tabs.embeddings_tab import OpenAIEmbedding
+            from enigma_engine.gui.tabs.embeddings_tab import OpenAIEmbedding
             
             provider = OpenAIEmbedding(api_key="test-key")
             embedding = provider.embed("Test text")
@@ -305,7 +305,7 @@ class TestOpenAIEmbeddingMock:
         mock_client.embeddings.create.return_value = mock_response
         
         try:
-            from forge_ai.gui.tabs.embeddings_tab import OpenAIEmbedding
+            from enigma_engine.gui.tabs.embeddings_tab import OpenAIEmbedding
             
             provider = OpenAIEmbedding(api_key="test-key")
             embeddings = provider.embed_batch(["Text 1", "Text 2"])
@@ -329,7 +329,7 @@ class TestReplicateVideoMock:
         mock_run.return_value = "https://example.com/video.mp4"
         
         try:
-            from forge_ai.gui.tabs.video_tab import ReplicateVideo
+            from enigma_engine.gui.tabs.video_tab import ReplicateVideo
             
             provider = ReplicateVideo(api_key="test-key")
             result = provider.generate("A cat playing piano")
@@ -354,7 +354,7 @@ class TestReplicate3DMock:
         mock_run.return_value = "https://example.com/model.glb"
         
         try:
-            from forge_ai.gui.tabs.threed_tab import Cloud3DGen
+            from enigma_engine.gui.tabs.threed_tab import Cloud3DGen
             
             provider = Cloud3DGen(api_key="test-key")
             result = provider.generate("A 3D chair")
@@ -384,7 +384,7 @@ class TestWebToolsMock:
         mock_get.return_value = mock_response
         
         try:
-            from forge_ai.tools.web_tools import WebSearchTool
+            from enigma_engine.tools.web_tools import WebSearchTool
             
             tool = WebSearchTool()
             # Use correct execute method
@@ -405,7 +405,7 @@ class TestWebToolsMock:
         mock_get.return_value = mock_response
         
         try:
-            from forge_ai.tools.web_tools import WebFetchTool
+            from enigma_engine.tools.web_tools import WebFetchTool
             
             tool = WebFetchTool()
             content = tool.fetch("https://example.com")
@@ -434,7 +434,7 @@ class TestAPIKeyValidation:
         mock_client.models.list.return_value = MagicMock(data=[])
         
         try:
-            from forge_ai.utils.api_key_encryption import get_key_storage
+            from enigma_engine.utils.api_key_encryption import get_key_storage
             
             # Test that we can at least import the module
             storage = get_key_storage()

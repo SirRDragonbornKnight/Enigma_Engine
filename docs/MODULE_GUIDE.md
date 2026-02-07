@@ -1,4 +1,4 @@
-# ForgeAI Module System Guide
+# Enigma AI Engine Module System Guide
 
 **Version:** 2.0  
 **Last Updated:** January 2026
@@ -20,7 +20,7 @@
 
 ## Overview
 
-The ForgeAI Module System is a **unified architecture where EVERYTHING is a toggleable module**. This design:
+The Enigma AI Engine Module System is a **unified architecture where EVERYTHING is a toggleable module**. This design:
 
 - ✅ **Prevents conflicts** - Only one image generator, one code generator, etc. at a time
 - ✅ **Manages dependencies** - Automatically loads required modules
@@ -48,7 +48,7 @@ engine = AIEngine()  # Loads EVERYTHING
 
 ```python
 # ✅ Module way - load only what you need
-from forge_ai.modules import ModuleManager
+from enigma_engine.modules import ModuleManager
 
 manager = ModuleManager()
 manager.load('model')      # Core AI
@@ -73,7 +73,7 @@ manager.load('image_gen_local')  # Now uses 8GB RAM
 ### Quick Start (5 lines)
 
 ```python
-from forge_ai.modules import ModuleManager
+from enigma_engine.modules import ModuleManager
 
 manager = ModuleManager()
 manager.load('model', {'size': 'small'})
@@ -88,7 +88,7 @@ response = engine.generate("Hello!")
 ### With Generation Capabilities
 
 ```python
-from forge_ai.modules import ModuleManager
+from enigma_engine.modules import ModuleManager
 
 manager = ModuleManager()
 
@@ -197,7 +197,7 @@ manager.load('image_gen_local')   # Stable Diffusion (local)
 manager.load('image_gen_api')     # DALL-E (cloud)
 
 # Code
-manager.load('code_gen_local')    # ForgeAI model
+manager.load('code_gen_local')    # Enigma AI Engine model
 manager.load('code_gen_api')      # GPT-4
 
 # Video
@@ -344,7 +344,7 @@ if not can_load:
 ### Simple Module
 
 ```python
-from forge_ai.modules import Module, ModuleInfo, ModuleCategory
+from enigma_engine.modules import Module, ModuleInfo, ModuleCategory
 
 class MyModule(Module):
     INFO = ModuleInfo(
@@ -369,7 +369,7 @@ class MyModule(Module):
         return self._instance
 
 # Register it
-from forge_ai.modules import ModuleManager
+from enigma_engine.modules import ModuleManager
 
 manager = ModuleManager()
 manager.register(MyModule)
@@ -405,7 +405,7 @@ class AdvancedModule(Module):
 ### Generation Module (Using Tab Providers)
 
 ```python
-from forge_ai.modules.registry import GenerationModule, ModuleInfo, ModuleCategory
+from enigma_engine.modules.registry import GenerationModule, ModuleInfo, ModuleCategory
 
 class MyImageGenModule(GenerationModule):
     """Custom image generation module using tab providers."""
@@ -420,7 +420,7 @@ class MyImageGenModule(GenerationModule):
     
     def load(self) -> bool:
         # Import from the tab where implementations live
-        from forge_ai.gui.tabs.image_tab import StableDiffusionLocal
+        from enigma_engine.gui.tabs.image_tab import StableDiffusionLocal
         self._provider = StableDiffusionLocal()
         return self._provider.load()
     
@@ -435,7 +435,7 @@ class MyImageGenModule(GenerationModule):
 ### Example 1: Minimal Chat Bot
 
 ```python
-from forge_ai.modules import ModuleManager
+from enigma_engine.modules import ModuleManager
 
 def create_chatbot():
     manager = ModuleManager()
@@ -467,7 +467,7 @@ manager.unload('model')
 ### Example 2: Multimodal AI (Text + Images)
 
 ```python
-from forge_ai.modules import ModuleManager
+from enigma_engine.modules import ModuleManager
 
 manager = ModuleManager()
 
@@ -503,7 +503,7 @@ def chat_with_images(prompt):
 ### Example 3: Hardware-Aware Loading
 
 ```python
-from forge_ai.modules import ModuleManager
+from enigma_engine.modules import ModuleManager
 
 def smart_load(manager):
     """Load modules based on available hardware."""
@@ -534,7 +534,7 @@ smart_load(manager)
 ### Example 4: Dynamic Module Switching
 
 ```python
-from forge_ai.modules import ModuleManager
+from enigma_engine.modules import ModuleManager
 
 manager = ModuleManager()
 manager.load('model')
@@ -630,7 +630,7 @@ new_manager.load_config(Path("my_config.json"))
 
 ```python
 # At startup, register all modules once
-from forge_ai.modules.registry import register_all
+from enigma_engine.modules.registry import register_all
 
 manager = ModuleManager()
 register_all(manager)
@@ -641,7 +641,7 @@ register_all(manager)
 ### 7. Use Categories to Organize
 
 ```python
-from forge_ai.modules import ModuleCategory
+from enigma_engine.modules import ModuleCategory
 
 # Load all core modules
 for module_info in manager.list_modules(ModuleCategory.CORE):
@@ -659,7 +659,7 @@ for module_info in manager.list_modules(ModuleCategory.CORE):
 
 **Solution:**
 ```python
-from forge_ai.modules.registry import register_all
+from enigma_engine.modules.registry import register_all
 
 manager = ModuleManager()
 register_all(manager)  # Register built-in modules
@@ -785,7 +785,7 @@ def setup_for_task(task: str):
 
 ## Conclusion
 
-The ForgeAI Module System provides:
+The Enigma AI Engine Module System provides:
 
 ✅ **Flexibility** - Load only what you need  
 ✅ **Safety** - Automatic conflict prevention  
@@ -795,7 +795,7 @@ The ForgeAI Module System provides:
 
 **Next Steps:**
 1. Try the [Quick Start](#getting-started) example
-2. Browse available modules in `forge_ai.modules.registry`
+2. Browse available modules in `enigma_engine.modules.registry`
 3. Create your first custom module
 4. Join the community and share your modules!
 

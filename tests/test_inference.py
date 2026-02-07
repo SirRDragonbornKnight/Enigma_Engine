@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tests for the ForgeAI inference engine.
+Tests for the Enigma AI Engine inference engine.
 
 Run with: pytest tests/test_inference.py -v
 """
@@ -18,7 +18,7 @@ class TestForgeEngine:
     @pytest.fixture
     def engine(self):
         """Create a test engine."""
-        from forge_ai.core.inference import ForgeEngine
+        from enigma_engine.core.inference import ForgeEngine
         try:
             return ForgeEngine()
         except FileNotFoundError:
@@ -32,7 +32,7 @@ class TestForgeEngine:
     
     def test_device_selection(self):
         """Test device selection."""
-        from forge_ai.core.inference import ForgeEngine
+        from enigma_engine.core.inference import ForgeEngine
         
         # Force CPU
         try:
@@ -102,13 +102,13 @@ class TestTokenizer:
     
     def test_load_tokenizer(self):
         """Test tokenizer loading."""
-        from forge_ai.core.tokenizer import load_tokenizer
+        from enigma_engine.core.tokenizer import load_tokenizer
         tok = load_tokenizer()
         assert tok is not None
     
     def test_encode_decode(self):
         """Test encoding and decoding."""
-        from forge_ai.core.tokenizer import load_tokenizer
+        from enigma_engine.core.tokenizer import load_tokenizer
         tok = load_tokenizer()
         
         text = "Hello world"
@@ -128,13 +128,13 @@ class TestTokenizer:
     
     def test_vocab_size(self):
         """Test vocab size property."""
-        from forge_ai.core.tokenizer import load_tokenizer
+        from enigma_engine.core.tokenizer import load_tokenizer
         tok = load_tokenizer()
         assert hasattr(tok, "vocab_size") or hasattr(tok, "n_vocab")
     
     def test_special_tokens(self):
         """Test special tokens handling."""
-        from forge_ai.core.tokenizer import load_tokenizer
+        from enigma_engine.core.tokenizer import load_tokenizer
         tok = load_tokenizer()
         
         # Should handle empty string
@@ -147,7 +147,7 @@ class TestInferenceHelpers:
     
     def test_sample_token(self):
         """Test token sampling."""
-        from forge_ai.core.inference import ForgeEngine
+        from enigma_engine.core.inference import ForgeEngine
         
         try:
             engine = ForgeEngine()
@@ -168,7 +168,7 @@ class TestInferenceHelpers:
     
     def test_repetition_penalty(self):
         """Test repetition penalty reduces repeat probability."""
-        from forge_ai.core.inference import ForgeEngine
+        from enigma_engine.core.inference import ForgeEngine
         
         try:
             engine = ForgeEngine()
@@ -194,7 +194,7 @@ class TestTraining:
     
     def test_train_step(self):
         """Test a single training step."""
-        from forge_ai.core.model import Enigma
+        from enigma_engine.core.model import Enigma
         import torch.optim as optim
         
         model = Enigma(vocab_size=1000, dim=32, depth=1, heads=2)

@@ -6,8 +6,8 @@ from pathlib import Path
 import tempfile
 import json
 
-from forge_ai.tools.url_safety import URLSafety, ContentFilter
-from forge_ai.gui.theme_system import (
+from enigma_engine.tools.url_safety import URLSafety, ContentFilter
+from enigma_engine.gui.theme_system import (
     Theme,
     ThemeColors,
     ThemeManager

@@ -2,7 +2,7 @@
 
 ## Overview
 
-ForgeAI supports training and deploying **specialized smaller AI models** for specific tasks like intent classification, vision captioning, and code generation. All specialized models share the same tokenizer architecture, allowing seamless interoperability across the system.
+Enigma AI Engine supports training and deploying **specialized smaller AI models** for specific tasks like intent classification, vision captioning, and code generation. All specialized models share the same tokenizer architecture, allowing seamless interoperability across the system.
 
 This approach offers several advantages:
 - **Efficiency**: Use tiny models (1-5M params) for simple classification tasks
@@ -13,13 +13,13 @@ This approach offers several advantages:
 ## Architecture
 
 ### Shared Tokenizer
-All models in ForgeAI use the same tokenizer, ensuring:
+All models in Enigma AI Engine use the same tokenizer, ensuring:
 - Consistent vocabulary across all models
 - Easy model switching without re-tokenization
 - Simplified training pipeline
 - Better interoperability
 
-The shared tokenizer is located at `forge_ai/vocab_model/bpe_vocab.json` (or character tokenizer as fallback).
+The shared tokenizer is located at `enigma_engine/vocab_model/bpe_vocab.json` (or character tokenizer as fallback).
 
 ### Model Types
 
@@ -138,7 +138,7 @@ def reverse_string(text):
 ### In Python Code
 
 ```python
-from forge_ai.core.inference import ForgeEngine
+from enigma_engine.core.inference import ForgeEngine
 
 # Enable routing with specialized models
 engine = ForgeEngine(use_routing=True)
@@ -154,7 +154,7 @@ response = engine.generate("how are you today?")  # Uses main chat model
 ### Direct Router Usage
 
 ```python
-from forge_ai.core.tool_router import get_router
+from enigma_engine.core.tool_router import get_router
 
 # Get router with specialized models
 router = get_router(use_specialized=True)
@@ -179,7 +179,7 @@ Specialized models are configured in `information/specialized_models.json`:
 ```json
 {
   "enabled": true,
-  "shared_tokenizer": "forge_ai/vocab_model/bpe_vocab.json",
+  "shared_tokenizer": "enigma_engine/vocab_model/bpe_vocab.json",
   "models": {
     "router": {
       "path": "models/specialized/intent_router_nano.pth",
@@ -325,10 +325,10 @@ A: def sort_list(items): return sorted(items)
 
 ## Integration with Module System
 
-Specialized models integrate with ForgeAI's module system. To enable via module manager:
+Specialized models integrate with Enigma AI Engine's module system. To enable via module manager:
 
 ```python
-from forge_ai.modules.manager import ModuleManager
+from enigma_engine.modules.manager import ModuleManager
 
 manager = ModuleManager()
 
@@ -416,7 +416,7 @@ python scripts/train_specialized_model.py \
 
 # 4. Use the system
 python -c "
-from forge_ai.core.inference import ForgeEngine
+from enigma_engine.core.inference import ForgeEngine
 engine = ForgeEngine(use_routing=True)
 print(engine.generate('write a hello world function'))
 "
@@ -482,7 +482,7 @@ response = engine.generate(
 
 **Direct Router Access:**
 ```python
-from forge_ai.core.tool_router import get_router
+from enigma_engine.core.tool_router import get_router
 
 router = get_router(use_specialized=True)
 
@@ -507,4 +507,4 @@ Key takeaways:
 - **Monitor performance**: Track classification accuracy
 - **Scale as needed**: Upgrade model sizes for complex tasks
 
-For questions or issues, refer to the main ForgeAI documentation or open an issue on GitHub.
+For questions or issues, refer to the main Enigma AI Engine documentation or open an issue on GitHub.

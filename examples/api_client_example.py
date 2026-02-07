@@ -2,13 +2,13 @@
 """
 API Client Example
 
-Shows how to use the ForgeAI REST API from Python.
+Shows how to use the Enigma AI Engine REST API from Python.
 """
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from forge_ai.comms.remote_client import RemoteClient
+from enigma_engine.comms.remote_client import RemoteClient
 
 
 def main():

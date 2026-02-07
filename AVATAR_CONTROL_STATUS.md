@@ -160,7 +160,7 @@ python examples/bone_control_priority_demo.py
 
 ### Check Current Controller
 ```python
-from forge_ai.avatar import get_avatar
+from enigma_engine.avatar import get_avatar
 
 avatar = get_avatar()
 print(f"Current controller: {avatar.current_controller}")

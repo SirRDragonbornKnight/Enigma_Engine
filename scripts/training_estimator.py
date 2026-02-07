@@ -42,7 +42,7 @@ def check_mark(condition):
     return "[OK]" if condition else "[!!]"
 
 def main():
-    print_header("ForgeAI Training Estimator")
+    print_header("Enigma AI Engine Training Estimator")
     print("Let's see if you're ready to train!")
     
     # =========================================================================
@@ -291,7 +291,7 @@ def main():
   FORMAT (Q&A style works best):
   
     Q: What is your name?
-    A: I am ForgeAI, your helpful assistant!
+    A: I am Enigma AI Engine, your helpful assistant!
     
     Q: How do you feel today?
     A: I'm doing great! Ready to help you with anything.
@@ -301,7 +301,7 @@ def main():
   
   You can also add plain text for the AI to learn from:
   
-    ForgeAI is an intelligent assistant that helps users
+    Enigma AI Engine is an intelligent assistant that helps users
     with coding, writing, and everyday tasks. It is friendly,
     helpful, and always eager to learn new things.
   

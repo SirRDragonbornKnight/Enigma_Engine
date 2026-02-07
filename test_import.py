@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Quick test to verify avatar_display imports correctly."""
 try:
-    from forge_ai.gui.tabs.avatar.avatar_display import (
+    from enigma_engine.gui.tabs.avatar.avatar_display import (
         create_avatar_subtab,
         _use_builtin_sprite,
         _show_default_preview,

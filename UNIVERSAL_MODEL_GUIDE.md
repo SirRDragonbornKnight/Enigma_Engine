@@ -1,6 +1,6 @@
 # Universal Model Features - Usage Examples
 
-This document demonstrates the new universal features added to `forge_ai/core/model.py`.
+This document demonstrates the new universal features added to `enigma_engine/core/model.py`.
 
 ## Table of Contents
 1. [Backward Compatibility](#backward-compatibility)
@@ -19,7 +19,7 @@ This document demonstrates the new universal features added to `forge_ai/core/mo
 All existing code continues to work unchanged:
 
 ```python
-from forge_ai.core.model import create_model, Forge, ForgeConfig
+from enigma_engine.core.model import create_model, Forge, ForgeConfig
 
 # Standard model creation (unchanged)
 model = create_model('small')
@@ -38,7 +38,7 @@ Extend context length beyond training with three scaling methods:
 
 ### Linear Scaling
 ```python
-from forge_ai.core.model import ForgeConfig, Forge
+from enigma_engine.core.model import ForgeConfig, Forge
 
 # Extend context by 2x with linear scaling
 config = ForgeConfig(
@@ -93,7 +93,7 @@ Load models from any format:
 
 ### Auto-Detection
 ```python
-from forge_ai.core.model import Forge
+from enigma_engine.core.model import Forge
 
 # Automatically detects format
 model = Forge.from_any("path/to/model")
@@ -138,7 +138,7 @@ Integrate vision and audio with text models:
 
 ### Vision + Text Model
 ```python
-from forge_ai.core.model import ForgeConfig, Forge
+from enigma_engine.core.model import ForgeConfig, Forge
 import torch
 
 # Configure with vision encoder dimension
@@ -210,7 +210,7 @@ Low-Rank Adaptation for efficient fine-tuning:
 
 ### Load LoRA Adapter
 ```python
-from forge_ai.core.model import create_model
+from enigma_engine.core.model import create_model
 
 model = create_model('medium')
 
@@ -238,7 +238,7 @@ model.merge_lora("coding")
 model.merge_lora()
 ```
 
-**Requirements**: Implemented via `forge_ai/core/lora_utils.py`
+**Requirements**: Implemented via `enigma_engine/core/lora_utils.py`
 
 ---
 
@@ -248,7 +248,7 @@ model.merge_lora()
 
 ### Enable Speculative Decoding
 ```python
-from forge_ai.core.model import create_model
+from enigma_engine.core.model import create_model
 
 # Create small draft model and large main model
 draft_model = create_model('tiny')
@@ -332,7 +332,7 @@ Conditional computation with expert routing:
 
 ### Basic MoE Configuration
 ```python
-from forge_ai.core.model import ForgeConfig, Forge
+from enigma_engine.core.model import ForgeConfig, Forge
 
 config = ForgeConfig(
     vocab_size=8000,

@@ -18,7 +18,7 @@ print("=" * 50)
 print("\n[TEST 1] PNG Bounce Mode (DougDoug style)")
 print("-" * 40)
 
-from forge_ai.avatar import UnifiedAvatar, AvatarMode, AvatarType
+from enigma_engine.avatar import UnifiedAvatar, AvatarMode, AvatarType
 
 # Create test image
 pixmap = QPixmap(128, 128)
@@ -59,7 +59,7 @@ print("  RESULT: PASS")
 print("\n[TEST 2] 2D Animation System")
 print("-" * 40)
 
-from forge_ai.avatar import AvatarAnimator, AnimationState2D
+from enigma_engine.avatar import AvatarAnimator, AnimationState2D
 
 animator = AvatarAnimator()
 print(f"  Created: YES")
@@ -76,7 +76,7 @@ print("  RESULT: PASS")
 print("\n[TEST 3] 3D Native System (no Panda3D)")
 print("-" * 40)
 
-from forge_ai.avatar import NativeAvatar3D, Animation3DState, GLTFLoader
+from enigma_engine.avatar import NativeAvatar3D, Animation3DState, GLTFLoader
 
 avatar3d = NativeAvatar3D()
 print(f"  Created: YES")
@@ -95,7 +95,7 @@ print("  RESULT: PASS")
 print("\n[TEST 4] Non-Human Avatar Types")
 print("-" * 40)
 
-from forge_ai.avatar import EmotionMapping
+from enigma_engine.avatar import EmotionMapping
 
 for atype in AvatarType:
     mapping = EmotionMapping.get_mapping(atype)

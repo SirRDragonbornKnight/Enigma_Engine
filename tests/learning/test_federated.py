@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from datetime import datetime
 
-from forge_ai.learning import (
+from enigma_engine.learning import (
     FederatedLearning,
     WeightUpdate,
     FederatedMode,

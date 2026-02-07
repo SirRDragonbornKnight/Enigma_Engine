@@ -16,7 +16,7 @@ class TestDeviceDiscovery:
     
     def test_discovery_init(self):
         """Test discovery initialization."""
-        from forge_ai.comms.discovery import DeviceDiscovery
+        from enigma_engine.comms.discovery import DeviceDiscovery
         
         service = DeviceDiscovery(node_name="test_node", node_port=5000)
         assert service is not None
@@ -26,7 +26,7 @@ class TestDeviceDiscovery:
     
     def test_get_local_ip(self):
         """Test getting local IP address."""
-        from forge_ai.comms.discovery import DeviceDiscovery
+        from enigma_engine.comms.discovery import DeviceDiscovery
         
         service = DeviceDiscovery(node_name="test_node", node_port=5000)
         ip = service.get_local_ip()
@@ -38,7 +38,7 @@ class TestDeviceDiscovery:
     
     def test_discover_self_excluded(self):
         """Test that we don't discover ourselves."""
-        from forge_ai.comms.discovery import DeviceDiscovery
+        from enigma_engine.comms.discovery import DeviceDiscovery
         
         service = DeviceDiscovery(node_name="test_node", node_port=5000)
         
@@ -48,7 +48,7 @@ class TestDeviceDiscovery:
     
     def test_device_url_generation(self):
         """Test generating device URLs."""
-        from forge_ai.comms.discovery import DeviceDiscovery
+        from enigma_engine.comms.discovery import DeviceDiscovery
         
         service = DeviceDiscovery(node_name="test_node", node_port=5000)
         
@@ -68,7 +68,7 @@ class TestDeviceDiscovery:
     
     def test_on_discover_callback(self):
         """Test discovery callbacks."""
-        from forge_ai.comms.discovery import DeviceDiscovery
+        from enigma_engine.comms.discovery import DeviceDiscovery
         
         service = DeviceDiscovery(node_name="test_node", node_port=5000)
         
@@ -89,11 +89,11 @@ class TestDeviceDiscovery:
     
     def test_convenience_function(self):
         """Test the convenience discover function."""
-        from forge_ai.comms.discovery import discover_forge_ai_nodes
+        from enigma_engine.comms.discovery import discover_enigma_engine_nodes
         
         # This will timeout quickly if no nodes are running
         # Just test that it doesn't crash
-        nodes = discover_forge_ai_nodes(node_name="test_scanner", timeout=0.5)
+        nodes = discover_enigma_engine_nodes(node_name="test_scanner", timeout=0.5)
         
         assert isinstance(nodes, dict)
         # May be empty if no nodes running, which is fine
@@ -105,17 +105,17 @@ class TestDiscoveryIntegration:
     def test_imports_without_torch(self):
         """Test that discovery can be imported without torch."""
         # This should not raise ImportError
-        from forge_ai.comms.discovery import DeviceDiscovery, discover_forge_ai_nodes
+        from enigma_engine.comms.discovery import DeviceDiscovery, discover_enigma_engine_nodes
         
         assert DeviceDiscovery is not None
-        assert discover_forge_ai_nodes is not None
+        assert discover_enigma_engine_nodes is not None
     
     def test_discovery_in_comms_package(self):
         """Test that discovery is exported from comms package."""
-        from forge_ai.comms import DeviceDiscovery, discover_forge_ai_nodes
+        from enigma_engine.comms import DeviceDiscovery, discover_enigma_engine_nodes
         
         assert DeviceDiscovery is not None
-        assert discover_forge_ai_nodes is not None
+        assert discover_enigma_engine_nodes is not None
 
 
 if __name__ == "__main__":

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Generate ForgeAI Icon
+Generate Enigma AI Engine Icon
 
-Creates a custom icon for ForgeAI with:
+Creates a custom icon for Enigma AI Engine with:
 - Modern gradient design
 - "F" or forge/anvil symbol
 - Multiple sizes for different uses
@@ -243,7 +243,7 @@ def save_icon_sizes(base_img, output_dir, name="forge"):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate ForgeAI icon")
+    parser = argparse.ArgumentParser(description="Generate Enigma AI Engine icon")
     parser.add_argument("--style", choices=["letter", "anvil", "neural"], 
                         default="neural", help="Icon style")
     parser.add_argument("--color", default="#3498db", help="Primary color (hex)")
@@ -280,7 +280,7 @@ def main():
     ico_path = save_icon_sizes(icon, output_dir)
     
     # Also save to gui/icons for PyQt
-    gui_icons = project_root / "forge_ai" / "gui" / "icons"
+    gui_icons = project_root / "enigma_engine" / "gui" / "icons"
     if gui_icons.exists():
         save_icon_sizes(icon, gui_icons)
     

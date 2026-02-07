@@ -1,6 +1,6 @@
 # Game Mode - Zero Lag Gaming with AI Companion
 
-Game Mode allows ForgeAI to run in the background while you play games without causing frame drops or lag. The AI automatically detects when you're gaming and reduces its resource usage to near-zero, while still remaining responsive when you need it.
+Game Mode allows Enigma AI Engine to run in the background while you play games without causing frame drops or lag. The AI automatically detects when you're gaming and reduces its resource usage to near-zero, while still remaining responsive when you need it.
 
 ## Features
 
@@ -87,7 +87,7 @@ When the game closes:
 
 ## Integration Points
 
-### Autonomous Mode (`forge_ai/core/autonomous.py`)
+### Autonomous Mode (`enigma_engine/core/autonomous.py`)
 ```python
 # Checks game mode before each action
 if game_mode.is_active():
@@ -97,7 +97,7 @@ if game_mode.is_active():
         continue
 ```
 
-### Inference Engine (`forge_ai/core/inference.py`)
+### Inference Engine (`enigma_engine/core/inference.py`)
 ```python
 # Applies resource limits during generation
 if game_mode.is_active():
@@ -107,7 +107,7 @@ if game_mode.is_active():
     max_gen = min(max_gen, limits.max_response_tokens)
 ```
 
-### GUI (`forge_ai/gui/enhanced_window.py`)
+### GUI (`enigma_engine/gui/enhanced_window.py`)
 ```python
 # Status bar indicator
 self.game_mode_indicator = QLabel("Game Mode: OFF")
@@ -157,13 +157,13 @@ The following games are automatically detected:
 - EA Desktop
 - Ubisoft Connect
 
-...and more! See `forge_ai/core/process_monitor.py` for the complete list.
+...and more! See `enigma_engine/core/process_monitor.py` for the complete list.
 
 ## API Reference
 
 ### GameMode Class
 ```python
-from forge_ai.core.game_mode import get_game_mode
+from enigma_engine.core.game_mode import get_game_mode
 
 game_mode = get_game_mode()
 
@@ -186,7 +186,7 @@ print(limits.background_tasks)   # False in game mode
 
 ### ProcessMonitor Class
 ```python
-from forge_ai.core.process_monitor import get_process_monitor
+from enigma_engine.core.process_monitor import get_process_monitor
 
 monitor = get_process_monitor()
 
@@ -206,7 +206,7 @@ monitor.add_custom_game("MyGame.exe")
 
 ### ResourceLimits Class
 ```python
-from forge_ai.core.resource_limiter import ResourceLimits
+from enigma_engine.core.resource_limiter import ResourceLimits
 
 # Create custom limits
 limits = ResourceLimits(
@@ -272,18 +272,18 @@ limits = ResourceLimits(
 ## Files Changed
 
 ### Core Files
-- `forge_ai/core/game_mode.py` - Main GameMode class
-- `forge_ai/core/process_monitor.py` - Process and game detection
-- `forge_ai/core/resource_limiter.py` - Resource limit enforcement
-- `forge_ai/core/autonomous.py` - Modified to respect game mode
-- `forge_ai/core/inference.py` - Modified to apply resource limits
+- `enigma_engine/core/game_mode.py` - Main GameMode class
+- `enigma_engine/core/process_monitor.py` - Process and game detection
+- `enigma_engine/core/resource_limiter.py` - Resource limit enforcement
+- `enigma_engine/core/autonomous.py` - Modified to respect game mode
+- `enigma_engine/core/inference.py` - Modified to apply resource limits
 
 ### GUI Files
-- `forge_ai/gui/tabs/settings_tab.py` - Added game mode controls
-- `forge_ai/gui/enhanced_window.py` - Added status bar indicator
+- `enigma_engine/gui/tabs/settings_tab.py` - Added game mode controls
+- `enigma_engine/gui/enhanced_window.py` - Added status bar indicator
 
 ### Configuration
-- `forge_ai/config/defaults.py` - Added game mode config section
+- `enigma_engine/config/defaults.py` - Added game mode config section
 
 ## Dependencies
 

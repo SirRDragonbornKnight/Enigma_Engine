@@ -3,7 +3,7 @@
 Module System Demo
 ==================
 
-Demonstrates the ForgeAI Module System in action.
+Demonstrates the Enigma AI Engine Module System in action.
 Shows loading, conflict detection, and module usage.
 """
 
@@ -13,8 +13,8 @@ from pathlib import Path
 # Add parent to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from forge_ai.modules import ModuleManager, ModuleCategory
-from forge_ai.modules.registry import register_all
+from enigma_engine.modules import ModuleManager, ModuleCategory
+from enigma_engine.modules.registry import register_all
 
 
 def print_header(text):

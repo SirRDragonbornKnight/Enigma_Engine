@@ -21,11 +21,11 @@ try:
     sys.path.insert(0, str(Path(__file__).parent.parent))
     
     # Import just the orchestration components
-    from forge_ai.core.capability_registry import (
+    from enigma_engine.core.capability_registry import (
         CapabilityRegistry, Capability, BUILT_IN_CAPABILITIES
     )
-    from forge_ai.core.collaboration import ModelCollaboration
-    from forge_ai.core.standalone_tools import list_available_tools
+    from enigma_engine.core.collaboration import ModelCollaboration
+    from enigma_engine.core.standalone_tools import list_available_tools
     
     print("   ✓ Direct imports successful!")
     
@@ -95,7 +95,7 @@ try:
     tools = list_available_tools()
     assert len(tools) > 0, "No tools found"
     
-    from forge_ai.core.standalone_tools import get_tool_info
+    from enigma_engine.core.standalone_tools import get_tool_info
     
     # Test a few tool infos
     for tool_name in ['image', 'vision', 'code']:
@@ -174,9 +174,9 @@ print("✅ ALL ORCHESTRATION TESTS PASSED!")
 print("="*70)
 
 print("\n📦 Validated Components:")
-print("   ✓ forge_ai/core/capability_registry.py")
-print("   ✓ forge_ai/core/collaboration.py")
-print("   ✓ forge_ai/core/standalone_tools.py")
+print("   ✓ enigma_engine/core/capability_registry.py")
+print("   ✓ enigma_engine/core/collaboration.py")
+print("   ✓ enigma_engine/core/standalone_tools.py")
 
 print("\n🎯 Key Features Working:")
 print("   ✓ Model registration and capability tracking")
@@ -189,6 +189,6 @@ print("   ✓ Standalone tool interface")
 print("\n📚 Next Steps:")
 print("   - See docs/ORCHESTRATION_GUIDE.md for full documentation")
 print("   - Run examples/orchestration_demo.py (requires torch)")
-print("   - Integrate with your ForgeAI models")
+print("   - Integrate with your Enigma AI Engine models")
 
 print()

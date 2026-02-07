@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a bug or issue with ForgeAI
+about: Report a bug or issue with Enigma AI Engine
 title: "[BUG] "
 labels: bug
 assignees: ''
@@ -26,7 +26,7 @@ What actually happened instead.
 ## Environment
 - **OS:** [e.g. Windows 10, Ubuntu 22.04, macOS 13]
 - **Python Version:** [e.g. 3.10.5]
-- **ForgeAI Version:** [e.g. commit hash or release tag]
+- **Enigma AI Engine Version:** [e.g. commit hash or release tag]
 - **Model Size:** [e.g. small, medium, large]
 - **Installation Method:** [pip, source, Docker]
 

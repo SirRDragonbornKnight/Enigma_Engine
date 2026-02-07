@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-ForgeAI Complete Integration Example
+Enigma AI Engine Complete Integration Example
 =====================================
 
-This comprehensive example shows how to use ALL ForgeAI features together:
+This comprehensive example shows how to use ALL Enigma AI Engine features together:
 - Model training and inference
 - Module management
 - Memory and RAG
@@ -24,12 +24,12 @@ from typing import Optional, Dict, Any, List
 
 
 # =============================================================================
-# Complete ForgeAI Application
+# Complete Enigma AI Engine Application
 # =============================================================================
 
-class ForgeAIApp:
+class Enigma AI EngineApp:
     """
-    Complete ForgeAI application example.
+    Complete Enigma AI Engine application example.
     
     Shows how all the components work together to create
     a fully-featured AI assistant.
@@ -57,16 +57,16 @@ class ForgeAIApp:
         }
     
     def _log(self, message: str):
-        print(f"[ForgeAI] {message}")
+        print(f"[Enigma AI Engine] {message}")
     
     # =========================================================================
     # Initialization
     # =========================================================================
     
     def initialize(self) -> bool:
-        """Initialize all ForgeAI components."""
+        """Initialize all Enigma AI Engine components."""
         self._log("="*50)
-        self._log("Initializing ForgeAI Application")
+        self._log("Initializing Enigma AI Engine Application")
         self._log("="*50)
         
         # Step 1: Load modules
@@ -98,7 +98,7 @@ class ForgeAIApp:
             self._start_server()
         
         self._log("\n" + "="*50)
-        self._log("ForgeAI Ready!")
+        self._log("Enigma AI Engine Ready!")
         self._log("="*50)
         
         self.is_running = True
@@ -297,7 +297,7 @@ class ForgeAIApp:
     
     def shutdown(self):
         """Gracefully shutdown."""
-        self._log("\nShutting down ForgeAI...")
+        self._log("\nShutting down Enigma AI Engine...")
         
         if self.server:
             self._log("  Stopping API server...")
@@ -321,11 +321,11 @@ class ForgeAIApp:
 def run_demo():
     """Run interactive demo."""
     print("\n" + "="*60)
-    print("ForgeAI Complete Demo")
+    print("Enigma AI Engine Complete Demo")
     print("="*60)
     
     # Create and initialize app
-    app = ForgeAIApp()
+    app = Enigma AI EngineApp()
     app.config["enable_voice"] = True
     app.config["enable_avatar"] = True
     app.config["memory_enabled"] = True
@@ -413,25 +413,25 @@ def show_usage_patterns():
 
 
 def show_real_code():
-    """Show real ForgeAI code examples."""
+    """Show real Enigma AI Engine code examples."""
     print("\n" + "="*60)
-    print("Real ForgeAI Code")
+    print("Real Enigma AI Engine Code")
     print("="*60)
     
     code = '''
 # =====================================================
-# ACTUAL FORGEAI USAGE
+# ACTUAL Enigma AI Engine USAGE
 # =====================================================
 
 # 1. Basic Chat
-from forge_ai.core.inference import ForgeEngine
+from enigma_engine.core.inference import ForgeEngine
 
 engine = ForgeEngine()
 engine.load("models/forge-small")
 response = engine.generate("Hello!")
 
 # 2. With Module System
-from forge_ai.modules import ModuleManager
+from enigma_engine.modules import ModuleManager
 
 manager = ModuleManager()
 manager.load("tokenizer")
@@ -439,8 +439,8 @@ manager.load("model")
 manager.load("inference")
 
 # 3. With Memory
-from forge_ai.memory.manager import ConversationManager
-from forge_ai.memory.rag import RAGSystem
+from enigma_engine.memory.manager import ConversationManager
+from enigma_engine.memory.rag import RAGSystem
 
 memory = ConversationManager()
 rag = RAGSystem(memory.vector_db)
@@ -451,8 +451,8 @@ augmented_prompt = rag.augment_prompt(user_input, context)
 response = engine.generate(augmented_prompt)
 
 # 4. With Voice
-from forge_ai.voice.listener import VoiceListener
-from forge_ai.voice.voice_generator import AIVoiceGenerator
+from enigma_engine.voice.listener import VoiceListener
+from enigma_engine.voice.voice_generator import AIVoiceGenerator
 
 listener = VoiceListener()
 tts = AIVoiceGenerator()
@@ -465,7 +465,7 @@ response = engine.generate(user_input)
 tts.speak(response)
 
 # 5. With Avatar
-from forge_ai.avatar.desktop_pet import DesktopPet
+from enigma_engine.avatar.desktop_pet import DesktopPet
 
 pet = DesktopPet()
 pet.start()
@@ -475,21 +475,21 @@ pet.say(response)  # Shows speech bubble + lip sync
 pet.set_mood("happy")  # Change expression
 
 # 6. With Image Generation
-from forge_ai.gui.tabs.image_tab import StableDiffusionLocal
+from enigma_engine.gui.tabs.image_tab import StableDiffusionLocal
 
 image_gen = StableDiffusionLocal()
 image_gen.load()
 image_path = image_gen.generate("a sunset over mountains")
 
 # 7. With Robot Control
-from forge_ai.tools.robot_tools import RobotInterface
+from enigma_engine.tools.robot_tools import RobotInterface
 
 robot = RobotInterface(connection_type="serial", port="/dev/ttyUSB0")
 robot.connect()
 robot.move_servo(servo_id=1, angle=90)
 
 # 8. Complete Application
-from forge_ai.gui.enhanced_window import EnhancedMainWindow
+from enigma_engine.gui.enhanced_window import EnhancedMainWindow
 from PyQt5.QtWidgets import QApplication
 
 app = QApplication([])
@@ -511,7 +511,7 @@ app.exec_()
 # =============================================================================
 
 if __name__ == "__main__":
-    print("ForgeAI Complete Integration Example")
+    print("Enigma AI Engine Complete Integration Example")
     print("="*60)
     
     run_demo()
@@ -519,7 +519,7 @@ if __name__ == "__main__":
     show_real_code()
     
     print("\n" + "="*60)
-    print("Summary: ForgeAI Components")
+    print("Summary: Enigma AI Engine Components")
     print("="*60)
     print("""
 CORE:

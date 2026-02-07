@@ -2,7 +2,7 @@
 
 ## Overview
 
-ForgeAI now includes two revolutionary systems that make the AI feel truly alive:
+Enigma AI Engine now includes two revolutionary systems that make the AI feel truly alive:
 
 1. **Wants System** - AI has internal motivations, goals, and desires
 2. **Learned Generator** - AI learns to CREATE designs from data, not pick from presets
@@ -14,7 +14,7 @@ ForgeAI now includes two revolutionary systems that make the AI feel truly alive
 - "Select personality: friendly, professional, or creative"
 - Limited, feels scripted
 
-**ForgeAI approach:** AI INVENTS everything based on learned patterns
+**Enigma AI Engine approach:** AI INVENTS everything based on learned patterns
 - AI trains on examples of how to express concepts visually
 - Generates unique designs that reflect personality
 - Creates original aesthetics, not menu selections
@@ -26,7 +26,7 @@ ForgeAI now includes two revolutionary systems that make the AI feel truly alive
 The AI develops internal wants and goals that drive its behavior:
 
 ```python
-from forge_ai.core.wants_system import get_wants_system
+from enigma_engine.core.wants_system import get_wants_system
 
 wants = get_wants_system("my_model")
 
@@ -90,7 +90,7 @@ This makes the AI's responses reflect its internal state!
 Instead of picking from presets, the AI **invents** designs based on training:
 
 ```python
-from forge_ai.core.learned_generator import AILearnedGenerator
+from enigma_engine.core.learned_generator import AILearnedGenerator
 
 generator = AILearnedGenerator("my_model", data_dir=Path("data/"))
 
@@ -158,13 +158,13 @@ avatar_design = generator.generate_avatar_from_personality(traits)
 # Not in any preset list - AI created it!
 ```
 
-## Integration with ForgeAI
+## Integration with Enigma AI Engine
 
 ### 1. Load Both Systems
 
 ```python
-from forge_ai.core.wants_system import get_wants_system
-from forge_ai.core.learned_generator import AILearnedGenerator
+from enigma_engine.core.wants_system import get_wants_system
+from enigma_engine.core.learned_generator import AILearnedGenerator
 
 wants = get_wants_system("my_model")
 generator = AILearnedGenerator("my_model", data_dir)
@@ -309,7 +309,7 @@ motivation = wants.get_motivation_prompt()
 - ❌ No personalization
 - ❌ AI has no internal motivation
 
-### ForgeAI Wants + Learned System
+### Enigma AI Engine Wants + Learned System
 - ✅ Infinite unique designs
 - ✅ AI creates based on learned patterns
 - ✅ Reflects individual personality

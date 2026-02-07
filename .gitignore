@@ -21,6 +21,22 @@ wheels/
 *.egg
 MANIFEST
 
+# User-specific settings (regenerated on first run)
+# These files contain your local paths, window sizes, auth tokens, etc.
+# Copy the .example versions to get started:
+#   cp forge_modules.example.json forge_modules.json
+#   cp data/gui_settings.example.json data/gui_settings.json
+#   etc.
+forge_modules.json
+!forge_modules.example.json
+forge_config.json
+data/gui_settings.json
+!data/gui_settings.example.json
+data/overlay_settings.json
+!data/overlay_settings.example.json
+memory/web_tokens.json
+models/registry.json
+
 # Virtual environments
 venv/
 ENV/
@@ -50,6 +66,13 @@ desktop.ini
 htmlcov/
 *.cover
 .hypothesis/
+
+# Test output files (generated during pytest/manual testing)
+*test*.txt
+*tests*.txt
+pytest_*.txt
+complete_run.txt
+final_run.txt
 .tox/
 
 # Linting/Type checking
@@ -108,10 +131,14 @@ data/*
 !data/specialized/
 !data/personas/
 !data/personas/templates/
+!data/gui_settings.example.json
+!data/overlay_settings.example.json
 
 # Keep models structure
 models/*
 !models/.gitkeep
+# Exclude test models (generated during pytest)
+models/test_model_*
 
 # Memory and cache
 memory/*.db

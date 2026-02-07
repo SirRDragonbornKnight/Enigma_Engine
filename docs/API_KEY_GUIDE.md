@@ -1,15 +1,15 @@
-# ForgeAI API Key Authentication
+# Enigma AI Engine API Key Authentication
 
-## 🔑 Using ForgeAI Like OpenAI's API
+## 🔑 Using Enigma AI Engine Like OpenAI's API
 
-ForgeAI now has API key authentication so you can call it from external applications just like you would with OpenAI's API!
+Enigma AI Engine now has API key authentication so you can call it from external applications just like you would with OpenAI's API!
 
 ## Quick Start
 
 ### 1. Generate an API Key
 
 ```bash
-# Start the ForgeAI API server
+# Start the Enigma AI Engine API server
 python run.py --serve
 
 # In another terminal, generate a key:
@@ -20,8 +20,8 @@ Response:
 ```json
 {
   "api_key": "sk-forge-randomgeneratedstring123abc",
-  "message": "Save this key! Set it as FORGEAI_API_KEY environment variable.",
-  "example": "export FORGEAI_API_KEY=sk-forge-randomgeneratedstring123abc"
+  "message": "Save this key! Set it as Enigma AI Engine_API_KEY environment variable.",
+  "example": "export Enigma AI Engine_API_KEY=sk-forge-randomgeneratedstring123abc"
 }
 ```
 
@@ -29,18 +29,18 @@ Response:
 
 **Linux/macOS:**
 ```bash
-export FORGEAI_API_KEY="sk-forge-yourkey"
+export Enigma AI Engine_API_KEY="sk-forge-yourkey"
 ```
 
 **Windows (PowerShell):**
 ```powershell
-$env:FORGEAI_API_KEY="sk-forge-yourkey"
+$env:Enigma AI Engine_API_KEY="sk-forge-yourkey"
 ```
 
 **Or in `forge_config.json`:**
 ```json
 {
-  "forgeai_api_key": "sk-forge-yourkey",
+  "Enigma AI Engine_api_key": "sk-forge-yourkey",
   "require_api_key": true
 }
 ```
@@ -95,7 +95,7 @@ curl -X POST http://localhost:5000/generate \
 
 ## Authentication Methods
 
-ForgeAI supports **three ways** to send your API key:
+Enigma AI Engine supports **three ways** to send your API key:
 
 1. **`X-API-Key` header** (recommended):
    ```
@@ -119,7 +119,7 @@ In `forge_config.json` or environment variables:
 ```json
 {
   "require_api_key": true,        // Require authentication (default: true)
-  "forgeai_api_key": "sk-forge-...",  // Your API key
+  "Enigma AI Engine_api_key": "sk-forge-...",  // Your API key
   "api_host": "0.0.0.0",          // Bind to all interfaces
   "api_port": 5000                 // API port
 }
@@ -127,7 +127,7 @@ In `forge_config.json` or environment variables:
 
 **Environment variables:**
 ```bash
-export FORGEAI_API_KEY="sk-forge-yourkey"
+export Enigma AI Engine_API_KEY="sk-forge-yourkey"
 export FORGE_API_HOST="0.0.0.0"
 export FORGE_API_PORT="5000"
 ```
@@ -144,7 +144,7 @@ For local testing without authentication:
 
 Or unset the API key:
 ```bash
-unset FORGEAI_API_KEY
+unset Enigma AI Engine_API_KEY
 ```
 
 ## Remote Access
@@ -153,7 +153,7 @@ To allow remote connections:
 
 ```bash
 export FORGE_API_HOST="0.0.0.0"  # Listen on all interfaces
-export FORGEAI_API_KEY="sk-forge-yourkey"  # Required for security!
+export Enigma AI Engine_API_KEY="sk-forge-yourkey"  # Required for security!
 ```
 
 **⚠️ Security Warning:** Always use an API key when exposing the server to the internet!
@@ -162,18 +162,18 @@ export FORGEAI_API_KEY="sk-forge-yourkey"  # Required for security!
 
 ### VS Code Extension Example
 
-Create a VS Code extension that calls ForgeAI:
+Create a VS Code extension that calls Enigma AI Engine:
 
 ```typescript
 // extension.ts
 import * as vscode from 'vscode';
 import axios from 'axios';
 
-const FORGEAI_URL = 'http://localhost:5000/generate';
-const API_KEY = process.env.FORGEAI_API_KEY || 'sk-forge-yourkey';
+const Enigma AI Engine_URL = 'http://localhost:5000/generate';
+const API_KEY = process.env.Enigma AI Engine_API_KEY || 'sk-forge-yourkey';
 
 export async function getAICompletion(prompt: string): Promise<string> {
-    const response = await axios.post(FORGEAI_URL, {
+    const response = await axios.post(Enigma AI Engine_URL, {
         prompt: prompt,
         max_gen: 100,
         temperature: 0.7
@@ -201,7 +201,7 @@ vscode.commands.registerCommand('extension.askAI', async () => {
 
 ### Game Integration Example
 
-Inject ForgeAI into a game:
+Inject Enigma AI Engine into a game:
 
 ```python
 # game_ai_helper.py
@@ -209,13 +209,13 @@ import requests
 import pyautogui
 import time
 
-FORGEAI_API = "http://localhost:5000/generate"
+Enigma AI Engine_API = "http://localhost:5000/generate"
 API_KEY = "sk-forge-yourkey"
 
 def ask_ai(question: str) -> str:
-    """Ask ForgeAI a question."""
+    """Ask Enigma AI Engine a question."""
     response = requests.post(
-        FORGEAI_API,
+        Enigma AI Engine_API,
         headers={"X-API-Key": API_KEY},
         json={"prompt": question, "max_gen": 50}
     )
@@ -254,7 +254,7 @@ if __name__ == "__main__":
 ```json
 {
   "error": "Unauthorized",
-  "message": "Invalid or missing API key. Set FORGEAI_API_KEY environment variable."
+  "message": "Invalid or missing API key. Set Enigma AI Engine_API_KEY environment variable."
 }
 ```
 
@@ -262,7 +262,7 @@ if __name__ == "__main__":
 ```json
 {
   "error": "API key already configured",
-  "message": "Unset FORGEAI_API_KEY to generate a new one"
+  "message": "Unset Enigma AI Engine_API_KEY to generate a new one"
 }
 ```
 
@@ -276,7 +276,7 @@ if __name__ == "__main__":
 
 ## Comparison with OpenAI API
 
-| Feature | OpenAI | ForgeAI |
+| Feature | OpenAI | Enigma AI Engine |
 |---------|--------|---------|
 | Authentication | ✅ `Authorization: Bearer` | ✅ `X-API-Key` or `Bearer` |
 | Local Execution | ❌ Cloud only | ✅ Runs on your hardware |
@@ -288,7 +288,7 @@ if __name__ == "__main__":
 ## Troubleshooting
 
 **"Invalid or missing API key"**
-- Make sure `FORGEAI_API_KEY` is set in your environment
+- Make sure `Enigma AI Engine_API_KEY` is set in your environment
 - Check that the key matches exactly (no extra spaces)
 - Try using a different authentication method
 
@@ -299,7 +299,7 @@ if __name__ == "__main__":
 
 **"API key already configured"**
 - You can only generate a key once for security
-- To reset: `unset FORGEAI_API_KEY` then restart the server
+- To reset: `unset Enigma AI Engine_API_KEY` then restart the server
 
 ## Next Steps
 

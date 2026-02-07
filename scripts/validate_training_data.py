@@ -128,7 +128,7 @@ def print_result(filename: str, result: ValidationResult) -> None:
 def main() -> int:
     """CLI entry point."""
     print("="*50)
-    print("ForgeAI Training Data Validator")
+    print("Enigma AI Engine Training Data Validator")
     print("="*50)
     
     if len(sys.argv) > 1:
@@ -140,7 +140,7 @@ def main() -> int:
     
     # Validate all training files
     try:
-        from forge_ai.config import CONFIG
+        from enigma_engine.config import CONFIG
         data_dir = Path(CONFIG.get("data_dir", "data"))
     except ImportError:
         data_dir = Path("data")

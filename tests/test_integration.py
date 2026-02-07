@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Integration tests for ForgeAI.
+Integration tests for Enigma AI Engine.
 
 These tests verify that different components work together correctly.
 
@@ -19,8 +19,8 @@ class TestModelToInference:
     
     def test_model_in_engine(self):
         """Test that engine uses correct model."""
-        from forge_ai.core.inference import ForgeEngine
-        from forge_ai.core.model import Enigma
+        from enigma_engine.core.inference import ForgeEngine
+        from enigma_engine.core.model import Enigma
         
         try:
             engine = ForgeEngine()
@@ -30,7 +30,7 @@ class TestModelToInference:
     
     def test_tokenizer_vocab_matches_model(self):
         """Test tokenizer vocab matches model embedding."""
-        from forge_ai.core.inference import ForgeEngine
+        from enigma_engine.core.inference import ForgeEngine
         
         try:
             engine = ForgeEngine()
@@ -44,7 +44,7 @@ class TestModelToInference:
     
     def test_full_generation_pipeline(self):
         """Test full pipeline from prompt to text."""
-        from forge_ai.core.inference import ForgeEngine
+        from enigma_engine.core.inference import ForgeEngine
         
         try:
             engine = ForgeEngine()
@@ -68,8 +68,8 @@ class TestTrainingPipeline:
     
     def test_train_and_save(self, tmp_path):
         """Test training and saving model."""
-        from forge_ai.core.model import Enigma
-        from forge_ai.core.training import train_model
+        from enigma_engine.core.model import Enigma
+        from enigma_engine.core.training import train_model
         
         # Create small model
         model = Enigma(vocab_size=1000, dim=32, depth=1, heads=2)
@@ -84,8 +84,8 @@ class TestTrainingPipeline:
     
     def test_model_checkpointing(self, tmp_path):
         """Test saving and loading model checkpoints."""
-        from forge_ai.core.model import Enigma
-        from forge_ai.core.model_registry import safe_load_weights
+        from enigma_engine.core.model import Enigma
+        from enigma_engine.core.model_registry import safe_load_weights
         import torch
         
         # Create and save
@@ -107,7 +107,7 @@ class TestModelRegistry:
     
     def test_create_and_load_model(self, tmp_path):
         """Test creating and loading model through registry."""
-        from forge_ai.core.model_registry import ModelRegistry
+        from enigma_engine.core.model_registry import ModelRegistry
         import shutil
         
         # Create registry with temp dir
@@ -135,8 +135,8 @@ class TestConfigIntegration:
     
     def test_config_affects_model(self):
         """Test that CONFIG affects model creation."""
-        from forge_ai.config import CONFIG
-        from forge_ai.core.inference import ForgeEngine
+        from enigma_engine.config import CONFIG
+        from enigma_engine.core.inference import ForgeEngine
         
         try:
             engine = ForgeEngine()
@@ -154,7 +154,7 @@ class TestEndToEnd:
     
     def test_conversation_flow(self):
         """Test a full conversation flow."""
-        from forge_ai.core.inference import ForgeEngine
+        from enigma_engine.core.inference import ForgeEngine
         
         try:
             engine = ForgeEngine()
@@ -177,7 +177,7 @@ class TestEndToEnd:
     
     def test_streaming_generation(self):
         """Test streaming generation collects all tokens."""
-        from forge_ai.core.inference import ForgeEngine
+        from enigma_engine.core.inference import ForgeEngine
         
         try:
             engine = ForgeEngine()

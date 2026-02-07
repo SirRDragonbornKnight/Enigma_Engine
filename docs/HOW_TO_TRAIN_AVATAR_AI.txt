@@ -1,6 +1,6 @@
 ================================================================================
                   HOW TO TRAIN AN AI WITH AVATAR CAPABILITIES
-                           ForgeAI Avatar Guide
+                           Enigma AI Engine Avatar Guide
 ================================================================================
 
 OVERVIEW
@@ -38,7 +38,7 @@ Companion Mode makes your AI act like an autonomous desktop companion that:
 
 HOW TO ENABLE COMPANION MODE:
 -----------------------------
-1. Open ForgeAI GUI (python run.py --gui)
+1. Open Enigma AI Engine GUI (python run.py --gui)
 2. Go to the CHAT tab
 3. Find the "Companion Mode" toggle/checkbox
 4. Enable it
@@ -77,10 +77,10 @@ HOW BONE CONTROL WORKS:
 
 QUICK START - TRAIN BONE CONTROL AI:
 ------------------------------------
-ForgeAI includes a ready-to-use training script!
+Enigma AI Engine includes a ready-to-use training script!
 
 1. Run the training script:
-   cd /home/pi/ForgeAI
+   cd /home/pi/Enigma AI Engine
    python scripts/train_avatar_control.py
 
 2. This creates a specialized model trained on 168 examples like:
@@ -89,7 +89,7 @@ ForgeAI includes a ready-to-use training script!
        <bone_control>right_forearm|pitch=90,yaw=0,roll=0</bone_control>
 
 3. Load the trained model in GUI:
-   - Open ForgeAI (python run.py --gui)
+   - Open Enigma AI Engine (python run.py --gui)
    - Go to Model Manager tab
    - Load "avatar_control" model
    - Enable avatar module in Modules tab
@@ -378,11 +378,11 @@ Training Data Locations:
   data/specialized/avatar_training.txt        - Avatar tools (create if needed)
 
 Avatar Implementation Files:
-  forge_ai/avatar/controller.py      - Priority system, main controller
-  forge_ai/avatar/bone_control.py    - PRIMARY bone control (priority 100)
-  forge_ai/avatar/ai_control.py      - Parses AI bone commands
-  forge_ai/avatar/autonomous.py      - Fallback behaviors (priority 50)
-  forge_ai/tools/avatar_control_tool.py - Tool definition for AI
+  enigma_engine/avatar/controller.py      - Priority system, main controller
+  enigma_engine/avatar/bone_control.py    - PRIMARY bone control (priority 100)
+  enigma_engine/avatar/ai_control.py      - Parses AI bone commands
+  enigma_engine/avatar/autonomous.py      - Fallback behaviors (priority 50)
+  enigma_engine/tools/avatar_control_tool.py - Tool definition for AI
 
 Training Scripts:
   scripts/train_avatar_control.py    - One-command bone control training

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Build ForgeAI as a Standalone Executable
+Build Enigma AI Engine as a Standalone Executable
 
 Creates a single executable (or folder) that can run without Python installed.
 
@@ -13,8 +13,8 @@ Usage:
     python scripts/build_executable.py --portable   # Build portable version with models
 
 Output:
-    dist/ForgeAI/ForgeAI.exe   (one-folder mode)
-    dist/ForgeAI.exe           (one-file mode)
+    dist/Enigma AI Engine/Enigma AI Engine.exe   (one-folder mode)
+    dist/Enigma AI Engine.exe           (one-file mode)
 """
 
 import os
@@ -36,29 +36,29 @@ def check_pyinstaller():
 
 
 def build_executable(onefile=False, portable=False):
-    """Build the ForgeAI executable."""
+    """Build the Enigma AI Engine executable."""
     project_root = Path(__file__).parent.parent.resolve()
     
     # Paths
     main_script = project_root / "run.py"
     icon_path = project_root / "data" / "icons" / "forge.ico"
     if not icon_path.exists():
-        icon_path = project_root / "forge_ai" / "gui" / "icons" / "forge.ico"
+        icon_path = project_root / "enigma_engine" / "gui" / "icons" / "forge.ico"
     
     # Data files to include
     data_files = [
         # Icons
         (str(project_root / "data" / "icons"), "data/icons"),
-        (str(project_root / "forge_ai" / "gui" / "icons"), "forge_ai/gui/icons"),
+        (str(project_root / "enigma_engine" / "gui" / "icons"), "enigma_engine/gui/icons"),
         # Training data
         (str(project_root / "data" / "training.txt"), "data"),
         (str(project_root / "data" / "instructions.txt"), "data"),
         # Vocab model
-        (str(project_root / "forge_ai" / "vocab_model"), "forge_ai/vocab_model"),
+        (str(project_root / "enigma_engine" / "vocab_model"), "enigma_engine/vocab_model"),
         # Config
-        (str(project_root / "forge_ai" / "config"), "forge_ai/config"),
+        (str(project_root / "enigma_engine" / "config"), "enigma_engine/config"),
         # Builtin fallbacks
-        (str(project_root / "forge_ai" / "builtin"), "forge_ai/builtin"),
+        (str(project_root / "enigma_engine" / "builtin"), "enigma_engine/builtin"),
     ]
     
     # Build data args
@@ -81,13 +81,13 @@ def build_executable(onefile=False, portable=False):
         "safetensors",
         "pyttsx3",
         "speech_recognition",
-        "forge_ai",
-        "forge_ai.core",
-        "forge_ai.gui",
-        "forge_ai.modules",
-        "forge_ai.tools",
-        "forge_ai.voice",
-        "forge_ai.companion",
+        "enigma_engine",
+        "enigma_engine.core",
+        "enigma_engine.gui",
+        "enigma_engine.modules",
+        "enigma_engine.tools",
+        "enigma_engine.voice",
+        "enigma_engine.companion",
     ]
     
     hidden_import_args = [f'--hidden-import={mod}' for mod in hidden_imports]
@@ -95,7 +95,7 @@ def build_executable(onefile=False, portable=False):
     # Build command
     cmd_parts = [
         sys.executable, "-m", "PyInstaller",
-        "--name=ForgeAI",
+        "--name=Enigma AI Engine",
         "--windowed",  # No console window
         f"--icon={icon_path}" if icon_path.exists() else "",
         "--noconfirm",  # Overwrite without asking
@@ -115,7 +115,7 @@ def build_executable(onefile=False, portable=False):
     cmd_parts = [p for p in cmd_parts if p]
     
     # Run PyInstaller
-    print("Building ForgeAI executable...")
+    print("Building Enigma AI Engine executable...")
     print(f"Command: {' '.join(cmd_parts[:5])}...")
     
     os.chdir(project_root)
@@ -127,7 +127,7 @@ def build_executable(onefile=False, portable=False):
     
     # Copy additional files if portable
     if portable:
-        dist_dir = project_root / "dist" / "ForgeAI"
+        dist_dir = project_root / "dist" / "Enigma AI Engine"
         if dist_dir.exists():
             print("\nCreating portable package...")
             
@@ -148,9 +148,9 @@ def build_executable(onefile=False, portable=False):
     print("=" * 50)
     
     if onefile:
-        exe_path = project_root / "dist" / "ForgeAI.exe"
+        exe_path = project_root / "dist" / "Enigma AI Engine.exe"
     else:
-        exe_path = project_root / "dist" / "ForgeAI" / "ForgeAI.exe"
+        exe_path = project_root / "dist" / "Enigma AI Engine" / "Enigma AI Engine.exe"
     
     print(f"\nExecutable: {exe_path}")
     print(f"Size: {exe_path.stat().st_size / 1024 / 1024:.1f} MB" if exe_path.exists() else "")
@@ -159,7 +159,7 @@ def build_executable(onefile=False, portable=False):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Build ForgeAI executable")
+    parser = argparse.ArgumentParser(description="Build Enigma AI Engine executable")
     parser.add_argument("--onefile", action="store_true", 
                         help="Build single executable (slower startup)")
     parser.add_argument("--portable", action="store_true",

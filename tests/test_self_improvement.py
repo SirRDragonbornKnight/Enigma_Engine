@@ -17,7 +17,7 @@ import shutil
 from pathlib import Path
 import time
 
-from forge_ai.core.self_improvement import (
+from enigma_engine.core.self_improvement import (
     LearningEngine,
     LearningExample,
     LearningSource,
@@ -168,7 +168,7 @@ class TestLearningEngine:
     def engine(self, temp_model_dir, monkeypatch):
         """Create a learning engine with temporary directory."""
         # Mock CONFIG to use temp directory
-        from forge_ai import config
+        from enigma_engine import config
         monkeypatch.setitem(config.CONFIG, 'models_dir', temp_model_dir)
         
         engine = LearningEngine("test_model")
@@ -356,7 +356,7 @@ class TestLearningEngine:
         engine.save_state()
         
         # Create new engine instance (should load saved state)
-        from forge_ai import config
+        from enigma_engine import config
         engine2 = LearningEngine("test_model")
         
         # Check data persisted
@@ -372,7 +372,7 @@ class TestGetLearningEngine:
         temp_dir = tempfile.mkdtemp()
         
         try:
-            from forge_ai import config
+            from enigma_engine import config
             monkeypatch.setitem(config.CONFIG, 'models_dir', temp_dir)
             
             # Get engine for first time
@@ -390,5 +390,5 @@ class TestGetLearningEngine:
             shutil.rmtree(temp_dir)
 
 
-# Integration tests would go here but require full ForgeAI setup
+# Integration tests would go here but require full Enigma AI Engine setup
 # These are unit tests focusing on the self-improvement components

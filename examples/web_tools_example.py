@@ -1,7 +1,7 @@
 """
-Web Tools Example for ForgeAI
+Web Tools Example for Enigma AI Engine
 
-This example shows how to use ForgeAI's web capabilities.
+This example shows how to use Enigma AI Engine's web capabilities.
 The AI can search the internet, fetch web pages, and extract content.
 
 CAPABILITIES:
@@ -29,7 +29,7 @@ from html.parser import HTMLParser
 # CONSTANTS
 # =============================================================================
 
-DEFAULT_USER_AGENT = "Mozilla/5.0 (compatible; ForgeAI/1.0)"
+DEFAULT_USER_AGENT = "Mozilla/5.0 (compatible; Enigma AI Engine/1.0)"
 DEFAULT_TIMEOUT = 10
 MAX_CONTENT_SIZE = 100000  # 100KB
 
@@ -406,7 +406,7 @@ def search_and_fetch(query: str, num_results: int = 3) -> List[Dict[str, Any]]:
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("ForgeAI Web Tools Example")
+    print("Enigma AI Engine Web Tools Example")
     print("=" * 60)
     
     # Test web search
@@ -463,7 +463,7 @@ if __name__ == "__main__":
     
     # Test search and summarize
     print("\n[5] Testing search summary...")
-    summary = searcher.search_and_summarize("ForgeAI framework", num_results=2)
+    summary = searcher.search_and_summarize("Enigma AI Engine framework", num_results=2)
     print(summary)
     
     print("\n" + "=" * 60)

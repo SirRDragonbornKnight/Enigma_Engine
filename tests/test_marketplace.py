@@ -1,5 +1,5 @@
 """
-Tests for forge_ai.marketplace module.
+Tests for enigma_engine.marketplace module.
 
 Tests marketplace functionality including:
 - Package browsing and search
@@ -19,20 +19,20 @@ class TestMarketplace:
     
     def test_marketplace_class_exists(self):
         """Test Marketplace class exists."""
-        from forge_ai.marketplace.marketplace import Marketplace
+        from enigma_engine.marketplace.marketplace import Marketplace
         
         assert Marketplace is not None
     
     def test_marketplace_creation(self):
         """Test creating marketplace instance."""
-        from forge_ai.marketplace.marketplace import Marketplace
+        from enigma_engine.marketplace.marketplace import Marketplace
         
         marketplace = Marketplace()
         assert marketplace is not None
     
     def test_search_packages(self):
         """Test searching for packages."""
-        from forge_ai.marketplace.marketplace import Marketplace
+        from enigma_engine.marketplace.marketplace import Marketplace
         
         marketplace = Marketplace()
         
@@ -41,7 +41,7 @@ class TestMarketplace:
     
     def test_refresh_method(self):
         """Test refresh method exists."""
-        from forge_ai.marketplace.marketplace import Marketplace
+        from enigma_engine.marketplace.marketplace import Marketplace
         
         marketplace = Marketplace()
         
@@ -54,20 +54,20 @@ class TestMarketplaceInstaller:
     
     def test_installer_class_exists(self):
         """Test PluginInstaller class exists."""
-        from forge_ai.marketplace.installer import PluginInstaller
+        from enigma_engine.marketplace.installer import PluginInstaller
         
         assert PluginInstaller is not None
     
     def test_installer_creation(self):
         """Test creating installer instance."""
-        from forge_ai.marketplace.installer import PluginInstaller
+        from enigma_engine.marketplace.installer import PluginInstaller
         
         installer = PluginInstaller()
         assert installer is not None
     
     def test_install_package(self):
         """Test installing a package."""
-        from forge_ai.marketplace.installer import PluginInstaller
+        from enigma_engine.marketplace.installer import PluginInstaller
         
         installer = PluginInstaller()
         
@@ -76,7 +76,7 @@ class TestMarketplaceInstaller:
     
     def test_uninstall_package(self):
         """Test uninstalling a package."""
-        from forge_ai.marketplace.installer import PluginInstaller
+        from enigma_engine.marketplace.installer import PluginInstaller
         
         installer = PluginInstaller()
         
@@ -90,7 +90,7 @@ class TestRepository:
     def test_repository_module_exists(self):
         """Test Repository module exists."""
         try:
-            repo_mod = importlib.import_module('forge_ai.marketplace.repository')
+            repo_mod = importlib.import_module('enigma_engine.marketplace.repository')
             assert repo_mod is not None
         except ImportError:
             pytest.skip("Repository module not available")
@@ -98,7 +98,7 @@ class TestRepository:
     def test_repository_manager_exists(self):
         """Test RepositoryManager class exists."""
         try:
-            repo_mod = importlib.import_module('forge_ai.marketplace.repository')
+            repo_mod = importlib.import_module('enigma_engine.marketplace.repository')
             if hasattr(repo_mod, 'RepositoryManager'):
                 assert repo_mod.RepositoryManager is not None
             else:
@@ -112,7 +112,7 @@ class TestPackageInfo:
     
     def test_plugin_info_class(self):
         """Test PluginInfo class exists."""
-        from forge_ai.marketplace.marketplace import PluginInfo
+        from enigma_engine.marketplace.marketplace import PluginInfo
         
         assert PluginInfo is not None
 
@@ -122,6 +122,6 @@ class TestDependencyResolver:
     
     def test_resolver_class_exists(self):
         """Test DependencyResolver class exists."""
-        from forge_ai.marketplace.installer import DependencyResolver
+        from enigma_engine.marketplace.installer import DependencyResolver
         
         assert DependencyResolver is not None

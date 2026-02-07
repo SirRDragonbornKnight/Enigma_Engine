@@ -18,12 +18,12 @@ def import_module(name, path):
     return module
 
 print("=" * 60)
-print("Testing ForgeAI Game Mode System")
+print("Testing Enigma AI Engine Game Mode System")
 print("=" * 60)
 
 # Test 1: Process Monitor
 print("\n[1/3] Testing ProcessMonitor...")
-pm_module = import_module('process_monitor', 'forge_ai/core/process_monitor.py')
+pm_module = import_module('process_monitor', 'enigma_engine/core/process_monitor.py')
 monitor = pm_module.ProcessMonitor()
 print(f"✓ ProcessMonitor initialized")
 print(f"  - Tracking {len(monitor.get_known_game_processes())} known games")
@@ -47,7 +47,7 @@ else:
 # Test 2: Resource Limits
 print("\n[2/3] Testing ResourceLimits...")
 try:
-    rl_module = import_module('resource_limiter', 'forge_ai/core/resource_limiter.py')
+    rl_module = import_module('resource_limiter', 'enigma_engine/core/resource_limiter.py')
 
     # Normal limits
     normal = rl_module.ResourceLimits(

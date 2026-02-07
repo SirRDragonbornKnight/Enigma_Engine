@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Quick Test Script - Tests ForgeAI GUI with a small/fast model.
+Quick Test Script - Tests Enigma AI Engine GUI with a small/fast model.
 
 This script:
-1. Loads ForgeAI with the smallest available model for faster testing
+1. Loads Enigma AI Engine with the smallest available model for faster testing
 2. Shows the GUI so you can test UI changes with actual AI
 3. Skips slow initialization where possible
 
@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Quick test ForgeAI GUI")
+    parser = argparse.ArgumentParser(description="Quick test Enigma AI Engine GUI")
     parser.add_argument('--no-model', action='store_true', 
                        help='Skip model loading (UI only)')
     parser.add_argument('--model', type=str, default=None,
@@ -29,7 +29,7 @@ def main():
     args = parser.parse_args()
     
     print("=" * 50)
-    print("ForgeAI Quick Test")
+    print("Enigma AI Engine Quick Test")
     print("=" * 50)
     
     # Import PyQt
@@ -44,11 +44,11 @@ def main():
     app = QApplication(sys.argv)
     app.setStyle('Fusion')
     
-    # Import ForgeAI GUI
+    # Import Enigma AI Engine GUI
     try:
-        from forge_ai.gui.enhanced_window import EnhancedMainWindow
+        from enigma_engine.gui.enhanced_window import EnhancedMainWindow
     except ImportError as e:
-        print(f"ERROR: Could not import ForgeAI GUI: {e}")
+        print(f"ERROR: Could not import Enigma AI Engine GUI: {e}")
         return 1
     
     print("\n[1/3] Creating main window...")
@@ -58,7 +58,7 @@ def main():
     
     if args.no_model:
         print("[2/3] Skipping model loading (--no-model)")
-        window.setWindowTitle("ForgeAI - No Model (UI Test)")
+        window.setWindowTitle("Enigma AI Engine - No Model (UI Test)")
     else:
         print("[2/3] Model will load when window opens...")
         if args.model:

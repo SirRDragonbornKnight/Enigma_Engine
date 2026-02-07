@@ -1,17 +1,17 @@
-# ForgeAI Built-in Fallbacks
+# Enigma AI Engine Built-in Fallbacks
 
-ForgeAI now includes **zero-dependency fallbacks** that work without installing external packages like `pyttsx3`, `sentence-transformers`, `diffusers`, `torch`, etc.
+Enigma AI Engine now includes **zero-dependency fallbacks** that work without installing external packages like `pyttsx3`, `sentence-transformers`, `diffusers`, `torch`, etc.
 
 ## How It Works
 
-When a full-featured library isn't available, ForgeAI automatically falls back to built-in implementations:
+When a full-featured library isn't available, Enigma AI Engine automatically falls back to built-in implementations:
 
 | Feature | Full Library | Built-in Fallback |
 |---------|-------------|-------------------|
 | **Neural Network** | PyTorch | Pure Python transformer (nano/micro sizes) |
 | **TTS (Speech)** | pyttsx3 | Windows SAPI / macOS `say` / Linux espeak |
 | **Embeddings** | sentence-transformers | TF-IDF + hash-based vectors |
-| **Code Generation** | ForgeAI Model | Template-based code snippets |
+| **Code Generation** | Enigma AI Engine Model | Template-based code snippets |
 | **Image Generation** | Stable Diffusion | Procedural art (gradients, patterns, etc.) |
 
 ## Usage
@@ -23,7 +23,7 @@ The fallbacks are **automatic**. When you use any tab in the GUI, it will:
 
 ## Built-in Modules
 
-Located in `forge_ai/builtin/`:
+Located in `enigma_engine/builtin/`:
 
 ### PureTransformer (`neural_network.py`) - NEW!
 - **Complete neural network in pure Python** - no numpy, no torch!
@@ -74,7 +74,7 @@ Configuration in Settings > Hardware > NN Backend:
 ## Direct Usage
 
 ```python
-from forge_ai.builtin import (
+from enigma_engine.builtin import (
     BuiltinTTS,
     BuiltinEmbeddings,
     BuiltinCodeGen,
@@ -84,7 +84,7 @@ from forge_ai.builtin import (
 # Text-to-speech
 tts = BuiltinTTS()
 tts.load()
-tts.speak("Hello from ForgeAI!")
+tts.speak("Hello from Enigma AI Engine!")
 
 # Embeddings
 emb = BuiltinEmbeddings()
@@ -138,7 +138,7 @@ pip install openai replicate elevenlabs
 ## Checking Status
 
 ```python
-from forge_ai.builtin import get_builtin_status
+from enigma_engine.builtin import get_builtin_status
 
 status = get_builtin_status()
 print(status)

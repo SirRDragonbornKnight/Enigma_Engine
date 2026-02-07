@@ -4,7 +4,7 @@ import pytest
 import time
 from unittest.mock import Mock, patch, MagicMock
 
-from forge_ai.network import (
+from enigma_engine.network import (
     RemoteOffloader,
     OffloadDecision,
     LoadBalancer,

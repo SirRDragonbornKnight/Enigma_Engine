@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ForgeAI 3D Generation Example
+Enigma AI Engine 3D Generation Example
 ==============================
 
 Complete example showing how to generate 3D models including:
@@ -681,14 +681,14 @@ def example_format_conversion():
 
 
 def example_forge_integration():
-    """ForgeAI integration."""
+    """Enigma AI Engine integration."""
     print("\n" + "="*60)
-    print("Example 5: ForgeAI Integration")
+    print("Example 5: Enigma AI Engine Integration")
     print("="*60)
     
-    print("For actual ForgeAI 3D generation:")
+    print("For actual Enigma AI Engine 3D generation:")
     print("""
-    from forge_ai.gui.tabs.threed_tab import Local3DGen, Cloud3DGen
+    from enigma_engine.gui.tabs.threed_tab import Local3DGen, Cloud3DGen
     
     # Local generation (needs GPU)
     local = Local3DGen()
@@ -720,7 +720,7 @@ def example_forge_integration():
 # =============================================================================
 
 if __name__ == "__main__":
-    print("ForgeAI 3D Generation Examples")
+    print("Enigma AI Engine 3D Generation Examples")
     print("="*60)
     
     example_basic_generation()

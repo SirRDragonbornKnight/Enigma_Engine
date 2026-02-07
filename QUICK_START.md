@@ -24,7 +24,7 @@ Expected: "✓ ALL VALIDATIONS PASSED!" with 54 tests passing.
 
 ### 1. Create Model (Backward Compatible)
 ```python
-from forge_ai.core.model import create_model
+from enigma_engine.core.model import create_model
 
 model = create_model('small')  # Works exactly as before
 output = model.generate(input_ids, max_new_tokens=50)
@@ -32,7 +32,7 @@ output = model.generate(input_ids, max_new_tokens=50)
 
 ### 2. Extended Context (2x-8x)
 ```python
-from forge_ai.core.model import ForgeConfig, Forge
+from enigma_engine.core.model import ForgeConfig, Forge
 
 config = ForgeConfig(
     vocab_size=8000,
@@ -74,7 +74,7 @@ output = model.generate_speculative(input_ids, max_new_tokens=100)
 
 ### 5. Load Any Format
 ```python
-from forge_ai.core.model import Forge
+from enigma_engine.core.model import Forge
 
 # Auto-detects format
 model = Forge.from_any("model.gguf")
@@ -98,7 +98,7 @@ python examples/universal_model_demo.py
 
 ### Check Configuration
 ```python
-from forge_ai.core.model import ForgeConfig
+from enigma_engine.core.model import ForgeConfig
 
 # All parameters
 config = ForgeConfig(
@@ -135,7 +135,7 @@ config = ForgeConfig(
 # Issue: torch not found
 pip install torch --index-url https://download.pytorch.org/whl/cpu
 
-# Issue: forge_ai not found
+# Issue: enigma_engine not found
 export PYTHONPATH=$(pwd):$PYTHONPATH
 
 # Issue: HuggingFace loading fails
@@ -172,7 +172,7 @@ pytest tests/test_universal_model.py -v --tb=short
 Run this to verify everything:
 
 ```python
-from forge_ai.core.model import create_model, ForgeConfig, Forge
+from enigma_engine.core.model import create_model, ForgeConfig, Forge
 import torch
 
 # 1. Basic

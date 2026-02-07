@@ -2,7 +2,7 @@
 
 ## Overview
 
-ForgeAI can run across multiple devices in two modes:
+Enigma AI Engine can run across multiple devices in two modes:
 
 ### 1. NETWORKED MODE (Devices Connected)
 Devices on the same network can communicate in real-time.
@@ -45,7 +45,7 @@ Transfer models and memories via USB drive or files.
 
 ### Using the Network Tab
 
-1. **Launch ForgeAI GUI**
+1. **Launch Enigma AI Engine GUI**
    ```bash
    python run.py --gui
    ```
@@ -56,7 +56,7 @@ Transfer models and memories via USB drive or files.
 3. **Start Server (to be discoverable)**
    - Set your desired port (default: 8765)
    - Click "Start Server"
-   - Your device will now be discoverable by other ForgeAI instances
+   - Your device will now be discoverable by other Enigma AI Engine instances
 
 4. **Discover Other Devices**
    - Choose scan mode:
@@ -128,7 +128,7 @@ python examples/multi_device_example.py --import-model /media/usb/my_model_packa
 
 ### Server Node with Discovery
 ```python
-from forge_ai.comms import ForgeNode, DeviceDiscovery
+from enigma_engine.comms import ForgeNode, DeviceDiscovery
 
 # Enable auto-discovery listener
 discovery = DeviceDiscovery("my_server", port=5000)
@@ -144,7 +144,7 @@ node.start_server(blocking=True)  # Blocking
 
 ### Client Node with Discovery
 ```python
-from forge_ai.comms import ForgeNode, DeviceDiscovery
+from enigma_engine.comms import ForgeNode, DeviceDiscovery
 
 # Discover nodes on network
 discovery = DeviceDiscovery("my_client")
@@ -170,7 +170,7 @@ if nodes:
 
 ### Discovery Callbacks
 ```python
-from forge_ai.comms import DeviceDiscovery
+from enigma_engine.comms import DeviceDiscovery
 
 discovery = DeviceDiscovery("my_client", port=5000)
 
@@ -186,7 +186,7 @@ discovery.start_listener()
 
 ### Memory Sync
 ```python
-from forge_ai.comms import MemorySync, OfflineSync
+from enigma_engine.comms import MemorySync, OfflineSync
 
 # Network sync
 sync = MemorySync()
@@ -199,7 +199,7 @@ OfflineSync.import_from_file("/media/usb/memories.json")
 
 ### Model Export/Import
 ```python
-from forge_ai.comms import ModelExporter
+from enigma_engine.comms import ModelExporter
 
 # Export
 ModelExporter.export_model("my_model", "/media/usb/")
@@ -211,7 +211,7 @@ ModelExporter.import_model("/media/usb/my_model_package.zip")
 
 ## Discovery Methods Explained
 
-ForgeAI uses multiple discovery methods for maximum compatibility:
+Enigma AI Engine uses multiple discovery methods for maximum compatibility:
 
 ### 1. UDP Broadcast Discovery (Default)
 - **Speed**: 3 seconds
@@ -294,9 +294,9 @@ ForgeAI uses multiple discovery methods for maximum compatibility:
 
 ## Files Created
 
-- `forge_ai/comms/network.py` - ForgeNode for multi-device communication
-- `forge_ai/comms/discovery.py` - Auto-discovery on network (UDP + scan)
-- `forge_ai/comms/memory_sync.py` - Memory synchronization
-- `forge_ai/gui/tabs/network_tab.py` - GUI for device management
+- `enigma_engine/comms/network.py` - ForgeNode for multi-device communication
+- `enigma_engine/comms/discovery.py` - Auto-discovery on network (UDP + scan)
+- `enigma_engine/comms/memory_sync.py` - Memory synchronization
+- `enigma_engine/gui/tabs/network_tab.py` - GUI for device management
 - `examples/multi_device_example.py` - Example usage
 - `tests/test_device_discovery.py` - Discovery system tests

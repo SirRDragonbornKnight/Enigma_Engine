@@ -4,8 +4,8 @@
 import sys
 sys.path.insert(0, '.')
 
-from forge_ai.modules.registry import MODULE_REGISTRY
-from forge_ai.modules.manager import ModuleManager
+from enigma_engine.modules.registry import MODULE_REGISTRY
+from enigma_engine.modules.manager import ModuleManager
 
 modules_to_test = [
     'camera', 'gif_gen', 'voice_clone', 'notes', 'sessions',

@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-Example showcasing Universal Model features in ForgeAI.
+Example showcasing Universal Model features in Enigma AI Engine.
 
-This demonstrates the new capabilities added to forge_ai/core/model.py:
+This demonstrates the new capabilities added to enigma_engine/core/model.py:
 - RoPE scaling for extended context
 - Multi-modal integration
 - Speculative decoding
 - Configuration serialization
 """
 import torch
-from forge_ai.core.model import create_model, Forge, ForgeConfig
+from enigma_engine.core.model import create_model, Forge, ForgeConfig
 
 
 def demo_backward_compatibility():
@@ -209,9 +209,9 @@ def demo_lora():
 def main():
     """Run all demonstrations."""
     print("\n" + "#"*70)
-    print("# FORGEAI UNIVERSAL MODEL - FEATURE DEMONSTRATION")
+    print("# Enigma AI Engine UNIVERSAL MODEL - FEATURE DEMONSTRATION")
     print("#"*70)
-    print("\nThis showcases the new universal features in forge_ai/core/model.py")
+    print("\nThis showcases the new universal features in enigma_engine/core/model.py")
     print("All features maintain 100% backward compatibility!")
     
     try:

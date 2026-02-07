@@ -12,8 +12,8 @@ from pathlib import Path
 # Add project to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from forge_ai.avatar.renderers.default_sprites import SPRITE_TEMPLATES, generate_sprite
-from forge_ai.config import CONFIG
+from enigma_engine.avatar.renderers.default_sprites import SPRITE_TEMPLATES, generate_sprite
+from enigma_engine.config import CONFIG
 import json
 
 

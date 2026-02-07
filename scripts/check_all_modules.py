@@ -4,8 +4,8 @@
 import sys
 sys.path.insert(0, '.')
 
-from forge_ai.modules.registry import MODULE_REGISTRY
-from forge_ai.modules.manager import ModuleManager
+from enigma_engine.modules.registry import MODULE_REGISTRY
+from enigma_engine.modules.manager import ModuleManager
 
 print("=" * 60)
 print("FORGE AI - COMPREHENSIVE MODULE CHECK")
@@ -50,7 +50,7 @@ print("=" * 60)
 import os
 from pathlib import Path
 
-tabs_dir = Path("forge_ai/gui/tabs")
+tabs_dir = Path("enigma_engine/gui/tabs")
 tab_files = [f.stem for f in tabs_dir.glob("*.py") if not f.name.startswith("_")]
 print(f"Found {len(tab_files)} tab files")
 
@@ -93,7 +93,7 @@ print("CHECKING TOOL DEFINITIONS")
 print("=" * 60)
 
 try:
-    from forge_ai.tools.tool_definitions import get_all_tools
+    from enigma_engine.tools.tool_definitions import get_all_tools
     tools = get_all_tools()
     print(f"Found {len(tools)} tool definitions")
     for tool in tools[:10]:

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test ForgeAI Web Server API Endpoints
+Test Enigma AI Engine Web Server API Endpoints
 
 This script tests all the REST API endpoints to ensure they work correctly.
 """
@@ -12,7 +12,7 @@ from pathlib import Path
 import subprocess
 import requests
 
-# Add forge_ai to path
+# Add enigma_engine to path
 sys.path.insert(0, str(Path(__file__).parent))
 
 SERVER_URL = "http://localhost:8080"
@@ -191,7 +191,7 @@ def test_static_files():
     try:
         response = requests.get(f"{SERVER_URL}/")
         assert response.status_code == 200
-        assert "ForgeAI" in response.text
+        assert "Enigma AI Engine" in response.text
         print("   ✓ Index page served")
         
         response = requests.get(f"{SERVER_URL}/static/styles.css")
@@ -211,7 +211,7 @@ def test_static_files():
 def main():
     """Run all tests."""
     print("="*60)
-    print("ForgeAI Web Server API Tests")
+    print("Enigma AI Engine Web Server API Tests")
     print("="*60)
     
     # Start server

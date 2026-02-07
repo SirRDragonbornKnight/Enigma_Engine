@@ -12,7 +12,7 @@ class TestHotkeyManager:
     
     def test_initialization(self):
         """Test hotkey manager initialization."""
-        from forge_ai.core.hotkey_manager import HotkeyManager
+        from enigma_engine.core.hotkey_manager import HotkeyManager
         
         manager = HotkeyManager()
         assert manager is not None
@@ -20,7 +20,7 @@ class TestHotkeyManager:
     
     def test_default_hotkeys(self):
         """Test default hotkey definitions."""
-        from forge_ai.core.hotkey_manager import DEFAULT_HOTKEYS
+        from enigma_engine.core.hotkey_manager import DEFAULT_HOTKEYS
         
         assert "summon_ai" in DEFAULT_HOTKEYS
         assert "dismiss_ai" in DEFAULT_HOTKEYS
@@ -31,7 +31,7 @@ class TestHotkeyManager:
     
     def test_register_hotkey(self):
         """Test registering a hotkey."""
-        from forge_ai.core.hotkey_manager import HotkeyManager
+        from enigma_engine.core.hotkey_manager import HotkeyManager
         
         manager = HotkeyManager()
         callback = Mock()
@@ -49,7 +49,7 @@ class TestHotkeyManager:
     
     def test_unregister_hotkey(self):
         """Test unregistering a hotkey."""
-        from forge_ai.core.hotkey_manager import HotkeyManager
+        from enigma_engine.core.hotkey_manager import HotkeyManager
         
         manager = HotkeyManager()
         callback = Mock()
@@ -66,7 +66,7 @@ class TestHotkeyManager:
     
     def test_unregister_all(self):
         """Test unregistering all hotkeys."""
-        from forge_ai.core.hotkey_manager import HotkeyManager
+        from enigma_engine.core.hotkey_manager import HotkeyManager
         
         manager = HotkeyManager()
         callback1 = Mock()
@@ -85,7 +85,7 @@ class TestHotkeyManager:
     
     def test_singleton_pattern(self):
         """Test that get_hotkey_manager returns singleton."""
-        from forge_ai.core.hotkey_manager import get_hotkey_manager
+        from enigma_engine.core.hotkey_manager import get_hotkey_manager
         
         manager1 = get_hotkey_manager()
         manager2 = get_hotkey_manager()
@@ -98,14 +98,14 @@ class TestHotkeyActions:
     
     def test_initialization(self):
         """Test hotkey actions initialization."""
-        from forge_ai.core.hotkey_actions import HotkeyActions
+        from enigma_engine.core.hotkey_actions import HotkeyActions
         
         actions = HotkeyActions()
         assert actions is not None
     
     def test_summon_overlay(self):
         """Test summon_overlay action."""
-        from forge_ai.core.hotkey_actions import HotkeyActions
+        from enigma_engine.core.hotkey_actions import HotkeyActions
         
         actions = HotkeyActions()
         
@@ -118,7 +118,7 @@ class TestHotkeyActions:
     
     def test_dismiss_overlay(self):
         """Test dismiss_overlay action."""
-        from forge_ai.core.hotkey_actions import HotkeyActions
+        from enigma_engine.core.hotkey_actions import HotkeyActions
         
         actions = HotkeyActions()
         
@@ -130,7 +130,7 @@ class TestHotkeyActions:
     
     def test_toggle_game_mode(self):
         """Test toggle_game_mode action."""
-        from forge_ai.core.hotkey_actions import HotkeyActions
+        from enigma_engine.core.hotkey_actions import HotkeyActions
         
         actions = HotkeyActions()
         
@@ -143,7 +143,7 @@ class TestHotkeyActions:
     
     def test_singleton_pattern(self):
         """Test that get_hotkey_actions returns singleton."""
-        from forge_ai.core.hotkey_actions import get_hotkey_actions
+        from enigma_engine.core.hotkey_actions import get_hotkey_actions
         
         actions1 = get_hotkey_actions()
         actions2 = get_hotkey_actions()
@@ -157,7 +157,7 @@ class TestWindowsHotkeyBackend:
     @pytest.mark.skipif(sys.platform != 'win32', reason="Windows-specific test")
     def test_initialization(self):
         """Test Windows backend initialization."""
-        from forge_ai.core.hotkeys.windows import WindowsHotkeyBackend
+        from enigma_engine.core.hotkeys.windows import WindowsHotkeyBackend
         
         backend = WindowsHotkeyBackend()
         assert backend is not None
@@ -165,7 +165,7 @@ class TestWindowsHotkeyBackend:
     @pytest.mark.skipif(sys.platform != 'win32', reason="Windows-specific test")
     def test_parse_hotkey(self):
         """Test hotkey parsing on Windows."""
-        from forge_ai.core.hotkeys.windows import WindowsHotkeyBackend
+        from enigma_engine.core.hotkeys.windows import WindowsHotkeyBackend
         
         backend = WindowsHotkeyBackend()
         
@@ -177,7 +177,7 @@ class TestWindowsHotkeyBackend:
     @pytest.mark.skipif(sys.platform != 'win32', reason="Windows-specific test")
     def test_key_to_vk(self):
         """Test key to virtual key code conversion."""
-        from forge_ai.core.hotkeys.windows import WindowsHotkeyBackend
+        from enigma_engine.core.hotkeys.windows import WindowsHotkeyBackend
         
         backend = WindowsHotkeyBackend()
         
@@ -194,7 +194,7 @@ class TestLinuxHotkeyBackend:
     @pytest.mark.skipif(not sys.platform.startswith('linux'), reason="Linux-specific test")
     def test_initialization(self):
         """Test Linux backend initialization."""
-        from forge_ai.core.hotkeys.linux import LinuxHotkeyBackend
+        from enigma_engine.core.hotkeys.linux import LinuxHotkeyBackend
         
         backend = LinuxHotkeyBackend()
         assert backend is not None
@@ -202,7 +202,7 @@ class TestLinuxHotkeyBackend:
     @pytest.mark.skipif(not sys.platform.startswith('linux'), reason="Linux-specific test")
     def test_parse_hotkey(self):
         """Test hotkey parsing on Linux."""
-        from forge_ai.core.hotkeys.linux import LinuxHotkeyBackend
+        from enigma_engine.core.hotkeys.linux import LinuxHotkeyBackend
         
         backend = LinuxHotkeyBackend()
         
@@ -218,7 +218,7 @@ class TestMacOSHotkeyBackend:
     @pytest.mark.skipif(sys.platform != 'darwin', reason="macOS-specific test")
     def test_initialization(self):
         """Test macOS backend initialization."""
-        from forge_ai.core.hotkeys.macos import MacOSHotkeyBackend
+        from enigma_engine.core.hotkeys.macos import MacOSHotkeyBackend
         
         backend = MacOSHotkeyBackend()
         assert backend is not None
@@ -226,7 +226,7 @@ class TestMacOSHotkeyBackend:
     @pytest.mark.skipif(sys.platform != 'darwin', reason="macOS-specific test")
     def test_parse_hotkey(self):
         """Test hotkey parsing on macOS."""
-        from forge_ai.core.hotkeys.macos import MacOSHotkeyBackend
+        from enigma_engine.core.hotkeys.macos import MacOSHotkeyBackend
         
         backend = MacOSHotkeyBackend()
         
@@ -244,7 +244,7 @@ class TestHotkeyConfigWidget:
     def test_initialization(self):
         """Test widget initialization."""
         try:
-            from forge_ai.gui.widgets.hotkey_config import HotkeyConfigWidget
+            from enigma_engine.gui.widgets.hotkey_config import HotkeyConfigWidget
             from PyQt5.QtWidgets import QApplication
             
             # Need QApplication instance
@@ -263,7 +263,7 @@ class TestConfigIntegration:
     
     def test_default_config(self):
         """Test that hotkey config exists in defaults."""
-        from forge_ai.config import CONFIG
+        from enigma_engine.config import CONFIG
         
         assert "enable_hotkeys" in CONFIG
         assert "hotkeys" in CONFIG
@@ -271,7 +271,7 @@ class TestConfigIntegration:
     
     def test_hotkey_config_structure(self):
         """Test hotkey config structure."""
-        from forge_ai.config import CONFIG
+        from enigma_engine.config import CONFIG
         
         hotkeys = CONFIG["hotkeys"]
         

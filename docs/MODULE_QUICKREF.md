@@ -1,12 +1,12 @@
 # Module System Quick Reference
 
-**One-page reference for the ForgeAI Module System**
+**One-page reference for the Enigma AI Engine Module System**
 
 ## Basic Usage
 
 ```python
-from forge_ai.modules import ModuleManager
-from forge_ai.modules.registry import register_all
+from enigma_engine.modules import ModuleManager
+from enigma_engine.modules.registry import register_all
 
 # Create manager
 manager = ModuleManager()
@@ -134,7 +134,7 @@ print(f"Loaded: {status['loaded']} modules")
 ## Module Categories
 
 ```python
-from forge_ai.modules import ModuleCategory
+from enigma_engine.modules import ModuleCategory
 
 # Get all generation modules
 gen_modules = manager.list_modules(ModuleCategory.GENERATION)
@@ -199,7 +199,7 @@ DISABLED  - Administratively disabled
 
 ### Minimal Module
 ```python
-from forge_ai.modules import Module, ModuleInfo, ModuleCategory
+from enigma_engine.modules import Module, ModuleInfo, ModuleCategory
 
 class MyModule(Module):
     INFO = ModuleInfo(
@@ -237,7 +237,7 @@ interface = manager.get_interface('my_module')
 ### "Module not registered"
 ```python
 # Fix: Register first
-from forge_ai.modules.registry import register_all
+from enigma_engine.modules.registry import register_all
 register_all(manager)
 ```
 
@@ -270,7 +270,7 @@ else:
 - **Full Guide:** `docs/MODULE_GUIDE.md`
 - **Examples:** `examples/module_system_demo.py`
 - **Tests:** `tests/test_modules.py`
-- **Source:** `forge_ai/modules/`
+- **Source:** `enigma_engine/modules/`
 
 ## Quick Recipes
 

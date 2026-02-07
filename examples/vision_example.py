@@ -1,7 +1,7 @@
 """
-Vision Integration Example for ForgeAI
+Vision Integration Example for Enigma AI Engine
 
-This example shows how to use ForgeAI's vision capabilities.
+This example shows how to use Enigma AI Engine's vision capabilities.
 The AI can "see" screens, images, and analyze visual content.
 
 CAPABILITIES:
@@ -516,7 +516,7 @@ class ScreenMonitor:
 
 
 # =============================================================================
-# INTEGRATION WITH FORGEAI
+# INTEGRATION WITH Enigma AI Engine
 # =============================================================================
 
 def capture_and_analyze(save_path: Optional[str] = None) -> Dict[str, Any]:
@@ -602,7 +602,7 @@ def track_face_for_robot() -> Optional[Tuple[float, float]]:
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("ForgeAI Vision Example")
+    print("Enigma AI Engine Vision Example")
     print("=" * 60)
     
     # Test screen capture
@@ -615,7 +615,7 @@ if __name__ == "__main__":
         print(f"Captured: {image.size}")
         
         # Save screenshot
-        output_dir = Path.home() / ".forge_ai" / "outputs"
+        output_dir = Path.home() / ".enigma_engine" / "outputs"
         output_dir.mkdir(parents=True, exist_ok=True)
         save_path = output_dir / "vision_test.png"
         vision.save(str(save_path))

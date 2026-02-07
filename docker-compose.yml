@@ -1,4 +1,4 @@
-# Forge_AI Docker Compose Configuration
+# enigma_engine Docker Compose Configuration
 #
 # Usage:
 #   docker-compose up              # Start all services
@@ -20,7 +20,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: final
-    image: forge-ai:latest
+    image: enigma-engine:latest
     container_name: forge-api
     restart: unless-stopped
     ports:
@@ -58,7 +58,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: cpu-only
-    image: forge-ai:cpu
+    image: enigma-engine:cpu
     container_name: forge-api-cpu
     restart: unless-stopped
     profiles:
@@ -84,7 +84,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: final
-    image: forge-ai:latest
+    image: enigma-engine:latest
     container_name: forge-train
     profiles:
       - train

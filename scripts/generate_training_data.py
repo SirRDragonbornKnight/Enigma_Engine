@@ -1,0 +1,568 @@
+"""
+Training Data Generator using Large HuggingFace Models
+
+Uses a large AI (Mistral-7B, Llama-3-8B, etc.) to generate high-quality
+training data for smaller Enigma models.
+
+Usage:
+    python scripts/generate_training_data.py --topic "general knowledge" --count 100
+    python scripts/generate_training_data.py --topics-file topics.txt --count 50
+    
+Requirements:
+    pip install transformers accelerate bitsandbytes
+"""
+
+import argparse
+import json
+import logging
+import os
+import sys
+import time
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Generator, List, Optional
+
+# Add parent directory to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+
+# Recommended models for training data generation
+# Sorted by speed on CPU (fastest first)
+RECOMMENDED_MODELS = {
+    # Fast on CPU - smaller but still good
+    "phi3-mini": "microsoft/Phi-3-mini-4k-instruct",     # 3.8B - RECOMMENDED for CPU
+    "phi2": "microsoft/phi-2",                            # 2.7B - Fast, good quality
+    "tinyllama": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",   # 1.1B - Fastest
+    
+    # Medium - slower on CPU but better quality
+    "mistral-7b": "mistralai/Mistral-7B-Instruct-v0.2",  # 7B - Excellent quality
+    "llama3-8b": "meta-llama/Meta-Llama-3-8B-Instruct",  # 8B - Best quality (needs access)
+    "qwen2-7b": "Qwen/Qwen2-7B-Instruct",                # 7B - Good alternative
+}
+
+# Default to Phi-3-mini for CPU - best speed/quality balance
+DEFAULT_MODEL = "microsoft/Phi-3-mini-4k-instruct"
+
+
+class TrainingDataGenerator:
+    """
+    Generate training data using a large language model.
+    
+    The generated data is formatted for Enigma Engine training:
+    - Q&A pairs in "Question: ... Answer: ..." format
+    - Conversational exchanges
+    - Instruction-following examples
+    """
+    
+    def __init__(
+        self,
+        model_id: str = DEFAULT_MODEL,
+        use_4bit: bool = True,
+        device: str = "auto",
+    ):
+        """
+        Initialize the generator.
+        
+        Args:
+            model_id: HuggingFace model ID
+            use_4bit: Use 4-bit quantization (recommended for CPU/low VRAM)
+            device: Device to use ("auto", "cpu", "cuda")
+        """
+        self.model_id = model_id
+        self.use_4bit = use_4bit
+        self.device = device
+        self.model = None
+        self.tokenizer = None
+        self._loaded = False
+        
+    def load(self) -> bool:
+        """Load the model and tokenizer."""
+        if self._loaded:
+            return True
+            
+        try:
+            import torch
+            from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+            
+            logger.info(f"Loading model: {self.model_id}")
+            logger.info("This may take a few minutes on first run (downloading model)...")
+            
+            # Tokenizer
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                self.model_id,
+                trust_remote_code=True,
+            )
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+            
+            # Quantization config for 4-bit
+            quant_config = None
+            if self.use_4bit:
+                try:
+                    quant_config = BitsAndBytesConfig(
+                        load_in_4bit=True,
+                        bnb_4bit_compute_dtype=torch.float16,
+                        bnb_4bit_use_double_quant=True,
+                        bnb_4bit_quant_type="nf4",
+                    )
+                    logger.info("Using 4-bit quantization")
+                except Exception as e:
+                    logger.warning(f"4-bit quantization not available: {e}")
+                    logger.info("Falling back to fp16/fp32")
+                    quant_config = None
+            
+            # Load model
+            model_kwargs = {
+                "trust_remote_code": True,
+                "low_cpu_mem_usage": True,
+            }
+            
+            if quant_config:
+                model_kwargs["quantization_config"] = quant_config
+                model_kwargs["device_map"] = "auto"
+            elif torch.cuda.is_available():
+                model_kwargs["torch_dtype"] = torch.float16
+                model_kwargs["device_map"] = "auto"
+            else:
+                # CPU - use bfloat16 if available, else float32
+                logger.info("Running on CPU - this will be slower but works fine for data generation")
+                try:
+                    # bfloat16 is faster than float32 on modern CPUs
+                    if torch.backends.cpu.get_cpu_capability() >= 1:
+                        model_kwargs["torch_dtype"] = torch.bfloat16
+                        logger.info("Using bfloat16 for faster CPU inference")
+                    else:
+                        model_kwargs["torch_dtype"] = torch.float32
+                except:
+                    model_kwargs["torch_dtype"] = torch.float32
+            
+            self.model = AutoModelForCausalLM.from_pretrained(
+                self.model_id,
+                **model_kwargs
+            )
+            
+            self._loaded = True
+            logger.info("Model loaded successfully!")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to load model: {e}")
+            return False
+    
+    def generate_qa_pairs(
+        self,
+        topic: str,
+        count: int = 10,
+        style: str = "informative",
+    ) -> List[dict]:
+        """
+        Generate Q&A pairs on a topic.
+        
+        Args:
+            topic: The topic to generate Q&A about
+            count: Number of Q&A pairs to generate
+            style: Style of responses ("informative", "conversational", "technical")
+            
+        Returns:
+            List of {"question": ..., "answer": ...} dicts
+        """
+        if not self._loaded:
+            if not self.load():
+                return []
+        
+        style_instructions = {
+            "informative": "Give clear, factual, educational answers.",
+            "conversational": "Give friendly, natural conversational answers.",
+            "technical": "Give detailed technical explanations.",
+        }
+        
+        prompt = f"""Generate {count} diverse question-answer pairs about: {topic}
+
+Instructions:
+- {style_instructions.get(style, style_instructions["informative"])}
+- Make questions varied (what, how, why, when, explain, describe, etc.)
+- Answers should be 1-3 sentences, helpful and accurate
+- Format each pair as:
+Q: [question]
+A: [answer]
+
+Generate the Q&A pairs now:"""
+
+        response = self._generate(prompt, max_tokens=2000)
+        
+        # Parse Q&A pairs from response
+        pairs = []
+        lines = response.strip().split('\n')
+        current_q = None
+        
+        for line in lines:
+            line = line.strip()
+            if line.startswith(('Q:', 'Question:')):
+                current_q = line.split(':', 1)[1].strip()
+            elif line.startswith(('A:', 'Answer:')) and current_q:
+                answer = line.split(':', 1)[1].strip()
+                if current_q and answer:
+                    pairs.append({"question": current_q, "answer": answer})
+                current_q = None
+        
+        logger.info(f"Generated {len(pairs)} Q&A pairs for topic: {topic}")
+        return pairs
+    
+    def generate_conversations(
+        self,
+        scenario: str,
+        count: int = 5,
+        turns: int = 4,
+    ) -> List[List[dict]]:
+        """
+        Generate multi-turn conversations.
+        
+        Args:
+            scenario: Scenario description
+            count: Number of conversations
+            turns: Turns per conversation
+            
+        Returns:
+            List of conversations, each being a list of {"role": ..., "content": ...}
+        """
+        if not self._loaded:
+            if not self.load():
+                return []
+        
+        prompt = f"""Generate {count} natural conversations about: {scenario}
+
+Each conversation should have {turns} exchanges between User and Assistant.
+Make them realistic and helpful.
+
+Format:
+---CONVERSATION---
+User: [message]
+Assistant: [response]
+User: [follow-up]
+Assistant: [response]
+---END---
+
+Generate the conversations:"""
+
+        response = self._generate(prompt, max_tokens=3000)
+        
+        # Parse conversations
+        conversations = []
+        current_conv = []
+        
+        for line in response.split('\n'):
+            line = line.strip()
+            if line.startswith('User:'):
+                current_conv.append({"role": "user", "content": line[5:].strip()})
+            elif line.startswith('Assistant:'):
+                current_conv.append({"role": "assistant", "content": line[10:].strip()})
+            elif '---END---' in line or '---CONVERSATION---' in line:
+                if current_conv:
+                    conversations.append(current_conv)
+                    current_conv = []
+        
+        if current_conv:
+            conversations.append(current_conv)
+        
+        logger.info(f"Generated {len(conversations)} conversations")
+        return conversations
+    
+    def generate_instructions(
+        self,
+        task_type: str,
+        count: int = 10,
+    ) -> List[dict]:
+        """
+        Generate instruction-following examples.
+        
+        Args:
+            task_type: Type of task (e.g., "writing", "coding", "analysis")
+            count: Number of examples
+            
+        Returns:
+            List of {"instruction": ..., "response": ...} dicts
+        """
+        if not self._loaded:
+            if not self.load():
+                return []
+        
+        prompt = f"""Generate {count} instruction-following examples for: {task_type}
+
+Each example should have:
+- A clear instruction/request from a user
+- A helpful, complete response
+
+Format:
+INSTRUCTION: [user request]
+RESPONSE: [helpful response]
+
+Generate varied examples:"""
+
+        response = self._generate(prompt, max_tokens=3000)
+        
+        # Parse instructions
+        examples = []
+        lines = response.split('\n')
+        current_inst = None
+        
+        for line in lines:
+            line = line.strip()
+            if line.startswith('INSTRUCTION:'):
+                current_inst = line[12:].strip()
+            elif line.startswith('RESPONSE:') and current_inst:
+                resp = line[9:].strip()
+                if current_inst and resp:
+                    examples.append({"instruction": current_inst, "response": resp})
+                current_inst = None
+        
+        logger.info(f"Generated {len(examples)} instruction examples")
+        return examples
+    
+    def _generate(self, prompt: str, max_tokens: int = 1000) -> str:
+        """Generate text from prompt."""
+        import torch
+        
+        # Format for instruct models
+        if "instruct" in self.model_id.lower() or "chat" in self.model_id.lower():
+            messages = [{"role": "user", "content": prompt}]
+            if hasattr(self.tokenizer, 'apply_chat_template'):
+                formatted = self.tokenizer.apply_chat_template(
+                    messages, 
+                    tokenize=False, 
+                    add_generation_prompt=True
+                )
+            else:
+                formatted = f"[INST] {prompt} [/INST]"
+        else:
+            formatted = prompt
+        
+        inputs = self.tokenizer(formatted, return_tensors="pt")
+        if hasattr(self.model, 'device'):
+            inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
+        
+        with torch.no_grad():
+            outputs = self.model.generate(
+                **inputs,
+                max_new_tokens=max_tokens,
+                do_sample=True,
+                temperature=0.7,
+                top_p=0.9,
+                pad_token_id=self.tokenizer.pad_token_id,
+            )
+        
+        response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+        
+        # Remove the prompt from response
+        if formatted in response:
+            response = response[len(formatted):].strip()
+        
+        return response
+    
+    def save_training_data(
+        self,
+        data: List[dict],
+        output_path: str,
+        format: str = "enigma",
+    ):
+        """
+        Save generated data in training format.
+        
+        Args:
+            data: List of Q&A pairs or conversations
+            output_path: Output file path
+            format: Output format ("enigma", "jsonl", "json")
+        """
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        if format == "enigma":
+            # Enigma training format: Question: ... Answer: ...
+            with open(output_path, 'w', encoding='utf-8') as f:
+                for item in data:
+                    if "question" in item:
+                        f.write(f"Question: {item['question']}\n")
+                        f.write(f"Answer: {item['answer']}\n\n")
+                    elif "instruction" in item:
+                        f.write(f"Question: {item['instruction']}\n")
+                        f.write(f"Answer: {item['response']}\n\n")
+                    elif isinstance(item, list):  # Conversation
+                        for turn in item:
+                            role = "Question" if turn["role"] == "user" else "Answer"
+                            f.write(f"{role}: {turn['content']}\n")
+                        f.write("\n")
+            logger.info(f"Saved {len(data)} examples to {output_path}")
+            
+        elif format == "jsonl":
+            with open(output_path, 'w', encoding='utf-8') as f:
+                for item in data:
+                    f.write(json.dumps(item) + '\n')
+            logger.info(f"Saved {len(data)} examples to {output_path}")
+            
+        elif format == "json":
+            with open(output_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2)
+            logger.info(f"Saved {len(data)} examples to {output_path}")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Generate training data using a large AI model",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+    # Generate Q&A about a topic
+    python generate_training_data.py --topic "Python programming" --count 50
+    
+    # Generate from multiple topics
+    python generate_training_data.py --topics "math,science,history" --count 20
+    
+    # Generate conversations
+    python generate_training_data.py --topic "customer support" --type conversations
+    
+    # Use a specific model
+    python generate_training_data.py --model "microsoft/Phi-3-mini-4k-instruct" --topic "AI"
+
+Available models (sorted by CPU speed):
+    tinyllama   : TinyLlama-1.1B  (fastest, ~10 tok/s on CPU)
+    phi2        : Phi-2 2.7B     (fast, good quality)
+    phi3-mini   : Phi-3-mini 3.8B (DEFAULT - best balance)
+    mistral-7b  : Mistral-7B     (slower but excellent)
+    qwen2-7b    : Qwen2-7B       (good alternative)
+    llama3-8b   : Llama-3-8B     (best quality, needs HF access)
+"""
+    )
+    
+    parser.add_argument(
+        "--model", "-m",
+        default="phi3-mini",
+        help="Model to use (name or HuggingFace ID). Default: phi3-mini"
+    )
+    parser.add_argument(
+        "--topic", "-t",
+        help="Topic to generate data about"
+    )
+    parser.add_argument(
+        "--topics",
+        help="Comma-separated list of topics"
+    )
+    parser.add_argument(
+        "--topics-file",
+        help="File with topics (one per line)"
+    )
+    parser.add_argument(
+        "--count", "-n",
+        type=int,
+        default=20,
+        help="Number of examples per topic (default: 20)"
+    )
+    parser.add_argument(
+        "--type",
+        choices=["qa", "conversations", "instructions"],
+        default="qa",
+        help="Type of data to generate (default: qa)"
+    )
+    parser.add_argument(
+        "--style",
+        choices=["informative", "conversational", "technical"],
+        default="informative",
+        help="Style of responses (default: informative)"
+    )
+    parser.add_argument(
+        "--output", "-o",
+        default="data/generated_training.txt",
+        help="Output file path"
+    )
+    parser.add_argument(
+        "--format", "-f",
+        choices=["enigma", "jsonl", "json"],
+        default="enigma",
+        help="Output format (default: enigma)"
+    )
+    parser.add_argument(
+        "--no-4bit",
+        action="store_true",
+        help="Don't use 4-bit quantization (uses more memory)"
+    )
+    
+    args = parser.parse_args()
+    
+    # Resolve model ID
+    model_id = RECOMMENDED_MODELS.get(args.model, args.model)
+    
+    # Collect topics
+    topics = []
+    if args.topic:
+        topics.append(args.topic)
+    if args.topics:
+        topics.extend([t.strip() for t in args.topics.split(',')])
+    if args.topics_file:
+        with open(args.topics_file) as f:
+            topics.extend([line.strip() for line in f if line.strip()])
+    
+    if not topics:
+        parser.error("Please provide at least one topic (--topic, --topics, or --topics-file)")
+    
+    # Initialize generator
+    print(f"\n{'='*60}")
+    print(f"Training Data Generator")
+    print(f"{'='*60}")
+    print(f"Model: {model_id}")
+    print(f"Topics: {', '.join(topics)}")
+    print(f"Count per topic: {args.count}")
+    print(f"Type: {args.type}")
+    print(f"Output: {args.output}")
+    print(f"{'='*60}")
+    
+    # CPU warning
+    import torch
+    if not torch.cuda.is_available():
+        print("\n[!] Running on CPU - generation will be slower")
+        print("    Estimated time per topic:")
+        if "tiny" in model_id.lower() or "1.1b" in model_id.lower():
+            print("    - ~2-5 minutes for 20 Q&A pairs")
+        elif "phi-2" in model_id.lower() or "2.7" in model_id.lower():
+            print("    - ~5-10 minutes for 20 Q&A pairs")
+        elif "phi-3" in model_id.lower() or "3.8" in model_id.lower():
+            print("    - ~10-20 minutes for 20 Q&A pairs")
+        else:  # 7B+ models
+            print("    - ~30-60 minutes for 20 Q&A pairs")
+        print("    Use --model tinyllama or phi2 for faster generation\n")
+    
+    generator = TrainingDataGenerator(
+        model_id=model_id,
+        use_4bit=not args.no_4bit,
+    )
+    
+    # Generate data
+    all_data = []
+    
+    for topic in topics:
+        print(f"\nGenerating data for: {topic}")
+        print("-" * 40)
+        
+        if args.type == "qa":
+            data = generator.generate_qa_pairs(topic, args.count, args.style)
+        elif args.type == "conversations":
+            data = generator.generate_conversations(topic, args.count)
+        elif args.type == "instructions":
+            data = generator.generate_instructions(topic, args.count)
+        
+        all_data.extend(data)
+        print(f"Generated {len(data)} examples")
+    
+    # Save
+    if all_data:
+        generator.save_training_data(all_data, args.output, args.format)
+        print(f"\n{'='*60}")
+        print(f"Done! Generated {len(all_data)} total examples")
+        print(f"Saved to: {args.output}")
+        print(f"{'='*60}\n")
+    else:
+        print("\nNo data generated. Check the logs for errors.")
+
+
+if __name__ == "__main__":
+    main()

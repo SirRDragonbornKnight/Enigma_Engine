@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Example: Using Specialized Model Routing in ForgeAI
+Example: Using Specialized Model Routing in Enigma AI Engine
 
 This example demonstrates:
 1. Training specialized models
@@ -23,7 +23,7 @@ def example_1_basic_routing():
     print()
     
     try:
-        from forge_ai.core.inference import ForgeEngine
+        from enigma_engine.core.inference import ForgeEngine
         
         # Create engine with routing enabled
         print("Creating ForgeEngine with routing enabled...")
@@ -60,7 +60,7 @@ def example_2_direct_router_access():
     print()
     
     try:
-        from forge_ai.core.tool_router import get_router
+        from enigma_engine.core.tool_router import get_router
         
         # Get router with specialized models disabled (works without training)
         print("Getting router with keyword-based detection...")
@@ -130,7 +130,7 @@ def example_3_training_workflow():
     
     print("Step 5: Use in your application")
     print("  Python code:")
-    print("    from forge_ai.core.inference import ForgeEngine")
+    print("    from enigma_engine.core.inference import ForgeEngine")
     print("    engine = ForgeEngine(use_routing=True)")
     print("    response = engine.generate('write a sort function')")
     print()
@@ -145,7 +145,7 @@ def example_4_module_system():
     print()
     
     try:
-        from forge_ai.modules.manager import ModuleManager
+        from enigma_engine.modules.manager import ModuleManager
         
         print("Using ModuleManager to load tool router...")
         manager = ModuleManager()

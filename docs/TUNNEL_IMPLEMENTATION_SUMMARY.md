@@ -2,17 +2,17 @@
 
 ## Overview
 
-This document summarizes the implementation of the Tunnel Management Module for ForgeAI, which enables users to expose their local server to the internet for remote access.
+This document summarizes the implementation of the Tunnel Management Module for Enigma AI Engine, which enables users to expose their local server to the internet for remote access.
 
 ## Problem Statement
 
-The original issue requested a retry of creating a tunnel management module. This implementation provides a comprehensive solution for exposing ForgeAI servers publicly.
+The original issue requested a retry of creating a tunnel management module. This implementation provides a comprehensive solution for exposing Enigma AI Engine servers publicly.
 
 ## Implementation Details
 
 ### Files Created
 
-1. **forge_ai/comms/tunnel_manager.py** (510 lines)
+1. **enigma_engine/comms/tunnel_manager.py** (510 lines)
    - Core `TunnelManager` class
    - Support for ngrok, localtunnel, and bore providers
    - Automatic reconnection with retry logic
@@ -40,7 +40,7 @@ The original issue requested a retry of creating a tunnel management module. Thi
 
 ### Files Modified
 
-1. **forge_ai/modules/registry.py** (+125 lines)
+1. **enigma_engine/modules/registry.py** (+125 lines)
    - Added `TunnelModule` class
    - Registered in `MODULE_REGISTRY`
    - Full configuration schema
@@ -126,7 +126,7 @@ python run.py --tunnel --tunnel-region eu
 ### Python API
 
 ```python
-from forge_ai.comms.tunnel_manager import TunnelManager
+from enigma_engine.comms.tunnel_manager import TunnelManager
 
 # Create manager
 manager = TunnelManager(provider="ngrok", auth_token="YOUR_TOKEN")
@@ -142,7 +142,7 @@ manager.stop_tunnel()
 ### Module System
 
 ```python
-from forge_ai.modules import ModuleManager
+from enigma_engine.modules import ModuleManager
 
 manager = ModuleManager()
 manager.load('tunnel', config={
@@ -251,7 +251,7 @@ The Tunnel Management Module is complete and production-ready. It provides:
 - ✅ CLI and API support
 - ✅ Module system integration
 
-Users can now easily expose their ForgeAI server to the internet for remote access, mobile apps, demos, and collaboration.
+Users can now easily expose their Enigma AI Engine server to the internet for remote access, mobile apps, demos, and collaboration.
 
 ## Statistics
 

@@ -16,8 +16,8 @@ The Enhanced Avatar System allows AI to design its own visual appearance based o
 ### 1. AI Self-Design from Personality
 
 ```python
-from forge_ai.avatar import get_avatar
-from forge_ai.core.personality import load_personality
+from enigma_engine.avatar import get_avatar
+from enigma_engine.core.personality import load_personality
 
 # Get avatar and load AI personality
 avatar = get_avatar()
@@ -36,7 +36,7 @@ print(avatar.explain_appearance())
 ### 2. Natural Language Description
 
 ```python
-from forge_ai.avatar import get_avatar
+from enigma_engine.avatar import get_avatar
 
 avatar = get_avatar()
 
@@ -50,7 +50,7 @@ appearance = avatar.describe_desired_appearance(
 ### 3. User Customization
 
 ```python
-from forge_ai.avatar import get_avatar
+from enigma_engine.avatar import get_avatar
 
 avatar = get_avatar()
 customizer = avatar.get_customizer()
@@ -73,8 +73,8 @@ customizer.set_animations(idle="bounce", movement="bounce")
 ### 4. Emotion Synchronization
 
 ```python
-from forge_ai.avatar import get_avatar
-from forge_ai.core.personality import load_personality
+from enigma_engine.avatar import get_avatar
+from enigma_engine.core.personality import load_personality
 
 avatar = get_avatar()
 personality = load_personality("my_model")
@@ -163,7 +163,7 @@ All sprites support custom colors (primary, secondary, accent).
 Works everywhere, console output:
 
 ```python
-from forge_ai.avatar.renderers import SpriteRenderer
+from enigma_engine.avatar.renderers import SpriteRenderer
 
 renderer = SpriteRenderer(controller)
 renderer.show()  # Prints to console
@@ -173,7 +173,7 @@ renderer.show()  # Prints to console
 Transparent overlay window:
 
 ```python
-from forge_ai.avatar.renderers import QtAvatarRenderer
+from enigma_engine.avatar.renderers import QtAvatarRenderer
 
 renderer = QtAvatarRenderer(controller)
 renderer.show()  # Shows draggable window
@@ -183,7 +183,7 @@ renderer.show()  # Shows draggable window
 For web dashboard:
 
 ```python
-from forge_ai.avatar.renderers import WebAvatarRenderer
+from enigma_engine.avatar.renderers import WebAvatarRenderer
 
 renderer = WebAvatarRenderer(controller, socketio)
 renderer.show()  # Sends to web clients
@@ -255,7 +255,7 @@ appearance = customizer.interactive_customize()
 ### Generate All Sprites
 
 ```python
-from forge_ai.avatar.renderers import SpriteRenderer
+from enigma_engine.avatar.renderers import SpriteRenderer
 
 renderer = SpriteRenderer(controller)
 renderer.export_sprites("./my_sprites/")

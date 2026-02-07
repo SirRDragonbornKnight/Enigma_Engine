@@ -1,6 +1,6 @@
-# ForgeAI Module Dependency Graph
+# Enigma AI Engine Module Dependency Graph
 
-This document describes the relationships between ForgeAI modules - which modules depend on others to function.
+This document describes the relationships between Enigma AI Engine modules - which modules depend on others to function.
 
 ## Dependency Graph (Visual)
 

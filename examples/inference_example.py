@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ForgeAI Inference Example
+Enigma AI Engine Inference Example
 =========================
 
 Complete example showing how to run model inference including:
@@ -11,7 +11,7 @@ Complete example showing how to run model inference including:
 - Streaming generation
 - Configuration options
 
-This is the core of ForgeAI - generating AI responses from trained models.
+This is the core of Enigma AI Engine - generating AI responses from trained models.
 
 Dependencies:
     pip install torch  # PyTorch
@@ -55,7 +55,7 @@ class InferenceConfig:
 
 class ForgeEngine:
     """
-    ForgeAI inference engine.
+    Enigma AI Engine inference engine.
     
     Handles model loading, text generation, and routing to
     specialized models when needed.
@@ -90,8 +90,8 @@ class ForgeEngine:
         
         try:
             # In real implementation:
-            # from forge_ai.core.model import Forge
-            # from forge_ai.core.tokenizer import get_tokenizer
+            # from enigma_engine.core.model import Forge
+            # from enigma_engine.core.tokenizer import get_tokenizer
             # 
             # self.model = Forge.from_pretrained(model_path)
             # self.tokenizer = get_tokenizer()
@@ -231,7 +231,7 @@ class ToolRouter:
         self._log("Loading router classifier...")
         
         # In real implementation:
-        # from forge_ai.core.tool_router import get_router
+        # from enigma_engine.core.tool_router import get_router
         # self.classifier = get_router()
         
         self.is_loaded = True
@@ -517,16 +517,16 @@ def example_batch():
 
 
 def example_forge_integration():
-    """Real ForgeAI integration."""
+    """Real Enigma AI Engine integration."""
     print("\n" + "="*60)
-    print("Example 7: ForgeAI Integration")
+    print("Example 7: Enigma AI Engine Integration")
     print("="*60)
     
-    print("For actual ForgeAI inference:")
+    print("For actual Enigma AI Engine inference:")
     print("""
-    from forge_ai.core.inference import ForgeEngine
-    from forge_ai.core.tool_router import ToolRouter, get_router
-    from forge_ai.core.model_registry import ModelRegistry
+    from enigma_engine.core.inference import ForgeEngine
+    from enigma_engine.core.tool_router import ToolRouter, get_router
+    from enigma_engine.core.model_registry import ModelRegistry
     
     # Basic inference
     engine = ForgeEngine()
@@ -563,7 +563,7 @@ def example_forge_integration():
 # =============================================================================
 
 if __name__ == "__main__":
-    print("ForgeAI Inference Examples")
+    print("Enigma AI Engine Inference Examples")
     print("="*60)
     
     example_basic_inference()

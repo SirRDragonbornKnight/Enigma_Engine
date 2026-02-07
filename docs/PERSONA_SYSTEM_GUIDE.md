@@ -7,7 +7,7 @@ The AI Persona System allows you to create, customize, copy, and share complete 
 ## Key Features
 
 - **Copy/Paste AI Cloning**: Duplicate any persona to create variants
-- **Export/Import**: Share your AI configurations with others as `.forge-ai` files
+- **Export/Import**: Share your AI configurations with others as `.enigma-engine` files
 - **Merge Personas**: Combine traits from multiple personas
 - **Template Personas**: Start with pre-configured examples
 - **Integration**: Works with existing personality, voice, and avatar systems
@@ -16,18 +16,18 @@ The AI Persona System allows you to create, customize, copy, and share complete 
 
 ### Using the GUI
 
-1. Open ForgeAI and navigate to the **Persona** tab
+1. Open Enigma AI Engine and navigate to the **Persona** tab
 2. You'll see your current persona listed (default: "Forge Assistant")
 3. Use the buttons to:
    - **Copy Persona**: Create a variant of any persona
-   - **Export to File**: Save as `.forge-ai` file to share
+   - **Export to File**: Save as `.enigma-engine` file to share
    - **Import from File**: Load a shared persona
    - **Load Template**: Start with a pre-made persona
 
 ### Using Python
 
 ```python
-from forge_ai.core.persona import PersonaManager, AIPersona
+from enigma_engine.core.persona import PersonaManager, AIPersona
 
 # Get the manager
 manager = PersonaManager()
@@ -40,10 +40,10 @@ print(f"Current: {persona.name}")
 copy = manager.copy_persona(persona.id, "My Assistant")
 
 # Export to share
-manager.export_persona(copy.id, Path("my_ai.forge-ai"))
+manager.export_persona(copy.id, Path("my_ai.enigma-engine"))
 
 # Import from file
-imported = manager.import_persona(Path("shared_ai.forge-ai"))
+imported = manager.import_persona(Path("shared_ai.enigma-engine"))
 
 # Switch to a different persona
 manager.set_current_persona(imported.id)
@@ -94,8 +94,8 @@ Load any template in the GUI via "Load Template" button.
 The persona system integrates with the existing `AIPersonality` class:
 
 ```python
-from forge_ai.core.persona import get_persona_manager
-from forge_ai.core.personality import personality_from_persona
+from enigma_engine.core.persona import get_persona_manager
+from enigma_engine.core.personality import personality_from_persona
 
 # Get current persona
 manager = get_persona_manager()
@@ -113,7 +113,7 @@ print(f"Humor level: {personality.traits.humor_level}")
 
 ## File Format
 
-Personas are stored as JSON files with `.forge-ai` extension:
+Personas are stored as JSON files with `.enigma-engine` extension:
 
 ```json
 {
@@ -146,10 +146,10 @@ data/personas/
 ├── my_assistant/
 │   └── ...
 └── templates/
-    ├── helpful_assistant.forge-ai
-    ├── creative_companion.forge-ai
-    ├── technical_expert.forge-ai
-    └── casual_friend.forge-ai
+    ├── helpful_assistant.enigma-engine
+    ├── creative_companion.enigma-engine
+    ├── technical_expert.enigma-engine
+    └── casual_friend.enigma-engine
 ```
 
 ## Advanced Usage
@@ -220,7 +220,7 @@ copy = manager.copy_persona(
 ### Create a Gaming Persona
 
 ```python
-from forge_ai.core.persona import PersonaManager, AIPersona
+from enigma_engine.core.persona import PersonaManager, AIPersona
 
 manager = PersonaManager()
 
@@ -273,7 +273,7 @@ manager.save_persona(tutor)
 
 ## API Reference
 
-See `forge_ai/core/persona.py` for complete API documentation.
+See `enigma_engine/core/persona.py` for complete API documentation.
 
 Key classes:
 - `AIPersona`: Dataclass representing a complete AI identity

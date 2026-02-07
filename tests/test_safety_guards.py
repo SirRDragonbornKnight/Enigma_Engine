@@ -18,7 +18,7 @@ class TestInputValidator:
     
     def test_text_validation_empty_allowed(self):
         """Test empty text when allowed."""
-        from forge_ai.gui.safety_guards import InputValidator
+        from enigma_engine.gui.safety_guards import InputValidator
         
         valid, error = InputValidator.validate_text("", allow_empty=True)
         assert valid is True
@@ -26,7 +26,7 @@ class TestInputValidator:
     
     def test_text_validation_empty_not_allowed(self):
         """Test empty text when not allowed."""
-        from forge_ai.gui.safety_guards import InputValidator
+        from enigma_engine.gui.safety_guards import InputValidator
         
         valid, error = InputValidator.validate_text("", allow_empty=False)
         assert valid is False
@@ -34,7 +34,7 @@ class TestInputValidator:
     
     def test_text_validation_too_long(self):
         """Test text exceeding max length."""
-        from forge_ai.gui.safety_guards import InputValidator
+        from enigma_engine.gui.safety_guards import InputValidator
         
         long_text = "x" * 60000
         valid, error = InputValidator.validate_text(long_text, field_type="chat_message")
@@ -43,7 +43,7 @@ class TestInputValidator:
     
     def test_text_validation_injection_null_byte(self):
         """Test null byte injection detection."""
-        from forge_ai.gui.safety_guards import InputValidator
+        from enigma_engine.gui.safety_guards import InputValidator
         
         # Null byte injection attempt
         valid, error = InputValidator.validate_text("normal\x00text")
@@ -52,21 +52,21 @@ class TestInputValidator:
     
     def test_text_validation_injection_path_traversal(self):
         """Test path traversal injection detection."""
-        from forge_ai.gui.safety_guards import InputValidator
+        from enigma_engine.gui.safety_guards import InputValidator
         
         valid, error = InputValidator.validate_text("../../etc/passwd", check_injection=True)
         assert valid is False
     
     def test_text_validation_injection_template(self):
         """Test template injection detection."""
-        from forge_ai.gui.safety_guards import InputValidator
+        from enigma_engine.gui.safety_guards import InputValidator
         
         valid, error = InputValidator.validate_text("Hello ${user.password}", check_injection=True)
         assert valid is False
     
     def test_text_validation_normal_text(self):
         """Test normal text passes validation."""
-        from forge_ai.gui.safety_guards import InputValidator
+        from enigma_engine.gui.safety_guards import InputValidator
         
         valid, error = InputValidator.validate_text("Hello, this is a normal message!")
         assert valid is True
@@ -74,7 +74,7 @@ class TestInputValidator:
     
     def test_path_validation_traversal(self):
         """Test path traversal detection."""
-        from forge_ai.gui.safety_guards import InputValidator
+        from enigma_engine.gui.safety_guards import InputValidator
         
         valid, error = InputValidator.validate_path("../../../etc/passwd")
         # Path with .. is still allowed if it resolves within bounds
@@ -83,7 +83,7 @@ class TestInputValidator:
     
     def test_path_validation_dangerous_chars(self):
         """Test dangerous character detection in paths."""
-        from forge_ai.gui.safety_guards import InputValidator
+        from enigma_engine.gui.safety_guards import InputValidator
         
         valid, error = InputValidator.validate_path("file<script>.txt")
         assert valid is False
@@ -91,14 +91,14 @@ class TestInputValidator:
     
     def test_path_validation_null_byte(self):
         """Test null byte in path."""
-        from forge_ai.gui.safety_guards import InputValidator
+        from enigma_engine.gui.safety_guards import InputValidator
         
         valid, error = InputValidator.validate_path("file.txt\x00.exe")
         assert valid is False
     
     def test_number_validation_valid(self):
         """Test valid number."""
-        from forge_ai.gui.safety_guards import InputValidator
+        from enigma_engine.gui.safety_guards import InputValidator
         
         valid, error, value = InputValidator.validate_number("42")
         assert valid is True
@@ -106,7 +106,7 @@ class TestInputValidator:
     
     def test_number_validation_bounds(self):
         """Test number bounds checking."""
-        from forge_ai.gui.safety_guards import InputValidator
+        from enigma_engine.gui.safety_guards import InputValidator
         
         valid, error, value = InputValidator.validate_number("150", min_val=0, max_val=100)
         assert valid is False
@@ -114,7 +114,7 @@ class TestInputValidator:
     
     def test_number_validation_invalid(self):
         """Test invalid number format."""
-        from forge_ai.gui.safety_guards import InputValidator
+        from enigma_engine.gui.safety_guards import InputValidator
         
         valid, error, value = InputValidator.validate_number("not_a_number")
         assert valid is False
@@ -122,7 +122,7 @@ class TestInputValidator:
     
     def test_sanitize_for_display(self):
         """Test text sanitization for display."""
-        from forge_ai.gui.safety_guards import InputValidator
+        from enigma_engine.gui.safety_guards import InputValidator
         
         # Test control character removal
         text = "Hello\x00World\x07Test"
@@ -142,7 +142,7 @@ class TestRateLimiter:
     
     def test_rate_limiter_allows_first_action(self):
         """Test first action is allowed."""
-        from forge_ai.gui.safety_guards import RateLimiter
+        from enigma_engine.gui.safety_guards import RateLimiter
         
         limiter = RateLimiter()
         allowed, wait = limiter.check("test_action", min_interval=1.0)
@@ -151,7 +151,7 @@ class TestRateLimiter:
     
     def test_rate_limiter_blocks_rapid_actions(self):
         """Test rapid actions are blocked."""
-        from forge_ai.gui.safety_guards import RateLimiter
+        from enigma_engine.gui.safety_guards import RateLimiter
         
         limiter = RateLimiter()
         
@@ -166,7 +166,7 @@ class TestRateLimiter:
     
     def test_rate_limiter_allows_after_interval(self):
         """Test actions allowed after interval."""
-        from forge_ai.gui.safety_guards import RateLimiter
+        from enigma_engine.gui.safety_guards import RateLimiter
         
         limiter = RateLimiter()
         
@@ -180,7 +180,7 @@ class TestRateLimiter:
     
     def test_rate_limiter_burst_protection(self):
         """Test burst protection kicks in."""
-        from forge_ai.gui.safety_guards import RateLimiter
+        from enigma_engine.gui.safety_guards import RateLimiter
         
         limiter = RateLimiter()
         
@@ -194,7 +194,7 @@ class TestRateLimiter:
     
     def test_rate_limiter_different_actions_independent(self):
         """Test different actions are tracked independently."""
-        from forge_ai.gui.safety_guards import RateLimiter
+        from enigma_engine.gui.safety_guards import RateLimiter
         
         limiter = RateLimiter()
         
@@ -212,7 +212,7 @@ class TestActionHistory:
     
     def test_record_action(self):
         """Test recording an action."""
-        from forge_ai.gui.safety_guards import ActionHistory
+        from enigma_engine.gui.safety_guards import ActionHistory
         
         history = ActionHistory()
         action_id = history.record(
@@ -226,7 +226,7 @@ class TestActionHistory:
     
     def test_can_undo_after_record(self):
         """Test can_undo returns True after recording."""
-        from forge_ai.gui.safety_guards import ActionHistory
+        from enigma_engine.gui.safety_guards import ActionHistory
         
         history = ActionHistory()
         history.record("test", "Test", {"x": 1})
@@ -237,7 +237,7 @@ class TestActionHistory:
     
     def test_cannot_undo_empty_history(self):
         """Test can_undo returns False for empty history."""
-        from forge_ai.gui.safety_guards import ActionHistory
+        from enigma_engine.gui.safety_guards import ActionHistory
         
         history = ActionHistory()
         can_undo, desc = history.can_undo()
@@ -245,7 +245,7 @@ class TestActionHistory:
     
     def test_undo_with_handler(self):
         """Test undo executes handler."""
-        from forge_ai.gui.safety_guards import ActionHistory
+        from enigma_engine.gui.safety_guards import ActionHistory
         
         history = ActionHistory()
         
@@ -265,7 +265,7 @@ class TestActionHistory:
     
     def test_undo_without_handler_fails(self):
         """Test undo fails without registered handler."""
-        from forge_ai.gui.safety_guards import ActionHistory
+        from enigma_engine.gui.safety_guards import ActionHistory
         
         history = ActionHistory()
         history.record("unhandled_type", "Test", {"x": 1})
@@ -276,7 +276,7 @@ class TestActionHistory:
     
     def test_get_history(self):
         """Test getting action history."""
-        from forge_ai.gui.safety_guards import ActionHistory
+        from enigma_engine.gui.safety_guards import ActionHistory
         
         history = ActionHistory()
         history.record("type1", "First action", {})
@@ -289,7 +289,7 @@ class TestActionHistory:
     
     def test_max_history_enforcement(self):
         """Test maximum history limit is enforced."""
-        from forge_ai.gui.safety_guards import ActionHistory
+        from enigma_engine.gui.safety_guards import ActionHistory
         
         history = ActionHistory(max_history=5)
         
@@ -305,7 +305,7 @@ class TestAntiTamper:
     
     def test_protected_settings_blocked(self):
         """Test that protected settings cannot be changed."""
-        from forge_ai.gui.safety_guards import AntiTamper
+        from enigma_engine.gui.safety_guards import AntiTamper
         
         tamper = AntiTamper()
         
@@ -317,7 +317,7 @@ class TestAntiTamper:
     
     def test_setting_bounds_enforced(self):
         """Test that setting bounds are enforced."""
-        from forge_ai.gui.safety_guards import AntiTamper
+        from enigma_engine.gui.safety_guards import AntiTamper
         
         tamper = AntiTamper()
         
@@ -330,7 +330,7 @@ class TestAntiTamper:
     
     def test_valid_setting_change_allowed(self):
         """Test that valid setting changes are allowed."""
-        from forge_ai.gui.safety_guards import AntiTamper
+        from enigma_engine.gui.safety_guards import AntiTamper
         
         tamper = AntiTamper()
         
@@ -341,7 +341,7 @@ class TestAntiTamper:
     
     def test_api_key_format_validation(self):
         """Test API key format validation."""
-        from forge_ai.gui.safety_guards import AntiTamper
+        from enigma_engine.gui.safety_guards import AntiTamper
         
         tamper = AntiTamper()
         
@@ -356,7 +356,7 @@ class TestAntiTamper:
     
     def test_suspicious_activity_logging(self):
         """Test suspicious activity is logged."""
-        from forge_ai.gui.safety_guards import AntiTamper
+        from enigma_engine.gui.safety_guards import AntiTamper
         
         tamper = AntiTamper()
         
@@ -373,7 +373,7 @@ class TestActionSeverity:
     
     def test_severity_mapping(self):
         """Test action severity mapping."""
-        from forge_ai.gui.safety_guards import ACTION_SEVERITY_MAP, ActionSeverity
+        from enigma_engine.gui.safety_guards import ACTION_SEVERITY_MAP, ActionSeverity
         
         assert ACTION_SEVERITY_MAP["read_file"] == ActionSeverity.SAFE
         assert ACTION_SEVERITY_MAP["delete_file"] == ActionSeverity.MODERATE
@@ -386,28 +386,28 @@ class TestSafetyGuardsClass:
     
     def test_initialization(self):
         """Test SafetyGuards initialization."""
-        from forge_ai.gui.safety_guards import SafetyGuards
+        from enigma_engine.gui.safety_guards import SafetyGuards
         
         SafetyGuards.initialize()
         # Should not raise
     
     def test_validate_input(self):
         """Test input validation through SafetyGuards."""
-        from forge_ai.gui.safety_guards import SafetyGuards
+        from enigma_engine.gui.safety_guards import SafetyGuards
         
         valid, error = SafetyGuards.validate_input("Hello world")
         assert valid is True
     
     def test_validate_path(self):
         """Test path validation through SafetyGuards."""
-        from forge_ai.gui.safety_guards import SafetyGuards
+        from enigma_engine.gui.safety_guards import SafetyGuards
         
         valid, error = SafetyGuards.validate_path("/some/valid/path")
         assert valid is True
     
     def test_rate_limit_check(self):
         """Test rate limit check through SafetyGuards."""
-        from forge_ai.gui.safety_guards import SafetyGuards
+        from enigma_engine.gui.safety_guards import SafetyGuards
         
         allowed, wait = SafetyGuards.check_rate_limit("test_action_sg")
         assert allowed is True
@@ -418,7 +418,7 @@ class TestRateLimitDecorator:
     
     def test_decorator_allows_first_call(self):
         """Test decorator allows first call."""
-        from forge_ai.gui.safety_guards import rate_limit
+        from enigma_engine.gui.safety_guards import rate_limit
         
         @rate_limit(min_interval=1.0, action_name="decorator_test_1")
         def test_func():
@@ -429,7 +429,7 @@ class TestRateLimitDecorator:
     
     def test_decorator_blocks_rapid_calls(self):
         """Test decorator blocks rapid calls."""
-        from forge_ai.gui.safety_guards import rate_limit
+        from enigma_engine.gui.safety_guards import rate_limit
         
         call_count = {"value": 0}
         

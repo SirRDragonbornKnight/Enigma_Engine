@@ -1,5 +1,5 @@
 """
-DEEP CODE ANALYSIS - ForgeAI
+DEEP CODE ANALYSIS - Enigma AI Engine
 ============================
 Comprehensive multi-pass analysis for bugs, anti-patterns, and issues.
 """
@@ -233,26 +233,26 @@ def check_imports():
     
     # Key modules to test
     modules_to_test = [
-        'forge_ai',
-        'forge_ai.core',
-        'forge_ai.core.model',
-        'forge_ai.core.tokenizer',
-        'forge_ai.core.inference',
-        'forge_ai.core.training',
-        'forge_ai.core.tool_router',
-        'forge_ai.modules',
-        'forge_ai.modules.manager',
-        'forge_ai.modules.registry',
-        'forge_ai.memory',
-        'forge_ai.memory.manager',
-        'forge_ai.tools',
-        'forge_ai.tools.tool_executor',
-        'forge_ai.gui',
-        'forge_ai.gui.enhanced_window',
-        'forge_ai.voice',
-        'forge_ai.avatar',
-        'forge_ai.comms',
-        'forge_ai.web',
+        'enigma_engine',
+        'enigma_engine.core',
+        'enigma_engine.core.model',
+        'enigma_engine.core.tokenizer',
+        'enigma_engine.core.inference',
+        'enigma_engine.core.training',
+        'enigma_engine.core.tool_router',
+        'enigma_engine.modules',
+        'enigma_engine.modules.manager',
+        'enigma_engine.modules.registry',
+        'enigma_engine.memory',
+        'enigma_engine.memory.manager',
+        'enigma_engine.tools',
+        'enigma_engine.tools.tool_executor',
+        'enigma_engine.gui',
+        'enigma_engine.gui.enhanced_window',
+        'enigma_engine.voice',
+        'enigma_engine.avatar',
+        'enigma_engine.comms',
+        'enigma_engine.web',
     ]
     
     import_errors = []
@@ -277,7 +277,7 @@ def runtime_checks():
     
     # Test 1: Config paths exist
     try:
-        from forge_ai.config import CONFIG
+        from enigma_engine.config import CONFIG
         for key in ['data_dir', 'models_dir', 'logs_dir']:
             path = CONFIG.get(key)
             if path:
@@ -289,7 +289,7 @@ def runtime_checks():
     
     # Test 2: Model creation with all presets
     try:
-        from forge_ai.core.model import create_model, MODEL_PRESETS
+        from enigma_engine.core.model import create_model, MODEL_PRESETS
         for preset in ['nano', 'micro', 'tiny']:  # Only test small ones
             model = create_model(preset)
             del model
@@ -300,7 +300,7 @@ def runtime_checks():
     
     # Test 3: Tokenizer encode/decode roundtrip
     try:
-        from forge_ai.core.tokenizer import get_tokenizer
+        from enigma_engine.core.tokenizer import get_tokenizer
         tok = get_tokenizer()
         test_texts = [
             "Hello world!",
@@ -320,7 +320,7 @@ def runtime_checks():
     
     # Test 4: Module registration
     try:
-        from forge_ai.modules import ModuleManager, register_all
+        from enigma_engine.modules import ModuleManager, register_all
         mgr = ModuleManager()
         register_all(mgr)
         
@@ -335,7 +335,7 @@ def runtime_checks():
     
     # Test 5: Tool definitions
     try:
-        from forge_ai.tools.tool_definitions import get_all_tools
+        from enigma_engine.tools.tool_definitions import get_all_tools
         tools = get_all_tools()
         for tool in tools[:5]:  # Check first 5
             assert hasattr(tool, 'name')
@@ -347,8 +347,8 @@ def runtime_checks():
     
     # Test 6: Memory system
     try:
-        from forge_ai.memory.manager import ConversationManager
-        from forge_ai.memory.vector_db import SimpleVectorDB
+        from enigma_engine.memory.manager import ConversationManager
+        from enigma_engine.memory.vector_db import SimpleVectorDB
         import numpy as np
         
         cm = ConversationManager()
@@ -364,8 +364,8 @@ def runtime_checks():
     try:
         from PyQt5.QtWidgets import QApplication
         app = QApplication.instance() or QApplication([])
-        from forge_ai.gui.enhanced_window import EnhancedMainWindow
-        from forge_ai.gui.tabs import ImageTab, CodeTab, create_chat_tab
+        from enigma_engine.gui.enhanced_window import EnhancedMainWindow
+        from enigma_engine.gui.tabs import ImageTab, CodeTab, create_chat_tab
         print("  ✓ GUI imports")
     except Exception as e:
         issues.append(('gui', str(e)))
@@ -384,7 +384,7 @@ def api_consistency_check():
     
     # Check Tool classes have required attributes
     try:
-        from forge_ai.tools import file_tools, web_tools
+        from enigma_engine.tools import file_tools, web_tools
         
         tool_modules = [file_tools, web_tools]
         for mod in tool_modules:
@@ -404,7 +404,7 @@ def api_consistency_check():
     
     # Check Module classes have required methods
     try:
-        from forge_ai.modules.registry import (
+        from enigma_engine.modules.registry import (
             ModelModule, TokenizerModule, InferenceModule
         )
         
@@ -436,8 +436,8 @@ def thread_safety_check():
         (r'self\.\w+\s*=.*\n.*Thread', "Instance attribute modification near thread start"),
     ]
     
-    forge_ai_path = Path('forge_ai')
-    for pyfile in forge_ai_path.rglob('*.py'):
+    enigma_engine_path = Path('enigma_engine')
+    for pyfile in enigma_engine_path.rglob('*.py'):
         try:
             content = pyfile.read_text(encoding='utf-8', errors='replace')
             
@@ -459,12 +459,12 @@ def thread_safety_check():
 # ===========================================================================
 def main():
     print("=" * 70)
-    print("DEEP CODE ANALYSIS - ForgeAI")
+    print("DEEP CODE ANALYSIS - Enigma AI Engine")
     print("=" * 70)
     
     # Collect all Python files
-    forge_ai_path = Path('forge_ai')
-    py_files = list(forge_ai_path.rglob('*.py'))
+    enigma_engine_path = Path('enigma_engine')
+    py_files = list(enigma_engine_path.rglob('*.py'))
     
     print(f"\nAnalyzing {len(py_files)} Python files...")
     

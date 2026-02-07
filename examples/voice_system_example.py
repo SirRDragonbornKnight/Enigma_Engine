@@ -9,7 +9,7 @@ Demonstrates:
 - Interactive voice customization
 """
 
-from forge_ai.voice import (
+from enigma_engine.voice import (
     VoiceProfile,
     discover_voice,
     describe_voice,
@@ -29,7 +29,7 @@ def example_ai_voice_discovery():
     # Create one first with: personality = AIPersonality("example_model"); personality.save()
     print("\n1. Discovering voice with personality...")
     try:
-        from forge_ai.core.personality import AIPersonality
+        from enigma_engine.core.personality import AIPersonality
         
         # Create a temporary personality for demonstration
         personality = AIPersonality("example_model")
@@ -125,7 +125,7 @@ def example_smart_wake_words():
     """Example: Smart wake word suggestions."""
     print("\n=== Smart Wake Word Suggestions ===")
     
-    ai_names = ["ForgeAI", "Atlas", "Nova"]
+    ai_names = ["Enigma AI Engine", "Atlas", "Nova"]
     
     for name in ai_names:
         suggestions = suggest_wake_phrases(name)
@@ -138,14 +138,14 @@ def example_voice_customization():
     print("\n=== Voice Customization Workflow ===")
     
     # Start with a preset
-    from forge_ai.voice import PRESET_PROFILES
+    from enigma_engine.voice import PRESET_PROFILES
     
     print("\n   Available presets:")
     for name, profile in list(PRESET_PROFILES.items())[:5]:
         print(f"   - {name}: {profile.description}")
     
     # Customize a preset
-    from forge_ai.voice import VoiceCustomizer
+    from enigma_engine.voice import VoiceCustomizer
     customizer = VoiceCustomizer()
     
     custom = customizer.create_from_preset(

@@ -1,9 +1,9 @@
 {
-  "name": "forgeai-vscode",
-  "displayName": "ForgeAI",
-  "description": "AI-powered coding assistant powered by ForgeAI",
+  "name": "Enigma AI Engine-vscode",
+  "displayName": "Enigma AI Engine",
+  "description": "AI-powered coding assistant powered by Enigma AI Engine",
   "version": "1.0.0",
-  "publisher": "forgeai",
+  "publisher": "Enigma AI Engine",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -23,7 +23,7 @@
   "icon": "images/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/forgeai/forgeai-vscode"
+    "url": "https://github.com/Enigma AI Engine/Enigma AI Engine-vscode"
   },
   "activationEvents": [
     "onStartupFinished"
@@ -32,125 +32,125 @@
   "contributes": {
     "commands": [
       {
-        "command": "forgeai.chat",
-        "title": "ForgeAI: Open Chat"
+        "command": "Enigma AI Engine.chat",
+        "title": "Enigma AI Engine: Open Chat"
       },
       {
-        "command": "forgeai.explainCode",
-        "title": "ForgeAI: Explain Code"
+        "command": "Enigma AI Engine.explainCode",
+        "title": "Enigma AI Engine: Explain Code"
       },
       {
-        "command": "forgeai.generateCode",
-        "title": "ForgeAI: Generate Code"
+        "command": "Enigma AI Engine.generateCode",
+        "title": "Enigma AI Engine: Generate Code"
       },
       {
-        "command": "forgeai.refactorCode",
-        "title": "ForgeAI: Refactor Code"
+        "command": "Enigma AI Engine.refactorCode",
+        "title": "Enigma AI Engine: Refactor Code"
       },
       {
-        "command": "forgeai.addComments",
-        "title": "ForgeAI: Add Comments"
+        "command": "Enigma AI Engine.addComments",
+        "title": "Enigma AI Engine: Add Comments"
       },
       {
-        "command": "forgeai.generateTests",
-        "title": "ForgeAI: Generate Tests"
+        "command": "Enigma AI Engine.generateTests",
+        "title": "Enigma AI Engine: Generate Tests"
       },
       {
-        "command": "forgeai.findBugs",
-        "title": "ForgeAI: Find Bugs"
+        "command": "Enigma AI Engine.findBugs",
+        "title": "Enigma AI Engine: Find Bugs"
       },
       {
-        "command": "forgeai.optimizeCode",
-        "title": "ForgeAI: Optimize Code"
+        "command": "Enigma AI Engine.optimizeCode",
+        "title": "Enigma AI Engine: Optimize Code"
       },
       {
-        "command": "forgeai.askAboutFile",
-        "title": "ForgeAI: Ask About This File"
+        "command": "Enigma AI Engine.askAboutFile",
+        "title": "Enigma AI Engine: Ask About This File"
       }
     ],
     "menus": {
       "editor/context": [
         {
-          "command": "forgeai.explainCode",
+          "command": "Enigma AI Engine.explainCode",
           "when": "editorHasSelection",
-          "group": "forgeai@1"
+          "group": "Enigma AI Engine@1"
         },
         {
-          "command": "forgeai.refactorCode",
+          "command": "Enigma AI Engine.refactorCode",
           "when": "editorHasSelection",
-          "group": "forgeai@2"
+          "group": "Enigma AI Engine@2"
         },
         {
-          "command": "forgeai.addComments",
+          "command": "Enigma AI Engine.addComments",
           "when": "editorHasSelection",
-          "group": "forgeai@3"
+          "group": "Enigma AI Engine@3"
         },
         {
-          "command": "forgeai.generateTests",
+          "command": "Enigma AI Engine.generateTests",
           "when": "editorHasSelection",
-          "group": "forgeai@4"
+          "group": "Enigma AI Engine@4"
         },
         {
-          "command": "forgeai.findBugs",
+          "command": "Enigma AI Engine.findBugs",
           "when": "editorHasSelection",
-          "group": "forgeai@5"
+          "group": "Enigma AI Engine@5"
         }
       ]
     },
     "keybindings": [
       {
-        "command": "forgeai.chat",
+        "command": "Enigma AI Engine.chat",
         "key": "ctrl+shift+f",
         "mac": "cmd+shift+f"
       },
       {
-        "command": "forgeai.generateCode",
+        "command": "Enigma AI Engine.generateCode",
         "key": "ctrl+shift+g",
         "mac": "cmd+shift+g"
       },
       {
-        "command": "forgeai.explainCode",
+        "command": "Enigma AI Engine.explainCode",
         "key": "ctrl+shift+e",
         "mac": "cmd+shift+e",
         "when": "editorHasSelection"
       }
     ],
     "configuration": {
-      "title": "ForgeAI",
+      "title": "Enigma AI Engine",
       "properties": {
-        "forgeai.apiUrl": {
+        "Enigma AI Engine.apiUrl": {
           "type": "string",
           "default": "http://localhost:8000",
-          "description": "URL of the ForgeAI API server"
+          "description": "URL of the Enigma AI Engine API server"
         },
-        "forgeai.apiKey": {
+        "Enigma AI Engine.apiKey": {
           "type": "string",
           "default": "",
           "description": "API key for authentication (optional)"
         },
-        "forgeai.model": {
+        "Enigma AI Engine.model": {
           "type": "string",
           "default": "default",
           "description": "Model to use for code generation"
         },
-        "forgeai.maxTokens": {
+        "Enigma AI Engine.maxTokens": {
           "type": "number",
           "default": 2048,
           "description": "Maximum tokens in response"
         },
-        "forgeai.temperature": {
+        "Enigma AI Engine.temperature": {
           "type": "number",
           "default": 0.7,
           "minimum": 0,
           "maximum": 2,
           "description": "Temperature for generation (0-2)"
         },
-        "forgeai.inlineCompletions": {
+        "Enigma AI Engine.inlineCompletions": {
           "type": "boolean",
           "default": true,
           "description": "Enable inline code completions"
         },
-        "forgeai.autoSuggest": {
+        "Enigma AI Engine.autoSuggest": {
           "type": "boolean",
           "default": false,
           "description": "Automatically suggest improvements"
@@ -160,21 +160,21 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "forgeai",
-          "title": "ForgeAI",
+          "id": "Enigma AI Engine",
+          "title": "Enigma AI Engine",
           "icon": "images/icon.svg"
         }
       ]
     },
     "views": {
-      "forgeai": [
+      "Enigma AI Engine": [
         {
-          "id": "forgeai.chat",
+          "id": "Enigma AI Engine.chat",
           "name": "Chat",
           "type": "webview"
         },
         {
-          "id": "forgeai.history",
+          "id": "Enigma AI Engine.history",
           "name": "History"
         }
       ]

@@ -43,7 +43,7 @@ class ControlPriority(IntEnum):
 
 ## Files Modified & Integrated
 
-### 1. forge_ai/avatar/controller.py
+### 1. enigma_engine/avatar/controller.py
 - Added `ControlPriority` enum with 6 priority levels
 - Added `_control_lock`, `_current_controller`, `_current_priority` tracking
 - Added `request_control()` and `release_control()` methods
@@ -51,19 +51,19 @@ class ControlPriority(IntEnum):
 - Bone controller auto-detection on model upload
 - Modified `move_to()` and `set_expression()` to request control first
 
-### 2. forge_ai/avatar/bone_control.py
+### 2. enigma_engine/avatar/bone_control.py
 - Updated docstring to mark as PRIMARY control system
 - Added `link_avatar_controller()` method
 - Modified `move_bone()` to request BONE_ANIMATION priority
 - Updated `get_bone_controller()` to accept avatar_controller parameter for linking
 
-### 3. forge_ai/avatar/autonomous.py
+### 3. enigma_engine/avatar/autonomous.py
 - Updated docstring to mark as FALLBACK system
 - Modified mood changes to use AUTONOMOUS priority
 - Modified expression changes to use AUTONOMOUS priority
 - Added try/except for backward compatibility
 
-### 4. forge_ai/avatar/__init__.py
+### 4. enigma_engine/avatar/__init__.py
 - Exported `ControlPriority` for use in other modules
 
 ### 5. .github/copilot-instructions.md
@@ -84,8 +84,8 @@ Demo showing:
 ## Usage Example
 
 ```python
-from forge_ai.avatar import get_avatar, ControlPriority
-from forge_ai.avatar.bone_control import get_bone_controller
+from enigma_engine.avatar import get_avatar, ControlPriority
+from enigma_engine.avatar.bone_control import get_bone_controller
 
 # Setup
 avatar = get_avatar()
@@ -127,17 +127,17 @@ Old code that doesn't use the priority system still works:
 
 ### New Files for AI Control
 
-**forge_ai/tools/avatar_control_tool.py**
+**enigma_engine/tools/avatar_control_tool.py**
 - Tool definition: `control_avatar_bones`
 - Function: `execute_avatar_control()`
 - AI can call as a tool like web_search or generate_image
 
-**forge_ai/avatar/ai_control.py**
+**enigma_engine/avatar/ai_control.py**
 - Parses `<bone_control>` tags from AI responses
 - `BoneCommand` class for structured commands
 - Predefined gestures: nod, wave, shake, shrug, point, etc.
 
-**forge_ai/tools/tool_executor.py**
+**enigma_engine/tools/tool_executor.py**
 - Method: `_execute_control_avatar_bones()`
 - Routes tool calls to avatar control system
 
@@ -151,7 +151,7 @@ Old code that doesn't use the priority system still works:
 ### Quick Training
 
 ```bash
-cd /home/pi/ForgeAI
+cd /home/pi/Enigma AI Engine
 python scripts/train_avatar_control.py
 ```
 

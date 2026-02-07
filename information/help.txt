@@ -14,7 +14,7 @@ Ctrl+Shift+F4       Emergency quit (force close)
 
 VOICE COMMANDS
 --------------
-Say "Hey ForgeAI" then speak your command:
+Say "Hey Enigma AI Engine" then speak your command:
 - "Take a screenshot"
 - "Generate an image of a sunset"
 - "What's on my screen?"

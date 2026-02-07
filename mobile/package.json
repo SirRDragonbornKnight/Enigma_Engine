@@ -1,7 +1,7 @@
 {
-  "name": "forgeai-mobile",
+  "name": "Enigma AI Engine-mobile",
   "version": "1.0.0",
-  "description": "ForgeAI Mobile App - Cross-platform AI assistant",
+  "description": "Enigma AI Engine Mobile App - Cross-platform AI assistant",
   "main": "index.js",
   "scripts": {
     "start": "expo start",

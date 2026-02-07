@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-ForgeAI API Server & Networking Example
+Enigma AI Engine API Server & Networking Example
 ========================================
 
-Complete example showing how to use ForgeAI's networking including:
+Complete example showing how to use Enigma AI Engine's networking including:
 - REST API server for remote access
 - Multi-device networking (distributed inference)
 - Client connections
 - Security and authentication
 
-ForgeAI can run as a server that other applications can connect to,
-or participate in a network of ForgeAI instances for distributed computing.
+Enigma AI Engine can run as a server that other applications can connect to,
+or participate in a network of Enigma AI Engine instances for distributed computing.
 
 Dependencies:
     pip install flask flask-cors requests
@@ -53,7 +53,7 @@ class APIServerSimulator:
     """
     Simulated REST API server for demonstration.
     
-    In real usage, use forge_ai.comms.api_server which provides:
+    In real usage, use enigma_engine.comms.api_server which provides:
     - Chat completions endpoint
     - Model info endpoint
     - Generation endpoints (image, code, etc.)
@@ -170,9 +170,9 @@ class APIServerSimulator:
         return {
             "object": "list",
             "data": [
-                {"id": "forge-nano", "object": "model", "owned_by": "forgeai"},
-                {"id": "forge-small", "object": "model", "owned_by": "forgeai"},
-                {"id": "forge-medium", "object": "model", "owned_by": "forgeai"},
+                {"id": "forge-nano", "object": "model", "owned_by": "Enigma AI Engine"},
+                {"id": "forge-small", "object": "model", "owned_by": "Enigma AI Engine"},
+                {"id": "forge-medium", "object": "model", "owned_by": "Enigma AI Engine"},
             ]
         }
     
@@ -204,7 +204,7 @@ class APIServerSimulator:
 
 class ForgeClient:
     """
-    Client for connecting to ForgeAI API server.
+    Client for connecting to Enigma AI Engine API server.
     
     Compatible with OpenAI API format for easy integration.
     """
@@ -309,7 +309,7 @@ class ForgeClient:
 
 @dataclass
 class NetworkNode:
-    """A node in the ForgeAI network."""
+    """A node in the Enigma AI Engine network."""
     node_id: str
     host: str
     port: int
@@ -320,9 +320,9 @@ class NetworkNode:
 
 class ForgeNetwork:
     """
-    Multi-device networking for distributed ForgeAI.
+    Multi-device networking for distributed Enigma AI Engine.
     
-    Allows multiple ForgeAI instances to:
+    Allows multiple Enigma AI Engine instances to:
     - Share model inference load
     - Specialize in different tasks
     - Provide redundancy
@@ -359,7 +359,7 @@ class ForgeNetwork:
     
     def discover_nodes(self, broadcast_addr: str = "255.255.255.255"):
         """
-        Discover other ForgeAI nodes on the network.
+        Discover other Enigma AI Engine nodes on the network.
         
         Uses UDP broadcast to find nodes.
         """
@@ -583,9 +583,9 @@ def example_openai_compatible():
     print("Example 4: OpenAI-Compatible API")
     print("="*60)
     
-    print("ForgeAI server is OpenAI API compatible!")
+    print("Enigma AI Engine server is OpenAI API compatible!")
     print("""
-    # Start ForgeAI server
+    # Start Enigma AI Engine server
     python run.py --serve --port 5000
     
     # Use with OpenAI Python library
@@ -608,15 +608,15 @@ def example_openai_compatible():
 
 
 def example_forge_integration():
-    """Real ForgeAI integration."""
+    """Real Enigma AI Engine integration."""
     print("\n" + "="*60)
-    print("Example 5: ForgeAI Integration")
+    print("Example 5: Enigma AI Engine Integration")
     print("="*60)
     
-    print("For actual ForgeAI networking:")
+    print("For actual Enigma AI Engine networking:")
     print("""
     # Start API server
-    from forge_ai.comms.api_server import create_api_server
+    from enigma_engine.comms.api_server import create_api_server
     
     app = create_api_server(
         model_path="models/forge-small",
@@ -628,14 +628,14 @@ def example_forge_integration():
     python run.py --serve --port 5000
     
     # Multi-device networking
-    from forge_ai.comms.network import ForgeNode
+    from enigma_engine.comms.network import ForgeNode
     
     node = ForgeNode(capabilities=["chat", "image_gen"])
     node.start(port=5001)
     node.discover_peers()
     
     # The network automatically:
-    # - Discovers other ForgeAI instances
+    # - Discovers other Enigma AI Engine instances
     # - Routes requests to appropriate nodes
     # - Balances load across nodes
     # - Handles node failures gracefully
@@ -647,7 +647,7 @@ def example_forge_integration():
 # =============================================================================
 
 if __name__ == "__main__":
-    print("ForgeAI API Server & Networking Examples")
+    print("Enigma AI Engine API Server & Networking Examples")
     print("="*60)
     
     example_api_server()

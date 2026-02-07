@@ -2,7 +2,7 @@
 
 ## Overview
 
-The AI Overlay is a transparent, always-on-top window that allows you to interact with ForgeAI while gaming or using other applications. It floats above all windows, providing quick AI access without leaving your current application.
+The AI Overlay is a transparent, always-on-top window that allows you to interact with Enigma AI Engine while gaming or using other applications. It floats above all windows, providing quick AI access without leaving your current application.
 
 ## Features
 
@@ -80,14 +80,14 @@ Can be toggled if you need it to behave like a normal window.
 ### Opening the Overlay
 
 #### From Main GUI:
-1. Open ForgeAI
+1. Open Enigma AI Engine
 2. Go to Settings tab
 3. Find "AI Overlay" section
 4. Click "Show Overlay"
 
 #### From Code:
 ```python
-from forge_ai.gui.overlay import AIOverlay, OverlayMode
+from enigma_engine.gui.overlay import AIOverlay, OverlayMode
 
 # Create overlay
 overlay = AIOverlay()
@@ -114,7 +114,7 @@ overlay.show()
 
 #### From Code:
 ```python
-from forge_ai.gui.overlay import AIOverlay, OverlayMode, OverlayPosition
+from enigma_engine.gui.overlay import AIOverlay, OverlayMode, OverlayPosition
 
 overlay = AIOverlay()
 
@@ -137,8 +137,8 @@ overlay.set_click_through(True)
 ### Using with AI Engine
 
 ```python
-from forge_ai.core.inference import ForgeEngine
-from forge_ai.gui.overlay import AIOverlay
+from enigma_engine.core.inference import ForgeEngine
+from enigma_engine.gui.overlay import AIOverlay
 
 # Create engine
 engine = ForgeEngine(model, tokenizer)
@@ -155,7 +155,7 @@ overlay.show()
 
 ### Default Settings
 
-Settings are stored in `forge_ai/config/defaults.py`:
+Settings are stored in `enigma_engine/config/defaults.py`:
 
 ```python
 "overlay": {
@@ -218,7 +218,7 @@ The overlay includes detection for known anti-cheat systems and will warn if pot
 
 1. Check if overlay is enabled in config:
    ```python
-   from forge_ai.config import CONFIG
+   from enigma_engine.config import CONFIG
    print(CONFIG.get("overlay", {}).get("enabled"))
    ```
 
@@ -347,4 +347,4 @@ When adding new features to the overlay:
 
 ## License
 
-Part of the ForgeAI project. See main LICENSE file.
+Part of the Enigma AI Engine project. See main LICENSE file.

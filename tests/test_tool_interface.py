@@ -6,7 +6,7 @@ Tests for the tool interface that allows AI to invoke tools.
 """
 
 import pytest
-from forge_ai.core.tool_interface import (
+from enigma_engine.core.tool_interface import (
     ToolInterface, ToolCall, ToolResult,
     create_tool_interface, parse_and_execute_tool
 )

@@ -1,5 +1,5 @@
 """
-EXTENDED FUNCTIONAL TESTS - ForgeAI
+EXTENDED FUNCTIONAL TESTS - Enigma AI Engine
 ====================================
 Tests edge cases, error handling, and integration points.
 """
@@ -37,7 +37,7 @@ def test(name):
     return decorator
 
 print("=" * 70)
-print("EXTENDED FUNCTIONAL TESTS - ForgeAI")
+print("EXTENDED FUNCTIONAL TESTS - Enigma AI Engine")
 print("=" * 70)
 
 # ===========================================================================
@@ -47,8 +47,8 @@ print("\n[1/10] MODEL EDGE CASES")
 
 @test("Model handles empty input")
 def t1():
-    from forge_ai.core.model import create_model
-    from forge_ai.core.tokenizer import get_tokenizer
+    from enigma_engine.core.model import create_model
+    from enigma_engine.core.tokenizer import get_tokenizer
     import torch
     
     model = create_model('nano')
@@ -65,8 +65,8 @@ def t1():
 
 @test("Model handles long input (truncation)")
 def t2():
-    from forge_ai.core.model import create_model
-    from forge_ai.core.tokenizer import get_tokenizer
+    from enigma_engine.core.model import create_model
+    from enigma_engine.core.tokenizer import get_tokenizer
     import torch
     
     model = create_model('nano')
@@ -82,8 +82,8 @@ def t2():
 
 @test("Model handles special characters")
 def t3():
-    from forge_ai.core.model import create_model
-    from forge_ai.core.tokenizer import get_tokenizer
+    from enigma_engine.core.model import create_model
+    from enigma_engine.core.tokenizer import get_tokenizer
     import torch
     
     model = create_model('nano')
@@ -107,9 +107,9 @@ print("\n[2/10] INFERENCE ENGINE EDGE CASES")
 
 @test("ForgeEngine handles streaming")
 def t4():
-    from forge_ai.core.inference import ForgeEngine
-    from forge_ai.core.model import create_model
-    from forge_ai.core.tokenizer import get_tokenizer
+    from enigma_engine.core.inference import ForgeEngine
+    from enigma_engine.core.model import create_model
+    from enigma_engine.core.tokenizer import get_tokenizer
     
     model = create_model('nano')
     tok = get_tokenizer()
@@ -120,9 +120,9 @@ def t4():
 
 @test("ForgeEngine handles max_gen edge case")
 def t5():
-    from forge_ai.core.inference import ForgeEngine
-    from forge_ai.core.model import create_model
-    from forge_ai.core.tokenizer import get_tokenizer
+    from enigma_engine.core.inference import ForgeEngine
+    from enigma_engine.core.model import create_model
+    from enigma_engine.core.tokenizer import get_tokenizer
     
     model = create_model('nano')
     tok = get_tokenizer()
@@ -141,9 +141,9 @@ def t5():
 
 @test("ForgeEngine handles temperature extremes")
 def t6():
-    from forge_ai.core.inference import ForgeEngine
-    from forge_ai.core.model import create_model
-    from forge_ai.core.tokenizer import get_tokenizer
+    from enigma_engine.core.inference import ForgeEngine
+    from enigma_engine.core.model import create_model
+    from enigma_engine.core.tokenizer import get_tokenizer
     
     model = create_model('nano')
     tok = get_tokenizer()
@@ -167,7 +167,7 @@ print("\n[3/10] MEMORY SYSTEM EDGE CASES")
 
 @test("ConversationManager handles unicode")
 def t7():
-    from forge_ai.memory.manager import ConversationManager
+    from enigma_engine.memory.manager import ConversationManager
     
     cm = ConversationManager()
     test_data = [{"role": "user", "content": "你好世界 🌍 Привет"}]
@@ -184,7 +184,7 @@ def t7():
 
 @test("ConversationManager handles empty conversation")
 def t8():
-    from forge_ai.memory.manager import ConversationManager
+    from enigma_engine.memory.manager import ConversationManager
     
     cm = ConversationManager()
     cm.save_conversation("_test_empty_", [])
@@ -200,7 +200,7 @@ def t8():
 
 @test("SimpleVectorDB handles zero vector")
 def t9():
-    from forge_ai.memory.vector_db import SimpleVectorDB
+    from enigma_engine.memory.vector_db import SimpleVectorDB
     import numpy as np
     
     db = SimpleVectorDB(dim=4)
@@ -222,7 +222,7 @@ print("\n[4/10] TOOL SYSTEM EDGE CASES")
 
 @test("ReadFileTool handles nonexistent file")
 def t10():
-    from forge_ai.tools.file_tools import ReadFileTool
+    from enigma_engine.tools.file_tools import ReadFileTool
     
     tool = ReadFileTool()
     result = tool.execute(path="/nonexistent/file/path.txt")
@@ -230,7 +230,7 @@ def t10():
 
 @test("ListDirectoryTool handles nonexistent dir")
 def t11():
-    from forge_ai.tools.file_tools import ListDirectoryTool
+    from enigma_engine.tools.file_tools import ListDirectoryTool
     
     tool = ListDirectoryTool()
     result = tool.execute(path="/nonexistent/directory/")
@@ -238,7 +238,7 @@ def t11():
 
 @test("WriteFileTool creates parent directories")
 def t12():
-    from forge_ai.tools.file_tools import WriteFileTool
+    from enigma_engine.tools.file_tools import WriteFileTool
     import tempfile
     import os
     
@@ -267,7 +267,7 @@ print("\n[5/10] MODULE SYSTEM EDGE CASES")
 
 @test("ModuleManager handles double load")
 def t13():
-    from forge_ai.modules import ModuleManager, register_all
+    from enigma_engine.modules import ModuleManager, register_all
     
     mgr = ModuleManager()
     register_all(mgr)
@@ -281,7 +281,7 @@ def t13():
 
 @test("ModuleManager handles unload of unloaded module")
 def t14():
-    from forge_ai.modules import ModuleManager, register_all
+    from enigma_engine.modules import ModuleManager, register_all
     
     mgr = ModuleManager()
     register_all(mgr)
@@ -292,7 +292,7 @@ def t14():
 
 @test("ModuleManager can_load checks dependencies")
 def t15():
-    from forge_ai.modules import ModuleManager, register_all
+    from enigma_engine.modules import ModuleManager, register_all
     
     mgr = ModuleManager()
     register_all(mgr)
@@ -312,7 +312,7 @@ print("\n[6/10] TOOL ROUTER EDGE CASES")
 
 @test("ToolRouter handles empty string")
 def t16():
-    from forge_ai.core.tool_router import get_router
+    from enigma_engine.core.tool_router import get_router
     
     router = get_router(use_specialized=False)
     intent = router.classify_intent("")
@@ -320,7 +320,7 @@ def t16():
 
 @test("ToolRouter handles very long input")
 def t17():
-    from forge_ai.core.tool_router import get_router
+    from enigma_engine.core.tool_router import get_router
     
     router = get_router(use_specialized=False)
     long_text = "Please write code. " * 100
@@ -329,7 +329,7 @@ def t17():
 
 @test("ToolRouter handles special characters")
 def t18():
-    from forge_ai.core.tool_router import get_router
+    from enigma_engine.core.tool_router import get_router
     
     router = get_router(use_specialized=False)
     intent = router.classify_intent("@#$%^&*()")
@@ -346,8 +346,8 @@ print("\n[7/10] TRAINING SYSTEM EDGE CASES")
 
 @test("TextDataset handles short texts")
 def t19():
-    from forge_ai.core.training import TextDataset
-    from forge_ai.core.tokenizer import get_tokenizer
+    from enigma_engine.core.training import TextDataset
+    from enigma_engine.core.tokenizer import get_tokenizer
     
     tok = get_tokenizer()
     # Very short text
@@ -356,8 +356,8 @@ def t19():
 
 @test("TextDataset handles empty list")
 def t20():
-    from forge_ai.core.training import TextDataset
-    from forge_ai.core.tokenizer import get_tokenizer
+    from enigma_engine.core.training import TextDataset
+    from enigma_engine.core.tokenizer import get_tokenizer
     
     tok = get_tokenizer()
     ds = TextDataset([], tok, max_length=32)
@@ -365,7 +365,7 @@ def t20():
 
 @test("TrainingConfig validates parameters")
 def t21():
-    from forge_ai.core.training import TrainingConfig
+    from enigma_engine.core.training import TrainingConfig
     
     # Test with valid parameters
     cfg = TrainingConfig(epochs=1, batch_size=1, learning_rate=0.001)
@@ -385,7 +385,7 @@ def t22():
     from PyQt5.QtWidgets import QApplication
     app = QApplication.instance() or QApplication([])
     
-    from forge_ai.gui.enhanced_window import EnhancedMainWindow
+    from enigma_engine.gui.enhanced_window import EnhancedMainWindow
     # Should create without engine pre-loaded
     window = EnhancedMainWindow()
     result = window is not None
@@ -397,8 +397,8 @@ def t23():
     from PyQt5.QtWidgets import QApplication
     app = QApplication.instance() or QApplication([])
     
-    from forge_ai.gui.tabs.modules_tab import ModulesTab
-    from forge_ai.modules import ModuleManager, register_all
+    from enigma_engine.gui.tabs.modules_tab import ModulesTab
+    from enigma_engine.modules import ModuleManager, register_all
     
     mgr = ModuleManager()
     register_all(mgr)
@@ -413,7 +413,7 @@ def t24():
     from PyQt5.QtWidgets import QApplication
     app = QApplication.instance() or QApplication([])
     
-    from forge_ai.gui.tabs.image_tab import ImageTab
+    from enigma_engine.gui.tabs.image_tab import ImageTab
     tab = ImageTab()
     result = tab is not None
     tab.deleteLater()
@@ -430,7 +430,7 @@ print("\n[9/10] CONFIG AND PATH HANDLING")
 
 @test("CONFIG handles missing keys gracefully")
 def t25():
-    from forge_ai.config import CONFIG
+    from enigma_engine.config import CONFIG
     
     # Non-existent key should return None or default
     val = CONFIG.get("nonexistent_key_12345", "default")
@@ -438,7 +438,7 @@ def t25():
 
 @test("Paths are created properly")
 def t26():
-    from forge_ai.config import CONFIG
+    from enigma_engine.config import CONFIG
     
     # Check that core directories exist or can be created
     for key in ['data_dir', 'models_dir', 'logs_dir']:
@@ -450,7 +450,7 @@ def t26():
 
 @test("Security path blocking works")
 def t27():
-    from forge_ai.utils.security import is_path_blocked, get_blocked_paths
+    from enigma_engine.utils.security import is_path_blocked, get_blocked_paths
     
     # Should have some blocked paths
     blocked = get_blocked_paths()
@@ -471,9 +471,9 @@ print("\n[10/10] INTEGRATION TESTS")
 
 @test("Full pipeline: tokenize -> model -> generate")
 def t28():
-    from forge_ai.core.model import create_model
-    from forge_ai.core.tokenizer import get_tokenizer
-    from forge_ai.core.inference import ForgeEngine
+    from enigma_engine.core.model import create_model
+    from enigma_engine.core.tokenizer import get_tokenizer
+    from enigma_engine.core.inference import ForgeEngine
     
     # Create all components
     model = create_model('nano')
@@ -486,7 +486,7 @@ def t28():
 
 @test("Module + Memory integration")
 def t29():
-    from forge_ai.modules import ModuleManager, register_all
+    from enigma_engine.modules import ModuleManager, register_all
     
     mgr = ModuleManager()
     register_all(mgr)
@@ -505,8 +505,8 @@ def t29():
 
 @test("Tool execution integration")
 def t30():
-    from forge_ai.tools.tool_executor import ToolExecutor
-    from forge_ai.tools.file_tools import ReadFileTool
+    from enigma_engine.tools.tool_executor import ToolExecutor
+    from enigma_engine.tools.file_tools import ReadFileTool
     
     executor = ToolExecutor()
     

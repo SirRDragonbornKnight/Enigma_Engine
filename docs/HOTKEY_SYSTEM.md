@@ -2,29 +2,29 @@
 
 ## Overview
 
-The global hotkey system allows users to summon ForgeAI from anywhere, even when the application is not focused or when playing fullscreen games. This is implemented through platform-specific backends that register system-wide keyboard shortcuts.
+The global hotkey system allows users to summon Enigma AI Engine from anywhere, even when the application is not focused or when playing fullscreen games. This is implemented through platform-specific backends that register system-wide keyboard shortcuts.
 
 ## Architecture
 
 ### Core Components
 
-1. **HotkeyManager** (`forge_ai/core/hotkey_manager.py`)
+1. **HotkeyManager** (`enigma_engine/core/hotkey_manager.py`)
    - Central management of all hotkeys
    - Platform detection and backend initialization
    - Hotkey registration/unregistration
    - Singleton pattern for global access
 
-2. **Platform Backends** (`forge_ai/core/hotkeys/`)
+2. **Platform Backends** (`enigma_engine/core/hotkeys/`)
    - **Windows** (`windows.py`): Uses Windows API via ctypes
    - **Linux** (`linux.py`): Uses python-xlib or keyboard library
    - **macOS** (`macos.py`): Uses Quartz Event Taps or keyboard library
 
-3. **HotkeyActions** (`forge_ai/core/hotkey_actions.py`)
+3. **HotkeyActions** (`enigma_engine/core/hotkey_actions.py`)
    - Callable actions triggered by hotkeys
    - Integration with GUI overlay system
    - Voice input, screenshot, and game mode actions
 
-4. **Configuration Widget** (`forge_ai/gui/widgets/hotkey_config.py`)
+4. **Configuration Widget** (`enigma_engine/gui/widgets/hotkey_config.py`)
    - GUI for rebinding hotkeys
    - Conflict detection
    - Visual feedback
@@ -70,8 +70,8 @@ Hotkeys can be configured in:
 ### Programmatic Usage
 
 ```python
-from forge_ai.core.hotkey_manager import get_hotkey_manager, DEFAULT_HOTKEYS
-from forge_ai.core.hotkey_actions import get_hotkey_actions
+from enigma_engine.core.hotkey_manager import get_hotkey_manager, DEFAULT_HOTKEYS
+from enigma_engine.core.hotkey_actions import get_hotkey_actions
 
 # Get manager instance
 manager = get_hotkey_manager()
@@ -99,7 +99,7 @@ manager.unregister("custom_hotkey")
 ### Custom Actions
 
 ```python
-from forge_ai.core.hotkey_manager import get_hotkey_manager
+from enigma_engine.core.hotkey_manager import get_hotkey_manager
 
 def my_custom_action():
     print("Custom hotkey pressed!")
@@ -176,13 +176,13 @@ Check the logs for initialization errors:
 import logging
 logging.basicConfig(level=logging.DEBUG)
 
-from forge_ai.core.hotkey_manager import get_hotkey_manager
+from enigma_engine.core.hotkey_manager import get_hotkey_manager
 manager = get_hotkey_manager()
 ```
 
 ## Security Considerations
 
-- Hotkeys work globally, even when ForgeAI is not focused
+- Hotkeys work globally, even when Enigma AI Engine is not focused
 - Be careful with sensitive operations
 - Consider disabling hotkeys in secure environments
 - Hotkey actions should validate permissions

@@ -1,10 +1,10 @@
-# ForgeAI GUI Architecture
+# Enigma AI Engine GUI Architecture
 
 ## Mode-Based Tab Visibility
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    ForgeAI - GUI Mode System                     │
+│                    Enigma AI Engine - GUI Mode System                     │
 └─────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────┐
@@ -250,4 +250,4 @@ Update UI Instantly
 ```
 
 ---
-This architecture provides flexibility, scalability, and a clean separation of concerns while maintaining backward compatibility with all existing ForgeAI features.
+This architecture provides flexibility, scalability, and a clean separation of concerns while maintaining backward compatibility with all existing Enigma AI Engine features.

@@ -2,7 +2,7 @@
 
 ## What Was Built
 
-The self-improvement system is now **fully integrated** into ForgeAI! Your AI can now:
+The self-improvement system is now **fully integrated** into Enigma AI Engine! Your AI can now:
 - ✅ Learn from user feedback (thumbs up/down)
 - ✅ Automatically collect high-quality training examples
 - ✅ Track its own performance metrics
@@ -13,7 +13,7 @@ The self-improvement system is now **fully integrated** into ForgeAI! Your AI ca
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                     FORGEAI MAIN WINDOW                          │
+│                     Enigma AI Engine MAIN WINDOW                          │
 ├─────────────────────────────────────────────────────────────────┤
 │  Sidebar Navigation:                                             │
 │    • Chat                    ← Talk to AI                       │
@@ -80,7 +80,7 @@ Just click the feedback links that appear under AI responses:
 - **Critique**: Provide detailed feedback with suggested improvements
 
 ### 2. View Learning Progress
-1. Open ForgeAI
+1. Open Enigma AI Engine
 2. Click "**Learning**" in the sidebar (under SYSTEM section)
 3. See real-time metrics:
    - How many conversations analyzed
@@ -110,7 +110,7 @@ In the Learning tab, check "**Enable Autonomous Learning**":
 
 ## Configuration
 
-Edit `forge_config.json` or use the defaults in `forge_ai/config/defaults.py`:
+Edit `forge_config.json` or use the defaults in `enigma_engine/config/defaults.py`:
 
 ```json
 {
@@ -226,15 +226,15 @@ learning/
 The system is ready for:
 1. ✅ Testing with real conversations
 2. ✅ Collecting feedback from users
-3. ⏳ Full LoRA training integration (connects to `forge_ai/core/training.py`)
+3. ⏳ Full LoRA training integration (connects to `enigma_engine/core/training.py`)
 4. ⏳ Advanced features (federated learning, critic models, A/B testing)
 
 ## Support
 
 For issues or questions:
 1. Check `SELF_IMPROVEMENT_INTEGRATION.md` for technical details
-2. View `forge_ai/learning/training_scheduler.py` for scheduler logic
-3. See `forge_ai/core/self_improvement.py` for learning engine
+2. View `enigma_engine/learning/training_scheduler.py` for scheduler logic
+3. See `enigma_engine/core/self_improvement.py` for learning engine
 4. Check logs in `logs/` directory
 
 ---

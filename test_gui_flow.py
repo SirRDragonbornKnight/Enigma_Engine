@@ -3,8 +3,8 @@ import sys
 sys.path.insert(0, '.')
 
 import torch
-from forge_ai.core.model_registry import ModelRegistry
-from forge_ai.core.inference import ForgeEngine
+from enigma_engine.core.model_registry import ModelRegistry
+from enigma_engine.core.inference import ForgeEngine
 
 # Load model through registry (like GUI)
 r = ModelRegistry()
@@ -29,7 +29,7 @@ engine.model = model
 # Set tokenizer
 use_custom_tokenizer = config.get("use_custom_tokenizer", False)
 if use_custom_tokenizer:
-    from forge_ai.core.tokenizer import load_tokenizer
+    from enigma_engine.core.tokenizer import load_tokenizer
     engine.tokenizer = load_tokenizer()
     engine._using_custom_tokenizer = True
 else:

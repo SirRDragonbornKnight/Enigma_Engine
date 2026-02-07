@@ -22,8 +22,8 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from forge_ai.modules import ModuleManager
-from forge_ai.tools.tool_executor import ToolExecutor
+from enigma_engine.modules import ModuleManager
+from enigma_engine.tools.tool_executor import ToolExecutor
 
 
 def example_basic_gif():

@@ -22,7 +22,7 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from forge_ai.tools.tool_executor import ToolExecutor
+from enigma_engine.tools.tool_executor import ToolExecutor
 
 
 def create_test_image():

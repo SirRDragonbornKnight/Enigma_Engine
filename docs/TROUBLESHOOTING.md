@@ -1,6 +1,6 @@
-# ForgeAI Troubleshooting Guide
+# Enigma AI Engine Troubleshooting Guide
 
-Quick solutions to common issues. Can't find your problem? Check the [GitHub Issues](https://github.com/SirRDragonbornKnight/Forge_AI/issues).
+Quick solutions to common issues. Can't find your problem? Check the [GitHub Issues](https://github.com/SirRDragonbornKnight/enigma_engine/issues).
 
 ---
 
@@ -227,7 +227,7 @@ pipwin install pyaudio
 ## Getting Help
 
 1. **Check logs**: Look in `logs/` folder for detailed error messages
-2. **GitHub Issues**: [Report a bug](https://github.com/SirRDragonbornKnight/Forge_AI/issues)
+2. **GitHub Issues**: [Report a bug](https://github.com/SirRDragonbornKnight/enigma_engine/issues)
 3. **Debug mode**: Run with `--debug` flag for verbose output:
    ```bash
    python run.py --gui --debug
@@ -239,5 +239,5 @@ Run this to check your setup:
 ```bash
 python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA: {torch.cuda.is_available()}')"
 python -c "from PyQt5.QtWidgets import QApplication; print('PyQt5: OK')"
-python -c "from forge_ai.core.model import Forge; print('ForgeAI: OK')"
+python -c "from enigma_engine.core.model import Forge; print('Enigma AI Engine: OK')"
 ```

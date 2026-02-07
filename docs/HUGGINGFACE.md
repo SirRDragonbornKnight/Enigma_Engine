@@ -21,7 +21,7 @@ pip install huggingface-hub transformers diffusers sentence-transformers
 The Image Tab uses Stable Diffusion models from HuggingFace:
 
 ```python
-from forge_ai.gui.tabs.image_tab import StableDiffusionLocal
+from enigma_engine.gui.tabs.image_tab import StableDiffusionLocal
 
 # Create local image generator
 generator = StableDiffusionLocal(
@@ -42,7 +42,7 @@ print(f"Saved to: {result['path']}")
 The Embeddings Tab uses sentence-transformers from HuggingFace:
 
 ```python
-from forge_ai.gui.tabs.embeddings_tab import LocalEmbedding
+from enigma_engine.gui.tabs.embeddings_tab import LocalEmbedding
 
 # Create local embedding generator
 embedder = LocalEmbedding(
@@ -61,7 +61,7 @@ print(f"Similarity: {similarity['similarity']:.2%}")
 ### Audio/TTS (Audio Tab)
 
 ```python
-from forge_ai.gui.tabs.audio_tab import LocalTTS
+from enigma_engine.gui.tabs.audio_tab import LocalTTS
 
 # Create local TTS
 tts = LocalTTS()
@@ -76,7 +76,7 @@ print(f"Saved to: {result['path']}")
 The module system wraps the tab implementations:
 
 ```python
-from forge_ai.modules import ModuleManager
+from enigma_engine.modules import ModuleManager
 
 manager = ModuleManager()
 
@@ -143,23 +143,23 @@ export ELEVENLABS_API_KEY="your_key"
 
 ## Note on Legacy Addons
 
-The previous addon system (`forge_ai.addons`) has been removed. All functionality is now in the GUI tabs:
-- `forge_ai/gui/tabs/image_tab.py`
-- `forge_ai/gui/tabs/code_tab.py`
-- `forge_ai/gui/tabs/video_tab.py`
-- `forge_ai/gui/tabs/audio_tab.py`
-- `forge_ai/gui/tabs/embeddings_tab.py`
-- `forge_ai/gui/tabs/threed_tab.py`
+The previous addon system (`enigma_engine.addons`) has been removed. All functionality is now in the GUI tabs:
+- `enigma_engine/gui/tabs/image_tab.py`
+- `enigma_engine/gui/tabs/code_tab.py`
+- `enigma_engine/gui/tabs/video_tab.py`
+- `enigma_engine/gui/tabs/audio_tab.py`
+- `enigma_engine/gui/tabs/embeddings_tab.py`
+- `enigma_engine/gui/tabs/threed_tab.py`
 
 Each tab contains both the implementation classes and the GUI.
-## Exporting ForgeAI Models to HuggingFace
+## Exporting Enigma AI Engine Models to HuggingFace
 
-You can upload your locally trained ForgeAI models to HuggingFace Hub to share them!
+You can upload your locally trained Enigma AI Engine models to HuggingFace Hub to share them!
 
 ### Quick Export
 
 ```python
-from forge_ai.core.model_registry import ModelRegistry
+from enigma_engine.core.model_registry import ModelRegistry
 
 registry = ModelRegistry()
 
@@ -178,7 +178,7 @@ registry.export_to_huggingface(
 ### Using the Exporter Directly
 
 ```python
-from forge_ai.core.huggingface_exporter import HuggingFaceExporter
+from enigma_engine.core.huggingface_exporter import HuggingFaceExporter
 
 exporter = HuggingFaceExporter()
 
@@ -202,7 +202,7 @@ print(f"Model available at: {url}")
 ### Convenience Functions
 
 ```python
-from forge_ai.core import export_model_to_hub, export_model_locally
+from enigma_engine.core import export_model_to_hub, export_model_locally
 
 # One-liner to push to Hub
 url = export_model_to_hub("my_model", "username/my-model", token="hf_...")
@@ -239,7 +239,7 @@ pip install huggingface-hub
 
 ## Multi-Platform Model Hub (Bidirectional)
 
-ForgeAI has a complete Model Hub for **importing AND exporting** models to multiple platforms!
+Enigma AI Engine has a complete Model Hub for **importing AND exporting** models to multiple platforms!
 
 ### Available Platforms
 
@@ -254,7 +254,7 @@ ForgeAI has a complete Model Hub for **importing AND exporting** models to multi
 ### Using the Model Hub
 
 ```python
-from forge_ai.core.model_export import ModelHub
+from enigma_engine.core.model_export import ModelHub
 
 hub = ModelHub()
 
@@ -310,7 +310,7 @@ results = hub.export_all(
 ### Quick Functions
 
 ```python
-from forge_ai.core.model_export import (
+from enigma_engine.core.model_export import (
     import_model,
     export_model,
     search_models,

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Download HuggingFace models for ForgeAI.
+Download HuggingFace models for Enigma AI Engine.
 
 Usage:
     python scripts/download_models.py                           # Interactive menu
@@ -26,8 +26,8 @@ RECOMMENDED = [
 def download_model(model_id: str, local_name: str | None = None) -> bool:
     """Download and register a HuggingFace model."""
     try:
-        from forge_ai.core.huggingface_loader import HuggingFaceModel, get_huggingface_model_info
-        from forge_ai.core.model_registry import ModelRegistry
+        from enigma_engine.core.huggingface_loader import HuggingFaceModel, get_huggingface_model_info
+        from enigma_engine.core.model_registry import ModelRegistry
     except ImportError as e:
         print(f"Error: Missing dependencies: {e}")
         return False
@@ -89,7 +89,7 @@ def download_model(model_id: str, local_name: str | None = None) -> bool:
 def main() -> int:
     """CLI entry point."""
     print("="*50)
-    print("ForgeAI Model Downloader")
+    print("Enigma AI Engine Model Downloader")
     print("="*50)
     
     # Direct download

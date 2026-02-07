@@ -4,7 +4,7 @@
 
 ### 1. Core Infrastructure
 
-#### Feedback Widget (`forge_ai/gui/widgets/feedback_widget.py`)
+#### Feedback Widget (`enigma_engine/gui/widgets/feedback_widget.py`)
 - **Purpose**: Collects user feedback on AI responses
 - **Features**:
   - Thumbs up/down buttons for quick feedback
@@ -13,7 +13,7 @@
   - Emits `feedback_given` signal with rating and text
 - **Integration**: Ready to be added to chat messages
 
-#### Training Scheduler (`forge_ai/learning/training_scheduler.py`)
+#### Training Scheduler (`enigma_engine/learning/training_scheduler.py`)
 - **Purpose**: Manages automatic LoRA training based on collected feedback
 - **Features**:
   - Monitors learning example accumulation
@@ -23,7 +23,7 @@
   - Tracks training history
 - **Configuration**: LoRA rank=8, alpha=16, dropout=0.1
 
-#### Learning Tab (`forge_ai/gui/tabs/learning_tab.py`)
+#### Learning Tab (`enigma_engine/gui/tabs/learning_tab.py`)
 - **Purpose**: Dashboard for viewing self-improvement metrics
 - **Features**:
   - Real-time metrics display (conversations, examples, feedback ratio, health score)
@@ -33,7 +33,7 @@
   - Activity log for recent learning events
 - **Auto-refresh**: Updates every 5 seconds
 
-### 2. Configuration (`forge_ai/config/defaults.py`)
+### 2. Configuration (`enigma_engine/config/defaults.py`)
 
 Added complete `self_improvement` section:
 ```python
@@ -72,9 +72,9 @@ Added complete `self_improvement` section:
 }
 ```
 
-### 3. GUI Integration (`forge_ai/gui/enhanced_window.py`)
+### 3. GUI Integration (`enigma_engine/gui/enhanced_window.py`)
 
-- ✅ Imported `LearningTab` from `forge_ai.gui.tabs.learning_tab`
+- ✅ Imported `LearningTab` from `enigma_engine.gui.tabs.learning_tab`
 - ✅ Added "Learning" to navigation sidebar under SYSTEM section
 - ✅ Added Learning tab to content stack at proper index
 - ✅ Marked as always-visible core tab
@@ -82,7 +82,7 @@ Added complete `self_improvement` section:
 
 ### 4. Existing Systems (Already Implemented)
 
-#### Autonomous Learning (`forge_ai/core/autonomous.py`)
+#### Autonomous Learning (`enigma_engine/core/autonomous.py`)
 **Status**: ✅ Already has REAL implementations (not stubs)
 
 Confirmed implementations:
@@ -92,7 +92,7 @@ Confirmed implementations:
 - `_research_topic()`: Web search and knowledge building
 - `_build_knowledge()`: Connects concepts in knowledge graph
 
-#### Self-Improvement Engine (`forge_ai/core/self_improvement.py`)
+#### Self-Improvement Engine (`enigma_engine/core/self_improvement.py`)
 **Status**: ✅ Complete, production-ready
 
 Features:
@@ -103,14 +103,14 @@ Features:
 - Feedback recording (positive/negative/neutral)
 - Training data export
 
-#### Feedback System (`forge_ai/gui/tabs/chat_tab.py`)
+#### Feedback System (`enigma_engine/gui/tabs/chat_tab.py`)
 **Status**: ✅ Already integrated with self-improvement
 
 Current implementation:
 - Links for "Good", "Bad", "Critique" feedback
 - `_handle_feedback_link()` processes user feedback
 - `_record_positive_feedback()` and `_record_negative_feedback()` save to learning engine
-- Connected to `forge_ai.core.self_improvement.get_learning_engine()`
+- Connected to `enigma_engine.core.self_improvement.get_learning_engine()`
 
 ## 🔄 Integration Flow
 
@@ -163,7 +163,7 @@ Learning metrics update in dashboard
 ### LoRA Training Integration
 The training scheduler prepares data but doesn't execute actual LoRA training yet. To complete:
 
-1. Integrate with `forge_ai/core/training.py`
+1. Integrate with `enigma_engine/core/training.py`
 2. Implement actual LoRA adapter training
 3. Load trained adapters into running model
 4. Track training metrics (loss, accuracy)
@@ -187,7 +187,7 @@ The training scheduler prepares data but doesn't execute actual LoRA training ye
 
 ```python
 # Record feedback programmatically
-from forge_ai.core.self_improvement import get_learning_engine
+from enigma_engine.core.self_improvement import get_learning_engine
 
 engine = get_learning_engine("model_name")
 engine.record_feedback(
@@ -198,7 +198,7 @@ engine.record_feedback(
 )
 
 # Check training readiness
-from forge_ai.learning.training_scheduler import get_training_scheduler
+from enigma_engine.learning.training_scheduler import get_training_scheduler
 
 scheduler = get_training_scheduler("model_name")
 if scheduler.should_train():

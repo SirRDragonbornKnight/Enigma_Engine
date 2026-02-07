@@ -9,9 +9,9 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from forge_ai.core.training import train_model, TrainingConfig
-from forge_ai.core.model import create_model
-from forge_ai.config import CONFIG
+from enigma_engine.core.training import train_model, TrainingConfig
+from enigma_engine.core.model import create_model
+from enigma_engine.config import CONFIG
 from pathlib import Path
 
 

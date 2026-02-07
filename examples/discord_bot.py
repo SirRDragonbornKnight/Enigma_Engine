@@ -1,7 +1,7 @@
 """
-Discord Bot Template for ForgeAI
+Discord Bot Template for Enigma AI Engine
 
-A ready-to-deploy Discord bot that integrates with ForgeAI.
+A ready-to-deploy Discord bot that integrates with Enigma AI Engine.
 
 Features:
 - Chat with AI in channels or DMs
@@ -57,8 +57,8 @@ class BotConfig:
     rate_limit_per_user: int = 10  # requests per minute
 
 
-class ForgeAIClient:
-    """Client for communicating with ForgeAI API"""
+class Enigma AI EngineClient:
+    """Client for communicating with Enigma AI Engine API"""
     
     def __init__(self, api_url: str, api_key: str = ""):
         self.api_url = api_url.rstrip('/')
@@ -170,12 +170,12 @@ def create_discord_bot(config: BotConfig) -> Optional[commands.Bot]:
     bot = commands.Bot(
         command_prefix=config.command_prefix,
         intents=intents,
-        description="ForgeAI Discord Bot"
+        description="Enigma AI Engine Discord Bot"
     )
     
     # Store config and AI client
     bot.forge_config = config
-    bot.forge_client = ForgeAIClient(config.forge_api_url, config.forge_api_key)
+    bot.forge_client = Enigma AI EngineClient(config.forge_api_url, config.forge_api_key)
     bot.conversation_contexts: Dict[str, str] = {}  # user_id -> conversation_id
     bot.rate_limits: Dict[int, List[float]] = {}  # user_id -> timestamps
     
@@ -225,7 +225,7 @@ def create_discord_bot(config: BotConfig) -> Optional[commands.Bot]:
     
     # ==================== Slash Commands ====================
     
-    @bot.tree.command(name="chat", description="Chat with ForgeAI")
+    @bot.tree.command(name="chat", description="Chat with Enigma AI Engine")
     @app_commands.describe(message="Your message to the AI")
     async def chat_command(interaction: discord.Interaction, message: str):
         """Chat with the AI"""
@@ -305,7 +305,7 @@ def create_discord_bot(config: BotConfig) -> Optional[commands.Bot]:
     async def help_command(interaction: discord.Interaction):
         """Show help"""
         embed = discord.Embed(
-            title="ForgeAI Bot Help",
+            title="Enigma AI Engine Bot Help",
             description="AI-powered Discord bot",
             color=discord.Color.blue()
         )
@@ -396,7 +396,7 @@ def main():
         print("Get your token from https://discord.com/developers/applications")
         return
     
-    print("Starting ForgeAI Discord Bot...")
+    print("Starting Enigma AI Engine Discord Bot...")
     asyncio.run(run_bot(config))
 
 

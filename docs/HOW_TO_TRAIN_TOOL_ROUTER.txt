@@ -1,6 +1,6 @@
 ================================================================================
                HOW TO TRAIN THE TOOL ROUTER SYSTEM
-                      ForgeAI Guide
+                      Enigma AI Engine Guide
 ================================================================================
 
 OVERVIEW
@@ -265,7 +265,7 @@ Test routing decisions with these commands:
 
 1. Check which model would be selected:
    python -c "
-   from forge_ai.tools.tool_manager import get_tool_manager
+   from enigma_engine.tools.tool_manager import get_tool_manager
    manager = get_tool_manager()
    print(manager.route_task('What is 2 + 2?'))
    print(manager.route_task('Write me a poem'))
@@ -274,7 +274,7 @@ Test routing decisions with these commands:
 
 2. Test with different hardware profiles:
    python -c "
-   from forge_ai.tools.tool_manager import get_tool_manager
+   from enigma_engine.tools.tool_manager import get_tool_manager
    manager = get_tool_manager()
    # Simulate no GPU
    manager.hardware_profile = {'gpu': False, 'ram_gb': 8}
@@ -283,7 +283,7 @@ Test routing decisions with these commands:
 
 3. Check all registered models:
    python -c "
-   from forge_ai.tools.tool_manager import get_tool_manager
+   from enigma_engine.tools.tool_manager import get_tool_manager
    manager = get_tool_manager()
    manager.list_models_by_task()
    "

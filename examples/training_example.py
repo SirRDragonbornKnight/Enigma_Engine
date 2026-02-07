@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-ForgeAI Model Training Example
+Enigma AI Engine Model Training Example
 ==============================
 
-Complete example showing how to train ForgeAI models including:
+Complete example showing how to train Enigma AI Engine models including:
 - Training from text data
 - Training specialized models (router, vision, code)
 - Configuration options
 - Checkpointing and resuming
 - Training monitoring
 
-ForgeAI supports training models from nano (1M params) to omega (70B+).
+Enigma AI Engine supports training models from nano (1M params) to omega (70B+).
 This example covers the training workflow.
 
 Dependencies:
@@ -84,7 +84,7 @@ class TrainerSimulator:
     """
     Simulated trainer for demonstrating the training workflow.
     
-    In real usage, use forge_ai.core.training.Trainer which
+    In real usage, use enigma_engine.core.training.Trainer which
     implements actual gradient descent and model updates.
     """
     
@@ -114,7 +114,7 @@ class TrainerSimulator:
             # Create sample data
             data_path.parent.mkdir(parents=True, exist_ok=True)
             sample_data = """Hello, how can I help you today?
-I'm an AI assistant created by ForgeAI.
+I'm an AI assistant created by Enigma AI Engine.
 I can help with many tasks including writing, coding, and analysis.
 What would you like to know?
 I'm always happy to help!
@@ -151,7 +151,7 @@ Here's what I know about that topic."""
         self._log(f"  n_layers: {size_info['n_layers']}")
         
         # In real code, this creates actual model:
-        # from forge_ai.core.model import create_model
+        # from enigma_engine.core.model import create_model
         # self.model = create_model(size=self.config.model_size)
         
         self.model = {"size": self.config.model_size, **size_info}
@@ -406,7 +406,7 @@ def example_model_sizes():
     print("Example 2: Available Model Sizes")
     print("="*60)
     
-    print("\nForgeAI supports these model sizes:\n")
+    print("\nEnigma AI Engine supports these model sizes:\n")
     print(f"{'Size':<10} {'d_model':<10} {'Heads':<8} {'Layers':<8} {'Params':<10}")
     print("-" * 50)
     
@@ -494,16 +494,16 @@ def example_specialized():
 
 
 def example_forge_integration():
-    """Using actual ForgeAI training."""
+    """Using actual Enigma AI Engine training."""
     print("\n" + "="*60)
-    print("Example 6: ForgeAI Integration")
+    print("Example 6: Enigma AI Engine Integration")
     print("="*60)
     
-    print("For actual ForgeAI training:")
+    print("For actual Enigma AI Engine training:")
     print("""
-    from forge_ai.core.training import Trainer, TrainingConfig
-    from forge_ai.core.model import create_model
-    from forge_ai.core.tokenizer import get_tokenizer
+    from enigma_engine.core.training import Trainer, TrainingConfig
+    from enigma_engine.core.model import create_model
+    from enigma_engine.core.tokenizer import get_tokenizer
     
     # Create model and tokenizer
     model = create_model(size='small')
@@ -538,7 +538,7 @@ def example_forge_integration():
 # =============================================================================
 
 if __name__ == "__main__":
-    print("ForgeAI Model Training Examples")
+    print("Enigma AI Engine Model Training Examples")
     print("="*60)
     
     example_model_sizes()

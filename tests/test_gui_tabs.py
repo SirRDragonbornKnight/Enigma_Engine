@@ -1,5 +1,5 @@
 """
-Tests for forge_ai.gui.tabs module.
+Tests for enigma_engine.gui.tabs module.
 
 Tests GUI tab functionality including:
 - Tab creation and initialization
@@ -24,7 +24,7 @@ class TestBaseTab:
     
     def test_base_tab_interface(self):
         """Test base tab has required interface."""
-        from forge_ai.gui.tabs.base_generation_tab import BaseGenerationTab
+        from enigma_engine.gui.tabs.base_generation_tab import BaseGenerationTab
         
         # Should have required methods
         assert hasattr(BaseGenerationTab, 'get_name')
@@ -49,7 +49,7 @@ class TestImageTab:
     
     def test_image_tab_providers(self):
         """Test image providers exist."""
-        from forge_ai.gui.tabs.image_tab import (
+        from enigma_engine.gui.tabs.image_tab import (
             StableDiffusionLocal,
             OpenAIImage,
             ReplicateImage
@@ -62,7 +62,7 @@ class TestImageTab:
     
     def test_provider_interface(self):
         """Test provider interface."""
-        from forge_ai.gui.tabs.image_tab import StableDiffusionLocal
+        from enigma_engine.gui.tabs.image_tab import StableDiffusionLocal
         
         # Should have generate method
         assert hasattr(StableDiffusionLocal, 'generate')
@@ -73,7 +73,7 @@ class TestCodeTab:
     
     def test_code_tab_providers(self):
         """Test code providers exist."""
-        from forge_ai.gui.tabs.code_tab import ForgeCode, OpenAICode
+        from enigma_engine.gui.tabs.code_tab import ForgeCode, OpenAICode
         
         assert ForgeCode is not None
         assert OpenAICode is not None
@@ -82,7 +82,7 @@ class TestCodeTab:
         """Test language selection support."""
         import importlib
         try:
-            code_tab = importlib.import_module('forge_ai.gui.tabs.code_tab')
+            code_tab = importlib.import_module('enigma_engine.gui.tabs.code_tab')
             if hasattr(code_tab, 'SUPPORTED_LANGUAGES'):
                 langs = code_tab.SUPPORTED_LANGUAGES
                 # Should support common languages if the constant exists
@@ -98,7 +98,7 @@ class TestVideoTab:
     
     def test_video_tab_providers(self):
         """Test video providers exist."""
-        from forge_ai.gui.tabs.video_tab import LocalVideo, ReplicateVideo
+        from enigma_engine.gui.tabs.video_tab import LocalVideo, ReplicateVideo
         
         assert LocalVideo is not None
         assert ReplicateVideo is not None
@@ -109,7 +109,7 @@ class TestAudioTab:
     
     def test_audio_tab_providers(self):
         """Test audio providers exist."""
-        from forge_ai.gui.tabs.audio_tab import LocalTTS, ElevenLabsTTS, ReplicateAudio
+        from enigma_engine.gui.tabs.audio_tab import LocalTTS, ElevenLabsTTS, ReplicateAudio
         
         assert LocalTTS is not None
         assert ElevenLabsTTS is not None
@@ -121,7 +121,7 @@ class TestEmbeddingsTab:
     
     def test_embedding_providers(self):
         """Test embedding providers exist."""
-        from forge_ai.gui.tabs.embeddings_tab import LocalEmbedding, OpenAIEmbedding
+        from enigma_engine.gui.tabs.embeddings_tab import LocalEmbedding, OpenAIEmbedding
         
         assert LocalEmbedding is not None
         assert OpenAIEmbedding is not None
@@ -132,7 +132,7 @@ class TestThreeDTab:
     
     def test_threed_providers(self):
         """Test 3D providers exist."""
-        from forge_ai.gui.tabs.threed_tab import Local3DGen, Cloud3DGen
+        from enigma_engine.gui.tabs.threed_tab import Local3DGen, Cloud3DGen
         
         assert Local3DGen is not None
         assert Cloud3DGen is not None
@@ -143,7 +143,7 @@ class TestModulesTab:
     
     def test_modules_tab_class(self):
         """Test ModulesTab class exists."""
-        from forge_ai.gui.tabs.modules_tab import ModulesTab
+        from enigma_engine.gui.tabs.modules_tab import ModulesTab
         
         assert ModulesTab is not None
 
@@ -155,7 +155,7 @@ class TestSettingsTab:
         """Test SettingsTab class exists."""
         import importlib
         try:
-            settings_tab = importlib.import_module('forge_ai.gui.tabs.settings_tab')
+            settings_tab = importlib.import_module('enigma_engine.gui.tabs.settings_tab')
             if hasattr(settings_tab, 'SettingsTab'):
                 assert settings_tab.SettingsTab is not None
             else:
@@ -171,7 +171,7 @@ class TestTrainingTab:
         """Test TrainingTab class exists."""
         import importlib
         try:
-            training_tab = importlib.import_module('forge_ai.gui.tabs.training_tab')
+            training_tab = importlib.import_module('enigma_engine.gui.tabs.training_tab')
             if hasattr(training_tab, 'TrainingTab'):
                 assert training_tab.TrainingTab is not None
             else:
@@ -187,7 +187,7 @@ class TestVisionTab:
         """Test VisionTab class exists."""
         import importlib
         try:
-            vision_tab = importlib.import_module('forge_ai.gui.tabs.vision_tab')
+            vision_tab = importlib.import_module('enigma_engine.gui.tabs.vision_tab')
             if hasattr(vision_tab, 'VisionTab'):
                 assert vision_tab.VisionTab is not None
             else:
@@ -201,7 +201,7 @@ class TestCameraTab:
     
     def test_camera_tab_class(self):
         """Test CameraTab class exists."""
-        from forge_ai.gui.tabs.camera_tab import CameraTab
+        from enigma_engine.gui.tabs.camera_tab import CameraTab
         
         assert CameraTab is not None
 
@@ -211,7 +211,7 @@ class TestModelRouterTab:
     
     def test_model_router_tab_class(self):
         """Test ModelRouterTab class exists."""
-        from forge_ai.gui.tabs.model_router_tab import ModelRouterTab
+        from enigma_engine.gui.tabs.model_router_tab import ModelRouterTab
         
         assert ModelRouterTab is not None
 
@@ -223,7 +223,7 @@ class TestProviderBase:
         """Test provider base has required interface."""
         import importlib
         try:
-            provider_base = importlib.import_module('forge_ai.gui.tabs.provider_base')
+            provider_base = importlib.import_module('enigma_engine.gui.tabs.provider_base')
             if hasattr(provider_base, 'ProviderBase'):
                 pb = provider_base.ProviderBase
                 # Should be a class
@@ -239,12 +239,12 @@ class TestSharedComponents:
     
     def test_shared_components_exist(self):
         """Test shared components module exists."""
-        from forge_ai.gui.tabs import shared_components
+        from enigma_engine.gui.tabs import shared_components
         
         assert shared_components is not None
     
     def test_output_helpers_exist(self):
         """Test output helpers module exists."""
-        from forge_ai.gui.tabs import output_helpers
+        from enigma_engine.gui.tabs import output_helpers
         
         assert output_helpers is not None

@@ -22,12 +22,12 @@ class TestResourceMonitor:
     
     def test_resource_monitor_import(self):
         """Test that resource monitor can be imported."""
-        from forge_ai.gui.resource_monitor import ResourceMonitor
+        from enigma_engine.gui.resource_monitor import ResourceMonitor
         assert ResourceMonitor is not None
     
     def test_resource_monitor_has_module_tracking(self):
         """Test that resource monitor has module memory tracking methods."""
-        from forge_ai.gui.resource_monitor import ResourceMonitor
+        from enigma_engine.gui.resource_monitor import ResourceMonitor
         
         # Check that new methods exist
         assert hasattr(ResourceMonitor, 'update_module_memory')
@@ -35,15 +35,15 @@ class TestResourceMonitor:
         assert hasattr(ResourceMonitor, '_estimate_module_vram')
         assert hasattr(ResourceMonitor, '_get_memory_color')
     
-    @patch('forge_ai.gui.resource_monitor.QTimer')
-    @patch('forge_ai.gui.resource_monitor.QWidget.__init__')
+    @patch('enigma_engine.gui.resource_monitor.QTimer')
+    @patch('enigma_engine.gui.resource_monitor.QWidget.__init__')
     def test_module_timer_setup(self, mock_widget_init, mock_timer):
         """Test that module update timer is set up correctly."""
         mock_widget_init.return_value = None
         mock_timer_instance = MagicMock()
         mock_timer.return_value = mock_timer_instance
         
-        from forge_ai.gui.resource_monitor import ResourceMonitor
+        from enigma_engine.gui.resource_monitor import ResourceMonitor
         
         # Create monitor (will fail on UI but we're checking timer setup)
         try:
@@ -61,12 +61,12 @@ class TestModelComparisonTab:
     
     def test_model_comparison_import(self):
         """Test that model comparison tab can be imported."""
-        from forge_ai.gui.tabs.model_comparison_tab import create_model_comparison_tab
+        from enigma_engine.gui.tabs.model_comparison_tab import create_model_comparison_tab
         assert create_model_comparison_tab is not None
     
     def test_response_panel_class(self):
         """Test that ResponsePanel class exists and has required methods."""
-        from forge_ai.gui.tabs.model_comparison_tab import ResponsePanel
+        from enigma_engine.gui.tabs.model_comparison_tab import ResponsePanel
         
         assert hasattr(ResponsePanel, 'set_response')
         assert hasattr(ResponsePanel, 'set_error')
@@ -75,7 +75,7 @@ class TestModelComparisonTab:
     
     def test_compare_worker_class(self):
         """Test that CompareWorker class exists and has required signals."""
-        from forge_ai.gui.tabs.model_comparison_tab import CompareWorker
+        from enigma_engine.gui.tabs.model_comparison_tab import CompareWorker
         
         assert hasattr(CompareWorker, 'result_ready')
         assert hasattr(CompareWorker, 'error')
@@ -83,7 +83,7 @@ class TestModelComparisonTab:
     
     def test_get_available_models(self):
         """Test that _get_available_models returns defaults."""
-        from forge_ai.gui.tabs.model_comparison_tab import _get_available_models
+        from enigma_engine.gui.tabs.model_comparison_tab import _get_available_models
         
         models = _get_available_models()
         
@@ -97,7 +97,7 @@ class TestMessageBranching:
     
     def test_branching_functions_exist(self):
         """Test that branching functions are defined in chat_tab."""
-        from forge_ai.gui.tabs import chat_tab
+        from enigma_engine.gui.tabs import chat_tab
         
         assert hasattr(chat_tab, '_init_branching')
         assert hasattr(chat_tab, '_add_branch')
@@ -108,7 +108,7 @@ class TestMessageBranching:
     
     def test_init_branching(self):
         """Test that branching can be initialized on a mock parent."""
-        from forge_ai.gui.tabs.chat_tab import _init_branching
+        from enigma_engine.gui.tabs.chat_tab import _init_branching
         
         parent = Mock()
         _init_branching(parent)
@@ -120,7 +120,7 @@ class TestMessageBranching:
     
     def test_add_branch(self):
         """Test adding a branch to a message."""
-        from forge_ai.gui.tabs.chat_tab import _init_branching, _add_branch
+        from enigma_engine.gui.tabs.chat_tab import _init_branching, _add_branch
         
         parent = Mock()
         parent.chat_messages = [
@@ -138,7 +138,7 @@ class TestMessageBranching:
     
     def test_get_branch_count(self):
         """Test getting branch count."""
-        from forge_ai.gui.tabs.chat_tab import _init_branching, _add_branch, _get_branch_count
+        from enigma_engine.gui.tabs.chat_tab import _init_branching, _add_branch, _get_branch_count
         
         parent = Mock()
         parent.chat_messages = [
@@ -162,7 +162,7 @@ class TestFileAttachments:
     
     def test_attachment_functions_exist(self):
         """Test that attachment functions are defined."""
-        from forge_ai.gui.tabs import chat_tab
+        from enigma_engine.gui.tabs import chat_tab
         
         assert hasattr(chat_tab, '_attach_file')
         assert hasattr(chat_tab, '_add_attachment')
@@ -173,7 +173,7 @@ class TestFileAttachments:
     
     def test_clear_attachments(self):
         """Test clearing attachments."""
-        from forge_ai.gui.tabs.chat_tab import _clear_attachments, _update_attachment_preview
+        from enigma_engine.gui.tabs.chat_tab import _clear_attachments, _update_attachment_preview
         
         parent = Mock()
         parent._attachments = ['/path/to/file1.txt', '/path/to/file2.png']
@@ -187,7 +187,7 @@ class TestFileAttachments:
     
     def test_get_attachments(self):
         """Test getting attachment list."""
-        from forge_ai.gui.tabs.chat_tab import get_attachments
+        from enigma_engine.gui.tabs.chat_tab import get_attachments
         
         parent = Mock()
         parent._attachments = ['/path/to/file.txt']
@@ -204,16 +204,16 @@ class TestVoiceMessages:
     
     def test_voice_input_functions_exist(self):
         """Test that voice input functions are defined."""
-        from forge_ai.gui.tabs import chat_tab
+        from enigma_engine.gui.tabs import chat_tab
         
         assert hasattr(chat_tab, '_toggle_voice_input')
         assert hasattr(chat_tab, '_do_voice_input')
         assert hasattr(chat_tab, '_voice_message_saved')
     
-    @patch('forge_ai.gui.tabs.chat_tab._update_attachment_preview')
+    @patch('enigma_engine.gui.tabs.chat_tab._update_attachment_preview')
     def test_voice_message_saved_attaches_file(self, mock_update_preview):
         """Test that saved voice message is attached."""
-        from forge_ai.gui.tabs.chat_tab import _voice_message_saved
+        from enigma_engine.gui.tabs.chat_tab import _voice_message_saved
         
         parent = Mock()
         parent._attachments = []
@@ -233,7 +233,7 @@ class TestChatTabIntegration:
     
     def test_chat_link_handler_routes_correctly(self):
         """Test that chat link handler routes to correct handler."""
-        from forge_ai.gui.tabs.chat_tab import _handle_chat_link, _init_branching
+        from enigma_engine.gui.tabs.chat_tab import _handle_chat_link, _init_branching
         
         parent = Mock()
         parent.chat_messages = [

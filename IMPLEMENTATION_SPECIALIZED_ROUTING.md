@@ -2,7 +2,7 @@
 
 ## Overview
 
-Successfully implemented a comprehensive specialized model routing system for ForgeAI, enabling training and deployment of task-specific smaller AI models while maintaining a shared tokenizer architecture.
+Successfully implemented a comprehensive specialized model routing system for Enigma AI Engine, enabling training and deployment of task-specific smaller AI models while maintaining a shared tokenizer architecture.
 
 ## What Was Built
 
@@ -25,7 +25,7 @@ python scripts/train_specialized_model.py \
     --epochs 50
 ```
 
-### 2. Enhanced Tool Router (`forge_ai/core/tool_router.py`)
+### 2. Enhanced Tool Router (`enigma_engine/core/tool_router.py`)
 - **Specialized model loading**: Lazy loading with caching
 - **Intent classification**: `classify_intent()` method using nano router model
 - **Vision captioning**: `describe_image()` method for image descriptions
@@ -39,20 +39,20 @@ python scripts/train_specialized_model.py \
 - `describe_image(features: str) -> str` - Generate image captions
 - `generate_code(prompt: str) -> str` - Generate code snippets
 
-### 3. Inference Engine Integration (`forge_ai/core/inference.py`)
+### 3. Inference Engine Integration (`enigma_engine/core/inference.py`)
 - **New parameter**: `use_routing` (default: False for backwards compatibility)
 - **Automatic routing**: Routes requests through specialized models
 - **Transparent**: Works seamlessly with existing inference API
 
 **Example usage:**
 ```python
-from forge_ai.core.inference import ForgeEngine
+from enigma_engine.core.inference import ForgeEngine
 
 engine = ForgeEngine(use_routing=True)
 response = engine.generate("write a sort function")  # Routes to code model
 ```
 
-### 4. Module System Integration (`forge_ai/modules/registry.py`)
+### 4. Module System Integration (`enigma_engine/modules/registry.py`)
 - **ToolRouterModule**: New module for specialized routing
 - **Configuration options**: Enable/disable individual specialized models
 - **Clean lifecycle**: Proper load/unload with cache cleanup
@@ -95,7 +95,7 @@ Created three comprehensive training data files in `data/specialized/`:
 ```json
 {
   "enabled": true,
-  "shared_tokenizer": "forge_ai/vocab_model/bpe_vocab.json",
+  "shared_tokenizer": "enigma_engine/vocab_model/bpe_vocab.json",
   "models": {
     "router": { "path": "...", "size": "nano", ... },
     "vision": { "path": "...", "size": "tiny", ... },
@@ -185,9 +185,9 @@ All specialized models use the same tokenizer, enabling:
 
 ## Files Modified (5)
 
-1. `forge_ai/core/tool_router.py` - Enhanced routing (+280 lines)
-2. `forge_ai/core/inference.py` - Added use_routing parameter (+20 lines)
-3. `forge_ai/modules/registry.py` - Added ToolRouterModule (+60 lines)
+1. `enigma_engine/core/tool_router.py` - Enhanced routing (+280 lines)
+2. `enigma_engine/core/inference.py` - Added use_routing parameter (+20 lines)
+3. `enigma_engine/modules/registry.py` - Added ToolRouterModule (+60 lines)
 4. `README.md` - Added specialized models section (+30 lines)
 5. `.gitignore` - Allow data/specialized/ directory (+1 line)
 
@@ -333,7 +333,7 @@ The specialized model routing system is **production-ready** and provides:
 - Full test coverage
 - Backwards compatibility
 
-Users can now train task-specific models and benefit from faster, more accurate routing while maintaining the flexibility of the unified ForgeAI architecture.
+Users can now train task-specific models and benefit from faster, more accurate routing while maintaining the flexibility of the unified Enigma AI Engine architecture.
 
 **Total Development**: ~4 hours
 **Lines of Code**: ~400 production, ~200 test

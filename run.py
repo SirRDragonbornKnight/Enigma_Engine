@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
 ================================================================================
-🚀 ForgeAI - MAIN ENTRY POINT
+🚀 Enigma AI Engine - MAIN ENTRY POINT
 ================================================================================
 
 This is where EVERYTHING begins! Like the front door to a castle.
-Your journey through ForgeAI starts here.
+Your journey through Enigma AI Engine starts here.
 
 📍 FILE: run.py
 🏷️ TYPE: Application Entry Point
@@ -22,10 +22,10 @@ Your journey through ForgeAI starts here.
 └─────────────────────────────────────────────────────────────────────────────┘
 
 🔗 CONNECTED FILES:
-    --train  → forge_ai/core/training.py      (Trainer, train_model)
-    --run    → forge_ai/core/inference.py     (ForgeEngine)
-    --gui    → forge_ai/gui/enhanced_window.py (EnhancedMainWindow)
-    --serve  → forge_ai/comms/api_server.py   (Flask REST API)
+    --train  → enigma_engine/core/training.py      (Trainer, train_model)
+    --run    → enigma_engine/core/inference.py     (ForgeEngine)
+    --gui    → enigma_engine/gui/enhanced_window.py (EnhancedMainWindow)
+    --serve  → enigma_engine/comms/api_server.py   (Flask REST API)
 
 📖 SEE ALSO:
     • CODE_ADVENTURE_TOUR.txt  - Full guided tour of the codebase
@@ -127,13 +127,13 @@ _suppress_noise()
 def _print_startup_banner():
     """Print a clean startup message."""
     print("=" * 50)
-    print("  ForgeAI - Starting...")
+    print("  Enigma AI Engine - Starting...")
     print("=" * 50)
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="ForgeAI - Build and run your own AI",
+        description="Enigma AI Engine - Build and run your own AI",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -224,8 +224,8 @@ Examples:
         print("AI TESTER - FULL BUILD")
         print("=" * 60)
         
-        from forge_ai.core.training import train_model
-        from forge_ai.config import CONFIG
+        from enigma_engine.core.training import train_model
+        from enigma_engine.config import CONFIG
         
         data_path = args.data or Path(CONFIG["data_dir"]) / "data.txt"
         output_path = args.output or Path(CONFIG["models_dir"]) / f"{args.model}_forge.pth"
@@ -250,8 +250,8 @@ Examples:
         print(f"  Final loss: {results.get('final_loss', 'N/A')}")
 
     if args.train:
-        from forge_ai.core.training import train_model
-        from forge_ai.config import CONFIG
+        from enigma_engine.core.training import train_model
+        from enigma_engine.config import CONFIG
         
         data_path = args.data or Path(CONFIG["data_dir"]) / "data.txt"
         output_path = args.output
@@ -276,10 +276,10 @@ Examples:
             print(f"  Final loss: {results.get('final_loss', 'N/A')}")
 
     if args.tunnel:
-        from forge_ai.comms.tunnel_manager import TunnelManager
+        from enigma_engine.comms.tunnel_manager import TunnelManager
         
         print("\n" + "=" * 60)
-        print("  ForgeAI Tunnel Manager")
+        print("  Enigma AI Engine Tunnel Manager")
         print("=" * 60)
         
         # Create tunnel manager
@@ -307,7 +307,7 @@ Examples:
             print("\n✓ Tunnel started successfully!")
             print(f"\n  Public URL: {tunnel_url}")
             print(f"  Local Port: {args.tunnel_port}")
-            print(f"\n  Share this URL to give others access to your ForgeAI server.")
+            print(f"\n  Share this URL to give others access to your Enigma AI Engine server.")
             print(f"  Press Ctrl+C to stop the tunnel.\n")
             
             # Keep running
@@ -341,11 +341,11 @@ Examples:
         
         if api_type == "openai":
             # OpenAI-compatible API (recommended)
-            from forge_ai.comms.openai_api import create_openai_server
+            from enigma_engine.comms.openai_api import create_openai_server
             port = port or 8000
             logger.info(f"Starting OpenAI-compatible API server on port {port}")
             print("\n" + "=" * 60)
-            print("  ForgeAI OpenAI-Compatible API Server")
+            print("  Enigma AI Engine OpenAI-Compatible API Server")
             print("=" * 60)
             print("\nThis server is compatible with:")
             print("  - OpenAI Python SDK")
@@ -357,7 +357,7 @@ Examples:
             create_openai_server(host="0.0.0.0", port=port)
         else:
             # Simple API (original)
-            from forge_ai.comms.api_server import create_app
+            from enigma_engine.comms.api_server import create_app
             port = port or 5000
             app = create_app()
             logger.info(f"Starting simple API server on port {port}")
@@ -366,9 +366,9 @@ Examples:
             app.run(host="127.0.0.1", port=port, debug=True)
 
     if args.run:
-        from forge_ai.core.inference import ForgeEngine
+        from enigma_engine.core.inference import ForgeEngine
         print("\n" + "=" * 50)
-        print("ForgeAI CLI Chat")
+        print("Enigma AI Engine CLI Chat")
         print("=" * 50)
         print("Type your message and press Enter.")
         print("Type 'quit' or 'exit' to stop.\n")
@@ -445,7 +445,7 @@ Examples:
         _print_startup_banner()
         
         try:
-            from forge_ai.gui.enhanced_window import run_app
+            from enigma_engine.gui.enhanced_window import run_app
         except ImportError as e:
             # Restore stderr for error messages
             if old_stderr_fd is not None:
@@ -470,7 +470,7 @@ Examples:
     
     if args.background:
         try:
-            from forge_ai.background import main as run_background
+            from enigma_engine.background import main as run_background
         except ImportError as e:
             logger.error(f"Background mode requires PyQt5: {e}")
             print(f"\n[ERROR] Background mode requires PyQt5")
@@ -490,7 +490,7 @@ Examples:
     
     if args.web:
         try:
-            from forge_ai.web.app import run_web
+            from enigma_engine.web.app import run_web
         except ImportError as e:
             logger.error(f"Web dashboard requires flask-socketio: {e}")
             print(f"\n[ERROR] Web dashboard requires flask-socketio")
@@ -508,7 +508,7 @@ Examples:
         
         # Setup instance manager if needed
         if args.instance or args.new_instance:
-            from forge_ai.core.instance_manager import InstanceManager
+            from enigma_engine.core.instance_manager import InstanceManager
             instance_manager = InstanceManager(instance_id=args.instance)
             print(f"Instance ID: {instance_manager.instance_id}")
         

@@ -1,10 +1,10 @@
-"""Test that ForgeAI components connect correctly."""
+"""Test that Enigma AI Engine components connect correctly."""
 import sys
 sys.path.insert(0, '.')
 
 def test_module_system():
     """Test Module Manager connections."""
-    from forge_ai.modules import ModuleManager
+    from enigma_engine.modules import ModuleManager
     manager = ModuleManager()
     assert manager is not None
     # module_classes holds registered module types
@@ -14,7 +14,7 @@ def test_module_system():
 
 def test_config():
     """Test configuration loading."""
-    from forge_ai.config import CONFIG, get_config
+    from enigma_engine.config import CONFIG, get_config
     assert CONFIG.get('data_dir')
     assert CONFIG.get('models_dir')
     print(f"  Config: OK (data_dir={CONFIG['data_dir'][:30]}...)")
@@ -22,7 +22,7 @@ def test_config():
 
 def test_tokenizer():
     """Test tokenizer encode/decode roundtrip."""
-    from forge_ai.core.tokenizer import get_tokenizer
+    from enigma_engine.core.tokenizer import get_tokenizer
     tok = get_tokenizer()
     text = "Hello world test"
     encoded = tok.encode(text)
@@ -33,7 +33,7 @@ def test_tokenizer():
 
 def test_memory():
     """Test memory system initialization."""
-    from forge_ai.memory import ConversationManager
+    from enigma_engine.memory import ConversationManager
     mem = ConversationManager()
     assert mem is not None
     print(f"  Memory: OK")
@@ -41,7 +41,7 @@ def test_memory():
 
 def test_tools():
     """Test tool execution."""
-    from forge_ai.tools import execute_tool
+    from enigma_engine.tools import execute_tool
     result = execute_tool('get_system_info')
     assert result.get('success')
     print(f"  Tools: OK (get_system_info returned {len(result)} keys)")
@@ -49,7 +49,7 @@ def test_tools():
 
 def test_web_search():
     """Test web search tool exists."""
-    from forge_ai.tools.web_tools import WebSearchTool
+    from enigma_engine.tools.web_tools import WebSearchTool
     tool = WebSearchTool()
     assert tool.name == "web_search"
     print(f"  Web Search: OK")
@@ -57,7 +57,7 @@ def test_web_search():
 
 def test_vision():
     """Test vision system."""
-    from forge_ai.tools.vision import ScreenCapture
+    from enigma_engine.tools.vision import ScreenCapture
     sc = ScreenCapture()
     assert sc._backend != "none"
     print(f"  Vision: OK (backend={sc._backend})")
@@ -65,14 +65,14 @@ def test_vision():
 
 def test_gui_tabs():
     """Test GUI tab imports (no Qt required)."""
-    from forge_ai.gui.tabs import chat_tab, training_tab, settings_tab
-    from forge_ai.gui.tabs.avatar import avatar_display
+    from enigma_engine.gui.tabs import chat_tab, training_tab, settings_tab
+    from enigma_engine.gui.tabs.avatar import avatar_display
     print(f"  GUI Tabs: OK (chat, training, settings, avatar)")
     return True
 
 def test_inference_engine():
     """Test inference engine can be imported."""
-    from forge_ai.core.inference import ForgeEngine
+    from enigma_engine.core.inference import ForgeEngine
     print(f"  Inference Engine: OK")
     return True
 
@@ -82,7 +82,7 @@ def test_gui_window():
     os.environ['QT_QPA_PLATFORM'] = 'offscreen'
     try:
         from PyQt5.QtWidgets import QApplication
-        from forge_ai.gui.enhanced_window import EnhancedMainWindow
+        from enigma_engine.gui.enhanced_window import EnhancedMainWindow
         app = QApplication.instance() or QApplication([])
         # Just test class exists and can be referenced
         assert EnhancedMainWindow is not None
@@ -94,7 +94,7 @@ def test_gui_window():
 
 def test_training_system():
     """Test training system connections."""
-    from forge_ai.core.training import Trainer, TrainingConfig
+    from enigma_engine.core.training import Trainer, TrainingConfig
     config = TrainingConfig(epochs=1, batch_size=2)
     assert config.epochs == 1
     assert config.batch_size == 2
@@ -103,7 +103,7 @@ def test_training_system():
 
 def test_huggingface_loader():
     """Test HuggingFace loader exists."""
-    from forge_ai.core.huggingface_loader import HuggingFaceModel, HuggingFaceEngine
+    from enigma_engine.core.huggingface_loader import HuggingFaceModel, HuggingFaceEngine
     assert HuggingFaceModel is not None
     assert HuggingFaceEngine is not None
     print(f"  HuggingFace Loader: OK")
@@ -111,7 +111,7 @@ def test_huggingface_loader():
 
 def main():
     print("=" * 50)
-    print("ForgeAI Connection Tests")
+    print("Enigma AI Engine Connection Tests")
     print("=" * 50)
     
     tests = [

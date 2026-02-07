@@ -1,6 +1,6 @@
 # Credits & Attributions
 
-ForgeAI is built on the shoulders of giants. This project uses and is inspired by several excellent open-source libraries and research papers.
+Enigma AI Engine is built on the shoulders of giants. This project uses and is inspired by several excellent open-source libraries and research papers.
 
 ## Core Dependencies
 
@@ -123,7 +123,7 @@ Special thanks to:
 
 ## No External Code Copied
 
-**Important:** While ForgeAI is inspired by and uses libraries from the above projects, **all core code is original**:
+**Important:** While Enigma AI Engine is inspired by and uses libraries from the above projects, **all core code is original**:
 
 - ✅ Transformer model implementation is written from scratch
 - ✅ Module manager system is original design
@@ -135,7 +135,7 @@ We follow best practices and architectural patterns from the community but do no
 
 ## License Compliance
 
-All dependencies are used in accordance with their respective licenses. ForgeAI itself is released under the MIT License, allowing free use, modification, and distribution.
+All dependencies are used in accordance with their respective licenses. Enigma AI Engine itself is released under the MIT License, allowing free use, modification, and distribution.
 
 ---
 

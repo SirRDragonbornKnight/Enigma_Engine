@@ -1,5 +1,5 @@
 """
-Train ForgeAI Model for Avatar Bone Control
+Train Enigma AI Engine Model for Avatar Bone Control
 
 Trains the AI to understand bone control commands and execute them naturally.
 """
@@ -11,12 +11,12 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from forge_ai.core.training import train_model, TrainingConfig
-from forge_ai.config import CONFIG
+from enigma_engine.core.training import train_model, TrainingConfig
+from enigma_engine.config import CONFIG
 
 def main():
     print("=" * 80)
-    print("Training ForgeAI for Avatar Bone Control")
+    print("Training Enigma AI Engine for Avatar Bone Control")
     print("=" * 80)
     
     # Training data file

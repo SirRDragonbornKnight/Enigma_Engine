@@ -5,9 +5,9 @@ Shows how bone animation is the PRIMARY control method, with other systems
 as fallbacks. Demonstrates priority system preventing conflicts.
 """
 
-from forge_ai.avatar import get_avatar, ControlPriority
-from forge_ai.avatar.bone_control import get_bone_controller
-from forge_ai.avatar.autonomous import get_autonomous_avatar
+from enigma_engine.avatar import get_avatar, ControlPriority
+from enigma_engine.avatar.bone_control import get_bone_controller
+from enigma_engine.avatar.autonomous import get_autonomous_avatar
 import time
 
 def main():

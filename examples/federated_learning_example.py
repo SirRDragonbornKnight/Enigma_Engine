@@ -12,7 +12,7 @@ import numpy as np
 from datetime import datetime
 
 # Import federated learning components
-from forge_ai.learning import (
+from enigma_engine.learning import (
     FederatedLearning,
     WeightUpdate,
     FederatedMode,

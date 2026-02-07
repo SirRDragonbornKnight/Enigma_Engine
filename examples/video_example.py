@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-ForgeAI Video Generation Example
+Enigma AI Engine Video Generation Example
 =================================
 
-Complete example showing how to generate videos using ForgeAI including:
+Complete example showing how to generate videos using Enigma AI Engine including:
 - Local video generation with AnimateDiff
 - Cloud generation via Replicate
 - Built-in GIF fallback for testing
@@ -594,14 +594,14 @@ def example_unified():
 
 
 def example_forge_integration():
-    """Using actual ForgeAI video generation."""
+    """Using actual Enigma AI Engine video generation."""
     print("\n" + "="*60)
-    print("Example 5: ForgeAI Integration")
+    print("Example 5: Enigma AI Engine Integration")
     print("="*60)
     
-    print("For actual ForgeAI video generation:")
+    print("For actual Enigma AI Engine video generation:")
     print("""
-    from forge_ai.gui.tabs.video_tab import LocalVideo, ReplicateVideo
+    from enigma_engine.gui.tabs.video_tab import LocalVideo, ReplicateVideo
     
     # Local generation (needs GPU)
     local = LocalVideo()
@@ -636,7 +636,7 @@ def example_forge_integration():
 # =============================================================================
 
 if __name__ == "__main__":
-    print("ForgeAI Video Generation Examples")
+    print("Enigma AI Engine Video Generation Examples")
     print("="*60)
     
     example_local_video()
@@ -676,7 +676,7 @@ Video Config Options:
    - guidance_scale: How closely to follow prompt
    - num_inference_steps: Quality vs speed
 
-For ForgeAI GUI:
+For Enigma AI Engine GUI:
     python run.py --gui
     # Then use the Video tab
 """)

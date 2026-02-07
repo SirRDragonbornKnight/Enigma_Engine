@@ -1,5 +1,5 @@
 """
-Tests for forge_ai.avatar module.
+Tests for enigma_engine.avatar module.
 
 Tests avatar system functionality including:
 - Avatar controller and priority system
@@ -19,7 +19,7 @@ class TestControlPriority:
     
     def test_priority_values(self):
         """Test priority values exist and have correct ordering."""
-        from forge_ai.avatar.controller import ControlPriority
+        from enigma_engine.avatar.controller import ControlPriority
         
         # Higher value = higher priority
         assert ControlPriority.BONE_ANIMATION > ControlPriority.USER_MANUAL
@@ -34,14 +34,14 @@ class TestAvatarController:
     
     def test_controller_creation(self):
         """Test creating an avatar controller."""
-        from forge_ai.avatar.controller import AvatarController
+        from enigma_engine.avatar.controller import AvatarController
         
         controller = AvatarController()
         assert controller is not None
     
     def test_priority_system(self):
         """Test that higher priority controls override lower."""
-        from forge_ai.avatar.controller import AvatarController, ControlPriority
+        from enigma_engine.avatar.controller import AvatarController, ControlPriority
         
         controller = AvatarController()
         
@@ -58,7 +58,7 @@ class TestAvatarController:
     
     def test_release_control(self):
         """Test releasing control."""
-        from forge_ai.avatar.controller import AvatarController, ControlPriority
+        from enigma_engine.avatar.controller import AvatarController, ControlPriority
         
         controller = AvatarController()
         
@@ -77,14 +77,14 @@ class TestBoneControl:
     
     def test_bone_controller_creation(self):
         """Test creating a bone controller."""
-        from forge_ai.avatar.bone_control import BoneController
+        from enigma_engine.avatar.bone_control import BoneController
         
         controller = BoneController()
         assert controller is not None
     
     def test_get_bone_controller_singleton(self):
         """Test that get_bone_controller returns singleton."""
-        from forge_ai.avatar.bone_control import get_bone_controller
+        from enigma_engine.avatar.bone_control import get_bone_controller
         
         controller1 = get_bone_controller()
         controller2 = get_bone_controller()
@@ -93,7 +93,7 @@ class TestBoneControl:
     
     def test_bone_movement(self):
         """Test moving bones with limits."""
-        from forge_ai.avatar.bone_control import BoneController
+        from enigma_engine.avatar.bone_control import BoneController
         
         controller = BoneController()
         
@@ -107,7 +107,7 @@ class TestBoneControl:
     
     def test_bone_limits(self):
         """Test getting bone rotation limits."""
-        from forge_ai.avatar.bone_control import BoneController
+        from enigma_engine.avatar.bone_control import BoneController
         
         controller = BoneController()
         
@@ -121,8 +121,8 @@ class TestAutonomousAvatar:
     
     def test_autonomous_creation(self):
         """Test creating an autonomous avatar."""
-        from forge_ai.avatar.autonomous import AutonomousAvatar, AutonomousConfig
-        from forge_ai.avatar.controller import AvatarController
+        from enigma_engine.avatar.autonomous import AutonomousAvatar, AutonomousConfig
+        from enigma_engine.avatar.controller import AvatarController
         
         avatar_controller = AvatarController()
         config = AutonomousConfig()
@@ -133,7 +133,7 @@ class TestAutonomousAvatar:
     
     def test_autonomous_config_defaults(self):
         """Test default autonomous config."""
-        from forge_ai.avatar.autonomous import AutonomousConfig
+        from enigma_engine.avatar.autonomous import AutonomousConfig
         
         config = AutonomousConfig()
         
@@ -149,7 +149,7 @@ class TestDesktopPet:
     def test_desktop_pet_config(self):
         """Test desktop pet configuration."""
         try:
-            from forge_ai.avatar.desktop_pet import PetConfig
+            from enigma_engine.avatar.desktop_pet import PetConfig
             
             config = PetConfig()
             assert config is not None
@@ -159,7 +159,7 @@ class TestDesktopPet:
     def test_pet_state_enum(self):
         """Test pet state enumeration."""
         try:
-            from forge_ai.avatar.desktop_pet import PetState
+            from enigma_engine.avatar.desktop_pet import PetState
             
             # Check states exist
             assert PetState.IDLE is not None
@@ -174,7 +174,7 @@ class TestAnimationSystem:
         """Test animation module exists."""
         import importlib
         try:
-            animation = importlib.import_module('forge_ai.avatar.animation')
+            animation = importlib.import_module('enigma_engine.avatar.animation')
             assert animation is not None
         except ImportError:
             pytest.skip("Animation module not available")
@@ -186,7 +186,7 @@ class TestLipSync:
     def test_lip_sync_module_exists(self):
         """Test lip sync module exists."""
         try:
-            from forge_ai.avatar import lip_sync
+            from enigma_engine.avatar import lip_sync
             assert lip_sync is not None
         except ImportError:
             pytest.skip("Lip sync module not available")
@@ -199,7 +199,7 @@ class TestEmotionSync:
         """Test emotion module exists."""
         import importlib
         try:
-            emotion = importlib.import_module('forge_ai.avatar.emotion')
+            emotion = importlib.import_module('enigma_engine.avatar.emotion')
             assert emotion is not None
         except ImportError:
             pytest.skip("Emotion module not available")
@@ -211,7 +211,7 @@ class TestAvatarPresets:
     def test_presets_module_exists(self):
         """Test presets module exists."""
         try:
-            from forge_ai.avatar import presets
+            from enigma_engine.avatar import presets
             assert presets is not None
         except ImportError:
             pytest.skip("Presets module not available")
@@ -222,14 +222,14 @@ class TestModelManager:
     
     def test_model_manager_creation(self):
         """Test creating model manager."""
-        from forge_ai.avatar.model_manager import AvatarModelManager
+        from enigma_engine.avatar.model_manager import AvatarModelManager
         
         manager = AvatarModelManager()
         assert manager is not None
     
     def test_list_avatars(self):
         """Test listing available avatars."""
-        from forge_ai.avatar.model_manager import AvatarModelManager
+        from enigma_engine.avatar.model_manager import AvatarModelManager
         
         manager = AvatarModelManager()
         avatars = manager.list_avatars()
@@ -242,13 +242,13 @@ class TestVRMSupport:
     
     def test_vrm_loader_creation(self):
         """Test creating VRM loader."""
-        from forge_ai.avatar.vrm_support import VRMLoader
+        from enigma_engine.avatar.vrm_support import VRMLoader
         
         loader = VRMLoader()
         assert loader is not None
     
     def test_vrm_model_class(self):
         """Test VRMModel class exists."""
-        from forge_ai.avatar.vrm_support import VRMModel
+        from enigma_engine.avatar.vrm_support import VRMModel
         
         assert VRMModel is not None

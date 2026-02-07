@@ -17,10 +17,10 @@ Successfully merged three major feature pull requests into the `copilot/merge-pr
 - Bug fix: corrected 'base' model preset n_kv_heads (4→2)
 
 **Files Modified:**
-- `forge_ai/__init__.py`
-- `forge_ai/core/inference.py`
-- `forge_ai/core/model.py`
-- `forge_ai/py.typed` (new)
+- `enigma_engine/__init__.py`
+- `enigma_engine/core/inference.py`
+- `enigma_engine/core/model.py`
+- `enigma_engine/py.typed` (new)
 - `tests/test_code_quality_improvements.py` (new)
 
 ### PR #25: Module System Enhancements
@@ -36,9 +36,9 @@ Successfully merged three major feature pull requests into the `copilot/merge-pr
 - 41 comprehensive tests
 
 **New Files:**
-- `forge_ai/modules/docs.py`
-- `forge_ai/modules/sandbox.py`
-- `forge_ai/modules/updater.py`
+- `enigma_engine/modules/docs.py`
+- `enigma_engine/modules/sandbox.py`
+- `enigma_engine/modules/updater.py`
 - `tests/test_modules_extended.py`
 - `MODULE_IMPROVEMENTS_SUMMARY.md`
 - `demo_module_improvements.py`
@@ -61,16 +61,16 @@ Successfully merged three major feature pull requests into the `copilot/merge-pr
 - 32 comprehensive tests
 
 **New Files:**
-- `forge_ai/memory/rag.py`
-- `forge_ai/memory/embeddings.py`
-- `forge_ai/memory/consolidation.py`
-- `forge_ai/memory/async_memory.py`
-- `forge_ai/memory/search.py`
-- `forge_ai/memory/deduplication.py`
-- `forge_ai/memory/analytics.py`
-- `forge_ai/memory/visualization.py`
-- `forge_ai/memory/encryption.py`
-- `forge_ai/memory/backup.py`
+- `enigma_engine/memory/rag.py`
+- `enigma_engine/memory/embeddings.py`
+- `enigma_engine/memory/consolidation.py`
+- `enigma_engine/memory/async_memory.py`
+- `enigma_engine/memory/search.py`
+- `enigma_engine/memory/deduplication.py`
+- `enigma_engine/memory/analytics.py`
+- `enigma_engine/memory/visualization.py`
+- `enigma_engine/memory/encryption.py`
+- `enigma_engine/memory/backup.py`
 - `tests/test_memory_complete.py`
 
 ## Total Impact
@@ -129,18 +129,18 @@ e78a1eb Initial plan for merge
 **Files Added:**
 - `data/specialized/avatar_control_training.txt` - Training examples
 - `scripts/train_avatar_control.py` - One-command training
-- `forge_ai/tools/avatar_control_tool.py` - Tool definition
-- `forge_ai/avatar/ai_control.py` - AI command parsing
+- `enigma_engine/tools/avatar_control_tool.py` - Tool definition
+- `enigma_engine/avatar/ai_control.py` - AI command parsing
 - `AI_AVATAR_CONTROL_GUIDE.md` - Complete guide (296 lines)
 - `AVATAR_CONTROL_STATUS.md` - Status and fixes (153 lines)
 - `AVATAR_PRIORITY_SYSTEM.md` - Priority explanation (200+ lines)
 
 **Files Modified:**
-- `forge_ai/avatar/controller.py` - Added ControlPriority enum, request/release control
-- `forge_ai/avatar/bone_control.py` - Integrated priority system
-- `forge_ai/avatar/autonomous.py` - Updated to fallback (priority 50)
-- `forge_ai/tools/tool_definitions.py` - Added CONTROL_AVATAR_BONES
-- `forge_ai/tools/tool_executor.py` - Added _execute_control_avatar_bones()
+- `enigma_engine/avatar/controller.py` - Added ControlPriority enum, request/release control
+- `enigma_engine/avatar/bone_control.py` - Integrated priority system
+- `enigma_engine/avatar/autonomous.py` - Updated to fallback (priority 50)
+- `enigma_engine/tools/tool_definitions.py` - Added CONTROL_AVATAR_BONES
+- `enigma_engine/tools/tool_executor.py` - Added _execute_control_avatar_bones()
 - `CODE_ADVENTURE_TOUR.md` - Added Chapter 9: Avatar Control
 - `docs/HOW_TO_TRAIN_AVATAR_AI.txt` - Added bone control section
 - `docs/AVATAR_SYSTEM_GUIDE.md` - Updated integration info

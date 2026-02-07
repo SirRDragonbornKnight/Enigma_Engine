@@ -15,13 +15,13 @@ class TestPersonality:
     
     def test_import(self):
         """Test that personality module can be imported."""
-        from forge_ai.core.personality import AIPersonality, PersonalityTraits
+        from enigma_engine.core.personality import AIPersonality, PersonalityTraits
         assert AIPersonality is not None
         assert PersonalityTraits is not None
     
     def test_personality_creation(self):
         """Test creating a personality."""
-        from forge_ai.core.personality import AIPersonality
+        from enigma_engine.core.personality import AIPersonality
         
         personality = AIPersonality("test_model")
         assert personality.model_name == "test_model"
@@ -30,7 +30,7 @@ class TestPersonality:
     
     def test_personality_presets(self):
         """Test personality presets."""
-        from forge_ai.core.personality import AIPersonality
+        from enigma_engine.core.personality import AIPersonality
         
         presets = ["professional", "friendly", "creative", "analytical"]
         for preset in presets:
@@ -43,7 +43,7 @@ class TestPersonality:
     
     def test_personality_evolution(self):
         """Test personality evolution."""
-        from forge_ai.core.personality import AIPersonality
+        from enigma_engine.core.personality import AIPersonality
         
         personality = AIPersonality("test")
         initial_humor = personality.traits.humor_level
@@ -60,7 +60,7 @@ class TestPersonality:
     
     def test_personality_save_load(self):
         """Test saving and loading personality."""
-        from forge_ai.core.personality import AIPersonality
+        from enigma_engine.core.personality import AIPersonality
         
         with tempfile.TemporaryDirectory() as tmpdir:
             personality = AIPersonality("test")
@@ -83,13 +83,13 @@ class TestVoiceGenerator:
     
     def test_import(self):
         """Test that voice generator can be imported."""
-        from forge_ai.voice.voice_generator import AIVoiceGenerator
+        from enigma_engine.voice.voice_generator import AIVoiceGenerator
         assert AIVoiceGenerator is not None
     
     def test_voice_from_personality(self):
         """Test generating voice from personality."""
-        from forge_ai.core.personality import AIPersonality
-        from forge_ai.voice.voice_generator import AIVoiceGenerator
+        from enigma_engine.core.personality import AIPersonality
+        from enigma_engine.voice.voice_generator import AIVoiceGenerator
         
         personality = AIPersonality("test")
         personality.traits.confidence = 0.9
@@ -109,12 +109,12 @@ class TestInstanceManager:
     
     def test_import(self):
         """Test that instance manager can be imported."""
-        from forge_ai.core.instance_manager import InstanceManager
+        from enigma_engine.core.instance_manager import InstanceManager
         assert InstanceManager is not None
     
     def test_instance_creation(self):
         """Test creating an instance."""
-        from forge_ai.core.instance_manager import InstanceManager
+        from enigma_engine.core.instance_manager import InstanceManager
         
         manager = InstanceManager()
         assert manager.instance_id is not None
@@ -123,7 +123,7 @@ class TestInstanceManager:
     
     def test_model_locking(self):
         """Test model locking mechanism."""
-        from forge_ai.core.instance_manager import InstanceManager
+        from enigma_engine.core.instance_manager import InstanceManager
         
         manager1 = InstanceManager("test1")
         manager2 = InstanceManager("test2")
@@ -150,8 +150,8 @@ class TestHuggingFaceAddons:
         """Test that HuggingFace tab providers can be imported."""
         # HuggingFace integration is now through GUI tabs
         try:
-            from forge_ai.gui.tabs.image_tab import StableDiffusionLocal
-            from forge_ai.gui.tabs.embeddings_tab import LocalEmbedding
+            from enigma_engine.gui.tabs.image_tab import StableDiffusionLocal
+            from enigma_engine.gui.tabs.embeddings_tab import LocalEmbedding
             assert StableDiffusionLocal is not None
             assert LocalEmbedding is not None
         except ImportError as e:
@@ -160,7 +160,7 @@ class TestHuggingFaceAddons:
     def test_addon_creation(self):
         """Test that tab-based providers can be instantiated."""
         try:
-            from forge_ai.gui.tabs.embeddings_tab import LocalEmbedding
+            from enigma_engine.gui.tabs.embeddings_tab import LocalEmbedding
             # LocalEmbedding can be created without loading the model
             embedder = LocalEmbedding()
             assert embedder is not None
@@ -173,9 +173,9 @@ class TestHuggingFaceAddons:
         """Test that generation tabs are available."""
         # Test that the new tab-based providers exist
         try:
-            from forge_ai.gui.tabs.image_tab import StableDiffusionLocal, OpenAIImage
-            from forge_ai.gui.tabs.code_tab import ForgeCode, OpenAICode
-            from forge_ai.gui.tabs.embeddings_tab import LocalEmbedding, OpenAIEmbedding
+            from enigma_engine.gui.tabs.image_tab import StableDiffusionLocal, OpenAIImage
+            from enigma_engine.gui.tabs.code_tab import ForgeCode, OpenAICode
+            from enigma_engine.gui.tabs.embeddings_tab import LocalEmbedding, OpenAIEmbedding
             assert StableDiffusionLocal is not None
             assert OpenAIImage is not None
             assert ForgeCode is not None
@@ -192,7 +192,7 @@ class TestWebDashboard:
     def test_import(self):
         """Test that web app can be imported."""
         try:
-            from forge_ai.web.app import app
+            from enigma_engine.web.app import app
             assert app is not None
         except ImportError:
             pytest.skip("Flask not installed")
@@ -200,7 +200,7 @@ class TestWebDashboard:
     def test_routes_exist(self):
         """Test that main routes are defined."""
         try:
-            from forge_ai.web.app import app
+            from enigma_engine.web.app import app
             
             # Get all route rules
             routes = [str(rule) for rule in app.url_map.iter_rules()]
@@ -221,7 +221,7 @@ class TestMobileAPI:
     def test_import(self):
         """Test that mobile API can be imported."""
         try:
-            from forge_ai.mobile import mobile_app, MobileAPI
+            from enigma_engine.mobile import mobile_app, MobileAPI
             # mobile_app may be None if Flask not available
             assert MobileAPI is not None
         except ImportError:
@@ -230,7 +230,7 @@ class TestMobileAPI:
     def test_endpoints_exist(self):
         """Test that API endpoints are defined."""
         try:
-            from forge_ai.mobile import MobileAPI
+            from enigma_engine.mobile import MobileAPI
             
             api = MobileAPI(port=5099)  # Use unusual port for test
             

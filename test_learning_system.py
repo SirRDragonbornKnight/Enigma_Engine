@@ -1,5 +1,5 @@
 """Test script for the learning system."""
-from forge_ai.learning import ConversationDetector, detect_learning, is_correction, is_teaching
+from enigma_engine.learning import ConversationDetector, detect_learning, is_correction, is_teaching
 
 # Test correction detection
 detector = ConversationDetector()

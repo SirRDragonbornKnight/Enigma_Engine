@@ -1,11 +1,11 @@
 #!/bin/bash
-# ForgeAI Quick Setup Script
+# Enigma AI Engine Quick Setup Script
 # Works on Linux, macOS, and WSL
 
 set -e
 
 echo "========================================"
-echo "  ForgeAI Quick Setup"
+echo "  Enigma AI Engine Quick Setup"
 echo "========================================"
 
 # Detect OS
@@ -65,7 +65,7 @@ if [[ "$OS" == "linux" ]] || [[ "$OS" == "pi" ]]; then
 fi
 
 # Run the installer
-echo "Running ForgeAI installer..."
+echo "Running Enigma AI Engine installer..."
 $PYTHON install.py --standard
 
 echo ""
@@ -80,7 +80,7 @@ else
     echo "  source venv/bin/activate"
 fi
 echo ""
-echo "To run ForgeAI:"
+echo "To run Enigma AI Engine:"
 echo "  python run.py --gui    # GUI mode"
 echo "  python run.py --run    # CLI mode"
 echo "  python run.py --train  # Training mode"

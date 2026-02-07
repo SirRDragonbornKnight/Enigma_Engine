@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ForgeAI Installer
+Enigma AI Engine Installer
 -----------------
 Cross-platform installer that detects your system and installs appropriate dependencies.
 
@@ -94,9 +94,16 @@ def detect_system():
     except:
         pass
     
-    # Check GPU
+    # Check GPU - works on Linux, Windows, and macOS
     if info['os'] == 'Linux':
         success, output = run_cmd('nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null')
+        if success and output.strip():
+            info['has_gpu'] = True
+            info['gpu_type'] = 'nvidia'
+            info['gpu_name'] = output.strip().split('\n')[0]
+    elif info['os'] == 'Windows':
+        # Windows - nvidia-smi is in PATH if CUDA drivers are installed
+        success, output = run_cmd('nvidia-smi --query-gpu=name --format=csv,noheader 2>nul')
         if success and output.strip():
             info['has_gpu'] = True
             info['gpu_type'] = 'nvidia'
@@ -245,8 +252,16 @@ def install_pytorch(system_info):
         print_info("Raspberry Pi detected - installing CPU-only PyTorch")
         cmd = f'{sys.executable} -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu'
     elif system_info['gpu_type'] == 'nvidia':
+        gpu_name = system_info.get('gpu_name', 'unknown').lower()
         print_info(f"NVIDIA GPU detected ({system_info.get('gpu_name', 'unknown')}) - installing CUDA PyTorch")
-        cmd = f'{sys.executable} -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118'
+        
+        # RTX 50 series (Blackwell) needs CUDA 12.8+ nightly
+        if any(x in gpu_name for x in ['5090', '5080', '5070', '5060', '50 series']):
+            print_info("RTX 50 series detected - using CUDA 12.8 nightly for Blackwell support")
+            cmd = f'{sys.executable} -m pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128'
+        # RTX 40/30/20 series work well with CUDA 12.4
+        else:
+            cmd = f'{sys.executable} -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124'
     elif system_info['gpu_type'] == 'mps':
         print_info("Apple Silicon detected - installing MPS PyTorch")
         cmd = f'{sys.executable} -m pip install torch torchvision torchaudio'
@@ -346,7 +361,7 @@ def install_profile(profile_name, system_info, installed):
 
 def interactive_install(system_info, installed):
     """Interactive installation wizard."""
-    print_header("ForgeAI Interactive Installer")
+    print_header("Enigma AI Engine Interactive Installer")
     
     print(f"""
 System Information:
@@ -424,7 +439,7 @@ Installation Profiles:
         installed.update(get_installed_packages())
 
 def main():
-    parser = argparse.ArgumentParser(description='ForgeAI Installer')
+    parser = argparse.ArgumentParser(description='Enigma AI Engine Installer')
     parser.add_argument('--minimal', action='store_true', help='Install minimal (core only)')
     parser.add_argument('--standard', action='store_true', help='Install standard (core + GUI + voice)')
     parser.add_argument('--full', action='store_true', help='Install everything')
@@ -436,7 +451,7 @@ def main():
     
     print(color("""
 ╔═══════════════════════════════════════════════════════════════════╗
-║                     ForgeAI Installer v1.0                        ║
+║                     Enigma AI Engine Installer v1.0                        ║
 ║              Cross-platform AI Framework Setup                    ║
 ╚═══════════════════════════════════════════════════════════════════╝
 """, Colors.CYAN))

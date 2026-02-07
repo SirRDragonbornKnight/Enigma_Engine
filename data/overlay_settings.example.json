@@ -1,0 +1,13 @@
+{
+  "mode": "compact",
+  "position": "top_right",
+  "custom_x": null,
+  "custom_y": null,
+  "opacity": 0.9,
+  "click_through": false,
+  "always_on_top": true,
+  "theme_name": "gaming",
+  "hotkey": "Ctrl+Shift+A",
+  "remember_position": true,
+  "show_on_startup": false
+}

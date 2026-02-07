@@ -1,6 +1,6 @@
 # Five-Star Features Guide
 
-This guide covers all the new advanced features added to ForgeAI to achieve a five-star rating.
+This guide covers all the new advanced features added to Enigma AI Engine to achieve a five-star rating.
 
 ## Table of Contents
 
@@ -21,7 +21,7 @@ Generate 3D models from text descriptions using state-of-the-art AI models.
 ### Local Generation (Shap-E/Point-E)
 
 ```python
-from forge_ai.modules import ModuleManager
+from enigma_engine.modules import ModuleManager
 
 manager = ModuleManager()
 manager.load('threed_gen_local', config={
@@ -79,7 +79,7 @@ Control resource usage with five optimized power modes.
 ### Usage
 
 ```python
-from forge_ai.core.resources import apply_resource_mode, get_resource_info
+from enigma_engine.core.resources import apply_resource_mode, get_resource_info
 
 # Switch to gaming mode
 apply_resource_mode("gaming")
@@ -111,7 +111,7 @@ Real-time motion tracking for gesture control and avatar mimicry.
 ### Setup
 
 ```python
-from forge_ai.modules import ModuleManager
+from enigma_engine.modules import ModuleManager
 
 manager = ModuleManager()
 manager.load('motion_tracking', config={
@@ -160,7 +160,7 @@ Load and run quantized GGUF models (llama.cpp compatible).
 ### Loading GGUF Models
 
 ```python
-from forge_ai.core.gguf_loader import GGUFModel
+from enigma_engine.core.gguf_loader import GGUFModel
 
 model = GGUFModel(
     model_path="models/llama-7b-q4.gguf",
@@ -210,7 +210,7 @@ response = model.chat(messages, max_tokens=150)
 ### GPU Layer Recommendations
 
 ```python
-from forge_ai.core.gguf_loader import recommend_gpu_layers
+from enigma_engine.core.gguf_loader import recommend_gpu_layers
 
 # Recommend layers based on model size and VRAM
 layers = recommend_gpu_layers(
@@ -236,7 +236,7 @@ Efficient fine-tuning with Low-Rank Adaptation (LoRA).
 ### Quick Start
 
 ```python
-from forge_ai.core.lora_utils import LoRATrainer, LoRAConfig
+from enigma_engine.core.lora_utils import LoRATrainer, LoRAConfig
 
 # Configure LoRA
 config = LoRAConfig(
@@ -263,7 +263,7 @@ trainer.merge_and_save("merged_model.pth")
 ### Preparing Data
 
 ```python
-from forge_ai.core.lora_utils import prepare_lora_dataset
+from enigma_engine.core.lora_utils import prepare_lora_dataset
 
 dataset = prepare_lora_dataset(
     data_path="data/training.txt",
@@ -294,7 +294,7 @@ Automatic typo correction and smart suggestions.
 ### Typo Correction
 
 ```python
-from forge_ai.utils.text_enhancement import correct_typos
+from enigma_engine.utils.text_enhancement import correct_typos
 
 text = "Teh modle is leraning form teh data"
 corrected = correct_typos(text)
@@ -304,7 +304,7 @@ corrected = correct_typos(text)
 ### Command Suggestions
 
 ```python
-from forge_ai.utils.text_enhancement import suggest_command
+from enigma_engine.utils.text_enhancement import suggest_command
 
 commands = ["train", "inference", "generate", "evaluate"]
 suggestion = suggest_command("trian", commands)
@@ -314,7 +314,7 @@ suggestion = suggest_command("trian", commands)
 ### Parameter Validation
 
 ```python
-from forge_ai.utils.text_enhancement import validate_parameter
+from enigma_engine.utils.text_enhancement import validate_parameter
 
 is_valid, error = validate_parameter(
     value="150",
@@ -329,7 +329,7 @@ is_valid, error = validate_parameter(
 ### "Did You Mean" Suggestions
 
 ```python
-from forge_ai.utils.text_enhancement import (
+from enigma_engine.utils.text_enhancement import (
     find_closest_match, 
     format_did_you_mean
 )
@@ -348,7 +348,7 @@ Real-time resource usage dashboard.
 ### GUI Widget
 
 ```python
-from forge_ai.gui.resource_monitor import ResourceMonitor
+from enigma_engine.gui.resource_monitor import ResourceMonitor
 
 # Create monitor widget
 monitor = ResourceMonitor()
@@ -440,13 +440,13 @@ monitor.record_generation(
 
 See individual module documentation:
 
-- `forge_ai.modules.registry` - Module definitions
-- `forge_ai.core.gguf_loader` - GGUF loading
-- `forge_ai.core.lora_utils` - LoRA training
-- `forge_ai.core.resources` - Resource management
-- `forge_ai.tools.motion_tracking` - Motion tracking
-- `forge_ai.utils.text_enhancement` - Text utilities
-- `forge_ai.gui.resource_monitor` - Resource monitoring widget
+- `enigma_engine.modules.registry` - Module definitions
+- `enigma_engine.core.gguf_loader` - GGUF loading
+- `enigma_engine.core.lora_utils` - LoRA training
+- `enigma_engine.core.resources` - Resource management
+- `enigma_engine.tools.motion_tracking` - Motion tracking
+- `enigma_engine.utils.text_enhancement` - Text utilities
+- `enigma_engine.gui.resource_monitor` - Resource monitoring widget
 
 ---
 
@@ -465,7 +465,7 @@ Complete examples available in `examples/` directory:
 
 To add more features, follow the module system pattern:
 
-1. Create module class in `forge_ai/modules/registry.py`
+1. Create module class in `enigma_engine/modules/registry.py`
 2. Add to `MODULE_REGISTRY` dict
 3. Implement load/unload methods
 4. Add tests
@@ -473,4 +473,4 @@ To add more features, follow the module system pattern:
 
 ---
 
-**ForgeAI** - The complete local AI framework
+**Enigma AI Engine** - The complete local AI framework

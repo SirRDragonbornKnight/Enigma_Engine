@@ -1,5 +1,5 @@
 """
-Tests for forge_ai.agents module.
+Tests for enigma_engine.agents module.
 
 Tests multi-agent system functionality including:
 - Agent creation and configuration
@@ -19,7 +19,7 @@ class TestAgentRole:
     
     def test_roles_exist(self):
         """Test that all expected roles exist."""
-        from forge_ai.agents.multi_agent import AgentRole
+        from enigma_engine.agents.multi_agent import AgentRole
         
         expected_roles = [
             'GENERAL', 'CODER', 'REVIEWER', 'WRITER', 'ANALYST',
@@ -31,7 +31,7 @@ class TestAgentRole:
     
     def test_role_values(self):
         """Test role value strings."""
-        from forge_ai.agents.multi_agent import AgentRole
+        from enigma_engine.agents.multi_agent import AgentRole
         
         assert AgentRole.CODER.value == "coder"
         assert AgentRole.GENERAL.value == "general"
@@ -42,7 +42,7 @@ class TestAgentPersonality:
     
     def test_default_personality(self):
         """Test creating personality with defaults."""
-        from forge_ai.agents.multi_agent import AgentPersonality, AgentRole
+        from enigma_engine.agents.multi_agent import AgentPersonality, AgentRole
         
         personality = AgentPersonality(
             name="TestAgent",
@@ -56,7 +56,7 @@ class TestAgentPersonality:
     
     def test_custom_personality(self):
         """Test creating personality with custom values."""
-        from forge_ai.agents.multi_agent import AgentPersonality, AgentRole
+        from enigma_engine.agents.multi_agent import AgentPersonality, AgentRole
         
         personality = AgentPersonality(
             name="CreativeWriter",
@@ -72,7 +72,7 @@ class TestAgentPersonality:
     
     def test_personality_to_dict(self):
         """Test serialization to dict."""
-        from forge_ai.agents.multi_agent import AgentPersonality, AgentRole
+        from enigma_engine.agents.multi_agent import AgentPersonality, AgentRole
         
         personality = AgentPersonality(
             name="Test",
@@ -98,7 +98,7 @@ class TestAgent:
     
     def test_agent_creation(self, mock_engine):
         """Test creating an agent."""
-        from forge_ai.agents.multi_agent import Agent, AgentRole, AgentPersonality
+        from enigma_engine.agents.multi_agent import Agent, AgentRole, AgentPersonality
         
         personality = AgentPersonality(
             name="TestAgent",
@@ -114,7 +114,7 @@ class TestAgent:
     
     def test_agent_respond(self, mock_engine):
         """Test agent generating a response."""
-        from forge_ai.agents.multi_agent import Agent, AgentRole, AgentPersonality
+        from enigma_engine.agents.multi_agent import Agent, AgentRole, AgentPersonality
         
         personality = AgentPersonality(
             name="TestAgent",
@@ -142,7 +142,7 @@ class TestMultiAgentSystem:
     
     def test_system_creation(self):
         """Test creating a multi-agent system."""
-        from forge_ai.agents.multi_agent import MultiAgentSystem
+        from enigma_engine.agents.multi_agent import MultiAgentSystem
         
         system = MultiAgentSystem()
         assert system is not None
@@ -150,7 +150,7 @@ class TestMultiAgentSystem:
     
     def test_create_agent(self, mock_engine):
         """Test creating an agent through the system."""
-        from forge_ai.agents.multi_agent import MultiAgentSystem, AgentRole
+        from enigma_engine.agents.multi_agent import MultiAgentSystem, AgentRole
         
         system = MultiAgentSystem()
         system._engine = mock_engine
@@ -164,7 +164,7 @@ class TestMultiAgentSystem:
     
     def test_remove_agent(self, mock_engine):
         """Test removing an agent."""
-        from forge_ai.agents.multi_agent import MultiAgentSystem, AgentRole
+        from enigma_engine.agents.multi_agent import MultiAgentSystem, AgentRole
         
         system = MultiAgentSystem()
         system._engine = mock_engine
@@ -177,7 +177,7 @@ class TestMultiAgentSystem:
     
     def test_get_agent(self, mock_engine):
         """Test getting an agent by name."""
-        from forge_ai.agents.multi_agent import MultiAgentSystem, AgentRole
+        from enigma_engine.agents.multi_agent import MultiAgentSystem, AgentRole
         
         system = MultiAgentSystem()
         system._engine = mock_engine
@@ -194,7 +194,7 @@ class TestAgentCollaboration:
     @pytest.fixture
     def system_with_agents(self):
         """Create a system with multiple agents."""
-        from forge_ai.agents.multi_agent import MultiAgentSystem, AgentRole
+        from enigma_engine.agents.multi_agent import MultiAgentSystem, AgentRole
         
         system = MultiAgentSystem()
         
@@ -223,7 +223,7 @@ class TestAgentSerialization:
     
     def test_agent_state_round_trip(self):
         """Test saving and loading agent state."""
-        from forge_ai.agents.multi_agent import AgentPersonality, AgentRole
+        from enigma_engine.agents.multi_agent import AgentPersonality, AgentRole
         
         original = AgentPersonality(
             name="TestAgent",

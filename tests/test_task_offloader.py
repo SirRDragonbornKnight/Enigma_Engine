@@ -6,7 +6,7 @@ import pytest
 import time
 from unittest.mock import Mock, MagicMock
 
-from forge_ai.core.task_offloader import (
+from enigma_engine.core.task_offloader import (
     TaskOffloader,
     OffloaderConfig,
     TaskStatus,

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-ForgeAI Memory System Example
+Enigma AI Engine Memory System Example
 =============================
 
-Complete example showing how to use ForgeAI's memory system including:
+Complete example showing how to use Enigma AI Engine's memory system including:
 - Conversation storage and retrieval
 - Vector database for semantic search
 - RAG (Retrieval-Augmented Generation)
@@ -28,10 +28,10 @@ import numpy as np
 
 # =============================================================================
 # Simulated Memory Classes (for standalone testing)
-# In real use, import from forge_ai.memory
+# In real use, import from enigma_engine.memory
 # =============================================================================
 
-SIMULATED = True  # Set to False when using actual ForgeAI
+SIMULATED = True  # Set to False when using actual Enigma AI Engine
 
 @dataclass
 class Memory:
@@ -488,14 +488,14 @@ def example_rag():
     
     # Index some knowledge
     knowledge = [
-        {"role": "ai", "text": "ForgeAI supports multiple model sizes from nano (1M params) to omega (70B+ params)", "ts": time.time()},
+        {"role": "ai", "text": "Enigma AI Engine supports multiple model sizes from nano (1M params) to omega (70B+ params)", "ts": time.time()},
         {"role": "ai", "text": "Training requires at least 1000 lines of text data for good results", "ts": time.time()},
         {"role": "ai", "text": "The module manager prevents loading conflicting modules automatically", "ts": time.time()},
         {"role": "ai", "text": "Image generation supports Stable Diffusion locally or DALL-E via API", "ts": time.time()},
         {"role": "ai", "text": "Voice input uses speech recognition, voice output uses TTS engines", "ts": time.time()}
     ]
     
-    manager.save_conversation("forgeai_knowledge", knowledge)
+    manager.save_conversation("Enigma AI Engine_knowledge", knowledge)
     
     # Create RAG system
     rag = RAGSystem(manager)
@@ -547,25 +547,25 @@ def example_faiss_backend():
 
 
 def example_with_forge():
-    """Using actual ForgeAI memory system (not simulated)."""
+    """Using actual Enigma AI Engine memory system (not simulated)."""
     print("\n" + "="*60)
-    print("Example 5: Integration with ForgeAI")
+    print("Example 5: Integration with Enigma AI Engine")
     print("="*60)
     
     if SIMULATED:
-        print("Running in simulated mode. To use real ForgeAI:")
-        print("  from forge_ai.memory.manager import ConversationManager")
-        print("  from forge_ai.memory.vector_db import SimpleVectorDB, FAISSVectorDB")
-        print("  from forge_ai.memory.rag import RAGSystem")
-        print("  from forge_ai.memory.embeddings import EmbeddingGenerator")
+        print("Running in simulated mode. To use real Enigma AI Engine:")
+        print("  from enigma_engine.memory.manager import ConversationManager")
+        print("  from enigma_engine.memory.vector_db import SimpleVectorDB, FAISSVectorDB")
+        print("  from enigma_engine.memory.rag import RAGSystem")
+        print("  from enigma_engine.memory.embeddings import EmbeddingGenerator")
         return
     
-    # Real ForgeAI usage
+    # Real Enigma AI Engine usage
     try:
-        from forge_ai.memory.manager import ConversationManager
-        from forge_ai.memory.rag import RAGSystem
+        from enigma_engine.memory.manager import ConversationManager
+        from enigma_engine.memory.rag import RAGSystem
         
-        # Use ForgeAI's actual memory system
+        # Use Enigma AI Engine's actual memory system
         manager = ConversationManager()
         rag = RAGSystem(manager.vector_db)
         
@@ -573,7 +573,7 @@ def example_with_forge():
         # Just use the chat interface and memories are stored!
         
     except ImportError as e:
-        print(f"ForgeAI not available: {e}")
+        print(f"Enigma AI Engine not available: {e}")
 
 
 # =============================================================================
@@ -581,7 +581,7 @@ def example_with_forge():
 # =============================================================================
 
 if __name__ == "__main__":
-    print("ForgeAI Memory System Examples")
+    print("Enigma AI Engine Memory System Examples")
     print("="*60)
     
     # Run all examples
@@ -622,8 +622,8 @@ Key Concepts:
    - FAISSVectorDB: Fast, for large data
    - Can add cloud backends (Pinecone)
 
-For real ForgeAI integration:
-    from forge_ai.memory.manager import ConversationManager
-    from forge_ai.memory.vector_db import SimpleVectorDB
-    from forge_ai.memory.rag import RAGSystem
+For real Enigma AI Engine integration:
+    from enigma_engine.memory.manager import ConversationManager
+    from enigma_engine.memory.vector_db import SimpleVectorDB
+    from enigma_engine.memory.rag import RAGSystem
 """)

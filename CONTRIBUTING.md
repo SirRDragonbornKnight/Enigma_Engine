@@ -1,6 +1,6 @@
-# Contributing to ForgeAI
+# Contributing to Enigma AI Engine
 
-Thank you for considering contributing to ForgeAI! This document provides guidelines for contributing to the project.
+Thank you for considering contributing to Enigma AI Engine! This document provides guidelines for contributing to the project.
 
 ## Table of Contents
 
@@ -61,7 +61,7 @@ pip install pytest black flake8 mypy
 python -m pytest tests/ -v
 
 # Check imports
-python -c "from forge_ai.modules import ModuleManager; print('✓ OK')"
+python -c "from enigma_engine.modules import ModuleManager; print('✓ OK')"
 ```
 
 ## Project Architecture
@@ -94,7 +94,7 @@ Enigma uses a **module-based architecture** where everything is toggleable:
 ### Package Structure
 
 ```
-forge_ai/
+enigma_engine/
 ├── core/          # AI model, training, inference
 ├── modules/       # Module system (manager, registry)
 ├── addons/        # AI generation addons (wrapped as modules)
@@ -141,8 +141,8 @@ forge_ai/
 **Example:** Adding a new AI capability
 
 ```python
-# forge_ai/modules/my_module.py
-from forge_ai.modules import Module, ModuleInfo, ModuleCategory
+# enigma_engine/modules/my_module.py
+from enigma_engine.modules import Module, ModuleInfo, ModuleCategory
 
 class MyModule(Module):
     INFO = ModuleInfo(
@@ -166,7 +166,7 @@ class MyModule(Module):
         return True
 ```
 
-Then register it in `forge_ai/modules/registry.py`:
+Then register it in `enigma_engine/modules/registry.py`:
 ```python
 MODULE_REGISTRY['my_module'] = MyModule
 ```
@@ -176,7 +176,7 @@ MODULE_REGISTRY['my_module'] = MyModule
 Generation capabilities now live in GUI tabs. To add a new generator:
 
 ```python
-# forge_ai/gui/tabs/my_gen_tab.py
+# enigma_engine/gui/tabs/my_gen_tab.py
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QPushButton, QTextEdit
 from ..base_tab import BaseTab
 
@@ -323,13 +323,13 @@ def calculate_loss(predictions, targets):
 
 ```bash
 # Format code
-black forge_ai/
+black enigma_engine/
 
 # Check style
-flake8 forge_ai/
+flake8 enigma_engine/
 
 # Type checking
-mypy forge_ai/
+mypy enigma_engine/
 ```
 
 ### Common Patterns
@@ -438,8 +438,8 @@ pytest tests/ -v
 ```python
 # tests/test_my_module.py
 import unittest
-from forge_ai.modules import ModuleManager
-from forge_ai.modules.my_module import MyModule
+from enigma_engine.modules import ModuleManager
+from enigma_engine.modules.my_module import MyModule
 
 class TestMyModule(unittest.TestCase):
     def setUp(self):
@@ -568,4 +568,4 @@ Your contributions will be credited in:
 
 ---
 
-**Thank you for making ForgeAI better!** 🚀
+**Thank you for making Enigma AI Engine better!** 🚀

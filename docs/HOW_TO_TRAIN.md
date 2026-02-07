@@ -1,6 +1,6 @@
-# How to Train Your ForgeAI
+# How to Train Your Enigma AI Engine
 
-Complete guide to training and fine-tuning your ForgeAI model.
+Complete guide to training and fine-tuning your Enigma AI Engine model.
 
 ## Table of Contents
 
@@ -68,7 +68,7 @@ Assistant: Neural networks are computing systems inspired by biological neural n
 #### Plain Text Format
 For general text, just provide clean paragraphs:
 ```
-The ForgeAI is a flexible AI framework. It can be trained on various types of data.
+The Enigma AI Engine is a flexible AI framework. It can be trained on various types of data.
 Each model size offers different capabilities and resource requirements.
 ```
 
@@ -151,7 +151,7 @@ python run.py --train --model tiny --epochs 100
 
 ### Advanced Parameters (config.py)
 
-Edit `forge_ai/config.py` for fine-tuning:
+Edit `enigma_engine/config.py` for fine-tuning:
 
 ```python
 # Learning rate (default: 1e-4)
@@ -235,7 +235,7 @@ Q: What is your favorite color?
 A: As an AI, I don't perceive colors, but I appreciate the concept of blue for its association with calm and clarity.
 
 Q: Tell me about yourself
-A: I'm an AI trained on the ForgeAI framework. I'm designed to be helpful, honest, and continuously learning.
+A: I'm an AI trained on the Enigma AI Engine framework. I'm designed to be helpful, honest, and continuously learning.
 ```
 
 ---
@@ -391,7 +391,7 @@ python run.py --train --data data/tool_training_data.txt --epochs 20
 
 Test your model quality:
 ```python
-from forge_ai.core.model_registry import ModelRegistry
+from enigma_engine.core.model_registry import ModelRegistry
 
 registry = ModelRegistry()
 model, _ = registry.load_model("your_model")

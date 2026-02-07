@@ -1,7 +1,7 @@
 """
-Image Generation Example for ForgeAI
+Image Generation Example for Enigma AI Engine
 
-This example shows how to generate images with ForgeAI.
+This example shows how to generate images with Enigma AI Engine.
 Create images from text prompts using local or cloud providers.
 
 SUPPORTED PROVIDERS:
@@ -31,7 +31,7 @@ from abc import ABC, abstractmethod
 # OUTPUT DIRECTORY
 # =============================================================================
 
-IMAGE_OUTPUT_DIR = Path.home() / ".forge_ai" / "outputs" / "images"
+IMAGE_OUTPUT_DIR = Path.home() / ".enigma_engine" / "outputs" / "images"
 IMAGE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -205,7 +205,7 @@ class OpenAIImage(ImageGenerator):
         - dall-e-2: Good quality, faster
     """
     
-    CONFIG_FILE = Path.home() / ".forge_ai" / "openai.json"
+    CONFIG_FILE = Path.home() / ".enigma_engine" / "openai.json"
     
     def __init__(self, api_key: str = None, model: str = "dall-e-3"):
         self.api_key = api_key or self._load_api_key()
@@ -318,7 +318,7 @@ class ReplicateImage(ImageGenerator):
         - pip install replicate
     """
     
-    CONFIG_FILE = Path.home() / ".forge_ai" / "replicate.json"
+    CONFIG_FILE = Path.home() / ".enigma_engine" / "replicate.json"
     
     DEFAULT_MODEL = "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b"
     
@@ -509,7 +509,7 @@ def generate_image(prompt: str, **kwargs) -> Optional[str]:
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("ForgeAI Image Generation Example")
+    print("Enigma AI Engine Image Generation Example")
     print("=" * 60)
     
     # Initialize

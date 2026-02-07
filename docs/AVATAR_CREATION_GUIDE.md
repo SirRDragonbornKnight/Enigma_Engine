@@ -1,6 +1,6 @@
-# ForgeAI Avatar Creation Guide
+# Enigma AI Engine Avatar Creation Guide
 
-Complete guide to creating custom avatars for ForgeAI.
+Complete guide to creating custom avatars for Enigma AI Engine.
 
 ## Table of Contents
 1. [Quick Start](#quick-start)
@@ -17,7 +17,7 @@ Complete guide to creating custom avatars for ForgeAI.
 ## Quick Start
 
 ### Easiest Way: Use Sample Avatars
-1. Open ForgeAI GUI
+1. Open Enigma AI Engine GUI
 2. Go to **Avatar** tab
 3. Click **Generate Samples**
 4. Select one from the gallery
@@ -33,7 +33,7 @@ Complete guide to creating custom avatars for ForgeAI.
 
 ## Avatar Types
 
-ForgeAI supports several avatar types:
+Enigma AI Engine supports several avatar types:
 
 | Type | Description | Best For |
 |------|-------------|----------|
@@ -81,7 +81,7 @@ excited.png    - Big smile, sparkly eyes
   "name": "My Avatar",
   "version": "1.0",
   "author": "Your Name",
-  "description": "A custom avatar for ForgeAI",
+  "description": "A custom avatar for Enigma AI Engine",
   "avatar_type": "HUMAN",
   "emotions": {
     "neutral": "neutral.png",
@@ -123,7 +123,7 @@ Drag the folder onto the Avatar tab import area, or use **Import Avatar...**.
 
 ### Generate Templates via Code
 ```python
-from forge_ai.avatar.template_generator import generate_template
+from enigma_engine.avatar.template_generator import generate_template
 
 # Create templates for "my_robot" avatar
 result = generate_template(
@@ -170,7 +170,7 @@ Add more nuance:
 - `proud` - Achievements
 
 ### Automatic Detection
-ForgeAI automatically detects emotions from AI responses using keywords:
+Enigma AI Engine automatically detects emotions from AI responses using keywords:
 - "happy", "great", "wonderful" → `happy`
 - "sorry", "unfortunately" → `sad`
 - "hmm", "let me think" → `thinking`
@@ -207,7 +207,7 @@ my_avatar.forgeavatar (ZIP file)
 
 2. **Create a Bundle**
 ```python
-from forge_ai.avatar import AvatarBundleCreator
+from enigma_engine.avatar import AvatarBundleCreator
 
 creator = AvatarBundleCreator()
 bundle_path = creator.create_from_folder(
@@ -218,7 +218,7 @@ bundle_path = creator.create_from_folder(
 
 3. **Install a Bundle**
 ```python
-from forge_ai.avatar import install_avatar_bundle
+from enigma_engine.avatar import install_avatar_bundle
 
 install_avatar_bundle("my_avatar.forgeavatar")
 ```

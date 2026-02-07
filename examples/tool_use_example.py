@@ -2,7 +2,7 @@
 """
 Example: Using the Tool Use System
 
-This example demonstrates how the ForgeAI AI can use tools naturally in conversation.
+This example demonstrates how the Enigma AI Engine AI can use tools naturally in conversation.
 
 Steps:
 1. Initialize inference engine with tool support
@@ -10,9 +10,9 @@ Steps:
 3. Have a conversation where AI uses tools
 """
 
-from forge_ai.core.inference import ForgeEngine
-from forge_ai.modules import ModuleManager
-from forge_ai.tools import get_available_tools_for_prompt
+from enigma_engine.core.inference import ForgeEngine
+from enigma_engine.modules import ModuleManager
+from enigma_engine.tools import get_available_tools_for_prompt
 
 
 def main():
@@ -54,7 +54,7 @@ def main():
     print("=" * 80)
     
     # Show available tools
-    from forge_ai.tools import get_all_tools
+    from enigma_engine.tools import get_all_tools
     tools = get_all_tools()
     
     print(f"\nThe AI has access to {len(tools)} tools:")
@@ -126,7 +126,7 @@ The AI then continues based on the result.
 To teach the AI to use tools:
 
 1. Train the tokenizer with tool tokens:
-   python -m forge_ai.core.tokenizer data/tool_training_data.txt
+   python -m enigma_engine.core.tokenizer data/tool_training_data.txt
 
 2. Train the model on tool examples:
    python run.py --train --data data/tool_training_data.txt

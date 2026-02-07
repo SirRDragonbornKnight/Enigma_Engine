@@ -29,7 +29,7 @@ Added avatar control button next to voice button:
 ## Technical Details
 
 ### Modified File
-- **forge_ai/gui/system_tray.py** (QuickCommandOverlay class)
+- **enigma_engine/gui/system_tray.py** (QuickCommandOverlay class)
 
 ### New Methods
 1. `_pulse_voice_button()` - Animates voice button during recording

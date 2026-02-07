@@ -2,17 +2,17 @@
 
 ## ✅ Implementation Complete
 
-This implementation adds a complete Character/Persona System to ForgeAI, allowing users to create, customize, copy, and share AI identities.
+This implementation adds a complete Character/Persona System to Enigma AI Engine, allowing users to create, customize, copy, and share AI identities.
 
 ## 📦 What Was Added
 
 ### Core System Files
-1. **`forge_ai/core/persona.py`** (645 lines)
+1. **`enigma_engine/core/persona.py`** (645 lines)
    - `AIPersona` dataclass - Complete AI identity
    - `PersonaManager` class - CRUD operations, copy, export, import, merge
    - `get_persona_manager()` - Singleton access
 
-2. **`forge_ai/gui/tabs/persona_tab.py`** (624 lines)
+2. **`enigma_engine/gui/tabs/persona_tab.py`** (624 lines)
    - Full GUI for persona management
    - Copy/paste functionality
    - Export/import dialogs
@@ -26,17 +26,17 @@ This implementation adds a complete Character/Persona System to ForgeAI, allowin
 
 ### Template Personas
 4 starter templates in `data/personas/templates/`:
-- **helpful_assistant.forge-ai** - Balanced, professional
-- **creative_companion.forge-ai** - Playful, imaginative
-- **technical_expert.forge-ai** - Precise, detailed
-- **casual_friend.forge-ai** - Relaxed, friendly
+- **helpful_assistant.enigma-engine** - Balanced, professional
+- **creative_companion.enigma-engine** - Playful, imaginative
+- **technical_expert.enigma-engine** - Precise, detailed
+- **casual_friend.enigma-engine** - Relaxed, friendly
 
 ### Integration Updates
-- **`forge_ai/core/__init__.py`** - Export persona classes
-- **`forge_ai/core/personality.py`** - Add `personality_from_persona()` helper
-- **`forge_ai/config/defaults.py`** - Add `personas_dir` config
-- **`forge_ai/gui/enhanced_window.py`** - Add Persona tab to sidebar
-- **`forge_ai/gui/tabs/chat_tab.py`** - Show current persona in header
+- **`enigma_engine/core/__init__.py`** - Export persona classes
+- **`enigma_engine/core/personality.py`** - Add `personality_from_persona()` helper
+- **`enigma_engine/config/defaults.py`** - Add `personas_dir` config
+- **`enigma_engine/gui/enhanced_window.py`** - Add Persona tab to sidebar
+- **`enigma_engine/gui/tabs/chat_tab.py`** - Show current persona in header
 - **`.gitignore`** - Allow persona templates in repo
 
 ### Documentation
@@ -55,12 +55,12 @@ Users can now:
 
 2. **Export personas** to share
    ```python
-   manager.export_persona(persona.id, Path("my_ai.forge-ai"))
+   manager.export_persona(persona.id, Path("my_ai.enigma-engine"))
    ```
 
 3. **Import personas** from others
    ```python
-   imported = manager.import_persona(Path("shared_ai.forge-ai"))
+   imported = manager.import_persona(Path("shared_ai.enigma-engine"))
    ```
 
 4. **Use templates** for quick start
@@ -94,30 +94,30 @@ data/personas/
 │   ├── persona.json
 │   └── learning/
 └── templates/
-    ├── helpful_assistant.forge-ai
-    ├── creative_companion.forge-ai
-    ├── technical_expert.forge-ai
-    └── casual_friend.forge-ai
+    ├── helpful_assistant.enigma-engine
+    ├── creative_companion.enigma-engine
+    ├── technical_expert.enigma-engine
+    └── casual_friend.enigma-engine
 ```
 
 ### Integration Points
 
-1. **Personality System** (`forge_ai/core/personality.py`)
+1. **Personality System** (`enigma_engine/core/personality.py`)
    - `PersonaManager.integrate_with_personality()` converts persona to AIPersonality
    - `personality_from_persona()` convenience function
    - Traits flow: Persona → AIPersonality → Model prompts
 
-2. **Voice System** (`forge_ai/voice/`)
+2. **Voice System** (`enigma_engine/voice/`)
    - Persona stores `voice_profile_id`
    - Links to voice profile configurations
    - Voice settings apply when persona is active
 
-3. **Avatar System** (`forge_ai/avatar/`)
+3. **Avatar System** (`enigma_engine/avatar/`)
    - Persona stores `avatar_preset_id`
    - Links to avatar appearance configs
    - Avatar updates when persona switches
 
-4. **Learning System** (`forge_ai/core/autonomous.py`)
+4. **Learning System** (`enigma_engine/core/autonomous.py`)
    - Each persona has `learning_data_path`
    - Separate training data per persona
    - Evolution applies to current persona only
@@ -193,7 +193,7 @@ Header now shows:
 
 ### Creating a Gaming Persona
 ```python
-from forge_ai.core.persona import PersonaManager, AIPersona
+from enigma_engine.core.persona import PersonaManager, AIPersona
 
 manager = PersonaManager()
 
@@ -218,11 +218,11 @@ manager.set_current_persona(gaming.id)
 ### Sharing a Persona
 ```python
 # User 1: Export
-manager.export_persona("my_custom_ai", Path("my_ai.forge-ai"))
+manager.export_persona("my_custom_ai", Path("my_ai.enigma-engine"))
 # Share file with User 2
 
 # User 2: Import
-imported = manager.import_persona(Path("my_ai.forge-ai"))
+imported = manager.import_persona(Path("my_ai.enigma-engine"))
 print(f"Imported: {imported.name}")
 ```
 

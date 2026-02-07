@@ -29,7 +29,7 @@ Please include the following information in your report:
 
 ## Security Best Practices
 
-When using ForgeAI:
+When using Enigma AI Engine:
 
 1. **File Paths**: Always validate and sanitize user-provided file paths
 2. **API Keys**: Never commit API keys or secrets to the repository
@@ -40,7 +40,7 @@ When using ForgeAI:
 
 ## Security Features
 
-ForgeAI includes several security features:
+Enigma AI Engine includes several security features:
 
 - Input validation on all public APIs
 - Path sanitization for file operations

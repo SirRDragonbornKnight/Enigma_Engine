@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tests for the ForgeAI core model.
+Tests for the Enigma AI Engine core model.
 
 Run with: pytest tests/test_model.py -v
 """
@@ -17,13 +17,13 @@ class TestRMSNorm:
     
     def test_creation(self):
         """Test RMSNorm can be created."""
-        from forge_ai.core.model import RMSNorm
+        from enigma_engine.core.model import RMSNorm
         norm = RMSNorm(64)
         assert norm.weight.shape == (64,)
     
     def test_forward(self):
         """Test RMSNorm forward pass."""
-        from forge_ai.core.model import RMSNorm
+        from enigma_engine.core.model import RMSNorm
         norm = RMSNorm(64)
         x = torch.randn(2, 10, 64)
         out = norm(x)
@@ -31,7 +31,7 @@ class TestRMSNorm:
     
     def test_normalization(self):
         """Test that RMSNorm actually normalizes."""
-        from forge_ai.core.model import RMSNorm
+        from enigma_engine.core.model import RMSNorm
         norm = RMSNorm(64)
         x = torch.randn(2, 10, 64) * 100  # Large values
         out = norm(x)
@@ -44,7 +44,7 @@ class TestAttention:
     
     def test_creation(self):
         """Test Attention can be created."""
-        from forge_ai.core.model import Attention, ForgeConfig
+        from enigma_engine.core.model import Attention, ForgeConfig
         config = ForgeConfig(dim=64, n_heads=4, n_kv_heads=2)
         attn = Attention(config)
         assert attn.n_heads == 4
@@ -52,7 +52,7 @@ class TestAttention:
     
     def test_forward(self):
         """Test attention forward pass."""
-        from forge_ai.core.model import Attention, ForgeConfig
+        from enigma_engine.core.model import Attention, ForgeConfig
         config = ForgeConfig(dim=64, n_heads=4, n_kv_heads=2)
         attn = Attention(config)
         x = torch.randn(2, 10, 64)
@@ -61,7 +61,7 @@ class TestAttention:
     
     def test_cache(self):
         """Test attention with cache."""
-        from forge_ai.core.model import Attention, ForgeConfig
+        from enigma_engine.core.model import Attention, ForgeConfig
         config = ForgeConfig(dim=64, n_heads=4, n_kv_heads=2)
         attn = Attention(config)
         
@@ -81,14 +81,14 @@ class TestFeedForward:
     
     def test_creation_swiglu(self):
         """Test SwiGLU FeedForward can be created."""
-        from forge_ai.core.model import FeedForward, ForgeConfig
+        from enigma_engine.core.model import FeedForward, ForgeConfig
         config = ForgeConfig(dim=64, use_swiglu=True)
         ff = FeedForward(config)
         assert ff.use_swiglu == True
     
     def test_forward(self):
         """Test FeedForward forward pass."""
-        from forge_ai.core.model import FeedForward, ForgeConfig
+        from enigma_engine.core.model import FeedForward, ForgeConfig
         config = ForgeConfig(dim=64, use_swiglu=True)
         ff = FeedForward(config)
         x = torch.randn(2, 10, 64)
@@ -101,14 +101,14 @@ class TestTransformerBlock:
     
     def test_creation(self):
         """Test TransformerBlock can be created."""
-        from forge_ai.core.model import TransformerBlock, ForgeConfig
+        from enigma_engine.core.model import TransformerBlock, ForgeConfig
         config = ForgeConfig(dim=64, n_heads=4)
         block = TransformerBlock(config, layer_id=0)
         assert block is not None
     
     def test_forward(self):
         """Test TransformerBlock forward pass."""
-        from forge_ai.core.model import TransformerBlock, ForgeConfig
+        from enigma_engine.core.model import TransformerBlock, ForgeConfig
         config = ForgeConfig(dim=64, n_heads=4)
         block = TransformerBlock(config, layer_id=0)
         x = torch.randn(2, 10, 64)
@@ -121,7 +121,7 @@ class TestEnigmaModel:
     
     def test_creation(self):
         """Test Enigma model can be created."""
-        from forge_ai.core.model import Enigma
+        from enigma_engine.core.model import Enigma
         model = Enigma(vocab_size=1000, dim=64, depth=2, heads=4)
         assert model.vocab_size == 1000
         assert model.dim == 64
@@ -129,14 +129,14 @@ class TestEnigmaModel:
     
     def test_num_parameters(self):
         """Test parameter counting."""
-        from forge_ai.core.model import Enigma
+        from enigma_engine.core.model import Enigma
         model = Enigma(vocab_size=1000, dim=64, depth=2, heads=4)
         params = model.num_parameters
         assert params > 0
     
     def test_forward(self):
         """Test forward pass."""
-        from forge_ai.core.model import Enigma
+        from enigma_engine.core.model import Enigma
         model = Enigma(vocab_size=1000, dim=64, depth=2, heads=4)
         x = torch.randint(0, 1000, (2, 10))
         out = model(x)
@@ -145,7 +145,7 @@ class TestEnigmaModel:
     
     def test_generate(self):
         """Test generation."""
-        from forge_ai.core.model import Enigma
+        from enigma_engine.core.model import Enigma
         model = Enigma(vocab_size=1000, dim=64, depth=2, heads=4)
         model.eval()
         x = torch.randint(0, 1000, (1, 5))
@@ -154,7 +154,7 @@ class TestEnigmaModel:
     
     def test_generate_deterministic(self):
         """Test generation is deterministic with same seed."""
-        from forge_ai.core.model import Enigma
+        from enigma_engine.core.model import Enigma
         model = Enigma(vocab_size=1000, dim=64, depth=2, heads=4)
         model.eval()
         x = torch.randint(0, 1000, (1, 5))
@@ -169,7 +169,7 @@ class TestEnigmaModel:
     
     def test_backwards_compat(self):
         """Test TinyForge alias."""
-        from forge_ai.core.model import Enigma, TinyForge
+        from enigma_engine.core.model import Enigma, TinyForge
         assert TinyForge is Enigma
 
 
@@ -178,7 +178,7 @@ class TestModelPresets:
     
     def test_presets_exist(self):
         """Test model presets are defined."""
-        from forge_ai.core.model import MODEL_PRESETS
+        from enigma_engine.core.model import MODEL_PRESETS
         assert "tiny" in MODEL_PRESETS
         assert "small" in MODEL_PRESETS
         assert "medium" in MODEL_PRESETS
@@ -186,7 +186,7 @@ class TestModelPresets:
     
     def test_create_from_preset(self):
         """Test creating model from preset."""
-        from forge_ai.core.model import create_model
+        from enigma_engine.core.model import create_model
         model = create_model("tiny", vocab_size=1000)
         assert model is not None
 
@@ -196,7 +196,7 @@ class TestModelConfig:
     
     def test_config_creation(self):
         """Test ForgeConfig can be created."""
-        from forge_ai.core.model import ForgeConfig
+        from enigma_engine.core.model import ForgeConfig
         config = ForgeConfig(dim=256, n_layers=6, n_heads=8)
         assert config.dim == 256
         assert config.n_layers == 6
@@ -204,7 +204,7 @@ class TestModelConfig:
     
     def test_config_to_dict(self):
         """Test config serialization."""
-        from forge_ai.core.model import ForgeConfig
+        from enigma_engine.core.model import ForgeConfig
         config = ForgeConfig(dim=256)
         d = config.to_dict()
         assert isinstance(d, dict)
@@ -212,7 +212,7 @@ class TestModelConfig:
     
     def test_config_from_dict(self):
         """Test config deserialization."""
-        from forge_ai.core.model import ForgeConfig
+        from enigma_engine.core.model import ForgeConfig
         d = {'dim': 128, 'n_layers': 4, 'n_heads': 4}
         config = ForgeConfig.from_dict(d)
         assert config.dim == 128
@@ -225,8 +225,8 @@ class TestModelScaling:
     @pytest.mark.skip(reason="Model scaling module may not be complete")
     def test_grow_model(self):
         """Test growing model dimensions."""
-        from forge_ai.core.model import Enigma
-        from forge_ai.core.model_scaling import grow_model
+        from enigma_engine.core.model import Enigma
+        from enigma_engine.core.model_scaling import grow_model
         
         small = Enigma(vocab_size=1000, dim=32, depth=2, heads=2)
         large = grow_model(small, "small", vocab_size=1000)
@@ -236,8 +236,8 @@ class TestModelScaling:
     @pytest.mark.skip(reason="Model scaling module may not be complete")
     def test_shrink_model(self):
         """Test shrinking model dimensions."""
-        from forge_ai.core.model import Enigma
-        from forge_ai.core.model_scaling import shrink_model
+        from enigma_engine.core.model import Enigma
+        from enigma_engine.core.model_scaling import shrink_model
         
         large = Enigma(vocab_size=1000, dim=256, depth=6, heads=8)
         small = shrink_model(large, "tiny", vocab_size=1000)

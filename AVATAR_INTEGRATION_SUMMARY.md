@@ -28,7 +28,7 @@ A complete avatar control system with priority-based coordination, AI training i
 
 ## Core Implementation
 
-### 1. Priority System (forge_ai/avatar/controller.py)
+### 1. Priority System (enigma_engine/avatar/controller.py)
 
 **New ControlPriority Enum:**
 ```python
@@ -52,7 +52,7 @@ class ControlPriority(IntEnum):
 - Automatic fallback when control expires
 - Thread-safe with locks
 
-### 2. Bone Controller Integration (forge_ai/avatar/bone_control.py)
+### 2. Bone Controller Integration (enigma_engine/avatar/bone_control.py)
 
 **Updated BoneController:**
 - Now requests BONE_ANIMATION priority (100) before moving bones
@@ -74,7 +74,7 @@ def move_bone(self, bone_name, pitch, yaw, roll):
         ...
 ```
 
-### 3. AI Control System (forge_ai/avatar/ai_control.py)
+### 3. AI Control System (enigma_engine/avatar/ai_control.py)
 
 **New File - BoneCommand Parser:**
 - Parses `<bone_control>` tags from AI responses
@@ -100,7 +100,7 @@ def move_bone(self, bone_name, pitch, yaw, roll):
 
 ### 4. Tool System Integration
 
-**New Tool: control_avatar_bones (forge_ai/tools/avatar_control_tool.py)**
+**New Tool: control_avatar_bones (enigma_engine/tools/avatar_control_tool.py)**
 ```python
 {
   "name": "control_avatar_bones",
@@ -116,12 +116,12 @@ def move_bone(self, bone_name, pitch, yaw, roll):
 }
 ```
 
-**Tool Executor Integration (forge_ai/tools/tool_executor.py):**
+**Tool Executor Integration (enigma_engine/tools/tool_executor.py):**
 - New method: `_execute_control_avatar_bones()`
 - Routes to `execute_avatar_control()` in avatar_control_tool.py
-- Integrated with ForgeAI tool calling system
+- Integrated with Enigma AI Engine tool calling system
 
-### 5. Autonomous System Update (forge_ai/avatar/autonomous.py)
+### 5. Autonomous System Update (enigma_engine/avatar/autonomous.py)
 
 **Changed to FALLBACK:**
 - Now uses AUTONOMOUS priority (50)
@@ -211,18 +211,18 @@ python scripts/train_avatar_control.py
 ### New Files (7)
 1. `data/specialized/avatar_control_training.txt` - Training data
 2. `scripts/train_avatar_control.py` - Training script
-3. `forge_ai/tools/avatar_control_tool.py` - Tool definition
-4. `forge_ai/avatar/ai_control.py` - Command parsing
+3. `enigma_engine/tools/avatar_control_tool.py` - Tool definition
+4. `enigma_engine/avatar/ai_control.py` - Command parsing
 5. `AI_AVATAR_CONTROL_GUIDE.md` - Main guide
 6. `AVATAR_CONTROL_STATUS.md` - Status doc
 7. `AVATAR_PRIORITY_SYSTEM.md` - Priority explanation
 
 ### Modified Files (8)
-1. `forge_ai/avatar/controller.py` - Priority system
-2. `forge_ai/avatar/bone_control.py` - Priority integration
-3. `forge_ai/avatar/autonomous.py` - Fallback updates
-4. `forge_ai/tools/tool_definitions.py` - Tool registration
-5. `forge_ai/tools/tool_executor.py` - Tool execution
+1. `enigma_engine/avatar/controller.py` - Priority system
+2. `enigma_engine/avatar/bone_control.py` - Priority integration
+3. `enigma_engine/avatar/autonomous.py` - Fallback updates
+4. `enigma_engine/tools/tool_definitions.py` - Tool registration
+5. `enigma_engine/tools/tool_executor.py` - Tool execution
 6. `CODE_ADVENTURE_TOUR.md` - Chapter 9 added
 7. `docs/HOW_TO_TRAIN_AVATAR_AI.txt` - Bone control section
 8. `docs/AVATAR_SYSTEM_GUIDE.md` - Integration info

@@ -10,8 +10,8 @@ from pathlib import Path
 # Add parent to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from forge_ai.modules.manager import ModuleManager, ModuleInfo, ModuleCategory
-from forge_ai.modules import registry
+from enigma_engine.modules.manager import ModuleManager, ModuleInfo, ModuleCategory
+from enigma_engine.modules import registry
 
 
 def test_cloud_modules_marked():

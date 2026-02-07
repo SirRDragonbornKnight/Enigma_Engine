@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Reset ForgeAI for Public Sharing
+Reset Enigma AI Engine for Public Sharing
 
 Removes user-specific data and settings to prepare for public release.
 
@@ -98,7 +98,7 @@ def get_cleanup_items(root: Path) -> tuple[list[CleanupItem], list[CleanupItem]]
         CleanupItem(root / 'data' / 'url_blocklist_cache.json', 'URL blocklist cache', 'url_blocklist', is_directory=False),
         CleanupItem(root / 'data' / 'tool_routing.json', 'Tool routing config', 'tool_routing', is_directory=False),
         CleanupItem(root / 'information' / 'gui_settings.json', 'Information GUI settings', 'information_gui', is_directory=False),
-        CleanupItem(root / 'forge_ai' / 'modules' / 'module_config.json', 'Module configuration', 'module_config', is_directory=False),
+        CleanupItem(root / 'enigma_engine' / 'modules' / 'module_config.json', 'Module configuration', 'module_config', is_directory=False),
     ]
     
     return directories, files
@@ -182,7 +182,7 @@ def perform_cleanup(root: Path, skip_items: set[str], verbose: bool = True) -> C
     directories, files = get_cleanup_items(root)
     
     if verbose:
-        print("\n=== Cleaning ForgeAI for sharing ===\n")
+        print("\n=== Cleaning Enigma AI Engine for sharing ===\n")
     
     # Clean directories
     for item in directories:
@@ -252,7 +252,7 @@ def perform_cleanup(root: Path, skip_items: set[str], verbose: bool = True) -> C
 def main() -> int:
     """CLI entry point."""
     parser = argparse.ArgumentParser(
-        description='Reset ForgeAI for public sharing by removing user-specific data.',
+        description='Reset Enigma AI Engine for public sharing by removing user-specific data.',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=f"""
 Valid --skip options:
@@ -289,7 +289,7 @@ Examples:
     root = get_project_root()
     
     print("=" * 50)
-    print("  ForgeAI - Reset for Public Sharing")
+    print("  Enigma AI Engine - Reset for Public Sharing")
     print("=" * 50)
     
     if args.preview:

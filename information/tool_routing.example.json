@@ -26,8 +26,8 @@
         }
       },
       {
-        "model_id": "forge_ai:default",
-        "model_type": "forge_ai",
+        "model_id": "enigma_engine:default",
+        "model_type": "enigma_engine",
         "priority": 10,
         "config": {}
       }
@@ -50,8 +50,8 @@
         }
       },
       {
-        "model_id": "forge_ai:default",
-        "model_type": "forge_ai",
+        "model_id": "enigma_engine:default",
+        "model_type": "enigma_engine",
         "priority": 10,
         "config": {}
       }

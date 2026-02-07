@@ -51,7 +51,7 @@
 **Normal State (Game Mode Disabled):**
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ Model: forge_ai ▼     AI: Ready     Game Mode: OFF                      │
+│ Model: enigma_engine ▼     AI: Ready     Game Mode: OFF                      │
 │                                           (gray)                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -59,7 +59,7 @@
 **Watching State (Game Mode Enabled, No Game):**
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ Model: forge_ai ▼     AI: Ready     Game Mode: Watching                 │
+│ Model: enigma_engine ▼     AI: Ready     Game Mode: Watching                 │
 │                                           (blue)                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -67,7 +67,7 @@
 **Active State (Game Detected):**
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ Model: forge_ai ▼     AI: Ready     Game Mode: ACTIVE                   │
+│ Model: enigma_engine ▼     AI: Ready     Game Mode: ACTIVE                   │
 │                                           (green, bold)                  │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -79,7 +79,7 @@
 
 ## 3. Integration Points
 
-### Autonomous Mode (forge_ai/core/autonomous.py)
+### Autonomous Mode (enigma_engine/core/autonomous.py)
 ```python
 def _run_loop(self):
     while not self._stop_event.is_set():
@@ -100,7 +100,7 @@ def _run_loop(self):
         # Perform autonomous action...
 ```
 
-### Inference Engine (forge_ai/core/inference.py)
+### Inference Engine (enigma_engine/core/inference.py)
 ```python
 def generate(self, prompt: str, max_gen: int = 100, ...):
     # ✓ CHECK GAME MODE AND APPLY LIMITS

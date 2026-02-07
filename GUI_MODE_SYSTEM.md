@@ -1,8 +1,8 @@
-# ForgeAI GUI Mode System
+# Enigma AI Engine GUI Mode System
 
 ## Overview
 
-ForgeAI now features a flexible GUI mode system that adapts the interface to different user needs and use cases. The system provides four distinct modes, each optimized for specific workflows.
+Enigma AI Engine now features a flexible GUI mode system that adapts the interface to different user needs and use cases. The system provides four distinct modes, each optimized for specific workflows.
 
 ## GUI Modes
 
@@ -72,7 +72,7 @@ Modern dark theme with indigo/cyan accents:
 ## Usage
 
 ### Switching Modes
-1. Open ForgeAI
+1. Open Enigma AI Engine
 2. Go to **View** menu in the menu bar
 3. Select **GUI Mode** submenu
 4. Choose your desired mode
@@ -93,7 +93,7 @@ GUI mode preference is saved automatically and persists across sessions. You can
 
 ### Files Added
 ```
-forge_ai/gui/
+enigma_engine/gui/
 ├── gui_modes.py           # Mode system and manager
 ├── themes/
 │   ├── gaming_theme.py    # Gaming aesthetic stylesheet
@@ -110,13 +110,13 @@ forge_ai/gui/
 ```
 
 ### Files Modified
-- `forge_ai/gui/enhanced_window.py` - Integrated mode system
-- `forge_ai/gui/tabs/__init__.py` - Added new consolidated tabs
-- `forge_ai/gui/tabs/chat_tab.py` - Added quick actions and feedback
-- `forge_ai/config/defaults.py` - Added GUI configuration defaults
+- `enigma_engine/gui/enhanced_window.py` - Integrated mode system
+- `enigma_engine/gui/tabs/__init__.py` - Added new consolidated tabs
+- `enigma_engine/gui/tabs/chat_tab.py` - Added quick actions and feedback
+- `enigma_engine/config/defaults.py` - Added GUI configuration defaults
 
 ### Configuration Options
-In `forge_ai/config/defaults.py`:
+In `enigma_engine/config/defaults.py`:
 ```python
 "gui_mode": "standard",           # Current GUI mode
 "gui_theme": "dark",              # Theme to use
