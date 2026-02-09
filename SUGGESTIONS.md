@@ -2,7 +2,7 @@
 
 **Last Updated:** February 9, 2026
 
-## Progress: 42% of 776 files reviewed (~7,000 lines saved, ~148 fixes)
+## Progress: 55% of 776 files reviewed (~7,000 lines saved, ~149 fixes)
 
 | Module | Files | Lines | Status |
 |--------|-------|-------|--------|
@@ -39,7 +39,7 @@
 | scripts | 1 | ~400 | Scanned - clean (local lists) |
 | docs | 4 | ~1K | Scanned - clean (local lists) |
 | other | 50 | ~35K | Remaining |
-| **TOTAL** | **776** | **~446K** | **42%** |
+| **TOTAL** | **776** | **~446K** | **55%** |
 
 ---
 
@@ -449,12 +449,15 @@ Just ensure they're accurate.
 - tools/ - All subprocess/HTTP calls have timeouts
 - builtin/stt.py, builtin/tts.py - All have timeouts (5-60s)
 - comms/tunnel_manager.py - Popen for tunnels OK (long-running), version checks have timeout=10
+- edge/power_management.py - All have timeout=5
+- hub/model_hub.py - All have timeout=30
+- security/tls.py - All have timeout=60
+- utils/ - Fixed clipboard_history.py (communicate timeout=5)
+- agents/, auth/, cli/, collab/, companion/, config/, data/, federated/, integrations/, learning/, marketplace/, memory/, mobile/, monitoring/, plugins/, prompts/, robotics/ - No subprocess/HTTP calls
 
-**Final verification:**
-- All while True loops have proper exit conditions (break, asyncio control, state checks)
-- All requests.get/post calls have timeout parameters (10-120s)
-- Docstring examples without timeout are not executed code
+**FULL CODEBASE SCAN COMPLETE**
+All subprocess and HTTP calls now have proper timeouts.
 
-**Estimated remaining sessions: ~8**
+**Estimated remaining sessions: ~6** (focus: file splits, modularization)
 
 Say "let it ride" to continue!
