@@ -2,7 +2,7 @@
 
 **Last Updated:** February 9, 2026
 
-## Progress: 70% of 776 files reviewed (~7,000 lines saved, ~151 fixes)
+## Progress: 75% of 776 files reviewed (~7,000 lines saved, ~151 fixes)
 
 | Module | Files | Lines | Status |
 |--------|-------|-------|--------|
@@ -39,7 +39,7 @@
 | scripts | 1 | ~400 | Scanned - clean (local lists) |
 | docs | 4 | ~1K | Scanned - clean (local lists) |
 | other | 50 | ~35K | Remaining |
-| **TOTAL** | **776** | **~446K** | **70%** |
+| **TOTAL** | **776** | **~446K** | **75%** |
 
 ---
 
@@ -476,7 +476,10 @@ All subprocess and HTTP calls now have proper timeouts.
 - TODO comments are mostly in code templates (not actual implementation gaps)
 - Regex patterns compiled at module level for efficiency
 - Logging config calls are in module init (acceptable for library)
+- All urlopen calls have timeout parameters (5-30s)
+- Assert statements are in test data strings only
+- ctypes usage is for native Windows API (expected for desktop app)
 
-**Estimated remaining sessions: ~2** (focus: final pass, documentation)
+**Estimated remaining sessions: ~1** (final documentation pass)
 
 Say "let it ride" to continue!
