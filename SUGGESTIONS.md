@@ -103,16 +103,16 @@
   - AI can combine these to create portal effect when requested
   - Full render-through-portal would need OpenGL shaders (future)
 
-- [ ] **Trainer fine-tuning workflow for pre-trained models** (~4-8 hours)
+- [x] **Trainer fine-tuning workflow for pre-trained models** (~4-8 hours) DONE
   - Current state:
-    - ✅ Resume training from checkpoints works (`resume_from_checkpoint()`)
-    - ✅ LoRA fine-tuning works (`lora_utils.py`)
-    - ✅ HuggingFace conversion works (`convert_huggingface_to_forge()`)
-  - Missing:
-    - [ ] `register_huggingface_model()` in `ModelRegistry` - auto-convert HF model and register for training
-    - [ ] Unified `fine_tune_pretrained()` function - handles full workflow (download → convert → register → train)
-    - [ ] GUI tab for importing external models (HuggingFace, GGUF) into registry
-  - Files: `enigma_engine/core/model_registry.py`, `enigma_engine/core/huggingface_loader.py`
+    - [x] Resume training from checkpoints works (`resume_from_checkpoint()`)
+    - [x] LoRA fine-tuning works (`lora_utils.py`)
+    - [x] HuggingFace conversion works (`convert_huggingface_to_forge()`)
+  - Implemented:
+    - [x] `register_huggingface_model()` in `ModelRegistry` - auto-convert HF model and register for training
+    - [x] Unified `fine_tune_pretrained()` function - handles full workflow (download -> convert -> register -> train)
+    - [x] GUI tab for importing external models (HuggingFace, GGUF) into registry
+  - Files: `enigma_engine/core/model_registry.py`, `enigma_engine/gui/tabs/import_models_tab.py`
 
 - [x] **Fullscreen effect overlay system** DONE
   - Single transparent fullscreen overlay for effects

@@ -721,6 +721,162 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
             return str(path)
 
     # =========================================================================
+    # IMPORT EXTERNAL MODELS
+    # =========================================================================
+    
+    def register_huggingface_model(
+        self,
+        model_id: str,
+        name: Optional[str] = None,
+        convert_to_forge: bool = False,
+        description: str = "",
+        capabilities: Optional[List[str]] = None,
+        use_custom_tokenizer: bool = False,
+    ) -> str:
+        """
+        Register a HuggingFace model in the registry for use or fine-tuning.
+        
+        Two modes:
+        1. convert_to_forge=False (default): Register as HF model, use HF inference
+        2. convert_to_forge=True: Download, convert to Forge format, enable training
+        
+        Args:
+            model_id: HuggingFace model ID (e.g., "gpt2", "microsoft/phi-2")
+            name: Local name for the model (default: derived from model_id)
+            convert_to_forge: If True, convert weights to Forge format for training
+            description: Optional description of this model
+            capabilities: What this model can do (e.g., ["chat", "code"])
+            use_custom_tokenizer: Use Enigma's tokenizer instead of HF's
+            
+        Returns:
+            Name of the registered model
+            
+        Example:
+            # Register for inference only
+            registry.register_huggingface_model("gpt2")
+            
+            # Register and convert for fine-tuning
+            registry.register_huggingface_model(
+                "microsoft/phi-2",
+                name="phi2_finetune",
+                convert_to_forge=True,
+                capabilities=["chat", "code"]
+            )
+        """
+        # Generate name from model_id if not provided
+        if name is None:
+            # "microsoft/phi-2" -> "phi-2", "gpt2" -> "gpt2"
+            name = model_id.split("/")[-1].lower().replace("-", "_")
+        
+        name = name.lower().strip().replace(" ", "_")
+        
+        # Check if already exists
+        if name in self.registry["models"]:
+            raise ValueError(
+                f"Model '{name}' already exists. "
+                "Use a different name or delete the existing model first."
+            )
+        
+        capabilities = capabilities or ["chat"]
+        
+        if convert_to_forge:
+            # Mode 2: Convert to Forge format for training
+            print(f"[SYSTEM] Downloading and converting {model_id} to Forge format...")
+            
+            try:
+                from .huggingface_loader import convert_huggingface_to_forge, convert_hf_config_to_forge
+                from transformers import AutoConfig
+            except ImportError as e:
+                raise ImportError(
+                    "HuggingFace conversion requires transformers. "
+                    f"Install with: pip install transformers\nError: {e}"
+                )
+            
+            # Create model directory
+            model_dir = self.models_dir / name
+            model_dir.mkdir(parents=True, exist_ok=True)
+            (model_dir / "checkpoints").mkdir(exist_ok=True)
+            (model_dir / "data").mkdir(exist_ok=True)
+            
+            # Get HF config and convert
+            hf_config = AutoConfig.from_pretrained(model_id, trust_remote_code=True)
+            forge_config = convert_hf_config_to_forge(hf_config)
+            
+            # Save Forge config
+            with open(model_dir / "config.json", "w") as f:
+                json.dump(forge_config, f, indent=2)
+            
+            # Convert and get model
+            forge_model = convert_huggingface_to_forge(model_id)
+            
+            # Save weights
+            import torch
+            torch.save(forge_model.state_dict(), model_dir / "weights.pth")
+            print(f"[SYSTEM]   Weights saved to {model_dir / 'weights.pth'}")
+            
+            # Create metadata
+            metadata = {
+                "name": name,
+                "description": description or f"Converted from HuggingFace: {model_id}",
+                "source_huggingface_id": model_id,
+                "converted_from_huggingface": True,
+                "created": datetime.now().isoformat(),
+                "last_trained": None,
+                "total_epochs": 0,
+                "capabilities": capabilities,
+            }
+            with open(model_dir / "metadata.json", "w") as f:
+                json.dump(metadata, f, indent=2)
+            
+            # Register as Forge model (trainable)
+            self.registry["models"][name] = {
+                "path": self._to_relative_path(model_dir),
+                "size": "custom",
+                "source": "enigma_engine",  # Trainable Forge model
+                "source_huggingface_id": model_id,
+                "created": metadata["created"],
+                "has_weights": True,
+                "capabilities": capabilities,
+            }
+            
+            print(f"[SYSTEM] [OK] Converted and registered '{name}' from {model_id}")
+            print(f"[SYSTEM]   Ready for fine-tuning with ForgeTrainer")
+            
+        else:
+            # Mode 1: Register as HuggingFace model (inference only, loads on demand)
+            model_dir = self.models_dir / name
+            model_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Create metadata
+            metadata = {
+                "name": name,
+                "description": description or f"HuggingFace model: {model_id}",
+                "huggingface_id": model_id,
+                "created": datetime.now().isoformat(),
+                "capabilities": capabilities,
+            }
+            with open(model_dir / "metadata.json", "w") as f:
+                json.dump(metadata, f, indent=2)
+            
+            # Register as HuggingFace model
+            self.registry["models"][name] = {
+                "path": self._to_relative_path(model_dir),
+                "source": "huggingface",
+                "huggingface_id": model_id,
+                "created": metadata["created"],
+                "has_weights": False,  # Weights download on first use
+                "capabilities": capabilities,
+                "use_custom_tokenizer": use_custom_tokenizer,
+            }
+            
+            print(f"[SYSTEM] [OK] Registered HuggingFace model '{name}' ({model_id})")
+            print(f"[SYSTEM]   Model will download on first use")
+            print(f"[SYSTEM]   To fine-tune, re-register with convert_to_forge=True")
+        
+        self._save_registry()
+        return name
+
+    # =========================================================================
     # MODEL VERSIONING
     # =========================================================================
     
@@ -1109,6 +1265,205 @@ def find_models_with_capability(capability: str, models_dir: Optional[str] = Non
             models.append(name)
     
     return models
+
+
+# =============================================================================
+# FINE-TUNING PRE-TRAINED MODELS
+# =============================================================================
+
+def fine_tune_pretrained(
+    source: str,
+    data_path: str,
+    name: Optional[str] = None,
+    epochs: int = 10,
+    use_lora: bool = True,
+    lora_rank: int = 8,
+    learning_rate: float = 3e-4,
+    batch_size: int = 4,
+    capabilities: Optional[List[str]] = None,
+    use_multi_gpu: bool = False,
+    use_amp: bool = True,
+    models_dir: Optional[str] = None,
+    **trainer_kwargs
+) -> Tuple[Any, str]:
+    """
+    Complete workflow to fine-tune a pre-trained model.
+    
+    Handles the full pipeline:
+    1. Download/convert model (if HuggingFace ID)
+    2. Register in ModelRegistry
+    3. Apply LoRA (optional but recommended)
+    4. Train on your data
+    5. Save and register the fine-tuned model
+    
+    Args:
+        source: HuggingFace model ID ("gpt2", "microsoft/phi-2") 
+                OR existing model name in registry
+        data_path: Path to training data file (text)
+        name: Name for the fine-tuned model (default: auto-generated)
+        epochs: Number of training epochs
+        use_lora: Use LoRA for efficient fine-tuning (recommended)
+        lora_rank: LoRA rank (lower = fewer params, higher = more capacity)
+        learning_rate: Learning rate (3e-4 default for LoRA, use 1e-5 for full)
+        batch_size: Training batch size
+        capabilities: What this model will be good at (e.g., ["chat", "code"])
+        use_multi_gpu: Use all available GPUs
+        use_amp: Use automatic mixed precision
+        models_dir: Optional models directory
+        **trainer_kwargs: Additional arguments for ForgeTrainer
+        
+    Returns:
+        Tuple of (trained_model, model_name)
+        
+    Example:
+        # Fine-tune GPT-2 on your data
+        model, name = fine_tune_pretrained(
+            source="gpt2",
+            data_path="data/my_training.txt",
+            name="my_gpt2",
+            epochs=10,
+            use_lora=True
+        )
+        
+        # Fine-tune an existing model further
+        model, name = fine_tune_pretrained(
+            source="my_gpt2",  # Already in registry
+            data_path="data/more_training.txt",
+            name="my_gpt2_v2",
+            epochs=5
+        )
+    """
+    from pathlib import Path
+    
+    registry = ModelRegistry(models_dir)
+    capabilities = capabilities or ["chat"]
+    
+    # Step 1: Determine if source is HuggingFace ID or existing model
+    is_huggingface = "/" in source or source not in registry.registry["models"]
+    
+    if is_huggingface:
+        # Source is a HuggingFace model - need to download and convert
+        print(f"[FINE-TUNE] Source '{source}' appears to be a HuggingFace model")
+        
+        # Generate name if not provided
+        if name is None:
+            base_name = source.split("/")[-1].lower().replace("-", "_")
+            name = f"{base_name}_finetuned"
+        
+        # Check if already exists
+        if name in registry.registry["models"]:
+            # Use existing converted model
+            print(f"[FINE-TUNE] Using existing converted model '{name}'")
+        else:
+            # Register and convert
+            print(f"[FINE-TUNE] Converting {source} to Forge format...")
+            registry.register_huggingface_model(
+                model_id=source,
+                name=name,
+                convert_to_forge=True,
+                capabilities=capabilities,
+            )
+    else:
+        # Source is an existing model in registry
+        print(f"[FINE-TUNE] Source '{source}' is an existing model in registry")
+        
+        if name is None:
+            # Create a new version name
+            name = f"{source}_finetuned"
+        
+        if name != source and name not in registry.registry["models"]:
+            # Copy the source model to new name
+            print(f"[FINE-TUNE] Creating '{name}' as copy of '{source}'...")
+            registry.create_model(
+                name=name,
+                base_model=source,
+                description=f"Fine-tuned from {source}",
+            )
+    
+    # Step 2: Load the model
+    print(f"[FINE-TUNE] Loading model '{name}'...")
+    model, config = registry.load_model(name)
+    
+    # HuggingFace wrapper models can't be trained directly
+    if hasattr(model, 'model') and hasattr(model, 'tokenizer'):
+        # This is a HuggingFaceModel wrapper - need conversion
+        raise ValueError(
+            f"Model '{name}' is registered as HuggingFace (inference only). "
+            f"Re-register with convert_to_forge=True to enable training:\n"
+            f"  registry.register_huggingface_model('{source}', name='{name}', convert_to_forge=True)"
+        )
+    
+    # Step 3: Apply LoRA if requested
+    if use_lora:
+        print(f"[FINE-TUNE] Applying LoRA (rank={lora_rank})...")
+        try:
+            from .lora_utils import LoRATrainer, LoRAConfig
+            
+            lora_config = LoRAConfig(
+                rank=lora_rank,
+                alpha=lora_rank * 2,
+                learning_rate=learning_rate,
+                batch_size=batch_size,
+                epochs=epochs,
+            )
+            
+            trainer = LoRATrainer(model, lora_config)
+            
+            # Load training data
+            with open(data_path, 'r', encoding='utf-8') as f:
+                training_text = f.read()
+            
+            # Train with LoRA
+            print(f"[FINE-TUNE] Training with LoRA for {epochs} epochs...")
+            trainer.train_on_text(training_text)
+            
+            # Merge LoRA weights back into model
+            print(f"[FINE-TUNE] Merging LoRA weights...")
+            trainer.merge_and_save()
+            
+            # Save the merged model
+            registry.save_model(name, model)
+            print(f"[FINE-TUNE] [OK] LoRA fine-tuning complete!")
+            
+        except ImportError:
+            print(f"[FINE-TUNE] LoRA not available, falling back to full fine-tuning")
+            use_lora = False
+        except Exception as e:
+            print(f"[FINE-TUNE] LoRA training failed: {e}, falling back to full fine-tuning")
+            use_lora = False
+    
+    if not use_lora:
+        # Step 3 (alt): Full fine-tuning
+        print(f"[FINE-TUNE] Using full fine-tuning (slower but more thorough)...")
+        
+        from .trainer import ForgeTrainer
+        
+        trainer = ForgeTrainer(
+            model=model,
+            model_name=name,
+            registry=registry,
+            data_path=data_path,
+            use_multi_gpu=use_multi_gpu,
+            use_amp=use_amp,
+            batch_size=batch_size,
+            learning_rate=learning_rate if learning_rate != 3e-4 else 1e-5,  # Lower LR for full
+            **trainer_kwargs
+        )
+        
+        trainer.train(epochs=epochs)
+    
+    # Step 4: Update capabilities
+    set_model_capabilities(name, capabilities, models_dir)
+    
+    print(f"\n[FINE-TUNE] ========================================")
+    print(f"[FINE-TUNE] Fine-tuning complete!")
+    print(f"[FINE-TUNE] Model: {name}")
+    print(f"[FINE-TUNE] Capabilities: {capabilities}")
+    print(f"[FINE-TUNE] ========================================\n")
+    
+    # Reload the trained model
+    model, _ = registry.load_model(name)
+    return model, name
 
 
 if __name__ == "__main__":

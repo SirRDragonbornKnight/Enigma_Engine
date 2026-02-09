@@ -69,6 +69,7 @@ def create_ai_tab(parent):
         from .modules_tab import ModulesTab
         from .scaling_tab import ScalingTab
         from .training_tab import create_training_tab
+        from .import_models_tab import create_import_models_tab
     except ImportError as e:
         widget = QWidget()
         layout = QVBoxLayout(widget)
@@ -149,6 +150,14 @@ def create_ai_tab(parent):
         except Exception as e:
             logger.debug(f"Training tab not available: {e}")
             pass  # Training tab might not be available in all configurations
+        
+        # Import Models tab
+        try:
+            import_widget = create_import_models_tab(parent)
+            tab_widget.addTab(import_widget, "Import Models")
+        except Exception as e:
+            logger.debug(f"Import Models tab not available: {e}")
+            pass
         
     except Exception as e:
         # If any tab fails to load, show error message
