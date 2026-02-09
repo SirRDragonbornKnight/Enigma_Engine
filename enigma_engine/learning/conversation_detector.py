@@ -285,6 +285,13 @@ class ConversationDetector:
             logger.info(f"Detected teaching: {detected.confidence:.2f} confidence")
             return detected
         
+        # Check for behavior rules (user teaching custom action sequences)
+        detected = self._detect_behavior_rule(message)
+        if detected:
+            self.detections_count['teaching'] += 1  # Count as teaching
+            logger.info(f"Detected behavior rule: {detected.confidence:.2f} confidence")
+            return detected
+        
         # Check for negative feedback (higher priority than positive)
         detected = self._detect_negative_feedback(message)
         if detected:
@@ -469,6 +476,49 @@ class ConversationDetector:
                 confidence=best_confidence,
                 user_preference=user_preference,
             )
+        
+        return None
+    
+    def _detect_behavior_rule(self, message: str) -> Optional[DetectedLearning]:
+        """
+        Detect if the user is teaching a behavior rule.
+        
+        Examples:
+        - "Whenever you teleport, spawn a portal gun first"
+        - "Before you attack, always cast a shield spell"
+        - "When you eat, hold the food first"
+        """
+        try:
+            from .behavior_preferences import check_behavior_statement, get_behavior_manager
+            
+            # Quick check if this looks like a behavior statement
+            if not check_behavior_statement(message):
+                return None
+            
+            # Try to learn the behavior
+            manager = get_behavior_manager()
+            rule = manager.learn_from_statement(message)
+            
+            if rule:
+                # Successfully learned a behavior rule
+                action_desc = ", ".join(
+                    f"{a.timing.value} '{rule.trigger_action}' -> '{a.tool_name}'"
+                    for a in rule.actions
+                )
+                
+                return DetectedLearning(
+                    type='teaching',
+                    input_text=message,
+                    target_output=f"I've learned a new behavior: {action_desc}. I'll remember this for future actions.",
+                    confidence=0.9,
+                    user_preference=f"behavior_rule:{rule.id}",
+                    context=f"trigger={rule.trigger_action}, actions={len(rule.actions)}",
+                )
+                
+        except ImportError:
+            pass  # Behavior preferences module not available
+        except Exception as e:
+            logger.debug(f"Error detecting behavior rule: {e}")
         
         return None
     

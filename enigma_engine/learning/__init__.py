@@ -63,6 +63,17 @@ from .conversation_detector import (
     is_feedback,
     is_teaching,
 )
+
+# User-teachable behavior preferences
+from .behavior_preferences import (
+    ActionTiming,
+    BehaviorAction,
+    BehaviorManager,
+    BehaviorRule,
+    check_behavior_statement,
+    get_behavior_manager,
+)
+
 from .coordinator import CoordinatorMode, FederatedCoordinator
 from .data_filter import FederatedDataFilter, TrainingExample
 from .federated import (

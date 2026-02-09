@@ -1,0 +1,111 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "rule_1770654098213_0",
+      "trigger_action": "teleport",
+      "trigger_keywords": [
+        "teleport"
+      ],
+      "actions": [
+        {
+          "timing": "before",
+          "tool_name": "spawn_object",
+          "params": {
+            "object": "portal gun"
+          },
+          "description": "spawn a portal gun first"
+        }
+      ],
+      "condition": null,
+      "original_statement": "Whenever you teleport, spawn a portal gun first",
+      "created_at": 1770654098.21312,
+      "enabled": true,
+      "use_count": 0
+    },
+    {
+      "id": "rule_1770654098213_1",
+      "trigger_action": "attack",
+      "trigger_keywords": [
+        "attack"
+      ],
+      "actions": [
+        {
+          "timing": "before",
+          "tool_name": "cast_spell",
+          "params": {},
+          "description": "cast a shield spell"
+        }
+      ],
+      "condition": null,
+      "original_statement": "Before you attack, always cast a shield spell",
+      "created_at": 1770654098.21312,
+      "enabled": true,
+      "use_count": 0
+    },
+    {
+      "id": "rule_1770654098214_2",
+      "trigger_action": "eat",
+      "trigger_keywords": [
+        "eat"
+      ],
+      "actions": [
+        {
+          "timing": "before",
+          "tool_name": "hold_item",
+          "params": {
+            "item": "food"
+          },
+          "description": "hold the food first"
+        }
+      ],
+      "condition": null,
+      "original_statement": "When you eat, hold the food first",
+      "created_at": 1770654098.214119,
+      "enabled": true,
+      "use_count": 0
+    },
+    {
+      "id": "rule_1770654098214_3",
+      "trigger_action": "dance",
+      "trigger_keywords": [
+        "dance"
+      ],
+      "actions": [
+        {
+          "timing": "after",
+          "tool_name": "do",
+          "params": {},
+          "description": "do a bow"
+        }
+      ],
+      "condition": null,
+      "original_statement": "After you dance, do a bow",
+      "created_at": 1770654098.214119,
+      "enabled": true,
+      "use_count": 0
+    },
+    {
+      "id": "rule_1770654115362_4",
+      "trigger_action": "teleport",
+      "trigger_keywords": [
+        "teleport"
+      ],
+      "actions": [
+        {
+          "timing": "before",
+          "tool_name": "spawn_object",
+          "params": {
+            "object": "portal gun"
+          },
+          "description": "spawn a portal gun first"
+        }
+      ],
+      "condition": null,
+      "original_statement": "Whenever you teleport, spawn a portal gun first",
+      "created_at": 1770654115.3620324,
+      "enabled": true,
+      "use_count": 0
+    }
+  ]
+}

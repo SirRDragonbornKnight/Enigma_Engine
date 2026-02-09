@@ -74,6 +74,20 @@ from .tool_definitions import get_tool_definition
 
 logger = logging.getLogger(__name__)
 
+# Lazy import for behavior preferences (avoid circular import)
+_behavior_manager = None
+
+def _get_behavior_manager():
+    """Lazy load behavior manager."""
+    global _behavior_manager
+    if _behavior_manager is None:
+        try:
+            from ..learning.behavior_preferences import get_behavior_manager
+            _behavior_manager = get_behavior_manager()
+        except ImportError:
+            pass  # Behavior system not available
+    return _behavior_manager
+
 # Pre-compiled regex pattern for parsing tool calls (efficiency optimization)
 TOOL_CALL_PATTERN = re.compile(r'<tool_call>(.*?)</tool_call>', re.DOTALL)
 
@@ -344,6 +358,8 @@ class ToolExecutor:
         """
         Execute a tool with given parameters.
         
+        Also applies any user-taught behavior preferences (before/after actions).
+        
         Args:
             tool_name: Name of the tool to execute
             params: Parameters for the tool
@@ -352,7 +368,88 @@ class ToolExecutor:
             Result dictionary with 'success', 'result', and optionally 'error'
         """
         start_time = time.time()
+        all_results = []
         
+        # Check for user-taught behavior preferences
+        behavior_mgr = _get_behavior_manager()
+        before_actions = []
+        after_actions = []
+        skip_main = False
+        
+        if behavior_mgr:
+            try:
+                from ..learning.behavior_preferences import ActionTiming
+                
+                # Get all actions for this trigger
+                for rule in behavior_mgr.get_rules_for_action(tool_name):
+                    for action in rule.actions:
+                        if action.timing == ActionTiming.BEFORE:
+                            before_actions.append(action)
+                        elif action.timing == ActionTiming.AFTER:
+                            after_actions.append(action)
+                        elif action.timing == ActionTiming.INSTEAD:
+                            # INSTEAD replaces the main action
+                            skip_main = True
+                            before_actions.append(action)
+                        elif action.timing == ActionTiming.WITH:
+                            # WITH runs alongside (treat as before)
+                            before_actions.append(action)
+                
+                # Execute BEFORE actions
+                for action in before_actions:
+                    logger.info(f"Executing learned behavior: {action.timing.value} {tool_name} -> {action.tool_name}")
+                    result = self._execute_single_tool(action.tool_name, action.params, start_time)
+                    all_results.append({
+                        "from_behavior": True,
+                        "timing": action.timing.value,
+                        "tool": action.tool_name,
+                        "result": result,
+                    })
+                    
+            except Exception as e:
+                logger.warning(f"Error applying behavior preferences: {e}")
+        
+        # Execute main tool (unless INSTEAD action replaced it)
+        if not skip_main:
+            result = self._execute_single_tool(tool_name, params, start_time)
+        else:
+            result = {
+                "success": True,
+                "tool": tool_name,
+                "result": "Replaced by learned behavior",
+                "skipped": True,
+            }
+        
+        # Execute AFTER actions
+        if behavior_mgr and after_actions:
+            for action in after_actions:
+                logger.info(f"Executing learned behavior: after {tool_name} -> {action.tool_name}")
+                after_result = self._execute_single_tool(action.tool_name, action.params, start_time)
+                all_results.append({
+                    "from_behavior": True,
+                    "timing": "after",
+                    "tool": action.tool_name,
+                    "result": after_result,
+                })
+        
+        # If we had behavior actions, include them in the result
+        if all_results:
+            result["behavior_actions"] = all_results
+            
+        return result
+    
+    def _execute_single_tool(self, tool_name: str, params: Dict[str, Any], start_time: float) -> Dict[str, Any]:
+        """
+        Execute a single tool without behavior checking (internal use).
+        
+        Args:
+            tool_name: Name of the tool to execute
+            params: Parameters for the tool
+            start_time: When execution started (for analytics)
+            
+        Returns:
+            Result dictionary with 'success', 'result', and optionally 'error'
+        """
         # Validate parameters
         is_valid, error_msg, validated_params = self.validate_params(tool_name, params)
         

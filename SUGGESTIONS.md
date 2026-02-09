@@ -645,6 +645,84 @@ What CAN'T happen without model upgrades:
 
 ---
 
-**That's it.** Codebase is solid - no security holes, no memory leaks, good patterns.
+## USER-TEACHABLE BEHAVIORS (NEW - Implemented)
+
+### What It Does
+
+Users can teach the AI custom action sequences through natural conversation:
+
+```
+User: "Whenever you teleport, spawn a portal gun first"
+AI: "I've learned a new behavior: before 'teleport' -> 'spawn_object'. I'll remember this."
+
+[Later, AI calls teleport tool]
+→ System automatically spawns portal gun BEFORE teleporting
+```
+
+### How It Works
+
+1. **ConversationDetector** recognizes behavior-teaching phrases
+2. **BehaviorManager** parses and stores the rule persistently
+3. **ToolExecutor** applies before/after/instead actions automatically
+
+### Supported Patterns
+
+| Pattern | Effect |
+|---------|--------|
+| "Whenever you X, do Y first" | Y runs before X |
+| "Before you X, always Y" | Y runs before X |
+| "After you X, always Y" | Y runs after X |
+| "When you X, also Y" | Y runs alongside X |
+| "Instead of X, do Y" | Y replaces X |
+| "Always Y before you X" | Y runs before X |
+| "Remember to Y whenever you X" | Y runs before X |
+
+### Core Files
+
+| File | Purpose |
+|------|---------|
+| `learning/behavior_preferences.py` | BehaviorManager, rule storage, parsing |
+| `tools/tool_executor.py` | Applies rules during tool execution |
+| `learning/conversation_detector.py` | Detects behavior-teaching statements |
+
+### Usage Example
+
+```python
+from enigma_engine.learning import BehaviorManager, get_behavior_manager
+
+manager = get_behavior_manager()
+
+# User teaches a behavior
+rule = manager.learn_from_statement("Whenever you attack, cast shield first")
+
+# Later, when AI executes "attack":
+before_actions = manager.get_before_actions("attack")
+# Returns: [BehaviorAction(timing=BEFORE, tool='cast_spell', params={})]
+
+# ToolExecutor automatically runs these before the main action
+```
+
+### Managing Rules
+
+```python
+manager = get_behavior_manager()
+
+# List all learned behaviors
+for rule in manager.list_rules():
+    print(f"{rule.trigger_action} -> {rule.actions}")
+
+# Disable a rule (keeps it, but doesn't apply)
+manager.disable_rule(rule_id)
+
+# Remove a rule permanently
+manager.remove_rule(rule_id)
+
+# Clear all rules
+manager.clear_rules()
+```
+
+Rules are persisted to `memory/behaviors/behavior_rules.json`.
+
+---
 
 
