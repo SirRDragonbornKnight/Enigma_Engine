@@ -29,15 +29,64 @@ USAGE:
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 
+@dataclass
+class RichParameter:
+    """
+    Rich parameter definition for tools.
+    
+    This provides detailed information about each parameter so the AI
+    knows exactly what to pass and users understand what's expected.
+    """
+    name: str
+    type: str  # "string", "int", "float", "bool", "list", "dict"
+    description: str
+    required: bool = True
+    default: Any = None
+    enum: List[Any] = field(default_factory=list)  # Valid choices
+    min_value: Optional[float] = None  # For numeric types
+    max_value: Optional[float] = None  # For numeric types
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for AI schemas."""
+        result = {
+            "type": self.type,
+            "description": self.description,
+            "required": self.required,
+        }
+        if self.default is not None:
+            result["default"] = self.default
+        if self.enum:
+            result["enum"] = self.enum
+        if self.min_value is not None:
+            result["min"] = self.min_value
+        if self.max_value is not None:
+            result["max"] = self.max_value
+        return result
+
+
 class Tool(ABC):
-    """Base class for all tools."""
+    """
+    Base class for all tools.
+    
+    Tools can define parameters in two ways:
+    1. Simple: parameters = {"name": "description"}
+    2. Rich: rich_parameters = [RichParameter(...), ...]
+    
+    Rich parameters provide more detail for the AI to understand
+    parameter types, valid values, defaults, etc.
+    """
     
     name: str = "base_tool"
     description: str = "Base tool - override this"
-    parameters: dict[str, str] = {}  # param_name: description
+    parameters: dict[str, str] = {}  # Simple: param_name: description
+    rich_parameters: List[RichParameter] = []  # Rich parameter definitions
+    category: str = "general"  # Tool category for grouping
+    examples: List[str] = []  # Usage examples for the AI
+    version: str = "1.0.0"  # Tool version
     
     @abstractmethod
     def execute(self, **kwargs) -> dict[str, Any]:
@@ -50,11 +99,51 @@ class Tool(ABC):
     
     def to_dict(self) -> Dict:
         """Export tool info for AI consumption."""
-        return {
+        result = {
             "name": self.name,
             "description": self.description,
-            "parameters": self.parameters,
+            "category": self.category,
+            "version": self.version,
         }
+        
+        # Use rich parameters if available, otherwise fall back to simple
+        if self.rich_parameters:
+            result["parameters"] = {
+                p.name: p.to_dict() for p in self.rich_parameters
+            }
+        else:
+            result["parameters"] = self.parameters
+        
+        if self.examples:
+            result["examples"] = self.examples
+        
+        return result
+    
+    def get_schema(self) -> str:
+        """Get human-readable schema for the tool."""
+        lines = [f"{self.name} (v{self.version})", f"  {self.description}", ""]
+        
+        if self.rich_parameters:
+            lines.append("  Parameters:")
+            for p in self.rich_parameters:
+                req = "required" if p.required else "optional"
+                default = f" = {p.default}" if p.default is not None else ""
+                lines.append(f"    {p.name} ({p.type}, {req}){default}")
+                lines.append(f"      {p.description}")
+                if p.enum:
+                    lines.append(f"      Choices: {', '.join(str(e) for e in p.enum)}")
+        elif self.parameters:
+            lines.append("  Parameters:")
+            for name, desc in self.parameters.items():
+                lines.append(f"    {name}: {desc}")
+        
+        if self.examples:
+            lines.append("")
+            lines.append("  Examples:")
+            for ex in self.examples[:3]:
+                lines.append(f"    - {ex}")
+        
+        return "\n".join(lines)
 
 
 class ToolRegistry:
@@ -396,14 +485,48 @@ class ToolRegistry:
     def get_tools_prompt(self) -> str:
         """
         Get a prompt describing all tools for the AI.
-        Useful for training or prompting.
+        Uses rich parameter info when available.
         """
-        lines = ["Available tools:\n"]
+        lines = ["AVAILABLE TOOLS", "=" * 60, ""]
+        
+        # Group by category
+        by_category: Dict[str, List[Tool]] = {}
         for tool in self.tools.values():
-            lines.append(f"- {tool.name}: {tool.description}")
-            if tool.parameters:
-                for param, desc in tool.parameters.items():
-                    lines.append(f"    - {param}: {desc}")
+            cat = getattr(tool, 'category', 'general')
+            if cat not in by_category:
+                by_category[cat] = []
+            by_category[cat].append(tool)
+        
+        for category in sorted(by_category.keys()):
+            lines.append(f"\n{category.upper()} TOOLS:")
+            lines.append("-" * 40)
+            
+            for tool in by_category[category]:
+                lines.append(f"\n{tool.name}:")
+                lines.append(f"  {tool.description}")
+                
+                # Use rich parameters if available
+                if hasattr(tool, 'rich_parameters') and tool.rich_parameters:
+                    lines.append("  Parameters:")
+                    for p in tool.rich_parameters:
+                        req = "*required*" if p.required else "optional"
+                        default = f" = {p.default}" if p.default is not None else ""
+                        lines.append(f"    {p.name} ({p.type}, {req}){default}")
+                        lines.append(f"      {p.description}")
+                        if p.enum:
+                            lines.append(f"      Choices: {', '.join(str(e) for e in p.enum)}")
+                elif tool.parameters:
+                    lines.append("  Parameters:")
+                    for param, desc in tool.parameters.items():
+                        lines.append(f"    {param}: {desc}")
+                
+                # Show examples if available
+                if hasattr(tool, 'examples') and tool.examples:
+                    lines.append("  Examples:")
+                    for ex in tool.examples[:2]:
+                        lines.append(f"    - {ex}")
+        
+        return "\n".join(lines)
         return "\n".join(lines)
 
 

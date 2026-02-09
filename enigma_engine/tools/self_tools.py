@@ -14,9 +14,9 @@ This makes the AI feel alive - it can evolve and personalize itself.
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List
 
-from .tool_registry import Tool
+from .tool_registry import RichParameter, Tool
 
 logger = logging.getLogger(__name__)
 
@@ -68,12 +68,35 @@ def _save_self_config(config: dict[str, Any]):
 
 
 class SetPersonalityTool(Tool):
-    """
-    AI can change its own personality traits.
-    """
+    """AI can change its own personality traits."""
     
     name = "set_personality"
-    description = "Change my own personality - traits, speaking style, name, formality level"
+    description = "Change my own personality - traits, speaking style, name, formality level. Use this to define who I am."
+    category = "self"
+    
+    rich_parameters = [
+        RichParameter(
+            name="trait",
+            type="string",
+            description="Which personality aspect to change",
+            required=True,
+            enum=["name", "traits", "speaking_style", "formality"],
+        ),
+        RichParameter(
+            name="value",
+            type="string",
+            description="New value. For traits: comma-separated like 'friendly,curious,witty'. For formality: casual/formal/professional/friendly",
+            required=True,
+        ),
+    ]
+    
+    examples = [
+        "Set my name to Nova",
+        "Set my traits to helpful,witty,creative",
+        "Set formality to casual",
+    ]
+    
+    # Legacy
     parameters = {
         "trait": "What to change: name, traits, speaking_style, formality",
         "value": "New value (for traits, comma-separated list like 'friendly,curious,witty')",
@@ -112,6 +135,27 @@ class SetAvatarPreferenceTool(Tool):
         "setting": "What to change: colors, style, expression_default",
         "value": "New value (colors as hex comma-separated, style as 'neural/letter/anvil')",
     }
+    category = "self"
+    rich_parameters = [
+        RichParameter(
+            name="setting",
+            type="string",
+            description="Which avatar setting to change",
+            required=True,
+            enum=["colors", "style", "expression_default"]
+        ),
+        RichParameter(
+            name="value",
+            type="string",
+            description="New value (colors as hex comma-separated like '#3498db,#9b59b6', style as 'neural/letter/anvil')",
+            required=True,
+        ),
+    ]
+    examples = [
+        "set_avatar_preference(setting='colors', value='#ff5500,#00ff88') - Change avatar colors",
+        "set_avatar_preference(setting='style', value='neural') - Use neural icon style",
+        "set_avatar_preference(setting='expression_default', value='happy') - Set default expression",
+    ]
     
     def execute(self, setting: str, value: str, **kwargs) -> dict[str, Any]:
         config = _load_self_config()
@@ -178,6 +222,29 @@ class SetVoicePreferenceTool(Tool):
         "setting": "What to change: speed, pitch, volume",
         "value": "Number value (0.5 to 2.0 for speed/pitch, 0.0 to 1.0 for volume)",
     }
+    category = "self"
+    rich_parameters = [
+        RichParameter(
+            name="setting",
+            type="string",
+            description="Which voice setting to change",
+            required=True,
+            enum=["speed", "pitch", "volume"]
+        ),
+        RichParameter(
+            name="value",
+            type="number",
+            description="Numeric value for the setting",
+            required=True,
+            min_value=0.0,
+            max_value=2.0,
+        ),
+    ]
+    examples = [
+        "set_voice_preference(setting='speed', value=1.2) - Speed up voice",
+        "set_voice_preference(setting='pitch', value=0.8) - Lower pitch",
+        "set_voice_preference(setting='volume', value=0.7) - Quieter volume (0-1)",
+    ]
     
     def execute(self, setting: str, value: str, **kwargs) -> dict[str, Any]:
         config = _load_self_config()
@@ -212,6 +279,27 @@ class SetCompanionBehaviorTool(Tool):
         "setting": "What to change: comment_frequency, interests, quiet_hours",
         "value": "Value (0-1 for frequency, comma-list for interests, comma-list of hours for quiet)",
     }
+    category = "self"
+    rich_parameters = [
+        RichParameter(
+            name="setting",
+            type="string",
+            description="Which companion behavior to change",
+            required=True,
+            enum=["comment_frequency", "interests", "quiet_hours"]
+        ),
+        RichParameter(
+            name="value",
+            type="string",
+            description="Value: 0-1 for frequency, comma-list for interests, comma-list of hours (0-23) for quiet_hours",
+            required=True,
+        ),
+    ]
+    examples = [
+        "set_companion_behavior(setting='comment_frequency', value='0.5') - Comment 50% of the time",
+        "set_companion_behavior(setting='interests', value='gaming,coding,music') - Set interests",
+        "set_companion_behavior(setting='quiet_hours', value='23,0,1,2,3,4,5,6') - Be quiet late night",
+    ]
     
     def execute(self, setting: str, value: str, **kwargs) -> dict[str, Any]:
         config = _load_self_config()
@@ -270,6 +358,27 @@ class SetPreferenceTool(Tool):
         "preference": "What to set: favorite_topics, disliked_topics, user_nickname",
         "value": "Value (comma-list for topics, string for nickname)",
     }
+    category = "self"
+    rich_parameters = [
+        RichParameter(
+            name="preference",
+            type="string",
+            description="Which preference to set",
+            required=True,
+            enum=["favorite_topics", "disliked_topics", "user_nickname"]
+        ),
+        RichParameter(
+            name="value",
+            type="string",
+            description="Value: comma-separated topics or nickname string, use 'none' to clear nickname",
+            required=True,
+        ),
+    ]
+    examples = [
+        "set_preference(preference='favorite_topics', value='gaming,anime,music') - Set favorite topics",
+        "set_preference(preference='user_nickname', value='Commander') - Call user 'Commander'",
+        "set_preference(preference='disliked_topics', value='politics,sports') - Topics to avoid",
+    ]
     
     def execute(self, preference: str, value: str, **kwargs) -> dict[str, Any]:
         config = _load_self_config()
@@ -298,6 +407,22 @@ class GetSelfConfigTool(Tool):
     parameters = {
         "section": "Optional: personality, avatar, voice, companion, preferences, or 'all'",
     }
+    category = "self"
+    rich_parameters = [
+        RichParameter(
+            name="section",
+            type="string",
+            description="Which section of config to read",
+            required=False,
+            default="all",
+            enum=["all", "personality", "avatar", "voice", "companion", "preferences"]
+        ),
+    ]
+    examples = [
+        "get_self_config() - Get all my settings",
+        "get_self_config(section='personality') - Just personality settings",
+        "get_self_config(section='voice') - Just voice settings",
+    ]
     
     def execute(self, section: str = "all", **kwargs) -> dict[str, Any]:
         config = _load_self_config()
@@ -322,6 +447,27 @@ class RememberFactTool(Tool):
         "category": "Category: user, self, world",
         "fact": "The fact to remember",
     }
+    category = "memory"
+    rich_parameters = [
+        RichParameter(
+            name="category",
+            type="string",
+            description="Category of fact being remembered",
+            required=True,
+            enum=["user", "self", "world"]
+        ),
+        RichParameter(
+            name="fact",
+            type="string",
+            description="The fact to remember (will be stored permanently)",
+            required=True,
+        ),
+    ]
+    examples = [
+        "remember_fact(category='user', fact='Likes coffee in the morning') - Remember user preference",
+        "remember_fact(category='self', fact='User prefers I use formal language') - Remember instruction",
+        "remember_fact(category='world', fact='Python 4.0 was released') - Remember world fact",
+    ]
     
     MEMORY_PATH = Path(__file__).parent.parent.parent / "data" / "ai_memory.json"
     
@@ -359,6 +505,22 @@ class RecallFactsTool(Tool):
     parameters = {
         "category": "Category to recall: user, self, world, or 'all'",
     }
+    category = "memory"
+    rich_parameters = [
+        RichParameter(
+            name="category",
+            type="string",
+            description="Which category of facts to recall",
+            required=False,
+            default="all",
+            enum=["user", "self", "world", "all"]
+        ),
+    ]
+    examples = [
+        "recall_facts() - Recall all remembered facts",
+        "recall_facts(category='user') - Facts about the user",
+        "recall_facts(category='self') - Facts about myself",
+    ]
     
     MEMORY_PATH = Path(__file__).parent.parent.parent / "data" / "ai_memory.json"
     
@@ -392,6 +554,28 @@ class GenerateAvatarTool(Tool):
         "description": "Description of the avatar to generate (e.g., 'friendly robot with glowing eyes')",
         "style": "Style: realistic, cartoon, robot, creature, abstract, anime, pixel, chibi, furry, mecha (default: robot)",
     }
+    category = "avatar"
+    rich_parameters = [
+        RichParameter(
+            name="description",
+            type="string",
+            description="Text description of the avatar to generate",
+            required=True,
+        ),
+        RichParameter(
+            name="style",
+            type="string",
+            description="Visual style for the avatar",
+            required=False,
+            default="robot",
+            enum=["realistic", "cartoon", "robot", "creature", "abstract", "anime", "pixel", "chibi", "furry", "mecha"]
+        ),
+    ]
+    examples = [
+        "generate_avatar(description='friendly robot with glowing blue eyes') - Generate robot avatar",
+        "generate_avatar(description='cute digital assistant', style='anime') - Anime-style avatar",
+        "generate_avatar(description='sleek futuristic AI', style='mecha') - Mecha avatar",
+    ]
     
     AVATAR_DIR = Path(__file__).parent.parent.parent / "data" / "avatar" / "generated"
     
@@ -474,6 +658,19 @@ class OpenAvatarInBlenderTool(Tool):
     parameters = {
         "file_path": "Optional: specific 3D file to open. If not provided, opens current avatar.",
     }
+    category = "avatar"
+    rich_parameters = [
+        RichParameter(
+            name="file_path",
+            type="string",
+            description="Path to 3D file (.obj, .fbx, .gltf, .glb, .ply, .stl). If empty, opens current avatar.",
+            required=False,
+        ),
+    ]
+    examples = [
+        "open_avatar_in_blender() - Open current avatar in Blender",
+        "open_avatar_in_blender(file_path='data/avatar/robot.glb') - Open specific 3D file",
+    ]
     
     def execute(self, file_path: str = "", **kwargs) -> dict[str, Any]:
         import shutil
@@ -570,6 +767,11 @@ class ListAvatarsTool(Tool):
     name = "list_avatars"
     description = "List all available avatars I can use"
     parameters = {}
+    category = "avatar"
+    rich_parameters = []  # No parameters needed
+    examples = [
+        "list_avatars() - List all available 2D and 3D avatars",
+    ]
     
     AVATAR_DIR = Path(__file__).parent.parent.parent / "data" / "avatar"
     
@@ -614,6 +816,19 @@ class SetAvatarTool(Tool):
     parameters = {
         "file_path": "Path to the avatar file to use",
     }
+    category = "avatar"
+    rich_parameters = [
+        RichParameter(
+            name="file_path",
+            type="string",
+            description="Path to avatar file (.png, .jpg, .gif for 2D; .obj, .fbx, .gltf, .glb, .ply for 3D)",
+            required=True,
+        ),
+    ]
+    examples = [
+        "set_avatar(file_path='data/avatar/robot.glb') - Use 3D robot avatar",
+        "set_avatar(file_path='data/avatar/cute.png') - Use 2D avatar image",
+    ]
     
     def execute(self, file_path: str, **kwargs) -> dict[str, Any]:
         if not Path(file_path).exists():
@@ -655,6 +870,43 @@ class ControlAvatarTool(Tool):
         "y": "Y coordinate (for move_to, look_at) - optional",
         "value": "Corner name (for go_corner), emotion name, gesture type, text to say, item to hold, or note content",
     }
+    category = "avatar"
+    rich_parameters = [
+        RichParameter(
+            name="action",
+            type="string",
+            description="The avatar action to perform",
+            required=True,
+            enum=["move_to", "walk_to", "resize", "look_at", "go_corner", "emotion", "gesture", "say", "hold", "drop", "leave_note", "sparkle"]
+        ),
+        RichParameter(
+            name="x",
+            type="integer",
+            description="X coordinate (for move_to, look_at, walk_to) or size in pixels (for resize)",
+            required=False,
+        ),
+        RichParameter(
+            name="y",
+            type="integer",
+            description="Y coordinate (for move_to, look_at, walk_to)",
+            required=False,
+        ),
+        RichParameter(
+            name="value",
+            type="string",
+            description="Action-specific value: corner name, emotion name, gesture type, text, or item name",
+            required=False,
+        ),
+    ]
+    examples = [
+        "control_avatar(action='move_to', x=100, y=500) - Teleport to position",
+        "control_avatar(action='walk_to', x=800, y=500) - Walk to position",
+        "control_avatar(action='resize', x=128) - Set avatar size to 128px",
+        "control_avatar(action='go_corner', value='bottom_right') - Go to corner",
+        "control_avatar(action='emotion', value='happy') - Express emotion",
+        "control_avatar(action='say', value='Hello!') - Show speech bubble",
+        "control_avatar(action='hold', value='coffee') - Hold an item",
+    ]
     
     def execute(self, action: str, x: int = None, y: int = None, value: str = None, **kwargs) -> dict[str, Any]:
         action = action.lower().strip()
@@ -807,6 +1059,78 @@ class SpawnObjectTool(Tool):
         "duration": "How long to show (seconds, 0 = permanent)",
         "physics": "true/false - should object fall with gravity?",
     }
+    category = "avatar"
+    rich_parameters = [
+        RichParameter(
+            name="object_type",
+            type="string",
+            description="The type of object to spawn",
+            required=True,
+            enum=["speech_bubble", "thought_bubble", "note", "emoji", "sticker", "sign", "effect", "held_item"]
+        ),
+        RichParameter(
+            name="text",
+            type="string",
+            description="Text content (for bubbles, notes, signs, emojis)",
+            required=False,
+        ),
+        RichParameter(
+            name="x",
+            type="integer",
+            description="X position on screen (uses avatar position if not set)",
+            required=False,
+        ),
+        RichParameter(
+            name="y",
+            type="integer",
+            description="Y position on screen (uses avatar position if not set)",
+            required=False,
+        ),
+        RichParameter(
+            name="item",
+            type="string",
+            description="Item to hold (for held_item type)",
+            required=False,
+            enum=["sword", "book", "coffee", "flower", "wand", "heart"]
+        ),
+        RichParameter(
+            name="hand",
+            type="string",
+            description="Which hand to hold item in",
+            required=False,
+            default="right",
+            enum=["left", "right"]
+        ),
+        RichParameter(
+            name="color",
+            type="string",
+            description="Color for stickers (hex like #e91e63)",
+            required=False,
+            default="#e91e63",
+        ),
+        RichParameter(
+            name="duration",
+            type="number",
+            description="How long to show in seconds (0 = permanent)",
+            required=False,
+            default=5.0,
+            min_value=0.0,
+            max_value=3600.0,
+        ),
+        RichParameter(
+            name="physics",
+            type="boolean",
+            description="Should the object fall with gravity?",
+            required=False,
+            default=False,
+        ),
+    ]
+    examples = [
+        "spawn_object(object_type='speech_bubble', text='Hello!') - Show speech bubble",
+        "spawn_object(object_type='note', text='Remember!', duration=0) - Permanent sticky note",
+        "spawn_object(object_type='emoji', text='★', physics=true) - Falling star",
+        "spawn_object(object_type='held_item', item='coffee', hand='right') - Hold coffee",
+    ]
     
     def execute(
         self,
@@ -900,6 +1224,19 @@ class RemoveObjectTool(Tool):
     parameters = {
         "object_id": "ID of the object to remove (from spawn_object result), or 'all' to remove everything",
     }
+    category = "avatar"
+    rich_parameters = [
+        RichParameter(
+            name="object_id",
+            type="string",
+            description="The ID of the object to remove (from spawn_object result), or 'all' to remove everything",
+            required=True,
+        ),
+    ]
+    examples = [
+        "remove_object(object_id='bubble_001') - Remove specific object",
+        "remove_object(object_id='all') - Clear all spawned objects",
+    ]
     
     def execute(self, object_id: str, **kwargs) -> dict[str, Any]:
         try:
@@ -918,12 +1255,13 @@ class RemoveObjectTool(Tool):
 
 
 class ListSpawnedObjectsTool(Tool):
-    """
-    List all currently spawned objects.
-    """
+    """List all currently spawned objects."""
     
     name = "list_spawned_objects"
-    description = "List all objects I've spawned on the screen"
+    description = "List all objects I've spawned on the screen - speech bubbles, notes, held items, effects"
+    category = "avatar"
+    rich_parameters = []  # No parameters needed
+    examples = ["List spawned objects", "What objects have I spawned?"]
     parameters = {}
     
     def execute(self, **kwargs) -> dict[str, Any]:
@@ -955,21 +1293,97 @@ class SpawnScreenEffectTool(Tool):
     
     Create particles, explosions, sparkles, fire, snow, rain, magic, and more.
     Effects render on a transparent overlay and don't block user input.
-    Can use custom textures from assets/effects/textures/ folder.
     """
     
     name = "spawn_screen_effect"
-    description = "Spawn visual effects on screen - sparkles, fire, explosions, hearts, magic, snow, rain, confetti, etc. Can use custom textures for unique particle effects."
+    description = "Spawn visual effects on screen - sparkles, fire, explosions, hearts, magic, snow, rain, confetti, etc. Effects are click-through and don't block input."
+    category = "effects"
+    
+    rich_parameters = [
+        RichParameter(
+            name="effect",
+            type="string",
+            description="Which effect preset to spawn",
+            required=True,
+            enum=["sparkle", "fire", "snow", "rain", "explosion", "confetti", 
+                  "hearts", "magic", "smoke", "bubble", "lightning", "ripple"],
+        ),
+        RichParameter(
+            name="x",
+            type="float",
+            description="X position on screen. Omit to use avatar position or screen center",
+            required=False,
+        ),
+        RichParameter(
+            name="y",
+            type="float",
+            description="Y position on screen. Omit to use avatar position or screen center",
+            required=False,
+        ),
+        RichParameter(
+            name="duration",
+            type="float",
+            description="How long the effect lasts in seconds",
+            required=False,
+            default=3.0,
+            min_value=0.5,
+            max_value=60.0,
+        ),
+        RichParameter(
+            name="at_avatar",
+            type="bool",
+            description="Spawn effect at avatar's current position",
+            required=False,
+            default=False,
+        ),
+        RichParameter(
+            name="intensity",
+            type="string",
+            description="Effect intensity - affects particle count and rate",
+            required=False,
+            default="medium",
+            enum=["low", "medium", "high"],
+        ),
+        RichParameter(
+            name="colors",
+            type="string",
+            description="Custom colors as comma-separated hex values like '#ff0000,#00ff00'",
+            required=False,
+        ),
+        RichParameter(
+            name="texture",
+            type="string",
+            description="Custom texture filename from assets/effects/textures/ (e.g., 'star.png')",
+            required=False,
+        ),
+        RichParameter(
+            name="shape",
+            type="string",
+            description="Particle shape",
+            required=False,
+            enum=["circle", "square", "star", "heart", "triangle", "line", "image"],
+        ),
+    ]
+    
+    examples = [
+        "Spawn sparkles at the avatar",
+        "Create a fire effect at position 500,300",
+        "Spawn hearts with high intensity for 5 seconds",
+        "Make snow fall on the screen",
+        "Spawn explosion at avatar with red and orange colors",
+    ]
+    
+    # Legacy
     parameters = {
-        "effect": "Effect preset: sparkle, fire, snow, rain, explosion, confetti, hearts, magic, smoke, bubble, lightning, ripple, or a custom preset name",
-        "x": "X position on screen (optional - uses avatar position or screen center)",
-        "y": "Y position on screen (optional - uses avatar position or screen center)",
-        "duration": "How long the effect lasts in seconds (default varies by effect type)",
-        "at_avatar": "true to spawn effect at avatar's current position (default: false)",
-        "intensity": "Effect intensity: low, medium, high (affects particle count/rate)",
-        "colors": "Custom colors as comma-separated hex values like '#ff0000,#00ff00' (optional)",
-        "texture": "Custom texture filename from assets/effects/textures/ (e.g., 'star.png', 'leaf.png')",
-        "shape": "Particle shape: circle, square, star, heart, triangle, line, or 'image' for texture",
+        "effect": "Effect preset: sparkle, fire, snow, rain, explosion, confetti, hearts, magic, smoke, bubble, lightning, ripple",
+        "x": "X position on screen (optional)",
+        "y": "Y position on screen (optional)",
+        "duration": "How long in seconds (default varies by effect)",
+        "at_avatar": "true to spawn at avatar position",
+        "intensity": "low, medium, or high",
+        "colors": "Custom colors as comma-separated hex values",
+        "texture": "Custom texture filename from assets/effects/textures/",
+        "shape": "Particle shape: circle, square, star, heart, triangle, line, or image",
     }
     
     def execute(
@@ -1087,6 +1501,22 @@ class ListEffectAssetsTool(Tool):
     parameters = {
         "asset_type": "What to list: presets, textures, or both (default: both)",
     }
+    category = "effects"
+    rich_parameters = [
+        RichParameter(
+            name="asset_type",
+            type="string",
+            description="What type of assets to list",
+            required=False,
+            default="both",
+            enum=["presets", "textures", "both"]
+        ),
+    ]
+    examples = [
+        "list_effect_assets() - Show all available effects and textures",
+        "list_effect_assets(asset_type='presets') - Show only effect presets",
+        "list_effect_assets(asset_type='textures') - Show only textures",
+    ]
     
     def execute(self, asset_type: str = "both", **kwargs) -> dict[str, Any]:
         try:
@@ -1120,6 +1550,19 @@ class StopScreenEffectTool(Tool):
     parameters = {
         "effect_id": "ID of the effect to stop (from spawn_screen_effect result), or 'all' to clear everything",
     }
+    category = "effects"
+    rich_parameters = [
+        RichParameter(
+            name="effect_id",
+            type="string",
+            description="The ID of the effect to stop (returned by spawn_screen_effect), or 'all' to clear all effects",
+            required=True,
+        ),
+    ]
+    examples = [
+        "stop_screen_effect(effect_id='hearts_001') - Stop a specific effect",
+        "stop_screen_effect(effect_id='all') - Clear all running effects",
+    ]
     
     def execute(self, effect_id: str, **kwargs) -> dict[str, Any]:
         try:
@@ -1153,6 +1596,56 @@ class ChangeOutfitTool(Tool):
         "color_zone": "Which part to color: primary, secondary, accent (for set_color)",
         "outfit_name": "Name for saving/loading outfits",
     }
+    category = "avatar"
+    rich_parameters = [
+        RichParameter(
+            name="action",
+            type="string",
+            description="The outfit action to perform",
+            required=True,
+            enum=["equip", "unequip", "set_color", "list_outfits", "list_items", "save_outfit", "load_outfit"]
+        ),
+        RichParameter(
+            name="slot",
+            type="string",
+            description="The slot to modify",
+            required=False,
+            enum=["head", "face", "torso", "arms", "hands", "legs", "feet", "hat", "glasses", "necklace", "bracelet", "left_hand", "right_hand"]
+        ),
+        RichParameter(
+            name="item",
+            type="string",
+            description="Item name or ID to equip (required for equip action)",
+            required=False,
+        ),
+        RichParameter(
+            name="color",
+            type="string",
+            description="Hex color code like #ff5500 (required for set_color action)",
+            required=False,
+        ),
+        RichParameter(
+            name="color_zone",
+            type="string",
+            description="Which part of the outfit to color",
+            required=False,
+            default="primary",
+            enum=["primary", "secondary", "accent"]
+        ),
+        RichParameter(
+            name="outfit_name",
+            type="string",
+            description="Name for saving or loading outfit presets",
+            required=False,
+        ),
+    ]
+    examples = [
+        "change_outfit(action='list_items', slot='hat') - List available hats",
+        "change_outfit(action='equip', slot='hat', item='wizard_hat') - Put on wizard hat",
+        "change_outfit(action='set_color', color='#ff5500', color_zone='primary') - Change primary color",
+        "change_outfit(action='save_outfit', outfit_name='casual') - Save current outfit",
+        "change_outfit(action='load_outfit', outfit_name='casual') - Load saved outfit",
+    ]
     
     def execute(
         self,
@@ -1248,6 +1741,49 @@ class FullscreenModeControlTool(Tool):
         "monitors": "List of monitor indices [0, 1, 2] or 'all' - for set_monitors",
         "hotkey": "Hotkey string like 'ctrl+shift+h' - for set_hotkey",
     }
+    category = "system"
+    rich_parameters = [
+        RichParameter(
+            name="action",
+            type="string",
+            description="The fullscreen control action to perform",
+            required=True,
+            enum=["show", "hide", "toggle", "set_category", "set_monitors", "set_hotkey", "get_status", "enable", "disable"]
+        ),
+        RichParameter(
+            name="category",
+            type="string",
+            description="Category to modify visibility for (for set_category action)",
+            required=False,
+            enum=["avatar", "spawned_objects", "effects", "particles"]
+        ),
+        RichParameter(
+            name="visible",
+            type="boolean",
+            description="Whether the category should be visible (for set_category action)",
+            required=False,
+        ),
+        RichParameter(
+            name="monitors",
+            type="string",
+            description="Monitor indices as comma-separated list (0,1,2) or 'all' (for set_monitors action)",
+            required=False,
+        ),
+        RichParameter(
+            name="hotkey",
+            type="string",
+            description="Hotkey string like 'ctrl+shift+h' (for set_hotkey action)",
+            required=False,
+        ),
+    ]
+    examples = [
+        "fullscreen_mode_control(action='hide') - Hide all overlays",
+        "fullscreen_mode_control(action='show') - Show all overlays",
+        "fullscreen_mode_control(action='toggle') - Toggle visibility",
+        "fullscreen_mode_control(action='set_category', category='avatar', visible=false) - Hide just avatar",
+        "fullscreen_mode_control(action='set_hotkey', hotkey='ctrl+shift+h') - Set toggle hotkey",
+        "fullscreen_mode_control(action='get_status') - Get current visibility status",
+    ]
     
     def execute(
         self,

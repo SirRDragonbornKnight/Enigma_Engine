@@ -116,7 +116,7 @@ from .tool_executor import ToolExecutor, execute_tool_from_text
 
 # Tool Manager for enabling/disabling tools
 from .tool_manager import PRESETS, TOOL_CATEGORIES, ToolManager, get_tool_manager
-from .tool_registry import Tool, ToolRegistry, execute_tool, get_registry
+from .tool_registry import RichParameter, Tool, ToolRegistry, execute_tool, get_registry
 from .validation import ToolSchemaValidator
 from .vision import (
     FindOnScreenTool,
@@ -129,6 +129,7 @@ from .vision import (
 __all__ = [
     # Core
     "Tool",
+    "RichParameter",
     "ToolRegistry", 
     "get_registry",
     "execute_tool",

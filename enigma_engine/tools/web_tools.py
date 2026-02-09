@@ -15,7 +15,7 @@ import urllib.parse
 import urllib.request
 from typing import Any, Dict
 
-from .tool_registry import Tool
+from .tool_registry import RichParameter, Tool
 from .url_safety import ContentFilter, URLSafety
 
 logger = logging.getLogger(__name__)
@@ -38,6 +38,28 @@ class WebSearchTool(Tool):
         "query": "The search query string",
         "num_results": "Number of results to return (default: 5)",
     }
+    category = "web"
+    rich_parameters = [
+        RichParameter(
+            name="query",
+            type="string",
+            description="The search query string",
+            required=True,
+        ),
+        RichParameter(
+            name="num_results",
+            type="integer",
+            description="Number of results to return",
+            required=False,
+            default=5,
+            min_value=1,
+            max_value=20,
+        ),
+    ]
+    examples = [
+        "web_search(query='Python tutorials') - Search for Python tutorials",
+        "web_search(query='latest AI news', num_results=10) - Get 10 results about AI news",
+    ]
     
     def __init__(self):
         super().__init__()
@@ -141,6 +163,28 @@ class FetchWebpageTool(Tool):
         "url": "The URL to fetch",
         "max_length": "Maximum characters to return (default: 5000)",
     }
+    category = "web"
+    rich_parameters = [
+        RichParameter(
+            name="url",
+            type="string",
+            description="The URL to fetch (must be http:// or https://)",
+            required=True,
+        ),
+        RichParameter(
+            name="max_length",
+            type="integer",
+            description="Maximum characters to return",
+            required=False,
+            default=5000,
+            min_value=100,
+            max_value=100000,
+        ),
+    ]
+    examples = [
+        "fetch_webpage(url='https://example.com/article') - Get article content",
+        "fetch_webpage(url='https://docs.python.org/', max_length=10000) - Fetch Python docs",
+    ]
     
     def __init__(self):
         super().__init__()

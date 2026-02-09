@@ -16,7 +16,7 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict
 
-from .tool_registry import Tool
+from .tool_registry import RichParameter, Tool
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +34,35 @@ class RunCommandTool(Tool):
         "timeout": "Maximum seconds to wait (default: 30)",
         "cwd": "Working directory (default: current directory)",
     }
+    category = "system"
+    rich_parameters = [
+        RichParameter(
+            name="command",
+            type="string",
+            description="The shell command to execute (must be in allowlist)",
+            required=True,
+        ),
+        RichParameter(
+            name="timeout",
+            type="integer",
+            description="Maximum seconds to wait",
+            required=False,
+            default=30,
+            min_value=1,
+            max_value=300,
+        ),
+        RichParameter(
+            name="cwd",
+            type="string",
+            description="Working directory for the command",
+            required=False,
+        ),
+    ]
+    examples = [
+        "run_command(command='ls -la') - List directory contents",
+        "run_command(command='python --version') - Check Python version",
+        "run_command(command='git status', cwd='project/') - Git status in project folder",
+    ]
     
     # Dangerous commands/patterns that are blocked
     BLOCKED_COMMANDS = [
@@ -194,6 +223,27 @@ class ScreenshotTool(Tool):
         "output_path": "Where to save the screenshot (default: screenshot.png)",
         "region": "Optional region as 'x,y,width,height' (default: full screen)",
     }
+    category = "system"
+    rich_parameters = [
+        RichParameter(
+            name="output_path",
+            type="string",
+            description="File path to save the screenshot",
+            required=False,
+            default="screenshot.png",
+        ),
+        RichParameter(
+            name="region",
+            type="string",
+            description="Screen region to capture as 'x,y,width,height' (e.g., '0,0,800,600')",
+            required=False,
+        ),
+    ]
+    examples = [
+        "screenshot() - Take fullscreen screenshot",
+        "screenshot(output_path='capture.png') - Save to specific file",
+        "screenshot(region='100,100,500,400') - Capture specific region",
+    ]
     
     def __init__(self):
         super().__init__()
@@ -246,6 +296,11 @@ class GetSystemInfoTool(Tool):
     name = "get_system_info"
     description = "Get information about the system (OS, CPU, memory, disk, etc.)"
     parameters = {}
+    category = "system"
+    rich_parameters = []  # No parameters
+    examples = [
+        "get_system_info() - Get OS, CPU, memory, disk, and GPU info",
+    ]
     
     def execute(self, **kwargs) -> dict[str, Any]:
         try:

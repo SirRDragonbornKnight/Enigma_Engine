@@ -19,9 +19,9 @@ import logging
 import platform
 import shutil
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
-from .tool_registry import Tool
+from .tool_registry import RichParameter, Tool
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +77,33 @@ class ReadFileTool(Tool):
         "max_lines": "Maximum lines to read (default: all)",
         "encoding": "File encoding (default: utf-8)",
     }
+    category = "file"
+    rich_parameters = [
+        RichParameter(
+            name="path",
+            type="string",
+            description="Path to the file to read",
+            required=True,
+        ),
+        RichParameter(
+            name="max_lines",
+            type="integer",
+            description="Maximum number of lines to read (reads all if not set)",
+            required=False,
+            min_value=1,
+        ),
+        RichParameter(
+            name="encoding",
+            type="string",
+            description="File encoding",
+            required=False,
+            default="utf-8",
+        ),
+    ]
+    examples = [
+        "read_file(path='config.json') - Read entire config file",
+        "read_file(path='log.txt', max_lines=100) - Read first 100 lines",
+    ]
     
     def execute(self, path: str, max_lines: Optional[int] = None, encoding: str = "utf-8", **kwargs) -> dict[str, Any]:
         """
@@ -147,6 +174,33 @@ class WriteFileTool(Tool):
         "content": "The text content to write",
         "mode": "Write mode: 'overwrite' or 'append' (default: overwrite)",
     }
+    category = "file"
+    rich_parameters = [
+        RichParameter(
+            name="path",
+            type="string",
+            description="Path to write to",
+            required=True,
+        ),
+        RichParameter(
+            name="content",
+            type="string",
+            description="Text content to write",
+            required=True,
+        ),
+        RichParameter(
+            name="mode",
+            type="string",
+            description="Write mode",
+            required=False,
+            default="overwrite",
+            enum=["overwrite", "append"]
+        ),
+    ]
+    examples = [
+        "write_file(path='output.txt', content='Hello World') - Write to file",
+        "write_file(path='log.txt', content='New entry', mode='append') - Append to file",
+    ]
     
     def execute(self, path: str, content: str, mode: str = "overwrite", **kwargs) -> dict[str, Any]:
         """
@@ -203,6 +257,34 @@ class ListDirectoryTool(Tool):
         "recursive": "Whether to list subdirectories recursively (default: false)",
         "pattern": "Filter files by pattern like '*.txt' (default: all files)",
     }
+    category = "file"
+    rich_parameters = [
+        RichParameter(
+            name="path",
+            type="string",
+            description="Directory path to list",
+            required=True,
+        ),
+        RichParameter(
+            name="recursive",
+            type="boolean",
+            description="List subdirectories recursively",
+            required=False,
+            default=False,
+        ),
+        RichParameter(
+            name="pattern",
+            type="string",
+            description="Glob pattern to filter files (e.g., '*.txt')",
+            required=False,
+            default="*",
+        ),
+    ]
+    examples = [
+        "list_directory(path='.') - List current directory",
+        "list_directory(path='src', recursive=true) - List all files recursively",
+        "list_directory(path='docs', pattern='*.md') - List only markdown files",
+    ]
     
     def execute(self, path: str, recursive: bool = False, pattern: str = "*", **kwargs) -> dict[str, Any]:
         try:
@@ -257,6 +339,25 @@ class MoveFileTool(Tool):
         "source": "The current path of the file",
         "destination": "The new path for the file",
     }
+    category = "file"
+    rich_parameters = [
+        RichParameter(
+            name="source",
+            type="string",
+            description="Current path of the file",
+            required=True,
+        ),
+        RichParameter(
+            name="destination",
+            type="string",
+            description="New path for the file",
+            required=True,
+        ),
+    ]
+    examples = [
+        "move_file(source='old.txt', destination='new.txt') - Rename file",
+        "move_file(source='file.txt', destination='archive/file.txt') - Move to folder",
+    ]
     
     def execute(self, source: str, destination: str, **kwargs) -> dict[str, Any]:
         try:
@@ -298,6 +399,26 @@ class DeleteFileTool(Tool):
         "path": "The path of the file to delete",
         "confirm": "Must be 'yes' to actually delete (safety check)",
     }
+    category = "file"
+    rich_parameters = [
+        RichParameter(
+            name="path",
+            type="string",
+            description="Path of the file to delete",
+            required=True,
+        ),
+        RichParameter(
+            name="confirm",
+            type="string",
+            description="Safety confirmation - must be 'yes' to delete",
+            required=True,
+            enum=["yes", "no"]
+        ),
+    ]
+    examples = [
+        "delete_file(path='temp.txt', confirm='yes') - Delete file",
+        "delete_file(path='folder/', confirm='yes') - Delete folder and contents",
+    ]
     
     # Protected paths that cannot be deleted - OS-specific
     PROTECTED_PATHS_UNIX = [
