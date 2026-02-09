@@ -303,7 +303,8 @@ class ClipboardHistory:
             import sys
             if sys.platform == 'win32':
                 import subprocess
-                subprocess.Popen(['clip'], stdin=subprocess.PIPE).communicate(content.encode('utf-16-le'))
+                proc = subprocess.Popen(['clip'], stdin=subprocess.PIPE)
+                proc.communicate(content.encode('utf-16-le'), timeout=5)
                 return True
             
         except Exception as e:

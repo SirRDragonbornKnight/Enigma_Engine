@@ -35,8 +35,11 @@
 | auth | 1 | ~700 | Scanned - no issues |
 | mobile | 2 | ~1K | 2 TS fetch timeout fixes |
 | monitoring | 2 | ~400 | Scanned - has max_samples |
-| other | 60 | ~40K | Started |
-| **TOTAL** | **776** | **~446K** | **39%** |
+| personality | 3 | ~2K | 1 unbounded history fix |
+| scripts | 1 | ~400 | Scanned - clean (local lists) |
+| docs | 4 | ~1K | Scanned - clean (local lists) |
+| other | 50 | ~35K | Remaining |
+| **TOTAL** | **776** | **~446K** | **42%** |
 
 ---
 
@@ -441,7 +444,17 @@ Just ensure they're accurate.
 - web/ - Verified clean (telemetry, app have limits)
 - i18n/ - No subprocess/HTTP calls
 - testing/ - Benchmark results reset per run
+- gui/ - All subprocess calls have timeouts (screencapture, tasklist, xrandr, etc.)
+- avatar/ - All subprocess calls have timeouts (xrandr, wmctrl, xdotool, osascript)
+- tools/ - All subprocess/HTTP calls have timeouts
+- builtin/stt.py, builtin/tts.py - All have timeouts (5-60s)
+- comms/tunnel_manager.py - Popen for tunnels OK (long-running), version checks have timeout=10
 
-**Estimated remaining sessions: ~9**
+**Final verification:**
+- All while True loops have proper exit conditions (break, asyncio control, state checks)
+- All requests.get/post calls have timeout parameters (10-120s)
+- Docstring examples without timeout are not executed code
+
+**Estimated remaining sessions: ~8**
 
 Say "let it ride" to continue!
