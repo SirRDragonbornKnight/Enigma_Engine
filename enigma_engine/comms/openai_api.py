@@ -130,7 +130,7 @@ class OpenAICompatibleServer:
         Initialize the server.
         
         Args:
-            engine: ForgeEngine instance (lazy-loaded if None)
+            engine: EnigmaEngine instance (lazy-loaded if None)
             host: Host to bind to
             port: Port to listen on
         """
@@ -152,8 +152,8 @@ class OpenAICompatibleServer:
                 from ..core.engine_pool import get_engine
                 self._engine = get_engine()
             except ImportError:
-                from ..core.inference import ForgeEngine
-                self._engine = ForgeEngine()
+                from ..core.inference import EnigmaEngine
+                self._engine = EnigmaEngine()
         return self._engine
     
     def _setup_routes(self):

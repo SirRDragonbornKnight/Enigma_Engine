@@ -12,7 +12,7 @@ Usage:
     # Define lazy imports
     _LAZY_IMPORTS = {
         'create_model': ('.model', 'create_model'),
-        'ForgeEngine': ('.inference', 'ForgeEngine'),
+        'EnigmaEngine': ('.inference', 'EnigmaEngine'),
     }
     
     def __getattr__(name):
@@ -67,7 +67,7 @@ class LazyLoader:
     
     Usage in __init__.py:
         _loader = LazyLoader(__name__)
-        _loader.register('ForgeEngine', '.inference', 'ForgeEngine')
+        _loader.register('EnigmaEngine', '.inference', 'EnigmaEngine')
         _loader.register('create_model', '.model', 'create_model')
         
         def __getattr__(name):

@@ -113,6 +113,99 @@ class HealthResponse:
     version: str
 
 
+# Proto file content for reference (defined at module level)
+PROTO_CONTENT = '''
+syntax = "proto3";
+
+package forgeengine;
+
+service ForgeService {
+    // Text generation
+    rpc Generate(GenerateRequest) returns (GenerateResponse);
+    rpc GenerateStream(GenerateRequest) returns (stream GenerateResponse);
+    
+    // Chat
+    rpc Chat(ChatRequest) returns (ChatResponse);
+    rpc ChatStream(ChatRequest) returns (stream ChatResponse);
+    
+    // Module management
+    rpc ManageModule(ModuleRequest) returns (ModuleResponse);
+    
+    // Tool execution
+    rpc ExecuteTool(ToolRequest) returns (ToolResponse);
+    
+    // Health check
+    rpc HealthCheck(HealthCheckRequest) returns (HealthResponse);
+}
+
+message GenerateRequest {
+    string prompt = 1;
+    int32 max_tokens = 2;
+    float temperature = 3;
+    float top_p = 4;
+    float top_k = 5;
+    repeated string stop_sequences = 6;
+    bool stream = 7;
+}
+
+message GenerateResponse {
+    string text = 1;
+    int32 tokens_generated = 2;
+    float generation_time = 3;
+    string finish_reason = 4;
+}
+
+message ChatMessage {
+    string role = 1;
+    string content = 2;
+}
+
+message ChatRequest {
+    repeated ChatMessage messages = 1;
+    int32 max_tokens = 2;
+    float temperature = 3;
+    bool stream = 4;
+}
+
+message ChatResponse {
+    ChatMessage message = 1;
+    int32 tokens_generated = 2;
+    float generation_time = 3;
+}
+
+message ModuleRequest {
+    string name = 1;
+    string action = 2;  // load, unload, status
+}
+
+message ModuleResponse {
+    string name = 1;
+    string status = 2;
+    bool success = 3;
+    string error = 4;
+}
+
+message ToolRequest {
+    string name = 1;
+    string arguments = 2;  // JSON string
+}
+
+message ToolResponse {
+    string result = 1;  // JSON string
+    bool success = 2;
+    string error = 3;
+}
+
+message HealthCheckRequest {}
+
+message HealthResponse {
+    string status = 1;
+    float uptime = 2;
+    string version = 3;
+}
+'''
+
+
 if HAS_GRPC:
     
     class ForgeServicer:
@@ -126,8 +219,8 @@ if HAS_GRPC:
             """Lazy load inference engine."""
             if self._engine is None:
                 try:
-                    from enigma_engine.core.inference import ForgeEngine
-                    self._engine = ForgeEngine()
+                    from enigma_engine.core.inference import EnigmaEngine
+                    self._engine = EnigmaEngine()
                 except Exception as e:
                     logger.error(f"Failed to load engine: {e}")
             return self._engine
@@ -455,98 +548,6 @@ if HAS_GRPC:
                 version="unknown"
             )
 
-
-# Proto file content for reference
-PROTO_CONTENT = '''
-syntax = "proto3";
-
-package Enigma AI Engine;
-
-service ForgeService {
-    // Text generation
-    rpc Generate(GenerateRequest) returns (GenerateResponse);
-    rpc GenerateStream(GenerateRequest) returns (stream GenerateResponse);
-    
-    // Chat
-    rpc Chat(ChatRequest) returns (ChatResponse);
-    rpc ChatStream(ChatRequest) returns (stream ChatResponse);
-    
-    // Module management
-    rpc ManageModule(ModuleRequest) returns (ModuleResponse);
-    
-    // Tool execution
-    rpc ExecuteTool(ToolRequest) returns (ToolResponse);
-    
-    // Health check
-    rpc HealthCheck(HealthCheckRequest) returns (HealthResponse);
-}
-
-message GenerateRequest {
-    string prompt = 1;
-    int32 max_tokens = 2;
-    float temperature = 3;
-    float top_p = 4;
-    int32 top_k = 5;
-    repeated string stop_sequences = 6;
-    bool stream = 7;
-}
-
-message GenerateResponse {
-    string text = 1;
-    int32 tokens_generated = 2;
-    float generation_time = 3;
-    string finish_reason = 4;
-}
-
-message ChatMessage {
-    string role = 1;
-    string content = 2;
-}
-
-message ChatRequest {
-    repeated ChatMessage messages = 1;
-    int32 max_tokens = 2;
-    float temperature = 3;
-    bool stream = 4;
-}
-
-message ChatResponse {
-    ChatMessage message = 1;
-    int32 tokens_generated = 2;
-    float generation_time = 3;
-}
-
-message ModuleRequest {
-    string name = 1;
-    string action = 2;  // load, unload, status
-}
-
-message ModuleResponse {
-    string name = 1;
-    string status = 2;
-    bool success = 3;
-    string error = 4;
-}
-
-message ToolRequest {
-    string name = 1;
-    string arguments = 2;  // JSON string
-}
-
-message ToolResponse {
-    string result = 1;  // JSON string
-    bool success = 2;
-    string error = 3;
-}
-
-message HealthCheckRequest {}
-
-message HealthResponse {
-    string status = 1;
-    float uptime = 2;
-    string version = 3;
-}
-'''
 
 else:
     class ForgeGRPCServer:

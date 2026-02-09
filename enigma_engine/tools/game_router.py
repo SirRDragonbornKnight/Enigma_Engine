@@ -529,8 +529,8 @@ class GameAIRouter:
             except ImportError:
                 # Fallback to direct creation (less efficient)
                 try:
-                    from enigma_engine.core.inference import ForgeEngine
-                    engine = ForgeEngine()
+                    from enigma_engine.core.inference import EnigmaEngine
+                    engine = EnigmaEngine()
                 except Exception:
                     return "[No AI engine available - check that a model is loaded]"
         

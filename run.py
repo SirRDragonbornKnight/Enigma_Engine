@@ -23,7 +23,7 @@ Your journey through Enigma AI Engine starts here.
 
 🔗 CONNECTED FILES:
     --train  → enigma_engine/core/training.py      (Trainer, train_model)
-    --run    → enigma_engine/core/inference.py     (ForgeEngine)
+    --run    → enigma_engine/core/inference.py     (EnigmaEngine)
     --gui    → enigma_engine/gui/enhanced_window.py (EnhancedMainWindow)
     --serve  → enigma_engine/comms/api_server.py   (Flask REST API)
 
@@ -366,7 +366,7 @@ Examples:
             app.run(host="127.0.0.1", port=port, debug=True)
 
     if args.run:
-        from enigma_engine.core.inference import ForgeEngine
+        from enigma_engine.core.inference import EnigmaEngine
         print("\n" + "=" * 50)
         print("Enigma AI Engine CLI Chat")
         print("=" * 50)
@@ -374,7 +374,7 @@ Examples:
         print("Type 'quit' or 'exit' to stop.\n")
 
         try:
-            engine = ForgeEngine()
+            engine = EnigmaEngine()
         except FileNotFoundError as e:
             logger.error(f"Model not found: {e}")
             print(f"\n[ERROR] Model not found")

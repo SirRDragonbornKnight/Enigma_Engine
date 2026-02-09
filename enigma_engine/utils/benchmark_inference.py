@@ -159,7 +159,7 @@ def benchmark_single(
     Run a single benchmark on an inference engine.
     
     Args:
-        engine: ForgeEngine instance
+        engine: EnigmaEngine instance
         prompt: Text prompt to use
         max_tokens: Number of tokens to generate
         model_size: Label for the model size
@@ -239,7 +239,7 @@ def quick_benchmark(
     Quick benchmark of current engine.
     
     Args:
-        engine: ForgeEngine instance
+        engine: EnigmaEngine instance
         num_runs: Number of runs to average
         model_size: Label for the model
         
@@ -284,7 +284,7 @@ def run_benchmark(
     Returns:
         BenchmarkReport with all results
     """
-    from enigma_engine.core.inference import ForgeEngine
+    from enigma_engine.core.inference import EnigmaEngine
     from enigma_engine.core.model import create_model
     from enigma_engine.core.tokenizer import get_tokenizer
     
@@ -310,7 +310,7 @@ def run_benchmark(
             # Create model
             model = create_model(size, vocab_size=vocab_size)
             tokenizer = get_tokenizer(vocab_size=vocab_size)
-            engine = ForgeEngine(model, tokenizer)
+            engine = EnigmaEngine(model, tokenizer)
             
             # Run benchmarks
             for i in range(num_runs):

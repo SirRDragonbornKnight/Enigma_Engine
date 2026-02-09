@@ -306,15 +306,15 @@ def main():
     # =========================================================================
     print_header("6. INFERENCE ENGINE")
     
-    @test("ForgeEngine Import")
+    @test("EnigmaEngine Import")
     def test_engine_import():
-        from enigma_engine.core.inference import ForgeEngine
+        from enigma_engine.core.inference import EnigmaEngine
         return "Imported"
     test_engine_import()
     
-    @test("ForgeEngine with Tools")
+    @test("EnigmaEngine with Tools")
     def test_engine_tools():
-        from enigma_engine.core.inference import ForgeEngine
+        from enigma_engine.core.inference import EnigmaEngine
         # Just test that it can be configured with tools enabled
         # Don't actually load a model (that requires a trained model)
         return "enable_tools parameter available"

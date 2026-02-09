@@ -108,8 +108,8 @@ class InferenceGateway:
         """Get or create local inference engine."""
         if self._local_engine is None:
             try:
-                from ..core.inference import ForgeEngine
-                self._local_engine = ForgeEngine()
+                from ..core.inference import EnigmaEngine
+                self._local_engine = EnigmaEngine()
             except Exception as e:
                 logger.error(f"Failed to create local engine: {e}")
         return self._local_engine

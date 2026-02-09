@@ -7265,13 +7265,13 @@ def _auto_design_avatar(parent):
             else:
                 # Fallback: Use AI to pick a style based on personality
                 try:
-                    from ....core.inference import ForgeEngine
-                    engine = ForgeEngine.get_instance()
+                    from ....core.inference import EnigmaEngine
+                    engine = EnigmaEngine.get_instance()
                     styles = list(SPRITE_TEMPLATES.keys()) if SPRITE_TEMPLATES else ['default']
                     
                     if engine and engine.model:
                         prompt = f"Pick ONE avatar style from this list that best fits an AI assistant: {', '.join(styles)}. Reply with ONLY the style name, nothing else."
-                        response = engine.generate(prompt, max_length=20, temperature=0.7)
+                        response = engine.generate(prompt, max_gen=20, temperature=0.7)
                         chosen_style = response.strip().lower()
                         # Validate it's a real style
                         if chosen_style not in styles:

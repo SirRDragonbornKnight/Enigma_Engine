@@ -137,11 +137,11 @@ overlay.set_click_through(True)
 ### Using with AI Engine
 
 ```python
-from enigma_engine.core.inference import ForgeEngine
+from enigma_engine.core.inference import EnigmaEngine
 from enigma_engine.gui.overlay import AIOverlay
 
 # Create engine
-engine = ForgeEngine(model, tokenizer)
+engine = EnigmaEngine(model, tokenizer)
 
 # Create and connect overlay
 overlay = AIOverlay()

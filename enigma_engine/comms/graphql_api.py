@@ -174,6 +174,31 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+# GraphiQL HTML interface (defined before if block for module-level access)
+GRAPHIQL_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Enigma AI Engine GraphQL</title>
+    <link href="https://unpkg.com/graphiql/graphiql.min.css" rel="stylesheet" />
+</head>
+<body style="margin: 0;">
+    <div id="graphiql" style="height: 100vh;"></div>
+    <script src="https://unpkg.com/react@17/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@17/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/graphiql/graphiql.min.js"></script>
+    <script>
+        const fetcher = GraphiQL.createFetcher({ url: '/graphql' });
+        ReactDOM.render(
+            React.createElement(GraphiQL, { fetcher: fetcher }),
+            document.getElementById('graphiql'),
+        );
+    </script>
+</body>
+</html>
+"""
+
+
 if HAS_GRAPHQL:
     
     # GraphQL Types
@@ -384,9 +409,9 @@ if HAS_GRAPHQL:
         def resolve_generate(self, info, prompt, options=None):
             """Generate text."""
             try:
-                from enigma_engine.core.inference import ForgeEngine
+                from enigma_engine.core.inference import EnigmaEngine
                 
-                engine = ForgeEngine()
+                engine = EnigmaEngine()
                 
                 max_tokens = 256
                 temperature = 0.7
@@ -455,8 +480,8 @@ if HAS_GRAPHQL:
             # Generate response if user message
             if message["role"] == "user":
                 try:
-                    from enigma_engine.core.inference import ForgeEngine
-                    engine = ForgeEngine()
+                    from enigma_engine.core.inference import EnigmaEngine
+                    engine = EnigmaEngine()
                     
                     response = engine.generate(message["content"])
                     
@@ -724,30 +749,6 @@ if HAS_GRAPHQL:
             else:
                 raise ImportError("Flask or aiohttp required for GraphQL server")
 
-
-# GraphiQL HTML interface
-GRAPHIQL_HTML = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Enigma AI Engine GraphQL</title>
-    <link href="https://unpkg.com/graphiql/graphiql.min.css" rel="stylesheet" />
-</head>
-<body style="margin: 0;">
-    <div id="graphiql" style="height: 100vh;"></div>
-    <script src="https://unpkg.com/react@17/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@17/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/graphiql/graphiql.min.js"></script>
-    <script>
-        const fetcher = GraphiQL.createFetcher({ url: '/graphql' });
-        ReactDOM.render(
-            React.createElement(GraphiQL, { fetcher: fetcher }),
-            document.getElementById('graphiql'),
-        );
-    </script>
-</body>
-</html>
-"""
 
 else:
     class GraphQLAPI:

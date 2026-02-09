@@ -198,8 +198,8 @@ outputs/
 
 ```python
 # AI Brain
-from enigma_engine.core.model import Forge, create_model, get_model, register_model
-from enigma_engine.core.inference import ForgeEngine
+from enigma_engine.core.model import Enigma, create_model, get_model, register_model
+from enigma_engine.core.inference import EnigmaEngine
 from enigma_engine.core.tokenizer import get_tokenizer, TokenizerProtocol, encode_text, decode_tokens
 from enigma_engine.core.training import train_model
 from enigma_engine.core.tool_router import ToolRouter, get_router

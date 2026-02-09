@@ -139,7 +139,7 @@ def cmd_run(args):
     
     try:
         from ..config import CONFIG
-        from ..core.inference import ForgeEngine
+        from ..core.inference import EnigmaEngine
 
         # Find the model
         models_dir = Path(CONFIG.get("models_dir", "models"))
@@ -207,7 +207,7 @@ def cmd_run(args):
                 return 1
         
         print(f"Loading model: {model_path}")
-        engine = ForgeEngine(model_path=str(model_path))
+        engine = EnigmaEngine(model_path=str(model_path))
         
         # Chat loop
         conversation = []

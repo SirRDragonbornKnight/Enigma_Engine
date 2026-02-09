@@ -64,9 +64,9 @@ if HAS_LANGCHAIN:
         Example:
             ```python
             from enigma_engine.integrations.langchain_adapter import ForgeLLM
-            from enigma_engine.core.inference import ForgeEngine
+            from enigma_engine.core.inference import EnigmaEngine
             
-            engine = ForgeEngine(model_path="models/my_model")
+            engine = EnigmaEngine(model_path="models/my_model")
             llm = ForgeLLM(engine=engine)
             
             response = llm.invoke("What is the capital of France?")
@@ -92,7 +92,7 @@ if HAS_LANGCHAIN:
             Initialize ForgeLLM.
             
             Args:
-                engine: ForgeEngine instance
+                engine: EnigmaEngine instance
                 inference_fn: Alternative inference function
                 **kwargs: Additional parameters
             """

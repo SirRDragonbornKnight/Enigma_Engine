@@ -61,13 +61,13 @@ class MobileAPI:
         """Lazy load inference engine."""
         if self._engine is None:
             if self.model_name:
-                from ..core.inference import ForgeEngine
+                from ..core.inference import EnigmaEngine
                 from ..core.model_registry import ModelRegistry
                 
                 registry = ModelRegistry()
                 model, config = registry.load_model(self.model_name)
                 
-                self._engine = ForgeEngine.__new__(ForgeEngine)
+                self._engine = EnigmaEngine.__new__(EnigmaEngine)
                 self._engine.device = "cuda" if __import__('torch').cuda.is_available() else "cpu"
                 self._engine.model = model
                 self._engine.model.to(self._engine.device)
@@ -75,8 +75,8 @@ class MobileAPI:
                 from ..core.tokenizer import load_tokenizer
                 self._engine.tokenizer = load_tokenizer()
             else:
-                from ..core.inference import ForgeEngine
-                self._engine = ForgeEngine()
+                from ..core.inference import EnigmaEngine
+                self._engine = EnigmaEngine()
         return self._engine
     
     @property

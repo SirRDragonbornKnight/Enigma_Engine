@@ -49,7 +49,7 @@ deployment on any device from Raspberry Pi Zero to datacenter GPUs.
     → USES:      /proc/cpuinfo, /proc/meminfo (Linux)
     → USES:      torch.cuda, torch.backends.mps (GPU detection)
     ← USED BY:   enigma_engine/core/model.py (auto_configure)
-    ← USED BY:   enigma_engine/core/inference.py (ForgeEngine)
+    ← USED BY:   enigma_engine/core/inference.py (EnigmaEngine)
 
 📖 USAGE:
     from enigma_engine.core.hardware_detection import (

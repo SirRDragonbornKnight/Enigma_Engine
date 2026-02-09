@@ -209,16 +209,16 @@ server.start()
 
 ```python
 from enigma_engine.web import create_web_server
-from enigma_engine.core.inference import ForgeEngine
+from enigma_engine.core.inference import EnigmaEngine
 
 # Create engine
-engine = ForgeEngine()
+engine = EnigmaEngine()
 
 # Create server with custom generation
 server = create_web_server()
 
 # Override generation method if needed
-# (Server uses ForgeEngine by default)
+# (Server uses EnigmaEngine by default)
 
 server.start()
 ```

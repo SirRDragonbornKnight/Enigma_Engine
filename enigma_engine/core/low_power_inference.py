@@ -533,7 +533,7 @@ def get_engine(force_low_power: bool = False):
         force_low_power: Always use LowPowerEngine
         
     Returns:
-        ForgeEngine or LowPowerEngine depending on hardware
+        EnigmaEngine or LowPowerEngine depending on hardware
     """
     try:
         from .device_profiles import DeviceClass, get_device_profiler
@@ -550,8 +550,8 @@ def get_engine(force_low_power: bool = False):
         if force_low_power or device_class in low_power_classes:
             return LowPowerEngine()
         else:
-            from .inference import ForgeEngine
-            return ForgeEngine()
+            from .inference import EnigmaEngine
+            return EnigmaEngine()
     
     except ImportError:
         # Fall back to checking available memory
@@ -561,8 +561,8 @@ def get_engine(force_low_power: bool = False):
         if force_low_power or available_gb < 4:
             return LowPowerEngine()
         else:
-            from .inference import ForgeEngine
-            return ForgeEngine()
+            from .inference import EnigmaEngine
+            return EnigmaEngine()
 
 
 if __name__ == "__main__":

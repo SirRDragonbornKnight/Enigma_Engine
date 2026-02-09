@@ -75,10 +75,10 @@ class TestInferenceToToolFlow:
     
     def test_engine_with_tool_routing(self):
         """Test engine can route to tools when enabled."""
-        from enigma_engine.core.inference import ForgeEngine
+        from enigma_engine.core.inference import EnigmaEngine
         
         try:
-            engine = ForgeEngine()
+            engine = EnigmaEngine()
         except FileNotFoundError:
             pytest.skip("No trained model available")
         
@@ -129,10 +129,10 @@ class TestEndToEndPipeline:
     
     def test_chat_to_response_flow(self):
         """Test complete chat flow from input to response."""
-        from enigma_engine.core.inference import ForgeEngine
+        from enigma_engine.core.inference import EnigmaEngine
         
         try:
-            engine = ForgeEngine()
+            engine = EnigmaEngine()
         except FileNotFoundError:
             pytest.skip("No trained model available")
         
@@ -145,10 +145,10 @@ class TestEndToEndPipeline:
     
     def test_chat_with_history_context(self):
         """Test that history provides context."""
-        from enigma_engine.core.inference import ForgeEngine
+        from enigma_engine.core.inference import EnigmaEngine
         
         try:
-            engine = ForgeEngine()
+            engine = EnigmaEngine()
         except FileNotFoundError:
             pytest.skip("No trained model available")
         
@@ -167,10 +167,10 @@ class TestEndToEndPipeline:
     
     def test_generate_with_system_prompt(self):
         """Test generation with system prompt."""
-        from enigma_engine.core.inference import ForgeEngine
+        from enigma_engine.core.inference import EnigmaEngine
         
         try:
-            engine = ForgeEngine()
+            engine = EnigmaEngine()
         except FileNotFoundError:
             pytest.skip("No trained model available")
         
@@ -185,10 +185,10 @@ class TestEndToEndPipeline:
     
     def test_streaming_token_output(self):
         """Test streaming output yields tokens."""
-        from enigma_engine.core.inference import ForgeEngine
+        from enigma_engine.core.inference import EnigmaEngine
         
         try:
-            engine = ForgeEngine()
+            engine = EnigmaEngine()
         except FileNotFoundError:
             pytest.skip("No trained model available")
         
@@ -342,10 +342,10 @@ class TestErrorHandling:
     
     def test_inference_error_recovery(self):
         """Test inference recovers from errors gracefully."""
-        from enigma_engine.core.inference import ForgeEngine
+        from enigma_engine.core.inference import EnigmaEngine
         
         try:
-            engine = ForgeEngine()
+            engine = EnigmaEngine()
         except FileNotFoundError:
             pytest.skip("No trained model available")
         
@@ -377,10 +377,10 @@ class TestConcurrency:
     def test_concurrent_inference(self):
         """Test multiple concurrent inference requests."""
         import threading
-        from enigma_engine.core.inference import ForgeEngine
+        from enigma_engine.core.inference import EnigmaEngine
         
         try:
-            engine = ForgeEngine()
+            engine = EnigmaEngine()
         except FileNotFoundError:
             pytest.skip("No trained model available")
         

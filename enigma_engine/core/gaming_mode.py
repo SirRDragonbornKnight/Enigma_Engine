@@ -473,8 +473,8 @@ class GamingMode:
                     # Dispatch to appropriate handler based on task type
                     if task_type == 'text_generation':
                         # Deferred text generation
-                        from .inference import ForgeEngine
-                        engine = ForgeEngine()
+                        from .inference import EnigmaEngine
+                        engine = EnigmaEngine()
                         if 'prompt' in task_data:
                             result = engine.generate(task_data['prompt'], max_tokens=task_data.get('max_tokens', 100))
                             logger.debug(f"Completed deferred text generation: {len(result)} chars")

@@ -72,7 +72,7 @@ def test_gui_tabs():
 
 def test_inference_engine():
     """Test inference engine can be imported."""
-    from enigma_engine.core.inference import ForgeEngine
+    from enigma_engine.core.inference import EnigmaEngine
     print(f"  Inference Engine: OK")
     return True
 

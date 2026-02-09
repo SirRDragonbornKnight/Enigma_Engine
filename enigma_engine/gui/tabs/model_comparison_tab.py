@@ -178,8 +178,8 @@ class CompareWorker(QThread):
         except Exception as e:
             # Fallback: use inference engine
             try:
-                from ...core.inference import ForgeEngine
-                engine = ForgeEngine()
+                from ...core.inference import EnigmaEngine
+                engine = EnigmaEngine()
                 response = engine.generate(self.prompt, max_gen=self.max_tokens)
             except Exception as e2:
                 # Final fallback: return placeholder

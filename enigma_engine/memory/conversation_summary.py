@@ -398,7 +398,7 @@ class ConversationSummarizer:
         
         Args:
             messages: List of message dicts
-            engine: ForgeEngine instance (loads one if None)
+            engine: EnigmaEngine instance (loads one if None)
             model_name: Optional model name to use
             
         Returns:
@@ -413,8 +413,8 @@ class ConversationSummarizer:
         # Load engine if needed
         if engine is None:
             try:
-                from ..core.inference import ForgeEngine
-                engine = ForgeEngine(model_name=model_name)
+                from ..core.inference import EnigmaEngine
+                engine = EnigmaEngine(model_name=model_name)
             except Exception as e:
                 logger.warning(f"Could not load engine for AI summary: {e}")
                 return summary
@@ -576,7 +576,7 @@ def summarize_conversation(
     Args:
         messages: List of message dicts with 'role', 'text', 'ts'
         use_ai: Whether to use AI for better summary (slower)
-        engine: ForgeEngine instance (optional, loaded if needed)
+        engine: EnigmaEngine instance (optional, loaded if needed)
         
     Returns:
         ConversationSummary object

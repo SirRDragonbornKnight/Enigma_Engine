@@ -66,10 +66,10 @@ class ForgeCode:
             registry = ModelRegistry()
             model, config = registry.load_model(self.model_name)
             
-            from ...core.inference import ForgeEngine
+            from ...core.inference import EnigmaEngine
 
             # Create engine with loaded model
-            self.engine = ForgeEngine.__new__(ForgeEngine)
+            self.engine = EnigmaEngine.__new__(EnigmaEngine)
             import torch
             self.engine.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             self.engine.model = model

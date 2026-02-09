@@ -17,7 +17,7 @@ WHAT IS THIS FILE?
 THE KINGDOM MAP:
     ┌─────────────────────────────────────────────────────────────────┐
     │  enigma_engine/                                                      │
-    │  ├── core/       THE FORGE    - AI brains (model, inference)   │
+    │  ├── core/       THE ENGINE   - AI brains (model, inference)   │
     │  ├── modules/    THE ARMORY   - Load/unload capabilities       │
     │  ├── gui/        THE CASTLE   - Visual interface (PyQt5)       │
     │  ├── memory/     THE LIBRARY  - Conversation storage           │
@@ -30,9 +30,9 @@ THE KINGDOM MAP:
     └─────────────────────────────────────────────────────────────────┘
 
 YOUR FIRST QUEST:
-    >>> from enigma_engine.core import create_model, ForgeEngine
+    >>> from enigma_engine.core import create_model, EnigmaEngine
     >>> model = create_model('small')      # Create an AI brain
-    >>> engine = ForgeEngine()             # Create a way to talk to it
+    >>> engine = EnigmaEngine()            # Create a way to talk to it
     >>> response = engine.generate("Hello, how are you?")
     >>> print(response)                    # Magic!
 

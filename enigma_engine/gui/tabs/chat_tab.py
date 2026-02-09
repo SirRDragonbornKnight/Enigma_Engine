@@ -49,6 +49,7 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QProgressBar,
     QPushButton,
     QScrollArea,
     QShortcut,
@@ -627,7 +628,7 @@ def _create_input_section(parent, layout):
 
 
 def _create_status_bar(parent, layout):
-    """Build the bottom status bar with learning indicator."""
+    """Build the bottom status bar with learning indicator and token counter."""
     bottom_layout = QHBoxLayout()
     bottom_layout.setSpacing(8)
     
@@ -635,6 +636,43 @@ def _create_status_bar(parent, layout):
     parent.chat_status.setStyleSheet("color: #bac2de; font-size: 11px;")
     bottom_layout.addWidget(parent.chat_status)
     bottom_layout.addStretch()
+    
+    # Token usage display - shows context window usage
+    parent.token_label = QLabel("Tokens: 0 / 4096")
+    parent.token_label.setStyleSheet("color: #89b4fa; font-size: 11px;")
+    parent.token_label.setToolTip(
+        "Context window usage - shows how much of the AI's memory is being used.\n\n"
+        "When this fills up, older messages may be forgotten.\n"
+        "Click to see detailed breakdown."
+    )
+    parent.token_label.setCursor(Qt.PointingHandCursor)
+    parent.token_label.mousePressEvent = lambda e: _show_token_details(parent)
+    bottom_layout.addWidget(parent.token_label)
+    
+    # Token progress bar
+    parent.token_bar = QProgressBar()
+    parent.token_bar.setMaximumWidth(100)
+    parent.token_bar.setMaximumHeight(12)
+    parent.token_bar.setTextVisible(False)
+    parent.token_bar.setRange(0, 100)
+    parent.token_bar.setValue(0)
+    parent.token_bar.setStyleSheet("""
+        QProgressBar {
+            border: 1px solid #45475a;
+            border-radius: 4px;
+            background: #313244;
+        }
+        QProgressBar::chunk {
+            border-radius: 3px;
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                stop:0 #a6e3a1, stop:0.5 #f9e2af, stop:0.75 #fab387, stop:1 #f38ba8);
+        }
+    """)
+    parent.token_bar.setToolTip("Context usage: Green (low) -> Yellow (medium) -> Orange (high) -> Red (critical)")
+    bottom_layout.addWidget(parent.token_bar)
+    
+    # Initialize context tracker for this chat
+    _init_context_tracker(parent)
     
     # Learning indicator
     parent.learning_indicator = QLabel("Learning: ON")
@@ -656,6 +694,257 @@ def _create_status_bar(parent, layout):
     # Note: Voice toggle moved to input area (btn_speak) to reduce redundant indicators
     
     layout.addLayout(bottom_layout)
+
+
+def _init_context_tracker(parent):
+    """Initialize the context tracker for the chat."""
+    try:
+        from ...utils.context_window import get_context_tracker, reset_context_tracker
+        
+        # Get model context size if available
+        max_tokens = 4096  # Default
+        if hasattr(parent, 'current_model_name') and parent.current_model_name:
+            from ...utils.context_window import get_context_size
+            max_tokens = get_context_size(parent.current_model_name)
+        
+        # Reset and get fresh tracker
+        reset_context_tracker()
+        parent._context_tracker = get_context_tracker(max_tokens=max_tokens)
+        
+        # Add callback for auto-continue warnings
+        parent._context_tracker.add_usage_callback(lambda usage: _on_context_usage_update(parent, usage))
+        
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Failed to init context tracker: {e}")
+        parent._context_tracker = None
+
+
+def _on_context_usage_update(parent, usage):
+    """Called when context usage changes."""
+    try:
+        _update_token_display(parent)
+        
+        # Check for warnings
+        if usage.percentage >= 90:
+            parent.chat_status.setText("Warning: Context nearly full - AI may forget earlier messages")
+            parent.chat_status.setStyleSheet("color: #f38ba8; font-size: 11px; font-weight: bold;")
+            
+            # Show popup warning only once per session
+            if not getattr(parent, '_critical_warning_shown', False):
+                parent._critical_warning_shown = True
+                _show_hallucination_warning(parent, usage)
+                
+        elif usage.percentage >= 75:
+            parent.chat_status.setText("Context usage high")
+            parent.chat_status.setStyleSheet("color: #fab387; font-size: 11px;")
+            # Reset critical warning flag when usage drops
+            parent._critical_warning_shown = False
+        else:
+            parent.chat_status.setStyleSheet("color: #bac2de; font-size: 11px;")
+            # Reset critical warning flag when usage drops
+            parent._critical_warning_shown = False
+        
+        # Check for auto-continue trigger
+        if hasattr(parent, '_context_tracker') and parent._context_tracker:
+            if parent._context_tracker.should_auto_continue():
+                if not getattr(parent, '_auto_continue_triggered', False):
+                    parent._auto_continue_triggered = True
+                    _trigger_auto_continue(parent)
+            
+    except Exception:
+        pass
+
+
+def _show_hallucination_warning(parent, usage):
+    """Show a warning popup when context is nearly full."""
+    from PyQt5.QtWidgets import QMessageBox
+    
+    msg = QMessageBox(parent)
+    msg.setIcon(QMessageBox.Warning)
+    msg.setWindowTitle("Context Memory Warning")
+    msg.setText("The AI is running low on context memory.")
+    msg.setInformativeText(
+        f"Context usage: {usage.percentage:.0f}%\n\n"
+        "Earlier parts of this conversation may be forgotten, "
+        "leading to inconsistent or repeated responses.\n\n"
+        "What would you like to do?"
+    )
+    
+    continue_btn = msg.addButton("Continue Anyway", QMessageBox.AcceptRole)
+    new_chat_btn = msg.addButton("Start Fresh Chat", QMessageBox.ActionRole)
+    smart_btn = msg.addButton("Smart Continue", QMessageBox.ActionRole)
+    smart_btn.setToolTip("Save conversation summary and continue in new chat")
+    
+    msg.exec_()
+    
+    clicked = msg.clickedButton()
+    if clicked == new_chat_btn:
+        _clear_chat(parent)
+    elif clicked == smart_btn:
+        _smart_continue(parent)
+
+
+def _trigger_auto_continue(parent):
+    """Automatically continue conversation when context is full."""
+    from ...config import CONFIG
+    
+    ctx_config = CONFIG.get("context_window", {})
+    if not ctx_config.get("auto_continue_enabled", True):
+        return
+    
+    # Show notification
+    if hasattr(parent, 'chat_status'):
+        parent.chat_status.setText("Auto-continuing in new chat...")
+        parent.chat_status.setStyleSheet("color: #89b4fa; font-size: 11px; font-weight: bold;")
+    
+    _smart_continue(parent, show_notification=True)
+
+
+def _smart_continue(parent, show_notification=False):
+    """Continue conversation with summary in a new chat."""
+    from PyQt5.QtWidgets import QMessageBox
+    from ...config import CONFIG
+    
+    if not hasattr(parent, '_context_tracker') or parent._context_tracker is None:
+        return
+    
+    try:
+        ctx_config = CONFIG.get("context_window", {})
+        
+        # Get summary and messages to keep
+        summary, messages = parent._context_tracker.prepare_auto_continue()
+        
+        # Save old chat to history if enabled
+        if ctx_config.get("auto_save_on_continue", True):
+            try:
+                from ...memory.manager import ConversationManager
+                history_manager = ConversationManager()
+                history_manager.save_conversation(
+                    parent._conversation_history if hasattr(parent, '_conversation_history') else [],
+                    metadata={"auto_continued": True, "summary": summary[:200]}
+                )
+            except Exception:
+                pass  # History save is optional
+        
+        # Clear the chat
+        _clear_chat(parent, reset_tracker=True)
+        
+        # Add summary as system context if available
+        if summary and ctx_config.get("auto_continue_include_summary", True):
+            # Add summary to chat display
+            parent.chat_display.append(
+                f'<div style="color: #89b4fa; font-style: italic; padding: 8px; '
+                f'border-left: 3px solid #89b4fa; margin: 8px 0;">'
+                f'<strong>Continued from previous conversation:</strong><br/>'
+                f'{summary.replace(chr(10), "<br/>")}</div>'
+            )
+            
+            # Add to conversation history
+            if hasattr(parent, '_conversation_history'):
+                parent._conversation_history.append({
+                    "role": "system",
+                    "content": f"[Conversation Summary]\n{summary}"
+                })
+        
+        # Add kept messages back
+        for msg in messages:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            if role == "user":
+                parent.chat_display.append(
+                    f'<div style="color: #89dceb;"><strong>You:</strong> {content}</div>'
+                )
+            elif role == "assistant":
+                parent.chat_display.append(
+                    f'<div style="color: #a6e3a1;"><strong>AI:</strong> {content}</div>'
+                )
+            
+            # Add to conversation history
+            if hasattr(parent, '_conversation_history'):
+                parent._conversation_history.append(msg)
+            
+            # Re-track in context tracker
+            if hasattr(parent, '_context_tracker') and parent._context_tracker:
+                parent._context_tracker.add_message(role, content)
+        
+        # Reset auto-continue flag
+        parent._auto_continue_triggered = False
+        parent._critical_warning_shown = False
+        
+        # Show notification
+        if show_notification:
+            parent.chat_status.setText("Conversation continued in new context")
+            parent.chat_status.setStyleSheet("color: #a6e3a1; font-size: 11px;")
+        
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Smart continue failed: {e}")
+        QMessageBox.warning(parent, "Error", f"Could not continue conversation: {e}")
+
+
+def _update_token_display(parent):
+    """Update the token counter display."""
+    if not hasattr(parent, '_context_tracker') or parent._context_tracker is None:
+        return
+    
+    try:
+        usage = parent._context_tracker.get_usage()
+        
+        # Update label
+        parent.token_label.setText(f"Tokens: {usage.used_tokens:,} / {usage.max_tokens:,}")
+        
+        # Update progress bar
+        parent.token_bar.setValue(int(min(100, usage.percentage)))
+        
+        # Color-code based on usage level
+        from ...utils.context_window import UsageLevel
+        color_map = {
+            UsageLevel.LOW: "#a6e3a1",      # Green
+            UsageLevel.MEDIUM: "#f9e2af",   # Yellow
+            UsageLevel.HIGH: "#fab387",     # Orange
+            UsageLevel.CRITICAL: "#f38ba8"  # Red
+        }
+        color = color_map.get(usage.level, "#89b4fa")
+        parent.token_label.setStyleSheet(f"color: {color}; font-size: 11px;")
+        
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).debug(f"Token display update failed: {e}")
+
+
+def _show_token_details(parent):
+    """Show detailed token breakdown popup."""
+    from PyQt5.QtWidgets import QMessageBox
+    
+    if not hasattr(parent, '_context_tracker') or parent._context_tracker is None:
+        QMessageBox.information(parent, "Token Usage", "Context tracker not available.")
+        return
+    
+    try:
+        summary = parent._context_tracker.get_summary()
+        tokens = summary['tokens']
+        
+        details = f"""Context Window Usage
+
+Total: {tokens['used']:,} / {tokens['max']:,} tokens ({summary['percentage']:.1f}%)
+{summary['progress_bar']}
+
+Breakdown:
+  System Prompt:    {tokens['system']:,} tokens
+  User Messages:    {tokens['user']:,} tokens
+  AI Responses:     {tokens['assistant']:,} tokens
+  Remaining:        {tokens['remaining']:,} tokens
+
+Messages: {summary['message_count']}
+Status: {summary['level']}
+
+Tip: Start a new chat if context is running out."""
+        
+        QMessageBox.information(parent, "Token Usage Details", details)
+        
+    except Exception as e:
+        QMessageBox.warning(parent, "Error", f"Could not get token details: {e}")
 
 
 # =============================================================================
@@ -1513,10 +1802,24 @@ def _toggle_learning(parent):
         parent.brain.auto_learn = parent.learn_while_chatting
 
 
-def _clear_chat(parent):
-    """Clear the chat display and history."""
+def _clear_chat(parent, reset_tracker=False):
+    """Clear the chat display and history.
+    
+    Args:
+        parent: The parent widget
+        reset_tracker: If True, also reset the context tracker
+    """
     parent.chat_display.clear()
     parent.chat_messages = []
+    
+    # Clear conversation history if it exists
+    if hasattr(parent, '_conversation_history'):
+        parent._conversation_history = []
+    
+    # Reset context tracker if requested
+    if reset_tracker and hasattr(parent, '_context_tracker') and parent._context_tracker:
+        parent._context_tracker.clear()
+    
     parent.chat_status.setText("Chat cleared")
 
 

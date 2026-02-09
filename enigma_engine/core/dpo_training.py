@@ -658,11 +658,11 @@ def train_dpo(
     Returns:
         Training results
     """
-    from .inference import ForgeEngine
+    from .inference import EnigmaEngine
     from .tokenizer import get_tokenizer
 
     # Load model
-    engine = ForgeEngine(model_path=model_path)
+    engine = EnigmaEngine(model_path=model_path)
     model = engine.model
     tokenizer = engine.tokenizer
     

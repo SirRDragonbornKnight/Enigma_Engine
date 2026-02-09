@@ -424,9 +424,9 @@ def show_real_code():
 # =====================================================
 
 # 1. Basic Chat
-from enigma_engine.core.inference import ForgeEngine
+from enigma_engine.core.inference import EnigmaEngine
 
-engine = ForgeEngine()
+engine = EnigmaEngine()
 engine.load("models/forge-small")
 response = engine.generate("Hello!")
 

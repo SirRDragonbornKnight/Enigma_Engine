@@ -34,7 +34,7 @@ and let AIs have conversations with each other.
        - Sync memories when reconnected
 
 🔗 CONNECTED FILES:
-    → USES:      enigma_engine/core/inference.py (ForgeEngine for responses)
+    → USES:      enigma_engine/core/inference.py (EnigmaEngine for responses)
     → USES:      enigma_engine/memory/manager.py (sync memories)
     ← USED BY:   enigma_engine/gui/tabs/network_tab.py (GUI controls)
     📄 RELATED:  enigma_engine/comms/discovery.py (auto-find nodes)
@@ -181,14 +181,14 @@ class ForgeNode:
                 device = "cuda" if torch.cuda.is_available() else "cpu"
             
             if self.model_name:
-                from ..core.inference import ForgeEngine
+                from ..core.inference import EnigmaEngine
                 from ..core.model_registry import ModelRegistry
                 
                 registry = ModelRegistry()
                 model, config = registry.load_model(self.model_name)
                 
                 # Create engine with loaded model
-                self._engine = ForgeEngine.__new__(ForgeEngine)
+                self._engine = EnigmaEngine.__new__(EnigmaEngine)
                 self._engine.device = device
                 self._engine.model = model
                 self._engine.model.to(self._engine.device)
@@ -196,8 +196,8 @@ class ForgeNode:
                 from ..core.tokenizer import load_tokenizer
                 self._engine.tokenizer = load_tokenizer()
             else:
-                from ..core.inference import ForgeEngine
-                self._engine = ForgeEngine(device=str(device))
+                from ..core.inference import EnigmaEngine
+                self._engine = EnigmaEngine(device=str(device))
         return self._engine
     
     # === Server Mode ===

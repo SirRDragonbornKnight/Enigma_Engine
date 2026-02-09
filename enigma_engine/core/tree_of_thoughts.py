@@ -438,7 +438,7 @@ class ForgeToTIntegration:
         Initialize integration.
         
         Args:
-            engine: ForgeEngine instance for inference
+            engine: EnigmaEngine instance for inference
         """
         self._engine = engine
         self._reasoner: Optional[ToTReasoner] = None

@@ -472,7 +472,7 @@ class AIOverlay(QWidget):
         Set AI engine for response generation.
         
         Args:
-            engine: ForgeEngine instance
+            engine: EnigmaEngine instance
         """
         self.chat_bridge.set_engine(engine)
         

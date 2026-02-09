@@ -409,6 +409,26 @@ class ToolRouter:
         self.routing_rules = ROUTING_RULES.copy()
         
         # ─────────────────────────────────────────────────────────────────────
+        # MODULE MANAGER INTEGRATION: Check what modules are loaded
+        # ─────────────────────────────────────────────────────────────────────
+        self._module_manager = None
+        self._init_module_manager()
+        
+        # Tool -> Module mapping (which module provides which capability)
+        self._tool_to_module = {
+            "image": ["image_gen_local", "image_gen_api"],
+            "code": ["code_gen_local", "code_gen_api"],
+            "video": ["video_gen_local", "video_gen_api"],
+            "audio": ["audio_gen_local", "audio_gen_api"],
+            "3d": ["threed_gen_local", "threed_gen_api"],
+            "embeddings": ["embedding_local", "embedding_api"],
+            "vision": ["vision"],
+            "camera": ["camera"],
+            "voice": ["voice_input", "voice_output"],
+            "avatar": ["avatar"],
+        }
+        
+        # ─────────────────────────────────────────────────────────────────────
         # AI-TO-AI NETWORKING: For distributed task execution
         # ─────────────────────────────────────────────────────────────────────
         self._network_node: Optional[Any] = None
@@ -502,6 +522,90 @@ class ToolRouter:
             
         except Exception as e:
             logger.debug(f"Could not auto-assign from capabilities: {e}")
+    
+    def _init_module_manager(self):
+        """
+        Initialize connection to the ModuleManager.
+        
+        📖 WHY THIS EXISTS:
+        The ModuleManager controls what modules are loaded/available.
+        By connecting to it, the router can:
+        1. Check if a required module (e.g., image_gen_local) is loaded
+        2. Provide better error messages ("Image gen not available - enable in Modules tab")
+        3. Dynamically route based on what's actually loaded
+        """
+        try:
+            from ..modules import ModuleManager
+            self._module_manager = ModuleManager.get_instance()
+            logger.debug("Connected to ModuleManager for capability checking")
+        except Exception as e:
+            self._module_manager = None
+            logger.debug(f"ModuleManager not available: {e}")
+    
+    def is_module_available(self, tool_name: str) -> bool:
+        """
+        Check if the module for a tool is loaded.
+        
+        Args:
+            tool_name: Tool name (e.g., "image", "code", "video")
+            
+        Returns:
+            True if at least one module providing this capability is loaded
+        """
+        if self._module_manager is None:
+            # No module manager - assume all tools available (fallback behavior)
+            return True
+        
+        modules = self._tool_to_module.get(tool_name, [])
+        if not modules:
+            # No modules defined for this tool - assume available
+            return True
+        
+        # Check if ANY of the possible modules are loaded
+        for module_id in modules:
+            if self._module_manager.is_loaded(module_id):
+                return True
+        
+        return False
+    
+    def get_available_modules_for_tool(self, tool_name: str) -> list[str]:
+        """
+        Get list of loaded modules that can handle a tool.
+        
+        Args:
+            tool_name: Tool name (e.g., "image", "code")
+            
+        Returns:
+            List of loaded module IDs that provide this capability
+        """
+        if self._module_manager is None:
+            return []
+        
+        modules = self._tool_to_module.get(tool_name, [])
+        loaded = []
+        
+        for module_id in modules:
+            if self._module_manager.is_loaded(module_id):
+                loaded.append(module_id)
+        
+        return loaded
+    
+    def get_tool_availability_message(self, tool_name: str) -> str:
+        """
+        Get a descriptive message about tool availability.
+        
+        Returns user-friendly message explaining if/why a tool isn't available.
+        """
+        if self.is_module_available(tool_name):
+            modules = self.get_available_modules_for_tool(tool_name)
+            if modules:
+                return f"{tool_name.title()} available via: {', '.join(modules)}"
+            return f"{tool_name.title()} available"
+        
+        modules = self._tool_to_module.get(tool_name, [])
+        if modules:
+            return f"{tool_name.title()} not available - enable one of: {', '.join(modules)} in Modules tab"
+        return f"{tool_name.title()} not configured"
     
     def _cache_model(self, key: str, model: Any, is_specialized: bool = False):
         """
@@ -1628,8 +1732,8 @@ class ToolRouter:
         if model_data["type"] == "enigma_engine":
             # Use Forge inference
             try:
-                from .inference import ForgeEngine
-                engine = ForgeEngine(model_data["model"], model_data["config"])
+                from .inference import EnigmaEngine
+                engine = EnigmaEngine(model_data["model"], model_data["config"])
                 max_gen = params.get("max_tokens", 256)
                 result = engine.generate(prompt, max_gen=max_gen)
                 return {"success": True, "result": result, "model": assignment.model_id}
@@ -1695,6 +1799,13 @@ class ToolRouter:
     def _execute_image_generation(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute image generation using the local SD provider."""
         try:
+            # Check if image generation module is available
+            if not self.is_module_available("image"):
+                return {
+                    "success": False, 
+                    "error": self.get_tool_availability_message("image")
+                }
+            
             from ..gui.tabs.image_tab import get_provider
             
             provider = get_provider('local')
@@ -1733,6 +1844,13 @@ class ToolRouter:
     def _execute_code_generation(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute code generation, routing to language-specific models if available."""
         try:
+            # Check if code generation module is available
+            if not self.is_module_available("code"):
+                return {
+                    "success": False, 
+                    "error": self.get_tool_availability_message("code")
+                }
+            
             prompt = params.get("prompt", "")
             language = params.get("language", "python").lower()
             
@@ -1802,8 +1920,8 @@ class ToolRouter:
         
         if model_data["type"] == "enigma_engine":
             try:
-                from .inference import ForgeEngine
-                engine = ForgeEngine(model_data["model"], model_data["config"])
+                from .inference import EnigmaEngine
+                engine = EnigmaEngine(model_data["model"], model_data["config"])
                 result = engine.generate(code_prompt, max_gen=500)
                 return {
                     "success": True, 
@@ -1849,6 +1967,13 @@ class ToolRouter:
     def _execute_audio_generation(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute audio/TTS generation using local provider."""
         try:
+            # Check if audio generation module is available
+            if not self.is_module_available("audio"):
+                return {
+                    "success": False, 
+                    "error": self.get_tool_availability_message("audio")
+                }
+            
             from ..gui.tabs.audio_tab import get_provider
             
             provider = get_provider('local')
@@ -1872,6 +1997,13 @@ class ToolRouter:
     def _execute_video_generation(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute video generation using local AnimateDiff."""
         try:
+            # Check if video generation module is available
+            if not self.is_module_available("video"):
+                return {
+                    "success": False, 
+                    "error": self.get_tool_availability_message("video")
+                }
+            
             from ..gui.tabs.video_tab import get_provider
             
             provider = get_provider('local')
@@ -1897,6 +2029,13 @@ class ToolRouter:
     def _execute_3d_generation(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute 3D model generation using local Shap-E."""
         try:
+            # Check if 3D generation module is available
+            if not self.is_module_available("3d"):
+                return {
+                    "success": False, 
+                    "error": self.get_tool_availability_message("3d")
+                }
+            
             from ..gui.tabs.threed_tab import get_provider
             
             provider = get_provider('local')

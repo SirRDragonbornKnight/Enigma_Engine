@@ -29,7 +29,7 @@ USAGE:
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 
@@ -719,6 +719,303 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
             default_output = self.models_dir / f"{name}_hf_export"
             path = exporter.export_to_hf_format(name, str(default_output))
             return str(path)
+
+    # =========================================================================
+    # MODEL VERSIONING
+    # =========================================================================
+    
+    def create_version(
+        self,
+        name: str,
+        version_name: Optional[str] = None,
+        notes: str = "",
+    ) -> str:
+        """
+        Create a named version snapshot of the current model weights.
+        
+        Saves a copy of the current weights with version metadata, allowing
+        rollback if future training degrades quality.
+        
+        Args:
+            name: Model name
+            version_name: Optional version name (default: v1, v2, etc.)
+            notes: Notes about this version (what changed, quality observations)
+            
+        Returns:
+            Version name that was created
+        """
+        import shutil
+        
+        name = name.lower().strip()
+        if name not in self.registry["models"]:
+            raise ValueError(f"Model '{name}' not found")
+        
+        reg_info = self.registry["models"][name]
+        model_dir = self._to_absolute_path(reg_info["path"])
+        
+        # Create versions directory
+        versions_dir = model_dir / "versions"
+        versions_dir.mkdir(exist_ok=True)
+        
+        # Determine version name
+        if version_name is None:
+            existing = list(versions_dir.glob("v*"))
+            version_num = len(existing) + 1
+            version_name = f"v{version_num}"
+        
+        version_dir = versions_dir / version_name
+        if version_dir.exists():
+            raise ValueError(f"Version '{version_name}' already exists")
+        
+        version_dir.mkdir()
+        
+        # Copy current weights
+        weights_path = model_dir / "weights.pth"
+        if weights_path.exists():
+            shutil.copy2(weights_path, version_dir / "weights.pth")
+        
+        # Copy config
+        config_path = model_dir / "config.json"
+        if config_path.exists():
+            shutil.copy2(config_path, version_dir / "config.json")
+        
+        # Load current metadata for version info
+        metadata_path = model_dir / "metadata.json"
+        version_metadata = {
+            "version": version_name,
+            "created": datetime.now().isoformat(),
+            "notes": notes,
+            "epochs": 0,
+            "quality_score": None,
+        }
+        
+        if metadata_path.exists():
+            with open(metadata_path) as f:
+                current_meta = json.load(f)
+            version_metadata["epochs"] = current_meta.get("total_epochs", 0)
+        
+        # Save version metadata
+        with open(version_dir / "version_info.json", "w") as f:
+            json.dump(version_metadata, f, indent=2)
+        
+        # Update model's version history
+        if "versions" not in reg_info:
+            reg_info["versions"] = []
+        reg_info["versions"].append(version_name)
+        reg_info["current_version"] = version_name
+        self._save_registry()
+        
+        print(f"[SYSTEM] [OK] Created version '{version_name}' for model '{name}'")
+        return version_name
+    
+    def list_versions(self, name: str) -> List[Dict[str, Any]]:
+        """
+        List all versions of a model.
+        
+        Args:
+            name: Model name
+            
+        Returns:
+            List of version info dicts sorted by creation date
+        """
+        name = name.lower().strip()
+        if name not in self.registry["models"]:
+            raise ValueError(f"Model '{name}' not found")
+        
+        reg_info = self.registry["models"][name]
+        model_dir = self._to_absolute_path(reg_info["path"])
+        versions_dir = model_dir / "versions"
+        
+        if not versions_dir.exists():
+            return []
+        
+        versions = []
+        for version_path in versions_dir.iterdir():
+            if version_path.is_dir():
+                info_path = version_path / "version_info.json"
+                if info_path.exists():
+                    with open(info_path) as f:
+                        info = json.load(f)
+                    info["path"] = str(version_path)
+                    info["has_weights"] = (version_path / "weights.pth").exists()
+                    versions.append(info)
+        
+        # Sort by creation date
+        versions.sort(key=lambda v: v.get("created", ""))
+        return versions
+    
+    def rollback_to_version(self, name: str, version_name: str) -> bool:
+        """
+        Rollback a model to a previous version.
+        
+        Copies the version's weights to be the current weights.
+        Creates a backup of current weights first.
+        
+        Args:
+            name: Model name
+            version_name: Version to rollback to
+            
+        Returns:
+            True if successful
+        """
+        import shutil
+        
+        name = name.lower().strip()
+        if name not in self.registry["models"]:
+            raise ValueError(f"Model '{name}' not found")
+        
+        reg_info = self.registry["models"][name]
+        model_dir = self._to_absolute_path(reg_info["path"])
+        version_dir = model_dir / "versions" / version_name
+        
+        if not version_dir.exists():
+            raise ValueError(f"Version '{version_name}' not found")
+        
+        version_weights = version_dir / "weights.pth"
+        if not version_weights.exists():
+            raise ValueError(f"Version '{version_name}' has no weights")
+        
+        # Backup current weights before rollback
+        current_weights = model_dir / "weights.pth"
+        if current_weights.exists():
+            backup_name = f"pre_rollback_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pth"
+            backup_path = model_dir / "checkpoints" / backup_name
+            backup_path.parent.mkdir(exist_ok=True)
+            shutil.copy2(current_weights, backup_path)
+            print(f"[SYSTEM]   Backed up current weights to: {backup_name}")
+        
+        # Copy version weights to current
+        shutil.copy2(version_weights, current_weights)
+        
+        # Update registry
+        reg_info["current_version"] = version_name
+        self._save_registry()
+        
+        print(f"[SYSTEM] [OK] Rolled back '{name}' to version '{version_name}'")
+        return True
+    
+    def compare_versions(
+        self,
+        name: str,
+        version_a: str,
+        version_b: str,
+    ) -> Dict[str, Any]:
+        """
+        Compare two versions of a model.
+        
+        Args:
+            name: Model name
+            version_a: First version to compare
+            version_b: Second version to compare
+            
+        Returns:
+            Comparison dict with differences
+        """
+        name = name.lower().strip()
+        if name not in self.registry["models"]:
+            raise ValueError(f"Model '{name}' not found")
+        
+        reg_info = self.registry["models"][name]
+        model_dir = self._to_absolute_path(reg_info["path"])
+        
+        # Load version info for both
+        version_a_dir = model_dir / "versions" / version_a
+        version_b_dir = model_dir / "versions" / version_b
+        
+        if not version_a_dir.exists():
+            raise ValueError(f"Version '{version_a}' not found")
+        if not version_b_dir.exists():
+            raise ValueError(f"Version '{version_b}' not found")
+        
+        info_a = {}
+        info_b = {}
+        
+        info_a_path = version_a_dir / "version_info.json"
+        info_b_path = version_b_dir / "version_info.json"
+        
+        if info_a_path.exists():
+            with open(info_a_path) as f:
+                info_a = json.load(f)
+        
+        if info_b_path.exists():
+            with open(info_b_path) as f:
+                info_b = json.load(f)
+        
+        # Calculate weight file sizes
+        weights_a = version_a_dir / "weights.pth"
+        weights_b = version_b_dir / "weights.pth"
+        
+        size_a = weights_a.stat().st_size if weights_a.exists() else 0
+        size_b = weights_b.stat().st_size if weights_b.exists() else 0
+        
+        return {
+            "model": name,
+            "version_a": {
+                "name": version_a,
+                "created": info_a.get("created", "Unknown"),
+                "epochs": info_a.get("epochs", 0),
+                "notes": info_a.get("notes", ""),
+                "quality_score": info_a.get("quality_score"),
+                "weights_size_mb": round(size_a / (1024 * 1024), 2),
+            },
+            "version_b": {
+                "name": version_b,
+                "created": info_b.get("created", "Unknown"),
+                "epochs": info_b.get("epochs", 0),
+                "notes": info_b.get("notes", ""),
+                "quality_score": info_b.get("quality_score"),
+                "weights_size_mb": round(size_b / (1024 * 1024), 2),
+            },
+            "differences": {
+                "epochs_delta": info_b.get("epochs", 0) - info_a.get("epochs", 0),
+                "size_delta_mb": round((size_b - size_a) / (1024 * 1024), 2),
+            },
+        }
+    
+    def set_version_quality_score(
+        self,
+        name: str,
+        version_name: str,
+        score: float,
+        notes: str = "",
+    ) -> None:
+        """
+        Set a quality score for a model version.
+        
+        Use this after testing to mark which versions are better.
+        
+        Args:
+            name: Model name
+            version_name: Version to score
+            score: Quality score (0.0 to 1.0)
+            notes: Optional notes about the quality
+        """
+        name = name.lower().strip()
+        if name not in self.registry["models"]:
+            raise ValueError(f"Model '{name}' not found")
+        
+        reg_info = self.registry["models"][name]
+        model_dir = self._to_absolute_path(reg_info["path"])
+        version_dir = model_dir / "versions" / version_name
+        
+        if not version_dir.exists():
+            raise ValueError(f"Version '{version_name}' not found")
+        
+        info_path = version_dir / "version_info.json"
+        info = {}
+        if info_path.exists():
+            with open(info_path) as f:
+                info = json.load(f)
+        
+        info["quality_score"] = max(0.0, min(1.0, score))
+        if notes:
+            info["quality_notes"] = notes
+        info["quality_scored_at"] = datetime.now().isoformat()
+        
+        with open(info_path, "w") as f:
+            json.dump(info, f, indent=2)
+        
+        print(f"[SYSTEM] [OK] Set quality score {score:.2f} for '{name}' version '{version_name}'")
 
 
 # Convenience function

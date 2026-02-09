@@ -32,7 +32,7 @@ automation, and integrations with external systems.
          -d '{"prompt": "Hello, AI!", "max_gen": 50}'
 
 🔗 CONNECTED FILES:
-    → USES:      enigma_engine/core/inference.py (ForgeEngine for generation)
+    → USES:      enigma_engine/core/inference.py (EnigmaEngine for generation)
     ← USED BY:   run.py --serve (entry point)
     📄 ALTERNATIVE: enigma_engine/comms/web_server.py (full web UI + WebSocket)
 
@@ -49,7 +49,7 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 
 from ..config import CONFIG
-from ..core.inference import ForgeEngine
+from ..core.inference import EnigmaEngine
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +105,7 @@ def create_app():
                 from ..core.engine_pool import get_engine
                 _engine_cache["engine"] = get_engine()
             except ImportError:
-                _engine_cache["engine"] = ForgeEngine()
+                _engine_cache["engine"] = EnigmaEngine()
         return _engine_cache["engine"]
 
     @app.route("/health")

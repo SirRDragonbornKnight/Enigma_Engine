@@ -1595,7 +1595,7 @@ class EnhancedMainWindow(QMainWindow):
     ┌────────────────────────────────────────────────────────────────────┐
     │ registry         │ ModelRegistry - manages saved models           │
     │ current_model    │ Name of the currently loaded model             │
-    │ engine           │ ForgeEngine - the inference engine             │
+    │ engine           │ EnigmaEngine - the inference engine            │
     │ module_manager   │ ModuleManager - controls loaded modules        │
     │ chat_messages    │ List of conversation messages                  │
     │ _is_hf_model     │ True if using HuggingFace model (no training!) │
@@ -1612,7 +1612,7 @@ class EnhancedMainWindow(QMainWindow):
     
     🔗 CONNECTED TO:
     - enigma_engine/gui/tabs/*.py - All the tab panels
-    - enigma_engine/core/inference.py - ForgeEngine for AI responses
+    - enigma_engine/core/inference.py - EnigmaEngine for AI responses
     - enigma_engine/memory/manager.py - Conversation storage
     - enigma_engine/modules/ - Module system integration
     """
@@ -3015,8 +3015,8 @@ class EnhancedMainWindow(QMainWindow):
                 return
             
             # Create engine instance without calling __init__
-            from ..core.inference import ForgeEngine
-            self.engine = ForgeEngine.__new__(ForgeEngine)
+            from ..core.inference import EnigmaEngine
+            self.engine = EnigmaEngine.__new__(EnigmaEngine)
             loading_dialog.set_status("[OK] Engine created", 50)
             
             # Set required attributes that __init__ would normally set
@@ -3391,6 +3391,7 @@ class EnhancedMainWindow(QMainWindow):
             create_vision_tab,
         )
         from .tabs.build_ai_tab import create_build_ai_tab
+        from .tabs.bundle_manager_tab import create_bundle_manager_tab
         from .tabs.gif_tab import create_gif_tab
         from .tabs.learning_tab import LearningTab
         from .tabs.model_comparison_tab import create_model_comparison_tab
@@ -3457,6 +3458,7 @@ class EnhancedMainWindow(QMainWindow):
             # My AI - building and customizing your AI
             ("section", "MY AI"),
             ("", "Build AI", "build_ai", "Step-by-step AI creation wizard"),
+            ("", "Bundles", "bundles", "Manage AI bundles for sharing"),
             ("", "Persona", "persona", "Create and manage AI personas"),
             ("", "Training", "training", "Train your AI model"),  # VISIBLE NOW
             ("", "Data Gen", "data_gen", "Generate training data with AI"),
@@ -3534,7 +3536,7 @@ class EnhancedMainWindow(QMainWindow):
         
         # Tabs that should always be visible (core tabs)
         self._always_visible_tabs = [
-            'chat', 'history', 'build_ai', 'persona', 'training', 'data_gen', 'learning', 'scale',  # MY AI section
+            'chat', 'history', 'build_ai', 'bundles', 'persona', 'training', 'data_gen', 'learning', 'scale',  # MY AI section
             'modules', 'tools', 'router', 'compare', 'search',  # TOOLS section
             'terminal', 'logs', 'files', 'network', 'settings', 'workspace',  # SYSTEM section
             'federation', 'analytics', 'examples',
@@ -3592,6 +3594,7 @@ class EnhancedMainWindow(QMainWindow):
         
         # MY AI section
         self.content_stack.addWidget(wrap_in_scroll(create_build_ai_tab(self)))  # Build AI (wizard)
+        self.content_stack.addWidget(wrap_in_scroll(create_bundle_manager_tab(self)))  # Bundles
         self.persona_tab = create_persona_tab(self)  # Store reference for signals
         self.content_stack.addWidget(wrap_in_scroll(self.persona_tab))  # Persona
         self.content_stack.addWidget(wrap_in_scroll(create_training_tab(self)))  # Training (NOW VISIBLE)
@@ -5434,6 +5437,13 @@ class EnhancedMainWindow(QMainWindow):
             "ts": time.time()
         })
         
+        # Track in context window
+        try:
+            if hasattr(self, '_context_tracker') and self._context_tracker:
+                self._context_tracker.add_message("user", text)
+        except Exception:
+            pass  # Context tracking optional
+        
         # Record user message in analytics
         try:
             from .tabs.analytics_tab import record_session_message
@@ -6084,6 +6094,14 @@ class EnhancedMainWindow(QMainWindow):
             'ai_response': response,
             'timestamp': time.time()
         }
+        
+        # Track in context window
+        try:
+            if hasattr(self, '_context_tracker') and self._context_tracker:
+                self._context_tracker.add_message("assistant", response)
+        except Exception:
+            pass  # Context tracking optional
+        
         # Limit response history to prevent memory leak
         MAX_RESPONSE_HISTORY = 100
         if len(self._response_history) > MAX_RESPONSE_HISTORY:

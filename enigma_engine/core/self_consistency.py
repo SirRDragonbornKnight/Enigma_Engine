@@ -445,7 +445,7 @@ class ForgeSelfConsistency:
         Initialize integration.
         
         Args:
-            engine: ForgeEngine instance
+            engine: EnigmaEngine instance
             num_samples: Number of samples per query
         """
         self._engine = engine

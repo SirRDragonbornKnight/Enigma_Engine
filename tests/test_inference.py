@@ -12,15 +12,15 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
-class TestForgeEngine:
-    """Tests for the ForgeEngine class."""
+class TestEnigmaEngine:
+    """Tests for the EnigmaEngine class."""
     
     @pytest.fixture
     def engine(self):
         """Create a test engine."""
-        from enigma_engine.core.inference import ForgeEngine
+        from enigma_engine.core.inference import EnigmaEngine
         try:
-            return ForgeEngine()
+            return EnigmaEngine()
         except FileNotFoundError:
             pytest.skip("No trained model available - train a model first")
     
@@ -32,11 +32,11 @@ class TestForgeEngine:
     
     def test_device_selection(self):
         """Test device selection."""
-        from enigma_engine.core.inference import ForgeEngine
+        from enigma_engine.core.inference import EnigmaEngine
         
         # Force CPU
         try:
-            engine = ForgeEngine(device="cpu")
+            engine = EnigmaEngine(device="cpu")
             assert engine.device.type == "cpu"
         except FileNotFoundError:
             pytest.skip("No trained model available - train a model first")
@@ -147,10 +147,10 @@ class TestInferenceHelpers:
     
     def test_sample_token(self):
         """Test token sampling."""
-        from enigma_engine.core.inference import ForgeEngine
+        from enigma_engine.core.inference import EnigmaEngine
         
         try:
-            engine = ForgeEngine()
+            engine = EnigmaEngine()
         except FileNotFoundError:
             pytest.skip("No trained model available - train a model first")
         logits = torch.randn(1, 1000)
@@ -168,10 +168,10 @@ class TestInferenceHelpers:
     
     def test_repetition_penalty(self):
         """Test repetition penalty reduces repeat probability."""
-        from enigma_engine.core.inference import ForgeEngine
+        from enigma_engine.core.inference import EnigmaEngine
         
         try:
-            engine = ForgeEngine()
+            engine = EnigmaEngine()
         except FileNotFoundError:
             pytest.skip("No trained model available - train a model first")
         

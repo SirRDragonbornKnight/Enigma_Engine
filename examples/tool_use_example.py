@@ -10,7 +10,7 @@ Steps:
 3. Have a conversation where AI uses tools
 """
 
-from enigma_engine.core.inference import ForgeEngine
+from enigma_engine.core.inference import EnigmaEngine
 from enigma_engine.modules import ModuleManager
 from enigma_engine.tools import get_available_tools_for_prompt
 
@@ -38,7 +38,7 @@ def main():
     # Initialize inference engine with tools enabled
     print("3. Initializing inference engine with tool support...")
     try:
-        engine = ForgeEngine(
+        engine = EnigmaEngine(
             model_size="small",
             enable_tools=True,
             module_manager=manager

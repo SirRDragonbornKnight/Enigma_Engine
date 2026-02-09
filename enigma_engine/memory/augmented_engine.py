@@ -3,7 +3,7 @@
 🧠 MEMORY-AUGMENTED INFERENCE ENGINE
 ================================================================================
 
-This wraps ForgeEngine to automatically retrieve and inject relevant memories
+This wraps EnigmaEngine to automatically retrieve and inject relevant memories
 before generating responses. The AI now has REAL memory!
 
 📍 FILE: enigma_engine/memory/augmented_engine.py
@@ -29,7 +29,7 @@ before generating responses. The AI now has REAL memory!
 └─────────────────────────────────────────────────────────────────────────────┘
 
 🔗 CONNECTED FILES:
-    → USES:      enigma_engine/core/inference.py (ForgeEngine)
+    → USES:      enigma_engine/core/inference.py (EnigmaEngine)
     → USES:      enigma_engine/memory/vector_db.py (SimpleVectorDB)
     → USES:      enigma_engine/memory/embeddings.py (EmbeddingGenerator)
     → USES:      enigma_engine/memory/rag.py (RAGSystem)
@@ -80,7 +80,7 @@ class MemoryConfig:
 
 class MemoryAugmentedEngine:
     """
-    Wraps ForgeEngine to add automatic memory retrieval and storage.
+    Wraps EnigmaEngine to add automatic memory retrieval and storage.
     
     📖 WHAT THIS DOES:
     - Before generating: Searches for relevant past conversations
@@ -100,7 +100,7 @@ class MemoryAugmentedEngine:
         response = engine.chat("Remember my preferences")
     
     🔗 CONNECTS TO:
-      → ForgeEngine for text generation
+      → EnigmaEngine for text generation
       → VectorDB for semantic memory search
       → RAGSystem for retrieval-augmented generation
     """
@@ -117,7 +117,7 @@ class MemoryAugmentedEngine:
         Initialize memory-augmented engine.
         
         Args:
-            engine: ForgeEngine instance (creates one if None)
+            engine: EnigmaEngine instance (creates one if None)
             vector_db: VectorDB instance for memory storage
             embedding_generator: For converting text to vectors
             config: Memory configuration
@@ -133,9 +133,9 @@ class MemoryAugmentedEngine:
             self.engine = engine
         else:
             # Lazy import to avoid circular imports
-            from ..core.inference import ForgeEngine
+            from ..core.inference import EnigmaEngine
             try:
-                self.engine = ForgeEngine()
+                self.engine = EnigmaEngine()
             except FileNotFoundError:
                 logger.warning("No trained model found, engine will not be available")
                 self.engine = None
@@ -425,7 +425,7 @@ class MemoryAugmentedEngine:
             top_p: Top-p (nucleus) sampling
             use_memory: Whether to retrieve and inject memories
             store_interaction: Whether to store this interaction
-            **kwargs: Additional arguments for ForgeEngine
+            **kwargs: Additional arguments for EnigmaEngine
             
         Returns:
             Generated text
@@ -479,7 +479,7 @@ class MemoryAugmentedEngine:
         Args:
             prompt: Input prompt
             use_memory: Whether to use memory augmentation
-            **kwargs: Arguments for ForgeEngine.stream_generate
+            **kwargs: Arguments for EnigmaEngine.stream_generate
             
         Yields:
             Generated tokens

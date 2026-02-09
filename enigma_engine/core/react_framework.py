@@ -395,7 +395,7 @@ class ForgeReActAgent(ReActAgent):
         Initialize with Enigma AI Engine engine.
         
         Args:
-            engine: ForgeEngine instance
+            engine: EnigmaEngine instance
             **kwargs: Additional arguments
         """
         super().__init__(**kwargs)
@@ -434,7 +434,7 @@ def create_react_agent(engine=None,
     Create a ReAct agent.
     
     Args:
-        engine: ForgeEngine for generation
+        engine: EnigmaEngine for generation
         tools: Additional tools to add
         **kwargs: Additional arguments
         

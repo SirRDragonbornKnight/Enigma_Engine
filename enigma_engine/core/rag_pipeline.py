@@ -486,8 +486,8 @@ class RAGPipeline:
         """Lazy-load LLM for answer generation."""
         if self._llm is None:
             try:
-                from .inference import ForgeEngine
-                self._llm = ForgeEngine()
+                from .inference import EnigmaEngine
+                self._llm = EnigmaEngine()
             except Exception as e:
                 logger.warning(f"Could not load LLM: {e}")
         return self._llm

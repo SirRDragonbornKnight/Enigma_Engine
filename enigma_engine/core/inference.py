@@ -10,8 +10,8 @@ you now understand HOW the AI thinks. This chapter teaches you how to
 actually TALK to it.
 
 WHY THIS FILE MATTERS:
-    The Forge (model.py) is just a brain in a jar - powerful but silent.
-    ForgeEngine is the VOICE. It takes your questions, feeds them to the
+    The Enigma model (model.py) is just a brain in a jar - powerful but silent.
+    EnigmaEngine is the VOICE. It takes your questions, feeds them to the
     brain, and brings back answers. Every conversation you have with 
     Enigma AI Engine passes through this file.
 
@@ -19,10 +19,10 @@ THE MAGIC PROCESS:
     ┌─────────────────────────────────────────────────────────────┐
     │  YOU: "What is the meaning of life?"                        │
     │   │                                                         │
-    │   ↓  (ForgeEngine encodes your words into numbers)          │
+    │   ↓  (EnigmaEngine encodes your words into numbers)         │
     │  [15496, 318, 262, 3616, ...]                               │
     │   │                                                         │
-    │   ↓  (Sends numbers through the Forge brain)                │
+    │   ↓  (Sends numbers through the Enigma brain)               │
     │  [Matrix multiplication magic x millions]                   │
     │   │                                                         │
     │   ↓  (Gets probability for each possible next word)         │
@@ -41,8 +41,8 @@ SPEAKING STYLES (Sampling Strategies):
     | Temperature| Higher = more wild         | Stories, brainstorming|
 
 YOUR FIRST CONVERSATION:
-    >>> from enigma_engine.core.inference import ForgeEngine
-    >>> oracle = ForgeEngine()
+    >>> from enigma_engine.core.inference import EnigmaEngine
+    >>> oracle = EnigmaEngine()
     >>> oracle.chat("Tell me a joke about AI")
     "Why did the AI go to therapy? Too many neural issues!"
 
@@ -87,9 +87,9 @@ LEGACY_MODEL = MODELS_DIR / "tiny_enigma_engine.pth"
 #   - KV-cache for fast generation
 #   - Tool routing for specialized tasks
 
-class ForgeEngine:
+class EnigmaEngine:
     """
-    High-performance inference engine for Forge models.
+    High-performance inference engine for Enigma models.
     
     📖 WHAT THIS DOES:
     Takes your text prompt and generates a response using the AI model.
@@ -162,7 +162,7 @@ class ForgeEngine:
         tokenizer: Any,
         device: str | None = None,
         use_half: bool = False
-    ) -> ForgeEngine:
+    ) -> EnigmaEngine:
         """
         Create engine directly from model and tokenizer objects.
         
@@ -174,16 +174,16 @@ class ForgeEngine:
             model = create_model('small')
             model.load_state_dict(torch.load('my_model.pth'))
             tokenizer = get_tokenizer()
-            engine = ForgeEngine.from_model(model, tokenizer)
+            engine = EnigmaEngine.from_model(model, tokenizer)
         
         Args:
-            model: A Forge model instance (already loaded)
+            model: An Enigma model instance (already loaded)
             tokenizer: A tokenizer instance
             device: Device to use ("cuda", "cpu", or auto-detected)
             use_half: Use FP16 for faster inference (GPU only)
             
         Returns:
-            ForgeEngine instance ready for generation
+            EnigmaEngine instance ready for generation
         """
         import torch
 
@@ -313,6 +313,11 @@ class ForgeEngine:
         
         # Set to evaluation mode (disables dropout, etc.)
         self.model.eval()
+
+        # ─────────────────────────────────────────────────────────────────────
+        # LOAD MODEL METADATA (including content rating support)
+        # ─────────────────────────────────────────────────────────────────────
+        self._load_model_metadata(model_path)
 
         # Log what we loaded
         self._log_init_info()
@@ -612,7 +617,7 @@ class ForgeEngine:
                 f"To use a trained model:\n"
                 f"  1. Train a model: python run.py --train\n"
                 f"  2. Download a HuggingFace model via the GUI Model Manager\n"
-                f"  3. Or specify model_path when creating ForgeEngine"
+                f"  3. Or specify model_path when creating EnigmaEngine"
             )
 
         return model
@@ -650,11 +655,54 @@ class ForgeEngine:
                  for name, preset in MODEL_PRESETS.items()]
         return min(diffs, key=lambda x: x[1])[0]
 
+    def _load_model_metadata(self, model_path: Optional[str] = None):
+        """
+        Load model metadata including content rating capabilities.
+        
+        Looks for metadata in:
+        1. model_metadata.json alongside the model file
+        2. 'metadata' key inside the checkpoint dict
+        """
+        import json
+        
+        self.model_metadata = {
+            "supports_nsfw": False,
+            "content_rating": "sfw",
+            "trained_date": None,
+            "training_tasks": [],
+        }
+        
+        try:
+            # Try to find metadata file
+            if model_path:
+                model_dir = Path(model_path).parent if Path(model_path).is_file() else Path(model_path)
+                metadata_file = model_dir / "model_metadata.json"
+                
+                if metadata_file.exists():
+                    with open(metadata_file, 'r') as f:
+                        loaded_metadata = json.load(f)
+                    self.model_metadata.update(loaded_metadata)
+                    logger.info(f"Loaded model metadata from {metadata_file}")
+            
+            # Update content filter with model's NSFW capability
+            try:
+                from .content_rating import get_content_filter
+                content_filter = get_content_filter()
+                content_filter.set_model_nsfw_capability(self.model_metadata.get("supports_nsfw", False))
+                logger.info(f"Model NSFW capability: {self.model_metadata.get('supports_nsfw', False)}")
+            except ImportError:
+                logger.debug("Content rating module not available")
+            except Exception as e:
+                logger.warning(f"Could not update content filter: {e}")
+                
+        except Exception as e:
+            logger.debug(f"Could not load model metadata: {e}")
+
     def _log_init_info(self):
         """Log initialization information."""
         num_params = sum(p.numel() for p in self.model.parameters())
 
-        print(system_msg(f"ForgeEngine initialized on {self.device}"))
+        print(system_msg(f"EnigmaEngine initialized on {self.device}"))
         if self.device.type == "cuda":
             print(info_msg(f"GPU: {torch.cuda.get_device_name(0)}"))
         print(info_msg(f"Model parameters: {num_params:,}"))
@@ -677,7 +725,10 @@ class ForgeEngine:
         stop_strings: list[str] | None = None,
         use_cache: bool = True,
         execute_tools: bool = None,
-        max_tool_iterations: int = 5
+        max_tool_iterations: int = 5,
+        max_tokens: int | None = None,  # Alias for max_gen (backward compatibility)
+        max_new_tokens: int | None = None,  # Alias for max_gen (Forge model compatibility)
+        max_length: int | None = None  # Alias for max_gen (common parameter name)
     ) -> str:
         """
         Generate text from a prompt.
@@ -737,6 +788,14 @@ class ForgeEngine:
             ValueError: If parameters are out of valid range
             TypeError: If prompt is not a string
         """
+        # Handle max_tokens, max_new_tokens, max_length aliases for backward compatibility
+        if max_tokens is not None:
+            max_gen = max_tokens
+        if max_new_tokens is not None:
+            max_gen = max_new_tokens
+        if max_length is not None:
+            max_gen = max_length
+        
         # ─────────────────────────────────────────────────────────────────────
         # STEP 0: Check game mode and apply resource limits
         # ─────────────────────────────────────────────────────────────────────
@@ -1278,7 +1337,10 @@ class ForgeEngine:
         temperature: float = 0.8,
         top_k: int = 50,
         top_p: float = 0.9,
-        repetition_penalty: float = 1.1
+        repetition_penalty: float = 1.1,
+        max_tokens: int | None = None,  # Alias for max_gen (backward compatibility)
+        max_new_tokens: int | None = None,  # Alias for max_gen (Forge model compatibility)
+        max_length: int | None = None  # Alias for max_gen (common parameter name)
     ) -> Generator[str]:
         """
         Stream generated tokens one at a time.
@@ -1290,10 +1352,21 @@ class ForgeEngine:
             top_k: Top-k sampling
             top_p: Top-p sampling
             repetition_penalty: Repetition penalty
+            max_tokens: Alias for max_gen (backward compatibility)
+            max_new_tokens: Alias for max_gen (Forge model compatibility)
+            max_length: Alias for max_gen (common parameter name)
 
         Yields:
             Each newly generated token as it's produced
         """
+        # Handle max_tokens, max_new_tokens, max_length aliases for backward compatibility
+        if max_tokens is not None:
+            max_gen = max_tokens
+        if max_new_tokens is not None:
+            max_gen = max_new_tokens
+        if max_length is not None:
+            max_gen = max_length
+        
         input_ids = self._encode_prompt(prompt)
         generated = input_ids
 
@@ -1978,14 +2051,14 @@ def generate(
     Returns:
         Generated text
     """
-    engine = ForgeEngine(model_path=model_path)
+    engine = EnigmaEngine(model_path=model_path)
     return engine.generate(prompt, max_gen=max_gen, **kwargs)
 
 
 def load_engine(
     model_path: str | None = None,
     device: str | None = None
-) -> ForgeEngine:
+) -> EnigmaEngine:
     """
     Load an inference engine.
 
@@ -1994,9 +2067,17 @@ def load_engine(
         device: Device to use
 
     Returns:
-        ForgeEngine instance
+        EnigmaEngine instance
     """
-    return ForgeEngine(model_path=model_path, device=device)
+    return EnigmaEngine(model_path=model_path, device=device)
+
+
+# =============================================================================
+# Backward Compatibility Alias
+# =============================================================================
+
+# Keep ForgeEngine as an alias for existing code
+ForgeEngine = EnigmaEngine
 
 
 # =============================================================================
@@ -2004,7 +2085,8 @@ def load_engine(
 # =============================================================================
 
 __all__ = [
-    "ForgeEngine",
+    "EnigmaEngine",
+    "ForgeEngine",  # Backward compatibility alias
     "generate",
     "load_engine",
 ]

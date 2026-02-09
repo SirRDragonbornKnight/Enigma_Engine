@@ -120,10 +120,10 @@ Choose based on your hardware:
 ### Quick Chat with Your AI
 
 ```python
-from enigma_engine.core.inference import ForgeEngine
+from enigma_engine.core.inference import EnigmaEngine
 
 # Load model and chat
-engine = ForgeEngine()
+engine = EnigmaEngine()
 engine.load_model("models/my_ai")
 
 response = engine.generate("Hello! How are you?")
@@ -331,8 +331,8 @@ python scripts/train_specialized_model.py \
     --model-size nano
 
 # Use in code
-from enigma_engine.core.inference import ForgeEngine
-engine = ForgeEngine(use_routing=True)
+from enigma_engine.core.inference import EnigmaEngine
+engine = EnigmaEngine(use_routing=True)
 response = engine.generate("write a sort function")  # Routes to code model
 ```
 

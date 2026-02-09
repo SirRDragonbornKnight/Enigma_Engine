@@ -280,8 +280,8 @@ class DistributedNode:
         """Lazy-load inference engine."""
         if self._engine is None and self.role in (NodeRole.INFERENCE_SERVER, NodeRole.HYBRID):
             try:
-                from ..core.inference import ForgeEngine
-                self._engine = ForgeEngine()
+                from ..core.inference import EnigmaEngine
+                self._engine = EnigmaEngine()
             except Exception as e:
                 logger.error(f"Could not load engine: {e}")
         return self._engine
@@ -528,7 +528,7 @@ class DistributedNode:
         """
         # If we can do inference locally, do it
         if "inference" in self.capabilities and self.engine:
-            return self.engine.generate(prompt, max_new_tokens=max_tokens, temperature=temperature)
+            return self.engine.generate(prompt, max_gen=max_tokens, temperature=temperature)
         
         # Find a peer that can do inference
         for peer in self.peers.values():

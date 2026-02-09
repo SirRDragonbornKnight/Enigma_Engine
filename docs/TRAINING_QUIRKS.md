@@ -16,9 +16,9 @@ This document explains the **weird things** in Enigma AI Engine that need specia
 **Fix:**
 ```python
 # Make sure to use the proper inference path
-from enigma_engine.core.inference import ForgeEngine
+from enigma_engine.core.inference import EnigmaEngine
 
-engine = ForgeEngine()
+engine = EnigmaEngine()
 engine.load_model("your_model")
 
 # Use generate(), not forward()

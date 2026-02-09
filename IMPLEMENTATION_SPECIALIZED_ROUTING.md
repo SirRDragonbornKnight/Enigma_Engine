@@ -46,9 +46,9 @@ python scripts/train_specialized_model.py \
 
 **Example usage:**
 ```python
-from enigma_engine.core.inference import ForgeEngine
+from enigma_engine.core.inference import EnigmaEngine
 
-engine = ForgeEngine(use_routing=True)
+engine = EnigmaEngine(use_routing=True)
 response = engine.generate("write a sort function")  # Routes to code model
 ```
 
@@ -208,7 +208,7 @@ All specialized models use the same tokenizer, enabling:
 5. Saves model + config to `models/specialized/`
 
 ### Inference Flow
-1. User creates `ForgeEngine(use_routing=True)`
+1. User creates `EnigmaEngine(use_routing=True)`
 2. Engine initializes ToolRouter with specialized models
 3. User calls `engine.generate(prompt)`
 4. Router classifies intent using nano model (or keywords)
@@ -303,7 +303,7 @@ For users wanting to use this system:
 3. ✅ Review training data: Check `data/specialized/*.txt`
 4. ✅ Train router: `python scripts/train_specialized_model.py --type router ...`
 5. ✅ (Optional) Train vision/code models
-6. ✅ Enable in code: `ForgeEngine(use_routing=True)`
+6. ✅ Enable in code: `EnigmaEngine(use_routing=True)`
 7. ✅ Or enable in GUI: Module Manager → Tool Router → Load
 
 ## Documentation Links

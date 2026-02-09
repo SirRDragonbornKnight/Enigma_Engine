@@ -3,7 +3,7 @@
 Adaptive Engine - Smart inference that adapts to context.
 ================================================================================
 
-This module provides a smart wrapper around ForgeEngine that automatically
+This module provides a smart wrapper around EnigmaEngine that automatically
 adjusts its behavior based on:
 
 1. Gaming Mode: Reduces resources when games are detected
@@ -24,7 +24,7 @@ USAGE:
     print(engine.get_status())
 
 INTEGRATION:
-    AdaptiveEngine wraps ForgeEngine and adds these layers:
+    AdaptiveEngine wraps EnigmaEngine and adds these layers:
     
     ┌──────────────────────────────────────────────────────────────────────┐
     │                      AdaptiveEngine                                   │
@@ -36,8 +36,8 @@ INTEGRATION:
     │         └────────────────┴─────────────────┘                          │
     │                          │                                            │
     │                    ┌─────┴─────┐                                     │
-    │                    │ForgeEngine│                                     │
-    │                    └───────────┘                                     │
+    │                    │EnigmaEngine│                                     │
+    │                    └────────────┘                                     │
     └──────────────────────────────────────────────────────────────────────┘
 """
 
@@ -87,7 +87,7 @@ class AdaptiveEngine:
     """
     Smart inference engine that adapts to context.
     
-    This wraps ForgeEngine and automatically:
+    This wraps EnigmaEngine and automatically:
     - Detects and respects gaming mode
     - Offloads to distributed servers when beneficial
     - Uses low-power mode on constrained devices
@@ -105,8 +105,8 @@ class AdaptiveEngine:
         
         Args:
             config: Adaptive behavior configuration
-            model_path: Path to model (passed to ForgeEngine)
-            **engine_kwargs: Additional args for ForgeEngine
+            model_path: Path to model (passed to EnigmaEngine)
+            **engine_kwargs: Additional args for EnigmaEngine
         """
         self.config = config or AdaptiveConfig()
         self._model_path = model_path
@@ -180,17 +180,17 @@ class AdaptiveEngine:
     
     @property
     def forge_engine(self):
-        """Get or create ForgeEngine (lazy loaded)."""
+        """Get or create EnigmaEngine (lazy loaded)."""
         if self._forge_engine is None:
             try:
-                from .inference import ForgeEngine
+                from .inference import EnigmaEngine
                 kwargs = self._engine_kwargs.copy()
                 if self._model_path:
                     kwargs["model_path"] = self._model_path
-                self._forge_engine = ForgeEngine(**kwargs)
-                logger.info("ForgeEngine loaded")
+                self._forge_engine = EnigmaEngine(**kwargs)
+                logger.info("EnigmaEngine loaded")
             except Exception as e:
-                logger.error(f"Could not load ForgeEngine: {e}")
+                logger.error(f"Could not load EnigmaEngine: {e}")
         return self._forge_engine
     
     @property
@@ -323,7 +323,7 @@ class AdaptiveEngine:
                 return self._generate_fallback(prompt, params)
     
     def _generate_local(self, prompt: str, params: dict[str, Any]) -> str:
-        """Generate using local ForgeEngine."""
+        """Generate using local EnigmaEngine."""
         self._stats["local_generations"] += 1
         
         engine = self.forge_engine

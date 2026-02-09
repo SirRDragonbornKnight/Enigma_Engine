@@ -265,13 +265,13 @@ class TutorialGenerator:
         
         nb.add_section("Import", "Import the main Enigma AI Engine module.")
         nb.add_code("""import enigma_engine
-from enigma_engine.core import ForgeEngine
+from enigma_engine.core import EnigmaEngine
 
 print(f"Enigma AI Engine version: {enigma_engine.__version__}")""")
         
         nb.add_section("Basic Inference", "Let's run a simple inference.")
         nb.add_code("""# Initialize the engine
-engine = ForgeEngine()
+engine = EnigmaEngine()
 
 # Generate a response
 response = engine.generate("Hello, Enigma AI Engine!")

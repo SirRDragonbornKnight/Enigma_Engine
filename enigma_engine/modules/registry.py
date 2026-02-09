@@ -361,7 +361,7 @@ class InferenceModule(Module):
     - Code generation: temperature=0.3, top_k=40
     - Factual answers: temperature=0.1, top_p=0.8
     
-    🔗 WRAPS: enigma_engine/core/inference.py → ForgeEngine class
+    🔗 WRAPS: enigma_engine/core/inference.py → EnigmaEngine class
     """
 
     INFO = ModuleInfo(
@@ -384,9 +384,9 @@ class InferenceModule(Module):
     )
 
     def load(self) -> bool:
-        """Load the ForgeEngine class for local inference."""
-        from enigma_engine.core.inference import ForgeEngine
-        self._engine_class = ForgeEngine
+        """Load the EnigmaEngine class for local inference."""
+        from enigma_engine.core.inference import EnigmaEngine
+        self._engine_class = EnigmaEngine
         return True
 
 

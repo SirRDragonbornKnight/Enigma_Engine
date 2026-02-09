@@ -129,6 +129,8 @@ def __getattr__(name: str):
         'create_model_comparison_tab': ('.model_comparison_tab', 'create_model_comparison_tab'),
         'TrainingDataTab': ('.training_data_tab', 'TrainingDataTab'),
         'create_training_data_tab': ('.training_data_tab', 'create_training_data_tab'),
+        'BundleManagerTab': ('.bundle_manager_tab', 'BundleManagerTab'),
+        'create_bundle_manager_tab': ('.bundle_manager_tab', 'create_bundle_manager_tab'),
         
         # Shared components
         'STYLE_PRESETS': ('.shared_components', 'STYLE_PRESETS'),
@@ -237,6 +239,8 @@ __all__ = [
     'create_model_comparison_tab',
     'TrainingDataTab',
     'create_training_data_tab',
+    'BundleManagerTab',
+    'create_bundle_manager_tab',
     'GIFTab',
     'create_gif_tab',
     'create_settings_tab',

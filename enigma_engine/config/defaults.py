@@ -198,6 +198,21 @@ CONFIG = {
     "enable_hotkeys": True,  # Enable global hotkey system
     
     # =========================================================================
+    # THE CONTEXT WINDOW - Memory Display and Auto-Continue
+    # =========================================================================
+    # Track AI's context usage and prevent hallucinations from overflow.
+    "context_window": {
+        "display_tokens": True,           # Show token counter in chat UI
+        "warning_threshold": 75,          # Yellow warning at this percentage
+        "critical_threshold": 90,         # Red warning at this percentage
+        "auto_continue_enabled": True,    # Enable auto-continue when context full
+        "auto_continue_threshold": 85,    # Trigger auto-continue at this percentage
+        "auto_continue_keep_messages": 3, # Keep last N messages when continuing
+        "auto_continue_include_summary": True,  # Generate summary for new chat
+        "auto_save_on_continue": True,    # Save old chat when auto-continuing
+    },
+    
+    # =========================================================================
     # THE INTERFACE REALM - GUI Configuration
     # =========================================================================
     "gui_mode": "standard",  # "simple", "standard", "advanced", "gaming"

@@ -364,8 +364,8 @@ class CompanionMode:
         
         # Try to use AI for natural comments
         try:
-            from ..core.inference import ForgeEngine
-            engine = ForgeEngine.get_instance()
+            from ..core.inference import EnigmaEngine
+            engine = EnigmaEngine.get_instance()
             
             if engine and engine.model:
                 prompt = f"""You're a friendly AI companion watching the user's screen. 
@@ -377,7 +377,7 @@ If there's nothing interesting to comment on, respond with just "..." to stay qu
 
 Your comment:"""
                 
-                response = engine.generate(prompt, max_length=50, temperature=0.8)
+                response = engine.generate(prompt, max_gen=50, temperature=0.8)
                 if response and response.strip() and response.strip() != "...":
                     return response.strip()
                 return None  # AI chose to stay quiet
@@ -403,8 +403,8 @@ Your comment:"""
         
         # Try AI-based emotion detection first
         try:
-            from ..core.inference import ForgeEngine
-            engine = ForgeEngine.get_instance()
+            from ..core.inference import EnigmaEngine
+            engine = EnigmaEngine.get_instance()
             
             if engine and engine.model:
                 prompt = f"""What emotion does this text express? Choose ONE: happy, sad, thinking, excited, curious, neutral

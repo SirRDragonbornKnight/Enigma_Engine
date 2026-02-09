@@ -214,8 +214,8 @@ class Agent:
         """Get or create inference engine."""
         if self._engine is None:
             try:
-                from ..core.inference import ForgeEngine
-                self._engine = ForgeEngine()
+                from ..core.inference import EnigmaEngine
+                self._engine = EnigmaEngine()
             except Exception as e:
                 logger.error(f"Could not create engine: {e}")
         return self._engine

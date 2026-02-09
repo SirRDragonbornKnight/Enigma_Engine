@@ -136,8 +136,8 @@ class DiscoveryMode:
         """Get a topic to explore, using AI to pick something relevant."""
         # Try AI-driven topic selection
         try:
-            from ..core.inference import ForgeEngine
-            engine = ForgeEngine.get_instance()
+            from ..core.inference import EnigmaEngine
+            engine = EnigmaEngine.get_instance()
             
             if engine and engine.model:
                 # Build context from past discoveries
@@ -185,8 +185,8 @@ Consider what builds on recent topics or fills knowledge gaps. Reply with ONLY t
         """
         # Try AI-generated query
         try:
-            from ..core.inference import ForgeEngine
-            engine = ForgeEngine.get_instance()
+            from ..core.inference import EnigmaEngine
+            engine = EnigmaEngine.get_instance()
             
             if engine and engine.model:
                 prompt = f"""Generate ONE interesting research question about '{topic}' that would lead to learning something new and practical. Be specific and curious. Reply with ONLY the question."""

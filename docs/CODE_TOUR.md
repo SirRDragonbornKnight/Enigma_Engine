@@ -129,9 +129,9 @@ Production-ready training loop:
 ### inference.py - Getting Responses
 **File:** [enigma_engine/core/inference.py](../enigma_engine/core/inference.py)
 
-`ForgeEngine` class - the main way to interact with the AI:
+`EnigmaEngine` class - the main way to interact with the AI:
 ```python
-engine = ForgeEngine()
+engine = EnigmaEngine()
 response = engine.generate("Hello!", temperature=0.8, top_p=0.9)
 
 # Streaming generation
@@ -428,8 +428,8 @@ train_model(force=True, num_epochs=10)
 
 ### Chat with your AI
 ```python
-from enigma_engine.core.inference import ForgeEngine
-engine = ForgeEngine()
+from enigma_engine.core.inference import EnigmaEngine
+engine = EnigmaEngine()
 print(engine.generate("Hello!"))
 ```
 

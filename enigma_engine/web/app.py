@@ -653,8 +653,8 @@ def api_get_ai_mood():
     """Get AI's current mood based on actual state."""
     # Determine mood from actual AI state
     try:
-        from ..core.inference import ForgeEngine
-        engine = ForgeEngine.get_instance()
+        from ..core.inference import EnigmaEngine
+        engine = EnigmaEngine.get_instance()
         
         if engine and engine.model:
             # Base mood on recent interactions and system state
@@ -662,7 +662,7 @@ def api_get_ai_mood():
 Choose ONE: curious, happy, focused, creative
 Reply with ONLY the mood word."""
             
-            response = engine.generate(prompt, max_length=15, temperature=0.5)
+            response = engine.generate(prompt, max_gen=15, temperature=0.5)
             mood_word = response.strip().lower().split()[0] if response else "focused"
             
             mood_map = {

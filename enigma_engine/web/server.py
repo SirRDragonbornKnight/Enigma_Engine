@@ -747,11 +747,11 @@ Connect to `/ws` for real-time chat. Send JSON messages with `type` field.
         def _sync_generate():
             """Synchronous generation function to run in thread pool."""
             try:
-                from ..core.inference import ForgeEngine
+                from ..core.inference import EnigmaEngine
 
                 # Create engine if needed (singleton pattern)
                 # Note: Engine creation is thread-safe due to GIL
-                engine = ForgeEngine()
+                engine = EnigmaEngine()
                 response = engine.generate(prompt, max_gen=200)
                 return response
             except Exception as e:

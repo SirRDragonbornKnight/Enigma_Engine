@@ -3,7 +3,7 @@
 ENGINE POOL - SHARED MODEL INSTANCE MANAGEMENT
 ================================================================================
 
-Provides a centralized pool of ForgeEngine instances for efficient reuse.
+Provides a centralized pool of EnigmaEngine instances for efficient reuse.
 Prevents repeatedly loading models and manages engine lifecycle.
 
 FILE: enigma_engine/core/engine_pool.py
@@ -33,7 +33,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
-    from .inference import ForgeEngine
+    from .inference import EnigmaEngine
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ class EnginePoolConfig:
 class PooledEngine:
     """Wrapper for a pooled engine with metadata."""
     
-    engine: Any  # ForgeEngine
+    engine: Any  # EnigmaEngine
     model_path: str
     created_at: float = field(default_factory=time.time)
     last_used_at: float = field(default_factory=time.time)
@@ -99,7 +99,7 @@ class PooledEngine:
 
 class EnginePool:
     """
-    Pool of ForgeEngine instances for efficient reuse.
+    Pool of EnigmaEngine instances for efficient reuse.
     
     Benefits:
     - Prevents repeated model loading (slow!)
@@ -189,11 +189,11 @@ class EnginePool:
             **engine_kwargs: Arguments for engine creation
         
         Returns:
-            ForgeEngine instance or None if unavailable
+            EnigmaEngine instance or None if unavailable
         """
         # Import here to avoid circular imports
         from ..config import CONFIG
-        from .inference import ForgeEngine
+        from .inference import EnigmaEngine
 
         # Determine model path
         if model_path is None:
@@ -228,7 +228,7 @@ class EnginePool:
             # Create new engine
             logger.info(f"Creating new engine for {model_path}")
             try:
-                engine = ForgeEngine(model_path=model_path, **engine_kwargs)
+                engine = EnigmaEngine(model_path=model_path, **engine_kwargs)
                 pe = PooledEngine(engine=engine, model_path=model_path)
                 pe.mark_used()
                 
@@ -343,7 +343,7 @@ def get_engine(model_path: Optional[str] = None, **kwargs) -> Optional[Any]:
         **kwargs: Additional engine arguments
     
     Returns:
-        ForgeEngine instance or None
+        EnigmaEngine instance or None
     """
     return get_pool().get_engine(model_path, **kwargs)
 

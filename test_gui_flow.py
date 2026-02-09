@@ -4,7 +4,7 @@ sys.path.insert(0, '.')
 
 import torch
 from enigma_engine.core.model_registry import ModelRegistry
-from enigma_engine.core.inference import ForgeEngine
+from enigma_engine.core.inference import EnigmaEngine
 
 # Load model through registry (like GUI)
 r = ModelRegistry()
@@ -15,7 +15,7 @@ print(f"source: {config.get('source')}")
 print(f"use_custom_tokenizer: {config.get('use_custom_tokenizer')}")
 
 # Create engine like GUI does
-engine = ForgeEngine.__new__(ForgeEngine)
+engine = EnigmaEngine.__new__(EnigmaEngine)
 engine.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 engine.use_half = False
 engine.enable_tools = False

@@ -640,9 +640,9 @@ def create_inference_server(
     Returns:
         InferenceServer instance
     """
-    from .inference import ForgeEngine
+    from .inference import EnigmaEngine
     
-    engine = ForgeEngine(model_path=model_path)
+    engine = EnigmaEngine(model_path=model_path)
     
     return InferenceServer(
         model=engine.model,

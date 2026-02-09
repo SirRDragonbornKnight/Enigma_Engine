@@ -272,8 +272,8 @@ class AutonomousMode:
         
         # Try AI-driven selection
         try:
-            from .inference import ForgeEngine
-            engine = ForgeEngine.get_instance()
+            from .inference import EnigmaEngine
+            engine = EnigmaEngine.get_instance()
             
             if engine and engine.model:
                 prompt = f"""Pick ONE topic from this list that would be most valuable for {context}:
@@ -659,8 +659,8 @@ Reply with ONLY the topic name."""
             
             # Try to generate multiple response candidates
             try:
-                from .inference import ForgeEngine
-                engine = ForgeEngine(self.model_name)
+                from .inference import EnigmaEngine
+                engine = EnigmaEngine(self.model_name)
                 
                 # Generate multiple candidates with different temperatures
                 num_candidates = 5

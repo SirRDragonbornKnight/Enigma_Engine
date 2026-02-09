@@ -324,7 +324,7 @@ train_model(
 Initialize the inference engine with tool support:
 
 ```python
-from enigma_engine.core.inference import ForgeEngine
+from enigma_engine.core.inference import EnigmaEngine
 from enigma_engine.modules import ModuleManager
 
 # Initialize module manager
@@ -338,7 +338,7 @@ manager.load('vision')            # For image analysis
 manager.load('avatar')            # For avatar control
 
 # Create inference engine with tools enabled
-engine = ForgeEngine(
+engine = EnigmaEngine(
     model_path="models/enigma_engine.pth",
     enable_tools=True,
     module_manager=manager
@@ -528,7 +528,7 @@ manager.configure('image_gen_local', {
 
 1. **Check training**: Ensure model was trained on tool use examples
 2. **Verify modules**: Confirm required modules are loaded
-3. **Enable tools**: Set `enable_tools=True` in ForgeEngine
+3. **Enable tools**: Set `enable_tools=True` in EnigmaEngine
 4. **Check prompt**: Include clear requests that require tools
 
 ### Tool Execution Errors
@@ -571,10 +571,10 @@ class ToolExecutor:
     def format_tool_result(self, result: Dict) -> str
 ```
 
-### ForgeEngine (Tool Support)
+### EnigmaEngine (Tool Support)
 
 ```python
-class ForgeEngine:
+class EnigmaEngine:
     def __init__(
         self,
         ...,

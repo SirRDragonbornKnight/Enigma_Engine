@@ -1779,7 +1779,7 @@ def load_trained_model(
     🔗 CONNECTS TO:
       → Model weights saved by Trainer.save_model()
       → Tokenizer saved during train_model()
-      ← Used by ForgeEngine in inference.py
+      ← Used by EnigmaEngine in inference.py
 
     Args:
         model_path: Path to saved model (.pth file)

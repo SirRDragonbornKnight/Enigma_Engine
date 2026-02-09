@@ -176,6 +176,216 @@ def _toggle_key_visibility(parent):
             inp.setEchoMode(QLineEdit.Password)
 
 
+# =============================================================================
+# CONTENT RATING SETTINGS
+# =============================================================================
+
+def _init_content_rating(parent):
+    """Initialize content rating from saved config."""
+    try:
+        from ...core.content_rating import ContentRating, get_content_filter
+        
+        filter_instance = get_content_filter()
+        current_mode = filter_instance.get_mode()
+        
+        # Set combo box to current mode
+        mode_map = {
+            ContentRating.SFW: 0,
+            ContentRating.MATURE: 1,
+            ContentRating.NSFW: 2
+        }
+        parent.content_rating_combo.setCurrentIndex(mode_map.get(current_mode, 0))
+        
+        # Update status based on model capability
+        if filter_instance.config.model_supports_nsfw:
+            parent.content_rating_status.setText("Model supports NSFW")
+            parent.content_rating_status.setStyleSheet("color: #a6adc8; font-style: italic;")
+        else:
+            parent.content_rating_status.setText("Model: SFW only")
+            parent.content_rating_status.setStyleSheet("color: #f59e0b; font-style: italic;")
+            # Disable NSFW option if model doesn't support it
+            if parent.content_rating_combo.count() >= 3:
+                parent.content_rating_combo.model().item(2).setEnabled(False)
+        
+    except Exception as e:
+        logger.warning(f"Could not initialize content rating: {e}")
+        parent.content_rating_status.setText("Content filter unavailable")
+        parent.content_rating_status.setStyleSheet("color: #ef4444; font-style: italic;")
+
+
+def _change_content_rating(parent):
+    """Handle content rating change."""
+    try:
+        from ...core.content_rating import ContentRating, get_content_filter
+        
+        filter_instance = get_content_filter()
+        
+        # Map combo index to mode
+        idx = parent.content_rating_combo.currentIndex()
+        mode_map = {0: ContentRating.SFW, 1: ContentRating.MATURE, 2: ContentRating.NSFW}
+        new_mode = mode_map.get(idx, ContentRating.SFW)
+        
+        # Try to set the mode
+        success = filter_instance.set_mode(new_mode)
+        
+        if success:
+            filter_instance.save_config()
+            parent.content_rating_status.setText(f"Set to {new_mode.value.upper()}")
+            parent.content_rating_status.setStyleSheet("color: #22c55e; font-style: italic;")
+        else:
+            # Revert combo box
+            current_mode = filter_instance.get_mode()
+            mode_reverse = {ContentRating.SFW: 0, ContentRating.MATURE: 1, ContentRating.NSFW: 2}
+            parent.content_rating_combo.blockSignals(True)
+            parent.content_rating_combo.setCurrentIndex(mode_reverse.get(current_mode, 0))
+            parent.content_rating_combo.blockSignals(False)
+            
+            parent.content_rating_status.setText("Model not trained for NSFW")
+            parent.content_rating_status.setStyleSheet("color: #ef4444; font-style: italic;")
+            
+            # Show message
+            QMessageBox.warning(
+                parent,
+                "Content Rating",
+                "This model was not trained with NSFW capability.\n\n"
+                "To enable NSFW mode, train a model with 'Include NSFW' enabled in Build AI."
+            )
+            
+    except Exception as e:
+        logger.error(f"Failed to change content rating: {e}")
+        parent.content_rating_status.setText(f"Error: {str(e)[:30]}")
+        parent.content_rating_status.setStyleSheet("color: #ef4444; font-style: italic;")
+
+
+# =============================================================================
+# CONTEXT WINDOW SETTINGS
+# =============================================================================
+
+def _load_context_settings(parent):
+    """Load context window settings from config."""
+    try:
+        from ...config import CONFIG
+        
+        ctx_config = CONFIG.get("context_window", {})
+        
+        # Token display checkbox
+        if hasattr(parent, 'show_tokens_check'):
+            parent.show_tokens_check.setChecked(ctx_config.get("display_tokens", True))
+        
+        # Warning threshold slider
+        if hasattr(parent, 'warning_threshold_slider'):
+            parent.warning_threshold_slider.setValue(ctx_config.get("warning_threshold", 75))
+        
+        # Critical threshold slider
+        if hasattr(parent, 'critical_threshold_slider'):
+            parent.critical_threshold_slider.setValue(ctx_config.get("critical_threshold", 90))
+        
+        # Auto-continue checkbox
+        if hasattr(parent, 'auto_continue_check'):
+            parent.auto_continue_check.setChecked(ctx_config.get("auto_continue_enabled", True))
+        
+        # Auto-continue threshold slider
+        if hasattr(parent, 'auto_continue_threshold_slider'):
+            parent.auto_continue_threshold_slider.setValue(ctx_config.get("auto_continue_threshold", 85))
+        
+        # Keep messages spinner
+        if hasattr(parent, 'keep_messages_spin'):
+            parent.keep_messages_spin.setValue(ctx_config.get("auto_continue_keep_messages", 3))
+        
+        # Include summary checkbox
+        if hasattr(parent, 'include_summary_check'):
+            parent.include_summary_check.setChecked(ctx_config.get("auto_continue_include_summary", True))
+        
+        # Auto-save checkbox
+        if hasattr(parent, 'auto_save_check'):
+            parent.auto_save_check.setChecked(ctx_config.get("auto_save_on_continue", True))
+        
+    except Exception as e:
+        logger.warning(f"Failed to load context settings: {e}")
+
+
+def _save_context_settings(parent):
+    """Save context window settings to config."""
+    try:
+        from ...config import CONFIG
+        
+        # Build config dict
+        ctx_config = {
+            "display_tokens": parent.show_tokens_check.isChecked() if hasattr(parent, 'show_tokens_check') else True,
+            "warning_threshold": parent.warning_threshold_slider.value() if hasattr(parent, 'warning_threshold_slider') else 75,
+            "critical_threshold": parent.critical_threshold_slider.value() if hasattr(parent, 'critical_threshold_slider') else 90,
+            "auto_continue_enabled": parent.auto_continue_check.isChecked() if hasattr(parent, 'auto_continue_check') else True,
+            "auto_continue_threshold": parent.auto_continue_threshold_slider.value() if hasattr(parent, 'auto_continue_threshold_slider') else 85,
+            "auto_continue_keep_messages": parent.keep_messages_spin.value() if hasattr(parent, 'keep_messages_spin') else 3,
+            "auto_continue_include_summary": parent.include_summary_check.isChecked() if hasattr(parent, 'include_summary_check') else True,
+            "auto_save_on_continue": parent.auto_save_check.isChecked() if hasattr(parent, 'auto_save_check') else True,
+        }
+        
+        CONFIG["context_window"] = ctx_config
+        
+        # Update context tracker if it exists
+        if hasattr(parent, '_context_tracker') and parent._context_tracker:
+            parent._context_tracker.config.warn_percentage = float(ctx_config["warning_threshold"])
+            parent._context_tracker.config.critical_percentage = float(ctx_config["critical_threshold"])
+            parent._context_tracker.config.auto_continue_enabled = ctx_config["auto_continue_enabled"]
+            parent._context_tracker.config.auto_continue_threshold = float(ctx_config["auto_continue_threshold"])
+            parent._context_tracker.config.auto_continue_keep_messages = ctx_config["auto_continue_keep_messages"]
+            parent._context_tracker.config.auto_continue_include_summary = ctx_config["auto_continue_include_summary"]
+        
+        # Save to persistent config file
+        try:
+            from ...config import save_config
+            save_config()
+        except Exception:
+            pass  # Config persistence is optional
+        
+        # Update status
+        if hasattr(parent, 'context_settings_status'):
+            parent.context_settings_status.setText("Settings saved")
+            parent.context_settings_status.setStyleSheet("color: #a6e3a1; font-style: italic;")
+        
+    except Exception as e:
+        logger.warning(f"Failed to save context settings: {e}")
+        if hasattr(parent, 'context_settings_status'):
+            parent.context_settings_status.setText(f"Error: {e}")
+            parent.context_settings_status.setStyleSheet("color: #f38ba8; font-style: italic;")
+
+
+def _update_warning_threshold_label(parent, value):
+    """Update the warning threshold display label."""
+    if hasattr(parent, 'warning_threshold_label'):
+        parent.warning_threshold_label.setText(f"{value}%")
+    _save_context_settings(parent)
+
+
+def _update_critical_threshold_label(parent, value):
+    """Update the critical threshold display label."""
+    if hasattr(parent, 'critical_threshold_label'):
+        parent.critical_threshold_label.setText(f"{value}%")
+    _save_context_settings(parent)
+
+
+def _update_auto_continue_threshold_label(parent, value):
+    """Update the auto-continue threshold display label."""
+    if hasattr(parent, 'auto_continue_threshold_label'):
+        parent.auto_continue_threshold_label.setText(f"{value}%")
+    _save_context_settings(parent)
+
+
+def _toggle_auto_continue_options(parent, enabled):
+    """Enable/disable auto-continue sub-options based on checkbox state."""
+    enabled = enabled == 2  # Qt.Checked
+    if hasattr(parent, 'auto_continue_threshold_slider'):
+        parent.auto_continue_threshold_slider.setEnabled(enabled)
+    if hasattr(parent, 'keep_messages_spin'):
+        parent.keep_messages_spin.setEnabled(enabled)
+    if hasattr(parent, 'include_summary_check'):
+        parent.include_summary_check.setEnabled(enabled)
+    if hasattr(parent, 'auto_save_check'):
+        parent.auto_save_check.setEnabled(enabled)
+    _save_context_settings(parent)
+
+
 def _toggle_hotkeys(parent, state):
     """Toggle global hotkeys on/off."""
     enabled = state == 2  # Qt.Checked
@@ -1681,6 +1891,36 @@ def create_settings_tab(parent):
     quick_row1.addStretch()
     quick_layout.addLayout(quick_row1)
     
+    # Content Rating row
+    content_row = QHBoxLayout()
+    
+    content_row.addWidget(QLabel("Content Rating:"))
+    
+    parent.content_rating_combo = NoScrollComboBox()
+    parent.content_rating_combo.setToolTip(
+        "Control content restrictions:\n"
+        "SFW - Safe for work, no explicit content\n"
+        "Mature - Violence, mild language allowed\n"
+        "NSFW - Adult content (requires trained model)"
+    )
+    parent.content_rating_combo.addItem("SFW (Safe)", "sfw")
+    parent.content_rating_combo.addItem("Mature", "mature")
+    parent.content_rating_combo.addItem("NSFW (Adult)", "nsfw")
+    parent.content_rating_combo.currentIndexChanged.connect(
+        lambda idx: _change_content_rating(parent)
+    )
+    content_row.addWidget(parent.content_rating_combo)
+    
+    parent.content_rating_status = QLabel("")
+    parent.content_rating_status.setStyleSheet("color: #a6adc8; font-style: italic;")
+    content_row.addWidget(parent.content_rating_status)
+    
+    content_row.addStretch()
+    quick_layout.addLayout(content_row)
+    
+    # Initialize content rating from saved config
+    _init_content_rating(parent)
+    
     # Quick links row
     quick_row2 = QHBoxLayout()
     
@@ -2185,6 +2425,121 @@ def create_settings_tab(parent):
     names_layout.addWidget(names_note)
     
     layout.addWidget(names_group)
+
+    # === CONTEXT WINDOW SETTINGS ===
+    context_group = QGroupBox("Context Window - Memory and Auto-Continue")
+    context_layout = QVBoxLayout(context_group)
+    context_layout.setSpacing(8)
+    
+    context_desc = QLabel(
+        "Control how the AI handles its context memory. When context fills up, the AI may "
+        "forget earlier messages, leading to inconsistent responses (hallucinations)."
+    )
+    context_desc.setWordWrap(True)
+    context_layout.addWidget(context_desc)
+    
+    # Show token counter checkbox
+    parent.show_tokens_check = QCheckBox("Show token counter in chat")
+    parent.show_tokens_check.setToolTip("Display a token usage bar above the chat input")
+    parent.show_tokens_check.stateChanged.connect(lambda: _save_context_settings(parent))
+    context_layout.addWidget(parent.show_tokens_check)
+    
+    # Warning threshold slider
+    warn_row = QHBoxLayout()
+    warn_row.addWidget(QLabel("Warning threshold:"))
+    parent.warning_threshold_slider = QSlider(Qt.Horizontal)
+    parent.warning_threshold_slider.setRange(50, 95)
+    parent.warning_threshold_slider.setTickInterval(5)
+    parent.warning_threshold_slider.setToolTip("Show yellow warning when context usage exceeds this percentage")
+    parent.warning_threshold_slider.valueChanged.connect(
+        lambda val: _update_warning_threshold_label(parent, val)
+    )
+    warn_row.addWidget(parent.warning_threshold_slider)
+    parent.warning_threshold_label = QLabel("75%")
+    parent.warning_threshold_label.setMinimumWidth(40)
+    warn_row.addWidget(parent.warning_threshold_label)
+    context_layout.addLayout(warn_row)
+    
+    # Critical threshold slider
+    crit_row = QHBoxLayout()
+    crit_row.addWidget(QLabel("Critical threshold:"))
+    parent.critical_threshold_slider = QSlider(Qt.Horizontal)
+    parent.critical_threshold_slider.setRange(70, 99)
+    parent.critical_threshold_slider.setTickInterval(5)
+    parent.critical_threshold_slider.setToolTip("Show red warning when context usage exceeds this percentage")
+    parent.critical_threshold_slider.valueChanged.connect(
+        lambda val: _update_critical_threshold_label(parent, val)
+    )
+    crit_row.addWidget(parent.critical_threshold_slider)
+    parent.critical_threshold_label = QLabel("90%")
+    parent.critical_threshold_label.setMinimumWidth(40)
+    crit_row.addWidget(parent.critical_threshold_label)
+    context_layout.addLayout(crit_row)
+    
+    # Separator
+    sep_label = QLabel("Auto-Continue Settings")
+    sep_label.setStyleSheet("font-weight: bold; margin-top: 8px;")
+    context_layout.addWidget(sep_label)
+    
+    # Auto-continue checkbox
+    parent.auto_continue_check = QCheckBox("Enable auto-continue when context is full")
+    parent.auto_continue_check.setToolTip(
+        "Automatically start a new chat with summary when context fills up.\n"
+        "This prevents the AI from forgetting earlier messages."
+    )
+    parent.auto_continue_check.stateChanged.connect(
+        lambda state: _toggle_auto_continue_options(parent, state)
+    )
+    context_layout.addWidget(parent.auto_continue_check)
+    
+    # Auto-continue threshold slider
+    auto_row = QHBoxLayout()
+    auto_row.addWidget(QLabel("Auto-continue at:"))
+    parent.auto_continue_threshold_slider = QSlider(Qt.Horizontal)
+    parent.auto_continue_threshold_slider.setRange(60, 95)
+    parent.auto_continue_threshold_slider.setTickInterval(5)
+    parent.auto_continue_threshold_slider.setToolTip("Start a new chat when context usage exceeds this percentage")
+    parent.auto_continue_threshold_slider.valueChanged.connect(
+        lambda val: _update_auto_continue_threshold_label(parent, val)
+    )
+    auto_row.addWidget(parent.auto_continue_threshold_slider)
+    parent.auto_continue_threshold_label = QLabel("85%")
+    parent.auto_continue_threshold_label.setMinimumWidth(40)
+    auto_row.addWidget(parent.auto_continue_threshold_label)
+    context_layout.addLayout(auto_row)
+    
+    # Keep messages spinner
+    keep_row = QHBoxLayout()
+    keep_row.addWidget(QLabel("Keep last messages:"))
+    parent.keep_messages_spin = QSpinBox()
+    parent.keep_messages_spin.setRange(1, 10)
+    parent.keep_messages_spin.setToolTip("Number of recent messages to preserve when auto-continuing")
+    parent.keep_messages_spin.valueChanged.connect(lambda: _save_context_settings(parent))
+    keep_row.addWidget(parent.keep_messages_spin)
+    keep_row.addStretch()
+    context_layout.addLayout(keep_row)
+    
+    # Include summary checkbox
+    parent.include_summary_check = QCheckBox("Generate summary for new chat")
+    parent.include_summary_check.setToolTip("Create a brief summary of the conversation to maintain context")
+    parent.include_summary_check.stateChanged.connect(lambda: _save_context_settings(parent))
+    context_layout.addWidget(parent.include_summary_check)
+    
+    # Auto-save checkbox
+    parent.auto_save_check = QCheckBox("Auto-save old chat to history")
+    parent.auto_save_check.setToolTip("Save the old conversation to history when auto-continuing")
+    parent.auto_save_check.stateChanged.connect(lambda: _save_context_settings(parent))
+    context_layout.addWidget(parent.auto_save_check)
+    
+    # Status label
+    parent.context_settings_status = QLabel("")
+    parent.context_settings_status.setStyleSheet("color: #bac2de; font-style: italic;")
+    context_layout.addWidget(parent.context_settings_status)
+    
+    # Load saved settings
+    _load_context_settings(parent)
+    
+    layout.addWidget(context_group)
 
     # === WINDOW OPTIONS ===
     window_group = QGroupBox("Window Options")

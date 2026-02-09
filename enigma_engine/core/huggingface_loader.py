@@ -685,9 +685,9 @@ class HuggingFaceModel:
 
 class HuggingFaceEngine:
     """
-    High-level inference engine compatible with ForgeEngine interface.
+    High-level inference engine compatible with EnigmaEngine interface.
     
-    Drop-in replacement for ForgeEngine using HuggingFace models.
+    Drop-in replacement for EnigmaEngine using HuggingFace models.
     """
     
     def __init__(

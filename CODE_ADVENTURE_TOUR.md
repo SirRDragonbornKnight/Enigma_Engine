@@ -44,7 +44,7 @@ attention, and all the matrix math that makes intelligence emerge from numbers.
 ### Chapter 2: The Oracle (`enigma_engine/core/inference.py`)
 *"Speaking with your AI"*
 
-The Forge is a brain in a jar. The Oracle (ForgeEngine) is how you TALK to it.
+The Forge is a brain in a jar. The Oracle (EnigmaEngine) is how you TALK to it.
 Takes your text, runs it through the brain, returns intelligent responses.
 
 **Key concepts:** Tokenization, sampling, temperature, streaming

@@ -200,7 +200,7 @@ class TestTrainingPipeline:
         from enigma_engine.core.model import create_model
         from enigma_engine.core.tokenizer import get_tokenizer
         from enigma_engine.core.training import Trainer, TrainingConfig
-        from enigma_engine.core.inference import ForgeEngine
+        from enigma_engine.core.inference import EnigmaEngine
         
         model = create_model(
             small_model_config['size'],
@@ -220,7 +220,7 @@ class TestTrainingPipeline:
         trainer.train(sample_training_data[:20], epochs=2)
         
         # Create inference engine
-        engine = ForgeEngine(model, tokenizer)
+        engine = EnigmaEngine(model, tokenizer)
         
         # Generate text
         prompt = "The quick"

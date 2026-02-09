@@ -57,10 +57,10 @@ Enigma AI Engine is a **fully modular AI framework** where EVERYTHING is a toggl
 - **enigma_engine/modules/sandbox.py**: Sandboxed module execution
 
 ### Core AI Components
-- **enigma_engine/core/model.py**: `Forge`, `create_model()` - Main transformer model implementation
+- **enigma_engine/core/model.py**: `Enigma`, `create_model()` - Main transformer model implementation
 - **enigma_engine/core/tokenizer.py**: `get_tokenizer()`, `SimpleTokenizer`, `TiktokenWrapper` - Text tokenization
 - **enigma_engine/core/training.py**: `Trainer`, `TrainingConfig`, `train_model()` - Model training
-- **enigma_engine/core/inference.py**: `ForgeEngine` class - Model inference with optional `use_routing` for specialized models
+- **enigma_engine/core/inference.py**: `EnigmaEngine` class - Model inference with optional `use_routing` for specialized models
 - **enigma_engine/core/model_registry.py**: `ModelRegistry` class - Manages multiple loaded models, `export_to_huggingface()` for uploading to HF Hub
 - **enigma_engine/core/tool_router.py**: `ToolRouter`, `get_router()`, `classify_intent()`, `describe_image()`, `generate_code()` - Specialized model routing
 - **enigma_engine/core/huggingface_loader.py**: `load_huggingface_model()` - Load HuggingFace models

@@ -518,11 +518,11 @@ class AIAvatarBridge(QObject if HAS_PYQT else object):
         """
         Generate AI response with avatar expression.
         
-        Wraps the ForgeEngine generate call to automatically
+        Wraps the EnigmaEngine generate call to automatically
         control the avatar during generation.
         
         Args:
-            engine: ForgeEngine instance
+            engine: EnigmaEngine instance
             prompt: The user's prompt
             **kwargs: Additional args for engine.generate()
             
@@ -560,7 +560,7 @@ class AIAvatarBridge(QObject if HAS_PYQT else object):
         so the AI knows how to control the avatar.
         
         Args:
-            engine: ForgeEngine instance
+            engine: EnigmaEngine instance
             prompt: The user's prompt
             include_command_reference: If True, adds command reference to prompt
             **kwargs: Additional args for engine.generate()

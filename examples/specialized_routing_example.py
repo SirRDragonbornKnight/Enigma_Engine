@@ -16,18 +16,18 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 
 def example_1_basic_routing():
-    """Example 1: Basic routing with ForgeEngine"""
+    """Example 1: Basic routing with EnigmaEngine"""
     print("=" * 70)
-    print("Example 1: Basic Routing with ForgeEngine")
+    print("Example 1: Basic Routing with EnigmaEngine")
     print("=" * 70)
     print()
     
     try:
-        from enigma_engine.core.inference import ForgeEngine
+        from enigma_engine.core.inference import EnigmaEngine
         
         # Create engine with routing enabled
-        print("Creating ForgeEngine with routing enabled...")
-        engine = ForgeEngine(use_routing=True)
+        print("Creating EnigmaEngine with routing enabled...")
+        engine = EnigmaEngine(use_routing=True)
         
         # The router will automatically classify intent and route to appropriate model
         print("\n1. Asking for code generation:")
@@ -42,7 +42,7 @@ def example_1_basic_routing():
         print('   Input: "how are you today?"')
         print('   Expected: Router detects "chat" intent')
         
-        print("\n✓ ForgeEngine routing setup successful!")
+        print("\n✓ EnigmaEngine routing setup successful!")
         print("  Note: Specialized models need to be trained first")
         print("  Run: python scripts/train_specialized_model.py --type router --data data/specialized/router_training.txt --model-size nano")
         
@@ -130,8 +130,8 @@ def example_3_training_workflow():
     
     print("Step 5: Use in your application")
     print("  Python code:")
-    print("    from enigma_engine.core.inference import ForgeEngine")
-    print("    engine = ForgeEngine(use_routing=True)")
+    print("    from enigma_engine.core.inference import EnigmaEngine")
+    print("    engine = EnigmaEngine(use_routing=True)")
     print("    response = engine.generate('write a sort function')")
     print()
 

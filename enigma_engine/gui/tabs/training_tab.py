@@ -1796,14 +1796,14 @@ def _test_system_prompt(parent):
         
         try:
             # Try to use the inference engine
-            from ...core.inference import ForgeEngine
+            from ...core.inference import EnigmaEngine
             
-            engine = ForgeEngine()
+            engine = EnigmaEngine()
             
             # Format with system prompt
             full_prompt = f"System: {prompt}\n\nUser: {test_msg}\n\nAssistant:"
             
-            response = engine.generate(full_prompt, max_tokens=150)
+            response = engine.generate(full_prompt, max_gen=150)
             
             # Clean up response
             if "Assistant:" in response:

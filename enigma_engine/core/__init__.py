@@ -22,6 +22,7 @@ _loader = LazyLoader(__name__)
 # Register lazy imports for heavy torch-dependent modules
 _loader.register_many({
     # Inference
+    'EnigmaEngine': ('.inference', 'EnigmaEngine'),
     'ForgeEngine': ('.inference', 'ForgeEngine'),
     'generate': ('.inference', 'generate'),
     'load_engine': ('.inference', 'load_engine'),
@@ -88,6 +89,24 @@ except ImportError:
     get_trainer_ai = None
     POSITION_CONFIGS = None
     DataQualityScore = None
+
+# Trainer Integrations (connects TrainerAI to all systems)
+try:
+    from .integrations import (
+        TrainerIntegration,
+        get_integration,
+        IntegrationResult,
+        TrainingProgress,
+        quick_create_character_ai,
+        quick_create_task_ai,
+    )
+except ImportError:
+    TrainerIntegration = None
+    get_integration = None
+    IntegrationResult = None
+    TrainingProgress = None
+    quick_create_character_ai = None
+    quick_create_task_ai = None
 
 # Tool Router (intent classification and routing)
 try:
@@ -475,7 +494,8 @@ __all__ = [
     "MODEL_PRESETS",
 
     # Inference
-    "ForgeEngine",
+    "EnigmaEngine",
+    "ForgeEngine",  # Backward compatibility alias
     "generate",
     "load_engine",
 

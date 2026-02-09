@@ -611,8 +611,8 @@ class StoryContinueTool(Tool):
         
         # Try AI-generated continuation
         try:
-            from ..core.inference import ForgeEngine
-            engine = ForgeEngine.get_instance()
+            from ..core.inference import EnigmaEngine
+            engine = EnigmaEngine.get_instance()
             
             if engine and engine.model:
                 # Get last chapter for context
@@ -634,7 +634,7 @@ CHOICE A: [option]
 CHOICE B: [option]  
 CHOICE C: [option]"""
                 
-                response = engine.generate(prompt, max_length=200, temperature=0.9)
+                response = engine.generate(prompt, max_gen=200, temperature=0.9)
                 
                 # Parse response
                 if response and "STORY:" in response:

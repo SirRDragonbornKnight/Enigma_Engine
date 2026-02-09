@@ -138,10 +138,10 @@ def reverse_string(text):
 ### In Python Code
 
 ```python
-from enigma_engine.core.inference import ForgeEngine
+from enigma_engine.core.inference import EnigmaEngine
 
 # Enable routing with specialized models
-engine = ForgeEngine(use_routing=True)
+engine = EnigmaEngine(use_routing=True)
 
 # Router automatically detects intent and routes to specialized model
 response = engine.generate("draw me a cat")  # Routes to image tool
@@ -416,8 +416,8 @@ python scripts/train_specialized_model.py \
 
 # 4. Use the system
 python -c "
-from enigma_engine.core.inference import ForgeEngine
-engine = ForgeEngine(use_routing=True)
+from enigma_engine.core.inference import EnigmaEngine
+engine = EnigmaEngine(use_routing=True)
 print(engine.generate('write a hello world function'))
 "
 ```
@@ -465,9 +465,9 @@ Optional:
 
 ### Python API
 
-**ForgeEngine with Routing:**
+**EnigmaEngine with Routing:**
 ```python
-engine = ForgeEngine(
+engine = EnigmaEngine(
     use_routing=True,      # Enable specialized models
     enable_tools=True,     # Enable tool system
     device='cuda'          # Use GPU

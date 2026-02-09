@@ -81,6 +81,11 @@ class ContextConfig:
     critical_percentage: float = 95.0
     tokenizer_name: str = "cl100k_base"  # For tiktoken
     fallback_chars_per_token: float = 4.0
+    # Auto-continue settings
+    auto_continue_enabled: bool = True
+    auto_continue_threshold: float = 85.0  # Auto-continue at this percentage
+    auto_continue_keep_messages: int = 3   # Keep last N messages when continuing
+    auto_continue_include_summary: bool = True  # Generate summary for new chat
 
 
 class TokenCounter:
@@ -443,6 +448,104 @@ class ContextTracker:
     def estimate_tokens(self, text: str) -> TokenEstimate:
         """Get a detailed token estimate for text."""
         return self._counter.get_estimate(text)
+    
+    # =========================================================================
+    # AUTO-CONTINUE METHODS
+    # =========================================================================
+    
+    def set_auto_continue_threshold(self, percentage: float) -> None:
+        """
+        Set threshold for auto-continue.
+        
+        Args:
+            percentage: Percentage (0-100) at which to trigger auto-continue
+        """
+        self.config.auto_continue_threshold = max(50.0, min(99.0, percentage))
+    
+    def should_auto_continue(self) -> bool:
+        """
+        Check if auto-continue should trigger.
+        
+        Returns:
+            True if context usage exceeds auto-continue threshold
+        """
+        if not self.config.auto_continue_enabled:
+            return False
+        
+        usage = self.get_usage()
+        return usage.percentage >= self.config.auto_continue_threshold
+    
+    def get_messages_for_continue(self) -> list[dict[str, Any]]:
+        """
+        Get the last N messages to keep when auto-continuing.
+        
+        Returns:
+            List of messages to preserve in new context
+        """
+        keep_n = self.config.auto_continue_keep_messages
+        if len(self._messages) <= keep_n:
+            return self._messages.copy()
+        return self._messages[-keep_n:]
+    
+    def generate_conversation_summary(self) -> str:
+        """
+        Generate a summary of the conversation for smart continue.
+        
+        Returns:
+            Summary string suitable for injecting as context
+        """
+        if not self._messages:
+            return ""
+        
+        # Extract key points from conversation
+        user_messages = [m for m in self._messages if m["role"] == "user"]
+        assistant_messages = [m for m in self._messages if m["role"] == "assistant"]
+        
+        summary_parts = ["CONVERSATION SUMMARY:"]
+        
+        # First user topic
+        if user_messages:
+            first_msg = user_messages[0]["content"][:100]
+            summary_parts.append(f"- Conversation started about: {first_msg}...")
+        
+        # Key topics discussed (simple extraction from user messages)
+        if len(user_messages) > 1:
+            topics = []
+            for msg in user_messages[1:]:
+                # Extract first sentence as topic indicator
+                content = msg["content"]
+                first_sent = content.split('.')[0][:50] if '.' in content else content[:50]
+                if first_sent and first_sent not in topics:
+                    topics.append(first_sent)
+            
+            if topics:
+                summary_parts.append("- Topics discussed:")
+                for topic in topics[:5]:  # Limit to 5 topics
+                    summary_parts.append(f"  * {topic}")
+        
+        # Last exchange context
+        if user_messages and assistant_messages:
+            last_user = user_messages[-1]["content"][:100]
+            summary_parts.append(f"- Most recent question: {last_user}...")
+        
+        summary_parts.append(f"- Total messages: {len(self._messages)}")
+        
+        return "\n".join(summary_parts)
+    
+    def prepare_auto_continue(self) -> tuple[str, list[dict[str, Any]]]:
+        """
+        Prepare context for auto-continuing in a new chat.
+        
+        Returns:
+            Tuple of (summary_text, messages_to_keep)
+        """
+        summary = ""
+        if self.config.auto_continue_include_summary:
+            summary = self.generate_conversation_summary()
+        
+        messages = self.get_messages_for_continue()
+        
+        return summary, messages
 
 
 # Context window sizes for common models

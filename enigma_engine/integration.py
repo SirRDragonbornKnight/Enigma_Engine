@@ -329,8 +329,8 @@ class CrossDeviceSystem:
         except ImportError:
             # Double fallback to direct creation
             try:
-                from enigma_engine.core import ForgeEngine
-                engine = ForgeEngine()
+                from enigma_engine.core import EnigmaEngine
+                engine = EnigmaEngine()
                 return engine.generate(prompt, **kwargs)
             except Exception as e:
                 logger.error(f"Generation error: {e}")

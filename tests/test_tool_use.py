@@ -275,10 +275,10 @@ class TestInferenceToolIntegration:
     
     def test_engine_init_with_tools(self):
         """Test initializing engine with tools enabled."""
-        from enigma_engine.core.inference import ForgeEngine
+        from enigma_engine.core.inference import EnigmaEngine
         
         # Initialize without module manager (tools won't work but should init)
-        engine = ForgeEngine(
+        engine = EnigmaEngine(
             model_size="nano",  # Use smallest model for testing
             enable_tools=True,
             module_manager=None
@@ -290,9 +290,9 @@ class TestInferenceToolIntegration:
     
     def test_engine_init_without_tools(self):
         """Test initializing engine without tools."""
-        from enigma_engine.core.inference import ForgeEngine
+        from enigma_engine.core.inference import EnigmaEngine
         
-        engine = ForgeEngine(
+        engine = EnigmaEngine(
             model_size="nano",
             enable_tools=False
         )

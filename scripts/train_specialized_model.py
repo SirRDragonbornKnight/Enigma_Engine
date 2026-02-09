@@ -135,7 +135,7 @@ def get_shared_tokenizer():
     
     # Try to load existing tokenizer
     try:
-        tokenizer = get_tokenizer("bpe", vocab_file=str(vocab_file))
+        tokenizer = get_tokenizer("bpe", vocab_path=str(vocab_file))
         logger.info(f"Loaded existing tokenizer with vocab size: {tokenizer.vocab_size}")
         return tokenizer
     except Exception as e:

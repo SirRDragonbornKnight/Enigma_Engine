@@ -630,7 +630,7 @@ class ModelOrchestrator:
         task: Any,
         parameters: dict[str, Any],
     ) -> Any:
-        """Execute task on a Forge model (ForgeEngine)."""
+        """Execute task on a Forge model (EnigmaEngine)."""
         if capability in ["text_generation", "chat", "reasoning"]:
             return engine.chat(str(task), **parameters)
         elif capability == "code_generation":

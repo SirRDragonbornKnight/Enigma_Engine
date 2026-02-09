@@ -1,17 +1,17 @@
 """
 ================================================================================
-                    CHAPTER 1: THE FORGE - WHERE MINDS ARE BORN
+                    CHAPTER 1: THE ENIGMA - WHERE MINDS ARE BORN
 ================================================================================
 
     "In the depths of silicon and mathematics, something awakens..."
 
 Welcome, brave explorer. You have reached the most sacred place in all of
-Enigma AI Engine - the FORGE itself. This is where artificial minds are literally 
+Enigma AI Engine - the ENIGMA itself. This is where artificial minds are literally 
 CONSTRUCTED, layer by layer, neuron by neuron.
 
 WHY THIS FILE MATTERS:
     Every word your AI speaks, every thought it processes, every creative
-    idea it generates - ALL of it flows through this file. The Forge class
+    idea it generates - ALL of it flows through this file. The Enigma class
     is the living brain. Without it, Enigma AI Engine is just empty code.
 
 THE JOURNEY AHEAD:
@@ -20,7 +20,7 @@ THE JOURNEY AHEAD:
     3. Attention       - The memory (what to focus on?)
     4. SwiGLU          - The activation (fire or not fire?)
     5. TransformerBlock - One layer of thinking
-    6. Forge           - The complete brain!
+    6. Enigma          - The complete brain!
 
 MAIN QUEST: Create an AI brain that can process language and generate text.
 
@@ -61,25 +61,25 @@ CHOOSE YOUR FIGHTER (Model Sizes):
 
 🔗 CONNECTED FILES:
     → USES:      enigma_engine/config/ (CONFIG settings)
-    ← USED BY:   enigma_engine/core/inference.py (ForgeEngine loads this)
+    ← USED BY:   enigma_engine/core/inference.py (EnigmaEngine loads this)
     ← USED BY:   enigma_engine/core/training.py (trains this model)
     ← USED BY:   enigma_engine/modules/registry.py (ModelModule wraps this)
     → SEE ALSO:  UNIVERSAL_MODEL_GUIDE.md (detailed feature guide)
 
 📖 BASIC USAGE:
-    from enigma_engine.core.model import create_model, Forge, ForgeConfig
+    from enigma_engine.core.model import create_model, Enigma, ForgeConfig
     
     # Simple preset
     model = create_model('small')
     
     # Custom config
     config = ForgeConfig(vocab_size=8000, dim=512, n_layers=8)
-    model = Forge(config=config)
+    model = Enigma(config=config)
 
 📖 UNIVERSAL FEATURES USAGE:
     # Load from any format
-    model = Forge.from_any("model.gguf")
-    model = Forge.from_huggingface("microsoft/phi-2")
+    model = Enigma.from_any("model.gguf")
+    model = Enigma.from_huggingface("microsoft/phi-2")
     
     # Extended context with RoPE scaling
     config = ForgeConfig(
@@ -149,11 +149,11 @@ MAX_LEN = CONFIG.get("max_len", 1024)
 # when multiple threads access models concurrently (e.g., GUI + API server).
 import threading
 
-_LOADED_MODELS: dict[str, 'Forge'] = {}
+_LOADED_MODELS: dict[str, 'Enigma'] = {}
 _MODELS_LOCK = threading.RLock()  # RLock allows re-entrant locking
 
 
-def get_running_models() -> dict[str, 'Forge']:
+def get_running_models() -> dict[str, 'Enigma']:
     """Get a copy of all loaded model instances (thread-safe)."""
     with _MODELS_LOCK:
         return _LOADED_MODELS.copy()
@@ -165,14 +165,14 @@ def is_model_loaded(name: str) -> bool:
         return name in _LOADED_MODELS
 
 
-def register_model(name: str, model: 'Forge') -> None:
+def register_model(name: str, model: 'Enigma') -> None:
     """Register a model instance (thread-safe)."""
     with _MODELS_LOCK:
         _LOADED_MODELS[name] = model
         logger.debug(f"Registered model: {name}")
 
 
-def unregister_model(name: str) -> Optional['Forge']:
+def unregister_model(name: str) -> Optional['Enigma']:
     """Unregister a model and return it if found (thread-safe)."""
     with _MODELS_LOCK:
         model = _LOADED_MODELS.pop(name, None)
@@ -181,7 +181,7 @@ def unregister_model(name: str) -> Optional['Forge']:
         return model
 
 
-def get_model(name: str) -> Optional['Forge']:
+def get_model(name: str) -> Optional['Enigma']:
     """Get a specific model by name (thread-safe)."""
     with _MODELS_LOCK:
         return _LOADED_MODELS.get(name)
@@ -1503,9 +1503,9 @@ class TransformerBlock(nn.Module):
 # 🧠 MAIN MODEL - THE FULL TRANSFORMER
 # =============================================================================
 
-class Forge(nn.Module):
+class Enigma(nn.Module):
     """
-    Forge - Modern Transformer Language Model
+    Enigma - Modern Transformer Language Model
     
     📖 THIS IS THE COMPLETE MODEL!
     Stacks together all the components: embeddings, transformer blocks, output.
@@ -1548,7 +1548,7 @@ class Forge(nn.Module):
     
     🔗 CONNECTS TO:
       → Uses all the components defined above
-      ← Used by ForgeEngine for inference
+      ← Used by EnigmaEngine for inference
       ← Used by Trainer for training
     """
 
@@ -3204,3 +3204,11 @@ def create_model_auto(size: str = 'small', vocab_size: Optional[int] = None, **k
     # Use PyTorch backend (fallback)
     print(f"[Backend] Using PyTorch for {size}")
     return create_model(size, vocab_size, **kwargs)
+
+
+# =============================================================================
+# Backward Compatibility Alias
+# =============================================================================
+
+# Keep Forge as an alias for existing code
+Forge = Enigma

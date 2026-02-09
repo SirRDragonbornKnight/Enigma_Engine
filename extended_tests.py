@@ -105,28 +105,28 @@ t3()
 # ===========================================================================
 print("\n[2/10] INFERENCE ENGINE EDGE CASES")
 
-@test("ForgeEngine handles streaming")
+@test("EnigmaEngine handles streaming")
 def t4():
-    from enigma_engine.core.inference import ForgeEngine
+    from enigma_engine.core.inference import EnigmaEngine
     from enigma_engine.core.model import create_model
     from enigma_engine.core.tokenizer import get_tokenizer
     
     model = create_model('nano')
     tok = get_tokenizer()
-    engine = ForgeEngine.from_model(model, tok)
+    engine = EnigmaEngine.from_model(model, tok)
     
     chunks = list(engine.stream("Hello", max_tokens=5))
     return len(chunks) > 0
 
-@test("ForgeEngine handles max_gen edge case")
+@test("EnigmaEngine handles max_gen edge case")
 def t5():
-    from enigma_engine.core.inference import ForgeEngine
+    from enigma_engine.core.inference import EnigmaEngine
     from enigma_engine.core.model import create_model
     from enigma_engine.core.tokenizer import get_tokenizer
     
     model = create_model('nano')
     tok = get_tokenizer()
-    engine = ForgeEngine.from_model(model, tok)
+    engine = EnigmaEngine.from_model(model, tok)
     
     # max_gen=0 should raise ValueError (correct behavior)
     try:
@@ -139,15 +139,15 @@ def t5():
     result = engine.generate("Hello", max_gen=1)
     return isinstance(result, str)
 
-@test("ForgeEngine handles temperature extremes")
+@test("EnigmaEngine handles temperature extremes")
 def t6():
-    from enigma_engine.core.inference import ForgeEngine
+    from enigma_engine.core.inference import EnigmaEngine
     from enigma_engine.core.model import create_model
     from enigma_engine.core.tokenizer import get_tokenizer
     
     model = create_model('nano')
     tok = get_tokenizer()
-    engine = ForgeEngine.from_model(model, tok)
+    engine = EnigmaEngine.from_model(model, tok)
     
     # Low temperature
     result1 = engine.generate("Test", max_gen=5, temperature=0.01)
@@ -473,12 +473,12 @@ print("\n[10/10] INTEGRATION TESTS")
 def t28():
     from enigma_engine.core.model import create_model
     from enigma_engine.core.tokenizer import get_tokenizer
-    from enigma_engine.core.inference import ForgeEngine
+    from enigma_engine.core.inference import EnigmaEngine
     
     # Create all components
     model = create_model('nano')
     tok = get_tokenizer()
-    engine = ForgeEngine.from_model(model, tok)
+    engine = EnigmaEngine.from_model(model, tok)
     
     # Full generation
     result = engine.generate("Hello", max_gen=5)

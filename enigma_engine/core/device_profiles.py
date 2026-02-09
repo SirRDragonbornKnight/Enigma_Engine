@@ -242,7 +242,7 @@ DEVICE_PROFILES: dict[DeviceClass, ProfileSettings] = {
         default_max_tokens=1024,
     ),
     DeviceClass.DATACENTER: ProfileSettings(
-        recommended_model_size="titan",
+        recommended_model_size="omega",
         max_model_params=70_000_000_000,
         max_batch_size=32,
         max_sequence_length=32768,

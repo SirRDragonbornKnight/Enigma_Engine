@@ -19,21 +19,21 @@ class TestModelToInference:
     
     def test_model_in_engine(self):
         """Test that engine uses correct model."""
-        from enigma_engine.core.inference import ForgeEngine
+        from enigma_engine.core.inference import EnigmaEngine
         from enigma_engine.core.model import Enigma
         
         try:
-            engine = ForgeEngine()
+            engine = EnigmaEngine()
         except FileNotFoundError:
             pytest.skip("No trained model available")
         assert isinstance(engine.model, Enigma)
     
     def test_tokenizer_vocab_matches_model(self):
         """Test tokenizer vocab matches model embedding."""
-        from enigma_engine.core.inference import ForgeEngine
+        from enigma_engine.core.inference import EnigmaEngine
         
         try:
-            engine = ForgeEngine()
+            engine = EnigmaEngine()
         except FileNotFoundError:
             pytest.skip("No trained model available")
         tok_vocab = getattr(engine.tokenizer, 'vocab_size', None) or getattr(engine.tokenizer, 'n_vocab', 32000)
@@ -44,10 +44,10 @@ class TestModelToInference:
     
     def test_full_generation_pipeline(self):
         """Test full pipeline from prompt to text."""
-        from enigma_engine.core.inference import ForgeEngine
+        from enigma_engine.core.inference import EnigmaEngine
         
         try:
-            engine = ForgeEngine()
+            engine = EnigmaEngine()
         except FileNotFoundError:
             pytest.skip("No trained model available")
         
@@ -136,10 +136,10 @@ class TestConfigIntegration:
     def test_config_affects_model(self):
         """Test that CONFIG affects model creation."""
         from enigma_engine.config import CONFIG
-        from enigma_engine.core.inference import ForgeEngine
+        from enigma_engine.core.inference import EnigmaEngine
         
         try:
-            engine = ForgeEngine()
+            engine = EnigmaEngine()
         except FileNotFoundError:
             pytest.skip("No trained model available")
         
@@ -154,10 +154,10 @@ class TestEndToEnd:
     
     def test_conversation_flow(self):
         """Test a full conversation flow."""
-        from enigma_engine.core.inference import ForgeEngine
+        from enigma_engine.core.inference import EnigmaEngine
         
         try:
-            engine = ForgeEngine()
+            engine = EnigmaEngine()
         except FileNotFoundError:
             pytest.skip("No trained model available")
         
@@ -177,10 +177,10 @@ class TestEndToEnd:
     
     def test_streaming_generation(self):
         """Test streaming generation collects all tokens."""
-        from enigma_engine.core.inference import ForgeEngine
+        from enigma_engine.core.inference import EnigmaEngine
         
         try:
-            engine = ForgeEngine()
+            engine = EnigmaEngine()
         except FileNotFoundError:
             pytest.skip("No trained model available")
         

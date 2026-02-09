@@ -137,24 +137,24 @@ t8()
 # ===========================================================================
 print("\n[4/15] INFERENCE")
 
-@test("ForgeEngine.from_model creates engine")
+@test("EnigmaEngine.from_model creates engine")
 def t9():
     from enigma_engine.core.model import create_model
     from enigma_engine.core.tokenizer import get_tokenizer
-    from enigma_engine.core.inference import ForgeEngine
+    from enigma_engine.core.inference import EnigmaEngine
     model = create_model('nano')
     tok = get_tokenizer()
-    engine = ForgeEngine.from_model(model, tok)
+    engine = EnigmaEngine.from_model(model, tok)
     return engine is not None and engine.model is not None
 
-@test("ForgeEngine.generate produces text")
+@test("EnigmaEngine.generate produces text")
 def t10():
     from enigma_engine.core.model import create_model
     from enigma_engine.core.tokenizer import get_tokenizer
-    from enigma_engine.core.inference import ForgeEngine
+    from enigma_engine.core.inference import EnigmaEngine
     model = create_model('nano')
     tok = get_tokenizer()
-    engine = ForgeEngine.from_model(model, tok)
+    engine = EnigmaEngine.from_model(model, tok)
     result = engine.generate("Hello", max_gen=10)
     return isinstance(result, str) and len(result) > 0
 

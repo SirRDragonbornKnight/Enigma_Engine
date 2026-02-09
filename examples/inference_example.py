@@ -53,7 +53,7 @@ class InferenceConfig:
 # Simulated Inference Engine
 # =============================================================================
 
-class ForgeEngine:
+class EnigmaEngine:
     """
     Enigma AI Engine inference engine.
     
@@ -73,7 +73,7 @@ class ForgeEngine:
         self.specialized_models: Dict[str, Any] = {}
     
     def _log(self, message: str):
-        print(f"[ForgeEngine] {message}")
+        print(f"[EnigmaEngine] {message}")
     
     def load(self, model_path: Optional[str] = None) -> bool:
         """
@@ -309,7 +309,7 @@ class ModelRegistry:
     """
     
     def __init__(self):
-        self.models: Dict[str, ForgeEngine] = {}
+        self.models: Dict[str, EnigmaEngine] = {}
         self.router = ToolRouter()
     
     def _log(self, message: str):
@@ -319,7 +319,7 @@ class ModelRegistry:
         """Load a model with a given name."""
         self._log(f"Loading model '{name}' from {model_path}")
         
-        engine = ForgeEngine()
+        engine = EnigmaEngine()
         if engine.load(model_path):
             self.models[name] = engine
             return True
@@ -381,7 +381,7 @@ def example_basic_inference():
         temperature=0.7
     )
     
-    engine = ForgeEngine(config)
+    engine = EnigmaEngine(config)
     engine.load()
     
     # Generate text
@@ -398,7 +398,7 @@ def example_generation_params():
     print("Example 2: Generation Parameters")
     print("="*60)
     
-    engine = ForgeEngine()
+    engine = EnigmaEngine()
     engine.load()
     
     prompt = "Write a creative story about a robot"
@@ -422,7 +422,7 @@ def example_streaming():
     print("Example 3: Streaming Generation")
     print("="*60)
     
-    engine = ForgeEngine()
+    engine = EnigmaEngine()
     engine.load()
     
     prompt = "Explain how computers work"
@@ -494,7 +494,7 @@ def example_batch():
     print("Example 6: Batch Inference")
     print("="*60)
     
-    engine = ForgeEngine()
+    engine = EnigmaEngine()
     engine.load()
     
     prompts = [
@@ -524,12 +524,12 @@ def example_forge_integration():
     
     print("For actual Enigma AI Engine inference:")
     print("""
-    from enigma_engine.core.inference import ForgeEngine
+    from enigma_engine.core.inference import EnigmaEngine
     from enigma_engine.core.tool_router import ToolRouter, get_router
     from enigma_engine.core.model_registry import ModelRegistry
     
     # Basic inference
-    engine = ForgeEngine()
+    engine = EnigmaEngine()
     engine.load("models/forge-small")
     
     response = engine.generate(
@@ -544,7 +544,7 @@ def example_forge_integration():
         print(token, end="")
     
     # With tool routing
-    engine = ForgeEngine(use_routing=True)
+    engine = EnigmaEngine(use_routing=True)
     engine.load("models/forge-small")
     engine.load_router("models/router")
     

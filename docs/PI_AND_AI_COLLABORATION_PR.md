@@ -124,10 +124,10 @@ result = protocol.request_collaboration(
 ### 3. Auto-Detection in Inference (inference.py)
 
 ```python
-from enigma_engine.core.inference import ForgeEngine
+from enigma_engine.core.inference import EnigmaEngine
 
 # Auto-detect hardware and configure optimally
-engine = ForgeEngine(model_size="auto")
+engine = EnigmaEngine(model_size="auto")
 # On Pi 4: Loads pi_4 preset with int8 quantization
 # On Desktop: Loads medium/large with no quantization
 # On GPU Server: Loads xl with fp16
@@ -164,7 +164,7 @@ engine = ForgeEngine(model_size="auto")
 ├─────────────────────────────────────────────────────────────────────────────┤
 │  INFERENCE ENGINE                                                           │
 │  inference.py                                                               │
-│  └─► ForgeEngine(model_size="auto")                                        │
+│  └─► EnigmaEngine(model_size="auto")                                        │
 │      ├─► Detects hardware automatically                                    │
 │      ├─► Selects optimal model size                                        │
 │      └─► Applies quantization if needed                                    │
@@ -195,10 +195,10 @@ engine = ForgeEngine(model_size="auto")
 
 ```python
 # On Raspberry Pi 4
-from enigma_engine.core.inference import ForgeEngine
+from enigma_engine.core.inference import EnigmaEngine
 
 # Auto-detects Pi 4, uses pi_4 preset with int8 quantization
-engine = ForgeEngine(model_size="auto")
+engine = EnigmaEngine(model_size="auto")
 
 response = engine.generate("Hello, how are you?")
 print(response)
@@ -246,7 +246,7 @@ python -c "from enigma_engine.core.hardware_detection import detect_hardware; pr
 python -c "from enigma_engine.core.model import MODEL_PRESETS; print('pi_4' in MODEL_PRESETS)"
 
 # Test auto-detection in inference
-python -c "from enigma_engine.core.inference import ForgeEngine; print('auto mode available')"
+python -c "from enigma_engine.core.inference import EnigmaEngine; print('auto mode available')"
 
 # Test AI collaboration protocol
 python -c "from enigma_engine.comms.ai_collaboration import AICollaborationProtocol; print(AICollaborationProtocol('test'))"

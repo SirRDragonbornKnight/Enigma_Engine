@@ -164,9 +164,9 @@ class InferenceWorker:
     def _load_model(self):
         """Load the inference model."""
         try:
-            from ..core.inference import ForgeEngine
+            from ..core.inference import EnigmaEngine
             
-            self._engine = ForgeEngine()
+            self._engine = EnigmaEngine()
             self._engine.load(self.model_path)
             
             self._model_info = {
