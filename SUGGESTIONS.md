@@ -464,7 +464,10 @@ All subprocess and HTTP calls now have proper timeouts.
 - No hardcoded credentials (all are enums or docstring examples)
 - File handles properly closed (with statements or finally blocks)
 - Sockets properly closed
+- All threads are daemon=True (won't block app exit)
+- Temp files properly cleaned up (context managers or explicit cleanup)
+- Pickle loads are for local app caches only (not user data)
 
-**Estimated remaining sessions: ~5** (focus: file splits, modularization, edge cases)
+**Estimated remaining sessions: ~4** (focus: file splits, modularization, edge cases)
 
 Say "let it ride" to continue!
