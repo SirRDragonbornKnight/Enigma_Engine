@@ -63,7 +63,7 @@ class UserProfile:
     display_name: str = ""
     role: UserRole = UserRole.USER
     created_at: float = field(default_factory=time.time)
-    last_login: float = None
+    last_login: Optional[float] = None
     avatar_url: str = ""
     preferences: dict[str, Any] = field(default_factory=dict)
     
@@ -90,7 +90,7 @@ class Session:
     session_id: str
     user_id: str
     created_at: float = field(default_factory=time.time)
-    expires_at: float = None
+    expires_at: Optional[float] = None
     ip_address: str = ""
     user_agent: str = ""
     is_active: bool = True
@@ -101,6 +101,8 @@ class Session:
     
     @property
     def is_expired(self) -> bool:
+        if self.expires_at is None:
+            return False
         return time.time() > self.expires_at
 
 
@@ -113,8 +115,8 @@ class APIKey:
     name: str
     scopes: list[str] = field(default_factory=list)
     created_at: float = field(default_factory=time.time)
-    last_used: float = None
-    expires_at: float = None
+    last_used: Optional[float] = None
+    expires_at: Optional[float] = None
     is_active: bool = True
 
 
@@ -125,7 +127,7 @@ class PasswordHasher:
     ALGORITHM = "sha256"
     
     @classmethod
-    def hash_password(cls, password: str, salt: bytes = None) -> tuple:
+    def hash_password(cls, password: str, salt: Optional[bytes] = None) -> tuple:
         """Hash password with salt."""
         if salt is None:
             salt = secrets.token_bytes(32)
@@ -154,7 +156,7 @@ class PasswordHasher:
 class TokenManager:
     """JWT token management."""
     
-    def __init__(self, secret_key: str = None):
+    def __init__(self, secret_key: Optional[str] = None):
         self.secret_key = secret_key or secrets.token_hex(32)
         self._algorithm = "HS256"
     
@@ -162,7 +164,7 @@ class TokenManager:
         self,
         user_id: str,
         expires_hours: int = 24,
-        extra_claims: dict = None
+        extra_claims: Optional[dict] = None
     ) -> str:
         """Create JWT token."""
         if not HAS_JWT:
@@ -514,7 +516,7 @@ if HAS_SQLITE:
         def __init__(
             self,
             db_path: str = "data/users.db",
-            secret_key: str = None
+            secret_key: Optional[str] = None
         ):
             Path(db_path).parent.mkdir(parents=True, exist_ok=True)
             
@@ -677,7 +679,7 @@ else:
 
 def create_user_manager(
     db_path: str = "data/users.db",
-    secret_key: str = None
+    secret_key: Optional[str] = None
 ) -> 'UserManager':
     """Create user manager instance."""
     if not HAS_SQLITE:
