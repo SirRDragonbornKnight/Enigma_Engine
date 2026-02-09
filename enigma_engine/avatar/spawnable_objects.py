@@ -89,6 +89,44 @@ except ImportError:
     HAS_SVG = False
 
 
+@dataclass
+class SpawnSettings:
+    """Settings for object spawning - AI should know when disabled."""
+    allow_spawned_objects: bool = True   # Master toggle for all spawning
+    allow_held_items: bool = True        # Can AI hold things?
+    allow_screen_effects: bool = True    # Particles, effects, etc.
+    allow_notes: bool = True             # Sticky notes, signs
+    allow_bubbles: bool = True           # Speech/thought bubbles
+    gaming_mode: bool = False            # Disable all overlays except avatar
+    
+    def is_type_allowed(self, obj_type: 'ObjectType') -> tuple[bool, str]:
+        """Check if object type is allowed and return reason if not."""
+        if self.gaming_mode:
+            return False, "Gaming mode is active - object spawning disabled"
+        
+        if not self.allow_spawned_objects:
+            return False, "Object spawning is currently disabled by user"
+        
+        # Check specific categories
+        if obj_type in (ObjectType.HELD_ITEM,):
+            if not self.allow_held_items:
+                return False, "Held items are currently disabled by user"
+        
+        elif obj_type in (ObjectType.EFFECT,):
+            if not self.allow_screen_effects:
+                return False, "Screen effects are currently disabled by user"
+        
+        elif obj_type in (ObjectType.NOTE, ObjectType.SIGN):
+            if not self.allow_notes:
+                return False, "Notes/signs are currently disabled by user"
+        
+        elif obj_type in (ObjectType.SPEECH_BUBBLE, ObjectType.THOUGHT_BUBBLE):
+            if not self.allow_bubbles:
+                return False, "Speech bubbles are currently disabled by user"
+        
+        return True, ""
+
+
 class ObjectType(Enum):
     """Types of spawnable objects."""
     SPEECH_BUBBLE = auto()      # Text bubble
@@ -148,15 +186,18 @@ class SpawnedObject:
     scale: float = 1.0
     opacity: float = 1.0
     
+    # Spawn blocking (for AI feedback)
+    blocked: bool = False
+    blocked_reason: str = ""
+    
     def is_expired(self) -> bool:
         """Check if temporary object has expired."""
         if not self.temporary or self.lifetime <= 0:
             return False
         return time.time() - self.created_at > self.lifetime
 
-
 class ObjectWindow(QWidget):
-    """Window for displaying a spawned object."""
+    """Window for displaying a spawned object with pixel-perfect click detection."""
     
     clicked = pyqtSignal(str)  # Emits object ID
     
@@ -166,6 +207,8 @@ class ObjectWindow(QWidget):
         super().__init__(parent)
         
         self.obj = obj
+        self._rendered_pixmap: Optional[QPixmap] = None  # Cache for hit testing
+        self._is_dragging = False
         
         # Frameless, transparent, always on top
         self.setWindowFlags(
@@ -190,11 +233,100 @@ class ObjectWindow(QWidget):
         self._anim_phase += 0.1
         self.update()
     
-    def paintEvent(self, event):
-        """Draw the object."""
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
+    def nativeEvent(self, eventType, message):
+        """Handle Windows native events for per-pixel hit testing.
         
+        WM_NCHITTEST determines what part of the window the mouse is over.
+        Return HTTRANSPARENT for transparent pixels so clicks pass through.
+        """
+        import sys
+        if sys.platform != 'win32':
+            return super().nativeEvent(eventType, message)
+        
+        try:
+            import ctypes
+            from ctypes import wintypes
+            
+            WM_NCHITTEST = 0x0084
+            HTTRANSPARENT = -1
+            HTCLIENT = 1
+            
+            msg = ctypes.cast(int(message), ctypes.POINTER(wintypes.MSG)).contents
+            
+            if msg.message == WM_NCHITTEST:
+                # Don't do hit testing while dragging
+                if self._is_dragging:
+                    return super().nativeEvent(eventType, message)
+                
+                # Get mouse position from lParam
+                x = msg.lParam & 0xFFFF
+                y = (msg.lParam >> 16) & 0xFFFF
+                
+                # Handle signed coordinates (negative on multi-monitor)
+                if x > 32767:
+                    x -= 65536
+                if y > 32767:
+                    y -= 65536
+                
+                # Convert screen coords to widget coords
+                local_pos = self.mapFromGlobal(QPoint(x, y))
+                
+                # Check if pixel is opaque
+                if not self._is_pixel_opaque(local_pos.x(), local_pos.y()):
+                    return True, HTTRANSPARENT  # Click passes through
+                
+                return True, HTCLIENT  # Handle this click
+                
+        except Exception:
+            pass
+        
+        return super().nativeEvent(eventType, message)
+    
+    def _is_pixel_opaque(self, x: int, y: int, threshold: int = 10) -> bool:
+        """Check if the pixel at (x, y) is opaque (visible part of object).
+        
+        Args:
+            x, y: Position relative to widget
+            threshold: Alpha value below which pixel is considered transparent
+            
+        Returns:
+            True if pixel is opaque (should handle click), False if transparent
+        """
+        if not self._rendered_pixmap or self._rendered_pixmap.isNull():
+            return False
+        
+        # Bounds check
+        if x < 0 or x >= self._rendered_pixmap.width():
+            return False
+        if y < 0 or y >= self._rendered_pixmap.height():
+            return False
+        
+        # Get pixel color from cached pixmap
+        img = self._rendered_pixmap.toImage()
+        if img.isNull():
+            return False
+        
+        pixel = img.pixelColor(x, y)
+        return pixel.alpha() > threshold
+    
+    def paintEvent(self, event):
+        """Draw the object and cache for hit testing."""
+        # Create pixmap to render into (for hit testing cache)
+        self._rendered_pixmap = QPixmap(self.size())
+        self._rendered_pixmap.fill(Qt.transparent)
+        
+        # Render to cached pixmap
+        cache_painter = QPainter(self._rendered_pixmap)
+        cache_painter.setRenderHint(QPainter.Antialiasing)
+        self._draw_content(cache_painter)
+        cache_painter.end()
+        
+        # Draw cached pixmap to screen
+        painter = QPainter(self)
+        painter.drawPixmap(0, 0, self._rendered_pixmap)
+    
+    def _draw_content(self, painter: QPainter):
+        """Draw the object content."""
         # Apply transformations
         center = self.rect().center()
         painter.translate(center)
@@ -448,12 +580,16 @@ class ObjectWindow(QWidget):
 class ObjectSpawner:
     """
     Creates and manages spawned objects for the avatar.
+    
+    Settings can be used to disable specific object types. AI gets feedback
+    when attempting to spawn disabled types.
     """
     
-    def __init__(self):
+    def __init__(self, settings: Optional[SpawnSettings] = None):
         self._objects: dict[str, SpawnedObject] = {}
         self._windows: dict[str, ObjectWindow] = {}
         self._next_id = 0
+        self._settings = settings or SpawnSettings()
         
         # Physics/cleanup timer
         self._running = False
@@ -461,6 +597,20 @@ class ObjectSpawner:
         
         # Avatar attachment callback
         self._avatar_position_callback: Optional[Callable] = None
+    
+    @property
+    def settings(self) -> SpawnSettings:
+        """Get spawn settings."""
+        return self._settings
+    
+    @settings.setter
+    def settings(self, value: SpawnSettings):
+        """Set spawn settings."""
+        self._settings = value
+    
+    def _check_allowed(self, obj_type: ObjectType) -> tuple[bool, str]:
+        """Check if object type is allowed. Returns (allowed, reason_if_not)."""
+        return self._settings.is_type_allowed(obj_type)
     
     def _generate_id(self) -> str:
         """Generate unique object ID."""
@@ -735,7 +885,23 @@ class ObjectSpawner:
         return items.get(item_type, items.get("heart", ""))
     
     def _spawn(self, obj: SpawnedObject) -> SpawnedObject:
-        """Actually spawn the object on screen."""
+        """Actually spawn the object on screen.
+        
+        Checks settings before spawning. If blocked, the object is returned
+        with a special 'blocked' flag set so AI knows why it failed.
+        """
+        # Check if this type is allowed
+        allowed, reason = self._check_allowed(obj.object_type)
+        if not allowed:
+            # Mark as blocked - AI tools can check this
+            obj.blocked = True
+            obj.blocked_reason = reason
+            return obj
+        
+        # Clear any blocked flags
+        obj.blocked = False
+        obj.blocked_reason = ""
+        
         self._objects[obj.id] = obj
         
         if HAS_PYQT:

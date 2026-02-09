@@ -43,6 +43,7 @@ from PyQt5.QtCore import QMimeData, Qt, QUrl
 from PyQt5.QtGui import QClipboard, QImage, QKeySequence, QPixmap
 from PyQt5.QtWidgets import (
     QApplication,
+    QComboBox,
     QFileDialog,
     QFrame,
     QGroupBox,
@@ -280,28 +281,51 @@ def _create_header_section(parent, layout):
     parent.chat_model_label.setStyleSheet(STYLE_MODEL_LABEL)
     header_layout.addWidget(parent.chat_model_label)
     
-    # Persona indicator
-    try:
-        from ...core.persona import get_persona_manager
-        manager = get_persona_manager()
-        persona = manager.get_current_persona()
-        persona_text = f"[Persona] {persona.name}"
-    except Exception:
-        persona_text = "[Persona] Default"
-    
-    parent.chat_persona_label = QLabel(persona_text)
-    parent.chat_persona_label.setStyleSheet("""
-        QLabel {
+    # Persona dropdown selector
+    parent.persona_combo = QComboBox()
+    parent.persona_combo.setToolTip("Switch AI persona during conversation")
+    parent.persona_combo.setMinimumWidth(120)
+    parent.persona_combo.setMaximumWidth(180)
+    parent.persona_combo.setStyleSheet("""
+        QComboBox {
             color: #a6e3a1;
             font-weight: bold;
-            font-size: 12px;
+            font-size: 11px;
             padding: 4px 8px;
-            background: rgba(166, 227, 161, 0.1);
+            background: rgba(166, 227, 161, 0.15);
+            border: 1px solid rgba(166, 227, 161, 0.3);
             border-radius: 4px;
         }
+        QComboBox:hover {
+            background: rgba(166, 227, 161, 0.25);
+            border-color: rgba(166, 227, 161, 0.5);
+        }
+        QComboBox::drop-down {
+            border: none;
+            width: 20px;
+        }
+        QComboBox::down-arrow {
+            image: none;
+            border-left: 4px solid transparent;
+            border-right: 4px solid transparent;
+            border-top: 6px solid #a6e3a1;
+            margin-right: 5px;
+        }
+        QComboBox QAbstractItemView {
+            background: #313244;
+            border: 1px solid #45475a;
+            selection-background-color: rgba(166, 227, 161, 0.3);
+            color: #cdd6f4;
+        }
     """)
-    parent.chat_persona_label.setToolTip("Current AI persona - manage in Persona tab")
-    header_layout.addWidget(parent.chat_persona_label)
+    
+    # Populate persona dropdown
+    _populate_persona_combo(parent)
+    
+    # Connect persona change
+    parent.persona_combo.currentTextChanged.connect(lambda name: _on_persona_changed(parent, name))
+    
+    header_layout.addWidget(parent.persona_combo)
     
     header_layout.addStretch()
     
@@ -2003,6 +2027,98 @@ def _clear_prompt_history(prompt_list):
     if reply == QMessageBox.Yes:
         _save_prompt_history([])
         prompt_list.clear()
+
+
+def _populate_persona_combo(parent):
+    """Populate the persona dropdown with available personas."""
+    try:
+        from ...utils.personas import PersonaManager, PREDEFINED_PERSONAS
+        
+        manager = PersonaManager()
+        all_personas = manager.list_personas()
+        
+        parent.persona_combo.blockSignals(True)
+        parent.persona_combo.clear()
+        
+        # Add all available personas
+        for name, persona in sorted(all_personas.items()):
+            parent.persona_combo.addItem(persona.name, name)
+        
+        # Try to select current persona
+        try:
+            from ...core.persona import get_persona_manager
+            pm = get_persona_manager()
+            current = pm.get_current_persona()
+            if current:
+                idx = parent.persona_combo.findText(current.name)
+                if idx >= 0:
+                    parent.persona_combo.setCurrentIndex(idx)
+        except Exception:
+            # Default to first persona
+            if parent.persona_combo.count() > 0:
+                parent.persona_combo.setCurrentIndex(0)
+        
+        parent.persona_combo.blockSignals(False)
+        
+    except Exception as e:
+        print(f"[Chat] Failed to populate personas: {e}")
+        parent.persona_combo.addItem("Default", "default")
+
+
+def _on_persona_changed(parent, persona_name: str):
+    """Handle persona selection change."""
+    if not persona_name:
+        return
+        
+    try:
+        from ...utils.personas import PersonaManager
+        
+        manager = PersonaManager()
+        # Find persona key by display name
+        all_personas = manager.list_personas()
+        persona_key = None
+        for key, persona in all_personas.items():
+            if persona.name == persona_name:
+                persona_key = key
+                break
+        
+        if not persona_key:
+            return
+        
+        persona = manager.get_persona(persona_key)
+        if not persona:
+            return
+        
+        # Update the core persona manager (uses string IDs)
+        try:
+            from ...core.persona import get_persona_manager
+            pm = get_persona_manager()
+            # Core persona manager uses persona_id strings
+            # Check if this persona exists in core, if not create it
+            if not pm.persona_exists(persona_key):
+                # Create the persona in core system with utils persona data
+                pm.create_persona(
+                    persona_id=persona_key,
+                    name=persona.name,
+                    description=persona.description,
+                    system_prompt=persona.system_prompt,
+                    traits=persona.traits
+                )
+            pm.set_current_persona(persona_key)
+        except Exception as e:
+            print(f"[Chat] Core persona manager error: {e}")
+            pass  # Core persona manager may not be available
+        
+        # Update status
+        if hasattr(parent, 'chat_status'):
+            parent.chat_status.setText(f"Switched to persona: {persona.name}")
+        
+        # Log the change
+        if hasattr(parent, 'log_terminal'):
+            parent.log_terminal(f"Persona changed to: {persona.name}", "info")
+            
+    except Exception as e:
+        print(f"[Chat] Failed to change persona: {e}")
 
 
 def _new_chat(parent):

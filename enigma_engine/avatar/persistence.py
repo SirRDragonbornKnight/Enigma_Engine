@@ -398,3 +398,78 @@ def write_avatar_state_for_ai() -> None:
     
     with open(state_path, 'w') as f:
         json.dump(state, f, indent=2)
+
+
+def write_touch_event_for_ai(touch_type: str, region: str = "avatar") -> None:
+    """Write a touch event to a JSON file that AI can read and respond to.
+    
+    Args:
+        touch_type: Type of touch - 'tap', 'double_tap', 'hold', 'pet'
+        region: Body region touched (for BoneHitManager) or 'avatar' for general
+    
+    The AI can read this file to see recent touch events and respond appropriately.
+    Touch events expire after 5 seconds.
+    """
+    import json
+    import time
+    from pathlib import Path
+    
+    event_path = Path("data/avatar/touch_event.json")
+    event_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Human-readable descriptions for each touch type
+    descriptions = {
+        'tap': "User tapped the avatar",
+        'double_tap': "User double-tapped the avatar",
+        'hold': "User is holding/pressing on the avatar",
+        'pet': "User is petting/repeatedly tapping the avatar (headpat!)",
+    }
+    
+    # Suggested AI responses (personality-dependent)
+    response_hints = {
+        'tap': ["Acknowledge the tap", "Look at the user", "Small reaction"],
+        'double_tap': ["Express surprise", "Playful reaction", "Look curious"],
+        'hold': ["Show affection", "Comfort response", "Lean into touch"],
+        'pet': ["Happy wiggle", "Express joy", "Thank the user for pets"],
+    }
+    
+    event = {
+        'timestamp': time.time(),
+        'touch_type': touch_type,
+        'region': region,
+        'description': descriptions.get(touch_type, f"User touched ({touch_type})"),
+        'response_hints': response_hints.get(touch_type, []),
+        'expires_at': time.time() + 5.0,  # Event expires after 5 seconds
+    }
+    
+    with open(event_path, 'w') as f:
+        json.dump(event, f, indent=2)
+    
+    print(f"[Touch] {descriptions.get(touch_type, touch_type)} on {region}")
+
+
+def get_recent_touch_event() -> Optional[dict]:
+    """Get the most recent touch event if it hasn't expired.
+    
+    Returns:
+        Touch event dict if valid, None if no recent event or expired.
+    """
+    import json
+    import time
+    from pathlib import Path
+    
+    event_path = Path("data/avatar/touch_event.json")
+    if not event_path.exists():
+        return None
+    
+    try:
+        with open(event_path, 'r') as f:
+            event = json.load(f)
+        
+        # Check if expired
+        if time.time() > event.get('expires_at', 0):
+            return None
+        
+        return event
+    except Exception:
+        return None

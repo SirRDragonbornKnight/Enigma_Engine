@@ -144,3 +144,101 @@ class AvatarEmotionTool(Tool):
             return {"success": False, "error": f"Invalid emotion '{emotion}'. Valid: {self.VALID_EMOTIONS}"}
         
         return _send_avatar_command("emotion", emotion)
+
+
+class AdjustIdleAnimationTool(Tool):
+    """
+    Adjust the avatar's idle animations - breathing, blinking, sway, and micro-expressions.
+    AI can use this to show emotion through subtle animation changes.
+    """
+    
+    name = "adjust_idle_animation"
+    description = "Adjust avatar idle animations - breathing rate, sway, blinking. Use to show mood through subtle movement (calm = slow breathing, nervous = fast breathing)"
+    parameters = {
+        "breath_rate": "Breaths per second (0.1=calm, 0.2=normal, 0.4=excited). Optional.",
+        "sway_enabled": "Enable subtle idle sway (true/false). Optional.",
+        "sway_amount": "How much to sway (0.001=subtle, 0.005=normal, 0.01=noticeable). Optional.",
+        "blink_rate": "Blinks per second (0.03=slow, 0.05=normal, 0.1=nervous). Optional.",
+        "look_enabled": "Enable random look-around (true/false). Optional.",
+        "micro_expressions": "Enable subtle micro-expressions (true/false). Optional.",
+    }
+    
+    def execute(
+        self, 
+        breath_rate: float = None,
+        sway_enabled: bool = None,
+        sway_amount: float = None,
+        blink_rate: float = None,
+        look_enabled: bool = None,
+        micro_expressions: bool = None,
+        **kwargs
+    ) -> dict[str, Any]:
+        try:
+            from ..avatar.procedural_animation import get_procedural_animator, ProceduralConfig
+            
+            animator = get_procedural_animator()
+            config = animator.config
+            changes = []
+            
+            # Apply changes
+            if breath_rate is not None:
+                breath_rate = max(0.05, min(0.5, float(breath_rate)))
+                config.breath_rate = breath_rate
+                changes.append(f"breath_rate={breath_rate}")
+            
+            if sway_enabled is not None:
+                config.sway_enabled = bool(sway_enabled)
+                changes.append(f"sway_enabled={sway_enabled}")
+            
+            if sway_amount is not None:
+                sway_amount = max(0.001, min(0.02, float(sway_amount)))
+                config.sway_amount = sway_amount
+                changes.append(f"sway_amount={sway_amount}")
+            
+            if blink_rate is not None:
+                blink_rate = max(0.01, min(0.2, float(blink_rate)))
+                config.blink_rate = blink_rate
+                changes.append(f"blink_rate={blink_rate}")
+            
+            if look_enabled is not None:
+                config.look_enabled = bool(look_enabled)
+                changes.append(f"look_enabled={look_enabled}")
+            
+            if micro_expressions is not None:
+                config.micro_expression_rate = 0.02 if micro_expressions else 0.0
+                changes.append(f"micro_expressions={micro_expressions}")
+            
+            # Re-apply config to animator (triggers controller recreation)
+            animator.config = config
+            
+            if changes:
+                return {
+                    "success": True, 
+                    "message": f"Adjusted idle animation: {', '.join(changes)}",
+                    "current_settings": {
+                        "breath_rate": config.breath_rate,
+                        "sway_enabled": config.sway_enabled,
+                        "sway_amount": config.sway_amount,
+                        "blink_rate": config.blink_rate,
+                        "look_enabled": config.look_enabled,
+                        "micro_expression_rate": config.micro_expression_rate,
+                    }
+                }
+            else:
+                return {
+                    "success": True,
+                    "message": "No changes specified. Current settings returned.",
+                    "current_settings": {
+                        "breath_rate": config.breath_rate,
+                        "sway_enabled": config.sway_enabled,
+                        "sway_amount": config.sway_amount,
+                        "blink_rate": config.blink_rate,
+                        "look_enabled": config.look_enabled,
+                        "micro_expression_rate": config.micro_expression_rate,
+                    }
+                }
+                
+        except ImportError:
+            return {"success": False, "error": "Procedural animation system not available"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}

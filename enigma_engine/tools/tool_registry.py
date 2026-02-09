@@ -96,6 +96,7 @@ class ToolRegistry:
 
         # Avatar tools - AI can control and customize the desktop avatar
         from .avatar_tools import (
+            AdjustIdleAnimationTool,
             AvatarControlTool,
             AvatarCustomizeTool,
             AvatarEmotionTool,
@@ -318,6 +319,7 @@ class ToolRegistry:
             AvatarCustomizeTool(),
             AvatarGestureTool(),
             AvatarEmotionTool(),
+            AdjustIdleAnimationTool(),
             # Self-Modification - AI customizes itself
             SetPersonalityTool(),
             SetAvatarPreferenceTool(),

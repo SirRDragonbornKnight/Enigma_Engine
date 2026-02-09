@@ -390,7 +390,7 @@ class GenerateAvatarTool(Tool):
     description = "Generate a new 3D avatar model for myself using text description"
     parameters = {
         "description": "Description of the avatar to generate (e.g., 'friendly robot with glowing eyes')",
-        "style": "Style: realistic, cartoon, robot, creature, abstract (default: robot)",
+        "style": "Style: realistic, cartoon, robot, creature, abstract, anime, pixel, chibi, furry, mecha (default: robot)",
     }
     
     AVATAR_DIR = Path(__file__).parent.parent.parent / "data" / "avatar" / "generated"
@@ -405,6 +405,11 @@ class GenerateAvatarTool(Tool):
             "robot": "sleek robotic 3D avatar, mechanical, sci-fi,",
             "creature": "fantasy creature 3D model of",
             "abstract": "abstract geometric 3D representation of",
+            "anime": "anime-style 3D character, big expressive eyes, stylized proportions,",
+            "pixel": "voxel-based pixel art 3D character, blocky, retro game style,",
+            "chibi": "cute chibi-style 3D character, oversized head, small body, adorable,",
+            "furry": "anthropomorphic animal 3D character, furry, expressive,",
+            "mecha": "mechanical robot suit, gundam-style mecha, detailed armor plating,",
         }
         full_prompt = f"{style_prefixes.get(style, style_prefixes['robot'])} {description}"
         

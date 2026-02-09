@@ -1269,9 +1269,17 @@ class AvatarOverlayWindow(QWidget):
     - Always on top of other windows
     - Border wraps TIGHTLY around the avatar image
     - Blue border shows when resize mode is ON
+    - Touch reactions: tap, double-tap, hold, pet (repeated taps)
     """
     
     closed = pyqtSignal()
+    
+    # Touch reaction signal: (touch_type, global_pos)
+    # touch_type: 'tap', 'double_tap', 'hold', 'pet' (repeated taps)
+    touched = pyqtSignal(str, object)
+    
+    # Touch detection constants
+    HOLD_THRESHOLD_MS = 500  # Milliseconds to hold for 'hold' touch type
     
     def __init__(self):
         super().__init__(None)
@@ -1335,6 +1343,43 @@ class AvatarOverlayWindow(QWidget):
         self._use_pixel_hit_test = True
         self._is_dragging = False
         
+        # Touch detection state
+        self._touch_press_time = 0
+        self._touch_press_pos = None
+        self._touch_moved = False
+        self._last_tap_time = 0
+        self._tap_count = 0
+        
+        # Hold detection timer
+        self._hold_timer = QTimer(self)
+        self._hold_timer.setSingleShot(True)
+        self._hold_timer.timeout.connect(self._on_hold_detected)
+        
+        # Pet detection timer (resets tap count after delay)
+        self._pet_timer = QTimer(self)
+        self._pet_timer.setSingleShot(True)
+        self._pet_timer.timeout.connect(self._on_pet_timeout)
+        
+        # Connect touch signal to write events for AI
+        self.touched.connect(self._on_touched)
+        
+        # File watcher for hot-swap (reload avatar when file changes)
+        from PyQt5.QtCore import QFileSystemWatcher
+        self._file_watcher = QFileSystemWatcher(self)
+        self._file_watcher.fileChanged.connect(self._on_avatar_file_changed)
+        self._hotswap_enabled = True  # Enable by default
+        self._hotswap_debounce_timer = QTimer(self)
+        self._hotswap_debounce_timer.setSingleShot(True)
+        self._hotswap_debounce_timer.timeout.connect(self._do_hotswap_reload)
+        self._pending_hotswap_path = None
+        
+        # Crossfade state
+        self._crossfade_active = False
+        self._crossfade_old_pixmap = None
+        self._crossfade_progress = 1.0  # 0.0 = old, 1.0 = new
+        self._crossfade_timer = QTimer(self)
+        self._crossfade_timer.timeout.connect(self._update_crossfade)
+        
         # Make window layered for transparency (Windows)
         import sys
         if sys.platform == 'win32':
@@ -1367,6 +1412,50 @@ class AvatarOverlayWindow(QWidget):
             self._eye_offset_y = 0.0
             self.update()
     
+    def _on_hold_detected(self):
+        """Called when user holds on avatar long enough."""
+        if self._touch_press_pos and not self._touch_moved:
+            self.touched.emit('hold', self._touch_press_pos)
+    
+    def _on_pet_timeout(self):
+        """Called after delay to reset tap count."""
+        if self._tap_count >= 3:
+            # Already emitted 'pet' on third tap
+            pass
+        self._tap_count = 0
+    
+    def _on_touched(self, touch_type: str, global_pos):
+        """Handle touch event - write to file for AI to read."""
+        try:
+            from ....avatar.persistence import write_touch_event_for_ai
+            write_touch_event_for_ai(touch_type, region='avatar')
+        except Exception as e:
+            print(f"[Touch] Failed to write touch event: {e}")
+    
+    def _check_tap_type(self, global_pos):
+        """Determine tap type based on timing."""
+        import time
+        current_time = time.time()
+        
+        # Check for double tap (two taps within 400ms)
+        if current_time - self._last_tap_time < 0.4:
+            self._tap_count += 1
+            if self._tap_count == 2:
+                self.touched.emit('double_tap', global_pos)
+            elif self._tap_count >= 3:
+                # Repeated taps = petting (headpats!)
+                self.touched.emit('pet', global_pos)
+        else:
+            # Single tap
+            self._tap_count = 1
+            self.touched.emit('tap', global_pos)
+        
+        self._last_tap_time = current_time
+        
+        # Reset pet timer
+        self._pet_timer.stop()
+        self._pet_timer.start(600)  # Reset tap count after 600ms of no taps
+
     def _update_eye_tracking(self):
         """Update eye position based on cursor location."""
         if not self._eye_tracking_enabled:
@@ -1392,7 +1481,20 @@ class AvatarOverlayWindow(QWidget):
     
     def set_avatar_path(self, path: str):
         """Set the current avatar path and load per-avatar settings."""
+        # Stop watching old file
+        if self._avatar_path and hasattr(self, '_file_watcher'):
+            old_files = self._file_watcher.files()
+            if old_files:
+                self._file_watcher.removePaths(old_files)
+        
         self._avatar_path = path
+        
+        # Start watching new file for hot-swap
+        if path and hasattr(self, '_file_watcher') and self._hotswap_enabled:
+            from pathlib import Path
+            if Path(path).exists():
+                self._file_watcher.addPath(path)
+        
         # Load per-avatar size and position
         try:
             from ....avatar.persistence import load_avatar_settings
@@ -1405,6 +1507,101 @@ class AvatarOverlayWindow(QWidget):
             self._update_scaled_pixmap()
         except Exception:
             pass
+    
+    def set_hotswap_enabled(self, enabled: bool):
+        """Enable or disable avatar hot-swap (auto-reload on file change)."""
+        self._hotswap_enabled = enabled
+        if not enabled:
+            # Stop watching files
+            if hasattr(self, '_file_watcher'):
+                old_files = self._file_watcher.files()
+                if old_files:
+                    self._file_watcher.removePaths(old_files)
+        elif self._avatar_path:
+            # Start watching current file
+            from pathlib import Path
+            if Path(self._avatar_path).exists():
+                self._file_watcher.addPath(self._avatar_path)
+    
+    def _on_avatar_file_changed(self, path: str):
+        """Handle avatar file change - debounce and reload."""
+        if not self._hotswap_enabled:
+            return
+        
+        # Debounce rapid file changes (like during save)
+        self._pending_hotswap_path = path
+        self._hotswap_debounce_timer.stop()
+        self._hotswap_debounce_timer.start(300)  # Wait 300ms for file to settle
+    
+    def _do_hotswap_reload(self):
+        """Actually reload the avatar after debounce."""
+        path = self._pending_hotswap_path
+        if not path:
+            return
+        
+        self._pending_hotswap_path = None
+        
+        from pathlib import Path
+        if not Path(path).exists():
+            return
+        
+        print(f"[Avatar] Hot-swapping avatar: {path}")
+        
+        # Load new pixmap
+        try:
+            new_pixmap = QPixmap(path)
+            if new_pixmap.isNull():
+                return
+            
+            # Start crossfade if enabled
+            if hasattr(self, '_crossfade_timer'):
+                self._start_crossfade(new_pixmap)
+            else:
+                # Immediate swap
+                self._original_pixmap = new_pixmap
+                self._update_scaled_pixmap()
+            
+            # Re-add to watcher (file changes remove the watch)
+            if hasattr(self, '_file_watcher') and self._hotswap_enabled:
+                self._file_watcher.addPath(path)
+                
+        except Exception as e:
+            print(f"[Avatar] Hot-swap failed: {e}")
+    
+    def _start_crossfade(self, new_pixmap: QPixmap):
+        """Start crossfade animation from current to new avatar."""
+        # Store old pixmap for blending
+        if self.pixmap and not self.pixmap.isNull():
+            self._crossfade_old_pixmap = self.pixmap.copy()
+        else:
+            self._crossfade_old_pixmap = None
+        
+        # Set new avatar
+        self._original_pixmap = new_pixmap
+        self._update_scaled_pixmap()
+        
+        # Start crossfade animation
+        self._crossfade_active = True
+        self._crossfade_progress = 0.0
+        self._crossfade_timer.start(16)  # ~60 FPS
+    
+    def _update_crossfade(self):
+        """Update crossfade animation progress."""
+        if not self._crossfade_active:
+            self._crossfade_timer.stop()
+            return
+        
+        # Advance progress
+        self._crossfade_progress += 0.05  # 20 frames total (~320ms)
+        
+        if self._crossfade_progress >= 1.0:
+            # Crossfade complete
+            self._crossfade_progress = 1.0
+            self._crossfade_active = False
+            self._crossfade_old_pixmap = None
+            self._crossfade_timer.stop()
+        
+        self.update()  # Trigger repaint
         
     def set_avatar(self, pixmap: QPixmap):
         """Set avatar image and resize window to wrap tightly around it."""
@@ -1508,8 +1705,25 @@ class AvatarOverlayWindow(QWidget):
             painter.setBrush(QColor(30, 30, 46, 80))  # Semi-transparent dark
             painter.drawEllipse(x - 3, y - 3, self.pixmap.width() + 6, self.pixmap.height() + 6)
             
-            # Draw the avatar with eye tracking offset applied
-            painter.drawPixmap(x + eye_shift_x, y + eye_shift_y, self.pixmap)
+            # Handle crossfade during hot-swap
+            if getattr(self, '_crossfade_active', False) and self._crossfade_old_pixmap:
+                progress = getattr(self, '_crossfade_progress', 1.0)
+                
+                # Draw old pixmap with fading opacity
+                old_opacity = 1.0 - progress
+                if old_opacity > 0:
+                    painter.setOpacity(old_opacity)
+                    old_x = (self.width() - self._crossfade_old_pixmap.width()) // 2
+                    old_y = (self.height() - self._crossfade_old_pixmap.height()) // 2
+                    painter.drawPixmap(old_x + eye_shift_x, old_y + eye_shift_y, self._crossfade_old_pixmap)
+                
+                # Draw new pixmap with increasing opacity
+                painter.setOpacity(progress)
+                painter.drawPixmap(x + eye_shift_x, y + eye_shift_y, self.pixmap)
+                painter.setOpacity(1.0)  # Reset
+            else:
+                # Normal draw (no crossfade)
+                painter.drawPixmap(x + eye_shift_x, y + eye_shift_y, self.pixmap)
             
             # Draw border ALWAYS tight around avatar - color indicates resize mode
             pen = painter.pen()
@@ -1541,6 +1755,13 @@ class AvatarOverlayWindow(QWidget):
         except AttributeError:
             global_pos = a0.globalPos()
             local_pos = a0.pos()
+        
+        # Check if mouse moved significantly (for tap detection)
+        if self._touch_press_pos:
+            delta = global_pos - self._touch_press_pos
+            if abs(delta.x()) > 5 or abs(delta.y()) > 5:
+                self._touch_moved = True
+                self._hold_timer.stop()  # Cancel hold detection if dragging
         
         # If rotating (Shift+drag)
         if self._rotate_start_x is not None and a0.buttons() == Qt_LeftButton:
@@ -1617,7 +1838,28 @@ class AvatarOverlayWindow(QWidget):
         a0.accept()
             
     def mouseReleaseEvent(self, a0):  # type: ignore
-        """End drag or resize."""
+        """End drag or resize, and detect touch type."""
+        # Stop hold timer
+        self._hold_timer.stop()
+        
+        # Check for tap (didn't move much, wasn't a long hold)
+        if not self._touch_moved and self._touch_press_pos:
+            import time as time_module
+            try:
+                global_pos = a0.globalPosition().toPoint()
+            except AttributeError:
+                global_pos = a0.globalPos()
+            
+            press_duration = time_module.time() - self._touch_press_time
+            
+            # If it wasn't a hold (timer would have fired), it's a tap
+            if press_duration < (self.HOLD_THRESHOLD_MS / 1000.0):
+                self._check_tap_type(global_pos)
+        
+        # Reset touch state
+        self._touch_press_pos = None
+        self._touch_moved = False
+        
         # Save position if we were dragging (per-avatar)
         if self._drag_pos is not None:
             try:
@@ -1983,7 +2225,8 @@ class AvatarOverlayWindow(QWidget):
         return pixel.alpha() > threshold
     
     def mousePressEvent(self, a0):  # type: ignore
-        """Start drag to move, resize, or rotate (Shift+drag when enabled)."""
+        """Start drag to move, resize, rotate (Shift+drag), or detect touch."""
+        import time as time_module
         if a0.button() == Qt_LeftButton:
             try:
                 global_pos = a0.globalPosition().toPoint()
@@ -1991,6 +2234,11 @@ class AvatarOverlayWindow(QWidget):
             except AttributeError:
                 global_pos = a0.globalPos()
                 local_pos = a0.pos()
+            
+            # Start touch tracking for tap/hold detection
+            self._touch_press_time = time_module.time()
+            self._touch_press_pos = global_pos
+            self._touch_moved = False
             
             # Mark as dragging for nativeEvent
             self._is_dragging = True
@@ -2015,6 +2263,9 @@ class AvatarOverlayWindow(QWidget):
                     # Normal drag (only if reposition is enabled) - no hand cursor
                     self._drag_pos = global_pos - self.pos()
                     # Keep arrow cursor, no grabbing hand
+                    
+                    # Start hold timer for touch detection
+                    self._hold_timer.start(self.HOLD_THRESHOLD_MS)
         a0.accept()
 
 
@@ -2885,15 +3136,21 @@ class BoneHitRegion(QWidget):
     Users can resize each bone's hit area to match their avatar's shape.
     The region follows the bone when the AI animates the avatar.
     Left-drag center to move avatar, right-click for menu.
+    Double-click or hold to trigger touch reactions.
     """
     
     EDGE_MARGIN = 8  # Pixels from edge for resize handles
+    HOLD_THRESHOLD_MS = 500  # How long to hold for "hold" touch type
     
     # Signals for avatar dragging
     drag_started = pyqtSignal(object)
     drag_moved = pyqtSignal(object)
     drag_ended = pyqtSignal()
     context_menu_requested = pyqtSignal(object)
+    
+    # Touch reaction signal: (region_name, touch_type, global_pos)
+    # touch_type: 'tap', 'hold', 'double_tap', 'pet' (repeated taps)
+    touched = pyqtSignal(str, str, object)
     
     def __init__(self, bone_name: str, parent_manager):
         super().__init__(None)  # Top-level window
@@ -2924,6 +3181,23 @@ class BoneHitRegion(QWidget):
         self._offset_drag_pos = None  # For adjusting bone offset (Shift+drag)
         self._resize_edge = None
         self._resize_start = None
+        
+        # Touch detection state
+        self._touch_press_time = 0
+        self._touch_press_pos = None
+        self._touch_moved = False
+        self._last_tap_time = 0
+        self._tap_count = 0
+        
+        # Hold detection timer
+        self._hold_timer = QTimer()
+        self._hold_timer.setSingleShot(True)
+        self._hold_timer.timeout.connect(self._on_hold_detected)
+        
+        # Pet detection timer (resets tap count after delay)
+        self._pet_timer = QTimer()
+        self._pet_timer.setSingleShot(True)
+        self._pet_timer.timeout.connect(self._on_pet_timeout)
         
         # Settings (from manager)
         self._show_border = True
@@ -3013,6 +3287,42 @@ class BoneHitRegion(QWidget):
         self._resize_locked = locked
         self.update()
     
+    def _on_hold_detected(self):
+        """Called when user holds on region long enough."""
+        if self._touch_press_pos and not self._touch_moved:
+            self.touched.emit(self._bone_name, 'hold', self._touch_press_pos)
+    
+    def _on_pet_timeout(self):
+        """Called after delay to check for petting (repeated taps)."""
+        if self._tap_count >= 3:
+            # Extended petting detected
+            pass  # Already emitted 'pet' on third tap
+        self._tap_count = 0
+    
+    def _check_tap_type(self, global_pos):
+        """Determine tap type based on timing."""
+        import time
+        current_time = time.time()
+        
+        # Check for double tap (two taps within 400ms)
+        if current_time - self._last_tap_time < 0.4:
+            self._tap_count += 1
+            if self._tap_count == 2:
+                self.touched.emit(self._bone_name, 'double_tap', global_pos)
+            elif self._tap_count >= 3:
+                # Repeated taps = petting
+                self.touched.emit(self._bone_name, 'pet', global_pos)
+        else:
+            # Single tap
+            self._tap_count = 1
+            self.touched.emit(self._bone_name, 'tap', global_pos)
+        
+        self._last_tap_time = current_time
+        
+        # Reset pet timer
+        self._pet_timer.stop()
+        self._pet_timer.start(600)  # Reset tap count after 600ms of no taps
+
     def paintEvent(self, event):
         """Draw the bone region with handles."""
         painter = QPainter(self)
@@ -3052,10 +3362,16 @@ class BoneHitRegion(QWidget):
             painter.drawRect(w - handle_size, h - handle_size, handle_size, handle_size)
     
     def mousePressEvent(self, event):
+        import time as time_module
         if event.button() == Qt_LeftButton:
             edge = self._get_edge_at_pos(event.pos())
             # Check for Shift modifier - Shift+drag adjusts bone offset
             shift_held = event.modifiers() & Qt_ShiftModifier
+            
+            # Start touch tracking for tap/hold detection
+            self._touch_press_time = time_module.time()
+            self._touch_press_pos = event.globalPos()
+            self._touch_moved = False
             
             if edge and not self._resize_locked:
                 # Resize the bone region
@@ -3077,6 +3393,9 @@ class BoneHitRegion(QWidget):
                 if self._manager and self._manager._avatar:
                     self._drag_pos = event.globalPos() - self._manager._avatar.pos()
                     self.drag_started.emit(event.globalPos())
+                
+                # Start hold timer for touch detection
+                self._hold_timer.start(self.HOLD_THRESHOLD_MS)
             event.accept()
         elif event.button() == Qt_RightButton:
             # Pass context menu up to manager
@@ -3084,6 +3403,13 @@ class BoneHitRegion(QWidget):
             event.accept()
     
     def mouseMoveEvent(self, event):
+        # Check if mouse moved significantly (for tap detection)
+        if self._touch_press_pos:
+            delta = event.globalPos() - self._touch_press_pos
+            if abs(delta.x()) > 5 or abs(delta.y()) > 5:
+                self._touch_moved = True
+                self._hold_timer.stop()  # Cancel hold detection if dragging
+        
         if self._resize_edge and self._resize_start:
             delta = event.globalPos() - self._resize_start['pos']
             edge = self._resize_edge
@@ -3147,6 +3473,22 @@ class BoneHitRegion(QWidget):
     
     def mouseReleaseEvent(self, event):
         if event.button() == Qt_LeftButton:
+            # Stop hold timer
+            self._hold_timer.stop()
+            
+            # Check for tap (didn't move much, wasn't a long hold)
+            if not self._touch_moved and self._touch_press_pos:
+                import time as time_module
+                press_duration = time_module.time() - self._touch_press_time
+                
+                # If it wasn't a hold (timer would have fired), it's a tap
+                if press_duration < (self.HOLD_THRESHOLD_MS / 1000.0):
+                    self._check_tap_type(event.globalPos())
+            
+            # Reset touch state
+            self._touch_press_pos = None
+            self._touch_moved = False
+            
             if self._drag_pos is not None:
                 self.drag_ended.emit()
             self._drag_pos = None
@@ -3271,7 +3613,7 @@ class ResizeHandle(QWidget):
             self.move(x, y)
 
 
-class BoneHitManager:
+class BoneHitManager(QObject):
     """Manages body region hit areas for an avatar.
     
     Uses 6 body regions instead of individual bones for simplicity:
@@ -3284,6 +3626,11 @@ class BoneHitManager:
     
     This works with any model regardless of how many bones it has.
     """
+    
+    # Signal emitted when avatar is touched: (region_name, touch_type, global_pos)
+    # region_name: 'head', 'torso', 'arm_left', 'arm_right', 'leg_left', 'leg_right'
+    # touch_type: 'tap', 'double_tap', 'hold', 'pet' (repeated taps)
+    region_touched = pyqtSignal(str, str, object)
     
     # Body regions with their screen positions (relative 0-1)
     # Each region covers a larger area than individual bones
@@ -3321,6 +3668,7 @@ class BoneHitManager:
     }
     
     def __init__(self, avatar_window):
+        super().__init__()
         self._avatar = avatar_window
         self._regions: dict[str, BoneHitRegion] = {}
         self._visible = False
@@ -3392,6 +3740,9 @@ class BoneHitManager:
                 region.drag_moved.connect(self._avatar._on_drag_bar_move)
                 region.drag_ended.connect(self._avatar._on_drag_bar_end)
                 region.context_menu_requested.connect(self._avatar._show_context_menu_at)
+            
+            # Connect touch signal for AI interaction
+            region.touched.connect(self.region_touched.emit)
             
             self._regions[bone_name] = region
         
