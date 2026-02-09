@@ -871,6 +871,130 @@ manager.create_custom_persona(
 
 ---
 
+### 6. Avatar Movement & Scaling (What EXISTS)
+
+**AI Can Already:**
+
+| Action | Tool | Notes |
+|--------|------|-------|
+| Teleport instantly | `control_avatar action=move_to x=500 y=300` | Works |
+| Walk smoothly | `control_avatar action=walk_to x=800` | Animated movement |
+| Resize | `control_avatar action=resize x=256` | 32-512px range |
+| Look at point | `control_avatar action=look_at x=300 y=400` | Head/eyes turn |
+| Go to corner | `control_avatar action=go_corner value=top_right` | Preset positions |
+| Gestures | `control_avatar action=gesture value=wave` | wave, dance, sleep |
+| Emotions | `control_avatar action=emotion value=happy` | Mood expressions |
+
+**Scaling Concern:** Current resize is 32-512px. If you make everything larger you could break UI layouts.
+
+**Suggested Fix:** Add "safe scaling mode" that:
+- Scales avatar relative to screen size (e.g., 10-50% of screen height)
+- Doesn't let avatar exceed screen bounds
+- Prevents z-index/overlap issues
+
+---
+
+### 7. Touch Interaction / Headpats System (PARTIAL)
+
+**What EXISTS:**
+- `BoneHitManager` in `avatar_display.py` - Detects clicks on body regions
+- 6 body regions: head, torso, left_arm, right_arm, left_leg, right_leg
+- Regions are resizable and follow avatar positions
+- Currently used for: dragging avatar, context menu
+
+**What's MISSING:**
+- Touch REACTION callbacks - AI doesn't know when user touches it
+- Reaction animations - headpat → happy wiggle, etc.
+- Touch type detection - tap vs hold vs drag
+
+**Implementation Plan:**
+
+```python
+# New signals in BoneHitRegion:
+touched = pyqtSignal(str, str)  # (region_name, touch_type)
+
+# Touch types:
+# - "tap" - quick click
+# - "hold" - press and hold (petting)
+# - "drag" - moving across region (stroking)
+
+# AI gets notified:
+def on_avatar_touched(region: str, touch_type: str):
+    # region = "head", touch_type = "hold"
+    # AI can respond: "*happy wiggle* That feels nice!"
+    pass
+```
+
+**Files to Modify:**
+- `avatar_display.py` - Add touch detection and signals
+- `tool_executor.py` - Route touch events to AI
+- Create `avatar_reactions.py` - Pre-built reaction animations
+
+**Complexity:** Medium (~6-8 hours)
+
+---
+
+### 8. Avatar Detail Level / Pores / High-Res Rendering
+
+**Current State:** Avatar renders at whatever resolution the model/image is.
+
+**What You're Asking:** Can we see pores on a face, tiny details, skin texture?
+
+**Answer:** Yes, IF:
+
+1. **The avatar model HAS that detail** - You can't see pores on a low-poly model
+2. **The texture is high-res enough** - 4K+ textures for visible pores
+3. **The render size is large enough** - Pores won't show on a 128px avatar
+
+**What Would Be Needed:**
+
+| Component | Purpose |
+|-----------|---------|
+| LOD (Level of Detail) system | Swap high-res model when zoomed in |
+| Texture quality setting | Load 4K textures when detail needed |
+| GPU shader support | Normal maps, subsurface scattering for realistic skin |
+| Procedural detail | Generate pores/wrinkles via shaders |
+
+**Reality Check:**
+- Most avatar models are stylized (anime, cartoon) - no pores by design
+- Realistic human models with pore detail are huge (100MB+)
+- OpenGL rendering we have can support this, but models need to exist
+
+**Quick Win:** For 2D avatars, use high-res images (2048px+). Details will show when avatar is enlarged.
+
+**Complexity:** Easy for 2D (just use bigger images). Hard for 3D (needs model creation + shader work).
+
+---
+
+### 9. AI Screen Control Beyond Avatar Window
+
+**Question:** Can the AI take over monitors for effects?
+
+**Options:**
+
+| Approach | What It Does | Complexity |
+|----------|--------------|------------|
+| **Transparent fullscreen overlay** | AI draws effects on invisible layer over everything | Medium |
+| **Multiple avatar windows** | Spawn additional windows for portals, effects | Easy but messy |
+| **Desktop wallpaper integration** | Draw on wallpaper layer | OS-specific, limited |
+| **Screen capture + composite** | Grab screen, add effects, display | High CPU, feels fake |
+
+**Recommended:** Single transparent fullscreen overlay (click-through by default).
+
+```python
+# Proposed API:
+effect_layer.spawn_effect("portal", x=500, y=300, target_x=1200, target_y=300)
+effect_layer.spawn_particles("sparkles", x=800, y=400, duration=3.0)
+effect_layer.draw_line(start=(100, 100), end=(500, 500), color="blue")
+```
+
+**When User Is Gaming:**
+- Effect layer auto-hides
+- AI knows effects are disabled
+- Can still use in-avatar-window effects only
+
+---
+
 ## About Cleaning Up SUGGESTIONS.md
 
 **Your Question:** Should we delete completed items?
