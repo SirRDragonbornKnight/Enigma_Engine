@@ -1871,6 +1871,12 @@ class EnhancedMainWindow(QMainWindow):
         self._init_global_hotkeys()
         
         # ─────────────────────────────────────────────────────────────────
+        # Initialize Fullscreen Visibility Controller
+        # Auto-hides avatar/effects when fullscreen apps are detected
+        # ─────────────────────────────────────────────────────────────────
+        self._init_fullscreen_controller()
+        
+        # ─────────────────────────────────────────────────────────────────
         # First-run check or model selection
         # ─────────────────────────────────────────────────────────────────
         if not self.registry.registry.get("models"):
@@ -2327,6 +2333,32 @@ class EnhancedMainWindow(QMainWindow):
         # NOTE: We do NOT restore last_tab here because _build_ui() already
         # sets the sidebar to 'chat' tab. Setting content_stack without updating
         # sidebar causes a mismatch where sidebar shows chat but content shows avatar.
+    
+    def _init_fullscreen_controller(self):
+        """
+        Initialize the fullscreen visibility controller.
+        
+        This system auto-hides avatar/effects when fullscreen apps are detected,
+        and loads saved visibility preferences.
+        """
+        try:
+            from ..core.fullscreen_mode import get_fullscreen_controller
+            
+            self._fullscreen_controller = get_fullscreen_controller()
+            
+            # Load saved settings
+            self._fullscreen_controller.load_settings()
+            
+            # Enable if auto-hide was enabled
+            if self._fullscreen_controller._settings.auto_hide_on_fullscreen:
+                self._fullscreen_controller.enable()
+                print("Fullscreen visibility controller enabled")
+            else:
+                print("Fullscreen visibility controller ready (not active)")
+                
+        except Exception as e:
+            print(f"Could not initialize fullscreen controller: {e}")
+            self._fullscreen_controller = None
     
     def _load_gui_settings(self):
         """Load GUI settings from file."""

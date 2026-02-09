@@ -192,9 +192,11 @@ class ToolRegistry:
 
         # Self-modification tools - AI can customize itself
         from .self_tools import (
+            FullscreenModeControlTool,
             GenerateAvatarTool,
             GetSelfConfigTool,
             ListAvatarsTool,
+            ListEffectAssetsTool,
             ListSpawnedObjectsTool,
             OpenAvatarInBlenderTool,
             RecallFactsTool,
@@ -207,6 +209,8 @@ class ToolRegistry:
             SetPreferenceTool,
             SetVoicePreferenceTool,
             SpawnObjectTool,
+            SpawnScreenEffectTool,
+            StopScreenEffectTool,
         )
         from .system_tools import GetSystemInfoTool, RunCommandTool, ScreenshotTool
         from .vision import FindOnScreenTool, ScreenVisionTool
@@ -338,6 +342,12 @@ class ToolRegistry:
             SpawnObjectTool(),
             RemoveObjectTool(),
             ListSpawnedObjectsTool(),
+            # Screen Effects - AI can spawn visual effects anywhere
+            SpawnScreenEffectTool(),
+            StopScreenEffectTool(),
+            ListEffectAssetsTool(),
+            # Fullscreen Mode - AI can control visibility during fullscreen apps
+            FullscreenModeControlTool(),
         ]
         
         for tool in builtin:

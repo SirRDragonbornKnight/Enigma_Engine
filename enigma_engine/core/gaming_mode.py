@@ -253,6 +253,14 @@ class GamingMode:
         )
         self._monitor_thread.start()
         
+        # Also enable fullscreen controller for visibility management
+        try:
+            from .fullscreen_mode import get_fullscreen_controller
+            controller = get_fullscreen_controller()
+            controller.enable()
+        except Exception:
+            pass
+        
         logger.info("Gaming mode enabled")
     
     def disable(self):
@@ -414,12 +422,33 @@ class GamingMode:
             priority=profile.priority,
         )
         
+        # Also control avatar visibility via fullscreen controller
+        try:
+            from .fullscreen_mode import get_fullscreen_controller
+            controller = get_fullscreen_controller()
+            controller.set_category_visible('avatar', profile.avatar_enabled)
+            controller.set_category_visible('spawned_objects', profile.avatar_enabled)
+            controller.set_category_visible('effects', profile.avatar_enabled)
+        except Exception:
+            pass
+        
         self._notify_limits_change()
     
     def _restore_full_limits(self):
         """Restore full resource limits."""
         self._current_limits = ResourceLimits()
         self._active_profile = None
+        
+        # Restore avatar visibility
+        try:
+            from .fullscreen_mode import get_fullscreen_controller
+            controller = get_fullscreen_controller()
+            controller.set_category_visible('avatar', True)
+            controller.set_category_visible('spawned_objects', True)
+            controller.set_category_visible('effects', True)
+        except Exception:
+            pass
+        
         self._notify_limits_change()
     
     def _notify_limits_change(self):

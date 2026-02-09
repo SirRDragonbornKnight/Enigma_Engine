@@ -949,6 +949,195 @@ class ListSpawnedObjectsTool(Tool):
             return {"success": False, "error": str(e)}
 
 
+class SpawnScreenEffectTool(Tool):
+    """
+    AI can spawn fullscreen visual effects anywhere on screen.
+    
+    Create particles, explosions, sparkles, fire, snow, rain, magic, and more.
+    Effects render on a transparent overlay and don't block user input.
+    Can use custom textures from assets/effects/textures/ folder.
+    """
+    
+    name = "spawn_screen_effect"
+    description = "Spawn visual effects on screen - sparkles, fire, explosions, hearts, magic, snow, rain, confetti, etc. Can use custom textures for unique particle effects."
+    parameters = {
+        "effect": "Effect preset: sparkle, fire, snow, rain, explosion, confetti, hearts, magic, smoke, bubble, lightning, ripple, or a custom preset name",
+        "x": "X position on screen (optional - uses avatar position or screen center)",
+        "y": "Y position on screen (optional - uses avatar position or screen center)",
+        "duration": "How long the effect lasts in seconds (default varies by effect type)",
+        "at_avatar": "true to spawn effect at avatar's current position (default: false)",
+        "intensity": "Effect intensity: low, medium, high (affects particle count/rate)",
+        "colors": "Custom colors as comma-separated hex values like '#ff0000,#00ff00' (optional)",
+        "texture": "Custom texture filename from assets/effects/textures/ (e.g., 'star.png', 'leaf.png')",
+        "shape": "Particle shape: circle, square, star, heart, triangle, line, or 'image' for texture",
+    }
+    
+    def execute(
+        self,
+        effect: str = "sparkle",
+        x: float = None,
+        y: float = None,
+        duration: float = None,
+        at_avatar: bool = False,
+        intensity: str = "medium",
+        colors: str = None,
+        texture: str = None,
+        shape: str = None,
+        **kwargs
+    ) -> dict[str, Any]:
+        try:
+            from enigma_engine.avatar.screen_effects import get_effect_manager, EFFECT_PRESETS
+            
+            manager = get_effect_manager()
+            
+            # Validate effect type
+            effect = effect.lower().strip()
+            available = manager.list_presets()
+            if effect not in available:
+                return {
+                    "success": False, 
+                    "error": f"Unknown effect: {effect}. Available: {', '.join(available)}"
+                }
+            
+            # Build spawn kwargs
+            spawn_kwargs = {}
+            
+            # Position handling
+            if at_avatar:
+                # Use spawn_at_avatar method
+                effect_id = manager.spawn_at_avatar(effect, duration=duration, **spawn_kwargs)
+            else:
+                # Get position
+                if x is None or y is None:
+                    pos = self._get_avatar_position()
+                    if pos:
+                        x = x if x is not None else pos[0] + 30
+                        y = y if y is not None else pos[1]
+                
+                if x is not None:
+                    spawn_kwargs['x'] = float(x)
+                if y is not None:
+                    spawn_kwargs['y'] = float(y)
+            
+            # Duration
+            if duration is not None:
+                spawn_kwargs['duration'] = float(duration)
+            
+            # Intensity affects spawn rate
+            intensity = intensity.lower().strip()
+            if intensity == "low":
+                spawn_kwargs['spawn_rate'] = 8
+            elif intensity == "high":
+                spawn_kwargs['spawn_rate'] = 50
+            # medium uses default
+            
+            # Custom colors
+            if colors:
+                color_list = [c.strip() for c in colors.split(',') if c.strip()]
+                if color_list:
+                    spawn_kwargs['colors'] = color_list
+            
+            # Custom texture
+            if texture:
+                spawn_kwargs['texture'] = texture
+                # If using texture, default to image shape
+                if not shape:
+                    spawn_kwargs['shape'] = 'image'
+            
+            # Custom shape
+            if shape:
+                spawn_kwargs['shape'] = shape
+            
+            # Spawn the effect
+            if not at_avatar:
+                effect_id = manager.spawn(effect, **spawn_kwargs)
+            
+            if effect_id:
+                return {
+                    "success": True, 
+                    "effect_id": effect_id, 
+                    "effect": effect,
+                    "message": f"Spawned {effect} effect" + (f" with texture {texture}" if texture else "")
+                }
+            else:
+                return {"success": False, "error": "Failed to spawn effect - effects may be disabled"}
+        
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def _get_avatar_position(self):
+        """Get avatar position."""
+        try:
+            from enigma_engine.avatar.persistence import load_avatar_state
+            state = load_avatar_state()
+            if state:
+                return (state.get('x', 500), state.get('y', 300))
+        except Exception:
+            pass
+        return None
+
+
+class ListEffectAssetsTool(Tool):
+    """
+    List available effect presets and textures.
+    """
+    
+    name = "list_effect_assets"
+    description = "List available effect presets and textures for spawn_screen_effect"
+    parameters = {
+        "asset_type": "What to list: presets, textures, or both (default: both)",
+    }
+    
+    def execute(self, asset_type: str = "both", **kwargs) -> dict[str, Any]:
+        try:
+            from enigma_engine.avatar.screen_effects import get_effect_manager
+            
+            manager = get_effect_manager()
+            result = {"success": True}
+            
+            asset_type = asset_type.lower().strip()
+            
+            if asset_type in ("presets", "both"):
+                result["presets"] = manager.list_presets()
+            
+            if asset_type in ("textures", "both"):
+                result["textures"] = manager.list_textures()
+                result["textures_dir"] = "assets/effects/textures/"
+            
+            return result
+        
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+
+class StopScreenEffectTool(Tool):
+    """
+    Stop a running screen effect.
+    """
+    
+    name = "stop_screen_effect"
+    description = "Stop a screen effect by ID, or stop all effects with 'all'"
+    parameters = {
+        "effect_id": "ID of the effect to stop (from spawn_screen_effect result), or 'all' to clear everything",
+    }
+    
+    def execute(self, effect_id: str, **kwargs) -> dict[str, Any]:
+        try:
+            from enigma_engine.avatar.screen_effects import get_effect_manager
+            
+            manager = get_effect_manager()
+            
+            if effect_id.lower() == "all":
+                manager.clear_all()
+                return {"success": True, "action": "cleared_all"}
+            else:
+                manager.stop(effect_id)
+                return {"success": True, "action": "stopped", "effect_id": effect_id}
+        
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+
 class ChangeOutfitTool(Tool):
     """
     Change avatar's outfit, clothing, and accessories.
@@ -1044,3 +1233,85 @@ class ChangeOutfitTool(Tool):
         except Exception:
             return None
 
+
+class FullscreenModeControlTool(Tool):
+    """
+    Control visibility during fullscreen apps (games, videos, presentations).
+    """
+    
+    name = "fullscreen_mode_control"
+    description = "Control avatar and overlay visibility during fullscreen apps. Toggle categories, set hotkey, configure per-monitor display."
+    parameters = {
+        "action": "Action: show, hide, toggle, set_category, set_monitors, set_hotkey, get_status, enable, disable",
+        "category": "Category for set_category: avatar, spawned_objects, effects, particles",
+        "visible": "Whether category should be visible (true/false) - for set_category",
+        "monitors": "List of monitor indices [0, 1, 2] or 'all' - for set_monitors",
+        "hotkey": "Hotkey string like 'ctrl+shift+h' - for set_hotkey",
+    }
+    
+    def execute(
+        self,
+        action: str,
+        category: str = None,
+        visible: bool = None,
+        monitors: Any = None,
+        hotkey: str = None,
+        **kwargs
+    ) -> dict[str, Any]:
+        try:
+            from enigma_engine.core.fullscreen_mode import get_fullscreen_controller
+            
+            controller = get_fullscreen_controller()
+            action = action.lower().strip()
+            
+            if action == "show":
+                controller.show_all()
+                return {"success": True, "action": "shown", "visible": True}
+            
+            elif action == "hide":
+                controller.hide_all()
+                return {"success": True, "action": "hidden", "visible": False}
+            
+            elif action == "toggle":
+                controller.toggle_visibility()
+                return {"success": True, "action": "toggled", "visible": controller.is_visible}
+            
+            elif action == "set_category":
+                if not category:
+                    return {"success": False, "error": "Need category name"}
+                if visible is None:
+                    return {"success": False, "error": "Need visible (true/false)"}
+                controller.set_category_visible(category, visible)
+                return {"success": True, "category": category, "visible": visible}
+            
+            elif action == "set_monitors":
+                if monitors == "all" or monitors is None:
+                    controller.set_allowed_monitors(None)
+                    return {"success": True, "monitors": "all"}
+                elif isinstance(monitors, list):
+                    controller.set_allowed_monitors(monitors)
+                    return {"success": True, "monitors": monitors}
+                else:
+                    return {"success": False, "error": "monitors should be a list [0, 1, 2] or 'all'"}
+            
+            elif action == "set_hotkey":
+                controller.set_toggle_hotkey(hotkey)
+                return {"success": True, "hotkey": hotkey}
+            
+            elif action == "get_status":
+                return {"success": True, **controller.get_status()}
+            
+            elif action == "enable":
+                controller.enable()
+                return {"success": True, "action": "enabled"}
+            
+            elif action == "disable":
+                controller.disable()
+                return {"success": True, "action": "disabled"}
+            
+            else:
+                valid = ["show", "hide", "toggle", "set_category", "set_monitors", "set_hotkey", "get_status", "enable", "disable"]
+                return {"success": False, "error": f"Unknown action: {action}. Valid: {valid}"}
+        
+        except Exception as e:
+            return {"success": False, "error": str(e)}

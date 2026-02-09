@@ -910,6 +910,14 @@ class ObjectSpawner:
                 window.clicked.connect(lambda oid: self._on_object_clicked(oid))
                 window.show()
                 self._windows[obj.id] = window
+                
+                # Register with fullscreen controller for visibility management
+                try:
+                    from ..core.fullscreen_mode import get_fullscreen_controller
+                    controller = get_fullscreen_controller()
+                    controller.register_element(f'spawned_{obj.id}', window, category='spawned_objects')
+                except Exception:
+                    pass
             except Exception as e:
                 print(f"[ObjectSpawner] Failed to create window: {e}")
         
@@ -920,6 +928,13 @@ class ObjectSpawner:
         if obj_id in self._objects:
             del self._objects[obj_id]
         if obj_id in self._windows:
+            # Unregister from fullscreen controller
+            try:
+                from ..core.fullscreen_mode import get_fullscreen_controller
+                controller = get_fullscreen_controller()
+                controller.unregister_element(f'spawned_{obj_id}')
+            except Exception:
+                pass
             try:
                 self._windows[obj_id].close()
             except Exception:

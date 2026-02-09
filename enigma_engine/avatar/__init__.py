@@ -277,6 +277,28 @@ from .unified_avatar import (  # Convenience functions
     create_robot_avatar,
 )
 
+# Part Editor (real-time part-by-part editing with morph transitions)
+from .part_editor import (
+    AvatarPart,
+    AvatarPartEditor,
+    MorphTransition,
+    PartLayer,
+    PartType,
+    get_part_editor,
+)
+
+# Mesh Manipulation (vertex-level editing, morph targets, blend shapes)
+from .mesh_manipulation import (
+    BlendShape,
+    Face,
+    MeshManipulator,
+    MeshRegion,
+    MorphTarget,
+    RegionDefinition,
+    Vertex,
+    get_mesh_manipulator,
+)
+
 __all__ = [
     # Controller
     "AvatarController",
@@ -402,4 +424,22 @@ __all__ = [
     "generate_template",
     "STANDARD_EMOTIONS",
     "EXTENDED_EMOTIONS",
+    
+    # Part Editor
+    "AvatarPartEditor",
+    "AvatarPart",
+    "PartLayer",
+    "PartType",
+    "MorphTransition",
+    "get_part_editor",
+    
+    # Mesh Manipulation
+    "MeshManipulator",
+    "Vertex",
+    "Face",
+    "MeshRegion",
+    "RegionDefinition",
+    "MorphTarget",
+    "BlendShape",
+    "get_mesh_manipulator",
 ]

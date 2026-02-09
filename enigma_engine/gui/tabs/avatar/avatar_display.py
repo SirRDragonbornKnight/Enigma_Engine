@@ -1919,6 +1919,14 @@ class AvatarOverlayWindow(QWidget):
                     self.move(x, y)
             except Exception:
                 pass
+        
+        # Register with fullscreen controller for visibility management
+        try:
+            from ....core.fullscreen_mode import get_fullscreen_controller
+            controller = get_fullscreen_controller()
+            controller.register_element('avatar_overlay', self, category='avatar')
+        except Exception:
+            pass
     
     def _auto_save_size(self):
         """Auto-save size if it changed (called by timer)."""

@@ -54,46 +54,80 @@
 
 ## Large Tasks (1-3 days each)
 
-- [ ] **Gaming mode enhancements** (~1-2 days)
-  - Per-monitor control: "Show avatar on monitor 2 only"
-  - Object category toggles: avatar, spawned_objects, portal_effects, particles
-  - Smooth fade transitions instead of instant hide
-  - Hotkey override for instant toggle
-  - Files: `gaming_mode.py`, `avatar_display.py`
+- [x] **Fullscreen app mode enhancements** (~1-2 days) DONE
+  - [x] FullscreenController class with settings/methods
+  - [x] Per-monitor control logic
+  - [x] Object category toggles logic (avatar, spawned_objects, effects, particles)
+  - [x] Smooth fade transition code
+  - [x] Global hotkey registration code (Windows)
+  - [x] Fullscreen detection (Windows)
+  - [x] AI tool: `fullscreen_mode_control`
+  - [x] File: `enigma_engine/core/fullscreen_mode.py`
+  - [x] Hooked `avatar_display.py` - registers in showEvent
+  - [x] Hooked `spawnable_objects.py` - registers/unregisters on spawn/remove
+  - [x] Hooked `screen_effects.py` - registers overlays on creation
+  - [x] Integrated with `gaming_mode.py` - profile.avatar_enabled controls visibility
+  - [x] GUI settings panel for configuring visibility preferences
+  - [x] Settings persistence (auto-load on startup)
+  - File: `enigma_engine/gui/tabs/settings_tab.py` (Fullscreen Visibility Control section)
 
-- [ ] **Real-time avatar editing (full version)** (~2-3 days)
-  - Part-by-part editing (swap hair, eyes, clothes while visible)
-  - Morphing transitions between avatars
-  - AI describes changes, system generates just that part
-  - Files: new `avatar/part_editor.py`, `tools/avatar_tools.py`
+- [x] **Real-time avatar editing (full version)** (~2-3 days) DONE
+  - [x] Part-by-part editing (swap hair, eyes, clothes while visible)
+  - [x] Morphing transitions between avatars
+  - [x] Layer-based composition with z-ordering
+  - [x] Per-part transforms (offset, scale, rotation, opacity)
+  - [x] Tint/color support per part
+  - [x] Variant system for swappable parts
+  - [x] Preset save/load
+  - File: `enigma_engine/avatar/part_editor.py`
 
-- [ ] **Mesh manipulation** (~1 day min, 1 week full)
-  - Vertex-level manipulation (stretch, squash, pull)
-  - Morph targets / blend shapes
-  - Simple version: scale body regions
-  - Full version: proper blend shape system
-  - `trimesh` library available
+- [x] **Mesh manipulation** (~1 day min, 1 week full) DONE
+  - [x] Vertex-level manipulation (move, stretch)
+  - [x] Morph targets / blend shapes
+  - [x] Region-based scaling (HEAD, TORSO, LEGS, etc.)
+  - [x] Soft selection with falloff
+  - [x] Animated morph transitions
+  - [x] OBJ import/export
+  - [x] trimesh integration
+  - File: `enigma_engine/avatar/mesh_manipulation.py`
 
 ---
 
 ## Major Features (40+ hours)
 
-- [ ] **Portal gun visual effects system** (~40+ hours)
-  - Portal projectile animation (particle system)
-  - Portal surface rendering (render-to-texture, shaders)
-  - See-through effect (render destination, project onto portal)
-  - Avatar teleport animation (fade into portal, appear at exit)
-  - Two modes: 
-    - Simple: visual effect only, instant teleport
-    - Full: actual render-through-portal (OpenGL/shader work)
-  - Sound effects
+- [ ] **Portal gun system** (~30+ hours) - *AI can implement using existing tools*
+  - Building blocks available:
+    - Particle effects: `screen_effects.py` (magic, sparkle presets)
+    - Avatar teleport: `avatar_display.py` (move_to, fade transitions)
+    - Screen overlays: transparent click-through windows ready
+  - AI can combine these to create portal effect when requested
+  - Full render-through-portal would need OpenGL shaders (future)
 
-- [ ] **Fullscreen effect overlay system**
+- [ ] **Trainer fine-tuning workflow for pre-trained models** (~4-8 hours)
+  - Current state:
+    - ✅ Resume training from checkpoints works (`resume_from_checkpoint()`)
+    - ✅ LoRA fine-tuning works (`lora_utils.py`)
+    - ✅ HuggingFace conversion works (`convert_huggingface_to_forge()`)
+  - Missing:
+    - [ ] `register_huggingface_model()` in `ModelRegistry` - auto-convert HF model and register for training
+    - [ ] Unified `fine_tune_pretrained()` function - handles full workflow (download → convert → register → train)
+    - [ ] GUI tab for importing external models (HuggingFace, GGUF) into registry
+  - Files: `enigma_engine/core/model_registry.py`, `enigma_engine/core/huggingface_loader.py`
+
+- [x] **Fullscreen effect overlay system** DONE
   - Single transparent fullscreen overlay for effects
-  - Click-through by default, solid for dramatic moments
-  - Can draw: portals, particles, explosions, spell effects
-  - Auto-hides in gaming mode
-  - Works across multi-monitor setups
+  - Click-through by default (WA_TransparentForMouseEvents)
+  - 12 effect presets: sparkle, fire, snow, rain, explosion, confetti, hearts, magic, smoke, bubble, lightning, ripple
+  - Custom textures support via `assets/effects/textures/`
+  - Custom presets support via `assets/effects/presets/`
+  - `set_gaming_mode()` method available (manual call, not auto-connected to gaming_mode.py)
+  - Multi-monitor support (spawn_effect_on_screen, spawn_effect_all_screens)
+  - AI tools: `spawn_screen_effect`, `stop_screen_effect`, `list_effect_assets`
+  - File: `enigma_engine/avatar/screen_effects.py`
+
+---
+
+everything needs to be real time and fully integrated and fix the workflow
 
 ---
 
@@ -109,8 +143,9 @@ These features are DONE and don't need implementation:
 | Persona system | `utils/personas.py` | Create/switch AI personalities |
 | Content rating (NSFW) | `content_rating.py` | SFW/MATURE/NSFW modes, text filtering |
 | Gaming mode (basic) | `gaming_mode.py` | Game detection, resource throttling, profiles |
-| Generate avatar | `self_tools.py` | 5 styles: realistic, cartoon, robot, creature, abstract |
+| Generate avatar | `self_tools.py` | 10 styles: realistic, cartoon, robot, creature, abstract, anime, pixel, chibi, furry, mecha |
 | Spawnable objects | `spawnable_objects.py` | Speech bubbles, notes, held items, effects |
+| Screen effects | `screen_effects.py` | 12 presets + custom textures/presets via `assets/effects/` |
 | BoneHitManager | `avatar_display.py` | 6 body region click detection |
 | User-teachable behaviors | `behavior_preferences.py` | "Whenever you X, do Y first" |
 | Physics simulation | `physics_simulation.py` | Hair/cloth springs, gravity, bounce |

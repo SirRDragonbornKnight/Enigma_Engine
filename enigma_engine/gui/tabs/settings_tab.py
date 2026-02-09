@@ -830,6 +830,147 @@ def _configure_overlay(parent):
         QMessageBox.warning(parent, "Configuration Error", f"Could not open overlay settings: {e}")
 
 
+# ===== FULLSCREEN VISIBILITY SETTINGS =====
+def _load_fullscreen_settings(parent):
+    """Load fullscreen visibility settings into UI."""
+    try:
+        from ...core.fullscreen_mode import get_fullscreen_controller
+        controller = get_fullscreen_controller()
+        controller.load_settings()  # Load from file
+        
+        status = controller.get_status()
+        
+        # Update category checkboxes
+        if hasattr(parent, 'fs_avatar_check'):
+            parent.fs_avatar_check.setChecked(status['category_visible'].get('avatar', True))
+        if hasattr(parent, 'fs_objects_check'):
+            parent.fs_objects_check.setChecked(status['category_visible'].get('spawned_objects', True))
+        if hasattr(parent, 'fs_effects_check'):
+            parent.fs_effects_check.setChecked(status['category_visible'].get('effects', True))
+        if hasattr(parent, 'fs_particles_check'):
+            parent.fs_particles_check.setChecked(status['category_visible'].get('particles', True))
+        
+        # Update other settings
+        if hasattr(parent, 'fs_auto_hide_check'):
+            parent.fs_auto_hide_check.setChecked(status.get('auto_hide_on_fullscreen', True))
+        if hasattr(parent, 'fs_fade_check'):
+            parent.fs_fade_check.setChecked(status.get('fade_enabled', True))
+        if hasattr(parent, 'fs_hotkey_input'):
+            parent.fs_hotkey_input.setText(status.get('toggle_hotkey', '') or '')
+        
+        # Update status
+        if hasattr(parent, 'fs_status_label'):
+            parent.fs_status_label.setText("Settings loaded")
+            parent.fs_status_label.setStyleSheet("color: #22c55e; font-style: italic;")
+    except Exception as e:
+        logger.debug(f"Could not load fullscreen settings: {e}")
+
+
+def _save_fullscreen_settings(parent):
+    """Save fullscreen visibility settings."""
+    try:
+        from ...core.fullscreen_mode import get_fullscreen_controller
+        controller = get_fullscreen_controller()
+        
+        # Update category visibility
+        if hasattr(parent, 'fs_avatar_check'):
+            controller.set_category_visible('avatar', parent.fs_avatar_check.isChecked())
+        if hasattr(parent, 'fs_objects_check'):
+            controller.set_category_visible('spawned_objects', parent.fs_objects_check.isChecked())
+        if hasattr(parent, 'fs_effects_check'):
+            controller.set_category_visible('effects', parent.fs_effects_check.isChecked())
+        if hasattr(parent, 'fs_particles_check'):
+            controller.set_category_visible('particles', parent.fs_particles_check.isChecked())
+        
+        # Update other settings
+        if hasattr(parent, 'fs_auto_hide_check'):
+            controller.set_auto_hide_on_fullscreen(parent.fs_auto_hide_check.isChecked())
+        if hasattr(parent, 'fs_fade_check'):
+            controller.set_fade_enabled(parent.fs_fade_check.isChecked())
+        if hasattr(parent, 'fs_hotkey_input'):
+            hotkey = parent.fs_hotkey_input.text().strip()
+            controller.set_toggle_hotkey(hotkey if hotkey else None)
+        
+        # Save to file
+        controller.save_settings()
+        
+        # Update status
+        if hasattr(parent, 'fs_status_label'):
+            parent.fs_status_label.setText("Settings saved")
+            parent.fs_status_label.setStyleSheet("color: #22c55e; font-style: italic;")
+    except Exception as e:
+        logger.error(f"Could not save fullscreen settings: {e}")
+        if hasattr(parent, 'fs_status_label'):
+            parent.fs_status_label.setText(f"Save error: {e}")
+            parent.fs_status_label.setStyleSheet("color: #ef4444; font-style: italic;")
+
+
+def _toggle_fullscreen_controller(parent, state):
+    """Enable or disable the fullscreen controller."""
+    enabled = state == Checked
+    try:
+        from ...core.fullscreen_mode import get_fullscreen_controller
+        controller = get_fullscreen_controller()
+        
+        if enabled:
+            controller.enable()
+            if hasattr(parent, 'fs_status_label'):
+                parent.fs_status_label.setText("Fullscreen detection enabled")
+                parent.fs_status_label.setStyleSheet("color: #22c55e; font-style: italic;")
+        else:
+            controller.disable()
+            if hasattr(parent, 'fs_status_label'):
+                parent.fs_status_label.setText("Fullscreen detection disabled")
+                parent.fs_status_label.setStyleSheet("color: #bac2de; font-style: italic;")
+        
+        # Save setting
+        _save_fullscreen_settings(parent)
+    except Exception as e:
+        logger.error(f"Could not toggle fullscreen controller: {e}")
+
+
+def _refresh_fullscreen_status(parent):
+    """Refresh fullscreen detection status."""
+    try:
+        from ...core.fullscreen_mode import get_fullscreen_controller
+        controller = get_fullscreen_controller()
+        status = controller.get_status()
+        
+        status_parts = []
+        if status['enabled']:
+            status_parts.append("Active")
+        else:
+            status_parts.append("Inactive")
+        
+        if status['fullscreen_detected']:
+            status_parts.append("Fullscreen detected")
+        if status['manually_hidden']:
+            status_parts.append("Manually hidden")
+        
+        elements_count = len(status.get('registered_elements', []))
+        status_parts.append(f"{elements_count} elements registered")
+        
+        if hasattr(parent, 'fs_status_label'):
+            parent.fs_status_label.setText(" | ".join(status_parts))
+            color = "#22c55e" if status['visible'] else "#f59e0b"
+            parent.fs_status_label.setStyleSheet(f"color: {color}; font-style: italic;")
+    except Exception as e:
+        if hasattr(parent, 'fs_status_label'):
+            parent.fs_status_label.setText(f"Status error: {e}")
+            parent.fs_status_label.setStyleSheet("color: #ef4444; font-style: italic;")
+
+
+def _toggle_fs_visibility(parent):
+    """Toggle visibility manually via button."""
+    try:
+        from ...core.fullscreen_mode import get_fullscreen_controller
+        controller = get_fullscreen_controller()
+        controller.toggle_visibility()
+        _refresh_fullscreen_status(parent)
+    except Exception as e:
+        logger.error(f"Could not toggle visibility: {e}")
+
+
 def _change_active_game(parent):
     """Manually change active game."""
     if not hasattr(parent, 'game_combo'):
@@ -3237,7 +3378,111 @@ def create_settings_tab(parent):
     overlay_layout.addWidget(parent.overlay_status_label)
     
     layout.addWidget(overlay_group)
+
+    # === FULLSCREEN VISIBILITY SETTINGS ===
+    fs_group = QGroupBox("Fullscreen Visibility Control")
+    fs_layout = QVBoxLayout(fs_group)
     
+    fs_desc = QLabel(
+        "Control what's visible when a fullscreen app (game, video) is detected. "
+        "Elements can auto-hide or be toggled with a hotkey."
+    )
+    fs_desc.setWordWrap(True)
+    fs_layout.addWidget(fs_desc)
+    
+    # Enable fullscreen detection
+    parent.fs_enabled_check = QCheckBox("Enable fullscreen detection")
+    parent.fs_enabled_check.setToolTip("Automatically detect when a fullscreen app is running")
+    parent.fs_enabled_check.stateChanged.connect(
+        lambda state: _toggle_fullscreen_controller(parent, state)
+    )
+    fs_layout.addWidget(parent.fs_enabled_check)
+    
+    # Auto-hide checkbox
+    parent.fs_auto_hide_check = QCheckBox("Auto-hide when fullscreen detected")
+    parent.fs_auto_hide_check.setToolTip("Automatically hide elements when a fullscreen app is detected")
+    parent.fs_auto_hide_check.setChecked(True)
+    parent.fs_auto_hide_check.stateChanged.connect(lambda: _save_fullscreen_settings(parent))
+    fs_layout.addWidget(parent.fs_auto_hide_check)
+    
+    # Fade transition checkbox
+    parent.fs_fade_check = QCheckBox("Use fade transitions")
+    parent.fs_fade_check.setToolTip("Smoothly fade elements in/out instead of instant hide/show")
+    parent.fs_fade_check.setChecked(True)
+    parent.fs_fade_check.stateChanged.connect(lambda: _save_fullscreen_settings(parent))
+    fs_layout.addWidget(parent.fs_fade_check)
+    
+    # Category toggles header
+    cat_label = QLabel("Visible Categories:")
+    cat_label.setStyleSheet("font-weight: bold; margin-top: 8px;")
+    fs_layout.addWidget(cat_label)
+    
+    # Category checkboxes row
+    cat_row = QHBoxLayout()
+    
+    parent.fs_avatar_check = QCheckBox("Avatar")
+    parent.fs_avatar_check.setChecked(True)
+    parent.fs_avatar_check.setToolTip("Show/hide the avatar")
+    parent.fs_avatar_check.stateChanged.connect(lambda: _save_fullscreen_settings(parent))
+    cat_row.addWidget(parent.fs_avatar_check)
+    
+    parent.fs_objects_check = QCheckBox("Objects")
+    parent.fs_objects_check.setChecked(True)
+    parent.fs_objects_check.setToolTip("Show/hide spawned objects (speech bubbles, notes)")
+    parent.fs_objects_check.stateChanged.connect(lambda: _save_fullscreen_settings(parent))
+    cat_row.addWidget(parent.fs_objects_check)
+    
+    parent.fs_effects_check = QCheckBox("Effects")
+    parent.fs_effects_check.setChecked(True)
+    parent.fs_effects_check.setToolTip("Show/hide screen effects")
+    parent.fs_effects_check.stateChanged.connect(lambda: _save_fullscreen_settings(parent))
+    cat_row.addWidget(parent.fs_effects_check)
+    
+    parent.fs_particles_check = QCheckBox("Particles")
+    parent.fs_particles_check.setChecked(True)
+    parent.fs_particles_check.setToolTip("Show/hide particle effects")
+    parent.fs_particles_check.stateChanged.connect(lambda: _save_fullscreen_settings(parent))
+    cat_row.addWidget(parent.fs_particles_check)
+    
+    cat_row.addStretch()
+    fs_layout.addLayout(cat_row)
+    
+    # Global hotkey row
+    hotkey_row = QHBoxLayout()
+    hotkey_row.addWidget(QLabel("Toggle Hotkey:"))
+    
+    parent.fs_hotkey_input = QLineEdit()
+    parent.fs_hotkey_input.setPlaceholderText("e.g., ctrl+shift+h")
+    parent.fs_hotkey_input.setMaximumWidth(150)
+    parent.fs_hotkey_input.setToolTip("Global hotkey to toggle visibility (e.g., ctrl+shift+h)")
+    parent.fs_hotkey_input.editingFinished.connect(lambda: _save_fullscreen_settings(parent))
+    hotkey_row.addWidget(parent.fs_hotkey_input)
+    
+    # Toggle button
+    fs_toggle_btn = QPushButton("Toggle Now")
+    fs_toggle_btn.setToolTip("Toggle visibility immediately")
+    fs_toggle_btn.clicked.connect(lambda: _toggle_fs_visibility(parent))
+    hotkey_row.addWidget(fs_toggle_btn)
+    
+    # Refresh status button
+    fs_refresh_btn = QPushButton("Refresh")
+    fs_refresh_btn.setToolTip("Refresh detection status")
+    fs_refresh_btn.clicked.connect(lambda: _refresh_fullscreen_status(parent))
+    hotkey_row.addWidget(fs_refresh_btn)
+    
+    hotkey_row.addStretch()
+    fs_layout.addLayout(hotkey_row)
+    
+    # Status label
+    parent.fs_status_label = QLabel("Not initialized")
+    parent.fs_status_label.setStyleSheet("color: #bac2de; font-style: italic;")
+    fs_layout.addWidget(parent.fs_status_label)
+    
+    layout.addWidget(fs_group)
+    
+    # Load saved fullscreen settings
+    _load_fullscreen_settings(parent)
+
     # === FEDERATED LEARNING ===
     try:
         from ..widgets.federated_widget import FederatedLearningWidget

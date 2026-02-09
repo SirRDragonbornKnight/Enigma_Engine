@@ -162,6 +162,8 @@ TOOL_CATEGORIES = {
         "remember_fact", "recall_facts",
         "generate_avatar", "open_avatar_in_blender", "list_avatars", "set_avatar",
         "spawn_object", "remove_object", "list_spawned_objects",
+        "spawn_screen_effect", "stop_screen_effect", "list_effect_assets",
+        "fullscreen_mode_control",
     ],
 }
 
