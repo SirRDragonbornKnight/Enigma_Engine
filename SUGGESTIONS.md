@@ -2,7 +2,7 @@
 
 **Last Updated:** February 9, 2026
 
-## Progress: 60% of 776 files reviewed (~7,000 lines saved, ~150 fixes)
+## Progress: 65% of 776 files reviewed (~7,000 lines saved, ~150 fixes)
 
 | Module | Files | Lines | Status |
 |--------|-------|-------|--------|
@@ -39,7 +39,7 @@
 | scripts | 1 | ~400 | Scanned - clean (local lists) |
 | docs | 4 | ~1K | Scanned - clean (local lists) |
 | other | 50 | ~35K | Remaining |
-| **TOTAL** | **776** | **~446K** | **60%** |
+| **TOTAL** | **776** | **~446K** | **65%** |
 
 ---
 
@@ -467,7 +467,9 @@ All subprocess and HTTP calls now have proper timeouts.
 - All threads are daemon=True (won't block app exit)
 - Temp files properly cleaned up (context managers or explicit cleanup)
 - Pickle loads are for local app caches only (not user data)
+- No shell=True in subprocess, no os.system calls
+- Global lists have limits (web/app.py _memories has MAX_MEMORIES=1000)
 
-**Estimated remaining sessions: ~4** (focus: file splits, modularization, edge cases)
+**Estimated remaining sessions: ~3** (focus: file splits, modularization)
 
 Say "let it ride" to continue!
