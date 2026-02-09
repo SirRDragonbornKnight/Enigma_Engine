@@ -17,7 +17,7 @@ import secrets
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
@@ -171,8 +171,8 @@ class TokenManager:
         
         payload = {
             "sub": user_id,
-            "iat": datetime.utcnow(),
-            "exp": datetime.utcnow() + timedelta(hours=expires_hours),
+            "iat": datetime.now(timezone.utc),
+            "exp": datetime.now(timezone.utc) + timedelta(hours=expires_hours),
             "jti": str(uuid.uuid4())
         }
         
