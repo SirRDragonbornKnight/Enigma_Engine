@@ -598,7 +598,12 @@ class ModelSyncClient(QObject if HAS_PYQT else object):
             sock.close()
             
             # Check if it's a tar (directory)
-            if temp_file.stat().st_size > 2 and open(temp_file, "rb").read(3)[:2] == b"\x1f\x8b":
+            is_gzip = False
+            if temp_file.stat().st_size > 2:
+                with open(temp_file, "rb") as f:
+                    is_gzip = f.read(2) == b"\x1f\x8b"
+            
+            if is_gzip:
                 # It's gzipped tar - extract it
                 import tarfile
                 
