@@ -513,4 +513,138 @@ All subprocess and HTTP calls now have proper timeouts.
 | Exception handlers | 3,497 |
 | Pass statements | 697 |
 
-Say "let it ride" to continue!
+---
+
+## Next Steps (Actually Useful)
+
+### 1. Run Tests
+Verify all 151 fixes didn't break anything. Priority.
+
+### 2. Split Large Files (Optional)
+| File | Lines | Why |
+|------|-------|-----|
+| avatar_display.py | 8,149 | Will become maintenance nightmare |
+| enhanced_window.py | 7,525 | Same |
+| trainer_ai.py | 6,300 | Same |
+
+### 3. Print→Logging (Optional)
+Only needed if you need to debug without a console attached.
+
+---
+
+## Bigger Feature: OpenAI Live Training (~2-3 hours)
+
+**The Vision:**
+1. OpenAI appears as a model in Model Manager (like any other model)
+2. User asks question → OpenAI answers → Local model learns from that answer (single training step)
+3. Trained local model becomes "the trainer" that can teach other models
+4. Self-sustaining: Trainer trains more trainers
+
+**What Needs Building:**
+| Component | Status | Work |
+|-----------|--------|------|
+| OpenAI as Model Manager entry | Not built | Wrapper class |
+| Live single-step training | Partial | Wire up IncrementalTrainer |
+| Teacher→Student pipeline | Conceptual | Connect external teacher (OpenAI) to local student |
+
+**Core Flow:**
+```
+User asks → OpenAI (teacher) answers → Local model trains on (Q, A) → Repeat
+```
+
+This is knowledge distillation with online learning.
+
+---
+
+## Avatar System - Full Capability Breakdown
+
+### AI Avatar Tools (What AI Can Call)
+
+| Tool | What It Does | Example |
+|------|--------------|---------|
+| `control_avatar` | Move, walk, look, teleport, emotions | `look_at x=500 y=300` |
+| `control_avatar_bones` | Direct bone control (head, arms, etc.) | `move_bone bone=head pitch=15` |
+| `avatar_gesture` | wave, nod, shake, blink, speak | `gesture=wave` |
+| `avatar_emotion` | happy, sad, angry, surprised, etc. | `emotion=excited` |
+| `spawn_object` | Bubbles, notes, held items, effects | `type=held_item item=sword` |
+| `remove_object` | Remove spawned stuff | `object_id=all` |
+| `customize_avatar` | Colors, lighting, wireframe | `setting=primary_color value=#ff5500` |
+| `change_outfit` | Clothes, accessories, color zones | `action=equip slot=hat item=crown` |
+| `set_avatar` | Change avatar file | `file_path=models/avatars/robot.gltf` |
+| `generate_avatar` | Generate new avatar | Creates from AI |
+| `list_avatars` | See available avatars | Returns list |
+| `open_avatar_in_blender` | Send to Blender for editing | Opens external editor |
+
+### Background Command System
+
+AI outputs commands in tags - **automatically stripped before showing to user**:
+```
+AI outputs: *waves* Hello! <bone_control>right_arm|pitch=90,yaw=0,roll=-45</bone_control>
+User sees: *waves* Hello!
+Avatar does: Raises arm in wave motion
+```
+
+The trainer doesn't need special knowledge - the parsing is automatic in `ai_control.py`.
+
+### Physics System (What EXISTS)
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Hair simulation | **EXISTS** | Spring-based strands, follows head |
+| Cloth simulation | **EXISTS** | Particle grid, gravity, wind |
+| Gravity/Wind | **EXISTS** | Configurable per simulation |
+| Collision detection | **EXISTS** | Sphere colliders |
+| Floor bounce | **EXISTS** | Adjustable bounce coefficient |
+| Spawn physics | **EXISTS** | Objects can fall with gravity |
+
+### Physics System (What's MISSING)
+
+| Feature | Status | What Would Be Needed |
+|---------|--------|---------------------|
+| Jiggle physics | **NOT BUILT** | Secondary motion bones in avatar |
+| Squish on contact | **NOT BUILT** | Soft body deformation system |
+| Realistic eating | **PARTIAL** | Can hold items, needs blend shapes for cheeks |
+| Muscle deformation | **NOT BUILT** | Complex rigging in avatar model |
+
+### How AI Would "Eat Something"
+
+Currently possible with training:
+```
+*picks up apple* <spawn_object type=held_item item=apple hand=right>
+<bone_control>right_arm|pitch=60,yaw=-20,roll=0</bone_control>
+Mmm, looks delicious! <bone_control>head|pitch=-15,yaw=0,roll=0</bone_control>
+*takes a bite* <bone_control>head|pitch=-5,yaw=0,roll=0</bone_control>
+```
+
+What CAN'T happen without model upgrades:
+- Cheeks puffing (needs blend shapes in avatar file)
+- Food disappearing (could do with hide/spawn tricks)
+- Chewing animation (needs jaw bone + training data)
+
+### Files Involved (50+ in avatar/)
+
+**Core Control:**
+- `bone_control.py` - Direct skeleton manipulation
+- `ai_control.py` - Parses AI output for commands
+- `controller.py` - Main avatar controller
+- `autonomous.py` - Self-acting when AI isn't commanding
+
+**Physics:**
+- `physics_simulation.py` - Hair/cloth springs
+- `procedural_animation.py` - Procedural movement
+
+**Customization:**
+- `outfit_system.py` - Clothes, accessories, colors
+- `customizer.py` - User customization tools
+- `spawnable_objects.py` - Items avatar can hold/spawn
+
+**Display:**
+- `desktop_pet.py` - Floating overlay window
+- `live2d.py` - 2D layered animation
+- `avatar_display.py` - Main rendering (8K lines)
+
+---
+
+**That's it.** Codebase is solid - no security holes, no memory leaks, good patterns.
+
+

@@ -942,3 +942,100 @@ class ListSpawnedObjectsTool(Tool):
         
         except Exception as e:
             return {"success": False, "error": str(e)}
+
+
+class ChangeOutfitTool(Tool):
+    """
+    Change avatar's outfit, clothing, and accessories.
+    """
+    
+    name = "change_outfit"
+    description = "Change my outfit - clothes, accessories, colors. Full wardrobe control."
+    parameters = {
+        "action": "Action: equip, unequip, set_color, list_outfits, list_items, save_outfit, load_outfit",
+        "slot": "Slot: head, face, torso, arms, hands, legs, feet, hat, glasses, necklace, bracelet, left_hand, right_hand",
+        "item": "Item name/ID to equip (for equip action)",
+        "color": "Hex color like #ff5500 (for set_color action)",
+        "color_zone": "Which part to color: primary, secondary, accent (for set_color)",
+        "outfit_name": "Name for saving/loading outfits",
+    }
+    
+    def execute(
+        self,
+        action: str,
+        slot: str = None,
+        item: str = None,
+        color: str = None,
+        color_zone: str = "primary",
+        outfit_name: str = None,
+        **kwargs
+    ) -> dict[str, Any]:
+        try:
+            from enigma_engine.avatar.outfit_system import OutfitManager, ClothingSlot, AccessorySlot, PropSlot
+            
+            # Get or create outfit manager
+            manager = self._get_outfit_manager()
+            if not manager:
+                return {"success": False, "error": "Outfit system not available"}
+            
+            action = action.lower().strip()
+            
+            if action == "equip":
+                if not slot or not item:
+                    return {"success": False, "error": "Need slot and item for equip"}
+                success = manager.equip_item(slot, item)
+                return {"success": success, "action": "equipped", "slot": slot, "item": item}
+            
+            elif action == "unequip":
+                if not slot:
+                    return {"success": False, "error": "Need slot for unequip"}
+                success = manager.unequip_slot(slot)
+                return {"success": success, "action": "unequipped", "slot": slot}
+            
+            elif action == "set_color":
+                if not color:
+                    return {"success": False, "error": "Need color (hex like #ff5500)"}
+                success = manager.set_color(color_zone, color)
+                return {"success": success, "action": "colored", "zone": color_zone, "color": color}
+            
+            elif action == "list_outfits":
+                outfits = manager.list_saved_outfits()
+                return {"success": True, "outfits": outfits}
+            
+            elif action == "list_items":
+                items = manager.list_available_items(slot)
+                return {"success": True, "slot": slot, "items": items}
+            
+            elif action == "save_outfit":
+                if not outfit_name:
+                    return {"success": False, "error": "Need outfit_name to save"}
+                success = manager.save_current_outfit(outfit_name)
+                return {"success": success, "action": "saved", "name": outfit_name}
+            
+            elif action == "load_outfit":
+                if not outfit_name:
+                    return {"success": False, "error": "Need outfit_name to load"}
+                success = manager.load_outfit(outfit_name)
+                return {"success": success, "action": "loaded", "name": outfit_name}
+            
+            else:
+                valid = ["equip", "unequip", "set_color", "list_outfits", "list_items", "save_outfit", "load_outfit"]
+                return {"success": False, "error": f"Unknown action: {action}. Valid: {valid}"}
+        
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def _get_outfit_manager(self):
+        """Get the outfit manager instance."""
+        try:
+            from enigma_engine.avatar import get_avatar
+            avatar = get_avatar()
+            if avatar and hasattr(avatar, '_outfit_manager'):
+                return avatar._outfit_manager
+            
+            # Try to create one
+            from enigma_engine.avatar.outfit_system import OutfitManager
+            return OutfitManager()
+        except Exception:
+            return None
+
