@@ -261,6 +261,13 @@ class GamingMode:
         except Exception:
             pass
         
+        # Hook up screen effects integration
+        try:
+            from ..avatar.screen_effects import setup_gaming_mode_integration
+            setup_gaming_mode_integration()
+        except Exception:
+            pass
+        
         logger.info("Gaming mode enabled")
     
     def disable(self):

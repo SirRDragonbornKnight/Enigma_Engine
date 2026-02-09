@@ -1877,6 +1877,12 @@ class EnhancedMainWindow(QMainWindow):
         self._init_fullscreen_controller()
         
         # ─────────────────────────────────────────────────────────────────
+        # Initialize Gaming Mode
+        # Resource throttling and auto-hide during games
+        # ─────────────────────────────────────────────────────────────────
+        self._init_gaming_mode()
+        
+        # ─────────────────────────────────────────────────────────────────
         # First-run check or model selection
         # ─────────────────────────────────────────────────────────────────
         if not self.registry.registry.get("models"):
@@ -2360,6 +2366,33 @@ class EnhancedMainWindow(QMainWindow):
             print(f"Could not initialize fullscreen controller: {e}")
             self._fullscreen_controller = None
     
+    def _init_gaming_mode(self):
+        """
+        Initialize gaming mode for resource management during games.
+        
+        This system:
+        - Detects when games are running
+        - Throttles AI resource usage during games
+        - Auto-hides overlays (via fullscreen_controller)
+        - Connects screen effects to gaming mode
+        """
+        gaming_mode_enabled = self._gui_settings.get("gaming_mode_enabled", False)
+        
+        if gaming_mode_enabled:
+            try:
+                from ..core.gaming_mode import get_gaming_mode
+                
+                self._gaming_mode = get_gaming_mode()
+                self._gaming_mode.enable()
+                print("Gaming mode enabled")
+                
+            except Exception as e:
+                print(f"Could not initialize gaming mode: {e}")
+                self._gaming_mode = None
+        else:
+            self._gaming_mode = None
+            print("Gaming mode ready (not active)")
+    
     def _load_gui_settings(self):
         """Load GUI settings from file."""
         from ..config import CONFIG
@@ -2440,6 +2473,9 @@ class EnhancedMainWindow(QMainWindow):
             
             # Save mini chat settings
             settings["mini_chat_always_on_top"] = getattr(self, '_mini_chat_on_top', True)
+            
+            # Save gaming mode enabled state
+            settings["gaming_mode_enabled"] = hasattr(self, '_gaming_mode') and self._gaming_mode is not None
             
             with open(settings_path, "w") as f:
                 json.dump(settings, f, indent=2)

@@ -443,7 +443,7 @@ class AvatarPartEditor:
             try:
                 # Create canvas
                 canvas = QPixmap(self._canvas_width, self._canvas_height)
-                canvas.fill(Qt.transparent)
+                canvas.fill(QColor(0, 0, 0, 0))  # Transparent
                 
                 painter = QPainter(canvas)
                 painter.setRenderHint(QPainter.Antialiasing, True)
@@ -530,7 +530,7 @@ class AvatarPartEditor:
             if target is None:
                 # Fading out
                 result = QPixmap(source.size())
-                result.fill(Qt.transparent)
+                result.fill(QColor(0, 0, 0, 0))  # Transparent
                 
                 painter = QPainter(result)
                 painter.setOpacity(1.0 - progress)
@@ -541,7 +541,7 @@ class AvatarPartEditor:
             
             # Blend source and target
             result = QPixmap(target.size())
-            result.fill(Qt.transparent)
+            result.fill(QColor(0, 0, 0, 0))  # Transparent
             
             painter = QPainter(result)
             
