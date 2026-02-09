@@ -299,7 +299,7 @@ class CoquiEngine(TTSEngine):
             return []
         try:
             return self.tts.speakers or []
-        except:
+        except Exception:
             return []
     
     def _load_wav(self, path: str) -> Tuple[np.ndarray, int]:

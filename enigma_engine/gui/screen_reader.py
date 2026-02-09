@@ -83,7 +83,7 @@ class WindowsNarrator(ScreenReaderBackend):
             try:
                 import win32com.client
                 self._accessible = win32com.client.Dispatch("SAPI.SpVoice")
-            except:
+            except Exception:
                 pass
     
     def announce(self, text: str, priority: AnnouncementPriority = AnnouncementPriority.NORMAL):
@@ -118,9 +118,9 @@ class MacVoiceOver(ScreenReaderBackend):
                 capture_output=True,
                 timeout=5
             )
-        except:
+        except Exception:
             # Fallback to say command
-            subprocess.run(["say", text], capture_output=True)
+            subprocess.run(["say", text], capture_output=True, timeout=30)
     
     def is_available(self) -> bool:
         return self._available
@@ -161,7 +161,7 @@ class FallbackTTS(ScreenReaderBackend):
         try:
             import pyttsx3
             self._engine = pyttsx3.init()
-        except:
+        except Exception:
             pass
     
     def announce(self, text: str, priority: AnnouncementPriority = AnnouncementPriority.NORMAL):

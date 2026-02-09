@@ -716,6 +716,7 @@ class HuggingFaceEngine:
         
         # Chat history for stateful conversations
         self.chat_history: list[dict[str, str]] = []
+        self._max_chat_history: int = 100
     
     def generate(
         self,
@@ -772,6 +773,10 @@ class HuggingFaceEngine:
         self.chat_history.append({"role": "user", "content": message})
         self.chat_history.append({"role": "assistant", "content": response})
         
+        # Trim history if too long
+        if len(self.chat_history) > self._max_chat_history:
+            self.chat_history = self.chat_history[-self._max_chat_history:]
+        
         return response
     
     def chat_with_tools(
@@ -813,6 +818,10 @@ class HuggingFaceEngine:
         # Update history
         self.chat_history.append({"role": "user", "content": message})
         self.chat_history.append({"role": "assistant", "content": response})
+        
+        # Trim history if too long
+        if len(self.chat_history) > self._max_chat_history:
+            self.chat_history = self.chat_history[-self._max_chat_history:]
         
         return response
     

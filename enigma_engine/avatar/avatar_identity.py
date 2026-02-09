@@ -85,6 +85,7 @@ class AIAvatarIdentity:
         self.personality = personality
         self.appearance = AvatarAppearance()
         self.evolution_history: list[dict[str, Any]] = []
+        self._max_evolution_history: int = 50
         self.reasoning: str = ""
         
     def design_from_personality(self) -> AvatarAppearance:
@@ -283,6 +284,10 @@ class AIAvatarIdentity:
                 "confidence": confidence,
             }
         })
+        
+        # Trim history if too long
+        if len(self.evolution_history) > self._max_evolution_history:
+            self.evolution_history = self.evolution_history[-self._max_evolution_history:]
         
         return appearance
     

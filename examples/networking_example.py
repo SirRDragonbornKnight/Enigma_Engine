@@ -234,9 +234,9 @@ class ForgeClient:
                 headers["Authorization"] = f"Bearer {self.api_key}"
             
             if method == "GET":
-                response = requests.get(url, headers=headers)
+                response = requests.get(url, headers=headers, timeout=30)
             else:
-                response = requests.post(url, headers=headers, json=data)
+                response = requests.post(url, headers=headers, json=data, timeout=30)
             
             return response.json()
             

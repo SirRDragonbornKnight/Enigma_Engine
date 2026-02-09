@@ -530,7 +530,7 @@ class AuditLogger:
                         
                         level = event.get('level', 'info')
                         by_level[level] = by_level.get(level, 0) + 1
-                    except:
+                    except Exception:
                         continue
         
         return {

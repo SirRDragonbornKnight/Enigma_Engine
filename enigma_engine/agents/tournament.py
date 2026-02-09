@@ -238,6 +238,7 @@ class Tournament:
         self._matches: List[Match] = []
         self._listeners: List[Callable[[str, Any], None]] = []
         self._history: List[TournamentResult] = []
+        self._max_history: int = 100
     
     def add_participant(
         self,
@@ -323,6 +324,10 @@ class Tournament:
         )
         
         self._history.append(result)
+        
+        # Trim history if too long
+        if len(self._history) > self._max_history:
+            self._history = self._history[-self._max_history:]
         
         self._emit("tournament_ended", {
             "champion": champion,

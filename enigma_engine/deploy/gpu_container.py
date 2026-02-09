@@ -418,7 +418,8 @@ def detect_gpu() -> Optional[GPUVendor]:
         result = subprocess.run(
             ["nvidia-smi"],
             capture_output=True,
-            text=True
+            text=True,
+            timeout=10
         )
         if result.returncode == 0:
             return GPUVendor.NVIDIA
@@ -427,7 +428,8 @@ def detect_gpu() -> Optional[GPUVendor]:
         result = subprocess.run(
             ["rocm-smi"],
             capture_output=True,
-            text=True
+            text=True,
+            timeout=10
         )
         if result.returncode == 0:
             return GPUVendor.AMD

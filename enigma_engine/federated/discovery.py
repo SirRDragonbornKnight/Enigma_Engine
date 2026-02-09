@@ -156,6 +156,7 @@ class FederationDiscovery:
         
         Runs in background thread.
         """
+        sock = None
         try:
             # Create UDP socket
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -185,10 +186,11 @@ class FederationDiscovery:
                 except Exception as e:
                     logger.debug(f"Error receiving broadcast: {e}")
             
-            sock.close()
-            
         except Exception as e:
             logger.error(f"Error in listener thread: {e}")
+        finally:
+            if sock:
+                sock.close()
     
     def _broadcast_federations(self):
         """
@@ -196,6 +198,7 @@ class FederationDiscovery:
         
         Runs in background thread.
         """
+        sock = None
         try:
             # Create UDP socket for broadcasting
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -221,10 +224,11 @@ class FederationDiscovery:
                 # Broadcast every 2 seconds
                 time.sleep(2)
             
-            sock.close()
-            
         except Exception as e:
             logger.error(f"Error in broadcaster thread: {e}")
+        finally:
+            if sock:
+                sock.close()
     
     def _handle_announcement(self, message: dict, addr: tuple):
         """

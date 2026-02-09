@@ -331,7 +331,7 @@ class GameSessionTracker:
                 with open(file) as f:
                     data = json.load(f)
                     games.append(data.get("game", file.stem))
-            except:
+            except Exception:
                 pass
         return sorted(set(games))
     

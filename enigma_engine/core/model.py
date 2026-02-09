@@ -2082,11 +2082,11 @@ class Enigma(nn.Module):
         return self.config.to_dict()
 
     @classmethod
-    def from_config(cls, config: dict[str, Any]) -> 'Forge':
+    def from_config(cls, config: dict[str, Any]) -> 'Enigma':
         return cls(config=ForgeConfig.from_dict(config))
 
     @classmethod
-    def from_pretrained(cls, path: Path) -> 'Forge':
+    def from_pretrained(cls, path: Path) -> 'Enigma':
         from .model_registry import safe_load_weights
         path = Path(path)
         config_file = path / 'config.json' if path.is_dir() else path.with_suffix('.json')
@@ -2105,7 +2105,7 @@ class Enigma(nn.Module):
         return model
 
     @classmethod
-    def from_pretrained_quantized(cls, path: Path, quantization: str = "dynamic") -> 'Forge':
+    def from_pretrained_quantized(cls, path: Path, quantization: str = "dynamic") -> 'Enigma':
         """
         Load a pretrained model with quantization applied.
         
@@ -2138,7 +2138,7 @@ class Enigma(nn.Module):
         return model
 
     @classmethod
-    def load_mmap(cls, path: Path) -> 'Forge':
+    def load_mmap(cls, path: Path) -> 'Enigma':
         """
         Load model using memory-mapped file loading.
         
@@ -2195,7 +2195,7 @@ class Enigma(nn.Module):
         return model
 
     @classmethod
-    def auto_configure(cls, vocab_size: int = 8000) -> 'Forge':
+    def auto_configure(cls, vocab_size: int = 8000) -> 'Enigma':
         """
         Create an optimally-configured model for the current hardware.
         
@@ -2245,7 +2245,7 @@ class Enigma(nn.Module):
             logger.warning(f"Hardware detection not available: {e}, using default config")
             return create_model('small', vocab_size=vocab_size)
 
-    def quantize(self, mode: str = "dynamic") -> 'Forge':
+    def quantize(self, mode: str = "dynamic") -> 'Enigma':
         """
         Apply quantization to reduce model memory footprint.
         
@@ -2374,7 +2374,7 @@ class Enigma(nn.Module):
     # =========================================================================
     
     @classmethod
-    def from_any(cls, path: Union[str, Path], **kwargs) -> 'Forge':
+    def from_any(cls, path: Union[str, Path], **kwargs) -> 'Enigma':
         """
         Universal model loader - auto-detects format and loads appropriately.
         
@@ -3044,19 +3044,19 @@ def estimate_memory_usage(size: str, quantization: str = "none") -> dict[str, fl
 # Aliases (for backwards compatibility)
 # =============================================================================
 
-# Legacy aliases - these are deprecated, use 'Forge' directly
-# Kept for backwards compatibility with old code
-TinyForge = Forge  # Deprecated: use Forge
-ForgeModel = Forge  # Deprecated: use Forge
-Enigma = Forge  # Deprecated: use Forge
+# Legacy aliases - the main class is 'Enigma', these are for backwards compatibility
+# Kept for compatibility with old code that used different names
+Forge = Enigma  # Alias: some old code used 'Forge'
+TinyForge = Enigma  # Deprecated alias
+ForgeModel = Enigma  # Deprecated alias
 
 # =============================================================================
 # Factory Functions
 # =============================================================================
 
-def create_model(size: str = 'small', vocab_size: Optional[int] = None, **kwargs) -> Forge:
+def create_model(size: str = 'small', vocab_size: Optional[int] = None, **kwargs) -> Enigma:
     """
-    Create an Forge model from a preset configuration.
+    Create an Enigma model from a preset configuration.
 
     Args:
         size: Model size preset (tiny, small, medium, large, xl, etc.)
@@ -3064,7 +3064,7 @@ def create_model(size: str = 'small', vocab_size: Optional[int] = None, **kwargs
         **kwargs: Additional config overrides (unknown keys are logged and ignored)
 
     Returns:
-        Configured Forge model instance
+        Configured Enigma model instance
 
     Raises:
         ValueError: If size is invalid or vocab_size is invalid
@@ -3112,20 +3112,20 @@ def create_model(size: str = 'small', vocab_size: Optional[int] = None, **kwargs
 
     # Create model
     try:
-        model = Forge(config=config)
+        model = Enigma(config=config)
     except Exception as e:
         logger.error(f"Failed to initialize model: {e}")
         raise RuntimeError(f"Model creation failed: {e}") from e
 
-    logger.info(f"Created Forge ({size}): {model.num_parameters:,} params, "
+    logger.info(f"Created Enigma ({size}): {model.num_parameters:,} params, "
           f"{config.dim}d, {config.n_layers}L")
     return model
 
 
-# Additional aliases for backwards compatibility
-TinyForge = Forge
-ForgeModel = Forge
-Enigma = Forge  # Legacy name used in tests and documentation
+# Additional aliases (already defined above, these are duplicates - keeping for safety)
+# Forge = Enigma  # Already defined above
+# TinyForge = Enigma  # Already defined above
+# ForgeModel = Enigma  # Already defined above
 
 
 def create_model_auto(size: str = 'small', vocab_size: Optional[int] = None, **kwargs):

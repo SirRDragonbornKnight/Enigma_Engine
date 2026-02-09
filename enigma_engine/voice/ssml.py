@@ -649,7 +649,7 @@ class SSMLProcessor:
             cmd.append(segment.text)
             
             if blocking:
-                subprocess.run(cmd, capture_output=True)
+                subprocess.run(cmd, capture_output=True, timeout=60)
             else:
                 subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 

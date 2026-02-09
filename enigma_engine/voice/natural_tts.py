@@ -53,21 +53,32 @@ class NaturalTTS:
     
     def speak(self, text: str):
         """Speak text through speakers."""
+        import atexit
         import os
         import subprocess
         import tempfile
         
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
-            self.save(f.name, text)
-            # Play audio using subprocess (safer than os.system)
-            if os.name == 'nt':
-                subprocess.Popen(['cmd', '/c', 'start', '', f.name], shell=False)
-            elif os.name == 'posix':
-                # Try aplay first, then afplay (macOS)
-                try:
-                    subprocess.run(['aplay', f.name], stderr=subprocess.DEVNULL, check=False)
-                except FileNotFoundError:
-                    subprocess.run(['afplay', f.name], stderr=subprocess.DEVNULL, check=False)
+            temp_path = f.name
+            
+        self.save(temp_path, text)
+        # Play audio using subprocess (safer than os.system)
+        if os.name == 'nt':
+            # Windows: Popen doesn't wait, file may still be in use
+            # Schedule cleanup for when process exits
+            atexit.register(lambda p=temp_path: os.unlink(p) if os.path.exists(p) else None)
+            subprocess.Popen(['cmd', '/c', 'start', '', temp_path], shell=False)
+        elif os.name == 'posix':
+            # Try aplay first, then afplay (macOS)
+            try:
+                subprocess.run(['aplay', temp_path], stderr=subprocess.DEVNULL, check=False, timeout=60)
+            except FileNotFoundError:
+                subprocess.run(['afplay', temp_path], stderr=subprocess.DEVNULL, check=False, timeout=60)
+            # Cleanup temp file after playback
+            try:
+                os.unlink(temp_path)
+            except Exception:
+                pass
     
     def save(self, path: str, text: str):
         """Save speech to file."""

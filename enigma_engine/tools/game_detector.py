@@ -426,7 +426,7 @@ class GameDetector:
         if WIN32_AVAILABLE:
             try:
                 titles = self._get_win32_window_titles()
-            except:
+            except Exception:
                 pass
         
         return titles
@@ -464,7 +464,7 @@ class GameDetector:
         
         try:
             return bool(re.match(regex, text))
-        except:
+        except Exception:
             return pattern in text
     
     def on_game_change(self, callback: Callable[[Optional[GameProfile]], None]):

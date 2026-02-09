@@ -199,6 +199,9 @@ class InferenceWorker:
     def _handle_client(self, client_socket: socket.socket, address):
         """Handle a client connection."""
         try:
+            # Set timeout for client socket to prevent indefinite blocking
+            client_socket.settimeout(60.0)
+            
             # Receive message
             length_data = client_socket.recv(4)
             if not length_data:

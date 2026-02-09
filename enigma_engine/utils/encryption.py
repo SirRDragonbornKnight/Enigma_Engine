@@ -151,7 +151,7 @@ class KeyManager:
         try:
             data = json.loads(self.key_file.read_text())
             return base64.b64decode(data["salt"])
-        except:
+        except Exception:
             return None
 
 

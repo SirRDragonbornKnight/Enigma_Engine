@@ -1349,15 +1349,15 @@ def _do_voice_input(parent, save_recording: bool = False):
         
         # Suppress PyAudio stderr spam when opening microphone
         old_stderr = sys.stderr
+        devnull = open(os.devnull, 'w')
         try:
-            devnull = open(os.devnull, 'w')
             sys.stderr = devnull
             mic = sr.Microphone()
+        except Exception:
+            raise
+        finally:
             sys.stderr = old_stderr
             devnull.close()
-        except Exception:
-            sys.stderr = old_stderr
-            raise
         
         with mic as source:
             recognizer.adjust_for_ambient_noise(source, duration=0.3)

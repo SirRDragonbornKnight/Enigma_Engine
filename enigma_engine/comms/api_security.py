@@ -507,6 +507,9 @@ class UsageTracker:
     Track API usage and estimate costs.
     """
     
+    # Maximum in-memory records to prevent unbounded growth
+    _max_records: int = 10000
+    
     def __init__(self, db_path: Optional[str] = None):
         """Initialize usage tracker."""
         self._db_path = db_path
@@ -551,6 +554,9 @@ class UsageTracker:
         
         with self._lock:
             self._records.append(record)
+            # Trim oldest records if exceeding limit
+            if len(self._records) > self._max_records:
+                self._records = self._records[-self._max_records:]
         
         if self._db_path:
             with sqlite3.connect(self._db_path) as conn:

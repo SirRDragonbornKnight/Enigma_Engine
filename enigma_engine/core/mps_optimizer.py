@@ -84,7 +84,7 @@ if HAS_TORCH:
             try:
                 result = subprocess.run(
                     ['sysctl', '-n', 'machdep.cpu.brand_string'],
-                    capture_output=True, text=True
+                    capture_output=True, text=True, timeout=5
                 )
                 chip = result.stdout.strip()
             except (subprocess.SubprocessError, OSError):
@@ -105,7 +105,7 @@ if HAS_TORCH:
             try:
                 result = subprocess.run(
                     ['sysctl', '-n', 'hw.memsize'],
-                    capture_output=True, text=True
+                    capture_output=True, text=True, timeout=5
                 )
                 memory = int(result.stdout.strip()) / (1024**3)
             except (subprocess.SubprocessError, ValueError, OSError):

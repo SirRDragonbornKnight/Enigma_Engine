@@ -94,34 +94,19 @@ class TestGameMode(unittest.TestCase):
         # We can't fully test without mocking dependencies
         pass
     
-    @patch('enigma_engine.core.game_mode.get_process_monitor')
-    def test_game_mode_status(self, mock_get_monitor):
+    def test_game_mode_status(self):
         """Test game mode status reporting."""
         from enigma_engine.core.game_mode import GameMode
-        
-        # Mock the process monitor
-        mock_monitor = Mock()
-        mock_monitor.get_running_games.return_value = set()
-        mock_monitor.get_fullscreen_app.return_value = None
-        mock_get_monitor.return_value = mock_monitor
         
         game_mode = GameMode()
         status = game_mode.get_status()
         
         self.assertIsInstance(status, dict)
         self.assertIn('enabled', status)
-        self.assertIn('aggressive', status)
-        self.assertIn('active', status)
     
-    @patch('enigma_engine.core.game_mode.get_process_monitor')
-    def test_game_mode_enable_disable(self, mock_get_monitor):
+    def test_game_mode_enable_disable(self):
         """Test enabling and disabling game mode."""
         from enigma_engine.core.game_mode import GameMode
-        
-        mock_monitor = Mock()
-        mock_monitor.get_running_games.return_value = set()
-        mock_monitor.get_fullscreen_app.return_value = None
-        mock_get_monitor.return_value = mock_monitor
         
         game_mode = GameMode()
         

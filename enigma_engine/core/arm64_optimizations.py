@@ -98,7 +98,7 @@ class DeviceProfile:
                 import subprocess
                 result = subprocess.run(
                     ["sysctl", "-n", "machdep.cpu.brand_string"],
-                    capture_output=True, text=True
+                    capture_output=True, text=True, timeout=5
                 )
                 brand = result.stdout.lower()
                 if "m1" in brand:
@@ -330,7 +330,7 @@ class PowerManager:
             import subprocess
             result = subprocess.run(
                 ["osx-cpu-temp"],
-                capture_output=True, text=True
+                capture_output=True, text=True, timeout=5
             )
             return float(result.stdout.strip().replace("C", ""))
         except (subprocess.SubprocessError, FileNotFoundError, ValueError, OSError):

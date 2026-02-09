@@ -185,7 +185,7 @@ class SIMDDetector:
             import subprocess
             result = subprocess.run(
                 ['wmic', 'cpu', 'get', 'name'],
-                capture_output=True, text=True
+                capture_output=True, text=True, timeout=5
             )
             # Modern Intel/AMD CPUs support at least AVX2
             cpu_name = result.stdout.lower()

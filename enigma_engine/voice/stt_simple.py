@@ -108,15 +108,15 @@ def _transcribe_sr_from_mic(timeout):
         
         # Suppress PyAudio stderr spam when opening microphone
         old_stderr = sys.stderr
+        devnull = open(os.devnull, 'w')
         try:
-            devnull = open(os.devnull, 'w')
             sys.stderr = devnull
             mic = sr.Microphone()
+        except Exception:
+            raise
+        finally:
             sys.stderr = old_stderr
             devnull.close()
-        except Exception:
-            sys.stderr = old_stderr
-            raise
         
         with mic as source:
             r.adjust_for_ambient_noise(source)

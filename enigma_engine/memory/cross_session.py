@@ -466,7 +466,7 @@ class CrossSessionContext:
         if index_file.exists():
             try:
                 self._session_index = json.loads(index_file.read_text())
-            except:
+            except Exception:
                 self._session_index = {}
         
         # Load user profiles
@@ -484,7 +484,7 @@ class CrossSessionContext:
                         created=data.get("created", time.time()),
                         last_seen=data.get("last_seen", time.time())
                     )
-            except:
+            except Exception:
                 pass
 
 

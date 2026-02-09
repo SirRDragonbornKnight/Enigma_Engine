@@ -38,7 +38,7 @@ except ImportError:
 HAVE_COG = False
 try:
     import subprocess
-    result = subprocess.run(["cog", "--version"], capture_output=True, text=True)
+    result = subprocess.run(["cog", "--version"], capture_output=True, text=True, timeout=5)
     HAVE_COG = result.returncode == 0
 except Exception:
     pass
@@ -457,7 +457,8 @@ print(output)
                     ["cog", "push", f"r8.im/{model_owner}/{model_name}"],
                     cwd=str(output_path),
                     capture_output=True,
-                    text=True
+                    text=True,
+                    timeout=3600  # Model uploads can take a long time
                 )
                 
                 if result.returncode != 0:

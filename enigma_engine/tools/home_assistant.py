@@ -112,9 +112,9 @@ class HomeAssistantClient:
             url = f"{self._url}/api/{endpoint}"
             
             if method == "GET":
-                response = requests.get(url, headers=self._headers)
+                response = requests.get(url, headers=self._headers, timeout=30)
             elif method == "POST":
-                response = requests.post(url, headers=self._headers, json=data)
+                response = requests.post(url, headers=self._headers, json=data, timeout=30)
             else:
                 return None
             

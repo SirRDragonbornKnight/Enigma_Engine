@@ -830,7 +830,7 @@ class CameraStreamTool(Tool):
                 import subprocess
 
                 # Check if motion is installed
-                result = subprocess.run(['which', 'motion'], capture_output=True)
+                result = subprocess.run(['which', 'motion'], capture_output=True, timeout=5)
                 
                 if result.returncode == 0:
                     # Start motion with basic config

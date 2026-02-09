@@ -178,6 +178,9 @@ class FederatedCoordinator:
         }
         
         self.round_history.append(round_stats)
+        # Trim history to prevent unbounded growth
+        if len(self.round_history) > self._max_round_history:
+            self.round_history = self.round_history[-self._max_round_history:]
         logger.info(
             f"Round {self.current_round} completed: {len(updates)} updates, "
             f"avg_loss={round_stats['avg_loss']:.4f}"

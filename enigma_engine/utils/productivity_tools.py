@@ -131,7 +131,8 @@ class CommitMessageGenerator:
                 ["git", "diff", "--cached", "--stat"],
                 cwd=self.repo_path,
                 capture_output=True,
-                text=True
+                text=True,
+                timeout=30
             )
             return result.stdout
         except Exception as e:
@@ -145,7 +146,8 @@ class CommitMessageGenerator:
                 ["git", "diff", "--cached", "--name-only"],
                 cwd=self.repo_path,
                 capture_output=True,
-                text=True
+                text=True,
+                timeout=30
             )
             return result.stdout.strip().split("\n") if result.stdout else []
         except Exception as e:

@@ -142,17 +142,19 @@ class AIConversation:
         - Personality injection
     """
     
-    def __init__(self, name: str = None, log_callback: Callable = None):
+    def __init__(self, name: str = None, log_callback: Callable = None, max_history: int = 500):
         """
         Args:
             name: Name for this conversation
             log_callback: Function to call with each exchange (for GUI)
+            max_history: Maximum history entries to keep (0 = unlimited for saving)
         """
         self.name = name or f"conv_{int(time.time())}"
         self.participants: dict[str, AIParticipant] = {}
         self.history: list[dict] = []
         self.log_callback = log_callback
         self.created = datetime.now().isoformat()
+        self._max_history = max_history
     
     def add_participant(
         self,
@@ -237,6 +239,9 @@ class AIConversation:
             
             # Store and notify
             self.history.append(exchange)
+            # Trim history if limit set
+            if self._max_history > 0 and len(self.history) > self._max_history:
+                self.history = self.history[-self._max_history:]
             if self.log_callback:
                 self.log_callback(exchange)
             

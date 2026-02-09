@@ -90,6 +90,7 @@ class AILearnedGenerator:
         
         # Generation history
         self.generation_history: list[dict[str, Any]] = []
+        self._max_history: int = 100
         
         self.load()
     
@@ -236,6 +237,10 @@ class AILearnedGenerator:
             "timestamp": design["generated_at"],
             "parameters": design
         })
+        
+        # Trim history if too long
+        if len(self.generation_history) > self._max_history:
+            self.generation_history = self.generation_history[-self._max_history:]
         
         return design
     

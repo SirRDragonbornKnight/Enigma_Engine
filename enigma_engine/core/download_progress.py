@@ -122,13 +122,16 @@ class DownloadProgress:
         )
 
 
+# Use format_bytes from utils - consolidated from duplicate implementations
+from enigma_engine.utils import format_bytes
+
+
 def format_size(size_bytes: int) -> str:
-    """Format bytes as human-readable string."""
-    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
-        if size_bytes < 1024:
-            return f"{size_bytes:.1f} {unit}"
-        size_bytes /= 1024
-    return f"{size_bytes:.1f} PB"
+    """Format bytes as human-readable string.
+    
+    Note: Uses format_bytes from utils (DRY - was duplicated).
+    """
+    return format_bytes(size_bytes)
 
 
 class ProgressCallback:

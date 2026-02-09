@@ -440,7 +440,8 @@ class APIKeyManager:
                 import requests
                 resp = requests.get(
                     "https://huggingface.co/api/whoami",
-                    headers={"Authorization": f"Bearer {key}"}
+                    headers={"Authorization": f"Bearer {key}"},
+                    timeout=10
                 )
                 return resp.status_code == 200
             else:

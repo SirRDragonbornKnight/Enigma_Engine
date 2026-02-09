@@ -115,7 +115,7 @@ class WaylandDetector:
         try:
             result = subprocess.run(
                 ["ps", "-A", "-o", "comm="],
-                capture_output=True, text=True
+                capture_output=True, text=True, timeout=5
             )
             processes = result.stdout.lower()
             
@@ -141,7 +141,7 @@ class WaylandDetector:
         try:
             result = subprocess.run(
                 ["wayland-info"],
-                capture_output=True, text=True
+                capture_output=True, text=True, timeout=5
             )
             return "zwlr_layer_shell_v1" in result.stdout
         except (subprocess.SubprocessError, FileNotFoundError, OSError):
@@ -157,7 +157,7 @@ class WaylandDetector:
         try:
             result = subprocess.run(
                 ["wlr-randr"],
-                capture_output=True, text=True
+                capture_output=True, text=True, timeout=5
             )
             
             current_output = None
@@ -485,7 +485,7 @@ class WaylandClipboard:
             try:
                 result = subprocess.run(
                     ["wl-paste", "-n"],
-                    capture_output=True, text=True
+                    capture_output=True, text=True, timeout=5
                 )
                 return result.stdout
             except (subprocess.SubprocessError, FileNotFoundError, OSError):
@@ -495,7 +495,7 @@ class WaylandClipboard:
         try:
             result = subprocess.run(
                 ["xclip", "-selection", "clipboard", "-o"],
-                capture_output=True, text=True
+                capture_output=True, text=True, timeout=5
             )
             return result.stdout
         except (subprocess.SubprocessError, FileNotFoundError, OSError):
@@ -516,7 +516,8 @@ class WaylandClipboard:
                 subprocess.run(
                     ["wl-copy"],
                     input=text,
-                    text=True
+                    text=True,
+                    timeout=5
                 )
                 return
             except (subprocess.SubprocessError, FileNotFoundError, OSError):
@@ -527,7 +528,8 @@ class WaylandClipboard:
             subprocess.run(
                 ["xclip", "-selection", "clipboard"],
                 input=text,
-                text=True
+                text=True,
+                timeout=5
             )
             return
         except (subprocess.SubprocessError, FileNotFoundError, OSError):

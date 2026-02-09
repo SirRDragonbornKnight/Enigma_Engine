@@ -39,7 +39,7 @@ except ImportError:
 # Check for Ollama CLI
 HAVE_OLLAMA = False
 try:
-    result = subprocess.run(["ollama", "--version"], capture_output=True, text=True)
+    result = subprocess.run(["ollama", "--version"], capture_output=True, text=True, timeout=5)
     HAVE_OLLAMA = result.returncode == 0
 except Exception:
     pass
@@ -291,7 +291,8 @@ Current: `{quantization}`
                     result = subprocess.run(
                         ["ollama", "list"],
                         capture_output=True,
-                        text=True
+                        text=True,
+                        timeout=10
                     )
                     if result.returncode == 0:
                         return ExportResult(
@@ -399,7 +400,8 @@ class OllamaImporter(ImportProvider):
             result = subprocess.run(
                 ["ollama", "list"],
                 capture_output=True,
-                text=True
+                text=True,
+                timeout=10
             )
             
             if result.returncode != 0:
@@ -467,7 +469,8 @@ class OllamaImporter(ImportProvider):
             result = subprocess.run(
                 ["ollama", "pull", source_id],
                 capture_output=True,
-                text=True
+                text=True,
+                timeout=3600  # Model downloads can take a long time
             )
             
             if result.returncode != 0:
@@ -521,7 +524,8 @@ def api_generate(prompt: str, **kwargs) -> str:
     import requests
     response = requests.post(
         "http://localhost:11434/api/generate",
-        json={{"model": MODEL_ID, "prompt": prompt, **kwargs}}
+        json={{"model": MODEL_ID, "prompt": prompt, **kwargs}},
+        timeout=120
     )
     return response.json().get("response", "")
 

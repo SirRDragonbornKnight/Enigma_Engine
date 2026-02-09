@@ -394,7 +394,8 @@ class BatteryManager:
             result = subprocess.run(
                 ["pmset", "-g", "batt"],
                 capture_output=True,
-                text=True
+                text=True,
+                timeout=5
             )
             
             output = result.stdout

@@ -148,7 +148,8 @@ class TunnelManager:
             subprocess.run(
                 ["ngrok", "version"],
                 capture_output=True,
-                check=True
+                check=True,
+                timeout=10
             )
         except (subprocess.CalledProcessError, FileNotFoundError):
             logger.error("ngrok not found. Install from https://ngrok.com/download")
@@ -160,7 +161,8 @@ class TunnelManager:
                 subprocess.run(
                     ["ngrok", "config", "add-authtoken", self.auth_token],
                     capture_output=True,
-                    check=True
+                    check=True,
+                    timeout=15
                 )
                 logger.info("ngrok auth token configured")
             except subprocess.CalledProcessError as e:
@@ -240,7 +242,8 @@ class TunnelManager:
                 ["lt", "--version"],
                 capture_output=True,
                 check=True,
-                shell=False
+                shell=False,
+                timeout=10
             )
         except (subprocess.CalledProcessError, FileNotFoundError):
             logger.error("localtunnel not found. Install with: npm install -g localtunnel")
@@ -326,7 +329,8 @@ class TunnelManager:
             subprocess.run(
                 ["bore", "--version"],
                 capture_output=True,
-                check=True
+                check=True,
+                timeout=10
             )
         except (subprocess.CalledProcessError, FileNotFoundError):
             logger.error("bore not found. Install from https://github.com/ekzhang/bore")

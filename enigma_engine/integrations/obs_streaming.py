@@ -198,9 +198,17 @@ class OBSController:
         
         await self._ws.send(json.dumps(message))
         
-        # Wait for response
+        # Wait for response with timeout
+        timeout = 30.0  # 30 second timeout
+        start_time = asyncio.get_event_loop().time()
         while True:
-            response = await self._ws.recv()
+            remaining = timeout - (asyncio.get_event_loop().time() - start_time)
+            if remaining <= 0:
+                return {"error": "Request timed out"}
+            try:
+                response = await asyncio.wait_for(self._ws.recv(), timeout=remaining)
+            except asyncio.TimeoutError:
+                return {"error": "Request timed out"}
             response_data = json.loads(response)
             
             if response_data.get("op") == 7:  # RequestResponse
@@ -383,6 +391,9 @@ class OverlayServer:
     def add_alert(self, alert: Dict):
         """Add an alert."""
         self._alerts.append(alert)
+        # Keep last 50 alerts to prevent unbounded growth
+        if len(self._alerts) > 50:
+            self._alerts = self._alerts[-50:]
 
 
 class OBSIntegration:

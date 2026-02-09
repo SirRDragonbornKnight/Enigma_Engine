@@ -162,25 +162,33 @@ export class SiriShortcutsManager {
   }
 
   private async generateResponse(serverUrl: string, apiKey: string, prompt: string): Promise<AssistantResponse> {
-    const response = await fetch(`${serverUrl}/v1/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {}),
-      },
-      body: JSON.stringify({
-        prompt,
-        max_tokens: 150,
-        temperature: 0.7,
-      }),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+    
+    try {
+      const response = await fetch(`${serverUrl}/v1/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {}),
+        },
+        body: JSON.stringify({
+          prompt,
+          max_tokens: 150,
+          temperature: 0.7,
+        }),
+        signal: controller.signal,
+      });
 
-    const data = await response.json();
-    return {
-      text: data.choices?.[0]?.text || 'No response',
-      success: true,
-      action: 'generate',
-    };
+      const data = await response.json();
+      return {
+        text: data.choices?.[0]?.text || 'No response',
+        success: true,
+        action: 'generate',
+      };
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
 
   private async continueChat(serverUrl: string, apiKey: string, userInput?: string): Promise<AssistantResponse> {
@@ -198,24 +206,32 @@ export class SiriShortcutsManager {
       messages.push({ role: 'user', content: userInput });
     }
 
-    const response = await fetch(`${serverUrl}/v1/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {}),
-      },
-      body: JSON.stringify({
-        messages: messages.slice(-10), // Last 10 messages for context
-        max_tokens: 150,
-      }),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+    
+    try {
+      const response = await fetch(`${serverUrl}/v1/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {}),
+        },
+        body: JSON.stringify({
+          messages: messages.slice(-10), // Last 10 messages for context
+          max_tokens: 150,
+        }),
+        signal: controller.signal,
+      });
 
-    const data = await response.json();
-    return {
-      text: data.choices?.[0]?.message?.content || 'No response',
-      success: true,
-      action: 'chat',
-    };
+      const data = await response.json();
+      return {
+        text: data.choices?.[0]?.message?.content || 'No response',
+        success: true,
+        action: 'chat',
+      };
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
 
   private async summarizeText(serverUrl: string, apiKey: string, text: string): Promise<AssistantResponse> {

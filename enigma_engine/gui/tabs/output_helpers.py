@@ -58,14 +58,14 @@ def open_folder(folder_path: Union[str, Path]) -> None:
         os.startfile(str(folder))  # type: ignore[attr-defined]
     elif sys.platform == 'darwin':
         import subprocess
-        subprocess.run(['open', str(folder)])
+        subprocess.run(['open', str(folder)], timeout=10)
     else:
         # Linux/other - try Qt first, then xdg-open
         if HAS_PYQT:
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
         else:
             import subprocess
-            subprocess.run(['xdg-open', str(folder)])
+            subprocess.run(['xdg-open', str(folder)], timeout=10)
 
 
 def create_auto_open_options(parent: Any) -> tuple[Any, Any, Any]:

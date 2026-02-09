@@ -141,7 +141,7 @@ FORGE_LOG_LEVEL=info
             # Check if Railway CLI is installed
             result = subprocess.run(
                 ["railway", "--version"],
-                capture_output=True, text=True
+                capture_output=True, text=True, timeout=10
             )
             
             if result.returncode != 0:
@@ -152,7 +152,7 @@ FORGE_LOG_LEVEL=info
             result = subprocess.run(
                 ["railway", "up"],
                 cwd=self._output_dir.parent,
-                capture_output=True, text=True
+                capture_output=True, text=True, timeout=600
             )
             
             if result.returncode == 0:
@@ -288,7 +288,7 @@ primary_region = "{self._config.region}"
             # Check if Fly CLI is installed
             result = subprocess.run(
                 ["fly", "version"],
-                capture_output=True, text=True
+                capture_output=True, text=True, timeout=10
             )
             
             if result.returncode != 0:
@@ -299,7 +299,7 @@ primary_region = "{self._config.region}"
             result = subprocess.run(
                 ["fly", "deploy", "--config", str(self._output_dir / "fly.toml")],
                 cwd=self._output_dir.parent,
-                capture_output=True, text=True
+                capture_output=True, text=True, timeout=600
             )
             
             if result.returncode == 0:
@@ -381,7 +381,7 @@ networks:
             result = subprocess.run(
                 ["docker-compose", "-f", "docker-compose.prod.yml", "up", "-d", "--build"],
                 cwd=self._output_dir,
-                capture_output=True, text=True
+                capture_output=True, text=True, timeout=1800
             )
             
             return result.returncode == 0

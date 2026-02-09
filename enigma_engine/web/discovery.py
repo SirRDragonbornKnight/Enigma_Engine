@@ -94,16 +94,19 @@ class LocalDiscovery:
         Returns:
             Local IP address or None if unavailable
         """
+        s = None
         try:
             # Create a socket to determine local IP
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.connect(("8.8.8.8", 80))
             local_ip = s.getsockname()[0]
-            s.close()
             return local_ip
         except Exception as e:
             logger.warning(f"Could not determine local IP: {e}")
             return None
+        finally:
+            if s:
+                s.close()
 
 
 def get_local_ip() -> str:
@@ -113,11 +116,14 @@ def get_local_ip() -> str:
     Returns:
         Local IP address as string, or "localhost" if unavailable
     """
+    s = None
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
         ip = s.getsockname()[0]
-        s.close()
         return ip
     except Exception:
         return "localhost"
+    finally:
+        if s:
+            s.close()

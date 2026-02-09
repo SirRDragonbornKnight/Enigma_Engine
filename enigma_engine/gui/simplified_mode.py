@@ -66,6 +66,7 @@ if HAS_PYQT:
             # History
             self._history: List[str] = []
             self._history_index = -1
+            self._max_history = 100
             
             self._setup_ui()
             self._setup_shortcuts()
@@ -284,6 +285,8 @@ if HAS_PYQT:
             
             # Add to history
             self._history.append(text)
+            if len(self._history) > self._max_history:
+                self._history = self._history[-self._max_history:]
             self._history_index = len(self._history)
             
             # Display user message

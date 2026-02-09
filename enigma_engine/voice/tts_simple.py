@@ -50,39 +50,39 @@ def speak(text: str):
     try:
         if platform.system() == "Darwin":
             # macOS: use 'say' command
-            subprocess.run(['say', safe_text], check=False)
+            subprocess.run(['say', safe_text], check=False, timeout=60)
         elif platform.system() == "Windows":
             # Windows: use SAPI via PowerShell
             subprocess.run(
                 ['powershell', '-c', 
                  f'Add-Type -AssemblyName System.speech; $s=new-object System.Speech.Synthesis.SpeechSynthesizer; $s.Speak("{safe_text}")'],
-                check=False
+                check=False, timeout=60
             )
         else:
             # Linux: try multiple TTS options
             if shutil.which("espeak-ng"):
-                subprocess.run(['espeak-ng', safe_text], check=False)
+                subprocess.run(['espeak-ng', safe_text], check=False, timeout=60)
             elif shutil.which("espeak"):
-                subprocess.run(['espeak', safe_text], check=False)
+                subprocess.run(['espeak', safe_text], check=False, timeout=60)
             elif shutil.which("festival"):
                 # Festival requires text via stdin
                 process = subprocess.Popen(['festival', '--tts'], stdin=subprocess.PIPE, text=True)
-                process.communicate(input=safe_text)
+                process.communicate(input=safe_text, timeout=60)
             elif shutil.which("pico2wave"):
                 # Pico TTS (high quality, needs temp file)
                 import os
                 import tempfile
                 with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
                     temp_path = f.name
-                subprocess.run(['pico2wave', '-w', temp_path, safe_text], check=False)
+                subprocess.run(['pico2wave', '-w', temp_path, safe_text], check=False, timeout=60)
                 if shutil.which("aplay"):
-                    subprocess.run(['aplay', temp_path], check=False)
+                    subprocess.run(['aplay', temp_path], check=False, timeout=60)
                 elif shutil.which("paplay"):
-                    subprocess.run(['paplay', temp_path], check=False)
+                    subprocess.run(['paplay', temp_path], check=False, timeout=60)
                 os.unlink(temp_path)
             elif shutil.which("spd-say"):
                 # Speech-dispatcher
-                subprocess.run(['spd-say', safe_text], check=False)
+                subprocess.run(['spd-say', safe_text], check=False, timeout=60)
             else:
                 logger.info(f"No TTS backend available, text: {text}")
     except Exception as e:

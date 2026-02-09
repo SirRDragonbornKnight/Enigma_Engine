@@ -201,6 +201,7 @@ class ActiveLearner:
         self._unlabeled_pool: dict[str, Sample] = {}
         self._labeled_samples: dict[str, LabeledSample] = {}
         self._selection_history: list[list[str]] = []
+        self._max_selection_history = 100  # Prevent unbounded growth
         
         if self._config.random_seed is not None:
             random.seed(self._config.random_seed)
@@ -263,6 +264,10 @@ class ActiveLearner:
         # Record selection
         selected_ids = [s.id for s in selected]
         self._selection_history.append(selected_ids)
+        
+        # Trim history if too long
+        if len(self._selection_history) > self._max_selection_history:
+            self._selection_history = self._selection_history[-self._max_selection_history:]
         
         return selected
     

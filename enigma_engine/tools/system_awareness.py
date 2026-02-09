@@ -22,6 +22,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from enigma_engine.utils import format_bytes
+
 logger = logging.getLogger(__name__)
 
 
@@ -289,14 +291,17 @@ class SystemAwareness:
             'interfaces': []
         }
         
+        s = None
         try:
             # Get local IP
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.connect(("8.8.8.8", 80))
             info['local_ip'] = s.getsockname()[0]
-            s.close()
         except Exception:
             pass
+        finally:
+            if s:
+                s.close()
             
         try:
             result = subprocess.run(['ip', 'addr'], capture_output=True, text=True, timeout=5)
@@ -472,12 +477,11 @@ class SystemAwareness:
             return None
     
     def _format_size(self, size: int) -> str:
-        """Format size in human-readable format."""
-        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
-            if size < 1024:
-                return f"{size:.1f} {unit}"
-            size /= 1024
-        return f"{size:.1f} PB"
+        """Format size in human-readable format.
+        
+        Note: Uses format_bytes from utils (DRY - was duplicated).
+        """
+        return format_bytes(size)
     
     def find_files(self, directory: str, pattern: str, recursive: bool = True) -> list[str]:
         """Find files matching a pattern."""

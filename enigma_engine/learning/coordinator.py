@@ -50,6 +50,7 @@ class FederatedCoordinator:
         mode: CoordinatorMode = CoordinatorMode.PEER_TO_PEER,
         min_participants: int = 2,
         round_timeout: int = 300,
+        max_history_size: int = 100,
     ):
         """
         Initialize coordinator.
@@ -58,10 +59,12 @@ class FederatedCoordinator:
             mode: Coordination mode (centralized or peer-to-peer)
             min_participants: Minimum devices needed for a round
             round_timeout: Seconds to wait for updates before finalizing
+            max_history_size: Maximum round history entries to keep
         """
         self.mode = mode
         self.min_participants = min_participants
         self.round_timeout = round_timeout
+        self._max_history_size = max_history_size
         
         # Round management
         self.current_round = 0
@@ -272,6 +275,9 @@ class FederatedCoordinator:
         }
         
         self.round_history.append(round_info)
+        # Trim history to prevent unbounded growth
+        if len(self.round_history) > self._max_history_size:
+            self.round_history = self.round_history[-self._max_history_size:]
         
         logger.info(
             f"Finalized round {self.current_round}: "

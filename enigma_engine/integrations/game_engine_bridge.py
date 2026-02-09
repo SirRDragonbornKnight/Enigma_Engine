@@ -356,7 +356,7 @@ class GameEngineBridge:
             for client in self._clients:
                 try:
                     await client.send(message.to_json())
-                except:
+                except Exception:
                     pass
         
         asyncio.run_coroutine_threadsafe(_broadcast(), self._loop)

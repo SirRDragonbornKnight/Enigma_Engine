@@ -286,6 +286,7 @@ class NLModelConfig:
         
         # History of adjustments
         self._history: List[Tuple[str, Intent]] = []
+        self._max_history: int = 100
         
         logger.info("NLModelConfig initialized")
     
@@ -315,6 +316,10 @@ class NLModelConfig:
         
         # Record history
         self._history.append((instruction, intent))
+        
+        # Trim history if too long
+        if len(self._history) > self._max_history:
+            self._history = self._history[-self._max_history:]
         
         return {
             'understood': True,

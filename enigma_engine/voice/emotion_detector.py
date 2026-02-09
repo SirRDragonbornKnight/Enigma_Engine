@@ -183,7 +183,7 @@ class AudioFeatureExtractor:
             else:
                 features['pitch_mean'] = 0.0
                 features['pitch_std'] = 0.0
-        except:
+        except Exception:
             features['pitch_mean'] = 0.0
             features['pitch_std'] = 0.0
         
@@ -214,7 +214,7 @@ class AudioFeatureExtractor:
             onset_env = librosa.onset.onset_strength(y=audio, sr=sr)
             tempo = librosa.beat.tempo(onset_envelope=onset_env, sr=sr)[0]
             features['tempo'] = float(tempo)
-        except:
+        except Exception:
             features['tempo'] = 120.0
         
         return features

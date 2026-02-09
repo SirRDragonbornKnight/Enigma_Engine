@@ -442,7 +442,7 @@ class AvatarController:
             if platform.system() == "Linux":
                 result = subprocess.run(
                     ["xrandr", "--current"],
-                    capture_output=True, text=True
+                    capture_output=True, text=True, timeout=5
                 )
                 import re
                 match = re.search(r'current (\d+) x (\d+)', result.stdout)
@@ -1210,7 +1210,7 @@ class ScreenInteractor:
             # Try wmctrl
             result = subprocess.run(
                 ["wmctrl", "-l", "-G"],
-                capture_output=True, text=True
+                capture_output=True, text=True, timeout=10
             )
             
             for line in result.stdout.split("\n"):
@@ -1230,14 +1230,14 @@ class ScreenInteractor:
             # Try xdotool
             result = subprocess.run(
                 ["xdotool", "search", "--name", title],
-                capture_output=True, text=True
+                capture_output=True, text=True, timeout=10
             )
             
             window_id = result.stdout.strip().split("\n")[0]
             if window_id:
                 result = subprocess.run(
                     ["xdotool", "getwindowgeometry", window_id],
-                    capture_output=True, text=True
+                    capture_output=True, text=True, timeout=10
                 )
                 
                 import re
@@ -1318,7 +1318,7 @@ class ScreenInteractor:
             
             result = subprocess.run(
                 ["osascript", "-e", script],
-                capture_output=True, text=True
+                capture_output=True, text=True, timeout=30
             )
             
             if result.stdout:

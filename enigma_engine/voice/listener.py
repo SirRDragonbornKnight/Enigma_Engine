@@ -106,16 +106,16 @@ def _check_audio_device():
         # Suppress PyAudio/PortAudio stderr spam during initialization
         # On Linux, ctypes callbacks print errors that we can't catch otherwise
         old_stderr = sys.stderr
+        devnull = open(os.devnull, 'w')
         try:
-            devnull = open(os.devnull, 'w')
             sys.stderr = devnull
             p = sr.Microphone.get_pyaudio().PyAudio()
-            sys.stderr = old_stderr
-            devnull.close()
         except Exception as e:
-            sys.stderr = old_stderr
             logger.debug("PyAudio initialization failed: %s", e)
             raise
+        finally:
+            sys.stderr = old_stderr
+            devnull.close()
         
         device_count = p.get_device_count()
         has_device = False

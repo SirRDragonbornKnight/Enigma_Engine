@@ -257,12 +257,17 @@ class CircuitBreaker:
     
     def __enter__(self) -> "CircuitBreaker":
         """Context manager entry."""
-        if not self.can_execute():
-            self.record_rejection()
-            raise CircuitBreakerError(f"Circuit '{self.name}' is open")
-        
-        if self._state == CircuitState.HALF_OPEN:
-            with self._lock:
+        with self._lock:
+            self._check_state_transition()
+            
+            if self._state == CircuitState.OPEN:
+                self._stats.rejected_calls += 1
+                raise CircuitBreakerError(f"Circuit '{self.name}' is open")
+            
+            if self._state == CircuitState.HALF_OPEN:
+                if self._half_open_calls >= self.half_open_max_calls:
+                    self._stats.rejected_calls += 1
+                    raise CircuitBreakerError(f"Circuit '{self.name}' is open")
                 self._half_open_calls += 1
         
         return self

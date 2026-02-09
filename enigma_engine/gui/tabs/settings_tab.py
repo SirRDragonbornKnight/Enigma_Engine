@@ -2272,7 +2272,23 @@ def create_settings_tab(parent):
     display_desc.setWordWrap(True)
     display_layout.addWidget(display_desc)
 
-    # Font scale
+    # Font size (in pixels)
+    font_size_row = QHBoxLayout()
+    font_size_row.addWidget(QLabel("Font Size (px):"))
+
+    parent.font_size_spinbox = QSpinBox()
+    parent.font_size_spinbox.setToolTip("Base font size in pixels (default: 13)")
+    parent.font_size_spinbox.setRange(8, 32)
+    parent.font_size_spinbox.setValue(13)  # Default from constants.py
+    parent.font_size_spinbox.setSuffix(" px")
+    parent.font_size_spinbox.valueChanged.connect(
+        lambda val: _apply_font_size(parent, val)
+    )
+    font_size_row.addWidget(parent.font_size_spinbox)
+    font_size_row.addStretch()
+    display_layout.addLayout(font_size_row)
+
+    # Font scale (percentage multiplier)
     scale_row = QHBoxLayout()
     scale_row.addWidget(QLabel("Font Scale:"))
 
@@ -3467,13 +3483,8 @@ def _get_folder_size(path):
     return total
 
 
-def _format_size(size_bytes):
-    """Format size in human-readable format."""
-    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
-        if size_bytes < 1024:
-            return f"{size_bytes:.1f} {unit}"
-        size_bytes /= 1024
-    return f"{size_bytes:.1f} PB"
+# Use format_bytes from utils - consolidated from duplicate implementations
+from enigma_engine.utils import format_bytes as _format_size
 
 
 def _refresh_cache_info(parent):
@@ -3610,6 +3621,13 @@ def _init_display_settings(parent):
         from ..ui_settings import get_ui_settings
         ui_settings = get_ui_settings()
         
+        # Set font size spinbox to current value
+        if hasattr(parent, 'font_size_spinbox'):
+            current_size = ui_settings._font_sizes.normal
+            parent.font_size_spinbox.blockSignals(True)
+            parent.font_size_spinbox.setValue(current_size)
+            parent.font_size_spinbox.blockSignals(False)
+        
         # Set font scale combo to current value
         current_scale = ui_settings.scale
         scale_map = {0.75: 0, 0.9: 1, 1.0: 2, 1.2: 3, 1.5: 4, 2.0: 5}
@@ -3634,6 +3652,36 @@ def _init_display_settings(parent):
         _update_theme_description(parent)
     except Exception as e:
         print(f"Could not initialize display settings: {e}")
+
+
+def _apply_font_size(parent, size_px: int):
+    """Apply font size in pixels to the application."""
+    try:
+        from ..ui_settings import get_ui_settings
+        ui_settings = get_ui_settings()
+        
+        # Update all font sizes proportionally based on the new base size
+        # Default normal is 16, so we scale from that
+        ratio = size_px / 13.0  # 13 is the default from constants.py
+        
+        ui_settings._font_sizes.tiny = int(10 * ratio)
+        ui_settings._font_sizes.small = int(11 * ratio)
+        ui_settings._font_sizes.normal = size_px
+        ui_settings._font_sizes.medium = int(14 * ratio)
+        ui_settings._font_sizes.large = int(16 * ratio)
+        ui_settings._font_sizes.xlarge = int(18 * ratio)
+        ui_settings._font_sizes.title = int(20 * ratio)
+        ui_settings._font_sizes.header = int(22 * ratio)
+        ui_settings._font_sizes.huge = int(26 * ratio)
+        
+        ui_settings.save_settings()
+        
+        # Apply to main window
+        main_window = parent.window()
+        if main_window:
+            main_window.setStyleSheet(ui_settings.get_global_stylesheet())
+    except Exception as e:
+        print(f"Could not apply font size: {e}")
 
 
 def _apply_font_scale(parent):
@@ -4476,15 +4524,15 @@ def _get_audio_devices():
         # Suppress PyAudio/PortAudio stderr spam during initialization
         # This is especially needed on Linux where ctypes callbacks print errors
         old_stderr = sys.stderr
+        devnull = open(os.devnull, 'w')
         try:
-            devnull = open(os.devnull, 'w')
             sys.stderr = devnull
             p = pyaudio.PyAudio()
+        except Exception:
+            raise
+        finally:
             sys.stderr = old_stderr
             devnull.close()
-        except Exception:
-            sys.stderr = old_stderr
-            raise
         
         for i in range(p.get_device_count()):
             try:

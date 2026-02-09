@@ -118,7 +118,7 @@ class CertificateManager:
                 "openssl", "genrsa",
                 "-out", str(key_path),
                 str(key_size)
-            ], check=True, capture_output=True)
+            ], check=True, capture_output=True, timeout=60)
             
             # Generate self-signed certificate
             subprocess.run([
@@ -128,7 +128,7 @@ class CertificateManager:
                 "-out", str(cert_path),
                 "-days", str(days),
                 "-subj", f"/CN={domain}"
-            ], check=True, capture_output=True)
+            ], check=True, capture_output=True, timeout=60)
             
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
             logger.warning(f"OpenSSL not available, using Python fallback: {e}")

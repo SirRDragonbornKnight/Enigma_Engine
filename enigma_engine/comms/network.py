@@ -153,8 +153,9 @@ class ForgeNode:
         self.incoming_queue = queue.Queue()
         self.outgoing_queue = queue.Queue()
         
-        # Conversation history
+        # Conversation history (limited to prevent unbounded growth)
         self.conversations: dict[str, list[Message]] = {}
+        self._max_conversation_messages = 100  # Max messages per conversation
         
         # Server thread
         self._server_thread = None
@@ -266,6 +267,9 @@ class ForgeNode:
             if msg.conversation_id not in self.conversations:
                 self.conversations[msg.conversation_id] = []
             self.conversations[msg.conversation_id].append(msg)
+            # Trim to prevent unbounded growth
+            if len(self.conversations[msg.conversation_id]) > self._max_conversation_messages:
+                self.conversations[msg.conversation_id] = self.conversations[msg.conversation_id][-self._max_conversation_messages:]
             
             # If it's a query, generate response
             if msg.msg_type == "query":

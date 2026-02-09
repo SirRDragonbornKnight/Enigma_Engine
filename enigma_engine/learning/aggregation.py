@@ -40,9 +40,14 @@ class SecureAggregator:
               individual updates)
     """
     
-    def __init__(self):
-        """Initialize the aggregator."""
+    def __init__(self, max_history_size: int = 100):
+        """Initialize the aggregator.
+        
+        Args:
+            max_history_size: Maximum aggregation history entries to keep
+        """
         self.aggregation_history: list[dict[str, Any]] = []
+        self._max_history_size = max_history_size
         logger.info("Secure aggregator initialized")
     
     def aggregate_updates(
@@ -83,6 +88,9 @@ class SecureAggregator:
             "num_updates": len(updates),
             "result_id": result.update_id,
         })
+        # Trim history to prevent unbounded growth
+        if len(self.aggregation_history) > self._max_history_size:
+            self.aggregation_history = self.aggregation_history[-self._max_history_size:]
         
         return result
     

@@ -387,7 +387,10 @@ class PluginInstaller:
     
     def _download_file(self, url: str, path: Path):
         """Download file from URL."""
-        urllib.request.urlretrieve(url, path)
+        # Use urlopen with timeout instead of urlretrieve (no timeout support)
+        with urllib.request.urlopen(url, timeout=300) as response:
+            with open(path, 'wb') as f:
+                shutil.copyfileobj(response, f)
     
     def _verify_checksum(self, path: Path, expected: str) -> bool:
         """Verify file SHA256 checksum."""

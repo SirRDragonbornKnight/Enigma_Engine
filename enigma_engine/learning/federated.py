@@ -164,6 +164,7 @@ class FederatedLearning:
         mode: FederatedMode = FederatedMode.OPT_IN,
         privacy_level: PrivacyLevel = PrivacyLevel.HIGH,
         device_id: Optional[str] = None,
+        max_history_size: int = 100,
     ):
         """
         Initialize federated learning system.
@@ -173,11 +174,13 @@ class FederatedLearning:
             mode: Participation mode (opt-in, opt-out, disabled)
             privacy_level: Level of privacy protection
             device_id: Unique device identifier (generated if not provided)
+            max_history_size: Maximum update history entries to keep
         """
         self.model_name = model_name
         self.mode = mode
         self.privacy_level = privacy_level
         self.device_id = device_id or self._generate_device_id()
+        self._max_history_size = max_history_size
         
         # Initial model weights (for computing deltas)
         self.initial_weights: Optional[dict[str, Any]] = None
@@ -289,6 +292,9 @@ class FederatedLearning:
         # In a real implementation, this would send to coordinator or peers
         # For now, we just record it
         self.updates_sent.append(protected_update)
+        # Trim history to prevent unbounded growth
+        if len(self.updates_sent) > self._max_history_size:
+            self.updates_sent = self.updates_sent[-self._max_history_size:]
         
         logger.info(
             f"Shared update {update.update_id[:8]} with privacy level {self.privacy_level.value}"
@@ -342,6 +348,9 @@ class FederatedLearning:
         
         # Record the update
         self.updates_received.append(global_update)
+        # Trim history to prevent unbounded growth
+        if len(self.updates_received) > self._max_history_size:
+            self.updates_received = self.updates_received[-self._max_history_size:]
         
         # In a real implementation, this would apply the update to the model
         logger.info(

@@ -453,6 +453,7 @@ class Agent:
     model: Optional[str] = None
     
     _history: List[Dict[str, str]] = field(default_factory=list, repr=False)
+    _max_history: int = field(default=100, repr=False)  # Limit history to prevent unbounded growth
     
     def chat(self, message: str) -> str:
         """
@@ -484,12 +485,18 @@ class Agent:
             )
             
             self._history.append({'role': 'assistant', 'content': response})
+            # Trim history if exceeds max
+            if len(self._history) > self._max_history:
+                self._history = self._history[-self._max_history:]
             return response
             
         except ImportError:
             # Fallback message
             response = f"[{self.name} agent would respond here]"
             self._history.append({'role': 'assistant', 'content': response})
+            # Trim history if exceeds max
+            if len(self._history) > self._max_history:
+                self._history = self._history[-self._max_history:]
             return response
     
     def reset(self):

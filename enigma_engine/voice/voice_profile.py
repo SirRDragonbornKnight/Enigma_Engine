@@ -378,7 +378,7 @@ class VoiceEngine:
                 # macOS 'say' command with rate (use shlex.quote to prevent injection)
                 rate = int(180 * self.profile.speed)
                 import subprocess
-                subprocess.run(['say', '-r', str(rate), text], check=False)
+                subprocess.run(['say', '-r', str(rate), text], check=False, timeout=60)
                 
             elif system == "Windows":
                 # Windows SAPI with rate (escape text to prevent injection)
@@ -401,7 +401,7 @@ class VoiceEngine:
                     # espeak with pitch and speed (use subprocess to prevent injection)
                     pitch = int(50 * self.profile.pitch)
                     speed = int(175 * self.profile.speed)
-                    subprocess.run(['espeak', '-p', str(pitch), '-s', str(speed), text], check=False)
+                    subprocess.run(['espeak', '-p', str(pitch), '-s', str(speed), text], check=False, timeout=60)
                 else:
                     logger.info(f"[TTS fallback] {text}")
                     

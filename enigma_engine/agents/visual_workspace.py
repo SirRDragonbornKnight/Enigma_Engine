@@ -98,6 +98,8 @@ class AgentWorkspace:
         self._agent_states: Dict[str, AgentState] = {}
         self._messages: List[AgentMessage] = []
         self._snapshots: List[WorkspaceSnapshot] = []
+        self._max_messages = 500  # Prevent unbounded growth
+        self._max_snapshots = 100  # Prevent unbounded growth
         
         # Event listeners
         self._listeners: List[Callable[[str, Any], None]] = []
@@ -200,6 +202,9 @@ class AgentWorkspace:
         )
         
         self._messages.append(message)
+        # Trim to prevent unbounded growth
+        if len(self._messages) > self._max_messages:
+            self._messages = self._messages[-self._max_messages:]
         
         # Update message counts
         if from_agent in self._agent_states:
@@ -283,6 +288,9 @@ class AgentWorkspace:
             active_task=self._current_task or ""
         )
         self._snapshots.append(snapshot)
+        # Trim to prevent unbounded growth
+        if len(self._snapshots) > self._max_snapshots:
+            self._snapshots = self._snapshots[-self._max_snapshots:]
     
     def get_snapshots(self) -> List[WorkspaceSnapshot]:
         """Get all snapshots."""

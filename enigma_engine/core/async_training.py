@@ -344,7 +344,7 @@ class AsyncTrainer:
                 time.sleep(0.1)
             
             batch_count = min(batch_size, count - i)
-            progress = i / count
+            progress = i / count if count > 0 else 0
             self._update_progress(
                 task,
                 progress,
@@ -406,7 +406,7 @@ class AsyncTrainer:
             if task.cancel_flag.is_set():
                 return results
             
-            progress = i / len(urls)
+            progress = i / len(urls) if urls else 0
             self._update_progress(task, progress, f"Scraping {url}")
             
             try:

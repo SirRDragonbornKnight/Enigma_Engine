@@ -36,6 +36,7 @@ class TrustManager:
         max_update_magnitude: float = 10.0,
         min_reputation: float = 0.3,
         reputation_decay: float = 0.95,
+        max_history_size: int = 100,
     ):
         """
         Initialize trust manager.
@@ -44,10 +45,12 @@ class TrustManager:
             max_update_magnitude: Maximum allowed L2 norm of updates
             min_reputation: Minimum reputation to accept updates
             reputation_decay: Reputation decay per time period
+            max_history_size: Maximum update history entries to keep
         """
         self.max_update_magnitude = max_update_magnitude
         self.min_reputation = min_reputation
         self.reputation_decay = reputation_decay
+        self._max_history_size = max_history_size
         
         # Device reputation scores (0.0 to 1.0)
         self.reputations: dict[str, float] = defaultdict(lambda: 0.5)
@@ -118,6 +121,9 @@ class TrustManager:
             "training_samples": update.training_samples,
             "magnitude": self._calculate_magnitude(update),
         })
+        # Trim history to prevent unbounded growth
+        if len(self.update_history) > self._max_history_size:
+            self.update_history = self.update_history[-self._max_history_size:]
         
         # Reward device for valid update
         self._reward_device(device_id, 0.05)

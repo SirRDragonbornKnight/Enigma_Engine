@@ -394,6 +394,7 @@ class ReasoningMonitor:
         self.evaluator = evaluator or ReasoningEvaluator()
         
         self._history: list[ReasoningChain] = []
+        self._max_history: int = 100
         self._callbacks: list[Callable[[ReasoningChain], None]] = []
     
     def add_callback(
@@ -446,6 +447,11 @@ class ReasoningMonitor:
         
         # Store and callback
         self._history.append(chain)
+        
+        # Trim history if too long
+        if len(self._history) > self._max_history:
+            self._history = self._history[-self._max_history:]
+        
         for callback in self._callbacks:
             try:
                 callback(chain)

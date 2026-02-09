@@ -63,6 +63,9 @@ class MemoryConfig:
     # Auto-save messages to vector DB
     auto_store: bool = True
     
+    # Maximum conversation history entries (prevents unbounded growth)
+    max_conversation_history: int = 100
+    
     # Memory types to search
     search_types: list[str] = field(default_factory=lambda: [
         "conversation", "fact", "preference", "instruction"
@@ -464,6 +467,7 @@ class MemoryAugmentedEngine:
         # Update conversation history
         self.conversation_history.append({"role": "user", "content": prompt})
         self.conversation_history.append({"role": "assistant", "content": response})
+        self._trim_history()
         
         return response
     
@@ -505,6 +509,7 @@ class MemoryAugmentedEngine:
         # Update history
         self.conversation_history.append({"role": "user", "content": prompt})
         self.conversation_history.append({"role": "assistant", "content": full_response})
+        self._trim_history()
     
     def chat(
         self,
@@ -568,6 +573,7 @@ class MemoryAugmentedEngine:
         # Update history
         self.conversation_history.append({"role": "user", "content": message})
         self.conversation_history.append({"role": "assistant", "content": response})
+        self._trim_history()
         
         return response
     
@@ -598,6 +604,12 @@ class MemoryAugmentedEngine:
     def clear_history(self):
         """Clear current session conversation history."""
         self.conversation_history = []
+    
+    def _trim_history(self):
+        """Trim conversation history to max size (prevents unbounded memory growth)."""
+        max_size = self.config.max_conversation_history
+        if len(self.conversation_history) > max_size:
+            self.conversation_history = self.conversation_history[-max_size:]
     
     def save_memories(self):
         """Save vector database to disk."""

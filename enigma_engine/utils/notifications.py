@@ -352,7 +352,7 @@ class MacOSNotificationBackend(NotificationBackend):
             script = f'''
             display notification "{notification.message}" with title "{notification.title}"
             '''
-            subprocess.run(["osascript", "-e", script], capture_output=True)
+            subprocess.run(["osascript", "-e", script], capture_output=True, timeout=10)
             return True
         except Exception as e:
             logger.error(f"osascript error: {e}")

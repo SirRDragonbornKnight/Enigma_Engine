@@ -342,6 +342,7 @@ class GamingMode:
                     ["tasklist", "/fo", "csv", "/nh"],
                     text=True,
                     creationflags=subprocess.CREATE_NO_WINDOW,
+                    timeout=10
                 )
                 for line in output.strip().split('\n'):
                     if line:
@@ -354,6 +355,7 @@ class GamingMode:
                 output = subprocess.check_output(
                     ["ps", "-A", "-o", "comm="],
                     text=True,
+                    timeout=10
                 )
                 for line in output.strip().split('\n'):
                     if line:

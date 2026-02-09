@@ -128,10 +128,10 @@ class ScreenVision:
                 x, y, w, h = region
                 subprocess.run(
                     ['scrot', '-a', f'{x},{y},{w},{h}', tmp_path],
-                    check=True, capture_output=True
+                    check=True, capture_output=True, timeout=10
                 )
             else:
-                subprocess.run(['scrot', tmp_path], check=True, capture_output=True)
+                subprocess.run(['scrot', tmp_path], check=True, capture_output=True, timeout=10)
             
             img = Image.open(tmp_path)
             self._last_capture = img.copy()
@@ -188,10 +188,10 @@ class ScreenVision:
                 x, y, w, h = region
                 subprocess.run(
                     ['screencapture', '-x', '-R', f'{x},{y},{w},{h}', tmp_path],
-                    check=True
+                    check=True, timeout=10
                 )
             else:
-                subprocess.run(['screencapture', '-x', tmp_path], check=True)
+                subprocess.run(['screencapture', '-x', tmp_path], check=True, timeout=10)
             
             img = Image.open(tmp_path)
             self._last_capture = img.copy()

@@ -133,7 +133,7 @@ def kill_other_enigma_engine_instances() -> dict:
             # Windows: use tasklist and taskkill
             result = subprocess.run(
                 ['tasklist', '/FI', 'IMAGENAME eq python.exe', '/FO', 'CSV'],
-                capture_output=True, text=True
+                capture_output=True, text=True, timeout=15
             )
             for line in result.stdout.split('\n'):
                 if 'enigma_engine' in line.lower() or 'run.py' in line.lower():
@@ -143,7 +143,7 @@ def kill_other_enigma_engine_instances() -> dict:
                         if len(parts) >= 2:
                             pid = int(parts[1].strip('"'))
                             if pid != current_pid:
-                                subprocess.run(['taskkill', '/PID', str(pid), '/F'], capture_output=True)
+                                subprocess.run(['taskkill', '/PID', str(pid), '/F'], capture_output=True, timeout=10)
                                 killed += 1
                     except Exception as e:
                         logger.debug(f"Could not kill process: {e}")
@@ -151,7 +151,7 @@ def kill_other_enigma_engine_instances() -> dict:
             # Linux/Mac: use ps and kill
             result = subprocess.run(
                 ['ps', 'aux'],
-                capture_output=True, text=True
+                capture_output=True, text=True, timeout=15
             )
             for line in result.stdout.split('\n'):
                 if ('enigma_engine' in line.lower() or 'run.py' in line.lower()) and 'python' in line.lower():
@@ -1624,15 +1624,15 @@ class QuickCommandOverlay(QWidget):
             
             # Suppress PyAudio stderr spam when opening microphone
             old_stderr = sys.stderr
+            devnull = open(os.devnull, 'w')
             try:
-                devnull = open(os.devnull, 'w')
                 sys.stderr = devnull
                 mic = sr.Microphone()
+            except Exception:
+                raise
+            finally:
                 sys.stderr = old_stderr
                 devnull.close()
-            except Exception:
-                sys.stderr = old_stderr
-                raise
             
             with mic as source:
                 recognizer.adjust_for_ambient_noise(source, duration=0.3)

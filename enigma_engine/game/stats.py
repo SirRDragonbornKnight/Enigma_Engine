@@ -101,6 +101,7 @@ class SessionTracker:
     def __init__(self):
         self._active_session: Optional[GameSession] = None
         self._sessions: list[GameSession] = []
+        self._max_sessions = 100  # Prevent unbounded memory growth
     
     def start_session(self, game_id: str, metadata: dict[str, Any] = None) -> GameSession:
         """
@@ -139,6 +140,9 @@ class SessionTracker:
         session.duration_minutes = (session.end_time - session.start_time) / 60
         
         self._sessions.append(session)
+        # Trim old sessions to prevent unbounded growth
+        if len(self._sessions) > self._max_sessions:
+            self._sessions = self._sessions[-self._max_sessions:]
         self._active_session = None
         
         logger.info(f"Ended session {session.session_id} ({session.duration_minutes:.1f} min)")

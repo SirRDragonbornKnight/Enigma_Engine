@@ -796,7 +796,7 @@ class ReplicateImage:
             
             # Download image
             image_url = output[0] if isinstance(output, list) else output
-            resp = requests.get(image_url)
+            resp = requests.get(image_url, timeout=120)
             
             # Save to file
             timestamp = int(time.time())

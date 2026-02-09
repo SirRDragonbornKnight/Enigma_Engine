@@ -185,7 +185,7 @@ class I18n:
                 lang = system_locale.split('_')[0]
                 if lang in LOCALE_INFO:
                     self._current_locale = lang
-        except:
+        except Exception:
             pass
     
     @property

@@ -1,38 +1,16 @@
 #!/usr/bin/env python3
 """
-================================================================================
-🚀 Enigma AI Engine - MAIN ENTRY POINT
-================================================================================
+Enigma AI Engine - Main Entry Point
 
-This is where EVERYTHING begins! Like the front door to a castle.
-Your journey through Enigma AI Engine starts here.
+Commands:
+    python run.py --gui     Launch GUI (recommended)
+    python run.py --train   Train model
+    python run.py --run     CLI chat
+    python run.py --serve   Start API server
+    python run.py --tunnel  Expose server to internet
+    python run.py --build   Build new model from scratch
 
-📍 FILE: run.py
-🏷️ TYPE: Application Entry Point
-
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  COMMAND OPTIONS:                                                           │
-│                                                                             │
-│    python run.py --gui     → Opens graphical interface (RECOMMENDED!)      │
-│    python run.py --train   → Train your AI model                           │
-│    python run.py --run     → Chat in terminal (CLI)                        │
-│    python run.py --serve   → Start REST API server                         │
-│    python run.py --tunnel  → Expose server to internet (public access)     │
-│    python run.py --build   → Build new model from scratch                  │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-🔗 CONNECTED FILES:
-    --train  → enigma_engine/core/training.py      (Trainer, train_model)
-    --run    → enigma_engine/core/inference.py     (EnigmaEngine)
-    --gui    → enigma_engine/gui/enhanced_window.py (EnhancedMainWindow)
-    --serve  → enigma_engine/comms/api_server.py   (Flask REST API)
-
-📖 SEE ALSO:
-    • CODE_ADVENTURE_TOUR.txt  - Full guided tour of the codebase
-    • QUICK_FILE_LOCATOR.txt   - Fast file finder
-    • docs/CODE_TOUR.md        - Detailed documentation
-
-For first-time users, start with: python run.py --gui
+See --help for all options.
 """
 
 # === EARLY ENVIRONMENT SETUP ===

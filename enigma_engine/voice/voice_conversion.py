@@ -628,6 +628,8 @@ class VoiceMixer:
         """
         # Normalize weights
         total = sum(weights)
+        if total == 0:
+            raise ValueError("Weights cannot sum to zero")
         weights = [w / total for w in weights]
         
         # Collect profiles

@@ -279,7 +279,7 @@ class VoiceOnlyMode:
             for callback in self._transcript_callbacks:
                 try:
                     callback(command.text)
-                except:
+                except Exception:
                     pass
             
             # Process command
@@ -354,7 +354,7 @@ class VoiceOnlyMode:
             
             return text.strip()
             
-        except:
+        except Exception:
             return None
     
     def _is_wake_word(self, text: str) -> bool:
@@ -416,7 +416,12 @@ class VoiceOnlyMode:
                 import winsound
                 winsound.PlaySound(temp_path, winsound.SND_FILENAME)
             else:
-                os.system(f"aplay {temp_path} 2>/dev/null || afplay {temp_path} 2>/dev/null")
+                import subprocess
+                # Try aplay first, then afplay (macOS)
+                try:
+                    subprocess.run(['aplay', temp_path], stderr=subprocess.DEVNULL, check=False, timeout=30)
+                except FileNotFoundError:
+                    subprocess.run(['afplay', temp_path], stderr=subprocess.DEVNULL, check=False, timeout=30)
             
             os.unlink(temp_path)
     
@@ -450,7 +455,7 @@ class VoiceOnlyMode:
         for callback in self._state_callbacks:
             try:
                 callback(new_state)
-            except:
+            except Exception:
                 pass
     
     def _default_handler(self, text: str) -> str:

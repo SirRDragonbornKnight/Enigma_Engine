@@ -225,9 +225,9 @@ class EdgeTTS(TTSProvider):
             system = platform.system()
             
             if system == "Linux":
-                subprocess.run(["aplay", path], check=True, capture_output=True)
+                subprocess.run(["aplay", path], check=True, capture_output=True, timeout=60)
             elif system == "Darwin":
-                subprocess.run(["afplay", path], check=True)
+                subprocess.run(["afplay", path], check=True, timeout=60)
             elif system == "Windows":
                 os.startfile(path)
             

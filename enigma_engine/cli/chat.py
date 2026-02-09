@@ -93,6 +93,7 @@ class CLIChat:
         self.model_path = model_path
         self.engine = None
         self.history: List[dict] = []
+        self._max_history = 200  # Prevent unbounded memory growth
         self.system_prompt = system_prompt or "You are a helpful AI assistant."
         
         # Generation config
@@ -112,7 +113,7 @@ class CLIChat:
         if HAS_READLINE and self.history_file.exists():
             try:
                 readline.read_history_file(str(self.history_file))
-            except:
+            except Exception:
                 pass
     
     def _save_readline_history(self):
@@ -120,7 +121,7 @@ class CLIChat:
         if HAS_READLINE:
             try:
                 readline.write_history_file(str(self.history_file))
-            except:
+            except Exception:
                 pass
     
     def _print_header(self):
@@ -338,6 +339,10 @@ class CLIChat:
                         "content": response,
                         "timestamp": datetime.now().isoformat()
                     })
+                    
+                    # Trim history to prevent unbounded growth
+                    if len(self.history) > self._max_history:
+                        self.history = self.history[-self._max_history:]
                     
                 except KeyboardInterrupt:
                     print()  # New line after ^C

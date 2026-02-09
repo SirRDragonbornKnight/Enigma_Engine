@@ -100,7 +100,7 @@ class ProcessKillTool(Tool):
                 os.kill(int(pid), sig_num)
                 return {"success": True, "killed_pid": pid}
             elif name:
-                result = subprocess.run(['pkill', f'-{signal}', name], capture_output=True, text=True)
+                result = subprocess.run(['pkill', f'-{signal}', name], capture_output=True, text=True, timeout=30)
                 return {"success": result.returncode == 0, "killed_name": name}
             return {"success": False, "error": "Provide pid or name"}
         except Exception as e:
@@ -173,15 +173,15 @@ class GitStatusTool(Tool):
             path = Path(path).expanduser().resolve()
             if not (path / '.git').exists(): return {"success": False, "error": "Not a git repo"}
             
-            branch = subprocess.run(['git', 'branch', '--show-current'], cwd=str(path), capture_output=True, text=True).stdout.strip()
-            status = subprocess.run(['git', 'status', '--porcelain'], cwd=str(path), capture_output=True, text=True).stdout
+            branch = subprocess.run(['git', 'branch', '--show-current'], cwd=str(path), capture_output=True, text=True, timeout=10).stdout.strip()
+            status = subprocess.run(['git', 'status', '--porcelain'], cwd=str(path), capture_output=True, text=True, timeout=10).stdout
             staged, modified, untracked = [], [], []
             for line in status.strip().split('\n'):
                 if not line: continue
                 if line[0] in 'MADRC': staged.append(line[3:])
                 if line[1] == 'M': modified.append(line[3:])
                 if line[:2] == '??': untracked.append(line[3:])
-            last = subprocess.run(['git', 'log', '-1', '--pretty=%h %s (%cr)'], cwd=str(path), capture_output=True, text=True).stdout.strip()
+            last = subprocess.run(['git', 'log', '-1', '--pretty=%h %s (%cr)'], cwd=str(path), capture_output=True, text=True, timeout=10).stdout.strip()
             return {"success": True, "branch": branch, "staged": staged, "modified": modified, "untracked": untracked, 
                     "clean": not (staged or modified), "last_commit": last}
         except Exception as e:
@@ -204,7 +204,7 @@ class GitCommitTool(Tool):
                 if 'nothing to commit' in result.stdout + result.stderr:
                     return {"success": True, "committed": False, "message": "Nothing to commit"}
                 return {"success": False, "error": result.stderr}
-            hash = subprocess.run(['git', 'rev-parse', '--short', 'HEAD'], cwd=str(path), capture_output=True, text=True).stdout.strip()
+            hash = subprocess.run(['git', 'rev-parse', '--short', 'HEAD'], cwd=str(path), capture_output=True, text=True, timeout=10).stdout.strip()
             return {"success": True, "committed": True, "hash": hash, "message": message}
         except Exception as e:
             return {"success": False, "error": str(e)}

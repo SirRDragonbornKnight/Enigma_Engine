@@ -142,7 +142,7 @@ class QuickModelSwitcher(QWidget):
                 self.info_label.setText(f"({size_mb:.1f} MB)")
             else:
                 self.info_label.setText("")
-        except:
+        except Exception:
             self.info_label.setText("")
     
     def set_current_model(self, model_path: str):

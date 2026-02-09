@@ -149,7 +149,8 @@ class ProcessMonitor:
             output = subprocess.check_output(
                 ["xprop", "-root", "_NET_ACTIVE_WINDOW"],
                 text=True,
-                stderr=subprocess.DEVNULL
+                stderr=subprocess.DEVNULL,
+                timeout=10
             )
             
             if "window id" in output:
@@ -159,7 +160,8 @@ class ProcessMonitor:
                 state_output = subprocess.check_output(
                     ["xprop", "-id", window_id, "_NET_WM_STATE"],
                     text=True,
-                    stderr=subprocess.DEVNULL
+                    stderr=subprocess.DEVNULL,
+                    timeout=10
                 )
                 
                 if "_NET_WM_STATE_FULLSCREEN" in state_output:
@@ -167,7 +169,8 @@ class ProcessMonitor:
                     pid_output = subprocess.check_output(
                         ["xprop", "-id", window_id, "_NET_WM_PID"],
                         text=True,
-                        stderr=subprocess.DEVNULL
+                        stderr=subprocess.DEVNULL,
+                        timeout=10
                     )
                     
                     if "=" in pid_output:
@@ -193,7 +196,8 @@ class ProcessMonitor:
             
             output = subprocess.check_output(
                 ["osascript", "-e", script],
-                text=True
+                text=True,
+                timeout=10
             ).strip()
             
             return output if output else None
@@ -219,7 +223,8 @@ class ProcessMonitor:
                     output = subprocess.check_output(
                         ["nvidia-smi", "--query-compute-apps=pid,used_memory", "--format=csv,noheader,nounits"],
                         text=True,
-                        creationflags=subprocess.CREATE_NO_WINDOW
+                        creationflags=subprocess.CREATE_NO_WINDOW,
+                        timeout=10
                     )
                     
                     for line in output.strip().split('\n'):
@@ -240,7 +245,8 @@ class ProcessMonitor:
                 try:
                     output = subprocess.check_output(
                         ["nvidia-smi", "--query-compute-apps=pid,used_memory", "--format=csv,noheader,nounits"],
-                        text=True
+                        text=True,
+                        timeout=10
                     )
                     
                     for line in output.strip().split('\n'):
@@ -297,7 +303,8 @@ class ProcessMonitor:
                 output = subprocess.check_output(
                     ["tasklist", "/fo", "csv", "/nh"],
                     text=True,
-                    creationflags=subprocess.CREATE_NO_WINDOW
+                    creationflags=subprocess.CREATE_NO_WINDOW,
+                    timeout=10
                 )
                 
                 for line in output.strip().split('\n'):
@@ -310,7 +317,8 @@ class ProcessMonitor:
             elif self._system in ("Linux", "Darwin"):
                 output = subprocess.check_output(
                     ["ps", "-A", "-o", "comm="],
-                    text=True
+                    text=True,
+                    timeout=10
                 )
                 
                 for line in output.strip().split('\n'):

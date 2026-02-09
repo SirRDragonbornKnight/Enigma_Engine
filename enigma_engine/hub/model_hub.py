@@ -621,7 +621,8 @@ class HuggingFaceHubAdapter:
             response = requests.get(
                 f"{self.HF_API_URL}/models",
                 params=params,
-                headers=self._get_headers()
+                headers=self._get_headers(),
+                timeout=30
             )
             if response.status_code == 200:
                 return response.json()
@@ -638,7 +639,8 @@ class HuggingFaceHubAdapter:
         try:
             response = requests.get(
                 f"{self.HF_API_URL}/models/{model_id}",
-                headers=self._get_headers()
+                headers=self._get_headers(),
+                timeout=30
             )
             if response.status_code == 200:
                 return response.json()

@@ -578,6 +578,8 @@ class AutonomousAvatar:
                                 # Check if new window
                                 if title.value not in self._seen_windows:
                                     self._seen_windows.append(title.value)
+                                    if len(self._seen_windows) > 100:
+                                        self._seen_windows.pop(0)
                                     region.interest_score = 0.9  # New windows are interesting!
                                     region.content_type = "new_window"
                     return True
@@ -634,6 +636,8 @@ class AutonomousAvatar:
                                     
                                     if title not in self._seen_windows:
                                         self._seen_windows.append(title)
+                                        if len(self._seen_windows) > 100:
+                                            self._seen_windows.pop(0)
                                         region.interest_score = 0.9
                                         region.content_type = "new_window"
                             except Exception as e:
@@ -657,6 +661,8 @@ class AutonomousAvatar:
                                 )
                                 if name not in self._seen_windows:
                                     self._seen_windows.append(name)
+                                    if len(self._seen_windows) > 100:
+                                        self._seen_windows.pop(0)
                                     region.interest_score = 0.5
                                 self._screen_regions.append(region)
                             except (psutil.NoSuchProcess, psutil.AccessDenied):

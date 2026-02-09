@@ -218,7 +218,7 @@ def _detect_memory() -> tuple[float, float]:
             # macOS - use sysctl
             result = subprocess.run(
                 ["sysctl", "-n", "hw.memsize"],
-                capture_output=True, text=True
+                capture_output=True, text=True, timeout=5
             )
             total_ram = int(result.stdout.strip()) / (1024**3)
             # macOS doesn't easily report available, estimate as 60%
@@ -335,7 +335,7 @@ def _detect_cpu() -> tuple[int, str]:
         elif system == "Darwin":
             result = subprocess.run(
                 ["sysctl", "-n", "machdep.cpu.brand_string"],
-                capture_output=True, text=True
+                capture_output=True, text=True, timeout=5
             )
             model = result.stdout.strip()
             

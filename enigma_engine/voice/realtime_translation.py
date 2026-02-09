@@ -153,7 +153,8 @@ class TextTranslator:
                     "text": text,
                     "source_lang": source.upper(),
                     "target_lang": target.upper()
-                }
+                },
+                timeout=30
             )
             
             if response.ok:
@@ -391,7 +392,7 @@ class RealtimeTranslator:
                     for callback in self._on_original:
                         try:
                             callback(text)
-                        except:
+                        except Exception:
                             pass
                     
                     # Queue for translation
@@ -415,7 +416,7 @@ class RealtimeTranslator:
             for callback in self._on_translated:
                 try:
                     callback(segment)
-                except:
+                except Exception:
                     pass
             
             # Queue for speech output
@@ -454,7 +455,7 @@ class RealtimeTranslator:
                         import sounddevice as sd
                         sd.play(audio.audio_data, audio.sample_rate)
                         sd.wait()
-                    except:
+                    except Exception:
                         pass
                 else:
                     tts.say(segment.translated_text)

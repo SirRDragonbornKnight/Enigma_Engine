@@ -109,6 +109,7 @@ if HAS_QT:
             self.config = config or OverlayConfig()
             self._mode = OverlayMode.COMPACT
             self._messages: List[Dict[str, str]] = []
+            self._max_messages = 100  # Prevent unbounded growth
             self._dragging = False
             self._drag_position = QPoint()
             
@@ -365,6 +366,15 @@ if HAS_QT:
         def add_message(self, role: str, content: str):
             """Add a message to the display."""
             self._messages.append({"role": role, "content": content})
+            
+            # Trim old messages to prevent unbounded growth
+            while len(self._messages) > self._max_messages:
+                self._messages.pop(0)
+                # Also remove old widget from layout
+                if self._messages_layout.count() > 0:
+                    item = self._messages_layout.takeAt(0)
+                    if item and item.widget():
+                        item.widget().deleteLater()
             
             # Update compact label
             self._compact_label.setText(content[:100] + "..." if len(content) > 100 else content)

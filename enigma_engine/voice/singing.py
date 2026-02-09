@@ -173,6 +173,10 @@ class SingingVoice:
         # Parse lyrics into syllables
         syllables = self._syllabify(lyrics)
         
+        # Ensure notes is not empty
+        if not notes:
+            notes = ["A4"]  # Default note
+        
         # Match notes to syllables
         if len(notes) < len(syllables):
             # Repeat last note

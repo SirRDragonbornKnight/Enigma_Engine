@@ -426,6 +426,9 @@ class AICuriosity:
             question.last_asked = self._last_question_time
             question.asked_count += 1
             self._questions_asked.append(question)
+            # Keep limited history in memory
+            if len(self._questions_asked) > 200:
+                self._questions_asked = self._questions_asked[-200:]
             self._save_state()
         
         return question

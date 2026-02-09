@@ -295,7 +295,7 @@ class LocalOnlyMode:
             for module in api_modules:
                 try:
                     manager.unload(module)
-                except:
+                except Exception:
                     pass
                     
         except ImportError:
