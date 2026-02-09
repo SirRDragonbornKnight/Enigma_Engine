@@ -43,7 +43,8 @@
 
 ---
 
-## COMPLETED FIXES
+<details>
+<summary><h2>Completed Fixes (Click to expand - 151 fixes archived)</h2></summary>
 
 ### Memory Leak Prevention (19 fixes)
 - [x] Fixed `memory/augmented_engine.py` - conversation_history grew unbounded
@@ -512,6 +513,8 @@ All subprocess and HTTP calls now have proper timeouts.
 | TYPE_CHECKING | 32 usages |
 | Exception handlers | 3,497 |
 | Pass statements | 697 |
+
+</details>
 
 ---
 
