@@ -725,4 +725,174 @@ Rules are persisted to `memory/behaviors/behavior_rules.json`.
 
 ---
 
+## FUTURE IDEAS (User Requested)
 
+### 1. Portal Gun Visual Effects System
+
+**The Vision (Aperture Labs Style):**
+- AI spawns portal gun → shoots animated projectile → portal appears on "wall"
+- Two portals show through to each other (render-to-texture)
+- Avatar walks through portal → appears on other side
+
+**What Would Be Needed:**
+
+| Component | Complexity | Notes |
+|-----------|------------|-------|
+| Portal projectile animation | Medium | Particle system, trajectory |
+| Portal surface rendering | Hard | Render-to-texture, shader work |
+| See-through effect | Hard | Render avatar/scene at destination, project onto portal |
+| Avatar teleport animation | Medium | Fade/slide into portal, appear at exit |
+| Sound effects | Easy | Whoosh, zap, etc. |
+
+**Options:**
+1. **Fake it** - Portal is just a visual effect, teleport happens instantly (easier)
+2. **Full render** - Actually render through portals (hard, needs OpenGL/shader work)
+
+**Current Status:** Not built. Would be a major feature (~40+ hours).
+
+---
+
+### 2. Multi-Monitor / Window Display for Effects
+
+**The Problem:**
+- Effects that span beyond the avatar window (portals, explosions, etc.)
+- Taking over the screen for dramatic moments
+
+**Options:**
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| **Single overlay window (fullscreen)** | Simple, already have desktop_pet.py | Covers everything, may block user |
+| **Multiple transparent windows** | Can have portals on different monitors | Hard to coordinate, z-order issues |
+| **Screen capture + overlay** | Can composite onto "walls" | Performance hit, feels fake |
+| **Borderless game-style window** | Full control | Blocks everything, gaming mode only |
+
+**Recommended:** Single fullscreen transparent overlay that AI can draw effects on, with easy dismiss (click-through by default, solid for dramatic moments).
+
+**Current Status:** `desktop_pet.py` exists as floating window. Would need effect layer system.
+
+---
+
+### 3. AI Object Spawn Toggles (With AI Awareness)
+
+**User Request:** Toggle to disable AI-spawned objects, but AI should KNOW it's disabled.
+
+**Implementation Plan:**
+
+```python
+# In config or GUI settings
+avatar_settings = {
+    "allow_spawned_objects": True,   # Master toggle
+    "allow_held_items": True,        # Can AI hold things?
+    "allow_screen_effects": True,    # Particles, portals, etc.
+    "allow_notes": True,             # Sticky notes, drawings
+    "gaming_mode": False,            # Disable all overlays except avatar
+}
+```
+
+**AI Awareness:**
+- Before spawning, check toggle
+- If disabled, AI gets feedback: "Note: Object spawning is currently disabled by user"
+- AI can acknowledge: "I wanted to show you something, but objects are turned off"
+
+**Files to Modify:**
+- `spawnable_objects.py` - Check toggles before spawn
+- `tool_executor.py` - Return disabled message to AI
+- GUI settings tab - Add toggles
+
+**Current Status:** Not built. Medium complexity (~4-6 hours).
+
+---
+
+### 4. Swappable AI Personalities (GLaDOS ↔ Wheatley Style)
+
+**Good News: THIS ALREADY EXISTS!**
+
+The `PersonaManager` in `utils/personas.py` does exactly this:
+
+```python
+from enigma_engine.utils.personas import PersonaManager
+
+manager = PersonaManager()
+
+# List available personas
+personas = manager.list_personas()
+# Returns: {"helpful_assistant": ..., "creative_thinker": ..., etc.}
+
+# Switch persona
+current_persona = manager.get_persona("creative_thinker")
+
+# Create custom persona (your own GLaDOS/Wheatley)
+manager.create_custom_persona(
+    name="glados",
+    description="Passive-aggressive AI from Aperture Science",
+    system_prompt="You are GLaDOS... [personality details]",
+    tone="sarcastic",
+    traits=["calculating", "passive-aggressive", "darkly humorous"]
+)
+```
+
+**Predefined Personas:**
+- `helpful_assistant` - Default helpful AI
+- `creative_thinker` - Imaginative, idea generator
+
+**To Add:**
+- GUI dropdown to switch personas mid-conversation
+- Voice changes with persona (already supported via voice profiles)
+- Avatar appearance changes with persona (outfit system)
+
+**Current Status:** Core system EXISTS. GUI for switching could be improved.
+
+---
+
+### 5. Gaming Mode Considerations
+
+**Problem:** When user is gaming, AI overlays and effects could be disruptive.
+
+**Solutions:**
+
+| Feature | Purpose |
+|---------|---------|
+| Gaming mode toggle | Disable all overlays except minimal avatar |
+| Fullscreen detection | Auto-detect when user enters fullscreen app |
+| Do-not-disturb schedule | Time-based quiet mode |
+| Hotkey to hide all | Quick dismiss for "boss key" moments |
+
+**AI Behavior in Gaming Mode:**
+- No spawned objects
+- Minimal/hidden avatar
+- Queue notifications for later
+- AI knows: "You're in gaming mode, I'll keep quiet"
+
+**Current Status:** Partial. Game mode exists (`GAME_MODE.md`) but focuses on AI playing games, not staying out of the way.
+
+---
+
+## About Cleaning Up SUGGESTIONS.md
+
+**Your Question:** Should we delete completed items?
+
+**My Recommendation:** Keep them, but collapse/archive.
+
+**Why Keep:**
+- Historical record of what was done
+- Others can see what was fixed
+- Prevents re-doing work
+
+**Suggested Structure:**
+```markdown
+## Active / TODO
+(current work)
+
+## Completed (Archived)
+<details>
+<summary>Click to expand completed fixes...</summary>
+(all the completed stuff)
+</details>
+```
+
+This keeps the file useful while hiding the noise. Want me to restructure it this way?
+
+---
+
+**That's it.** Codebase is solid - no security holes, no memory leaks, good patterns.
