@@ -7,9 +7,9 @@
 ## Current Tasks: Code Improvements
 
 - [x] **Remove unused imports** - Cleaned 686 files, removed ~1200 lines (autoflake)
+- [x] **Add quiet callback utilities** - `quiet_callback()`, `make_quiet()` in utils/errors.py
 - [ ] **Split large functions** - 15 functions >100 lines identified (settings_tab.py: 1538 lines!)
-- [ ] **Add logging to silent except/pass** - 556 blocks could use debug logging
-- [ ] **Consolidate duplicate patterns** - 6 repeated try/except patterns found
+- [ ] **Replace silent except/pass** - 556 blocks could use `quiet_callback()` or debug logging
 
 ---
 

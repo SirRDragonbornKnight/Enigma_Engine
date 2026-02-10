@@ -650,3 +650,62 @@ def retry(
             )
         return wrapper
     return decorator
+
+
+def quiet_callback(fn: Callable, *args, logger_name: str = "enigma_engine", **kwargs) -> Any:
+    """
+    Run a callback quietly - log errors instead of crashing.
+    
+    Use this for GUI callbacks, event handlers, and other places where
+    an exception shouldn't crash the app.
+    
+    Usage:
+        # Instead of:
+        try:
+            callback(value)
+        except Exception:
+            pass
+            
+        # Use:
+        quiet_callback(callback, value)
+        
+        # Or as a wrapper:
+        button.clicked.connect(lambda: quiet_callback(my_handler))
+    
+    Args:
+        fn: Callback function to run
+        *args: Arguments to pass
+        logger_name: Logger name for error messages
+        **kwargs: Keyword arguments to pass
+        
+    Returns:
+        Function result, or None on error
+    """
+    import logging
+    logger = logging.getLogger(logger_name)
+    
+    try:
+        return fn(*args, **kwargs)
+    except Exception as e:
+        logger.debug(f"Callback {fn.__name__ if hasattr(fn, '__name__') else fn} failed: {e}")
+        return None
+
+
+def make_quiet(fn: Callable, logger_name: str = "enigma_engine") -> Callable:
+    """
+    Wrap a function to run quietly (log errors, don't crash).
+    
+    Usage:
+        # Wrap a handler
+        safe_handler = make_quiet(risky_handler)
+        button.clicked.connect(safe_handler)
+        
+        # Use decorator-style
+        @make_quiet
+        def on_click():
+            ...
+    """
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        return quiet_callback(fn, *args, logger_name=logger_name, **kwargs)
+    return wrapper
