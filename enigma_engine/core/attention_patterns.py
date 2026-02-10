@@ -35,6 +35,7 @@ class PatternType(Enum):
     DILATED = "dilated"
     LONGFORMER = "longformer"
     BIGBIRD = "bigbird"
+    PAGED = "paged"  # vLLM-style paged attention
 
 
 @dataclass
@@ -481,6 +482,196 @@ if HAS_TORCH:
             return self.o_proj(output)
     
     
+    class PagedAttention(nn.Module):
+        """
+        Paged Attention (vLLM-style).
+        
+        Enables efficient KV cache management by storing keys/values in
+        fixed-size pages. This allows:
+        - Efficient memory allocation/deallocation
+        - Better memory utilization
+        - Support for variable sequence lengths
+        - Efficient continuous batching
+        
+        Based on vLLM's PagedAttention paper.
+        """
+        
+        def __init__(
+            self,
+            config: AttentionConfig,
+            page_size: int = 16,
+            max_pages: int = 256,
+        ):
+            super().__init__()
+            self.config = config
+            self.page_size = page_size
+            self.max_pages = max_pages
+            
+            self.hidden_size = config.hidden_size
+            self.num_heads = config.num_heads
+            self.head_dim = config.head_dim
+            
+            # Projections
+            self.q_proj = nn.Linear(config.hidden_size, config.num_heads * config.head_dim)
+            self.k_proj = nn.Linear(config.hidden_size, config.num_heads * config.head_dim)
+            self.v_proj = nn.Linear(config.hidden_size, config.num_heads * config.head_dim)
+            self.o_proj = nn.Linear(config.num_heads * config.head_dim, config.hidden_size)
+            
+            self.dropout = nn.Dropout(config.dropout)
+            self.scale = config.head_dim ** -0.5
+            
+            # Page tables: maps (batch, position) -> page_idx
+            # In production, this would be managed externally
+            self.register_buffer('k_cache', None)
+            self.register_buffer('v_cache', None)
+            self.page_table = {}  # {batch_idx: [page_indices]}
+            
+        def allocate_pages(self, batch_idx: int, num_tokens: int) -> list:
+            """Allocate pages for a sequence."""
+            num_pages = (num_tokens + self.page_size - 1) // self.page_size
+            
+            # Get available page indices
+            used_pages = set()
+            for pages in self.page_table.values():
+                used_pages.update(pages)
+            
+            available = [i for i in range(self.max_pages) if i not in used_pages]
+            
+            if len(available) < num_pages:
+                # Evict LRU pages if needed
+                # For simplicity, just raise error
+                raise RuntimeError("Out of cache pages")
+            
+            pages = available[:num_pages]
+            self.page_table[batch_idx] = pages
+            return pages
+        
+        def free_pages(self, batch_idx: int) -> None:
+            """Free pages allocated to a sequence."""
+            if batch_idx in self.page_table:
+                del self.page_table[batch_idx]
+        
+        def _init_cache(self, device: torch.device, dtype: torch.dtype) -> None:
+            """Initialize KV cache."""
+            if self.k_cache is None:
+                cache_shape = (
+                    self.max_pages,
+                    self.page_size,
+                    self.num_heads,
+                    self.head_dim
+                )
+                self.k_cache = torch.zeros(cache_shape, device=device, dtype=dtype)
+                self.v_cache = torch.zeros(cache_shape, device=device, dtype=dtype)
+        
+        def forward(
+            self,
+            hidden_states: torch.Tensor,
+            position_ids: Optional[torch.Tensor] = None,
+            past_length: int = 0,
+            use_cache: bool = True,
+        ) -> torch.Tensor:
+            """
+            Forward pass with paged KV cache.
+            
+            Args:
+                hidden_states: (batch_size, seq_len, hidden_size)
+                position_ids: Token positions for RoPE (optional)
+                past_length: Length of cached sequence
+                use_cache: Whether to use KV cache
+            """
+            batch_size, seq_len, _ = hidden_states.shape
+            
+            # Initialize cache if needed
+            if use_cache:
+                self._init_cache(hidden_states.device, hidden_states.dtype)
+            
+            # Project Q, K, V
+            q = self.q_proj(hidden_states)
+            k = self.k_proj(hidden_states)
+            v = self.v_proj(hidden_states)
+            
+            # Reshape: (batch, seq, heads, dim)
+            q = q.view(batch_size, seq_len, self.num_heads, self.head_dim)
+            k = k.view(batch_size, seq_len, self.num_heads, self.head_dim)
+            v = v.view(batch_size, seq_len, self.num_heads, self.head_dim)
+            
+            if use_cache and past_length > 0:
+                # Append new K, V to cache
+                total_len = past_length + seq_len
+                
+                for b in range(batch_size):
+                    if b not in self.page_table:
+                        self.allocate_pages(b, total_len)
+                    
+                    pages = self.page_table[b]
+                    
+                    # Write new K, V to cache pages
+                    for i, pos in enumerate(range(past_length, total_len)):
+                        page_idx = pos // self.page_size
+                        page_offset = pos % self.page_size
+                        
+                        if page_idx < len(pages):
+                            self.k_cache[pages[page_idx], page_offset] = k[b, i]
+                            self.v_cache[pages[page_idx], page_offset] = v[b, i]
+                
+                # Gather full K, V from cache
+                k_full = torch.zeros(batch_size, total_len, self.num_heads, self.head_dim,
+                                   device=hidden_states.device, dtype=hidden_states.dtype)
+                v_full = torch.zeros(batch_size, total_len, self.num_heads, self.head_dim,
+                                   device=hidden_states.device, dtype=hidden_states.dtype)
+                
+                for b in range(batch_size):
+                    pages = self.page_table.get(b, [])
+                    for pos in range(total_len):
+                        page_idx = pos // self.page_size
+                        page_offset = pos % self.page_size
+                        
+                        if page_idx < len(pages):
+                            k_full[b, pos] = self.k_cache[pages[page_idx], page_offset]
+                            v_full[b, pos] = self.v_cache[pages[page_idx], page_offset]
+                
+                k = k_full
+                v = v_full
+            
+            # Transpose for attention: (batch, heads, seq, dim)
+            q = q.transpose(1, 2)
+            k = k.transpose(1, 2)
+            v = v.transpose(1, 2)
+            
+            # Compute attention scores
+            scores = torch.matmul(q, k.transpose(-2, -1)) * self.scale
+            
+            # Apply causal mask
+            if self.config.use_causal_mask:
+                total_len = k.size(2)
+                mask = torch.triu(
+                    torch.ones(seq_len, total_len, device=scores.device),
+                    diagonal=total_len - seq_len + 1
+                ).bool()
+                scores = scores.masked_fill(mask.unsqueeze(0).unsqueeze(0), float('-inf'))
+            
+            # Softmax and dropout
+            weights = F.softmax(scores, dim=-1)
+            weights = self.dropout(weights)
+            
+            # Weighted sum
+            output = torch.matmul(weights, v)
+            
+            # Reshape output
+            output = output.transpose(1, 2).contiguous().view(
+                batch_size, seq_len, self.num_heads * self.head_dim
+            )
+            
+            return self.o_proj(output)
+        
+        def clear_cache(self) -> None:
+            """Clear all cached keys and values."""
+            if self.k_cache is not None:
+                self.k_cache.zero_()
+                self.v_cache.zero_()
+            self.page_table.clear()
+    
+    
     def create_attention(config: AttentionConfig) -> nn.Module:
         """Factory function to create attention module."""
         if config.pattern_type == PatternType.SLIDING_WINDOW:
@@ -491,6 +682,8 @@ if HAS_TORCH:
             return LocalGlobalAttention(config)
         elif config.pattern_type == PatternType.DILATED:
             return DilatedAttention(config)
+        elif config.pattern_type == PatternType.PAGED:
+            return PagedAttention(config)
         else:
             # Full attention - use standard nn.MultiheadAttention
             return nn.MultiheadAttention(
@@ -515,6 +708,9 @@ else:
         pass
     
     class DilatedAttention:
+        pass
+    
+    class PagedAttention:
         pass
     
     def create_attention(config):

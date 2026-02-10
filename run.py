@@ -196,301 +196,59 @@ Examples:
         print("=" * 60 + "\n")
         return
 
+    # Import command handlers (lazy import to avoid circular deps)
+    from enigma_engine.cli.commands import (
+        cmd_build, cmd_train, cmd_tunnel, cmd_serve, 
+        cmd_run_cli, cmd_gui, cmd_background, cmd_web
+    )
+    
     if args.build:
-        # Full build: train tokenizer + model from scratch
-        print("\n" + "=" * 60)
-        print("AI TESTER - FULL BUILD")
-        print("=" * 60)
-        
-        from enigma_engine.core.training import train_model
-        from enigma_engine.config import CONFIG
-        
-        data_path = args.data or Path(CONFIG["data_dir"]) / "data.txt"
-        output_path = args.output or Path(CONFIG["models_dir"]) / f"{args.model}_forge.pth"
-        
-        logger.info(f"Building {args.model} model from {data_path}")
-        logger.info(f"Output: {output_path}")
-        print(f"\nBuilding {args.model} model from {data_path}")
-        print(f"Output: {output_path}")
-        print()
-        
-        results = train_model(
-            data_path=data_path,
-            epochs=args.epochs,
+        cmd_build(
             model_size=args.model,
-            output_path=output_path,
-            train_tokenizer_first=True,
+            epochs=args.epochs,
+            data_path=args.data,
+            output_path=args.output,
             force=args.force
         )
-        
-        print(f"\nBuild complete!")
-        print(f"  Model saved to: {results.get('model_path', output_path)}")
-        print(f"  Final loss: {results.get('final_loss', 'N/A')}")
 
     if args.train:
-        from enigma_engine.core.training import train_model
-        from enigma_engine.config import CONFIG
-        
-        data_path = args.data or Path(CONFIG["data_dir"]) / "data.txt"
-        output_path = args.output
-        
-        logger.info(f"Training {args.model} model, data={data_path}, epochs={args.epochs}")
-        print(f"\nTraining {args.model} model...")
-        print(f"Data: {data_path}")
-        print(f"Epochs: {args.epochs}")
-        print()
-        
-        results = train_model(
-            data_path=data_path,
-            epochs=args.epochs,
+        cmd_train(
             model_size=args.model,
-            output_path=output_path,
-            train_tokenizer_first=True,
+            epochs=args.epochs,
+            data_path=args.data,
+            output_path=args.output,
             force=args.force
         )
-        
-        if results.get('status') != 'skipped':
-            print(f"\nTraining complete!")
-            print(f"  Final loss: {results.get('final_loss', 'N/A')}")
 
     if args.tunnel:
-        from enigma_engine.comms.tunnel_manager import TunnelManager
-        
-        print("\n" + "=" * 60)
-        print("  Enigma AI Engine Tunnel Manager")
-        print("=" * 60)
-        
-        # Create tunnel manager
-        manager = TunnelManager(
+        cmd_tunnel(
             provider=args.tunnel_provider,
+            port=args.tunnel_port,
             auth_token=args.tunnel_token,
             region=args.tunnel_region,
             subdomain=args.tunnel_subdomain
         )
-        
-        logger.info(f"Starting {args.tunnel_provider} tunnel on port {args.tunnel_port}")
-        print(f"\nStarting {args.tunnel_provider} tunnel on port {args.tunnel_port}...")
-        print("This will expose your local server to the internet.\n")
-        
-        if args.tunnel_provider == "ngrok" and not args.tunnel_token:
-            print("⚠️  Warning: ngrok requires an auth token for best results.")
-            print("   Sign up at https://ngrok.com and get your token.")
-            print("   Then use: --tunnel-token YOUR_TOKEN\n")
-        
-        # Start tunnel
-        tunnel_url = manager.start_tunnel(args.tunnel_port)
-        
-        if tunnel_url:
-            logger.info(f"Tunnel started successfully: {tunnel_url}")
-            print("\n✓ Tunnel started successfully!")
-            print(f"\n  Public URL: {tunnel_url}")
-            print(f"  Local Port: {args.tunnel_port}")
-            print(f"\n  Share this URL to give others access to your Enigma AI Engine server.")
-            print(f"  Press Ctrl+C to stop the tunnel.\n")
-            
-            # Keep running
-            try:
-                import time
-                while True:
-                    time.sleep(1)
-            except KeyboardInterrupt:
-                print("\n\nStopping tunnel...")
-                manager.stop_tunnel()
-                print("✓ Tunnel stopped.\n")
-        else:
-            logger.error(f"Failed to start {args.tunnel_provider} tunnel on port {args.tunnel_port}")
-            print("\n✗ Failed to start tunnel.")
-            print(f"\nTroubleshooting:")
-            print(f"  1. Make sure {args.tunnel_provider} is installed")
-            if args.tunnel_provider == "ngrok":
-                print(f"     Download from: https://ngrok.com/download")
-                print(f"     Or install with: snap install ngrok")
-            elif args.tunnel_provider == "localtunnel":
-                print(f"     Install with: npm install -g localtunnel")
-            elif args.tunnel_provider == "bore":
-                print(f"     Install from: https://github.com/ekzhang/bore")
-            print(f"  2. Check that port {args.tunnel_port} is available")
-            print(f"  3. Verify your internet connection\n")
-            return
 
     if args.serve:
-        api_type = getattr(args, 'api_type', 'openai')
-        port = getattr(args, 'port', None)
-        
-        if api_type == "openai":
-            # OpenAI-compatible API (recommended)
-            from enigma_engine.comms.openai_api import create_openai_server
-            port = port or 8000
-            logger.info(f"Starting OpenAI-compatible API server on port {port}")
-            print("\n" + "=" * 60)
-            print("  Enigma AI Engine OpenAI-Compatible API Server")
-            print("=" * 60)
-            print("\nThis server is compatible with:")
-            print("  - OpenAI Python SDK")
-            print("  - LangChain")
-            print("  - LlamaIndex")
-            print("  - Any OpenAI-compatible tool")
-            print(f"\nBase URL: http://localhost:{port}/v1")
-            print("\nPress Ctrl+C to stop\n")
-            create_openai_server(host="0.0.0.0", port=port)
-        else:
-            # Simple API (original)
-            from enigma_engine.comms.api_server import create_app
-            port = port or 5000
-            app = create_app()
-            logger.info(f"Starting simple API server on port {port}")
-            print(f"\nStarting API server at http://127.0.0.1:{port}")
-            print("Press Ctrl+C to stop\n")
-            app.run(host="127.0.0.1", port=port, debug=True)
+        cmd_serve(
+            api_type=getattr(args, 'api_type', 'openai'),
+            port=getattr(args, 'port', None)
+        )
 
     if args.run:
-        from enigma_engine.core.inference import EnigmaEngine
-        print("\n" + "=" * 50)
-        print("Enigma AI Engine CLI Chat")
-        print("=" * 50)
-        print("Type your message and press Enter.")
-        print("Type 'quit' or 'exit' to stop.\n")
-
-        try:
-            engine = EnigmaEngine()
-        except FileNotFoundError as e:
-            logger.error(f"Model not found: {e}")
-            print(f"\n[ERROR] Model not found")
-            print(f"   {e}")
-            print("\nTo fix this:")
-            print("   1. Train a model first:")
-            print("      python run.py --train")
-            print("   2. Or use the GUI to train:")
-            print("      python run.py --gui")
-            return
-        except ImportError as e:
-            logger.error(f"Missing dependency: {e}")
-            print(f"\n[ERROR] Missing dependency")
-            print(f"   {e}")
-            print("\nTo fix this:")
-            print("   Install required packages:")
-            print("      pip install -r requirements.txt")
-            return
-        except Exception as e:
-            logger.error(f"Error loading model: {e}", exc_info=True)
-            print(f"\n[ERROR] Error loading model: {e}")
-            print("\nTroubleshooting:")
-            print("   - Check if the model file exists in the models/ directory")
-            print("   - Try retraining: python run.py --train --force")
-            print("   - Check logs for more details")
-            return
-
-        print("[OK] Model loaded successfully!\n")
-
-        while True:
-            try:
-                prompt = input("You: ")
-                if prompt.strip().lower() in ("quit", "exit", "q"):
-                    print("\n[SYSTEM] Goodbye!")
-                    break
-                if not prompt.strip():
-                    continue
-
-                # Generate with streaming
-                print("AI: ", end="", flush=True)
-                try:
-                    for token in engine.stream_generate(prompt, max_gen=200):
-                        print(token, end="", flush=True)
-                except Exception as e:
-                    logger.warning(f"Generation error: {e}", exc_info=True)
-                    print(f"\n\n[WARNING] Generation error: {e}")
-                    print("Try a different prompt or check the model.")
-                print("\n")
-
-            except KeyboardInterrupt:
-                print("\n\n[SYSTEM] Goodbye!")
-                break
+        cmd_run_cli()
 
     if args.gui:
-        # Suppress GTK/ATK stderr noise during Qt initialization
-        # Redirect stderr at the file descriptor level to catch C-level output
-        import sys
-        stderr_fd = sys.stderr.fileno()
-        try:
-            devnull_fd = os.open(os.devnull, os.O_WRONLY)
-            old_stderr_fd = os.dup(stderr_fd)
-            os.dup2(devnull_fd, stderr_fd)
-            os.close(devnull_fd)
-        except (OSError, AttributeError) as e:
-            logger.debug(f"Could not redirect stderr: {e}")
-            old_stderr_fd = None
-        
-        _print_startup_banner()
-        
-        try:
-            from enigma_engine.gui.enhanced_window import run_app
-        except ImportError as e:
-            # Restore stderr for error messages
-            if old_stderr_fd is not None:
-                os.dup2(old_stderr_fd, stderr_fd)
-                os.close(old_stderr_fd)
-            logger.error(f"GUI requires PyQt5: {e}")
-            print(f"\n[ERROR] GUI requires PyQt5")
-            print(f"   Error: {e}")
-            print("\nTo fix this:")
-            print("   Install PyQt5:")
-            print("      pip install PyQt5")
-            print("\n   On Raspberry Pi, use the system package:")
-            print("      sudo apt install python3-pyqt5")
-            sys.exit(1)
-        
-        # Restore stderr before running app (so we can see real errors)
-        if old_stderr_fd is not None:
-            os.dup2(old_stderr_fd, stderr_fd)
-            os.close(old_stderr_fd)
-        
-        run_app()
+        cmd_gui()
     
     if args.background:
-        try:
-            from enigma_engine.background import main as run_background
-        except ImportError as e:
-            logger.error(f"Background mode requires PyQt5: {e}")
-            print(f"\n[ERROR] Background mode requires PyQt5")
-            print(f"   Error: {e}")
-            print("\nTo fix this:")
-            print("   Install PyQt5:")
-            print("      pip install PyQt5")
-            sys.exit(1)
-        
-        print("\n" + "=" * 60)
-        print("AI TESTER - BACKGROUND MODE")
-        print("=" * 60)
-        print("\nRunning in system tray...")
-        print("Click tray icon or press Ctrl+Space for quick commands")
-        print("Press Ctrl+C to exit\n")
-        run_background()
+        cmd_background()
     
     if args.web:
-        try:
-            from enigma_engine.web.app import run_web
-        except ImportError as e:
-            logger.error(f"Web dashboard requires flask-socketio: {e}")
-            print(f"\n[ERROR] Web dashboard requires flask-socketio")
-            print(f"   Error: {e}")
-            print("\nTo fix this:")
-            print("   Install required packages:")
-            print("      pip install flask-socketio")
-            sys.exit(1)
-        
-        print("\n" + "=" * 60)
-        print("AI TESTER - WEB DASHBOARD")
-        print("=" * 60)
-        logger.info("Starting web dashboard on port 8080")
-        print(f"\nStarting web server...")
-        
-        # Setup instance manager if needed
-        if args.instance or args.new_instance:
-            from enigma_engine.core.instance_manager import InstanceManager
-            instance_manager = InstanceManager(instance_id=args.instance)
-            print(f"Instance ID: {instance_manager.instance_id}")
-        
-        run_web(host='0.0.0.0', port=8080)
+        cmd_web(
+            instance_id=args.instance,
+            new_instance=args.new_instance
+        )
 
 
 if __name__ == "__main__":

@@ -20,8 +20,11 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QSpinBox,
     QTextEdit,
     QVBoxLayout,
@@ -155,6 +158,163 @@ class CustomGameDialog(QDialog):
             "multiplayer_aware": self.multiplayer_aware.isChecked(),
             "wiki_url": self.wiki_input.text().strip(),
         }
+
+
+class GamingProfileDialog(QDialog):
+    """Dialog for creating/editing gaming resource profiles."""
+    
+    def __init__(self, parent=None, profile=None):
+        super().__init__(parent)
+        self.setWindowTitle("Edit Gaming Profile" if profile else "New Gaming Profile")
+        self.setMinimumWidth(500)
+        self.profile = profile
+        self._setup_ui()
+        if profile:
+            self._load_profile(profile)
+    
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        
+        # Form layout
+        form = QFormLayout()
+        
+        # Basic info
+        self.name_input = QLineEdit()
+        self.name_input.setPlaceholderText("e.g., My Favorite Game")
+        form.addRow("Profile Name:", self.name_input)
+        
+        # Process names (comma-separated)
+        self.process_input = QLineEdit()
+        self.process_input.setPlaceholderText("game.exe, game2.exe (comma-separated)")
+        self.process_input.setToolTip("Process names to detect - comma-separated")
+        form.addRow("Process Names:", self.process_input)
+        
+        # Priority
+        self.priority_combo = NoScrollComboBox()
+        self.priority_combo.addItems(["BACKGROUND", "LOW", "MEDIUM", "HIGH", "FULL"])
+        self.priority_combo.setCurrentText("HIGH")
+        self.priority_combo.setToolTip(
+            "BACKGROUND: AI uses minimal resources\n"
+            "LOW: Reduced resources, defers heavy tasks\n"
+            "MEDIUM: Balanced resources\n"
+            "HIGH: More resources, most tasks allowed\n"
+            "FULL: No restrictions"
+        )
+        form.addRow("Priority:", self.priority_combo)
+        
+        # Resource limits section
+        resource_group = QGroupBox("Resource Limits")
+        resource_layout = QFormLayout(resource_group)
+        
+        self.cpu_inference = QCheckBox("Force CPU inference")
+        self.cpu_inference.setToolTip("Use CPU instead of GPU when this game is running")
+        resource_layout.addRow("", self.cpu_inference)
+        
+        self.max_vram = QSpinBox()
+        self.max_vram.setRange(0, 48000)
+        self.max_vram.setValue(512)
+        self.max_vram.setSuffix(" MB")
+        self.max_vram.setToolTip("Max VRAM for AI (0 = unlimited)")
+        resource_layout.addRow("Max VRAM:", self.max_vram)
+        
+        self.max_ram = QSpinBox()
+        self.max_ram.setRange(0, 128000)
+        self.max_ram.setValue(2048)
+        self.max_ram.setSuffix(" MB")
+        self.max_ram.setToolTip("Max RAM for AI (0 = unlimited)")
+        resource_layout.addRow("Max RAM:", self.max_ram)
+        
+        self.batch_size = QSpinBox()
+        self.batch_size.setRange(0, 64)
+        self.batch_size.setValue(1)
+        self.batch_size.setToolTip("Max batch size (0 = default)")
+        resource_layout.addRow("Batch Size:", self.batch_size)
+        
+        form.addRow(resource_group)
+        
+        # Behavior options
+        behavior_group = QGroupBox("Behavior")
+        behavior_layout = QVBoxLayout(behavior_group)
+        
+        self.defer_heavy = QCheckBox("Defer heavy tasks until game ends")
+        self.defer_heavy.setChecked(True)
+        self.defer_heavy.setToolTip("Queue image/video generation until game closes")
+        behavior_layout.addWidget(self.defer_heavy)
+        
+        self.voice_enabled = QCheckBox("Voice enabled")
+        self.voice_enabled.setChecked(True)
+        self.voice_enabled.setToolTip("Allow voice interaction while gaming")
+        behavior_layout.addWidget(self.voice_enabled)
+        
+        self.avatar_enabled = QCheckBox("Avatar enabled")
+        self.avatar_enabled.setChecked(True)
+        self.avatar_enabled.setToolTip("Show avatar overlay while gaming")
+        behavior_layout.addWidget(self.avatar_enabled)
+        
+        form.addRow(behavior_group)
+        
+        # Notes
+        self.notes_input = QTextEdit()
+        self.notes_input.setPlaceholderText("Optional notes about this profile...")
+        self.notes_input.setMaximumHeight(60)
+        form.addRow("Notes:", self.notes_input)
+        
+        layout.addLayout(form)
+        
+        # Buttons
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        )
+        buttons.accepted.connect(self._validate_and_accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+    
+    def _load_profile(self, profile):
+        """Load existing profile into dialog."""
+        self.name_input.setText(profile.name)
+        self.process_input.setText(", ".join(profile.process_names))
+        self.priority_combo.setCurrentText(profile.priority.name)
+        self.cpu_inference.setChecked(profile.cpu_inference)
+        self.max_vram.setValue(profile.max_vram_mb)
+        self.max_ram.setValue(profile.max_ram_mb)
+        self.batch_size.setValue(profile.batch_size)
+        self.defer_heavy.setChecked(profile.defer_heavy_tasks)
+        self.voice_enabled.setChecked(profile.voice_enabled)
+        self.avatar_enabled.setChecked(profile.avatar_enabled)
+        self.notes_input.setPlainText(profile.notes or "")
+    
+    def _validate_and_accept(self):
+        """Validate inputs before accepting."""
+        if not self.name_input.text().strip():
+            QMessageBox.warning(self, "Validation Error", "Profile name is required")
+            return
+        if not self.process_input.text().strip():
+            QMessageBox.warning(self, "Validation Error", "At least one process name is required")
+            return
+        self.accept()
+    
+    def get_profile(self):
+        """Get the profile data from dialog inputs."""
+        from enigma_engine.core.gaming_mode import GamingPriority, GamingProfile
+        
+        process_names = [
+            p.strip() for p in self.process_input.text().split(",")
+            if p.strip()
+        ]
+        
+        return GamingProfile(
+            name=self.name_input.text().strip(),
+            process_names=process_names,
+            priority=GamingPriority[self.priority_combo.currentText()],
+            cpu_inference=self.cpu_inference.isChecked(),
+            max_vram_mb=self.max_vram.value(),
+            max_ram_mb=self.max_ram.value(),
+            batch_size=self.batch_size.value(),
+            defer_heavy_tasks=self.defer_heavy.isChecked(),
+            voice_enabled=self.voice_enabled.isChecked(),
+            avatar_enabled=self.avatar_enabled.isChecked(),
+            notes=self.notes_input.toPlainText().strip(),
+        )
 
 
 # Game configs directory
@@ -303,6 +463,97 @@ def create_game_subtab(parent):
     
     layout.addWidget(coplay_group)
     
+    # === GAMING PROFILES (Resource Management) ===
+    profiles_group = QGroupBox("Gaming Profiles (Resource Limits)")
+    profiles_layout = QVBoxLayout(profiles_group)
+    
+    profiles_desc = QLabel(
+        "Configure AI resource limits per-game. Games are auto-detected by process name."
+    )
+    profiles_desc.setWordWrap(True)
+    profiles_layout.addWidget(profiles_desc)
+    
+    # Gaming mode toggle
+    parent.gaming_mode_check = QCheckBox("Enable Gaming Mode")
+    parent.gaming_mode_check.setToolTip("Auto-detect games and apply resource limits")
+    parent.gaming_mode_check.stateChanged.connect(
+        lambda state: _toggle_gaming_mode(parent, state)
+    )
+    profiles_layout.addWidget(parent.gaming_mode_check)
+    
+    # Profile list with buttons
+    profile_list_row = QHBoxLayout()
+    
+    parent.gaming_profile_list = QListWidget()
+    parent.gaming_profile_list.setMaximumHeight(100)
+    parent.gaming_profile_list.setToolTip("Double-click to edit a profile")
+    parent.gaming_profile_list.itemDoubleClicked.connect(
+        lambda item: _edit_gaming_profile(parent, item)
+    )
+    profile_list_row.addWidget(parent.gaming_profile_list)
+    
+    # Profile buttons
+    profile_btn_col = QVBoxLayout()
+    btn_add_profile = QPushButton("Add")
+    btn_add_profile.setMaximumWidth(60)
+    btn_add_profile.clicked.connect(lambda: _add_gaming_profile(parent))
+    profile_btn_col.addWidget(btn_add_profile)
+    
+    btn_edit_profile = QPushButton("Edit")
+    btn_edit_profile.setMaximumWidth(60)
+    btn_edit_profile.clicked.connect(lambda: _edit_selected_profile(parent))
+    profile_btn_col.addWidget(btn_edit_profile)
+    
+    btn_remove_profile = QPushButton("Remove")
+    btn_remove_profile.setMaximumWidth(60)
+    btn_remove_profile.clicked.connect(lambda: _remove_gaming_profile(parent))
+    profile_btn_col.addWidget(btn_remove_profile)
+    
+    btn_steam_import = QPushButton("Steam")
+    btn_steam_import.setMaximumWidth(60)
+    btn_steam_import.setToolTip("Import games from Steam library")
+    btn_steam_import.clicked.connect(lambda: _import_steam_games(parent))
+    profile_btn_col.addWidget(btn_steam_import)
+    
+    profile_btn_col.addStretch()
+    profile_list_row.addLayout(profile_btn_col)
+    
+    profiles_layout.addLayout(profile_list_row)
+    
+    # FPS monitoring options
+    fps_row = QHBoxLayout()
+    parent.fps_adaptive_check = QCheckBox("FPS Adaptive Scaling")
+    parent.fps_adaptive_check.setChecked(True)
+    parent.fps_adaptive_check.setToolTip("Automatically reduce AI resources when FPS drops")
+    parent.fps_adaptive_check.stateChanged.connect(
+        lambda state: _toggle_fps_adaptive(parent, state)
+    )
+    fps_row.addWidget(parent.fps_adaptive_check)
+    
+    fps_row.addWidget(QLabel("Target FPS:"))
+    parent.target_fps_spin = QSpinBox()
+    parent.target_fps_spin.setRange(30, 240)
+    parent.target_fps_spin.setValue(60)
+    parent.target_fps_spin.setMaximumWidth(70)
+    parent.target_fps_spin.valueChanged.connect(
+        lambda v: _set_target_fps(parent, v)
+    )
+    fps_row.addWidget(parent.target_fps_spin)
+    fps_row.addStretch()
+    profiles_layout.addLayout(fps_row)
+    
+    # FPS stats display
+    parent.fps_stats_label = QLabel("FPS: -- | Scale: 100%")
+    parent.fps_stats_label.setStyleSheet("color: #bac2de; font-family: monospace;")
+    profiles_layout.addWidget(parent.fps_stats_label)
+    
+    # Current status
+    parent.gaming_status_label = QLabel("Gaming Mode: Disabled")
+    parent.gaming_status_label.setStyleSheet("color: #bac2de; font-style: italic;")
+    profiles_layout.addWidget(parent.gaming_status_label)
+    
+    layout.addWidget(profiles_group)
+    
     # === OUTPUT AT TOP ===
     # Log (main output area)
     parent.game_log = QTextEdit()
@@ -398,7 +649,311 @@ def create_game_subtab(parent):
     # Load custom games from previous sessions
     _load_custom_games(parent)
     
+    # Initialize gaming profiles list
+    _refresh_gaming_profiles(parent)
+    
     return widget
+
+
+# === GAMING PROFILE MANAGEMENT FUNCTIONS ===
+
+def _toggle_gaming_mode(parent, state):
+    """Toggle gaming mode on/off."""
+    try:
+        from enigma_engine.core.gaming_mode import get_gaming_mode
+        gm = get_gaming_mode()
+        
+        if state:
+            gm.enable()
+            parent.gaming_status_label.setText("Gaming Mode: Enabled (monitoring)")
+            parent.gaming_status_label.setStyleSheet("color: #a6e3a1; font-weight: bold;")
+            parent.game_log.append("[OK] Gaming mode enabled - monitoring for games")
+            
+            # Register status callback
+            def on_game_start(game, profile):
+                parent.gaming_status_label.setText(f"Gaming Mode: {profile.name}")
+                parent.game_log.append(f"[G] Detected: {game} -> {profile.name}")
+            
+            def on_game_end(game):
+                parent.gaming_status_label.setText("Gaming Mode: Enabled (monitoring)")
+                parent.game_log.append(f"[G] Game ended: {game}")
+            
+            def on_fps_update(stats):
+                # Use signal for thread-safe UI update
+                try:
+                    from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                    QMetaObject.invokeMethod(
+                        parent.fps_stats_label,
+                        "setText",
+                        Qt.QueuedConnection,
+                        Q_ARG(str, f"FPS: {stats.current_fps:.0f} | Scale: {int(gm.get_fps_scale() * 100)}%")
+                    )
+                except Exception:
+                    pass
+            
+            gm.on_game_start(on_game_start)
+            gm.on_game_end(on_game_end)
+            gm.on_fps_update(on_fps_update)
+            
+            # Apply current settings
+            gm.set_fps_adaptive(parent.fps_adaptive_check.isChecked())
+            gm.set_target_fps(float(parent.target_fps_spin.value()))
+        else:
+            gm.disable()
+            parent.gaming_status_label.setText("Gaming Mode: Disabled")
+            parent.gaming_status_label.setStyleSheet("color: #bac2de; font-style: italic;")
+            parent.fps_stats_label.setText("FPS: -- | Scale: 100%")
+            parent.fps_stats_label.setStyleSheet("color: #bac2de; font-family: monospace;")
+            parent.game_log.append("[x] Gaming mode disabled")
+            
+    except Exception as e:
+        parent.game_log.append(f"[X] Gaming mode error: {e}")
+
+
+def _refresh_gaming_profiles(parent):
+    """Refresh the gaming profiles list."""
+    parent.gaming_profile_list.clear()
+    
+    try:
+        from enigma_engine.core.gaming_mode import get_gaming_mode, DEFAULT_GAMING_PROFILES
+        gm = get_gaming_mode()
+        
+        for key, profile in gm.profiles.items():
+            is_default = key in DEFAULT_GAMING_PROFILES
+            prefix = "[D] " if is_default else "[C] "
+            processes = ", ".join(profile.process_names[:2])
+            if len(profile.process_names) > 2:
+                processes += "..."
+            
+            item = QListWidgetItem(f"{prefix}{profile.name} ({processes})")
+            item.setData(256, key)  # Store key in user role
+            item.setData(257, is_default)  # Store if default
+            
+            if is_default:
+                item.setToolTip(f"Default profile: {profile.notes or 'No description'}")
+            else:
+                item.setToolTip(f"Custom profile: {profile.notes or 'No description'}")
+            
+            parent.gaming_profile_list.addItem(item)
+            
+    except Exception as e:
+        parent.game_log.append(f"[X] Failed to load gaming profiles: {e}")
+
+
+def _toggle_fps_adaptive(parent, state):
+    """Toggle FPS adaptive scaling."""
+    try:
+        from enigma_engine.core.gaming_mode import get_gaming_mode
+        gm = get_gaming_mode()
+        gm.set_fps_adaptive(bool(state))
+        if state:
+            parent.game_log.append("[OK] FPS adaptive scaling enabled")
+        else:
+            parent.game_log.append("[x] FPS adaptive scaling disabled")
+            parent.fps_stats_label.setText("FPS: -- | Scale: 100%")
+    except Exception as e:
+        parent.game_log.append(f"[X] FPS adaptive error: {e}")
+
+
+def _set_target_fps(parent, fps):
+    """Set target FPS for monitoring."""
+    try:
+        from enigma_engine.core.gaming_mode import get_gaming_mode
+        gm = get_gaming_mode()
+        gm.set_target_fps(float(fps))
+    except Exception:
+        pass  # Silent fail if gaming mode not available
+
+
+def _update_fps_display(parent, stats):
+    """Update FPS stats display from callback."""
+    try:
+        scale = 100
+        try:
+            from enigma_engine.core.gaming_mode import get_gaming_mode
+            scale = int(get_gaming_mode().get_fps_scale() * 100)
+        except Exception:
+            pass
+        
+        if stats.current_fps > 0:
+            fps_text = f"FPS: {stats.current_fps:.0f} (avg: {stats.average_fps:.0f}) | Scale: {scale}%"
+            
+            # Color based on scale
+            if scale >= 80:
+                color = "#a6e3a1"  # Green
+            elif scale >= 50:
+                color = "#f59e0b"  # Orange
+            else:
+                color = "#f38ba8"  # Red
+            
+            parent.fps_stats_label.setText(fps_text)
+            parent.fps_stats_label.setStyleSheet(f"color: {color}; font-family: monospace;")
+        else:
+            parent.fps_stats_label.setText("FPS: -- | Scale: 100%")
+            parent.fps_stats_label.setStyleSheet("color: #bac2de; font-family: monospace;")
+    except Exception:
+        pass
+
+
+def _add_gaming_profile(parent):
+    """Add a new gaming profile."""
+    dialog = GamingProfileDialog(parent)
+    if dialog.exec_() == QDialog.Accepted:
+        profile = dialog.get_profile()
+        
+        try:
+            from enigma_engine.core.gaming_mode import get_gaming_mode
+            gm = get_gaming_mode()
+            gm.add_game_profile(profile)
+            
+            _refresh_gaming_profiles(parent)
+            parent.game_log.append(f"[OK] Added gaming profile: {profile.name}")
+            
+        except Exception as e:
+            parent.game_log.append(f"[X] Failed to add profile: {e}")
+
+
+def _import_steam_games(parent):
+    """Import games from Steam library."""
+    try:
+        from enigma_engine.core.steam_integration import get_steam_integration
+        steam = get_steam_integration()
+        
+        if not steam.is_available:
+            QMessageBox.warning(
+                parent,
+                "Steam Not Found",
+                "Could not find Steam installation. Make sure Steam is installed."
+            )
+            return
+        
+        # Get games
+        games = steam.get_installed_games(refresh=True)
+        
+        if not games:
+            QMessageBox.information(
+                parent,
+                "No Games Found",
+                "No games found in your Steam library."
+            )
+            return
+        
+        # Register with gaming mode
+        count = steam.register_with_gaming_mode()
+        
+        _refresh_gaming_profiles(parent)
+        
+        if count > 0:
+            parent.game_log.append(f"[OK] Imported {count} games from Steam ({len(games)} total in library)")
+            QMessageBox.information(
+                parent,
+                "Steam Import Complete",
+                f"Imported {count} new games from Steam.\n\n"
+                f"Total games in library: {len(games)}\n"
+                f"Games already registered were skipped."
+            )
+        else:
+            parent.game_log.append(f"[!] No new games to import (all {len(games)} already registered)")
+            QMessageBox.information(
+                parent,
+                "Already Imported",
+                f"All {len(games)} games from Steam are already registered."
+            )
+            
+    except ImportError:
+        parent.game_log.append("[X] Steam integration not available")
+    except Exception as e:
+        parent.game_log.append(f"[X] Steam import failed: {e}")
+        QMessageBox.warning(
+            parent,
+            "Import Failed",
+            f"Failed to import Steam games: {e}"
+        )
+
+
+def _edit_gaming_profile(parent, item):
+    """Edit a gaming profile from list item."""
+    key = item.data(256)
+    is_default = item.data(257)
+    
+    if is_default:
+        QMessageBox.information(
+            parent,
+            "Cannot Edit",
+            "Default profiles cannot be edited. Create a custom profile instead."
+        )
+        return
+    
+    try:
+        from enigma_engine.core.gaming_mode import get_gaming_mode
+        gm = get_gaming_mode()
+        profile = gm.profiles.get(key)
+        
+        if profile:
+            dialog = GamingProfileDialog(parent, profile)
+            if dialog.exec_() == QDialog.Accepted:
+                new_profile = dialog.get_profile()
+                
+                # Remove old profile if name changed
+                if key != new_profile.name.lower().replace(" ", "_"):
+                    gm.remove_game_profile(profile.name, auto_save=False)
+                
+                gm.add_game_profile(new_profile)
+                _refresh_gaming_profiles(parent)
+                parent.game_log.append(f"[OK] Updated gaming profile: {new_profile.name}")
+                
+    except Exception as e:
+        parent.game_log.append(f"[X] Failed to edit profile: {e}")
+
+
+def _edit_selected_profile(parent):
+    """Edit the currently selected profile."""
+    item = parent.gaming_profile_list.currentItem()
+    if item:
+        _edit_gaming_profile(parent, item)
+    else:
+        QMessageBox.information(parent, "No Selection", "Please select a profile to edit.")
+
+
+def _remove_gaming_profile(parent):
+    """Remove the selected gaming profile."""
+    item = parent.gaming_profile_list.currentItem()
+    if not item:
+        QMessageBox.information(parent, "No Selection", "Please select a profile to remove.")
+        return
+    
+    key = item.data(256)
+    is_default = item.data(257)
+    
+    if is_default:
+        QMessageBox.information(
+            parent,
+            "Cannot Remove",
+            "Default profiles cannot be removed."
+        )
+        return
+    
+    # Confirm
+    reply = QMessageBox.question(
+        parent,
+        "Confirm Removal",
+        f"Remove gaming profile '{key}'?",
+        QMessageBox.Yes | QMessageBox.No
+    )
+    
+    if reply == QMessageBox.Yes:
+        try:
+            from enigma_engine.core.gaming_mode import get_gaming_mode
+            gm = get_gaming_mode()
+            
+            if gm.remove_game_profile(key):
+                _refresh_gaming_profiles(parent)
+                parent.game_log.append(f"[OK] Removed gaming profile: {key}")
+            else:
+                parent.game_log.append(f"[!] Profile not found: {key}")
+                
+        except Exception as e:
+            parent.game_log.append(f"[X] Failed to remove profile: {e}")
 
 
 def load_game_configs() -> list:

@@ -262,8 +262,28 @@ my_3d_avatar/
 }
 ```
 
-### VRM Support (Coming Soon)
-VRM format support for anime-style avatars is planned.
+### VRM Support
+VRM format (VRM 0.x and 1.0) is fully supported for anime-style avatars:
+- Load VRM files directly: `data/avatar/vrm/your_model.vrm`
+- Automatic humanoid bone mapping
+- BlendShape/expression support
+- VRM metadata (license, author, etc.)
+
+Example VRM avatar config:
+```json
+{
+  "name": "Anime Avatar",
+  "avatar_type": "VRM",
+  "render_mode": "3D",
+  "model": "vrm/my_avatar.vrm",
+  "expressions": {
+    "happy": "happy",
+    "sad": "sad", 
+    "angry": "angry",
+    "surprised": "surprised"
+  }
+}
+```
 
 ---
 

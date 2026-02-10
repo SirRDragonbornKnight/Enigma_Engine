@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Enigma AI Engine - Create your own AI from scratch. No cloud required. Runs on anything from a Raspberry Pi to a gaming PC.">
+    <meta name="theme-color" content="#1a1a2e">
+    <title>Enigma AI Engine - Build Your Own AI</title>
+    <link rel="manifest" href="/static/manifest.json">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --bg-primary: #1e1e2e;
+            --bg-secondary: #313244;
+            --bg-tertiary: #45475a;
+            --text-primary: #cdd6f4;
+            --text-secondary: #a6adc8;
+            --accent-blue: #89b4fa;
+            --accent-green: #a6e3a1;
+            --accent-purple: #cba6f7;
+            --accent-pink: #f5c2e7;
+            --accent-red: #f38ba8;
+            --accent-yellow: #f9e2af;
+            --accent-teal: #94e2d5;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+        
+        /* Navigation */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(30, 30, 46, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 1000;
+            border-bottom: 1px solid var(--bg-tertiary);
+        }
+        
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--accent-blue);
+            text-decoration: none;
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+        }
+        
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+        
+        .nav-links a:hover {
+            color: var(--accent-blue);
+        }
+        
+        /* Hero Section */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 6rem 2rem 2rem;
+            background: linear-gradient(135deg, var(--bg-primary) 0%, #1a1a2e 100%);
+        }
+        
+        .hero h1 {
+            font-size: 3.5rem;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .hero .tagline {
+            font-size: 1.5rem;
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+            max-width: 600px;
+        }
+        
+        .cta-buttons {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-bottom: 3rem;
+        }
+        
+        .btn {
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(137, 180, 250, 0.3);
+        }
+        
+        .btn-primary {
+            background: var(--accent-blue);
+            color: var(--bg-primary);
+        }
+        
+        .btn-secondary {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--bg-tertiary);
+        }
+        
+        .btn-mobile {
+            background: linear-gradient(135deg, var(--accent-green), var(--accent-teal));
+            color: var(--bg-primary);
+        }
+        
+        /* Download Section */
+        .download-section {
+            padding: 4rem 2rem;
+            background: var(--bg-secondary);
+        }
+        
+        .download-section h2 {
+            text-align: center;
+            font-size: 2rem;
+            margin-bottom: 2rem;
+            color: var(--accent-blue);
+        }
+        
+        .download-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .download-card {
+            background: var(--bg-primary);
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            border: 1px solid var(--bg-tertiary);
+            transition: transform 0.2s, border-color 0.2s;
+        }
+        
+        .download-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--accent-blue);
+        }
+        
+        .download-card .icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+        
+        .download-card h3 {
+            font-size: 1.3rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .download-card p {
+            color: var(--text-secondary);
+            margin-bottom: 1.5rem;
+            font-size: 0.9rem;
+        }
+        
+        .download-card .btn {
+            width: 100%;
+            justify-content: center;
+        }
+        
+        /* Features Section */
+        .features {
+            padding: 4rem 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .features h2 {
+            text-align: center;
+            font-size: 2rem;
+            margin-bottom: 3rem;
+        }
+        
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+        }
+        
+        .feature-card {
+            background: var(--bg-secondary);
+            padding: 1.5rem;
+            border-radius: 12px;
+            border-left: 4px solid var(--accent-blue);
+        }
+        
+        .feature-card h3 {
+            color: var(--accent-blue);
+            margin-bottom: 0.5rem;
+        }
+        
+        .feature-card p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+        
+        /* Mobile App Section */
+        .mobile-section {
+            padding: 4rem 2rem;
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+        }
+        
+        .mobile-content {
+            max-width: 1000px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3rem;
+            align-items: center;
+        }
+        
+        .mobile-text h2 {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            color: var(--accent-green);
+        }
+        
+        .mobile-text p {
+            color: var(--text-secondary);
+            margin-bottom: 1.5rem;
+        }
+        
+        .mobile-features {
+            list-style: none;
+            margin-bottom: 2rem;
+        }
+        
+        .mobile-features li {
+            padding: 0.5rem 0;
+            padding-left: 1.5rem;
+            position: relative;
+        }
+        
+        .mobile-features li::before {
+            content: ">";
+            position: absolute;
+            left: 0;
+            color: var(--accent-green);
+            font-weight: bold;
+        }
+        
+        .mobile-preview {
+            text-align: center;
+        }
+        
+        .phone-mockup {
+            background: var(--bg-tertiary);
+            border-radius: 30px;
+            padding: 10px;
+            max-width: 280px;
+            margin: 0 auto;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+        }
+        
+        .phone-screen {
+            background: var(--bg-primary);
+            border-radius: 22px;
+            padding: 1.5rem;
+            min-height: 400px;
+        }
+        
+        .phone-header {
+            text-align: center;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--bg-tertiary);
+            margin-bottom: 1rem;
+        }
+        
+        .phone-header h4 {
+            color: var(--accent-blue);
+        }
+        
+        .chat-bubble {
+            background: var(--bg-secondary);
+            padding: 0.75rem 1rem;
+            border-radius: 12px;
+            margin-bottom: 0.75rem;
+            font-size: 0.85rem;
+        }
+        
+        .chat-bubble.user {
+            background: var(--accent-blue);
+            color: var(--bg-primary);
+            margin-left: 2rem;
+        }
+        
+        .chat-bubble.ai {
+            margin-right: 2rem;
+        }
+        
+        /* QR Code Section */
+        .qr-section {
+            padding: 3rem 2rem;
+            text-align: center;
+            background: var(--bg-secondary);
+        }
+        
+        .qr-section h3 {
+            margin-bottom: 1rem;
+            color: var(--accent-purple);
+        }
+        
+        .qr-code {
+            background: white;
+            padding: 1rem;
+            border-radius: 12px;
+            display: inline-block;
+            margin: 1rem 0;
+        }
+        
+        .qr-code canvas {
+            display: block;
+        }
+        
+        /* Footer */
+        footer {
+            background: var(--bg-primary);
+            padding: 2rem;
+            text-align: center;
+            border-top: 1px solid var(--bg-tertiary);
+        }
+        
+        footer p {
+            color: var(--text-secondary);
+        }
+        
+        footer a {
+            color: var(--accent-blue);
+            text-decoration: none;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+            
+            .hero .tagline {
+                font-size: 1.2rem;
+            }
+            
+            .nav-links {
+                display: none;
+            }
+            
+            .mobile-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .mobile-preview {
+                order: -1;
+            }
+        }
+        
+        /* Animations */
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        
+        .floating {
+            animation: float 3s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="/" class="logo">Enigma AI</a>
+        <div class="nav-links">
+            <a href="#features">Features</a>
+            <a href="#download">Download</a>
+            <a href="#mobile">Mobile</a>
+            <a href="/chat">Web Chat</a>
+        </div>
+    </nav>
+    
+    <section class="hero">
+        <h1>Enigma AI Engine</h1>
+        <p class="tagline">Create your own AI from scratch. No cloud required. Runs on anything from a Raspberry Pi to a gaming PC.</p>
+        
+        <div class="cta-buttons">
+            <a href="#download" class="btn btn-primary">Download Desktop</a>
+            <a href="#mobile" class="btn btn-mobile">Get Mobile App</a>
+            <a href="https://github.com/SirRDragonbornKnight/enigma_engine" class="btn btn-secondary">View on GitHub</a>
+        </div>
+        
+        <div style="color: var(--text-secondary); font-size: 0.9rem;">
+            <p>v1.0 | MIT License | 100% Local & Private</p>
+        </div>
+    </section>
+    
+    <section class="features" id="features">
+        <h2>Why Enigma AI Engine?</h2>
+        <div class="feature-grid">
+            <div class="feature-card">
+                <h3>100% Private</h3>
+                <p>Everything runs on your machine. Your data never leaves your computer or phone.</p>
+            </div>
+            <div class="feature-card">
+                <h3>Easy to Use</h3>
+                <p>Beautiful GUI interface. No coding required to get started training your AI.</p>
+            </div>
+            <div class="feature-card">
+                <h3>Fully Modular</h3>
+                <p>Toggle modules on/off. Image generation, voice, avatar - use only what you need.</p>
+            </div>
+            <div class="feature-card">
+                <h3>Train Anywhere</h3>
+                <p>Give feedback from your phone. Your PC trains the model. AI gets smarter together.</p>
+            </div>
+            <div class="feature-card">
+                <h3>All Generations</h3>
+                <p>Text, images, code, audio, video, 3D models - one framework for everything.</p>
+            </div>
+            <div class="feature-card">
+                <h3>Runs Anywhere</h3>
+                <p>From Raspberry Pi (nano models) to datacenter GPUs (70B+ models). Scales with you.</p>
+            </div>
+        </div>
+    </section>
+    
+    <section class="download-section" id="download">
+        <h2>Download Enigma AI Engine</h2>
+        <div class="download-grid">
+            <div class="download-card">
+                <div class="icon">W</div>
+                <h3>Windows</h3>
+                <p>Windows 10/11 (64-bit)<br>Installer or portable ZIP</p>
+                <a href="/download/windows" class="btn btn-primary">Download for Windows</a>
+            </div>
+            <div class="download-card">
+                <div class="icon">M</div>
+                <h3>macOS</h3>
+                <p>macOS 11+ (Intel & Apple Silicon)<br>DMG installer</p>
+                <a href="/download/macos" class="btn btn-primary">Download for macOS</a>
+            </div>
+            <div class="download-card">
+                <div class="icon">L</div>
+                <h3>Linux</h3>
+                <p>Ubuntu 20.04+, Debian, Fedora<br>AppImage or source</p>
+                <a href="/download/linux" class="btn btn-primary">Download for Linux</a>
+            </div>
+            <div class="download-card">
+                <div class="icon">Pi</div>
+                <h3>Raspberry Pi</h3>
+                <p>Raspberry Pi 4/5<br>Optimized nano models</p>
+                <a href="/download/rpi" class="btn btn-secondary">Pi Instructions</a>
+            </div>
+        </div>
+    </section>
+    
+    <section class="mobile-section" id="mobile">
+        <div class="mobile-content">
+            <div class="mobile-text">
+                <h2>Enigma AI Mobile</h2>
+                <p>Take your AI with you. Chat on the go, give feedback to train your AI, and control everything from your phone.</p>
+                
+                <ul class="mobile-features">
+                    <li>Chat with your AI anywhere</li>
+                    <li>Give thumbs up/down feedback for training</li>
+                    <li>Submit custom training examples</li>
+                    <li>Voice input and output</li>
+                    <li>Camera: snap photos for AI analysis</li>
+                    <li>Generate images, code, audio from your phone</li>
+                    <li>Control your PC's avatar remotely</li>
+                    <li>Works offline - syncs when connected</li>
+                </ul>
+                
+                <div class="cta-buttons" style="justify-content: flex-start;">
+                    <a href="/download/android" class="btn btn-mobile">Android APK</a>
+                    <a href="/download/ios" class="btn btn-secondary">iOS (TestFlight)</a>
+                </div>
+                
+                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 1rem;">
+                    Or build from source: <code style="background: var(--bg-tertiary); padding: 2px 6px; border-radius: 4px;">cd mobile && npm install && npx expo start</code>
+                </p>
+            </div>
+            
+            <div class="mobile-preview">
+                <div class="phone-mockup floating">
+                    <div class="phone-screen">
+                        <div class="phone-header">
+                            <h4>Enigma AI</h4>
+                            <small style="color: var(--accent-green);">Connected to Home PC</small>
+                        </div>
+                        <div class="chat-bubble user">Hey! What can you help me with today?</div>
+                        <div class="chat-bubble ai">I can chat, generate images, write code, and more! What would you like to do?</div>
+                        <div class="chat-bubble user">Generate an image of a sunset</div>
+                        <div class="chat-bubble ai" style="text-align: center; padding: 1rem;">
+                            <div style="background: linear-gradient(to bottom, #f9e2af, #f38ba8, #cba6f7); height: 80px; border-radius: 8px; margin-bottom: 0.5rem;"></div>
+                            <small>Image generated!</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <section class="qr-section">
+        <h3>Quick Connect</h3>
+        <p>Scan with your phone to download the mobile app or connect to this server:</p>
+        <div class="qr-code" id="qrCode">
+            <canvas id="qrCanvas" width="150" height="150"></canvas>
+        </div>
+        <p style="font-size: 0.85rem; color: var(--text-secondary);">
+            Server URL: <span id="serverUrl">{{ server_url }}</span>
+        </p>
+    </section>
+    
+    <footer>
+        <p>
+            Enigma AI Engine is open source under the <a href="https://opensource.org/licenses/MIT">MIT License</a>.<br>
+            <a href="https://github.com/SirRDragonbornKnight/enigma_engine">GitHub</a> | 
+            <a href="/docs">Documentation</a> | 
+            <a href="/api/docs">API Reference</a>
+        </p>
+    </footer>
+    
+    <script>
+        // Simple QR code generator (basic implementation)
+        function generateQR(text, canvas) {
+            // For a real implementation, use a library like qrcode.js
+            // This is a placeholder that shows a styled box
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#1e1e2e';
+            ctx.fillRect(0, 0, 150, 150);
+            
+            // Draw placeholder pattern
+            ctx.fillStyle = '#89b4fa';
+            for (let i = 0; i < 15; i++) {
+                for (let j = 0; j < 15; j++) {
+                    if (Math.random() > 0.5) {
+                        ctx.fillRect(i * 10, j * 10, 9, 9);
+                    }
+                }
+            }
+            
+            // Fixed position patterns
+            ctx.fillStyle = '#1e1e2e';
+            ctx.fillRect(0, 0, 30, 30);
+            ctx.fillRect(120, 0, 30, 30);
+            ctx.fillRect(0, 120, 30, 30);
+            
+            ctx.fillStyle = '#89b4fa';
+            ctx.fillRect(5, 5, 20, 20);
+            ctx.fillRect(125, 5, 20, 20);
+            ctx.fillRect(5, 125, 20, 20);
+            
+            ctx.fillStyle = '#1e1e2e';
+            ctx.fillRect(10, 10, 10, 10);
+            ctx.fillRect(130, 10, 10, 10);
+            ctx.fillRect(10, 130, 10, 10);
+        }
+        
+        // Generate QR on load
+        document.addEventListener('DOMContentLoaded', function() {
+            const canvas = document.getElementById('qrCanvas');
+            const serverUrl = window.location.origin;
+            document.getElementById('serverUrl').textContent = serverUrl;
+            generateQR(serverUrl, canvas);
+        });
+        
+        // Smooth scrolling for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                document.querySelector(this.getAttribute('href')).scrollIntoView({
+                    behavior: 'smooth'
+                });
+            });
+        });
+    </script>
+</body>
+</html>

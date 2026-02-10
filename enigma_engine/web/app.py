@@ -103,7 +103,14 @@ def get_engine():
 if FLASK_AVAILABLE and app is not None:
     @app.route('/')
     def index():
-        """Main dashboard."""
+        """Landing page with download links."""
+        server_url = request.host_url.rstrip('/')
+        return render_template('landing.html', server_url=server_url)
+
+
+    @app.route('/dashboard')
+    def dashboard():
+        """Main dashboard (for logged-in users)."""
         return render_template('dashboard.html')
 
 
@@ -147,6 +154,99 @@ if FLASK_AVAILABLE and app is not None:
     def ai_profile_page():
         """AI self-expression page."""
         return render_template('ai_profile.html')
+
+
+    # =========================================================================
+    # Download Routes
+    # =========================================================================
+
+    @app.route('/download/<platform>')
+    def download_page(platform):
+        """Handle download requests for various platforms."""
+        platform_info = {
+            'windows': {
+                'name': 'Windows',
+                'file': 'EnigmaAI-Setup.exe',
+                'instructions': 'Run the installer and follow the setup wizard.',
+                'github_release': 'https://github.com/SirRDragonbornKnight/enigma_engine/releases/latest'
+            },
+            'macos': {
+                'name': 'macOS',
+                'file': 'EnigmaAI.dmg',
+                'instructions': 'Open the DMG and drag Enigma AI to Applications.',
+                'github_release': 'https://github.com/SirRDragonbornKnight/enigma_engine/releases/latest'
+            },
+            'linux': {
+                'name': 'Linux',
+                'file': 'EnigmaAI.AppImage',
+                'instructions': 'Make executable with chmod +x and run.',
+                'github_release': 'https://github.com/SirRDragonbornKnight/enigma_engine/releases/latest'
+            },
+            'rpi': {
+                'name': 'Raspberry Pi',
+                'file': None,
+                'instructions': '''
+                    <ol>
+                        <li>Clone the repo: <code>git clone https://github.com/SirRDragonbornKnight/enigma_engine.git</code></li>
+                        <li>Run installer: <code>python install.py --minimal</code></li>
+                        <li>Use nano or micro model sizes for best performance</li>
+                    </ol>
+                ''',
+                'github_release': 'https://github.com/SirRDragonbornKnight/enigma_engine'
+            },
+            'android': {
+                'name': 'Android',
+                'file': 'EnigmaAI.apk',
+                'instructions': 'Enable "Install from unknown sources" and install the APK.',
+                'github_release': 'https://github.com/SirRDragonbornKnight/enigma_engine/releases/latest'
+            },
+            'ios': {
+                'name': 'iOS (TestFlight)',
+                'file': None,
+                'instructions': 'Join our TestFlight beta or build from source using Expo.',
+                'github_release': 'https://github.com/SirRDragonbornKnight/enigma_engine/tree/main/mobile'
+            }
+        }
+        
+        info = platform_info.get(platform, {
+            'name': platform.title(),
+            'file': None,
+            'instructions': 'Platform not found. Please check the GitHub releases.',
+            'github_release': 'https://github.com/SirRDragonbornKnight/enigma_engine/releases'
+        })
+        
+        # For now, redirect to GitHub releases (actual file hosting would need storage)
+        return f'''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Download Enigma AI for {info['name']}</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+                body {{ font-family: -apple-system, sans-serif; background: #1e1e2e; color: #cdd6f4; 
+                       display: flex; justify-content: center; align-items: center; min-height: 100vh;
+                       margin: 0; padding: 20px; }}
+                .card {{ background: #313244; padding: 2rem; border-radius: 12px; max-width: 500px; text-align: center; }}
+                h1 {{ color: #89b4fa; }}
+                p {{ color: #a6adc8; line-height: 1.6; }}
+                a.btn {{ display: inline-block; background: #89b4fa; color: #1e1e2e; padding: 12px 24px;
+                        border-radius: 8px; text-decoration: none; font-weight: 600; margin: 10px; }}
+                a.btn:hover {{ background: #b4befe; }}
+                a.btn-secondary {{ background: #45475a; color: #cdd6f4; }}
+                code {{ background: #45475a; padding: 2px 6px; border-radius: 4px; }}
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <h1>Download for {info['name']}</h1>
+                <p>{info['instructions']}</p>
+                <a href="{info['github_release']}" class="btn">Download from GitHub</a>
+                <br>
+                <a href="/" class="btn btn-secondary">Back to Home</a>
+            </div>
+        </body>
+        </html>
+        '''
 
 
     @app.route('/api/status')
@@ -408,6 +508,302 @@ def api_list_voice_profiles():
         'success': True,
         'profiles': _voice_profiles
     })
+
+
+@app.route('/api/voice/transcribe', methods=['POST'])
+def api_transcribe_voice():
+    """
+    Transcribe audio to text using server-side STT.
+    
+    Request body:
+        {
+            "audio": "<base64 encoded audio>",
+            "format": "webm",
+            "language": "en-US"
+        }
+    
+    Returns:
+        {
+            "success": true,
+            "text": "transcribed text"
+        }
+    """
+    data = request.json
+    
+    if not data or 'audio' not in data:
+        return jsonify({'success': False, 'error': 'No audio data provided'}), HTTP_BAD_REQUEST
+    
+    try:
+        import base64
+        import tempfile
+        import os
+        
+        # Decode audio
+        audio_b64 = data['audio']
+        audio_format = data.get('format', 'webm')
+        language = data.get('language', 'en-US')
+        
+        audio_data = base64.b64decode(audio_b64)
+        
+        # Save to temp file
+        with tempfile.NamedTemporaryFile(suffix=f'.{audio_format}', delete=False) as f:
+            f.write(audio_data)
+            temp_path = f.name
+        
+        try:
+            # Try Whisper first
+            try:
+                from ..voice.whisper_stt import WhisperSTT
+                stt = WhisperSTT()
+                text = stt.transcribe_file(temp_path)
+                return jsonify({'success': True, 'text': text})
+            except ImportError:
+                pass
+            
+            # Try speech_recognition
+            try:
+                import speech_recognition as sr
+                recognizer = sr.Recognizer()
+                
+                # Convert to wav if needed
+                audio_path = temp_path
+                if audio_format != 'wav':
+                    try:
+                        from pydub import AudioSegment
+                        audio = AudioSegment.from_file(temp_path, format=audio_format)
+                        wav_path = temp_path.replace(f'.{audio_format}', '.wav')
+                        audio.export(wav_path, format='wav')
+                        audio_path = wav_path
+                    except ImportError:
+                        return jsonify({
+                            'success': False, 
+                            'error': 'Audio conversion not available. Install pydub.'
+                        }), HTTP_SERVER_ERROR
+                
+                with sr.AudioFile(audio_path) as source:
+                    audio = recognizer.record(source)
+                    text = recognizer.recognize_google(audio, language=language)
+                    return jsonify({'success': True, 'text': text})
+                    
+            except ImportError:
+                return jsonify({
+                    'success': False,
+                    'error': 'No STT backend available. Install whisper or speech_recognition.'
+                }), HTTP_SERVER_ERROR
+            except Exception as e:
+                return jsonify({'success': False, 'error': f'Transcription failed: {str(e)}'}), HTTP_SERVER_ERROR
+                
+        finally:
+            # Clean up temp file
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+            # Clean up converted wav if exists
+            wav_path = temp_path.replace(f'.{audio_format}', '.wav')
+            if audio_format != 'wav' and os.path.exists(wav_path):
+                os.unlink(wav_path)
+                
+    except Exception as e:
+        logger.error(f"Transcription error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), HTTP_SERVER_ERROR
+
+
+# =============================================================================
+# Push Notification API
+# =============================================================================
+
+# VAPID keys for Web Push (generate with: openssl ecparam -genkey -name prime256v1 -out private.pem)
+# In production, load from environment or secure storage
+_vapid_keys = {
+    'public_key': os.environ.get('VAPID_PUBLIC_KEY', ''),
+    'private_key': os.environ.get('VAPID_PRIVATE_KEY', ''),
+    'claims': {'sub': 'mailto:admin@example.com'}
+}
+
+# Push subscriptions storage (use database in production)
+_push_subscriptions = {}
+
+
+@app.route('/api/push/vapid-key', methods=['GET'])
+def api_get_vapid_key():
+    """Get VAPID public key for push subscriptions."""
+    public_key = _vapid_keys.get('public_key', '')
+    
+    if not public_key:
+        # Generate a placeholder key for development
+        import base64
+        # This is just a placeholder - in production, use proper VAPID keys
+        public_key = base64.urlsafe_b64encode(os.urandom(65)).decode('utf-8').rstrip('=')
+    
+    return jsonify({
+        'success': True,
+        'publicKey': public_key
+    })
+
+
+@app.route('/api/push/subscribe', methods=['POST'])
+def api_push_subscribe():
+    """
+    Save a push subscription.
+    
+    Request body:
+        {
+            "subscription": {
+                "endpoint": "https://...",
+                "keys": { "p256dh": "...", "auth": "..." }
+            }
+        }
+    """
+    data = request.json
+    
+    if not data or 'subscription' not in data:
+        return jsonify({'success': False, 'error': 'No subscription data'}), HTTP_BAD_REQUEST
+    
+    subscription = data['subscription']
+    endpoint = subscription.get('endpoint', '')
+    
+    if not endpoint:
+        return jsonify({'success': False, 'error': 'Invalid subscription'}), HTTP_BAD_REQUEST
+    
+    # Store subscription (keyed by endpoint)
+    _push_subscriptions[endpoint] = subscription
+    
+    logger.info(f"Push subscription saved: {endpoint[:50]}...")
+    
+    return jsonify({
+        'success': True,
+        'message': 'Subscription saved',
+        'total_subscriptions': len(_push_subscriptions)
+    })
+
+
+@app.route('/api/push/unsubscribe', methods=['POST'])
+def api_push_unsubscribe():
+    """Remove a push subscription."""
+    data = request.json
+    
+    if not data or 'endpoint' not in data:
+        return jsonify({'success': False, 'error': 'No endpoint provided'}), HTTP_BAD_REQUEST
+    
+    endpoint = data['endpoint']
+    
+    if endpoint in _push_subscriptions:
+        del _push_subscriptions[endpoint]
+        logger.info(f"Push subscription removed: {endpoint[:50]}...")
+    
+    return jsonify({
+        'success': True,
+        'message': 'Subscription removed'
+    })
+
+
+@app.route('/api/push/test', methods=['POST'])
+def api_push_test():
+    """Send a test push notification."""
+    data = request.json or {}
+    message = data.get('message', 'Test notification from Enigma Engine')
+    
+    # Try to send via pywebpush if available
+    try:
+        from pywebpush import webpush, WebPushException
+        
+        sent_count = 0
+        for endpoint, subscription in list(_push_subscriptions.items()):
+            try:
+                webpush(
+                    subscription_info=subscription,
+                    data=json.dumps({
+                        'title': 'Enigma Engine',
+                        'body': message,
+                        'url': '/'
+                    }),
+                    vapid_private_key=_vapid_keys.get('private_key'),
+                    vapid_claims=_vapid_keys.get('claims', {})
+                )
+                sent_count += 1
+            except WebPushException as e:
+                logger.warning(f"Push failed for {endpoint[:30]}: {e}")
+                # Remove invalid subscription
+                if e.response and e.response.status_code in (404, 410):
+                    del _push_subscriptions[endpoint]
+            except Exception as e:
+                logger.warning(f"Push error: {e}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Sent to {sent_count} subscriber(s)'
+        })
+        
+    except ImportError:
+        # pywebpush not installed - just acknowledge
+        logger.warning("pywebpush not installed - cannot send real push notifications")
+        return jsonify({
+            'success': True,
+            'message': 'Test acknowledged (install pywebpush for real notifications)',
+            'subscribers': len(_push_subscriptions)
+        })
+
+
+@app.route('/api/push/send', methods=['POST'])
+def api_push_send():
+    """
+    Send push notification to all subscribers.
+    
+    Request body:
+        {
+            "title": "Notification Title",
+            "body": "Notification message",
+            "url": "/chat"  (optional)
+        }
+    """
+    data = request.json
+    
+    if not data:
+        return jsonify({'success': False, 'error': 'No data provided'}), HTTP_BAD_REQUEST
+    
+    title = data.get('title', 'Enigma Engine')
+    body = data.get('body', '')
+    url = data.get('url', '/')
+    
+    if not body:
+        return jsonify({'success': False, 'error': 'Message body required'}), HTTP_BAD_REQUEST
+    
+    try:
+        from pywebpush import webpush, WebPushException
+        
+        sent_count = 0
+        failed_count = 0
+        
+        for endpoint, subscription in list(_push_subscriptions.items()):
+            try:
+                webpush(
+                    subscription_info=subscription,
+                    data=json.dumps({
+                        'title': title,
+                        'body': body,
+                        'url': url
+                    }),
+                    vapid_private_key=_vapid_keys.get('private_key'),
+                    vapid_claims=_vapid_keys.get('claims', {})
+                )
+                sent_count += 1
+            except WebPushException as e:
+                failed_count += 1
+                if e.response and e.response.status_code in (404, 410):
+                    del _push_subscriptions[endpoint]
+            except Exception:
+                failed_count += 1
+        
+        return jsonify({
+            'success': True,
+            'sent': sent_count,
+            'failed': failed_count
+        })
+        
+    except ImportError:
+        return jsonify({
+            'success': False,
+            'error': 'pywebpush not installed'
+        }), HTTP_SERVER_ERROR
 
 
 # =============================================================================

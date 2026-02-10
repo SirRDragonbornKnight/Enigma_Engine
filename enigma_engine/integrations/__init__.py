@@ -4,10 +4,12 @@ External Integrations
 Integrations with external tools and platforms.
 
 Provides:
-- ForgeLLM: LangChain compatibility
+- ForgeLLM: LangChain LLM compatibility
+- EnigmaToolkit: LangChain Tools from Enigma
 - UnityExporter: Unity game engine export
 - GameEngineBridge: Generic game engine integration
 - OBSController: OBS Studio integration
+- HomeAssistant: Smart home control
 """
 
 from .game_engine_bridge import (
@@ -19,6 +21,15 @@ from .game_engine_bridge import (
     Transform,
     Vector3,
 )
+from .home_assistant import (
+    Area,
+    Entity,
+    HomeAssistant,
+    HomeAssistantError,
+    Scene,
+    get_home_assistant,
+    register_home_assistant_tools,
+)
 from .langchain_adapter import (
     ForgeChatModel,
     ForgeEmbeddings,
@@ -27,6 +38,14 @@ from .langchain_adapter import (
     create_forge_chat_model,
     create_forge_embeddings,
     create_forge_llm,
+)
+from .langchain_tools import (
+    EnigmaTool,
+    EnigmaToolkit,
+    enigma_tool_to_langchain,
+    get_langchain_tool,
+    get_langchain_tools,
+    is_langchain_available,
 )
 from .obs_streaming import (
     OBSConfig,
@@ -80,4 +99,19 @@ __all__ = [
     "OverlayServer",
     "OverlayType",
     "SceneInfo",
+    # LangChain Tools
+    "EnigmaTool",
+    "EnigmaToolkit",
+    "enigma_tool_to_langchain",
+    "get_langchain_tool",
+    "get_langchain_tools",
+    "is_langchain_available",
+    # Home Assistant
+    "HomeAssistant",
+    "HomeAssistantError",
+    "Entity",
+    "Scene",
+    "Area",
+    "get_home_assistant",
+    "register_home_assistant_tools",
 ]

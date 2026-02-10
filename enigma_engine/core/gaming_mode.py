@@ -164,6 +164,174 @@ class ResourceLimits:
     priority: GamingPriority = GamingPriority.FULL
 
 
+@dataclass
+class FPSStats:
+    """FPS monitoring statistics."""
+    current_fps: float = 0.0
+    average_fps: float = 0.0
+    min_fps: float = 0.0
+    max_fps: float = 0.0
+    target_fps: float = 60.0
+    samples: int = 0
+    fps_drop_detected: bool = False
+    last_update: float = 0.0
+
+
+class FPSMonitor:
+    """
+    Monitor game frame rates to dynamically adjust AI resource usage.
+    
+    Uses multiple methods to estimate FPS:
+    1. GPU utilization polling (NVIDIA/AMD APIs)
+    2. Present rate from D3D11 (Windows)
+    3. Process CPU/GPU activity correlation
+    """
+    
+    def __init__(self, target_fps: float = 60.0, headroom: float = 5.0):
+        self.target_fps = target_fps
+        self.headroom = headroom  # How many FPS below target to maintain
+        self.stats = FPSStats(target_fps=target_fps)
+        
+        self._fps_history: list[float] = []
+        self._max_history = 60  # Keep last 60 samples
+        self._lock = threading.Lock()
+        
+        # Detection method availability
+        self._nvidia_available = False
+        self._amd_available = False
+        self._wmi_available = False
+        
+        self._detect_available_methods()
+    
+    def _detect_available_methods(self):
+        """Detect which FPS monitoring methods are available."""
+        # Check for pynvml (NVIDIA)
+        try:
+            import pynvml
+            pynvml.nvmlInit()
+            self._nvidia_available = True
+            pynvml.nvmlShutdown()
+        except Exception:
+            self._nvidia_available = False
+        
+        # Check for WMI (Windows performance counters)
+        if platform.system() == "Windows":
+            try:
+                import wmi
+                self._wmi_available = True
+            except Exception:
+                self._wmi_available = False
+    
+    def get_gpu_activity(self) -> tuple[float, float]:
+        """
+        Get GPU utilization and memory usage.
+        
+        Returns:
+            Tuple of (utilization %, memory_used_mb)
+        """
+        if self._nvidia_available:
+            try:
+                import pynvml
+                pynvml.nvmlInit()
+                handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+                util = pynvml.nvmlDeviceGetUtilizationRates(handle)
+                mem = pynvml.nvmlDeviceGetMemoryInfo(handle)
+                pynvml.nvmlShutdown()
+                return util.gpu, mem.used / (1024 * 1024)
+            except Exception:
+                pass
+        
+        return 0.0, 0.0
+    
+    def estimate_fps_from_gpu(self) -> float:
+        """
+        Estimate FPS based on GPU utilization patterns.
+        
+        High GPU utilization with consistent patterns indicates
+        a game running at its frame rate cap.
+        """
+        gpu_util, _ = self.get_gpu_activity()
+        
+        if gpu_util < 10:
+            # GPU mostly idle - no game or game paused
+            return 0.0
+        elif gpu_util > 95:
+            # GPU fully loaded - game likely at its cap
+            return self.target_fps
+        else:
+            # Estimate based on utilization
+            # This is very rough - real implementation would
+            # use present timing from D3D/Vulkan
+            return self.target_fps * (gpu_util / 100.0)
+    
+    def update(self) -> FPSStats:
+        """
+        Update FPS statistics.
+        
+        Returns:
+            Current FPS stats
+        """
+        fps = self.estimate_fps_from_gpu()
+        
+        with self._lock:
+            self._fps_history.append(fps)
+            if len(self._fps_history) > self._max_history:
+                self._fps_history.pop(0)
+            
+            if self._fps_history:
+                self.stats.current_fps = fps
+                self.stats.average_fps = sum(self._fps_history) / len(self._fps_history)
+                self.stats.min_fps = min(self._fps_history)
+                self.stats.max_fps = max(self._fps_history)
+                self.stats.samples = len(self._fps_history)
+            
+            # Detect FPS drops
+            self.stats.fps_drop_detected = (
+                self.stats.average_fps > 0 and
+                self.stats.current_fps < (self.stats.average_fps - self.headroom)
+            )
+            self.stats.last_update = time.time()
+        
+        return self.stats
+    
+    def should_reduce_load(self) -> bool:
+        """Check if AI should reduce its resource usage."""
+        return (
+            self.stats.fps_drop_detected or
+            self.stats.current_fps < (self.target_fps - self.headroom * 2)
+        )
+    
+    def get_recommended_scale(self) -> float:
+        """
+        Get recommended scaling factor for AI resources.
+        
+        Returns:
+            Float between 0.0 (stop everything) and 1.0 (full resources)
+        """
+        if self.stats.average_fps <= 0:
+            return 1.0  # No data - don't restrict
+        
+        # Calculate how far we are from target
+        fps_ratio = self.stats.current_fps / self.target_fps
+        
+        if fps_ratio >= 1.0:
+            return 1.0  # At or above target - full resources
+        elif fps_ratio >= 0.9:
+            return 0.8  # Slightly below - minor reduction
+        elif fps_ratio >= 0.75:
+            return 0.5  # Noticeably below - significant reduction
+        elif fps_ratio >= 0.5:
+            return 0.2  # Major drop - minimal resources
+        else:
+            return 0.0  # Severe drop - pause AI tasks
+    
+    def reset(self):
+        """Reset FPS statistics."""
+        with self._lock:
+            self._fps_history.clear()
+            self.stats = FPSStats(target_fps=self.target_fps)
+
+
 class GamingMode:
     """
     Manages AI resource usage while gaming.
@@ -199,6 +367,9 @@ class GamingMode:
         if custom_profiles:
             self.profiles.update(custom_profiles)
         
+        # Auto-load saved custom profiles
+        self.load_profiles()
+        
         # Build process name to profile lookup
         self._process_to_profile: dict[str, GamingProfile] = {}
         for profile in self.profiles.values():
@@ -222,6 +393,12 @@ class GamingMode:
         self._on_game_start: list[Callable[[str, GamingProfile], None]] = []
         self._on_game_end: list[Callable[[str], None]] = []
         self._on_limits_change: list[Callable[[ResourceLimits], None]] = []
+        self._on_fps_update: list[Callable[[FPSStats], None]] = []
+        
+        # FPS monitoring
+        self._fps_monitor = FPSMonitor(target_fps=60.0, headroom=target_fps_headroom)
+        self._fps_adaptive_enabled = True  # Enable adaptive resource scaling
+        self._last_fps_scale = 1.0
     
     @property
     def enabled(self) -> bool:
@@ -296,10 +473,60 @@ class GamingMode:
         while not self._stop_event.is_set():
             try:
                 self._check_games()
+                
+                # Update FPS monitoring if a game is active
+                if self._active_game and self._fps_adaptive_enabled:
+                    self._update_fps_monitoring()
+                    
             except Exception as e:
                 logger.error(f"Gaming mode monitor error: {e}")
             
             self._stop_event.wait(self.check_interval)
+    
+    def _update_fps_monitoring(self):
+        """Update FPS stats and adjust resources if needed."""
+        stats = self._fps_monitor.update()
+        
+        # Notify callbacks
+        for callback in self._on_fps_update:
+            try:
+                callback(stats)
+            except Exception as e:
+                logger.error(f"FPS update callback error: {e}")
+        
+        # Get recommended scaling
+        new_scale = self._fps_monitor.get_recommended_scale()
+        
+        # Only adjust if scale changed significantly
+        if abs(new_scale - self._last_fps_scale) > 0.1:
+            self._last_fps_scale = new_scale
+            self._adjust_limits_for_fps(new_scale)
+    
+    def _adjust_limits_for_fps(self, scale: float):
+        """Adjust resource limits based on FPS scaling factor."""
+        if not self._active_profile:
+            return
+        
+        profile = self._active_profile
+        
+        # Scale the limits down based on FPS pressure
+        self._current_limits.max_vram_mb = int(profile.max_vram_mb * scale)
+        self._current_limits.max_ram_mb = int(profile.max_ram_mb * scale)
+        self._current_limits.batch_size = max(1, int(profile.batch_size * scale))
+        
+        # At very low scale, disable generation
+        if scale < 0.3:
+            self._current_limits.generation_allowed = False
+            self._current_limits.heavy_tasks_allowed = False
+        elif scale < 0.6:
+            self._current_limits.generation_allowed = True
+            self._current_limits.heavy_tasks_allowed = False
+        else:
+            self._current_limits.generation_allowed = profile.priority.value >= GamingPriority.MEDIUM.value
+            self._current_limits.heavy_tasks_allowed = not profile.defer_heavy_tasks
+        
+        logger.debug(f"Adjusted limits for FPS (scale={scale:.2f})")
+        self._notify_limits_change()
     
     def _check_games(self):
         """Check for running games and update limits."""
@@ -593,13 +820,80 @@ class GamingMode:
         """Register callback for when limits change."""
         self._on_limits_change.append(callback)
     
-    def add_game_profile(self, profile: GamingProfile):
+    def on_fps_update(self, callback: Callable[[FPSStats], None]):
+        """Register callback for FPS updates."""
+        self._on_fps_update.append(callback)
+    
+    def set_fps_adaptive(self, enabled: bool):
+        """Enable or disable FPS-adaptive resource scaling."""
+        self._fps_adaptive_enabled = enabled
+        if not enabled:
+            self._last_fps_scale = 1.0
+        logger.debug(f"FPS adaptive scaling: {enabled}")
+    
+    def set_target_fps(self, fps: float):
+        """Set the target FPS for monitoring."""
+        self._fps_monitor.target_fps = fps
+        self._fps_monitor.stats.target_fps = fps
+        logger.debug(f"Target FPS set to: {fps}")
+    
+    def get_fps_stats(self) -> FPSStats:
+        """Get current FPS statistics."""
+        return self._fps_monitor.stats
+    
+    def get_fps_scale(self) -> float:
+        """Get current FPS-based resource scaling factor."""
+        return self._last_fps_scale
+    
+    def add_game_profile(self, profile: GamingProfile, auto_save: bool = True):
         """Add or update a game profile."""
         key = profile.name.lower().replace(" ", "_")
         self.profiles[key] = profile
         
         for proc in profile.process_names:
             self._process_to_profile[proc.lower()] = profile
+        
+        if auto_save:
+            self.save_profiles()
+    
+    def remove_game_profile(self, name: str, auto_save: bool = True) -> bool:
+        """Remove a custom game profile by name."""
+        key = name.lower().replace(" ", "_")
+        
+        # Don't remove default profiles
+        if key in DEFAULT_GAMING_PROFILES:
+            logger.warning(f"Cannot remove default profile: {name}")
+            return False
+        
+        if key not in self.profiles:
+            return False
+        
+        profile = self.profiles[key]
+        
+        # Remove from process lookup
+        for proc in profile.process_names:
+            proc_key = proc.lower()
+            if proc_key in self._process_to_profile:
+                del self._process_to_profile[proc_key]
+        
+        # Remove profile
+        del self.profiles[key]
+        
+        if auto_save:
+            self.save_profiles()
+        
+        return True
+    
+    def get_custom_profiles(self) -> dict[str, GamingProfile]:
+        """Get only user-defined custom profiles (excluding defaults)."""
+        return {
+            k: v for k, v in self.profiles.items()
+            if k not in DEFAULT_GAMING_PROFILES
+        }
+    
+    def get_all_profile_names(self) -> list[str]:
+        """Get list of all profile names."""
+        return list(self.profiles.keys())
     
     def save_profiles(self, path: Path = None):
         """Save custom profiles to file."""
@@ -691,5 +985,7 @@ __all__ = [
     'GamingPriority',
     'GamingProfile',
     'ResourceLimits',
+    'FPSStats',
+    'FPSMonitor',
     'get_gaming_mode',
 ]

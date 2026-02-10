@@ -309,18 +309,12 @@ Visit `http://[YOUR_IP]:8080/qr` to see:
 1. **Icons**: PWA icons need to be generated (README provided)
 2. **Training**: Disabled from web interface (security)
 3. **HTTPS**: Requires reverse proxy for production
-4. **Background Sync**: Not yet implemented (future feature)
 
 ## Future Enhancements
 
 Possible future improvements:
-- Push notifications
-- Background sync
-- Voice input from web
 - Video chat support
 - Screen sharing
-- Multi-user support
-- User accounts
 - HTTPS built-in
 - Rate limiting per user
 - Bandwidth throttling

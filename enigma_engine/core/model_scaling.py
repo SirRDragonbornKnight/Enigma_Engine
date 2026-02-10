@@ -89,10 +89,12 @@ def grow_model(
                 _copy_partial_tensor(src_layer.attention.wo.weight, tgt_layer.attention.wo.weight)
 
                 # Copy feedforward weights (partial) - SwiGLU has w1, w2, w3
-                if hasattr(src_layer.ffn, 'w1'):
-                    _copy_partial_tensor(src_layer.ffn.w1.weight, tgt_layer.ffn.w1.weight)
-                    _copy_partial_tensor(src_layer.ffn.w2.weight, tgt_layer.ffn.w2.weight)
-                    _copy_partial_tensor(src_layer.ffn.w3.weight, tgt_layer.ffn.w3.weight)
+                src_ff = src_layer.feed_forward
+                tgt_ff = tgt_layer.feed_forward
+                if hasattr(src_ff, 'w1'):
+                    _copy_partial_tensor(src_ff.w1.weight, tgt_ff.w1.weight)
+                    _copy_partial_tensor(src_ff.w2.weight, tgt_ff.w2.weight)
+                    _copy_partial_tensor(src_ff.w3.weight, tgt_ff.w3.weight)
 
     print(
         f"[OK] Model grown successfully. New parameters: {sum(p.numel() for p in new_model.parameters()):,}")
@@ -147,10 +149,12 @@ def shrink_model(
                 _copy_partial_tensor(src_layer.attention.wo.weight, tgt_layer.attention.wo.weight)
                 
                 # Copy FFN weights (SwiGLU)
-                if hasattr(src_layer.ffn, 'w1'):
-                    _copy_partial_tensor(src_layer.ffn.w1.weight, tgt_layer.ffn.w1.weight)
-                    _copy_partial_tensor(src_layer.ffn.w2.weight, tgt_layer.ffn.w2.weight)
-                    _copy_partial_tensor(src_layer.ffn.w3.weight, tgt_layer.ffn.w3.weight)
+                src_ff = src_layer.feed_forward
+                tgt_ff = tgt_layer.feed_forward
+                if hasattr(src_ff, 'w1'):
+                    _copy_partial_tensor(src_ff.w1.weight, tgt_ff.w1.weight)
+                    _copy_partial_tensor(src_ff.w2.weight, tgt_ff.w2.weight)
+                    _copy_partial_tensor(src_ff.w3.weight, tgt_ff.w3.weight)
 
     print(f"[OK] Model shrunk. New parameters: {sum(p.numel() for p in new_model.parameters()):,}")
     return new_model

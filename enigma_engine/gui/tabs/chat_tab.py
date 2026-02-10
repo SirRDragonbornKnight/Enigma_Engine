@@ -40,7 +40,7 @@ USAGE:
 """
 
 from PyQt5.QtCore import QMimeData, Qt, QUrl
-from PyQt5.QtGui import QClipboard, QImage, QKeySequence, QPixmap
+from PyQt5.QtGui import QClipboard, QIcon, QImage, QKeySequence, QPixmap
 from PyQt5.QtWidgets import (
     QApplication,
     QComboBox,
@@ -579,10 +579,16 @@ def _create_input_section(parent, layout):
     input_layout.setContentsMargins(8, 8, 8, 8)
     input_layout.setSpacing(8)
     
-    # Attach button (before input)
-    parent.attach_btn = QPushButton("+")
+    # Attach button (before input) - uses link icon
+    from pathlib import Path
+    parent.attach_btn = QPushButton()
+    icon_path = Path(__file__).parent.parent.parent.parent / "assets" / "icons" / "link.svg"
+    if icon_path.exists():
+        parent.attach_btn.setIcon(QIcon(str(icon_path)))
+    else:
+        parent.attach_btn.setText("ATT")  # Fallback text
     parent.attach_btn.setFixedSize(*ATTACH_BTN_SIZE)
-    parent.attach_btn.setToolTip("Attach file or image (Ctrl+Shift+V to paste)")
+    parent.attach_btn.setToolTip("Attach file, image, or video (Ctrl+Shift+V to paste)")
     parent.attach_btn.setStyleSheet(STYLE_ATTACH_BTN)
     parent.attach_btn.clicked.connect(lambda: _attach_file(parent))
     input_layout.addWidget(parent.attach_btn)
@@ -979,7 +985,13 @@ def _attach_file(parent):
     """Open file dialog to attach files."""
     from pathlib import Path
     
-    file_filter = "All Files (*);;Images (*.png *.jpg *.jpeg *.gif *.bmp);;Documents (*.txt *.pdf *.md)"
+    file_filter = (
+        "All Files (*);;"
+        "Images (*.png *.jpg *.jpeg *.gif *.bmp *.webp);;"
+        "Videos (*.mp4 *.webm *.mov *.avi *.mkv);;"
+        "Audio (*.mp3 *.wav *.ogg *.m4a *.flac);;"
+        "Documents (*.txt *.pdf *.md *.doc *.docx)"
+    )
     files, _ = QFileDialog.getOpenFileNames(
         parent, "Attach Files", "", file_filter
     )
@@ -1042,6 +1054,8 @@ def _update_attachment_preview(parent):
         # Check if it's an image
         path_obj = Path(path)
         is_image = path_obj.suffix.lower() in ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp']
+        is_video = path_obj.suffix.lower() in ['.mp4', '.webm', '.mov', '.avi', '.mkv']
+        is_audio = path_obj.suffix.lower() in ['.mp3', '.wav', '.ogg', '.m4a', '.flac']
         
         if is_image:
             # Show thumbnail
@@ -1051,6 +1065,36 @@ def _update_attachment_preview(parent):
                 thumb_label = QLabel()
                 thumb_label.setPixmap(pixmap)
                 item_layout.addWidget(thumb_label)
+        elif is_video:
+            # Show video icon
+            video_label = QLabel("VID")
+            video_label.setFixedSize(40, 40)
+            video_label.setAlignment(Qt.AlignCenter)
+            video_label.setStyleSheet("""
+                background: #94e2d5; color: #1e1e2e; font-weight: bold;
+                font-size: 10px; border-radius: 4px;
+            """)
+            item_layout.addWidget(video_label)
+        elif is_audio:
+            # Show audio icon
+            audio_label = QLabel("AUD")
+            audio_label.setFixedSize(40, 40)
+            audio_label.setAlignment(Qt.AlignCenter)
+            audio_label.setStyleSheet("""
+                background: #f5c2e7; color: #1e1e2e; font-weight: bold;
+                font-size: 10px; border-radius: 4px;
+            """)
+            item_layout.addWidget(audio_label)
+        else:
+            # Show file icon
+            file_label = QLabel("FILE")
+            file_label.setFixedSize(40, 40)
+            file_label.setAlignment(Qt.AlignCenter)
+            file_label.setStyleSheet("""
+                background: #6c7086; color: #1e1e2e; font-weight: bold;
+                font-size: 9px; border-radius: 4px;
+            """)
+            item_layout.addWidget(file_label)
         
         # Show filename
         name_label = QLabel(path_obj.name[:15] + "..." if len(path_obj.name) > 15 else path_obj.name)
@@ -1152,6 +1196,129 @@ def _check_clipboard_for_image(parent):
 def get_attachments(parent):
     """Get list of current attachments (for use when sending message)."""
     return list(getattr(parent, '_attachments', []))
+
+
+def format_attachments_html(attachments: list, max_width: int = 300) -> str:
+    """
+    Format attachments as HTML for display in chat.
+    
+    Args:
+        attachments: List of file paths
+        max_width: Maximum image width in pixels
+        
+    Returns:
+        HTML string with embedded images/videos or file links
+    """
+    import base64
+    from pathlib import Path
+    
+    if not attachments:
+        return ""
+    
+    html_parts = []
+    
+    for path in attachments:
+        path_obj = Path(path)
+        suffix = path_obj.suffix.lower()
+        
+        # Image types
+        if suffix in ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp']:
+            try:
+                # Read and encode image as base64 for inline display
+                with open(path, 'rb') as f:
+                    img_data = base64.b64encode(f.read()).decode('utf-8')
+                
+                mime_type = {
+                    '.png': 'image/png',
+                    '.jpg': 'image/jpeg',
+                    '.jpeg': 'image/jpeg',
+                    '.gif': 'image/gif',
+                    '.bmp': 'image/bmp',
+                    '.webp': 'image/webp'
+                }.get(suffix, 'image/png')
+                
+                html_parts.append(f'''
+                <div style="margin: 8px 0;">
+                    <img src="data:{mime_type};base64,{img_data}" 
+                         style="max-width: {max_width}px; max-height: 300px; border-radius: 8px; cursor: pointer;"
+                         title="Click to view full size: {path_obj.name}"
+                         onclick="window.open('file:///{path.replace(chr(92), '/')}', '_blank')"/>
+                    <div style="color: #6c7086; font-size: 10px; margin-top: 2px;">{path_obj.name}</div>
+                </div>
+                ''')
+            except Exception as e:
+                html_parts.append(f'<div style="color: #f38ba8; font-size: 10px;">Failed to load image: {path_obj.name}</div>')
+        
+        # Video types
+        elif suffix in ['.mp4', '.webm', '.mov', '.avi', '.mkv']:
+            # For videos, show a clickable link/thumbnail (base64 embedding videos is too heavy)
+            html_parts.append(f'''
+            <div style="margin: 8px 0; padding: 10px; background: #45475a; border-radius: 8px; display: inline-block;">
+                <div style="color: #94e2d5; font-weight: bold;">Video Attachment</div>
+                <div style="color: #cdd6f4; font-size: 12px;">{path_obj.name}</div>
+                <div style="color: #6c7086; font-size: 10px; margin-top: 4px;">
+                    <a href="file:///{path.replace(chr(92), '/')}" style="color: #89b4fa;">Click to open</a>
+                </div>
+            </div>
+            ''')
+        
+        # Audio types
+        elif suffix in ['.mp3', '.wav', '.ogg', '.m4a', '.flac']:
+            html_parts.append(f'''
+            <div style="margin: 8px 0; padding: 10px; background: #45475a; border-radius: 8px; display: inline-block;">
+                <div style="color: #f5c2e7; font-weight: bold;">Audio Attachment</div>
+                <div style="color: #cdd6f4; font-size: 12px;">{path_obj.name}</div>
+                <div style="color: #6c7086; font-size: 10px; margin-top: 4px;">
+                    <a href="file:///{path.replace(chr(92), '/')}" style="color: #89b4fa;">Click to play</a>
+                </div>
+            </div>
+            ''')
+        
+        # Other files
+        else:
+            html_parts.append(f'''
+            <div style="margin: 8px 0; padding: 8px; background: #45475a; border-radius: 6px; display: inline-block;">
+                <span style="color: #6c7086;">File:</span>
+                <a href="file:///{path.replace(chr(92), '/')}" style="color: #89b4fa;">{path_obj.name}</a>
+            </div>
+            ''')
+    
+    return '\n'.join(html_parts)
+
+
+def process_attachments_for_ai(attachments: list) -> dict:
+    """
+    Process attachments for AI consumption (vision analysis, etc).
+    
+    Args:
+        attachments: List of file paths
+        
+    Returns:
+        Dict with 'images', 'videos', 'audio', 'files' lists
+    """
+    from pathlib import Path
+    
+    result = {
+        'images': [],
+        'videos': [],
+        'audio': [],
+        'files': []
+    }
+    
+    for path in attachments:
+        path_obj = Path(path)
+        suffix = path_obj.suffix.lower()
+        
+        if suffix in ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp']:
+            result['images'].append(str(path))
+        elif suffix in ['.mp4', '.webm', '.mov', '.avi', '.mkv']:
+            result['videos'].append(str(path))
+        elif suffix in ['.mp3', '.wav', '.ogg', '.m4a', '.flac']:
+            result['audio'].append(str(path))
+        else:
+            result['files'].append(str(path))
+    
+    return result
 
 
 # =============================================================================

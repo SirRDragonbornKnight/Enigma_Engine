@@ -92,6 +92,14 @@ from .trigger_phrases import (
     train_custom_wake_phrase,
 )
 
+# Local/offline wake word detection
+from .wake_word import (
+    WakeWordDetector,
+    WakeWordConfig,
+    WakeWordBackend,
+    create_wake_word_detector,
+)
+
 # User customization tools
 from .voice_customizer import (
     VoiceCustomizer,
@@ -197,6 +205,12 @@ __all__ = [
     'start_wake_word_detection',
     'stop_wake_word_detection',
     'is_wake_word_active',
+    
+    # Local/offline wake word detection
+    'WakeWordDetector',
+    'WakeWordConfig',
+    'WakeWordBackend',
+    'create_wake_word_detector',
     
     # Noise reduction
     'NoiseReducer',

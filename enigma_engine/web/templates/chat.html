@@ -25,6 +25,7 @@
     <div class="chat-input-container">
         <textarea id="chat-input" placeholder="Type your message here..." rows="3"></textarea>
         <div class="chat-controls">
+            <button id="voice-btn" class="btn btn-icon voice-input-btn" title="Voice input">🎤</button>
             <button id="send-btn" class="btn btn-primary">Send</button>
             <button id="clear-btn" class="btn btn-secondary">Clear</button>
         </div>
@@ -39,11 +40,52 @@
 
 {% block extra_js %}
 <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+<script src="{{ url_for('static', filename='js/voice-input.js') }}"></script>
 <script>
 const chatBox = document.getElementById('chat-box');
 const chatInput = document.getElementById('chat-input');
 const sendBtn = document.getElementById('send-btn');
 const clearBtn = document.getElementById('clear-btn');
+const voiceBtn = document.getElementById('voice-btn');
+
+// Voice input setup
+let voiceInput = null;
+if (typeof VoiceInput !== 'undefined') {
+    voiceInput = new VoiceInput({ continuous: false });
+    
+    voiceInput.onStart = () => {
+        voiceBtn.classList.add('listening');
+        voiceBtn.textContent = '⏹️';
+        voiceBtn.title = 'Stop listening';
+        addSystemMessage('Listening...');
+    };
+    
+    voiceInput.onStop = () => {
+        voiceBtn.classList.remove('listening');
+        voiceBtn.textContent = '🎤';
+        voiceBtn.title = 'Voice input';
+    };
+    
+    voiceInput.onResult = (text) => {
+        chatInput.value = text;
+        addSystemMessage('Voice: ' + text);
+    };
+    
+    voiceInput.onInterim = (text) => {
+        // Show interim results in input
+        chatInput.placeholder = text;
+    };
+    
+    voiceInput.onError = (error) => {
+        addSystemMessage('Voice error: ' + error);
+    };
+    
+    voiceBtn.addEventListener('click', () => {
+        voiceInput.toggle();
+    });
+} else {
+    voiceBtn.style.display = 'none';
+}
 
 // Load AI mood
 async function loadChatMood() {

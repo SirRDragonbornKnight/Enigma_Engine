@@ -220,29 +220,29 @@ class TestModelConfig:
 
 
 class TestModelScaling:
-    """Tests for model scaling (if available)."""
+    """Tests for model scaling (grow/shrink models while preserving weights)."""
     
-    @pytest.mark.skip(reason="Model scaling module may not be complete")
     def test_grow_model(self):
         """Test growing model dimensions."""
         from enigma_engine.core.model import Enigma
         from enigma_engine.core.model_scaling import grow_model
         
+        # Create small model (dim=32) and grow to "small" preset (dim=512)
         small = Enigma(vocab_size=1000, dim=32, depth=2, heads=2)
         large = grow_model(small, "small", vocab_size=1000)
         
-        assert large.dim > small.dim
+        assert large.dim > small.dim, f"Expected {large.dim} > {small.dim}"
     
-    @pytest.mark.skip(reason="Model scaling module may not be complete")
     def test_shrink_model(self):
         """Test shrinking model dimensions."""
         from enigma_engine.core.model import Enigma
         from enigma_engine.core.model_scaling import shrink_model
         
-        large = Enigma(vocab_size=1000, dim=256, depth=6, heads=8)
-        small = shrink_model(large, "tiny", vocab_size=1000)
+        # Create larger model (dim=512) and shrink to "nano" preset (dim=128)
+        large = Enigma(vocab_size=1000, dim=512, depth=6, heads=8)
+        small = shrink_model(large, "nano", vocab_size=1000)
         
-        assert small.dim < large.dim
+        assert small.dim < large.dim, f"Expected {small.dim} < {large.dim}"
 
 
 if __name__ == "__main__":

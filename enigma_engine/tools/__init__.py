@@ -98,7 +98,7 @@ from .permissions import (
     ToolPermissionManager,
     default_confirmation_callback,
 )
-from .plugins import ToolPluginLoader
+from .plugins import ToolPluginLoader, PluginFileWatcher
 from .rate_limiter import DEFAULT_RATE_LIMITS, RateLimiter
 
 # Robot and Game control systems
@@ -181,6 +181,7 @@ __all__ = [
     "UsageRecord",
     "ToolSchemaValidator",
     "ToolPluginLoader",
+    "PluginFileWatcher",
     "StreamingToolResult",
     "StreamingToolExecutor",
     "StreamState",

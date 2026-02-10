@@ -59,6 +59,201 @@ class GameType(Enum):
     OTHER = "other"
 
 
+class ResponseStyle(Enum):
+    """AI response styles for different game contexts."""
+    CONCISE = "concise"         # Quick tips, fast-paced games
+    DETAILED = "detailed"       # Full explanations, tutorials
+    CASUAL = "casual"           # Friendly chat, relaxed games
+    TACTICAL = "tactical"       # Strategic advice, competitive
+    ROLEPLAY = "roleplay"       # In-character, immersive
+    COACH = "coach"             # Encouraging, improvement-focused
+
+
+@dataclass
+class GamePersonality:
+    """
+    AI personality configuration for game-specific behavior.
+    
+    Controls how the AI speaks, emotes, and adapts to the game context.
+    """
+    # Voice characteristics
+    voice_pitch: float = 1.0        # 0.5 (low) to 2.0 (high)
+    voice_speed: float = 1.0        # 0.5 (slow) to 2.0 (fast)
+    voice_energy: float = 0.7       # 0.0 (calm) to 1.0 (excited)
+    voice_style: str = "neutral"    # "cheerful", "serious", "energetic", "calm"
+    
+    # Response behavior
+    response_style: ResponseStyle = ResponseStyle.CONCISE
+    formality: float = 0.5          # 0.0 (very casual) to 1.0 (formal)
+    humor_level: float = 0.3        # 0.0 (serious) to 1.0 (playful)
+    enthusiasm: float = 0.6         # 0.0 (subdued) to 1.0 (hyped)
+    
+    # Personality traits (0.0 to 1.0 scale)
+    traits: Dict[str, float] = field(default_factory=lambda: {
+        "helpful": 0.9,
+        "encouraging": 0.7,
+        "competitive": 0.3,
+        "analytical": 0.5,
+        "patient": 0.8,
+    })
+    
+    # Avatar expressions for this game context
+    default_expression: str = "neutral"     # Base expression
+    success_expression: str = "happy"       # When player succeeds
+    failure_expression: str = "concerned"   # When player fails
+    thinking_expression: str = "thoughtful" # When processing
+    excited_expression: str = "excited"     # For exciting moments
+    
+    # Catchphrases and flavor text
+    greeting: str = ""                      # Custom greeting
+    farewell: str = ""                      # Custom goodbye
+    encouragements: List[str] = field(default_factory=list)  # Random encouragements
+    reactions: Dict[str, List[str]] = field(default_factory=dict)  # Event reactions
+    
+    def to_dict(self) -> dict:
+        return {
+            "voice_pitch": self.voice_pitch,
+            "voice_speed": self.voice_speed,
+            "voice_energy": self.voice_energy,
+            "voice_style": self.voice_style,
+            "response_style": self.response_style.value,
+            "formality": self.formality,
+            "humor_level": self.humor_level,
+            "enthusiasm": self.enthusiasm,
+            "traits": self.traits,
+            "default_expression": self.default_expression,
+            "success_expression": self.success_expression,
+            "failure_expression": self.failure_expression,
+            "thinking_expression": self.thinking_expression,
+            "excited_expression": self.excited_expression,
+            "greeting": self.greeting,
+            "farewell": self.farewell,
+            "encouragements": self.encouragements,
+            "reactions": self.reactions,
+        }
+    
+    @staticmethod
+    def from_dict(data: dict) -> 'GamePersonality':
+        return GamePersonality(
+            voice_pitch=data.get("voice_pitch", 1.0),
+            voice_speed=data.get("voice_speed", 1.0),
+            voice_energy=data.get("voice_energy", 0.7),
+            voice_style=data.get("voice_style", "neutral"),
+            response_style=ResponseStyle(data.get("response_style", "concise")),
+            formality=data.get("formality", 0.5),
+            humor_level=data.get("humor_level", 0.3),
+            enthusiasm=data.get("enthusiasm", 0.6),
+            traits=data.get("traits", {"helpful": 0.9, "encouraging": 0.7}),
+            default_expression=data.get("default_expression", "neutral"),
+            success_expression=data.get("success_expression", "happy"),
+            failure_expression=data.get("failure_expression", "concerned"),
+            thinking_expression=data.get("thinking_expression", "thoughtful"),
+            excited_expression=data.get("excited_expression", "excited"),
+            greeting=data.get("greeting", ""),
+            farewell=data.get("farewell", ""),
+            encouragements=data.get("encouragements", []),
+            reactions=data.get("reactions", {}),
+        )
+    
+    def get_response_modifier(self) -> str:
+        """Generate prompt modifier based on personality settings."""
+        modifiers = []
+        
+        # Response style
+        style_map = {
+            ResponseStyle.CONCISE: "Keep responses brief and to the point.",
+            ResponseStyle.DETAILED: "Provide thorough explanations with examples.",
+            ResponseStyle.CASUAL: "Be friendly and conversational.",
+            ResponseStyle.TACTICAL: "Focus on strategic advice and optimal plays.",
+            ResponseStyle.ROLEPLAY: "Stay in character and maintain immersion.",
+            ResponseStyle.COACH: "Be encouraging and focus on improvement.",
+        }
+        modifiers.append(style_map.get(self.response_style, ""))
+        
+        # Formality
+        if self.formality < 0.3:
+            modifiers.append("Use casual language and slang.")
+        elif self.formality > 0.7:
+            modifiers.append("Maintain professional tone.")
+        
+        # Humor
+        if self.humor_level > 0.6:
+            modifiers.append("Include light humor and jokes when appropriate.")
+        elif self.humor_level < 0.2:
+            modifiers.append("Keep a serious, focused tone.")
+        
+        # Enthusiasm
+        if self.enthusiasm > 0.7:
+            modifiers.append("Show excitement and energy!")
+        
+        return " ".join(m for m in modifiers if m)
+
+
+# Pre-built personalities for different game types
+DEFAULT_PERSONALITIES: Dict[GameType, GamePersonality] = {
+    GameType.FPS: GamePersonality(
+        voice_speed=1.2,
+        voice_energy=0.8,
+        voice_style="energetic",
+        response_style=ResponseStyle.TACTICAL,
+        formality=0.3,
+        enthusiasm=0.8,
+        traits={"helpful": 0.8, "competitive": 0.7, "analytical": 0.6},
+        encouragements=["Nice shot!", "You got this!", "Stay focused!"],
+        reactions={"kill": ["Clean!", "Got 'em!"], "death": ["Unlucky", "Next time!"]},
+    ),
+    GameType.RPG: GamePersonality(
+        voice_speed=0.9,
+        voice_energy=0.6,
+        voice_style="calm",
+        response_style=ResponseStyle.DETAILED,
+        formality=0.5,
+        humor_level=0.4,
+        traits={"helpful": 0.9, "patient": 0.9, "analytical": 0.7},
+        encouragements=["A wise choice!", "Your journey continues..."],
+    ),
+    GameType.SANDBOX: GamePersonality(
+        voice_speed=1.0,
+        voice_energy=0.7,
+        voice_style="cheerful",
+        response_style=ResponseStyle.CASUAL,
+        formality=0.3,
+        humor_level=0.5,
+        traits={"helpful": 0.9, "encouraging": 0.8, "patient": 0.9},
+        encouragements=["That's creative!", "Nice build!", "Try experimenting!"],
+    ),
+    GameType.STRATEGY: GamePersonality(
+        voice_speed=0.9,
+        voice_energy=0.5,
+        voice_style="serious",
+        response_style=ResponseStyle.TACTICAL,
+        formality=0.6,
+        traits={"helpful": 0.8, "analytical": 0.9, "patient": 0.8},
+        encouragements=["Good strategy!", "Well planned!", "Adapt and overcome!"],
+    ),
+    GameType.SURVIVAL: GamePersonality(
+        voice_speed=1.0,
+        voice_energy=0.6,
+        voice_style="calm",
+        response_style=ResponseStyle.CONCISE,
+        formality=0.4,
+        traits={"helpful": 0.9, "encouraging": 0.7, "patient": 0.8},
+        encouragements=["Stay alive!", "Good resource management!", "Survive and thrive!"],
+    ),
+    GameType.MOBA: GamePersonality(
+        voice_speed=1.3,
+        voice_energy=0.9,
+        voice_style="energetic",
+        response_style=ResponseStyle.TACTICAL,
+        formality=0.2,
+        enthusiasm=0.9,
+        traits={"helpful": 0.7, "competitive": 0.8, "analytical": 0.7},
+        encouragements=["GG!", "Nice play!", "Team diff!"],
+        reactions={"kill": ["Let's go!", "Huge!"], "death": ["It happens", "Shake it off"]},
+    ),
+}
+
+
 @dataclass
 class GameConfig:
     """Configuration for a specific game."""
@@ -83,6 +278,15 @@ class GameConfig:
     wiki_url: str = ""              # For web lookup
     command_list: list[str] = field(default_factory=list)   # In-game commands
     
+    # Personality (NEW - game-specific AI behavior)
+    personality: Optional[GamePersonality] = None
+    
+    def get_personality(self) -> GamePersonality:
+        """Get personality, falling back to default for game type."""
+        if self.personality:
+            return self.personality
+        return DEFAULT_PERSONALITIES.get(self.type, GamePersonality())
+    
     def to_dict(self) -> dict:
         return {
             "name": self.name,
@@ -97,10 +301,14 @@ class GameConfig:
             "quick_responses": self.quick_responses,
             "wiki_url": self.wiki_url,
             "command_list": self.command_list,
+            "personality": self.personality.to_dict() if self.personality else None,
         }
     
     @staticmethod
     def from_dict(data: dict) -> 'GameConfig':
+        personality_data = data.get("personality")
+        personality = GamePersonality.from_dict(personality_data) if personality_data else None
+        
         return GameConfig(
             name=data.get("name", "Unknown"),
             type=GameType(data.get("type", "other")),
@@ -114,6 +322,7 @@ class GameConfig:
             quick_responses=data.get("quick_responses", False),
             wiki_url=data.get("wiki_url", ""),
             command_list=data.get("command_list", []),
+            personality=personality,
         )
 
 
@@ -134,6 +343,20 @@ Keep answers concise and practical.""",
         process_names=["javaw.exe", "minecraft.exe"],
         window_titles=["Minecraft"],
         wiki_url="https://minecraft.wiki",
+        personality=GamePersonality(
+            voice_style="cheerful",
+            voice_energy=0.7,
+            response_style=ResponseStyle.CASUAL,
+            formality=0.2,
+            humor_level=0.5,
+            traits={"helpful": 0.95, "encouraging": 0.9, "patient": 0.95},
+            greeting="Hey! Ready to mine some diamonds?",
+            encouragements=["Nice build!", "That's creative!", "You're a natural architect!"],
+            reactions={
+                "death": ["It's okay, respawn and try again!", "Creepers are sneaky..."],
+                "build": ["Looking good!", "That's an awesome design!"],
+            },
+        ),
     ),
     
     "terraria": GameConfig(
@@ -150,6 +373,14 @@ Be concise and gameplay-focused.""",
         process_names=["Terraria.exe"],
         window_titles=["Terraria"],
         wiki_url="https://terraria.wiki.gg",
+        personality=GamePersonality(
+            voice_style="cheerful",
+            voice_energy=0.75,
+            response_style=ResponseStyle.DETAILED,
+            humor_level=0.4,
+            traits={"helpful": 0.9, "encouraging": 0.85, "analytical": 0.7},
+            encouragements=["Boss down!", "Nice loot!", "Your build is coming together!"],
+        ),
     ),
     
     "valorant": GameConfig(
@@ -167,6 +398,21 @@ Keep responses SHORT - player is in-game.""",
         window_titles=["VALORANT"],
         multiplayer_aware=True,
         quick_responses=True,
+        personality=GamePersonality(
+            voice_speed=1.3,
+            voice_energy=0.9,
+            voice_style="energetic",
+            response_style=ResponseStyle.TACTICAL,
+            formality=0.1,
+            enthusiasm=0.9,
+            traits={"helpful": 0.8, "competitive": 0.85, "analytical": 0.75},
+            encouragements=["Nice ace!", "Clean shot!", "Big brain play!"],
+            reactions={
+                "kill": ["Let's go!", "Huge!", "Nice one!"],
+                "death": ["Unlucky", "Reset mental", "Next round"],
+                "win": ["GG!", "Diff!", "Easy clap"],
+            },
+        ),
     ),
     
     "league": GameConfig(
@@ -185,6 +431,21 @@ Keep it brief - they're playing.""",
         multiplayer_aware=True,
         quick_responses=True,
         wiki_url="https://leagueoflegends.fandom.com",
+        personality=GamePersonality(
+            voice_speed=1.2,
+            voice_energy=0.85,
+            voice_style="energetic",
+            response_style=ResponseStyle.TACTICAL,
+            formality=0.15,
+            enthusiasm=0.85,
+            traits={"helpful": 0.75, "competitive": 0.9, "analytical": 0.8},
+            encouragements=["Clean combo!", "Nice roam!", "Huge objective!"],
+            reactions={
+                "kill": ["Secured!", "Nice!", "Money in the bank"],
+                "death": ["Worth?", "Happens", "Shake it off"],
+                "dragon": ["Drake diff!", "Stacking them!", "Nice call"],
+            },
+        ),
     ),
     
     "darksouls": GameConfig(
@@ -200,6 +461,21 @@ Keep it brief - they're playing.""",
 Avoid major spoilers unless asked.""",
         process_names=["DarkSoulsIII.exe", "DarkSoulsRemastered.exe"],
         window_titles=["DARK SOULS"],
+        personality=GamePersonality(
+            voice_speed=0.9,
+            voice_energy=0.5,
+            voice_style="calm",
+            response_style=ResponseStyle.DETAILED,
+            formality=0.6,
+            humor_level=0.2,
+            traits={"helpful": 0.9, "patient": 0.95, "encouraging": 0.8},
+            greeting="Ah, another undead. Let me guide you.",
+            encouragements=["Victory achieved!", "Well done, Ashen One.", "Praise the sun!"],
+            reactions={
+                "death": ["Persevere, undead.", "You died. Try again.", "Death is not the end."],
+                "boss_kill": ["A great foe has fallen!", "You've proven your worth!"],
+            },
+        ),
     ),
     
     "stardew": GameConfig(
@@ -216,6 +492,17 @@ Friendly and helpful tone.""",
         process_names=["Stardew Valley.exe"],
         window_titles=["Stardew Valley"],
         wiki_url="https://stardewvalleywiki.com",
+        personality=GamePersonality(
+            voice_speed=0.95,
+            voice_energy=0.6,
+            voice_style="cheerful",
+            response_style=ResponseStyle.CASUAL,
+            formality=0.2,
+            humor_level=0.5,
+            traits={"helpful": 0.95, "patient": 0.95, "encouraging": 0.9},
+            greeting="Good morning, farmer! What can I help with?",
+            encouragements=["Your farm looks great!", "Nice harvest!", "The villagers love you!"],
+        ),
     ),
     
     "factorio": GameConfig(
@@ -232,6 +519,17 @@ Technical and efficient responses.""",
         process_names=["factorio.exe"],
         window_titles=["Factorio"],
         wiki_url="https://wiki.factorio.com",
+        personality=GamePersonality(
+            voice_speed=1.0,
+            voice_energy=0.5,
+            voice_style="serious",
+            response_style=ResponseStyle.DETAILED,
+            formality=0.7,
+            humor_level=0.2,
+            traits={"helpful": 0.85, "analytical": 0.95, "patient": 0.8},
+            greeting="Ready to optimize. What's the bottleneck?",
+            encouragements=["Excellent throughput!", "Ratio perfection.", "The factory must grow."],
+        ),
     ),
 }
 
@@ -486,6 +784,72 @@ class GameAIRouter:
                 }
         return {"model": "small", "adapter": "", "quick_responses": False}
     
+    def get_personality(self) -> GamePersonality:
+        """Get personality for active game."""
+        if self._active_game:
+            config = self._games.get(self._active_game)
+            if config:
+                return config.get_personality()
+        return GamePersonality()
+    
+    def get_personality_prompt(self) -> str:
+        """Get personality-based prompt modifier."""
+        personality = self.get_personality()
+        return personality.get_response_modifier()
+    
+    def get_voice_settings(self) -> dict[str, Any]:
+        """Get voice settings based on game personality."""
+        personality = self.get_personality()
+        return {
+            "pitch": personality.voice_pitch,
+            "speed": personality.voice_speed,
+            "energy": personality.voice_energy,
+            "style": personality.voice_style,
+        }
+    
+    def get_expression(self, event: str = "default") -> str:
+        """Get avatar expression for game context and event."""
+        personality = self.get_personality()
+        
+        expression_map = {
+            "default": personality.default_expression,
+            "success": personality.success_expression,
+            "failure": personality.failure_expression,
+            "thinking": personality.thinking_expression,
+            "excited": personality.excited_expression,
+        }
+        return expression_map.get(event, personality.default_expression)
+    
+    def get_encouragement(self) -> str:
+        """Get a random encouragement for active game."""
+        import random
+        personality = self.get_personality()
+        if personality.encouragements:
+            return random.choice(personality.encouragements)
+        return ""
+    
+    def get_reaction(self, event: str) -> str:
+        """Get a random reaction for a game event."""
+        import random
+        personality = self.get_personality()
+        if event in personality.reactions and personality.reactions[event]:
+            return random.choice(personality.reactions[event])
+        return ""
+    
+    def get_greeting(self) -> str:
+        """Get custom greeting for active game."""
+        personality = self.get_personality()
+        return personality.greeting
+    
+    def get_full_system_prompt(self) -> str:
+        """Get combined system prompt with personality modifiers."""
+        base_prompt = self.get_system_prompt()
+        personality_mod = self.get_personality_prompt()
+        
+        if base_prompt and personality_mod:
+            return f"{base_prompt}\n\nResponse style: {personality_mod}"
+        return base_prompt or personality_mod
+    
     def chat(self, message: str, engine=None) -> str:
         """
         Chat with game-aware AI.
@@ -493,8 +857,8 @@ class GameAIRouter:
         Uses the active game's configuration to route the query.
         Reuses pooled engine instances for efficiency.
         """
-        # Get system prompt
-        system_prompt = self.get_system_prompt()
+        # Get system prompt with personality modifiers
+        system_prompt = self.get_full_system_prompt()
         model_config = self.get_model_config()
         
         # Use centralized prompt builder

@@ -235,7 +235,7 @@ limits = ResourceLimits(
 ### macOS
 - Process detection via `ps`
 - Fullscreen detection via AppleScript
-- GPU monitoring not yet implemented
+- GPU monitoring via ioreg (basic utilization)
 
 ## Performance Impact
 

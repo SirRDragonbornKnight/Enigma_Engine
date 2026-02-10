@@ -360,6 +360,21 @@ class OverlayServer:
                     })
                 return jsonify({"text": "", "visible": False})
             
+            @self._app.route("/alert")
+            def alert_overlay():
+                return render_template_string(ALERT_OVERLAY_HTML)
+            
+            @self._app.route("/reactions")
+            def reactions_overlay():
+                return render_template_string(REACTIONS_OVERLAY_HTML)
+            
+            @self._app.route("/api/alerts")
+            def get_alerts():
+                # Return alerts from last 60 seconds
+                cutoff = time.time() - 60
+                recent = [a for a in self._alerts if a.get("timestamp", 0) > cutoff]
+                return jsonify(recent)
+            
             # Run in thread
             thread = threading.Thread(
                 target=lambda: self._app.run(
@@ -420,6 +435,15 @@ class OBSIntegration:
         self._connected = False
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._thread: Optional[threading.Thread] = None
+        
+        # Scene automation
+        self._scene_rules: Dict[str, str] = {}  # state -> scene name
+        self._current_ai_state: str = "idle"
+        self._auto_scene_enabled: bool = False
+        
+        # Chat styling
+        self._chat_style: str = "default"
+        self._emotes: Dict[str, str] = {}  # shortcode -> url
     
     def connect(self) -> bool:
         """Connect to OBS and start overlay server."""
@@ -528,8 +552,295 @@ class OBSIntegration:
         return {
             "chat": f"{base}/chat",
             "status": f"{base}/status",
-            "subtitle": f"{base}/subtitle"
+            "subtitle": f"{base}/subtitle",
+            "alert": f"{base}/alert",
+            "reactions": f"{base}/reactions",
         }
+    
+    # --- Enhanced Scene Switching ---
+    
+    def set_scene_rule(self, ai_state: str, scene_name: str):
+        """
+        Set automatic scene switching rule.
+        
+        When AI enters the specified state, switch to the scene.
+        
+        Args:
+            ai_state: AI state name (idle, thinking, generating, speaking, etc.)
+            scene_name: OBS scene to switch to
+        """
+        self._scene_rules[ai_state] = scene_name
+        logger.info(f"Scene rule: {ai_state} -> {scene_name}")
+    
+    def set_scene_rules(self, rules: Dict[str, str]):
+        """
+        Set multiple scene rules at once.
+        
+        Args:
+            rules: Dict mapping AI states to scene names
+        """
+        self._scene_rules.update(rules)
+    
+    def enable_auto_scene(self, enabled: bool = True):
+        """Enable/disable automatic scene switching."""
+        self._auto_scene_enabled = enabled
+        logger.info(f"Auto scene switching: {'enabled' if enabled else 'disabled'}")
+    
+    def set_ai_state(self, state: str):
+        """
+        Update AI state and trigger scene switch if configured.
+        
+        Args:
+            state: New AI state
+        """
+        old_state = self._current_ai_state
+        self._current_ai_state = state
+        
+        # Update status overlay
+        self._overlay.set_status({"state": state.title()})
+        
+        # Auto-switch scene
+        if self._auto_scene_enabled and state in self._scene_rules:
+            if old_state != state:  # Only switch on state change
+                self.switch_scene(self._scene_rules[state])
+    
+    # --- Quick Scene Shortcuts ---
+    
+    def scene_idle(self):
+        """Switch to idle/waiting scene."""
+        if "idle" in self._scene_rules:
+            self.switch_scene(self._scene_rules["idle"])
+    
+    def scene_generating(self):
+        """Switch to generation scene (for image/video gen)."""
+        if "generating" in self._scene_rules:
+            self.switch_scene(self._scene_rules["generating"])
+    
+    def scene_chatting(self):
+        """Switch to chat scene."""
+        if "chatting" in self._scene_rules:
+            self.switch_scene(self._scene_rules["chatting"])
+    
+    # --- Enhanced Chat Overlays ---
+    
+    def set_chat_style(self, style: str):
+        """
+        Set chat overlay style.
+        
+        Args:
+            style: Style name (default, bubble, minimal, gaming)
+        """
+        self._chat_style = style
+        # Browser source will poll this from API
+    
+    def add_emote(self, shortcode: str, url: str):
+        """
+        Add custom emote for chat.
+        
+        Args:
+            shortcode: Emote code (e.g., :smile:)
+            url: URL to emote image
+        """
+        self._emotes[shortcode] = url
+    
+    def show_reaction(self, reaction: str, duration: float = 3.0):
+        """
+        Show a reaction animation on stream.
+        
+        Args:
+            reaction: Reaction type (hearts, confetti, fire, etc.)
+            duration: How long to show
+        """
+        self._overlay.add_alert({
+            "type": "reaction",
+            "reaction": reaction,
+            "duration": duration,
+            "timestamp": time.time()
+        })
+    
+    def show_alert(
+        self,
+        title: str,
+        message: str = "",
+        alert_type: str = "info",
+        duration: float = 5.0
+    ):
+        """
+        Show an alert on stream.
+        
+        Args:
+            title: Alert title
+            message: Alert message
+            alert_type: Type (info, success, warning, error)
+            duration: Display duration
+        """
+        self._overlay.add_alert({
+            "type": "alert",
+            "title": title,
+            "message": message,
+            "alert_type": alert_type,
+            "duration": duration,
+            "timestamp": time.time()
+        })
+    
+    # --- Recording & Clips ---
+    
+    def start_recording(self) -> bool:
+        """Start OBS recording."""
+        if self._connected and self._loop:
+            future = asyncio.run_coroutine_threadsafe(
+                self._controller.send_request("StartRecord"),
+                self._loop
+            )
+            try:
+                future.result(timeout=5.0)
+                logger.info("Recording started")
+                return True
+            except Exception as e:
+                logger.error(f"Failed to start recording: {e}")
+        return False
+    
+    def stop_recording(self) -> bool:
+        """Stop OBS recording."""
+        if self._connected and self._loop:
+            future = asyncio.run_coroutine_threadsafe(
+                self._controller.send_request("StopRecord"),
+                self._loop
+            )
+            try:
+                future.result(timeout=5.0)
+                logger.info("Recording stopped")
+                return True
+            except Exception as e:
+                logger.error(f"Failed to stop recording: {e}")
+        return False
+    
+    def save_replay_buffer(self) -> bool:
+        """Save replay buffer (if enabled in OBS)."""
+        if self._connected and self._loop:
+            future = asyncio.run_coroutine_threadsafe(
+                self._controller.send_request("SaveReplayBuffer"),
+                self._loop
+            )
+            try:
+                future.result(timeout=5.0)
+                logger.info("Replay buffer saved")
+                return True
+            except Exception as e:
+                logger.error(f"Failed to save replay: {e}")
+        return False
+    
+    # --- Source Control ---
+    
+    def set_text_source(self, source_name: str, text: str):
+        """
+        Set text source content.
+        
+        Args:
+            source_name: OBS text source name
+            text: Text to display
+        """
+        if self._connected and self._loop:
+            asyncio.run_coroutine_threadsafe(
+                self._controller.send_request(
+                    "SetInputSettings",
+                    {
+                        "inputName": source_name,
+                        "inputSettings": {"text": text}
+                    }
+                ),
+                self._loop
+            )
+    
+    def set_image_source(self, source_name: str, file_path: str):
+        """
+        Set image source file.
+        
+        Args:
+            source_name: OBS image source name
+            file_path: Path to image file
+        """
+        if self._connected and self._loop:
+            asyncio.run_coroutine_threadsafe(
+                self._controller.send_request(
+                    "SetInputSettings",
+                    {
+                        "inputName": source_name,
+                        "inputSettings": {"file": file_path}
+                    }
+                ),
+                self._loop
+            )
+    
+    # --- Audio Control ---
+    
+    def set_source_volume(self, source_name: str, volume_db: float):
+        """
+        Set audio source volume.
+        
+        Args:
+            source_name: Audio source name
+            volume_db: Volume in dB (-100 to 26)
+        """
+        if self._connected and self._loop:
+            asyncio.run_coroutine_threadsafe(
+                self._controller.send_request(
+                    "SetInputVolume",
+                    {
+                        "inputName": source_name,
+                        "inputVolumeDb": volume_db
+                    }
+                ),
+                self._loop
+            )
+    
+    def mute_source(self, source_name: str, muted: bool = True):
+        """
+        Mute/unmute audio source.
+        
+        Args:
+            source_name: Audio source name
+            muted: Whether to mute
+        """
+        if self._connected and self._loop:
+            asyncio.run_coroutine_threadsafe(
+                self._controller.send_request(
+                    "SetInputMute",
+                    {
+                        "inputName": source_name,
+                        "inputMuted": muted
+                    }
+                ),
+                self._loop
+            )
+    
+    # --- Stream Info ---
+    
+    def get_stream_status(self) -> Dict[str, Any]:
+        """Get streaming status."""
+        if self._connected and self._loop:
+            future = asyncio.run_coroutine_threadsafe(
+                self._controller.send_request("GetStreamStatus"),
+                self._loop
+            )
+            try:
+                return future.result(timeout=5.0)
+            except Exception:
+                pass
+        return {}
+    
+    def get_record_status(self) -> Dict[str, Any]:
+        """Get recording status."""
+        if self._connected and self._loop:
+            future = asyncio.run_coroutine_threadsafe(
+                self._controller.send_request("GetRecordStatus"),
+                self._loop
+            )
+            try:
+                return future.result(timeout=5.0)
+            except Exception:
+                pass
+        return {}
 
 
 # HTML templates for overlays
@@ -682,6 +993,157 @@ SUBTITLE_OVERLAY_HTML = """
             el.classList.toggle('visible', data.visible);
         }
         setInterval(update, 200);
+        update();
+    </script>
+</body>
+</html>
+"""
+
+ALERT_OVERLAY_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        * { margin: 0; padding: 0; }
+        body {
+            background: transparent;
+            font-family: 'Segoe UI', sans-serif;
+            overflow: hidden;
+        }
+        .alert {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            padding: 20px 30px;
+            color: white;
+            text-align: center;
+            animation: slideIn 0.5s ease;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+        }
+        .alert.info { background: linear-gradient(135deg, #4fc3f7 0%, #0277bd 100%); }
+        .alert.success { background: linear-gradient(135deg, #69f0ae 0%, #00c853 100%); }
+        .alert.warning { background: linear-gradient(135deg, #ffd54f 0%, #ff8f00 100%); }
+        .alert.error { background: linear-gradient(135deg, #ff8a80 0%, #d32f2f 100%); }
+        .alert-title { font-size: 24px; font-weight: bold; }
+        .alert-message { font-size: 16px; margin-top: 5px; opacity: 0.9; }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translate(-50%, -30px); }
+            to { opacity: 1; transform: translate(-50%, 0); }
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+        .alert.hide { animation: fadeOut 0.5s forwards; }
+    </style>
+</head>
+<body>
+    <div id="alerts"></div>
+    <script>
+        let shownAlerts = new Set();
+        
+        async function update() {
+            const response = await fetch('/api/alerts');
+            const alerts = await response.json();
+            const container = document.getElementById('alerts');
+            
+            alerts.filter(a => a.type === 'alert').forEach(alert => {
+                const id = alert.timestamp.toString();
+                if (!shownAlerts.has(id)) {
+                    shownAlerts.add(id);
+                    
+                    const el = document.createElement('div');
+                    el.className = 'alert ' + (alert.alert_type || 'info');
+                    el.innerHTML = '<div class="alert-title">' + alert.title + '</div>' +
+                                   (alert.message ? '<div class="alert-message">' + alert.message + '</div>' : '');
+                    container.appendChild(el);
+                    
+                    setTimeout(() => {
+                        el.classList.add('hide');
+                        setTimeout(() => el.remove(), 500);
+                    }, (alert.duration || 5) * 1000);
+                }
+            });
+        }
+        setInterval(update, 300);
+        update();
+    </script>
+</body>
+</html>
+"""
+
+REACTIONS_OVERLAY_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        * { margin: 0; padding: 0; }
+        body {
+            background: transparent;
+            overflow: hidden;
+            pointer-events: none;
+        }
+        .reaction {
+            position: fixed;
+            font-size: 48px;
+            animation: rise 3s forwards;
+        }
+        @keyframes rise {
+            0% { opacity: 1; transform: translateY(0) scale(1); }
+            100% { opacity: 0; transform: translateY(-200px) scale(1.5); }
+        }
+    </style>
+</head>
+<body>
+    <div id="reactions"></div>
+    <script>
+        const reactionEmojis = {
+            hearts: ['❤️', '💕', '💖', '💗', '💓'],
+            fire: ['🔥', '🔥', '🔥'],
+            confetti: ['🎉', '🎊', '✨', '🎈'],
+            laugh: ['😂', '🤣', '😆'],
+            wow: ['😮', '🤯', '😱'],
+            thumbs: ['👍', '👏', '🙌'],
+        };
+        
+        let shownReactions = new Set();
+        
+        async function update() {
+            const response = await fetch('/api/alerts');
+            const alerts = await response.json();
+            
+            alerts.filter(a => a.type === 'reaction').forEach(r => {
+                const id = r.timestamp.toString();
+                if (!shownReactions.has(id)) {
+                    shownReactions.add(id);
+                    spawnReaction(r.reaction, r.duration || 3);
+                }
+            });
+        }
+        
+        function spawnReaction(type, duration) {
+            const emojis = reactionEmojis[type] || ['✨'];
+            const count = 10;
+            
+            for (let i = 0; i < count; i++) {
+                setTimeout(() => {
+                    const el = document.createElement('div');
+                    el.className = 'reaction';
+                    el.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+                    el.style.left = (Math.random() * 80 + 10) + '%';
+                    el.style.bottom = '10%';
+                    el.style.animationDuration = (duration * 0.8 + Math.random() * duration * 0.4) + 's';
+                    document.getElementById('reactions').appendChild(el);
+                    
+                    setTimeout(() => el.remove(), duration * 1000 + 500);
+                }, i * 150);
+            }
+        }
+        
+        setInterval(update, 300);
         update();
     </script>
 </body>
