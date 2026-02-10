@@ -25,7 +25,6 @@ Usage:
     result = tournament.run("Code golf challenge")
 """
 
-import json
 import logging
 import math
 import random

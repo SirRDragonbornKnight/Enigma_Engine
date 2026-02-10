@@ -17,7 +17,6 @@ Usage:
 Note: This module consolidates gguf_export.py and gguf_exporter.py
 """
 
-import json
 import logging
 import struct
 from dataclasses import dataclass, field

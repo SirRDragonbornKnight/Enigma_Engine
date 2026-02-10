@@ -4,7 +4,6 @@ Web Avatar Renderer
 Renders avatar in web browser via WebSocket for web dashboard integration.
 """
 
-import json
 from typing import Dict, Optional
 
 from ..avatar_identity import AvatarAppearance

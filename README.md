@@ -338,6 +338,70 @@ response = engine.generate("write a sort function")  # Routes to code model
 
 See `docs/SPECIALIZED_MODELS.md` for complete guide.
 
+### Tools System (122 Tools) 🔧
+
+Enigma AI Engine includes **122 tools** that extend your AI's capabilities. Every tool has:
+- **RichParameter definitions** - Full type info, validation, defaults
+- **Categorization** - Organized by use case
+- **Usage examples** - For AI understanding
+
+**Tool Categories:**
+
+| Category | Tools | Examples |
+|----------|-------|----------|
+| File | 12 | read_file, write_file, search_files |
+| System | 8 | run_command, get_env, set_env |
+| Web | 6 | web_search, fetch_url, check_site |
+| Data | 7 | csv_analyze, sql_query, plot_chart |
+| Media | 7 | music_generate, remove_background, upscale_image |
+| Gaming | 11 | trivia_game, dnd_roll, story_generate |
+| Automation | 12 | schedule_task, record_macro, watch_folder |
+| IoT | 11 | homeassistant_control, gpio_read, mqtt_publish |
+| Productivity | 10 | git_status, docker_control, ssh_execute |
+| Knowledge | 3 | wikipedia_search, arxiv_search, pdf_extract |
+| ... | ... | And many more! |
+
+**Quick Example:**
+```python
+from enigma_engine.tools.tool_executor import ToolExecutor
+
+executor = ToolExecutor()
+
+# Execute a tool with parameters
+result = executor.execute("wikipedia_search", query="quantum computing")
+print(result)
+
+# List all tools with their rich parameters
+from enigma_engine.tools import get_all_tools
+tools = get_all_tools()
+for tool in tools:
+    print(f"{tool.name}: {len(tool.rich_parameters)} params")
+```
+
+**RichParameter Example:**
+```python
+from enigma_engine.tools.tool_registry import RichParameter
+
+# Each tool defines its parameters like this:
+rich_parameters = [
+    RichParameter(
+        name="query",
+        type="string",
+        description="Search term",
+        required=True,
+    ),
+    RichParameter(
+        name="max_results",
+        type="integer",
+        description="Maximum results",
+        required=False,
+        default=5,
+        min_value=1,
+        max_value=20,
+    ),
+]
+```
+
 ### Upgraded Components (Optional)
 - **⚡ Flash Attention** - 2-4x faster training (auto-detected, CUDA + fp16/bf16)
 - **🎤 Whisper STT** - High-accuracy speech recognition (vs basic STT)

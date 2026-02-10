@@ -29,7 +29,6 @@ USAGE:
 
 import logging
 import threading
-import time
 from dataclasses import dataclass
 from enum import Enum, auto
 from pathlib import Path

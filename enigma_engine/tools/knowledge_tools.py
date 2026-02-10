@@ -18,7 +18,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Dict
 
-from .tool_registry import Tool
+from .tool_registry import Tool, RichParameter
 
 
 class WikipediaSearchTool(Tool):
@@ -31,6 +31,37 @@ class WikipediaSearchTool(Tool):
         "sentences": "Sentences to return (default: 5)",
         "language": "Language code: en, es, de, fr, ja, zh (default: en)",
     }
+    category = "knowledge"
+    rich_parameters = [
+        RichParameter(
+            name="query",
+            type="string",
+            description="Search query or article title",
+            required=True,
+        ),
+        RichParameter(
+            name="sentences",
+            type="integer",
+            description="Number of sentences to return",
+            required=False,
+            default=5,
+            min_value=1,
+            max_value=20,
+        ),
+        RichParameter(
+            name="language",
+            type="string",
+            description="Wikipedia language edition",
+            required=False,
+            default="en",
+            enum=["en", "es", "de", "fr", "ja", "zh", "ru", "pt", "it"],
+        ),
+    ]
+    examples = [
+        "wikipedia_search(query='Albert Einstein')",
+        "wikipedia_search(query='machine learning', sentences=10)",
+        "wikipedia_search(query='Paris', language='fr')",
+    ]
     
     def execute(self, query: str, sentences: int = 5, language: str = "en", **kwargs) -> dict[str, Any]:
         try:
@@ -79,6 +110,36 @@ class ArxivSearchTool(Tool):
         "max_results": "Max results (default: 5, max: 20)",
         "sort_by": "Sort: relevance, lastUpdatedDate, submittedDate",
     }
+    category = "knowledge"
+    rich_parameters = [
+        RichParameter(
+            name="query",
+            type="string",
+            description="Search query for papers",
+            required=True,
+        ),
+        RichParameter(
+            name="max_results",
+            type="integer",
+            description="Maximum number of results",
+            required=False,
+            default=5,
+            min_value=1,
+            max_value=20,
+        ),
+        RichParameter(
+            name="sort_by",
+            type="string",
+            description="Sort order for results",
+            required=False,
+            default="relevance",
+            enum=["relevance", "lastUpdatedDate", "submittedDate"],
+        ),
+    ]
+    examples = [
+        "arxiv_search(query='transformer neural networks')",
+        "arxiv_search(query='quantum computing', max_results=10, sort_by='submittedDate')",
+    ]
     
     def execute(self, query: str, max_results: int = 5, sort_by: str = "relevance", **kwargs) -> dict[str, Any]:
         try:
@@ -139,6 +200,35 @@ class PDFExtractTool(Tool):
         "pages": "Pages to extract: 'all', '1-5', '1,3,5' (default: first 10)",
         "max_pages": "Max pages (default: 10)",
     }
+    category = "knowledge"
+    rich_parameters = [
+        RichParameter(
+            name="path",
+            type="string",
+            description="Path to PDF file",
+            required=True,
+        ),
+        RichParameter(
+            name="pages",
+            type="string",
+            description="Pages to extract: 'all', '1-5', '1,3,5'",
+            required=False,
+            default="all",
+        ),
+        RichParameter(
+            name="max_pages",
+            type="integer",
+            description="Maximum pages to extract",
+            required=False,
+            default=10,
+            min_value=1,
+            max_value=100,
+        ),
+    ]
+    examples = [
+        "pdf_extract(path='research_paper.pdf')",
+        "pdf_extract(path='book.pdf', pages='1-20', max_pages=20)",
+    ]
     
     def execute(self, path: str, pages: str = "all", max_pages: int = 10, **kwargs) -> dict[str, Any]:
         try:

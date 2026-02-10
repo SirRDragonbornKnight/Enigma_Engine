@@ -23,7 +23,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .tool_registry import Tool
+from .tool_registry import RichParameter, Tool
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +50,29 @@ class TriviaGameTool(Tool):
         "category": "Category: 'general', 'science', 'history', 'geography', 'entertainment', 'sports' (default: random)",
         "difficulty": "Difficulty: 'easy', 'medium', 'hard' (default: medium)",
     }
+    category = "gaming"
+    rich_parameters = [
+        RichParameter(
+            name="category",
+            type="string",
+            description="Trivia category",
+            required=False,
+            default="random",
+            enum=["general", "science", "history", "geography", "entertainment", "sports", "random"]
+        ),
+        RichParameter(
+            name="difficulty",
+            type="string",
+            description="Question difficulty",
+            required=False,
+            default="medium",
+            enum=["easy", "medium", "hard"]
+        ),
+    ]
+    examples = [
+        "trivia_game() - Random trivia question",
+        "trivia_game(category='science', difficulty='hard') - Hard science question",
+    ]
     
     # Built-in trivia questions
     TRIVIA = {
@@ -140,6 +163,29 @@ class WordGameTool(Tool):
         "game_type": "Game: 'hangman', 'scramble', 'anagram' (default: scramble)",
         "difficulty": "Difficulty: 'easy', 'medium', 'hard' (default: medium)",
     }
+    category = "gaming"
+    rich_parameters = [
+        RichParameter(
+            name="game_type",
+            type="string",
+            description="Type of word game to play",
+            required=False,
+            default="scramble",
+            enum=["hangman", "scramble", "anagram"]
+        ),
+        RichParameter(
+            name="difficulty",
+            type="string",
+            description="Word difficulty",
+            required=False,
+            default="medium",
+            enum=["easy", "medium", "hard"]
+        ),
+    ]
+    examples = [
+        "word_game() - Word scramble game",
+        "word_game(game_type='hangman', difficulty='hard') - Hard hangman",
+    ]
     
     WORDS = {
         "easy": ["cat", "dog", "sun", "moon", "tree", "book", "fish", "bird", "cake", "star"],
@@ -208,6 +254,36 @@ class NumberGuessTool(Tool):
         "max_num": "Maximum number (default: 100)",
         "guess": "Your guess (optional - start game if not provided)",
     }
+    category = "gaming"
+    rich_parameters = [
+        RichParameter(
+            name="min_num",
+            type="integer",
+            description="Minimum number in the range",
+            required=False,
+            default=1,
+            min_value=1,
+        ),
+        RichParameter(
+            name="max_num",
+            type="integer",
+            description="Maximum number in the range",
+            required=False,
+            default=100,
+            max_value=1000000,
+        ),
+        RichParameter(
+            name="guess",
+            type="integer",
+            description="Your guess (omit to start a new game)",
+            required=False,
+        ),
+    ]
+    examples = [
+        "number_guess() - Start new game 1-100",
+        "number_guess(min_num=1, max_num=50) - Custom range game",
+        "number_guess(guess=42) - Make a guess",
+    ]
     
     # Store active games
     _active_games = {}
@@ -323,6 +399,44 @@ class CharacterCreateTool(Tool):
         "speaking_style": "How they speak (e.g., 'formal', 'pirate accent', 'medieval')",
         "traits": "Key traits (comma-separated)",
     }
+    category = "gaming"
+    rich_parameters = [
+        RichParameter(
+            name="name",
+            type="string",
+            description="Character name",
+            required=True,
+        ),
+        RichParameter(
+            name="personality",
+            type="string",
+            description="Personality description",
+            required=True,
+        ),
+        RichParameter(
+            name="backstory",
+            type="string",
+            description="Character backstory or history",
+            required=False,
+        ),
+        RichParameter(
+            name="speaking_style",
+            type="string",
+            description="How the character speaks",
+            required=False,
+            default="normal",
+        ),
+        RichParameter(
+            name="traits",
+            type="string",
+            description="Comma-separated personality traits",
+            required=False,
+        ),
+    ]
+    examples = [
+        "character_create(name='Merlin', personality='wise wizard', speaking_style='formal')",
+        "character_create(name='Jack', personality='pirate captain', traits='brave,cunning,loyal')",
+    ]
     
     def execute(self, name: str, personality: str, backstory: str = "",
                 speaking_style: str = "normal", traits: str = "", **kwargs) -> dict[str, Any]:
@@ -358,6 +472,9 @@ class CharacterListTool(Tool):
     name = "character_list"
     description = "List all created AI characters."
     parameters = {}
+    category = "gaming"
+    rich_parameters = []  # No parameters
+    examples = ["character_list() - List all characters"]
     
     def execute(self, **kwargs) -> dict[str, Any]:
         try:
@@ -392,6 +509,25 @@ class CharacterChatTool(Tool):
         "character_name": "Name of the character to use",
         "message": "Message to respond to as the character",
     }
+    category = "gaming"
+    rich_parameters = [
+        RichParameter(
+            name="character_name",
+            type="string",
+            description="Name of the character to roleplay as",
+            required=True,
+        ),
+        RichParameter(
+            name="message",
+            type="string",
+            description="Message for the character to respond to",
+            required=True,
+        ),
+    ]
+    examples = [
+        "character_chat(character_name='Merlin', message='Hello wizard!')",
+        "character_chat(character_name='Jack', message='Tell me about your ship')",
+    ]
     
     def execute(self, character_name: str, message: str, **kwargs) -> dict[str, Any]:
         try:
@@ -468,6 +604,40 @@ class StoryGenerateTool(Tool):
         "setting": "Story setting description",
         "protagonist": "Main character description",
     }
+    category = "gaming"
+    rich_parameters = [
+        RichParameter(
+            name="title",
+            type="string",
+            description="Title for the story",
+            required=True,
+        ),
+        RichParameter(
+            name="genre",
+            type="string",
+            description="Story genre",
+            required=False,
+            default="fantasy",
+            enum=["fantasy", "scifi", "mystery", "horror", "romance", "adventure"]
+        ),
+        RichParameter(
+            name="setting",
+            type="string",
+            description="Description of the story setting",
+            required=False,
+        ),
+        RichParameter(
+            name="protagonist",
+            type="string",
+            description="Main character description",
+            required=False,
+            default="our hero",
+        ),
+    ]
+    examples = [
+        "story_generate(title='The Lost Kingdom', genre='fantasy')",
+        "story_generate(title='Mars Colony', genre='scifi', protagonist='Captain Chen')",
+    ]
     
     # Story templates
     OPENINGS = {
@@ -569,6 +739,25 @@ class StoryContinueTool(Tool):
         "story_id": "ID of the story to continue",
         "choice": "The choice to make (A, B, C, etc.)",
     }
+    category = "gaming"
+    rich_parameters = [
+        RichParameter(
+            name="story_id",
+            type="string",
+            description="ID of the story (from story_generate result)",
+            required=True,
+        ),
+        RichParameter(
+            name="choice",
+            type="string",
+            description="The choice letter to make",
+            required=True,
+            enum=["A", "B", "C"]
+        ),
+    ]
+    examples = [
+        "story_continue(story_id='story_20260209_143022', choice='A')",
+    ]
     
     def execute(self, story_id: str, choice: str, **kwargs) -> dict[str, Any]:
         try:
@@ -680,6 +869,33 @@ class DnDRollTool(Tool):
         "reason": "Optional reason for the roll",
         "animate": "Generate animated dice roll GIF (default: True)",
     }
+    category = "gaming"
+    rich_parameters = [
+        RichParameter(
+            name="dice",
+            type="string",
+            description="Dice notation (NdS, NdS+M, NdSkhX for keep highest)",
+            required=True,
+        ),
+        RichParameter(
+            name="reason",
+            type="string",
+            description="Reason for the roll (e.g., 'Attack roll', 'Perception check')",
+            required=False,
+        ),
+        RichParameter(
+            name="animate",
+            type="boolean",
+            description="Generate animated dice roll GIF",
+            required=False,
+            default=True,
+        ),
+    ]
+    examples = [
+        "dnd_roll(dice='1d20+5', reason='Attack roll')",
+        "dnd_roll(dice='2d6+3', reason='Damage')",
+        "dnd_roll(dice='4d6kh3', reason='Stat roll')",
+    ]
     
     def execute(self, dice: str, reason: str = "", animate: bool = True, **kwargs) -> dict[str, Any]:
         try:
@@ -923,6 +1139,36 @@ class DnDCharacterTool(Tool):
         "race": "Race (optional, random if not specified)",
         "char_class": "Class (optional, random if not specified)",
     }
+    category = "gaming"
+    rich_parameters = [
+        RichParameter(
+            name="level",
+            type="integer",
+            description="Character level",
+            required=False,
+            default=1,
+            min_value=1,
+            max_value=20,
+        ),
+        RichParameter(
+            name="race",
+            type="string",
+            description="Character race",
+            required=False,
+            enum=["Human", "Elf", "Dwarf", "Halfling", "Dragonborn", "Gnome", "Half-Elf", "Half-Orc", "Tiefling"]
+        ),
+        RichParameter(
+            name="char_class",
+            type="string",
+            description="Character class",
+            required=False,
+            enum=["Barbarian", "Bard", "Cleric", "Druid", "Fighter", "Monk", "Paladin", "Ranger", "Rogue", "Sorcerer", "Warlock", "Wizard"]
+        ),
+    ]
+    examples = [
+        "dnd_character() - Random level 1 character",
+        "dnd_character(level=5, race='Elf', char_class='Wizard') - Level 5 Elf Wizard",
+    ]
     
     RACES = ["Human", "Elf", "Dwarf", "Halfling", "Dragonborn", "Gnome", "Half-Elf", "Half-Orc", "Tiefling"]
     CLASSES = ["Barbarian", "Bard", "Cleric", "Druid", "Fighter", "Monk", "Paladin", "Ranger", "Rogue", "Sorcerer", "Warlock", "Wizard"]
@@ -1005,6 +1251,37 @@ class DnDEncounterTool(Tool):
         "environment": "Environment: 'forest', 'dungeon', 'city', 'mountains', 'swamp' (default: random)",
         "party_size": "Number of players (default: 4)",
     }
+    category = "gaming"
+    rich_parameters = [
+        RichParameter(
+            name="difficulty",
+            type="string",
+            description="Encounter difficulty",
+            required=False,
+            default="medium",
+            enum=["easy", "medium", "hard", "deadly"]
+        ),
+        RichParameter(
+            name="environment",
+            type="string",
+            description="Encounter environment",
+            required=False,
+            enum=["forest", "dungeon", "city", "mountains", "swamp"]
+        ),
+        RichParameter(
+            name="party_size",
+            type="integer",
+            description="Number of players",
+            required=False,
+            default=4,
+            min_value=1,
+            max_value=10,
+        ),
+    ]
+    examples = [
+        "dnd_encounter() - Random medium encounter",
+        "dnd_encounter(difficulty='hard', environment='dungeon') - Hard dungeon encounter",
+    ]
     
     ENCOUNTERS = {
         "forest": {

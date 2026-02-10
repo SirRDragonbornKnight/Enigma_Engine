@@ -5,7 +5,6 @@ A simple rule-based chatbot that works without any AI model.
 Provides basic conversation when torch/models aren't available.
 """
 
-import random
 import re
 import time
 from datetime import datetime

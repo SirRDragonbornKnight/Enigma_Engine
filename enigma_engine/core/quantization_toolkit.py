@@ -9,7 +9,6 @@ TYPE: Core/Optimization
 MAIN CLASSES: Quantizer, QuantizationConfig, CalibrationDataset
 """
 
-import json
 import logging
 from collections.abc import Iterator
 from dataclasses import dataclass, field

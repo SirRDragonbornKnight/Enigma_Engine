@@ -9,7 +9,6 @@ TYPE: Core/Optimization
 MAIN CLASSES: Pruner, StructuredPruner, UnstructuredPruner, PruningScheduler
 """
 
-import copy
 import logging
 from dataclasses import dataclass, field
 from enum import Enum

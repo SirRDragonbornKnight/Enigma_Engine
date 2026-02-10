@@ -145,6 +145,28 @@ class MemoryMappedSource(DataSource):
     def __len__(self) -> int:
         return os.path.getsize(self.path) // self.record_size
     
+    def __enter__(self):
+        """Context manager entry - opens the file."""
+        self._open()
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - closes resources."""
+        self.close()
+        return False
+    
+    def close(self):
+        """Explicitly close the memory-mapped file and file handle."""
+        try:
+            if self._mmap:
+                self._mmap.close()
+                self._mmap = None
+            if self._file:
+                self._file.close()
+                self._file = None
+        except Exception:
+            pass  # Ignore cleanup errors
+    
     def __del__(self):
         try:
             if self._mmap:

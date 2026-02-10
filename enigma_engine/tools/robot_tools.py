@@ -458,7 +458,7 @@ def get_robot() -> RobotController:
 
 # === Tool Classes for AI ===
 
-from .tool_registry import Tool
+from .tool_registry import Tool, RichParameter
 
 
 class RobotMoveTool(Tool):
@@ -472,6 +472,42 @@ class RobotMoveTool(Tool):
         "robot": "Robot name (optional, uses default)",
         "speed": "Speed 0-1 (default 1.0)",
     }
+    category = "robot"
+    rich_parameters = [
+        RichParameter(
+            name="joint",
+            type="string",
+            description="Joint name (e.g., 'shoulder', 'elbow')",
+            required=True,
+        ),
+        RichParameter(
+            name="angle",
+            type="number",
+            description="Target angle in degrees",
+            required=True,
+            min_value=-180,
+            max_value=180,
+        ),
+        RichParameter(
+            name="robot",
+            type="string",
+            description="Robot name (uses default if not specified)",
+            required=False,
+        ),
+        RichParameter(
+            name="speed",
+            type="number",
+            description="Speed (0-1)",
+            required=False,
+            default=1.0,
+            min_value=0,
+            max_value=1,
+        ),
+    ]
+    examples = [
+        "robot_move(joint='shoulder', angle=45)",
+        "robot_move(joint='elbow', angle=90, speed=0.5)",
+    ]
     
     def execute(self, joint: str = "", angle: float = 0, robot: str = None, speed: float = 1.0, **kwargs) -> dict[str, Any]:
         controller = get_robot()
@@ -493,6 +529,26 @@ class RobotGripperTool(Tool):
         "action": "'open', 'close', or percentage 0-100 - required",
         "robot": "Robot name (optional)",
     }
+    category = "robot"
+    rich_parameters = [
+        RichParameter(
+            name="action",
+            type="string",
+            description="Gripper action or percentage",
+            required=True,
+            enum=["open", "close"],
+        ),
+        RichParameter(
+            name="robot",
+            type="string",
+            description="Robot name (uses default if not specified)",
+            required=False,
+        ),
+    ]
+    examples = [
+        "robot_gripper(action='close') - Close gripper",
+        "robot_gripper(action='open')",
+    ]
     
     def execute(self, action: str = "open", robot: str = None, **kwargs) -> dict[str, Any]:
         controller = get_robot()
@@ -508,6 +564,16 @@ class RobotStatusTool(Tool):
     parameters = {
         "robot": "Robot name (optional)",
     }
+    category = "robot"
+    rich_parameters = [
+        RichParameter(
+            name="robot",
+            type="string",
+            description="Robot name (all robots if not specified)",
+            required=False,
+        ),
+    ]
+    examples = ["robot_status() - Get all robot status"]
     
     def execute(self, robot: str = None, **kwargs) -> dict[str, Any]:
         controller = get_robot()
@@ -528,6 +594,16 @@ class RobotHomeTool(Tool):
     parameters = {
         "robot": "Robot name (optional)",
     }
+    category = "robot"
+    rich_parameters = [
+        RichParameter(
+            name="robot",
+            type="string",
+            description="Robot name (uses default if not specified)",
+            required=False,
+        ),
+    ]
+    examples = ["robot_home() - Home the default robot"]
     
     def execute(self, robot: str = None, **kwargs) -> dict[str, Any]:
         controller = get_robot()

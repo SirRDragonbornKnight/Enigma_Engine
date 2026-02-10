@@ -28,7 +28,6 @@ import asyncio
 import hashlib
 import json
 import logging
-import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -486,7 +485,7 @@ class BatchAPIClient:
     
     async def process_batch_async(self) -> BatchResult:
         """Async version of process_batch."""
-        return await asyncio.get_event_loop().run_in_executor(
+        return await asyncio.get_running_loop().run_in_executor(
             None, self.process_batch
         )
 

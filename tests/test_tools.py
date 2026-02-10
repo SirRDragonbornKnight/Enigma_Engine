@@ -82,9 +82,10 @@ class TestSystemTools:
     def test_run_command_safe(self):
         """Test running a safe command."""
         from enigma_engine.tools import execute_tool
-        result = execute_tool("run_command", command="echo hello")
+        # Use python --version which works cross-platform without shell
+        result = execute_tool("run_command", command="python --version")
         assert result.get("success") is True
-        assert "hello" in result.get("stdout", "")
+        assert "Python" in result.get("stdout", "") or "Python" in result.get("stderr", "")
     
     def test_run_command_blocked(self):
         """Test that dangerous commands are blocked."""

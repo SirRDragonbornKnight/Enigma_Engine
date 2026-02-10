@@ -33,7 +33,6 @@ Usage:
 
 import base64
 import json
-import math
 import os
 import struct
 from dataclasses import dataclass, field

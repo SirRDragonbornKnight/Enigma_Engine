@@ -1,7 +1,6 @@
 """Camera tab for Enigma AI Engine GUI - live camera preview and capture."""
 
 import logging
-import os
 from datetime import datetime
 from pathlib import Path
 

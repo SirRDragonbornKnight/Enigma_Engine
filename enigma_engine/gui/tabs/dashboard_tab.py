@@ -12,8 +12,6 @@ Features:
   - Pi-friendly - no AI dependencies
 """
 
-import json
-import os
 import platform
 from collections import deque
 from datetime import datetime

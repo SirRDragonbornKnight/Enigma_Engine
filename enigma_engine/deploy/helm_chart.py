@@ -9,7 +9,6 @@ TYPE: Deployment Configuration
 PURPOSE: Generate Helm chart for K8s deployment
 """
 
-import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path

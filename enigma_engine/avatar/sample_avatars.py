@@ -12,7 +12,6 @@ Avatars Generated:
 - Cube (abstract geometric)
 """
 
-import math
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 

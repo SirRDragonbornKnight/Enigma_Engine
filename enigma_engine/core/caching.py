@@ -25,7 +25,6 @@ Usage:
 import hashlib
 import json
 import logging
-import os
 import pickle
 import threading
 import time

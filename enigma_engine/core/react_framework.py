@@ -357,15 +357,29 @@ def _search_tool(inputs: dict) -> str:
 
 
 def _calculate_tool(inputs: dict) -> str:
-    """Simple calculation tool."""
+    """Simple calculation tool using safe evaluation."""
     expression = inputs.get("expression", "")
     try:
-        # Safe eval for simple math
-        allowed = set("0123456789+-*/.(). ")
-        if all(c in allowed for c in expression):
-            result = eval(expression)
+        # Strict validation: only digits, operators, decimals, parens, spaces
+        import re
+        if not re.match(r'^[\d\s+\-*/().]+$', expression):
+            return "Error: Invalid expression (only numbers and +-*/() allowed)"
+        
+        # Additional safety: no consecutive dots, no empty parens
+        if '..' in expression or '()' in expression:
+            return "Error: Invalid expression syntax"
+        
+        # Use compile to validate syntax before eval
+        code = compile(expression, '<string>', 'eval')
+        
+        # Only allow numeric types in result
+        result = eval(code, {"__builtins__": {}}, {})
+        
+        if isinstance(result, (int, float, complex)):
             return str(result)
-        return "Error: Invalid expression"
+        return "Error: Result must be numeric"
+    except SyntaxError:
+        return "Error: Invalid syntax"
     except Exception as e:
         return f"Error: {e}"
 

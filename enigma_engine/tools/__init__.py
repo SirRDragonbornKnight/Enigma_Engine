@@ -116,7 +116,7 @@ from .tool_executor import ToolExecutor, execute_tool_from_text
 
 # Tool Manager for enabling/disabling tools
 from .tool_manager import PRESETS, TOOL_CATEGORIES, ToolManager, get_tool_manager
-from .tool_registry import RichParameter, Tool, ToolRegistry, execute_tool, get_registry
+from .tool_registry import RichParameter, Tool, ToolProfiler, ToolRegistry, batch_execute_tools, execute_tool, get_profiler, get_registry, get_tool_summary
 from .validation import ToolSchemaValidator
 from .vision import (
     FindOnScreenTool,
@@ -131,8 +131,12 @@ __all__ = [
     "Tool",
     "RichParameter",
     "ToolRegistry", 
+    "ToolProfiler",
     "get_registry",
+    "get_profiler",
     "execute_tool",
+    "batch_execute_tools",
+    "get_tool_summary",
     # Tool Manager
     "ToolManager",
     "get_tool_manager",

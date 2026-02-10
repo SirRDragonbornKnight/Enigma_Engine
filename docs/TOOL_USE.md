@@ -10,6 +10,179 @@ When trained on tool use examples, the AI learns to:
 3. **Interpret** tool results
 4. **Respond** naturally after using tools
 
+## RichParameter System
+
+All **109 tools** in Enigma AI Engine use the **RichParameter** system for comprehensive parameter definitions:
+
+```python
+from dataclasses import dataclass
+from typing import Any, List, Optional
+
+@dataclass
+class RichParameter:
+    name: str                           # Parameter name
+    type: str                           # "string", "integer", "number", "boolean", "array", "object"
+    description: str                    # Human-readable description
+    required: bool = False              # Is this parameter required?
+    default: Any = None                 # Default value if not provided
+    enum: Optional[List[Any]] = None   # Allowed values (dropdown)
+    min_value: Optional[float] = None  # Minimum for numbers
+    max_value: Optional[float] = None  # Maximum for numbers
+```
+
+### Example Tool Definition
+
+```python
+class WikipediaSearchTool(Tool):
+    name = "wikipedia_search"
+    description = "Search Wikipedia for factual information."
+    parameters = {"query": "Search term", "sentences": "Number of sentences"}
+    
+    # NEW: Full type information
+    category = "knowledge"
+    rich_parameters = [
+        RichParameter(
+            name="query",
+            type="string",
+            description="Search query or article title",
+            required=True,
+        ),
+        RichParameter(
+            name="sentences",
+            type="integer",
+            description="Number of sentences to return",
+            required=False,
+            default=5,
+            min_value=1,
+            max_value=20,
+        ),
+        RichParameter(
+            name="language",
+            type="string",
+            description="Wikipedia language edition",
+            required=False,
+            default="en",
+            enum=["en", "es", "de", "fr", "ja", "zh"],
+        ),
+    ]
+    examples = [
+        "wikipedia_search(query='Albert Einstein')",
+        "wikipedia_search(query='machine learning', sentences=10)",
+    ]
+```
+
+### Benefits of RichParameter
+
+1. **Auto-validation** - Parameters are validated against type, range, and enum constraints
+2. **Better AI understanding** - LLMs can see exact parameter types and constraints
+3. **GUI integration** - Parameters can be rendered as proper form controls
+4. **Documentation** - Self-documenting tools with examples
+5. **IDE support** - Better autocomplete and type checking
+
+### Tool Categories
+
+Tools are organized into categories:
+
+| Category | Description |
+|----------|-------------|
+| `file` | File operations (read, write, search) |
+| `system` | System commands and environment |
+| `web` | Web scraping and HTTP requests |
+| `data` | CSV, JSON, SQL operations |
+| `media` | Image, audio, video processing |
+| `gaming` | Games, D&D, story generation |
+| `automation` | Scheduling, macros, folder watching |
+| `iot` | Home Assistant, GPIO, MQTT |
+| `productivity` | Git, Docker, SSH |
+| `knowledge` | Wikipedia, arXiv, PDF extraction |
+| `interactive` | Checklists, tasks, reminders |
+| `browser` | Browser media control |
+| `robot` | Physical robot control |
+| `avatar` | Avatar expressions and animations |
+| `self` | AI self-reflection tools |
+| `memory` | Conversation history search and stats |
+| `communication` | Translation, OCR |
+| `document` | PDF, EPUB, DOCX reading |
+
+## Programmatic API
+
+### Execute Tools
+
+```python
+from enigma_engine.tools import execute_tool
+
+# Single tool execution
+result = execute_tool("list_directory", path=".")
+print(result["success"])  # True/False
+print(result["files"])    # List of files
+```
+
+### Batch Execution
+
+Execute multiple tools efficiently with parallel processing:
+
+```python
+from enigma_engine.tools import batch_execute_tools
+
+# Execute in parallel for maximum speed
+results = batch_execute_tools([
+    ("list_directory", {"path": "."}),
+    ("get_system_info", {}),
+    ("web_search", {"query": "python tutorials"}),
+], parallel=True)
+
+# Results are in same order as input
+for result in results:
+    print(result["success"])
+```
+
+### Tool Profiler
+
+Track tool usage and performance:
+
+```python
+from enigma_engine.tools import get_profiler, execute_tool
+
+# Tools are automatically profiled
+execute_tool("list_directory", path=".")
+execute_tool("get_system_info")
+
+# Get profiler report
+profiler = get_profiler()
+print(profiler.get_report())
+# Output:
+# === Tool Usage Report ===
+# Total tool calls: 2
+# Total execution time: 1.23s
+#
+# Top 5 Most Used Tools:
+#   list_directory: 1 calls (50.0%)
+#   get_system_info: 1 calls (50.0%)
+
+# Get detailed stats
+stats = profiler.get_stats("list_directory")
+print(f"Calls: {stats['calls']}")
+print(f"Avg time: {stats['avg_time']*1000:.1f}ms")
+print(f"Success rate: {stats['success_rate']:.1f}%")
+
+# Find performance issues
+slowest = profiler.get_slowest_tools(5)
+most_used = profiler.get_top_tools(5)
+```
+
+### Tool Summary
+
+Get system-wide tool statistics:
+
+```python
+from enigma_engine.tools import get_tool_summary
+
+summary = get_tool_summary()
+print(f"Total tools: {summary['total_tools']}")  # 105
+print(f"Categories: {len(summary['categories'])}")  # 20
+print(f"Total calls: {summary['profiler_stats']['total_calls']}")
+```
+
 ## Architecture
 
 ```

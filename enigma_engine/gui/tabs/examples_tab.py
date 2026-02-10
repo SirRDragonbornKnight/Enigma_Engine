@@ -5,7 +5,6 @@ Examples Tab for Enigma AI Engine GUI
 Provides an easy way to browse and run example scripts.
 """
 
-import os
 from pathlib import Path
 
 from PyQt5.QtCore import QProcess, Qt

@@ -165,6 +165,11 @@ TOOL_CATEGORIES = {
         "spawn_screen_effect", "stop_screen_effect", "list_effect_assets",
         "fullscreen_mode_control",
     ],
+    
+    # Memory tools - AI can search and manage conversation history
+    "memory": [
+        "search_memory", "memory_stats", "export_memory", "import_memory",
+    ],
 }
 
 # Tool dependencies (Python packages required)

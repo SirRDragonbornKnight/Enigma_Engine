@@ -367,7 +367,7 @@ class BatchProcessor:
         """
         future = self.submit(prompt, priority, max_tokens)
         
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, future.result)
     
     def _process_loop(self):

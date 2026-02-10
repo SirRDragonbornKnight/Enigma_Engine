@@ -22,7 +22,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-from .tool_registry import Tool
+from .tool_registry import RichParameter, Tool
 
 logger = logging.getLogger(__name__)
 
@@ -202,6 +202,39 @@ class ScheduleTaskTool(Tool):
         "schedule_type": "Type: 'once', 'daily', 'hourly', 'interval'",
         "time_spec": "Time: 'HH:MM' for daily/once, minutes for interval/hourly",
     }
+    category = "automation"
+    rich_parameters = [
+        RichParameter(
+            name="name",
+            type="string",
+            description="Name for this scheduled task",
+            required=True,
+        ),
+        RichParameter(
+            name="command",
+            type="string",
+            description="Shell command to execute",
+            required=True,
+        ),
+        RichParameter(
+            name="schedule_type",
+            type="string",
+            description="Schedule type",
+            required=False,
+            default="once",
+            enum=["once", "daily", "hourly", "interval"]
+        ),
+        RichParameter(
+            name="time_spec",
+            type="string",
+            description="Time: 'HH:MM' for daily/once, minutes for interval/hourly",
+            required=False,
+        ),
+    ]
+    examples = [
+        "schedule_task(name='backup', command='python backup.py', schedule_type='daily', time_spec='02:00')",
+        "schedule_task(name='ping', command='ping google.com', schedule_type='interval', time_spec='60')",
+    ]
     
     def execute(self, name: str, command: str, schedule_type: str = "once", 
                 time_spec: str = None, **kwargs) -> dict[str, Any]:
@@ -225,6 +258,9 @@ class ListSchedulesTool(Tool):
     name = "list_schedules"
     description = "List all scheduled tasks with their status and next run time."
     parameters = {}
+    category = "automation"
+    rich_parameters = []
+    examples = ["list_schedules() - Show all scheduled tasks"]
     
     def execute(self, **kwargs) -> dict[str, Any]:
         try:
@@ -247,6 +283,16 @@ class RemoveScheduleTool(Tool):
     parameters = {
         "schedule_id": "The ID of the schedule to remove",
     }
+    category = "automation"
+    rich_parameters = [
+        RichParameter(
+            name="schedule_id",
+            type="integer",
+            description="The ID of the schedule to remove (from list_schedules)",
+            required=True,
+        ),
+    ]
+    examples = ["remove_schedule(schedule_id=1) - Remove schedule #1"]
     
     def execute(self, schedule_id: int, **kwargs) -> dict[str, Any]:
         try:
@@ -439,6 +485,9 @@ class ClipboardReadTool(Tool):
     name = "clipboard_read"
     description = "Read the current content of the system clipboard."
     parameters = {}
+    category = "automation"
+    rich_parameters = []
+    examples = ["clipboard_read() - Get clipboard content"]
     
     def execute(self, **kwargs) -> dict[str, Any]:
         try:
@@ -460,6 +509,16 @@ class ClipboardWriteTool(Tool):
     parameters = {
         "text": "The text to copy to clipboard",
     }
+    category = "automation"
+    rich_parameters = [
+        RichParameter(
+            name="text",
+            type="string",
+            description="Text to copy to clipboard",
+            required=True,
+        ),
+    ]
+    examples = ["clipboard_write(text='Hello World') - Copy to clipboard"]
     
     def execute(self, text: str, **kwargs) -> dict[str, Any]:
         try:
@@ -485,6 +544,19 @@ class ClipboardHistoryTool(Tool):
     parameters = {
         "limit": "Maximum number of items to return (default: 10)",
     }
+    category = "automation"
+    rich_parameters = [
+        RichParameter(
+            name="limit",
+            type="integer",
+            description="Maximum items to return",
+            required=False,
+            default=10,
+            min_value=1,
+            max_value=100,
+        ),
+    ]
+    examples = ["clipboard_history() - Show last 10 items", "clipboard_history(limit=5) - Show last 5 items"]
     
     def execute(self, limit: int = 10, **kwargs) -> dict[str, Any]:
         try:
@@ -551,6 +623,31 @@ class RecordMacroTool(Tool):
         "commands": "List of shell commands to run (comma-separated or as list)",
         "delays": "Optional delays between commands in seconds (comma-separated)",
     }
+    category = "automation"
+    rich_parameters = [
+        RichParameter(
+            name="name",
+            type="string",
+            description="Name for the macro",
+            required=True,
+        ),
+        RichParameter(
+            name="commands",
+            type="string",
+            description="Comma-separated list of commands",
+            required=True,
+        ),
+        RichParameter(
+            name="delays",
+            type="string",
+            description="Comma-separated delays in seconds between commands",
+            required=False,
+        ),
+    ]
+    examples = [
+        "record_macro(name='build', commands='npm install, npm build, npm test')",
+        "record_macro(name='deploy', commands='git pull, docker build, docker push', delays='0,5,0')",
+    ]
     
     def execute(self, name: str, commands: str, delays: str = None, **kwargs) -> dict[str, Any]:
         try:
@@ -595,6 +692,28 @@ class PlayMacroTool(Tool):
         "name": "Name of the macro to play",
         "repeat": "Number of times to repeat (default: 1)",
     }
+    category = "automation"
+    rich_parameters = [
+        RichParameter(
+            name="name",
+            type="string",
+            description="Name of the macro to play",
+            required=True,
+        ),
+        RichParameter(
+            name="repeat",
+            type="integer",
+            description="Number of times to repeat",
+            required=False,
+            default=1,
+            min_value=1,
+            max_value=100,
+        ),
+    ]
+    examples = [
+        "play_macro(name='build') - Run the build macro",
+        "play_macro(name='test', repeat=3) - Run test macro 3 times",
+    ]
     
     def execute(self, name: str, repeat: int = 1, **kwargs) -> dict[str, Any]:
         try:
@@ -641,6 +760,9 @@ class ListMacrosTool(Tool):
     name = "list_macros"
     description = "List all saved macros."
     parameters = {}
+    category = "automation"
+    rich_parameters = []
+    examples = ["list_macros() - Show all macros"]
     
     def execute(self, **kwargs) -> dict[str, Any]:
         try:
@@ -772,6 +894,31 @@ class WatchFolderTool(Tool):
         "action": "Command to run when files change. Use {file} for full path, {filename} for name only",
         "patterns": "File patterns to match (default: all files). Comma-separated, e.g. '*.jpg,*.png'",
     }
+    category = "automation"
+    rich_parameters = [
+        RichParameter(
+            name="path",
+            type="string",
+            description="Path to the folder to watch",
+            required=True,
+        ),
+        RichParameter(
+            name="action",
+            type="string",
+            description="Command to run. Use {file}, {filename}, {folder} placeholders",
+            required=True,
+        ),
+        RichParameter(
+            name="patterns",
+            type="string",
+            description="Comma-separated file patterns (e.g., '*.jpg,*.png')",
+            required=False,
+        ),
+    ]
+    examples = [
+        "watch_folder(path='downloads', action='echo New file: {filename}')",
+        "watch_folder(path='images', action='python process.py {file}', patterns='*.jpg,*.png')",
+    ]
     
     def execute(self, path: str, action: str, patterns: str = None, **kwargs) -> dict[str, Any]:
         try:
@@ -800,6 +947,16 @@ class StopWatchTool(Tool):
     parameters = {
         "path": "Path to the folder to stop watching",
     }
+    category = "automation"
+    rich_parameters = [
+        RichParameter(
+            name="path",
+            type="string",
+            description="Path to the folder to stop watching",
+            required=True,
+        ),
+    ]
+    examples = ["stop_watch(path='downloads') - Stop monitoring downloads folder"]
     
     def execute(self, path: str, **kwargs) -> dict[str, Any]:
         try:
@@ -816,6 +973,9 @@ class ListWatchesTool(Tool):
     name = "list_watches"
     description = "List all active folder watches."
     parameters = {}
+    category = "automation"
+    rich_parameters = []
+    examples = ["list_watches() - Show all active folder monitors"]
     
     def execute(self, **kwargs) -> dict[str, Any]:
         try:

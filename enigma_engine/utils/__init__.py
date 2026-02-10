@@ -29,6 +29,22 @@ from .constants import (
     DEFAULT_WEB_TIMEOUT,
     MAX_FILE_SIZE_BYTES,
 )
+# Structured error handling
+from .errors import (
+    ErrorAggregator,
+    ErrorCode,
+    ErrorContext,
+    ErrorSeverity,
+    ForgeError,
+    Result,
+    as_result,
+    ensure,
+    ensure_not_none,
+    from_tool_result,
+    handle_errors,
+    retry,
+    safe_call,
+)
 from .error_handler import ErrorHandler, GracefulFileHandler
 from .feedback import FeedbackCollector
 
@@ -212,6 +228,20 @@ __all__ = [
     'format_number',
     'format_bytes',
     'print_section',
+    # Error handling
+    'ForgeError',
+    'ErrorCode',
+    'ErrorSeverity',
+    'ErrorContext',
+    'ErrorAggregator',
+    'Result',
+    'safe_call',
+    'handle_errors',
+    'ensure',
+    'ensure_not_none',
+    'from_tool_result',
+    'as_result',
+    'retry',
     # Enigma AI Engine Messages
     'MessagePrefix',
     'system_msg',

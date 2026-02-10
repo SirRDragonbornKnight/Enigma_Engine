@@ -12,7 +12,6 @@ Part of the Enigma AI Engine GUI features.
 
 import json
 import logging
-import os
 import time
 from dataclasses import dataclass, field
 from enum import Enum, auto

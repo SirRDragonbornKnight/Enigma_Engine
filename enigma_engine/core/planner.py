@@ -268,23 +268,54 @@ class TaskDecomposer:
         if self._model is None:
             return self.decompose(goal)
         
-        # TODO: Use model to generate steps
-        prompt = f"""Break down this task into steps:
+        prompt = f"""Break down this task into clear steps:
 Goal: {goal}
 
-List each step with:
-- Name (short identifier)
-- Description (what to do)
+Format each step as:
+STEP: <name> - <description>
 
 Steps:"""
         
         try:
-            response = self._model.generate(prompt)
-            # Parse response into steps
-            # For now, fall back to patterns
-            return self.decompose(goal)
+            response = self._model.generate(prompt, max_new_tokens=300)
+            steps = self._parse_model_steps(response, goal)
+            return steps if steps else self.decompose(goal)
         except Exception:
             return self.decompose(goal)
+    
+    def _parse_model_steps(self, response: str, goal: str) -> List[Dict[str, str]]:
+        """Parse model response into steps."""
+        steps = []
+        lines = response.strip().split("\n")
+        
+        for line in lines:
+            line = line.strip()
+            # Parse "STEP: name - description" format
+            if line.upper().startswith("STEP:"):
+                content = line[5:].strip()
+                if " - " in content:
+                    name, desc = content.split(" - ", 1)
+                    steps.append({
+                        "name": name.strip().lower().replace(" ", "_"),
+                        "description": desc.strip()
+                    })
+            # Also parse numbered format "1. name - description"
+            elif line and line[0].isdigit() and ". " in line:
+                content = line.split(". ", 1)[1] if ". " in line else line
+                if " - " in content:
+                    name, desc = content.split(" - ", 1)
+                    steps.append({
+                        "name": name.strip().lower().replace(" ", "_"),
+                        "description": desc.strip()
+                    })
+                elif ":" in content:
+                    name, desc = content.split(":", 1)
+                    steps.append({
+                        "name": name.strip().lower().replace(" ", "_"),
+                        "description": desc.strip()
+                    })
+        
+        return steps
 
 
 class PlanExecutor:

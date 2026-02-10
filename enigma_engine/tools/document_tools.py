@@ -9,7 +9,7 @@ Tools:
 from pathlib import Path
 from typing import Any, Dict
 
-from .tool_registry import Tool
+from .tool_registry import Tool, RichParameter
 
 
 class ReadDocumentTool(Tool):
@@ -33,6 +33,43 @@ class ReadDocumentTool(Tool):
         "start_page": "For PDFs: starting page number (default: 1)",
         "end_page": "For PDFs: ending page number (default: all)",
     }
+    category = "document"
+    rich_parameters = [
+        RichParameter(
+            name="path",
+            type="string",
+            description="Path to the document file",
+            required=True,
+        ),
+        RichParameter(
+            name="max_chars",
+            type="integer",
+            description="Maximum characters to return",
+            required=False,
+            default=10000,
+            min_value=100,
+            max_value=1000000,
+        ),
+        RichParameter(
+            name="start_page",
+            type="integer",
+            description="For PDFs: starting page number",
+            required=False,
+            default=1,
+            min_value=1,
+        ),
+        RichParameter(
+            name="end_page",
+            type="integer",
+            description="For PDFs: ending page number (all if not specified)",
+            required=False,
+        ),
+    ]
+    examples = [
+        "read_document(path='book.pdf')",
+        "read_document(path='paper.pdf', start_page=5, end_page=10)",
+        "read_document(path='novel.epub', max_chars=50000)",
+    ]
     
     def execute(self, path: str, max_chars: int = 10000, 
                 start_page: int = 1, end_page: int = None, **kwargs) -> dict[str, Any]:
@@ -187,6 +224,28 @@ class ExtractTextTool(Tool):
         "path": "Path to the file",
         "max_chars": "Maximum characters to return (default: 10000)",
     }
+    category = "document"
+    rich_parameters = [
+        RichParameter(
+            name="path",
+            type="string",
+            description="Path to the file to extract text from",
+            required=True,
+        ),
+        RichParameter(
+            name="max_chars",
+            type="integer",
+            description="Maximum characters to return",
+            required=False,
+            default=10000,
+            min_value=100,
+            max_value=1000000,
+        ),
+    ]
+    examples = [
+        "extract_text(path='document.pdf')",
+        "extract_text(path='data.bin', max_chars=5000)",
+    ]
     
     def execute(self, path: str, max_chars: int = 10000, **kwargs) -> dict[str, Any]:
         try:

@@ -23,7 +23,6 @@ Usage:
     result = debate.debate("Topic", rounds=3)
 """
 
-import json
 import logging
 import time
 from dataclasses import dataclass, field

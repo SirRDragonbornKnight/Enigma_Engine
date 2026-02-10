@@ -528,3 +528,126 @@ def ensure_not_none(
     if value is None:
         raise ForgeError(message, code=code)
     return value
+
+
+def from_tool_result(result: Dict[str, Any], value_key: str = "result") -> Result[Any]:
+    """
+    Convert a tool result dict to a Result type.
+    
+    Tool functions return {"success": bool, "error": str, ...} dicts.
+    This converts them to proper Result types for chaining.
+    
+    Args:
+        result: Tool result dictionary
+        value_key: Key containing the value (default: "result")
+        
+    Returns:
+        Result wrapping success value or error
+        
+    Example:
+        result = execute_tool("read_file", path="test.txt")
+        r = from_tool_result(result, "content")
+        if r.is_success:
+            print(r.value)
+    """
+    if result.get("success", False):
+        # Extract value - try value_key first, then common alternatives
+        value = result.get(value_key)
+        if value is None:
+            for key in ["content", "data", "output", "results", "value"]:
+                if key in result:
+                    value = result[key]
+                    break
+        if value is None:
+            # Return the whole dict minus success/error keys
+            value = {k: v for k, v in result.items() if k not in ("success", "error")}
+        return Result.success(value)
+    else:
+        error_msg = result.get("error", "Unknown error")
+        return Result.failure(error_msg, code=ErrorCode.TOOL_EXECUTION_FAILED)
+
+
+def as_result(
+    error_code: ErrorCode = ErrorCode.UNKNOWN,
+    value_key: str = "result"
+) -> Callable[[Callable[..., Dict[str, Any]]], Callable[..., Result[Any]]]:
+    """
+    Decorator to convert dict-returning functions to Result-returning.
+    
+    Use this to wrap tool execute methods for functional-style chaining.
+    
+    Args:
+        error_code: Error code for failures
+        value_key: Key containing the value
+        
+    Returns:
+        Decorator function
+        
+    Example:
+        @as_result(ErrorCode.FILE_READ_ERROR, "content")
+        def read_file(path: str) -> dict:
+            return {"success": True, "content": "..."}
+    """
+    def decorator(fn: Callable[..., Dict[str, Any]]) -> Callable[..., Result[Any]]:
+        @wraps(fn)
+        def wrapper(*args, **kwargs) -> Result[Any]:
+            try:
+                result = fn(*args, **kwargs)
+                return from_tool_result(result, value_key)
+            except ForgeError as e:
+                return Result(_error=e)
+            except Exception as e:
+                return Result.failure(str(e), code=error_code, cause=e)
+        return wrapper
+    return decorator
+
+
+def retry(
+    max_attempts: int = 3,
+    delay: float = 1.0,
+    backoff: float = 2.0,
+    exceptions: tuple = (Exception,)
+) -> Callable[[Callable[..., T]], Callable[..., T]]:
+    """
+    Decorator to retry a function on failure.
+    
+    Args:
+        max_attempts: Maximum retry attempts
+        delay: Initial delay between retries (seconds)
+        backoff: Multiplier for delay after each attempt
+        exceptions: Exception types to catch
+        
+    Returns:
+        Decorator function
+        
+    Example:
+        @retry(max_attempts=3, delay=1.0)
+        def fetch_data(url: str) -> str:
+            return requests.get(url).text
+    """
+    def decorator(fn: Callable[..., T]) -> Callable[..., T]:
+        @wraps(fn)
+        def wrapper(*args, **kwargs) -> T:
+            last_error = None
+            current_delay = delay
+            
+            for attempt in range(max_attempts):
+                try:
+                    return fn(*args, **kwargs)
+                except exceptions as e:
+                    last_error = e
+                    if attempt < max_attempts - 1:
+                        import time
+                        time.sleep(current_delay)
+                        current_delay *= backoff
+            
+            # All attempts failed
+            if isinstance(last_error, ForgeError):
+                raise last_error
+            raise ForgeError(
+                f"Failed after {max_attempts} attempts: {last_error}",
+                code=ErrorCode.UNKNOWN,
+                cause=last_error
+            )
+        return wrapper
+    return decorator

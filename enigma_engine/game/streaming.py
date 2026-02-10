@@ -11,7 +11,6 @@ MAIN CLASSES: TwitchIntegration, YouTubeIntegration, StreamManager
 
 import asyncio
 import hashlib
-import json
 import logging
 import re
 import threading

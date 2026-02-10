@@ -19,7 +19,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Dict
 
-from .tool_registry import Tool
+from .tool_registry import Tool, RichParameter
 
 
 class TranslateTextTool(Tool):
@@ -32,6 +32,33 @@ class TranslateTextTool(Tool):
         "target_language": "Target: en, es, fr, de, it, pt, ru, ja, ko, zh, ar",
         "source_language": "Source language (default: auto-detect)",
     }
+    category = "communication"
+    rich_parameters = [
+        RichParameter(
+            name="text",
+            type="string",
+            description="Text to translate (max 500 chars)",
+            required=True,
+        ),
+        RichParameter(
+            name="target_language",
+            type="string",
+            description="Target language code",
+            required=True,
+            enum=["en", "es", "fr", "de", "it", "pt", "ru", "ja", "ko", "zh", "ar", "hi"],
+        ),
+        RichParameter(
+            name="source_language",
+            type="string",
+            description="Source language code (auto-detect if not specified)",
+            required=False,
+            default="auto",
+        ),
+    ]
+    examples = [
+        "translate_text(text='Hello world', target_language='es')",
+        "translate_text(text='Bonjour', target_language='en', source_language='fr')",
+    ]
     
     LANGUAGES = {
         'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German',
@@ -68,6 +95,19 @@ class DetectLanguageTool(Tool):
     name = "detect_language"
     description = "Detect what language text is written in."
     parameters = {"text": "Text to analyze"}
+    category = "communication"
+    rich_parameters = [
+        RichParameter(
+            name="text",
+            type="string",
+            description="Text to analyze for language detection",
+            required=True,
+        ),
+    ]
+    examples = [
+        "detect_language(text='Hello how are you')",
+        "detect_language(text='Bonjour comment allez-vous')",
+    ]
     
     def execute(self, text: str, **kwargs) -> dict[str, Any]:
         try:
@@ -105,6 +145,27 @@ class OCRImageTool(Tool):
         "path": "Path to image",
         "language": "OCR language (default: eng)",
     }
+    category = "communication"
+    rich_parameters = [
+        RichParameter(
+            name="path",
+            type="string",
+            description="Path to image file",
+            required=True,
+        ),
+        RichParameter(
+            name="language",
+            type="string",
+            description="OCR language code",
+            required=False,
+            default="eng",
+            enum=["eng", "spa", "fra", "deu", "ita", "por", "rus", "jpn", "kor", "chi_sim"],
+        ),
+    ]
+    examples = [
+        "ocr_image(path='screenshot.png')",
+        "ocr_image(path='document.jpg', language='deu')",
+    ]
     
     def execute(self, path: str, language: str = "eng", **kwargs) -> dict[str, Any]:
         try:

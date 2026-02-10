@@ -175,12 +175,12 @@ class PresetSelector(QWidget):
     def _update_combo(self):
         self.combo.clear()
         # Built-in presets
-        for name in self.presets.keys():
+        for name in self.presets:
             self.combo.addItem(name.title())
         # Custom presets
         if self._custom_presets:
             self.combo.insertSeparator(self.combo.count())
-            for name in self._custom_presets.keys():
+            for name in self._custom_presets:
                 self.combo.addItem(f"[Custom] {name}")
     
     def _on_selection(self, text: str):
@@ -241,7 +241,7 @@ class ColorCustomizer(QWidget):
         
         self.preset_combo = NoScrollComboBox()
         self.preset_combo.setToolTip("Select a color theme preset")
-        self.preset_combo.addItems([p.title() for p in COLOR_PRESETS.keys()])
+        self.preset_combo.addItems([p.title() for p in COLOR_PRESETS])
         self.preset_combo.currentTextChanged.connect(self._apply_preset)
         preset_row.addWidget(self.preset_combo, stretch=1)
         layout.addLayout(preset_row)

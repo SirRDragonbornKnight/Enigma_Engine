@@ -10,7 +10,6 @@ MAIN CLASSES: MPSOptimizer, MPSMemoryManager, MPSProfiler
 """
 
 import logging
-import os
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple

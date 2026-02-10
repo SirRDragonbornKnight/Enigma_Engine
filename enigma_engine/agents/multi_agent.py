@@ -92,6 +92,7 @@ class AgentPersonality:
     specialties: list[str] = field(default_factory=list)
     
     def to_dict(self) -> dict:
+        """Serialize personality to dictionary for storage/transfer."""
         return {
             'name': self.name,
             'role': self.role.value,
@@ -110,6 +111,7 @@ class AgentPersonality:
     
     @classmethod
     def from_dict(cls, data: dict) -> 'AgentPersonality':
+        """Create personality from dictionary."""
         return cls(
             name=data['name'],
             role=AgentRole(data.get('role', 'general')),

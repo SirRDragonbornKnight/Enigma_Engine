@@ -21,7 +21,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .tool_registry import Tool
+from .tool_registry import Tool, RichParameter
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +74,12 @@ class HomeAssistantSetupTool(Tool):
         "url": "Home Assistant URL (e.g., 'http://192.168.1.100:8123')",
         "token": "Long-lived access token from Home Assistant",
     }
+    category = "iot"
+    rich_parameters = [
+        RichParameter(name="url", type="string", description="Home Assistant URL", required=True),
+        RichParameter(name="token", type="string", description="Long-lived access token", required=True),
+    ]
+    examples = ["homeassistant_setup(url='http://192.168.1.100:8123', token='your_token')"]
     
     def execute(self, url: str, token: str, **kwargs) -> dict[str, Any]:
         try:
@@ -123,6 +129,13 @@ class HomeAssistantControlTool(Tool):
         "action": "Action: 'turn_on', 'turn_off', 'toggle', or service name",
         "data": "Optional JSON data for the service call (e.g., '{\"brightness\": 255}')",
     }
+    category = "iot"
+    rich_parameters = [
+        RichParameter(name="entity_id", type="string", description="Entity ID", required=True),
+        RichParameter(name="action", type="string", description="Action to perform", required=True, enum=["turn_on", "turn_off", "toggle"]),
+        RichParameter(name="data", type="string", description="Optional JSON data", required=False),
+    ]
+    examples = ["homeassistant_control(entity_id='light.living_room', action='turn_on')", "homeassistant_control(entity_id='light.bedroom', action='turn_on', data='{\"brightness\": 128}')"]
     
     def execute(self, entity_id: str, action: str, data: str = None, **kwargs) -> dict[str, Any]:
         try:
@@ -183,6 +196,12 @@ class HomeAssistantStatusTool(Tool):
         "entity_id": "Entity ID or 'all' for all entities",
         "domain": "Filter by domain (e.g., 'light', 'switch', 'sensor')",
     }
+    category = "iot"
+    rich_parameters = [
+        RichParameter(name="entity_id", type="string", description="Entity ID or 'all'", required=False, default="all"),
+        RichParameter(name="domain", type="string", description="Filter by domain", required=False, enum=["light", "switch", "sensor", "binary_sensor", "climate", "cover"]),
+    ]
+    examples = ["homeassistant_status()", "homeassistant_status(domain='light')"]
     
     def execute(self, entity_id: str = "all", domain: str = None, **kwargs) -> dict[str, Any]:
         try:
@@ -250,6 +269,12 @@ class GPIOReadTool(Tool):
         "pin": "GPIO pin number (BCM numbering)",
         "pull": "Pull-up/down resistor: 'up', 'down', 'none' (default: none)",
     }
+    category = "iot"
+    rich_parameters = [
+        RichParameter(name="pin", type="integer", description="GPIO pin (BCM numbering)", required=True, min_value=0, max_value=27),
+        RichParameter(name="pull", type="string", description="Pull resistor", required=False, default="none", enum=["up", "down", "none"]),
+    ]
+    examples = ["gpio_read(pin=17)", "gpio_read(pin=23, pull='up')"]
     
     def execute(self, pin: int, pull: str = "none", **kwargs) -> dict[str, Any]:
         try:
@@ -345,6 +370,12 @@ class GPIOWriteTool(Tool):
         "pin": "GPIO pin number (BCM numbering)",
         "value": "Value: 1/HIGH or 0/LOW",
     }
+    category = "iot"
+    rich_parameters = [
+        RichParameter(name="pin", type="integer", description="GPIO pin (BCM numbering)", required=True, min_value=0, max_value=27),
+        RichParameter(name="value", type="integer", description="Pin value (0=LOW, 1=HIGH)", required=True, enum=[0, 1]),
+    ]
+    examples = ["gpio_write(pin=17, value=1)", "gpio_write(pin=23, value=0)"]
     
     def execute(self, pin: int, value: Any, **kwargs) -> dict[str, Any]:
         try:
@@ -415,6 +446,13 @@ class GPIOPWMTool(Tool):
         "duty_cycle": "Duty cycle 0-100 (percentage)",
         "frequency": "PWM frequency in Hz (default: 1000)",
     }
+    category = "iot"
+    rich_parameters = [
+        RichParameter(name="pin", type="integer", description="GPIO pin (BCM numbering)", required=True, min_value=0, max_value=27),
+        RichParameter(name="duty_cycle", type="number", description="Duty cycle (0-100%)", required=True, min_value=0, max_value=100),
+        RichParameter(name="frequency", type="integer", description="PWM frequency (Hz)", required=False, default=1000, min_value=1, max_value=50000),
+    ]
+    examples = ["gpio_pwm(pin=18, duty_cycle=50)", "gpio_pwm(pin=18, duty_cycle=75, frequency=500)"]
     
     # Store active PWM instances
     _pwm_instances = {}
@@ -500,6 +538,15 @@ class MQTTPublishTool(Tool):
         "port": "MQTT broker port (default: 1883)",
         "retain": "Retain message (default: False)",
     }
+    category = "iot"
+    rich_parameters = [
+        RichParameter(name="topic", type="string", description="MQTT topic", required=True),
+        RichParameter(name="message", type="string", description="Message to publish", required=True),
+        RichParameter(name="broker", type="string", description="Broker address", required=False, default="localhost"),
+        RichParameter(name="port", type="integer", description="Broker port", required=False, default=1883),
+        RichParameter(name="retain", type="boolean", description="Retain message", required=False, default=False),
+    ]
+    examples = ["mqtt_publish(topic='home/temperature', message='22.5')", "mqtt_publish(topic='sensors/status', message='{\"online\": true}', retain=True)"]
     
     def execute(self, topic: str, message: str, broker: str = "localhost",
                 port: int = 1883, retain: bool = False, **kwargs) -> dict[str, Any]:
@@ -570,6 +617,14 @@ class MQTTSubscribeTool(Tool):
         "port": "MQTT broker port (default: 1883)",
         "timeout": "Wait timeout in seconds (default: 5)",
     }
+    category = "iot"
+    rich_parameters = [
+        RichParameter(name="topic", type="string", description="MQTT topic", required=True),
+        RichParameter(name="broker", type="string", description="Broker address", required=False, default="localhost"),
+        RichParameter(name="port", type="integer", description="Broker port", required=False, default=1883),
+        RichParameter(name="timeout", type="integer", description="Timeout in seconds", required=False, default=5, min_value=1, max_value=60),
+    ]
+    examples = ["mqtt_subscribe(topic='home/temperature')"]
     
     def execute(self, topic: str, broker: str = "localhost",
                 port: int = 1883, timeout: int = 5, **kwargs) -> dict[str, Any]:
@@ -640,6 +695,13 @@ class CameraCaptureTool(Tool):
         "camera_id": "Camera ID for multi-camera systems (default: 0)",
         "resolution": "Resolution as 'WIDTHxHEIGHT' (e.g., '1920x1080')",
     }
+    category = "iot"
+    rich_parameters = [
+        RichParameter(name="output_path", type="string", description="Output image path", required=False),
+        RichParameter(name="camera_id", type="integer", description="Camera ID", required=False, default=0, min_value=0, max_value=10),
+        RichParameter(name="resolution", type="string", description="Resolution (WIDTHxHEIGHT)", required=False),
+    ]
+    examples = ["camera_capture()", "camera_capture(resolution='1920x1080')"]
     
     def execute(self, output_path: str = None, camera_id: int = 0,
                 resolution: str = None, **kwargs) -> dict[str, Any]:
@@ -760,6 +822,9 @@ class CameraListTool(Tool):
     name = "camera_list"
     description = "List available cameras on the system."
     parameters = {}
+    category = "iot"
+    rich_parameters = []
+    examples = ["camera_list()"]
     
     def execute(self, **kwargs) -> dict[str, Any]:
         try:
@@ -812,6 +877,12 @@ class CameraStreamTool(Tool):
         "port": "Port for the stream server (default: 8081)",
         "camera_id": "Camera ID (default: 0)",
     }
+    category = "iot"
+    rich_parameters = [
+        RichParameter(name="port", type="integer", description="Stream server port", required=False, default=8081, min_value=1024, max_value=65535),
+        RichParameter(name="camera_id", type="integer", description="Camera ID", required=False, default=0),
+    ]
+    examples = ["camera_stream()", "camera_stream(port=8080)"]
     
     def execute(self, port: int = 8081, camera_id: int = 0, **kwargs) -> dict[str, Any]:
         try:

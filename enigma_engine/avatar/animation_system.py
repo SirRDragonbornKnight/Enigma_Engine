@@ -32,8 +32,6 @@ Usage:
     animator.play_gesture("wave")  # Plays once, returns to idle
 """
 
-import os
-import time
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path

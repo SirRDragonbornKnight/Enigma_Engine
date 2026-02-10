@@ -200,9 +200,10 @@ class OBSController:
         
         # Wait for response with timeout
         timeout = 30.0  # 30 second timeout
-        start_time = asyncio.get_event_loop().time()
+        loop = asyncio.get_running_loop()
+        start_time = loop.time()
         while True:
-            remaining = timeout - (asyncio.get_event_loop().time() - start_time)
+            remaining = timeout - (loop.time() - start_time)
             if remaining <= 0:
                 return {"error": "Request timed out"}
             try:

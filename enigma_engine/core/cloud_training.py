@@ -27,7 +27,6 @@ Usage:
     status = trainer.get_status(job.job_id)
 """
 
-import json
 import logging
 import time
 import uuid

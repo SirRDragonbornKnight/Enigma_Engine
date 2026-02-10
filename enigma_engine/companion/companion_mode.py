@@ -25,7 +25,6 @@ Usage:
 """
 
 import json
-import random
 import threading
 import time
 from dataclasses import dataclass, field

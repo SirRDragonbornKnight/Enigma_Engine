@@ -18,7 +18,6 @@ USAGE:
 """
 
 import logging
-import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Optional
 

@@ -31,7 +31,6 @@ Example training:
 
 import json
 import logging
-import random
 from collections import defaultdict
 from dataclasses import asdict, dataclass
 from datetime import datetime

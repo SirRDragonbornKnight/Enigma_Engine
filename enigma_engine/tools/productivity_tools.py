@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict
 
-from .tool_registry import Tool
+from .tool_registry import Tool, RichParameter
 
 
 class SystemMonitorTool(Tool):
@@ -17,6 +17,11 @@ class SystemMonitorTool(Tool):
     name = "system_monitor"
     description = "Get CPU, memory, disk usage, and temperature."
     parameters = {"detailed": "Show detailed breakdown (default: False)"}
+    category = "productivity"
+    rich_parameters = [
+        RichParameter(name="detailed", type="boolean", description="Show detailed breakdown", required=False, default=False),
+    ]
+    examples = ["system_monitor()", "system_monitor(detailed=True)"]
     
     def execute(self, detailed: bool = False, **kwargs) -> dict[str, Any]:
         try:
@@ -63,6 +68,12 @@ class ProcessListTool(Tool):
     name = "process_list"
     description = "List running processes sorted by CPU/memory usage."
     parameters = {"sort_by": "Sort by: cpu, memory, name (default: cpu)", "limit": "Max processes (default: 20)"}
+    category = "productivity"
+    rich_parameters = [
+        RichParameter(name="sort_by", type="string", description="Sort by", required=False, default="cpu", enum=["cpu", "memory", "name"]),
+        RichParameter(name="limit", type="integer", description="Max processes to show", required=False, default=20, min_value=1, max_value=100),
+    ]
+    examples = ["process_list()", "process_list(sort_by='memory', limit=10)"]
     
     def execute(self, sort_by: str = "cpu", limit: int = 20, **kwargs) -> dict[str, Any]:
         try:
@@ -89,6 +100,13 @@ class ProcessKillTool(Tool):
     name = "process_kill"
     description = "Kill a process by PID or name."
     parameters = {"pid": "Process ID (optional)", "name": "Process name (optional)", "signal": "Signal: TERM, KILL (default: TERM)"}
+    category = "productivity"
+    rich_parameters = [
+        RichParameter(name="pid", type="integer", description="Process ID", required=False),
+        RichParameter(name="name", type="string", description="Process name", required=False),
+        RichParameter(name="signal", type="string", description="Signal to send", required=False, default="TERM", enum=["TERM", "KILL", "HUP"]),
+    ]
+    examples = ["process_kill(pid=12345)", "process_kill(name='firefox', signal='TERM')"]
     
     def execute(self, pid: int = None, name: str = None, signal: str = "TERM", **kwargs) -> dict[str, Any]:
         try:
@@ -112,6 +130,13 @@ class SSHExecuteTool(Tool):
     name = "ssh_execute"
     description = "Execute command on remote machine via SSH."
     parameters = {"host": "user@host", "command": "Command to run", "timeout": "Timeout seconds (default: 30)"}
+    category = "productivity"
+    rich_parameters = [
+        RichParameter(name="host", type="string", description="SSH target (user@host)", required=True),
+        RichParameter(name="command", type="string", description="Command to execute", required=True),
+        RichParameter(name="timeout", type="integer", description="Timeout in seconds", required=False, default=30, min_value=5, max_value=600),
+    ]
+    examples = ["ssh_execute(host='user@server.com', command='uptime')"]
     
     def execute(self, host: str, command: str, timeout: int = 30, **kwargs) -> dict[str, Any]:
         try:
@@ -129,6 +154,11 @@ class DockerListTool(Tool):
     name = "docker_list"
     description = "List Docker containers."
     parameters = {"all": "Show all containers (default: True)"}
+    category = "productivity"
+    rich_parameters = [
+        RichParameter(name="all", type="boolean", description="Show all containers (including stopped)", required=False, default=True),
+    ]
+    examples = ["docker_list()", "docker_list(all=False)"]
     
     def execute(self, all: bool = True, **kwargs) -> dict[str, Any]:
         try:
@@ -148,6 +178,12 @@ class DockerControlTool(Tool):
     name = "docker_control"
     description = "Start, stop, restart, or get logs from Docker container."
     parameters = {"container": "Container name/ID", "action": "start, stop, restart, remove, logs"}
+    category = "productivity"
+    rich_parameters = [
+        RichParameter(name="container", type="string", description="Container name or ID", required=True),
+        RichParameter(name="action", type="string", description="Action to perform", required=True, enum=["start", "stop", "restart", "remove", "logs"]),
+    ]
+    examples = ["docker_control(container='my-app', action='restart')", "docker_control(container='nginx', action='logs')"]
     
     def execute(self, container: str, action: str, **kwargs) -> dict[str, Any]:
         try:
@@ -167,6 +203,11 @@ class GitStatusTool(Tool):
     name = "git_status"
     description = "Check git repository status."
     parameters = {"path": "Repository path (default: .)"}
+    category = "productivity"
+    rich_parameters = [
+        RichParameter(name="path", type="string", description="Repository path", required=False, default="."),
+    ]
+    examples = ["git_status()", "git_status(path='/home/user/project')"]
     
     def execute(self, path: str = ".", **kwargs) -> dict[str, Any]:
         try:
@@ -193,6 +234,13 @@ class GitCommitTool(Tool):
     name = "git_commit"
     description = "Stage and commit changes."
     parameters = {"message": "Commit message", "path": "Repository path (default: .)", "add_all": "Add all changes (default: True)"}
+    category = "productivity"
+    rich_parameters = [
+        RichParameter(name="message", type="string", description="Commit message", required=True),
+        RichParameter(name="path", type="string", description="Repository path", required=False, default="."),
+        RichParameter(name="add_all", type="boolean", description="Add all changes", required=False, default=True),
+    ]
+    examples = ["git_commit(message='Fix bug in login')", "git_commit(message='Add feature', add_all=False)"]
     
     def execute(self, message: str, path: str = ".", add_all: bool = True, **kwargs) -> dict[str, Any]:
         try:
@@ -215,6 +263,12 @@ class GitPushTool(Tool):
     name = "git_push"
     description = "Push commits to remote repository."
     parameters = {"path": "Repository path (default: .)", "remote": "Remote name (default: origin)"}
+    category = "productivity"
+    rich_parameters = [
+        RichParameter(name="path", type="string", description="Repository path", required=False, default="."),
+        RichParameter(name="remote", type="string", description="Remote name", required=False, default="origin"),
+    ]
+    examples = ["git_push()", "git_push(remote='upstream')"]
     
     def execute(self, path: str = ".", remote: str = "origin", **kwargs) -> dict[str, Any]:
         try:
@@ -229,6 +283,12 @@ class GitPullTool(Tool):
     name = "git_pull"
     description = "Pull changes from remote repository."
     parameters = {"path": "Repository path (default: .)", "remote": "Remote name (default: origin)"}
+    category = "productivity"
+    rich_parameters = [
+        RichParameter(name="path", type="string", description="Repository path", required=False, default="."),
+        RichParameter(name="remote", type="string", description="Remote name", required=False, default="origin"),
+    ]
+    examples = ["git_pull()", "git_pull(remote='upstream')"]
     
     def execute(self, path: str = ".", remote: str = "origin", **kwargs) -> dict[str, Any]:
         try:

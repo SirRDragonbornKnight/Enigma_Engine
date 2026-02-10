@@ -468,7 +468,7 @@ def get_screen_vision() -> ScreenVision:
 
 
 # Tool integration
-from .tool_registry import Tool
+from .tool_registry import Tool, RichParameter
 
 
 class ScreenVisionTool(Tool):
@@ -476,9 +476,23 @@ class ScreenVisionTool(Tool):
     
     name = "see_screen"
     description = "Look at the screen and describe what's visible"
+    category = "vision"
     parameters = {
         "detect_text": "Whether to extract text via OCR (default: True)"
     }
+    rich_parameters = [
+        RichParameter(
+            name="detect_text",
+            type="boolean",
+            description="Whether to extract text via OCR in addition to visual description",
+            required=False,
+            default=True,
+        ),
+    ]
+    examples = [
+        {"detect_text": True},
+        {"detect_text": False},
+    ]
     
     def execute(self, detect_text: bool = True, **kwargs) -> Dict[str, Any]:
         vision = get_screen_vision()
@@ -490,9 +504,23 @@ class FindOnScreenTool(Tool):
     
     name = "find_on_screen"
     description = "Find text or element on the screen"
+    category = "vision"
     parameters = {
         "text": "Text to search for on screen (required)"
     }
+    rich_parameters = [
+        RichParameter(
+            name="text",
+            type="string",
+            description="Text to search for on screen. Can be exact text or partial match.",
+            required=True,
+        ),
+    ]
+    examples = [
+        {"text": "OK"},
+        {"text": "Submit"},
+        {"text": "Error"},
+    ]
     
     def execute(self, text: str = "", **kwargs) -> Dict[str, Any]:
         vision = get_screen_vision()

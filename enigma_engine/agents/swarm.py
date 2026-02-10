@@ -26,7 +26,6 @@ Usage:
 """
 
 import asyncio
-import json
 import logging
 import time
 import uuid
@@ -223,7 +222,7 @@ Your response:"""
         
         if hasattr(model, "generate"):
             # Run in executor for async
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             return await loop.run_in_executor(
                 None,
                 lambda: model.generate(prompt, temperature=self.config.temperature)

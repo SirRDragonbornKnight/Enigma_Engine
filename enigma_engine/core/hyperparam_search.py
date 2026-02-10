@@ -9,7 +9,6 @@ TYPE: Training
 MAIN CLASSES: HyperparameterSearch, GridSearch, RandomSearch, BayesianSearch
 """
 
-import json
 import logging
 import math
 import random

@@ -9,7 +9,6 @@ TYPE: Core/Analysis
 MAIN CLASSES: TokenExplorer, EmbeddingClusterer, SemanticAnalyzer
 """
 
-import json
 import logging
 from collections import defaultdict
 from dataclasses import dataclass, field

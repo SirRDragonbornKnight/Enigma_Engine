@@ -38,7 +38,6 @@ Usage:
 import hashlib
 import json
 import logging
-import os
 import shutil
 import socket
 import struct

@@ -23,7 +23,6 @@ Usage:
     workspace.run_task("Build a web scraper")
 """
 
-import json
 import logging
 import time
 import uuid

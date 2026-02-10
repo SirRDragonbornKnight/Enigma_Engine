@@ -8,7 +8,6 @@ Works without any external dependencies using:
 4. Fallback: Save text to file
 """
 
-import os
 import subprocess
 import sys
 import tempfile

@@ -36,7 +36,6 @@ Usage:
     ai_art = spawner.spawn_ai_generated("a cute cat", style="pixel")
 """
 
-import json
 import math
 import threading
 import time

@@ -37,7 +37,6 @@ like ngrok, localtunnel, or bore. Useful for remote access, mobile apps, demos.
     ← USED BY:   enigma_engine/modules/registry.py (TunnelModule)
 """
 
-import json
 import logging
 import re
 import subprocess

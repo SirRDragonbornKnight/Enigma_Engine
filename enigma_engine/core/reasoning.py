@@ -25,7 +25,6 @@ Usage:
         print(f"{step.number}: {step.thought}")
 """
 
-import json
 import logging
 import re
 import time

@@ -31,7 +31,6 @@ Usage:
 """
 
 import logging
-import math
 import random
 import shutil
 from dataclasses import dataclass, field

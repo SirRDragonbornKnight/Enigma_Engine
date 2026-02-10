@@ -18,7 +18,7 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .tool_registry import Tool
+from .tool_registry import Tool, RichParameter
 
 # Storage for browser control settings
 BROWSER_CONFIG = Path.home() / ".enigma_engine" / "browser_config.json"
@@ -134,6 +134,21 @@ class BrowserMediaPauseTool(Tool):
     parameters = {
         "action": "Action: 'toggle' (default), 'pause', or 'play'",
     }
+    category = "browser"
+    rich_parameters = [
+        RichParameter(
+            name="action",
+            type="string",
+            description="Media action to perform",
+            required=False,
+            default="toggle",
+            enum=["toggle", "pause", "play"],
+        ),
+    ]
+    examples = [
+        "browser_media_pause() - Toggle play/pause",
+        "browser_media_pause(action='pause')",
+    ]
     
     def execute(self, **kwargs) -> dict[str, Any]:
         action = kwargs.get("action", "toggle")
@@ -159,6 +174,18 @@ class BrowserMediaMuteTool(Tool):
     parameters = {
         "action": "Action: 'toggle' (default), 'mute', or 'unmute'",
     }
+    category = "browser"
+    rich_parameters = [
+        RichParameter(
+            name="action",
+            type="string",
+            description="Mute action to perform",
+            required=False,
+            default="toggle",
+            enum=["toggle", "mute", "unmute"],
+        ),
+    ]
+    examples = ["browser_media_mute() - Toggle mute"]
     
     def execute(self, **kwargs) -> dict[str, Any]:
         action = kwargs.get("action", "toggle")
@@ -177,6 +204,21 @@ class BrowserMediaSkipTool(Tool):
     parameters = {
         "direction": "Direction: 'next' (default) or 'previous'",
     }
+    category = "browser"
+    rich_parameters = [
+        RichParameter(
+            name="direction",
+            type="string",
+            description="Skip direction",
+            required=False,
+            default="next",
+            enum=["next", "previous"],
+        ),
+    ]
+    examples = [
+        "browser_media_skip() - Skip to next",
+        "browser_media_skip(direction='previous')",
+    ]
     
     def execute(self, **kwargs) -> dict[str, Any]:
         direction = kwargs.get("direction", "next")
@@ -198,6 +240,9 @@ class BrowserMediaStopTool(Tool):
     name = "browser_media_stop"
     description = "Stop media playback completely in browser."
     parameters = {}
+    category = "browser"
+    rich_parameters = []
+    examples = ["browser_media_stop() - Stop all media"]
     
     def execute(self, **kwargs) -> dict[str, Any]:
         try:
@@ -215,6 +260,28 @@ class BrowserMediaVolumeTool(Tool):
         "action": "Action: 'up', 'down', or 'set'",
         "level": "Volume level 0-100 (only for 'set' action)",
     }
+    category = "browser"
+    rich_parameters = [
+        RichParameter(
+            name="action",
+            type="string",
+            description="Volume action",
+            required=True,
+            enum=["up", "down", "set"],
+        ),
+        RichParameter(
+            name="level",
+            type="integer",
+            description="Volume level (0-100, for 'set' action)",
+            required=False,
+            min_value=0,
+            max_value=100,
+        ),
+    ]
+    examples = [
+        "browser_media_volume(action='up')",
+        "browser_media_volume(action='set', level=50)",
+    ]
     
     def execute(self, **kwargs) -> dict[str, Any]:
         action = kwargs.get("action", "up")
@@ -273,6 +340,9 @@ class BrowserMediaInfoTool(Tool):
     name = "browser_media_info"
     description = "Get information about currently playing media (title, artist, etc.)."
     parameters = {}
+    category = "browser"
+    rich_parameters = []
+    examples = ["browser_media_info() - Get current track info"]
     
     def execute(self, **kwargs) -> dict[str, Any]:
         try:
@@ -310,6 +380,21 @@ class BrowserTabListTool(Tool):
     parameters = {
         "browser": "Browser: 'chrome', 'firefox', 'opera', 'brave', 'edge' (default: auto-detect)",
     }
+    category = "browser"
+    rich_parameters = [
+        RichParameter(
+            name="browser",
+            type="string",
+            description="Browser to query",
+            required=False,
+            default="auto",
+            enum=["auto", "chrome", "firefox", "opera", "brave", "edge"],
+        ),
+    ]
+    examples = [
+        "browser_tab_list() - List tabs from running browser",
+        "browser_tab_list(browser='chrome')",
+    ]
     
     def execute(self, **kwargs) -> dict[str, Any]:
         browser = kwargs.get("browser", "auto")
@@ -373,6 +458,20 @@ class BrowserFocusTool(Tool):
     parameters = {
         "browser": "Browser: 'chrome', 'firefox', 'opera', 'brave', 'edge'",
     }
+    category = "browser"
+    rich_parameters = [
+        RichParameter(
+            name="browser",
+            type="string",
+            description="Browser to focus",
+            required=True,
+            enum=["chrome", "firefox", "opera", "brave", "edge"],
+        ),
+    ]
+    examples = [
+        "browser_focus(browser='chrome')",
+        "browser_focus(browser='firefox')",
+    ]
     
     def execute(self, **kwargs) -> dict[str, Any]:
         browser = kwargs.get("browser", "chrome")

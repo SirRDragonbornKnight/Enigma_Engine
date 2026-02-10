@@ -638,7 +638,7 @@ class ModelRouterTab(QWidget):
             from enigma_engine.core.tool_router import get_router
             router = get_router()
             
-            for tool_id in TOOL_INFO.keys():
+            for tool_id in TOOL_INFO:
                 try:
                     assigns = router.get_assignments(tool_id)
                     self.assignments[tool_id] = [
@@ -649,7 +649,7 @@ class ModelRouterTab(QWidget):
                     self.assignments[tool_id] = []
                     
             # Update all rows
-            for tool_id in TOOL_INFO.keys():
+            for tool_id in TOOL_INFO:
                 self._update_tool_row(tool_id)
                 
             self.status_label.setText("Configuration loaded")

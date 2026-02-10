@@ -27,8 +27,6 @@ Usage:
     pet.stop()  # Hide avatar
 """
 
-import math
-import random
 import sys
 import threading
 import time

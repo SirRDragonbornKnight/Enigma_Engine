@@ -28,9 +28,11 @@ USAGE:
 
 from __future__ import annotations
 
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from functools import lru_cache
+from typing import Any, Callable, Dict, List, Optional
 
 
 @dataclass
@@ -153,9 +155,18 @@ class ToolRegistry:
     Respects tool_manager settings - disabled tools won't be registered.
     """
     
+    # Tools that can safely be cached (read-only operations)
+    CACHEABLE_TOOLS = {
+        "get_system_info",
+        "wikipedia_search",
+        "arxiv_search",
+    }
+    
     def __init__(self, respect_manager: bool = True):
         self.tools: Dict[str, Tool] = {}
         self._respect_manager = respect_manager
+        self._cache: Dict[str, tuple] = {}  # key -> (result, timestamp)
+        self._cache_ttl = 300  # 5 minutes default
         self._register_builtin_tools()
     
     def _is_tool_enabled(self, tool_name: str) -> bool:
@@ -305,6 +316,14 @@ class ToolRegistry:
         from .vision import FindOnScreenTool, ScreenVisionTool
         from .web_tools import FetchWebpageTool, WebSearchTool
         
+        # Memory tools - AI can search and manage conversation history
+        from .memory_tools import (
+            ExportMemoryTool,
+            ImportMemoryTool,
+            MemoryStatsTool,
+            SearchMemoryTool,
+        )
+        
         builtin = [
             # Web
             WebSearchTool(),
@@ -437,6 +456,11 @@ class ToolRegistry:
             ListEffectAssetsTool(),
             # Fullscreen Mode - AI can control visibility during fullscreen apps
             FullscreenModeControlTool(),
+            # Memory - AI can search and manage conversation history
+            SearchMemoryTool(),
+            MemoryStatsTool(),
+            ExportMemoryTool(),
+            ImportMemoryTool(),
         ]
         
         for tool in builtin:
@@ -477,6 +501,49 @@ class ToolRegistry:
             return tool.execute(**kwargs)
         except Exception as e:
             return {"success": False, "error": str(e)}
+    
+    def cached_execute(self, tool_name: str, ttl: Optional[int] = None, **kwargs) -> Dict[str, Any]:
+        """
+        Execute a tool with caching for cacheable tools.
+        
+        Args:
+            tool_name: Tool name
+            ttl: Cache time-to-live in seconds (default: 300)
+            **kwargs: Tool parameters
+            
+        Returns:
+            Tool result dict (may be cached)
+        """
+        # Non-cacheable tools execute directly
+        if tool_name not in self.CACHEABLE_TOOLS:
+            return self.execute(tool_name, **kwargs)
+        
+        # Create cache key from tool name and sorted params
+        cache_key = f"{tool_name}:{hash(frozenset(kwargs.items()))}"
+        ttl = ttl or self._cache_ttl
+        
+        # Check cache
+        if cache_key in self._cache:
+            result, timestamp = self._cache[cache_key]
+            if time.time() - timestamp < ttl:
+                return result  # Return cached result
+        
+        # Execute and cache
+        result = self.execute(tool_name, **kwargs)
+        if result.get("success", False):  # Only cache successful results
+            self._cache[cache_key] = (result, time.time())
+        
+        return result
+    
+    def clear_cache(self, tool_name: Optional[str] = None):
+        """Clear tool result cache."""
+        if tool_name:
+            # Clear specific tool's cache entries
+            keys_to_delete = [k for k in self._cache if k.startswith(f"{tool_name}:")]
+            for k in keys_to_delete:
+                del self._cache[k]
+        else:
+            self._cache.clear()
     
     def list_tools(self) -> List[Dict]:
         """List all available tools."""
@@ -527,11 +594,122 @@ class ToolRegistry:
                         lines.append(f"    - {ex}")
         
         return "\n".join(lines)
+
+
+class ToolProfiler:
+    """
+    Profiler for tracking tool usage and performance.
+    
+    Tracks:
+    - Tool call counts
+    - Execution times (min, max, avg)
+    - Success/failure rates
+    - Most used tools
+    
+    Usage:
+        profiler = ToolProfiler()
+        registry = ToolRegistry()
+        registry.set_profiler(profiler)
+        
+        # After using tools
+        print(profiler.get_report())
+    """
+    
+    def __init__(self):
+        self._stats: Dict[str, Dict[str, Any]] = {}
+        self._enabled = True
+    
+    def record(self, tool_name: str, duration: float, success: bool):
+        """Record a tool execution."""
+        if not self._enabled:
+            return
+            
+        if tool_name not in self._stats:
+            self._stats[tool_name] = {
+                "calls": 0,
+                "successes": 0,
+                "failures": 0,
+                "total_time": 0.0,
+                "min_time": float('inf'),
+                "max_time": 0.0,
+            }
+        
+        stats = self._stats[tool_name]
+        stats["calls"] += 1
+        if success:
+            stats["successes"] += 1
+        else:
+            stats["failures"] += 1
+        stats["total_time"] += duration
+        stats["min_time"] = min(stats["min_time"], duration)
+        stats["max_time"] = max(stats["max_time"], duration)
+    
+    def get_stats(self, tool_name: str) -> Optional[Dict[str, Any]]:
+        """Get stats for a specific tool."""
+        if tool_name not in self._stats:
+            return None
+        
+        stats = self._stats[tool_name].copy()
+        if stats["calls"] > 0:
+            stats["avg_time"] = stats["total_time"] / stats["calls"]
+            stats["success_rate"] = stats["successes"] / stats["calls"] * 100
+        return stats
+    
+    def get_top_tools(self, n: int = 10) -> List[tuple]:
+        """Get the most used tools."""
+        return sorted(
+            [(name, s["calls"]) for name, s in self._stats.items()],
+            key=lambda x: -x[1]
+        )[:n]
+    
+    def get_slowest_tools(self, n: int = 10) -> List[tuple]:
+        """Get the slowest tools by average execution time."""
+        tools_with_avg = []
+        for name, stats in self._stats.items():
+            if stats["calls"] > 0:
+                avg = stats["total_time"] / stats["calls"]
+                tools_with_avg.append((name, avg))
+        return sorted(tools_with_avg, key=lambda x: -x[1])[:n]
+    
+    def get_report(self) -> str:
+        """Get a human-readable report of tool usage."""
+        lines = ["=== Tool Usage Report ===", ""]
+        
+        total_calls = sum(s["calls"] for s in self._stats.values())
+        total_time = sum(s["total_time"] for s in self._stats.values())
+        
+        lines.append(f"Total tool calls: {total_calls}")
+        lines.append(f"Total execution time: {total_time:.2f}s")
+        lines.append("")
+        
+        lines.append("Top 5 Most Used Tools:")
+        for name, calls in self.get_top_tools(5):
+            pct = calls / total_calls * 100 if total_calls > 0 else 0
+            lines.append(f"  {name}: {calls} calls ({pct:.1f}%)")
+        
+        lines.append("")
+        lines.append("Top 5 Slowest Tools (avg):")
+        for name, avg in self.get_slowest_tools(5):
+            lines.append(f"  {name}: {avg*1000:.1f}ms")
+        
         return "\n".join(lines)
+    
+    def reset(self):
+        """Reset all statistics."""
+        self._stats.clear()
+    
+    def enable(self):
+        """Enable profiling."""
+        self._enabled = True
+    
+    def disable(self):
+        """Disable profiling."""
+        self._enabled = False
 
 
 # Global registry instance
 _registry = None
+_profiler = None
 
 def get_registry() -> ToolRegistry:
     """Get the global tool registry."""
@@ -540,7 +718,94 @@ def get_registry() -> ToolRegistry:
         _registry = ToolRegistry()
     return _registry
 
+def get_profiler() -> ToolProfiler:
+    """Get the global tool profiler."""
+    global _profiler
+    if _profiler is None:
+        _profiler = ToolProfiler()
+    return _profiler
 
 def execute_tool(name: str, **kwargs) -> Dict[str, Any]:
-    """Convenience function to execute a tool."""
-    return get_registry().execute(name, **kwargs)
+    """Convenience function to execute a tool with profiling."""
+    import time
+    profiler = get_profiler()
+    registry = get_registry()
+    
+    start = time.perf_counter()
+    result = registry.execute(name, **kwargs)
+    duration = time.perf_counter() - start
+    
+    success = result.get("success", False) if isinstance(result, dict) else True
+    profiler.record(name, duration, success)
+    
+    return result
+
+
+def batch_execute_tools(tool_calls: List[tuple], parallel: bool = False) -> List[Dict[str, Any]]:
+    """
+    Execute multiple tools in batch.
+    
+    Args:
+        tool_calls: List of (tool_name, kwargs_dict) tuples
+        parallel: If True, execute tools concurrently using threads
+        
+    Returns:
+        List of results in the same order as tool_calls
+        
+    Example:
+        results = batch_execute_tools([
+            ("list_directory", {"path": "."}),
+            ("get_system_info", {}),
+            ("web_search", {"query": "python"}),
+        ], parallel=True)
+    """
+    if parallel:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        
+        results = [None] * len(tool_calls)
+        with ThreadPoolExecutor(max_workers=min(len(tool_calls), 8)) as executor:
+            # Submit all tasks
+            future_to_idx = {
+                executor.submit(execute_tool, name, **kwargs): i
+                for i, (name, kwargs) in enumerate(tool_calls)
+            }
+            
+            # Collect results
+            for future in as_completed(future_to_idx):
+                idx = future_to_idx[future]
+                try:
+                    results[idx] = future.result()
+                except Exception as e:
+                    results[idx] = {"success": False, "error": str(e)}
+        
+        return results
+    else:
+        # Sequential execution
+        return [execute_tool(name, **kwargs) for name, kwargs in tool_calls]
+
+
+def get_tool_summary() -> Dict[str, Any]:
+    """
+    Get a summary of the tool system status.
+    
+    Returns:
+        Dict with tool counts, categories, and profiler stats
+    """
+    registry = get_registry()
+    profiler = get_profiler()
+    
+    # Count by category
+    categories = {}
+    for tool in registry.tools.values():
+        cat = getattr(tool, 'category', 'general')
+        categories[cat] = categories.get(cat, 0) + 1
+    
+    return {
+        "total_tools": len(registry.tools),
+        "categories": categories,
+        "profiler_stats": {
+            "total_calls": sum(s["calls"] for s in profiler._stats.values()),
+            "total_time": sum(s["total_time"] for s in profiler._stats.values()),
+            "top_tools": profiler.get_top_tools(5),
+        }
+    }

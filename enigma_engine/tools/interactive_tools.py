@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .tool_registry import Tool
+from .tool_registry import Tool, RichParameter
 
 
 class ChecklistManager:
@@ -319,6 +319,12 @@ class CreateChecklistTool(Tool):
         "name": "Name of the checklist",
         "items": "List of checklist items (comma-separated or list)",
     }
+    category = "interactive"
+    rich_parameters = [
+        RichParameter(name="name", type="string", description="Name of the checklist", required=True),
+        RichParameter(name="items", type="string", description="Comma-separated checklist items", required=True),
+    ]
+    examples = ["create_checklist(name='Shopping', items='milk, eggs, bread')"]
     
     def __init__(self):
         self.manager = ChecklistManager()
@@ -346,6 +352,9 @@ class ListChecklistsTool(Tool):
     name = "list_checklists"
     description = "List all created checklists and their status."
     parameters = {}
+    category = "interactive"
+    rich_parameters = []
+    examples = ["list_checklists()"]
     
     def __init__(self):
         self.manager = ChecklistManager()
@@ -373,6 +382,14 @@ class AddTaskTool(Tool):
         "due_date": "Due date in ISO format like '2024-12-31T17:00:00' (optional)",
         "priority": "Priority: low, medium, or high (default: medium)",
     }
+    category = "interactive"
+    rich_parameters = [
+        RichParameter(name="title", type="string", description="Task title", required=True),
+        RichParameter(name="description", type="string", description="Task description", required=False),
+        RichParameter(name="due_date", type="string", description="Due date (ISO format)", required=False),
+        RichParameter(name="priority", type="string", description="Task priority", required=False, default="medium", enum=["low", "medium", "high"]),
+    ]
+    examples = ["add_task(title='Review PR', priority='high')", "add_task(title='Meeting', due_date='2024-12-31T10:00:00')"]
     
     def __init__(self):
         self.scheduler = TaskScheduler()
@@ -395,6 +412,12 @@ class ListTasksTool(Tool):
         "show_completed": "Whether to show completed tasks (default: false)",
         "priority": "Filter by priority: low, medium, or high (optional)",
     }
+    category = "interactive"
+    rich_parameters = [
+        RichParameter(name="show_completed", type="boolean", description="Show completed tasks", required=False, default=False),
+        RichParameter(name="priority", type="string", description="Filter by priority", required=False, enum=["low", "medium", "high"]),
+    ]
+    examples = ["list_tasks()", "list_tasks(priority='high')", "list_tasks(show_completed=True)"]
     
     def __init__(self):
         self.scheduler = TaskScheduler()
@@ -420,6 +443,11 @@ class CompleteTaskTool(Tool):
     parameters = {
         "task_id": "The ID of the task to complete",
     }
+    category = "interactive"
+    rich_parameters = [
+        RichParameter(name="task_id", type="string", description="The task ID to complete", required=True),
+    ]
+    examples = ["complete_task(task_id='task_abc123')"]
     
     def __init__(self):
         self.scheduler = TaskScheduler()
@@ -444,6 +472,13 @@ class SetReminderTool(Tool):
         "remind_at": "When to remind in ISO format like '2024-12-31T17:00:00'",
         "repeat": "Repeat frequency: daily, weekly, monthly, or none (optional)",
     }
+    category = "interactive"
+    rich_parameters = [
+        RichParameter(name="message", type="string", description="Reminder message", required=True),
+        RichParameter(name="remind_at", type="string", description="Time to remind (ISO format)", required=True),
+        RichParameter(name="repeat", type="string", description="Repeat frequency", required=False, enum=["none", "daily", "weekly", "monthly"]),
+    ]
+    examples = ["set_reminder(message='Call mom', remind_at='2024-12-31T17:00:00')", "set_reminder(message='Take meds', remind_at='2024-12-31T08:00:00', repeat='daily')"]
     
     def __init__(self):
         self.system = ReminderSystem()
@@ -464,6 +499,11 @@ class ListRemindersTool(Tool):
     parameters = {
         "active_only": "Whether to show only active reminders (default: true)",
     }
+    category = "interactive"
+    rich_parameters = [
+        RichParameter(name="active_only", type="boolean", description="Show only active reminders", required=False, default=True),
+    ]
+    examples = ["list_reminders()", "list_reminders(active_only=False)"]
     
     def __init__(self):
         self.system = ReminderSystem()
@@ -486,6 +526,9 @@ class CheckRemindersTool(Tool):
     name = "check_reminders"
     description = "Check for reminders that are due right now."
     parameters = {}
+    category = "interactive"
+    rich_parameters = []
+    examples = ["check_reminders()"]
     
     def __init__(self):
         self.system = ReminderSystem()

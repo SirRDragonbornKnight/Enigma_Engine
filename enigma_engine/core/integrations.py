@@ -55,7 +55,6 @@ from __future__ import annotations
 import json
 import logging
 import subprocess
-import sys
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime

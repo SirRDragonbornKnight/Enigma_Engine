@@ -550,7 +550,7 @@ async def async_generate_stream(
         streaming = StreamingInference()
     
     # Run sync generator in thread pool
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     q: asyncio.Queue = asyncio.Queue()
     
     def producer():

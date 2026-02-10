@@ -16,7 +16,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from .tool_registry import Tool
+from .tool_registry import Tool, RichParameter
 
 # Output directories
 MUSIC_OUTPUT_DIR = Path.home() / ".enigma_engine" / "outputs" / "music"
@@ -42,6 +42,13 @@ class MusicGenerateTool(Tool):
         "duration": "Duration in seconds (default: 10, max: 30)",
         "output_name": "Name for the output file (without extension)",
     }
+    category = "media"
+    rich_parameters = [
+        RichParameter(name="prompt", type="string", description="Music description", required=True),
+        RichParameter(name="duration", type="integer", description="Duration in seconds", required=False, default=10, min_value=1, max_value=30),
+        RichParameter(name="output_name", type="string", description="Output filename (no extension)", required=False),
+    ]
+    examples = ["music_generate(prompt='calm piano melody')", "music_generate(prompt='upbeat electronic beat', duration=20)"]
     
     def execute(self, prompt: str, duration: int = 10, 
                 output_name: str = None, **kwargs) -> dict[str, Any]:
@@ -166,6 +173,13 @@ class RemoveBackgroundTool(Tool):
         "output_path": "Path for the output image (default: adds '_nobg' to filename)",
         "model": "Model to use: 'u2net', 'isnet' (default: u2net)",
     }
+    category = "media"
+    rich_parameters = [
+        RichParameter(name="input_path", type="string", description="Path to input image", required=True),
+        RichParameter(name="output_path", type="string", description="Path for output image", required=False),
+        RichParameter(name="model", type="string", description="Background removal model", required=False, default="u2net", enum=["u2net", "isnet"]),
+    ]
+    examples = ["remove_background(input_path='photo.jpg')", "remove_background(input_path='portrait.png', output_path='portrait_clean.png')"]
     
     def execute(self, input_path: str, output_path: str = None,
                 model: str = "u2net", **kwargs) -> dict[str, Any]:
@@ -246,6 +260,13 @@ class UpscaleImageTool(Tool):
         "output_path": "Path for the output image (default: adds '_upscaled' to filename)",
         "scale": "Upscale factor: 2, 4, or 8 (default: 2)",
     }
+    category = "media"
+    rich_parameters = [
+        RichParameter(name="input_path", type="string", description="Path to input image", required=True),
+        RichParameter(name="output_path", type="string", description="Path for output image", required=False),
+        RichParameter(name="scale", type="integer", description="Upscale factor", required=False, default=2, enum=[2, 4, 8]),
+    ]
+    examples = ["upscale_image(input_path='small.jpg')", "upscale_image(input_path='photo.png', scale=4)"]
     
     def execute(self, input_path: str, output_path: str = None,
                 scale: int = 2, **kwargs) -> dict[str, Any]:
@@ -332,6 +353,14 @@ class StyleTransferTool(Tool):
         "output_path": "Path for output (default: adds '_styled' to filename)",
         "strength": "Style strength 0-1 (default: 0.8)",
     }
+    category = "media"
+    rich_parameters = [
+        RichParameter(name="content_path", type="string", description="Path to content image", required=True),
+        RichParameter(name="style", type="string", description="Art style to apply", required=False, default="monet", enum=["monet", "vangogh", "picasso", "candy", "mosaic", "rain_princess"]),
+        RichParameter(name="output_path", type="string", description="Path for output image", required=False),
+        RichParameter(name="strength", type="number", description="Style strength (0-1)", required=False, default=0.8, min_value=0, max_value=1),
+    ]
+    examples = ["style_transfer(content_path='photo.jpg', style='vangogh')", "style_transfer(content_path='landscape.png', style='monet', strength=0.6)"]
     
     # Pre-defined style mappings
     PRESET_STYLES = {
@@ -418,6 +447,14 @@ class ConvertAudioTool(Tool):
         "output_path": "Path for output (default: same name with new extension)",
         "bitrate": "Bitrate for lossy formats (default: '192k')",
     }
+    category = "media"
+    rich_parameters = [
+        RichParameter(name="input_path", type="string", description="Path to input audio", required=True),
+        RichParameter(name="output_format", type="string", description="Target format", required=True, enum=["mp3", "wav", "ogg", "flac", "aac"]),
+        RichParameter(name="output_path", type="string", description="Path for output", required=False),
+        RichParameter(name="bitrate", type="string", description="Bitrate for lossy formats", required=False, default="192k"),
+    ]
+    examples = ["convert_audio(input_path='song.wav', output_format='mp3')", "convert_audio(input_path='audio.flac', output_format='ogg', bitrate='320k')"]
     
     def execute(self, input_path: str, output_format: str,
                 output_path: str = None, bitrate: str = "192k", **kwargs) -> dict[str, Any]:
@@ -497,6 +534,13 @@ class ExtractAudioTool(Tool):
         "output_path": "Path for audio output (default: same name with .mp3)",
         "format": "Audio format: 'mp3', 'wav', 'ogg' (default: mp3)",
     }
+    category = "media"
+    rich_parameters = [
+        RichParameter(name="input_path", type="string", description="Path to video file", required=True),
+        RichParameter(name="output_path", type="string", description="Path for audio output", required=False),
+        RichParameter(name="format", type="string", description="Audio format", required=False, default="mp3", enum=["mp3", "wav", "ogg"]),
+    ]
+    examples = ["extract_audio(input_path='video.mp4')", "extract_audio(input_path='movie.mkv', format='wav')"]
     
     def execute(self, input_path: str, output_path: str = None,
                 format: str = "mp3", **kwargs) -> dict[str, Any]:
@@ -571,6 +615,14 @@ class AudioVisualizeTool(Tool):
         "style": "Visualization style: 'waveform', 'spectrogram' (default: waveform)",
         "color": "Color scheme: 'blue', 'green', 'rainbow', 'white' (default: blue)",
     }
+    category = "media"
+    rich_parameters = [
+        RichParameter(name="input_path", type="string", description="Path to audio file", required=True),
+        RichParameter(name="output_path", type="string", description="Path for image output", required=False),
+        RichParameter(name="style", type="string", description="Visualization style", required=False, default="waveform", enum=["waveform", "spectrogram"]),
+        RichParameter(name="color", type="string", description="Color scheme", required=False, default="blue", enum=["blue", "green", "rainbow", "white"]),
+    ]
+    examples = ["audio_visualize(input_path='song.mp3')", "audio_visualize(input_path='audio.wav', style='spectrogram', color='rainbow')"]
     
     def execute(self, input_path: str, output_path: str = None,
                 style: str = "waveform", color: str = "blue", **kwargs) -> dict[str, Any]:

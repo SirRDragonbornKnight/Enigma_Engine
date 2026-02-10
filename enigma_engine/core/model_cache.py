@@ -12,7 +12,6 @@ MAIN CLASSES: ModelCache, CachePolicy, MemoryManager
 import gc
 import hashlib
 import logging
-import os
 import pickle
 import threading
 import time

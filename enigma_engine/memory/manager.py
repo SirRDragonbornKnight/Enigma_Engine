@@ -414,3 +414,157 @@ class ConversationManager:
         if topk <= 0:
             raise ValueError("topk must be positive")
         return self.vector_db.search(query_vec, topk=topk)
+
+    # =========================================================================
+    # 📦 EXPORT/IMPORT METHODS
+    # =========================================================================
+
+    def export_all(self, output_path: str, format: str = "json") -> Dict[str, Any]:
+        """
+        Export all conversations to a single file.
+        
+        Args:
+            output_path: Path to save exported data
+            format: 'json' or 'jsonl' (one conversation per line)
+            
+        Returns:
+            Dict with export stats
+        """
+        conversations = {}
+        for name in self.list_conversations():
+            data = self.load_conversation(name)
+            if data:
+                conversations[name] = data
+        
+        output = Path(output_path)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        
+        if format == "jsonl":
+            with open(output, "w", encoding="utf-8") as f:
+                for name, data in conversations.items():
+                    f.write(json.dumps({"name": name, **data}) + "\n")
+        else:
+            with open(output, "w", encoding="utf-8") as f:
+                json.dump(conversations, f, indent=2)
+        
+        return {
+            "success": True,
+            "path": str(output),
+            "conversations_exported": len(conversations),
+            "total_messages": sum(
+                len(c.get("messages", [])) for c in conversations.values()
+            )
+        }
+
+    def import_all(self, input_path: str, overwrite: bool = False) -> Dict[str, Any]:
+        """
+        Import conversations from an exported file.
+        
+        Args:
+            input_path: Path to exported data file
+            overwrite: If True, overwrite existing conversations
+            
+        Returns:
+            Dict with import stats
+        """
+        input_file = Path(input_path)
+        if not input_file.exists():
+            return {"success": False, "error": "File not found"}
+        
+        imported = 0
+        skipped = 0
+        
+        content = input_file.read_text(encoding="utf-8")
+        
+        # Detect format
+        if content.strip().startswith("{"):
+            # JSON format
+            data = json.loads(content)
+            for name, conv_data in data.items():
+                if not overwrite and (self.conv_dir / f"{name}.json").exists():
+                    skipped += 1
+                    continue
+                self.save_conversation(name, conv_data.get("messages", []))
+                imported += 1
+        else:
+            # JSONL format
+            for line in content.strip().split("\n"):
+                if not line.strip():
+                    continue
+                conv = json.loads(line)
+                name = conv.pop("name", f"imported_{imported}")
+                if not overwrite and (self.conv_dir / f"{name}.json").exists():
+                    skipped += 1
+                    continue
+                self.save_conversation(name, conv.get("messages", []))
+                imported += 1
+        
+        return {
+            "success": True,
+            "imported": imported,
+            "skipped": skipped
+        }
+
+    def get_stats(self) -> Dict[str, Any]:
+        """
+        Get statistics about stored conversations.
+        
+        Returns:
+            Dict with conversation stats
+        """
+        conversations = self.list_conversations()
+        total_messages = 0
+        total_size = 0
+        
+        for name in conversations:
+            data = self.load_conversation(name)
+            if data:
+                total_messages += len(data.get("messages", []))
+            
+            conv_path = self.conv_dir / f"{name}.json"
+            if conv_path.exists():
+                total_size += conv_path.stat().st_size
+        
+        return {
+            "total_conversations": len(conversations),
+            "total_messages": total_messages,
+            "total_size_kb": total_size / 1024,
+            "storage_path": str(self.conv_dir),
+            "model_name": self.model_name
+        }
+
+    def search_conversations(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Search all conversations for a text query.
+        
+        Args:
+            query: Text to search for (case-insensitive)
+            limit: Maximum results to return
+            
+        Returns:
+            List of matching messages with context
+        """
+        query_lower = query.lower()
+        results = []
+        
+        for name in self.list_conversations():
+            data = self.load_conversation(name)
+            if not data:
+                continue
+                
+            messages = data.get("messages", [])
+            for i, msg in enumerate(messages):
+                text = msg.get("text", "") or msg.get("content", "")
+                if query_lower in text.lower():
+                    results.append({
+                        "conversation": name,
+                        "message_index": i,
+                        "role": msg.get("role", "unknown"),
+                        "text": text[:200] + ("..." if len(text) > 200 else ""),
+                        "timestamp": msg.get("ts") or msg.get("timestamp")
+                    })
+                    
+                    if len(results) >= limit:
+                        return results
+        
+        return results

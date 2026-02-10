@@ -12,7 +12,6 @@ MAIN CLASSES: MetricsCollector, MetricType, PrometheusExporter
 import logging
 import re
 import threading
-import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum

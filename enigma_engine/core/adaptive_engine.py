@@ -43,7 +43,6 @@ INTEGRATION:
 
 import logging
 import threading
-import time
 from collections.abc import Generator
 from dataclasses import dataclass
 from enum import Enum, auto

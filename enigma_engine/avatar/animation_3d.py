@@ -47,7 +47,6 @@ Exporting from Unreal Engine:
 
 import os
 import queue
-import sys
 import threading
 from dataclasses import dataclass, field
 from enum import Enum, auto

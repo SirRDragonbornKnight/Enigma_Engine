@@ -9,7 +9,6 @@ TYPE: Core/Analysis
 MAIN CLASSES: ActivationRecorder, AttentionAnalyzer, LayerProfiler
 """
 
-import json
 import logging
 from collections import defaultdict
 from dataclasses import dataclass, field

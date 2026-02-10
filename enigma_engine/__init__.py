@@ -81,6 +81,26 @@ try:
 except ImportError:
     HAS_INTEGRATION = False
 
+# Quick API for simple operations
+from .quick import (
+    QuickError,
+    chat,
+    complete,
+    fetch,
+    ls,
+    read,
+    recall,
+    remember,
+    run,
+    screenshot,
+    search,
+    search_memory,
+    sysinfo,
+    translate,
+    wiki,
+    write,
+)
+
 __all__ = [
     # Configuration
     'CONFIG',
@@ -93,6 +113,23 @@ __all__ = [
     'DB_PATH',
     # Version
     '__version__',
+    # Quick API
+    'QuickError',
+    'chat',
+    'complete',
+    'search',
+    'fetch',
+    'read',
+    'write',
+    'ls',
+    'screenshot',
+    'sysinfo',
+    'run',
+    'remember',
+    'recall',
+    'search_memory',
+    'wiki',
+    'translate',
     # Cross-device integration
     'CrossDeviceSystem',
     'SystemRole',

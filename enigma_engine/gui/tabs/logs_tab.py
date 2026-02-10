@@ -9,7 +9,6 @@ Features:
   - Export logs to file
 """
 
-import os
 from datetime import datetime
 from pathlib import Path
 

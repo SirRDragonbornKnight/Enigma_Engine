@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict
 
-from .tool_registry import Tool
+from .tool_registry import Tool, RichParameter
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +25,12 @@ class CSVAnalyzeTool(Tool):
     name = "csv_analyze"
     description = "Load and analyze CSV file. Returns stats, columns, sample data."
     parameters = {"path": "CSV file path", "rows": "Sample rows (default: 5)"}
+    category = "data"
+    rich_parameters = [
+        RichParameter(name="path", type="string", description="CSV file path", required=True),
+        RichParameter(name="rows", type="integer", description="Sample rows to return", required=False, default=5, min_value=1, max_value=100),
+    ]
+    examples = ["csv_analyze(path='data.csv')", "csv_analyze(path='sales.csv', rows=10)"]
     
     def execute(self, path: str, rows: int = 5, **kwargs) -> dict[str, Any]:
         try:
@@ -57,6 +63,13 @@ class CSVQueryTool(Tool):
     name = "csv_query"
     description = "Query CSV using simple filters (column > value)."
     parameters = {"path": "CSV file path", "query": "Filter like 'age > 30'", "limit": "Max rows (default: 100)"}
+    category = "data"
+    rich_parameters = [
+        RichParameter(name="path", type="string", description="CSV file path", required=True),
+        RichParameter(name="query", type="string", description="Filter expression (e.g., 'age > 30')", required=True),
+        RichParameter(name="limit", type="integer", description="Max rows to return", required=False, default=100, min_value=1, max_value=10000),
+    ]
+    examples = ["csv_query(path='users.csv', query='age > 30')", "csv_query(path='sales.csv', query='amount >= 1000', limit=50)"]
     
     def execute(self, path: str, query: str, limit: int = 100, **kwargs) -> dict[str, Any]:
         try:
@@ -87,6 +100,15 @@ class PlotChartTool(Tool):
     description = "Create chart from CSV/JSON data. Requires matplotlib."
     parameters = {"data": "CSV path or JSON data", "chart_type": "line, bar, scatter, pie, histogram", 
                   "x": "X column", "y": "Y column", "title": "Chart title"}
+    category = "data"
+    rich_parameters = [
+        RichParameter(name="data", type="string", description="CSV path or JSON data", required=True),
+        RichParameter(name="chart_type", type="string", description="Chart type", required=False, default="line", enum=["line", "bar", "scatter", "pie", "histogram"]),
+        RichParameter(name="x", type="string", description="X-axis column name", required=False),
+        RichParameter(name="y", type="string", description="Y-axis column name", required=False),
+        RichParameter(name="title", type="string", description="Chart title", required=False),
+    ]
+    examples = ["plot_chart(data='sales.csv', chart_type='bar', x='month', y='revenue')", "plot_chart(data='data.csv', chart_type='pie', x='category', y='count')"]
     
     def execute(self, data: str, chart_type: str = "line", x: str = None, y: str = None, title: str = None, **kwargs) -> dict[str, Any]:
         try:
@@ -132,6 +154,13 @@ class JSONQueryTool(Tool):
     name = "json_query"
     description = "Query JSON using dot notation (e.g., 'users.0.name')."
     parameters = {"path": "JSON file path (or None)", "query": "Dot notation path", "data": "Direct JSON string"}
+    category = "data"
+    rich_parameters = [
+        RichParameter(name="query", type="string", description="Dot notation path (e.g., 'users.0.name')", required=True),
+        RichParameter(name="path", type="string", description="JSON file path", required=False),
+        RichParameter(name="data", type="string", description="Direct JSON string", required=False),
+    ]
+    examples = ["json_query(path='config.json', query='settings.theme')", "json_query(data='{\"a\": 1}', query='a')"]
     
     def execute(self, query: str, path: str = None, data: str = None, **kwargs) -> dict[str, Any]:
         try:
@@ -162,6 +191,13 @@ class SQLQueryTool(Tool):
     name = "sql_query"
     description = "Execute SELECT query on SQLite database."
     parameters = {"database": "Database path", "query": "SQL SELECT query", "limit": "Max rows (default: 100)"}
+    category = "data"
+    rich_parameters = [
+        RichParameter(name="database", type="string", description="SQLite database path", required=True),
+        RichParameter(name="query", type="string", description="SQL SELECT query", required=True),
+        RichParameter(name="limit", type="integer", description="Max rows to return", required=False, default=100, min_value=1, max_value=10000),
+    ]
+    examples = ["sql_query(database='app.db', query='SELECT * FROM users WHERE active=1')"]
     
     def execute(self, database: str, query: str, limit: int = 100, **kwargs) -> dict[str, Any]:
         try:
@@ -187,6 +223,12 @@ class SQLExecuteTool(Tool):
     name = "sql_execute"
     description = "Execute INSERT/UPDATE/DELETE on SQLite database."
     parameters = {"database": "Database path", "statement": "SQL statement"}
+    category = "data"
+    rich_parameters = [
+        RichParameter(name="database", type="string", description="SQLite database path", required=True),
+        RichParameter(name="statement", type="string", description="SQL INSERT/UPDATE/DELETE statement", required=True),
+    ]
+    examples = ["sql_execute(database='app.db', statement='UPDATE users SET active=0 WHERE id=5')"]
     
     def execute(self, database: str, statement: str, **kwargs) -> dict[str, Any]:
         try:
@@ -207,6 +249,13 @@ class DataConvertTool(Tool):
     name = "data_convert"
     description = "Convert CSV↔JSON, JSON↔YAML."
     parameters = {"input_path": "Input file", "output_format": "csv, json, yaml", "output_path": "Output file (optional)"}
+    category = "data"
+    rich_parameters = [
+        RichParameter(name="input_path", type="string", description="Input file path", required=True),
+        RichParameter(name="output_format", type="string", description="Output format", required=True, enum=["csv", "json", "yaml"]),
+        RichParameter(name="output_path", type="string", description="Output file path (auto-generated if not specified)", required=False),
+    ]
+    examples = ["data_convert(input_path='data.csv', output_format='json')", "data_convert(input_path='config.yaml', output_format='json', output_path='config.json')"]
     
     def execute(self, input_path: str, output_format: str, output_path: str = None, **kwargs) -> dict[str, Any]:
         try:

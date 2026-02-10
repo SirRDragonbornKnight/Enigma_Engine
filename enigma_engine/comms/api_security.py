@@ -31,7 +31,6 @@ Usage:
 
 import hashlib
 import hmac
-import json
 import logging
 import secrets
 import sqlite3

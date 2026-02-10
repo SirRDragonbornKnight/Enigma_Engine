@@ -40,7 +40,6 @@ Usage:
 """
 
 import math
-import random
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path

@@ -11,8 +11,6 @@ MAIN CLASSES: GameOverlay, OverlayWidget, OverlayManager
 
 import json
 import logging
-import os
-import sys
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
