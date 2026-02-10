@@ -12,12 +12,11 @@ MAIN CLASSES: KeyboardNavigator, FocusRing, NavigationHint
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, Dict, List, Optional, Set
+from typing import Optional
 
 from PyQt5.QtCore import QEvent, QObject, Qt, QTimer, pyqtSignal
-from PyQt5.QtGui import QColor, QKeyEvent, QKeySequence, QPalette
+from PyQt5.QtGui import QColor, QKeySequence
 from PyQt5.QtWidgets import (
-    QAction,
     QApplication,
     QCheckBox,
     QComboBox,
@@ -26,8 +25,6 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QListWidget,
     QMainWindow,
-    QMenu,
-    QMenuBar,
     QPushButton,
     QShortcut,
     QSlider,

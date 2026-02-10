@@ -41,9 +41,9 @@ import threading
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from enum import Enum, auto
+from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 

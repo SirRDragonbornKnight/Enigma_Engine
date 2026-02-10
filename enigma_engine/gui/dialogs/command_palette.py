@@ -6,15 +6,12 @@ to all GUI actions and features.
 """
 import logging
 from dataclasses import dataclass, field
-from functools import partial
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Optional
 
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal
-from PyQt5.QtGui import QFont, QIcon, QKeySequence
+from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import (
-    QApplication,
     QDialog,
-    QHBoxLayout,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -269,7 +266,6 @@ class CommandPaletteDialog(QDialog):
     def eventFilter(self, obj, event):
         """Handle keyboard navigation."""
         from PyQt5.QtCore import QEvent
-        from PyQt5.QtGui import QKeyEvent
         
         if obj == self.search_input and event.type() == QEvent.KeyPress:
             key = event.key()

@@ -13,7 +13,7 @@ import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from functools import wraps
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -402,7 +402,6 @@ class AccessControl:
 
 class PermissionError(Exception):
     """Raised when permission is denied."""
-    pass
 
 
 # Singleton

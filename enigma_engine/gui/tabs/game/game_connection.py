@@ -24,7 +24,6 @@ from PyQt5.QtWidgets import (
     QListWidgetItem,
     QMessageBox,
     QPushButton,
-    QScrollArea,
     QSpinBox,
     QTextEdit,
     QVBoxLayout,
@@ -1391,7 +1390,7 @@ def _load_custom_games(parent):
 def _start_coplay(parent):
     """Start co-play mode."""
     try:
-        from enigma_engine.tools.game_coplay import CoPlayRole, InputMethod, get_coplayer
+        from enigma_engine.tools.game_coplay import get_coplayer
         
         coplayer = get_coplayer()
         

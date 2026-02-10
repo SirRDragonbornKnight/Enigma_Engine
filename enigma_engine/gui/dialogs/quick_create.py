@@ -21,7 +21,6 @@ try:
         QMessageBox,
         QProgressBar,
         QPushButton,
-        QTextEdit,
         QVBoxLayout,
         QCheckBox,
     )

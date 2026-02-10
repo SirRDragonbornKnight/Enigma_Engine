@@ -61,7 +61,7 @@ Converts sentences into sequences of integers for the neural network.
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Protocol, Union, runtime_checkable
+from typing import Any, Dict, Optional, Protocol, Union, runtime_checkable
 
 logger = logging.getLogger(__name__)
 
@@ -640,7 +640,6 @@ def get_tokenizer(
     # Try tiktoken first (fastest)
     if tokenizer_type in ("auto", "tiktoken"):
         try:
-            import tiktoken
             tok = TiktokenWrapper()
             logger.info("Loaded tiktoken tokenizer (cl100k_base)")
             return _cache_and_return(tok)

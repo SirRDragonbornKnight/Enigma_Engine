@@ -37,19 +37,17 @@ import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Optional, Union
 
 logger = logging.getLogger(__name__)
 
 # Optional imports
 try:
-    import torch
     HAVE_TORCH = True
 except ImportError:
     HAVE_TORCH = False
 
 try:
-    import numpy as np
     HAVE_NUMPY = True
 except ImportError:
     HAVE_NUMPY = False

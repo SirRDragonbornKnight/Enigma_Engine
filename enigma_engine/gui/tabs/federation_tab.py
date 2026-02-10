@@ -29,19 +29,15 @@ from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDoubleSpinBox,
-    QFrame,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QListWidget,
     QListWidgetItem,
     QMessageBox,
-    QProgressBar,
     QPushButton,
     QSpinBox,
-    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -491,7 +487,6 @@ class FederationTab(QWidget):
     def _on_federation_selected(self, item):
         """Handle federation selection."""
         # Show federation details
-        pass
     
     def _refresh_my_federations(self):
         """Refresh list of joined federations."""

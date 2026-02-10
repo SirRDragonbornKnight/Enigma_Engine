@@ -24,10 +24,9 @@ Usage:
 """
 
 import logging
-import unicodedata
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -201,7 +200,7 @@ class RTLSupport:
         """Apply RTL layout to widget."""
         try:
             from PyQt5.QtCore import Qt
-            from PyQt5.QtWidgets import QWidget, QApplication
+            from PyQt5.QtWidgets import QWidget
             
             if isinstance(widget, QWidget):
                 widget.setLayoutDirection(Qt.RightToLeft)
@@ -400,11 +399,9 @@ class RTLAwareWidget:
     
     def _apply_rtl(self):
         """Apply RTL layout. Override in subclass."""
-        pass
     
     def _apply_ltr(self):
         """Apply LTR layout. Override in subclass."""
-        pass
 
 
 # Global instance

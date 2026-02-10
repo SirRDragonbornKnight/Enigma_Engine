@@ -4,8 +4,7 @@ Quick Actions Bar - Floating action bar for common tasks.
 Provides quick access to frequently used features like voice input,
 screenshot capture, and game mode toggle.
 """
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QFont
+from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
 
 

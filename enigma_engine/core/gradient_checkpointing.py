@@ -13,12 +13,12 @@ import functools
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Callable
 
 try:
     import torch
     import torch.nn as nn
-    from torch.utils.checkpoint import checkpoint, checkpoint_sequential
+    from torch.utils.checkpoint import checkpoint
     HAS_TORCH = True
 except ImportError:
     HAS_TORCH = False

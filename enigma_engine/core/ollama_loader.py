@@ -8,25 +8,21 @@ TYPE: Model Loading
 MAIN CLASSES: OllamaModelLoader, OllamaModelInfo
 """
 
-import hashlib
 import json
 import logging
 import os
-import re
 import struct
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 try:
-    import torch
     HAS_TORCH = True
 except ImportError:
     HAS_TORCH = False
 
 try:
-    import numpy as np
     HAS_NUMPY = True
 except ImportError:
     HAS_NUMPY = False

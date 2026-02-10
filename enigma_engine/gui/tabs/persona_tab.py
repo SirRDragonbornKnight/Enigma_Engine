@@ -26,9 +26,7 @@ from PyQt5.QtWidgets import (
     QDialogButtonBox,
     QFileDialog,
     QFormLayout,
-    QFrame,
     QGroupBox,
-    QHBoxLayout,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -42,7 +40,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from ...core.persona import AIPersona, PersonaManager, get_persona_manager
+from ...core.persona import AIPersona, get_persona_manager
 
 # =============================================================================
 # STYLE CONSTANTS
@@ -365,7 +363,6 @@ class PersonaTab(QWidget):
     
     def _load_voice_profiles(self):
         """Load voice profiles from data directory (async for system voices)."""
-        import os
         from pathlib import Path
 
         # Voice profiles directory (fast - local file check)
@@ -404,7 +401,6 @@ class PersonaTab(QWidget):
     
     def _load_avatar_presets(self):
         """Load avatar presets from data directory."""
-        import os
         from pathlib import Path
 
         # Avatar presets directory

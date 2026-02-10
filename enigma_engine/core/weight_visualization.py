@@ -14,10 +14,9 @@ import logging
 from dataclasses import dataclass
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 try:
-    import torch
     import torch.nn as nn
     HAS_TORCH = True
 except ImportError:

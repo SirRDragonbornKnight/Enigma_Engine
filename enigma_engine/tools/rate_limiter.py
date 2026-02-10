@@ -8,8 +8,7 @@ Prevents abuse and manages API quotas by limiting tool execution rates.
 import logging
 import time
 from collections import deque
-from datetime import datetime
-from typing import Dict, Optional
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 

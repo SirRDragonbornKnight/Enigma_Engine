@@ -8,9 +8,8 @@ Execute multiple tools concurrently for improved performance.
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
-from concurrent.futures import TimeoutError as FuturesTimeoutError
 from concurrent.futures import as_completed
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
 

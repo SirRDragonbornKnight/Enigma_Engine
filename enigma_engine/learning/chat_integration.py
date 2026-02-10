@@ -35,7 +35,7 @@ import logging
 import threading
 import time
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from ..core.self_improvement import (
     LearningEngine,

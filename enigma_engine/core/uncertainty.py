@@ -25,7 +25,7 @@ import logging
 import math
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +118,6 @@ class EntropyEstimator:
         Returns:
             Normalized entropy (0-1)
         """
-        import torch
         import torch.nn.functional as F
         
         # Get probabilities
@@ -449,7 +448,6 @@ class UncertaintyEstimator:
         tokenizer: Optional[Any]
     ) -> UncertaintyResult:
         """MC dropout uncertainty."""
-        import torch
         
         if tokenizer:
             input_ids = tokenizer.encode(prompt, return_tensors="pt")

@@ -1,7 +1,6 @@
 """Vision tab for Enigma AI Engine GUI - screen capture and camera support."""
 
 import logging
-import subprocess
 from datetime import datetime
 
 logger = logging.getLogger(__name__)

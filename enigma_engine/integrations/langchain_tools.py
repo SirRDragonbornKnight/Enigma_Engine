@@ -37,7 +37,7 @@ Requirements:
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Dict, List, Optional, Type, TYPE_CHECKING
+from typing import Any, List, Optional, Type
 
 logger = logging.getLogger(__name__)
 

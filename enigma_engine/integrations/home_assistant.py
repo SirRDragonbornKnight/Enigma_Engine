@@ -46,8 +46,7 @@ import logging
 import os
 import re
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple
-from urllib.parse import urljoin
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -138,7 +137,6 @@ class Area:
 
 class HomeAssistantError(Exception):
     """Base exception for Home Assistant errors."""
-    pass
 
 
 class HomeAssistant:

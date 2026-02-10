@@ -6,7 +6,7 @@ and the main Enigma AI Engine chat interface.
 """
 
 import logging
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Optional
 
 from PyQt5.QtCore import QObject, pyqtSignal
 

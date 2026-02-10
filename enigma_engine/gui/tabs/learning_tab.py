@@ -425,7 +425,6 @@ class LearningTab(QWidget):
             try:
                 from ..core.autonomous import (
                     AutonomousConfig,
-                    AutonomousLearner,
                     get_autonomous_learner,
                 )
                 

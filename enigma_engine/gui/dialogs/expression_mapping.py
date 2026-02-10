@@ -11,30 +11,23 @@ MAIN CLASSES: ExpressionMappingDialog, BlendShapeEditor, EmotionPreview
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
 try:
     from PyQt5.QtCore import Qt, pyqtSignal
-    from PyQt5.QtGui import QIcon
     from PyQt5.QtWidgets import (
         QCheckBox,
-        QComboBox,
         QDialog,
         QDoubleSpinBox,
         QFrame,
         QGroupBox,
         QHBoxLayout,
-        QHeaderView,
         QLabel,
         QListWidget,
-        QListWidgetItem,
         QMessageBox,
         QPushButton,
         QScrollArea,
         QSlider,
-        QSpinBox,
-        QTableWidget,
-        QTableWidgetItem,
         QTabWidget,
         QVBoxLayout,
         QWidget,

@@ -26,13 +26,12 @@ Usage:
     clothing.apply_outfit("casual")
 """
 
-import hashlib
 import json
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+from typing import Callable, Dict, List, Optional, Set, Tuple, Union
 
 logger = logging.getLogger(__name__)
 

@@ -92,20 +92,15 @@ logger = logging.getLogger(__name__)
 import time
 
 from PyQt5.QtCore import QSize, Qt, QThread, QTimer, pyqtSignal
-from PyQt5.QtGui import QFont, QIcon, QKeySequence, QPixmap
+from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtWidgets import (
     QAction,
     QActionGroup,
     QApplication,
     QButtonGroup,
-    QComboBox,
     QDialog,
-    QDialogButtonBox,
     QFileDialog,
     QFormLayout,
-    QFrame,
-    QGridLayout,
-    QGroupBox,
     QHBoxLayout,
     QInputDialog,
     QLabel,
@@ -113,17 +108,11 @@ from PyQt5.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMainWindow,
-    QMenu,
     QMessageBox,
-    QProgressBar,
     QPushButton,
     QRadioButton,
     QScrollArea,
-    QSizePolicy,
-    QSplitter,
     QStackedWidget,
-    QTabWidget,
-    QTextEdit,
     QVBoxLayout,
     QWidget,
     QWizard,
@@ -132,7 +121,6 @@ from PyQt5.QtWidgets import (
 
 # Import GUI mode system
 from .gui_modes import GUIMode, GUIModeManager
-from .widgets.quick_actions import FeedbackButtons, QuickActionsBar
 
 # Import dialogs
 from .dialogs.generation_preview import GenerationPreviewPopup
@@ -946,7 +934,6 @@ try:
     from ..config import CONFIG
     from ..core.model_config import MODEL_PRESETS
     from ..core.model_registry import ModelRegistry
-    from ..core.model_scaling import shrink_model
 except ImportError:
     # Running standalone
     pass
@@ -1529,7 +1516,7 @@ class EnhancedMainWindow(QMainWindow):
         # ─────────────────────────────────────────────────────────────────
         self._avatar_bridge = None
         try:
-            from ..avatar import AIAvatarBridge, create_avatar_bridge, get_avatar
+            from ..avatar import create_avatar_bridge, get_avatar
             avatar = get_avatar()
             if avatar:
                 self._avatar_bridge = create_avatar_bridge(avatar, enable_explicit=True)
@@ -1568,7 +1555,7 @@ class EnhancedMainWindow(QMainWindow):
         # ─────────────────────────────────────────────────────────────────
         self._learning_integration = None
         try:
-            from ..learning import LearningChatIntegration
+            pass
 
             # Will be properly initialized once a model is loaded
             self._learning_integration_enabled = self._gui_settings.get("learning_integration", True)
@@ -1772,7 +1759,6 @@ class EnhancedMainWindow(QMainWindow):
         """Handle escape key - if any popup/dialog is open, close it. Otherwise do nothing."""
         # This is mainly for consistency. The tray ESC functionality 
         # is handled via the overlay's keyPressEvent
-        pass
     
     def _force_quit(self):
         """Force quit Enigma AI Engine (Alt+F4)."""
@@ -1787,7 +1773,7 @@ class EnhancedMainWindow(QMainWindow):
     
     def _quick_persona_switch(self):
         """Show quick persona switch menu (Ctrl+P hotkey)."""
-        from PyQt5.QtWidgets import QMenu, QAction
+        from PyQt5.QtWidgets import QMenu
         
         menu = QMenu(self)
         menu.setStyleSheet("""
@@ -2366,7 +2352,6 @@ class EnhancedMainWindow(QMainWindow):
     def _cleanup_and_quit(self):
         """Clean up all resources and quit the application."""
         import os
-        import sys
         
         print("[Enigma AI Engine] Shutting down all components...")
         
@@ -3217,7 +3202,6 @@ class EnhancedMainWindow(QMainWindow):
             create_instructions_tab,
             create_logs_tab,
             create_network_tab,
-            create_notes_tab,
             create_robot_subtab,
             create_sessions_tab,
             create_terminal_tab,
@@ -4217,7 +4201,6 @@ class EnhancedMainWindow(QMainWindow):
             QDialogButtonBox,
             QHBoxLayout,
             QLabel,
-            QPushButton,
             QSlider,
             QSpinBox,
             QVBoxLayout,
@@ -5433,7 +5416,6 @@ class EnhancedMainWindow(QMainWindow):
         # we just don't show the thinking indicator in the chat at all.
         # The thinking_frame above the input already shows the status.
         # This is a no-op now for safety.
-        pass
     
     def _on_thinking_update(self, status: str):
         """Update the thinking indicator with current status."""
@@ -6103,7 +6085,6 @@ class EnhancedMainWindow(QMainWindow):
         """
         # AI curiosity is now handled naturally via system prompt
         # No more fake dice rolls - the AI decides when to ask
-        pass
     
     def _show_curiosity_question(self, question: str):
         """Display a curiosity question from the AI."""

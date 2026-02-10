@@ -11,10 +11,10 @@ MAIN CLASSES: DeepSpeedConfig, DeepSpeedTrainer
 
 import json
 import logging
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import torch
 import torch.nn as nn

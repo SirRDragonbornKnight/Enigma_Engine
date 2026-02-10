@@ -32,11 +32,9 @@ import io
 import wave
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Callable, Union
+from typing import Dict, List, Optional, Callable
 from enum import Enum
-import json
 import time
-import threading
 from collections import deque
 
 logger = logging.getLogger(__name__)
@@ -56,7 +54,6 @@ except ImportError:
     app_commands = None
 
 try:
-    import nacl
     HAVE_PYNACL = True
 except ImportError:
     pass

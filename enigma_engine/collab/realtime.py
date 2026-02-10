@@ -14,10 +14,9 @@ import logging
 import time
 import uuid
 from collections import defaultdict
-from collections.abc import Coroutine
 from dataclasses import asdict, dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable, Optional
 
 try:
     import websockets

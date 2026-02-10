@@ -8,19 +8,14 @@ Features:
 - Real-time preview
 """
 
-import json
-import shutil
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
 try:
     from PyQt5.QtCore import Qt, QThread, pyqtSignal
-    from PyQt5.QtGui import QFont, QIcon
+    from PyQt5.QtGui import QFont
     from PyQt5.QtWidgets import (
-        QCheckBox,
-        QDoubleSpinBox,
         QFileDialog,
-        QFrame,
         QGridLayout,
         QGroupBox,
         QHBoxLayout,
@@ -31,9 +26,7 @@ try:
         QMessageBox,
         QProgressBar,
         QPushButton,
-        QScrollArea,
         QSlider,
-        QSpinBox,
         QTabWidget,
         QTextEdit,
         QVBoxLayout,
@@ -45,8 +38,8 @@ except ImportError:
 
 from ...config import CONFIG
 from ...voice.audio_analyzer import AudioAnalyzer
-from ...voice.voice_generator import AIVoiceGenerator, create_voice_from_samples
-from ...voice.voice_profile import PROFILES_DIR, VoiceEngine, VoiceProfile, get_engine
+from ...voice.voice_generator import create_voice_from_samples
+from ...voice.voice_profile import PROFILES_DIR, VoiceProfile, get_engine
 from .shared_components import NoScrollComboBox
 
 # Voice samples directory

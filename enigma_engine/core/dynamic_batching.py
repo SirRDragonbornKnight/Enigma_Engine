@@ -21,15 +21,13 @@ Usage:
 """
 
 import logging
-import threading
 import time
 from concurrent.futures import Future
 from dataclasses import dataclass, field
 from enum import Enum
 from heapq import heappush, heappop
-from queue import PriorityQueue, Queue
 from threading import Lock, Thread
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 import torch
 

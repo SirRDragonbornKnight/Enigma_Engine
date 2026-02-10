@@ -23,7 +23,7 @@ import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Type, TypeVar, Union
+from typing import Any, Optional, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -96,11 +96,9 @@ class ForgePlugin(ABC):
     @abstractmethod
     def initialize(self) -> None:
         """Initialize the plugin. Called when plugin is loaded."""
-        pass
     
     def cleanup(self) -> None:
         """Cleanup the plugin. Called when plugin is unloaded."""
-        pass
     
     def configure(self, config: dict[str, Any]) -> None:
         """Configure the plugin with runtime settings."""
@@ -123,22 +121,18 @@ class BackendPlugin(ForgePlugin):
     @abstractmethod
     def is_available(self) -> bool:
         """Check if this backend is available on the current system."""
-        pass
     
     @abstractmethod
     def get_device(self) -> Any:
         """Get the device for this backend."""
-        pass
     
     @abstractmethod
     def prepare_model(self, model: Any) -> Any:
         """Prepare a model for inference on this backend."""
-        pass
     
     @abstractmethod
     def generate(self, model: Any, inputs: Any, **kwargs) -> Any:
         """Run generation on this backend."""
-        pass
 
 
 class TrainerPlugin(ForgePlugin):
@@ -159,7 +153,6 @@ class TrainerPlugin(ForgePlugin):
         Returns:
             Training results/metrics
         """
-        pass
     
     def validate(self, model: Any, dataset: Any) -> dict[str, Any]:
         """Validate model on dataset."""
@@ -174,16 +167,13 @@ class ModelPlugin(ForgePlugin):
     @abstractmethod
     def create_model(self, config: dict[str, Any]) -> Any:
         """Create a model instance."""
-        pass
     
     @abstractmethod
     def load_weights(self, model: Any, path: str) -> None:
         """Load weights into model."""
-        pass
     
     def save_weights(self, model: Any, path: str) -> None:
         """Save model weights."""
-        pass
 
 
 class ToolPlugin(ForgePlugin):
@@ -208,12 +198,10 @@ class ToolPlugin(ForgePlugin):
                 }
             }
         """
-        pass
     
     @abstractmethod
     def execute(self, **kwargs) -> Any:
         """Execute the tool with given arguments."""
-        pass
 
 
 class HookPlugin(ForgePlugin):

@@ -54,11 +54,10 @@ USAGE:
 """
 
 import logging
-import queue
 import threading
 import time
 from dataclasses import dataclass
-from typing import Callable, List, Optional
+from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 

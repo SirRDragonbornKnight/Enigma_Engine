@@ -11,8 +11,8 @@ import logging
 import sys
 import time
 
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QColor, QFont, QPalette
+from PyQt5.QtCore import QTimer
+from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -314,7 +314,6 @@ class ResourceMonitor(QWidget):
             
             # Try to get size from torch models
             if HAS_TORCH:
-                import torch
                 if hasattr(instance, 'parameters'):
                     # It's a torch model
                     param_size = sum(p.numel() * p.element_size() for p in instance.parameters())

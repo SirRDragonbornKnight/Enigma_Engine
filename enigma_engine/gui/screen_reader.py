@@ -25,7 +25,7 @@ import platform
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -416,7 +416,6 @@ class AccessibleWindow:
     def setup_accessibility(self):
         """Setup accessibility features for window."""
         # This would be called by the window class
-        pass
     
     def announce(self, text: str):
         """Announce text."""

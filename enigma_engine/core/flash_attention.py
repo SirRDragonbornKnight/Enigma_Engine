@@ -13,7 +13,7 @@ import logging
 import math
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, Tuple
+from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # Check for flash-attn library
 try:
     import flash_attn
-    from flash_attn import flash_attn_func, flash_attn_varlen_func
+    from flash_attn import flash_attn_func
     from flash_attn.flash_attn_interface import flash_attn_with_kvcache
     FLASH_ATTN_AVAILABLE = True
     FLASH_ATTN_VERSION = getattr(flash_attn, '__version__', '2.0')

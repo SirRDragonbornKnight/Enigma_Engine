@@ -11,13 +11,12 @@ MAIN CLASSES: PowerManager, ThermalManager, BatteryMonitor
 
 import logging
 import os
-import subprocess
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable, Optional
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

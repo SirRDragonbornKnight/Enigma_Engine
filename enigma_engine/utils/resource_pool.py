@@ -38,7 +38,7 @@ import time
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Generic, List, Optional, TypeVar
+from typing import Any, Callable, Generic, Optional, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -128,12 +128,10 @@ class ResourceFactory(ABC, Generic[T]):
     @abstractmethod
     def create(self) -> T:
         """Create a new resource."""
-        pass
     
     @abstractmethod
     def destroy(self, resource: T) -> None:
         """Destroy a resource."""
-        pass
     
     def validate(self, resource: T) -> bool:
         """Validate a resource is still usable. Override for custom validation."""

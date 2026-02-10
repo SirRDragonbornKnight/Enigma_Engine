@@ -12,13 +12,8 @@ from datetime import datetime
 from pathlib import Path
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
-    QCheckBox,
-    QDialog,
-    QDialogButtonBox,
     QFileDialog,
-    QFrame,
     QGroupBox,
     QHBoxLayout,
     QInputDialog,
@@ -30,7 +25,6 @@ from PyQt5.QtWidgets import (
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
-    QScrollArea,
     QSpinBox,
     QSplitter,
     QTabWidget,

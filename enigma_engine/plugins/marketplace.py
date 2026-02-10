@@ -12,7 +12,6 @@ MAIN CLASSES: PluginMarketplace, PluginRegistry, PluginInstaller
 import hashlib
 import json
 import logging
-import re
 import shutil
 import tempfile
 import urllib.request
@@ -20,7 +19,7 @@ import zipfile
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 

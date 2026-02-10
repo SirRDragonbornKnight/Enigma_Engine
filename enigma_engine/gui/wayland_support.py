@@ -15,14 +15,13 @@ import os
 import subprocess
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Optional
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 try:
     from PyQt5.QtCore import QRect, Qt
-    from PyQt5.QtGui import QWindow
     from PyQt5.QtWidgets import QApplication, QWidget
     HAS_QT = True
 except ImportError:
@@ -334,12 +333,11 @@ class WaylandOverlay:
     def _set_x11_properties(self):
         """Set X11 window properties for overlay."""
         try:
-            from PyQt5.QtX11Extras import QX11Info
+            pass
 
             # This would set:
             # _NET_WM_WINDOW_TYPE = _NET_WM_WINDOW_TYPE_DOCK
             # _NET_WM_STATE = _NET_WM_STATE_ABOVE, _NET_WM_STATE_STICKY
-            pass
         except ImportError:
             pass
     
@@ -460,7 +458,7 @@ class WaylandInputCapture:
     def _register_x11_hotkey(self, keys: str, callback: Callable):
         """Register X11 global hotkey."""
         try:
-            from pynput import keyboard
+            pass
 
             # Parse key combination
             # This is a simplified implementation

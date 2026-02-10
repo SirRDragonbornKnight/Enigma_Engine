@@ -5,7 +5,7 @@ Provides encryption/decryption for sensitive memories using Fernet (AES-128).
 import base64
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Optional
 
 from .categorization import Memory, MemoryCategory, MemoryType
 

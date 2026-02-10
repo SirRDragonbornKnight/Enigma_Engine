@@ -25,14 +25,9 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from PyQt5.QtCore import Qt
-    from PyQt5.QtGui import QFont
     from PyQt5.QtWidgets import (
-        QHBoxLayout,
         QLabel,
-        QPushButton,
         QTabWidget,
-        QTextEdit,
         QVBoxLayout,
         QWidget,
     )
@@ -157,7 +152,6 @@ def create_ai_tab(parent):
             tab_widget.addTab(import_widget, "Import Models")
         except Exception as e:
             logger.debug(f"Import Models tab not available: {e}")
-            pass
         
     except Exception as e:
         # If any tab fails to load, show error message

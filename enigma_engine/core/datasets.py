@@ -21,8 +21,8 @@ import logging
 import os
 import random
 from collections.abc import Iterator
-from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from dataclasses import dataclass
+from typing import Any, Optional
 
 import torch
 from torch.utils.data import Dataset, IterableDataset

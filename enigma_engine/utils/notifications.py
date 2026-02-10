@@ -31,12 +31,11 @@ import json
 import logging
 import platform
 import threading
-import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 PLATFORM = platform.system().lower()
@@ -102,7 +101,6 @@ class NotificationBackend:
     
     def play_sound(self, sound_type: str):
         """Play a notification sound."""
-        pass
 
 
 class WindowsNotificationBackend(NotificationBackend):
@@ -123,11 +121,6 @@ class WindowsNotificationBackend(NotificationBackend):
         # Try Windows Runtime (winrt) for modern notifications
         if self._toaster is None:
             try:
-                from winrt.windows.data.xml.dom import XmlDocument
-                from winrt.windows.ui.notifications import (
-                    ToastNotification,
-                    ToastNotificationManager,
-                )
                 self._winrt = True
                 logger.info("Using Windows Runtime backend")
             except ImportError:

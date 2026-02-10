@@ -18,18 +18,18 @@ Usage:
 """
 
 import logging
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable, List, Optional
 
 logger = logging.getLogger(__name__)
 
 try:
-    from PyQt5.QtCore import Qt, QSize, pyqtSignal
+    from PyQt5.QtCore import Qt, pyqtSignal
     from PyQt5.QtWidgets import (
         QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-        QPushButton, QTextEdit, QLineEdit, QLabel, QScrollArea,
-        QFrame, QSizePolicy, QShortcut
+        QPushButton, QTextEdit, QLineEdit, QLabel, QFrame,
+        QShortcut
     )
-    from PyQt5.QtGui import QFont, QKeySequence, QPalette, QColor
+    from PyQt5.QtGui import QFont, QKeySequence
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False

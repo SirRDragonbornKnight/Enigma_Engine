@@ -7,20 +7,16 @@ with individual progress indicators for each activated element.
 """
 
 import time
-from typing import Dict, List, Optional
 
 try:
     from PyQt5.QtCore import Qt, QTimer
-    from PyQt5.QtGui import QFont
     from PyQt5.QtWidgets import (
         QApplication,
         QDialog,
-        QFrame,
         QHBoxLayout,
         QLabel,
         QProgressBar,
         QPushButton,
-        QScrollArea,
         QTextEdit,
         QVBoxLayout,
         QWidget,

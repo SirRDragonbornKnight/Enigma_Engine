@@ -17,10 +17,10 @@ import logging
 from pathlib import Path
 from typing import List, Optional
 
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtWidgets import (
     QComboBox, QHBoxLayout, QLabel, QPushButton,
-    QWidget, QToolButton, QMenu, QAction
+    QWidget, QToolButton, QMenu
 )
 
 logger = logging.getLogger(__name__)

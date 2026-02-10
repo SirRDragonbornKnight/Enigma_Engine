@@ -23,12 +23,11 @@ Usage:
     add_swagger_ui(app)
 """
 
-import inspect
 import json
 import logging
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, get_type_hints
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -653,7 +652,7 @@ def add_swagger_ui(app, prefix: str = '/docs') -> None:
         app: Flask application
         prefix: URL prefix for docs (default: /docs)
     """
-    from flask import Response, send_from_directory
+    from flask import Response
     
     # Swagger UI HTML
     swagger_html = f'''

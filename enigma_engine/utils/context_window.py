@@ -32,10 +32,10 @@ USAGE:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum, auto
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +122,7 @@ class TokenCounter:
         
         # Try sentencepiece
         try:
-            import sentencepiece as spm
+            pass
 
             # Use a simple estimate if no model loaded
             self._method = "sentencepiece_estimate"

@@ -11,16 +11,14 @@ Provides unified database interface for:
 Part of the Enigma AI Engine persistence utilities.
 """
 
-import json
 import sqlite3
 import threading
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Optional, Union
 
 
 @dataclass
@@ -58,12 +56,10 @@ class DatabaseBackend(ABC):
     @abstractmethod
     def connect(self) -> bool:
         """Establish connection to database."""
-        pass
     
     @abstractmethod
     def disconnect(self) -> bool:
         """Close database connection."""
-        pass
     
     @abstractmethod
     def execute(
@@ -72,7 +68,6 @@ class DatabaseBackend(ABC):
         params: Optional[tuple] = None
     ) -> QueryResult:
         """Execute a query."""
-        pass
     
     @abstractmethod
     def execute_many(
@@ -81,32 +76,26 @@ class DatabaseBackend(ABC):
         params_list: list[tuple]
     ) -> QueryResult:
         """Execute query with multiple parameter sets."""
-        pass
     
     @abstractmethod
     def begin_transaction(self) -> bool:
         """Start a transaction."""
-        pass
     
     @abstractmethod
     def commit(self) -> bool:
         """Commit current transaction."""
-        pass
     
     @abstractmethod
     def rollback(self) -> bool:
         """Rollback current transaction."""
-        pass
     
     @abstractmethod
     def table_exists(self, table_name: str) -> bool:
         """Check if table exists."""
-        pass
     
     @abstractmethod
     def get_tables(self) -> list[str]:
         """List all tables."""
-        pass
     
     @contextmanager
     def transaction(self):

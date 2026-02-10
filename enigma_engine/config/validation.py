@@ -38,7 +38,7 @@ import os
 from dataclasses import asdict, dataclass, field, fields
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Type, TypeVar, Union, get_type_hints
+from typing import Any, TypeVar, get_type_hints
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,6 @@ T = TypeVar('T')
 
 class ConfigError(Exception):
     """Configuration validation error."""
-    pass
 
 
 class ModelSize(str, Enum):
@@ -110,7 +109,6 @@ class BaseConfig:
     
     def validate(self) -> None:
         """Override to add custom validation."""
-        pass
     
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""

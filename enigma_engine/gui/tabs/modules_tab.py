@@ -4,27 +4,22 @@ Module Manager Tab - Control all Forge capabilities
 
 Clean, functional interface for managing modules.
 """
-from typing import TYPE_CHECKING, Any, Dict, List, cast
+from typing import Any
 
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QColor, QFont
+from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
-    QCheckBox,
     QFrame,
-    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QListWidget,
-    QListWidgetItem,
     QMessageBox,
     QProgressBar,
     QPushButton,
     QScrollArea,
     QSizePolicy,
     QSplitter,
-    QStackedWidget,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -1085,7 +1080,7 @@ class ModulesTab(QWidget):
     
     def _show_profiles_menu(self):
         """Show profiles menu with save/load options."""
-        from PyQt5.QtWidgets import QMenu, QInputDialog
+        from PyQt5.QtWidgets import QMenu
         
         menu = QMenu(self)
         menu.setStyleSheet("""

@@ -34,11 +34,10 @@ Usage:
 
 import logging
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
-import io
+from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 

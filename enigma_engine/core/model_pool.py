@@ -35,12 +35,11 @@ USAGE:
 import gc
 import logging
 import threading
-import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 import psutil
 
@@ -592,7 +591,6 @@ class ModelPool:
     def _estimate_model_memory(self, model: Any) -> float:
         """Estimate memory usage of a PyTorch model in MB."""
         try:
-            import torch
             total_params = sum(p.numel() for p in model.parameters())
             # Assume float32 (4 bytes per param)
             bytes_per_param = 4

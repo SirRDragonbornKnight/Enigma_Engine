@@ -12,22 +12,18 @@ Features:
 
 import json
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Optional
 
 try:
     from PyQt5.QtCore import QEvent, Qt, pyqtSignal
-    from PyQt5.QtGui import QColor, QCursor, QPainter, QPixmap
+    from PyQt5.QtGui import QColor, QPainter
     from PyQt5.QtWidgets import (
-        QCheckBox,
         QColorDialog,
         QComboBox,
-        QDialog,
         QGroupBox,
         QHBoxLayout,
         QLabel,
         QPushButton,
-        QSlider,
-        QSpinBox,
         QVBoxLayout,
         QWidget,
     )

@@ -12,9 +12,8 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
-import torch
 
 from .base import (
     ExportProvider,
@@ -23,7 +22,6 @@ from .base import (
     ImportProvider,
     ImportResult,
     ImportStatus,
-    ProviderConfig,
 )
 
 logger = logging.getLogger(__name__)
@@ -31,7 +29,6 @@ logger = logging.getLogger(__name__)
 # Check for llama.cpp convert script or llama-cpp-python
 HAVE_LLAMA_CPP = False
 try:
-    from llama_cpp import Llama
     HAVE_LLAMA_CPP = True
 except ImportError:
     pass

@@ -31,7 +31,6 @@ Usage:
 from __future__ import annotations
 
 import logging
-import random
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
@@ -41,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 from ..config import CONFIG
 from ..utils.io_utils import safe_load_json, safe_save_json
-from .voice_profile import PROFILES_DIR, VoiceProfile
+from .voice_profile import VoiceProfile
 
 try:
     from ..core.personality import AIPersonality, PersonalityTraits

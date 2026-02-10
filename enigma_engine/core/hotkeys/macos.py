@@ -7,7 +7,7 @@ Uses Quartz Event Taps for system-wide hotkey capture.
 import logging
 import sys
 import threading
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -16,21 +16,6 @@ HAS_QUARTZ = False
 if sys.platform == 'darwin':
     try:
         # PyObjC modules for macOS
-        from Cocoa import NSEvent
-        from Quartz import (
-            CFMachPortCreateRunLoopSource,
-            CFRunLoopAddSource,
-            CFRunLoopGetCurrent,
-            CFRunLoopRun,
-            CFRunLoopStop,
-            CGEventMaskBit,
-            CGEventTapCreate,
-            CGEventTapEnable,
-            kCFRunLoopCommonModes,
-            kCGEventKeyDown,
-            kCGHeadInsertEventTap,
-            kCGSessionEventTap,
-        )
         HAS_QUARTZ = True
     except ImportError:
         logger.warning("PyObjC not available for macOS hotkeys")

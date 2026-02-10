@@ -38,16 +38,14 @@ Usage:
 import hashlib
 import json
 import logging
-import shutil
 import socket
 import struct
-import tempfile
 import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 try:
     from PyQt5.QtCore import QObject, pyqtSignal

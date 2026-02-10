@@ -39,7 +39,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import (
-    TYPE_CHECKING,
     Any,
     Callable,
     Generic,
@@ -47,7 +46,6 @@ from typing import (
     Optional,
     TypeVar,
     Union,
-    overload,
 )
 
 T = TypeVar("T")  # Success value type
@@ -58,7 +56,6 @@ F = TypeVar("F")  # Mapped error type
 
 class ResultError(Exception):
     """Raised when unwrapping a Result fails."""
-    pass
 
 
 @dataclass(frozen=True, slots=True)

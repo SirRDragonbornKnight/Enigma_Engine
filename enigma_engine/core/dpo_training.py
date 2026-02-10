@@ -41,9 +41,9 @@ DATA FORMAT:
 import copy
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Optional, Union
 
 import torch
 import torch.nn as nn
@@ -659,7 +659,6 @@ def train_dpo(
         Training results
     """
     from .inference import EnigmaEngine
-    from .tokenizer import get_tokenizer
 
     # Load model
     engine = EnigmaEngine(model_path=model_path)

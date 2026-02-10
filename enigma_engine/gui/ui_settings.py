@@ -19,9 +19,9 @@ USAGE:
 
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 

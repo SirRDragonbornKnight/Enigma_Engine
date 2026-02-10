@@ -8,7 +8,7 @@ Bidirectional model transfer - share your models AND use community models.
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import Any, Optional
 
 from .base import (
     ExportProvider,
@@ -16,7 +16,6 @@ from .base import (
     ExportStatus,
     ImportProvider,
     ImportResult,
-    ImportStatus,
     ProviderConfig,
 )
 from .huggingface import HuggingFaceImporter, HuggingFaceProvider

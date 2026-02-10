@@ -33,12 +33,11 @@ import json
 import logging
 import re
 from abc import ABC, abstractmethod
-from collections.abc import Iterator
-from dataclasses import asdict, dataclass, is_dataclass
+from dataclasses import asdict, is_dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Type, Union
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +66,6 @@ class FormatHandler(ABC):
         **options
     ) -> None:
         """Export data to stream."""
-        pass
     
     @abstractmethod
     def import_data(
@@ -76,7 +74,6 @@ class FormatHandler(ABC):
         **options
     ) -> Any:
         """Import data from stream."""
-        pass
 
 
 class JSONHandler(FormatHandler):

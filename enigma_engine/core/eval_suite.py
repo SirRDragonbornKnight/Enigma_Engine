@@ -17,7 +17,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -90,12 +90,10 @@ class Benchmark(ABC):
     @abstractmethod
     def load_data(self, path: Optional[Path] = None):
         """Load benchmark data."""
-        pass
     
     @abstractmethod
     def evaluate_sample(self, sample: BenchmarkSample, prediction: str) -> EvaluationResult:
         """Evaluate a single sample prediction."""
-        pass
     
     def get_samples(self, limit: int = 0) -> list[BenchmarkSample]:
         """Get benchmark samples."""

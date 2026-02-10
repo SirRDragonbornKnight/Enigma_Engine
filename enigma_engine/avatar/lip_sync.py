@@ -6,7 +6,6 @@ Maps phonemes to mouth shapes (visemes).
 """
 
 import re
-from typing import List, Tuple
 
 
 class LipSync:

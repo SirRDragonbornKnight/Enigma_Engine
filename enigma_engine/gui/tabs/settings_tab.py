@@ -1152,7 +1152,6 @@ def _get_lockable_widgets(parent):
 def _populate_monitors(parent, preserve_selection=False):
     """Populate the monitor dropdown with available displays."""
     from PyQt5.QtGui import QGuiApplication
-    from PyQt5.QtWidgets import QApplication
 
     # Remember current selection by screen identifier (more robust than index)
     previous_screen_name = None
@@ -1437,7 +1436,6 @@ def _disable_always_on_top(parent):
 def _reset_window_position(parent):
     """Reset main window to center of primary screen."""
     from PyQt5.QtGui import QGuiApplication
-    from PyQt5.QtWidgets import QApplication
     
     main_window = parent.window()
     if not main_window:
@@ -1455,7 +1453,6 @@ def _reset_window_position(parent):
 
 def _reset_all_settings(parent):
     """Reset all GUI settings to defaults."""
-    import json
     from pathlib import Path
 
     from PyQt5.QtWidgets import QMessageBox
@@ -3686,7 +3683,6 @@ def _refresh_connections(parent):
         else:
             # Try direct checks for memory
             try:
-                from ...memory import ConversationManager
                 _update_status_indicator(parent.memory_status, "connected")
             except Exception:
                 _update_status_indicator(parent.memory_status, "disconnected")
@@ -4095,7 +4091,7 @@ def _update_nn_backend_status(parent):
     """Update the neural network backend status label."""
     try:
         backend = parent.nn_backend_combo.currentData()
-        from ...builtin.neural_network import get_python_info, is_pypy
+        from ...builtin.neural_network import get_python_info
         
         info = get_python_info()
         

@@ -6,7 +6,7 @@ This file maintains backward compatibility.
 """
 
 from enum import Enum
-from typing import Any, BinaryIO, Dict, Optional, Union
+from typing import Any, BinaryIO, Optional, Union
 
 # Re-export everything from the main module
 from enigma_engine.utils.storage_backends import (
@@ -18,24 +18,20 @@ from enigma_engine.utils.storage_backends import (
     StorageObject,
     get_local_storage,
     get_memory_storage,
-    get_storage,
 )
 
 
 # Exceptions - kept for backward compatibility
 class StorageError(Exception):
     """Base exception for storage errors."""
-    pass
 
 
 class ObjectNotFoundError(StorageError):
     """Raised when object is not found."""
-    pass
 
 
 class PermissionDeniedError(StorageError):
     """Raised when permission is denied."""
-    pass
 
 
 # Enum for storage types

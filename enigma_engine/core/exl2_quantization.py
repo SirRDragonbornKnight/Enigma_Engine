@@ -17,9 +17,8 @@ import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Optional, Union
 
-import numpy as np
 import torch
 import torch.nn as nn
 

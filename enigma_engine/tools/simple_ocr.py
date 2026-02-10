@@ -16,7 +16,6 @@ Limited for: Handwriting, unusual fonts, rotated text
 
 import base64
 import io
-from typing import Dict, List
 
 
 class SimpleOCR:

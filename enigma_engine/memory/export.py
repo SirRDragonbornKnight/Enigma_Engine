@@ -24,7 +24,7 @@ import logging
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +93,6 @@ class ConversationExporter:
     
     def __init__(self):
         """Initialize exporter."""
-        pass
     
     def to_json(
         self,

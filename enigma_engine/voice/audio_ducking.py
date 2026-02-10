@@ -38,7 +38,6 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -343,7 +342,6 @@ class AudioDucker:
     def _duck_windows(self):
         """Duck audio using Windows pycaw."""
         try:
-            from comtypes import CLSCTX_ALL
             from pycaw.pycaw import AudioUtilities, ISimpleAudioVolume
             
             sessions = AudioUtilities.GetAllSessions()

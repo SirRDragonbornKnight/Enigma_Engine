@@ -15,11 +15,10 @@ Tools:
 
 import json
 import logging
-import os
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from .tool_registry import Tool, RichParameter
 

@@ -50,11 +50,9 @@ import fnmatch
 import logging
 import threading
 import time
-import weakref
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, Set, Type, Union
+from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 

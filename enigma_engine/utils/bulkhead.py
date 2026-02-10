@@ -20,10 +20,10 @@ import threading
 import time
 from collections import deque
 from contextlib import asynccontextmanager, contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from functools import wraps
-from typing import Any, Callable, Dict, Generic, Optional, TypeVar
+from typing import Any, Callable, Optional, TypeVar
 
 T = TypeVar('T')
 

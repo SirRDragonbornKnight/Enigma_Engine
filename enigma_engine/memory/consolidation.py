@@ -6,7 +6,7 @@ import logging
 import threading
 import time
 from datetime import datetime, timedelta
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable, Optional
 
 from .categorization import Memory, MemoryCategorization, MemoryType
 

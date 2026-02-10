@@ -7,7 +7,7 @@ Uses the Windows API (via ctypes) to register global hotkeys using RegisterHotKe
 import logging
 import sys
 import threading
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
 

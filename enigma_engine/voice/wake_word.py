@@ -36,12 +36,10 @@ import queue
 import struct
 import threading
 import time
-import wave
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -85,18 +83,15 @@ class BaseWakeWordEngine(ABC):
         Returns:
             True if wake word detected
         """
-        pass
     
     @abstractmethod
     def cleanup(self):
         """Release resources."""
-        pass
     
     @property
     @abstractmethod
     def name(self) -> str:
         """Engine name."""
-        pass
 
 
 class OpenWakeWordEngine(BaseWakeWordEngine):
@@ -561,19 +556,16 @@ class WakeWordDetector:
         available = []
         
         try:
-            import openwakeword
             available.append("openwakeword")
         except ImportError:
             pass
         
         try:
-            import pvporcupine
             available.append("porcupine")
         except ImportError:
             pass
         
         try:
-            import pocketsphinx
             available.append("pocketsphinx")
         except ImportError:
             pass

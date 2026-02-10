@@ -10,7 +10,6 @@ from pathlib import Path
 from PyQt5.QtCore import QProcess, Qt
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QListWidget,

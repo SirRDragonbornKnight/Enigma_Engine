@@ -13,8 +13,7 @@ import logging
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any
 
 try:
     import torch
@@ -25,7 +24,6 @@ except ImportError:
     HAS_TORCH = False
 
 try:
-    import numpy as np
     HAS_NUMPY = True
 except ImportError:
     HAS_NUMPY = False

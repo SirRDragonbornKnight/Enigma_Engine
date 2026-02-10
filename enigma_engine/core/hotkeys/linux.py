@@ -7,7 +7,7 @@ Uses python-xlib for X11 or fallback to keyboard library for Wayland.
 import logging
 import sys
 import threading
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -15,9 +15,7 @@ logger = logging.getLogger(__name__)
 HAS_XLIB = False
 if sys.platform.startswith('linux'):
     try:
-        from Xlib import XK, X, display
-        from Xlib.ext import record
-        from Xlib.protocol import rq
+        from Xlib import display
         HAS_XLIB = True
     except ImportError:
         logger.warning("python-xlib not available, trying keyboard library")

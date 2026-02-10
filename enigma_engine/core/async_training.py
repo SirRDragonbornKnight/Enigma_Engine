@@ -51,11 +51,11 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
 from pathlib import Path
-from queue import Queue, Empty
+from queue import Queue
 from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .training import Trainer
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -236,7 +236,6 @@ class AsyncTrainer:
         batch_size: int,
     ) -> Dict[str, Any]:
         """Execute training in background thread."""
-        from .training import train_model
         from .model import create_model
         
         self._update_progress(task, 0.0, "Initializing model")

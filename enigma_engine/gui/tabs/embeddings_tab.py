@@ -11,25 +11,20 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
 try:
-    from PyQt5.QtCore import Qt, QThread, pyqtSignal
-    from PyQt5.QtGui import QFont
+    from PyQt5.QtCore import QThread, pyqtSignal
     from PyQt5.QtWidgets import (
-        QGroupBox,
         QHBoxLayout,
         QHeaderView,
         QLabel,
         QLineEdit,
-        QListWidget,
-        QListWidgetItem,
         QMessageBox,
         QProgressBar,
         QPushButton,
-        QSplitter,
         QTableWidget,
         QTableWidgetItem,
         QTextEdit,
@@ -41,7 +36,7 @@ except ImportError:
     HAS_PYQT = False
 
 from ...config import CONFIG
-from .shared_components import NoScrollComboBox, disable_scroll_on_combos
+from .shared_components import NoScrollComboBox
 
 # Output directory
 OUTPUT_DIR = Path(CONFIG.get("outputs_dir", "outputs")) / "embeddings"

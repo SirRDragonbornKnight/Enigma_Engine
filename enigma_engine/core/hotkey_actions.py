@@ -19,7 +19,7 @@ USAGE:
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Optional
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from PyQt5.QtWidgets import QMainWindow
@@ -159,7 +159,6 @@ class HotkeyActions:
         
         try:
             # Use mss to capture screen
-            import io
             from datetime import datetime
 
             import mss

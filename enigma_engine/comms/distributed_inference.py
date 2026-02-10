@@ -40,10 +40,9 @@ import struct
 import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 try:
     from PyQt5.QtCore import QObject, pyqtSignal
@@ -53,7 +52,6 @@ except ImportError:
     QObject = object
     pyqtSignal = lambda *args: None
 
-from ..config import CONFIG
 
 logger = logging.getLogger(__name__)
 

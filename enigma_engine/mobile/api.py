@@ -179,7 +179,7 @@ if FLASK_AVAILABLE:
         voice_name = data.get('voice', 'default')
         
         try:
-            from ..voice import VoiceProfile, set_voice, speak
+            from ..voice import set_voice, speak
 
             # Set the voice profile
             try:
@@ -263,19 +263,16 @@ if FLASK_AVAILABLE:
         }
         
         try:
-            from ..voice import speak
             features['voice_tts'] = True
         except ImportError:
             pass
         
         try:
-            from ..voice import listen
             features['voice_stt'] = True
         except ImportError:
             pass
         
         try:
-            from ..core.personality import load_personality
             features['personality'] = True
         except ImportError:
             pass
@@ -624,7 +621,6 @@ if FLASK_AVAILABLE:
             from ..gui.tabs.image_tab import StableDiffusionLocal
             import base64
             from pathlib import Path
-            import uuid
             
             # Try to get image generator
             generator = StableDiffusionLocal()
@@ -861,7 +857,6 @@ if FLASK_AVAILABLE:
         
         try:
             from ..gui.tabs.threed_tab import Local3DGen
-            import base64
             from pathlib import Path
             
             # Try to get 3D generator

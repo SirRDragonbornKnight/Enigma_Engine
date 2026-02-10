@@ -10,9 +10,9 @@ MAIN CLASSES: Pruner, StructuredPruner, UnstructuredPruner, PruningScheduler
 """
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

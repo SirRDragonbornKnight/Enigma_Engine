@@ -6,7 +6,7 @@ Shows participation status, privacy settings, contribution stats, and network in
 """
 
 import logging
-from typing import Any, Optional
+from typing import Optional
 
 try:
     from PyQt5.QtCore import Qt, pyqtSignal
@@ -15,7 +15,6 @@ try:
         QCheckBox,
         QComboBox,
         QFormLayout,
-        QFrame,
         QGroupBox,
         QHBoxLayout,
         QLabel,
@@ -24,7 +23,6 @@ try:
         QPushButton,
         QScrollArea,
         QSpinBox,
-        QTextEdit,
         QVBoxLayout,
         QWidget,
     )
@@ -59,8 +57,6 @@ if HAS_PYQT:
             from ...learning import (
                 FederatedDataFilter,
                 FederatedLearning,
-                FederatedMode,
-                PrivacyLevel,
             )
             
             self.federated_learning: Optional[FederatedLearning] = None

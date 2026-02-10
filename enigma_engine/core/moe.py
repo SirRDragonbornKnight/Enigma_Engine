@@ -12,7 +12,7 @@ MAIN CLASSES: MoELayer, Router, Expert, MoETransformer
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Optional
 
 import torch
 import torch.nn as nn

@@ -22,7 +22,6 @@ Usage:
     marketplace.download(avatar_id, save_path)
 """
 
-import hashlib
 import json
 import logging
 import shutil
@@ -31,7 +30,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 

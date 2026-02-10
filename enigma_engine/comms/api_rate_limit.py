@@ -17,12 +17,11 @@ import logging
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime
 from functools import wraps
 from threading import Lock
-from typing import Callable, Dict, Optional, Tuple
+from typing import Callable, Optional
 
-from flask import g, jsonify, request
+from flask import jsonify, request
 
 logger = logging.getLogger(__name__)
 

@@ -21,14 +21,9 @@ all generation features accessible in one place.
 """
 
 try:
-    from PyQt5.QtCore import Qt
-    from PyQt5.QtGui import QFont
     from PyQt5.QtWidgets import (
-        QHBoxLayout,
         QLabel,
-        QPushButton,
         QTabWidget,
-        QTextEdit,
         QVBoxLayout,
         QWidget,
     )

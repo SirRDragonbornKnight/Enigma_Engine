@@ -8,7 +8,7 @@ Provides basic conversation when torch/models aren't available.
 import re
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class BuiltinChat:

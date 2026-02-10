@@ -35,19 +35,17 @@ USAGE:
 
 import functools
 import hashlib
-import hmac
 import json
 import logging
 import re
-import secrets
 import threading
 import time
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, TypeVar, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -55,11 +53,9 @@ logger = logging.getLogger(__name__)
 try:
     from PyQt5.QtWidgets import (
         QMessageBox, QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
-        QPushButton, QCheckBox, QLineEdit, QTextEdit, QWidget,
-        QProgressBar, QListWidget, QListWidgetItem, QApplication
+        QPushButton, QCheckBox, QLineEdit, QWidget, QProgressBar
     )
-    from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject
-    from PyQt5.QtGui import QIcon
+    from PyQt5.QtCore import QTimer
     HAS_QT = True
 except ImportError:
     HAS_QT = False

@@ -14,7 +14,7 @@ import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Optional
 
 try:
     import torch
@@ -24,7 +24,6 @@ except ImportError:
     HAS_TORCH = False
 
 try:
-    import numpy as np
     HAS_NUMPY = True
 except ImportError:
     HAS_NUMPY = False

@@ -30,7 +30,7 @@ from PyQt5.QtWidgets import (
 )
 
 from ...core.model_registry import ModelRegistry
-from ...core.model_scaling import grow_model, shrink_model
+from ...core.model_scaling import shrink_model
 from ..tabs.shared_components import NoScrollComboBox
 
 

@@ -12,14 +12,12 @@ Part of the Enigma AI Engine GUI notification suite.
 
 import json
 import logging
-import queue
 import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
-from enum import Enum, auto
+from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -1021,7 +1019,6 @@ class NotificationSystem:
     def _on_notification(self, notification: Notification):
         """Handle new notification."""
         # Could update status bar, etc.
-        pass
     
     def _type_to_sound(self, notif_type: NotificationType) -> SoundType:
         """Map notification type to sound type."""

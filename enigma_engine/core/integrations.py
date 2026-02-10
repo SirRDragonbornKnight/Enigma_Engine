@@ -54,19 +54,18 @@ from __future__ import annotations
 
 import json
 import logging
-import subprocess
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, TYPE_CHECKING
+from typing import Any, Callable, Dict, Generator, List, Optional, TYPE_CHECKING
 
 from ..config import CONFIG
 
 # Lazy imports to avoid circular dependencies
 if TYPE_CHECKING:
-    from .trainer_ai import TrainerAI, AIBundleSpec
-    from ..tools.data_trainer import CharacterTrainer, TaskTrainer, CharacterProfile
+    from .trainer_ai import TrainerAI
+    from ..tools.data_trainer import CharacterTrainer, TaskTrainer
     from .tool_router import ToolRouter
     from .model_registry import ModelRegistry
     from ..utils.context_window import ContextTracker

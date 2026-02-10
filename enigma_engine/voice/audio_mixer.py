@@ -26,7 +26,6 @@ Usage:
 """
 
 import logging
-import os
 import queue
 import threading
 import time
@@ -34,7 +33,7 @@ import wave
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import numpy as np
 

@@ -24,7 +24,7 @@ USAGE:
 
 import asyncio
 import logging
-from typing import Dict, Optional
+from typing import Optional
 
 import numpy as np
 
@@ -224,7 +224,7 @@ class FederatedParticipant:
         # Train using Enigma AI Engine training infrastructure
         loss = 0.0
         try:
-            from enigma_engine.core.training import Trainer, TrainingConfig
+            from enigma_engine.core.training import TrainingConfig
             
             config = TrainingConfig(
                 epochs=1,  # Single epoch per federated round

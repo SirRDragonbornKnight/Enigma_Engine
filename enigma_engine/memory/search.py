@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from .categorization import Memory, MemoryCategorization, MemoryType
 from .memory_db import MemoryDatabase

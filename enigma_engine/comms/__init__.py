@@ -168,8 +168,6 @@ except ImportError:
 
 # Optional imports (may require Flask)
 try:
-    from .mobile_api import MobileAPI, create_mobile_api
-    from .web_server import WebServer, create_web_server
     HAS_WEB = True
 except ImportError:
     HAS_WEB = False

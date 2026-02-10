@@ -11,14 +11,13 @@ Features:
 
 import json
 import logging
-import os
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 from pathlib import Path
 
 from PyQt5.QtCore import QDate, Qt, QTime, QTimer
-from PyQt5.QtGui import QColor, QFont
+from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
     QCheckBox,
     QDateEdit,

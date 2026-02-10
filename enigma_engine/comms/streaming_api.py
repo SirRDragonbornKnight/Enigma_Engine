@@ -31,7 +31,6 @@ Usage:
 import asyncio
 import json
 import logging
-import queue
 import threading
 import time
 from dataclasses import dataclass, field
@@ -42,7 +41,6 @@ logger = logging.getLogger(__name__)
 
 # Try imports
 try:
-    import aiohttp
     AIOHTTP_AVAILABLE = True
 except ImportError:
     AIOHTTP_AVAILABLE = False
@@ -54,7 +52,6 @@ except ImportError:
     FLASK_AVAILABLE = False
 
 try:
-    import websockets
     WEBSOCKETS_AVAILABLE = True
 except ImportError:
     WEBSOCKETS_AVAILABLE = False

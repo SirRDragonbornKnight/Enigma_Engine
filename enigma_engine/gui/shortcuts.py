@@ -17,7 +17,7 @@ Usage:
 
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Set
 
@@ -25,8 +25,8 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
-    QPushButton, QLabel, QLineEdit, QMessageBox, QHeaderView,
-    QShortcut, QWidget, QKeySequenceEdit, QGroupBox, QComboBox
+    QPushButton, QLabel, QMessageBox, QHeaderView, QShortcut,
+    QWidget, QKeySequenceEdit, QGroupBox, QComboBox
 )
 
 logger = logging.getLogger(__name__)

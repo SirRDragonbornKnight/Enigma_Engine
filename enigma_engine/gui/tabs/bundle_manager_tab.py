@@ -22,7 +22,6 @@ from typing import Any, Dict, List, Optional
 from PyQt5.QtCore import Qt, QThread, QTimer, pyqtSignal
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
-    QComboBox,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
@@ -40,9 +39,6 @@ from PyQt5.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
-    QSizePolicy,
-    QSpinBox,
-    QTextEdit,
     QVBoxLayout,
     QWidget,
 )

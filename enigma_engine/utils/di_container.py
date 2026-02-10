@@ -13,10 +13,10 @@ Part of the Enigma AI Engine architecture patterns.
 
 import inspect
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from threading import Lock
-from typing import Any, Callable, Dict, Generic, Optional, Type, TypeVar, get_type_hints
+from typing import Any, Callable, Optional, TypeVar, get_type_hints
 
 T = TypeVar('T')
 
@@ -30,22 +30,18 @@ class Lifetime(Enum):
 
 class DependencyError(Exception):
     """Base exception for dependency injection errors."""
-    pass
 
 
 class ServiceNotRegisteredError(DependencyError):
     """Raised when resolving an unregistered service."""
-    pass
 
 
 class CircularDependencyError(DependencyError):
     """Raised when circular dependency detected."""
-    pass
 
 
 class ScopeNotActiveError(DependencyError):
     """Raised when trying to resolve scoped service outside scope."""
-    pass
 
 
 @dataclass

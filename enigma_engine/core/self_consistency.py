@@ -13,12 +13,11 @@ PAPER: "Self-Consistency Improves Chain of Thought Reasoning in Language Models"
 import difflib
 import logging
 import re
-import threading
 import time
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
 

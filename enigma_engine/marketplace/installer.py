@@ -16,7 +16,7 @@ import shutil
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Optional
 
 from ..config import CONFIG
 from .marketplace import InstallResult, PluginInfo

@@ -11,11 +11,10 @@ MAIN CLASSES: PluginTemplate, PluginScaffold, ToolPlugin, TabPlugin, ThemePlugin
 
 import json
 import logging
-import shutil
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -66,15 +65,12 @@ class PluginBase(ABC):
     @abstractmethod
     def metadata(self) -> PluginMetadata:
         """Return plugin metadata."""
-        pass
     
     def on_load(self):
         """Called when plugin is loaded."""
-        pass
     
     def on_unload(self):
         """Called when plugin is unloaded."""
-        pass
     
     def on_enable(self):
         """Called when plugin is enabled."""
@@ -105,7 +101,6 @@ class ToolPlugin(PluginBase):
         Returns:
             List of tool definition dicts with name, description, parameters
         """
-        pass
     
     @abstractmethod
     def execute(self, tool_name: str, parameters: dict) -> Any:
@@ -119,7 +114,6 @@ class ToolPlugin(PluginBase):
         Returns:
             Tool result
         """
-        pass
 
 
 class TabPlugin(PluginBase):
@@ -133,7 +127,6 @@ class TabPlugin(PluginBase):
         Returns:
             Dict with 'name', 'icon', 'tooltip'
         """
-        pass
     
     @abstractmethod
     def create_widget(self, parent=None):
@@ -146,7 +139,6 @@ class TabPlugin(PluginBase):
         Returns:
             QWidget for the tab
         """
-        pass
 
 
 class ThemePlugin(PluginBase):
@@ -160,7 +152,6 @@ class ThemePlugin(PluginBase):
         Returns:
             Dict with color definitions
         """
-        pass
     
     @abstractmethod
     def get_stylesheet(self) -> str:
@@ -170,7 +161,6 @@ class ThemePlugin(PluginBase):
         Returns:
             CSS/QSS stylesheet string
         """
-        pass
 
 
 class ProcessorPlugin(PluginBase):
@@ -179,12 +169,10 @@ class ProcessorPlugin(PluginBase):
     @abstractmethod
     def process_input(self, text: str) -> str:
         """Pre-process user input."""
-        pass
     
     @abstractmethod
     def process_output(self, text: str) -> str:
         """Post-process AI output."""
-        pass
 
 
 # ============================================================================

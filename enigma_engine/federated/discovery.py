@@ -25,8 +25,7 @@ import logging
 import socket
 import threading
 import time
-from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Optional
 
 from .federation import FederationInfo, FederationMode
 

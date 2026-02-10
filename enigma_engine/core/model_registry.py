@@ -1333,7 +1333,6 @@ def fine_tune_pretrained(
             epochs=5
         )
     """
-    from pathlib import Path
     
     registry = ModelRegistry(models_dir)
     capabilities = capabilities or ["chat"]

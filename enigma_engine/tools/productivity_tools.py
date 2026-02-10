@@ -7,7 +7,7 @@ import os
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from .tool_registry import Tool, RichParameter
 

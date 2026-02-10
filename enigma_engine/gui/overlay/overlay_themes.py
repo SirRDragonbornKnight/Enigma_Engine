@@ -6,7 +6,6 @@ and different use cases (gaming, productivity, etc.).
 """
 
 from dataclasses import dataclass
-from typing import Dict
 
 
 @dataclass

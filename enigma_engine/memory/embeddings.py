@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from typing import Any, List, Optional
+from typing import List, Optional
 
 import numpy as np
 
@@ -73,7 +73,6 @@ class EmbeddingGenerator:
         try:
             import os
 
-            import openai
 
             # Get API key from environment
             api_key = os.environ.get("OPENAI_API_KEY")

@@ -30,20 +30,16 @@ import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, List, Optional
+from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 # Qt imports
 try:
     from PyQt5.QtWidgets import (
-        QApplication, QWidget, QMainWindow, QLabel, QPushButton,
-        QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QSpinBox,
-        QCheckBox, QRadioButton, QGroupBox, QTabWidget, QMenuBar,
-        QMenu, QAction, QStatusBar, QToolBar, QListWidget, QTreeWidget,
-        QTableWidget, QScrollArea, QDockWidget, QDialog, QMessageBox
+        QApplication, QWidget, QMainWindow, QMenu, QAction
     )
-    from PyQt5.QtGui import QFont, QFontDatabase, QKeySequence
+    from PyQt5.QtGui import QFont, QKeySequence
     from PyQt5.QtCore import Qt, QObject, pyqtSignal
     QT_AVAILABLE = True
 except ImportError:

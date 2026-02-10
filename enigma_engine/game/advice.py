@@ -12,13 +12,11 @@ MAIN CLASSES: GameAdvisor, AdviceEngine, ContextAnalyzer
 import logging
 import queue
 import random
-import re
 import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Optional
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

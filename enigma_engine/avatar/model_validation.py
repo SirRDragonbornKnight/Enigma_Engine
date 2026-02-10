@@ -12,8 +12,7 @@ MAIN CLASSES: ModelValidator, ValidationResult, ValidationRule
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
 

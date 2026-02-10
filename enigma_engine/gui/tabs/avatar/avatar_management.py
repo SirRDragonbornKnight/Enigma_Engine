@@ -9,7 +9,7 @@ Enhanced avatar management with:
 """
 
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 try:
     from PyQt5.QtCore import Qt, pyqtSignal
@@ -23,7 +23,6 @@ try:
         QMessageBox,
         QPushButton,
         QScrollArea,
-        QSizePolicy,
         QVBoxLayout,
         QWidget,
     )

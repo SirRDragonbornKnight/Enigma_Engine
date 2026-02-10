@@ -21,7 +21,7 @@ Install: pip install pygltflib trimesh numpy
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 # Check for required libraries
 try:
@@ -31,13 +31,11 @@ except ImportError:
     PYGLTFLIB_AVAILABLE = False
 
 try:
-    import numpy as np
     NUMPY_AVAILABLE = True
 except ImportError:
     NUMPY_AVAILABLE = False
 
 try:
-    import trimesh
     TRIMESH_AVAILABLE = True
 except ImportError:
     TRIMESH_AVAILABLE = False

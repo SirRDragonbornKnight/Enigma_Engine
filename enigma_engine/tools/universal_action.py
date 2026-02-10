@@ -30,7 +30,7 @@ import threading
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Optional
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)

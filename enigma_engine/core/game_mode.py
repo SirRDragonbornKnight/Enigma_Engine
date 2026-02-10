@@ -13,7 +13,7 @@ Mapping:
 """
 
 import logging
-from typing import Any, Callable, Optional
+from typing import Callable, Optional
 
 # Import everything from gaming_mode (the main implementation)
 from .gaming_mode import (
@@ -99,11 +99,9 @@ class GameModeWatcher:
     
     def start(self):
         """Start watching (no-op - GamingMode handles this)."""
-        pass
     
     def stop(self):
         """Stop watching (no-op - GamingMode handles this)."""
-        pass
 
 
 # Global instance using the same singleton as gaming_mode

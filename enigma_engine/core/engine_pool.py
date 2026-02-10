@@ -30,10 +30,10 @@ import threading
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
-    from .inference import EnigmaEngine
+    pass
 
 logger = logging.getLogger(__name__)
 

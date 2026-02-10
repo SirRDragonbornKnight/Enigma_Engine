@@ -42,25 +42,20 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Callable, Optional
 
 # Try PyQt5
 try:
     from PyQt5.QtCore import (
-        QEasingCurve,
         QPoint,
-        QPropertyAnimation,
         QRect,
-        QSize,
         Qt,
         QTimer,
         pyqtSignal,
     )
     from PyQt5.QtGui import (
-        QBrush,
         QColor,
         QFont,
-        QFontMetrics,
         QLinearGradient,
         QPainter,
         QPainterPath,
@@ -69,8 +64,6 @@ try:
     )
     from PyQt5.QtWidgets import (
         QApplication,
-        QGraphicsDropShadowEffect,
-        QLabel,
         QMenu,
         QWidget,
     )

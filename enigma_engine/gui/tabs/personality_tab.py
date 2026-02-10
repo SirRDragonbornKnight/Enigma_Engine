@@ -11,7 +11,6 @@ Allows users to:
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QCheckBox,
-    QFrame,
     QGroupBox,
     QHBoxLayout,
     QLabel,

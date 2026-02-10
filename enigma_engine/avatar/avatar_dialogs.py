@@ -9,15 +9,14 @@ Provides easy-to-use dialogs for:
 
 import os
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Optional
 
 try:
-    from PyQt5.QtCore import QMimeData, QSize, Qt, QTimer, pyqtSignal
+    from PyQt5.QtCore import QSize, Qt, pyqtSignal
     from PyQt5.QtGui import (
         QColor,
         QDragEnterEvent,
         QDropEvent,
-        QIcon,
         QPainter,
         QPixmap,
     )
@@ -30,15 +29,10 @@ try:
         QHBoxLayout,
         QLabel,
         QLineEdit,
-        QListWidget,
-        QListWidgetItem,
         QMessageBox,
-        QProgressBar,
         QPushButton,
         QScrollArea,
-        QStackedWidget,
         QTabWidget,
-        QTextEdit,
         QVBoxLayout,
         QWidget,
     )

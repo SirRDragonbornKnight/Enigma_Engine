@@ -27,16 +27,15 @@ USAGE:
 
 from __future__ import annotations
 
-import io
 import logging
 import queue
 import re
 import threading
 import time
-from collections.abc import Generator, Iterator
-from dataclasses import dataclass, field
+from collections.abc import Generator
+from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Any, Callable, List, Optional, Tuple
+from typing import Callable
 
 import numpy as np
 
@@ -496,7 +495,6 @@ class StreamingTTS:
         try:
             import asyncio
             import tempfile
-            import wave
             
             edge_tts = self._engine["module"]
             

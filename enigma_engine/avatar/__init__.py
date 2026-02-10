@@ -81,22 +81,11 @@ from .adaptive_animator import (
 # Uses only PyQt5's built-in OpenGL support
 from .animation_3d_native import (
     AI3DController,
-    Animation3DState,
-    Avatar3DWidget,
-    GLTFLoader,
     NativeAvatar3D,
 )
 
 # AI-controlled animation systems (Cortana/JARVIS style)
 # 2D Animation (GIF, sprite sheets, image sequences)
-from .animation_system import (
-    AIAvatarController,
-    Animation,
-)
-from .animation_system import AnimationState as AnimationState2D
-from .animation_system import (
-    AvatarAnimator,
-)
 from .avatar_identity import (
     PERSONALITY_TO_APPEARANCE,
     AIAvatarIdentity,
@@ -231,14 +220,6 @@ from .sample_avatars import (
 )
 
 # Spawnable objects system (avatar can spawn items on screen)
-from .spawnable_objects import (
-    AttachPoint,
-    ObjectSpawner,
-    ObjectType,
-    ObjectWindow,
-    SpawnedObject,
-    get_spawner,
-)
 
 # Speech synchronization (voice + lip sync)
 from .speech_sync import (

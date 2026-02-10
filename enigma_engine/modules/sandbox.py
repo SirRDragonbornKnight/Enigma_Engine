@@ -12,7 +12,6 @@ Features:
 """
 
 import logging
-import os
 import time
 from pathlib import Path
 
@@ -24,7 +23,7 @@ except ImportError:
     HAS_RESOURCE = False
     resource = None  # type: ignore
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -265,7 +264,6 @@ class ModuleSandbox:
 
 class SandboxViolationError(Exception):
     """Raised when sandbox restrictions are violated."""
-    pass
 
 
 def create_default_sandbox_config(

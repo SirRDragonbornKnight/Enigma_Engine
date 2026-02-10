@@ -17,7 +17,7 @@ import urllib.request
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Optional
 
 from ..config import CONFIG
 from .marketplace import PluginCategory, PluginInfo, PluginVersion
@@ -31,17 +31,14 @@ class PluginRepository(ABC):
     @abstractmethod
     def get_plugins(self) -> list[PluginInfo]:
         """Get all plugins from this repository."""
-        pass
     
     @abstractmethod
     def get_plugin(self, plugin_id: str) -> Optional[PluginInfo]:
         """Get a specific plugin by ID."""
-        pass
     
     @abstractmethod
     def download(self, plugin_id: str, version: str, dest: Path) -> bool:
         """Download a plugin to destination."""
-        pass
 
 
 class LocalRepository(PluginRepository):

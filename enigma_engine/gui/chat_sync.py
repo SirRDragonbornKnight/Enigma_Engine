@@ -7,8 +7,7 @@ Messages sent from either chat appear in both immediately.
 """
 
 import time
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 try:
     from PyQt5.QtCore import Q_ARG, QMetaObject, QObject, Qt, pyqtSignal
@@ -18,7 +17,6 @@ except ImportError:
     QObject = object
     pyqtSignal = lambda *args: None
 
-from ..config import CONFIG
 
 # Maximum messages to keep in memory (prevents unbounded growth)
 MAX_MESSAGES = 200

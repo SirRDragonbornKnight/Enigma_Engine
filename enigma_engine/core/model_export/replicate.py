@@ -6,10 +6,9 @@ Replicate is a platform for running and sharing ML models via API.
 
 import json
 import logging
-import os
 import shutil
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 import torch
 
@@ -20,7 +19,6 @@ from .base import (
     ImportProvider,
     ImportResult,
     ImportStatus,
-    ProviderConfig,
 )
 
 logger = logging.getLogger(__name__)
@@ -29,7 +27,6 @@ logger = logging.getLogger(__name__)
 HAVE_REPLICATE = False
 replicate_client = None
 try:
-    import replicate as replicate_client
     HAVE_REPLICATE = True
 except ImportError:
     pass

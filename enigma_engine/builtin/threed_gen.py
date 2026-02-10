@@ -7,7 +7,7 @@ Generates basic geometric shapes and primitives.
 
 import math
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 
 class Builtin3DGen:

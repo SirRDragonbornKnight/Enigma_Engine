@@ -6,7 +6,7 @@ Validates tool parameters against schemas with detailed error reporting.
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 

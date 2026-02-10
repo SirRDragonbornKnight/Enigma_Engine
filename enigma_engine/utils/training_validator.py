@@ -5,7 +5,7 @@ Checks training data format, quality, and provides suggestions for improvement.
 """
 
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 
 class TrainingDataValidator:

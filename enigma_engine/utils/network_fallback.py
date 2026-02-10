@@ -45,7 +45,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar
+from typing import Any, Callable
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)

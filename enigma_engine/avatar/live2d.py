@@ -31,7 +31,7 @@ import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Callable, Dict, List, Optional, Union
 import time
 import threading
 
@@ -532,7 +532,6 @@ def is_live2d_supported() -> bool:
         True if live2d-py is installed
     """
     try:
-        import live2d
         return True
     except ImportError:
         return False

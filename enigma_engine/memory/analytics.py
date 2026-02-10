@@ -3,9 +3,8 @@ Memory Analytics for Enigma AI Engine
 Provides usage statistics and access pattern analysis.
 """
 import logging
-from collections import Counter
-from datetime import datetime, timedelta
-from typing import Any, Dict, List
+from datetime import datetime
+from typing import Any
 
 from .categorization import Memory, MemoryCategorization, MemoryType
 

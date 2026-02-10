@@ -8,7 +8,7 @@ mobile, web browsers, and various inference engines.
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 import torch
 
@@ -19,14 +19,12 @@ logger = logging.getLogger(__name__)
 # Check for ONNX
 HAVE_ONNX = False
 try:
-    import onnx
     HAVE_ONNX = True
 except ImportError:
     pass
 
 HAVE_ONNXRUNTIME = False
 try:
-    import onnxruntime
     HAVE_ONNXRUNTIME = True
 except ImportError:
     pass
@@ -155,7 +153,6 @@ class ONNXProvider(ExportProvider):
             if optimize and HAVE_ONNXRUNTIME:
                 try:
                     import onnxruntime as ort
-                    from onnxruntime.transformers import optimizer
                     
                     optimized_path = output_path / "model_optimized.onnx"
                     

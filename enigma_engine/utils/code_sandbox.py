@@ -24,12 +24,10 @@ import ast
 import io
 import logging
 import multiprocessing
-import sys
 import time
-import traceback
 from contextlib import redirect_stdout, redirect_stderr
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 

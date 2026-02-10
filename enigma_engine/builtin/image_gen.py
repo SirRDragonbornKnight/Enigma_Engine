@@ -8,7 +8,7 @@ Creates simple procedural images without needing Stable Diffusion or any ML mode
 import math
 import struct
 import zlib
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 
 class BuiltinImageGen:

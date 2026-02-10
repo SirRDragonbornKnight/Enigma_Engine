@@ -25,13 +25,9 @@ Usage:
     state = reader.get_state()
 """
 
-import json
 import logging
-import re
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
-from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -114,7 +110,6 @@ class ScreenAnalyzer:
         
         # Try to import OCR
         try:
-            import pytesseract
             self._ocr_available = True
         except ImportError:
             logger.debug("pytesseract not available, OCR disabled")

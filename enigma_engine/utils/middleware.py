@@ -38,8 +38,7 @@ import time
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable
 from dataclasses import dataclass, field
-from functools import wraps
-from typing import Any, Callable, Dict, Generic, List, Optional, TypeVar, Union
+from typing import Any, Callable, Optional, TypeVar, Union
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +134,6 @@ class Middleware(ABC):
         Returns:
             Response object
         """
-        pass
     
     @property
     def name(self) -> str:

@@ -25,12 +25,11 @@ Usage:
 import asyncio
 import json
 import logging
-import queue
 import threading
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 

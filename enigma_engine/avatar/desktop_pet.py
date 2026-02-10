@@ -30,10 +30,9 @@ Usage:
 import sys
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum, auto
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Optional
 
 # Platform detection
 IS_WINDOWS = sys.platform == 'win32'
@@ -44,18 +43,14 @@ IS_MAC = sys.platform == 'darwin'
 try:
     from PyQt5.QtCore import (
         QByteArray,
-        QEasingCurve,
         QObject,
         QPoint,
-        QPropertyAnimation,
         QRect,
-        QSize,
         Qt,
         QTimer,
         pyqtSignal,
     )
     from PyQt5.QtGui import (
-        QBrush,
         QColor,
         QCursor,
         QFont,
@@ -64,14 +59,10 @@ try:
         QPainterPath,
         QPen,
         QPixmap,
-        QScreen,
     )
     from PyQt5.QtWidgets import (
         QApplication,
-        QGraphicsOpacityEffect,
-        QLabel,
         QMenu,
-        QVBoxLayout,
         QWidget,
     )
     HAS_PYQT = True
@@ -91,7 +82,6 @@ except ImportError:
     QSvgRenderer = None  # type: ignore
     HAS_SVG = False
 
-from ..config import CONFIG
 
 # Global pet instance for tool access
 _global_pet: Optional['DesktopPet'] = None
@@ -991,7 +981,6 @@ class DesktopPet(QObject):
             return
         
         # Could add frame-by-frame animation here
-        pass
     
     def _behavior_loop(self):
         """Autonomous behavior loop (runs in thread)."""

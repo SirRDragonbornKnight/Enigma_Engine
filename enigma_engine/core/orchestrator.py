@@ -47,12 +47,12 @@ USAGE:
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Optional
 
-from .capability_registry import CapabilityRegistry, get_capability_registry
-from .collaboration import ModelCollaboration, get_collaboration
-from .model_pool import ModelPool, ModelPoolConfig, get_model_pool
-from .task_offloader import OffloaderConfig, TaskOffloader, get_offloader
+from .capability_registry import get_capability_registry
+from .collaboration import get_collaboration
+from .model_pool import ModelPoolConfig, get_model_pool
+from .task_offloader import OffloaderConfig, get_offloader
 
 logger = logging.getLogger(__name__)
 

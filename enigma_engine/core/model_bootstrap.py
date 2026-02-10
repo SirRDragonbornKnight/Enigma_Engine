@@ -27,14 +27,12 @@ CONNECTED FILES:
 """
 
 import logging
-import time
 from enum import Enum
 from pathlib import Path
-from typing import Callable, List, Optional, Tuple
+from typing import Callable, Optional
 
 import torch
 
-from ..config import CONFIG
 from .model import Forge, create_model
 from .tokenizer import get_tokenizer
 

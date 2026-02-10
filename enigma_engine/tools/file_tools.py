@@ -19,7 +19,7 @@ import logging
 import platform
 import shutil
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from .tool_registry import RichParameter, Tool
 

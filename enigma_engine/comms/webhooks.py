@@ -23,7 +23,7 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from queue import Empty, Queue
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Optional
 
 
 class WebhookEvent(Enum):

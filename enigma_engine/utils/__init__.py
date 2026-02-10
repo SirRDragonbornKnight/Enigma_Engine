@@ -18,17 +18,6 @@ from .battery_manager import (
 )
 
 # Constants - centralized magic numbers
-from .constants import (
-    DEFAULT_API_TIMEOUT,
-    DEFAULT_IMAGE_HEIGHT,
-    DEFAULT_IMAGE_WIDTH,
-    DEFAULT_MAX_NEW_TOKENS,
-    DEFAULT_TEMPERATURE,
-    DEFAULT_TOP_K,
-    DEFAULT_TOP_P,
-    DEFAULT_WEB_TIMEOUT,
-    MAX_FILE_SIZE_BYTES,
-)
 # Structured error handling
 from .errors import (
     ErrorAggregator,
@@ -49,13 +38,6 @@ from .error_handler import ErrorHandler, GracefulFileHandler
 from .feedback import FeedbackCollector
 
 # GPU utilities - common operations to avoid duplication
-from .gpu import (
-    clear_cuda_cache,
-    get_best_device,
-    get_gpu_memory_info,
-    is_cuda_available,
-    is_mps_available,
-)
 from .json_cache import (
     get_cache_stats,
     invalidate_cache,
@@ -72,7 +54,6 @@ from .performance_monitor import (
 )
 
 # JSON storage utilities
-from .storage import JsonStorageMixin, load_json_file, save_json_file
 
 # Re-export from submodules for convenience
 from .system_messages import (

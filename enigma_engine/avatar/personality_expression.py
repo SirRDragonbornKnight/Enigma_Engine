@@ -11,9 +11,9 @@ MAIN CLASSES: PersonalityExpression, PersonalityTraits, ExpressionStyle
 
 import logging
 import random
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 

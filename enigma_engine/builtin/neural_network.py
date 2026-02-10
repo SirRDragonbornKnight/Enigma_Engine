@@ -55,15 +55,13 @@ Lines 3143-3295: Factory functions (get_model_for_size, convert_*, load_*)
 import json
 import math
 import multiprocessing as mp
-import os
 import platform
 import random
 import struct
 import sys
 from dataclasses import dataclass
-from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Optional, Union
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # OPTIONAL ACCELERATORS (Auto-detected, priority: Cython > Numba > PyPy > Pure)
@@ -2117,7 +2115,6 @@ class PureSGD:
     def zero_grad(self):
         """Zero all gradients (they get accumulated)."""
         # Gradients are recomputed each backward pass
-        pass
 
 
 class PureAdam:

@@ -13,15 +13,14 @@ Avatars Generated:
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Optional
 
 # Check for PyQt5 (needed for drawing)
 try:
-    from PyQt5.QtCore import QPoint, QPointF, QRect, Qt
+    from PyQt5.QtCore import QRect, Qt
     from PyQt5.QtGui import (
         QBrush,
         QColor,
-        QFont,
         QLinearGradient,
         QPainter,
         QPainterPath,

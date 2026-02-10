@@ -8,8 +8,7 @@ Generates basic motion graphics and transitions.
 import math
 import struct
 import time
-import zlib
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 
 class BuiltinVideoGen:

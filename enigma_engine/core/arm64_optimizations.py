@@ -9,15 +9,13 @@ TYPE: Core/Performance
 MAIN CLASSES: ARM64Optimizer, NEONKernels, PowerManager, MemoryOptimizer
 """
 
-import ctypes
 import logging
 import os
 import platform
-import subprocess
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

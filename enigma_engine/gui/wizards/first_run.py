@@ -4,9 +4,7 @@ try:
     from PyQt5.QtCore import pyqtSignal
     from PyQt5.QtWidgets import (
         QButtonGroup,
-        QFormLayout,
         QLabel,
-        QLineEdit,
         QRadioButton,
         QVBoxLayout,
         QWizard,

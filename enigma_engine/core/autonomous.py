@@ -34,17 +34,14 @@ import logging
 import random
 import threading
 import time
-from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Optional
 
 from .self_improvement import (
     AutonomousConfig,
-    LearningEngine,
     LearningExample,
     LearningSource,
-    PerformanceMetrics,
     Priority,
     get_learning_engine,
 )

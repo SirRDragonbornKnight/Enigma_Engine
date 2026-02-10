@@ -28,7 +28,6 @@ Usage:
 """
 
 import logging
-import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum, auto

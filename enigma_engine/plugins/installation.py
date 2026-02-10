@@ -9,7 +9,6 @@ TYPE: Plugin System
 MAIN CLASSES: PluginInstaller, InstalledPlugin, PluginRegistry
 """
 
-import hashlib
 import importlib.util
 import json
 import logging
@@ -20,7 +19,7 @@ import zipfile
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
 

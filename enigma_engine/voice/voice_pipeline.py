@@ -29,10 +29,10 @@ import logging
 import queue
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any, Callable
+from typing import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -654,7 +654,7 @@ class VoicePipeline:
     def _init_vosk(self):
         """Initialize Vosk STT."""
         try:
-            from vosk import KaldiRecognizer, Model
+            from vosk import Model
             model_path = Path(__file__).parent / "models" / "vosk-model-small"
             if model_path.exists():
                 model = Model(str(model_path))
@@ -1165,7 +1165,6 @@ class VoicePipeline:
     def _recognize_whisper(self) -> str:
         """Recognize using Whisper."""
         try:
-            import numpy as np
             import sounddevice as sd
 
             # Record audio

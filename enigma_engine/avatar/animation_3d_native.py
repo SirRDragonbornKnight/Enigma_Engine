@@ -33,16 +33,14 @@ Usage:
 
 import base64
 import json
-import os
 import struct
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Optional
 
 # Numpy for matrix math (already in requirements)
 try:
-    import numpy as np
     HAS_NUMPY = True
 except ImportError:
     HAS_NUMPY = False
@@ -51,9 +49,8 @@ except ImportError:
 # PyQt5 OpenGL (built into PyQt5, no extra install)
 try:
     from PyQt5.QtCore import QObject, Qt, QTimer, pyqtSignal
-    from PyQt5.QtGui import QColor, QMatrix4x4, QQuaternion, QVector3D
-    from PyQt5.QtOpenGL import QGLFormat
-    from PyQt5.QtWidgets import QOpenGLWidget, QVBoxLayout, QWidget
+    from PyQt5.QtGui import QMatrix4x4, QQuaternion, QVector3D
+    from PyQt5.QtWidgets import QOpenGLWidget
     HAS_PYQT_GL = True
 except ImportError:
     HAS_PYQT_GL = False
@@ -64,7 +61,6 @@ except ImportError:
 # OpenGL bindings require many constants (GL_DEPTH_TEST, GL_BLEND, etc.)
 # and functions (glEnable, glClear, etc.) - explicit imports would be verbose.
 try:
-    from OpenGL import GL
     from OpenGL.GL import *  # noqa: F401,F403 - OpenGL star import is standard practice
     from OpenGL.GLU import *  # noqa: F401,F403
     HAS_OPENGL = True

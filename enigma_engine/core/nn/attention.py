@@ -6,7 +6,7 @@ Contains:
 - GroupedQueryAttention: GQA for memory efficiency  
 - SlidingWindowAttention: For long sequences
 """
-from typing import Optional, Tuple
+from typing import Optional
 
 import torch
 import torch.nn as nn

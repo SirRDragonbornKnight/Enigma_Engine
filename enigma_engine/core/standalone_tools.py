@@ -34,7 +34,7 @@ USAGE:
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -211,7 +211,6 @@ def _use_vision(
     Returns:
         Description or answer about the image
     """
-    from ..modules.manager import ModuleManager
     from ..tools.vision import analyze_image
     
     if image_path is None and image is None:
@@ -622,7 +621,6 @@ def _use_gif_generation(
         Path to generated GIF
     """
     try:
-        import os
         import time
 
         from PIL import Image
@@ -760,7 +758,7 @@ def _use_avatar(
         Result dictionary
     """
     try:
-        from ..avatar.controller import AvatarController, get_avatar_controller
+        from ..avatar.controller import get_avatar_controller
         
         controller = get_avatar_controller()
         

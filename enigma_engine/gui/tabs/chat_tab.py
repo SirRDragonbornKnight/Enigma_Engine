@@ -39,25 +39,20 @@ USAGE:
     tabs.addTab(chat_widget, "Chat")
 """
 
-from PyQt5.QtCore import QMimeData, Qt, QUrl
-from PyQt5.QtGui import QClipboard, QIcon, QImage, QKeySequence, QPixmap
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QIcon, QImage, QKeySequence, QPixmap
 from PyQt5.QtWidgets import (
     QApplication,
     QComboBox,
     QFileDialog,
     QFrame,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QProgressBar,
     QPushButton,
-    QScrollArea,
     QShortcut,
-    QSizePolicy,
-    QSplitter,
     QTextBrowser,
-    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -983,7 +978,6 @@ Tip: Start a new chat if context is running out."""
 
 def _attach_file(parent):
     """Open file dialog to attach files."""
-    from pathlib import Path
     
     file_filter = (
         "All Files (*);;"
@@ -1008,7 +1002,6 @@ def _add_attachment(parent, source):
         parent: The parent widget
         source: File path (str) or QImage for clipboard pastes
     """
-    import os
     import tempfile
     from pathlib import Path
 
@@ -2199,7 +2192,7 @@ def _clear_prompt_history(prompt_list):
 def _populate_persona_combo(parent):
     """Populate the persona dropdown with available personas."""
     try:
-        from ...utils.personas import PersonaManager, PREDEFINED_PERSONAS
+        from ...utils.personas import PersonaManager
         
         manager = PersonaManager()
         all_personas = manager.list_personas()
@@ -2497,7 +2490,7 @@ def _handle_chat_link(parent, url):
 
 def _handle_feedback_link(parent, url):
     """Handle feedback links clicked in chat."""
-    from PyQt5.QtWidgets import QApplication, QInputDialog, QMessageBox
+    from PyQt5.QtWidgets import QInputDialog
     
     url_str = url.toString() if hasattr(url, 'toString') else str(url)
     
@@ -2586,7 +2579,6 @@ def _copy_code_block(parent, code_hash: str):
         code_hash: MD5 hash of the code content
     """
     from PyQt5.QtGui import QGuiApplication
-    from PyQt5.QtWidgets import QApplication
 
     # Try to find the code in the chat display HTML
     html = parent.chat_display.toHtml() if hasattr(parent, 'chat_display') else ""
@@ -2698,7 +2690,7 @@ def _go_to_search_position(parent, index):
     if not parent._search_positions or index >= len(parent._search_positions):
         return
     
-    from PyQt5.QtGui import QColor, QTextCharFormat, QTextCursor
+    from PyQt5.QtGui import QTextCursor
     
     pos = parent._search_positions[index]
     search_len = len(parent.search_input.text())

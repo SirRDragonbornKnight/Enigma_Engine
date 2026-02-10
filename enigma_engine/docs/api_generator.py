@@ -9,7 +9,6 @@ TYPE: Documentation
 MAIN CLASSES: APIDocGenerator, APIEndpoint, APISchema
 """
 
-import ast
 import importlib
 import inspect
 import json
@@ -19,7 +18,7 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, get_type_hints
+from typing import Any, Callable, Optional, get_type_hints
 
 logger = logging.getLogger(__name__)
 

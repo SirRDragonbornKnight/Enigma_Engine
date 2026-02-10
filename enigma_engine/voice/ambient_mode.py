@@ -9,14 +9,12 @@ TYPE: Voice
 MAIN CLASSES: AmbientListener, WakeWordDetector, BackgroundAssistant
 """
 
-import io
 import logging
-import queue
 import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, List, Optional
+from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +94,6 @@ class WakeWordDetector:
         
         # Option 1: Porcupine
         try:
-            import pvporcupine
             self._engine = "porcupine"
             logger.info("Using Porcupine for wake word detection")
             return
@@ -105,7 +102,6 @@ class WakeWordDetector:
         
         # Option 2: OpenWakeWord
         try:
-            import openwakeword
             self._engine = "openwakeword"
             logger.info("Using OpenWakeWord for wake word detection")
             return
@@ -114,7 +110,6 @@ class WakeWordDetector:
         
         # Option 3: Snowboy
         try:
-            import snowboy
             self._engine = "snowboy"
             logger.info("Using Snowboy for wake word detection")
             return
@@ -166,7 +161,6 @@ class WakeWordDetector:
         try:
             import struct
 
-            import pvporcupine
 
             # Convert bytes to int16 array
             audio = struct.unpack(f'{len(audio_data)//2}h', audio_data)
@@ -184,7 +178,7 @@ class WakeWordDetector:
     def _openwakeword_detect(self, audio_data: bytes) -> Optional[str]:
         """Detect using OpenWakeWord."""
         try:
-            import openwakeword
+            pass
 
             # Convert to numpy
             audio = np.frombuffer(audio_data, dtype=np.int16)

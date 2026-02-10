@@ -22,7 +22,7 @@ import struct
 from dataclasses import dataclass, field
 from enum import IntEnum
 from pathlib import Path
-from typing import Any, BinaryIO, Dict, List, Optional, Tuple, Union
+from typing import Any, BinaryIO, Optional, Union
 
 logger = logging.getLogger(__name__)
 

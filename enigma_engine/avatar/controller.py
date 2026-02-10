@@ -62,18 +62,15 @@ express emotions, "interact" with windows, and speak with lip sync.
     • docs/AVATAR_SYSTEM_GUIDE.md        - Full avatar documentation
 """
 
-import ctypes
 import json
 import logging
-import re
-import subprocess
 import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum, IntEnum
 from pathlib import Path
 from threading import Lock
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Optional
 
 from ..config import CONFIG
 

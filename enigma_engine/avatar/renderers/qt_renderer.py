@@ -5,17 +5,16 @@ Renders avatar as a transparent, always-on-top overlay window.
 """
 
 import sys
-from typing import Dict, Optional
+from typing import Optional
 
 from ..avatar_identity import AvatarAppearance
 from .base import BaseRenderer
-from .default_sprites import generate_sprite, get_sprite_data_url
+from .default_sprites import generate_sprite
 
 try:
     from PyQt5.QtCore import QPoint, Qt, QTimer
-    from PyQt5.QtGui import QCursor, QPixmap
     from PyQt5.QtSvg import QSvgWidget
-    from PyQt5.QtWidgets import QApplication, QLabel, QWidget
+    from PyQt5.QtWidgets import QApplication, QWidget
     PYQT5_AVAILABLE = True
 except ImportError:
     PYQT5_AVAILABLE = False

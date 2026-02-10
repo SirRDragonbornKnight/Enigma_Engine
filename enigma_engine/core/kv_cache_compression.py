@@ -24,12 +24,11 @@ Usage:
 """
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
 import torch
-import torch.nn as nn
 
 logger = logging.getLogger(__name__)
 

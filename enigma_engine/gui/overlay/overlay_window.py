@@ -8,9 +8,9 @@ providing quick AI interaction without leaving games or other apps.
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Optional
 
-from PyQt5.QtCore import QPoint, Qt, QTimer, pyqtSignal
+from PyQt5.QtCore import QPoint, Qt, pyqtSignal
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
     QFrame,
@@ -33,7 +33,7 @@ from .overlay_modes import (
     OverlayPosition,
     OverlaySettings,
 )
-from .overlay_themes import OverlayTheme, get_theme
+from .overlay_themes import get_theme
 
 logger = logging.getLogger(__name__)
 

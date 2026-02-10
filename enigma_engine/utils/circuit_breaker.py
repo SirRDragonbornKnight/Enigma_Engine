@@ -33,7 +33,7 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from functools import wraps
-from typing import Any, Callable, Dict, List, Optional, Type
+from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +81,6 @@ class CircuitStats:
 
 class CircuitBreakerError(Exception):
     """Raised when circuit breaker is open."""
-    pass
 
 
 class CircuitBreaker:

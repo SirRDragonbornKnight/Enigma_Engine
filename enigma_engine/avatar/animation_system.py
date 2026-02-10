@@ -35,11 +35,11 @@ Usage:
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable, Optional
 
 try:
-    from PyQt5.QtCore import QByteArray, QObject, QTimer, pyqtSignal
-    from PyQt5.QtGui import QColor, QImage, QPainter, QPixmap
+    from PyQt5.QtCore import QObject, QTimer, pyqtSignal
+    from PyQt5.QtGui import QImage, QPixmap
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False

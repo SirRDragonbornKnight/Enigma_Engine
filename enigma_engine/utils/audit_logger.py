@@ -27,7 +27,6 @@ Usage:
 
 import json
 import logging
-import os
 import threading
 import time
 from dataclasses import asdict, dataclass, field

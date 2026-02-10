@@ -9,15 +9,13 @@ Features:
   - Export logs to file
 """
 
-from datetime import datetime
 from pathlib import Path
 
-from PyQt5.QtCore import QFileSystemWatcher, Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QColor, QFont, QTextCharFormat, QTextCursor
 from PyQt5.QtWidgets import (
     QCheckBox,
     QFileDialog,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,

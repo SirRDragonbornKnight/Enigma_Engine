@@ -2,13 +2,12 @@
 Memory Export/Import API
 Allows exporting and importing memories across sessions and devices.
 """
-import hashlib
 import json
 import logging
 import zipfile
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from .categorization import Memory, MemoryCategorization, MemoryType
 from .vector_db import VectorDBInterface

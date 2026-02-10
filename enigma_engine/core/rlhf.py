@@ -11,15 +11,13 @@ MAIN CLASSES: RewardModel, PPOTrainer, RLHFPipeline
 
 import logging
 import random
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from dataclasses import dataclass
+from typing import Any
 
 try:
     import torch
     import torch.nn as nn
     import torch.nn.functional as F
-    from torch.utils.data import DataLoader, Dataset
     HAS_TORCH = True
 except ImportError:
     HAS_TORCH = False

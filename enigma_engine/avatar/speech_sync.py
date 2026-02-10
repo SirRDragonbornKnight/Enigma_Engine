@@ -25,15 +25,15 @@ import json
 import logging
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
 
 # Try to import voice module
 try:
-    from ..voice import VoiceEngine, get_engine
+    from ..voice import get_engine
     from ..voice import speak as voice_speak
     VOICE_AVAILABLE = True
 except ImportError:

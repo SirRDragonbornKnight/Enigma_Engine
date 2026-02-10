@@ -13,7 +13,7 @@ Tools for personal assistant functionality:
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from .tool_registry import Tool, RichParameter
 

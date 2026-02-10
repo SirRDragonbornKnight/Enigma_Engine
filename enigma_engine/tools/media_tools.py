@@ -10,11 +10,10 @@ Tools:
   - extract_audio: Extract audio from video
 """
 
-import os
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from .tool_registry import Tool, RichParameter
 
@@ -62,7 +61,6 @@ class MusicGenerateTool(Tool):
             
             # Try audiocraft/musicgen
             try:
-                import torch
                 from audiocraft.data.audio import audio_write
                 from audiocraft.models import MusicGen
 
@@ -219,7 +217,6 @@ class RemoveBackgroundTool(Tool):
             
             # Try backgroundremover
             try:
-                import backgroundremover
                 from backgroundremover.bg import remove as bg_remove
                 from PIL import Image
                 
@@ -286,7 +283,6 @@ class UpscaleImageTool(Tool):
             # Try Real-ESRGAN
             try:
                 import cv2
-                import numpy as np
                 from basicsr.archs.rrdbnet_arch import RRDBNet
                 from realesrgan import RealESRGANer
                 
@@ -387,8 +383,6 @@ class StyleTransferTool(Tool):
             
             # Try fast neural style transfer
             try:
-                import torch
-                import torchvision.transforms as transforms
                 from PIL import Image
 
                 # Simple color-based style transfer as fallback

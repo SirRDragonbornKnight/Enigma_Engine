@@ -12,11 +12,10 @@ MAIN CLASSES: PIIScrubber, PIIDetector, PIIPattern
 import hashlib
 import logging
 import re
-import time
 from dataclasses import dataclass, field
 from enum import Enum
 from re import Pattern
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 

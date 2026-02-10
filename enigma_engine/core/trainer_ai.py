@@ -59,7 +59,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..tools.data_trainer import CharacterProfile, CharacterTrainer
+    from ..tools.data_trainer import CharacterProfile
 
 from ..config import CONFIG
 

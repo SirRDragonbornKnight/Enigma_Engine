@@ -71,19 +71,16 @@ class ScreenCapture:
             logger.debug(f"PIL ImageGrab test failed: {e}")
         
         try:
-            import mss
             return "mss"
         except ImportError:
             pass
         
         try:
-            import pyautogui
             return "pyautogui"
         except ImportError:
             pass
         
         try:
-            import pyscreenshot
             return "pyscreenshot"
         except ImportError:
             pass

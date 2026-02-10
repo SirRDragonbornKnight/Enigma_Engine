@@ -66,7 +66,7 @@ from .voice_profile import PROFILES_DIR, VoiceProfile
 logger = logging.getLogger(__name__)
 
 try:
-    from ..core.personality import AIPersonality, PersonalityTraits
+    from ..core.personality import AIPersonality
     PERSONALITY_AVAILABLE = True
 except ImportError:
     PERSONALITY_AVAILABLE = False

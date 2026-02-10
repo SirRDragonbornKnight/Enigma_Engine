@@ -11,10 +11,8 @@ References:
 """
 
 import math
-from collections import defaultdict
-from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 import torch
 import torch.distributed as dist

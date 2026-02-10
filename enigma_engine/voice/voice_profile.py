@@ -28,14 +28,11 @@ from __future__ import annotations
 
 import logging
 import platform
-import shlex
 import shutil
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
 
 from ..utils.io_utils import safe_load_json, safe_save_json
-from ..utils.system_messages import error_msg, warning_msg
 
 logger = logging.getLogger(__name__)
 
@@ -368,7 +365,6 @@ class VoiceEngine:
     
     def _platform_speak(self, text: str):
         """Platform-specific TTS fallback."""
-        import os
         import subprocess
         
         try:

@@ -30,14 +30,12 @@ Usage:
 
 import logging
 from collections.abc import Generator
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional
 
 logger = logging.getLogger(__name__)
 
 # Type hints for optional dependencies
 if TYPE_CHECKING:
-    import torch as torch_types
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # Check for transformers
@@ -55,7 +53,6 @@ try:
         AutoModelForCausalLM,
         AutoTokenizer,
     )
-    from transformers.generation.configuration_utils import GenerationConfig
     from transformers.generation.streamers import TextIteratorStreamer
     from transformers.utils.quantization_config import BitsAndBytesConfig
     HAVE_TRANSFORMERS = True

@@ -11,20 +11,18 @@ Features:
 
 import json
 import logging
-import os
 import re
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Optional, Union
 
 logger = logging.getLogger(__name__)
 
 # Optional imports
 try:
-    import aiohttp
     HAS_AIOHTTP = True
 except ImportError:
     HAS_AIOHTTP = False

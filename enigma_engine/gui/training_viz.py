@@ -29,7 +29,7 @@ import threading
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -44,11 +44,10 @@ except ImportError:
 try:
     from PyQt5.QtWidgets import (
         QWidget, QVBoxLayout, QHBoxLayout, QTabWidget,
-        QLabel, QFrame, QSplitter, QScrollArea, QGridLayout,
-        QPushButton, QSpinBox, QComboBox
+        QLabel, QGridLayout, QPushButton
     )
     from PyQt5.QtCore import Qt, QTimer, pyqtSignal
-    from PyQt5.QtGui import QFont, QPainter, QColor, QPen, QBrush
+    from PyQt5.QtGui import QPainter, QColor, QPen, QBrush
     PYQT5_AVAILABLE = True
 except ImportError:
     PYQT5_AVAILABLE = False
@@ -623,7 +622,6 @@ class VisualizationCallback:
     
     def on_epoch_end(self, epoch: int):
         """Called at end of each epoch."""
-        pass
 
 
 def create_visualizer() -> Optional[TrainingVisualizer]:

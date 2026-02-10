@@ -10,7 +10,7 @@ import os
 import threading
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 # Thread-safe cache for JSON files
 _json_cache: dict[str, tuple] = {}  # path -> (mtime, data)

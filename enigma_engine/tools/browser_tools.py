@@ -16,7 +16,7 @@ import json
 import os
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .tool_registry import Tool, RichParameter
 
@@ -535,7 +535,6 @@ class BrowserFocusTool(Tool):
                 # Windows - use ctypes (internal)
                 try:
                     import ctypes
-                    from ctypes import wintypes
                     
                     user32 = ctypes.windll.user32
                     

@@ -12,19 +12,14 @@ import time
 
 logger = logging.getLogger(__name__)
 from pathlib import Path
-from typing import Any, Dict, List, Optional
 
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
-from PyQt5.QtGui import QFont, QPixmap
+from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import (
-    QDoubleSpinBox,
     QFileDialog,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QListWidget,
-    QListWidgetItem,
     QMessageBox,
     QProgressBar,
     QPushButton,
@@ -34,7 +29,6 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from .shared_components import NoScrollComboBox
 
 HAS_PYQT = True
 
@@ -69,7 +63,7 @@ class GIFGenerationWorker(QThread):
     
     def run(self):
         try:
-            import io
+            pass
 
             from PIL import Image
             

@@ -15,10 +15,9 @@ import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Set, Union
+from typing import Optional
 
 import torch
-import torch.nn.functional as F
 
 logger = logging.getLogger(__name__)
 
@@ -55,12 +54,10 @@ class GenerationConstraint(ABC):
         Returns:
             Boolean tensor of valid tokens, or None to allow all
         """
-        pass
     
     @abstractmethod
     def is_complete(self, generated_text: str) -> bool:
         """Check if generation is complete according to constraint."""
-        pass
 
 
 @dataclass

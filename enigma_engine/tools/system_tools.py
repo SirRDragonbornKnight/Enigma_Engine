@@ -14,7 +14,7 @@ import re
 import shlex
 import subprocess
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from .tool_registry import RichParameter, Tool
 

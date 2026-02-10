@@ -8,17 +8,14 @@ Allows users to:
   - Save/load custom profiles
 """
 
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QColor, QFont
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
-    QCheckBox,
-    QFrame,
     QGroupBox,
     QHBoxLayout,
     QInputDialog,
     QLabel,
     QMessageBox,
-    QProgressBar,
     QPushButton,
     QSizePolicy,
     QSplitter,
@@ -33,7 +30,6 @@ from enigma_engine.tools.tool_manager import (
     PRESETS,
     TOOL_CATEGORIES,
     TOOL_DEPENDENCIES,
-    ToolManager,
     get_tool_manager,
 )
 

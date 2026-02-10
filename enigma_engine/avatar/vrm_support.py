@@ -14,7 +14,7 @@ import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -237,7 +237,6 @@ class VRMLoader:
     
     def __init__(self):
         """Initialize VRM loader."""
-        pass
     
     def load(self, path: Path) -> VRMModel:
         """

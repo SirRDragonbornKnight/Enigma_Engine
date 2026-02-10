@@ -12,7 +12,7 @@ MAIN CLASSES: ActivationRecorder, AttentionAnalyzer, LayerProfiler
 import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 try:
     import torch
@@ -392,7 +392,6 @@ if HAS_TORCH:
             Returns:
                 Dict with timing and memory per layer
             """
-            import time
             
             self._layer_times.clear()
             self._layer_memory.clear()

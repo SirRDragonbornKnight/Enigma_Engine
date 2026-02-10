@@ -48,13 +48,11 @@ CONNECTED PATHS:
 """
 
 import base64
-import io
 import logging
 import os
-import subprocess
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -63,15 +61,12 @@ try:
     from PyQt5.QtGui import (
         QBrush,
         QColor,
-        QCursor,
-        QFont,
         QImage,
         QPainter,
         QPen,
         QPixmap,
     )
     from PyQt5.QtWidgets import (
-        QApplication,
         QCheckBox,
         QDoubleSpinBox,
         QFileDialog,
@@ -83,8 +78,6 @@ try:
         QMessageBox,
         QProgressBar,
         QPushButton,
-        QRubberBand,
-        QSizeGrip,
         QSpinBox,
         QTextEdit,
         QVBoxLayout,
@@ -95,7 +88,6 @@ except ImportError:
     HAS_PYQT = False
 
 from ...config import CONFIG
-from .shared_components import NoScrollComboBox, disable_scroll_on_combos
 
 # Output directory
 OUTPUT_DIR = Path(CONFIG.get("outputs_dir", "outputs")) / "images"
@@ -1125,7 +1117,7 @@ class ImageTab(QWidget):
         
         # Style Presets (from shared components)
         try:
-            from .shared_components import STYLE_PRESETS, PresetSelector
+            from .shared_components import PresetSelector
             
             preset_row = QHBoxLayout()
             self.style_preset = PresetSelector("image", self)

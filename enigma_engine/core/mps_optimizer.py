@@ -12,7 +12,7 @@ MAIN CLASSES: MPSOptimizer, MPSMemoryManager, MPSProfiler
 import logging
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 try:
     import torch
@@ -73,7 +73,6 @@ if HAS_TORCH:
             return None
         
         try:
-            import platform
             import subprocess
 
             # Get chip info

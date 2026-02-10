@@ -10,14 +10,10 @@ MAIN CLASSES: TokenExplorer, EmbeddingClusterer, SemanticAnalyzer
 """
 
 import logging
-from collections import defaultdict
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any
 
 try:
-    import torch
-    import torch.nn as nn
     HAS_TORCH = True
 except ImportError:
     HAS_TORCH = False

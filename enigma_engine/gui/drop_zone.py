@@ -19,7 +19,7 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QDragEnterEvent, QDropEvent
 from PyQt5.QtWidgets import (
     QFrame, QLabel, QVBoxLayout, QListWidget, QListWidgetItem,
-    QPushButton, QHBoxLayout, QWidget, QFileDialog
+    QPushButton, QHBoxLayout, QFileDialog
 )
 
 logger = logging.getLogger(__name__)

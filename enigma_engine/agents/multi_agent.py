@@ -36,15 +36,12 @@ USAGE:
 
 import json
 import logging
-import threading
-import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from queue import Queue
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Optional
 
 from ..config import CONFIG
 

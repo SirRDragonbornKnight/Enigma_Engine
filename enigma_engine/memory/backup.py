@@ -6,7 +6,6 @@ Provides automatic backup and restoration of memories.
 from __future__ import annotations
 
 import logging
-import shutil
 import threading
 import time
 from datetime import datetime

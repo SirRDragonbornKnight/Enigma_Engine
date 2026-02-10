@@ -26,7 +26,7 @@ import threading
 import time
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Generic, Iterator, Optional, TypeVar
+from typing import Any, Callable, Generic, Iterator, Optional, TypeVar
 
 K = TypeVar('K')
 V = TypeVar('V')

@@ -40,12 +40,10 @@ import logging
 import os
 import shutil
 import struct
-import tempfile
 import wave
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
 
 from ..config import CONFIG
 
@@ -59,7 +57,6 @@ except ImportError:
     NUMPY_AVAILABLE = False
 
 try:
-    from scipy import signal
     from scipy.io import wavfile
     SCIPY_AVAILABLE = True
 except ImportError:
@@ -458,7 +455,6 @@ class VoiceCloner:
         """
         try:
             import torch
-            import torch.nn.functional as F
         except ImportError:
             logger.debug("PyTorch not available for local neural analysis")
             return None
@@ -697,7 +693,6 @@ class VoiceCloner:
         """
         try:
             from TTS.encoder.utils.generic_utils import setup_encoder_model
-            from TTS.tts.utils.speakers import SpeakerManager
             from TTS.utils.audio import AudioProcessor
         except ImportError:
             logger.debug("Coqui TTS not available")
@@ -871,7 +866,6 @@ class VoiceCloner:
         audio_pre = np.append(audio[0], audio[1:] - pre_emphasis * audio[:-1])
         
         # LPC analysis
-        from scipy.signal import lfilter
 
         # Number of LPC coefficients
         order = 2 + sr // 1000

@@ -13,20 +13,17 @@ All generation tabs (Image, Code, Video, Audio, Embeddings, 3D) should inherit f
 """
 
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Optional
 
 try:
-    from PyQt5.QtCore import Qt, QThread, pyqtSignal
-    from PyQt5.QtGui import QFont
+    from PyQt5.QtCore import QThread, pyqtSignal
     from PyQt5.QtWidgets import (
-        QFrame,
         QGroupBox,
         QHBoxLayout,
         QLabel,
         QMessageBox,
         QProgressBar,
         QPushButton,
-        QSizePolicy,
         QVBoxLayout,
         QWidget,
     )
@@ -40,11 +37,7 @@ from .shared_components import NoScrollComboBox, disable_scroll_on_combos
 # Import unified patterns for device-aware styling
 try:
     from .unified_patterns import (
-        Colors,
         get_button_style,
-        get_group_style,
-        get_progress_style,
-        get_style_config,
     )
     HAS_UNIFIED = True
 except ImportError:
@@ -420,7 +413,6 @@ class BaseGenerationTab(QWidget):
             self.preview_label.setMinimumHeight(200)
             self.main_layout.addWidget(self.preview_label, stretch=1)
         """
-        pass
     
     def setup_settings(self):
         """
@@ -437,7 +429,6 @@ class BaseGenerationTab(QWidget):
             settings_layout.addStretch()
             self.main_layout.addLayout(settings_layout)
         """
-        pass
     
     def setup_input_area(self):
         """
@@ -453,7 +444,6 @@ class BaseGenerationTab(QWidget):
             input_group.setLayout(input_layout)
             self.main_layout.addWidget(input_group)
         """
-        pass
     
     def setup_buttons(self, btn_layout: QHBoxLayout):
         """
@@ -465,7 +455,6 @@ class BaseGenerationTab(QWidget):
             self.copy_btn.clicked.connect(self._copy_output)
             btn_layout.addWidget(self.copy_btn)
         """
-        pass
     
     def _generate(self):
         """
@@ -573,7 +562,6 @@ class BaseGenerationTab(QWidget):
                 pixmap = QPixmap(path)
                 self.preview_label.setPixmap(pixmap.scaled(...))
         """
-        pass
     
     def on_generation_error(self, result: dict):
         """

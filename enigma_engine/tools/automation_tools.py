@@ -20,7 +20,7 @@ import threading
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Optional
 
 from .tool_registry import RichParameter, Tool
 
@@ -363,7 +363,6 @@ def _get_clipboard() -> str:
     
     # Try PyQt5 QClipboard (internal)
     try:
-        from PyQt5.QtCore import QMimeData
         from PyQt5.QtWidgets import QApplication
         
         app = QApplication.instance()

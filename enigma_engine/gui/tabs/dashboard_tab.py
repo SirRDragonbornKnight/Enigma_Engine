@@ -19,26 +19,18 @@ from pathlib import Path
 
 import psutil
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
-from PyQt5.QtGui import QBrush, QColor, QFont, QPainter, QPainterPath, QPen
+from PyQt5.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
 from PyQt5.QtWidgets import (
     QFrame,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
-    QInputDialog,
     QLabel,
-    QLineEdit,
-    QMessageBox,
-    QProgressBar,
     QPushButton,
-    QScrollArea,
-    QSizePolicy,
-    QSpacerItem,
     QVBoxLayout,
     QWidget,
 )
 
-from ...config import CONFIG
 
 # === Storage for dashboard settings ===
 DASHBOARD_DIR = Path.home() / ".enigma_engine" / "dashboard"

@@ -37,7 +37,7 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -329,7 +329,6 @@ class GenerationProvider(ABC):
         
         Override if you need custom cleanup beyond deleting self._instance.
         """
-        pass
     
     @abstractmethod
     def _do_generate(self, **kwargs) -> dict[str, Any]:

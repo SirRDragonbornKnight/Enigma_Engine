@@ -10,7 +10,7 @@ import logging
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List
+from typing import Any
 
 try:
     import numpy as np
@@ -236,7 +236,6 @@ class SecureAggregator:
         For now, we implement a simplified version that just does weighted
         averaging but marks it as secure.
         """
-        from .federated import WeightUpdate
         
         logger.info("Using secure aggregation (simplified MPC)")
         

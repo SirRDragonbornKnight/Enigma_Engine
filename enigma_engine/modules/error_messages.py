@@ -15,7 +15,6 @@ Usage:
 """
 
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple
 
 
 @dataclass

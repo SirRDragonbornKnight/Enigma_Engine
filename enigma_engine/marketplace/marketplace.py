@@ -19,14 +19,12 @@ import hashlib
 import json
 import logging
 import shutil
-import tempfile
 import zipfile
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
-from urllib.parse import urljoin
+from typing import Any, Callable, Optional
 
 from ..config import CONFIG
 

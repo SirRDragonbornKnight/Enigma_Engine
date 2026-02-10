@@ -9,13 +9,11 @@ TYPE: Core/Inference
 MAIN CLASSES: TreeAttention, SpeculativeDecoder, ParallelBeamSearch
 """
 
-import heapq
 import logging
 import math
-from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 try:
     import torch

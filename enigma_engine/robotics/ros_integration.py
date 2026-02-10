@@ -11,13 +11,12 @@ MAIN CLASSES: ROSBridge, ROSNode, ROSTopicManager
 
 import json
 import logging
-import struct
 import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
 from queue import Queue
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Optional
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

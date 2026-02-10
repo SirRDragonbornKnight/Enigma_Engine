@@ -11,17 +11,15 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
 try:
     from PyQt5.QtCore import Qt, QThread, pyqtSignal
-    from PyQt5.QtGui import QFont
     from PyQt5.QtWidgets import (
         QCheckBox,
         QFileDialog,
-        QGroupBox,
         QHBoxLayout,
         QLabel,
         QLineEdit,
@@ -29,7 +27,6 @@ try:
         QProgressBar,
         QPushButton,
         QSlider,
-        QTextEdit,
         QVBoxLayout,
         QWidget,
     )
@@ -39,7 +36,7 @@ except ImportError:
 
 from ...config import CONFIG
 from .output_helpers import open_file_in_explorer, open_folder, open_in_default_viewer
-from .shared_components import NoScrollComboBox, disable_scroll_on_combos
+from .shared_components import NoScrollComboBox
 
 # Output directory
 OUTPUT_DIR = Path(CONFIG.get("outputs_dir", "outputs")) / "audio"
@@ -496,7 +493,7 @@ class AudioTab(QWidget):
         
         # Voice Preset selector (from shared components)
         try:
-            from .shared_components import STYLE_PRESETS, PresetSelector
+            from .shared_components import PresetSelector
             
             preset_row = QHBoxLayout()
             self.voice_preset = PresetSelector("audio", self)

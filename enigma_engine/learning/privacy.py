@@ -7,7 +7,7 @@ cannot reconstruct the original training examples.
 """
 
 import logging
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import numpy as np

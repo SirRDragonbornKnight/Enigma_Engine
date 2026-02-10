@@ -17,7 +17,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -61,27 +61,22 @@ class ExperimentTracker(ABC):
     @abstractmethod
     def start_run(self, config: RunConfig):
         """Start a new experiment run."""
-        pass
     
     @abstractmethod
     def log_metrics(self, metrics: dict[str, float], step: int = None):
         """Log metrics to the tracker."""
-        pass
     
     @abstractmethod
     def log_params(self, params: dict[str, Any]):
         """Log hyperparameters."""
-        pass
     
     @abstractmethod
     def log_artifact(self, path: Path, name: str = None):
         """Log an artifact file."""
-        pass
     
     @abstractmethod
     def finish_run(self):
         """Finish the current run."""
-        pass
     
     @property
     def is_active(self) -> bool:

@@ -19,11 +19,11 @@ import json
 import logging
 import re
 import zipfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, Generic, List, Optional, TypeVar, Union
+from typing import Any, Optional, TypeVar
 
 logger = logging.getLogger(__name__)
 

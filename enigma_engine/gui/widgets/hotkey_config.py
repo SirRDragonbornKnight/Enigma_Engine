@@ -10,15 +10,12 @@ Features:
 """
 
 import logging
-from typing import Callable, Dict, Optional
 
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import (
-    QCheckBox,
     QDialog,
     QDialogButtonBox,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QListWidget,
@@ -343,7 +340,6 @@ class HotkeyConfigWidget(QWidget):
             # Register new binding
             # Note: We'll need the callback - for now just update the config
             # The actual registration will happen when the manager is restarted
-            pass
         
         # Update local storage
         if name in self.hotkeys:

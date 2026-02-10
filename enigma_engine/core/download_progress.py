@@ -33,17 +33,16 @@ USAGE:
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum, auto
 from pathlib import Path
-from threading import Lock, Thread
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from threading import Lock
+from typing import Any, Callable
 
 # Import common progress utilities for GUI integration
-from ..utils.progress import ProgressState, ProgressTracker
+from ..utils.progress import ProgressState
 
 logger = logging.getLogger(__name__)
 
@@ -164,13 +163,11 @@ class ProgressCallback:
         
         # Check for progress libraries
         try:
-            import tqdm
             self._tqdm_available = True
         except ImportError:
             pass
         
         try:
-            from rich.progress import Progress
             self._rich_available = True
         except ImportError:
             pass
@@ -332,7 +329,7 @@ class DownloadTracker:
             Path to downloaded model, or None if failed
         """
         try:
-            from huggingface_hub import hf_hub_download, snapshot_download
+            from huggingface_hub import snapshot_download
             from huggingface_hub.utils import (
                 disable_progress_bars,
                 enable_progress_bars,
@@ -443,7 +440,7 @@ class DownloadTracker:
     def is_model_cached(self, model_id: str ) -> bool:
         """Check if a model is already downloaded."""
         try:
-            from huggingface_hub import scan_cache_dir, try_to_load_from_cache
+            from huggingface_hub import scan_cache_dir
 
             # Check cache
             cache_info = scan_cache_dir(self.cache_dir)
@@ -589,7 +586,7 @@ def create_download_widget():
         QWidget subclass or None if PyQt5 not available
     """
     try:
-        from PyQt5.QtCore import QObject, pyqtSignal
+        from PyQt5.QtCore import pyqtSignal
         from PyQt5.QtWidgets import (
             QHBoxLayout,
             QLabel,

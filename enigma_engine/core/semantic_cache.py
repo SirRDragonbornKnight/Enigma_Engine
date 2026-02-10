@@ -16,7 +16,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Optional
 
 import numpy as np
 
@@ -195,7 +195,7 @@ class SemanticIndex:
             self._keys.append(key)
             
             if self._faiss_index is not None:
-                import faiss
+                pass
 
                 # Check if index needs training
                 if hasattr(self._faiss_index, 'is_trained') and not self._faiss_index.is_trained:
@@ -229,7 +229,7 @@ class SemanticIndex:
         
         with self._lock:
             if self._faiss_index is not None and self._faiss_index.ntotal > 0:
-                import faiss
+                pass
                 
                 if hasattr(self._faiss_index, 'nprobe'):
                     self._faiss_index.nprobe = self.config.nprobe
@@ -268,7 +268,6 @@ class SemanticIndex:
         if not self._embeddings or self._faiss_index is None:
             return
         
-        import faiss
         
         self._faiss_index.reset()
         

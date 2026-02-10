@@ -9,7 +9,6 @@ Features:
 - Model cards (documentation)
 """
 
-import asyncio
 import hashlib
 import json
 import logging
@@ -21,7 +20,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 logger = logging.getLogger(__name__)
 

@@ -48,34 +48,24 @@ Exporting from Unreal Engine:
 import os
 import queue
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Callable, Optional
 
 # Check for Panda3D
 try:
     from direct.actor.Actor import Actor
-    from direct.interval.IntervalGlobal import Func, Sequence, Wait
     from direct.showbase.ShowBase import ShowBase
     from direct.task import Task
     from panda3d.core import (
         AmbientLight,
-        BitMask32,
-        Camera,
-        CardMaker,
         DirectionalLight,
         FrameBufferProperties,
         GraphicsOutput,
         GraphicsPipe,
         LColor,
-        LPoint3,
-        LVector3,
         NodePath,
-        OrthographicLens,
-        PerspectiveLens,
-        PNMImage,
-        PointLight,
         Texture,
         TransparencyAttrib,
         WindowProperties,
@@ -88,7 +78,7 @@ except ImportError:
 
 # PyQt integration
 try:
-    from PyQt5.QtCore import QObject, Qt, QThread, QTimer, pyqtSignal
+    from PyQt5.QtCore import QObject, QTimer, pyqtSignal
     from PyQt5.QtGui import QImage, QPixmap
     from PyQt5.QtWidgets import QLabel, QVBoxLayout, QWidget
     HAS_PYQT = True

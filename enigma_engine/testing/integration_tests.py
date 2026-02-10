@@ -11,18 +11,12 @@ End-to-end workflow tests that verify the system works as a whole:
 - Module system integration
 """
 
-import asyncio
-import json
 import logging
-import os
 import tempfile
 import time
-from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
-from unittest.mock import MagicMock, patch
+from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -654,7 +648,6 @@ class IntegrationTestRunner:
 
 class SkipTest(Exception):
     """Exception to skip a test."""
-    pass
 
 
 # =============================================================================

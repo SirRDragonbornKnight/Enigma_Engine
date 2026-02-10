@@ -12,7 +12,7 @@ MAIN CLASSES: ForgeLLM, ForgeChatModel, ForgeEmbeddings
 import logging
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ try:
         HumanMessage,
         SystemMessage,
     )
-    from langchain_core.outputs import ChatGeneration, ChatResult, Generation, LLMResult
+    from langchain_core.outputs import ChatGeneration, ChatResult
     HAS_LANGCHAIN = True
 except ImportError:
     HAS_LANGCHAIN = False

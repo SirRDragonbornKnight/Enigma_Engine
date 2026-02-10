@@ -19,16 +19,13 @@ import json
 import logging
 import math
 import os
-import re
 import time
-from collections import Counter, defaultdict
-from collections.abc import Iterator
+from collections import Counter
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Optional
 
 import torch
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
 
 logger = logging.getLogger(__name__)
 

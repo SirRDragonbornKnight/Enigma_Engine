@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .analytics_tab import AnalyticsTab, create_analytics_tab
     from .audio_tab import AudioTab, create_audio_tab
-    from .build_ai_tab import BuildAITab, create_build_ai_tab
     from .avatar.avatar_display import create_avatar_subtab
     from .avatar_tab import create_avatar_tab
     from .camera_tab import CameraTab, create_camera_tab

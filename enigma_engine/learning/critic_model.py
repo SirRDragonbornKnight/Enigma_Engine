@@ -24,10 +24,9 @@ import logging
 import json
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 from enum import Enum
 import time
-import math
 
 logger = logging.getLogger(__name__)
 

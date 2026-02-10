@@ -9,9 +9,8 @@ Simple, clean interface for selecting model sizes.
 
 from __future__ import annotations
 
-from typing import Optional
 
-from PyQt5.QtCore import QEvent, Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
     QApplication,
@@ -23,12 +22,10 @@ from PyQt5.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
-    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
-from .shared_components import NoScrollComboBox
 
 # Model definitions
 MODEL_SPECS = {

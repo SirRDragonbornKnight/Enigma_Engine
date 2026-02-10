@@ -16,7 +16,7 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Optional
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -24,8 +24,8 @@ logger = logging.getLogger(__name__)
 # Check for camera libraries
 try:
     from picamera2 import Picamera2
-    from picamera2.encoders import H264Encoder, JpegEncoder
-    from picamera2.outputs import CircularOutput, FileOutput
+    from picamera2.encoders import H264Encoder
+    from picamera2.outputs import FileOutput
     HAS_PICAMERA2 = True
 except ImportError:
     HAS_PICAMERA2 = False

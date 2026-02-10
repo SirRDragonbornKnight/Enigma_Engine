@@ -5,7 +5,6 @@ This module defines the GUI mode system that controls what features and tabs
 are visible to users based on their preference and use case.
 """
 from enum import Enum
-from typing import List, Set
 
 
 class GUIMode(Enum):

@@ -23,7 +23,6 @@ USAGE:
 """
 
 import logging
-from typing import Dict, List
 
 import numpy as np
 
@@ -363,7 +362,6 @@ class FederatedMedian:
     
     def __init__(self):
         """Initialize median aggregator."""
-        pass
     
     def aggregate_updates(self, updates: list[ModelUpdate]) -> dict[str, np.ndarray]:
         """

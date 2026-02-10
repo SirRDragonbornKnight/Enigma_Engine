@@ -17,14 +17,12 @@ Usage:
     dashboard.run(port=5001)  # Access at http://localhost:5001
 """
 
-import json
 import logging
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 

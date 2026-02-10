@@ -5,11 +5,10 @@ Verifies updates are legitimate and detects potential poisoning attacks.
 Prevents malicious actors from corrupting the shared model.
 """
 
-import hashlib
 import logging
 from collections import defaultdict
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Set
+from datetime import datetime
+from typing import Any
 
 try:
     import numpy as np

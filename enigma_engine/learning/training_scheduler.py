@@ -6,10 +6,9 @@ Monitors feedback collection and triggers LoRA training when criteria are met.
 
 import logging
 import threading
-import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 

@@ -59,14 +59,13 @@ Priority: AUTONOMOUS (50) - lower than BONE_ANIMATION (100)
 """
 
 import logging
-import random
 import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from threading import Lock
-from typing import TYPE_CHECKING, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Callable, Optional
 
 if TYPE_CHECKING:
     from .controller import AvatarController
@@ -592,7 +591,6 @@ class AutonomousAvatar:
                 try:
                     # Try python-xlib for X11 (internal library)
                     from Xlib import X, display
-                    from Xlib.protocol import rq
                     
                     d = display.Display()
                     root = d.screen().root

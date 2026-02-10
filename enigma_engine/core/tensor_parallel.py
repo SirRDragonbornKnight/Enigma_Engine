@@ -18,12 +18,11 @@ References:
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Optional
 
 import torch
 import torch.distributed as dist
 import torch.nn as nn
-from torch.distributed import ReduceOp
 
 logger = logging.getLogger(__name__)
 

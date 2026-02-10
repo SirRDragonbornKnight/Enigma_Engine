@@ -4,9 +4,9 @@ Model Selector Widget - Shared dropdown for selecting AI models in generation ta
 This widget syncs with the Model Router tab so changes in one place reflect everywhere.
 """
 
-from typing import Any, Callable, Dict, List, Optional
+from typing import Optional
 
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtWidgets import QHBoxLayout, QLabel, QMessageBox, QPushButton, QWidget
 
 from .shared_components import NoScrollComboBox

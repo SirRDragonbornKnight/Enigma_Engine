@@ -7,11 +7,11 @@ Generates PSD-like layered structures and PNG templates with guidelines.
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Optional
 
 try:
-    from PyQt5.QtCore import QRect, Qt
-    from PyQt5.QtGui import QBrush, QColor, QFont, QPainter, QPen, QPixmap
+    from PyQt5.QtCore import Qt
+    from PyQt5.QtGui import QColor, QFont, QPainter, QPen, QPixmap
     from PyQt5.QtWidgets import QApplication
     HAS_PYQT = True
 except ImportError:

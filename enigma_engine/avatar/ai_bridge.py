@@ -54,7 +54,7 @@ except ImportError:
     SentimentAnalyzer = None
     analyze_for_avatar = None
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Callable, Optional
 
 try:
     from PyQt5.QtCore import QObject, QTimer, pyqtSignal

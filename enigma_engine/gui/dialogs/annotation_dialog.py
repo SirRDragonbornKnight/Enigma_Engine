@@ -15,7 +15,7 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -23,21 +23,15 @@ try:
     from PyQt5.QtCore import Qt, pyqtSignal
     from PyQt5.QtGui import QColor, QTextCharFormat, QTextCursor
     from PyQt5.QtWidgets import (
-        QCheckBox,
         QComboBox,
         QDialog,
-        QFileDialog,
-        QFrame,
         QGroupBox,
         QHBoxLayout,
         QLabel,
-        QLineEdit,
         QListWidget,
-        QListWidgetItem,
         QMessageBox,
         QProgressBar,
         QPushButton,
-        QScrollArea,
         QSplitter,
         QTextEdit,
         QVBoxLayout,

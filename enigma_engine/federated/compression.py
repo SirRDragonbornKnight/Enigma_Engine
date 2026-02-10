@@ -22,7 +22,6 @@ USAGE:
 
 import logging
 from dataclasses import dataclass, field
-from typing import Dict, Tuple
 
 import numpy as np
 

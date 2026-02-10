@@ -45,7 +45,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -89,7 +89,6 @@ class VectorDBInterface(ABC):
             ids: List of unique identifiers for each vector
             metadata: Optional list of dicts with extra info for each vector
         """
-        pass
     
     @abstractmethod
     def search(self, query_vector: np.ndarray, top_k: int = 5) -> List[Tuple[str, float, Dict]]:
@@ -103,27 +102,22 @@ class VectorDBInterface(ABC):
         Returns:
             List of (id, similarity_score, metadata) tuples, sorted by score
         """
-        pass
     
     @abstractmethod
     def delete(self, ids: List[str]) -> None:
         """Delete vectors by IDs."""
-        pass
     
     @abstractmethod
     def save(self, path: Path) -> None:
         """Save index to disk for persistence."""
-        pass
     
     @abstractmethod
     def load(self, path: Path) -> None:
         """Load index from disk."""
-        pass
     
     @abstractmethod
     def count(self) -> int:
         """Get number of vectors in the database."""
-        pass
 
 
 # =============================================================================

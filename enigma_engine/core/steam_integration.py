@@ -24,12 +24,10 @@ USAGE:
     steam.register_with_gaming_mode()
 """
 
-import json
 import logging
 import os
 import platform
 import re
-import struct
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path

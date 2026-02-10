@@ -13,24 +13,20 @@ import logging
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Optional
 
 from PyQt5.QtCore import QSize, Qt, pyqtSignal
-from PyQt5.QtGui import QFont, QIcon, QTextDocument
+from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
     QAction,
     QComboBox,
     QFileDialog,
     QFrame,
-    QHBoxLayout,
     QLabel,
-    QMenu,
     QPlainTextEdit,
     QPushButton,
-    QScrollArea,
     QSplitter,
     QStackedWidget,
-    QTabWidget,
     QTextEdit,
     QToolBar,
     QVBoxLayout,

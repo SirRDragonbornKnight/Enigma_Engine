@@ -29,15 +29,12 @@ Usage:
 
 import json
 import logging
-import queue
 import threading
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
 from enum import Enum, auto
-from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -157,7 +154,6 @@ class Sensor(ABC):
     @abstractmethod
     def read(self) -> SensorReading:
         """Read sensor data."""
-        pass
     
     def start(self):
         """Start sensor."""

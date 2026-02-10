@@ -12,12 +12,10 @@ MAIN CLASSES: CPUOptimizer, SIMDDetector, VectorizedOps
 import logging
 import os
 import platform
-import struct
-import subprocess
 from dataclasses import dataclass
 from enum import Enum
 from functools import lru_cache
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Optional
 
 try:
     import numpy as np

@@ -41,9 +41,9 @@ import subprocess
 import threading
 import time
 from dataclasses import dataclass, field
-from enum import Enum, auto
+from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -217,7 +217,6 @@ class FPSMonitor:
         # Check for WMI (Windows performance counters)
         if platform.system() == "Windows":
             try:
-                import wmi
                 self._wmi_available = True
             except Exception:
                 self._wmi_available = False

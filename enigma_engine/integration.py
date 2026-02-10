@@ -31,8 +31,7 @@ import logging
 import threading
 from dataclasses import dataclass
 from enum import Enum, auto
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -447,7 +446,7 @@ class CrossDeviceSystem:
     def _init_mobile_avatar_server(self):
         """Initialize mobile avatar server."""
         try:
-            from enigma_engine.avatar.mobile_avatar import MobileAvatarServer
+            pass
 
             # Server is integrated with device sync
             logger.debug("Mobile avatar server initialized")

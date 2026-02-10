@@ -4,7 +4,7 @@ Detects and removes duplicate or near-duplicate memories.
 """
 import hashlib
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Optional
 
 from .categorization import Memory, MemoryCategorization
 

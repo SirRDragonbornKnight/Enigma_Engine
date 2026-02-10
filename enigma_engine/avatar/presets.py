@@ -6,10 +6,10 @@ Presets include colors, expressions, style, and accessories.
 """
 
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from .avatar_identity import AvatarAppearance
 

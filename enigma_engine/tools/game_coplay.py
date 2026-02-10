@@ -30,14 +30,12 @@ Usage:
     player.press_key("a")  # Move left
 """
 
-import json
 import logging
 import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -147,7 +145,6 @@ class InputSimulator:
             else:
                 # Linux - try uinput
                 try:
-                    import uinput
                     self._controller = "uinput"
                     self._available_methods.append(InputMethod.CONTROLLER)
                     logger.info("Controller input available (uinput)")

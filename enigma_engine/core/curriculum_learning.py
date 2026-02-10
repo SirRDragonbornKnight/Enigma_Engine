@@ -22,9 +22,9 @@ Usage:
 
 import logging
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Optional
 
 import torch
 import torch.nn as nn
@@ -75,12 +75,10 @@ class DifficultyScorer(ABC):
         Returns:
             Difficulty score (0-1, higher = harder)
         """
-        pass
     
     @abstractmethod
     def score_batch(self, samples: List[Any]) -> List[float]:
         """Score a batch of samples."""
-        pass
 
 
 class TextDifficultyScorer(DifficultyScorer):

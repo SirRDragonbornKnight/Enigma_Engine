@@ -25,15 +25,13 @@ Usage:
     converted.save("output.wav")
 """
 
-import hashlib
-import json
 import logging
 import os
 import wave
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 

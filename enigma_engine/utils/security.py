@@ -40,7 +40,7 @@ WARNING: The AI cannot modify these protections at runtime.
 import fnmatch
 import logging
 from pathlib import Path
-from typing import Any, List, Optional, Tuple, Set
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -554,7 +554,6 @@ class SecureLoader:
         Raises:
             SecurityError: If hash verification fails or dangerous class found
         """
-        import io
         import pickle
         
         path = Path(path)
@@ -615,7 +614,6 @@ class SecureLoader:
 
 class SecurityError(Exception):
     """Raised when a security check fails."""
-    pass
 
 
 # =============================================================================

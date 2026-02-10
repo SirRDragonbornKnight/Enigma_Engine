@@ -12,7 +12,7 @@ import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 # Check for FastAPI availability
 try:

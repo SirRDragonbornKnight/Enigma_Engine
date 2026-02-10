@@ -19,8 +19,7 @@ Usage:
 
 import logging
 import re
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 

@@ -39,7 +39,7 @@ from collections.abc import Generator
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Callable
 
 import numpy as np
 

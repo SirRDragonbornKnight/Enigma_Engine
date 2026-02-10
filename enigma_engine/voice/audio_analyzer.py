@@ -29,7 +29,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from .voice_profile import VoiceProfile
 
@@ -121,19 +121,16 @@ class AudioAnalyzer:
         self.have_soundfile = False
         
         try:
-            import librosa
             self.have_librosa = True
         except ImportError:
             pass
         
         try:
-            import parselmouth
             self.have_parselmouth = True
         except ImportError:
             pass
         
         try:
-            import soundfile
             self.have_soundfile = True
         except ImportError:
             pass

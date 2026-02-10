@@ -11,16 +11,15 @@ MAIN CLASSES: BenchmarkSuite, ProfileRunner, LoadTester
 import gc
 import json
 import logging
-import queue
 import statistics
 import threading
 import time
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from functools import wraps
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Optional
 
 try:
     import psutil

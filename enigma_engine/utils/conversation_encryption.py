@@ -24,12 +24,9 @@ Usage:
 
 import base64
 import hashlib
-import hmac
 import json
 import logging
-import os
 import secrets
-import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -55,8 +52,6 @@ class AESCipher:
         self._backend_available = False
         
         try:
-            from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-            from cryptography.hazmat.backends import default_backend
             self._backend_available = True
         except ImportError:
             logger.warning("cryptography library not available, using fallback")

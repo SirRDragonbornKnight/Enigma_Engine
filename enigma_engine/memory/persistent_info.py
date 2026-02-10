@@ -12,17 +12,15 @@ This allows both the user and AI to save information that persists
 across sessions and can be recalled when needed.
 """
 
-import hashlib
 import json
 import logging
-import re
 import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Union
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 

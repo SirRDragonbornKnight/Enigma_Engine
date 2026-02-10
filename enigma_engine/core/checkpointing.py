@@ -14,12 +14,11 @@ Usage:
 
 import functools
 import logging
-from collections.abc import Sequence
-from typing import Any, Callable, List, Optional, Tuple, Union
+from typing import Any, Callable, Optional
 
 import torch
 import torch.nn as nn
-from torch.utils.checkpoint import checkpoint, checkpoint_sequential
+from torch.utils.checkpoint import checkpoint
 
 logger = logging.getLogger(__name__)
 

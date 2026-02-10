@@ -25,7 +25,7 @@ Usage:
 import json
 import logging
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from enum import Enum
@@ -140,7 +140,6 @@ class GameSessionTracker:
     def _load_sessions(self):
         """Load all session data."""
         # Sessions are loaded per-game as needed
-        pass
     
     def _load_game_sessions(self, game: str) -> List[GameSession]:
         """Load sessions for a specific game."""

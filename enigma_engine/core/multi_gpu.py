@@ -12,18 +12,15 @@ MAIN CLASSES: MultiGPUManager, TensorParallel, PipelineParallel
 import logging
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, Callable, Dict, List, Optional, Tuple
 
 try:
     import torch
-    import torch.distributed as dist
     import torch.nn as nn
     HAS_TORCH = True
 except ImportError:
     HAS_TORCH = False
 
 try:
-    import numpy as np
     HAS_NUMPY = True
 except ImportError:
     HAS_NUMPY = False

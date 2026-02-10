@@ -49,9 +49,8 @@ import logging
 import re
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 from urllib.parse import urljoin, urlparse
 
 logger = logging.getLogger(__name__)

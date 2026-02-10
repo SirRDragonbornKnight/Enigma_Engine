@@ -10,7 +10,6 @@ MAIN CLASSES: TwitchIntegration, YouTubeIntegration, StreamManager
 """
 
 import asyncio
-import hashlib
 import logging
 import re
 import threading
@@ -18,7 +17,7 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from queue import Queue
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable, Optional
 
 try:
     import aiohttp
@@ -27,7 +26,6 @@ except ImportError:
     HAS_AIOHTTP = False
 
 try:
-    import websockets
     HAS_WEBSOCKETS = True
 except ImportError:
     HAS_WEBSOCKETS = False

@@ -37,12 +37,11 @@ import gc
 import logging
 import threading
 import time
-import warnings
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum, auto
 from functools import wraps
-from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar, Union
+from typing import Any, Callable, TypeVar
 
 logger = logging.getLogger(__name__)
 

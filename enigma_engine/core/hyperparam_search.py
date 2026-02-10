@@ -16,8 +16,7 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +88,6 @@ class HyperparameterSearch(ABC):
     @abstractmethod
     def suggest(self) -> dict[str, Any]:
         """Suggest next hyperparameters to try."""
-        pass
     
     def _sample_param(self, param: HyperparameterSpace) -> Any:
         """Sample a parameter value."""

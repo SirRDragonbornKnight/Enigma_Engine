@@ -2429,7 +2429,6 @@ class VoiceCloneModule(Module):
     def load(self) -> bool:
         """Load voice cloning module - verifies TTS backend."""
         try:
-            from enigma_engine.gui.tabs.voice_clone_tab import VoiceCloneTab
             return True
         except Exception as e:
             logger.warning(f"Voice clone module load: {e}")

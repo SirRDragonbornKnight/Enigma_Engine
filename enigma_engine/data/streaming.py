@@ -17,10 +17,10 @@ import queue
 import random
 import threading
 from abc import ABC, abstractmethod
-from collections.abc import Generator, Iterator
-from dataclasses import dataclass, field
+from collections.abc import Iterator
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -40,12 +40,10 @@ class DataSource(ABC):
     @abstractmethod
     def __iter__(self) -> Iterator[Any]:
         """Iterate over data samples."""
-        pass
     
     @abstractmethod
     def __len__(self) -> int:
         """Return total number of samples (approximate OK)."""
-        pass
 
 
 class TextFileSource(DataSource):

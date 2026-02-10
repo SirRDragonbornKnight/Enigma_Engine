@@ -12,9 +12,9 @@ MAIN CLASSES: GPUOptimizer, CUDAOptimizer, ROCmOptimizer
 import logging
 import os
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 try:
     import torch

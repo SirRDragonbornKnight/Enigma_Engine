@@ -14,8 +14,7 @@ Supports:
 import logging
 import os
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Optional
 
 import torch
 
@@ -162,7 +161,6 @@ class MetalBackend:
     def _convert_to_mlx(self, model: torch.nn.Module):
         """Convert PyTorch model to MLX format."""
         import mlx.core as mx
-        import mlx.nn as nn
 
         # This is a simplified conversion - real implementation would be more complex
         logger.warning(
@@ -297,7 +295,7 @@ class MetalBackend:
     def get_memory_info(self) -> dict[str, Any]:
         """Get Metal memory usage information."""
         if self.config.use_mlx:
-            import mlx.core as mx
+            pass
 
             # MLX doesn't expose detailed memory info yet
             return {"backend": "mlx", "available": True}

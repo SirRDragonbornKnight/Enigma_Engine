@@ -11,10 +11,10 @@ MAIN CLASSES: FontSelector, FontPreview, FontSettings
 
 import logging
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Optional
 
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QColor, QFont, QFontDatabase, QPalette
+from PyQt5.QtGui import QFont, QFontDatabase
 from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -24,14 +24,9 @@ from PyQt5.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
-    QListWidget,
-    QListWidgetItem,
     QPushButton,
-    QScrollArea,
     QSlider,
     QSpinBox,
-    QSplitter,
-    QTextEdit,
     QVBoxLayout,
     QWidget,
 )

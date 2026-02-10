@@ -33,11 +33,10 @@ import logging
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
-from typing import Any, Dict, Optional
+from typing import Any
 
-from PyQt5.QtCore import QByteArray, QObject, QPoint, QSize, Qt, QTimer, pyqtSignal
+from PyQt5.QtCore import QByteArray, QObject, QPoint, Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import (
-    QBitmap,
     QColor,
     QCursor,
     QImage,
@@ -45,24 +44,17 @@ from PyQt5.QtGui import (
     QPainter,
     QPen,
     QPixmap,
-    QRegion,
-    QWheelEvent,
 )
 from PyQt5.QtWidgets import (
     QApplication,
     QCheckBox,
-    QColorDialog,
     QFileDialog,
     QFrame,
-    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QMenu,
-    QMessageBox,
-    QOpenGLWidget,
     QPushButton,
-    QScrollArea,
     QSizePolicy,
     QSlider,
     QTextEdit,
@@ -105,11 +97,8 @@ Qt_SizeFDiagCursor: Any = getattr(Qt, 'SizeFDiagCursor', 8)  # \ diagonal
 Qt_SizeBDiagCursor: Any = getattr(Qt, 'SizeBDiagCursor', 9)  # / diagonal
 Qt_ShiftModifier: Any = getattr(Qt, 'ShiftModifier', 0x02000000)
 import json
-import os
-import time
 
-from ....avatar import AvatarState, get_avatar
-from ....avatar.customizer import AvatarCustomizer
+from ....avatar import get_avatar
 from ....avatar.renderers.default_sprites import SPRITE_TEMPLATES, generate_sprite
 from ....config import CONFIG
 
@@ -3138,11 +3127,9 @@ class Avatar3DOverlayWindow(QWidget):
     
     def _apply_click_through(self):
         """No-op - using dynamic click-through instead."""
-        pass
     
     def _apply_click_through_windows(self):
         """No-op - using dynamic click-through instead."""
-        pass
     
     def _apply_click_through_linux(self):
         """Linux: Make avatar window click-through using X11 input shape."""
@@ -3843,7 +3830,6 @@ class Avatar3DOverlayWindow(QWidget):
     def _check_ai_commands(self):
         """Check for AI commands and execute them."""
         import json
-        from datetime import datetime
         
         command_path = Path(__file__).parent.parent.parent.parent.parent / "data" / "avatar" / "ai_command.json"
         if not command_path.exists():
@@ -3994,7 +3980,6 @@ class Avatar3DOverlayWindow(QWidget):
         """Fallback speaking indicator - disabled for humanoid models."""
         # Don't do weird pulsing on human-shaped avatars
         # Proper lip sync should be handled by AdaptiveAnimator if model supports it
-        pass
     
     def _do_nod_fallback(self):
         """Fallback nod animation."""
@@ -5302,7 +5287,6 @@ def _toggle_reposition_enabled(parent, enabled: bool):
 def _reset_avatar_position(parent):
     """Reset avatar overlay position to center of primary screen."""
     try:
-        from PyQt5.QtCore import QPoint
         from PyQt5.QtWidgets import QApplication
 
         # Get primary screen geometry
@@ -5329,7 +5313,6 @@ def _reset_avatar_position(parent):
         # Save the new position to persistence
         try:
             from ....avatar.persistence import (
-                save_avatar_settings,
                 save_position,
                 write_avatar_state_for_ai,
             )

@@ -10,7 +10,7 @@ Tools:
 import json
 import time
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from .tool_registry import RichParameter, Tool
 
@@ -328,7 +328,7 @@ class AdjustIdleAnimationTool(Tool):
         **kwargs
     ) -> dict[str, Any]:
         try:
-            from ..avatar.procedural_animation import get_procedural_animator, ProceduralConfig
+            from ..avatar.procedural_animation import get_procedural_animator
             
             animator = get_procedural_animator()
             config = animator.config

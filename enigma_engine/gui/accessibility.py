@@ -5,27 +5,18 @@ Provides screen reader support, keyboard navigation,
 high contrast themes, and reduced motion options.
 """
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
-    QAction,
     QApplication,
-    QCheckBox,
     QComboBox,
-    QDialog,
     QGroupBox,
     QLabel,
     QLineEdit,
-    QListWidget,
     QMainWindow,
-    QMenu,
     QPushButton,
     QSlider,
-    QSpinBox,
-    QTabWidget,
-    QTextEdit,
-    QToolButton,
     QWidget,
 )
 

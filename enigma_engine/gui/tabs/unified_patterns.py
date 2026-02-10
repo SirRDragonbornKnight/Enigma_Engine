@@ -26,30 +26,19 @@ All generation tabs should use these patterns for consistency.
 import gc
 import logging
 import os
-import sys
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Optional
 
 try:
-    from PyQt5.QtCore import QSize, Qt, QThread, QTimer, pyqtSignal
-    from PyQt5.QtGui import QFont, QImage, QPixmap
+    from PyQt5.QtCore import Qt, QThread, pyqtSignal
+    from PyQt5.QtGui import QPixmap
     from PyQt5.QtWidgets import (
         QApplication,
-        QCheckBox,
         QComboBox,
         QDoubleSpinBox,
-        QFrame,
         QGroupBox,
-        QHBoxLayout,
-        QLabel,
-        QProgressBar,
         QPushButton,
-        QSizePolicy,
-        QSpacerItem,
         QSpinBox,
-        QTextEdit,
-        QVBoxLayout,
-        QWidget,
     )
     HAS_PYQT = True
 except ImportError:
@@ -95,7 +84,7 @@ class StyleConfig:
         """Detect device class, screen properties, and UI class."""
         # Hardware detection
         try:
-            from ...core.device_profiles import DeviceClass, get_device_profiler
+            from ...core.device_profiles import get_device_profiler
             profiler = get_device_profiler()
             self._device_class = profiler.classify()
         except ImportError:

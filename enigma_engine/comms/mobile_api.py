@@ -14,7 +14,7 @@ import base64
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Optional
 
 try:
     from flask import Flask, Response, jsonify, request
@@ -94,7 +94,6 @@ class MobileAPI:
                     def save_to_file(self, text, filepath):
                         """Save TTS output to file with multiple engine fallbacks."""
                         import os
-                        import tempfile
 
                         # Try pyttsx3 first (most common)
                         try:

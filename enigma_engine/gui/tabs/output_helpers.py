@@ -10,7 +10,7 @@ Provides common utilities for:
 import os
 import sys
 from pathlib import Path
-from typing import Any, Optional, Tuple, Union
+from typing import Any, Union
 
 try:
     from PyQt5.QtCore import QUrl  # type: ignore[import]

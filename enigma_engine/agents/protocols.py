@@ -25,7 +25,6 @@ Usage:
     bus.broadcast("status_update", {"ready": True})
 """
 
-import asyncio
 import logging
 import threading
 import time
@@ -34,7 +33,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, asdict
 from enum import Enum
 from queue import Queue
-from typing import Any, Callable, Dict, List, Optional, Set, Type, Union
+from typing import Any, Callable, Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -132,12 +131,10 @@ class AgentProtocol(ABC):
     @abstractmethod
     def handle_message(self, message: AgentMessage) -> Optional[AgentMessage]:
         """Handle incoming message."""
-        pass
     
     @abstractmethod
     def get_capabilities(self) -> List[AgentCapability]:
         """Return list of capabilities."""
-        pass
     
     def get_agent_info(self) -> AgentInfo:
         """Get agent info."""

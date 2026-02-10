@@ -26,12 +26,12 @@ USAGE:
 import asyncio
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Optional
 
 import numpy as np
 
 from .aggregation import FederatedAggregator
-from .federation import FederationInfo, ModelUpdate
+from .federation import ModelUpdate
 
 logger = logging.getLogger(__name__)
 

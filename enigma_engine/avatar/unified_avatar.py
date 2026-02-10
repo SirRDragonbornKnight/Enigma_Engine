@@ -40,24 +40,19 @@ Usage:
 """
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum, auto
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Optional
 
 try:
     from PyQt5.QtCore import (
-        QEasingCurve,
         QObject,
-        QPoint,
-        QPropertyAnimation,
-        QSize,
         Qt,
         QTimer,
         pyqtSignal,
     )
-    from PyQt5.QtGui import QColor, QPainter, QPixmap, QTransform
-    from PyQt5.QtWidgets import QLabel, QStackedWidget, QVBoxLayout, QWidget
+    from PyQt5.QtGui import QPainter, QPixmap, QTransform
+    from PyQt5.QtWidgets import QLabel, QStackedWidget, QWidget
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False

@@ -15,7 +15,6 @@ from PyQt5.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFileDialog,
-    QFrame,
     QGroupBox,
     QHBoxLayout,
     QInputDialog,
@@ -27,7 +26,6 @@ from PyQt5.QtWidgets import (
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
-    QScrollArea,
     QSpinBox,
     QTextEdit,
     QVBoxLayout,
@@ -635,7 +633,6 @@ def _refresh_training_files(parent):
 
 def _load_training_file(parent, index):
     """Load a training file into the editor - deprecated, kept for compatibility."""
-    pass
 
 
 def _save_training_file(parent):

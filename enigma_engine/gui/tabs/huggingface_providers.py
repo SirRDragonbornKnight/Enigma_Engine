@@ -11,11 +11,10 @@ Models available for free:
 - Text: Many LLMs and chat models
 """
 
-import base64
 import os
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 # Try to get HF token from environment (optional - free tier works without)
 HF_TOKEN = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN")
@@ -39,7 +38,6 @@ class HuggingFaceImage:
     def load(self) -> bool:
         """No loading needed - API is always available."""
         try:
-            import requests
             self.is_loaded = True
             return True
         except ImportError:
@@ -79,7 +77,6 @@ class HuggingFaceImage:
             
             if response.status_code == 503:
                 # Model is loading - wait and retry
-                import json
                 try:
                     data = response.json()
                     wait_time = data.get("estimated_time", 20)
@@ -140,7 +137,6 @@ class HuggingFaceTTS:
     
     def load(self) -> bool:
         try:
-            import requests
             self.is_loaded = True
             return True
         except ImportError:
@@ -168,7 +164,6 @@ class HuggingFaceTTS:
             
             if response.status_code == 503:
                 # Model loading
-                import json
                 try:
                     data = response.json()
                     wait_time = data.get("estimated_time", 20)
@@ -234,7 +229,6 @@ class HuggingFaceChat:
     
     def load(self) -> bool:
         try:
-            import requests
             self.is_loaded = True
             return True
         except ImportError:
@@ -331,7 +325,6 @@ class HuggingFaceEmbedding:
     
     def load(self) -> bool:
         try:
-            import requests
             self.is_loaded = True
             return True
         except ImportError:

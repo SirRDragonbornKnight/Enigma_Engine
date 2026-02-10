@@ -7,9 +7,8 @@ Provides customizable keyboard shortcuts for faster navigation and actions.
 import json
 import logging
 from pathlib import Path
-from typing import Callable, Dict, Optional
+from typing import Callable, Optional
 
-from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import QShortcut, QWidget
 

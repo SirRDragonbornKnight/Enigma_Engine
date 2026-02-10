@@ -16,7 +16,6 @@ from pathlib import Path
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor, QFont
 from PyQt5.QtWidgets import (
-    QFrame,
     QGroupBox,
     QHBoxLayout,
     QInputDialog,
@@ -33,7 +32,6 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from .shared_components import NoScrollComboBox
 
 # Storage paths
 NOTES_DIR = Path.home() / ".enigma_engine" / "notes"

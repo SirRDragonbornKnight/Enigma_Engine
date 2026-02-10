@@ -12,12 +12,11 @@ MAIN CLASSES: GameProfile, GameProfileManager, GameDetector
 import json
 import logging
 import os
-import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Optional
 
 try:
     import psutil

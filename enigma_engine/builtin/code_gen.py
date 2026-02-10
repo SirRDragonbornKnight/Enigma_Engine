@@ -7,7 +7,7 @@ Not as smart as AI but works without any installs.
 
 import re
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 # Code templates for common patterns
 TEMPLATES = {

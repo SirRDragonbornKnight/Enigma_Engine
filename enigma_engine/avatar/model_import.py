@@ -15,7 +15,7 @@ import struct
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, BinaryIO, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -144,7 +144,6 @@ class GLBLoader:
     
     def __init__(self):
         """Initialize GLB loader."""
-        pass
     
     def load(self, path: Path) -> Model3D:
         """
@@ -313,7 +312,6 @@ class FBXLoader:
     
     def __init__(self):
         """Initialize FBX loader."""
-        pass
     
     def load(self, path: Path) -> Model3D:
         """
@@ -374,7 +372,6 @@ class AutoRigger:
     
     def __init__(self):
         """Initialize auto-rigger."""
-        pass
     
     def detect_bones(self, skeleton: Skeleton) -> dict[str, str]:
         """

@@ -58,7 +58,7 @@ import logging
 import threading
 from collections.abc import Generator
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Optional
 
 import torch
 import torch.nn.functional as F

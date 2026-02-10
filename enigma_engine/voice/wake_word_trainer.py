@@ -35,16 +35,12 @@ from __future__ import annotations
 
 import json
 import logging
-import os
-import pickle
 import struct
-import tempfile
-import threading
 import time
 import wave
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable
 
 from ..config import CONFIG
 

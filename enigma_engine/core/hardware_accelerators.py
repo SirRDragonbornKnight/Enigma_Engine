@@ -12,7 +12,7 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Optional
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -81,42 +81,34 @@ class AcceleratorDevice(ABC):
     @abstractmethod
     def get_info(self) -> DeviceInfo:
         """Get device information."""
-        pass
     
     @abstractmethod
     def is_available(self) -> bool:
         """Check if device is available."""
-        pass
     
     @abstractmethod
     def allocate_memory(self, size_bytes: int) -> Optional[Any]:
         """Allocate memory on device."""
-        pass
     
     @abstractmethod
     def free_memory(self, handle: Any):
         """Free device memory."""
-        pass
     
     @abstractmethod
     def transfer_to_device(self, data: Any) -> Any:
         """Transfer data to device."""
-        pass
     
     @abstractmethod
     def transfer_to_host(self, data: Any) -> Any:
         """Transfer data back to host."""
-        pass
     
     @abstractmethod
     def compile_model(self, model: Any) -> Any:
         """Compile model for device."""
-        pass
     
     @abstractmethod
     def run_inference(self, model: Any, inputs: Any) -> Any:
         """Run inference on device."""
-        pass
 
 
 class CUDADevice(AcceleratorDevice):
@@ -308,7 +300,6 @@ class CoralDevice(AcceleratorDevice):
     
     def free_memory(self, handle: Any):
         """Coral manages memory internally."""
-        pass
     
     def transfer_to_device(self, data: Any) -> Any:
         """Prepare input for Coral."""
@@ -404,7 +395,6 @@ class TPUDevice(AcceleratorDevice):
     
     def free_memory(self, handle: Any):
         """TPU manages memory internally."""
-        pass
     
     def transfer_to_device(self, data: Any) -> Any:
         """Convert to TPU-compatible tensor."""
@@ -524,7 +514,7 @@ class IntelNPUDevice(AcceleratorDevice):
     def compile_model(self, model: Any) -> Any:
         """Compile using OpenVINO."""
         try:
-            from openvino.runtime import Core, serialize
+            from openvino.runtime import Core
             
             core = Core()
             compiled = core.compile_model(model, "NPU")

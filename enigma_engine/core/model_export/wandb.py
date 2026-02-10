@@ -5,11 +5,8 @@ W&B is an ML experiment tracking and model registry platform.
 """
 
 import logging
-import shutil
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
-import torch
 
 from .base import (
     ExportProvider,
@@ -18,7 +15,6 @@ from .base import (
     ImportProvider,
     ImportResult,
     ImportStatus,
-    ProviderConfig,
 )
 
 logger = logging.getLogger(__name__)

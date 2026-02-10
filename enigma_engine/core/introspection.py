@@ -29,9 +29,8 @@ Usage:
 
 import json
 import logging
-from collections import OrderedDict
-from dataclasses import dataclass, field
-from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 

@@ -32,7 +32,7 @@ import threading
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -657,7 +657,6 @@ class GameAIRouter:
             if sys.platform == 'win32':
                 try:
                     import ctypes
-                    from ctypes import wintypes
                     
                     user32 = ctypes.windll.user32
                     

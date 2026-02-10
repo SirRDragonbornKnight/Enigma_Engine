@@ -38,8 +38,8 @@ import time
 import zlib
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple
-from urllib import error, request
+from typing import Any, Callable, Optional
+from urllib import request
 
 logger = logging.getLogger(__name__)
 

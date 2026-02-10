@@ -94,7 +94,6 @@ TOOL_CALL_PATTERN = re.compile(r'<tool_call>(.*?)</tool_call>', re.DOTALL)
 
 class ToolTimeoutError(Exception):
     """Raised when a tool execution times out."""
-    pass
 
 
 @contextmanager
@@ -810,7 +809,6 @@ class ToolExecutor:
             except ImportError as e:
                 logger.warning(f"Could not import image_tab: {e}")
                 # Fall back to module-based generation
-                pass
             
             # Fallback: try module's generate method
             if module:
@@ -1214,7 +1212,6 @@ class ToolExecutor:
     def _execute_generate_gif(self, module, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute GIF generation by creating multiple image frames."""
         try:
-            import os
             from pathlib import Path
 
             from PIL import Image

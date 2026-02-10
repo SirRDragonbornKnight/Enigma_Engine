@@ -10,7 +10,6 @@ MAIN CLASSES: UpdateManager, UpdateChecker, UpdateInstaller
 """
 
 import hashlib
-import json
 import logging
 import platform
 import shutil
@@ -23,7 +22,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Optional
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

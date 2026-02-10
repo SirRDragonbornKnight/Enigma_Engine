@@ -19,17 +19,16 @@ import json
 import logging
 import time
 from dataclasses import dataclass, field
-from enum import Enum, auto
+from enum import Enum
 from pathlib import Path
 from threading import Lock
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 # Qt imports with fallback
 try:
-    from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, pyqtSignal, QObject
-    from PyQt5.QtGui import QPixmap, QPainter, QColor, QImage, QTransform
+    from PyQt5.QtGui import QPixmap, QPainter, QColor
     HAS_QT = True
 except ImportError:
     HAS_QT = False

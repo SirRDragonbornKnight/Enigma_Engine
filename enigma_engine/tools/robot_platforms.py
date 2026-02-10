@@ -12,21 +12,19 @@ Supports:
 
 import asyncio
 import logging
-import struct
-import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
 
 # Optional imports
 try:
     import rclpy
-    from geometry_msgs.msg import Pose, PoseStamped, Twist
+    from geometry_msgs.msg import PoseStamped, Twist
     from nav_msgs.msg import Odometry
-    from sensor_msgs.msg import Image, JointState, LaserScan
+    from sensor_msgs.msg import LaserScan
     HAS_ROS2 = True
 except ImportError:
     HAS_ROS2 = False
@@ -134,27 +132,22 @@ class RobotPlatform(ABC):
     @abstractmethod
     async def connect(self, **kwargs) -> bool:
         """Connect to the robot"""
-        pass
     
     @abstractmethod
     async def disconnect(self) -> None:
         """Disconnect from the robot"""
-        pass
     
     @abstractmethod
     def get_capabilities(self) -> RobotCapabilities:
         """Get robot capabilities"""
-        pass
     
     @abstractmethod
     async def get_pose(self) -> Pose6D:
         """Get current robot pose"""
-        pass
     
     @abstractmethod
     async def emergency_stop(self) -> None:
         """Emergency stop the robot"""
-        pass
     
     def add_callback(self, event: str, callback: Callable) -> None:
         """Add event callback"""

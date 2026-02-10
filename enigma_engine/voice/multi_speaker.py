@@ -34,13 +34,12 @@ import hashlib
 import json
 import logging
 import os
-import struct
 import wave
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -141,12 +140,10 @@ class TTSEngine(ABC):
         emotion: EmotionType = EmotionType.NEUTRAL
     ) -> GeneratedAudio:
         """Generate speech from text."""
-        pass
     
     @abstractmethod
     def get_available_voices(self) -> List[str]:
         """Get available voice presets."""
-        pass
 
 
 class Pyttsx3Engine(TTSEngine):

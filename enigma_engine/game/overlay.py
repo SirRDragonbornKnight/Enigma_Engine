@@ -14,11 +14,10 @@ import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 try:
-    from PyQt5.QtCore import QPoint, QRect, Qt, QTimer, pyqtSignal
-    from PyQt5.QtGui import QColor, QFont, QKeySequence, QPalette
+    from PyQt5.QtCore import QPoint, Qt, QTimer, pyqtSignal
     from PyQt5.QtWidgets import (
         QApplication,
         QFrame,
@@ -27,7 +26,6 @@ try:
         QLineEdit,
         QPushButton,
         QScrollArea,
-        QTextEdit,
         QVBoxLayout,
         QWidget,
     )

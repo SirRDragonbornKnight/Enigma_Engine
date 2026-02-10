@@ -11,13 +11,12 @@ Provides consistent error handling for:
 Part of the Enigma AI Engine core utilities.
 """
 
-import sys
 import traceback
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
 from functools import wraps
-from typing import Any, Callable, Dict, Generic, List, Optional, TypeVar, Union
+from typing import Any, Callable, Dict, Generic, Optional, TypeVar, Union
 
 T = TypeVar('T')
 

@@ -28,13 +28,11 @@ Lines 3150-3208: Factory Functions (create_system_tray, cleanup_all_system_trays
 """
 
 import logging
-import os
 import subprocess
 import sys
-import threading
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -1009,7 +1007,6 @@ class QuickCommandOverlay(QWidget):
         """No-op: thinking indicator is shown in status bar instead of chat."""
         # Previously appended a thinking div which had to be removed with regex,
         # causing HTML corruption. Now we just use the status bar.
-        pass
     
     def stop_responding(self):
         """Stop the responding state."""
@@ -1044,7 +1041,6 @@ class QuickCommandOverlay(QWidget):
         """Remove the thinking indicator from chat - now a no-op to prevent HTML corruption."""
         # Previously used regex on HTML which could corrupt formatting.
         # The thinking indicator is now handled by the UI frame, not appended to chat.
-        pass
     
     def _quit_app(self):
         """Quit the entire application and clean up tray icons."""
@@ -1343,7 +1339,6 @@ class QuickCommandOverlay(QWidget):
     def _open_avatar_controls(self):
         """Open avatar control menu with quick gestures."""
         try:
-            from PyQt5.QtCore import QPoint
             from PyQt5.QtWidgets import QMenu
             
             menu = QMenu(self)
@@ -2414,7 +2409,6 @@ class ForgeSystemTray(QObject):
     
     def _on_overlay_closed(self):
         """Handle overlay close."""
-        pass
     
     def _on_chat_sync_finished(self, response: str):
         """Handle when shared ChatSync finishes generating."""
@@ -3011,7 +3005,6 @@ class ForgeSystemTray(QObject):
     def _check_hotkey(self):
         """Check for global hotkey (fallback if pyqtkeybind not available)."""
         # This is a placeholder - actual global hotkey needs platform-specific code
-        pass
     
     def _load_hotkey_settings(self) -> dict:
         """Load keyboard shortcut settings."""

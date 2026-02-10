@@ -26,22 +26,21 @@ Usage:
 """
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, Dict, List, Optional, Tuple, Any
+from typing import Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 try:
     from PyQt5.QtCore import (
-        Qt, QTimer, QPropertyAnimation, QEasingCurve, QPoint, QRect,
-        pyqtSignal, QObject
+        Qt, QTimer, QPoint, QRect, pyqtSignal, QObject
     )
     from PyQt5.QtWidgets import (
         QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
         QFrame, QGraphicsDropShadowEffect, QApplication
     )
-    from PyQt5.QtGui import QColor, QPainter, QPainterPath, QFont, QRegion
+    from PyQt5.QtGui import QColor, QPainter, QPainterPath
     PYQT5_AVAILABLE = True
 except ImportError:
     PYQT5_AVAILABLE = False

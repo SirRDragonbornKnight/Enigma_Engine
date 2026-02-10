@@ -29,18 +29,15 @@ Usage:
         process_request()
 """
 
-import hashlib
-import hmac
 import logging
 import secrets
 import sqlite3
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum, auto
 from functools import wraps
-from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
@@ -55,7 +52,6 @@ class RateLimitExceeded(Exception):
 
 class AuthenticationError(Exception):
     """Authentication failed."""
-    pass
 
 
 class APITier(Enum):

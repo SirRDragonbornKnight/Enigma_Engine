@@ -27,7 +27,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -35,14 +35,13 @@ logger = logging.getLogger(__name__)
 try:
     from PyQt5.QtWidgets import (
         QDialog, QVBoxLayout, QHBoxLayout, QWidget, QLabel,
-        QPushButton, QLineEdit, QTextEdit, QPlainTextEdit,
-        QListWidget, QListWidgetItem, QTableWidget, QTableWidgetItem,
-        QTabWidget, QGroupBox, QComboBox, QSpinBox, QCheckBox,
-        QFileDialog, QMessageBox, QProgressBar, QSplitter,
-        QMenu, QAction, QToolBar, QStatusBar, QHeaderView
+        QPushButton, QLineEdit, QPlainTextEdit, QListWidget,
+        QListWidgetItem, QTableWidget, QTableWidgetItem, QTabWidget,
+        QGroupBox, QFileDialog, QMessageBox, QSplitter, QToolBar,
+        QHeaderView
     )
-    from PyQt5.QtCore import Qt, pyqtSignal, QThread
-    from PyQt5.QtGui import QFont, QColor
+    from PyQt5.QtCore import Qt
+    from PyQt5.QtGui import QColor
     QT_AVAILABLE = True
 except ImportError:
     QT_AVAILABLE = False

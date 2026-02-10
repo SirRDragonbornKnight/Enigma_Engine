@@ -15,7 +15,7 @@ Extracted from avatar_display.py for maintainability.
 import logging
 import math
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QCursor
@@ -293,7 +293,6 @@ class OpenGL3DWidget(QOpenGLWidget):
                             break
                 
                 if img is not None and uv is not None and len(uv) == num_verts:
-                    from PIL import Image
                     if not isinstance(img, np.ndarray):
                         img = np.array(img)
                     
@@ -563,7 +562,7 @@ class OpenGL3DWidget(QOpenGLWidget):
     def _load_vrm_data(self, path: str):
         """Load VRM-specific data (expressions, humanoid bones, metadata)."""
         try:
-            from ....avatar.vrm_support import VRMLoader, VRMModel, VRMExpression
+            from ....avatar.vrm_support import VRMLoader, VRMModel
             
             loader = VRMLoader()
             vrm_model: VRMModel = loader.load(path)

@@ -10,7 +10,7 @@ import queue
 import threading
 from collections.abc import Iterator
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 

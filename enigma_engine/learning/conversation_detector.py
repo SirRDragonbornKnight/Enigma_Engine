@@ -34,7 +34,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Optional, Tuple
+from typing import Optional
 
 # Import from existing self_improvement module
 from ..core.self_improvement import (

@@ -27,7 +27,6 @@ from PyQt5.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMessageBox,
-    QProgressBar,
     QPushButton,
     QScrollArea,
     QSplitter,
@@ -43,7 +42,6 @@ from ...config import CONFIG
 from ...tools.data_trainer import (
     CharacterProfile, 
     CharacterTrainer, 
-    TaskTrainer,
     get_character_trainer,
     get_task_trainer
 )

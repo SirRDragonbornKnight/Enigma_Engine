@@ -10,16 +10,15 @@ MAIN CLASSES: ImagePasteHandler, PastedImage, ImagePreview
 """
 
 import base64
-import io
 import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Callable, Optional
 
 try:
-    from PyQt5.QtCore import QBuffer, QByteArray, QMimeData, Qt, pyqtSignal
-    from PyQt5.QtGui import QClipboard, QDragEnterEvent, QDropEvent, QImage, QPixmap
+    from PyQt5.QtCore import QBuffer, Qt, pyqtSignal
+    from PyQt5.QtGui import QDragEnterEvent, QDropEvent, QImage, QPixmap
     from PyQt5.QtWidgets import (
         QFrame,
         QHBoxLayout,

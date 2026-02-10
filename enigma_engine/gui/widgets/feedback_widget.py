@@ -4,7 +4,7 @@ Feedback Widget - User feedback collection for self-improvement.
 Provides thumbs up/down buttons for AI responses with optional text feedback.
 """
 
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QPushButton, QWidget
 
 

@@ -12,16 +12,14 @@ import logging
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
-from PyQt5.QtCore import QByteArray, QSettings, Qt
+from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
-    QApplication,
     QDockWidget,
     QMainWindow,
     QSplitter,
     QTabWidget,
-    QWidget,
 )
 
 logger = logging.getLogger(__name__)

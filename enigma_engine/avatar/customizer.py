@@ -7,7 +7,7 @@ User tools for customizing avatar appearance.
 import json
 import shutil
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 from .avatar_identity import AvatarAppearance
 

@@ -39,11 +39,10 @@ import mimetypes
 import os
 import shutil
 from abc import ABC, abstractmethod
-from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, BinaryIO, Dict, List, Optional, Union
+from typing import Any, BinaryIO
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
@@ -87,7 +86,6 @@ class StorageBackend(ABC):
         Raises:
             FileNotFoundError: If object doesn't exist
         """
-        pass
     
     @abstractmethod
     def put(self, key: str, data: bytes | BinaryIO, **kwargs) -> StorageObject:
@@ -102,7 +100,6 @@ class StorageBackend(ABC):
         Returns:
             StorageObject with metadata
         """
-        pass
     
     @abstractmethod
     def delete(self, key: str) -> bool:
@@ -115,12 +112,10 @@ class StorageBackend(ABC):
         Returns:
             True if deleted, False if not found
         """
-        pass
     
     @abstractmethod
     def exists(self, key: str) -> bool:
         """Check if an object exists."""
-        pass
     
     @abstractmethod
     def list(self, prefix: str = "", recursive: bool = True) -> list[StorageObject]:
@@ -134,12 +129,10 @@ class StorageBackend(ABC):
         Returns:
             List of StorageObject
         """
-        pass
     
     @abstractmethod
     def info(self, key: str) -> StorageObject | None:
         """Get object metadata without downloading."""
-        pass
     
     def get_text(self, key: str, encoding: str = "utf-8") -> str:
         """Get object as text."""

@@ -13,7 +13,7 @@ import functools
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -26,10 +26,6 @@ except ImportError:
 # Try to import the full auth system
 try:
     from ..auth.accounts import (
-        UserRole,
-        UserProfile,
-        Session as AuthSession,
-        AuthMethod,
         PasswordHasher,
         TokenManager,
         HAS_SQLITE,

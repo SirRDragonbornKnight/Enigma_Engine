@@ -12,12 +12,11 @@ Removed (AI can generate these):
 """
 
 import json
-import os
 import re
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from .tool_registry import Tool, RichParameter
 

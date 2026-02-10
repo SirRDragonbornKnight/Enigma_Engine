@@ -5,7 +5,7 @@ Abstract base class for all avatar renderers.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Optional
 
 from ..avatar_identity import AvatarAppearance
 
@@ -33,12 +33,10 @@ class BaseRenderer(ABC):
     @abstractmethod
     def show(self) -> None:
         """Show avatar window/display."""
-        pass
     
     @abstractmethod
     def hide(self) -> None:
         """Hide avatar window/display."""
-        pass
     
     @abstractmethod
     def set_position(self, x: int, y: int) -> None:
@@ -49,7 +47,6 @@ class BaseRenderer(ABC):
             x: X coordinate
             y: Y coordinate
         """
-        pass
     
     @abstractmethod
     def render_frame(self, animation_data: Optional[dict] = None) -> None:
@@ -59,7 +56,6 @@ class BaseRenderer(ABC):
         Args:
             animation_data: Optional animation state data
         """
-        pass
     
     def load_model(self, model_path: str) -> bool:
         """
@@ -81,7 +77,6 @@ class BaseRenderer(ABC):
         Args:
             scale: Scale factor (1.0 = normal)
         """
-        pass
     
     def set_opacity(self, opacity: float) -> None:
         """
@@ -90,7 +85,6 @@ class BaseRenderer(ABC):
         Args:
             opacity: 0.0 (transparent) to 1.0 (opaque)
         """
-        pass
     
     def set_color(self, color: str) -> None:
         """
@@ -99,7 +93,6 @@ class BaseRenderer(ABC):
         Args:
             color: Hex color code (e.g., "#FF0000")
         """
-        pass
     
     def set_appearance(self, appearance: AvatarAppearance) -> None:
         """
@@ -135,7 +128,6 @@ class BaseRenderer(ABC):
             duration: Animation duration in seconds
         """
         # Default implementation - can be overridden
-        pass
     
     @property
     def is_visible(self) -> bool:

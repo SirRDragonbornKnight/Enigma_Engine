@@ -38,8 +38,7 @@ import re
 import threading
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Callable, Dict, List, Optional, Set
 import json
 
 logger = logging.getLogger(__name__)
@@ -55,7 +54,6 @@ except ImportError:
 # Windows-specific for window titles
 try:
     import ctypes
-    from ctypes import wintypes
     WIN32_AVAILABLE = True
 except ImportError:
     WIN32_AVAILABLE = False

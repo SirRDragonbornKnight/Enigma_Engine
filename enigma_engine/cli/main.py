@@ -29,7 +29,6 @@ EXAMPLES:
 import argparse
 import sys
 from pathlib import Path
-from typing import List, Optional
 
 # =============================================================================
 # CLI Commands
@@ -538,7 +537,6 @@ def cmd_create(args):
     print(f"Base model: {config['base']}")
     
     # Copy base model with new config
-    import json
 
     import torch
 

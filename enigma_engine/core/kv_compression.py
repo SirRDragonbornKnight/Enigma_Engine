@@ -22,9 +22,9 @@ Usage:
 import logging
 import time
 from collections import OrderedDict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -192,7 +192,6 @@ class CompressedKVCache:
         scale: Any
     ) -> Any:
         """Dequantize tensor."""
-        import torch
         
         if scale is None:
             return quantized
@@ -226,7 +225,6 @@ class CompressedKVCache:
         
         # Offload to CPU if configured
         if self._config.offload_to_cpu:
-            import torch
             if isinstance(key, tuple):
                 key = (key[0].cpu(), key[1].cpu() if key[1] is not None else None)
                 value = (value[0].cpu(), value[1].cpu() if value[1] is not None else None)

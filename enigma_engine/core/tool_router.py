@@ -1183,7 +1183,6 @@ class ToolRouter:
         
         Splits text into paragraphs and creates questions from them.
         """
-        import re
         
         lines = []
         paragraphs = [p.strip() for p in text.split('\n\n') if p.strip()]
@@ -2073,7 +2072,7 @@ class ToolRouter:
             from pathlib import Path
 
             import torch
-            from diffusers import DiffusionPipeline, StableDiffusionPipeline
+            from diffusers import DiffusionPipeline
             
             model_id = assignment.model_id.split(":", 1)[1] if ":" in assignment.model_id else assignment.model_id
             
@@ -2858,7 +2857,6 @@ class ToolRouter:
         Returns:
             Training statistics
         """
-        from pathlib import Path
         
         feedback_path = self.config_path.parent / "routing_feedback.json"
         
@@ -3056,7 +3054,6 @@ class ToolRouter:
             return {"error": f"Invalid domain. Must be one of: {valid_domains}"}
         
         # Generate domain-specific training data
-        from pathlib import Path
         
         output_dir = self.config_path.parent / "sub_routers"
         output_dir.mkdir(parents=True, exist_ok=True)

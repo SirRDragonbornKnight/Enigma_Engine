@@ -16,7 +16,7 @@ import re
 from dataclasses import dataclass, field
 from enum import Enum
 from re import Pattern
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Optional
 
 
 class SensitiveDataType(Enum):

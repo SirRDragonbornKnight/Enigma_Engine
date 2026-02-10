@@ -26,7 +26,7 @@ import logging
 import queue
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Type
 
@@ -157,7 +157,6 @@ class ROS2Bridge:
         """
         try:
             import rclpy
-            from rclpy.node import Node
             
             self._rclpy = rclpy
             

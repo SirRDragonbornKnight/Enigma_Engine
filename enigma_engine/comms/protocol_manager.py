@@ -13,7 +13,7 @@ Each protocol config is a JSON file with connection settings.
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from ..config import CONFIG
 

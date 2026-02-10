@@ -6,7 +6,7 @@ import json
 import logging
 import shutil
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 import torch
 
@@ -34,7 +34,6 @@ try:
     from huggingface_hub import (
         HfApi,
         create_repo,
-        hf_hub_download,
         list_models,
         snapshot_download,
     )
@@ -44,7 +43,6 @@ except ImportError:
 
 HAVE_SAFETENSORS = False
 try:
-    from safetensors.torch import load_file as load_safetensors
     from safetensors.torch import save_file as save_safetensors
     HAVE_SAFETENSORS = True
 except ImportError:

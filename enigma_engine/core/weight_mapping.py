@@ -16,15 +16,13 @@ Usage:
 
 import logging
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
-import numpy as np
 
 logger = logging.getLogger(__name__)
 
 # Optional torch import
 try:
-    import torch
     HAVE_TORCH = True
 except ImportError:
     HAVE_TORCH = False
@@ -131,7 +129,6 @@ class WeightMapper:
         if not HAVE_TORCH:
             return tensor
         
-        import torch
 
         # GPT-2 style models: combined QKV needs splitting
         if 'c_attn' in source_name and source_format == 'huggingface':

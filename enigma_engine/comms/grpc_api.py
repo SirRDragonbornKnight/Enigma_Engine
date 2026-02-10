@@ -13,11 +13,10 @@ import logging
 import time
 from concurrent import futures
 from dataclasses import dataclass
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Dict, Iterator, List
 
 try:
     import grpc
-    from grpc import aio as grpc_aio
     HAS_GRPC = True
 except ImportError:
     HAS_GRPC = False

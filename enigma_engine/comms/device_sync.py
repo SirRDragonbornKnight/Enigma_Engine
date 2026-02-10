@@ -35,8 +35,8 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, Callable, Dict, List, Optional, Set
-from urllib import error, request
+from typing import Any, Callable, Optional
+from urllib import request
 
 logger = logging.getLogger(__name__)
 
@@ -535,7 +535,6 @@ class DeviceSync:
     def _queue_command(self, device_id: str, command: str, params: dict[str, Any]):
         """Queue a command for a device."""
         # Commands are delivered on next sync
-        pass
     
     def _notify_callbacks(self, key: str, value: Any):
         """Notify subscribers of state change."""

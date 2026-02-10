@@ -4,7 +4,7 @@ Avatar Control Tool Definition
 Allows AI to control avatar through bone animations as a tool call.
 """
 
-from typing import Any, Dict
+from typing import Any
 
 AVATAR_CONTROL_TOOL = {
     "name": "control_avatar_bones",

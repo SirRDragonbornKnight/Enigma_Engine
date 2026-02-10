@@ -26,9 +26,8 @@ import json
 import logging
 import os
 import shutil
-from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import Any, Optional
 
 import torch
 
@@ -37,7 +36,7 @@ logger = logging.getLogger(__name__)
 # Check for huggingface_hub
 HAVE_HF_HUB = False
 try:
-    from huggingface_hub import HfApi, create_repo, upload_folder
+    from huggingface_hub import HfApi, create_repo
     HAVE_HF_HUB = True
 except ImportError:
     logger.info("huggingface_hub not installed - push_to_hub disabled. Install with: pip install huggingface-hub")

@@ -12,7 +12,7 @@ The canonical MODEL_PRESETS are defined in enigma_engine.core.model.
 """
 
 # Import from the canonical location
-from .model import MODEL_DESCRIPTIONS, MODEL_PRESETS, ForgeConfig
+from .model import MODEL_DESCRIPTIONS, MODEL_PRESETS
 
 
 def get_model_config(size: str = "tiny") -> dict:

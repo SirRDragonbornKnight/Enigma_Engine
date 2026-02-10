@@ -43,11 +43,10 @@ IMPLEMENTING YOUR OWN ROBOT:
 import json
 import socket
 import time
-import urllib.error
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 
 class RobotState(Enum):

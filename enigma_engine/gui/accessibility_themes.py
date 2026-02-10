@@ -30,17 +30,15 @@ Usage:
 """
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
 # Try PyQt5 imports
 try:
-    from PyQt5.QtWidgets import QApplication, QWidget
-    from PyQt5.QtGui import QFont, QPalette, QColor
-    from PyQt5.QtCore import Qt
+    from PyQt5.QtWidgets import QApplication
     PYQT5_AVAILABLE = True
 except ImportError:
     PYQT5_AVAILABLE = False

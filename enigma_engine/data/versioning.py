@@ -9,17 +9,15 @@ TYPE: Data Management
 MAIN CLASSES: DatasetVersion, VersionManager, DataDiff
 """
 
-import gzip
 import hashlib
 import json
 import logging
 import shutil
 import time
-from collections.abc import Iterator
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 

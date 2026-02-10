@@ -14,7 +14,7 @@ Usage:
 
 import re
 from difflib import get_close_matches
-from typing import List, Optional, Tuple
+from typing import Optional
 
 
 def levenshtein_distance(s1: str, s2: str) -> int:

@@ -21,10 +21,9 @@ Usage:
 """
 
 import logging
-import threading
 import time
-from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -32,10 +31,9 @@ try:
     from PyQt5.QtWidgets import (
         QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
         QTextEdit, QLineEdit, QPushButton, QLabel,
-        QComboBox, QFrame, QProgressBar, QGroupBox,
-        QScrollArea
+        QComboBox, QFrame, QProgressBar
     )
-    from PyQt5.QtCore import Qt, pyqtSignal, QThread, QTimer
+    from PyQt5.QtCore import Qt, pyqtSignal, QThread
     from PyQt5.QtGui import QFont, QTextCursor
     PYQT5_AVAILABLE = True
 except ImportError:

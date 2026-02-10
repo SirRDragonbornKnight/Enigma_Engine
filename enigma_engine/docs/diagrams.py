@@ -10,14 +10,10 @@ MAIN CLASSES: DiagramGenerator, MermaidGenerator, PlantUMLGenerator
 """
 
 import ast
-import importlib
-import inspect
 import logging
-import re
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -225,7 +221,6 @@ class MermaidGenerator:
     
     def __init__(self):
         """Initialize Mermaid generator."""
-        pass
     
     def class_diagram(self, modules: list[ModuleInfo],
                       relationships: list[Relationship] = None) -> str:
@@ -341,7 +336,6 @@ class PlantUMLGenerator:
     
     def __init__(self):
         """Initialize PlantUML generator."""
-        pass
     
     def class_diagram(self, modules: list[ModuleInfo],
                       relationships: list[Relationship] = None) -> str:

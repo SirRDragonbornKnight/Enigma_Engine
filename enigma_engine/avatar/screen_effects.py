@@ -27,10 +27,10 @@ logger = logging.getLogger(__name__)
 
 # Qt imports with fallbacks
 try:
-    from PyQt5.QtCore import Qt, QTimer, QPointF, QRectF, pyqtSignal, QObject
+    from PyQt5.QtCore import Qt, QTimer, QPointF, QRectF, pyqtSignal
     from PyQt5.QtGui import (
         QPainter, QColor, QPen, QBrush, QRadialGradient, 
-        QPainterPath, QPixmap, QImage, QLinearGradient
+        QPainterPath, QPixmap
     )
     from PyQt5.QtWidgets import QWidget, QApplication
     HAS_QT = True

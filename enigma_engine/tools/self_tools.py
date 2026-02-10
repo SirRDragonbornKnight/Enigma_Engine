@@ -14,7 +14,7 @@ This makes the AI feel alive - it can evolve and personalize itself.
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from .tool_registry import RichParameter, Tool
 
@@ -601,7 +601,7 @@ class GenerateAvatarTool(Tool):
         try:
             import time
 
-            from ..gui.tabs.threed_tab import OUTPUT_DIR, Cloud3DGen, Local3DGen
+            from ..gui.tabs.threed_tab import Cloud3DGen, Local3DGen
 
             # Try local first
             gen = Local3DGen()
@@ -913,7 +913,7 @@ class ControlAvatarTool(Tool):
         
         try:
             # Try to get the desktop pet
-            from enigma_engine.avatar.desktop_pet import DesktopPet
+            pass
 
             # Get the running pet instance
             pet = self._get_pet_instance()
@@ -1400,7 +1400,7 @@ class SpawnScreenEffectTool(Tool):
         **kwargs
     ) -> dict[str, Any]:
         try:
-            from enigma_engine.avatar.screen_effects import get_effect_manager, EFFECT_PRESETS
+            from enigma_engine.avatar.screen_effects import get_effect_manager
             
             manager = get_effect_manager()
             
@@ -1658,7 +1658,7 @@ class ChangeOutfitTool(Tool):
         **kwargs
     ) -> dict[str, Any]:
         try:
-            from enigma_engine.avatar.outfit_system import OutfitManager, ClothingSlot, AccessorySlot, PropSlot
+            pass
             
             # Get or create outfit manager
             manager = self._get_outfit_manager()

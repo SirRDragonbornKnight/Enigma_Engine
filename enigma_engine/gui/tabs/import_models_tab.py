@@ -16,7 +16,6 @@ USAGE:
 
 import logging
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +23,6 @@ try:
     from PyQt5.QtCore import Qt, QThread, pyqtSignal
     from PyQt5.QtWidgets import (
         QCheckBox,
-        QComboBox,
         QFileDialog,
         QGroupBox,
         QHBoxLayout,
@@ -37,7 +35,6 @@ try:
         QPushButton,
         QScrollArea,
         QSpinBox,
-        QTextEdit,
         QVBoxLayout,
         QWidget,
     )

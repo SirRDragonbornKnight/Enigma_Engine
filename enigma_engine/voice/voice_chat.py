@@ -9,15 +9,13 @@ TYPE: Voice
 MAIN CLASSES: VoiceChat, AudioStream, VAD, TurnManager
 """
 
-import io
 import logging
 import queue
 import threading
 import time
-import wave
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
 
