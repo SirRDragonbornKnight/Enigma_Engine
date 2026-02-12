@@ -106,7 +106,7 @@ class EchoCanceller:
             import speexdsp  # type: ignore
             available.append(EchoCancellationBackend.SPEEXDSP)
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         return available
     

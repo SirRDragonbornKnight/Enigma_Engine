@@ -84,7 +84,7 @@ class ModelLoadingDialog(QDialog):
             from ..ui_settings import apply_dialog_transparency
             apply_dialog_transparency(self)
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         # Calculate size based on number of items
         num_items = len(self._loading_items)

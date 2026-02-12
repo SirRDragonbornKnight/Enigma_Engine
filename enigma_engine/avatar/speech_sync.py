@@ -105,7 +105,7 @@ class SpeechSync:
             try:
                 self._voice_engine = get_engine()
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         # AI command file for avatar overlay
         if self.config.command_file:

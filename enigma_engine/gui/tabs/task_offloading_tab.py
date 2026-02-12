@@ -690,7 +690,7 @@ class TaskOffloadingTab(QWidget):
             self.stat_success_rate.setText(f"{success_rate * 100:.1f}%")
             
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def _on_task_config_changed(self, task_type: TaskType, config: TaskConfig):
         """Handle task configuration change."""
@@ -789,7 +789,7 @@ class TaskOffloadingTab(QWidget):
                             widget.priority_spin.setValue(task_config.get("priority", 5))
                             widget.fallback_check.setChecked(task_config.get("fallback_local", True))
                     except (KeyError, ValueError):
-                        pass
+                        pass  # Intentionally silent
                         
             except Exception as e:
                 logger.error(f"Failed to import config: {e}")

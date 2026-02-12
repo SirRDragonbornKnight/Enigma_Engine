@@ -134,7 +134,7 @@ class CameraModule:
                     self.camera_type = CameraType.PI_CAMERA
                     logger.info("Detected Pi Camera")
                 except (RuntimeError, Exception):
-                    pass
+                    pass  # Intentionally silent
             
             # Fall back to USB webcam
             if self.camera_type == CameraType.AUTO and HAS_OPENCV:
@@ -272,7 +272,7 @@ class CameraModule:
                 try:
                     metadata = self._camera.capture_metadata()
                 except (RuntimeError, AttributeError):
-                    pass
+                    pass  # Intentionally silent
                 
                 if format == ImageFormat.JPEG:
                     import io
@@ -400,7 +400,7 @@ class CameraModule:
                         self._frame_queue.get_nowait()
                         self._frame_queue.put_nowait(result)
                     except queue.Empty:
-                        pass
+                        pass  # Intentionally silent
                 
                 # Call callbacks
                 for callback in self._frame_callbacks:

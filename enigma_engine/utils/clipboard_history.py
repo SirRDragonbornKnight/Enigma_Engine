@@ -134,7 +134,7 @@ def detect_content_type(content: str) -> ContentType:
             json.loads(content)
             return ContentType.JSON
         except (json.JSONDecodeError, ValueError):
-            pass
+            pass  # Intentionally silent
     
     # Code detection (heuristic)
     code_indicators = [
@@ -237,7 +237,7 @@ class ClipboardHistory:
                 import pyperclip
                 return pyperclip.paste()
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             # Try tkinter
             try:
@@ -284,7 +284,7 @@ class ClipboardHistory:
                 pyperclip.copy(content)
                 return True
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             # Try tkinter
             try:

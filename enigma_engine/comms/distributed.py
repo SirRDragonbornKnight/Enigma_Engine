@@ -258,7 +258,7 @@ class DistributedNode:
             if torch.cuda.is_available():
                 caps.append("gpu")
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         return caps
     

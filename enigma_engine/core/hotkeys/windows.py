@@ -122,7 +122,7 @@ class WindowsHotkeyBackend:
                 if 1 <= num <= 12:
                     return 0x70 + num - 1
             except ValueError:
-                pass
+                pass  # Intentionally silent
         
         # Check special keys
         if key_upper in special_keys:

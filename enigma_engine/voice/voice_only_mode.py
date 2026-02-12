@@ -279,7 +279,7 @@ class VoiceOnlyMode:
                 try:
                     callback(command.text)
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
             
             # Process command
             try:
@@ -441,10 +441,10 @@ class VoiceOnlyMode:
                 sd.play(beep, sample_rate)
                 sd.wait()
             except ImportError:
-                pass
+                pass  # Intentionally silent
                 
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def _set_state(self, new_state: ListeningState):
         """Set state and notify."""
@@ -454,7 +454,7 @@ class VoiceOnlyMode:
             try:
                 callback(new_state)
             except Exception:
-                pass
+                pass  # Intentionally silent
     
     def _default_handler(self, text: str) -> str:
         """Default command handler."""

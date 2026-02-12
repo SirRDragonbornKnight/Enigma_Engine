@@ -83,7 +83,7 @@ if HAS_TORCH:
         and unscales gradients before optimizer step.
         """
         
-        def __init__(self, config: PrecisionConfig = None):
+        def __init__(self, config: PrecisionConfig = None) -> None:
             self.config = config or PrecisionConfig()
             
             self._scale = self.config.initial_scale
@@ -116,7 +116,7 @@ if HAS_TORCH:
             self._state = ScalerState.READY
             return loss * self._scale
         
-        def unscale_(self, optimizer: torch.optim.Optimizer):
+        def unscale_(self, optimizer: torch.optim.Optimizer) -> None:
             """Unscale gradients before optimizer step."""
             if not self.config.enabled:
                 return
@@ -180,7 +180,7 @@ if HAS_TORCH:
             
             return True
         
-        def update(self):
+        def update(self) -> None:
             """Update scaler state after optimizer step."""
             if self._torch_scaler:
                 self._torch_scaler.update()
@@ -195,7 +195,7 @@ if HAS_TORCH:
                             return True
             return False
         
-        def _handle_nan(self):
+        def _handle_nan(self) -> None:
             """Handle NaN gradients by reducing scale."""
             old_scale = self._scale
             self._scale = max(
@@ -231,7 +231,7 @@ if HAS_TORCH:
                 "total_steps": self._total_steps
             }
         
-        def load_state_dict(self, state_dict: dict[str, Any]):
+        def load_state_dict(self, state_dict: dict[str, Any]) -> None:
             """Load state dict."""
             if self._torch_scaler:
                 self._torch_scaler.load_state_dict(state_dict)
@@ -249,7 +249,7 @@ if HAS_TORCH:
         Keeps certain sensitive operations in FP32 for stability.
         """
         
-        def __init__(self, config: PrecisionConfig = None):
+        def __init__(self, config: PrecisionConfig = None) -> None:
             self.config = config or PrecisionConfig()
             self._dtype_map = {
                 Precision.FP32: torch.float32,
@@ -272,7 +272,7 @@ if HAS_TORCH:
             
             return False
         
-        def apply_to_model(self, model: nn.Module):
+        def apply_to_model(self, model: nn.Module) -> None:
             """
             Apply precision policy to model.
             
@@ -310,7 +310,7 @@ if HAS_TORCH:
             model: nn.Module,
             optimizer: torch.optim.Optimizer,
             config: PrecisionConfig = None
-        ):
+        ) -> None:
             self.model = model
             self.optimizer = optimizer
             self.config = config or PrecisionConfig()
@@ -419,7 +419,7 @@ if HAS_TORCH:
                 }
             }
         
-        def load_state(self, state: dict[str, Any]):
+        def load_state(self, state: dict[str, Any]) -> None:
             """Load trainer state."""
             self.scaler.load_state_dict(state["scaler"])
     

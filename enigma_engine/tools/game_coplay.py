@@ -149,7 +149,7 @@ class InputSimulator:
                     self._available_methods.append(InputMethod.CONTROLLER)
                     logger.info("Controller input available (uinput)")
                 except ImportError:
-                    pass
+                    pass  # Intentionally silent
         except ImportError:
             logger.debug("Virtual gamepad not available")
     
@@ -556,7 +556,7 @@ class GameCoPlayer:
             try:
                 cb(message)
             except Exception:
-                pass
+                pass  # Intentionally silent
     
     def combo(self, keys: list[str], delay: float = 0.05, reason: str = ""):
         """Queue a combo of key presses."""
@@ -574,7 +574,7 @@ class GameCoPlayer:
                 try:
                     cb(message)
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
     
     # === Observation and decision making ===
     

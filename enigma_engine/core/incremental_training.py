@@ -111,8 +111,8 @@ class IncrementalTrainer:
     def __init__(
         self,
         model_path: Optional[str] = None,
-        config: Optional[IncrementalConfig] = None
-    ):
+        config: Optional[IncrementalConfig] = None,
+    ) -> None:
         """
         Initialize incremental trainer.
         
@@ -151,7 +151,7 @@ class IncrementalTrainer:
         
         logger.info("IncrementalTrainer initialized")
     
-    def _load_model(self):
+    def _load_model(self) -> None:
         """Load existing model and tokenizer."""
         try:
             from enigma_engine.core.model import Forge
@@ -177,8 +177,8 @@ class IncrementalTrainer:
     def add_data(
         self,
         data_source: str | List[str],
-        is_validation: bool = False
-    ):
+        is_validation: bool = False,
+    ) -> None:
         """
         Add training data.
         
@@ -216,8 +216,8 @@ class IncrementalTrainer:
     def load_old_data(
         self,
         data_path: str,
-        max_samples: Optional[int] = None
-    ):
+        max_samples: Optional[int] = None,
+    ) -> None:
         """
         Load old training data for mixing.
         
@@ -267,7 +267,7 @@ class IncrementalTrainer:
         
         return all_data
     
-    def _compute_baseline(self):
+    def _compute_baseline(self) -> None:
         """Compute baseline metrics before training."""
         if not self._validation_data or not self._model:
             return
@@ -310,7 +310,7 @@ class IncrementalTrainer:
             self._state.baseline_metrics['loss'] = total_loss / count
             logger.info(f"Baseline loss: {self._state.baseline_metrics['loss']:.4f}")
     
-    def _setup_ewc(self):
+    def _setup_ewc(self) -> None:
         """Setup Elastic Weight Consolidation."""
         if self._config.ewc_lambda <= 0 or not self._old_data:
             return
@@ -597,8 +597,8 @@ class IncrementalTrainer:
     def save(
         self,
         output_path: str,
-        save_state: bool = True
-    ):
+        save_state: bool = True,
+    ) -> None:
         """
         Save the updated model.
         
@@ -631,7 +631,7 @@ class IncrementalTrainer:
         
         logger.info(f"Model saved to {output_path}")
     
-    def load_state(self, state_path: str):
+    def load_state(self, state_path: str) -> None:
         """Load training state to continue."""
         import json
         with open(state_path, 'r') as f:

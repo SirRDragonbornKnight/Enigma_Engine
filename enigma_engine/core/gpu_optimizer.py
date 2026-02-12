@@ -104,12 +104,12 @@ if HAS_TORCH:
         Provides unified interface for CUDA/ROCm optimizations.
         """
         
-        def __init__(self, config: GPUConfig = None):
+        def __init__(self, config: GPUConfig = None) -> None:
             self.config = config or GPUConfig()
             self.backend = detect_backend()
             self._original_settings = {}
         
-        def apply_optimizations(self):
+        def apply_optimizations(self) -> None:
             """Apply all configured optimizations."""
             if self.backend == GPUBackend.CUDA:
                 self._apply_cuda_optimizations()
@@ -118,7 +118,7 @@ if HAS_TORCH:
             
             logger.info(f"Applied {self.backend.name} optimizations")
         
-        def _apply_cuda_optimizations(self):
+        def _apply_cuda_optimizations(self) -> None:
             """Apply NVIDIA CUDA-specific optimizations."""
             # TF32 for Ampere+ GPUs
             if self.config.use_tf32:
@@ -141,7 +141,7 @@ if HAS_TORCH:
             if self.config.use_flash_attention:
                 self._enable_flash_attention()
         
-        def _apply_rocm_optimizations(self):
+        def _apply_rocm_optimizations(self) -> None:
             """Apply AMD ROCm-specific optimizations."""
             # ROCm-specific settings
             os.environ['PYTORCH_HIP_ALLOC_CONF'] = 'garbage_collection_threshold:0.6'
@@ -153,7 +153,7 @@ if HAS_TORCH:
             if self.config.memory_fraction < 1.0:
                 torch.cuda.set_per_process_memory_fraction(self.config.memory_fraction)
         
-        def _enable_flash_attention(self):
+        def _enable_flash_attention(self) -> None:
             """Enable flash attention if available."""
             try:
                 # PyTorch 2.0+ scaled_dot_product_attention
@@ -192,7 +192,7 @@ if HAS_TORCH:
             
             return model
         
-        def _enable_gradient_checkpointing(self, model: nn.Module):
+        def _enable_gradient_checkpointing(self, model: nn.Module) -> None:
             """Enable gradient checkpointing for memory efficiency."""
             if hasattr(model, 'gradient_checkpointing_enable'):
                 model.gradient_checkpointing_enable()
@@ -246,7 +246,7 @@ if HAS_TORCH:
                     power_draw = pynvml.nvmlDeviceGetPowerUsage(handle) / 1000.0
                     clock_speed = pynvml.nvmlDeviceGetClockInfo(handle, pynvml.NVML_CLOCK_SM)
                 except ImportError:
-                    pass
+                    pass  # Intentionally silent
                 
                 return GPUStats(
                     utilization=utilization,
@@ -260,13 +260,13 @@ if HAS_TORCH:
                 logger.error(f"Failed to get GPU stats: {e}")
                 return None
         
-        def clear_cache(self):
+        def clear_cache(self) -> None:
             """Clear GPU memory cache."""
             if self.backend in [GPUBackend.CUDA, GPUBackend.ROCM]:
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
         
-        def reset_peak_stats(self):
+        def reset_peak_stats(self) -> None:
             """Reset peak memory statistics."""
             if self.backend in [GPUBackend.CUDA, GPUBackend.ROCM]:
                 torch.cuda.reset_peak_memory_stats()
@@ -275,18 +275,18 @@ if HAS_TORCH:
     class CUDAOptimizer(GPUOptimizer):
         """NVIDIA CUDA-specific optimizations."""
         
-        def __init__(self, config: GPUConfig = None):
+        def __init__(self, config: GPUConfig = None) -> None:
             super().__init__(config)
             if self.backend != GPUBackend.CUDA:
                 logger.warning("CUDAOptimizer created but CUDA not available")
         
-        def enable_tensor_cores(self):
+        def enable_tensor_cores(self) -> None:
             """Enable Tensor Cores for matrix operations."""
             torch.backends.cuda.matmul.allow_tf32 = True
             torch.backends.cudnn.allow_tf32 = True
             logger.info("Tensor Cores enabled (TF32)")
         
-        def set_memory_allocator(self, allocator: str = "expandable"):
+        def set_memory_allocator(self, allocator: str = "expandable") -> None:
             """
             Set CUDA memory allocator strategy.
             
@@ -410,17 +410,17 @@ if HAS_TORCH:
     class ROCmOptimizer(GPUOptimizer):
         """AMD ROCm-specific optimizations."""
         
-        def __init__(self, config: GPUConfig = None):
+        def __init__(self, config: GPUConfig = None) -> None:
             super().__init__(config)
             if self.backend != GPUBackend.ROCM:
                 logger.warning("ROCmOptimizer created but ROCm not available")
         
-        def enable_miopen_optimization(self):
+        def enable_miopen_optimization(self) -> None:
             """Enable MIOpen optimizations (AMD's cuDNN equivalent)."""
             torch.backends.cudnn.benchmark = True
             os.environ['MIOPEN_FIND_MODE'] = '3'  # Exhaustive search
         
-        def set_hip_memory_pool(self):
+        def set_hip_memory_pool(self) -> None:
             """Configure HIP memory pool for better memory management."""
             os.environ['PYTORCH_HIP_ALLOC_CONF'] = (
                 'garbage_collection_threshold:0.6,'

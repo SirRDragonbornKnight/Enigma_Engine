@@ -113,7 +113,7 @@ class CacheEntry:
         self.last_access = time.time()
         self.importance = 0.0
     
-    def access(self, attention_score: Optional[float] = None):
+    def access(self, attention_score: Optional[float] = None) -> None:
         """Record cache access."""
         self.access_count += 1
         self.last_access = time.time()
@@ -307,7 +307,7 @@ class CompressedKVCache:
         
         return keys, values
     
-    def _evict(self):
+    def _evict(self) -> None:
         """Evict entries based on policy."""
         num_to_evict = int(self.size * self._config.eviction_ratio)
         num_to_evict = max(1, num_to_evict)
@@ -329,7 +329,7 @@ class CompressedKVCache:
         
         self._stats.evictions += num_to_evict
     
-    def _evict_lru(self, count: int):
+    def _evict_lru(self, count: int) -> None:
         """Evict least recently used."""
         for _ in range(min(count, len(self._entries))):
             # First item is least recently used
@@ -337,7 +337,7 @@ class CompressedKVCache:
             del self._entries[oldest]
             self._attention_scores.pop(oldest, None)
     
-    def _evict_lfu(self, count: int):
+    def _evict_lfu(self, count: int) -> None:
         """Evict least frequently used."""
         # Sort by access count
         sorted_entries = sorted(
@@ -349,7 +349,7 @@ class CompressedKVCache:
             del self._entries[pos]
             self._attention_scores.pop(pos, None)
     
-    def _evict_attention(self, count: int):
+    def _evict_attention(self, count: int) -> None:
         """Evict lowest attention score."""
         # Sort by attention score
         sorted_entries = sorted(
@@ -361,7 +361,7 @@ class CompressedKVCache:
             del self._entries[pos]
             self._attention_scores.pop(pos, None)
     
-    def _evict_sliding(self):
+    def _evict_sliding(self) -> None:
         """Keep only recent window."""
         window = self._config.window_size
         
@@ -376,7 +376,7 @@ class CompressedKVCache:
             del self._entries[pos]
             self._attention_scores.pop(pos, None)
     
-    def _evict_importance(self, count: int):
+    def _evict_importance(self, count: int) -> None:
         """Evict by computed importance score."""
         for entry in self._entries.values():
             # Combine factors for importance
@@ -395,7 +395,7 @@ class CompressedKVCache:
             del self._entries[pos]
             self._attention_scores.pop(pos, None)
     
-    def _evict_h2o(self):
+    def _evict_h2o(self) -> None:
         """
         Heavy Hitter Oracle eviction.
         
@@ -427,7 +427,7 @@ class CompressedKVCache:
             del self._entries[pos]
             self._attention_scores.pop(pos, None)
     
-    def clear(self):
+    def clear(self) -> None:
         """Clear the cache."""
         self._entries.clear()
         self._attention_scores.clear()
@@ -511,7 +511,7 @@ class KVCacheManager:
             logger.error(f"Failed to apply compression: {e}")
             return False
     
-    def clear_all(self):
+    def clear_all(self) -> None:
         """Clear all caches."""
         for cache in self._caches.values():
             cache.clear()

@@ -240,7 +240,7 @@ class WorkingMemory:
             try:
                 self._by_type[slot.slot_type].remove(slot_id)
             except ValueError:
-                pass
+                pass  # Intentionally silent
                 
         # Remove from tag indices
         for tag in slot.tags:
@@ -248,7 +248,7 @@ class WorkingMemory:
                 try:
                     self._by_tag[tag].remove(slot_id)
                 except ValueError:
-                    pass
+                    pass  # Intentionally silent
                     
         del self._slots[slot_id]
         return True

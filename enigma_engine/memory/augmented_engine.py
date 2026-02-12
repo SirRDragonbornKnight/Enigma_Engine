@@ -640,7 +640,7 @@ class MemoryAugmentedEngine:
         try:
             self.save_memories()
         except Exception:
-            pass
+            pass  # Intentionally silent
 
 
 # =============================================================================

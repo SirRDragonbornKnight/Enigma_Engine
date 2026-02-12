@@ -178,7 +178,7 @@ class AvatarPersistence:
                 data = json.loads(self.settings_path.read_text(encoding="utf-8"))
                 return AvatarSettings.from_dict(data)
             except Exception:
-                pass
+                pass  # Intentionally silent
         return AvatarSettings()
     
     def save(self, settings: AvatarSettings) -> bool:

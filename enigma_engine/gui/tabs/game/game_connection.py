@@ -688,7 +688,7 @@ def _toggle_gaming_mode(parent, state):
                         Q_ARG(str, f"FPS: {stats.current_fps:.0f} | Scale: {int(gm.get_fps_scale() * 100)}%")
                     )
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
             
             gm.on_game_start(on_game_start)
             gm.on_game_end(on_game_end)
@@ -772,7 +772,7 @@ def _update_fps_display(parent, stats):
             from enigma_engine.core.gaming_mode import get_gaming_mode
             scale = int(get_gaming_mode().get_fps_scale() * 100)
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         if stats.current_fps > 0:
             fps_text = f"FPS: {stats.current_fps:.0f} (avg: {stats.average_fps:.0f}) | Scale: {scale}%"
@@ -791,7 +791,7 @@ def _update_fps_display(parent, stats):
             parent.fps_stats_label.setText("FPS: -- | Scale: 100%")
             parent.fps_stats_label.setStyleSheet("color: #bac2de; font-family: monospace;")
     except Exception:
-        pass
+        pass  # Intentionally silent
 
 
 def _add_gaming_profile(parent):
@@ -1146,7 +1146,7 @@ def _disconnect_from_game(parent):
         try:
             parent.game_connection.close()
         except Exception:
-            pass
+            pass  # Intentionally silent
     parent.game_connection = None
     parent.game_status_label.setText("Status: Not connected")
     parent.game_status_label.setStyleSheet("color: #f38ba8;")
@@ -1209,7 +1209,7 @@ def _on_game_detected(parent, game_id: str):
                     break
             parent.game_routing_combo.blockSignals(False)
     except Exception:
-        pass
+        pass  # Intentionally silent
 
 
 def _change_active_game(parent):

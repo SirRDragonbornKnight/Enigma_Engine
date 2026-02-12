@@ -502,7 +502,7 @@ class AudioTab(QWidget):
             preset_row.addStretch()
             layout.addLayout(preset_row)
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         # Text input - compact
         text_layout = QHBoxLayout()

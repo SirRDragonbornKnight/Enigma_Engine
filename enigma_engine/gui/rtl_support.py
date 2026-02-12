@@ -206,7 +206,7 @@ class RTLSupport:
                 widget.setLayoutDirection(Qt.RightToLeft)
                 
         except ImportError:
-            pass
+            pass  # Intentionally silent
     
     def _apply_ltr_to_widget(self, widget: Any):
         """Apply LTR layout to widget."""
@@ -218,7 +218,7 @@ class RTLSupport:
                 widget.setLayoutDirection(Qt.LeftToRight)
                 
         except ImportError:
-            pass
+            pass  # Intentionally silent
     
     def _apply_rtl_to_widgets(self):
         """Apply RTL to all registered widgets."""

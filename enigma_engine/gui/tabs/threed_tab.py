@@ -126,7 +126,7 @@ class Local3DGen:
                     import gc
                     gc.collect()
             except ImportError:
-                pass
+                pass  # Intentionally silent
         if self._builtin_3d:
             self._builtin_3d.unload()
             self._builtin_3d = None

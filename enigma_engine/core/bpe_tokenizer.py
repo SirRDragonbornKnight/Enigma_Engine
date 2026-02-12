@@ -100,9 +100,9 @@ class BPETokenizer:
             verbose: Print progress
         """
         if verbose:
-            print(f"Training BPE tokenizer...")
-            print(f"  Target vocab size: {vocab_size}")
-            print(f"  Training texts: {len(texts)}")
+            logger.info("Training BPE tokenizer...")
+            logger.info(f"Target vocab size: {vocab_size}")
+            logger.info(f"Training texts: {len(texts)}")
 
         # Reset to base vocabulary
         self._init_base_vocab()
@@ -129,8 +129,8 @@ class BPETokenizer:
             self.id_to_token[next_id] = '</w>'
 
         if verbose:
-            print(f"  Unique words: {len(word_freqs)}")
-            print(f"  Base vocab: {len(self.token_to_id)}")
+            logger.info(f"Unique words: {len(word_freqs)}")
+            logger.info(f"Base vocab: {len(self.token_to_id)}")
 
         # BPE training loop
         num_merges = vocab_size - len(self.token_to_id)
@@ -141,7 +141,7 @@ class BPETokenizer:
 
             if not pair_freqs:
                 if verbose:
-                    print(f"  No more pairs to merge at iteration {i}")
+                    logger.info(f"No more pairs to merge at iteration {i}")
                 break
 
             # Find most frequent pair
@@ -150,7 +150,7 @@ class BPETokenizer:
 
             if best_freq < min_frequency:
                 if verbose:
-                    print(f"  Stopping: best pair frequency {best_freq} < {min_frequency}")
+                    logger.info(f"Stopping: best pair frequency {best_freq} < {min_frequency}")
                 break
 
             # Merge the pair
@@ -170,15 +170,15 @@ class BPETokenizer:
             word_freqs = self._apply_merge(word_freqs, best_pair, new_token)
 
             if verbose and (i + 1) % 500 == 0:
-                print(
-                    f"  Merge {i + 1}/{num_merges}: '{best_pair[0]}' + '{best_pair[1]}' -> '{new_token}' (freq: {best_freq})")
+                logger.info(
+                    f"Merge {i + 1}/{num_merges}: '{best_pair[0]}' + '{best_pair[1]}' -> '{new_token}' (freq: {best_freq})")
 
         self.vocab_size = len(self.token_to_id)
 
         if verbose:
-            print(f"  Final vocab size: {self.vocab_size}")
-            print(f"  Total merges: {len(self.merges)}")
-            print("Training complete!")
+            logger.info(f"Final vocab size: {self.vocab_size}")
+            logger.info(f"Total merges: {len(self.merges)}")
+            logger.info("Training complete!")
 
     def _pre_tokenize(self, text: str) -> list[str]:
         """Split text into words for BPE processing."""
@@ -392,7 +392,7 @@ class BPETokenizer:
         with open(path, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
-        print(f"Saved tokenizer to {path}")
+        logger.info(f"Saved tokenizer to {path}")
 
     def load(self, path: Path):
         """Load tokenizer from file."""
@@ -413,7 +413,7 @@ class BPETokenizer:
         self.vocab_size = len(self.token_to_id)
         self.cache = {}
 
-        print(
+        logger.info(
             f"Loaded tokenizer from {path} (vocab: {self.vocab_size}, merges: {len(self.merges)})")
 
     def __call__(self, text: str, return_tensors: str = None,
@@ -461,7 +461,7 @@ def train_bpe_tokenizer(data_paths: list[str], vocab_size: int = 8000,
         if p.exists():
             with open(p, encoding='utf-8') as f:
                 texts.append(f.read())
-            print(f"Loaded {p} ({len(texts[-1])} chars)")
+            logger.info(f"Loaded {p} ({len(texts[-1])} chars)")
 
     if not texts:
         raise ValueError("No training data found!")

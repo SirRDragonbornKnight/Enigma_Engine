@@ -69,7 +69,7 @@ class CacheEntry:
             return False
         return time.time() - self.created_at > self.ttl
     
-    def touch(self):
+    def touch(self) -> None:
         """Mark as recently accessed."""
         self.accessed_at = time.time()
         self.access_count += 1
@@ -103,7 +103,7 @@ class CacheConfig:
 class MemoryManager:
     """Manages memory usage for caching."""
     
-    def __init__(self, config: CacheConfig):
+    def __init__(self, config: CacheConfig) -> None:
         self.config = config
     
     def get_system_memory(self) -> tuple[int, int, float]:
@@ -177,7 +177,7 @@ class MemoryManager:
         except (TypeError, pickle.PicklingError):
             return 100 * 1024**2  # Assume 100MB
     
-    def force_gc(self):
+    def force_gc(self) -> None:
         """Force garbage collection."""
         gc.collect()
         
@@ -193,7 +193,7 @@ class ModelCache:
     and optional disk persistence for model caching.
     """
     
-    def __init__(self, config: CacheConfig = None):
+    def __init__(self, config: CacheConfig = None) -> None:
         self.config = config or CacheConfig()
         self.memory = MemoryManager(self.config)
         
@@ -282,7 +282,7 @@ class ModelCache:
                 param = next(model.parameters())
                 dtype = str(param.dtype)
             except StopIteration:
-                pass
+                pass  # Intentionally silent
         
         entry = CacheEntry(
             key=key,
@@ -322,7 +322,7 @@ class ModelCache:
                 return True
         return False
     
-    def clear(self):
+    def clear(self) -> None:
         """Clear all cached models."""
         with self._lock:
             self._cache.clear()
@@ -422,7 +422,7 @@ class ModelCache:
         # Default to LRU
         return next(iter(self._cache))
     
-    def _evict(self, key: str):
+    def _evict(self, key: str) -> None:
         """Evict a specific entry."""
         entry = self._cache.pop(key, None)
         if entry:
@@ -441,7 +441,7 @@ class ModelCache:
         if self.config.enable_gc_on_evict:
             self.memory.force_gc()
     
-    def _persist_entry(self, entry: CacheEntry):
+    def _persist_entry(self, entry: CacheEntry) -> None:
         """Persist entry to disk."""
         try:
             cache_path = self.config.cache_dir / f"{entry.key}.pkl"
@@ -499,7 +499,7 @@ class ModelCache:
         
         return model
     
-    def start_cleanup(self):
+    def start_cleanup(self) -> None:
         """Start background cleanup thread."""
         if self._running:
             return
@@ -511,19 +511,19 @@ class ModelCache:
         )
         self._cleanup_thread.start()
     
-    def stop_cleanup(self):
+    def stop_cleanup(self) -> None:
         """Stop background cleanup thread."""
         self._running = False
         if self._cleanup_thread:
             self._cleanup_thread.join(timeout=2.0)
     
-    def _cleanup_loop(self):
+    def _cleanup_loop(self) -> None:
         """Background cleanup loop."""
         while self._running:
             time.sleep(self.config.cleanup_interval)
             self._cleanup_expired()
     
-    def _cleanup_expired(self):
+    def _cleanup_expired(self) -> None:
         """Remove expired entries."""
         with self._lock:
             expired = [

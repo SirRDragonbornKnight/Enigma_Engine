@@ -154,7 +154,7 @@ def is_path_blocked(path: str) -> tuple[bool, Optional[str]]:
             if is_blocked:
                 return True, f"Unicode-normalized path blocked: {reason}"
     except Exception:
-        pass
+        pass  # Intentionally silent
     
     try:
         # Check BOTH resolved and unresolved paths to prevent symlink bypass

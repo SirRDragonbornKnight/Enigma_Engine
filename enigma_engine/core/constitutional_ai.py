@@ -152,24 +152,24 @@ class ConstitutionalAI:
         
         logger.info("ConstitutionalAI initialized")
     
-    def set_model(self, model):
+    def set_model(self, model: Any) -> None:
         """Set the model for generation."""
         self._model = model
     
-    def add_principle(self, principle: ConstitutionalPrinciple):
+    def add_principle(self, principle: ConstitutionalPrinciple) -> None:
         """Add a constitutional principle."""
         self._principles.append(principle)
         self._enabled_principles.add(principle.principle)
     
-    def enable_principle(self, principle: Principle):
+    def enable_principle(self, principle: Principle) -> None:
         """Enable a principle."""
         self._enabled_principles.add(principle)
     
-    def disable_principle(self, principle: Principle):
+    def disable_principle(self, principle: Principle) -> None:
         """Disable a principle."""
         self._enabled_principles.discard(principle)
     
-    def set_max_revisions(self, max_revisions: int):
+    def set_max_revisions(self, max_revisions: int) -> None:
         """Set maximum revision iterations."""
         self._max_revisions = max_revisions
     
@@ -425,11 +425,11 @@ class HarmlessnessFilter:
         self._patterns = [re.compile(p, re.IGNORECASE) for p in self.HARMFUL_PATTERNS]
         self._enabled = True
     
-    def enable(self):
+    def enable(self) -> None:
         """Enable filter."""
         self._enabled = True
     
-    def disable(self):
+    def disable(self) -> None:
         """Disable filter."""
         self._enabled = False
     

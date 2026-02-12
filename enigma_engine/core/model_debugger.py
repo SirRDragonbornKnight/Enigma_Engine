@@ -81,7 +81,7 @@ class DebugReport:
             "recommendations": self.recommendations
         }
     
-    def save(self, filepath: str):
+    def save(self, filepath: str) -> None:
         """Save report to JSON file."""
         with open(filepath, 'w') as f:
             json.dump(self.to_dict(), f, indent=2)
@@ -94,7 +94,7 @@ if HAS_TORCH:
         Inspect individual layers during forward pass.
         """
         
-        def __init__(self, model: nn.Module):
+        def __init__(self, model: nn.Module) -> None:
             self.model = model
             self._hooks: list[torch.utils.hooks.RemovableHandle] = []
             self._layer_data: dict[str, dict[str, Any]] = {}
@@ -178,7 +178,7 @@ if HAS_TORCH:
         Analyze gradient flow through the network.
         """
         
-        def __init__(self, model: nn.Module):
+        def __init__(self, model: nn.Module) -> None:
             self.model = model
             self._gradient_data: dict[str, torch.Tensor] = {}
             self._hooks: list[torch.utils.hooks.RemovableHandle] = []
@@ -286,7 +286,7 @@ if HAS_TORCH:
         Comprehensive model debugging toolkit.
         """
         
-        def __init__(self, model: nn.Module, model_name: str = "model"):
+        def __init__(self, model: nn.Module, model_name: str = "model") -> None:
             self.model = model
             self.model_name = model_name
             self.layer_inspector = LayerInspector(model)
@@ -375,7 +375,7 @@ if HAS_TORCH:
                 recommendations=recommendations
             )
         
-        def _capture_activations(self):
+        def _capture_activations(self) -> None:
             """Set up hooks to capture activations."""
             self._layer_activations.clear()
             self._layer_inputs.clear()
@@ -405,7 +405,7 @@ if HAS_TORCH:
             
             return hook
         
-        def _clear_hooks(self):
+        def _clear_hooks(self) -> None:
             """Remove all hooks."""
             for hook in self._hooks:
                 hook.remove()
@@ -521,7 +521,7 @@ if HAS_TORCH:
             self,
             callback: Callable[[str, torch.Tensor], None],
             layer_names: list[str] = None
-        ):
+        ) -> None:
             """
             Set up continuous monitoring.
             
@@ -540,7 +540,7 @@ if HAS_TORCH:
                     handle = module.register_forward_hook(make_hook(name))
                     self._hooks.append(handle)
         
-        def stop_watching(self):
+        def stop_watching(self) -> None:
             """Stop continuous monitoring."""
             self._clear_hooks()
 

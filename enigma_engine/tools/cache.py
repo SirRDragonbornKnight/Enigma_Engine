@@ -310,7 +310,7 @@ class ToolCache:
                     if data.get("expiry_time", 0) < current_time:
                         cache_file.unlink()
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
         
         if expired_keys:
             logger.info(f"Cleaned up {len(expired_keys)} expired cache entries")

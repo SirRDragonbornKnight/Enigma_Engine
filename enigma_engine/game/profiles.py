@@ -233,7 +233,7 @@ class GameDetector:
                     if name:
                         processes.add(name.lower())
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    pass
+                    pass  # Intentionally silent
         except Exception as e:
             logger.debug(f"Error scanning processes: {e}")
             return []

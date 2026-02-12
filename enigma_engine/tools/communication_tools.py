@@ -121,7 +121,7 @@ class DetectLanguageTool(Tool):
                     "confidence": [{"lang": str(p).split(':')[0], "prob": float(str(p).split(':')[1])} for p in probs[:3]],
                 }
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             # Simple heuristic fallback
             sample = text[:500]
@@ -180,7 +180,7 @@ class OCRImageTool(Tool):
                 text = pytesseract.image_to_string(img, lang=language)
                 return {"success": True, "text": text.strip(), "method": "tesseract", "words": len(text.split())}
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             # Try easyocr
             try:
@@ -190,14 +190,14 @@ class OCRImageTool(Tool):
                 text = "\n".join([r[1] for r in results])
                 return {"success": True, "text": text, "method": "easyocr", "words": len(text.split())}
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             # Try simple_ocr module
             try:
                 from .simple_ocr import extract_text
                 return {"success": True, "text": extract_text(str(path)), "method": "simple_ocr"}
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             return {"success": False, "error": "No OCR library. Install: pip install pytesseract pillow"}
         except Exception as e:

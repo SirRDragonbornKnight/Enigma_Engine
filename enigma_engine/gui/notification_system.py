@@ -295,13 +295,13 @@ class SoundSettings:
                 try:
                     self._sounds[SoundType(type_str)] = path
                 except ValueError:
-                    pass
+                    pass  # Intentionally silent
             
             for type_str, enabled in data.get("enabled_types", {}).items():
                 try:
                     self._enabled_types[SoundType(type_str)] = enabled
                 except ValueError:
-                    pass
+                    pass  # Intentionally silent
         except Exception as e:
             logger.warning(f"Failed to load sound settings: {e}")
 

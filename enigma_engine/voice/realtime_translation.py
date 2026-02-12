@@ -392,7 +392,7 @@ class RealtimeTranslator:
                         try:
                             callback(text)
                         except Exception:
-                            pass
+                            pass  # Intentionally silent
                     
                     # Queue for translation
                     self._text_queue.put(text)
@@ -416,7 +416,7 @@ class RealtimeTranslator:
                 try:
                     callback(segment)
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
             
             # Queue for speech output
             if self.config.voice_output:
@@ -455,7 +455,7 @@ class RealtimeTranslator:
                         sd.play(audio.audio_data, audio.sample_rate)
                         sd.wait()
                     except Exception:
-                        pass
+                        pass  # Intentionally silent
                 else:
                     tts.say(segment.translated_text)
                     tts.runAndWait()

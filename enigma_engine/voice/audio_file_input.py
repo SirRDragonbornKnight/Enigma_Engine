@@ -296,7 +296,7 @@ class AudioFileTranscriber:
                 try:
                     os.unlink(wav_path)
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
     
     def transcribe_batch(
         self,
@@ -396,7 +396,7 @@ class AudioFileTranscriber:
                 try:
                     os.unlink(wav_path)
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
     
     def _ensure_wav(self, file_path: Path) -> Path:
         """Convert audio to WAV format if needed."""
@@ -467,7 +467,7 @@ class AudioFileTranscriber:
             duration = len(audio) / self.config.sample_rate
             return audio.astype(np.float32), duration
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         # Try wave module
         try:
@@ -641,7 +641,7 @@ class AudioFileTranscriber:
             try:
                 os.unlink(temp_path)
             except Exception:
-                pass
+                pass  # Intentionally silent
     
     def get_supported_formats(self) -> list[str]:
         """Get list of supported audio formats."""

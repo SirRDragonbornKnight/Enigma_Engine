@@ -16,10 +16,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Recommended models (id, local_name, description)
 RECOMMENDED = [
-    ("Qwen/Qwen2-0.5B-Instruct", "qwen2_0.5b", "~0.5B, ~1GB VRAM - Fast"),
-    ("TinyLlama/TinyLlama-1.1B-Chat-v1.0", "tinyllama", "~1.1B, ~2.5GB VRAM - Chat"),
-    ("microsoft/DialoGPT-medium", "dialogpt", "~355M, ~1.5GB VRAM - Conversational"),
-    ("microsoft/phi-2", "phi2", "~2.7B, ~6GB VRAM - Capable"),
+    ("deepseek-ai/DeepSeek-R1-Distill-Qwen-32B", "deepseek_r1_32b", "~32B, ~20GB VRAM - Reasoning"),
+    ("meta-llama/Llama-3.3-70B-Instruct", "llama3_3_70b", "~70B, ~40GB VRAM - Top quality"),
+    ("Qwen/Qwen2.5-7B-Instruct", "qwen2_5_7b", "~7B, ~8GB VRAM - Great balance"),
+    ("microsoft/Phi-3.5-mini-instruct", "phi3_5_mini", "~3.8B, ~4GB VRAM - Fast"),
+    ("mistralai/Mistral-7B-Instruct-v0.3", "mistral_7b", "~7B, ~8GB VRAM - Efficient"),
+    ("google/gemma-2-9b-it", "gemma2_9b", "~9B, ~10GB VRAM - Versatile"),
 ]
 
 

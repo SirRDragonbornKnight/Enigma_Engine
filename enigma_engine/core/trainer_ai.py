@@ -373,11 +373,11 @@ class PromptParser:
         r"\bhuge|massive|maximum\b": "xl",
     }
     
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the prompt parser."""
         self._compile_patterns()
     
-    def _compile_patterns(self):
+    def _compile_patterns(self) -> None:
         """Pre-compile regex patterns for efficiency."""
         self._character_re = [(re.compile(p, re.IGNORECASE), v) for p, v in self.CHARACTER_PATTERNS.items()]
         self._capability_re = [(re.compile(p, re.IGNORECASE), v) for p, v in self.CAPABILITY_PATTERNS.items()]
@@ -842,7 +842,7 @@ class QualityTracker:
         alerts = tracker.get_models_needing_attention()
     """
     
-    def __init__(self, storage_path: Optional[Path] = None):
+    def __init__(self, storage_path: Optional[Path] = None) -> None:
         """Initialize the quality tracker."""
         self.storage_path = storage_path or Path(CONFIG.get("data_dir", "data")) / "quality_tracking"
         self.storage_path.mkdir(parents=True, exist_ok=True)
@@ -855,7 +855,7 @@ class QualityTracker:
         
         logger.info(f"QualityTracker initialized at {self.storage_path}")
     
-    def _load_metrics(self):
+    def _load_metrics(self) -> None:
         """Load existing metrics from storage."""
         metrics_file = self.storage_path / "metrics_history.json"
         if metrics_file.exists():
@@ -869,7 +869,7 @@ class QualityTracker:
             except Exception as e:
                 logger.warning(f"Failed to load metrics history: {e}")
     
-    def _save_metrics(self):
+    def _save_metrics(self) -> None:
         """Save metrics to storage."""
         metrics_file = self.storage_path / "metrics_history.json"
         try:
@@ -994,7 +994,7 @@ class QualityTracker:
         
         return metrics
     
-    def _update_health(self, model_id: str):
+    def _update_health(self, model_id: str) -> None:
         """Update health status for a model."""
         metrics_list = self._metrics_cache.get(model_id, [])
         if not metrics_list:
@@ -1255,7 +1255,7 @@ class DataMarketplace:
         marketplace.rate_pack(pack.pack_id, rating=4.5, review="Great quality!")
     """
     
-    def __init__(self, storage_path: Optional[Path] = None):
+    def __init__(self, storage_path: Optional[Path] = None) -> None:
         """Initialize the marketplace."""
         self.storage_path = storage_path or Path(CONFIG.get("data_dir", "data")) / "marketplace"
         self.packs_dir = self.storage_path / "packs"
@@ -1274,7 +1274,7 @@ class DataMarketplace:
         
         logger.info(f"DataMarketplace initialized at {self.storage_path}")
     
-    def _load_packs(self):
+    def _load_packs(self) -> None:
         """Load existing packs from storage."""
         index_file = self.storage_path / "pack_index.json"
         if index_file.exists():
@@ -1291,7 +1291,7 @@ class DataMarketplace:
             except Exception as e:
                 logger.warning(f"Failed to load marketplace index: {e}")
     
-    def _save_index(self):
+    def _save_index(self) -> None:
         """Save pack index to storage."""
         index_file = self.storage_path / "pack_index.json"
         try:
@@ -1846,7 +1846,7 @@ class IncrementalTrainer:
         )
     """
     
-    def __init__(self, storage_path: Optional[Path] = None):
+    def __init__(self, storage_path: Optional[Path] = None) -> None:
         """Initialize the incremental trainer."""
         self.storage_path = storage_path or Path(CONFIG.get("data_dir", "data")) / "incremental_training"
         self.storage_path.mkdir(parents=True, exist_ok=True)
@@ -1862,7 +1862,7 @@ class IncrementalTrainer:
         
         logger.info(f"IncrementalTrainer initialized at {self.storage_path}")
     
-    def _load_data(self):
+    def _load_data(self) -> None:
         """Load existing training history and skills."""
         history_file = self.storage_path / "training_history.json"
         if history_file.exists():
@@ -1876,7 +1876,7 @@ class IncrementalTrainer:
             except Exception as e:
                 logger.warning(f"Failed to load incremental training data: {e}")
     
-    def _save_data(self):
+    def _save_data(self) -> None:
         """Save training history and skills."""
         history_file = self.storage_path / "training_history.json"
         try:
@@ -1910,7 +1910,7 @@ class IncrementalTrainer:
         except Exception as e:
             logger.warning(f"Failed to save incremental training data: {e}")
     
-    def _init_builtin_skills(self):
+    def _init_builtin_skills(self) -> None:
         """Initialize built-in skill definitions."""
         builtin_skills = [
             SkillDefinition(
@@ -2335,7 +2335,7 @@ class ModelInheritance:
         lineage = inheritance.get_lineage("my_model")
     """
     
-    def __init__(self, storage_path: Optional[Path] = None):
+    def __init__(self, storage_path: Optional[Path] = None) -> None:
         """Initialize the model inheritance system."""
         self.storage_path = storage_path or Path(CONFIG.get("data_dir", "data")) / "model_inheritance"
         self.storage_path.mkdir(parents=True, exist_ok=True)
@@ -2347,7 +2347,7 @@ class ModelInheritance:
         
         logger.info(f"ModelInheritance initialized at {self.storage_path}")
     
-    def _load_lineage(self):
+    def _load_lineage(self) -> None:
         """Load existing lineage data."""
         lineage_file = self.storage_path / "lineage.json"
         if lineage_file.exists():
@@ -2359,7 +2359,7 @@ class ModelInheritance:
             except Exception as e:
                 logger.warning(f"Failed to load lineage data: {e}")
     
-    def _save_lineage(self):
+    def _save_lineage(self) -> None:
         """Save lineage data."""
         lineage_file = self.storage_path / "lineage.json"
         try:
@@ -2818,7 +2818,7 @@ class APITrainingProvider:
         provider.train_local_trainer(data, model_path="models/trainer")
     """
     
-    def __init__(self, auto_load_keys: bool = True):
+    def __init__(self, auto_load_keys: bool = True) -> None:
         """
         Initialize the API training provider.
         
@@ -2925,7 +2925,7 @@ class APITrainingProvider:
                 from ..utils.api_key_encryption import get_api_key
                 api_key = get_api_key("openai")
             except ImportError:
-                pass
+                pass  # Intentionally silent
         
         if not api_key:
             raise ValueError("No OpenAI API key provided and none found in secure storage")
@@ -2964,7 +2964,7 @@ class APITrainingProvider:
                 from ..utils.api_key_encryption import get_api_key
                 api_key = get_api_key("anthropic")
             except ImportError:
-                pass
+                pass  # Intentionally silent
         
         if not api_key:
             raise ValueError("No Anthropic API key provided and none found in secure storage")
@@ -3386,7 +3386,7 @@ class TrainerAI:
     for any specialized model in the router system.
     """
     
-    def __init__(self, model=None, use_ai_generation: bool = True):
+    def __init__(self, model=None, use_ai_generation: bool = True) -> None:
         """
         Initialize the Trainer AI.
         
@@ -3649,7 +3649,7 @@ Examples should be diverse and high quality.
                         output_part = parts[1].replace(config.output_prefix, '').strip()
                         patterns.append((input_part, output_part))
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
         
         return patterns
     

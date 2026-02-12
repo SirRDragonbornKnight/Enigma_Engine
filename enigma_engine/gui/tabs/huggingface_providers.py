@@ -89,7 +89,7 @@ class HuggingFaceImage:
                         timeout=120
                     )
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
             
             if response.status_code != 200:
                 return {
@@ -176,7 +176,7 @@ class HuggingFaceTTS:
                         timeout=60
                     )
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
             
             if response.status_code != 200:
                 return {
@@ -277,7 +277,7 @@ class HuggingFaceChat:
                         timeout=60
                     )
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
             
             if response.status_code != 200:
                 return {
@@ -364,7 +364,7 @@ class HuggingFaceEmbedding:
                         timeout=60
                     )
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
             
             if response.status_code != 200:
                 return {

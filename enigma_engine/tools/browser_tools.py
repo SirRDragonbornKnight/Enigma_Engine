@@ -50,7 +50,7 @@ def _run_browser_command(browser: str, action: str) -> dict[str, Any]:
                 if result.returncode == 0:
                     return {"success": True, "method": "dbus", "action": action}
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         # Try playerctl (Linux media control)
         try:
@@ -67,7 +67,7 @@ def _run_browser_command(browser: str, action: str) -> dict[str, Any]:
                 if result.returncode == 0:
                     return {"success": True, "method": "playerctl", "action": action}
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         # Try pynput for media keys (internal Python library)
         try:
@@ -88,9 +88,9 @@ def _run_browser_command(browser: str, action: str) -> dict[str, Any]:
                 keyboard.release(key_map[action])
                 return {"success": True, "method": "pynput", "action": action}
         except ImportError:
-            pass
+            pass  # Intentionally silent
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     # Windows - use PowerShell to send media keys
     elif system == "nt":
@@ -121,7 +121,7 @@ public class Keyboard {{
                 )
                 return {"success": True, "method": "powershell", "action": action}
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     return {"success": False, "error": f"Could not execute {action}. Install playerctl (Linux) or check system support."}
 
@@ -361,7 +361,7 @@ class BrowserMediaInfoTool(Tool):
                         except Exception:
                             return {"success": True, "raw_info": result.stdout.strip()}
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
             
             return {
                 "success": False, 
@@ -525,11 +525,11 @@ class BrowserFocusTool(Tool):
                                         d.close()
                                         return {"success": True, "browser": browser, "method": "xlib"}
                             except Exception:
-                                pass
+                                pass  # Intentionally silent
                     
                     d.close()
                 except ImportError:
-                    pass
+                    pass  # Intentionally silent
             
             elif os.name == "nt":
                 # Windows - use ctypes (internal)
@@ -566,7 +566,7 @@ class BrowserFocusTool(Tool):
                         user32.SetForegroundWindow(windows[0])
                         return {"success": True, "browser": browser, "method": "ctypes"}
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
             
             return {"success": False, "error": f"Could not focus {browser}. Install python-xlib for Linux support."}
         except Exception as e:

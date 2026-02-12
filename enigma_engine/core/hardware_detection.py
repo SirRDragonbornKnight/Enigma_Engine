@@ -306,7 +306,7 @@ def _detect_gpu() -> tuple[Optional[str], Optional[float], bool, bool]:
                 vram_gb = int(vram_str) / 1024
                 has_cuda = True
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     return gpu_name, vram_gb, has_cuda, has_mps
 
@@ -378,7 +378,7 @@ def _detect_raspberry_pi() -> tuple[bool, Optional[str]]:
             if "raspberry" in cpuinfo or "bcm" in cpuinfo:
                 is_pi = True
     except Exception:
-        pass
+        pass  # Intentionally silent
     
     # Try to get exact model from device tree
     model_paths = [

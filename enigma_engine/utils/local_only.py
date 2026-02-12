@@ -167,7 +167,7 @@ class NetworkBlocker:
             requests.post = blocked_request
             
         except ImportError:
-            pass
+            pass  # Intentionally silent
     
     def get_activity(self) -> List[NetworkActivity]:
         """Get network activity log."""
@@ -197,6 +197,8 @@ class LocalOnlyMode:
         
         # Components
         self._blocker = NetworkBlocker(self.config)
+        self.model_cache = ModelCache()
+        self.sync_queue = OfflineSyncQueue()
         
         # State
         self._enabled = False
@@ -296,10 +298,10 @@ class LocalOnlyMode:
                 try:
                     manager.unload(module)
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
                     
         except ImportError:
-            pass
+            pass  # Intentionally silent
     
     def check_local_models(self) -> Dict[str, bool]:
         """Check what local models are available."""
@@ -326,7 +328,9 @@ class LocalOnlyMode:
             "enabled": self._enabled,
             "blocked_connections": len(self._blocker.get_activity()),
             "allowed_hosts": list(self.config.allowed_hosts),
-            "local_models": self.check_local_models() if self._enabled else {}
+            "local_models": self.check_local_models() if self._enabled else {},
+            "cached_models": len(self.model_cache.list_cached()),
+            "pending_sync_ops": len(self.sync_queue),
         }
     
     def add_allowed_host(self, host: str):
@@ -348,6 +352,194 @@ class LocalOnlyMode:
             for a in activity
             if a.blocked
         ]
+
+
+class ModelCache:
+    """Manages local caching of models for offline use.
+
+    Tracks which models are cached locally so the engine can operate
+    without network access.  Models are stored under a configurable
+    cache directory and an index file records metadata.
+
+    Args:
+        cache_dir: Directory to store cached models. Defaults to
+            ``models/cache``.
+
+    Example::
+
+        cache = ModelCache()
+        cache.cache_model("microsoft/phi-3.5-mini", Path("models/phi35"))
+        print(cache.list_cached())
+    """
+
+    def __init__(self, cache_dir: Optional[Path] = None):
+        self.cache_dir = cache_dir or Path("models") / "cache"
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self._index_path = self.cache_dir / "cache_index.json"
+        self._index: Dict[str, Dict[str, Any]] = self._load_index()
+
+    # -- index persistence ------------------------------------------------
+
+    def _load_index(self) -> Dict[str, Dict[str, Any]]:
+        """Load the cache index from disk."""
+        if self._index_path.exists():
+            try:
+                with open(self._index_path, "r") as f:
+                    import json
+                    return json.load(f)
+            except Exception:
+                logger.warning("Corrupt cache index, starting fresh")
+        return {}
+
+    def _save_index(self):
+        """Persist the cache index to disk."""
+        import json
+        with open(self._index_path, "w") as f:
+            json.dump(self._index, f, indent=2)
+
+    # -- public API -------------------------------------------------------
+
+    def cache_model(self, model_id: str, source_path: Path, metadata: Optional[Dict] = None):
+        """Register a locally-available model in the cache.
+
+        Args:
+            model_id: HuggingFace-style model identifier (e.g.
+                ``"deepseek-ai/DeepSeek-R1-Distill-Qwen-32B"``).
+            source_path: Path where the model files reside on disk.
+            metadata: Optional extra information (size, format, etc.).
+        """
+        from datetime import datetime
+        self._index[model_id] = {
+            "path": str(source_path),
+            "cached_at": datetime.now().isoformat(),
+            "metadata": metadata or {},
+        }
+        self._save_index()
+        logger.info("Cached model %s at %s", model_id, source_path)
+
+    def get_cached_path(self, model_id: str) -> Optional[Path]:
+        """Return the local path for a cached model, or ``None``."""
+        entry = self._index.get(model_id)
+        if entry:
+            p = Path(entry["path"])
+            if p.exists():
+                return p
+            logger.warning("Cached path for %s no longer exists", model_id)
+        return None
+
+    def is_cached(self, model_id: str) -> bool:
+        """Check whether *model_id* is available locally."""
+        return self.get_cached_path(model_id) is not None
+
+    def list_cached(self) -> Dict[str, Dict[str, Any]]:
+        """Return a copy of the full cache index."""
+        return dict(self._index)
+
+    def remove(self, model_id: str):
+        """Remove a model from the cache index (does not delete files)."""
+        if model_id in self._index:
+            del self._index[model_id]
+            self._save_index()
+            logger.info("Removed %s from cache index", model_id)
+
+    def scan_local_models(self) -> Dict[str, Path]:
+        """Scan common model directories and return discovered models.
+
+        Looks inside ``models/``, the HuggingFace Hub cache, and the
+        Torch Hub cache.
+        """
+        found: Dict[str, Path] = {}
+        search_dirs = [
+            Path("models"),
+            Path.home() / ".cache" / "huggingface" / "hub",
+            Path.home() / ".cache" / "torch" / "hub",
+        ]
+        for d in search_dirs:
+            if not d.exists():
+                continue
+            for item in d.iterdir():
+                if item.is_dir():
+                    found[item.name] = item
+        return found
+
+
+class OfflineSyncQueue:
+    """Queues operations that require network access so they can be
+    replayed when connectivity is restored.
+
+    Operations are persisted to a JSONL file so nothing is lost if the
+    process restarts while still offline.
+
+    Args:
+        queue_path: File used to persist queued operations.
+
+    Example::
+
+        queue = OfflineSyncQueue()
+        queue.enqueue("upload_feedback", {"rating": "positive"})
+        # ... later, when back online ...
+        for op in queue.drain():
+            process(op)
+    """
+
+    def __init__(self, queue_path: Optional[Path] = None):
+        self.queue_path = queue_path or Path("data") / "offline_queue.jsonl"
+        self.queue_path.parent.mkdir(parents=True, exist_ok=True)
+        self._queue: List[Dict[str, Any]] = self._load()
+
+    def _load(self) -> List[Dict[str, Any]]:
+        """Load queued operations from disk."""
+        import json
+        ops: List[Dict[str, Any]] = []
+        if self.queue_path.exists():
+            try:
+                with open(self.queue_path, "r") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line:
+                            ops.append(json.loads(line))
+            except Exception:
+                logger.warning("Could not load offline queue")
+        return ops
+
+    def _persist(self):
+        """Write the queue to disk."""
+        import json
+        with open(self.queue_path, "w") as f:
+            for op in self._queue:
+                f.write(json.dumps(op) + "\n")
+
+    def enqueue(self, operation: str, payload: Dict[str, Any]):
+        """Add an operation to the queue.
+
+        Args:
+            operation: A short label such as ``"upload_feedback"`` or
+                ``"sync_memory"``.
+            payload: Arbitrary JSON-serializable data for the operation.
+        """
+        from datetime import datetime
+        entry = {
+            "operation": operation,
+            "payload": payload,
+            "queued_at": datetime.now().isoformat(),
+        }
+        self._queue.append(entry)
+        self._persist()
+        logger.debug("Queued offline operation: %s", operation)
+
+    def drain(self) -> List[Dict[str, Any]]:
+        """Return all queued operations and clear the queue."""
+        ops = list(self._queue)
+        self._queue.clear()
+        self._persist()
+        return ops
+
+    def peek(self) -> List[Dict[str, Any]]:
+        """Return queued operations without removing them."""
+        return list(self._queue)
+
+    def __len__(self) -> int:
+        return len(self._queue)
 
 
 # Global instance

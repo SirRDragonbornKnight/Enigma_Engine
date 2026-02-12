@@ -425,7 +425,7 @@ class GameDetector:
             try:
                 titles = self._get_win32_window_titles()
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         return titles
     

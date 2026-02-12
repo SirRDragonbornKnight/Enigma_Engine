@@ -83,7 +83,7 @@ class Sample:
 class UncertaintySampler:
     """Select samples with highest uncertainty."""
     
-    def __init__(self, model: Any = None):
+    def __init__(self, model: Any = None) -> None:
         self._model = model
     
     def compute_uncertainty(
@@ -144,7 +144,7 @@ class UncertaintySampler:
 class MarginSampler:
     """Select samples with smallest prediction margin."""
     
-    def __init__(self, model: Any = None):
+    def __init__(self, model: Any = None) -> None:
         self._model = model
     
     def compute_margin(
@@ -202,7 +202,7 @@ class MarginSampler:
 class EntropySampler:
     """Select samples with highest prediction entropy."""
     
-    def __init__(self, model: Any = None):
+    def __init__(self, model: Any = None) -> None:
         self._model = model
     
     def compute_entropy(
@@ -262,7 +262,7 @@ class EntropySampler:
 class DiversitySampler:
     """Select diverse samples using clustering."""
     
-    def __init__(self, embedding_fn: Optional[Callable] = None):
+    def __init__(self, embedding_fn: Optional[Callable] = None) -> None:
         self._embedding_fn = embedding_fn
     
     def compute_embeddings(
@@ -346,7 +346,7 @@ class ActiveLearner:
         self,
         model: Any = None,
         config: Optional[ActiveLearningConfig] = None
-    ):
+    ) -> None:
         """
         Initialize active learner.
         
@@ -371,7 +371,7 @@ class ActiveLearner:
         self,
         data: List[Any],
         ids: Optional[List[int]] = None
-    ):
+    ) -> None:
         """
         Initialize unlabeled data pool.
         
@@ -454,7 +454,7 @@ class ActiveLearner:
         self,
         sample: Sample,
         label: Any
-    ):
+    ) -> None:
         """
         Assign label to a sample.
         
@@ -469,7 +469,7 @@ class ActiveLearner:
     def label_samples(
         self,
         labels: List[Tuple[Sample, Any]]
-    ):
+    ) -> None:
         """
         Label multiple samples.
         
@@ -483,7 +483,7 @@ class ActiveLearner:
         if len(self._labeled_samples) % self._config.retrain_threshold == 0:
             self.update_model()
     
-    def update_model(self):
+    def update_model(self) -> None:
         """Update model with labeled data."""
         if self._model is None:
             logger.warning("No model to update")

@@ -120,7 +120,7 @@ class CharacterTokenizer:
                         self.id_to_token[next_id] = char
                         next_id += 1
                 except BaseException:
-                    pass
+                    pass  # Intentionally silent
 
         # Add dictionary words if enabled
         if use_dictionary:

@@ -10,6 +10,7 @@ Provides:
 Run with: python -m enigma_engine.comms.web_server
 """
 
+import logging
 import socket
 from datetime import datetime
 from typing import Callable, Optional
@@ -28,6 +29,8 @@ except ImportError:
     SOCKETIO_AVAILABLE = False
 
 from ..config import CONFIG
+
+logger = logging.getLogger(__name__)
 
 # HTML template for web interface
 WEB_INTERFACE_HTML = '''
@@ -509,15 +512,12 @@ class WebServer:
     def run(self, debug: bool = False):
         """Start the server."""
         ip = self._get_local_ip()
-        print(f"\n{'='*50}")
-        print(f"[*] Enigma AI Engine Web Server")
-        print(f"{'='*50}")
-        print(f"Local:    http://localhost:{self.port}")
-        print(f"Network:  http://{ip}:{self.port}")
-        print(f"QR Code:  http://{ip}:{self.port}/qr")
-        print(f"API:      http://{ip}:{self.port}/api/generate")
-        print(f"WebSocket: {'Enabled' if self.socketio else 'Disabled'}")
-        print(f"{'='*50}\n")
+        logger.info("Enigma AI Engine Web Server starting")
+        logger.info("Local:    http://localhost:%d", self.port)
+        logger.info("Network:  http://%s:%d", ip, self.port)
+        logger.info("QR Code:  http://%s:%d/qr", ip, self.port)
+        logger.info("API:      http://%s:%d/api/generate", ip, self.port)
+        logger.info("WebSocket: %s", "Enabled" if self.socketio else "Disabled")
         
         if self.socketio:
             self.socketio.run(self.app, host=self.host, port=self.port, debug=debug)
@@ -534,7 +534,7 @@ def create_web_server(host: str = '0.0.0.0', port: int = 5000) -> WebServer:
         from ..core.inference import generate
         server.set_generate_func(lambda prompt: generate(prompt))
     except Exception as e:
-        print(f"Warning: Could not connect AI: {e}")
+        logger.warning("Could not connect AI: %s", e)
         server.set_generate_func(lambda prompt: f"Echo: {prompt}")
     
     return server

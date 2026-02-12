@@ -12,7 +12,7 @@ MAIN CLASSES: ActivationRecorder, AttentionAnalyzer, LayerProfiler
 import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 try:
     import torch
@@ -78,14 +78,14 @@ if HAS_TORCH:
         for analysis and debugging.
         """
         
-        def __init__(self, model: nn.Module):
+        def __init__(self, model: nn.Module) -> None:
             self.model = model
             self._hooks: list[torch.utils.hooks.RemovableHandle] = []
             self._activations: dict[str, torch.Tensor] = {}
             self._gradients: dict[str, torch.Tensor] = {}
             self._recording = False
         
-        def start_recording(self, layer_names: list[str] = None):
+        def start_recording(self, layer_names: list[str] = None) -> None:
             """
             Start recording activations.
             
@@ -113,14 +113,14 @@ if HAS_TORCH:
             self._recording = True
             logger.debug(f"Recording activations for {len(self._hooks)//2} layers")
         
-        def stop_recording(self):
+        def stop_recording(self) -> None:
             """Stop recording and remove hooks."""
             for hook in self._hooks:
                 hook.remove()
             self._hooks.clear()
             self._recording = False
         
-        def _create_forward_hook(self, name: str):
+        def _create_forward_hook(self, name: str) -> Callable[[nn.Module, Any, Any], None]:
             """Create forward hook for a layer."""
             def hook(module, input, output):
                 if isinstance(output, torch.Tensor):
@@ -133,7 +133,7 @@ if HAS_TORCH:
                             break
             return hook
         
-        def _create_backward_hook(self, name: str):
+        def _create_backward_hook(self, name: str) -> Callable[[nn.Module, Any, Any], None]:
             """Create backward hook for gradients."""
             def hook(module, grad_input, grad_output):
                 if grad_output and isinstance(grad_output[0], torch.Tensor):
@@ -211,12 +211,12 @@ if HAS_TORCH:
         Analyze attention patterns in transformer models.
         """
         
-        def __init__(self, model: nn.Module):
+        def __init__(self, model: nn.Module) -> None:
             self.model = model
             self._attention_weights: dict[str, torch.Tensor] = {}
             self._hooks: list[torch.utils.hooks.RemovableHandle] = []
         
-        def capture_attention(self):
+        def capture_attention(self) -> None:
             """Start capturing attention weights."""
             self._clear_hooks()
             self._attention_weights.clear()
@@ -230,7 +230,7 @@ if HAS_TORCH:
                         )
                         self._hooks.append(handle)
         
-        def _attention_hook(self, name: str):
+        def _attention_hook(self, name: str) -> Callable[[nn.Module, Any, Any], None]:
             """Hook to capture attention weights."""
             def hook(module, input, output):
                 # Try to extract attention weights from output
@@ -243,7 +243,7 @@ if HAS_TORCH:
                                 break
             return hook
         
-        def _clear_hooks(self):
+        def _clear_hooks(self) -> None:
             """Remove all hooks."""
             for hook in self._hooks:
                 hook.remove()
@@ -371,7 +371,7 @@ if HAS_TORCH:
         Profile computational cost of each layer.
         """
         
-        def __init__(self, model: nn.Module):
+        def __init__(self, model: nn.Module) -> None:
             self.model = model
             self._layer_times: dict[str, list[float]] = defaultdict(list)
             self._layer_memory: dict[str, int] = {}
@@ -438,7 +438,7 @@ if HAS_TORCH:
             
             return results
         
-        def _timing_hook(self, name: str):
+        def _timing_hook(self, name: str) -> Callable[[nn.Module, Any, Any], None]:
             """Create timing hook for a layer."""
             import time
             

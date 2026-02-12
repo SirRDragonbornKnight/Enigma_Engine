@@ -61,7 +61,7 @@ class BuiltinTTS:
                 if result.returncode == 0:
                     self._voices = [v.strip() for v in result.stdout.strip().split('\n') if v.strip()]
             except Exception:
-                pass
+                pass  # Intentionally silent
             
             if not self._voices:
                 self._voices = ['Microsoft David', 'Microsoft Zira', 'Default']

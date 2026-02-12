@@ -479,14 +479,14 @@ class VoiceChat:
                 try:
                     self._audio_stream.close()
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
             
             # Signal playback queue to stop (don't wait - daemon threads will die with process)
             if hasattr(self, '_playback_queue') and self._playback_queue:
                 try:
                     self._playback_queue.put_nowait(None)
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
         except Exception:
             # Ignore errors during garbage collection
             pass

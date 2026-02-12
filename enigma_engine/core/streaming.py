@@ -92,7 +92,7 @@ class StreamingConfig:
 class TokenBuffer:
     """Buffer for accumulating tokens before flushing."""
     
-    def __init__(self, size: int = 0, interval: float = 0.0):
+    def __init__(self, size: int = 0, interval: float = 0.0) -> None:
         self.size = size
         self.interval = interval
         self._buffer: list[str] = []
@@ -140,7 +140,7 @@ class StreamingResponse:
     including iterator, async iterator, SSE, and WebSocket.
     """
     
-    def __init__(self, config: StreamingConfig = None):
+    def __init__(self, config: StreamingConfig = None) -> None:
         self.config = config or StreamingConfig()
         
         self._queue: queue.Queue[StreamChunk] = queue.Queue()
@@ -165,7 +165,7 @@ class StreamingResponse:
         self._on_end = self.config.on_end
         self._on_error = self.config.on_error
     
-    def start(self, metadata: dict[str, Any] = None):
+    def start(self, metadata: dict[str, Any] = None) -> None:
         """Start the stream."""
         if self._started:
             return
@@ -236,7 +236,7 @@ class StreamingResponse:
         if self.config.token_delay > 0:
             time.sleep(self.config.token_delay)
     
-    def finish(self, metadata: dict[str, Any] = None):
+    def finish(self, metadata: dict[str, Any] = None) -> None:
         """Finish the stream."""
         if self._finished:
             return
@@ -274,7 +274,7 @@ class StreamingResponse:
             except Exception as e:
                 logger.debug(f"End callback error: {e}")
     
-    def error(self, exception: Exception):
+    def error(self, exception: Exception) -> None:
         """Signal an error in the stream."""
         self._error = exception
         self._finished = True
@@ -293,7 +293,7 @@ class StreamingResponse:
             except Exception as e:
                 logger.debug(f"Error callback error: {e}")
     
-    def _emit(self, chunk: StreamChunk):
+    def _emit(self, chunk: StreamChunk) -> None:
         """Emit a chunk to all outputs."""
         self._chunks.append(chunk)
         self._queue.put_nowait(chunk)
@@ -408,7 +408,7 @@ class TokenStreamer:
     Integrates with model inference to provide streaming output.
     """
     
-    def __init__(self, config: StreamingConfig = None):
+    def __init__(self, config: StreamingConfig = None) -> None:
         self.config = config or StreamingConfig()
     
     def stream(
@@ -505,7 +505,7 @@ class CallbackStreamer:
         self._started = False
         self._finished = False
     
-    def __call__(self, token: str):
+    def __call__(self, token: str) -> None:
         """Stream a token."""
         if self._finished:
             return
@@ -521,7 +521,7 @@ class CallbackStreamer:
         if self.config.token_delay > 0:
             time.sleep(self.config.token_delay)
     
-    def finish(self):
+    def finish(self) -> None:
         """Finish streaming."""
         self._finished = True
         if self.config.on_end:

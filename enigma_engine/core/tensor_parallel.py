@@ -101,7 +101,7 @@ class ParallelState:
             cls._instance = cls()
         return cls._instance
     
-    def setup(self, config: ParallelConfig):
+    def setup(self, config: ParallelConfig) -> None:
         """Set up parallel groups."""
         if not dist.is_initialized():
             # Single GPU fallback
@@ -143,7 +143,7 @@ def get_tensor_parallel_size() -> int:
     return state.tensor_parallel_size
 
 
-def get_tensor_parallel_group():
+def get_tensor_parallel_group() -> Optional[Any]:
     """Get tensor parallel process group."""
     state = ParallelState.get()
     return state.tensor_parallel_group
@@ -153,14 +153,14 @@ class _AllReduce(torch.autograd.Function):
     """All-reduce in forward, identity in backward."""
     
     @staticmethod
-    def forward(ctx, x):
+    def forward(ctx: Any, x: torch.Tensor) -> torch.Tensor:
         if get_tensor_parallel_size() == 1:
             return x
         dist.all_reduce(x, group=get_tensor_parallel_group())
         return x
     
     @staticmethod
-    def backward(ctx, grad):
+    def backward(ctx: Any, grad: torch.Tensor) -> torch.Tensor:
         return grad
 
 
@@ -168,7 +168,7 @@ class _AllGather(torch.autograd.Function):
     """All-gather in forward, reduce-scatter in backward."""
     
     @staticmethod
-    def forward(ctx, x):
+    def forward(ctx: Any, x: torch.Tensor) -> torch.Tensor:
         if get_tensor_parallel_size() == 1:
             return x
         
@@ -178,7 +178,7 @@ class _AllGather(torch.autograd.Function):
         return torch.cat(gathered, dim=-1)
     
     @staticmethod
-    def backward(ctx, grad):
+    def backward(ctx: Any, grad: torch.Tensor) -> torch.Tensor:
         if get_tensor_parallel_size() == 1:
             return grad
         
@@ -194,7 +194,7 @@ class _ReduceScatter(torch.autograd.Function):
     """Reduce-scatter in forward, all-gather in backward."""
     
     @staticmethod
-    def forward(ctx, x):
+    def forward(ctx: Any, x: torch.Tensor) -> torch.Tensor:
         if get_tensor_parallel_size() == 1:
             return x
         
@@ -211,7 +211,7 @@ class _ReduceScatter(torch.autograd.Function):
         return output
     
     @staticmethod
-    def backward(ctx, grad):
+    def backward(ctx: Any, grad: torch.Tensor) -> torch.Tensor:
         if get_tensor_parallel_size() == 1:
             return grad
         
@@ -279,7 +279,7 @@ class ColumnParallelLinear(nn.Module):
         
         self._init_weights(init_method)
     
-    def _init_weights(self, method: str):
+    def _init_weights(self, method: str) -> None:
         if method == "xavier":
             nn.init.xavier_uniform_(self.weight)
         elif method == "normal":
@@ -367,7 +367,7 @@ class RowParallelLinear(nn.Module):
         
         self._init_weights(init_method)
     
-    def _init_weights(self, method: str):
+    def _init_weights(self, method: str) -> None:
         if method == "xavier":
             nn.init.xavier_uniform_(self.weight)
         elif method == "normal":

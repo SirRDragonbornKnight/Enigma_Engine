@@ -232,7 +232,7 @@ class APIKeyManager:
             try:
                 os.chmod(self._key_path, 0o600)
             except (OSError, AttributeError):
-                pass
+                pass  # Intentionally silent
                 
             logger.debug("API keys saved")
             

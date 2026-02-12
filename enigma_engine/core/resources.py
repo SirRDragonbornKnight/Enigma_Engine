@@ -17,10 +17,13 @@ Usage:
     set_low_priority(True)           # Run at lower OS priority
 """
 
+import logging
 import os
 import platform
 
 from ..config import CONFIG
+
+logger = logging.getLogger(__name__)
 
 # Check for torch
 HAVE_TORCH = False
@@ -28,7 +31,7 @@ try:
     import torch
     HAVE_TORCH = True
 except ImportError:
-    pass
+    pass  # Intentionally silent
 
 
 # =============================================================================
@@ -95,7 +98,7 @@ def apply_resource_mode(mode: str = "balanced") -> bool:
         True if applied successfully
     """
     if mode not in RESOURCE_MODES:
-        print(f"Unknown mode '{mode}', using 'balanced'")
+        logger.warning(f"Unknown mode '{mode}', using 'balanced'")
         mode = "balanced"
 
     preset = RESOURCE_MODES[mode]
@@ -114,7 +117,7 @@ def apply_resource_mode(mode: str = "balanced") -> bool:
     return True
 
 
-def set_cpu_threads(num_threads: int):
+def set_cpu_threads(num_threads: int) -> None:
     """
     Set the number of CPU threads for the AI to use.
 
@@ -141,10 +144,10 @@ def set_cpu_threads(num_threads: int):
 
         torch.set_num_threads(actual_threads)
         torch.set_num_interop_threads(max(1, actual_threads // 2))
-        print(f"[Resources] CPU threads set to {actual_threads}")
+        logger.info(f"CPU threads set to {actual_threads}")
 
 
-def set_gpu_memory_fraction(fraction: float):
+def set_gpu_memory_fraction(fraction: float) -> None:
     """
     Set how much GPU memory the AI can use.
 
@@ -157,12 +160,12 @@ def set_gpu_memory_fraction(fraction: float):
     if HAVE_TORCH and torch.cuda.is_available():
         try:
             torch.cuda.set_per_process_memory_fraction(fraction)
-            print(f"[Resources] GPU memory limited to {int(fraction * 100)}%")
+            logger.info(f"GPU memory limited to {int(fraction * 100)}%")
         except Exception as e:
-            print(f"[Resources] Could not set GPU limit: {e}")
+            logger.warning(f"Could not set GPU limit: {e}")
 
 
-def set_low_priority(enabled: bool = True):
+def set_low_priority(enabled: bool = True) -> None:
     """
     Set the process to run at lower OS priority.
     This helps other apps (like games) run smoother.
@@ -186,7 +189,7 @@ def set_low_priority(enabled: bool = True):
             kernel32 = ctypes.windll.kernel32
             handle = kernel32.GetCurrentProcess()
             kernel32.SetPriorityClass(handle, priority)
-            print(f"[Resources] Process priority: {'low' if enabled else 'normal'}")
+            logger.info(f"Process priority: {'low' if enabled else 'normal'}")
 
         elif system in ("Linux", "Darwin"):
             import os
@@ -198,15 +201,15 @@ def set_low_priority(enabled: bool = True):
                 target = 10 if enabled else 0
                 if target > current:  # Can only increase niceness without root
                     os.nice(target - current)
-                print(f"[Resources] Process nice value: {target}")
+                logger.info(f"Process nice value: {target}")
             except OSError as e:
-                print(f"[Resources] Could not set nice value: {e}")
+                logger.warning(f"Could not set nice value: {e}")
 
     except Exception as e:
-        print(f"[Resources] Could not set priority: {e}")
+        logger.warning(f"Could not set priority: {e}")
 
 
-def _apply_current_settings():
+def _apply_current_settings() -> None:
     """Apply all current resource settings from CONFIG."""
     # CPU threads
     set_cpu_threads(CONFIG.get("cpu_threads", 0))
@@ -254,31 +257,29 @@ def get_batch_size_limit() -> int:
     return CONFIG.get("batch_size_limit", 4)
 
 
-def print_resource_info():
+def print_resource_info() -> None:
     """Print current resource configuration."""
     info = get_resource_info()
 
-    print("\n" + "=" * 50)
-    print("RESOURCE CONFIGURATION")
-    print("=" * 50)
-    print(f"Mode:           {info['mode']}")
-    print(f"CPU Cores:      {info['cpu_count']}")
-    print(f"Torch Threads:  {info.get('torch_threads', 'N/A')}")
-    print(f"Batch Size Limit: {info['batch_size_limit']}")
-    print(f"Low Priority:   {'Yes' if info['low_priority'] else 'No'}")
+    logger.info("RESOURCE CONFIGURATION")
+    logger.info(f"Mode:           {info['mode']}")
+    logger.info(f"CPU Cores:      {info['cpu_count']}")
+    logger.info(f"Torch Threads:  {info.get('torch_threads', 'N/A')}")
+    logger.info(f"Batch Size Limit: {info['batch_size_limit']}")
+    logger.info(f"Low Priority:   {'Yes' if info['low_priority'] else 'No'}")
 
     if info['gpu_available']:
-        print(f"GPU:            {info['gpu_name']}")
-        print(f"GPU Memory:     {info['gpu_memory_total_mb']} MB")
-        print(f"GPU Fraction:   {int(info['gpu_memory_fraction'] * 100)}%")
+        logger.info(f"GPU:            {info['gpu_name']}")
+        logger.info(f"GPU Memory:     {info['gpu_memory_total_mb']} MB")
+        logger.info(f"GPU Fraction:   {int(info['gpu_memory_fraction'] * 100)}%")
     else:
-        print("GPU:            Not available")
+        logger.info("GPU:            Not available")
 
-    print("=" * 50 + "\n")
+    logger.info("Resource configuration complete")
 
 
 # Initialize on import
-def init_resources():
+def init_resources() -> None:
     """Initialize resource settings from CONFIG."""
     mode = CONFIG.get("resource_mode", "balanced")
     if mode in RESOURCE_MODES:

@@ -75,7 +75,7 @@ class ExpertFFN(nn.Module):
         hidden_size: int,
         intermediate_size: int,
         dropout: float = 0.0
-    ):
+    ) -> None:
         super().__init__()
         self.hidden_size = hidden_size
         self.intermediate_size = intermediate_size
@@ -101,7 +101,7 @@ class Router(nn.Module):
     Supports multiple routing strategies with load balancing.
     """
     
-    def __init__(self, config: MoEConfig):
+    def __init__(self, config: MoEConfig) -> None:
         super().__init__()
         self.config = config
         self.hidden_size = config.hidden_size
@@ -372,7 +372,7 @@ class MoELayer(nn.Module):
         routing_strategy: Union[str, RoutingStrategy] = RoutingStrategy.TOP_K,
         aux_loss_coef: float = 0.01,
         expert_dropout: float = 0.0
-    ):
+    ) -> None:
         super().__init__()
         
         # Build config
@@ -401,7 +401,7 @@ class MoELayer(nn.Module):
         # Shared expert (optional, for stability)
         self.shared_expert = None
     
-    def add_shared_expert(self):
+    def add_shared_expert(self) -> None:
         """Add a shared expert that processes all tokens."""
         self.shared_expert = ExpertFFN(
             self.config.hidden_size,
@@ -492,7 +492,7 @@ class MoEBlock(nn.Module):
         num_experts: int = 8,
         num_experts_per_tok: int = 2,
         dropout: float = 0.0
-    ):
+    ) -> None:
         super().__init__()
         
         self.hidden_size = hidden_size
@@ -568,7 +568,7 @@ class MoEModel(nn.Module):
         max_seq_len: int = 2048,
         dropout: float = 0.0,
         moe_every_n_layers: int = 2  # Apply MoE every N layers
-    ):
+    ) -> None:
         super().__init__()
         
         self.vocab_size = vocab_size

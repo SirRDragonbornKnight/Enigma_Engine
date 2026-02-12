@@ -265,17 +265,17 @@ if FLASK_AVAILABLE:
         try:
             features['voice_tts'] = True
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         try:
             features['voice_stt'] = True
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         try:
             features['personality'] = True
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         return jsonify({
             'status': 'ok',

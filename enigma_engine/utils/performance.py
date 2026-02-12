@@ -203,7 +203,7 @@ class PerformanceMonitor:
             logger.info("GPU monitoring enabled via pynvml")
             return
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         # macOS fallback via ioreg
         if sys.platform == 'darwin':
@@ -238,7 +238,7 @@ class PerformanceMonitor:
                     gpu_util = 25.0
                     
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         return gpu_util, gpu_mem
     
@@ -306,12 +306,12 @@ class PerformanceMonitor:
                     metrics.gpu_memory_percent = (mem.used / mem.total) * 100
                     metrics.gpu_memory_used_gb = mem.used / (1024**3)
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
             elif getattr(self, '_macos_gpu_available', False):
                 try:
                     metrics.gpu_percent, metrics.gpu_memory_percent = self._get_macos_gpu_usage()
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
             
             return metrics
             

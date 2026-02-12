@@ -276,7 +276,7 @@ class InterruptionHandler:
             try:
                 return self._vad.is_speech(audio, self.config.sample_rate)
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         # Fall back to energy-based detection
         threshold = self._get_energy_threshold()

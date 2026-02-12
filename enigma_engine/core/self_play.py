@@ -93,7 +93,7 @@ class SelfPlayConfig:
 class ResponseGenerator:
     """Generate diverse responses for self-play."""
     
-    def __init__(self, model: nn.Module, tokenizer: Any):
+    def __init__(self, model: nn.Module, tokenizer: Any) -> None:
         """
         Initialize generator.
         
@@ -165,7 +165,7 @@ class ResponseScorer:
         self,
         judge_model: Optional[nn.Module] = None,
         tokenizer: Optional[Any] = None
-    ):
+    ) -> None:
         """
         Initialize scorer.
         
@@ -285,7 +285,7 @@ class SelfPlayTrainer:
         model: nn.Module,
         tokenizer: Any,
         config: Optional[SelfPlayConfig] = None
-    ):
+    ) -> None:
         """
         Initialize self-play trainer.
         
@@ -572,7 +572,7 @@ class SelfPlayTrainer:
         
         return pairs
     
-    def _add_preference_data(self, result: DebateResult):
+    def _add_preference_data(self, result: DebateResult) -> None:
         """Add debate result to preference data."""
         # Find best and worst turns
         if len(result.turns) < 2:

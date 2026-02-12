@@ -270,7 +270,7 @@ class ObjectWindow(QWidget):
                 return True, HTCLIENT  # Handle this click
                 
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         return super().nativeEvent(eventType, message)
     
@@ -624,7 +624,7 @@ class ObjectSpawner:
             try:
                 win.close()
             except Exception:
-                pass
+                pass  # Intentionally silent
         self._windows.clear()
         self._objects.clear()
     
@@ -666,7 +666,7 @@ class ObjectSpawner:
                         try:
                             self._windows[obj_id].move(int(obj.x), int(obj.y))
                         except Exception:
-                            pass
+                            pass  # Intentionally silent
             
             time.sleep(0.033)  # ~30 FPS
     
@@ -909,7 +909,7 @@ class ObjectSpawner:
                     controller = get_fullscreen_controller()
                     controller.register_element(f'spawned_{obj.id}', window, category='spawned_objects')
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
             except Exception as e:
                 print(f"[ObjectSpawner] Failed to create window: {e}")
         
@@ -926,11 +926,11 @@ class ObjectSpawner:
                 controller = get_fullscreen_controller()
                 controller.unregister_element(f'spawned_{obj_id}')
             except Exception:
-                pass
+                pass  # Intentionally silent
             try:
                 self._windows[obj_id].close()
             except Exception:
-                pass
+                pass  # Intentionally silent
             del self._windows[obj_id]
     
     def remove_all(self):

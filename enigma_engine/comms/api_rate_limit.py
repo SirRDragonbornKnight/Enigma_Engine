@@ -213,7 +213,7 @@ def rate_limit(
                 remaining = limiter.get_remaining(endpoint_name)
                 response.headers["X-RateLimit-Remaining-Minute"] = str(remaining["minute"])
             except Exception:
-                pass
+                pass  # Intentionally silent
             
             return response
         

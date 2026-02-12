@@ -369,13 +369,13 @@ class SpeedController:
             return stretched.astype(np.float32)
             
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         try:
             # Try scipy-based WSOLA
             return self._wsola_stretch(audio, sample_rate, speed)
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         # Fallback to simple stretch
         logger.debug("Pitch preservation unavailable, using simple stretch")

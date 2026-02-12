@@ -841,7 +841,7 @@ CHOICE C: [option]"""
                     if story_text and len(choices) >= 2:
                         return {"text": story_text, "choices": choices[:3]}
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         # Fallback: Simple template
         return {

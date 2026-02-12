@@ -38,7 +38,7 @@ class CachedPrefix:
     use_count: int = 0
     memory_bytes: int = 0
     
-    def update_usage(self):
+    def update_usage(self) -> None:
         """Update usage statistics."""
         self.last_used = time.time()
         self.use_count += 1
@@ -149,7 +149,7 @@ class PrefixCache:
             
             return entry
     
-    def _evict_if_needed(self, needed_bytes: int):
+    def _evict_if_needed(self, needed_bytes: int) -> None:
         """Evict entries to make room."""
         # Check entry count
         while len(self._cache) >= self._max_entries:
@@ -159,7 +159,7 @@ class PrefixCache:
         while self._current_memory + needed_bytes > self._max_memory and self._cache:
             self._evict_oldest()
             
-    def _evict_oldest(self):
+    def _evict_oldest(self) -> None:
         """Evict the least recently used entry."""
         if self._cache:
             oldest_key, oldest_entry = self._cache.popitem(last=False)
@@ -171,7 +171,7 @@ class PrefixCache:
                 
             logger.debug(f"Evicted prefix {oldest_key}")
             
-    def clear(self):
+    def clear(self) -> None:
         """Clear all cached entries."""
         with self._lock:
             for entry in self._cache.values():
@@ -198,7 +198,7 @@ class PrefixCache:
                 "hit_rate": hit_rate
             }
             
-    def _load_metadata(self):
+    def _load_metadata(self) -> None:
         """Load cache metadata from disk."""
         if not self._persist_dir:
             return
@@ -213,7 +213,7 @@ class PrefixCache:
             except Exception as e:
                 logger.warning(f"Failed to load prefix cache metadata: {e}")
                 
-    def save_metadata(self):
+    def save_metadata(self) -> None:
         """Save cache metadata to disk."""
         if not self._persist_dir:
             return
@@ -267,7 +267,7 @@ class PrefixCacheManager:
         """Get the underlying cache."""
         return self._cache
     
-    def register_system_prompt(self, name: str, prompt: str):
+    def register_system_prompt(self, name: str, prompt: str) -> None:
         """Register a commonly-used system prompt.
         
         Args:
@@ -339,7 +339,7 @@ class PrefixCacheManager:
             logger.debug(f"KV cache computation skipped: {e}")
             return None
     
-    def prefetch_system_prompts(self, tokenizer, model=None, model_id: str = ""):
+    def prefetch_system_prompts(self, tokenizer, model=None, model_id: str = "") -> None:
         """Pre-cache registered system prompts.
         
         Args:
@@ -355,7 +355,7 @@ class PrefixCacheManager:
         """Get cache statistics."""
         return self._cache.get_stats()
     
-    def clear(self):
+    def clear(self) -> None:
         """Clear all cached prefixes."""
         self._cache.clear()
 

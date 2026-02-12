@@ -64,7 +64,7 @@ class SparseAttention(nn.Module):
         hidden_dim: int = 512,
         num_heads: int = 8,
         config: Optional[SparseConfig] = None
-    ):
+    ) -> None:
         """
         Initialize sparse attention.
         
@@ -431,7 +431,7 @@ class EfficientAttention(nn.Module):
         hidden_dim: int = 512,
         num_heads: int = 8,
         chunk_size: int = 512
-    ):
+    ) -> None:
         super().__init__()
         self.hidden_dim = hidden_dim
         self.num_heads = num_heads

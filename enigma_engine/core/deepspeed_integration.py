@@ -208,7 +208,7 @@ class DeepSpeedConfig:
         
         return config
     
-    def save(self, path: Path):
+    def save(self, path: Path) -> None:
         """Save config to JSON file."""
         path = Path(path)
         with open(path, 'w') as f:
@@ -258,7 +258,7 @@ class DeepSpeedTrainer:
         self._scheduler = None
         self._initialized = False
     
-    def initialize(self):
+    def initialize(self) -> None:
         """Initialize DeepSpeed engine."""
         try:
             import deepspeed
@@ -311,13 +311,13 @@ class DeepSpeedTrainer:
             "lr": self._scheduler.get_last_lr()[0] if self._scheduler else 0
         }
     
-    def save_checkpoint(self, path: str, tag: str = "latest"):
+    def save_checkpoint(self, path: str, tag: str = "latest") -> None:
         """Save training checkpoint."""
         if self._engine:
             self._engine.save_checkpoint(path, tag)
             logger.info(f"Saved checkpoint to {path}/{tag}")
     
-    def load_checkpoint(self, path: str, tag: str = "latest"):
+    def load_checkpoint(self, path: str, tag: str = "latest") -> None:
         """Load training checkpoint."""
         if self._engine:
             self._engine.load_checkpoint(path, tag)

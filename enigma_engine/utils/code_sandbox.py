@@ -233,7 +233,7 @@ def _execute_in_process(
             try:
                 restricted_globals[module_name] = __import__(module_name)
             except ImportError:
-                pass
+                pass  # Intentionally silent
     
     result = ExecutionResult(success=False)
     

@@ -38,9 +38,32 @@ from typing import Any, Dict, List, Optional
 class RichParameter:
     """
     Rich parameter definition for tools.
-    
-    This provides detailed information about each parameter so the AI
-    knows exactly what to pass and users understand what's expected.
+
+    Provides detailed metadata about a single tool parameter so that the AI
+    model can construct valid calls and end-users can understand what is
+    expected.  Used by ``Tool.rich_parameters`` as an alternative to the
+    simpler ``Tool.parameters`` dict.
+
+    Attributes:
+        name: Parameter name used as the keyword argument.
+        type: Data type string -- one of ``"string"``, ``"int"``,
+            ``"float"``, ``"bool"``, ``"list"``, ``"dict"``.
+        description: Human-readable explanation of what the parameter does.
+        required: If ``True`` the caller must supply this parameter.
+        default: Default value when the parameter is omitted.
+        enum: List of allowed values (empty list means unconstrained).
+        min_value: Minimum allowed value for numeric types.
+        max_value: Maximum allowed value for numeric types.
+
+    Example:
+        >>> param = RichParameter(
+        ...     name="query",
+        ...     type="string",
+        ...     description="The search query to look up.",
+        ...     required=True,
+        ... )
+        >>> param.to_dict()
+        {'type': 'string', 'description': 'The search query to look up.', 'required': True}
     """
     name: str
     type: str  # "string", "int", "float", "bool", "list", "dict"
@@ -71,14 +94,38 @@ class RichParameter:
 
 class Tool(ABC):
     """
-    Base class for all tools.
-    
-    Tools can define parameters in two ways:
-    1. Simple: parameters = {"name": "description"}
-    2. Rich: rich_parameters = [RichParameter(...), ...]
-    
-    Rich parameters provide more detail for the AI to understand
-    parameter types, valid values, defaults, etc.
+    Abstract base class for all Enigma AI Engine tools.
+
+    Subclass this to create a new tool that the AI can invoke.  At minimum
+    you must set ``name``, ``description``, and implement ``execute()``.
+
+    Tools can define their accepted parameters in two ways:
+
+    1. **Simple** -- set ``parameters = {"name": "description", ...}``
+    2. **Rich** -- set ``rich_parameters = [RichParameter(...), ...]``
+
+    Rich parameters carry type information, constraints, and defaults which
+    produce better AI prompts and enable automatic schema validation.
+
+    Attributes:
+        name: Unique identifier string (e.g. ``"web_search"``).
+        description: One-line description shown to the AI model.
+        parameters: Simple parameter map ``{param_name: description}``.
+        rich_parameters: List of ``RichParameter`` objects (preferred).
+        category: Grouping label (``"web"``, ``"file"``, ``"system"``, ...).
+        examples: Usage examples surfaced in the AI tools prompt.
+        version: SemVer version string for the tool implementation.
+
+    Example:
+        >>> class PingTool(Tool):
+        ...     name = "ping"
+        ...     description = "Ping a host to check connectivity."
+        ...     rich_parameters = [
+        ...         RichParameter("host", "string", "Hostname or IP", required=True),
+        ...     ]
+        ...     def execute(self, **kwargs):
+        ...         host = kwargs["host"]
+        ...         return {"success": True, "result": f"Pong from {host}"}
     """
     
     name: str = "base_tool"
@@ -149,9 +196,43 @@ class Tool(ABC):
 
 class ToolRegistry:
     """
-    Registry of all available tools.
-    
-    Respects tool_manager settings - disabled tools won't be registered.
+    Central registry of all available AI tools.
+
+    The ``ToolRegistry`` is the single source of truth for which tools the
+    AI can invoke.  On construction it auto-discovers and registers every
+    built-in tool, filtering out any that are disabled in the
+    ``tool_manager`` configuration.
+
+    Key responsibilities:
+        * **Registration** -- ``register()`` / ``unregister()`` to add or
+          remove tools at runtime.
+        * **Lookup** -- ``get()`` retrieves a ``Tool`` instance by name.
+        * **Execution** -- ``execute()`` runs a tool by name with keyword
+          arguments, returning a standardised result dict.
+        * **Caching** -- ``cached_execute()`` caches results for read-only
+          tools (configurable TTL).
+        * **Prompt generation** -- ``get_tools_prompt()`` builds a
+          human-readable (and AI-readable) description of every registered
+          tool, grouped by category.
+
+    Attributes:
+        tools: Mapping of tool name to ``Tool`` instance.
+        CACHEABLE_TOOLS: Set of tool names whose results may be cached.
+
+    Args:
+        respect_manager: If ``True`` (default), tools disabled by the
+            ``tool_manager`` subsystem are silently skipped during
+            registration.
+
+    Example:
+        >>> registry = ToolRegistry()
+        >>> result = registry.execute("web_search", query="python asyncio")
+        >>> print(result["success"])
+        True
+        >>>
+        >>> # List all tool names
+        >>> [t["name"] for t in registry.list_tools()]
+        ['web_search', 'read_file', 'write_file', ...]
     """
     
     # Tools that can safely be cached (read-only operations)
@@ -468,29 +549,82 @@ class ToolRegistry:
                 self.register(tool)
     
     def register(self, tool: Tool, force: bool = False):
-        """Register a tool. Set force=True to bypass tool_manager check."""
+        """Register a tool, making it available for execution.
+
+        By default the registration respects the ``tool_manager``
+        enable/disable settings.  Pass ``force=True`` to register the
+        tool regardless.
+
+        Args:
+            tool: A ``Tool`` subclass instance to register.  Its ``name``
+                attribute is used as the registry key.
+            force: If ``True``, bypass the ``tool_manager`` enabled check
+                and always register the tool.
+
+        Example:
+            >>> registry = ToolRegistry(respect_manager=False)
+            >>> registry.register(MyCustomTool(), force=True)
+            >>> assert registry.get("my_custom_tool") is not None
+        """
         if force or self._is_tool_enabled(tool.name):
             self.tools[tool.name] = tool
     
     def unregister(self, name: str):
-        """Remove a tool."""
+        """Remove a tool from the registry.
+
+        After unregistration the tool can no longer be looked up or
+        executed.  This is a no-op if no tool with the given name exists.
+
+        Args:
+            name: The unique name of the tool to remove.
+        """
         if name in self.tools:
             del self.tools[name]
     
     def get(self, name: str) -> Optional[Tool]:
-        """Get a tool by name."""
+        """Look up a registered tool by its unique name.
+
+        Args:
+            name: The tool's unique identifier (e.g. ``"web_search"``).
+
+        Returns:
+            The ``Tool`` instance if registered, or ``None``.
+
+        Example:
+            >>> tool = registry.get("screenshot")
+            >>> if tool:
+            ...     print(tool.description)
+        """
         return self.tools.get(name)
     
     def execute(self, tool_name: str, **kwargs) -> Dict[str, Any]:
-        """
-        Execute a tool by name.
-        
+        """Execute a registered tool by name.
+
+        Looks up the tool in the registry, calls its ``execute()`` method
+        with the supplied keyword arguments, and returns a standardised
+        result dictionary.  If the tool is not found or raises an
+        exception, the returned dict will contain
+        ``{"success": False, "error": "..."}``.
+
         Args:
-            tool_name: Tool name (renamed from 'name' to avoid conflicts with tool params)
-            **kwargs: Tool parameters
-            
+            tool_name: Unique tool identifier (e.g. ``"web_search"``).
+            **kwargs: Keyword arguments forwarded to ``Tool.execute()``.
+
         Returns:
-            Tool result dict
+            A dict with at least a ``"success"`` boolean key.  On success
+            the dict also contains a ``"result"`` key.  On failure it
+            contains an ``"error"`` string.
+
+        Raises:
+            No exceptions are raised; errors are captured in the returned
+            dict.
+
+        Example:
+            >>> result = registry.execute("web_search", query="python docs")
+            >>> if result["success"]:
+            ...     print(result["result"])
+            ... else:
+            ...     print("Error:", result["error"])
         """
         tool = self.get(tool_name)
         if not tool:
@@ -545,7 +679,19 @@ class ToolRegistry:
             self._cache.clear()
     
     def list_tools(self) -> List[Dict]:
-        """List all available tools."""
+        """List all registered tools as serialisable dictionaries.
+
+        Each dictionary is produced by ``Tool.to_dict()`` and contains at
+        minimum ``name``, ``description``, ``category``, ``version``, and
+        ``parameters``.
+
+        Returns:
+            A list of tool-info dicts, one per registered tool.
+
+        Example:
+            >>> for info in registry.list_tools():
+            ...     print(f"{info['name']}: {info['description']}")
+        """
         return [tool.to_dict() for tool in self.tools.values()]
     
     def get_tools_prompt(self) -> str:

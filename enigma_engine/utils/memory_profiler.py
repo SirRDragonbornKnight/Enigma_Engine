@@ -366,14 +366,14 @@ def get_memory_usage() -> dict[str, float]:
             result["rss_mb"] = mem_info.rss / (1024 * 1024)
             result["vms_mb"] = mem_info.vms / (1024 * 1024)
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     if TORCH_AVAILABLE and torch.cuda.is_available():
         try:
             result["gpu_allocated_mb"] = torch.cuda.memory_allocated() / (1024 * 1024)
             result["gpu_reserved_mb"] = torch.cuda.memory_reserved() / (1024 * 1024)
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     return result
 

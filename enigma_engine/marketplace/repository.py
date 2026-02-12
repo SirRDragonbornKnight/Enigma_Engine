@@ -248,7 +248,7 @@ class RemoteRepository(PluginRepository):
                         self._plugins[plugin.id] = plugin
                     return True
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
             
             return False
     

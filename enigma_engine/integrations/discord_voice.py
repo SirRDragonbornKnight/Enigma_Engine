@@ -56,7 +56,7 @@ except ImportError:
 try:
     HAVE_PYNACL = True
 except ImportError:
-    pass
+    pass  # Intentionally silent
 
 
 class VoiceState(Enum):
@@ -650,7 +650,7 @@ class DiscordBot:
                 return audio
             
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         try:
             # Fallback: pyttsx3

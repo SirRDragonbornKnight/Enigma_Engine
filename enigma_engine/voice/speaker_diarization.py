@@ -298,7 +298,7 @@ class SpeakerDiarizer:
                 audio = scipy.signal.resample(audio, int(len(audio) * self.config.sample_rate / sr))
             return audio.astype(np.float32), self.config.sample_rate
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         # Try librosa
         try:
@@ -306,7 +306,7 @@ class SpeakerDiarizer:
             audio, sr = librosa.load(str(audio_path), sr=self.config.sample_rate, mono=True)
             return audio.astype(np.float32), sr
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         # Fallback: WAV with standard library
         if audio_path.suffix.lower() == '.wav':
@@ -624,7 +624,7 @@ class SpeakerDiarizer:
             from scipy.ndimage import median_filter
             is_speech = median_filter(is_speech.astype(float), size=15) > 0.5
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         # Find boundaries
         segments = []

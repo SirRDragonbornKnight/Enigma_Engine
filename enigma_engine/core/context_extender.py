@@ -70,8 +70,8 @@ if HAS_TORCH:
         def __init__(
             self,
             dim: int,
-            config: RoPEConfig = None
-        ):
+            config: RoPEConfig = None,
+        ) -> None:
             self.dim = dim
             self.config = config or RoPEConfig()
             
@@ -88,7 +88,7 @@ if HAS_TORCH:
         def _compute_freqs(
             self,
             seq_len: int,
-            device: torch.device = None
+            device: torch.device = None,
         ) -> torch.Tensor:
             """Compute frequency tensor."""
             cache_key = (seq_len, str(device), self.config.method)
@@ -114,7 +114,7 @@ if HAS_TORCH:
         def _base_rope(
             self,
             seq_len: int,
-            device: torch.device = None
+            device: torch.device = None,
         ) -> torch.Tensor:
             """Standard RoPE frequencies."""
             inv_freq = 1.0 / (
@@ -129,7 +129,7 @@ if HAS_TORCH:
         def _linear_scale(
             self,
             seq_len: int,
-            device: torch.device = None
+            device: torch.device = None,
         ) -> torch.Tensor:
             """Linear position interpolation."""
             inv_freq = 1.0 / (
@@ -146,7 +146,7 @@ if HAS_TORCH:
         def _ntk_scale(
             self,
             seq_len: int,
-            device: torch.device = None
+            device: torch.device = None,
         ) -> torch.Tensor:
             """NTK-aware scaling - modifies base frequency."""
             # Scale the base frequency
@@ -167,7 +167,7 @@ if HAS_TORCH:
         def _dynamic_ntk_scale(
             self,
             seq_len: int,
-            device: torch.device = None
+            device: torch.device = None,
         ) -> torch.Tensor:
             """Dynamic NTK - adjusts based on actual sequence length."""
             if seq_len <= self.config.base_context:
@@ -191,7 +191,7 @@ if HAS_TORCH:
         def _yarn_scale(
             self,
             seq_len: int,
-            device: torch.device = None
+            device: torch.device = None,
         ) -> torch.Tensor:
             """
             YaRN scaling - combines interpolation and NTK.
@@ -238,7 +238,7 @@ if HAS_TORCH:
         def _pi_scale(
             self,
             seq_len: int,
-            device: torch.device = None
+            device: torch.device = None,
         ) -> torch.Tensor:
             """Position Interpolation - fine-tuning friendly."""
             inv_freq = 1.0 / (
@@ -257,7 +257,7 @@ if HAS_TORCH:
         def apply_rotary(
             self,
             x: torch.Tensor,
-            position_ids: torch.Tensor = None
+            position_ids: torch.Tensor = None,
         ) -> torch.Tensor:
             """
             Apply rotary embeddings to input.
@@ -316,8 +316,8 @@ if HAS_TORCH:
         def __init__(
             self,
             num_heads: int,
-            slope_multiplier: float = 1.0
-        ):
+            slope_multiplier: float = 1.0,
+        ) -> None:
             super().__init__()
             self.num_heads = num_heads
             self.slope_multiplier = slope_multiplier
@@ -329,7 +329,7 @@ if HAS_TORCH:
         @staticmethod
         def _compute_slopes(
             num_heads: int,
-            multiplier: float = 1.0
+            multiplier: float = 1.0,
         ) -> torch.Tensor:
             """Compute ALiBi slopes for each head."""
             # Start with closest power of 2
@@ -349,7 +349,7 @@ if HAS_TORCH:
         def get_bias(
             self,
             seq_len: int,
-            device: torch.device = None
+            device: torch.device = None,
         ) -> torch.Tensor:
             """
             Get ALiBi bias matrix.
@@ -373,7 +373,7 @@ if HAS_TORCH:
         
         def forward(
             self,
-            attention_scores: torch.Tensor
+            attention_scores: torch.Tensor,
         ) -> torch.Tensor:
             """
             Add ALiBi bias to attention scores.
@@ -402,8 +402,8 @@ if HAS_TORCH:
             model: nn.Module,
             base_context: int = 2048,
             target_context: int = 8192,
-            method: str = "dynamic_ntk"
-        ):
+            method: str = "dynamic_ntk",
+        ) -> None:
             self.model = model
             self.base_context = base_context
             self.target_context = target_context

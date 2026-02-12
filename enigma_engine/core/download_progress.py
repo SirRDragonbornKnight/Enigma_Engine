@@ -165,12 +165,12 @@ class ProgressCallback:
         try:
             self._tqdm_available = True
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         try:
             self._rich_available = True
         except ImportError:
-            pass
+            pass  # Intentionally silent
     
     def __call__(
         self,

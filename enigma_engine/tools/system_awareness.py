@@ -125,7 +125,7 @@ class SystemAwareness:
                     elif line.startswith('MemAvailable:'):
                         avail_mem = int(line.split()[1]) / (1024 * 1024)
         except Exception:
-            pass
+            pass  # Intentionally silent
             
         # Disk
         disk_total = 0.0
@@ -135,7 +135,7 @@ class SystemAwareness:
             disk_total = (statvfs.f_blocks * statvfs.f_frsize) / (1024**3)
             disk_free = (statvfs.f_bavail * statvfs.f_frsize) / (1024**3)
         except Exception:
-            pass
+            pass  # Intentionally silent
             
         # Uptime
         uptime_hours = 0.0
@@ -143,14 +143,14 @@ class SystemAwareness:
             with open('/proc/uptime') as f:
                 uptime_hours = float(f.read().split()[0]) / 3600
         except Exception:
-            pass
+            pass  # Intentionally silent
             
         # Load average
         load_avg = (0.0, 0.0, 0.0)
         try:
             load_avg = os.getloadavg()
         except Exception:
-            pass
+            pass  # Intentionally silent
             
         # Network interfaces
         interfaces = []
@@ -176,7 +176,7 @@ class SystemAwareness:
                 gpu_available = True
                 gpu_name = result.stdout.strip()
         except Exception:
-            pass
+            pass  # Intentionally silent
             
         info = SystemInfo(
             os_name=os_name,
@@ -221,7 +221,7 @@ class SystemAwareness:
             if total_delta > 0:
                 return round(100.0 * (1 - idle_delta / total_delta), 1)
         except Exception:
-            pass
+            pass  # Intentionally silent
         return 0.0
     
     def get_memory_usage(self) -> dict[str, float]:
@@ -248,7 +248,7 @@ class SystemAwareness:
             result['available_gb'] = round(available, 2)
             result['percent_used'] = round(100 * used / total, 1) if total > 0 else 0.0
         except Exception:
-            pass
+            pass  # Intentionally silent
         return result
     
     def get_disk_usage(self, path: str = '/') -> dict[str, float]:
@@ -270,7 +270,7 @@ class SystemAwareness:
             result['free_gb'] = round(free, 2)
             result['percent_used'] = round(100 * used / total, 1) if total > 0 else 0.0
         except Exception:
-            pass
+            pass  # Intentionally silent
         return result
     
     def is_online(self) -> bool:
@@ -297,7 +297,7 @@ class SystemAwareness:
             s.connect(("8.8.8.8", 80))
             info['local_ip'] = s.getsockname()[0]
         except Exception:
-            pass
+            pass  # Intentionally silent
         finally:
             if s:
                 s.close()
@@ -306,7 +306,7 @@ class SystemAwareness:
             result = subprocess.run(['ip', 'addr'], capture_output=True, text=True, timeout=5)
             info['interfaces_raw'] = result.stdout
         except Exception:
-            pass
+            pass  # Intentionally silent
             
         return info
     
@@ -391,7 +391,7 @@ class SystemAwareness:
             with open('/proc/uptime') as f:
                 uptime = float(f.read().split()[0])
         except Exception:
-            pass
+            pass  # Intentionally silent
             
         return TimeInfo(
             now=now,
@@ -518,7 +518,7 @@ class SystemAwareness:
                         break
             info['cpu']['cores'] = os.cpu_count()
         except Exception:
-            pass
+            pass  # Intentionally silent
             
         # Memory
         info['memory'] = self.get_memory_usage()
@@ -530,7 +530,7 @@ class SystemAwareness:
                 data = json.loads(result.stdout)
                 info['storage'] = data.get('blockdevices', [])
         except Exception:
-            pass
+            pass  # Intentionally silent
             
         # GPU
         try:
@@ -548,7 +548,7 @@ class SystemAwareness:
                     'temperature': parts[3].strip() if len(parts) > 3 else None
                 }
         except Exception:
-            pass
+            pass  # Intentionally silent
             
         # USB devices
         try:
@@ -556,7 +556,7 @@ class SystemAwareness:
             if result.returncode == 0:
                 info['usb'] = result.stdout.strip().split('\n')
         except Exception:
-            pass
+            pass  # Intentionally silent
             
         return info
     

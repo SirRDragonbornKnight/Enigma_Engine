@@ -275,7 +275,7 @@ class ThreadPoolManager:
                     try:
                         callback(result)
                     except Exception:
-                        pass
+                        pass  # Intentionally silent
             
             return result.result
         

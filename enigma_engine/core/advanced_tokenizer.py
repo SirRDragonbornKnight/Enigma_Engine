@@ -245,12 +245,10 @@ class ForgeTokenizer:
             verbose: Print progress
         """
         if verbose:
-            print("=" * 60)
-            print("TRAINING ADVANCED BPE TOKENIZER")
-            print("=" * 60)
-            print(f"  Target vocab size: {vocab_size:,}")
-            print(f"  Training texts: {len(texts):,}")
-            print(f"  Min frequency: {min_frequency}")
+            logger.info("TRAINING ADVANCED BPE TOKENIZER")
+            logger.info(f"Target vocab size: {vocab_size:,}")
+            logger.info(f"Training texts: {len(texts):,}")
+            logger.info(f"Min frequency: {min_frequency}")
 
         # Reset vocabulary
         self._init_base_vocab()
@@ -271,11 +269,10 @@ class ForgeTokenizer:
                     word_freqs[byte_word] += 1
 
         if verbose:
-            print(f"  Total characters: {total_chars:,}")
-            print(f"  Unique words: {len(word_freqs):,}")
-            print(f"  Base vocab: {len(self.encoder)}")
-            print()
-            print("Training BPE merges...")
+            logger.info(f"Total characters: {total_chars:,}")
+            logger.info(f"Unique words: {len(word_freqs):,}")
+            logger.info(f"Base vocab: {len(self.encoder)}")
+            logger.info("Training BPE merges...")
 
         # Calculate number of merges needed
         num_merges = vocab_size - len(self.encoder)
@@ -292,7 +289,7 @@ class ForgeTokenizer:
 
             if not pairs:
                 if verbose:
-                    print(f"  No more pairs at merge {i}")
+                    logger.info(f"No more pairs at merge {i}")
                 break
 
             # Find best pair
@@ -301,7 +298,7 @@ class ForgeTokenizer:
 
             if best_freq < min_frequency:
                 if verbose:
-                    print(f"  Stopping: freq {best_freq} < {min_frequency}")
+                    logger.info(f"Stopping: freq {best_freq} < {min_frequency}")
                 break
 
             # Create new token
@@ -325,19 +322,16 @@ class ForgeTokenizer:
 
             # Progress
             if verbose and (i + 1) % 500 == 0:
-                print(f"  Merge {i + 1:,}/{num_merges:,}: "
+                logger.info(f"Merge {i + 1:,}/{num_merges:,}: "
                       f"'{best_pair[0]}'+'{best_pair[1]}' -> '{new_token}' "
                       f"(freq: {best_freq:,})")
 
         self.vocab_size = len(self.encoder)
 
         if verbose:
-            print()
-            print("=" * 60)
-            print("TRAINING COMPLETE")
-            print("=" * 60)
-            print(f"  Final vocab size: {self.vocab_size:,}")
-            print(f"  Total merges: {len(self.bpe_ranks):,}")
+            logger.info("TRAINING COMPLETE")
+            logger.info(f"Final vocab size: {self.vocab_size:,}")
+            logger.info(f"Total merges: {len(self.bpe_ranks):,}")
 
     def _apply_merge(
         self,
@@ -581,9 +575,9 @@ class ForgeTokenizer:
         with open(path, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
-        print(f"Saved tokenizer to {path}")
-        print(f"  Vocab size: {self.vocab_size:,}")
-        print(f"  Merges: {len(self.bpe_ranks):,}")
+        logger.info(f"Saved tokenizer to {path}")
+        logger.info(f"Vocab size: {self.vocab_size:,}")
+        logger.info(f"Merges: {len(self.bpe_ranks):,}")
 
     def load(self, path: Path):
         """
@@ -615,9 +609,9 @@ class ForgeTokenizer:
         self.vocab_size = len(self.encoder)
         self.cache = {}
 
-        print(f"Loaded tokenizer from {path}")
-        print(f"  Vocab size: {self.vocab_size:,}")
-        print(f"  Merges: {len(self.bpe_ranks):,}")
+        logger.info(f"Loaded tokenizer from {path}")
+        logger.info(f"Vocab size: {self.vocab_size:,}")
+        logger.info(f"Merges: {len(self.bpe_ranks):,}")
 
     def __call__(
         self,

@@ -106,7 +106,7 @@ class ActivationCache:
         self.current_size = 0
         self._lock = threading.Lock()
     
-    def put(self, key: str, tensor: torch.Tensor):
+    def put(self, key: str, tensor: torch.Tensor) -> None:
         """Store activation in cache."""
         with self._lock:
             tensor_size = tensor.element_size() * tensor.nelement()
@@ -124,17 +124,17 @@ class ActivationCache:
         with self._lock:
             return self.cache.get(key)
     
-    def remove(self, key: str):
+    def remove(self, key: str) -> None:
         """Remove activation from cache."""
         with self._lock:
             if key in self.cache:
                 self._evict(key)
     
-    def _evict(self, key: str):
+    def _evict(self, key: str) -> None:
         tensor = self.cache.pop(key)
         self.current_size -= tensor.element_size() * tensor.nelement()
     
-    def clear(self):
+    def clear(self) -> None:
         """Clear all cached activations."""
         with self._lock:
             self.cache.clear()
@@ -163,7 +163,7 @@ class ShardWorker:
         self.activation_cache = ActivationCache()
         self._is_ready = False
     
-    def load_shard(self, state_dict: dict):
+    def load_shard(self, state_dict: dict) -> None:
         """Load model shard from state dict."""
         try:
             # This would be customized based on model architecture
@@ -294,7 +294,7 @@ class ShardCoordinator:
             
         return node_id
     
-    def remove_node(self, node_id: str):
+    def remove_node(self, node_id: str) -> None:
         """Remove a node from the cluster."""
         with self._lock:
             if node_id in self.nodes:
@@ -440,7 +440,7 @@ class ShardCoordinator:
         
         return shard_state
     
-    def _send_shard_to_node(self, shard: Shard, state_dict: dict):
+    def _send_shard_to_node(self, shard: Shard, state_dict: dict) -> None:
         """Send shard state to a node."""
         node = self.nodes[shard.node_id]
         
@@ -555,7 +555,7 @@ class ShardCoordinator:
         
         return status
     
-    def shutdown(self):
+    def shutdown(self) -> None:
         """Shutdown all workers and cleanup."""
         logger.info("Shutting down shard coordinator...")
         

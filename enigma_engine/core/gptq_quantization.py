@@ -154,7 +154,7 @@ class GPTQ:
         )
         self.nsamples = 0
     
-    def add_batch(self, inp: torch.Tensor):
+    def add_batch(self, inp: torch.Tensor) -> None:
         """
         Add a batch of inputs to accumulate Hessian.
         
@@ -478,7 +478,7 @@ class GPTQQuantizer:
         hooks = []
         activations = []
         
-        def hook_fn(module, inp, out):
+        def hook_fn(module: Any, inp: tuple, out: Any) -> None:
             activations.append(inp[0].detach())
         
         # Register hook on the layer

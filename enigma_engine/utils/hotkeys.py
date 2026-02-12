@@ -408,7 +408,7 @@ class KeyboardHotkeyListener:
                 try:
                     self._keyboard.remove_hotkey(hotkey)
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
             self.hotkeys.clear()
 
 

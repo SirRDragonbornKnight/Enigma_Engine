@@ -692,7 +692,7 @@ def _create_step_setup(parent):
         for model_name in registry.list_models():
             parent._build_existing_model.addItem(model_name)
     except Exception:
-        pass
+        pass  # Intentionally silent
     existing_row_layout.addWidget(parent._build_existing_model, stretch=1)
     parent._build_existing_model_row.setVisible(False)
     model_layout.addWidget(parent._build_existing_model_row)
@@ -2344,7 +2344,7 @@ def _update_data_summary(parent):
             try:
                 total_lines += sum(1 for _ in open(base_file, encoding='utf-8'))
             except Exception:
-                pass
+                pass  # Intentionally silent
     
     for i in range(parent._build_training_files.count()):
         item = parent._build_training_files.item(i)
@@ -2353,7 +2353,7 @@ def _update_data_summary(parent):
             try:
                 total_lines += sum(1 for _ in open(item.text(), encoding='utf-8'))
             except Exception:
-                pass
+                pass  # Intentionally silent
     
     if total_files == 0:
         parent._build_data_summary.setText("No training data selected")
@@ -2505,7 +2505,7 @@ def _save_model_metadata(parent):
             content_filter.set_model_nsfw_capability(nsfw_enabled)
             content_filter.save_config()
         except ImportError:
-            pass
+            pass  # Intentionally silent
             
     except Exception as e:
         logger.warning(f"Could not save model metadata: {e}")

@@ -178,7 +178,7 @@ class SetAvatarPreferenceTool(Tool):
                         "--color2", colors[1]
                     ], capture_output=True)
             except Exception:
-                pass
+                pass  # Intentionally silent
                 
         elif setting == "style":
             if value.lower() in ["neural", "letter", "anvil"]:
@@ -198,7 +198,7 @@ class SetAvatarPreferenceTool(Tool):
                             "--color2", colors[1] if len(colors) > 1 else colors[0]
                         ], capture_output=True)
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
             else:
                 return {"success": False, "error": "Style must be: neural, letter, or anvil"}
                 
@@ -323,7 +323,7 @@ class SetCompanionBehaviorTool(Tool):
                 if companion and companion.config:
                     companion.config.interests = interests
             except Exception:
-                pass
+                pass  # Intentionally silent
                 
         elif setting == "quiet_hours":
             try:
@@ -337,7 +337,7 @@ class SetCompanionBehaviorTool(Tool):
                     if companion and companion.config:
                         companion.config.quiet_hours = hours
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
             except ValueError:
                 return {"success": False, "error": "Hours must be comma-separated numbers"}
         else:
@@ -478,7 +478,7 @@ class RememberFactTool(Tool):
             try:
                 memories = json.loads(self.MEMORY_PATH.read_text())
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         category = category.lower().strip()
         if category not in memories:
@@ -1487,7 +1487,7 @@ class SpawnScreenEffectTool(Tool):
             if state:
                 return (state.get('x', 500), state.get('y', 300))
         except Exception:
-            pass
+            pass  # Intentionally silent
         return None
 
 

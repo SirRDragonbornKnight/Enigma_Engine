@@ -27,7 +27,7 @@ import threading
 import time
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 import torch
 
@@ -48,14 +48,14 @@ class HistogramBuckets:
 class Counter:
     """Thread-safe counter metric."""
     
-    def __init__(self, name: str, description: str, labels: Optional[list[str]] = None):
+    def __init__(self, name: str, description: str, labels: Optional[list[str]] = None) -> None:
         self.name = name
         self.description = description
         self.labels = labels or []
         self._values: dict[tuple, float] = defaultdict(float)
         self._lock = threading.Lock()
     
-    def inc(self, value: float = 1.0, **labels):
+    def inc(self, value: float = 1.0, **labels) -> None:
         """Increment counter."""
         label_key = tuple(labels.get(l, '') for l in self.labels)
         with self._lock:
@@ -85,26 +85,26 @@ class Counter:
 class Gauge:
     """Thread-safe gauge metric."""
     
-    def __init__(self, name: str, description: str, labels: Optional[list[str]] = None):
+    def __init__(self, name: str, description: str, labels: Optional[list[str]] = None) -> None:
         self.name = name
         self.description = description
         self.labels = labels or []
         self._values: dict[tuple, float] = defaultdict(float)
         self._lock = threading.Lock()
     
-    def set(self, value: float, **labels):
+    def set(self, value: float, **labels) -> None:
         """Set gauge value."""
         label_key = tuple(labels.get(l, '') for l in self.labels)
         with self._lock:
             self._values[label_key] = value
     
-    def inc(self, value: float = 1.0, **labels):
+    def inc(self, value: float = 1.0, **labels) -> None:
         """Increment gauge."""
         label_key = tuple(labels.get(l, '') for l in self.labels)
         with self._lock:
             self._values[label_key] += value
     
-    def dec(self, value: float = 1.0, **labels):
+    def dec(self, value: float = 1.0, **labels) -> None:
         """Decrement gauge."""
         self.inc(-value, **labels)
     
@@ -138,7 +138,7 @@ class Histogram:
         description: str,
         buckets: list[float],
         labels: Optional[list[str]] = None
-    ):
+    ) -> None:
         self.name = name
         self.description = description
         self.buckets = sorted(buckets)
@@ -150,7 +150,7 @@ class Histogram:
         self._counts: dict[tuple, int] = defaultdict(int)
         self._lock = threading.Lock()
     
-    def observe(self, value: float, **labels):
+    def observe(self, value: float, **labels) -> None:
         """Observe a value."""
         label_key = tuple(labels.get(l, '') for l in self.labels)
         with self._lock:
@@ -197,16 +197,16 @@ class Histogram:
 class Timer:
     """Context manager for timing operations."""
     
-    def __init__(self, histogram: Histogram, **labels):
+    def __init__(self, histogram: Histogram, **labels) -> None:
         self.histogram = histogram
         self.labels = labels
         self.start_time: Optional[float] = None
     
-    def __enter__(self):
+    def __enter__(self) -> "Timer":
         self.start_time = time.perf_counter()
         return self
     
-    def __exit__(self, *args):
+    def __exit__(self, *args) -> None:
         if self.start_time is not None:
             duration = time.perf_counter() - self.start_time
             self.histogram.observe(duration, **self.labels)
@@ -232,7 +232,7 @@ class MetricsCollector:
         print(metrics.export())
     """
     
-    def __init__(self):
+    def __init__(self) -> None:
         # Request metrics
         self.requests_total = Counter(
             "forge_requests_total",
@@ -358,7 +358,7 @@ class MetricsCollector:
         self._stop_event = threading.Event()
         self._update_thread: Optional[threading.Thread] = None
     
-    def start_background_updates(self, interval: float = 10.0):
+    def start_background_updates(self, interval: float = 10.0) -> None:
         """Start background thread for periodic metric updates."""
         self._stop_event.clear()
         self._update_thread = threading.Thread(
@@ -368,18 +368,18 @@ class MetricsCollector:
         )
         self._update_thread.start()
     
-    def stop_background_updates(self):
+    def stop_background_updates(self) -> None:
         """Stop background update thread."""
         self._stop_event.set()
         if self._update_thread:
             self._update_thread.join(timeout=5.0)
     
-    def _background_update_loop(self, interval: float):
+    def _background_update_loop(self, interval: float) -> None:
         """Background loop for updating system metrics."""
         while not self._stop_event.wait(interval):
             self._update_gpu_metrics()
     
-    def _update_gpu_metrics(self):
+    def _update_gpu_metrics(self) -> None:
         """Update GPU memory metrics."""
         if not torch.cuda.is_available():
             return
@@ -409,7 +409,7 @@ class MetricsCollector:
         status: str,
         tokens: int,
         latency: float
-    ):
+    ) -> None:
         """Record a completed request."""
         self.requests_total.inc(model=model, endpoint=endpoint, status=status)
         self.tokens_generated.inc(tokens, model=model)
@@ -419,7 +419,7 @@ class MetricsCollector:
         if latency > 0:
             self.tokens_per_second.set(tokens / latency, model=model)
     
-    def record_error(self, model: str, error_type: str):
+    def record_error(self, model: str, error_type: str) -> None:
         """Record an error."""
         self.errors_total.inc(model=model, error_type=error_type)
     
@@ -448,13 +448,13 @@ def get_metrics() -> MetricsCollector:
     return _metrics
 
 
-def metrics_endpoint():
+def metrics_endpoint() -> Any:
     """Flask endpoint handler for /metrics."""
     from flask import Response
     return Response(get_metrics().export(), mimetype='text/plain')
 
 
-def add_metrics_to_flask_app(app):
+def add_metrics_to_flask_app(app: Any) -> None:
     """Add /metrics endpoint to a Flask app."""
     app.add_url_rule('/metrics', 'metrics', metrics_endpoint)
     logger.info("Added /metrics endpoint to Flask app")

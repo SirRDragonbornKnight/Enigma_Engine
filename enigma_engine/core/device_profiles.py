@@ -421,7 +421,7 @@ class DeviceProfiler:
                 caps.vram_available_mb = (props.total_memory - torch.cuda.memory_allocated(0)) // (1024 * 1024)
                 caps.cuda_version = torch.version.cuda or ""
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         # Disk detection
         try:

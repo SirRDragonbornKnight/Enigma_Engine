@@ -122,7 +122,7 @@ class WaylandDetector:
                 if process.lower() in processes:
                     return process
         except (subprocess.SubprocessError, FileNotFoundError, OSError):
-            pass
+            pass  # Intentionally silent
         
         return "unknown"
     
@@ -134,7 +134,7 @@ class WaylandDetector:
             ctypes.CDLL("libwlr-layer-shell.so")
             return True
         except OSError:
-            pass
+            pass  # Intentionally silent
         
         # Check via wayland-info
         try:
@@ -144,7 +144,7 @@ class WaylandDetector:
             )
             return "zwlr_layer_shell_v1" in result.stdout
         except (subprocess.SubprocessError, FileNotFoundError, OSError):
-            pass
+            pass  # Intentionally silent
         
         return False
     
@@ -174,7 +174,7 @@ class WaylandDetector:
                             current_output["width"] = int(w)
                             current_output["height"] = int(h)
         except (subprocess.SubprocessError, FileNotFoundError, ValueError, OSError):
-            pass
+            pass  # Intentionally silent
         
         return outputs
 
@@ -339,7 +339,7 @@ class WaylandOverlay:
             # _NET_WM_WINDOW_TYPE = _NET_WM_WINDOW_TYPE_DOCK
             # _NET_WM_STATE = _NET_WM_STATE_ABOVE, _NET_WM_STATE_STICKY
         except ImportError:
-            pass
+            pass  # Intentionally silent
     
     def set_position(self, x: int, y: int):
         """Set overlay position."""
@@ -487,7 +487,7 @@ class WaylandClipboard:
                 )
                 return result.stdout
             except (subprocess.SubprocessError, FileNotFoundError, OSError):
-                pass
+                pass  # Intentionally silent
         
         # Fallback to xclip
         try:
@@ -497,7 +497,7 @@ class WaylandClipboard:
             )
             return result.stdout
         except (subprocess.SubprocessError, FileNotFoundError, OSError):
-            pass
+            pass  # Intentionally silent
         
         # PyQt5 fallback
         if HAS_QT:
@@ -519,7 +519,7 @@ class WaylandClipboard:
                 )
                 return
             except (subprocess.SubprocessError, FileNotFoundError, OSError):
-                pass
+                pass  # Intentionally silent
         
         # Fallback to xclip
         try:
@@ -531,7 +531,7 @@ class WaylandClipboard:
             )
             return
         except (subprocess.SubprocessError, FileNotFoundError, OSError):
-            pass
+            pass  # Intentionally silent
         
         # PyQt5 fallback
         if HAS_QT:

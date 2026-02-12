@@ -422,7 +422,7 @@ class TrainingScheduler:
         import uuid
         return str(uuid.uuid4())[:8]
     
-    def _add_job(self, job: TrainingJob):
+    def _add_job(self, job: TrainingJob) -> None:
         """Add job to queue."""
         with self._lock:
             self._jobs[job.id] = job
@@ -472,7 +472,7 @@ class TrainingScheduler:
             jobs = [j for j in jobs if j.status == status]
         return sorted(jobs, key=lambda j: j.scheduled_time or j.created_at)
     
-    def start(self, blocking: bool = False):
+    def start(self, blocking: bool = False) -> None:
         """
         Start the scheduler daemon.
         
@@ -491,13 +491,13 @@ class TrainingScheduler:
             self._scheduler_thread.start()
             logger.info("Training scheduler started")
     
-    def stop(self):
+    def stop(self) -> None:
         """Stop the scheduler daemon."""
         self._running = False
         if self._scheduler_thread:
             self._scheduler_thread.join(timeout=5)
     
-    def _scheduler_loop(self):
+    def _scheduler_loop(self) -> None:
         """Main scheduler loop."""
         while self._running:
             try:
@@ -506,7 +506,7 @@ class TrainingScheduler:
             except Exception as e:
                 logger.error(f"Scheduler error: {e}")
     
-    def _check_jobs(self):
+    def _check_jobs(self) -> None:
         """Check and run due jobs."""
         now = datetime.now()
         
@@ -537,7 +537,7 @@ class TrainingScheduler:
                         self._start_job(job)
                         self._job_queue.remove(job_id)
     
-    def _start_job(self, job: TrainingJob):
+    def _start_job(self, job: TrainingJob) -> None:
         """Start a training job."""
         job.status = JobStatus.RUNNING
         job.started_at = datetime.now()
@@ -555,7 +555,7 @@ class TrainingScheduler:
         )
         thread.start()
     
-    def _run_training(self, job: TrainingJob):
+    def _run_training(self, job: TrainingJob) -> None:
         """Run the actual training."""
         try:
             from enigma_engine.core.training import train_model, TrainingConfig
@@ -575,7 +575,7 @@ class TrainingScheduler:
             )
             
             # Progress callback
-            def on_progress(epoch, total_epochs, loss):
+            def on_progress(epoch, total_epochs, loss) -> None:
                 job.current_epoch = epoch
                 job.progress = epoch / total_epochs
                 job.current_loss = loss
@@ -637,7 +637,7 @@ class TrainingScheduler:
             
             self._save_jobs()
     
-    def _send_notification(self, job: TrainingJob, event: str):
+    def _send_notification(self, job: TrainingJob, event: str) -> None:
         """Send notification for job event."""
         if not job.notify_on_complete and event == "completed":
             return
@@ -660,7 +660,7 @@ class TrainingScheduler:
         
         logger.info(f"Notification: {message}")
     
-    def _save_jobs(self):
+    def _save_jobs(self) -> None:
         """Save jobs to disk."""
         try:
             jobs_file = self._jobs_dir / "jobs.json"
@@ -670,7 +670,7 @@ class TrainingScheduler:
         except Exception as e:
             logger.error(f"Failed to save jobs: {e}")
     
-    def _load_jobs(self):
+    def _load_jobs(self) -> None:
         """Load jobs from disk."""
         try:
             jobs_file = self._jobs_dir / "jobs.json"
@@ -690,15 +690,15 @@ class TrainingScheduler:
         except Exception as e:
             logger.warning(f"Failed to load jobs: {e}")
     
-    def on_job_start(self, callback: Callable[[TrainingJob], None]):
+    def on_job_start(self, callback: Callable[[TrainingJob], None]) -> None:
         """Set callback for job start."""
         self._on_job_start = callback
     
-    def on_job_complete(self, callback: Callable[[TrainingJob], None]):
+    def on_job_complete(self, callback: Callable[[TrainingJob], None]) -> None:
         """Set callback for job completion."""
         self._on_job_complete = callback
     
-    def on_job_error(self, callback: Callable[[TrainingJob, Exception], None]):
+    def on_job_error(self, callback: Callable[[TrainingJob, Exception], None]) -> None:
         """Set callback for job errors."""
         self._on_job_error = callback
 

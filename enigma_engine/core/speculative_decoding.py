@@ -16,7 +16,7 @@ References:
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Generator, Optional
 
 import torch
 import torch.nn as nn
@@ -61,7 +61,7 @@ class SpeculativeDecoder:
         draft_model: nn.Module,
         tokenizer: Any,
         config: Optional[SpeculativeConfig] = None
-    ):
+    ) -> None:
         self.target_model = target_model
         self.draft_model = draft_model
         self.tokenizer = tokenizer
@@ -82,7 +82,7 @@ class SpeculativeDecoder:
             return 0.0
         return self.accepted_tokens / self.total_draft_tokens
     
-    def reset_stats(self):
+    def reset_stats(self) -> None:
         """Reset acceptance statistics."""
         self.total_draft_tokens = 0
         self.accepted_tokens = 0
@@ -159,7 +159,7 @@ class SpeculativeDecoder:
         input_ids: torch.Tensor,
         temperature: float,
         top_p: float,
-        top_k: int
+        top_k: int,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Generate draft tokens using the small model."""
         draft_ids = []
@@ -212,7 +212,7 @@ class SpeculativeDecoder:
         draft_probs: torch.Tensor,
         temperature: float,
         top_p: float,
-        top_k: int
+        top_k: int,
     ) -> tuple[torch.Tensor, int]:
         """Verify draft tokens with target model."""
         # Concatenate input with draft tokens
@@ -287,8 +287,8 @@ class SpeculativeDecoder:
         prompt: str,
         max_tokens: int = 100,
         temperature: Optional[float] = None,
-        **kwargs
-    ):
+        **kwargs,
+    ) -> Generator[str, None, None]:
         """
         Streaming generation with speculative decoding.
         
@@ -329,7 +329,7 @@ def create_speculative_decoder(
     target_model: nn.Module,
     draft_model: nn.Module,
     tokenizer: Any,
-    num_speculative_tokens: int = 5
+    num_speculative_tokens: int = 5,
 ) -> SpeculativeDecoder:
     """
     Create a speculative decoder.

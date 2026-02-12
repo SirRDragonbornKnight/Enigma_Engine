@@ -16,6 +16,7 @@ The AI receives model capability info and adapts its commands accordingly.
 """
 
 import json
+import logging
 import math
 import threading
 import time
@@ -26,6 +27,8 @@ from typing import TYPE_CHECKING, Any, Callable, Optional
 
 if TYPE_CHECKING:
     from .controller import AvatarController
+
+logger = logging.getLogger(__name__)
 
 
 class AnimationStrategy(Enum):
@@ -307,13 +310,13 @@ class AdaptiveAnimator:
         self.capabilities = caps
         self.strategy = caps.recommended_strategy
         
-        print(f"[AdaptiveAnimator] Model analysis complete:")
-        print(f"  Strategy: {self.strategy.name}")
-        print(f"  Can lip sync: {caps.can_lip_sync} (jaw: {caps.jaw_bone}, mouth shapes: {len(caps.mouth_shapes)})")
-        print(f"  Can emote: {caps.can_emote}")
-        print(f"  Can look at: {caps.can_look_at}")
-        print(f"  Can nod: {caps.can_nod}")
-        print(f"  Can gesture: {caps.can_gesture}")
+        logger.info(
+            "Model analysis complete: strategy=%s, lip_sync=%s (jaw=%s, mouth_shapes=%d), "
+            "emote=%s, look_at=%s, nod=%s, gesture=%s",
+            self.strategy.name, caps.can_lip_sync, caps.jaw_bone,
+            len(caps.mouth_shapes), caps.can_emote, caps.can_look_at,
+            caps.can_nod, caps.can_gesture
+        )
         
         return caps
     
@@ -325,14 +328,14 @@ class AdaptiveAnimator:
         self._running = True
         self._anim_thread = threading.Thread(target=self._animation_loop, daemon=True)
         self._anim_thread.start()
-        print("[AdaptiveAnimator] Started")
+        logger.info("Started")
     
     def stop(self):
         """Stop the animation system."""
         self._running = False
         if self._anim_thread:
             self._anim_thread.join(timeout=1.0)
-        print("[AdaptiveAnimator] Stopped")
+        logger.info("Stopped")
     
     def _animation_loop(self):
         """Main animation loop."""
@@ -478,7 +481,7 @@ class AdaptiveAnimator:
             self._reset_mouth()
         
         threading.Timer(duration, stop_speaking).start()
-        print(f"[AdaptiveAnimator] Speaking for {duration:.1f}s (method: {self._get_lip_sync_method()})")
+        logger.info("Speaking for %.1fs (method: %s)", duration, self._get_lip_sync_method())
     
     def _get_lip_sync_method(self) -> str:
         """Get description of lip sync method being used."""
@@ -529,7 +532,7 @@ class AdaptiveAnimator:
                 self.state.blend_shape_values[shape] = 1.0
                 self._notify_blend_shape_update(shape, 1.0)
         
-        print(f"[AdaptiveAnimator] Emotion set: {emotion}")
+        logger.info("Emotion set: %s", emotion)
     
     def look_at(self, x: float, y: float, z: float = 0.0):
         """
@@ -643,7 +646,7 @@ class AdaptiveAnimator:
     def wave(self):
         """Make avatar wave (if capable)."""
         if not self.capabilities.can_gesture:
-            print("[AdaptiveAnimator] Model cannot wave (no arm bones)")
+            logger.info("Model cannot wave (no arm bones)")
             # Fallback: rotation wiggle
             with self._anim_lock:
                 self._animation_queue.append({
@@ -722,7 +725,7 @@ class AdaptiveAnimator:
             try:
                 cb(self.state.position_offset, self.state.rotation_offset, self.state.scale_factor)
             except Exception as e:
-                print(f"[AdaptiveAnimator] Transform callback error: {e}")
+                logger.error("Transform callback error: %s", e)
     
     def _notify_bone_update(self, bone: str, rotation: tuple[float, float, float]):
         """Notify bone update callbacks."""
@@ -730,7 +733,7 @@ class AdaptiveAnimator:
             try:
                 cb(bone, rotation)
             except Exception as e:
-                print(f"[AdaptiveAnimator] Bone callback error: {e}")
+                logger.error("Bone callback error: %s", e)
     
     def _notify_blend_shape_update(self, shape: str, value: float):
         """Notify blend shape update callbacks."""
@@ -738,7 +741,7 @@ class AdaptiveAnimator:
             try:
                 cb(shape, value)
             except Exception as e:
-                print(f"[AdaptiveAnimator] Blend shape callback error: {e}")
+                logger.error("Blend shape callback error: %s", e)
     
     # === AI Integration ===
     
@@ -782,7 +785,7 @@ class AdaptiveAnimator:
                     json.dump(self.capabilities.to_dict(), f, indent=2)
         
         except (json.JSONDecodeError, OSError, ValueError) as e:
-            pass
+            pass  # Intentionally silent
     
     def get_capabilities_for_ai(self) -> dict:
         """

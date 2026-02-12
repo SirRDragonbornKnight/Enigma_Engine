@@ -102,7 +102,7 @@ class StyleConfig:
                         self._screen_width = size.width()
                         self._screen_height = size.height()
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         # Determine UI class based on screen width
         if self._screen_width < 800:

@@ -74,7 +74,7 @@ try:
     CYTHON_AVAILABLE = True
     print("[PureNN] Cython kernels detected - maximum acceleration enabled!")
 except ImportError:
-    pass
+    pass  # Intentionally silent
 
 # Try to import Numba for JIT compilation (100-300x speedup)
 NUMBA_AVAILABLE = False
@@ -2698,7 +2698,7 @@ class PureTokenizer:
             self._loaded = True
             return True
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         # Fall back to simple character/word tokenizer
         self._build_simple_vocab()

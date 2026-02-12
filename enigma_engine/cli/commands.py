@@ -40,7 +40,7 @@ def cmd_train(
     from ..core.training import train_model
     from ..config import CONFIG
     
-    data_path = data_path or Path(CONFIG["data_dir"]) / "data.txt"
+    data_path = data_path or Path(CONFIG["data_dir"]) / "training.txt"
     
     logger.info(f"Training {model_size} model, data={data_path}, epochs={epochs}")
     print(f"\nTraining {model_size} model...")
@@ -87,7 +87,7 @@ def cmd_build(
     from ..core.training import train_model
     from ..config import CONFIG
     
-    data_path = data_path or Path(CONFIG["data_dir"]) / "data.txt"
+    data_path = data_path or Path(CONFIG["data_dir"]) / "training.txt"
     output_path = output_path or Path(CONFIG["models_dir"]) / f"{model_size}_forge.pth"
     
     print("\n" + "=" * 60)
@@ -306,15 +306,23 @@ def cmd_gui() -> None:
     print("  Enigma AI Engine - Starting...")
     print("=" * 50)
     
+    # Import torch BEFORE PyQt5 to prevent DLL conflict on Windows
+    # (PyQt5 pollutes the DLL search path, breaking torch's c10.dll loading)
+    try:
+        import torch  # noqa: F401
+    except ImportError:
+        pass
+    
     try:
         from ..gui.enhanced_window import run_app
-    except ImportError as e:
+    except (ImportError, OSError) as e:
         if old_stderr_fd is not None:
             os.dup2(old_stderr_fd, stderr_fd)
             os.close(old_stderr_fd)
-        logger.error(f"GUI requires PyQt5: {e}")
-        print(f"\n[ERROR] GUI requires PyQt5: {e}")
-        print("\nInstall PyQt5: pip install PyQt5")
+        logger.error(f"GUI failed to load: {e}")
+        print(f"\n[ERROR] GUI failed to load: {e}")
+        if isinstance(e, ImportError):
+            print("\nInstall PyQt5: pip install PyQt5")
         sys.exit(1)
     
     # Restore stderr before running app

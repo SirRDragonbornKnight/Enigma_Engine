@@ -88,7 +88,7 @@ class Benchmark(ABC):
         self._samples: list[BenchmarkSample] = []
     
     @abstractmethod
-    def load_data(self, path: Optional[Path] = None):
+    def load_data(self, path: Optional[Path] = None) -> None:
         """Load benchmark data."""
     
     @abstractmethod
@@ -130,7 +130,7 @@ class MMLUBenchmark(Benchmark):
     def __init__(self):
         super().__init__("MMLU", BenchmarkType.MULTIPLE_CHOICE)
     
-    def load_data(self, path: Optional[Path] = None):
+    def load_data(self, path: Optional[Path] = None) -> None:
         """Load MMLU data."""
         sample_questions = [
             {
@@ -199,7 +199,7 @@ class HellaSwagBenchmark(Benchmark):
     def __init__(self):
         super().__init__("HellaSwag", BenchmarkType.MULTIPLE_CHOICE)
     
-    def load_data(self, path: Optional[Path] = None):
+    def load_data(self, path: Optional[Path] = None) -> None:
         """Load HellaSwag data."""
         sample_scenarios = [
             {
@@ -266,7 +266,7 @@ class HumanEvalBenchmark(Benchmark):
     def __init__(self):
         super().__init__("HumanEval", BenchmarkType.CODE_GENERATION)
     
-    def load_data(self, path: Optional[Path] = None):
+    def load_data(self, path: Optional[Path] = None) -> None:
         """Load HumanEval problems."""
         sample_problems = [
             {
@@ -341,11 +341,11 @@ class EvaluationSuite:
         self._benchmarks: dict[str, Benchmark] = {}
         self._results: dict[str, BenchmarkResult] = {}
     
-    def add_benchmark(self, benchmark: Benchmark):
+    def add_benchmark(self, benchmark: Benchmark) -> None:
         """Add a benchmark to the suite."""
         self._benchmarks[benchmark.name] = benchmark
     
-    def add_standard_benchmarks(self):
+    def add_standard_benchmarks(self) -> None:
         """Add standard benchmarks (MMLU, HellaSwag, HumanEval)."""
         mmlu = MMLUBenchmark()
         mmlu.load_data()
@@ -436,7 +436,7 @@ class EvaluationSuite:
             samples=results
         )
     
-    def save_results(self, path: Path):
+    def save_results(self, path: Path) -> None:
         """Save all results to JSON."""
         path = Path(path)
         

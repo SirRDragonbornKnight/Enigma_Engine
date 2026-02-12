@@ -11,9 +11,12 @@ Supported formats:
 """
 
 import json
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
+
+logger = logging.getLogger(__name__)
 
 try:
     PIL_AVAILABLE = True
@@ -148,12 +151,12 @@ class SpriteSheetLoader:
             SpriteSheet or None
         """
         if not PIL_AVAILABLE:
-            print("[SpriteSheetLoader] Pillow not installed")
+            logger.warning("Pillow not installed")
             return None
         
         path = Path(filepath)
         if not path.exists():
-            print(f"[SpriteSheetLoader] File not found: {filepath}")
+            logger.warning("File not found: %s", filepath)
             return None
         
         try:
@@ -194,7 +197,7 @@ class SpriteSheetLoader:
             return sheet
             
         except Exception as e:
-            print(f"[SpriteSheetLoader] Error loading grid: {e}")
+            logger.error("Error loading grid: %s", e)
             return None
     
     def load_atlas(self, filepath: str) -> Optional[SpriteSheet]:
@@ -226,7 +229,7 @@ class SpriteSheetLoader:
         """
         path = Path(filepath)
         if not path.exists():
-            print(f"[SpriteSheetLoader] File not found: {filepath}")
+            logger.warning("File not found: %s", filepath)
             return None
         
         try:
@@ -271,7 +274,7 @@ class SpriteSheetLoader:
             return sheet
             
         except Exception as e:
-            print(f"[SpriteSheetLoader] Error loading atlas: {e}")
+            logger.error("Error loading atlas: %s", e)
             return None
     
     def load_directory(self, dirpath: str) -> Optional[SpriteSheet]:
@@ -289,7 +292,7 @@ class SpriteSheetLoader:
         """
         path = Path(dirpath)
         if not path.is_dir():
-            print(f"[SpriteSheetLoader] Not a directory: {dirpath}")
+            logger.warning("Not a directory: %s", dirpath)
             return None
         
         # Find image files
@@ -297,7 +300,7 @@ class SpriteSheetLoader:
         image_files = [f for f in path.iterdir() if f.suffix.lower() in image_extensions]
         
         if not image_files:
-            print(f"[SpriteSheetLoader] No images found in {dirpath}")
+            logger.warning("No images found in %s", dirpath)
             return None
         
         sheet = SpriteSheet()
@@ -315,7 +318,7 @@ class SpriteSheetLoader:
                     img = PILImage.open(img_file)
                     width, height = img.size
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
             
             frame = SpriteFrame(
                 name=frame_name,
@@ -407,7 +410,7 @@ class SpriteSheetLoader:
         with open(path, 'w', encoding='utf-8') as f:
             json.dump(template, f, indent=2)
         
-        print(f"[SpriteSheetLoader] Created template at: {output_path}")
+        logger.info("Created template at: %s", output_path)
 
 
 def get_sprite_loader() -> SpriteSheetLoader:

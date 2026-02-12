@@ -97,7 +97,7 @@ class FullscreenController:
     and user preferences.
     """
     
-    def __init__(self):
+    def __init__(self) -> None:
         self._settings = VisibilitySettings()
         self._elements: Dict[str, RegisteredElement] = {}
         
@@ -144,7 +144,7 @@ class FullscreenController:
     # Configuration Methods
     # ========================================================================
     
-    def set_allowed_monitors(self, monitors: Optional[List[int]]):
+    def set_allowed_monitors(self, monitors: Optional[List[int]]) -> None:
         """
         Set which monitors can show elements.
         
@@ -154,7 +154,7 @@ class FullscreenController:
         self._settings.allowed_monitors = monitors
         self._update_element_visibility()
     
-    def set_category_visible(self, category: str, visible: bool):
+    def set_category_visible(self, category: str, visible: bool) -> None:
         """
         Set visibility for an entire category.
         
@@ -169,17 +169,17 @@ class FullscreenController:
         """Get visibility setting for a category."""
         return self._settings.category_visible.get(category, True)
     
-    def set_fade_enabled(self, enabled: bool, duration_ms: int = 300):
+    def set_fade_enabled(self, enabled: bool, duration_ms: int = 300) -> None:
         """Enable or disable fade transitions."""
         self._settings.fade_enabled = enabled
         self._settings.fade_duration_ms = duration_ms
     
-    def set_auto_hide_on_fullscreen(self, enabled: bool):
+    def set_auto_hide_on_fullscreen(self, enabled: bool) -> None:
         """Enable or disable auto-hide when fullscreen app detected."""
         self._settings.auto_hide_on_fullscreen = enabled
         self._update_element_visibility()
     
-    def set_toggle_hotkey(self, hotkey: Optional[str]):
+    def set_toggle_hotkey(self, hotkey: Optional[str]) -> None:
         """
         Set the global hotkey for toggling visibility.
         
@@ -205,7 +205,7 @@ class FullscreenController:
         element_id: str,
         widget: Any,
         category: str = "avatar",
-    ):
+    ) -> None:
         """
         Register a visual element for visibility control.
         
@@ -232,7 +232,7 @@ class FullscreenController:
         
         logger.debug(f"Registered element: {element_id} (category: {category})")
     
-    def unregister_element(self, element_id: str):
+    def unregister_element(self, element_id: str) -> None:
         """Unregister an element from visibility control."""
         if element_id in self._elements:
             # Restore original opacity
@@ -246,7 +246,7 @@ class FullscreenController:
     # Lifecycle
     # ========================================================================
     
-    def enable(self):
+    def enable(self) -> None:
         """Enable fullscreen detection and visibility control."""
         if self._enabled:
             return
@@ -268,7 +268,7 @@ class FullscreenController:
         
         logger.info("Fullscreen mode controller enabled")
     
-    def disable(self):
+    def disable(self) -> None:
         """Disable fullscreen detection."""
         if not self._enabled:
             return
@@ -290,7 +290,7 @@ class FullscreenController:
         
         logger.info("Fullscreen mode controller disabled")
     
-    def toggle_visibility(self):
+    def toggle_visibility(self) -> None:
         """Toggle visibility manually (hotkey action)."""
         self._manually_hidden = not self._manually_hidden
         self._update_element_visibility()
@@ -304,12 +304,12 @@ class FullscreenController:
             except Exception as e:
                 logger.error(f"Visibility change callback error: {e}")
     
-    def show_all(self):
+    def show_all(self) -> None:
         """Show all elements (override fullscreen detection)."""
         self._manually_hidden = False
         self._update_element_visibility()
     
-    def hide_all(self):
+    def hide_all(self) -> None:
         """Hide all elements."""
         self._manually_hidden = True
         self._update_element_visibility()
@@ -318,11 +318,11 @@ class FullscreenController:
     # Callbacks
     # ========================================================================
     
-    def on_visibility_change(self, callback: Callable[[bool], None]):
+    def on_visibility_change(self, callback: Callable[[bool], None]) -> None:
         """Register callback for visibility changes."""
         self._on_visibility_change.append(callback)
     
-    def on_fullscreen_change(self, callback: Callable[[bool], None]):
+    def on_fullscreen_change(self, callback: Callable[[bool], None]) -> None:
         """Register callback for fullscreen detection changes."""
         self._on_fullscreen_change.append(callback)
     
@@ -330,7 +330,7 @@ class FullscreenController:
     # Monitoring
     # ========================================================================
     
-    def _monitor_loop(self):
+    def _monitor_loop(self) -> None:
         """Main monitoring loop for fullscreen detection."""
         while not self._stop_event.is_set():
             try:
@@ -447,14 +447,14 @@ class FullscreenController:
     # Visibility Control
     # ========================================================================
     
-    def _update_element_visibility(self):
+    def _update_element_visibility(self) -> None:
         """Update visibility of all registered elements."""
         target_visible = self.is_visible
         
         for element in self._elements.values():
             self._apply_visibility_to_element(element)
     
-    def _apply_visibility_to_element(self, element: RegisteredElement):
+    def _apply_visibility_to_element(self, element: RegisteredElement) -> None:
         """Apply visibility settings to a single element."""
         should_show = self._should_element_be_visible(element)
         
@@ -508,11 +508,11 @@ class FullscreenController:
                     desktop = app.desktop()
                     return desktop.screenNumber(center)
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         return 0  # Default to primary monitor
     
-    def _set_element_visible(self, element: RegisteredElement, visible: bool):
+    def _set_element_visible(self, element: RegisteredElement, visible: bool) -> None:
         """Set element visibility instantly."""
         widget = element.widget
         
@@ -528,7 +528,7 @@ class FullscreenController:
         except Exception as e:
             logger.error(f"Failed to set element visibility: {e}")
     
-    def _fade_element(self, element: RegisteredElement, target_opacity: float):
+    def _fade_element(self, element: RegisteredElement, target_opacity: float) -> None:
         """Fade an element to target opacity."""
         element._target_opacity = target_opacity
         
@@ -586,7 +586,7 @@ class FullscreenController:
     # Hotkey Support
     # ========================================================================
     
-    def _register_hotkey(self, hotkey: str):
+    def _register_hotkey(self, hotkey: str) -> None:
         """Register a global hotkey."""
         if platform.system() != "Windows":
             logger.warning("Global hotkeys only supported on Windows currently")
@@ -638,7 +638,7 @@ class FullscreenController:
         except Exception as e:
             logger.error(f"Failed to register hotkey: {e}")
     
-    def _unregister_hotkey(self):
+    def _unregister_hotkey(self) -> None:
         """Unregister the global hotkey."""
         self._hotkey_registered = False
         # The listener thread will clean up when stop_event is set
@@ -729,7 +729,7 @@ class FullscreenController:
     # Persistence
     # ========================================================================
     
-    def save_settings(self, path: Optional[Path] = None):
+    def save_settings(self, path: Optional[Path] = None) -> None:
         """Save settings to file."""
         if path is None:
             path = Path("data/fullscreen_settings.json")
@@ -749,7 +749,7 @@ class FullscreenController:
         
         logger.info(f"Saved fullscreen settings to {path}")
     
-    def load_settings(self, path: Optional[Path] = None):
+    def load_settings(self, path: Optional[Path] = None) -> None:
         """Load settings from file."""
         if path is None:
             path = Path("data/fullscreen_settings.json")

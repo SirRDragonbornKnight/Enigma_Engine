@@ -177,7 +177,7 @@ class ChordSequence:
         
         return False
     
-    def reset(self):
+    def reset(self) -> None:
         """Reset the sequence progress."""
         self._current_index = 0
         self._last_press_time = None
@@ -208,7 +208,7 @@ class ChordManager:
             chords.on_key(hotkey)
     """
     
-    def __init__(self):
+    def __init__(self) -> None:
         self._chords: Dict[str, ChordSequence] = {}
         self._lock = threading.Lock()
     
@@ -256,7 +256,7 @@ class ChordManager:
                     completed.append(chord.name)
         return completed
     
-    def reset_all(self):
+    def reset_all(self) -> None:
         """Reset all chord sequences."""
         with self._lock:
             for chord in self._chords.values():
@@ -290,7 +290,7 @@ class HotkeyManager:
     based on the foreground window.
     """
     
-    def __init__(self, profiles_path: Optional[str] = None):
+    def __init__(self, profiles_path: Optional[str] = None) -> None:
         """Initialize the hotkey manager."""
         self._hotkeys: dict[str, HotkeyInfo] = {}
         self._backend: Optional[Any] = None
@@ -316,7 +316,7 @@ class HotkeyManager:
         self._initialize_backend()
         self._load_profiles()
     
-    def _initialize_backend(self):
+    def _initialize_backend(self) -> None:
         """Initialize the platform-specific backend."""
         try:
             if sys.platform == 'win32':
@@ -413,7 +413,7 @@ class HotkeyManager:
                 logger.error(f"Error unregistering hotkey '{name}': {e}")
                 return False
     
-    def unregister_all(self):
+    def unregister_all(self) -> None:
         """Unregister all hotkeys."""
         if not self._backend:
             return
@@ -459,7 +459,7 @@ class HotkeyManager:
             logger.error(f"Error checking hotkey availability: {e}")
             return False
     
-    def start(self):
+    def start(self) -> None:
         """Start listening for hotkeys."""
         if not self._backend:
             logger.warning("No hotkey backend available")
@@ -476,7 +476,7 @@ class HotkeyManager:
         except Exception as e:
             logger.error(f"Error starting hotkey manager: {e}")
     
-    def stop(self):
+    def stop(self) -> None:
         """Stop listening for hotkeys."""
         if not self._backend:
             return
@@ -557,7 +557,7 @@ class HotkeyManager:
         """Get the currently active profile name."""
         return self._active_profile
     
-    def activate_profile(self, name: Optional[str] = None):
+    def activate_profile(self, name: Optional[str] = None) -> None:
         """
         Activate a specific profile or return to default.
         
@@ -592,7 +592,7 @@ class HotkeyManager:
                 except Exception as e:
                     logger.debug(f"Profile change callback error: {e}")
     
-    def _apply_bindings(self, bindings: Dict[str, str]):
+    def _apply_bindings(self, bindings: Dict[str, str]) -> None:
         """Apply a set of hotkey bindings, re-registering as needed."""
         for name, info in list(self._hotkeys.items()):
             new_hotkey = bindings.get(name)
@@ -602,13 +602,13 @@ class HotkeyManager:
                 self.unregister(name)
                 self.register(new_hotkey, callback, name)
     
-    def on_profile_changed(self, callback: Callable[[Optional[str], Optional[str]], None]):
+    def on_profile_changed(self, callback: Callable[[Optional[str], Optional[str]], None]) -> None:
         """Register callback when active profile changes. Args: (old_profile, new_profile)"""
         self._on_profile_changed.append(callback)
     
     # ===== Auto-detection =====
     
-    def start_app_detection(self, interval: float = 2.0):
+    def start_app_detection(self, interval: float = 2.0) -> None:
         """
         Start automatic profile switching based on foreground app.
         
@@ -632,7 +632,7 @@ class HotkeyManager:
         self._detection_thread.start()
         logger.info("Started app detection for hotkey profiles")
     
-    def stop_app_detection(self):
+    def stop_app_detection(self) -> None:
         """Stop automatic profile switching."""
         self._app_detecting = False
         if self._detection_thread:
@@ -640,7 +640,7 @@ class HotkeyManager:
             self._detection_thread = None
         logger.info("Stopped app detection for hotkey profiles")
     
-    def _detection_loop(self, interval: float):
+    def _detection_loop(self, interval: float) -> None:
         """Detection loop for auto-switching profiles."""
         while self._app_detecting:
             try:
@@ -723,7 +723,7 @@ class HotkeyManager:
     
     # ===== Profile Persistence =====
     
-    def _load_profiles(self):
+    def _load_profiles(self) -> None:
         """Load profiles from disk."""
         if self._profiles_path.exists():
             try:
@@ -738,7 +738,7 @@ class HotkeyManager:
             except Exception as e:
                 logger.warning(f"Failed to load hotkey profiles: {e}")
     
-    def _save_profiles(self):
+    def _save_profiles(self) -> None:
         """Save profiles to disk."""
         try:
             self._profiles_path.parent.mkdir(parents=True, exist_ok=True)
@@ -753,7 +753,7 @@ class HotkeyManager:
         except Exception as e:
             logger.warning(f"Failed to save hotkey profiles: {e}")
 
-    def __del__(self):
+    def __del__(self) -> None:
         """Cleanup when manager is destroyed."""
         try:
             self.stop_app_detection()

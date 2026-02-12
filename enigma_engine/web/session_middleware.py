@@ -312,7 +312,7 @@ class SessionManager:
                                 role=data.get("role", "user"),
                             )
             except Exception:
-                pass
+                pass  # Intentionally silent
         return None
     
     def get_user(self, user_id: str) -> Optional[dict]:

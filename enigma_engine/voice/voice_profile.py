@@ -42,7 +42,7 @@ try:
     import pyttsx3
     HAVE_PYTTSX3 = True
 except ImportError:
-    pass
+    pass  # Intentionally silent
 
 HAVE_ESPEAK = shutil.which("espeak") is not None
 
@@ -332,7 +332,7 @@ class VoiceEngine:
                     self._engine.runAndWait()
                 return
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         # Fallback to platform-specific TTS
         self._platform_speak(text)
@@ -353,7 +353,7 @@ class VoiceEngine:
             
             return text
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         # Fallback to basic robotic effect
         if "robotic" in self.profile.effects:

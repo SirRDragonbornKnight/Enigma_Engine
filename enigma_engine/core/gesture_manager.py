@@ -103,7 +103,7 @@ class Gesture:
     double_click_window: float = 0.5            # Seconds for double-click
     corner_size: int = 10                       # Pixels from corner for hover
     
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         # Normalize modifiers to lowercase
         self.modifiers = [m.lower() for m in self.modifiers]
         self.mouse_action = self.mouse_action.lower()
@@ -176,7 +176,7 @@ class GestureManager:
     when registered gesture patterns are matched.
     """
     
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the gesture manager."""
         self._bindings: Dict[str, GestureBinding] = {}
         self._running = False
@@ -292,7 +292,7 @@ class GestureManager:
         logger.info("Gesture detection started")
         return True
     
-    def stop(self):
+    def stop(self) -> None:
         """Stop listening for gestures."""
         self._running = False
         
@@ -307,7 +307,7 @@ class GestureManager:
         self._active_modifiers.clear()
         logger.info("Gesture detection stopped")
     
-    def _on_key_press(self, key):
+    def _on_key_press(self, key) -> None:
         """Handle key press - track modifiers."""
         if not _PYNPUT_AVAILABLE:
             return
@@ -324,7 +324,7 @@ class GestureManager:
         except Exception as e:
             logger.debug(f"Key press handling error: {e}")
     
-    def _on_key_release(self, key):
+    def _on_key_release(self, key) -> None:
         """Handle key release - track modifiers."""
         if not _PYNPUT_AVAILABLE:
             return
@@ -341,7 +341,7 @@ class GestureManager:
         except Exception as e:
             logger.debug(f"Key release handling error: {e}")
     
-    def _on_mouse_click(self, x: int, y: int, button, pressed: bool):
+    def _on_mouse_click(self, x: int, y: int, button, pressed: bool) -> None:
         """Handle mouse click events."""
         if not pressed:
             # Button released - check for drag end
@@ -392,7 +392,7 @@ class GestureManager:
         # Check for matching gestures
         self._check_gestures(action)
     
-    def _on_mouse_scroll(self, x: int, y: int, dx: int, dy: int):
+    def _on_mouse_scroll(self, x: int, y: int, dx: int, dy: int) -> None:
         """Handle mouse scroll events."""
         self._mouse_pos = (x, y)
         
@@ -405,7 +405,7 @@ class GestureManager:
         
         self._check_gestures(action)
     
-    def _on_mouse_move(self, x: int, y: int):
+    def _on_mouse_move(self, x: int, y: int) -> None:
         """Handle mouse move events."""
         prev_pos = self._mouse_pos
         self._mouse_pos = (x, y)
@@ -451,7 +451,7 @@ class GestureManager:
                 if in_corner and gesture.matches_modifiers(self._active_modifiers):
                     self._trigger_gesture(binding)
     
-    def _handle_drag_end(self, x: int, y: int):
+    def _handle_drag_end(self, x: int, y: int) -> None:
         """Handle the end of a drag gesture."""
         if not self._drag_start:
             self._is_dragging = False
@@ -479,7 +479,7 @@ class GestureManager:
         self._drag_start = None
         self._is_dragging = False
     
-    def _check_gestures(self, action: str):
+    def _check_gestures(self, action: str) -> None:
         """Check if any gestures match the current action and modifiers."""
         for binding in self._bindings.values():
             if not binding.enabled:
@@ -491,7 +491,7 @@ class GestureManager:
                 if gesture.matches_modifiers(self._active_modifiers):
                     self._trigger_gesture(binding)
     
-    def _trigger_gesture(self, binding: GestureBinding):
+    def _trigger_gesture(self, binding: GestureBinding) -> None:
         """Trigger a gesture callback."""
         logger.debug(f"Gesture detected: {binding.name}")
         
@@ -599,7 +599,7 @@ def start_gesture_detection() -> bool:
     return get_gesture_manager().start()
 
 
-def stop_gesture_detection():
+def stop_gesture_detection() -> None:
     """Stop the global gesture manager."""
     get_gesture_manager().stop()
 

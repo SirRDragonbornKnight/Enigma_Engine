@@ -13,6 +13,7 @@ import logging
 import math
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
 
 import torch
 import torch.nn as nn
@@ -114,7 +115,7 @@ class LoRALinear(nn.Module):
         # Initialize
         self.reset_parameters()
     
-    def reset_parameters(self):
+    def reset_parameters(self) -> None:
         """Initialize LoRA parameters."""
         nn.init.kaiming_uniform_(self.lora_A, a=math.sqrt(5))
         nn.init.zeros_(self.lora_B)
@@ -132,7 +133,7 @@ class LoRALinear(nn.Module):
         
         return base_out + lora_out
     
-    def merge_weights(self):
+    def merge_weights(self) -> None:
         """Merge LoRA weights into base weight."""
         self.weight.data += (self.lora_B @ self.lora_A) * self.scaling
     
@@ -193,7 +194,7 @@ class QuantizedLinear(nn.Module):
         
         return weight
     
-    def quantize(self, weight: torch.Tensor):
+    def quantize(self, weight: torch.Tensor) -> None:
         """Quantize a weight tensor."""
         # Simple symmetric quantization
         max_val = 2 ** (self.bits - 1) - 1
@@ -244,7 +245,7 @@ class QLoRAModel(nn.Module):
         # Add LoRA adapters
         self._add_lora_adapters()
     
-    def _add_lora_adapters(self):
+    def _add_lora_adapters(self) -> None:
         """Add LoRA adapters to target modules."""
         target_names = [t.value for t in self.config.target_modules]
         
@@ -260,7 +261,7 @@ class QLoRAModel(nn.Module):
         target_names = [t.value for t in self.config.target_modules]
         return any(t in name for t in target_names)
     
-    def _replace_with_lora(self, name: str, module: nn.Linear):
+    def _replace_with_lora(self, name: str, module: nn.Linear) -> None:
         """Replace a linear layer with LoRA version."""
         lora = LoRALinear(
             module.in_features,
@@ -286,7 +287,7 @@ class QLoRAModel(nn.Module):
         else:
             setattr(self.base_model, child_name, lora)
     
-    def forward(self, *args, **kwargs):
+    def forward(self, *args: Any, **kwargs: Any) -> Any:
         """Forward pass through adapted model."""
         return self.base_model(*args, **kwargs)
     
@@ -298,7 +299,7 @@ class QLoRAModel(nn.Module):
         """Get total parameters."""
         return sum(p.numel() for p in self.parameters())
     
-    def merge_and_save(self, path: str):
+    def merge_and_save(self, path: str) -> None:
         """Merge LoRA weights and save."""
         for lora in self.lora_layers.values():
             lora.merge_weights()
@@ -306,7 +307,7 @@ class QLoRAModel(nn.Module):
         torch.save(self.base_model.state_dict(), path)
         logger.info(f"Saved merged model to {path}")
     
-    def save_lora_only(self, path: str):
+    def save_lora_only(self, path: str) -> None:
         """Save only LoRA weights."""
         lora_state = {}
         for name, lora in self.lora_layers.items():
@@ -316,7 +317,7 @@ class QLoRAModel(nn.Module):
         torch.save(lora_state, path)
         logger.info(f"Saved LoRA weights to {path}")
     
-    def load_lora(self, path: str):
+    def load_lora(self, path: str) -> None:
         """Load LoRA weights."""
         lora_state = torch.load(path)
         

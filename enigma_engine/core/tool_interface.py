@@ -241,7 +241,7 @@ class ToolInterface:
                         arguments['params'] = parsed[1]
                     return arguments
         except json.JSONDecodeError:
-            pass
+            pass  # Intentionally silent
         
         # Fallback: parse as simple comma-separated values
         parts = [p.strip() for p in args_str.split(',')]

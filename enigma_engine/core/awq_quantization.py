@@ -58,7 +58,7 @@ class AWQLinear(nn.Module):
         bias: bool = True,
         w_bit: int = 4,
         group_size: int = 128
-    ):
+    ) -> None:
         super().__init__()
         
         self.in_features = in_features
@@ -153,7 +153,7 @@ class AWQQuantizer:
         model: nn.Module,
         tokenizer: Any,
         config: Optional[AWQConfig] = None
-    ):
+    ) -> None:
         self.model = model
         self.tokenizer = tokenizer
         self.config = config or AWQConfig()
@@ -225,7 +225,7 @@ class AWQQuantizer:
                 try:
                     self.model(input_ids)
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
         
         # Remove hooks
         for handle in hooks:
@@ -243,7 +243,7 @@ class AWQQuantizer:
         name: str,
         layer: nn.Linear,
         act_scale: Optional[torch.Tensor]
-    ):
+    ) -> None:
         """Quantize a single layer using AWQ."""
         W = layer.weight.data.clone().float()
         
@@ -406,7 +406,7 @@ class AWQQuantizer:
         Q: torch.Tensor,
         scales: torch.Tensor,
         zeros: torch.Tensor
-    ):
+    ) -> None:
         """Pack quantized weights into AWQ format."""
         elements_per_int = 32 // self.config.w_bit
         

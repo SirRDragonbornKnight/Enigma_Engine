@@ -36,6 +36,9 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
 from typing import Callable, Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 try:
     from PyQt5.QtCore import QObject, QTimer, pyqtSignal
@@ -158,7 +161,7 @@ class AvatarAnimator(QObject):
         path = Path(path)
         
         if not path.exists():
-            print(f"[Animator] Animation not found: {path}")
+            logger.warning("Animation not found: %s", path)
             return False
         
         animation = Animation(name=name, loop=loop, default_fps=fps)
@@ -178,10 +181,10 @@ class AvatarAnimator(QObject):
         
         if success and animation.frame_count > 0:
             self._animations[name] = animation
-            print(f"[Animator] Loaded '{name}': {animation.frame_count} frames")
+            logger.info("Loaded '%s': %d frames", name, animation.frame_count)
             return True
         
-        print(f"[Animator] Failed to load '{name}' from {path}")
+        logger.warning("Failed to load '%s' from %s", name, path)
         return False
     
     def _is_animated_png(self, path: Path) -> bool:
@@ -218,14 +221,14 @@ class AvatarAnimator(QObject):
                         
                         img.seek(img.tell() + 1)
                 except EOFError:
-                    pass
+                    pass  # Intentionally silent
                 
                 animation.frames = frames
                 animation.frame_durations = durations
                 return len(frames) > 0
                 
             except Exception as e:
-                print(f"[Animator] PIL error: {e}")
+                logger.error("PIL error: %s", e)
         
         if HAS_IMAGEIO:
             try:
@@ -249,7 +252,7 @@ class AvatarAnimator(QObject):
                 return len(animation.frames) > 0
                 
             except Exception as e:
-                print(f"[Animator] imageio error: {e}")
+                logger.error("imageio error: %s", e)
         
         return False
     
@@ -294,7 +297,7 @@ class AvatarAnimator(QObject):
             return len(animation.frames) > 0
             
         except Exception as e:
-            print(f"[Animator] Sprite sheet error: {e}")
+            logger.error("Sprite sheet error: %s", e)
             return False
     
     def _load_image_sequence(self, animation: Animation, folder: Path) -> bool:
@@ -315,7 +318,7 @@ class AvatarAnimator(QObject):
             return len(animation.frames) > 0
             
         except Exception as e:
-            print(f"[Animator] Image sequence error: {e}")
+            logger.error("Image sequence error: %s", e)
             return False
     
     # =========================================================================
@@ -364,7 +367,7 @@ class AvatarAnimator(QObject):
             then_state: State to return to after gesture completes
         """
         if gesture_name not in self._animations:
-            print(f"[Animator] Unknown gesture: {gesture_name}")
+            logger.warning("Unknown gesture: %s", gesture_name)
             return
         
         self._return_state = then_state

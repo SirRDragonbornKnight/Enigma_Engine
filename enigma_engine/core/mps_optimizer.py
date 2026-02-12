@@ -12,7 +12,7 @@ MAIN CLASSES: MPSOptimizer, MPSMemoryManager, MPSProfiler
 import logging
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Generator, Optional
 
 try:
     import torch
@@ -86,7 +86,7 @@ if HAS_TORCH:
                 )
                 chip = result.stdout.strip()
             except (subprocess.SubprocessError, OSError):
-                pass
+                pass  # Intentionally silent
             
             # Determine chip family
             chip_family = "Unknown"
@@ -107,7 +107,7 @@ if HAS_TORCH:
                 )
                 memory = int(result.stdout.strip()) / (1024**3)
             except (subprocess.SubprocessError, ValueError, OSError):
-                pass
+                pass  # Intentionally silent
             
             # Recommended batch size based on memory
             if memory >= 32:
@@ -203,7 +203,7 @@ if HAS_TORCH:
             
             return data
         
-        def clear_cache(self):
+        def clear_cache(self) -> None:
             """Clear MPS memory cache."""
             if hasattr(torch.mps, 'empty_cache'):
                 torch.mps.empty_cache()
@@ -260,7 +260,7 @@ if HAS_TORCH:
             
             return model
         
-        def _set_conv_precision(self, model: nn.Module):
+        def _set_conv_precision(self, model: nn.Module) -> None:
             """Set convolution precision for Metal."""
             # Metal convolutions can use different precision modes
             for module in model.modules():
@@ -270,7 +270,7 @@ if HAS_TORCH:
                         pass  # Metal handles this internally
         
         @contextmanager
-        def inference_context(self):
+        def inference_context(self) -> Generator[None, None, None]:
             """
             Context manager for optimized MPS inference.
             """
@@ -431,7 +431,7 @@ if HAS_TORCH:
             
             return summary
         
-        def clear(self):
+        def clear(self) -> None:
             """Clear profiling records."""
             self._records.clear()
     

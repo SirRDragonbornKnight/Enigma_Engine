@@ -357,7 +357,7 @@ class GameEngineBridge:
                 try:
                     await client.send(message.to_json())
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
         
         asyncio.run_coroutine_threadsafe(_broadcast(), self._loop)
     

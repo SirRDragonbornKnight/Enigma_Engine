@@ -94,12 +94,12 @@ class Scope:
                 try:
                     instance.dispose()
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
             elif hasattr(instance, 'close'):
                 try:
                     instance.close()
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
         self._instances.clear()
 
 
@@ -387,7 +387,7 @@ class Container:
                     try:
                         instance.dispose()
                     except Exception:
-                        pass
+                        pass  # Intentionally silent
             
             self._services.clear()
             self._singletons.clear()

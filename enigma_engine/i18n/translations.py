@@ -519,7 +519,7 @@ class TranslationManager:
                 self._current_language = lang_code
                 logger.info(f"Detected system language: {lang_code}")
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def set_translations_directory(self, path: Union[str, Path]) -> None:
         """Set directory for loading additional translation files"""
@@ -592,7 +592,7 @@ class TranslationManager:
             try:
                 locale.setlocale(locale.LC_ALL, lang_code)
             except locale.Error:
-                pass
+                pass  # Intentionally silent
         
         # Notify callbacks
         if old_lang != lang_code:
@@ -644,7 +644,7 @@ class TranslationManager:
             try:
                 text = text.format(**kwargs)
             except (KeyError, ValueError):
-                pass
+                pass  # Intentionally silent
         
         return text
     
@@ -845,7 +845,7 @@ class RTLLayoutHelper:
             widget.setLayoutDirection(direction)
             
         except ImportError:
-            pass
+            pass  # Intentionally silent
     
     def apply_to_qt_application(self, app) -> None:
         """Apply RTL settings to entire Qt application"""
@@ -861,7 +861,7 @@ class RTLLayoutHelper:
             app.setStyleSheet(current_style + direction_style)
             
         except ImportError:
-            pass
+            pass  # Intentionally silent
 
 
 # Singleton accessor

@@ -129,7 +129,7 @@ class TokenCounter:
             logger.info("Using sentencepiece estimate for token counting")
             return
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         # Fallback to character-based estimate
         self._method = "simple"

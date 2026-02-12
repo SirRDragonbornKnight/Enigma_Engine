@@ -26,7 +26,7 @@ try:
     import wandb
     HAVE_WANDB = True
 except ImportError:
-    pass
+    pass  # Intentionally silent
 
 
 class WandBProvider(ExportProvider):

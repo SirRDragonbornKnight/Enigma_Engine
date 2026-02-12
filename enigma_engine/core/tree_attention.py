@@ -132,7 +132,7 @@ if HAS_TORCH:
             hidden_size: int,
             num_heads: int,
             config: TreeConfig = None
-        ):
+        ) -> None:
             super().__init__()
             self.hidden_size = hidden_size
             self.num_heads = num_heads
@@ -290,7 +290,7 @@ if HAS_TORCH:
             main_model: nn.Module,
             draft_model: nn.Module,
             config: TreeConfig = None
-        ):
+        ) -> None:
             self.main_model = main_model
             self.draft_model = draft_model
             self.config = config or TreeConfig()
@@ -439,7 +439,7 @@ if HAS_TORCH:
                 return 0.0
             return self._stats["accepted_tokens"] / self._stats["total_tokens"]
         
-        def reset_stats(self):
+        def reset_stats(self) -> None:
             """Reset statistics."""
             self._stats = {
                 "total_tokens": 0,
@@ -460,7 +460,7 @@ if HAS_TORCH:
             beam_width: int = 4,
             max_length: int = 50,
             length_penalty: float = 1.0
-        ):
+        ) -> None:
             self.model = model
             self.beam_width = beam_width
             self.max_length = max_length

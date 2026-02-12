@@ -279,7 +279,7 @@ class NetworkTaskQueue:
                             self._load_balancer.add_server(svc.address, svc.port)
                         server = self._load_balancer.get_server()
                     except Exception:
-                        pass
+                        pass  # Intentionally silent
                 
                 if server is None:
                     # Fall back to localhost default
@@ -349,7 +349,7 @@ class NetworkTaskQueue:
                     try:
                         task.on_error(e)
                     except Exception:
-                        pass
+                        pass  # Intentionally silent
     
     def get_stats(self) -> Dict[str, Any]:
         """Get queue statistics."""

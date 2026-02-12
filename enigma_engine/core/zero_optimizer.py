@@ -12,7 +12,7 @@ References:
 
 import math
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import torch
 import torch.distributed as dist
@@ -59,7 +59,7 @@ class ZeROOptimizer(Optimizer):
         model: torch.nn.Module,
         config: Optional[ZeROConfig] = None,
         process_group: Optional[Any] = None
-    ):
+    ) -> None:
         self.optimizer = optimizer
         self.model = model
         self.config = config or ZeROConfig()
@@ -100,7 +100,7 @@ class ZeROOptimizer(Optimizer):
         # Initialize optimizer state partitions
         self._partition_optimizer_state()
     
-    def _setup_flat_params(self):
+    def _setup_flat_params(self) -> None:
         """Flatten parameters into contiguous buffers for efficient partitioning."""
         self._flat_params: list[torch.Tensor] = []
         self._param_groups_flat: list[dict] = []
@@ -148,7 +148,7 @@ class ZeROOptimizer(Optimizer):
         end = min(start + partition_size, total_elements)
         return start, end
     
-    def _partition_optimizer_state(self):
+    def _partition_optimizer_state(self) -> None:
         """Partition optimizer states across ranks."""
         self._partitioned_states: dict[int, dict[str, torch.Tensor]] = {}
         
@@ -181,25 +181,25 @@ class ZeROOptimizer(Optimizer):
                 
                 self._partitioned_states[group_idx] = state
     
-    def _register_hooks(self):
+    def _register_hooks(self) -> None:
         """Register backward hooks for gradient reduction."""
-        self._hooks = []
+        self._hooks: list[Any] = []
         
         for param in self.model.parameters():
             if param.requires_grad:
                 hook = param.register_hook(self._make_grad_hook(param))
                 self._hooks.append(hook)
     
-    def _make_grad_hook(self, param: torch.nn.Parameter):
+    def _make_grad_hook(self, param: torch.nn.Parameter) -> Callable[[torch.Tensor], torch.Tensor]:
         """Create a gradient hook for reduce-scatter."""
-        def hook(grad: torch.Tensor):
+        def hook(grad: torch.Tensor) -> torch.Tensor:
             if self.config.partition_gradients and self.world_size > 1:
                 # Async reduce-scatter
                 self._reduce_scatter_grad(param, grad)
             return grad
         return hook
     
-    def _reduce_scatter_grad(self, param: torch.nn.Parameter, grad: torch.Tensor):
+    def _reduce_scatter_grad(self, param: torch.nn.Parameter, grad: torch.Tensor) -> None:
         """Reduce-scatter gradient across ranks."""
         if not dist.is_initialized():
             return
@@ -232,7 +232,7 @@ class ZeROOptimizer(Optimizer):
             name = self._param_to_name[param]
             self._grad_partitions[name] = output
     
-    def backward(self, loss: torch.Tensor, retain_graph: bool = False):
+    def backward(self, loss: torch.Tensor, retain_graph: bool = False) -> None:
         """Compute gradients with automatic gradient partitioning."""
         # Clear communication handles
         self._comm_handles.clear()
@@ -244,7 +244,7 @@ class ZeROOptimizer(Optimizer):
         # Wait for all async communications
         self._sync_gradients()
     
-    def _sync_gradients(self):
+    def _sync_gradients(self) -> None:
         """Wait for all gradient communications to complete."""
         for handle, param, output, chunk_size in self._comm_handles:
             handle.wait()
@@ -252,7 +252,7 @@ class ZeROOptimizer(Optimizer):
             self._grad_partitions[name] = output
         self._comm_handles.clear()
     
-    def step(self, closure=None):
+    def step(self, closure: Optional[Callable[[], float]] = None) -> Optional[float]:
         """
         Perform optimization step with partitioned states.
         
@@ -260,7 +260,7 @@ class ZeROOptimizer(Optimizer):
         1. Updates only its partition of parameters using its optimizer state
         2. All-gathers updated parameters to sync across ranks
         """
-        loss = None
+        loss: Optional[float] = None
         if closure is not None:
             loss = closure()
         
@@ -353,7 +353,7 @@ class ZeROOptimizer(Optimizer):
         betas: tuple[float, float],
         eps: float,
         weight_decay: float
-    ):
+    ) -> None:
         """Fused AdamW step on parameter partition."""
         beta1, beta2 = betas
         
@@ -397,7 +397,7 @@ class ZeROOptimizer(Optimizer):
             state['exp_avg'].copy_(exp_avg, non_blocking=True)
             state['exp_avg_sq'].copy_(exp_avg_sq, non_blocking=True)
     
-    def _allgather_params(self, flat_buffer: torch.Tensor, start: int, end: int):
+    def _allgather_params(self, flat_buffer: torch.Tensor, start: int, end: int) -> None:
         """All-gather updated parameters across ranks."""
         if not dist.is_initialized() or self.world_size == 1:
             return
@@ -428,7 +428,7 @@ class ZeROOptimizer(Optimizer):
         # Copy back
         flat_buffer.copy_(gathered[:total_elements])
     
-    def _unflatten_params(self):
+    def _unflatten_params(self) -> None:
         """Copy flat buffers back to original parameters."""
         for flat_group in self._param_groups_flat:
             flat_buffer = flat_group['flat_buffer']
@@ -441,7 +441,7 @@ class ZeROOptimizer(Optimizer):
                 
                 param.data.copy_(flat_buffer[offset:offset + numel].view(shape))
     
-    def zero_grad(self, set_to_none: bool = True):
+    def zero_grad(self, set_to_none: bool = True) -> None:
         """Zero gradients."""
         for param in self.model.parameters():
             if set_to_none:
@@ -459,7 +459,7 @@ class ZeROOptimizer(Optimizer):
             'base_optimizer_state': self.optimizer.state_dict()
         }
     
-    def load_state_dict(self, state_dict: dict[str, Any]):
+    def load_state_dict(self, state_dict: dict[str, Any]) -> None:
         """Load optimizer state dict."""
         if state_dict['rank'] != self.rank:
             raise ValueError(

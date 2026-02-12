@@ -95,7 +95,7 @@ if HAS_TORCH:
             self,
             base_model: nn.Module,
             config: RLHFConfig = None
-        ):
+        ) -> None:
             super().__init__()
             self.config = config or RLHFConfig()
             
@@ -185,7 +185,7 @@ if HAS_TORCH:
             self,
             reward_model: RewardModel,
             config: RLHFConfig = None
-        ):
+        ) -> None:
             self.model = reward_model
             self.config = config or RLHFConfig()
             
@@ -293,7 +293,7 @@ if HAS_TORCH:
             ref_model: nn.Module,
             reward_model: RewardModel,
             config: RLHFConfig = None
-        ):
+        ) -> None:
             self.policy = policy_model
             self.ref_model = ref_model
             self.reward_model = reward_model
@@ -495,7 +495,7 @@ if HAS_TORCH:
                 "entropy": total_entropy / max(n_updates, 1)
             }
         
-        def update_kl_coef(self, kl: float):
+        def update_kl_coef(self, kl: float) -> None:
             """Update KL coefficient adaptively."""
             if kl < self.config.kl_target / 1.5:
                 self.kl_coef /= 2
@@ -517,7 +517,7 @@ if HAS_TORCH:
             base_model: nn.Module,
             tokenizer: Any,
             config: RLHFConfig = None
-        ):
+        ) -> None:
             self.tokenizer = tokenizer
             self.config = config or RLHFConfig()
             

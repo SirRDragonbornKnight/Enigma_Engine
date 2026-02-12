@@ -77,7 +77,7 @@ def get_best_backend() -> AttentionBackend:
 class AttentionBase(nn.Module):
     """Base class for attention implementations."""
     
-    def __init__(self, config: AttentionConfig):
+    def __init__(self, config: AttentionConfig) -> None:
         super().__init__()
         self.config = config
         self.scale = config.softmax_scale or (1.0 / math.sqrt(config.head_dim))
@@ -197,7 +197,7 @@ class FlashAttention2(AttentionBase):
     - Supports variable length sequences
     """
     
-    def __init__(self, config: AttentionConfig):
+    def __init__(self, config: AttentionConfig) -> None:
         super().__init__(config)
         
         if not FLASH_ATTN_AVAILABLE:
@@ -235,7 +235,7 @@ class FlashAttention3(AttentionBase):
     - FP8 support
     """
     
-    def __init__(self, config: AttentionConfig):
+    def __init__(self, config: AttentionConfig) -> None:
         super().__init__(config)
         
         if not FLASH_ATTN_AVAILABLE:
@@ -268,7 +268,7 @@ class FlashAttentionWithKVCache(nn.Module):
     Optimized for autoregressive generation.
     """
     
-    def __init__(self, config: AttentionConfig, max_seq_len: int = 8192):
+    def __init__(self, config: AttentionConfig, max_seq_len: int = 8192) -> None:
         super().__init__()
         self.config = config
         self.max_seq_len = max_seq_len
@@ -279,13 +279,13 @@ class FlashAttentionWithKVCache(nn.Module):
         self._v_cache: Optional[torch.Tensor] = None
         self._cache_seq_len = 0
     
-    def reset_cache(self):
+    def reset_cache(self) -> None:
         """Reset the KV cache."""
         self._k_cache = None
         self._v_cache = None
         self._cache_seq_len = 0
     
-    def _init_cache(self, batch_size: int, device: torch.device, dtype: torch.dtype):
+    def _init_cache(self, batch_size: int, device: torch.device, dtype: torch.dtype) -> None:
         """Initialize KV cache."""
         self._k_cache = torch.zeros(
             batch_size,
@@ -395,7 +395,7 @@ class SlidingWindowAttention(AttentionBase):
     Each token only attends to a fixed window of previous tokens.
     """
     
-    def __init__(self, config: AttentionConfig, window_size: int):
+    def __init__(self, config: AttentionConfig, window_size: int) -> None:
         config.window_size = (window_size, 0)  # Left window, no right
         super().__init__(config)
         self.window_size = window_size

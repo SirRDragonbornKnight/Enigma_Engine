@@ -825,7 +825,7 @@ class OBSIntegration:
             try:
                 return future.result(timeout=5.0)
             except Exception:
-                pass
+                pass  # Intentionally silent
         return {}
     
     def get_record_status(self) -> Dict[str, Any]:
@@ -838,7 +838,7 @@ class OBSIntegration:
             try:
                 return future.result(timeout=5.0)
             except Exception:
-                pass
+                pass  # Intentionally silent
         return {}
 
 

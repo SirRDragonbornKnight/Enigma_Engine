@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from heapq import heappush, heappop
 from threading import Lock, Thread
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import torch
 
@@ -94,7 +94,7 @@ class InferenceResult:
 class RequestBatch:
     """A batch of requests for inference."""
     
-    def __init__(self):
+    def __init__(self) -> None:
         self.requests: List[InferenceRequest] = []
         self.padded_input: Optional[torch.Tensor] = None
         self.attention_mask: Optional[torch.Tensor] = None
@@ -121,7 +121,7 @@ class RequestBatch:
             return 0
         return max(req.input_ids.shape[-1] for req in self.requests)
     
-    def prepare(self, device: torch.device, pad_token_id: int = 0):
+    def prepare(self, device: torch.device, pad_token_id: int = 0) -> None:
         """Prepare padded batch for inference."""
         if not self.requests:
             return
@@ -163,8 +163,8 @@ class DynamicBatcher:
         self,
         model,
         tokenizer=None,
-        config: Optional[BatchingConfig] = None
-    ):
+        config: Optional[BatchingConfig] = None,
+    ) -> None:
         """
         Initialize dynamic batcher.
         
@@ -203,7 +203,7 @@ class DynamicBatcher:
             f"policy={self.config.policy.value}"
         )
     
-    def start(self):
+    def start(self) -> None:
         """Start batch processing worker."""
         if self._running:
             return
@@ -213,7 +213,7 @@ class DynamicBatcher:
         self._worker_thread.start()
         logger.info("Batch worker started")
     
-    def stop(self):
+    def stop(self) -> None:
         """Stop batch processing worker."""
         self._running = False
         if self._worker_thread:
@@ -289,7 +289,7 @@ class DynamicBatcher:
         """Submit multiple requests."""
         return [self.submit(p, **kwargs) for p in prompts]
     
-    def _worker(self):
+    def _worker(self) -> None:
         """Background worker for batch processing."""
         last_batch_time = 0
         
@@ -381,7 +381,7 @@ class DynamicBatcher:
         
         return batch
     
-    def _timeout_request(self, request: InferenceRequest):
+    def _timeout_request(self, request: InferenceRequest) -> None:
         """Handle timed out request."""
         with self._results_lock:
             if request.id in self._results:
@@ -492,7 +492,7 @@ class DynamicBatcher:
         
         return generated
     
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> Dict[str, Any]:
         """Get batching statistics."""
         with self._queue_lock:
             queue_size = len(self._queue)
@@ -510,7 +510,7 @@ class DynamicBatcher:
 class ContinuousBatcher(DynamicBatcher):
     """Continuous batching with iteration-level scheduling."""
     
-    def __init__(self, model, tokenizer=None, config=None):
+    def __init__(self, model, tokenizer=None, config=None) -> None:
         """Initialize with continuous batching policy."""
         config = config or BatchingConfig()
         config.policy = BatchPolicy.CONTINUOUS
@@ -520,7 +520,7 @@ class ContinuousBatcher(DynamicBatcher):
         self._active: Dict[str, Dict] = {}
         self._active_lock = Lock()
     
-    def _worker(self):
+    def _worker(self) -> None:
         """Worker with continuous batching."""
         while self._running:
             # Add new requests to active set
@@ -539,7 +539,7 @@ class ContinuousBatcher(DynamicBatcher):
             # Check for completed requests
             self._check_completions()
     
-    def _add_new_requests(self):
+    def _add_new_requests(self) -> None:
         """Add pending requests to active set."""
         with self._queue_lock:
             while self._queue:
@@ -556,7 +556,7 @@ class ContinuousBatcher(DynamicBatcher):
                         "start_time": time.time()
                     }
     
-    def _iteration(self):
+    def _iteration(self) -> None:
         """Run one generation iteration."""
         with self._active_lock:
             if not self._active:
@@ -597,7 +597,7 @@ class ContinuousBatcher(DynamicBatcher):
                     state["generated"] = torch.cat([state["generated"], next_token], dim=-1)
                     state["tokens_generated"] += 1
     
-    def _check_completions(self):
+    def _check_completions(self) -> None:
         """Check for completed generations."""
         completed = []
         

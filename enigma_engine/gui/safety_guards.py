@@ -970,7 +970,7 @@ class AntiTamper:
                     if num_value < min_val or num_value > max_val:
                         return False, f"{setting_name} must be between {min_val} and {max_val}"
                 except (ValueError, TypeError):
-                    pass
+                    pass  # Intentionally silent
         
         # Detect suspicious patterns (rapid changes, extreme values)
         self._track_change(setting_name)

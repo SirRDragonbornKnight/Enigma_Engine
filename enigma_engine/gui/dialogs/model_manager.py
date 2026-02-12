@@ -34,6 +34,70 @@ from ...core.model_scaling import shrink_model
 from ..tabs.shared_components import NoScrollComboBox
 
 
+# =============================================================================
+# VRAM REQUIREMENTS - Memory needed for each model size
+# =============================================================================
+# Format: (inference_vram_mb, training_vram_mb)
+# Training uses ~2-3x more memory due to gradients and optimizer state
+VRAM_REQUIREMENTS = {
+    # Pi-optimized (~50-500 MB)
+    "pi_zero": (50, 150),
+    "pi_4": (100, 300),
+    "pi_5": (200, 600),
+    # Embedded (~100-400 MB)
+    "nano": (100, 300),
+    "micro": (150, 400),
+    # Edge devices (~300 MB - 1 GB)
+    "tiny": (300, 800),
+    "mini": (500, 1200),
+    # Consumer GPU (1-4 GB)
+    "small": (800, 2000),
+    "medium": (1500, 4000),
+    "base": (2000, 5000),
+    # Prosumer GPU (4-16 GB)
+    "large": (4000, 10000),
+    "xl": (8000, 20000),
+    # Server GPU (16-80 GB)
+    "xxl": (16000, 40000),
+    "huge": (24000, 60000),
+    # Datacenter (40+ GB)
+    "giant": (40000, 100000),
+    "colossal": (60000, 150000),
+    "titan": (100000, 250000),
+    "omega": (160000, 400000),
+}
+
+
+def get_vram_requirement(size: str) -> tuple[float, float]:
+    """
+    Get VRAM requirements for a model size.
+    
+    Args:
+        size: Model size preset (e.g., "small", "medium", "large")
+    
+    Returns:
+        Tuple of (inference_vram_gb, training_vram_gb)
+    """
+    size_lower = size.lower()
+    if size_lower in VRAM_REQUIREMENTS:
+        inference_mb, training_mb = VRAM_REQUIREMENTS[size_lower]
+        return (inference_mb / 1024, training_mb / 1024)
+    # Default for unknown sizes
+    return (1.0, 3.0)
+
+
+def get_user_gpu_vram() -> float:
+    """Get user's GPU VRAM in GB."""
+    try:
+        import torch
+        if torch.cuda.is_available():
+            props = torch.cuda.get_device_properties(0)
+            return props.total_memory / (1024**3)
+    except Exception:
+        pass
+    return 0.0
+
+
 class ModelManagerDialog(QDialog):
     """Modern model manager dialog - manage, scale, backup, and organize models."""
     
@@ -58,7 +122,7 @@ class ModelManagerDialog(QDialog):
             from ..ui_settings import apply_dialog_transparency
             apply_dialog_transparency(self)
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         # Apply dark style to dialog
         self.setStyleSheet("""
@@ -332,7 +396,7 @@ class ModelManagerDialog(QDialog):
         try:
             self.registry._load_registry()
         except (OSError, json.JSONDecodeError):
-            pass
+            pass  # Intentionally silent
         
         self.model_list.clear()
         self.selected_model = None
@@ -433,6 +497,10 @@ class ModelManagerDialog(QDialog):
             size = reg_info.get('size', '?')
             source = reg_info.get('source', 'enigma_engine')
             
+            # Get VRAM requirements
+            inference_vram, training_vram = get_vram_requirement(size)
+            user_vram = get_user_gpu_vram()
+            
             details = f"""
 Source: {source.upper()}
 Size: {size.upper()}
@@ -441,7 +509,18 @@ Created: {created}
 Last trained: {last_trained}
 Total epochs: {epochs}
 Checkpoints: {checkpoints}
+
+VRAM REQUIREMENTS
+Inference: {inference_vram:.1f} GB
+Training:  {training_vram:.1f} GB
             """.strip()
+            
+            # Add user GPU info
+            if user_vram > 0:
+                can_run = "Yes" if user_vram >= inference_vram else "No"
+                can_train = "Yes" if user_vram >= training_vram else "No"
+                details += f"\n\nYour GPU: {user_vram:.1f} GB"
+                details += f"\nCan run: {can_run} | Can train: {can_train}"
             
             # Add note for HuggingFace models
             if source == "huggingface":

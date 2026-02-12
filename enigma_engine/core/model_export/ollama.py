@@ -31,7 +31,7 @@ HAVE_LLAMA_CPP = False
 try:
     HAVE_LLAMA_CPP = True
 except ImportError:
-    pass
+    pass  # Intentionally silent
 
 # Check for Ollama CLI
 HAVE_OLLAMA = False
@@ -39,7 +39,7 @@ try:
     result = subprocess.run(["ollama", "--version"], capture_output=True, text=True, timeout=5)
     HAVE_OLLAMA = result.returncode == 0
 except Exception:
-    pass
+    pass  # Intentionally silent
 
 
 class OllamaProvider(ExportProvider):

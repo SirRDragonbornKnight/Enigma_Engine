@@ -228,7 +228,7 @@ class WebSocketServer:
             async for message in websocket:
                 await self._handle_message(connection_id, websocket, message)
         except websockets.exceptions.ConnectionClosed:
-            pass
+            pass  # Intentionally silent
         finally:
             self.connection_manager.remove_connection(connection_id)
             logger.info(f"Connection closed: {connection_id}")

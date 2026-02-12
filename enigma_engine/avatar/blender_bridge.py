@@ -33,6 +33,7 @@ Usage:
 """
 
 import json
+import logging
 import socket
 import threading
 import time
@@ -43,6 +44,8 @@ from queue import Queue
 from typing import Any, Callable, Optional
 
 from ..config import CONFIG
+
+logger = logging.getLogger(__name__)
 
 # Default connection settings
 DEFAULT_HOST = "127.0.0.1"
@@ -242,7 +245,7 @@ class BlenderBridge:
             # Handshake
             response = self._send_command(BlenderCommand.HANDSHAKE, {"client": "Enigma AI Engine"})
             if response and response.get("status") == "ok":
-                print(f"[BlenderBridge] Connected to Blender at {host}:{port}")
+                logger.info("Connected to Blender at %s:%s", host, port)
                 
                 # Get model info
                 self._refresh_model_info()
@@ -251,7 +254,7 @@ class BlenderBridge:
                     try:
                         cb()
                     except Exception as e:
-                        print(f"[BlenderBridge] Callback error: {e}")
+                        logger.error("Callback error: %s", e)
                 
                 return True
             else:
@@ -259,7 +262,7 @@ class BlenderBridge:
                 return False
                 
         except Exception as e:
-            print(f"[BlenderBridge] Connection failed: {e}")
+            logger.error("Connection failed: %s", e)
             self._connected = False
             
             if self.config.auto_reconnect:
@@ -292,7 +295,7 @@ class BlenderBridge:
             except Exception as e:
                 logger.debug(f"Disconnect callback error: {e}")
         
-        print("[BlenderBridge] Disconnected")
+        logger.info("Disconnected")
     
     def _start_reconnect(self):
         """Start auto-reconnect thread."""
@@ -307,7 +310,7 @@ class BlenderBridge:
         while not self._connected and self.config.auto_reconnect:
             time.sleep(self.config.reconnect_interval)
             if not self._connected:
-                print("[BlenderBridge] Attempting to reconnect...")
+                logger.info("Attempting to reconnect...")
                 self.connect()
     
     def _receive_loop(self):
@@ -330,13 +333,13 @@ class BlenderBridge:
                             msg = json.loads(line)
                             self._handle_message(msg)
                         except json.JSONDecodeError:
-                            pass
+                            pass  # Intentionally silent
                             
             except socket.timeout:
                 continue
             except Exception as e:
                 if self._running:
-                    print(f"[BlenderBridge] Receive error: {e}")
+                    logger.error("Receive error: %s", e)
                 break
         
         if self._running:
@@ -401,7 +404,7 @@ class BlenderBridge:
             return {"status": "sent"}
             
         except Exception as e:
-            print(f"[BlenderBridge] Send error: {e}")
+            logger.error("Send error: %s", e)
             return None
     
     def _refresh_model_info(self):
@@ -877,7 +880,7 @@ def server_thread():
                                 result = handle_command(cmd)
                                 _client_socket.send((json.dumps(result) + '\\n').encode('utf-8'))
                             except json.JSONDecodeError:
-                                pass
+                                pass  # Intentionally silent
                                 
                 except socket.timeout:
                     continue
@@ -1015,8 +1018,8 @@ def save_blender_addon(output_dir: Optional[str] = None) -> str:
     with open(addon_path, 'w') as f:
         f.write(BLENDER_ADDON_CODE)
     
-    print(f"[BlenderBridge] Addon saved to: {addon_path}")
-    print("Install in Blender: Edit > Preferences > Add-ons > Install")
+    logger.info("Addon saved to: %s", addon_path)
+    logger.info("Install in Blender: Edit > Preferences > Add-ons > Install")
     
     return str(addon_path)
 

@@ -683,7 +683,7 @@ def create_connection_pool(
             try:
                 conn.close()
             except Exception:
-                pass
+                pass  # Intentionally silent
     
     pool = ResourcePool(
         factory=connector,

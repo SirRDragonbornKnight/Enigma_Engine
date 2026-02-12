@@ -379,14 +379,14 @@ class FederatedParticipant:
             try:
                 return len(dataset)
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         # Try size attribute
         if hasattr(dataset, 'size'):
             try:
                 return dataset.size
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         # Unknown size
         return 0

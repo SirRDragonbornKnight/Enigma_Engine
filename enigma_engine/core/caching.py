@@ -70,7 +70,7 @@ class LRUCache:
     Thread-safe LRU cache.
     """
     
-    def __init__(self, max_size: int = 1000):
+    def __init__(self, max_size: int = 1000) -> None:
         self.max_size = max_size
         self._cache: OrderedDict[str, CacheEntry] = OrderedDict()
         self._lock = threading.Lock()
@@ -106,7 +106,7 @@ class LRUCache:
         value: Any,
         ttl: Optional[int] = None,
         metadata: Optional[dict[str, Any]] = None
-    ):
+    ) -> None:
         """Set value in cache."""
         with self._lock:
             # Remove if exists
@@ -136,7 +136,7 @@ class LRUCache:
                 return True
             return False
     
-    def clear(self):
+    def clear(self) -> None:
         """Clear all entries."""
         with self._lock:
             self._cache.clear()
@@ -175,7 +175,7 @@ class DiskCache:
         
         self._load_index()
     
-    def _load_index(self):
+    def _load_index(self) -> None:
         """Load cache index from disk."""
         if self._index_path.exists():
             try:
@@ -185,7 +185,7 @@ class DiskCache:
                 logger.warning(f"Failed to load cache index: {e}")
                 self._index = {}
     
-    def _save_index(self):
+    def _save_index(self) -> None:
         """Save cache index to disk."""
         try:
             with open(self._index_path, 'w') as f:
@@ -236,7 +236,7 @@ class DiskCache:
         value: Any,
         ttl: Optional[int] = None,
         metadata: Optional[dict[str, Any]] = None
-    ):
+    ) -> None:
         """Set value in disk cache."""
         with self._lock:
             # Serialize value
@@ -280,7 +280,7 @@ class DiskCache:
             
             return True
     
-    def _evict_if_needed(self):
+    def _evict_if_needed(self) -> None:
         """Evict entries if over size limit."""
         total_size = sum(e.get('size', 0) for e in self._index.values())
         
@@ -309,7 +309,7 @@ class DiskCache:
         
         self._save_index()
     
-    def clear(self):
+    def clear(self) -> None:
         """Clear all cache entries."""
         with self._lock:
             import shutil
@@ -368,7 +368,7 @@ class RedisCache:
         value: Any,
         ttl: Optional[int] = None,
         metadata: Optional[dict[str, Any]] = None
-    ):
+    ) -> None:
         """Set value in Redis."""
         try:
             data = pickle.dumps(value)
@@ -396,7 +396,7 @@ class RedisCache:
             logger.error(f"Redis delete error: {e}")
             return False
     
-    def clear(self, pattern: str = '*'):
+    def clear(self, pattern: str = '*') -> None:
         """Clear matching keys."""
         try:
             keys = self._client.keys(f"{self._prefix}{pattern}")
@@ -450,7 +450,7 @@ class SemanticCache:
             
             return best_match
     
-    def set(self, query: str, value: Any):
+    def set(self, query: str, value: Any) -> None:
         """Cache a response with its embedding."""
         query_embed = np.array(self.embed_fn(query))
         
@@ -534,7 +534,7 @@ class InferenceCache:
         value: Any,
         ttl: Optional[int] = None,
         metadata: Optional[dict[str, Any]] = None
-    ):
+    ) -> None:
         """Set value in cache."""
         self._backend.set(key, value, ttl=ttl, metadata=metadata)
     
@@ -542,7 +542,7 @@ class InferenceCache:
         """Delete key from cache."""
         return self._backend.delete(key)
     
-    def clear(self):
+    def clear(self) -> None:
         """Clear all cache entries."""
         self._backend.clear()
     

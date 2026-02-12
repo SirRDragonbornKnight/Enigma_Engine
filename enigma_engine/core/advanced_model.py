@@ -41,7 +41,7 @@ class ForgeConfig:
     bias: bool = False  # Use bias in linear layers
     rope_theta: float = 10000.0  # RoPE base frequency
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.n_kv_heads is None:
             self.n_kv_heads = self.n_heads
         if self.hidden_dim is None:
@@ -59,7 +59,7 @@ class RMSNorm(nn.Module):
     Used by LLaMA, Mistral, etc.
     """
 
-    def __init__(self, dim: int, eps: float = 1e-6):
+    def __init__(self, dim: int, eps: float = 1e-6) -> None:
         super().__init__()
         self.eps = eps
         self.weight = nn.Parameter(torch.ones(dim))
@@ -129,7 +129,7 @@ class Attention(nn.Module):
     and computation while maintaining quality.
     """
 
-    def __init__(self, config: ForgeConfig):
+    def __init__(self, config: ForgeConfig) -> None:
         super().__init__()
         self.n_heads = config.n_heads
         self.n_kv_heads = config.n_kv_heads
@@ -218,7 +218,7 @@ class Attention(nn.Module):
 
         return output
 
-    def clear_cache(self):
+    def clear_cache(self) -> None:
         """Clear KV cache."""
         self.cache_k = None
         self.cache_v = None
@@ -232,7 +232,7 @@ class FeedForward(nn.Module):
     and performance than traditional FFN with ReLU/GELU.
     """
 
-    def __init__(self, config: ForgeConfig):
+    def __init__(self, config: ForgeConfig) -> None:
         super().__init__()
         hidden_dim = config.hidden_dim
 
@@ -261,7 +261,7 @@ class TransformerBlock(nn.Module):
     deep networks compared to post-norm.
     """
 
-    def __init__(self, config: ForgeConfig, layer_id: int):
+    def __init__(self, config: ForgeConfig, layer_id: int) -> None:
         super().__init__()
         self.layer_id = layer_id
 
@@ -295,7 +295,7 @@ class TransformerBlock(nn.Module):
 
         return out
 
-    def clear_cache(self):
+    def clear_cache(self) -> None:
         self.attention.clear_cache()
 
 
@@ -311,7 +311,7 @@ class ForgeModel(nn.Module):
     - KV Cache for fast generation
     """
 
-    def __init__(self, config: ForgeConfig):
+    def __init__(self, config: ForgeConfig) -> None:
         super().__init__()
         self.config = config
 
@@ -350,7 +350,7 @@ class ForgeModel(nn.Module):
                 # Scale down output projections
                 torch.nn.init.normal_(p, mean=0.0, std=0.02 / math.sqrt(2 * config.n_layers))
 
-    def _init_weights(self, module: nn.Module):
+    def _init_weights(self, module: nn.Module) -> None:
         """Initialize weights with small values for stability."""
         if isinstance(module, nn.Linear):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
@@ -419,7 +419,7 @@ class ForgeModel(nn.Module):
 
         return logits, loss
 
-    def clear_cache(self):
+    def clear_cache(self) -> None:
         """Clear KV cache in all layers."""
         for layer in self.layers:
             layer.clear_cache()

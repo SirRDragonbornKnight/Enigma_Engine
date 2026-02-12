@@ -365,7 +365,7 @@ class AudioMixer:
                         if self._speech_queue.empty():
                             self._unduck()
                 except queue.Empty:
-                    pass
+                    pass  # Intentionally silent
             
             # Effects channel
             for buffer in list(self._buffers[AudioChannel.EFFECTS]):

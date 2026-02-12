@@ -35,7 +35,7 @@ class GameMode(GamingMode):
     Provides the old API for existing code.
     """
     
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize game mode with default settings."""
         super().__init__()
         self._aggressive = False
@@ -43,7 +43,7 @@ class GameMode(GamingMode):
         self._on_game_ended_callbacks: list[Callable[[], None]] = []
         self._on_limits_changed_callbacks: list[Callable[[ResourceLimits], None]] = []
     
-    def enable(self, aggressive: bool = False):
+    def enable(self, aggressive: bool = False) -> None:
         """
         Enable game mode.
         
@@ -71,15 +71,15 @@ class GameMode(GamingMode):
         """Get current resource limits."""
         return self._current_limits
     
-    def on_game_detected(self, callback: Callable[[str], None]):
+    def on_game_detected(self, callback: Callable[[str], None]) -> None:
         """Register callback for when game is detected."""
         self._on_game_detected_callbacks.append(callback)
     
-    def on_game_ended(self, callback: Callable[[], None]):
+    def on_game_ended(self, callback: Callable[[], None]) -> None:
         """Register callback for when game ends."""
         self._on_game_ended_callbacks.append(callback)
     
-    def on_limits_changed(self, callback: Callable[[ResourceLimits], None]):
+    def on_limits_changed(self, callback: Callable[[ResourceLimits], None]) -> None:
         """Register callback for when resource limits change."""
         self._on_limits_changed_callbacks.append(callback)
 
@@ -92,15 +92,15 @@ class GameModeWatcher:
     GamingMode handles its own monitoring internally.
     """
     
-    def __init__(self, game_mode: GameMode):
+    def __init__(self, game_mode: GameMode) -> None:
         """Initialize watcher (no-op - GamingMode handles monitoring)."""
         self.game_mode = game_mode
         logger.warning("GameModeWatcher is deprecated. GamingMode handles monitoring internally.")
     
-    def start(self):
+    def start(self) -> None:
         """Start watching (no-op - GamingMode handles this)."""
     
-    def stop(self):
+    def stop(self) -> None:
         """Stop watching (no-op - GamingMode handles this)."""
 
 

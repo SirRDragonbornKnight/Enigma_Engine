@@ -138,7 +138,7 @@ class DeviceDiscovery:
                         pass
                         
             except socket.timeout:
-                pass
+                pass  # Intentionally silent
             except Exception as e:
                 if self._running:
                     logger.error(f"Discovery error: {e}")
@@ -194,7 +194,7 @@ class DeviceDiscovery:
                     except (json.JSONDecodeError, KeyError, AttributeError):
                         pass  # Invalid response format
             except socket.timeout:
-                pass
+                pass  # Intentionally silent
         
         sock.close()
         return self.discovered
@@ -223,7 +223,7 @@ class DeviceDiscovery:
             parts = local_ip.split(".")
             subnet = f"{parts[0]}.{parts[1]}.{parts[2]}"
         
-        print(f"Scanning {subnet}.0/24 for Forge nodes...")
+        logger.info("Scanning %s.0/24 for Forge nodes...", subnet)
         
         def check_host(ip):
             try:
@@ -267,7 +267,7 @@ class DeviceDiscovery:
         for name, info in results:
             if name and info:
                 self.discovered[name] = info
-                print(f"Found: {name} at {info['ip']}:{info['port']}")
+                logger.info("Found: %s at %s:%s", name, info['ip'], info['port'])
         
         return self.discovered
     
@@ -313,7 +313,7 @@ class DeviceDiscovery:
                             "privacy_level": data.get("privacy_level"),
                             "current_round": data.get("current_round", 0),
                         })
-                        print(f"Found federated peer: {name} (privacy: {data.get('privacy_level')})")
+                        logger.info("Found federated peer: %s (privacy: %s)", name, data.get('privacy_level'))
             except (urllib.error.URLError, json.JSONDecodeError, socket.timeout):
                 # Node doesn't support federated learning or is unreachable
                 pass

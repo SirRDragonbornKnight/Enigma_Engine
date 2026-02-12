@@ -157,7 +157,7 @@ class ShortcutManager:
             
             return True
         except Exception as e:
-            print(f"Failed to register shortcut {action}: {e}")
+            logger.error("Failed to register shortcut %s: %s", action, e)
             return False
     
     def unregister(self, action: str):
@@ -182,7 +182,7 @@ class ShortcutManager:
         # Check for conflicts
         for act, key in self.shortcuts.items():
             if act != action and key == new_key:
-                print(f"Conflict: {new_key} already used by {act}")
+                logger.warning("Conflict: %s already used by %s", new_key, act)
                 return False
         
         # Update
@@ -333,7 +333,7 @@ class UndoRedoManager:
             try:
                 action['undo_func']()
             except Exception as e:
-                print(f"Undo failed: {e}")
+                logger.error("Undo failed: %s", e)
                 return False
         
         # Move to redo stack
@@ -357,7 +357,7 @@ class UndoRedoManager:
             try:
                 action['redo_func']()
             except Exception as e:
-                print(f"Redo failed: {e}")
+                logger.error("Redo failed: %s", e)
                 return False
         
         # Move back to undo stack

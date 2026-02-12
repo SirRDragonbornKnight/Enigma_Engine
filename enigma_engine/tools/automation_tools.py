@@ -359,7 +359,7 @@ def _get_clipboard() -> str:
         import pyperclip
         return pyperclip.paste()
     except ImportError:
-        pass
+        pass  # Intentionally silent
     
     # Try PyQt5 QClipboard (internal)
     try:
@@ -370,7 +370,7 @@ def _get_clipboard() -> str:
             clipboard = app.clipboard()
             return clipboard.text() or ""
     except ImportError:
-        pass
+        pass  # Intentionally silent
     
     # Windows fallback using ctypes (internal)
     if os.name == 'nt':
@@ -398,7 +398,7 @@ def _get_clipboard() -> str:
             if result.returncode == 0:
                 return result.stdout
         except (FileNotFoundError, subprocess.TimeoutExpired):
-            pass
+            pass  # Intentionally silent
         
         try:
             # Try xsel as fallback
@@ -407,7 +407,7 @@ def _get_clipboard() -> str:
             if result.returncode == 0:
                 return result.stdout
         except (FileNotFoundError, subprocess.TimeoutExpired):
-            pass
+            pass  # Intentionally silent
         
         try:
             # macOS pbpaste
@@ -415,7 +415,7 @@ def _get_clipboard() -> str:
             if result.returncode == 0:
                 return result.stdout
         except (FileNotFoundError, subprocess.TimeoutExpired):
-            pass
+            pass  # Intentionally silent
     
     return ""
 
@@ -428,7 +428,7 @@ def _set_clipboard(text: str) -> bool:
         pyperclip.copy(text)
         return True
     except ImportError:
-        pass
+        pass  # Intentionally silent
     
     # Try PyQt5 QClipboard (internal)
     try:
@@ -440,7 +440,7 @@ def _set_clipboard(text: str) -> bool:
             clipboard.setText(text)
             return True
     except ImportError:
-        pass
+        pass  # Intentionally silent
     
     # Linux fallback using xclip/xsel
     if os.name == 'posix':
@@ -454,7 +454,7 @@ def _set_clipboard(text: str) -> bool:
             if process.returncode == 0:
                 return True
         except (FileNotFoundError, subprocess.TimeoutExpired):
-            pass
+            pass  # Intentionally silent
         
         try:
             # Try xsel as fallback
@@ -464,7 +464,7 @@ def _set_clipboard(text: str) -> bool:
             if process.returncode == 0:
                 return True
         except (FileNotFoundError, subprocess.TimeoutExpired):
-            pass
+            pass  # Intentionally silent
         
         try:
             # macOS pbcopy
@@ -473,7 +473,7 @@ def _set_clipboard(text: str) -> bool:
             if process.returncode == 0:
                 return True
         except (FileNotFoundError, subprocess.TimeoutExpired):
-            pass
+            pass  # Intentionally silent
     
     return False
 

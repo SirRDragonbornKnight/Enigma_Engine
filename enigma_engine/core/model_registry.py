@@ -27,11 +27,14 @@ USAGE:
 """
 
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import torch
+
+logger = logging.getLogger(__name__)
 
 from ..config import CONFIG
 from .model import MODEL_PRESETS, Forge, ForgeConfig
@@ -369,8 +372,8 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
                         # Mark as having weights
                         self.registry["models"][name]["has_weights"] = True
                         
-                        print(f"[SYSTEM] [OK] Copied weights from base model '{base_model}'")
-                        print(f"[SYSTEM]   Base checkpoint: {latest.name}")
+                        logger.info(f"Copied weights from base model '{base_model}'")
+                        logger.info(f"Base checkpoint: {latest.name}")
                         
                         # Also copy training data if exists
                         base_training = base_dir / "data" / "training.txt"
@@ -383,18 +386,18 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
                                 f"\n\n# === Inherited from base model: {base_model} ===\n\n" +
                                 base_content
                             )
-                            print(f"[SYSTEM]   Inherited training data from base model")
+                            logger.info("Inherited training data from base model")
             else:
-                print(f"[SYSTEM] [!] Base model '{base_model}' has no trained weights - starting fresh")
+                logger.warning(f"Base model '{base_model}' has no trained weights - starting fresh")
         
         self._save_registry()
 
-        print(f"[SYSTEM] [OK] Created model '{name}' ({size})")
-        print(f"[SYSTEM]   Parameters: {metadata['estimated_parameters']:,}")
-        print(f"[SYSTEM]   Location: {model_dir}")
-        print(f"[SYSTEM]   Training data: {training_data_file}")
+        logger.info(f"Created model '{name}' ({size})")
+        logger.info(f"Parameters: {metadata['estimated_parameters']:,}")
+        logger.info(f"Location: {model_dir}")
+        logger.info(f"Training data: {training_data_file}")
         if base_model:
-            print(f"[SYSTEM]   Base model: {base_model}")
+            logger.info(f"Base model: {base_model}")
 
         # Return None instead of instantiating model - saves memory
         # Model will be created lazily when load_model() is called
@@ -502,7 +505,7 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
             report("Weights loaded successfully", 35)
             # Silent load - no print to avoid confusion with AI output
         else:
-            print(f"[SYSTEM] [!] No weights found - model is untrained")
+            logger.warning("No weights found - model is untrained")
 
         report(f"Moving model to {device}...", 38)
         model.to(device)
@@ -627,7 +630,7 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
                 with open(config_path) as f:
                     config = json.load(f)
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         # Load metadata if exists, otherwise use registry info
         metadata = {}
@@ -637,7 +640,7 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
                 with open(metadata_path) as f:
                     metadata = json.load(f)
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         # For HuggingFace models, populate metadata from registry
         if reg_info.get("source") == "huggingface":
@@ -781,7 +784,7 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         
         if convert_to_forge:
             # Mode 2: Convert to Forge format for training
-            print(f"[SYSTEM] Downloading and converting {model_id} to Forge format...")
+            logger.info(f"Downloading and converting {model_id} to Forge format...")
             
             try:
                 from .huggingface_loader import convert_huggingface_to_forge, convert_hf_config_to_forge
@@ -812,7 +815,7 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
             # Save weights
             import torch
             torch.save(forge_model.state_dict(), model_dir / "weights.pth")
-            print(f"[SYSTEM]   Weights saved to {model_dir / 'weights.pth'}")
+            logger.info(f"Weights saved to {model_dir / 'weights.pth'}")
             
             # Create metadata
             metadata = {
@@ -839,8 +842,8 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
                 "capabilities": capabilities,
             }
             
-            print(f"[SYSTEM] [OK] Converted and registered '{name}' from {model_id}")
-            print(f"[SYSTEM]   Ready for fine-tuning with ForgeTrainer")
+            logger.info(f"Converted and registered '{name}' from {model_id}")
+            logger.info("Ready for fine-tuning with ForgeTrainer")
             
         else:
             # Mode 1: Register as HuggingFace model (inference only, loads on demand)
@@ -869,9 +872,9 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
                 "use_custom_tokenizer": use_custom_tokenizer,
             }
             
-            print(f"[SYSTEM] [OK] Registered HuggingFace model '{name}' ({model_id})")
-            print(f"[SYSTEM]   Model will download on first use")
-            print(f"[SYSTEM]   To fine-tune, re-register with convert_to_forge=True")
+            logger.info(f"Registered HuggingFace model '{name}' ({model_id})")
+            logger.info("Model will download on first use")
+            logger.info("To fine-tune, re-register with convert_to_forge=True")
         
         self._save_registry()
         return name
@@ -961,7 +964,7 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         reg_info["current_version"] = version_name
         self._save_registry()
         
-        print(f"[SYSTEM] [OK] Created version '{version_name}' for model '{name}'")
+        logger.info(f"Created version '{version_name}' for model '{name}'")
         return version_name
     
     def list_versions(self, name: str) -> List[Dict[str, Any]]:
@@ -1038,7 +1041,7 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
             backup_path = model_dir / "checkpoints" / backup_name
             backup_path.parent.mkdir(exist_ok=True)
             shutil.copy2(current_weights, backup_path)
-            print(f"[SYSTEM]   Backed up current weights to: {backup_name}")
+            logger.info(f"Backed up current weights to: {backup_name}")
         
         # Copy version weights to current
         shutil.copy2(version_weights, current_weights)
@@ -1047,7 +1050,7 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         reg_info["current_version"] = version_name
         self._save_registry()
         
-        print(f"[SYSTEM] [OK] Rolled back '{name}' to version '{version_name}'")
+        logger.info(f"Rolled back '{name}' to version '{version_name}'")
         return True
     
     def compare_versions(
@@ -1171,7 +1174,7 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         with open(info_path, "w") as f:
             json.dump(info, f, indent=2)
         
-        print(f"[SYSTEM] [OK] Set quality score {score:.2f} for '{name}' version '{version_name}'")
+        logger.info(f"Set quality score {score:.2f} for '{name}' version '{version_name}'")
 
 
 # Convenience function
@@ -1222,7 +1225,7 @@ def set_model_capabilities(model_name: str, capabilities: list, models_dir: Opti
         with open(metadata_path, "w") as f:
             json.dump(metadata, f, indent=2)
     
-    print(f"[SYSTEM] [OK] Set capabilities for '{name}': {capabilities}")
+    logger.info(f"Set capabilities for '{name}': {capabilities}")
 
 
 def get_model_capabilities(model_name: str, models_dir: Optional[str] = None) -> list:
@@ -1342,7 +1345,7 @@ def fine_tune_pretrained(
     
     if is_huggingface:
         # Source is a HuggingFace model - need to download and convert
-        print(f"[FINE-TUNE] Source '{source}' appears to be a HuggingFace model")
+        logger.info(f"Source '{source}' appears to be a HuggingFace model")
         
         # Generate name if not provided
         if name is None:
@@ -1352,10 +1355,10 @@ def fine_tune_pretrained(
         # Check if already exists
         if name in registry.registry["models"]:
             # Use existing converted model
-            print(f"[FINE-TUNE] Using existing converted model '{name}'")
+            logger.info(f"Using existing converted model '{name}'")
         else:
             # Register and convert
-            print(f"[FINE-TUNE] Converting {source} to Forge format...")
+            logger.info(f"Converting {source} to Forge format...")
             registry.register_huggingface_model(
                 model_id=source,
                 name=name,
@@ -1364,7 +1367,7 @@ def fine_tune_pretrained(
             )
     else:
         # Source is an existing model in registry
-        print(f"[FINE-TUNE] Source '{source}' is an existing model in registry")
+        logger.info(f"Source '{source}' is an existing model in registry")
         
         if name is None:
             # Create a new version name
@@ -1372,7 +1375,7 @@ def fine_tune_pretrained(
         
         if name != source and name not in registry.registry["models"]:
             # Copy the source model to new name
-            print(f"[FINE-TUNE] Creating '{name}' as copy of '{source}'...")
+            logger.info(f"Creating '{name}' as copy of '{source}'...")
             registry.create_model(
                 name=name,
                 base_model=source,
@@ -1380,7 +1383,7 @@ def fine_tune_pretrained(
             )
     
     # Step 2: Load the model
-    print(f"[FINE-TUNE] Loading model '{name}'...")
+    logger.info(f"Loading model '{name}'...")
     model, config = registry.load_model(name)
     
     # HuggingFace wrapper models can't be trained directly
@@ -1394,7 +1397,7 @@ def fine_tune_pretrained(
     
     # Step 3: Apply LoRA if requested
     if use_lora:
-        print(f"[FINE-TUNE] Applying LoRA (rank={lora_rank})...")
+        logger.info(f"Applying LoRA (rank={lora_rank})...")
         try:
             from .lora_utils import LoRATrainer, LoRAConfig
             
@@ -1413,27 +1416,27 @@ def fine_tune_pretrained(
                 training_text = f.read()
             
             # Train with LoRA
-            print(f"[FINE-TUNE] Training with LoRA for {epochs} epochs...")
+            logger.info(f"Training with LoRA for {epochs} epochs...")
             trainer.train_on_text(training_text)
             
             # Merge LoRA weights back into model
-            print(f"[FINE-TUNE] Merging LoRA weights...")
+            logger.info("Merging LoRA weights...")
             trainer.merge_and_save()
             
             # Save the merged model
             registry.save_model(name, model)
-            print(f"[FINE-TUNE] [OK] LoRA fine-tuning complete!")
+            logger.info("LoRA fine-tuning complete!")
             
         except ImportError:
-            print(f"[FINE-TUNE] LoRA not available, falling back to full fine-tuning")
+            logger.warning("LoRA not available, falling back to full fine-tuning")
             use_lora = False
         except Exception as e:
-            print(f"[FINE-TUNE] LoRA training failed: {e}, falling back to full fine-tuning")
+            logger.warning(f"LoRA training failed: {e}, falling back to full fine-tuning")
             use_lora = False
     
     if not use_lora:
         # Step 3 (alt): Full fine-tuning
-        print(f"[FINE-TUNE] Using full fine-tuning (slower but more thorough)...")
+        logger.info("Using full fine-tuning (slower but more thorough)...")
         
         from .trainer import ForgeTrainer
         
@@ -1454,11 +1457,9 @@ def fine_tune_pretrained(
     # Step 4: Update capabilities
     set_model_capabilities(name, capabilities, models_dir)
     
-    print(f"\n[FINE-TUNE] ========================================")
-    print(f"[FINE-TUNE] Fine-tuning complete!")
-    print(f"[FINE-TUNE] Model: {name}")
-    print(f"[FINE-TUNE] Capabilities: {capabilities}")
-    print(f"[FINE-TUNE] ========================================\n")
+    logger.info("Fine-tuning complete!")
+    logger.info(f"Model: {name}")
+    logger.info(f"Capabilities: {capabilities}")
     
     # Reload the trained model
     model, _ = registry.load_model(name)

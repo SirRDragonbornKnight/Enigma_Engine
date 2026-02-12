@@ -115,7 +115,7 @@ class PromptTemplate:
         """Generate a name from template hash."""
         return f"template_{hashlib.md5(self.template.encode()).hexdigest()[:8]}"
     
-    def _detect_variables(self):
+    def _detect_variables(self) -> None:
         """Auto-detect variables from template."""
         patterns = {
             TemplateFormat.PYTHON: r'\{(\w+)\}',
@@ -447,7 +447,7 @@ class PromptChain:
 class ChainOfThought(PromptChain):
     """Chain-of-thought prompting pattern."""
     
-    def __init__(self, task_template: str, system_prompt: str = ""):
+    def __init__(self, task_template: str, system_prompt: str = "") -> None:
         super().__init__(name="chain_of_thought")
         
         # Step 1: Think through the problem
@@ -473,7 +473,7 @@ class ChainOfThought(PromptChain):
 class SelfRefine(PromptChain):
     """Self-refinement prompting pattern."""
     
-    def __init__(self, task_template: str, max_iterations: int = 3):
+    def __init__(self, task_template: str, max_iterations: int = 3) -> None:
         super().__init__(name="self_refine")
         
         # Step 1: Initial attempt
@@ -508,7 +508,7 @@ class SelfRefine(PromptChain):
 class TemplateRegistry:
     """Registry for managing prompt templates."""
     
-    def __init__(self, templates_dir: Path = None):
+    def __init__(self, templates_dir: Path = None) -> None:
         self.templates_dir = templates_dir or Path("data/templates")
         self._templates: dict[str, PromptTemplate] = {}
         self._chains: dict[str, PromptChain] = {}
@@ -516,7 +516,7 @@ class TemplateRegistry:
         # Load built-in templates
         self._load_builtin_templates()
     
-    def _load_builtin_templates(self):
+    def _load_builtin_templates(self) -> None:
         """Load built-in templates."""
         self.register("chat", PromptTemplate(
             template="{user_message}",
@@ -567,7 +567,7 @@ class TemplateRegistry:
             }
         ))
     
-    def register(self, name: str, template: PromptTemplate):
+    def register(self, name: str, template: PromptTemplate) -> None:
         """Register a template."""
         template.name = name
         self._templates[name] = template
@@ -581,7 +581,7 @@ class TemplateRegistry:
         """List all registered templates."""
         return list(self._templates.keys())
     
-    def register_chain(self, name: str, chain: PromptChain):
+    def register_chain(self, name: str, chain: PromptChain) -> None:
         """Register a prompt chain."""
         chain.name = name
         self._chains[name] = chain
@@ -590,7 +590,7 @@ class TemplateRegistry:
         """Get a chain by name."""
         return self._chains.get(name)
     
-    def save_template(self, name: str):
+    def save_template(self, name: str) -> None:
         """Save a template to disk."""
         template = self._templates.get(name)
         if not template:
@@ -611,7 +611,7 @@ class TemplateRegistry:
         self.register(template.name, template)
         return template
     
-    def load_all(self):
+    def load_all(self) -> None:
         """Load all templates from disk."""
         if not self.templates_dir.exists():
             return

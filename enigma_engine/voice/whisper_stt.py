@@ -63,4 +63,4 @@ class WhisperSTT:
             try:
                 os.unlink(temp_path)
             except OSError:
-                pass
+                pass  # Intentionally silent

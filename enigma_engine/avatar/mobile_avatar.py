@@ -524,7 +524,7 @@ class MobileAvatarServer:
             emit('avatar_state', state, broadcast=True, namespace='/avatar')
             return
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         # Fallback: HTTP Server-Sent Events (SSE) style
         # Store state for polling clients

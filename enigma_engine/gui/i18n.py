@@ -185,7 +185,7 @@ class I18n:
                 if lang in LOCALE_INFO:
                     self._current_locale = lang
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     @property
     def locale(self) -> str:
@@ -271,7 +271,7 @@ class I18n:
             try:
                 text = text.format(**kwargs)
             except KeyError:
-                pass
+                pass  # Intentionally silent
         
         return text
     

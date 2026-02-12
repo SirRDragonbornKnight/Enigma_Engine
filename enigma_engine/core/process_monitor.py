@@ -238,7 +238,7 @@ class ProcessMonitor:
                                     gpu_usage[process_name] = memory
                 
                 except (subprocess.CalledProcessError, FileNotFoundError):
-                    pass
+                    pass  # Intentionally silent
             
             elif self._system == "Linux":
                 # Use nvidia-smi on Linux
@@ -260,7 +260,7 @@ class ProcessMonitor:
                                     gpu_usage[process_name] = memory
                 
                 except (subprocess.CalledProcessError, FileNotFoundError):
-                    pass
+                    pass  # Intentionally silent
         
         except Exception as e:
             logger.debug(f"Error getting GPU usage: {e}")
@@ -345,7 +345,7 @@ class ProcessMonitor:
                     return parts[0].strip('"')
         
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         return None
     
@@ -364,7 +364,7 @@ class ProcessMonitor:
             return output.strip()
         
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         return None
     

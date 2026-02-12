@@ -82,7 +82,7 @@ class DistillationConfig:
 class DistillationLoss(nn.Module):
     """Loss functions for knowledge distillation."""
     
-    def __init__(self, config: DistillationConfig):
+    def __init__(self, config: DistillationConfig) -> None:
         super().__init__()
         self.config = config
         self.temperature = config.temperature
@@ -294,7 +294,7 @@ class DistillationLoss(nn.Module):
 class FeatureExtractor:
     """Extract intermediate features from models."""
     
-    def __init__(self, model: nn.Module, layer_names: list[str]):
+    def __init__(self, model: nn.Module, layer_names: list[str]) -> None:
         self.model = model
         self.layer_names = layer_names
         self.features: dict[str, "torch.Tensor"] = {}
@@ -303,7 +303,7 @@ class FeatureExtractor:
         
         self._register_hooks()
     
-    def _register_hooks(self):
+    def _register_hooks(self) -> None:
         """Register forward hooks to capture features."""
         for name, module in self.model.named_modules():
             if name in self.layer_names:
@@ -312,7 +312,7 @@ class FeatureExtractor:
                 )
                 self._hooks.append(hook)
     
-    def _save_feature(self, name: str, output):
+    def _save_feature(self, name: str, output) -> None:
         """Save feature from hook."""
         if isinstance(output, tuple):
             self.features[name] = output[0].detach()
@@ -329,12 +329,12 @@ class FeatureExtractor:
         """Get extracted attention maps."""
         return self.attentions
     
-    def clear(self):
+    def clear(self) -> None:
         """Clear stored features."""
         self.features.clear()
         self.attentions.clear()
     
-    def remove_hooks(self):
+    def remove_hooks(self) -> None:
         """Remove registered hooks."""
         for hook in self._hooks:
             hook.remove()
@@ -349,7 +349,7 @@ class DistillationTrainer:
         teacher: nn.Module,
         student: nn.Module,
         config: DistillationConfig = None
-    ):
+    ) -> None:
         self.teacher = teacher
         self.student = student
         self.config = config or DistillationConfig()
@@ -541,7 +541,7 @@ class DistillationTrainer:
         
         return total_loss / count if count > 0 else 0.0
     
-    def save_student(self, path: str):
+    def save_student(self, path: str) -> None:
         """Save distilled student model."""
         torch.save({
             "model_state_dict": self.student.state_dict(),
@@ -557,7 +557,7 @@ class Distiller:
     High-level API for knowledge distillation.
     """
     
-    def __init__(self, config: DistillationConfig = None):
+    def __init__(self, config: DistillationConfig = None) -> None:
         self.config = config or DistillationConfig()
     
     def distill(

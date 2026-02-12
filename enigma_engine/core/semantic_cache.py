@@ -41,7 +41,7 @@ class CachedItem:
     latency_ms: float = 0.0
     metadata: dict[str, Any] = field(default_factory=dict)
     
-    def touch(self):
+    def touch(self) -> None:
         """Mark as recently accessed."""
         self.accessed_at = time.time()
         self.access_count += 1
@@ -78,7 +78,7 @@ class CacheConfig:
 class EmbeddingProvider:
     """Base class for embedding providers."""
     
-    def __init__(self, dim: int = 384):
+    def __init__(self, dim: int = 384) -> None:
         self.dim = dim
     
     def embed(self, text: str) -> np.ndarray:
@@ -111,7 +111,7 @@ class HashEmbedding(EmbeddingProvider):
 class SentenceTransformerEmbedding(EmbeddingProvider):
     """Sentence-transformers based embeddings."""
     
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2", dim: int = 384):
+    def __init__(self, model_name: str = "all-MiniLM-L6-v2", dim: int = 384) -> None:
         super().__init__(dim)
         self.model_name = model_name
         self._model = None
@@ -147,7 +147,7 @@ class SentenceTransformerEmbedding(EmbeddingProvider):
 class SemanticIndex:
     """Index for efficient similarity search."""
     
-    def __init__(self, config: CacheConfig):
+    def __init__(self, config: CacheConfig) -> None:
         self.config = config
         self._embeddings: list[np.ndarray] = []
         self._keys: list[str] = []
@@ -156,7 +156,7 @@ class SemanticIndex:
         
         self._init_faiss()
     
-    def _init_faiss(self):
+    def _init_faiss(self) -> None:
         """Initialize FAISS index if available."""
         if not self.config.use_faiss:
             return
@@ -185,7 +185,7 @@ class SemanticIndex:
             logger.warning("FAISS not available, using brute-force search")
             self._faiss_index = None
     
-    def add(self, key: str, embedding: np.ndarray):
+    def add(self, key: str, embedding: np.ndarray) -> None:
         """Add embedding to index."""
         with self._lock:
             if self.config.normalize_embeddings:
@@ -251,7 +251,7 @@ class SemanticIndex:
                 top_k = np.argsort(similarities)[-k:][::-1]
                 return [(self._keys[i], float(similarities[i])) for i in top_k]
     
-    def remove(self, key: str):
+    def remove(self, key: str) -> None:
         """Remove embedding from index."""
         with self._lock:
             if key in self._keys:
@@ -263,7 +263,7 @@ class SemanticIndex:
                 if self._faiss_index is not None and self._embeddings:
                     self._rebuild_faiss()
     
-    def _rebuild_faiss(self):
+    def _rebuild_faiss(self) -> None:
         """Rebuild FAISS index from scratch."""
         if not self._embeddings or self._faiss_index is None:
             return
@@ -295,7 +295,7 @@ class SemanticCache:
         self,
         config: CacheConfig = None,
         embedding_provider: EmbeddingProvider = None
-    ):
+    ) -> None:
         self.config = config or CacheConfig()
         
         # Embedding provider
@@ -368,7 +368,7 @@ class SemanticCache:
         query: str,
         response: Any,
         metadata: dict[str, Any] = None
-    ):
+    ) -> None:
         """
         Cache a query-response pair.
         
@@ -396,7 +396,7 @@ class SemanticCache:
             self._cache[key] = item
             self._index.add(key, embedding)
     
-    def invalidate(self, query: str):
+    def invalidate(self, query: str) -> None:
         """Invalidate a cached query."""
         key = self._make_key(query)
         
@@ -405,7 +405,7 @@ class SemanticCache:
                 del self._cache[key]
                 self._index.remove(key)
     
-    def clear(self):
+    def clear(self) -> None:
         """Clear the entire cache."""
         with self._lock:
             self._cache.clear()
@@ -421,13 +421,13 @@ class SemanticCache:
             return False
         return time.time() - item.created_at > self.config.ttl_seconds
     
-    def _ensure_capacity(self):
+    def _ensure_capacity(self) -> None:
         """Ensure cache has capacity for new items."""
         with self._lock:
             while len(self._cache) >= self.config.max_items:
                 self._evict_one()
     
-    def _evict_one(self):
+    def _evict_one(self) -> None:
         """Evict one item (LRU)."""
         if not self._cache:
             return
@@ -455,7 +455,7 @@ class SemanticCache:
             if self._stats["hits"] > 0 else 0.0
         }
     
-    def start_cleanup(self):
+    def start_cleanup(self) -> None:
         """Start background cleanup thread."""
         if self._running:
             return
@@ -467,19 +467,19 @@ class SemanticCache:
         )
         self._cleanup_thread.start()
     
-    def stop_cleanup(self):
+    def stop_cleanup(self) -> None:
         """Stop background cleanup."""
         self._running = False
         if self._cleanup_thread:
             self._cleanup_thread.join(timeout=2.0)
     
-    def _cleanup_loop(self):
+    def _cleanup_loop(self) -> None:
         """Background cleanup loop."""
         while self._running:
             time.sleep(self.config.eviction_check_interval)
             self._cleanup_expired()
     
-    def _cleanup_expired(self):
+    def _cleanup_expired(self) -> None:
         """Remove expired items."""
         with self._lock:
             expired = [
@@ -490,7 +490,7 @@ class SemanticCache:
                 del self._cache[key]
                 self._index.remove(key)
     
-    def save(self, path: Path = None):
+    def save(self, path: Path = None) -> None:
         """Save cache to disk."""
         path = path or self.config.persist_path
         if not path:
@@ -516,7 +516,7 @@ class SemanticCache:
         with open(path, 'w') as f:
             json.dump(data, f)
     
-    def load(self, path: Path = None):
+    def load(self, path: Path = None) -> None:
         """Load cache from disk."""
         path = path or self.config.persist_path
         if not path or not path.exists():
@@ -548,7 +548,7 @@ class CachedLLM:
         self,
         llm: Callable[[str], str],
         cache: SemanticCache = None
-    ):
+    ) -> None:
         self.llm = llm
         self.cache = cache or SemanticCache()
     

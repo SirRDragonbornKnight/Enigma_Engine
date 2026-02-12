@@ -175,7 +175,7 @@ class ForgeNode:
                 profiler = get_device_profiler()
                 device = profiler.get_torch_device()
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             if device is None:
                 import torch
@@ -239,7 +239,7 @@ class ForgeNode:
                     "vram_mb": caps.vram_total_mb,
                 }
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             return jsonify({
                 "name": self.name,

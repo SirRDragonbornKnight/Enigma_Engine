@@ -768,7 +768,7 @@ class VoiceCloneTab(QWidget):
                     item.setData(Qt.UserRole, file.stem)
                     self.profiles_list.addItem(item)
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
     
     def _on_profile_selected(self, item):
         """Handle profile selection."""

@@ -121,7 +121,7 @@ def get_hardware_info() -> dict[str, Any]:
         info['ram_gb'] = psutil.virtual_memory().total / (1024**3)
         info['cpu_count'] = psutil.cpu_count()
     except ImportError:
-        pass
+        pass  # Intentionally silent
     
     if torch.cuda.is_available():
         info['device'] = 'cuda'

@@ -428,7 +428,7 @@ class SSMLParser:
                 else:
                     return pct / 100
             except ValueError:
-                pass
+                pass  # Intentionally silent
         
         # Semitones for pitch (e.g., "+2st", "-3st")
         if value.endswith("st"):
@@ -436,7 +436,7 @@ class SSMLParser:
                 st = float(value[:-2])
                 return 2 ** (st / 12)  # Semitone to frequency ratio
             except ValueError:
-                pass
+                pass  # Intentionally silent
         
         # Hertz for pitch
         if value.endswith("hz"):

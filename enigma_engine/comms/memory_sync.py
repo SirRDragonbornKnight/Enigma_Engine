@@ -13,12 +13,15 @@ SYNC STRATEGIES:
 """
 
 import json
+import logging
 import time
 import urllib.request
 from datetime import datetime
 from pathlib import Path
 
 from ..config import CONFIG
+
+logger = logging.getLogger(__name__)
 
 
 class MemorySync:
@@ -62,7 +65,7 @@ class MemorySync:
                     data["_file"] = file.name
                     memories.append(data)
             except (json.JSONDecodeError, OSError):
-                pass
+                pass  # Intentionally silent
         return memories
     
     def get_memories_since(self, timestamp: str) -> list[dict]:
@@ -83,7 +86,7 @@ class MemorySync:
                         data["_file"] = file.name
                         memories.append(data)
                 except (json.JSONDecodeError, OSError):
-                    pass
+                    pass  # Intentionally silent
         
         return memories
     
@@ -154,7 +157,7 @@ class MemorySync:
             }
             self._save_sync_state()
         
-        print(f"Imported {imported} memories from {source}")
+        logger.info("Imported %d memories from %s", imported, source)
         return imported
     
     def sync_with_peer(self, peer_url: str, peer_name: str = None) -> dict:
@@ -191,7 +194,7 @@ class MemorySync:
                 result = json.loads(response.read().decode())
                 stats["sent"] = export_data["count"]
         except Exception as e:
-            print(f"Failed to send memories: {e}")
+            logger.error("Failed to send memories: %s", e)
         
         # Request peer's memories
         try:
@@ -213,7 +216,7 @@ class MemorySync:
                 received = self.import_from_sync(peer_data, peer_name)
                 stats["received"] = received
         except Exception as e:
-            print(f"Failed to receive memories: {e}")
+            logger.error("Failed to receive memories: %s", e)
         
         return stats
 
@@ -255,7 +258,7 @@ def add_sync_routes(app, memory_sync: MemorySync):
             "sync_state": memory_sync.sync_state,
         })
     
-    print("Added sync routes: /sync/receive, /sync/export, /sync/status")
+    logger.info("Added sync routes: /sync/receive, /sync/export, /sync/status")
 
 
 # File-based sync for disconnected devices
@@ -287,7 +290,7 @@ class OfflineSync:
         with open(output_path, "w") as f:
             json.dump(export_data, f, indent=2)
         
-        print(f"Exported {export_data['count']} memories to {output_path}")
+        logger.info("Exported %d memories to %s", export_data['count'], output_path)
         return str(output_path)
     
     @staticmethod

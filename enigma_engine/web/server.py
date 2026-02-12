@@ -398,7 +398,7 @@ Connect to `/ws` for real-time chat. Send JSON messages with `type` field.
                             'message_count': len(data.get('messages', []))
                         })
                     except Exception:
-                        pass
+                        pass  # Intentionally silent
                 
                 return {"conversations": conversations}
             except Exception as e:

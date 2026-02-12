@@ -115,7 +115,7 @@ try:
     trimesh = _trimesh
     np = _np
 except ImportError:
-    pass
+    pass  # Intentionally silent
 
 # OpenGL imports with explicit names to avoid wildcard import issues
 try:
@@ -139,7 +139,7 @@ AVATAR_IMAGES_DIR = AVATAR_CONFIG_DIR / "images"
 AVATAR_ACTIVITY_LOG = AVATAR_CONFIG_DIR / "activity_log.txt"
 
 
-def _log_avatar_activity(action: str, value: str = ""):
+def _log_avatar_activity(action: str, value: str = "") -> None:
     """Log an avatar command to the activity log file."""
     from datetime import datetime
     try:
@@ -157,7 +157,7 @@ def _log_avatar_activity(action: str, value: str = ""):
         lines.append(log_line.strip())
         AVATAR_ACTIVITY_LOG.write_text("\n".join(lines))
     except Exception:
-        pass
+        pass  # Intentionally silent
 
 
 class AvatarOverlayWindow(QWidget):
@@ -182,7 +182,7 @@ class AvatarOverlayWindow(QWidget):
     # Touch detection constants
     HOLD_THRESHOLD_MS = 500  # Milliseconds to hold for 'hold' touch type
     
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(None)
         
         # Transparent, always-on-top, no taskbar, but accept mouse input
@@ -293,9 +293,9 @@ class AvatarOverlayWindow(QWidget):
                 current_style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
                 user32.SetWindowLongW(hwnd, GWL_EXSTYLE, current_style | WS_EX_LAYERED)
             except Exception:
-                pass
+                pass  # Intentionally silent
     
-    def set_eye_tracking(self, enabled: bool):
+    def set_eye_tracking(self, enabled: bool) -> None:
         """Enable or disable eye tracking (follow cursor)."""
         self._eye_tracking_enabled = enabled
         
@@ -313,19 +313,19 @@ class AvatarOverlayWindow(QWidget):
             self._eye_offset_y = 0.0
             self.update()
     
-    def _on_hold_detected(self):
+    def _on_hold_detected(self) -> None:
         """Called when user holds on avatar long enough."""
         if self._touch_press_pos and not self._touch_moved:
             self.touched.emit('hold', self._touch_press_pos)
     
-    def _on_pet_timeout(self):
+    def _on_pet_timeout(self) -> None:
         """Called after delay to reset tap count."""
         if self._tap_count >= 3:
             # Already emitted 'pet' on third tap
             pass
         self._tap_count = 0
     
-    def _on_touched(self, touch_type: str, global_pos):
+    def _on_touched(self, touch_type: str, global_pos) -> None:
         """Handle touch event - write to file for AI to read."""
         try:
             from ....avatar.persistence import write_touch_event_for_ai
@@ -357,7 +357,7 @@ class AvatarOverlayWindow(QWidget):
         self._pet_timer.stop()
         self._pet_timer.start(600)  # Reset tap count after 600ms of no taps
 
-    def _update_eye_tracking(self):
+    def _update_eye_tracking(self) -> None:
         """Update eye position based on cursor location."""
         if not self._eye_tracking_enabled:
             return
@@ -380,7 +380,7 @@ class AvatarOverlayWindow(QWidget):
         # Trigger repaint to show the shift
         self.update()
     
-    def set_avatar_path(self, path: str):
+    def set_avatar_path(self, path: str) -> None:
         """Set the current avatar path and load per-avatar settings."""
         # Stop watching old file
         if self._avatar_path and hasattr(self, '_file_watcher'):
@@ -407,9 +407,9 @@ class AvatarOverlayWindow(QWidget):
             self.move(x, y)
             self._update_scaled_pixmap()
         except Exception:
-            pass
+            pass  # Intentionally silent
     
-    def set_hotswap_enabled(self, enabled: bool):
+    def set_hotswap_enabled(self, enabled: bool) -> None:
         """Enable or disable avatar hot-swap (auto-reload on file change)."""
         self._hotswap_enabled = enabled
         if not enabled:
@@ -424,7 +424,7 @@ class AvatarOverlayWindow(QWidget):
             if Path(self._avatar_path).exists():
                 self._file_watcher.addPath(self._avatar_path)
     
-    def _on_avatar_file_changed(self, path: str):
+    def _on_avatar_file_changed(self, path: str) -> None:
         """Handle avatar file change - debounce and reload."""
         if not self._hotswap_enabled:
             return
@@ -434,7 +434,7 @@ class AvatarOverlayWindow(QWidget):
         self._hotswap_debounce_timer.stop()
         self._hotswap_debounce_timer.start(300)  # Wait 300ms for file to settle
     
-    def _do_hotswap_reload(self):
+    def _do_hotswap_reload(self) -> None:
         """Actually reload the avatar after debounce."""
         path = self._pending_hotswap_path
         if not path:
@@ -469,7 +469,7 @@ class AvatarOverlayWindow(QWidget):
         except Exception as e:
             print(f"[Avatar] Hot-swap failed: {e}")
     
-    def _start_crossfade(self, new_pixmap: QPixmap):
+    def _start_crossfade(self, new_pixmap: QPixmap) -> None:
         """Start crossfade animation from current to new avatar."""
         # Store old pixmap for blending
         if self.pixmap and not self.pixmap.isNull():
@@ -486,7 +486,7 @@ class AvatarOverlayWindow(QWidget):
         self._crossfade_progress = 0.0
         self._crossfade_timer.start(16)  # ~60 FPS
     
-    def _update_crossfade(self):
+    def _update_crossfade(self) -> None:
         """Update crossfade animation progress."""
         if not self._crossfade_active:
             self._crossfade_timer.stop()
@@ -504,7 +504,7 @@ class AvatarOverlayWindow(QWidget):
         
         self.update()  # Trigger repaint
         
-    def set_avatar(self, pixmap: QPixmap):
+    def set_avatar(self, pixmap: QPixmap) -> None:
         """Set avatar image and resize window to wrap tightly around it."""
         self._original_pixmap = pixmap
         self._update_scaled_pixmap()
@@ -533,7 +533,7 @@ class AvatarOverlayWindow(QWidget):
             return '-'.join(edges)
         return None
         
-    def _update_scaled_pixmap(self):
+    def _update_scaled_pixmap(self) -> None:
         """Scale avatar to fit within _size, then resize window to TIGHTLY wrap the result.
         This ALWAYS wraps tightly, regardless of resize mode."""
         if not self._original_pixmap or self._original_pixmap.isNull():
@@ -582,7 +582,7 @@ class AvatarOverlayWindow(QWidget):
         self.update()
         self.repaint()
         
-    def paintEvent(self, a0):
+    def paintEvent(self, a0) -> None:
         """Draw avatar with border that always wraps tightly around the image."""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
@@ -777,7 +777,7 @@ class AvatarOverlayWindow(QWidget):
                 persistence.save(settings)
                 write_avatar_state_for_ai()  # Update AI awareness
             except Exception:
-                pass
+                pass  # Intentionally silent
         # Save size if we were resizing (per-avatar)
         if self._resize_edge is not None:
             try:
@@ -793,14 +793,14 @@ class AvatarOverlayWindow(QWidget):
                 persistence.save(settings)
                 write_avatar_state_for_ai()
             except Exception:
-                pass
+                pass  # Intentionally silent
         # Save rotation if we were rotating
         if self._rotate_start_x is not None:
             try:
                 from ....avatar.persistence import save_avatar_settings
                 save_avatar_settings(overlay_rotation=self._rotation_angle)
             except Exception:
-                pass
+                pass  # Intentionally silent
         self._drag_pos = None
         self._resize_edge = None
         self._rotate_start_x = None
@@ -819,7 +819,7 @@ class AvatarOverlayWindow(QWidget):
                 if x is not None and y is not None:
                     self.move(x, y)
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         # Register with fullscreen controller for visibility management
         try:
@@ -827,9 +827,9 @@ class AvatarOverlayWindow(QWidget):
             controller = get_fullscreen_controller()
             controller.register_element('avatar_overlay', self, category='avatar')
         except Exception:
-            pass
+            pass  # Intentionally silent
     
-    def _auto_save_size(self):
+    def _auto_save_size(self) -> None:
         """Auto-save size if it changed (called by timer)."""
         if not hasattr(self, '_last_saved_size'):
             self._last_saved_size = self._size
@@ -850,9 +850,9 @@ class AvatarOverlayWindow(QWidget):
                 self._last_saved_size = self._size
                 write_avatar_state_for_ai()
             except Exception:
-                pass
+                pass  # Intentionally silent
     
-    def hideEvent(self, a0):
+    def hideEvent(self, a0) -> None:
         """Save position and size when hidden."""
         super().hideEvent(a0)
         try:
@@ -867,7 +867,7 @@ class AvatarOverlayWindow(QWidget):
             self._last_saved_size = self._size  # Update last saved
             write_avatar_state_for_ai()
         except Exception:
-            pass
+            pass  # Intentionally silent
         
     def keyPressEvent(self, a0):  # type: ignore
         """ESC to close."""
@@ -903,7 +903,7 @@ class AvatarOverlayWindow(QWidget):
                 save_avatar_settings(overlay_size=self._size)
                 write_avatar_state_for_ai()
             except Exception:
-                pass
+                pass  # Intentionally silent
             
             a0.accept()
         else:
@@ -981,9 +981,9 @@ class AvatarOverlayWindow(QWidget):
             # Add as a system message so AI knows user requested this
             conv.add_message("system", f"[User requested gesture: {gesture}]")
         except Exception:
-            pass
+            pass  # Intentionally silent
     
-    def _toggle_resize(self):
+    def _toggle_resize(self) -> None:
         """Toggle resize/rotate mode and update border visibility."""
         self._resize_enabled = not getattr(self, '_resize_enabled', False)
         self.update()  # Repaint to show/hide border
@@ -996,7 +996,7 @@ class AvatarOverlayWindow(QWidget):
             save_avatar_settings(resize_enabled=self._resize_enabled)
             write_avatar_state_for_ai()
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def _center_on_screen(self):
         """Center the avatar on the current screen."""
@@ -1008,7 +1008,7 @@ class AvatarOverlayWindow(QWidget):
                 screen_geo.center().y() - self._size // 2
             )
     
-    def _close_avatar(self):
+    def _close_avatar(self) -> None:
         """Close the avatar."""
         self.hide()
         self.closed.emit()
@@ -1038,7 +1038,7 @@ class AvatarOverlayWindow(QWidget):
                 persistence.save(settings)
                 write_avatar_state_for_ai()
             except Exception:
-                pass
+                pass  # Intentionally silent
     
     def mouseDoubleClickEvent(self, a0):  # type: ignore
         """Double-click does nothing - use right-click menu for Center on Screen."""
@@ -1096,7 +1096,7 @@ class AvatarOverlayWindow(QWidget):
                 return True, HTCLIENT
                 
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         return super().nativeEvent(eventType, message)
     
@@ -1192,7 +1192,7 @@ class DragBarWidget(QWidget):
     position_changed = pyqtSignal(int, int)  # Emits x, y when bar is repositioned within parent
     context_menu_requested = pyqtSignal(object)  # Emits global position for context menu
     
-    def __init__(self, parent=None):
+    def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self._drag_pos = None
         self._resize_edge = None
@@ -1206,7 +1206,7 @@ class DragBarWidget(QWidget):
         self.setMinimumSize(20, 10)  # Allow smaller sizes
         self.setContextMenuPolicy(Qt.CustomContextMenu if hasattr(Qt, 'CustomContextMenu') else 3)
         
-    def set_ghost_mode(self, ghost: bool):
+    def set_ghost_mode(self, ghost: bool) -> None:
         """Set ghost mode - when True, bar is nearly invisible but still functional."""
         self._ghost_mode = ghost
         self.update()
@@ -1214,7 +1214,7 @@ class DragBarWidget(QWidget):
     def is_ghost_mode(self) -> bool:
         return self._ghost_mode
     
-    def set_reposition_mode(self, reposition: bool):
+    def set_reposition_mode(self, reposition: bool) -> None:
         """Set reposition mode - when True, dragging moves bar instead of avatar."""
         self._reposition_mode = reposition
         self.update()
@@ -1364,7 +1364,7 @@ class FloatingDragBar(QWidget):
     position_changed = pyqtSignal(int, int)
     context_menu_requested = pyqtSignal(object)
     
-    def __init__(self, avatar_window):
+    def __init__(self, avatar_window) -> None:
         # Separate top-level window, not a child
         super().__init__(None)
         self._avatar = avatar_window
@@ -1399,14 +1399,14 @@ class FloatingDragBar(QWidget):
         # Use arrow cursor, not hand - subtle change
         self.setCursor(QCursor(Qt_ArrowCursor))
     
-    def set_relative_position(self, x: int, y: int):
+    def set_relative_position(self, x: int, y: int) -> None:
         """Set position relative to avatar window."""
         self._rel_x = x
         self._rel_y = y
         if not self._anchored_mode:
             self._update_position()
     
-    def _update_position(self):
+    def _update_position(self) -> None:
         """Update screen position based on avatar window position."""
         if self._avatar:
             avatar_pos = self._avatar.pos()
@@ -1685,7 +1685,7 @@ class AvatarHitLayer(QWidget):
             from ....avatar.persistence import save_avatar_settings
             save_avatar_settings(hit_auto_track=enabled)
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def _update_auto_track(self):
         """Update hit area to match model's rendered bounds."""
@@ -1752,7 +1752,7 @@ class AvatarHitLayer(QWidget):
             from ....avatar.persistence import save_avatar_settings
             save_avatar_settings(hit_border_visible=visible)
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def set_resize_locked(self, locked: bool):
         """Lock or unlock resize."""
@@ -1762,9 +1762,9 @@ class AvatarHitLayer(QWidget):
             from ....avatar.persistence import save_avatar_settings
             save_avatar_settings(hit_resize_locked=locked)
         except Exception:
-            pass
+            pass  # Intentionally silent
     
-    def _load_settings(self):
+    def _load_settings(self) -> None:
         """Load saved settings."""
         try:
             from ....avatar.persistence import load_avatar_settings
@@ -1780,9 +1780,9 @@ class AvatarHitLayer(QWidget):
             if auto_track:
                 self.set_auto_track(True)
         except Exception:
-            pass
+            pass  # Intentionally silent
     
-    def _save_settings(self):
+    def _save_settings(self) -> None:
         """Save settings to persistence."""
         try:
             from ....avatar.persistence import save_avatar_settings
@@ -1793,9 +1793,9 @@ class AvatarHitLayer(QWidget):
                 hit_ratio_bottom=self._ratio_bottom
             )
         except Exception:
-            pass
+            pass  # Intentionally silent
     
-    def set_hit_ratio(self, ratio: float):
+    def set_hit_ratio(self, ratio: float) -> None:
         """Set the hit area ratio (0.0-1.0) - applies uniformly to all sides."""
         # Convert overall ratio to edge ratios
         # ratio=1.0 means full coverage (edge ratios = 0)
@@ -2603,7 +2603,7 @@ class BoneHitManager(QObject):
             self._show_border = getattr(settings, 'hit_border_visible', True)
             self._resize_locked = getattr(settings, 'hit_resize_locked', False)
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def set_border_visible(self, visible: bool):
         """Show or hide borders on all bone regions."""
@@ -2614,7 +2614,7 @@ class BoneHitManager(QObject):
             from ....avatar.persistence import save_avatar_settings
             save_avatar_settings(hit_border_visible=visible)
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def set_resize_locked(self, locked: bool):
         """Lock or unlock resize on all bone regions."""
@@ -2625,7 +2625,7 @@ class BoneHitManager(QObject):
             from ....avatar.persistence import save_avatar_settings
             save_avatar_settings(hit_resize_locked=locked)
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def setup_bones(self, bone_names: list):
         """Create hit regions for the given bone names."""
@@ -2779,7 +2779,7 @@ class BoneHitManager(QObject):
             from ....avatar.persistence import save_avatar_settings
             save_avatar_settings(bone_hit_configs=configs)
         except Exception:
-            pass
+            pass  # Intentionally silent
 
 
 class Avatar3DOverlayWindow(QWidget):
@@ -3064,7 +3064,7 @@ class Avatar3DOverlayWindow(QWidget):
                 user32.SetWindowLongW(hwnd, GWL_EXSTYLE, current_style | WS_EX_TRANSPARENT)
                 
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def _update_hit_test_image(self):
         """Capture the current GL frame for pixel-based hit testing."""
@@ -3073,7 +3073,7 @@ class Avatar3DOverlayWindow(QWidget):
         try:
             self._hit_test_image = self._gl_widget.grabFramebuffer()
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def _is_pixel_opaque(self, x: int, y: int, threshold: int = 30) -> bool:
         """Check if the pixel at (x, y) is opaque (part of the avatar).
@@ -3180,7 +3180,7 @@ class Avatar3DOverlayWindow(QWidget):
                 new_pos.setX(new_x)
                 new_pos.setY(new_y)
             except Exception:
-                pass
+                pass  # Intentionally silent
             self.move(new_pos)
     
     def _on_drag_bar_end(self):
@@ -3193,7 +3193,7 @@ class Avatar3DOverlayWindow(QWidget):
             save_position(pos.x(), pos.y())
             write_avatar_state_for_ai()
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def _on_drag_bar_repositioned(self, new_x: int, new_y: int):
         """Called when drag bar is repositioned within the window (Shift+drag)."""
@@ -3210,7 +3210,7 @@ class Avatar3DOverlayWindow(QWidget):
             save_avatar_settings(control_bar_x=new_x, control_bar_y=new_y)
             write_avatar_state_for_ai()
         except Exception:
-            pass
+            pass  # Intentionally silent
 
     def _on_animator_transform(self, pos_offset, rot_offset, scale):
         """Callback from AdaptiveAnimator for transform updates."""
@@ -3420,7 +3420,7 @@ class Avatar3DOverlayWindow(QWidget):
             if x is not None and y is not None:
                 self.move(x, y)
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def paintEvent(self, event):
         """Draw visual indicators."""
@@ -3459,7 +3459,7 @@ class Avatar3DOverlayWindow(QWidget):
                 new_pos.setX(new_x)
                 new_pos.setY(new_y)
             except Exception:
-                pass
+                pass  # Intentionally silent
             self.move(new_pos)
             event.accept()
         else:
@@ -3482,7 +3482,7 @@ class Avatar3DOverlayWindow(QWidget):
                 save_position(pos.x(), pos.y())
                 write_avatar_state_for_ai()
             except Exception:
-                pass
+                pass  # Intentionally silent
             event.accept()
         else:
             event.ignore()
@@ -3585,7 +3585,7 @@ class Avatar3DOverlayWindow(QWidget):
             # Add as a system message so AI knows user requested this
             conv.add_message("system", f"[User requested gesture: {gesture}]")
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def _toggle_hit_border(self):
         """Toggle drag area border visibility."""
@@ -3670,7 +3670,7 @@ class Avatar3DOverlayWindow(QWidget):
             save_avatar_settings(show_control_bar_3d=self._show_control_bar)
             write_avatar_state_for_ai()
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def _toggle_ghost_mode(self):
         """No-op - hit layer is always invisible."""
@@ -3708,7 +3708,7 @@ class Avatar3DOverlayWindow(QWidget):
             save_avatar_settings(click_through_mode_3d=self._click_through_mode)
             write_avatar_state_for_ai()
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def _set_always_interactive(self):
         """Set always interactive mode - drag anywhere on avatar."""
@@ -3722,7 +3722,7 @@ class Avatar3DOverlayWindow(QWidget):
             save_avatar_settings(click_through_mode_3d=self._click_through_mode)
             write_avatar_state_for_ai()
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def _center_on_screen(self):
         """Center the avatar on the current screen."""
@@ -3760,7 +3760,7 @@ class Avatar3DOverlayWindow(QWidget):
                 save_avatar_settings(overlay_3d_size=self._size)
                 write_avatar_state_for_ai()
             except Exception:
-                pass
+                pass  # Intentionally silent
     
     def _set_size(self, size: int, keep_center: bool = True, smooth: bool = False):
         """Set avatar size programmatically (used by AI commands and scroll wheel).
@@ -3825,7 +3825,7 @@ class Avatar3DOverlayWindow(QWidget):
             save_avatar_settings(overlay_3d_size=self._size)
             write_avatar_state_for_ai()
         except Exception:
-            pass
+            pass  # Intentionally silent
 
     def _check_ai_commands(self):
         """Check for AI commands and execute them."""
@@ -3862,13 +3862,13 @@ class Avatar3DOverlayWindow(QWidget):
                         x, y = int(parts[0].strip()), int(parts[1].strip())
                         self.move(x, y)
                 except ValueError:
-                    pass
+                    pass  # Intentionally silent
             elif action == "resize":
                 try:
                     size = int(value)
                     self._set_size(size)
                 except ValueError:
-                    pass
+                    pass  # Intentionally silent
             elif action == "orientation":
                 value_lower = value.lower()
                 if value_lower == "front":
@@ -3886,7 +3886,7 @@ class Avatar3DOverlayWindow(QWidget):
                             rx, ry = float(parts[0].strip()), float(parts[1].strip())
                             self._set_view_angle(rx, ry)
                     except ValueError:
-                        pass
+                        pass  # Intentionally silent
             
             # === NEW: AdaptiveAnimator commands ===
             elif action == "speak":
@@ -3939,7 +3939,7 @@ class Avatar3DOverlayWindow(QWidget):
                             z = float(parts[2].strip()) if len(parts) > 2 else 0.0
                             self._animator.look_at(x, y, z)
                     except ValueError:
-                        pass
+                        pass  # Intentionally silent
             
             elif action == "get_capabilities":
                 # Write avatar capabilities for AI to read
@@ -3967,14 +3967,14 @@ class Avatar3DOverlayWindow(QWidget):
                         speed = speed / 100.0
                     self._idle_speed = max(0.01, min(0.2, speed * 0.2))
                 except ValueError:
-                    pass
+                    pass  # Intentionally silent
             elif action == "get_model_info":
                 info_path = Path(__file__).parent.parent.parent.parent.parent / "data" / "avatar" / "model_info.json"
                 info_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(info_path, 'w') as f:
                     json.dump(self._model_info, f, indent=2)
         except (json.JSONDecodeError, OSError, ValueError):
-            pass
+            pass  # Intentionally silent
     
     def _do_speaking_pulse(self):
         """Fallback speaking indicator - disabled for humanoid models."""
@@ -4990,7 +4990,7 @@ def create_avatar_subtab(parent):
             # Update expression on overlay if it's showing (from_callback=True prevents loop)
             _set_expression(parent, new_expr, from_callback=True)
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     avatar.on("expression", _on_expression_change)
     parent._expression_callback = _on_expression_change  # Keep reference
@@ -5205,7 +5205,7 @@ def _save_auto_settings(parent):
                 with open(settings_path) as f:
                     settings = json.load(f)
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         # Update auto settings
         settings["avatar_auto_load"] = getattr(parent, '_avatar_auto_load', False)
@@ -5341,7 +5341,7 @@ def _reset_avatar_position(parent):
                 parent.avatar_status.setText(f"Position reset to center - run avatar to see it")
                 parent.avatar_status.setStyleSheet("color: #89b4fa;")
             except Exception:
-                pass
+                pass  # Intentionally silent
                 
     except Exception as e:
         parent.avatar_status.setText(f"Reset position error: {e}")
@@ -5425,7 +5425,7 @@ def _update_activity_log(parent):
             scrollbar = parent.avatar_activity_log.verticalScrollBar()
             scrollbar.setValue(scrollbar.maximum())
     except Exception:
-        pass
+        pass  # Intentionally silent
 
 
 def _poll_ai_customizations(parent):
@@ -5499,7 +5499,7 @@ def _apply_ai_customization(parent, setting: str, value: str):
                 b = int(v[5:7], 16) / 255.0
                 return [r, g, b]
             except (ValueError, IndexError):
-                pass
+                pass  # Intentionally silent
         return None
     
     # Apply the setting
@@ -5635,7 +5635,7 @@ def _update_sprite_colors(parent):
         )
         parent.avatar_preview_2d.set_svg_sprite(svg_data)
     except Exception:
-        pass
+        pass  # Intentionally silent
 
 
 def _is_avatar_module_enabled() -> bool:
@@ -6008,7 +6008,7 @@ def _generate_layers_from_depth(parent, qimage, width, height):
             depth_map = np.array(result['depth'])
             print("[Parallax] Using transformers depth estimation")
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         # Method 2: Try MiDaS directly
         if depth_map is None:
@@ -6025,7 +6025,7 @@ def _generate_layers_from_depth(parent, qimage, width, height):
                     depth_map = prediction.squeeze().cpu().numpy()
                 print("[Parallax] Using MiDaS depth estimation")
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         if depth_map is None:
             return None
@@ -6218,7 +6218,7 @@ def _toggle_overlay(parent):
                     if x >= 0 and y >= 0:
                         parent._overlay_3d.move(x, y)
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
                 
                 # Reapply mask after loading settings (includes drag bar region)
                 parent._overlay_3d._apply_circular_mask()
@@ -6269,7 +6269,7 @@ def _toggle_overlay(parent):
                     if x >= 0 and y >= 0:
                         parent._overlay.move(x, y)
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
             
             # ALWAYS set resize to OFF by default when showing overlay
             # This overrides any saved setting
@@ -6348,7 +6348,7 @@ def _set_wireframe(parent, enabled: bool):
         from ....avatar.persistence import save_avatar_settings
         save_avatar_settings(wireframe_mode=enabled)
     except Exception:
-        pass
+        pass  # Intentionally silent
 
 
 def _set_show_grid(parent, enabled: bool):
@@ -6361,7 +6361,7 @@ def _set_show_grid(parent, enabled: bool):
         from ....avatar.persistence import save_avatar_settings
         save_avatar_settings(show_grid=enabled)
     except Exception:
-        pass
+        pass  # Intentionally silent
 
 
 def _set_lighting(parent, intensity: float):
@@ -6375,7 +6375,7 @@ def _set_lighting(parent, intensity: float):
         from ....avatar.persistence import save_avatar_settings
         save_avatar_settings(light_intensity=intensity)
     except Exception:
-        pass
+        pass  # Intentionally silent
 
 
 def _set_ambient(parent, strength: float):
@@ -6389,7 +6389,7 @@ def _set_ambient(parent, strength: float):
         from ....avatar.persistence import save_avatar_settings
         save_avatar_settings(ambient_strength=strength)
     except Exception:
-        pass
+        pass  # Intentionally silent
 
 
 def _set_rotate_speed(parent, speed: float):
@@ -6676,7 +6676,7 @@ def _load_model_orientation(parent, model_path: str):
                 'roll': math.radians(data.get('roll', 0))
             }
     except (json.JSONDecodeError, OSError):
-        pass
+        pass  # Intentionally silent
     
     return None
 

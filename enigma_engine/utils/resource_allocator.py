@@ -173,7 +173,7 @@ class ResourceAllocator:
                 cpus = list(range(min(threads, cpu_count)))
                 psutil.Process().cpu_affinity(cpus)
         except (OSError, psutil.AccessDenied, AttributeError):
-            pass
+            pass  # Intentionally silent
     
     def get_current_mode(self) -> dict[str, Any]:
         """Get current mode settings."""

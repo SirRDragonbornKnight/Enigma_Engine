@@ -32,7 +32,7 @@ class HotkeyActions:
     Actions that can be triggered by hotkeys.
     """
     
-    def __init__(self, main_window: Optional['QMainWindow'] = None):
+    def __init__(self, main_window: Optional['QMainWindow'] = None) -> None:
         """
         Initialize hotkey actions.
         
@@ -44,7 +44,7 @@ class HotkeyActions:
         self._voice_active = False
         self._game_mode_active = False
     
-    def summon_overlay(self):
+    def summon_overlay(self) -> None:
         """
         Show AI overlay.
         
@@ -77,7 +77,7 @@ class HotkeyActions:
         except Exception as e:
             logger.error(f"Error summoning overlay: {e}")
     
-    def dismiss_overlay(self):
+    def dismiss_overlay(self) -> None:
         """Hide AI overlay, return focus to previous app."""
         logger.info("Dismissing AI overlay")
         
@@ -88,7 +88,7 @@ class HotkeyActions:
         except Exception as e:
             logger.error(f"Error dismissing overlay: {e}")
     
-    def push_to_talk_start(self):
+    def push_to_talk_start(self) -> None:
         """Start listening for voice input."""
         logger.info("Push-to-talk: Starting voice input")
         
@@ -119,7 +119,7 @@ class HotkeyActions:
         except Exception as e:
             logger.error(f"Error in push_to_talk_start: {e}")
     
-    def push_to_talk_stop(self):
+    def push_to_talk_stop(self) -> None:
         """Stop listening, process voice input."""
         logger.info("Push-to-talk: Stopping voice input")
         
@@ -134,7 +134,7 @@ class HotkeyActions:
         except Exception as e:
             logger.error(f"Error in push_to_talk_stop: {e}")
     
-    def quick_command(self):
+    def quick_command(self) -> None:
         """
         Show minimal command input.
         
@@ -147,7 +147,7 @@ class HotkeyActions:
         # but could be a smaller version
         self.summon_overlay()
     
-    def screenshot_to_ai(self):
+    def screenshot_to_ai(self) -> None:
         """
         Take screenshot and send to AI.
         
@@ -200,7 +200,7 @@ class HotkeyActions:
         except Exception as e:
             logger.error(f"Error taking screenshot: {e}")
     
-    def toggle_game_mode(self):
+    def toggle_game_mode(self) -> None:
         """Toggle game mode on/off."""
         self._game_mode_active = not self._game_mode_active
         
@@ -220,7 +220,7 @@ class HotkeyActions:
         except Exception as e:
             logger.error(f"Error toggling game mode: {e}")
     
-    def set_main_window(self, window: 'QMainWindow'):
+    def set_main_window(self, window: 'QMainWindow') -> None:
         """
         Set the main window reference.
         

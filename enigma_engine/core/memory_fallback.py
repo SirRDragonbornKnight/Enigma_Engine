@@ -188,7 +188,7 @@ class MemoryFallbackManager:
             info.cpu_used = vm.used
             info.cpu_utilization = vm.percent / 100.0
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         # GPU memory
         if HAVE_TORCH and torch.cuda.is_available():

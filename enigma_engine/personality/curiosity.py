@@ -326,7 +326,7 @@ class AICuriosity:
                     try:
                         self._questions_asked.append(Question.from_dict(q_data))
                     except Exception:
-                        pass
+                        pass  # Intentionally silent
                 
                 logger.debug(f"Loaded curiosity state: {len(self._user_answers)} answers")
         except Exception as e:
@@ -565,7 +565,7 @@ class AICuriosity:
                 }
             )
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         self._save_state()
     

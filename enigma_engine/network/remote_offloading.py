@@ -84,7 +84,7 @@ class RemoteOffloader:
                 gpu_available = True
                 gpu_memory_mb = torch.cuda.get_device_properties(0).total_memory // (1024 * 1024)
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         self._local_capability = ServerCapability(
             address="localhost",

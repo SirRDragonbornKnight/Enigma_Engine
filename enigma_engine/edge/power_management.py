@@ -102,7 +102,7 @@ class CPUGovernor:
             if path.exists():
                 return path.read_text().strip().split()
         except OSError:
-            pass
+            pass  # Intentionally silent
         return []
     
     def get_current_governor(self) -> str:
@@ -112,7 +112,7 @@ class CPUGovernor:
             if path.exists():
                 return path.read_text().strip()
         except OSError:
-            pass
+            pass  # Intentionally silent
         return "unknown"
     
     def set_governor(self, governor: str) -> bool:
@@ -141,7 +141,7 @@ class CPUGovernor:
             if path.exists():
                 return int(path.read_text().strip()) // 1000
         except (OSError, ValueError):
-            pass
+            pass  # Intentionally silent
         return 0
     
     def set_frequency_limits(self, min_mhz: int, max_mhz: int) -> bool:
@@ -287,7 +287,7 @@ class BatteryMonitor:
             if capacity_path.exists():
                 return int(capacity_path.read_text().strip())
         except (OSError, ValueError):
-            pass
+            pass  # Intentionally silent
         return None
     
     def is_charging(self) -> bool:
@@ -301,7 +301,7 @@ class BatteryMonitor:
                 status = status_path.read_text().strip().lower()
                 return status in ("charging", "full")
         except OSError:
-            pass
+            pass  # Intentionally silent
         return False
     
     def is_low(self) -> bool:
@@ -532,7 +532,7 @@ class RaspberryPiPower:
                 result["throttled"] = bool(hex_value & 0x4)
                 result["soft_temp_limit"] = bool(hex_value & 0x8)
         except (subprocess.SubprocessError, FileNotFoundError, ValueError, OSError):
-            pass
+            pass  # Intentionally silent
         
         return result
     
@@ -551,7 +551,7 @@ class RaspberryPiPower:
                 temp_str = output.split("=")[1].split("'")[0]
                 return float(temp_str)
         except (subprocess.SubprocessError, FileNotFoundError, ValueError, OSError):
-            pass
+            pass  # Intentionally silent
         return 0.0
     
     @staticmethod

@@ -375,7 +375,7 @@ class HardwareProfileManager:
             else:
                 allocator.set_mode('maximum')
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         # Apply tool restrictions via ToolManager
         try:
@@ -394,7 +394,7 @@ class HardwareProfileManager:
                 for tool in profile.blocked_tools:
                     manager.disable_tool(tool)
         except ImportError:
-            pass
+            pass  # Intentionally silent
     
     def create_custom_profile(
         self, 
@@ -519,7 +519,7 @@ class HardwareProfileManager:
                 has_gpu = True
                 gpu_memory_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         # Decision tree
         if memory_gb < 2:

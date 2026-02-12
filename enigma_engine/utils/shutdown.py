@@ -390,7 +390,7 @@ def _register_builtin_cleanups():
                     logger.warning(f"Failed to unload module {module_id}: {e}")
                     
         except ImportError:
-            pass
+            pass  # Intentionally silent
         except Exception as e:
             logger.warning(f"Module cleanup failed: {e}")
     

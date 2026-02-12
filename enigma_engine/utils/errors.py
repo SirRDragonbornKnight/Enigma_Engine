@@ -664,7 +664,7 @@ def quiet_callback(fn: Callable, *args, logger_name: str = "enigma_engine", **kw
         try:
             callback(value)
         except Exception:
-            pass
+            pass  # Intentionally silent
             
         # Use:
         quiet_callback(callback, value)

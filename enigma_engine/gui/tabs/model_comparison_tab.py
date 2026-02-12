@@ -511,7 +511,7 @@ def _get_available_models() -> list[str]:
         registry = ModelRegistry()
         models.extend(registry.list_models())
     except Exception:
-        pass
+        pass  # Intentionally silent
     
     # Try to get from models directory
     try:
@@ -522,7 +522,7 @@ def _get_available_models() -> list[str]:
                     if item.name not in models:
                         models.append(item.name)
     except Exception:
-        pass
+        pass  # Intentionally silent
     
     # Add some default model names
     default_models = ["forge-small", "forge-medium", "forge-large", "gpt2", "gpt2-medium"]

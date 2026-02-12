@@ -147,7 +147,7 @@ class TTSEnginePool:
                     try:
                         engine["engine"].stop()
                     except Exception:
-                        pass
+                        pass  # Intentionally silent
             self._engines.clear()
             self._in_use.clear()
             logger.debug("TTS engine pool cleaned up")
@@ -362,7 +362,7 @@ class VoicePipeline:
                 try:
                     self._tts_queue.put_nowait(None)
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
         except Exception:
             # Ignore errors during garbage collection
             pass
@@ -1012,7 +1012,7 @@ class VoicePipeline:
             try:
                 self._audio_ducker.duck_end()
             except Exception:
-                pass
+                pass  # Intentionally silent
     
     def enable_interruption(self, enabled: bool = True):
         """Enable or disable interruption handling at runtime."""
@@ -1139,12 +1139,12 @@ class VoicePipeline:
                     try:
                         self._interruption_handler.stop_monitoring()
                     except Exception:
-                        pass
+                        pass  # Intentionally silent
                 if self._audio_ducker:
                     try:
                         self._audio_ducker.duck_end()
                     except Exception:
-                        pass
+                        pass  # Intentionally silent
     
     def _recognize_speech(self) -> str:
         """Recognize speech from microphone."""
@@ -1380,7 +1380,7 @@ class VoicePipeline:
                 sample_rate = audio.frame_rate
                 
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             # Try soundfile if pydub not available
             if audio_array is None:
@@ -1388,7 +1388,7 @@ class VoicePipeline:
                     import soundfile as sf
                     audio_array, sample_rate = sf.read(BytesIO(audio_data))
                 except (ImportError, RuntimeError):
-                    pass
+                    pass  # Intentionally silent
             
             # Fallback to built-in wave for WAV files
             if audio_array is None and audio_data[:4] == b'RIFF':

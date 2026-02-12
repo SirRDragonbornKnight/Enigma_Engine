@@ -8,7 +8,7 @@ import json
 import logging
 import shutil
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Tuple
 
 import torch
 
@@ -29,7 +29,7 @@ replicate_client = None
 try:
     HAVE_REPLICATE = True
 except ImportError:
-    pass
+    pass  # Intentionally silent
 
 # Check for Cog (Replicate's model packaging tool)
 HAVE_COG = False
@@ -38,7 +38,7 @@ try:
     result = subprocess.run(["cog", "--version"], capture_output=True, text=True, timeout=5)
     HAVE_COG = result.returncode == 0
 except Exception:
-    pass
+    pass  # Intentionally silent
 
 
 class ReplicateProvider(ExportProvider):
@@ -77,7 +77,7 @@ class ReplicateProvider(ExportProvider):
         output_path: Path,
         model_name: str,
         config: dict[str, Any]
-    ):
+    ) -> None:
         """Create cog.yaml configuration file."""
         cog_config = f"""# Cog configuration for {model_name}
 # https://github.com/replicate/cog/blob/main/docs/yaml.md
@@ -99,7 +99,7 @@ predict: "predict.py:Predictor"
         output_path: Path,
         model_name: str,
         config: dict[str, Any]
-    ):
+    ) -> None:
         """Create predict.py for Cog."""
         predict_code = f'''"""
 Cog predictor for {model_name}
@@ -166,7 +166,7 @@ class Predictor(BasePredictor):
         self,
         output_path: Path,
         config: dict[str, Any]
-    ):
+    ) -> None:
         """Create model.py with Forge architecture."""
         model_code = '''"""
 Enigma AI Engine Model Architecture

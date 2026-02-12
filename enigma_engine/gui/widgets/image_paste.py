@@ -163,7 +163,7 @@ class ImagePasteHandlerBase:
                 # JPEG: need to parse markers
                 return self._parse_jpeg_dimensions(data)
         except (IndexError, ValueError, TypeError):
-            pass
+            pass  # Intentionally silent
         return 0, 0
     
     def _parse_jpeg_dimensions(self, data: bytes) -> tuple[int, int]:
@@ -185,7 +185,7 @@ class ImagePasteHandlerBase:
                         continue
                 i += 1
         except (IndexError, ValueError):
-            pass
+            pass  # Intentionally silent
         return 0, 0
     
     def load_file(self, path: Path) -> Optional[PastedImage]:

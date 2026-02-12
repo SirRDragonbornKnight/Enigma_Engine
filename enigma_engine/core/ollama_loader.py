@@ -178,7 +178,7 @@ class OllamaModelLoader:
                 try:
                     config = json.loads(config_data)
                 except json.JSONDecodeError:
-                    pass
+                    pass  # Intentionally silent
         
         # Determine quantization and size
         digest = model_layer.get("digest", "")

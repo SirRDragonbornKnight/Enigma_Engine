@@ -613,7 +613,7 @@ class UniversalAction:
                 controller.play_gesture(gesture)
                 return True
         except ImportError:
-            pass
+            pass  # Intentionally silent
         logger.info(f"Avatar gesture: {gesture}")
         return True
     
@@ -626,7 +626,7 @@ class UniversalAction:
                 auto.process_request(request)
                 return True
         except ImportError:
-            pass
+            pass  # Intentionally silent
         return False
     
     def _interpret(self, request: str) -> str:

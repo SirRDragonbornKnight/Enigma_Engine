@@ -459,6 +459,14 @@ class ModuleManager:
       → Uses module classes from registry.py
       → Saves config to data/module_config.json
       ← Used by GUI modules tab, CLI, and all module consumers
+    Attributes:
+        modules: Dict mapping module ID to loaded ``Module`` instance.
+        module_classes: Dict mapping module ID to registered module class.
+        config_path: ``Path`` to the JSON file where module configuration
+            is persisted.
+        hardware_profile: Dict of detected hardware capabilities (CPU
+            cores, RAM, GPU name, VRAM, recommended model size, etc.).
+        local_only: If ``True``, cloud-service modules are blocked.
     """
     
     # Singleton instance storage
@@ -895,11 +903,26 @@ class ModuleManager:
                                                     LOADED  ERROR
 
         Args:
-            module_id: Module ID to load
-            config: Optional configuration dictionary
+            module_id: The unique string identifier of the module to load
+                (e.g. ``"model"``, ``"image_gen_local"``).
+            config: Optional dictionary of module-specific settings that
+                is forwarded to the module constructor.
 
         Returns:
-            True if loaded successfully, False otherwise
+            ``True`` if the module was loaded (or was already loaded).
+            ``False`` if any validation check failed or the module's own
+            ``load()`` method returned ``False``.
+
+        Raises:
+            No exceptions are raised directly; failures are logged and
+            ``False`` is returned.
+
+        Example:
+            >>> manager = ModuleManager()
+            >>> manager.load("model")
+            True
+            >>> manager.load("image_gen_local", config={"resolution": 512})
+            True
         """
         # Get per-module lock to prevent concurrent loading of same module
         module_lock = self._get_module_lock(module_id)
@@ -1059,30 +1082,37 @@ class ModuleManager:
 
     def unload(self, module_id: str) -> bool:
         """
-        Unload a module (thread-safe).
-        
-        📖 WHAT THIS DOES:
-        1. Checks no other modules depend on this one
-        2. Calls module's unload() to release resources
-        3. Removes module from our registry
-        4. Notifies listeners that module was unloaded
-        
-        📐 DEPENDENCY CHECK:
-        If module B requires module A, you CANNOT unload A until B is unloaded.
-        
-            A (required by B)
-            ▲
-            │ depends
-            │
-            B
-            
-        Unload B first, then A.
+        Unload a module and release its resources (thread-safe).
+
+        Performs the following steps:
+
+        1. Checks that no other loaded module declares a dependency on
+           this one.  If module *B* requires module *A*, you must unload
+           *B* before *A*.
+        2. Calls the module's own ``unload()`` method so it can free GPU
+           memory, close network connections, save state, etc.
+        3. Removes the module from the internal ``modules`` dict.
+        4. Fires all registered ``_on_unload`` callbacks to notify
+           listeners (e.g. the GUI Modules tab).
 
         Args:
-            module_id: Module ID to unload
+            module_id: The unique identifier of the module to unload
+                (e.g. ``"image_gen_local"``).
 
         Returns:
-            True if unloaded successfully
+            ``True`` if the module was successfully unloaded.
+            ``False`` if the module was not loaded, is still required by
+            another module, or its ``unload()`` method returned ``False``.
+
+        Raises:
+            No exceptions are raised directly; errors are logged and
+            ``False`` is returned.
+
+        Example:
+            >>> manager.unload("image_gen_local")
+            True
+            >>> manager.get_module("image_gen_local") is None
+            True
         """
         # Get per-module lock
         module_lock = self._get_module_lock(module_id)
@@ -1198,18 +1228,27 @@ class ModuleManager:
     # =========================================================================
 
     def get_module(self, module_id: str) -> Optional[Module]:
-        """
-        Get a loaded module instance.
-        
-        📖 RETURNS:
-        The Module wrapper object (with state, config, etc.)
-        For the actual working object, use get_interface() instead.
+        """Get a loaded module instance by its unique ID.
+
+        Returns the ``Module`` wrapper object that carries lifecycle state,
+        configuration, and metadata.  To obtain the inner working object
+        (e.g. the actual image generator or model), call
+        ``get_interface()`` on the returned module -- or use the
+        convenience method ``manager.get_interface(module_id)``.
 
         Args:
-            module_id: Module ID to get
+            module_id: The unique string identifier of the module
+                (e.g. ``"image_gen_local"``, ``"model"``).
 
         Returns:
-            Module instance or None if not loaded
+            The ``Module`` instance if the module is currently loaded,
+            or ``None`` if it has not been loaded or has been unloaded.
+
+        Example:
+            >>> mod = manager.get_module("inference")
+            >>> if mod and mod.is_loaded():
+            ...     engine = mod.get_interface()
+            ...     response = engine.generate("Hello world")
         """
         return self.modules.get(module_id)
 
@@ -1235,11 +1274,43 @@ class ModuleManager:
         return module.get_interface() if module else None
 
     def is_loaded(self, module_id: str) -> bool:
-        """Check if a module is currently loaded."""
+        """Check whether a module is currently loaded.
+
+        Args:
+            module_id: The unique identifier of the module.
+
+        Returns:
+            ``True`` if the module exists in the loaded modules dict
+            and its state is ``ModuleState.LOADED``.
+        """
         return module_id in self.modules and self.modules[module_id].state == ModuleState.LOADED
 
     def list_modules(self, category: Optional[ModuleCategory] = None) -> List[ModuleInfo]:
-        """List all registered modules."""
+        """List all registered modules, optionally filtered by category.
+
+        Returns ``ModuleInfo`` objects for every module class that has been
+        registered with the manager.  If a module is currently loaded, its
+        ``state`` field is updated to reflect the live runtime state.
+
+        Args:
+            category: If provided, only modules whose
+                ``ModuleInfo.category`` matches this value are returned.
+                Pass ``None`` (default) to list modules from all
+                categories.
+
+        Returns:
+            A list of ``ModuleInfo`` dataclass instances, one per
+            registered module (or per matching module when *category* is
+            set).
+
+        Example:
+            >>> # List all generation modules
+            >>> gen_mods = manager.list_modules(ModuleCategory.GENERATION)
+            >>> for m in gen_mods:
+            ...     print(m.id, m.state.value)
+            'image_gen_local' 'unloaded'
+            'code_gen_local'  'loaded'
+        """
         modules = []
         for module_class in self.module_classes.values():
             info = module_class.get_info()
@@ -1251,7 +1322,15 @@ class ModuleManager:
         return modules
 
     def list_loaded(self) -> List[str]:
-        """List IDs of loaded modules."""
+        """Return the IDs of all currently loaded modules.
+
+        Returns:
+            A list of module ID strings in no guaranteed order.
+
+        Example:
+            >>> manager.list_loaded()
+            ['model', 'tokenizer', 'inference']
+        """
         return list(self.modules.keys())
 
     def get_status(self) -> Dict[str, Any]:

@@ -466,7 +466,7 @@ class VoiceGameController:
                 self._tts_engine = pyttsx3.init()
                 self._tts_engine.setProperty('rate', 180)
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         # Callbacks
         self._on_command: Optional[Callable[[str, VoiceCommand], None]] = None
@@ -672,7 +672,7 @@ class VoiceGameController:
                 self._tts_engine.say(command.confirmation_phrase)
                 self._tts_engine.runAndWait()
             except Exception:
-                pass
+                pass  # Intentionally silent
     
     def _do_keyboard(self, command: VoiceCommand):
         """Execute keyboard command."""
@@ -683,7 +683,7 @@ class VoiceGameController:
                     try:
                         keyboard.release(key)
                     except Exception:
-                        pass
+                        pass  # Intentionally silent
             return
         
         key = command.action

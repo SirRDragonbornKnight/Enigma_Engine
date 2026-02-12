@@ -536,7 +536,7 @@ class ResourceMonitor(QWidget):
                 self.mode_label.setText("Mode: Full")
                 self.mode_label.setStyleSheet("color: #a6e3a1; font-size: 12px;")
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def set_mode(self, mode: str):
         """Manually set the mode display."""

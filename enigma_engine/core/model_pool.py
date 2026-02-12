@@ -271,7 +271,7 @@ class ModelPool:
                 if torch.cuda.is_available() and entry.device.startswith("cuda"):
                     torch.cuda.empty_cache()
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             logger.info(f"Unloaded model: {model_id}")
             return True
@@ -339,7 +339,7 @@ class ModelPool:
                     "gpu_free_mb": (gpu_total - gpu_reserved) / (1024 * 1024),
                 })
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         return info
     
@@ -584,7 +584,7 @@ class ModelPool:
             elif torch.backends.mps.is_available():
                 return "mps"
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         return "cpu"
     

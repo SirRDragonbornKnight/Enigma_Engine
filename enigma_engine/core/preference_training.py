@@ -97,16 +97,16 @@ class PreferenceDataset(Dataset):
         self,
         data: list[PreferenceData],
         tokenizer: Any,
-        max_length: int = 512
-    ):
+        max_length: int = 512,
+    ) -> None:
         self.data = data
         self.tokenizer = tokenizer
         self.max_length = max_length
     
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.data)
     
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> dict[str, Any]:
         item = self.data[idx]
         
         # Tokenize chosen (prompt + chosen response)
@@ -138,7 +138,7 @@ class PreferenceDataset(Dataset):
         }
 
 
-def collate_preference(batch):
+def collate_preference(batch: list[dict[str, Any]]) -> dict[str, torch.Tensor]:
     """Collate function for preference dataset."""
     # Pad sequences
     max_chosen_len = max(len(b["chosen_ids"]) for b in batch)
@@ -183,8 +183,8 @@ class DPOTrainer:
         model: nn.Module,
         ref_model: nn.Module,
         tokenizer: Any,
-        config: DPOConfig = None
-    ):
+        config: DPOConfig = None,
+    ) -> None:
         """
         Initialize DPO trainer.
         
@@ -218,7 +218,7 @@ class DPOTrainer:
         model: nn.Module,
         input_ids: torch.Tensor,
         attention_mask: torch.Tensor,
-        prompt_lens: torch.Tensor
+        prompt_lens: torch.Tensor,
     ) -> torch.Tensor:
         """Compute log probabilities for responses (excluding prompt)."""
         with torch.set_grad_enabled(model == self.model):
@@ -255,8 +255,8 @@ class DPOTrainer:
         policy_chosen_logps: torch.Tensor,
         policy_rejected_logps: torch.Tensor,
         ref_chosen_logps: torch.Tensor,
-        ref_rejected_logps: torch.Tensor
-    ) -> tuple[torch.Tensor, dict]:
+        ref_rejected_logps: torch.Tensor,
+    ) -> tuple[torch.Tensor, dict[str, float]]:
         """
         Compute DPO loss.
         
@@ -296,7 +296,7 @@ class DPOTrainer:
         
         return loss, metrics
     
-    def train_step(self, batch: dict) -> dict:
+    def train_step(self, batch: dict[str, Any]) -> dict[str, float]:
         """Perform single training step."""
         self.model.train()
         
@@ -359,8 +359,8 @@ class DPOTrainer:
         self,
         train_data: list[PreferenceData],
         eval_data: Optional[list[PreferenceData]] = None,
-        callback: Callable[[dict], None] = None
-    ):
+        callback: Callable[[dict], None] = None,
+    ) -> None:
         """Train on preference data."""
         dataset = PreferenceDataset(
             train_data, self.tokenizer, self.config.max_length
@@ -423,7 +423,7 @@ class RewardModel(nn.Module):
     Predicts scalar reward for (prompt, response) pairs.
     """
     
-    def __init__(self, base_model: nn.Module, hidden_size: int):
+    def __init__(self, base_model: nn.Module, hidden_size: int) -> None:
         super().__init__()
         self.base = base_model
         self.reward_head = nn.Linear(hidden_size, 1)
@@ -431,7 +431,7 @@ class RewardModel(nn.Module):
     def forward(
         self,
         input_ids: torch.Tensor,
-        attention_mask: Optional[torch.Tensor] = None
+        attention_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """Compute reward for input."""
         outputs = self.base(input_ids, attention_mask=attention_mask)
@@ -462,8 +462,8 @@ class RewardModelTrainer:
         model: RewardModel,
         tokenizer: Any,
         learning_rate: float = 1e-5,
-        batch_size: int = 8
-    ):
+        batch_size: int = 8,
+    ) -> None:
         self.model = model
         self.tokenizer = tokenizer
         self.batch_size = batch_size
@@ -473,7 +473,7 @@ class RewardModelTrainer:
             lr=learning_rate
         )
     
-    def train_step(self, batch: dict) -> dict:
+    def train_step(self, batch: dict[str, Any]) -> dict[str, float]:
         """Train step for reward model."""
         self.model.train()
         
@@ -505,7 +505,7 @@ class RewardModelTrainer:
             "rejected_reward": rejected_reward.mean().item()
         }
     
-    def train(self, data: list[PreferenceData], num_epochs: int = 3):
+    def train(self, data: list[PreferenceData], num_epochs: int = 3) -> None:
         """Train reward model."""
         dataset = PreferenceDataset(data, self.tokenizer)
         dataloader = DataLoader(
@@ -544,8 +544,8 @@ class RLHFTrainer:
         ref_model: nn.Module,
         reward_model: RewardModel,
         tokenizer: Any,
-        config: RLHFConfig = None
-    ):
+        config: RLHFConfig = None,
+    ) -> None:
         self.model = model
         self.ref_model = ref_model
         self.reward_model = reward_model
@@ -569,7 +569,7 @@ class RLHFTrainer:
     def generate_responses(
         self,
         prompts: list[str],
-        max_new_tokens: int = 100
+        max_new_tokens: int = 100,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Generate responses from policy."""
         self.model.eval()
@@ -635,7 +635,7 @@ class RLHFTrainer:
         self,
         input_ids: torch.Tensor,
         attention_mask: torch.Tensor,
-        prompt_lens: torch.Tensor
+        prompt_lens: torch.Tensor,
     ) -> torch.Tensor:
         """Compute rewards for generated responses."""
         device = input_ids.device
@@ -658,7 +658,7 @@ class RLHFTrainer:
         self,
         input_ids: torch.Tensor,
         attention_mask: torch.Tensor,
-        policy_log_probs: torch.Tensor
+        policy_log_probs: torch.Tensor,
     ) -> torch.Tensor:
         """Compute KL penalty from reference model."""
         device = input_ids.device
@@ -684,8 +684,8 @@ class RLHFTrainer:
     def ppo_step(
         self,
         prompts: list[str],
-        prompt_lens: torch.Tensor
-    ) -> dict:
+        prompt_lens: torch.Tensor,
+    ) -> dict[str, float]:
         """Single PPO update step."""
         device = next(self.model.parameters()).device
         
@@ -769,8 +769,8 @@ class RLHFTrainer:
     def train(
         self,
         prompts: list[str],
-        callback: Callable[[dict], None] = None
-    ):
+        callback: Callable[[dict], None] = None,
+    ) -> None:
         """Train with RLHF."""
         # Get prompt lengths
         prompt_lens = torch.tensor([

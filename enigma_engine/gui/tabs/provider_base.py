@@ -232,7 +232,7 @@ class GenerationProvider(ABC):
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             logger.info(f"{self.DISPLAY_NAME} unloaded")
             return True

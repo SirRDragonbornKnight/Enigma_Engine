@@ -25,6 +25,7 @@ Usage:
 """
 
 import json
+import logging
 import os
 import time
 import uuid
@@ -36,6 +37,8 @@ from typing import Any, Optional
 import psutil
 
 from ..config import CONFIG  # noqa: F401 - imported for side effects
+
+logger = logging.getLogger(__name__)
 
 # Lock directory in user's home
 LOCK_DIR = Path.home() / ".enigma_engine" / "locks"
@@ -79,7 +82,7 @@ class InstanceManager:
     - Enable inter-instance communication
     """
     
-    def __init__(self, instance_id: Optional[str] = None):
+    def __init__(self, instance_id: Optional[str] = None) -> None:
         """
         Initialize instance manager.
         
@@ -102,22 +105,22 @@ class InstanceManager:
         """Generate unique instance ID."""
         return str(uuid.uuid4())[:8]
     
-    def _register_instance(self):
+    def _register_instance(self) -> None:
         """Register this instance with a lock file."""
         try:
             with open(self.lock_file, 'w') as f:
                 json.dump(self.info.to_dict(), f, indent=2)
         except Exception as e:
-            print(f"Warning: Could not register instance: {e}")
+            logger.warning(f"Could not register instance: {e}")
     
-    def _update_instance_info(self):
+    def _update_instance_info(self) -> None:
         """Update instance lock file with current info."""
         try:
             if self.lock_file.exists():
                 with open(self.lock_file, 'w') as f:
                     json.dump(self.info.to_dict(), f, indent=2)
         except Exception as e:
-            print(f"Warning: Could not update instance info: {e}")
+            logger.warning(f"Could not update instance info: {e}")
     
     def acquire_model_lock(self, model_name: str, timeout: float = 0.0) -> bool:
         """
@@ -162,7 +165,7 @@ class InstanceManager:
                     try:
                         lock_file.unlink()
                     except Exception:
-                        pass
+                        pass  # Intentionally silent
             
             # Try to acquire lock
             try:
@@ -182,10 +185,10 @@ class InstanceManager:
                 
                 return True
             except Exception as e:
-                print(f"Failed to acquire lock for {model_name}: {e}")
+                logger.error(f"Failed to acquire lock for {model_name}: {e}")
                 return False
     
-    def release_model_lock(self, model_name: str):
+    def release_model_lock(self, model_name: str) -> None:
         """
         Release model lock.
         
@@ -206,9 +209,9 @@ class InstanceManager:
                 self.info.locked_models.remove(model_name)
                 self._update_instance_info()
         except Exception as e:
-            print(f"Warning: Could not release lock for {model_name}: {e}")
+            logger.warning(f"Could not release lock for {model_name}: {e}")
     
-    def release_all_locks(self):
+    def release_all_locks(self) -> None:
         """Release all locks held by this instance."""
         for model_name in list(self.model_locks.keys()):
             self.release_model_lock(model_name)
@@ -248,14 +251,14 @@ class InstanceManager:
                     try:
                         lock_file.unlink()
                     except Exception:
-                        pass
+                        pass  # Intentionally silent
             except Exception as e:
                 # Corrupted file, skip it
-                print(f"Warning: Could not read {lock_file}: {e}")
+                logger.warning(f"Could not read {lock_file}: {e}")
         
         return instances
     
-    def _cleanup_stale_locks(self):
+    def _cleanup_stale_locks(self) -> None:
         """Remove lock files for dead processes."""
         for lock_file in LOCK_DIR.glob("*.lock"):
             try:
@@ -272,9 +275,9 @@ class InstanceManager:
                     if lock_file.stat().st_mtime < time.time() - 86400:
                         lock_file.unlink()
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
     
-    def send_to_instance(self, instance_id: str, message: str):
+    def send_to_instance(self, instance_id: str, message: str) -> None:
         """
         Send message to another instance.
         
@@ -299,7 +302,7 @@ class InstanceManager:
                     'timestamp': datetime.now().isoformat()
                 }, f)
         except Exception as e:
-            print(f"Failed to send message: {e}")
+            logger.error(f"Failed to send message: {e}")
     
     def receive_messages(self) -> list[dict[str, Any]]:
         """
@@ -323,7 +326,7 @@ class InstanceManager:
                 # Remove processed message
                 msg_file.unlink()
             except Exception as e:
-                print(f"Warning: Could not read message {msg_file}: {e}")
+                logger.warning(f"Could not read message {msg_file}: {e}")
         
         return messages
     
@@ -355,12 +358,12 @@ class InstanceManager:
                 try:
                     lock_file.unlink()
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
                 return None
         except Exception:
             return None
     
-    def shutdown(self):
+    def shutdown(self) -> None:
         """Shutdown this instance and cleanup."""
         # Release all locks
         self.release_all_locks()
@@ -370,22 +373,22 @@ class InstanceManager:
             if self.lock_file.exists():
                 self.lock_file.unlink()
         except Exception as e:
-            print(f"Warning: Could not remove instance lock: {e}")
+            logger.warning(f"Could not remove instance lock: {e}")
     
-    def __enter__(self):
+    def __enter__(self) -> "InstanceManager":
         """Context manager entry."""
         return self
     
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """Context manager exit."""
         self.shutdown()
     
-    def __del__(self):
+    def __del__(self) -> None:
         """Cleanup on deletion."""
         try:
             self.shutdown()
         except Exception:
-            pass
+            pass  # Intentionally silent
 
 
 # Convenience functions
@@ -395,7 +398,7 @@ def get_active_instances() -> list[dict[str, Any]]:
     return manager.list_running_instances()
 
 
-def cleanup_stale_locks():
+def cleanup_stale_locks() -> None:
     """Clean up stale lock files."""
     manager = InstanceManager()
     manager._cleanup_stale_locks()

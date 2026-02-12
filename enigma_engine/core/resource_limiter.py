@@ -33,7 +33,7 @@ class ResourceLimiter:
     Tracks CPU and memory usage, triggers callbacks when limits exceeded.
     """
     
-    def __init__(self, limits: ResourceLimits):
+    def __init__(self, limits: ResourceLimits) -> None:
         """
         Initialize resource limiter.
         
@@ -50,7 +50,7 @@ class ResourceLimiter:
         self._on_limit_exceeded: list[Callable[[str, float], None]] = []
         self._on_limit_ok: list[Callable[[], None]] = []
     
-    def start_monitoring(self, interval: float = 1.0):
+    def start_monitoring(self, interval: float = 1.0) -> None:
         """
         Start monitoring resource usage.
         
@@ -73,7 +73,7 @@ class ResourceLimiter:
         
         logger.info("Resource monitoring started")
     
-    def stop_monitoring(self):
+    def stop_monitoring(self) -> None:
         """Stop monitoring resource usage."""
         if not self._monitoring:
             return
@@ -87,7 +87,7 @@ class ResourceLimiter:
         
         logger.info("Resource monitoring stopped")
     
-    def _monitor_loop(self, interval: float):
+    def _monitor_loop(self, interval: float) -> None:
         """Main monitoring loop."""
         while not self._stop_event.is_set():
             try:
@@ -97,7 +97,7 @@ class ResourceLimiter:
             
             self._stop_event.wait(interval)
     
-    def _check_limits(self):
+    def _check_limits(self) -> None:
         """Check if resource usage is within limits."""
         # Get current usage
         cpu_percent = self._current_process.cpu_percent(interval=0.1)
@@ -111,7 +111,7 @@ class ResourceLimiter:
         if memory_mb > self.limits.max_memory_mb:
             self._notify_limit_exceeded("Memory", memory_mb)
     
-    def _notify_limit_exceeded(self, resource: str, value: float):
+    def _notify_limit_exceeded(self, resource: str, value: float) -> None:
         """Notify that a limit was exceeded."""
         for callback in self._on_limit_exceeded:
             try:
@@ -119,7 +119,7 @@ class ResourceLimiter:
             except Exception as e:
                 logger.error(f"Limit exceeded callback error: {e}")
     
-    def _notify_limit_ok(self):
+    def _notify_limit_ok(self) -> None:
         """Notify that limits are OK."""
         for callback in self._on_limit_ok:
             try:
@@ -127,7 +127,7 @@ class ResourceLimiter:
             except Exception as e:
                 logger.error(f"Limit OK callback error: {e}")
     
-    def update_limits(self, limits: ResourceLimits):
+    def update_limits(self, limits: ResourceLimits) -> None:
         """
         Update resource limits.
         
@@ -166,7 +166,7 @@ class ResourceLimiter:
             usage["memory_mb"] <= self.limits.max_memory_mb
         )
     
-    def on_limit_exceeded(self, callback: Callable[[str, float], None]):
+    def on_limit_exceeded(self, callback: Callable[[str, float], None]) -> None:
         """
         Register callback for limit exceeded events.
         
@@ -175,7 +175,7 @@ class ResourceLimiter:
         """
         self._on_limit_exceeded.append(callback)
     
-    def on_limit_ok(self, callback: Callable[[], None]):
+    def on_limit_ok(self, callback: Callable[[], None]) -> None:
         """
         Register callback for when limits are OK.
         

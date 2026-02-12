@@ -77,7 +77,7 @@ class AutonomousMode:
     without sharing data.
     """
     
-    def __init__(self, model_name: str):
+    def __init__(self, model_name: str) -> None:
         self.model_name = model_name
         
         # Learning engine (real learning system)
@@ -102,7 +102,7 @@ class AutonomousMode:
         self.federated_learning = None
         self._init_federated_learning()
     
-    def start(self):
+    def start(self) -> None:
         """Start autonomous mode with real learning."""
         if self._thread and self._thread.is_alive():
             return
@@ -118,7 +118,7 @@ class AutonomousMode:
             
         logger.info(f"Autonomous mode started for {self.model_name}")
     
-    def stop(self):
+    def stop(self) -> None:
         """Stop autonomous mode."""
         self.config.enabled = False
         self._save_config()
@@ -134,7 +134,7 @@ class AutonomousMode:
             
         logger.info(f"Autonomous mode stopped for {self.model_name}")
     
-    def set_low_power_mode(self, enabled: bool):
+    def set_low_power_mode(self, enabled: bool) -> None:
         """
         Enable/disable low power mode for gaming.
         
@@ -159,22 +159,22 @@ class AutonomousMode:
     # CALLBACK HELPERS
     # =========================================================================
     
-    def _emit_action(self, message: str):
+    def _emit_action(self, message: str) -> None:
         """Emit an action message to the UI."""
         if self.on_action:
             self.on_action(message)
     
-    def _emit_thought(self, message: str):
+    def _emit_thought(self, message: str) -> None:
         """Emit a thought/status message to the UI."""
         if self.on_thought:
             self.on_thought(message)
     
-    def _emit_learning(self, message: str):
+    def _emit_learning(self, message: str) -> None:
         """Emit a learning update message to the UI."""
         if self.on_learning:
             self.on_learning(message)
     
-    def _emit_improvement(self, message: str):
+    def _emit_improvement(self, message: str) -> None:
         """Emit an improvement/consolidation message."""
         if self.on_learning:
             self.on_learning(f"[Improvement] {message}")
@@ -286,7 +286,7 @@ Reply with ONLY the topic name."""
                     if t.lower() in picked or picked in t.lower():
                         return t
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         # Fallback: Cycle through topics
         idx_attr = f'_topic_idx_{context}'
@@ -295,7 +295,7 @@ Reply with ONLY the topic name."""
         setattr(self, idx_attr, idx + 1)
         return topic
     
-    def _run_loop(self):
+    def _run_loop(self) -> None:
         """Main autonomous loop with real learning actions."""
         while not self._stop_event.is_set():
             # Check game mode - pause if game is active
@@ -337,7 +337,7 @@ Reply with ONLY the topic name."""
             interval = self.config.get_effective_interval()
             self._stop_event.wait(interval)
     
-    def _perform_action(self):
+    def _perform_action(self) -> None:
         """
         Perform an autonomous action using intelligent weighted selection.
         
@@ -373,7 +373,7 @@ Reply with ONLY the topic name."""
     # CONFIGURATION MANAGEMENT
     # =========================================================================
     
-    def _load_config(self):
+    def _load_config(self) -> None:
         """Load configuration from disk."""
         from ..config import CONFIG
         models_dir = Path(CONFIG.get("models_dir", "models"))
@@ -389,7 +389,7 @@ Reply with ONLY the topic name."""
             except Exception as e:
                 logger.error(f"Error loading autonomous config: {e}")
     
-    def _save_config(self):
+    def _save_config(self) -> None:
         """Save configuration to disk."""
         from ..config import CONFIG
         models_dir = Path(CONFIG.get("models_dir", "models"))
@@ -407,7 +407,7 @@ Reply with ONLY the topic name."""
     # AUTONOMOUS ACTIONS - REAL IMPLEMENTATIONS
     # =========================================================================
     
-    def _explore_curiosity(self):
+    def _explore_curiosity(self) -> None:
         """
         Explore a topic the AI is curious about.
         
@@ -476,7 +476,7 @@ Reply with ONLY the topic name."""
         except (ImportError, Exception) as e:
             logger.debug(f"Could not explore curiosity: {e}")
     
-    def _reflect_on_conversations(self):
+    def _reflect_on_conversations(self) -> None:
         """
         Review past conversations for learning.
         
@@ -605,7 +605,7 @@ Reply with ONLY the topic name."""
         except Exception as e:
             logger.error(f"Error reflecting on conversations: {e}", exc_info=True)
     
-    def _practice_response(self):
+    def _practice_response(self) -> None:
         """
         Practice generating responses.
         
@@ -738,7 +738,7 @@ Reply with ONLY the topic name."""
         except Exception as e:
             logger.error(f"Error in practice: {e}", exc_info=True)
     
-    def _update_personality(self):
+    def _update_personality(self) -> None:
         """
         Gradually evolve personality.
         
@@ -1047,7 +1047,7 @@ Reply with ONLY the topic name."""
     # NEW AUTONOMOUS ACTIONS
     # =========================================================================
     
-    def _research_topic(self, specific_topic: Optional[str] = None):
+    def _research_topic(self, specific_topic: Optional[str] = None) -> None:
         """
         Actually search the web and learn.
         
@@ -1104,7 +1104,7 @@ Reply with ONLY the topic name."""
         except Exception as e:
             logger.debug(f"Could not research topic: {e}")
     
-    def _build_knowledge(self):
+    def _build_knowledge(self) -> None:
         """
         Connect concepts in knowledge graph.
         
@@ -1158,14 +1158,14 @@ Reply with ONLY the topic name."""
                             if self.on_learning:
                                 self.on_learning(f"Connected: {topic1} <-> {topic2}")
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
             
             logger.info("Knowledge building complete")
         
         except Exception as e:
             logger.error(f"Error building knowledge: {e}", exc_info=True)
     
-    def _consolidate_learning(self):
+    def _consolidate_learning(self) -> None:
         """
         Export to training data or trigger LoRA fine-tuning.
         
@@ -1199,7 +1199,7 @@ Reply with ONLY the topic name."""
         except Exception as e:
             logger.error(f"Error consolidating learning: {e}", exc_info=True)
     
-    def _optimize_responses(self):
+    def _optimize_responses(self) -> None:
         """
         Analyze patterns in good vs bad responses.
         
@@ -1239,7 +1239,7 @@ Reply with ONLY the topic name."""
         except Exception as e:
             logger.error(f"Error optimizing responses: {e}", exc_info=True)
     
-    def _self_evaluate(self):
+    def _self_evaluate(self) -> None:
         """
         Check own performance metrics.
         
@@ -1276,7 +1276,7 @@ Reply with ONLY the topic name."""
         except Exception as e:
             logger.error(f"Error in self-evaluation: {e}", exc_info=True)
     
-    def _dream(self):
+    def _dream(self) -> None:
         """
         Creative recombination of knowledge (experimental).
         
@@ -1309,7 +1309,7 @@ Reply with ONLY the topic name."""
         except Exception as e:
             logger.debug(f"Error in dream: {e}")
     
-    def _init_federated_learning(self):
+    def _init_federated_learning(self) -> None:
         """Initialize federated learning if enabled."""
         try:
             from ..config import get_config
@@ -1356,7 +1356,7 @@ Reply with ONLY the topic name."""
             logger.warning(f"Could not initialize federated learning: {e}")
             self.federated_learning = None
     
-    def share_learning_update(self):
+    def share_learning_update(self) -> None:
         """
         Share recent learning improvements via federated learning.
         
@@ -1482,7 +1482,7 @@ class AutonomousManager:
         return cls._instances[model_name]
     
     @classmethod
-    def stop_all(cls):
+    def stop_all(cls) -> None:
         for instance in cls._instances.values():
             instance.stop()
 

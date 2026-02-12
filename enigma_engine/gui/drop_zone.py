@@ -228,7 +228,7 @@ class DropZone(QFrame):
                         size_str = f"{size} B"
                     item.setText(f"{path.name} ({size_str})")
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
                 
                 self.file_list.addItem(item)
             
@@ -257,7 +257,7 @@ class DropZone(QFrame):
             try:
                 total += path.stat().st_size
             except Exception:
-                pass
+                pass  # Intentionally silent
         return total
     
     def add_file(self, file_path: str):
@@ -310,7 +310,7 @@ class TrainingDataDropZone(DropZone):
                 total_lines += content.count('\n') + 1
                 total_chars += len(content)
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         # Rough token estimate (4 chars per token average)
         est_tokens = total_chars // 4

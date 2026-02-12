@@ -116,7 +116,7 @@ class WindowsNotificationBackend(NotificationBackend):
             self._toaster = ToastNotifier()
             logger.info("Using win10toast backend")
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         # Try Windows Runtime (winrt) for modern notifications
         if self._toaster is None:
@@ -124,7 +124,7 @@ class WindowsNotificationBackend(NotificationBackend):
                 self._winrt = True
                 logger.info("Using Windows Runtime backend")
             except ImportError:
-                pass
+                pass  # Intentionally silent
     
     def send(self, notification: Notification) -> bool:
         """Send a Windows notification."""
@@ -206,7 +206,7 @@ class WindowsNotificationBackend(NotificationBackend):
             }
             winsound.MessageBeep(sounds.get(sound_type, winsound.MB_OK))
         except Exception:
-            pass
+            pass  # Intentionally silent
 
 
 class LinuxNotificationBackend(NotificationBackend):
@@ -223,7 +223,7 @@ class LinuxNotificationBackend(NotificationBackend):
             self._notify2 = notify2
             logger.info("Using notify2 backend")
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         # Try dbus directly
         if self._notify2 is None:
@@ -232,7 +232,7 @@ class LinuxNotificationBackend(NotificationBackend):
                 self._dbus = dbus
                 logger.info("Using dbus backend")
             except ImportError:
-                pass
+                pass  # Intentionally silent
     
     def send(self, notification: Notification) -> bool:
         """Send a Linux notification."""
@@ -310,7 +310,7 @@ class LinuxNotificationBackend(NotificationBackend):
                            stdout=subprocess.DEVNULL, 
                            stderr=subprocess.DEVNULL)
         except Exception:
-            pass
+            pass  # Intentionally silent
 
 
 class MacOSNotificationBackend(NotificationBackend):
@@ -370,7 +370,7 @@ class MacOSNotificationBackend(NotificationBackend):
                 stderr=subprocess.DEVNULL
             )
         except Exception:
-            pass
+            pass  # Intentionally silent
 
 
 class PlyrNotificationBackend(NotificationBackend):
@@ -384,7 +384,7 @@ class PlyrNotificationBackend(NotificationBackend):
             self._plyer = notification
             logger.info("Using plyer backend")
         except ImportError:
-            pass
+            pass  # Intentionally silent
     
     def send(self, notification_obj: Notification) -> bool:
         """Send using plyer."""
@@ -541,7 +541,7 @@ class NotificationManager:
                             ntype = NotificationType(type_str)
                             self.type_settings[ntype] = NotificationSettings.from_dict(settings_data)
                         except ValueError:
-                            pass
+                            pass  # Intentionally silent
         except Exception as e:
             logger.debug(f"Could not load notification settings: {e}")
     
@@ -797,7 +797,7 @@ class NotificationManager:
                     try:
                         callback(n)
                     except Exception:
-                        pass
+                        pass  # Intentionally silent
                 return True
         return False
     

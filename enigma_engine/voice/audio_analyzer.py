@@ -123,17 +123,17 @@ class AudioAnalyzer:
         try:
             self.have_librosa = True
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         try:
             self.have_parselmouth = True
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         try:
             self.have_soundfile = True
         except ImportError:
-            pass
+            pass  # Intentionally silent
     
     def _estimate_speaking_rate(self, audio: np.ndarray, sr: int, duration: float) -> float:
         """

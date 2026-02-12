@@ -485,7 +485,7 @@ class CrossSessionContext:
                         last_seen=data.get("last_seen", time.time())
                     )
             except Exception:
-                pass
+                pass  # Intentionally silent
 
 
 # Global instance

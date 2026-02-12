@@ -40,7 +40,7 @@ try:
     np = _np
     HAS_TRIMESH = True
 except ImportError:
-    pass
+    pass  # Intentionally silent
 
 try:
     import OpenGL.GL as GL
@@ -154,7 +154,7 @@ class OpenGL3DWidget(QOpenGLWidget):
                 from trimesh.visual.resolvers import FilePathResolver
                 resolver = FilePathResolver(str(model_dir))
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             # Load with force='scene' to get materials properly
             if resolver:
@@ -418,7 +418,7 @@ class OpenGL3DWidget(QOpenGLWidget):
                         tex_name = largest_path.name
                         print(f"[Avatar] Using largest texture: {tex_name}")
                     except Exception:
-                        pass
+                        pass  # Intentionally silent
             
             if tex_img is None:
                 return None
@@ -868,7 +868,7 @@ class OpenGL3DWidget(QOpenGLWidget):
                 GL.glHint(GL.GL_LINE_SMOOTH_HINT, GL.GL_NICEST)
                 GL.glHint(GL.GL_POLYGON_SMOOTH_HINT, GL.GL_NICEST)
             except Exception:
-                pass
+                pass  # Intentionally silent
                 
             self._gl_initialized = True
         except Exception as e:

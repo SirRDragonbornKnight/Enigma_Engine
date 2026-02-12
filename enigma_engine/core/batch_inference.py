@@ -106,7 +106,7 @@ class RequestBatcher:
         max_batch_size: int = 8,
         max_wait_time: float = 0.1,
         max_tokens_per_batch: int = 2048
-    ):
+    ) -> None:
         """
         Initialize batcher.
         
@@ -122,7 +122,7 @@ class RequestBatcher:
         self._queue: queue.PriorityQueue = queue.PriorityQueue()
         self._lock = threading.Lock()
     
-    def add_request(self, request: InferenceRequest):
+    def add_request(self, request: InferenceRequest) -> None:
         """Add a request to the queue."""
         self._queue.put(request)
     
@@ -171,7 +171,7 @@ class RequestBatcher:
 class TokenPadder:
     """Handles padding for batch processing."""
     
-    def __init__(self, pad_token_id: int = 0):
+    def __init__(self, pad_token_id: int = 0) -> None:
         """Initialize padder."""
         self._pad_id = pad_token_id
     
@@ -232,7 +232,7 @@ class BatchProcessor:
         max_batch_size: int = 8,
         max_wait_time: float = 0.1,
         num_workers: int = 1
-    ):
+    ) -> None:
         """
         Initialize batch processor.
         
@@ -264,7 +264,7 @@ class BatchProcessor:
         self._request_counter = 0
         self._counter_lock = threading.Lock()
     
-    def start(self):
+    def start(self) -> None:
         """Start batch processing."""
         if self._running:
             return
@@ -274,7 +274,7 @@ class BatchProcessor:
         self._worker_thread.start()
         logger.info("Batch processor started")
     
-    def stop(self):
+    def stop(self) -> None:
         """Stop batch processing."""
         self._running = False
         if self._worker_thread:
@@ -370,7 +370,7 @@ class BatchProcessor:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, future.result)
     
-    def _process_loop(self):
+    def _process_loop(self) -> None:
         """Main processing loop."""
         while self._running:
             try:
@@ -382,7 +382,7 @@ class BatchProcessor:
             except Exception as e:
                 logger.error(f"Batch processing error: {e}")
     
-    def _process_batch_internal(self, batch: List[InferenceRequest]):
+    def _process_batch_internal(self, batch: List[InferenceRequest]) -> None:
         """Process a batch of requests."""
         start_time = time.time()
         

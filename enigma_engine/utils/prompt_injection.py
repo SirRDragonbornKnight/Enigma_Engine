@@ -238,7 +238,7 @@ class PromptInjectionDetector:
                 try:
                     compiled.append((re.compile(pattern, re.IGNORECASE), level, name))
                 except re.error:
-                    pass
+                    pass  # Intentionally silent
             self._compiled_patterns[injection_type] = compiled
         
         # Compile custom patterns
@@ -247,7 +247,7 @@ class PromptInjectionDetector:
             try:
                 self._compiled_custom.append((re.compile(pattern, re.IGNORECASE), level, name))
             except re.error:
-                pass
+                pass  # Intentionally silent
     
     def detect(self, text: str) -> DetectionResult:
         """

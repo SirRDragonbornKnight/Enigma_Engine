@@ -64,7 +64,7 @@ class LoRALinear(nn.Module):
         alpha: int = 16,
         dropout: float = 0.0,
         bias: bool = False
-    ):
+    ) -> None:
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
@@ -94,7 +94,7 @@ class LoRALinear(nn.Module):
         # For merged weights
         self._merged = False
     
-    def reset_lora_parameters(self):
+    def reset_lora_parameters(self) -> None:
         """Initialize LoRA matrices."""
         # A uses Kaiming uniform, B is zero-initialized
         nn.init.kaiming_uniform_(self.lora_A, a=math.sqrt(5))
@@ -131,13 +131,13 @@ class LoRALinear(nn.Module):
         
         return result + lora_output
     
-    def merge_weights(self):
+    def merge_weights(self) -> None:
         """Merge LoRA weights into main weights for inference."""
         if not self._merged:
             self.weight.data += (self.lora_B @ self.lora_A) * self.scaling
             self._merged = True
     
-    def unmerge_weights(self):
+    def unmerge_weights(self) -> None:
         """Unmerge LoRA weights for continued training."""
         if self._merged:
             self.weight.data -= (self.lora_B @ self.lora_A) * self.scaling
@@ -153,7 +153,7 @@ class LoRALinear(nn.Module):
             state['bias'] = self.bias.data
         return state
     
-    def load_lora_state_dict(self, state_dict: dict[str, torch.Tensor]):
+    def load_lora_state_dict(self, state_dict: dict[str, torch.Tensor]) -> None:
         """Load LoRA parameters."""
         self.lora_A.data.copy_(state_dict['lora_A'])
         self.lora_B.data.copy_(state_dict['lora_B'])
@@ -177,7 +177,7 @@ class QLoRALinear(LoRALinear):
         dropout: float = 0.0,
         bias: bool = False,
         bits: int = 4
-    ):
+    ) -> None:
         super().__init__(in_features, out_features, r, alpha, dropout, bias)
         self.bits = bits
         
@@ -297,7 +297,7 @@ class LoRAModel(nn.Module):
         self,
         base_model: nn.Module,
         config: Optional[LoRAConfig] = None
-    ):
+    ) -> None:
         super().__init__()
         self.config = config or LoRAConfig()
         self.base_model = base_model
@@ -312,7 +312,7 @@ class LoRAModel(nn.Module):
         
         logger.info(f"Created LoRA model with {self.num_trainable_params:,} trainable parameters")
     
-    def _add_lora_adapters(self):
+    def _add_lora_adapters(self) -> None:
         """Replace target modules with LoRA versions."""
         for name, module in self.base_model.named_modules():
             if isinstance(module, nn.Linear):
@@ -374,20 +374,20 @@ class LoRAModel(nn.Module):
         """Forward pass through the adapted model."""
         return self.base_model(*args, **kwargs)
     
-    def merge_adapters(self):
+    def merge_adapters(self) -> None:
         """Merge LoRA weights into base weights for inference."""
         for name, layer in self._lora_layers.items():
             if isinstance(layer, LoRALinear) and not isinstance(layer, QLoRALinear):
                 layer.merge_weights()
                 logger.debug(f"Merged LoRA weights for {name}")
     
-    def unmerge_adapters(self):
+    def unmerge_adapters(self) -> None:
         """Unmerge LoRA weights for continued training."""
         for name, layer in self._lora_layers.items():
             if isinstance(layer, LoRALinear) and not isinstance(layer, QLoRALinear):
                 layer.unmerge_weights()
     
-    def save_adapters(self, path: Union[str, Path]):
+    def save_adapters(self, path: Union[str, Path]) -> None:
         """Save only the LoRA adapter weights."""
         path = Path(path)
         path.mkdir(parents=True, exist_ok=True)
@@ -417,7 +417,7 @@ class LoRAModel(nn.Module):
         
         logger.info(f"Saved LoRA adapters to {path}")
     
-    def load_adapters(self, path: Union[str, Path]):
+    def load_adapters(self, path: Union[str, Path]) -> None:
         """Load LoRA adapter weights."""
         path = Path(path)
         
@@ -459,7 +459,7 @@ class LoRATrainer:
         weight_decay: float = 0.01,
         warmup_steps: int = 100,
         gradient_accumulation_steps: int = 4
-    ):
+    ) -> None:
         self.model = model
         self.tokenizer = tokenizer
         self.lr = lr
@@ -546,7 +546,7 @@ class LoRATrainer:
         
         return history
     
-    def save(self, path: str):
+    def save(self, path: str) -> None:
         """Save the LoRA model."""
         self.model.save_adapters(path)
 

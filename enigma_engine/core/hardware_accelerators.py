@@ -91,7 +91,7 @@ class AcceleratorDevice(ABC):
         """Allocate memory on device."""
     
     @abstractmethod
-    def free_memory(self, handle: Any):
+    def free_memory(self, handle: Any) -> None:
         """Free device memory."""
     
     @abstractmethod
@@ -114,7 +114,7 @@ class AcceleratorDevice(ABC):
 class CUDADevice(AcceleratorDevice):
     """NVIDIA CUDA device."""
     
-    def __init__(self, device_id: int = 0):
+    def __init__(self, device_id: int = 0) -> None:
         self.device_id = device_id
         self.device = f"cuda:{device_id}" if HAS_TORCH else None
     
@@ -155,7 +155,7 @@ class CUDADevice(AcceleratorDevice):
             return None
         return torch.empty(size_bytes, dtype=torch.uint8, device=self.device)
     
-    def free_memory(self, handle: Any):
+    def free_memory(self, handle: Any) -> None:
         """Free CUDA memory."""
         del handle
         if self.is_available():
@@ -200,7 +200,7 @@ class CUDADevice(AcceleratorDevice):
 class MPSDevice(AcceleratorDevice):
     """Apple Metal Performance Shaders device."""
     
-    def __init__(self):
+    def __init__(self) -> None:
         self.device = "mps" if HAS_TORCH else None
     
     def get_info(self) -> DeviceInfo:
@@ -230,7 +230,7 @@ class MPSDevice(AcceleratorDevice):
             return None
         return torch.empty(size_bytes, dtype=torch.uint8, device="mps")
     
-    def free_memory(self, handle: Any):
+    def free_memory(self, handle: Any) -> None:
         """Free MPS memory."""
         del handle
     
@@ -263,7 +263,7 @@ class MPSDevice(AcceleratorDevice):
 class CoralDevice(AcceleratorDevice):
     """Google Coral Edge TPU device."""
     
-    def __init__(self, device_path: str = None):
+    def __init__(self, device_path: str = None) -> None:
         self.device_path = device_path
         self._interpreter = None
     
@@ -298,7 +298,7 @@ class CoralDevice(AcceleratorDevice):
         """Coral manages memory internally."""
         return None
     
-    def free_memory(self, handle: Any):
+    def free_memory(self, handle: Any) -> None:
         """Coral manages memory internally."""
     
     def transfer_to_device(self, data: Any) -> Any:
@@ -341,7 +341,7 @@ class CoralDevice(AcceleratorDevice):
 class TPUDevice(AcceleratorDevice):
     """Google Cloud TPU device."""
     
-    def __init__(self, tpu_name: str = None):
+    def __init__(self, tpu_name: str = None) -> None:
         self.tpu_name = tpu_name
         self._resolver = None
         self._strategy = None
@@ -379,7 +379,7 @@ class TPUDevice(AcceleratorDevice):
         except (ValueError, RuntimeError, Exception):
             return False
     
-    def _init_tpu(self):
+    def _init_tpu(self) -> None:
         """Initialize TPU."""
         if self._resolver is None:
             self._resolver = tf.distribute.cluster_resolver.TPUClusterResolver(
@@ -393,7 +393,7 @@ class TPUDevice(AcceleratorDevice):
         """TPU manages memory internally."""
         return None
     
-    def free_memory(self, handle: Any):
+    def free_memory(self, handle: Any) -> None:
         """TPU manages memory internally."""
     
     def transfer_to_device(self, data: Any) -> Any:
@@ -433,7 +433,7 @@ class TPUDevice(AcceleratorDevice):
 class QualcommNPUDevice(AcceleratorDevice):
     """Qualcomm Hexagon NPU device (mobile/edge)."""
     
-    def __init__(self):
+    def __init__(self) -> None:
         self._ctx = None
     
     def get_info(self) -> DeviceInfo:
@@ -456,7 +456,7 @@ class QualcommNPUDevice(AcceleratorDevice):
     def allocate_memory(self, size_bytes: int) -> Optional[Any]:
         return None
     
-    def free_memory(self, handle: Any):
+    def free_memory(self, handle: Any) -> None:
         pass
     
     def transfer_to_device(self, data: Any) -> Any:
@@ -477,7 +477,7 @@ class QualcommNPUDevice(AcceleratorDevice):
 class IntelNPUDevice(AcceleratorDevice):
     """Intel Neural Processing Unit (Meteor Lake+)."""
     
-    def __init__(self):
+    def __init__(self) -> None:
         pass
     
     def get_info(self) -> DeviceInfo:
@@ -502,7 +502,7 @@ class IntelNPUDevice(AcceleratorDevice):
     def allocate_memory(self, size_bytes: int) -> Optional[Any]:
         return None
     
-    def free_memory(self, handle: Any):
+    def free_memory(self, handle: Any) -> None:
         pass
     
     def transfer_to_device(self, data: Any) -> Any:
@@ -533,12 +533,12 @@ class IntelNPUDevice(AcceleratorDevice):
 class AcceleratorManager:
     """Manages multiple hardware accelerators."""
     
-    def __init__(self):
+    def __init__(self) -> None:
         self.devices: dict[str, AcceleratorDevice] = {}
         self.primary_device: Optional[AcceleratorDevice] = None
         self._discover_devices()
     
-    def _discover_devices(self):
+    def _discover_devices(self) -> None:
         """Discover available accelerators."""
         # CUDA
         if HAS_TORCH and torch.cuda.is_available():

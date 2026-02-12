@@ -644,7 +644,7 @@ class GameAIRouter:
                 try:
                     running.add(proc.info['name'].lower())
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    pass
+                    pass  # Intentionally silent
             
             # Check against game configs
             for game_id, config in self._games.items():
@@ -937,7 +937,7 @@ class GameAIRouter:
                     from enigma_engine.core.engine_pool import release_engine
                     release_engine(engine)
                 except ImportError:
-                    pass
+                    pass  # Intentionally silent
     
     # ===== Callbacks =====
     

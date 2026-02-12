@@ -546,7 +546,7 @@ class DJITelloPlatform(RobotPlatform):
             try:
                 self.tello.emergency()
             except Exception:
-                pass
+                pass  # Intentionally silent
         self._is_flying = False
         self.state = RobotState.EMERGENCY_STOP
     
@@ -629,7 +629,7 @@ class DJITelloPlatform(RobotPlatform):
             try:
                 return self.tello.get_battery()
             except Exception:
-                pass
+                pass  # Intentionally silent
         return 0
     
     def get_frame(self):
@@ -638,7 +638,7 @@ class DJITelloPlatform(RobotPlatform):
             try:
                 return self.tello.get_frame_read().frame
             except Exception:
-                pass
+                pass  # Intentionally silent
         return None
 
 

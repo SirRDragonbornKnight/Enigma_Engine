@@ -394,7 +394,7 @@ class PersonaTab(QWidget):
                 
                 QTimer.singleShot(0, add_voices)
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         thread = threading.Thread(target=load_system_voices, daemon=True)
         thread.start()

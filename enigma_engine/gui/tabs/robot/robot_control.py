@@ -452,7 +452,7 @@ def _disconnect_robot(parent):
         try:
             parent.robot_connection.close()
         except Exception:
-            pass
+            pass  # Intentionally silent
     parent.robot_connection = None
     parent.robot_status_label.setText("Status: Not connected")
     parent.robot_status_label.setStyleSheet("color: #f38ba8;")

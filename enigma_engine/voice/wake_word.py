@@ -332,7 +332,7 @@ class PocketsphinxEngine(BaseWakeWordEngine):
             try:
                 self._decoder.end_utt()
             except Exception:
-                pass
+                pass  # Intentionally silent
             self._decoder = None
     
     @property
@@ -558,17 +558,17 @@ class WakeWordDetector:
         try:
             available.append("openwakeword")
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         try:
             available.append("porcupine")
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         try:
             available.append("pocketsphinx")
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         # Energy is always available
         available.append("energy")

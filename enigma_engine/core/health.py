@@ -297,7 +297,7 @@ class HealthChecker:
                 disk = psutil.disk_usage('/')
                 disk_percent = disk.percent
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         # GPU metrics
         if TORCH_AVAILABLE and torch.cuda.is_available():
@@ -317,7 +317,7 @@ class HealthChecker:
                     if result.returncode == 0:
                         gpu_utilization = float(result.stdout.strip().split('\n')[0])
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
                     
             except Exception as e:
                 logger.debug(f"GPU metrics unavailable: {e}")
@@ -411,23 +411,23 @@ def create_health_routes(app: Any, checker: HealthChecker) -> Any:
     
     @app.route('/health')
     @app.route('/health/live')
-    def health_live():
+    def health_live() -> tuple[Any, int]:
         status = checker.check_liveness()
         code = 200 if status.status == 'healthy' else 503
         return jsonify(status.to_dict()), code
     
     @app.route('/health/ready')
-    def health_ready():
+    def health_ready() -> tuple[Any, int]:
         status = checker.check_readiness()
         code = 200 if status.status == 'healthy' else 503
         return jsonify(status.to_dict()), code
     
     @app.route('/health/full')
-    def health_full():
+    def health_full() -> Any:
         return jsonify(checker.get_full_status())
     
     @app.route('/metrics')
-    def metrics():
+    def metrics() -> Any:
         return jsonify({
             'system': checker.get_system_metrics().to_dict(),
             'requests': checker.get_request_stats()
@@ -452,7 +452,7 @@ class HealthCheckMiddleware:
         start_time = time.time()
         success = True
         
-        def custom_start_response(status, headers, exc_info=None):
+        def custom_start_response(status: str, headers: Any, exc_info: Any = None) -> Any:
             nonlocal success
             status_code = int(status.split()[0])
             success = status_code < 500

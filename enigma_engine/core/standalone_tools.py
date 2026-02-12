@@ -500,7 +500,7 @@ def _use_embeddings(
     text: Union[str, list[str]],
     provider: str = "auto",
     **kwargs,
-) -> Union[list, list]:
+) -> Union[list[float], list[list[float]]]:
     """
     Create text embeddings for semantic search.
     
@@ -697,7 +697,7 @@ def _use_gif_generation(
                 
                 return output_path
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         # Fallback: Create simple procedural animation
         # This creates a gradient animation without AI image generation
@@ -885,7 +885,7 @@ def _use_file_tools(
 # HELPER FUNCTIONS
 # =============================================================================
 
-def list_available_tools() -> list:
+def list_available_tools() -> list[str]:
     """
     Get list of all available tools.
     

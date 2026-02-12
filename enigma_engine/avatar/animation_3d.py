@@ -414,7 +414,7 @@ class Avatar3DAnimator:
                     label.setPixmap(pixmap)
                     
         except queue.Empty:
-            pass
+            pass  # Intentionally silent
     
     # =========================================================================
     # PUBLIC API

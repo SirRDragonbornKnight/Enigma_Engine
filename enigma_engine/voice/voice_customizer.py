@@ -224,7 +224,7 @@ class VoiceCustomizer:
                 if 0 <= idx < len(available):
                     selected.append(available[idx])
             except ValueError:
-                pass
+                pass  # Intentionally silent
         
         return selected
     

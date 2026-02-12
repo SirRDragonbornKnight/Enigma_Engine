@@ -36,7 +36,7 @@ class MultiHeadAttention(nn.Module):
         n_heads: int, 
         max_seq_len: int = 2048, 
         dropout: float = 0.0
-    ):
+    ) -> None:
         super().__init__()
         self.n_heads = n_heads
         self.head_dim = dim // n_heads
@@ -142,7 +142,7 @@ class GroupedQueryAttention(nn.Module):
         n_kv_heads: int,
         max_seq_len: int = 2048,
         dropout: float = 0.0
-    ):
+    ) -> None:
         super().__init__()
         assert n_heads % n_kv_heads == 0
         
@@ -228,7 +228,7 @@ class SlidingWindowAttention(nn.Module):
         window_size: int = 512,
         max_seq_len: int = 2048,
         dropout: float = 0.0
-    ):
+    ) -> None:
         super().__init__()
         self.n_heads = n_heads
         self.head_dim = dim // n_heads

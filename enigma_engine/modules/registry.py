@@ -1780,7 +1780,7 @@ class CodeGenAPIModule(GenerationModule):
                 logger.info("Using built-in code generator as fallback")
                 return True
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         return True  # Module loads, code gen may be limited
 
@@ -1877,7 +1877,7 @@ class VideoGenAPIModule(GenerationModule):
                 logger.info("Using built-in video generator as fallback")
                 return True
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         return True  # Module loads, video gen may be limited
 
@@ -1995,7 +1995,7 @@ class AudioGenAPIModule(GenerationModule):
                 logger.info("Using built-in TTS as fallback")
                 return True
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         return True  # Module loads, audio gen may be limited
 
@@ -2244,7 +2244,7 @@ class ThreeDGenAPIModule(GenerationModule):
                 logger.info("Using built-in 3D generator as fallback")
                 return True
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         return True  # Module loads, 3D gen may be limited
 

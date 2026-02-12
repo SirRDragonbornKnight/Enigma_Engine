@@ -1203,7 +1203,7 @@ def _populate_monitors(parent, preserve_selection=False):
                     idx = screens.index(current_screen)
                     parent.monitor_combo.setCurrentIndex(idx)
                 except ValueError:
-                    pass
+                    pass  # Intentionally silent
     
     parent.monitor_combo.blockSignals(False)
 
@@ -2156,7 +2156,7 @@ def create_settings_tab(parent):
             runtime_label.setStyleSheet("color: #bac2de;")
         nn_backend_row.addWidget(runtime_label)
     except Exception:
-        pass
+        pass  # Intentionally silent
     
     nn_backend_row.addStretch()
     device_layout.addLayout(nn_backend_row)
@@ -5010,6 +5010,6 @@ def _load_profanity_filter_setting(parent):
                 pf = get_profanity_filter()
                 pf.set_enabled(enabled)
             except ImportError:
-                pass
+                pass  # Intentionally silent
     except Exception as e:
         logger.debug(f"Failed to load profanity filter setting: {e}")

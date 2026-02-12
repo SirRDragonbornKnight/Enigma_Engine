@@ -50,7 +50,7 @@ class ThoughtNode:
     depth: int = 0
     metadata: dict[str, Any] = field(default_factory=dict)
     
-    def __lt__(self, other):
+    def __lt__(self, other) -> bool:
         # For heap comparison
         return self.score > other.score  # Higher score = higher priority
 
@@ -267,7 +267,7 @@ class ToTReasoner:
         node.state = NodeState.EVALUATED
         return children
     
-    def _evaluate_node(self, tree: ThoughtTree, node: ThoughtNode):
+    def _evaluate_node(self, tree: ThoughtTree, node: ThoughtNode) -> None:
         """Evaluate a thought node."""
         if node.state == NodeState.EVALUATED:
             return
@@ -280,7 +280,7 @@ class ToTReasoner:
         node.score = self._evaluator(tree.problem, full_thought)
         node.state = NodeState.EVALUATED
         
-    def _bfs_search(self, tree: ThoughtTree):
+    def _bfs_search(self, tree: ThoughtTree) -> None:
         """Breadth-first search."""
         queue = [tree.root_id]
         
@@ -301,7 +301,7 @@ class ToTReasoner:
                 else:
                     child.state = NodeState.PRUNED
     
-    def _dfs_search(self, tree: ThoughtTree):
+    def _dfs_search(self, tree: ThoughtTree) -> None:
         """Depth-first search."""
         stack = [tree.root_id]
         
@@ -322,7 +322,7 @@ class ToTReasoner:
                 else:
                     child.state = NodeState.PRUNED
     
-    def _beam_search(self, tree: ThoughtTree):
+    def _beam_search(self, tree: ThoughtTree) -> None:
         """Beam search - keep top k nodes at each level."""
         beam = [tree.root_id]
         
@@ -352,7 +352,7 @@ class ToTReasoner:
             for candidate in candidates[self._beam_width:]:
                 candidate.state = NodeState.PRUNED
     
-    def _best_first_search(self, tree: ThoughtTree):
+    def _best_first_search(self, tree: ThoughtTree) -> None:
         """Best-first search using priority queue."""
         # Priority queue (min-heap, so negate scores)
         pq = []
@@ -433,7 +433,7 @@ def create_tot_reasoner(generator: Callable = None,
 class ForgeToTIntegration:
     """Integration layer for using ToT with Enigma AI Engine inference."""
     
-    def __init__(self, engine=None):
+    def __init__(self, engine=None) -> None:
         """
         Initialize integration.
         
@@ -443,12 +443,12 @@ class ForgeToTIntegration:
         self._engine = engine
         self._reasoner: Optional[ToTReasoner] = None
         
-    def set_engine(self, engine):
+    def set_engine(self, engine) -> None:
         """Set the inference engine."""
         self._engine = engine
         self._reasoner = None  # Reset reasoner
         
-    def _create_generator(self):
+    def _create_generator(self) -> Callable[[str, int], list[str]]:
         """Create thought generator using Enigma AI Engine."""
         def generator(context: str, n: int) -> list[str]:
             if not self._engine:
@@ -473,7 +473,7 @@ class ForgeToTIntegration:
         
         return generator
     
-    def _create_evaluator(self):
+    def _create_evaluator(self) -> Callable[[str, str], float]:
         """Create thought evaluator using Enigma AI Engine."""
         def evaluator(problem: str, thought: str) -> float:
             if not self._engine:

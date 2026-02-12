@@ -148,11 +148,31 @@ class EnigmaEngine:
     │   Dynamic cutoff based on confidence                                  │
     └────────────────────────────────────────────────────────────────────────┘
     
-    🔗 CONNECTS TO:
-      → Uses Forge model from model.py
-      → Uses tokenizer from tokenizer.py
-      → Uses ToolRouter from tool_router.py (optional)
-      ← Used by GUI chat, CLI, API server
+    Attributes:
+        model: The loaded ``Forge`` transformer model instance.
+        tokenizer: Tokenizer used to encode/decode text.
+        device: ``torch.device`` the model runs on (``cpu``, ``cuda``,
+            ``mps``).
+        use_half: Whether FP16 precision is enabled.
+        enable_tools: Whether the AI tool execution system is active.
+        use_routing: Whether specialised model routing is enabled.
+        model_metadata: Dict of metadata loaded from alongside the
+            model checkpoint (content rating, training info, etc.).
+
+    Example:
+        >>> from enigma_engine.core.inference import EnigmaEngine
+        >>> engine = EnigmaEngine()
+        >>> response = engine.generate("Tell me about AI", max_gen=50)
+        >>> print(response)
+        >>> reply = engine.chat("Hello!", system_prompt="Be helpful.")
+
+    See Also:
+        ``enigma_engine.core.model``:
+            The ``Forge`` transformer model architecture.
+        ``enigma_engine.core.tokenizer``:
+            Tokenizer utilities.
+        ``enigma_engine.core.tool_router``:
+            Specialised model routing for vision, code, etc.
     """
 
     @classmethod
@@ -229,7 +249,7 @@ class EnigmaEngine:
         enable_tools: bool = False,
         module_manager: Any | None = None,
         use_routing: bool = False
-    ):
+    ) -> None:
         """
         Initialize the inference engine.
         
@@ -359,7 +379,7 @@ class EnigmaEngine:
 
         return torch.device("cpu")
 
-    def _apply_offloading(self):
+    def _apply_offloading(self) -> None:
         """Apply CPU+GPU offloading to the model."""
         try:
             from .offloading import OffloadingConfig, apply_offloading, get_memory_info
@@ -655,7 +675,7 @@ class EnigmaEngine:
                  for name, preset in MODEL_PRESETS.items()]
         return min(diffs, key=lambda x: x[1])[0]
 
-    def _load_model_metadata(self, model_path: Optional[str] = None):
+    def _load_model_metadata(self, model_path: Optional[str] = None) -> None:
         """
         Load model metadata including content rating capabilities.
         
@@ -698,17 +718,17 @@ class EnigmaEngine:
         except Exception as e:
             logger.debug(f"Could not load model metadata: {e}")
 
-    def _log_init_info(self):
+    def _log_init_info(self) -> None:
         """Log initialization information."""
         num_params = sum(p.numel() for p in self.model.parameters())
 
-        print(system_msg(f"EnigmaEngine initialized on {self.device}"))
+        logger.info(f"EnigmaEngine initialized on {self.device}")
         if self.device.type == "cuda":
-            print(info_msg(f"GPU: {torch.cuda.get_device_name(0)}"))
-        print(info_msg(f"Model parameters: {num_params:,}"))
-        print(info_msg(f"Vocab size: {self.tokenizer.vocab_size:,}"))
-        print(info_msg(f"Max sequence length: {self.model.config.max_seq_len}"))
-        print(info_msg(f"FP16: {self.use_half}"))
+            logger.info(f"GPU: {torch.cuda.get_device_name(0)}")
+        logger.info(f"Model parameters: {num_params:,}")
+        logger.info(f"Vocab size: {self.tokenizer.vocab_size:,}")
+        logger.info(f"Max sequence length: {self.model.config.max_seq_len}")
+        logger.info(f"FP16: {self.use_half}")
 
     # =========================================================================
     # 📝 GENERATION METHODS - The Heart of Text Generation
@@ -885,26 +905,26 @@ class EnigmaEngine:
         max_tokens: int = 100,
         **kwargs
     ) -> Generator[str]:
-        """
-        Stream generated tokens one at a time.
-        
-        📖 WHY USE STREAMING?
-        Instead of waiting for the entire response, you get each token
-        as it's generated. Great for chat interfaces where users want
-        to see the AI "typing" in real-time.
-        
-        📐 EXAMPLE:
-            for token in engine.stream("Once upon a time"):
-                print(token, end="", flush=True)
-                # Prints: " there" " was" " a" " dragon"...
-        
+        """Stream generated tokens one at a time.
+
+        Instead of waiting for the entire response, each token is yielded
+        as soon as it is produced.  This is ideal for chat interfaces
+        where the user should see the AI "typing" in real time.
+
         Args:
-            prompt: Input text to continue
-            max_tokens: Maximum tokens to generate (alias for max_gen)
-            **kwargs: Additional generation parameters
-            
+            prompt: Input text to continue from.
+            max_tokens: Maximum number of tokens to generate.
+            **kwargs: Additional parameters forwarded to
+                ``stream_generate()`` (e.g. ``temperature``, ``top_k``,
+                ``top_p``, ``repetition_penalty``).
+
         Yields:
-            Each newly generated token as it's produced
+            Each newly generated token string as it is produced.
+
+        Example:
+            >>> for token in engine.stream("Once upon a time"):
+            ...     print(token, end="", flush=True)
+            ' there was a dragon...'
         """
         return self.stream_generate(prompt, max_gen=max_tokens, **kwargs)
     
@@ -1667,19 +1687,52 @@ class EnigmaEngine:
         auto_truncate: bool = True,
         **kwargs
     ) -> str:
-        """
-        Chat-style generation with conversation history.
+        """Chat-style generation with conversation history.
+
+        Builds a structured prompt from the conversation history and the
+        current user message, runs it through ``generate()``, and extracts
+        only the assistant's reply.
+
+        When ``auto_truncate`` is enabled (default), long conversation
+        histories are automatically trimmed so they fit inside the model's
+        context window.  This prevents the model from receiving a prompt
+        that exceeds ``max_seq_len`` -- a common cause of hallucinations
+        and garbled output.
 
         Args:
-            message: User's message
-            history: List of {"role": "user/assistant", "content": "..."} dicts
-            system_prompt: Optional system prompt
-            max_gen: Maximum tokens to generate
-            auto_truncate: Automatically truncate history to fit context (prevents hallucinations!)
-            **kwargs: Additional generation parameters
+            message: The user's current message.
+            history: Previous turns as a list of dicts, each with
+                ``"role"`` (``"user"`` or ``"assistant"``) and
+                ``"content"`` keys.  ``None`` starts a fresh
+                conversation.
+            system_prompt: An optional system instruction prepended to the
+                prompt (e.g. ``"You are a helpful coding assistant."``).
+            max_gen: Maximum number of new tokens to generate for the
+                assistant reply.
+            auto_truncate: If ``True``, older history entries are dropped
+                when the prompt would exceed the model's context window.
+            **kwargs: Extra keyword arguments forwarded to ``generate()``
+                (e.g. ``temperature``, ``top_k``, ``top_p``).
 
         Returns:
-            Assistant's response
+            The assistant's response text (without prompt or history).
+
+        Raises:
+            RuntimeError: If the underlying model is not loaded or the
+                tokenizer fails to encode the prompt.
+
+        Example:
+            >>> engine = EnigmaEngine()
+            >>> reply = engine.chat("What is Python?")
+            >>> print(reply)
+            'Python is a high-level programming language...'
+            >>>
+            >>> # Multi-turn with history
+            >>> history = [
+            ...     {"role": "user", "content": "Hi!"},
+            ...     {"role": "assistant", "content": "Hello! How can I help?"},
+            ... ]
+            >>> reply = engine.chat("Tell me a joke", history=history)
         """
         # ─────────────────────────────────────────────────────────────────────
         # TRUNCATE HISTORY TO PREVENT HALLUCINATIONS

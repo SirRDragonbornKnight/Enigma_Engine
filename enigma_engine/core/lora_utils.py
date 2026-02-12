@@ -18,7 +18,7 @@ Usage:
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import torch
 import torch.nn as nn
@@ -45,7 +45,7 @@ class LoRAConfig:
     weight_decay: float = 0.01
     max_grad_norm: float = 1.0
     
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.target_modules is None:
             # Default: apply to attention query and value projections
             self.target_modules = ['q_proj', 'v_proj']
@@ -58,7 +58,7 @@ class LoRATrainer:
     Freezes base model and only trains LoRA adapter weights.
     """
     
-    def __init__(self, model: nn.Module, config: LoRAConfig):
+    def __init__(self, model: nn.Module, config: LoRAConfig) -> None:
         """
         Initialize LoRA trainer.
         
@@ -79,7 +79,7 @@ class LoRATrainer:
         logger.info(f"LoRA trainer initialized with rank={config.rank}")
         self._log_trainable_params()
     
-    def _apply_lora(self):
+    def _apply_lora(self) -> None:
         """Apply LoRA layers to target modules."""
         from enigma_engine.core.nn.experts import LoRALayer
         
@@ -112,7 +112,7 @@ class LoRATrainer:
         
         logger.info(f"Applied LoRA to {count} modules")
     
-    def _freeze_base_model(self):
+    def _freeze_base_model(self) -> None:
         """Freeze all parameters except LoRA."""
         for param in self.model.parameters():
             param.requires_grad = False
@@ -122,7 +122,7 @@ class LoRATrainer:
             for param in lora.parameters():
                 param.requires_grad = True
     
-    def _log_trainable_params(self):
+    def _log_trainable_params(self) -> None:
         """Log number of trainable parameters."""
         total_params = sum(p.numel() for p in self.model.parameters())
         trainable_params = sum(
@@ -134,7 +134,7 @@ class LoRATrainer:
         logger.info(f"Total parameters: {total_params:,}")
         logger.info(f"Trainable (LoRA): {trainable_params:,} ({percentage:.2f}%)")
     
-    def forward_with_lora(self, input_ids, attention_mask=None, **kwargs):
+    def forward_with_lora(self, input_ids: torch.Tensor, attention_mask: Optional[torch.Tensor] = None, **kwargs: Any) -> Any:
         """
         Forward pass with LoRA adapters applied.
         
@@ -185,11 +185,11 @@ class LoRATrainer:
     
     def train(
         self,
-        train_dataset,
+        train_dataset: Any,
         epochs: Optional[int] = None,
         learning_rate: Optional[float] = None,
-        **kwargs
-    ):
+        **kwargs: Any
+    ) -> None:
         """
         Train LoRA adapters.
         
@@ -262,7 +262,7 @@ class LoRATrainer:
             avg_loss = total_loss / num_batches if num_batches > 0 else 0
             logger.info(f"Epoch {epoch+1}/{epochs}, Loss: {avg_loss:.4f}")
     
-    def save_adapter(self, path: str):
+    def save_adapter(self, path: str) -> None:
         """
         Save only the LoRA adapter weights.
         
@@ -286,7 +286,7 @@ class LoRATrainer:
         torch.save(save_dict, path)
         logger.info(f"LoRA adapter saved to {path}")
     
-    def load_adapter(self, path: str):
+    def load_adapter(self, path: str) -> None:
         """
         Load LoRA adapter weights.
         
@@ -303,7 +303,7 @@ class LoRATrainer:
         
         logger.info(f"LoRA adapter loaded from {path}")
     
-    def merge_and_save(self, path: str):
+    def merge_and_save(self, path: str) -> None:
         """
         Merge LoRA weights into base model and save.
         
@@ -327,9 +327,9 @@ class LoRATrainer:
 
 def prepare_lora_dataset(
     data_path: str,
-    tokenizer,
+    tokenizer: Any,
     max_length: int = 512
-):
+) -> list[tuple[str, str]]:
     """
     Prepare dataset for LoRA fine-tuning.
     
@@ -345,21 +345,34 @@ def prepare_lora_dataset(
     with open(data_path, encoding='utf-8') as f:
         lines = f.readlines()
     
-    # Parse Q&A pairs or conversation format
+    # Parse Q&A pairs or conversation format (handles multi-line answers)
     samples = []
     current_q = None
+    current_a = []
+    in_answer = False
     
     for line in lines:
-        line = line.strip()
-        if not line:
-            continue
+        stripped = line.strip()
         
-        if line.startswith('Q:') or line.startswith('User:'):
-            current_q = line.split(':', 1)[1].strip()
-        elif (line.startswith('A:') or line.startswith('AI:')) and current_q:
-            answer = line.split(':', 1)[1].strip()
-            samples.append((current_q, answer))
-            current_q = None
+        if stripped.startswith('Q:') or stripped.startswith('User:'):
+            # Save previous pair
+            if current_q and in_answer:
+                samples.append((current_q, '\n'.join(current_a).strip()))
+            current_q = stripped.split(':', 1)[1].strip()
+            current_a = []
+            in_answer = False
+        elif (stripped.startswith('A:') or stripped.startswith('AI:')) and current_q:
+            in_answer = True
+            first_line = stripped.split(':', 1)[1].strip()
+            if first_line:
+                current_a.append(first_line)
+        elif current_q and in_answer:
+            # Continue collecting (preserve for code blocks)
+            current_a.append(line.rstrip())
+    
+    # Don't forget last pair
+    if current_q and in_answer:
+        samples.append((current_q, '\n'.join(current_a).strip()))
     
     logger.info(f"Prepared {len(samples)} training samples")
     return samples

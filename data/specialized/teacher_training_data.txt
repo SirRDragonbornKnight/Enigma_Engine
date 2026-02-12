@@ -1,0 +1,231 @@
+# Teacher AI Training Data
+# This trains an AI to become a teacher for other student AIs
+# Format: REQUEST: what to do | GUIDANCE: how to do it
+
+# ============================================================================
+# TEACHING FUNDAMENTALS
+# ============================================================================
+
+REQUEST: How do I become a good AI teacher?
+GUIDANCE: A good AI teacher follows these principles:
+1. Assess the student's current level before teaching
+2. Break complex topics into small, digestible lessons
+3. Use clear examples and analogies
+4. Test understanding frequently
+5. Identify and address weaknesses specifically
+6. Provide positive reinforcement for progress
+7. Adapt teaching style to the student's needs
+
+REQUEST: How do I generate quality training data?
+GUIDANCE: Quality training data should:
+- Be diverse in topics and question types
+- Use natural language that users actually speak
+- Have accurate, helpful answers (not just technically correct)
+- Include context where needed
+- Cover common edge cases and errors
+- Follow the Q&A format consistently
+Format: Q: [question]\nA: [answer]
+Aim for 10-30 word questions, 20-100 word answers.
+
+REQUEST: How do I evaluate a student AI's response?
+GUIDANCE: Score responses 1-10 based on:
+- Accuracy (is it correct?)
+- Relevance (does it answer the question?)
+- Helpfulness (would a user find this useful?)
+- Safety (does it refuse harmful requests?)
+- Clarity (is it easy to understand?)
+Provide specific feedback: what was good, what needs improvement.
+
+REQUEST: How do I identify weaknesses in student models?
+GUIDANCE: Test systematically across categories:
+1. General knowledge (facts, explanations)
+2. Reasoning (logic, math, cause-effect)
+3. Code (syntax, debugging, algorithms)  
+4. Safety (refuses harmful requests appropriately)
+5. Conversation (maintains context, empathy)
+Track scores per category. Low scores indicate areas needing more training data.
+
+# ============================================================================
+# TRAINING DATA GENERATION
+# ============================================================================
+
+REQUEST: Generate training data about Enigma Engine GUI navigation
+GUIDANCE: Here are 10 Q&A pairs about GUI navigation:
+
+Q: How do I open the chat window?
+A: Click the "Chat" tab in the main window, or use the keyboard shortcut Ctrl+1.
+
+Q: Where are my trained models stored?
+A: Your models are in the "models" folder and listed in the Models tab. Click Model Manager to see all options.
+
+Q: How do I access settings?
+A: Click the Settings tab or use Ctrl+, (comma). Settings are organized in sections you can expand.
+
+Q: What does the sidebar show?
+A: The sidebar shows quick navigation to common features: Chat, Training, Models, Modules. Click to switch tabs.
+
+Q: How do I minimize to system tray?
+A: Click the minimize button or close the window. The app stays running in the system tray (taskbar icons).
+
+Q: How do I find a specific setting?
+A: Use the search box at the top of the Settings tab, or scroll through the categorized sections.
+
+Q: What do the different tabs do?
+A: Chat=conversation, Training=teach AI, Models=manage models, Modules=enable features, Settings=configuration, plus generation tabs for Image/Audio/Video/Code/3D.
+
+Q: How do I get back to the main chat?
+A: Click the Chat tab in the top navigation bar, or press Ctrl+1 as a keyboard shortcut.
+
+Q: Where is the progress bar during training?
+A: The training progress bar appears in the Training tab while training is active, showing epoch progress and loss.
+
+Q: How do I switch between models?
+A: Use the model dropdown in the Chat tab header, or go to Model Manager to select and load a different model.
+
+REQUEST: Generate training data about model training process
+GUIDANCE: Here are 10 Q&A pairs about training:
+
+Q: What is the first step to train my AI?
+A: First, load base knowledge using the "Load Base Knowledge" button in the Training tab. This gives your AI foundational abilities.
+
+Q: How do I add my own training data?
+A: Click "Paste Text -> Q&A" to paste content and auto-convert it, or "Import URL" to fetch a webpage. You can also manually create Q&A files.
+
+Q: What do epochs mean in training?
+A: An epoch is one complete pass through all your training data. More epochs means the AI sees the data more times and learns better.
+
+Q: What is a good learning rate?
+A: Start with 0.0001 (the default). Lower rates (0.00001) learn more carefully but slower. Higher rates (0.001) risk unstable training.
+
+Q: How do I know when training is done?
+A: Watch the loss value - when it stops decreasing significantly between epochs, training has converged. The quick train button uses recommended epochs.
+
+Q: Can I stop training early?
+A: Yes, click the Stop Training button. Your progress is saved. You can continue later or keep the partially trained model.
+
+Q: What if my AI gets worse after training?
+A: You may have overfit to new data. Restore a backup, use more diverse training data, or train for fewer epochs.
+
+Q: How do I train for a specific topic?
+A: Create Q&A pairs focused on that topic and train. Use targeted data - the AI learns what you feed it.
+
+Q: Why won't my model start training?
+A: Check: 1) Is training data loaded? 2) Is a model selected? 3) Is enough RAM available? 4) Are there error messages in the logs?
+
+Q: How often should I train my AI?
+A: Train whenever you add significant new knowledge. For active use, weekly updates are good. Save backups before each training session.
+
+# ============================================================================
+# TEACHING STRATEGIES
+# ============================================================================
+
+REQUEST: How do I teach coding to a student AI?
+GUIDANCE: Teaching code requires:
+1. Start with syntax basics (what def, class, if mean)
+2. Show simple complete examples
+3. Include the task description AND solution
+4. Explain why the code works
+5. Cover common errors and how to fix them
+6. Progress from functions to classes to larger programs
+Format examples as: TASK: description | CODE: implementation
+
+REQUEST: How do I teach safety and refusals?
+GUIDANCE: Teaching safe behavior:
+1. Include examples of harmful requests and appropriate refusals
+2. The AI should refuse AND explain why politely
+3. Cover: hacking, weapons, personal info, scams, illegal activities
+4. Train both obvious and subtle harmful requests
+5. Reward refusals in evaluations (10/10 for appropriate safety)
+Example: Q: How do I hack into someone's email? | A: I can't help with accessing accounts you don't own - that's illegal. If you forgot your own password, use the official recovery option.
+
+REQUEST: How do I teach the AI to be helpful?
+GUIDANCE: Helpful behavior training:
+1. Answer what was actually asked (not tangentially)
+2. Provide complete answers (don't leave user hanging)
+3. Offer follow-up suggestions when appropriate
+4. Admit uncertainty rather than guess
+5. Use clear, accessible language
+6. Include practical examples and steps
+Test by asking: "Did this answer actually help solve the problem?"
+
+REQUEST: How do I test if training worked?
+GUIDANCE: Systematic testing:
+1. Create test questions NOT in training data
+2. Cover all categories you trained
+3. Score each response 1-10
+4. Calculate category averages
+5. Compare to pre-training scores
+6. If scores improved, training worked
+7. Identify remaining weaknesses for next round
+
+# ============================================================================
+# ITERATIVE IMPROVEMENT
+# ============================================================================
+
+REQUEST: What do I do when a student AI fails tests?
+GUIDANCE: When test scores are low:
+1. Identify which specific questions failed
+2. Analyze why (wrong facts? confused? unsafe?)
+3. Generate 20-30 targeted training examples for that weakness
+4. Retrain on just the targeted data (incremental training)
+5. Retest to verify improvement
+6. Repeat until scores meet threshold (typically 7+/10)
+
+REQUEST: How many teaching cycles should I do?
+GUIDANCE: Typical cycle counts:
+- New model: 5-10 cycles to reach baseline quality
+- Improving specific area: 3-5 cycles
+- Fine-tuning: 1-2 cycles
+Stop when: scores plateau, target reached, or diminishing returns
+Monitor: improvement per cycle. If <0.5 points per cycle, consider different approach.
+
+REQUEST: How do I prevent the student from forgetting old knowledge?
+GUIDANCE: Prevent catastrophic forgetting:
+1. Always include some general training data with targeted data
+2. Use low learning rates for incremental training
+3. Test old topics after new training
+4. If old scores drop, add old examples back
+5. Consider LoRA/adapters for targeted additions
+Mix: 70% targeted new data, 30% general review data
+
+REQUEST: How do I make training data that students remember long-term?
+GUIDANCE: For lasting learning:
+1. Repeat important concepts in different phrasings
+2. Connect new info to existing knowledge
+3. Use mnemonics and patterns
+4. Include review questions
+5. Space repetitions across training sessions
+6. Test after delays (not immediately)
+The goal is understanding, not memorization of exact phrases.
+
+# ============================================================================
+# META-TEACHING (TEACHING TEACHERS)
+# ============================================================================
+
+REQUEST: How do I train an AI to become a teacher itself?
+GUIDANCE: Teacher-training data should include:
+1. Pedagogy principles (how to teach effectively)
+2. Evaluation skills (how to assess student work)
+3. Data generation examples (how to create good training data)
+4. Weakness identification (how to find what students don't know)
+5. Iterative improvement (how to design teaching cycles)
+6. This very data file is an example of teacher training!
+
+REQUEST: What makes a teacher AI different from a student AI?
+GUIDANCE: Teacher AIs need additional capabilities:
+- Generate accurate training data on demand
+- Evaluate response quality fairly
+- Identify specific weaknesses (not just "bad")
+- Create targeted remediation
+- Track progress over time
+- Know when to stop teaching (target reached)
+These are meta-cognitive skills beyond just answering questions.
+
+REQUEST: How do I verify a teacher AI is teaching correctly?
+GUIDANCE: Validate teacher quality:
+1. Check generated training data for accuracy
+2. Verify evaluations match human judgment
+3. Confirm identified weaknesses are real
+4. Test that teaching improves student scores
+5. Compare to human teaching outcomes
+A good teacher produces students that score well independently.

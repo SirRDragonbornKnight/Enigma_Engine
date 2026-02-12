@@ -53,7 +53,7 @@ def _ensure_preset():
         if not manager.enabled_tools:
             manager.apply_preset("full")
     except Exception:
-        pass
+        pass  # Intentionally silent
 
 
 def _execute(tool_name: str, **kwargs) -> dict[str, Any]:

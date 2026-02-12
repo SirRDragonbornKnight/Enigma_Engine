@@ -206,7 +206,7 @@ class CommandProcessor(QObject):
             from .chat_sync import ChatSync
             ChatSync.instance().set_engine(value)
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def _ensure_engine(self):
         """Ensure tool interface is initialized."""
@@ -215,7 +215,7 @@ class CommandProcessor(QObject):
                 from ..core.tool_interface import ToolInterface
                 self.tool_interface = ToolInterface()
             except Exception:
-                pass
+                pass  # Intentionally silent
         # Update model name from ChatSync
         try:
             from .chat_sync import ChatSync
@@ -223,7 +223,7 @@ class CommandProcessor(QObject):
             if chat_sync._model_name:
                 self.model_name = chat_sync._model_name
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def process_command(self, command: str) -> dict[str, Any]:
         """
@@ -916,7 +916,7 @@ class QuickCommandOverlay(QWidget):
             chat_sync = ChatSync.instance()
             chat_sync.clear_chat()
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         # Reset model conversation history
         try:
@@ -927,7 +927,7 @@ class QuickCommandOverlay(QWidget):
                 if engine and hasattr(engine, 'model') and hasattr(engine.model, 'reset_conversation'):
                     engine.model.reset_conversation()
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         # Show welcome message
         model_name = getattr(self, 'model_name', 'AI')
@@ -959,7 +959,7 @@ class QuickCommandOverlay(QWidget):
                     self.user_display_name = settings.get("user_display_name", "You")
                     return settings
         except Exception:
-            pass
+            pass  # Intentionally silent
         self.user_display_name = "You"
         return {}
     
@@ -1028,7 +1028,7 @@ class QuickCommandOverlay(QWidget):
             chat_sync = ChatSync.instance()
             chat_sync.stop_generation()
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         self.stop_responding()
         # Add stopped message
@@ -1232,7 +1232,7 @@ class QuickCommandOverlay(QWidget):
                 if widget.__class__.__name__ == 'EnhancedMainWindow':
                     return widget
         except Exception:
-            pass
+            pass  # Intentionally silent
         return None
     
     def send_to_other_windows(self, message: str):
@@ -1502,7 +1502,7 @@ class QuickCommandOverlay(QWidget):
                 # was_checked and now_checked - tried to stop but still running?
                 self.set_status("Avatar running")
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def _send_avatar_command(self, command: str):
         """Send an avatar control command to the AI."""
@@ -2045,7 +2045,7 @@ class ForgeSystemTray(QObject):
                         try:
                             keys.add(getattr(keyboard.Key, part))
                         except AttributeError:
-                            pass
+                            pass  # Intentionally silent
                 return frozenset(keys)
             
             # Define hotkey combinations
@@ -2082,7 +2082,7 @@ class ForgeSystemTray(QObject):
                     else:
                         self._active_modifiers.discard(key)
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
             
             # Start listener in non-blocking mode
             self._hotkey_listener = keyboard.Listener(
@@ -2123,7 +2123,7 @@ class ForgeSystemTray(QObject):
             try:
                 self._hotkey_listener.stop()
             except Exception:
-                pass
+                pass  # Intentionally silent
     
     def _create_icon(self):
         """Load icon from file or create a simple one."""
@@ -3118,7 +3118,7 @@ class ForgeSystemTray(QObject):
             try:
                 self.main_window.close()
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         # Process any pending events before quitting
         from PyQt5.QtWidgets import QApplication
@@ -3142,7 +3142,7 @@ class ForgeSystemTray(QObject):
             if hasattr(self, 'refresh_timer') and self.refresh_timer:
                 self.refresh_timer.stop()
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def set_status(self, text: str):
         """Update the status in the tray menu."""
@@ -3189,7 +3189,7 @@ def create_system_tray(app, main_window=None):
             try:
                 instance.cleanup()
             except Exception:
-                pass
+                pass  # Intentionally silent
         _tray_instances.clear()
         _tray_created = False
     
@@ -3207,5 +3207,5 @@ def cleanup_all_system_trays():
                 instance.tray_icon.hide()
                 instance.tray_icon.setVisible(False)
         except Exception:
-            pass
+            pass  # Intentionally silent
     _tray_instances.clear()

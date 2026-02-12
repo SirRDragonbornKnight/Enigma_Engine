@@ -12,7 +12,7 @@ MAIN CLASSES: AttentionPattern, SlidingWindowAttention, SparseAttention
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 
 try:
     import torch
@@ -191,7 +191,7 @@ if HAS_TORCH:
         Reduces complexity from O(n^2) to O(n * w) where w is window size.
         """
         
-        def __init__(self, config: AttentionConfig):
+        def __init__(self, config: AttentionConfig) -> None:
             super().__init__()
             self.config = config
             
@@ -263,7 +263,7 @@ if HAS_TORCH:
         Reduces complexity for long sequences.
         """
         
-        def __init__(self, config: AttentionConfig):
+        def __init__(self, config: AttentionConfig) -> None:
             super().__init__()
             self.config = config
             
@@ -326,7 +326,7 @@ if HAS_TORCH:
         Local tokens attend within a window plus global tokens.
         """
         
-        def __init__(self, config: AttentionConfig):
+        def __init__(self, config: AttentionConfig) -> None:
             super().__init__()
             self.config = config
             
@@ -418,7 +418,7 @@ if HAS_TORCH:
         multi-scale attention patterns.
         """
         
-        def __init__(self, config: AttentionConfig):
+        def __init__(self, config: AttentionConfig) -> None:
             super().__init__()
             self.config = config
             
@@ -501,7 +501,7 @@ if HAS_TORCH:
             config: AttentionConfig,
             page_size: int = 16,
             max_pages: int = 256,
-        ):
+        ) -> None:
             super().__init__()
             self.config = config
             self.page_size = page_size
@@ -713,5 +713,5 @@ else:
     class PagedAttention:
         pass
     
-    def create_attention(config):
+    def create_attention(config) -> Any:
         raise ImportError("PyTorch required for attention patterns")

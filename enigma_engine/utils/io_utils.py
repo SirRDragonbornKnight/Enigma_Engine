@@ -211,7 +211,7 @@ def atomic_save_json(
             try:
                 os.unlink(temp_path)
             except OSError:
-                pass
+                pass  # Intentionally silent
             raise
     except (OSError, TypeError) as e:
         logger.error(f"Failed to save {path}: {e}")

@@ -113,7 +113,7 @@ class CLIChat:
             try:
                 readline.read_history_file(str(self.history_file))
             except Exception:
-                pass
+                pass  # Intentionally silent
     
     def _save_readline_history(self):
         """Save command history to file."""
@@ -121,7 +121,7 @@ class CLIChat:
             try:
                 readline.write_history_file(str(self.history_file))
             except Exception:
-                pass
+                pass  # Intentionally silent
     
     def _print_header(self):
         """Print welcome header."""

@@ -435,7 +435,7 @@ def detect_gpu() -> Optional[GPUVendor]:
             return GPUVendor.AMD
         
     except FileNotFoundError:
-        pass
+        pass  # Intentionally silent
     
     return None
 

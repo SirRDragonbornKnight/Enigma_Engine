@@ -79,7 +79,7 @@ class AnalyticsRecorder:
                     data = json.loads(TOOL_USAGE_FILE.read_text())
                     entries = data.get("entries", [])
                 except json.JSONDecodeError:
-                    pass
+                    pass  # Intentionally silent
             
             entries.append({
                 "tool": tool_name,
@@ -105,7 +105,7 @@ class AnalyticsRecorder:
                     data = json.loads(RESPONSE_TIMES_FILE.read_text())
                     entries = data.get("entries", [])
                 except json.JSONDecodeError:
-                    pass
+                    pass  # Intentionally silent
             
             entries.append({
                 "response_time_ms": response_time_ms,
@@ -130,7 +130,7 @@ class AnalyticsRecorder:
                 try:
                     stats = json.loads(SESSION_STATS_FILE.read_text())
                 except json.JSONDecodeError:
-                    pass
+                    pass  # Intentionally silent
             
             stats["total_messages"] = stats.get("total_messages", 0) + 1
             
@@ -153,7 +153,7 @@ class AnalyticsRecorder:
                 try:
                     stats = json.loads(SESSION_STATS_FILE.read_text())
                 except json.JSONDecodeError:
-                    pass
+                    pass  # Intentionally silent
             
             stats["models_trained"] = stats.get("models_trained", 0) + 1
             
@@ -182,7 +182,7 @@ class AnalyticsRecorder:
                     times = [e.get("response_time_ms", 0) for e in entries[-100:]]
                     return sum(times) / len(times) if times else 0
         except (json.JSONDecodeError, KeyError, TypeError):
-            pass
+            pass  # Intentionally silent
         return 0
 
 

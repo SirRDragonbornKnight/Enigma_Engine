@@ -204,7 +204,7 @@ class HookManager:
                 try:
                     registry[hook.hook_point].remove(hook)
                 except (KeyError, ValueError):
-                    pass
+                    pass  # Intentionally silent
         
         return unregister
     

@@ -25,7 +25,7 @@ import torch.nn.functional as F
 class FeedForward(nn.Module):
     """Standard feed-forward network with GELU activation."""
 
-    def __init__(self, d_model: int, d_ff: int, dropout: float = 0.0):
+    def __init__(self, d_model: int, d_ff: int, dropout: float = 0.0) -> None:
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(d_model, d_ff),
@@ -42,7 +42,7 @@ class FeedForward(nn.Module):
 class GLU(nn.Module):
     """Gated Linear Unit - gates the output with a learnable mechanism."""
 
-    def __init__(self, d_model: int, d_ff: int, dropout: float = 0.0):
+    def __init__(self, d_model: int, d_ff: int, dropout: float = 0.0) -> None:
         super().__init__()
         self.proj = nn.Linear(d_model, d_ff * 2)
         self.out = nn.Linear(d_ff, d_model)
@@ -56,7 +56,7 @@ class GLU(nn.Module):
 class GeGLU(nn.Module):
     """GELU-Gated Linear Unit - more expressive than standard GLU."""
 
-    def __init__(self, d_model: int, d_ff: int, dropout: float = 0.0):
+    def __init__(self, d_model: int, d_ff: int, dropout: float = 0.0) -> None:
         super().__init__()
         self.w1 = nn.Linear(d_model, d_ff)
         self.w2 = nn.Linear(d_model, d_ff)
@@ -73,7 +73,7 @@ class MultiQueryAttention(nn.Module):
     More memory efficient for generation while maintaining quality.
     """
 
-    def __init__(self, dim: int, n_heads: int, dropout: float = 0.0):
+    def __init__(self, dim: int, n_heads: int, dropout: float = 0.0) -> None:
         super().__init__()
         self.n_heads = n_heads
         self.head_dim = dim // n_heads
@@ -121,7 +121,7 @@ class GroupedQueryAttention(nn.Module):
     Uses fewer K,V heads than Q heads for efficiency.
     """
 
-    def __init__(self, dim: int, n_heads: int, n_kv_heads: int, dropout: float = 0.0):
+    def __init__(self, dim: int, n_heads: int, n_kv_heads: int, dropout: float = 0.0) -> None:
         super().__init__()
         self.n_heads = n_heads
         self.n_kv_heads = n_kv_heads
@@ -170,7 +170,7 @@ class SlidingWindowAttention(nn.Module):
     Efficient for long sequences where full attention is too expensive.
     """
 
-    def __init__(self, dim: int, n_heads: int, window_size: int = 256, dropout: float = 0.0):
+    def __init__(self, dim: int, n_heads: int, window_size: int = 256, dropout: float = 0.0) -> None:
         super().__init__()
         self.n_heads = n_heads
         self.head_dim = dim // n_heads
@@ -215,7 +215,7 @@ class LoRALayer(nn.Module):
     Adds trainable low-rank matrices to frozen pretrained weights.
     """
 
-    def __init__(self, in_features: int, out_features: int, rank: int = 4, alpha: float = 1.0):
+    def __init__(self, in_features: int, out_features: int, rank: int = 4, alpha: float = 1.0) -> None:
         super().__init__()
         self.rank = rank
         self.alpha = alpha
@@ -236,7 +236,7 @@ class LoRALayer(nn.Module):
 class AdaptiveLayerNorm(nn.Module):
     """Adaptive Layer Normalization - learns per-sample scale and shift."""
 
-    def __init__(self, dim: int, cond_dim: int):
+    def __init__(self, dim: int, cond_dim: int) -> None:
         super().__init__()
         self.norm = nn.LayerNorm(dim)
         self.scale_proj = nn.Linear(cond_dim, dim)
@@ -255,7 +255,7 @@ class MixtureOfExperts(nn.Module):
     Efficient way to scale models with sparse computation.
     """
 
-    def __init__(self, dim: int, n_experts: int = 4, top_k: int = 2, dropout: float = 0.0):
+    def __init__(self, dim: int, n_experts: int = 4, top_k: int = 2, dropout: float = 0.0) -> None:
         super().__init__()
         self.n_experts = n_experts
         self.top_k = top_k

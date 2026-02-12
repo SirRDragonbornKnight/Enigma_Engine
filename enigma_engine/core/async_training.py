@@ -135,7 +135,7 @@ class AsyncTask:
     cancel_flag: threading.Event = field(default_factory=threading.Event)
     pause_flag: threading.Event = field(default_factory=threading.Event)
     
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.progress = TaskProgress(
             task_id=self.task_id,
             task_type=self.task_type,
@@ -168,7 +168,7 @@ class AsyncTrainer:
             cls._instance._initialized = False
         return cls._instance
     
-    def __init__(self, max_workers: int = 4):
+    def __init__(self, max_workers: int = 4) -> None:
         if self._initialized:
             return
             
@@ -421,12 +421,12 @@ class AsyncTrainer:
     # TASK MANAGEMENT
     # ─────────────────────────────────────────────────────────────────────────
     
-    def _submit_task(self, task: AsyncTask):
+    def _submit_task(self, task: AsyncTask) -> None:
         """Submit a task to the executor."""
         with self._lock:
             self._tasks[task.task_id] = task
             
-            def run_task():
+            def run_task() -> None:
                 try:
                     task.progress.status = TaskStatus.RUNNING
                     task.progress.start_time = time.time()
@@ -532,12 +532,12 @@ class AsyncTrainer:
                 return True
             return False
     
-    def add_progress_callback(self, callback: Callable[[TaskProgress], None]):
+    def add_progress_callback(self, callback: Callable[[TaskProgress], None]) -> None:
         """Add a global progress callback."""
         with self._lock:
             self._progress_callbacks.append(callback)
     
-    def remove_progress_callback(self, callback: Callable[[TaskProgress], None]):
+    def remove_progress_callback(self, callback: Callable[[TaskProgress], None]) -> None:
         """Remove a global progress callback."""
         with self._lock:
             if callback in self._progress_callbacks:
@@ -547,7 +547,7 @@ class AsyncTrainer:
     # HISTORY AND PERSISTENCE
     # ─────────────────────────────────────────────────────────────────────────
     
-    def _save_task_history(self, task: AsyncTask):
+    def _save_task_history(self, task: AsyncTask) -> None:
         """Save completed task to history."""
         try:
             self._history_file.parent.mkdir(parents=True, exist_ok=True)
@@ -584,7 +584,7 @@ class AsyncTrainer:
             logger.warning(f"Failed to load task history: {e}")
         return []
     
-    def _progress_monitor(self):
+    def _progress_monitor(self) -> None:
         """Background thread to monitor progress."""
         while self._monitor_running:
             # Update elapsed times for running tasks
@@ -595,7 +595,7 @@ class AsyncTrainer:
             
             time.sleep(0.5)
     
-    def shutdown(self, wait: bool = True):
+    def shutdown(self, wait: bool = True) -> None:
         """Shutdown the async trainer."""
         self._monitor_running = False
         self._executor.shutdown(wait=wait)

@@ -157,7 +157,7 @@ Consider what builds on recent topics or fills knowledge gaps. Reply with ONLY t
                     if t.lower() in topic.lower() or topic.lower() in t.lower():
                         return t
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         # Fallback: Check if we have related topics from last discovery
         if self.discoveries and 'related_topics' in self.discoveries[-1]:
@@ -194,7 +194,7 @@ Consider what builds on recent topics or fills knowledge gaps. Reply with ONLY t
                 if response and '?' in response:
                     return response.strip()
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         # Fallback: Simple template
         return f"What are the most interesting aspects of {topic}?"

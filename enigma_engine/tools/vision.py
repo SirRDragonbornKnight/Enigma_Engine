@@ -73,17 +73,17 @@ class ScreenCapture:
         try:
             return "mss"
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         try:
             return "pyautogui"
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         try:
             return "pyscreenshot"
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         return "none"
     
@@ -245,7 +245,7 @@ class ScreenVision:
             from .simple_ocr import AdvancedOCR
             return AdvancedOCR()
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         # Fallback to tesseract check
         try:

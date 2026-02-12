@@ -161,7 +161,7 @@ class SplitPane(QFrame):
             ct = ContentType(type_text.lower())
             self._set_content_type(ct)
         except ValueError:
-            pass
+            pass  # Intentionally silent
             
     def _set_content_type(self, content_type: ContentType):
         """Set the content type and show appropriate editor."""

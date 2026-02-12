@@ -343,13 +343,13 @@ class AdvancedOCR:
         try:
             return "easyocr"
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         # Try PaddleOCR (alternative)
         try:
             return "paddleocr"
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         # Try tesseract (legacy)
         try:
@@ -357,7 +357,7 @@ class AdvancedOCR:
             pytesseract.get_tesseract_version()
             return "tesseract"
         except (ImportError, RuntimeError, OSError):
-            pass
+            pass  # Intentionally silent
         
         # Fallback to simple
         return "simple"

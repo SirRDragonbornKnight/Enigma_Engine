@@ -233,7 +233,7 @@ class PersonaManager:
                                 'created_at': data.get('created_at', ''),
                             })
                     except Exception:
-                        pass
+                        pass  # Intentionally silent
         return personas
     
     def load_persona(self, persona_id: str) -> Optional[AIPersona]:

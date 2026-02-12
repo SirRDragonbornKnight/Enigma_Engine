@@ -47,19 +47,19 @@ try:
     from transformers import AutoTokenizer, AutoConfig
     HAVE_TRANSFORMERS = True
 except ImportError:
-    pass
+    pass  # Intentionally silent
 
 try:
     from auto_gptq import AutoGPTQForCausalLM, BaseQuantizeConfig
     HAVE_AUTO_GPTQ = True
 except ImportError:
-    pass
+    pass  # Intentionally silent
 
 try:
     from awq import AutoAWQForCausalLM
     HAVE_AWQ = True
 except ImportError:
-    pass
+    pass  # Intentionally silent
 
 
 class QuantizationType(Enum):

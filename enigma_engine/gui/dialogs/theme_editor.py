@@ -115,7 +115,7 @@ class ThemeEditorDialog(QDialog):
             from ..ui_settings import apply_dialog_transparency
             apply_dialog_transparency(self)
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         if edit_theme:
             self._load_theme(edit_theme)

@@ -12,6 +12,7 @@ MAIN CLASSES: MultiGPUManager, TensorParallel, PipelineParallel
 import logging
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from typing import Any
 
 try:
     import torch
@@ -215,11 +216,11 @@ if HAS_TORCH:
             self._wrapped_model = model
             return model
         
-        def synchronize(self):
+        def synchronize(self) -> None:
             """Synchronize all GPUs."""
             if HAS_TORCH and torch.cuda.is_available():
                 torch.cuda.synchronize()
-        
+    
         def get_memory_summary(self) -> dict[int, dict[str, float]]:
             """Get memory usage on each GPU."""
             summary = {}
@@ -238,7 +239,7 @@ if HAS_TORCH:
             
             return summary
         
-        def optimize_memory(self):
+        def optimize_memory(self) -> None:
             """Optimize memory usage across GPUs."""
             for gpu_id in self.gpu_ids:
                 with torch.cuda.device(gpu_id):
@@ -266,14 +267,14 @@ if HAS_TORCH:
             
             self._shard_model()
         
-        def _shard_model(self):
+        def _shard_model(self) -> None:
             """Shard model layers across GPUs."""
             for name, module in self.model.named_modules():
                 if isinstance(module, nn.Linear) and module.weight.shape[0] > 1024:
                     # Shard large linear layers
                     self._shard_linear(name, module)
         
-        def _shard_linear(self, name: str, module: nn.Linear):
+        def _shard_linear(self, name: str, module: nn.Linear) -> None:
             """Shard a linear layer across GPUs."""
             out_features = module.out_features
             in_features = module.in_features
@@ -296,7 +297,7 @@ if HAS_TORCH:
                     module._shards = []
                 module._shards.append((gpu_id, shard))
         
-        def forward(self, *args, **kwargs):
+        def forward(self, *args, **kwargs) -> Any:
             """Forward with tensor parallel gathering."""
             return self.model(*args, **kwargs)
     
@@ -326,7 +327,7 @@ if HAS_TORCH:
             
             self._partition_model()
         
-        def _partition_model(self):
+        def _partition_model(self) -> None:
             """Partition model into pipeline stages."""
             # Get all layers
             layers = []

@@ -189,12 +189,12 @@ class EventBus:
                 try:
                     self._pattern_subscriptions.remove(sub)
                 except ValueError:
-                    pass
+                    pass  # Intentionally silent
             else:
                 try:
                     self._subscriptions[sub.pattern].remove(sub)
                 except (KeyError, ValueError):
-                    pass
+                    pass  # Intentionally silent
     
     def publish(
         self,

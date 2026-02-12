@@ -294,7 +294,7 @@ class HardwareDetectionPage(QWizardPage):
             import psutil
             cpu_count = psutil.cpu_count() or cpu_count
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         # Try to get CPU name
         try:
@@ -310,7 +310,7 @@ class HardwareDetectionPage(QWizardPage):
                 if len(lines) > 1:
                     cpu_name = lines[1].strip()
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         if cpu_name and cpu_name != "":
             self._cpu_label.setText(f"CPU: {cpu_name} ({cpu_count} cores)")

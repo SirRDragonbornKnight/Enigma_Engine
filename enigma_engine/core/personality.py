@@ -64,7 +64,7 @@ class PersonalityTraits:
         """Create from dictionary."""
         return cls(**data)
     
-    def clamp(self):
+    def clamp(self) -> None:
         """Ensure all values are in valid range."""
         for key in self.__annotations__:
             value = getattr(self, key)
@@ -110,7 +110,7 @@ class AIPersonality:
         self.evolution_rate: float = 0.05       # How fast personality changes
         self.min_confidence: float = 0.2        # Minimum confidence level
     
-    def set_user_override(self, trait_name: str, value: float):
+    def set_user_override(self, trait_name: str, value: float) -> None:
         """
         Set a user override for a trait.
         User overrides take precedence over evolved values.
@@ -128,13 +128,13 @@ class AIPersonality:
         self.user_overrides[trait_name] = value
         self.last_updated = datetime.now().isoformat()
     
-    def clear_user_override(self, trait_name: str):
+    def clear_user_override(self, trait_name: str) -> None:
         """Clear a user override, allowing the trait to evolve naturally."""
         if trait_name in self.user_overrides:
             del self.user_overrides[trait_name]
             self.last_updated = datetime.now().isoformat()
     
-    def clear_all_overrides(self):
+    def clear_all_overrides(self) -> None:
         """Clear all user overrides."""
         self.user_overrides.clear()
         self.last_updated = datetime.now().isoformat()
@@ -159,7 +159,7 @@ class AIPersonality:
         traits.update(self.user_overrides)
         return traits
     
-    def set_preset(self, preset: str):
+    def set_preset(self, preset: str) -> None:
         """
         Apply a personality preset.
         
@@ -303,7 +303,7 @@ class AIPersonality:
         
         self.last_updated = datetime.now().isoformat()
     
-    def _adjust_trait(self, trait_name: str, amount: float):
+    def _adjust_trait(self, trait_name: str, amount: float) -> None:
         """Adjust a personality trait (only if not overridden by user)."""
         # Don't evolve traits that have user overrides
         if trait_name in self.user_overrides or not self.allow_evolution:
@@ -314,7 +314,7 @@ class AIPersonality:
         new_value = max(0.0, min(1.0, new_value))
         setattr(self.traits, trait_name, new_value)
     
-    def _update_mood(self, user_input: str, feedback: Optional[str]):
+    def _update_mood(self, user_input: str, feedback: Optional[str]) -> None:
         """Update mood based on interaction."""
         positive_words = ["great", "awesome", "thanks", "love", "excellent"]
         negative_words = ["bad", "wrong", "hate", "terrible", "awful"]
@@ -330,11 +330,11 @@ class AIPersonality:
         else:
             self.mood = "neutral"
     
-    def add_opinion(self, topic: str, opinion: str):
+    def add_opinion(self, topic: str, opinion: str) -> None:
         """Add an opinion on a topic."""
         self.opinions[topic] = opinion
     
-    def add_memory(self, memory: str, importance: int = 1):
+    def add_memory(self, memory: str, importance: int = 1) -> None:
         """
         Add an important memory.
         
@@ -622,7 +622,7 @@ def load_personality(model_name: str) -> AIPersonality:
     return personality
 
 
-def save_personality(personality: AIPersonality):
+def save_personality(personality: AIPersonality) -> None:
     """Save personality to file."""
     personality.save()
 

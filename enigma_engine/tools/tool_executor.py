@@ -1444,7 +1444,7 @@ class ToolExecutor:
                     durations.append(gif.info.get('duration', 100))
                     gif.seek(gif.tell() + 1)
             except EOFError:
-                pass
+                pass  # Intentionally silent
             
             if not frames:
                 return {

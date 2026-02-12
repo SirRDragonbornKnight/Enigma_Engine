@@ -6,12 +6,15 @@ Presets include colors, expressions, style, and accessories.
 """
 
 import json
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
 from .avatar_identity import AvatarAppearance
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -304,7 +307,7 @@ class PresetManager:
                 self._cache[name] = preset
                 return preset
             except Exception as e:
-                print(f"[PresetManager] Error loading preset {name}: {e}")
+                logger.error("Error loading preset %s: %s", name, e)
         
         return None
     
@@ -342,11 +345,11 @@ class PresetManager:
             # Update cache
             self._cache[name] = preset
             
-            print(f"[PresetManager] Saved preset: {name}")
+            logger.info("Saved preset: %s", name)
             return True
             
         except Exception as e:
-            print(f"[PresetManager] Error saving preset {name}: {e}")
+            logger.error("Error saving preset %s: %s", name, e)
             return False
     
     def delete_preset(self, name: str) -> bool:
@@ -360,7 +363,7 @@ class PresetManager:
             True if deleted
         """
         if name.startswith("[builtin]"):
-            print("[PresetManager] Cannot delete built-in presets")
+            logger.warning("Cannot delete built-in presets")
             return False
         
         preset_path = self.presets_dir / f"{name}.json"
@@ -369,10 +372,10 @@ class PresetManager:
                 preset_path.unlink()
                 if name in self._cache:
                     del self._cache[name]
-                print(f"[PresetManager] Deleted preset: {name}")
+                logger.info("Deleted preset: %s", name)
                 return True
             except Exception as e:
-                print(f"[PresetManager] Error deleting preset: {e}")
+                logger.error("Error deleting preset: %s", e)
         
         return False
     
@@ -394,10 +397,10 @@ class PresetManager:
         try:
             with open(output_path, 'w', encoding='utf-8') as f:
                 json.dump(preset.to_dict(), f, indent=2)
-            print(f"[PresetManager] Exported preset to: {output_path}")
+            logger.info("Exported preset to: %s", output_path)
             return True
         except Exception as e:
-            print(f"[PresetManager] Export error: {e}")
+            logger.error("Export error: %s", e)
             return False
     
     def import_preset(self, filepath: str, name: Optional[str] = None) -> bool:
@@ -421,7 +424,7 @@ class PresetManager:
                 preset.name = name
             
             if preset.appearance is None:
-                print("[PresetManager] Preset has no appearance data")
+                logger.warning("Preset has no appearance data")
                 return False
             return self.save_preset(
                 preset.name,
@@ -430,7 +433,7 @@ class PresetManager:
                 preset.tags
             )
         except Exception as e:
-            print(f"[PresetManager] Import error: {e}")
+            logger.error("Import error: %s", e)
             return False
     
     def get_presets_by_tag(self, tag: str) -> list[AvatarPreset]:

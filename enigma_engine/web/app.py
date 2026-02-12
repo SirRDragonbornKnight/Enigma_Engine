@@ -276,7 +276,7 @@ if FLASK_AVAILABLE and app is not None:
                 'vram_mb': caps.vram_total_mb if caps.has_gpu else None,
             }
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         # Get instance info
         try:
@@ -351,6 +351,62 @@ if FLASK_AVAILABLE and app is not None:
             })
         except Exception as e:
             return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/feedback', methods=['POST'])
+    def api_feedback():
+        """
+        Submit feedback on an AI response for training improvement.
+
+        Request body:
+            {
+                "response_id": "optional response identifier",
+                "feedback": "positive" or "negative",
+                "reason": "optional reason for negative feedback",
+                "user_input": "the original user prompt",
+                "ai_response": "the AI response being rated"
+            }
+
+        Returns:
+            {"success": true, "message": "Feedback recorded"}
+        """
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No data provided'}), HTTP_BAD_REQUEST
+
+        feedback = data.get('feedback', '')
+        if feedback not in ('positive', 'negative'):
+            return jsonify({'error': 'feedback must be "positive" or "negative"'}), HTTP_BAD_REQUEST
+
+        user_input = data.get('user_input', '')
+        ai_response = data.get('ai_response', '')
+        reason = data.get('reason', '')
+        response_id = data.get('response_id', '')
+
+        # Store feedback for future training
+        feedback_dir = Path('data/feedback')
+        feedback_dir.mkdir(parents=True, exist_ok=True)
+
+        import json
+        from datetime import datetime
+        entry = {
+            'timestamp': datetime.now().isoformat(),
+            'feedback': feedback,
+            'user_input': user_input,
+            'ai_response': ai_response,
+            'reason': reason,
+            'response_id': response_id,
+        }
+
+        feedback_file = feedback_dir / 'feedback_log.jsonl'
+        try:
+            with open(feedback_file, 'a', encoding='utf-8') as f:
+                f.write(json.dumps(entry) + '\n')
+        except OSError as e:
+            logger.error(f"Failed to save feedback: {e}")
+            return jsonify({'error': 'Failed to save feedback'}), 500
+
+        logger.info(f"Feedback received: {feedback} for response {response_id}")
+        return jsonify({'success': True, 'message': 'Feedback recorded'})
 
 
 # =============================================================================
@@ -557,7 +613,7 @@ def api_transcribe_voice():
                 text = stt.transcribe_file(temp_path)
                 return jsonify({'success': True, 'text': text})
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             # Try speech_recognition
             try:

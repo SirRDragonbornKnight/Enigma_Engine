@@ -59,7 +59,7 @@ class ModelConfig:
     sliding_window_size: int = 4096
     tie_word_embeddings: bool = True
     
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.intermediate_size is None:
             self.intermediate_size = self.hidden_size * 4
         if self.num_kv_heads is None:
@@ -192,7 +192,7 @@ class ConfigManager:
     - Nested config access
     """
     
-    def __init__(self, config: Optional[ForgeConfig] = None):
+    def __init__(self, config: Optional[ForgeConfig] = None) -> None:
         self.config = config or ForgeConfig()
         self._env_prefix = "FORGE_"
     
@@ -273,7 +273,7 @@ class ConfigManager:
         
         return cls_type(**valid_data)
     
-    def _apply_env_overrides(self):
+    def _apply_env_overrides(self) -> None:
         """Apply environment variable overrides."""
         # Environment variables like FORGE_MODEL_HIDDEN_SIZE=1024
         for key, value in os.environ.items():
@@ -318,7 +318,7 @@ class ConfigManager:
         else:
             return value
     
-    def save(self, path: Union[str, Path]):
+    def save(self, path: Union[str, Path]) -> None:
         """Save configuration to file."""
         path = Path(path)
         ext = path.suffix.lower()
@@ -358,7 +358,7 @@ class ConfigManager:
             'data': asdict(self.config.data),
         }
     
-    def update(self, **kwargs):
+    def update(self, **kwargs) -> None:
         """Update configuration values using dot notation."""
         for key, value in kwargs.items():
             parts = key.split('.')

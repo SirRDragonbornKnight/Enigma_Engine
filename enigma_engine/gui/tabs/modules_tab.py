@@ -1056,7 +1056,7 @@ class ModulesTab(QWidget):
                             if mod_id in self.module_manager.list_loaded():
                                 loaded_marker = " <span style='color: #22c55e;'>[LOADED]</span>"
                         except Exception:
-                            pass
+                            pass  # Intentionally silent
                     
                     lines.append(f"<p style='margin-left: 20px;'><b style='color: #cdd6f4;'>{mod_id}</b>{loaded_marker}</p>")
                     
@@ -1164,7 +1164,7 @@ class ModulesTab(QWidget):
                     data = json.load(f)
                     return list(data.get('profiles', {}).keys())
             except Exception:
-                pass
+                pass  # Intentionally silent
         return []
     
     def _save_profile(self):
@@ -1184,7 +1184,7 @@ class ModulesTab(QWidget):
                 try:
                     loaded = list(self.module_manager.list_loaded())
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
             
             # Load existing profiles
             path = self._get_profiles_path()
@@ -1194,7 +1194,7 @@ class ModulesTab(QWidget):
                     with open(path, 'r') as f:
                         data = json.load(f)
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
             
             # Save new profile
             data['profiles'][name] = {
@@ -1245,7 +1245,7 @@ class ModulesTab(QWidget):
                     for mod_id in loaded:
                         self.module_manager.unload(mod_id)
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
             
             # Load profile modules in order
             loaded_count = 0
@@ -1327,7 +1327,7 @@ class ModulesTab(QWidget):
                 for mod_id in loaded:
                     self.module_manager.unload(mod_id)
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         # Load preset modules
         loaded_count = 0
@@ -1372,7 +1372,7 @@ class ModulesTab(QWidget):
                         if conflict_id in modules:
                             conflicts.append(f"'{mod_id}' conflicts with '{conflict_id}'")
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         return "\n".join(conflicts) if conflicts else ""
     

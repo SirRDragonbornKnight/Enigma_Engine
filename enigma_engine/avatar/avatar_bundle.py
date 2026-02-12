@@ -457,6 +457,6 @@ def list_installed_avatars(avatars_dir: Optional[str] = None) -> list[dict[str, 
                         "tags": manifest.tags,
                     })
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
     
     return avatars

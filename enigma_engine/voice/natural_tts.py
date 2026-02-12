@@ -78,7 +78,7 @@ class NaturalTTS:
             try:
                 os.unlink(temp_path)
             except Exception:
-                pass
+                pass  # Intentionally silent
     
     def save(self, path: str, text: str):
         """Save speech to file."""

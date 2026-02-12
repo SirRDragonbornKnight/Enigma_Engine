@@ -414,7 +414,7 @@ class CompressedKVCache:
         
         self._attention_scores[layer_idx] = scores
     
-    def _update_stats(self):
+    def _update_stats(self) -> None:
         """Update cache statistics."""
         total_bytes = 0
         total_tokens = 0
@@ -440,13 +440,13 @@ class CompressedKVCache:
         """Get cache statistics."""
         return self._stats
     
-    def clear(self):
+    def clear(self) -> None:
         """Clear cache."""
         self._cache.clear()
         self._attention_scores.clear()
         self._stats = CacheStats()
     
-    def clear_layer(self, layer_idx: int):
+    def clear_layer(self, layer_idx: int) -> None:
         """Clear cache for a specific layer."""
         if layer_idx in self._cache:
             del self._cache[layer_idx]
@@ -495,7 +495,7 @@ class StreamingKVCache(CompressedKVCache):
         if total_tokens >= self.chunk_size:
             self._flush_buffer(layer_idx)
     
-    def _flush_buffer(self, layer_idx: int):
+    def _flush_buffer(self, layer_idx: int) -> None:
         """Flush buffer to main cache."""
         if layer_idx not in self._buffer or not self._buffer[layer_idx]:
             return
@@ -510,7 +510,7 @@ class StreamingKVCache(CompressedKVCache):
         # Clear buffer
         self._buffer[layer_idx] = []
     
-    def flush_all(self):
+    def flush_all(self) -> None:
         """Flush all buffers."""
         for layer_idx in list(self._buffer.keys()):
             self._flush_buffer(layer_idx)

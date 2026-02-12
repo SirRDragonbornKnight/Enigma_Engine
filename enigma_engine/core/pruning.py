@@ -145,13 +145,13 @@ class ImportanceEstimator:
         
         return weight.abs()
     
-    def collect_gradients(self, model: nn.Module):
+    def collect_gradients(self, model: nn.Module) -> None:
         """Collect gradients for importance estimation."""
         for name, param in model.named_parameters():
             if param.grad is not None:
                 self._gradients[name] = param.grad.clone()
     
-    def save_initial_weights(self, model: nn.Module):
+    def save_initial_weights(self, model: nn.Module) -> None:
         """Save initial weights for movement pruning."""
         for name, param in model.named_parameters():
             self._activations[name] = param.data.clone()
@@ -354,7 +354,7 @@ class SemiStructuredPruner:
         
         return mask
     
-    def prune_layer(self, module: nn.Module):
+    def prune_layer(self, module: nn.Module) -> None:
         """Apply N:M pruning to a layer."""
         if hasattr(module, "weight"):
             mask = self.compute_nm_mask(module.weight.data)
@@ -394,7 +394,7 @@ class PruningScheduler:
         
         return self.config.initial_sparsity + sparsity_delta * factor
     
-    def step(self):
+    def step(self) -> None:
         """Advance scheduler by one step."""
         self.current_step += 1
     

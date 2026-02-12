@@ -92,7 +92,7 @@ class SessionData:
         except Exception:
             return 0.0
     
-    def touch(self):
+    def touch(self) -> None:
         """Update last activity time."""
         self.last_activity = datetime.now().isoformat()
         self.activity_count += 1
@@ -201,7 +201,7 @@ class OfflineQueue:
         
         return action_id
     
-    def register_handler(self, action_type: str, handler: Callable[[dict], Any]):
+    def register_handler(self, action_type: str, handler: Callable[[dict], Any]) -> None:
         """Register handler for action type."""
         self._callbacks[action_type] = handler
     
@@ -248,7 +248,7 @@ class OfflineQueue:
         
         return processed
     
-    def clear(self):
+    def clear(self) -> None:
         """Clear the queue."""
         with self._lock:
             self._queue = []
@@ -258,7 +258,7 @@ class OfflineQueue:
         """Get queue size."""
         return len(self._queue)
     
-    def _save(self):
+    def _save(self) -> None:
         """Save queue to disk."""
         try:
             data = [
@@ -278,7 +278,7 @@ class OfflineQueue:
         except Exception as e:
             logger.error(f"Failed to save offline queue: {e}")
     
-    def _load(self):
+    def _load(self) -> None:
         """Load queue from disk."""
         if not self.storage_path.exists():
             return
@@ -384,7 +384,7 @@ class SessionManager:
         self._notify("state_change", session)
         return session
     
-    def end_session(self):
+    def end_session(self) -> None:
         """End current session."""
         with self._lock:
             if self._current_session:
@@ -399,7 +399,7 @@ class SessionManager:
         """Get current session."""
         return self._current_session
     
-    def record_activity(self, activity_type: str = "general"):
+    def record_activity(self, activity_type: str = "general") -> None:
         """Record user activity."""
         with self._lock:
             if self._current_session:
@@ -414,7 +414,7 @@ class SessionManager:
                     "type": activity_type
                 })
     
-    def record_message(self, direction: str = "sent"):
+    def record_message(self, direction: str = "sent") -> None:
         """Record message sent/received."""
         with self._lock:
             if self._current_session:
@@ -425,7 +425,7 @@ class SessionManager:
                 else:
                     self._current_session.messages_received += 1
     
-    def set_data(self, key: str, value: Any):
+    def set_data(self, key: str, value: Any) -> None:
         """Set session data."""
         with self._lock:
             if self._current_session:
@@ -437,7 +437,7 @@ class SessionManager:
             return self._current_session.data.get(key, default)
         return default
     
-    def go_offline(self):
+    def go_offline(self) -> None:
         """Manually set offline mode."""
         with self._lock:
             if self._current_session:
@@ -445,7 +445,7 @@ class SessionManager:
                 self._current_session.state = SessionState.OFFLINE
                 self._notify("connection_change", self._current_session)
     
-    def go_online(self):
+    def go_online(self) -> None:
         """Manually set online mode and process queue."""
         with self._lock:
             if self._current_session:
@@ -462,7 +462,7 @@ class SessionManager:
         """Queue action for offline processing."""
         return self._offline_queue.add(action_type, payload)
     
-    def register_queue_handler(self, action_type: str, handler: Callable):
+    def register_queue_handler(self, action_type: str, handler: Callable) -> None:
         """Register handler for queued actions."""
         self._offline_queue.register_handler(action_type, handler)
     
@@ -470,7 +470,7 @@ class SessionManager:
         """Get number of queued actions."""
         return self._offline_queue.count()
     
-    def on(self, event: str, callback: Callable):
+    def on(self, event: str, callback: Callable) -> None:
         """Register event callback."""
         if event in self._callbacks:
             self._callbacks[event].append(callback)
@@ -561,7 +561,7 @@ class SessionManager:
         except OSError:
             return ConnectionState.OFFLINE
     
-    def _save_session(self, session: SessionData):
+    def _save_session(self, session: SessionData) -> None:
         """Save session to disk."""
         try:
             file_path = self.storage_path / f"{session.session_id}.json"
@@ -570,7 +570,7 @@ class SessionManager:
         except Exception as e:
             logger.error(f"Failed to save session: {e}")
     
-    def _start_monitor(self):
+    def _start_monitor(self) -> None:
         """Start background monitoring thread."""
         if self._running:
             return
@@ -582,11 +582,11 @@ class SessionManager:
         )
         self._monitor_thread.start()
     
-    def _stop_monitor(self):
+    def _stop_monitor(self) -> None:
         """Stop background monitoring."""
         self._running = False
     
-    def _monitor_loop(self):
+    def _monitor_loop(self) -> None:
         """Background monitoring loop."""
         last_save = time.time()
         
@@ -627,7 +627,7 @@ class SessionManager:
             
             time.sleep(5)  # Check every 5 seconds
     
-    def _notify(self, event: str, data: Any):
+    def _notify(self, event: str, data: Any) -> None:
         """Notify event callbacks."""
         for callback in self._callbacks.get(event, []):
             try:
@@ -656,11 +656,11 @@ def start_session(user_id: str = "default") -> SessionData:
     return get_session_manager().start_session(user_id)
 
 
-def end_session():
+def end_session() -> None:
     """Quick function to end current session."""
     get_session_manager().end_session()
 
 
-def record_activity():
+def record_activity() -> None:
     """Quick function to record activity."""
     get_session_manager().record_activity()

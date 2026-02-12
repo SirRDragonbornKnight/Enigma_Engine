@@ -111,7 +111,7 @@ class AudioDucker:
                 import pulsectl  # type: ignore
                 return AudioBackend.PULSEAUDIO
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             # Check for ALSA
             try:
@@ -123,14 +123,14 @@ class AudioDucker:
                 if result.returncode == 0:
                     return AudioBackend.ALSA
             except (subprocess.SubprocessError, FileNotFoundError):
-                pass
+                pass  # Intentionally silent
         
         elif system == "Windows":
             try:
                 from pycaw.pycaw import AudioUtilities  # type: ignore
                 return AudioBackend.WINDOWS
             except ImportError:
-                pass
+                pass  # Intentionally silent
         
         elif system == "Darwin":  # macOS
             return AudioBackend.MACOS

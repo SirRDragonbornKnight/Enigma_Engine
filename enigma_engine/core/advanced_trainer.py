@@ -12,6 +12,7 @@ A production-grade training system with:
   - Training metrics tracking
   - Automatic batch sizing
 """
+import logging
 import math
 import time
 from dataclasses import asdict, dataclass
@@ -24,6 +25,8 @@ from torch.amp import autocast
 from torch.utils.data import DataLoader, Dataset
 
 from .advanced_model import ForgeModel
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -96,7 +99,7 @@ class TextDataset(Dataset):
                 if len(last_chunk) >= max_length // 2:
                     self.samples.append(last_chunk)
 
-        print(f"Created dataset with {len(self.samples)} samples")
+        logger.info(f"Created dataset with {len(self.samples)} samples")
 
     def __len__(self) -> int:
         return len(self.samples)
@@ -144,7 +147,7 @@ class QADataset(Dataset):
             if len(tokens) <= max_length:
                 self.samples.append(tokens)
 
-        print(f"Created Q&A dataset with {len(self.samples)} samples")
+        logger.info(f"Created Q&A dataset with {len(self.samples)} samples")
 
     def __len__(self) -> int:
         return len(self.samples)
@@ -328,17 +331,14 @@ class Trainer:
             checkpoint_dir = Path(checkpoint_dir)
             checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
-        print(f"\n{'=' * 60}")
-        print(f"Starting Training")
-        print(f"{'=' * 60}")
-        print(f"Device: {self.device}")
-        print(f"Total steps: {total_steps:,}")
-        print(f"Batch size: {self.config.batch_size}")
-        print(f"Gradient accumulation: {self.config.gradient_accumulation_steps}")
+        logger.info("Starting Training")
+        logger.info(f"Device: {self.device}")
+        logger.info(f"Total steps: {total_steps:,}")
+        logger.info(f"Batch size: {self.config.batch_size}")
+        logger.info(f"Gradient accumulation: {self.config.gradient_accumulation_steps}")
         effective_batch = self.config.batch_size * self.config.gradient_accumulation_steps
-        print(f"Effective batch size: {effective_batch}")
-        print(f"Learning rate: {self.config.learning_rate}")
-        print(f"{'=' * 60}\n")
+        logger.info(f"Effective batch size: {effective_batch}")
+        logger.info(f"Learning rate: {self.config.learning_rate}")
 
         # Training loop
         self.model.train()
@@ -418,7 +418,7 @@ class Trainer:
                         avg_time = sum(step_times[-10:]) / len(step_times[-10:])
                         eta = avg_time * (total_steps - self.global_step)
 
-                        print(
+                        logger.info(
                             f"Step {self.global_step:>6}/{total_steps} | "
                             f"Loss: {avg_loss:.4f} | "
                             f"LR: {scheduler.get_lr():.2e} | "
@@ -437,7 +437,7 @@ class Trainer:
                     # Evaluation
                     if val_dataset and self.global_step % self.config.eval_interval == 0:
                         val_loss = self.evaluate(val_dataset)
-                        print(f"  Validation Loss: {val_loss:.4f}")
+                        logger.info(f"Validation Loss: {val_loss:.4f}")
 
                         # Save best model
                         if val_loss < self.best_loss:
@@ -447,21 +447,19 @@ class Trainer:
 
                         # Early stopping check
                         if early_stopping(val_loss):
-                            print(f"\nEarly stopping triggered at step {self.global_step}")
+                            logger.info(f"Early stopping triggered at step {self.global_step}")
                             return self._get_history()
 
                         self.model.train()
 
                     # Check max steps
                     if self.config.max_steps and self.global_step >= self.config.max_steps:
-                        print(f"\nReached max steps ({self.config.max_steps})")
+                        logger.info(f"Reached max steps ({self.config.max_steps})")
                         return self._get_history()
 
             # End of epoch
             avg_epoch_loss = epoch_loss / max(epoch_steps, 1)
-            print(f"\n{'=' * 40}")
-            print(f"Epoch {epoch + 1} complete | Avg Loss: {avg_epoch_loss:.4f}")
-            print(f"{'=' * 40}\n")
+            logger.info(f"Epoch {epoch + 1} complete | Avg Loss: {avg_epoch_loss:.4f}")
 
         # Final checkpoint
         if checkpoint_dir:
@@ -507,7 +505,7 @@ class Trainer:
         }
 
         torch.save(checkpoint, path)
-        print(f"Saved checkpoint to {path}")
+        logger.info(f"Saved checkpoint to {path}")
 
     def load_checkpoint(self, path: Path):
         """Load training checkpoint."""
@@ -521,8 +519,8 @@ class Trainer:
         self.best_loss = checkpoint.get('best_loss', float('inf'))
         self.train_history = checkpoint.get('train_history', [])
 
-        print(f"Loaded checkpoint from {path}")
-        print(f"Resuming from step {self.global_step}, epoch {self.epoch}")
+        logger.info(f"Loaded checkpoint from {path}")
+        logger.info(f"Resuming from step {self.global_step}, epoch {self.epoch}")
 
     def _get_history(self) -> dict[str, Any]:
         """Get training history."""
@@ -553,43 +551,47 @@ def load_training_data(data_path: Path) -> list[str]:
 
 
 def load_qa_data(data_path: Path) -> list[dict[str, str]]:
-    """Load Q&A formatted data."""
+    """Load Q&A formatted data (handles multi-line answers and code blocks)."""
     qa_pairs = []
 
     text = data_path.read_text(encoding='utf-8')
 
-    # Parse Q: A: format
-    lines = text.strip().split('\n')
+    # Parse Q: A: format with code block support
+    lines = text.split('\n')  # Don't strip - preserve whitespace for code
     current_q = None
     current_a = []
+    in_answer = False
 
     for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-
-        if line.startswith('Q:'):
+        stripped = line.strip()
+        
+        if stripped.startswith('Q:'):
             # Save previous pair
-            if current_q and current_a:
+            if current_q and in_answer:
                 qa_pairs.append({
                     'question': current_q,
-                    'answer': ' '.join(current_a)
+                    'answer': '\n'.join(current_a).strip()
                 })
 
-            current_q = line[2:].strip()
+            current_q = stripped[2:].strip()
             current_a = []
+            in_answer = False
 
-        elif line.startswith('A:'):
-            current_a.append(line[2:].strip())
+        elif stripped.startswith('A:') and current_q:
+            in_answer = True
+            first_line = stripped[2:].strip()
+            if first_line:
+                current_a.append(first_line)
 
-        elif current_a:  # Continuation of answer
-            current_a.append(line)
+        elif current_q and in_answer:
+            # Continue collecting (preserve indentation for code blocks)
+            current_a.append(line.rstrip())
 
     # Don't forget last pair
-    if current_q and current_a:
+    if current_q and in_answer:
         qa_pairs.append({
             'question': current_q,
-            'answer': ' '.join(current_a)
+            'answer': '\n'.join(current_a).strip()
         })
 
     return qa_pairs

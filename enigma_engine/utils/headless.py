@@ -11,11 +11,14 @@ Provides headless operation utilities:
 Part of the Enigma AI Engine platform utilities.
 """
 
+import logging
 import os
 import platform
 from dataclasses import dataclass
 from enum import Enum
 from typing import Callable, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class DisplayEnvironment(Enum):
@@ -276,7 +279,7 @@ class HeadlessDetector:
                                 if len(dims) == 2 and dims[0].isdigit() and dims[1].isdigit():
                                     return (int(dims[0]), int(dims[1]))
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         return None
     
@@ -352,7 +355,7 @@ class HeadlessDetector:
             try:
                 self._virtual_display.stop()
             except Exception:
-                pass
+                pass  # Intentionally silent
             self._virtual_display = None
             self._display_info = None
 
@@ -427,7 +430,7 @@ def gui_available(
         elif cli_func:
             return cli_func(*args, **kwargs)
         else:
-            print("GUI not available in headless mode")
+            logger.warning("GUI not available in headless mode")
             return None
     return wrapper
 

@@ -314,7 +314,7 @@ class ChatSync(QObject if HAS_PYQT else object):
                 if isinstance(response, torch.Tensor):
                     return "[WARNING] Model returned raw tensor. Try a different model or check configuration."
             except ImportError:
-                pass
+                pass  # Intentionally silent
             return "[WARNING] Model returned invalid data format."
         
         # Convert to string if needed

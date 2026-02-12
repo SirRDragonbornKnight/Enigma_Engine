@@ -464,7 +464,7 @@ class WebhookManager:
             except Empty:
                 continue
             except Exception:
-                pass
+                pass  # Intentionally silent
     
     def on_delivery(self, callback: Callable[[WebhookDelivery], None]):
         """Set callback for successful deliveries."""
@@ -544,7 +544,7 @@ class WebhookManager:
                     timeout_seconds=data.get("timeout_seconds", 30)
                 )
         except Exception:
-            pass
+            pass  # Intentionally silent
 
 
 # Global webhook manager

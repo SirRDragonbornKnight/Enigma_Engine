@@ -41,12 +41,15 @@ IMPLEMENTING YOUR OWN ROBOT:
 """
 
 import json
+import logging
 import socket
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class RobotState(Enum):
@@ -150,10 +153,10 @@ class SerialRobotInterface(RobotInterface):
             self._serial = serial.Serial(self.port, self.baudrate, timeout=1)
             time.sleep(2)  # Wait for Arduino reset
             self.state = RobotState.CONNECTED
-            print(f"Connected to {self.name} on {self.port}")
+            logger.info("Connected to %s on %s", self.name, self.port)
             return True
         except Exception as e:
-            print(f"Serial connection failed: {e}")
+            logger.error("Serial connection failed: %s", e)
             self.state = RobotState.ERROR
             return False
     
@@ -211,10 +214,10 @@ class GPIORobotInterface(RobotInterface):
             GPIO.setmode(GPIO.BCM)
             self._gpio_available = True
             self.state = RobotState.CONNECTED
-            print(f"GPIO robot '{self.name}' connected")
+            logger.info("GPIO robot '%s' connected", self.name)
             return True
         except Exception as e:
-            print(f"GPIO not available: {e}")
+            logger.error("GPIO not available: %s", e)
             self.state = RobotState.ERROR
             return False
     
@@ -267,10 +270,10 @@ class NetworkRobotInterface(RobotInterface):
                 data = json.loads(response.read().decode())
                 if data.get("ok"):
                     self.state = RobotState.CONNECTED
-                    print(f"Connected to network robot at {self.url}")
+                    logger.info("Connected to network robot at %s", self.url)
                     return True
         except Exception as e:
-            print(f"Network robot connection failed: {e}")
+            logger.error("Network robot connection failed: %s", e)
         
         self.state = RobotState.ERROR
         return False
@@ -324,23 +327,23 @@ class SimulatedRobotInterface(RobotInterface):
     
     def connect(self) -> bool:
         self.state = RobotState.CONNECTED
-        print(f"[SIM] Robot '{self.name}' connected (simulated)")
-        print(f"[SIM] Joints: {self.joints}")
+        logger.info("Robot '%s' connected (simulated)", self.name)
+        logger.info("Joints: %s", self.joints)
         return True
     
     def disconnect(self) -> bool:
         self.state = RobotState.DISCONNECTED
-        print(f"[SIM] Robot '{self.name}' disconnected")
+        logger.info("Robot '%s' disconnected", self.name)
         return True
     
     def move_joint(self, joint: str, angle: float, speed: float = 1.0) -> bool:
         if joint not in self._positions:
-            print(f"[SIM] Unknown joint: {joint}")
+            logger.warning("Unknown joint: %s", joint)
             return False
         
         old_pos = self._positions[joint]
         self._positions[joint] = angle
-        print(f"[SIM] {joint}: {old_pos} deg -> {angle} deg (speed={speed})")
+        logger.debug("%s: %s deg -> %s deg (speed=%s)", joint, old_pos, angle, speed)
         return True
     
     def get_joint_position(self, joint: str) -> Optional[float]:
@@ -349,11 +352,11 @@ class SimulatedRobotInterface(RobotInterface):
     def gripper(self, action: str) -> bool:
         old_state = self._gripper_state
         self._gripper_state = action
-        print(f"[SIM] Gripper: {old_state} -> {action}")
+        logger.debug("Gripper: %s -> %s", old_state, action)
         return True
     
     def home(self) -> bool:
-        print(f"[SIM] Homing all joints...")
+        logger.info("Homing all joints...")
         for joint in self._positions:
             self._positions[joint] = 0.0
         return True

@@ -15,34 +15,30 @@ from .shared_components import NoScrollComboBox
 # Format: (model_id, display_name, model_type, is_free)
 TOOL_MODEL_OPTIONS = {
     "image": [
-        ("local:placeholder", "Placeholder (test only)", "local", True),
         ("local:stable-diffusion", "Local: Stable Diffusion", "local", True),
-        ("huggingface:runwayml/stable-diffusion-v1-5", "HF FREE: SD 1.5", "huggingface", True),
         ("huggingface:stabilityai/stable-diffusion-xl-base-1.0", "HF FREE: SDXL", "huggingface", True),
         ("huggingface:stabilityai/sd-turbo", "HF FREE: SD Turbo (fast)", "huggingface", True),
-        ("huggingface:nota-ai/bk-sdm-small", "HF FREE: BK-SDM Small (tiny)", "huggingface", True),
+        ("huggingface:black-forest-labs/FLUX.1-schnell", "HF FREE: FLUX.1 Schnell", "huggingface", True),
         ("api:openai", "API: DALL-E 3 (paid)", "api", False),
         ("api:replicate", "API: Replicate (paid)", "api", False),
     ],
     "code": [
-        ("enigma:default", "Forge: Default Model", "enigma_engine", True),
-        ("huggingface:Qwen/Qwen2.5-Coder-1.5B-Instruct", "HF FREE: Qwen2.5 Coder", "huggingface", True),
-        ("huggingface:Salesforce/codegen-350M-mono", "HF FREE: CodeGen 350M", "huggingface", True),
+        ("enigma:default", "Enigma: Default Model", "enigma_engine", True),
+        ("huggingface:Qwen/Qwen2.5-Coder-7B-Instruct", "HF FREE: Qwen2.5 Coder 7B", "huggingface", True),
+        ("huggingface:deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct", "HF FREE: DeepSeek Coder V2", "huggingface", True),
         ("huggingface:bigcode/starcoder2-3b", "HF FREE: StarCoder2 3B", "huggingface", True),
         ("api:openai", "API: GPT-4 (paid)", "api", False),
     ],
     "audio": [
         ("local:tts", "Local: pyttsx3 (offline)", "local", True),
-        ("huggingface:facebook/mms-tts-eng", "HF FREE: MMS TTS English", "huggingface", True),
         ("huggingface:hexgrad/Kokoro-82M", "HF FREE: Kokoro 82M", "huggingface", True),
         ("huggingface:suno/bark-small", "HF FREE: Bark Small", "huggingface", True),
+        ("huggingface:facebook/mms-tts-eng", "HF FREE: MMS TTS English", "huggingface", True),
         ("api:elevenlabs", "API: ElevenLabs (paid)", "api", False),
-        ("api:replicate", "API: Replicate (paid)", "api", False),
     ],
     "video": [
         ("local:animatediff", "Local: AnimateDiff", "local", True),
         ("huggingface:ali-vilab/text-to-video-ms-1.7b", "HF FREE: ModelScope Video", "huggingface", True),
-        ("huggingface:damo-vilab/text-to-video-ms-1.7b", "HF FREE: DAMO Video", "huggingface", True),
         ("api:replicate", "API: Replicate (paid)", "api", False),
     ],
     "3d": [
@@ -60,16 +56,18 @@ TOOL_MODEL_OPTIONS = {
     ],
     "vision": [
         ("local:vision", "Local: Vision Analysis", "local", True),
-        ("huggingface:Salesforce/blip2-opt-2.7b", "HF FREE: BLIP2", "huggingface", True),
         ("huggingface:microsoft/Florence-2-base", "HF FREE: Florence 2", "huggingface", True),
+        ("huggingface:Salesforce/blip2-opt-2.7b", "HF FREE: BLIP2", "huggingface", True),
         ("huggingface:nlpconnect/vit-gpt2-image-captioning", "HF FREE: ViT-GPT2 Caption", "huggingface", True),
     ],
     "chat": [
-        ("enigma:default", "Forge: Default Model", "enigma_engine", True),
-        ("huggingface:microsoft/DialoGPT-medium", "HF FREE: DialoGPT", "huggingface", True),
-        ("huggingface:Qwen/Qwen2.5-0.5B-Instruct", "HF FREE: Qwen2.5 0.5B", "huggingface", True),
-        ("huggingface:TinyLlama/TinyLlama-1.1B-Chat-v1.0", "HF FREE: TinyLlama 1.1B", "huggingface", True),
-        ("huggingface:microsoft/phi-2", "HF FREE: Phi-2 2.7B", "huggingface", True),
+        ("enigma:default", "Enigma: Default Model", "enigma_engine", True),
+        ("huggingface:deepseek-ai/DeepSeek-R1-Distill-Qwen-32B", "HF FREE: DeepSeek-R1 32B", "huggingface", True),
+        ("huggingface:meta-llama/Llama-3.3-70B-Instruct", "HF FREE: Llama 3.3 70B", "huggingface", True),
+        ("huggingface:Qwen/Qwen2.5-7B-Instruct", "HF FREE: Qwen2.5 7B", "huggingface", True),
+        ("huggingface:microsoft/Phi-3.5-mini-instruct", "HF FREE: Phi-3.5 Mini 3.8B", "huggingface", True),
+        ("huggingface:mistralai/Mistral-7B-Instruct-v0.3", "HF FREE: Mistral 7B v0.3", "huggingface", True),
+        ("huggingface:google/gemma-2-9b-it", "HF FREE: Gemma 2 9B", "huggingface", True),
         ("api:openai", "API: GPT-4 (paid)", "api", False),
     ],
 }
@@ -190,7 +188,7 @@ class ModelSelector(QWidget):
                     if not name.startswith("enigma:"):
                         self.model_combo.addItem(f"Forge: {name}", f"enigma:{name}")
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def _load_from_router(self):
         """Load current model assignment from the router."""

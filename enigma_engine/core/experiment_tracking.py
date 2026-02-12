@@ -17,7 +17,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Optional, Self, Union
 
 logger = logging.getLogger(__name__)
 
@@ -53,29 +53,29 @@ class Metric:
 class ExperimentTracker(ABC):
     """Abstract base class for experiment trackers."""
     
-    def __init__(self, tracker_type: TrackerType):
+    def __init__(self, tracker_type: TrackerType) -> None:
         self.tracker_type = tracker_type
         self._run_active = False
         self._metrics: list[Metric] = []
     
     @abstractmethod
-    def start_run(self, config: RunConfig):
+    def start_run(self, config: RunConfig) -> None:
         """Start a new experiment run."""
     
     @abstractmethod
-    def log_metrics(self, metrics: dict[str, float], step: int = None):
+    def log_metrics(self, metrics: dict[str, float], step: int = None) -> None:
         """Log metrics to the tracker."""
     
     @abstractmethod
-    def log_params(self, params: dict[str, Any]):
+    def log_params(self, params: dict[str, Any]) -> None:
         """Log hyperparameters."""
     
     @abstractmethod
-    def log_artifact(self, path: Path, name: str = None):
+    def log_artifact(self, path: Path, name: str = None) -> None:
         """Log an artifact file."""
     
     @abstractmethod
-    def finish_run(self):
+    def finish_run(self) -> None:
         """Finish the current run."""
     
     @property
@@ -87,14 +87,14 @@ class ExperimentTracker(ABC):
 class WandBTracker(ExperimentTracker):
     """Weights & Biases experiment tracker."""
     
-    def __init__(self, api_key: str = None):
+    def __init__(self, api_key: str = None) -> None:
         """Initialize W&B tracker."""
         super().__init__(TrackerType.WANDB)
         self._api_key = api_key
         self._run = None
         self._wandb = None
     
-    def _init_wandb(self):
+    def _init_wandb(self) -> None:
         """Initialize wandb module."""
         if self._wandb is None:
             try:
@@ -106,7 +106,7 @@ class WandBTracker(ExperimentTracker):
             except ImportError:
                 raise ImportError("wandb not installed. Install with: pip install wandb")
     
-    def start_run(self, config: RunConfig):
+    def start_run(self, config: RunConfig) -> None:
         """Start a new W&B run."""
         self._init_wandb()
         
@@ -123,7 +123,7 @@ class WandBTracker(ExperimentTracker):
         self._run_active = True
         logger.info(f"Started W&B run: {self._run.name}")
     
-    def log_metrics(self, metrics: dict[str, float], step: int = None):
+    def log_metrics(self, metrics: dict[str, float], step: int = None) -> None:
         """Log metrics to W&B."""
         if not self._run_active:
             logger.warning("No active run to log metrics")
@@ -135,12 +135,12 @@ class WandBTracker(ExperimentTracker):
         for name, value in metrics.items():
             self._metrics.append(Metric(name, value, step or 0))
     
-    def log_params(self, params: dict[str, Any]):
+    def log_params(self, params: dict[str, Any]) -> None:
         """Log params to W&B config."""
         if self._run:
             self._wandb.config.update(params)
     
-    def log_artifact(self, path: Path, name: str = None):
+    def log_artifact(self, path: Path, name: str = None) -> None:
         """Log artifact to W&B."""
         if not self._run_active:
             return
@@ -154,11 +154,11 @@ class WandBTracker(ExperimentTracker):
         
         logger.info(f"Logged artifact: {artifact_name}")
     
-    def log_model(self, path: Path, name: str = "model"):
+    def log_model(self, path: Path, name: str = "model") -> None:
         """Log model checkpoint."""
         self.log_artifact(path, f"model-{name}")
     
-    def log_table(self, name: str, columns: list[str], data: list[list[Any]]):
+    def log_table(self, name: str, columns: list[str], data: list[list[Any]]) -> None:
         """Log a table to W&B."""
         if not self._run_active:
             return
@@ -166,7 +166,7 @@ class WandBTracker(ExperimentTracker):
         table = self._wandb.Table(columns=columns, data=data)
         self._wandb.log({name: table})
     
-    def finish_run(self):
+    def finish_run(self) -> None:
         """Finish W&B run."""
         if self._run:
             self._run.finish()
@@ -178,14 +178,14 @@ class WandBTracker(ExperimentTracker):
 class MLflowTracker(ExperimentTracker):
     """MLflow experiment tracker."""
     
-    def __init__(self, tracking_uri: str = None):
+    def __init__(self, tracking_uri: str = None) -> None:
         """Initialize MLflow tracker."""
         super().__init__(TrackerType.MLFLOW)
         self._tracking_uri = tracking_uri or os.environ.get("MLFLOW_TRACKING_URI", "mlruns")
         self._run_id = None
         self._mlflow = None
     
-    def _init_mlflow(self):
+    def _init_mlflow(self) -> None:
         """Initialize mlflow module."""
         if self._mlflow is None:
             try:
@@ -195,7 +195,7 @@ class MLflowTracker(ExperimentTracker):
             except ImportError:
                 raise ImportError("mlflow not installed. Install with: pip install mlflow")
     
-    def start_run(self, config: RunConfig):
+    def start_run(self, config: RunConfig) -> None:
         """Start a new MLflow run."""
         self._init_mlflow()
         
@@ -220,7 +220,7 @@ class MLflowTracker(ExperimentTracker):
         
         logger.info(f"Started MLflow run: {self._run_id}")
     
-    def log_metrics(self, metrics: dict[str, float], step: int = None):
+    def log_metrics(self, metrics: dict[str, float], step: int = None) -> None:
         """Log metrics to MLflow."""
         if not self._run_active:
             return
@@ -229,7 +229,7 @@ class MLflowTracker(ExperimentTracker):
             self._mlflow.log_metric(name, value, step=step)
             self._metrics.append(Metric(name, value, step or 0))
     
-    def log_params(self, params: dict[str, Any]):
+    def log_params(self, params: dict[str, Any]) -> None:
         """Log params to MLflow."""
         if not self._run_active:
             return
@@ -238,7 +238,7 @@ class MLflowTracker(ExperimentTracker):
         flat_params = self._flatten_dict(params)
         self._mlflow.log_params(flat_params)
     
-    def _flatten_dict(self, d: dict, parent_key: str = '', sep: str = '.') -> dict:
+    def _flatten_dict(self, d: dict, parent_key: str = '', sep: str = '.') -> dict[str, str]:
         """Flatten nested dictionary."""
         items = []
         for k, v in d.items():
@@ -249,7 +249,7 @@ class MLflowTracker(ExperimentTracker):
                 items.append((new_key, str(v)))
         return dict(items)
     
-    def log_artifact(self, path: Path, name: str = None):
+    def log_artifact(self, path: Path, name: str = None) -> None:
         """Log artifact to MLflow."""
         if not self._run_active:
             return
@@ -257,7 +257,7 @@ class MLflowTracker(ExperimentTracker):
         self._mlflow.log_artifact(str(path))
         logger.info(f"Logged artifact: {path}")
     
-    def log_model(self, model, name: str = "model"):
+    def log_model(self, model: Any, name: str = "model") -> None:
         """Log PyTorch model to MLflow."""
         if not self._run_active:
             return
@@ -267,7 +267,7 @@ class MLflowTracker(ExperimentTracker):
         except Exception as e:
             logger.error(f"Failed to log model: {e}")
     
-    def finish_run(self):
+    def finish_run(self) -> None:
         """Finish MLflow run."""
         if self._run_active:
             self._mlflow.end_run()
@@ -279,7 +279,7 @@ class MLflowTracker(ExperimentTracker):
 class LocalTracker(ExperimentTracker):
     """Local file-based experiment tracker."""
     
-    def __init__(self, output_dir: Path = None):
+    def __init__(self, output_dir: Path = None) -> None:
         """Initialize local tracker."""
         super().__init__(TrackerType.LOCAL)
         self._output_dir = Path(output_dir or "experiments")
@@ -287,7 +287,7 @@ class LocalTracker(ExperimentTracker):
         self._config: Optional[RunConfig] = None
         self._step = 0
     
-    def start_run(self, config: RunConfig):
+    def start_run(self, config: RunConfig) -> None:
         """Start a new local run."""
         self._config = config
         
@@ -313,7 +313,7 @@ class LocalTracker(ExperimentTracker):
         
         logger.info(f"Started local run: {self._run_dir}")
     
-    def log_metrics(self, metrics: dict[str, float], step: int = None):
+    def log_metrics(self, metrics: dict[str, float], step: int = None) -> None:
         """Log metrics to local file."""
         if not self._run_active:
             return
@@ -329,7 +329,7 @@ class LocalTracker(ExperimentTracker):
         with open(metrics_path, 'a') as f:
             f.write(json.dumps({"step": step, **metrics}) + "\n")
     
-    def log_params(self, params: dict[str, Any]):
+    def log_params(self, params: dict[str, Any]) -> None:
         """Log params to local file."""
         if not self._run_active:
             return
@@ -347,7 +347,7 @@ class LocalTracker(ExperimentTracker):
         with open(params_path, 'w') as f:
             json.dump(existing, f, indent=2)
     
-    def log_artifact(self, path: Path, name: str = None):
+    def log_artifact(self, path: Path, name: str = None) -> None:
         """Copy artifact to run directory."""
         if not self._run_active:
             return
@@ -363,7 +363,7 @@ class LocalTracker(ExperimentTracker):
         
         logger.info(f"Logged artifact: {dest}")
     
-    def finish_run(self):
+    def finish_run(self) -> None:
         """Finish local run."""
         if not self._run_active:
             return
@@ -427,26 +427,26 @@ def create_tracker(tracker_type: Union[str, TrackerType],
 class ExperimentManager:
     """Manages experiment runs with automatic tracking."""
     
-    def __init__(self, tracker: ExperimentTracker):
+    def __init__(self, tracker: ExperimentTracker) -> None:
         """Initialize manager with tracker."""
         self._tracker = tracker
         self._best_metrics: dict[str, float] = {}
         self._checkpoint_dir: Optional[Path] = None
     
-    def __enter__(self):
+    def __enter__(self) -> Self:
         return self
     
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: type, exc_val: BaseException, exc_tb: Any) -> None:
         self._tracker.finish_run()
     
-    def start(self, config: RunConfig, checkpoint_dir: Path = None):
+    def start(self, config: RunConfig, checkpoint_dir: Path = None) -> None:
         """Start experiment."""
         self._tracker.start_run(config)
         self._checkpoint_dir = Path(checkpoint_dir) if checkpoint_dir else None
         if self._checkpoint_dir:
             self._checkpoint_dir.mkdir(parents=True, exist_ok=True)
     
-    def log_step(self, metrics: dict[str, float], step: int):
+    def log_step(self, metrics: dict[str, float], step: int) -> None:
         """Log a training step."""
         self._tracker.log_metrics(metrics, step)
         
@@ -456,7 +456,7 @@ class ExperimentManager:
                 if name not in self._best_metrics or value < self._best_metrics[name]:
                     self._best_metrics[name] = value
     
-    def save_checkpoint(self, model, step: int, is_best: bool = False):
+    def save_checkpoint(self, model: Any, step: int, is_best: bool = False) -> None:
         """Save model checkpoint."""
         if not self._checkpoint_dir:
             return

@@ -76,7 +76,7 @@ class WindowsNarrator(ScreenReaderBackend):
                 self._tolk = tolk
                 logger.info(f"Tolk initialized with {tolk.detect_screen_reader()}")
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         # Try Windows accessibility API
         if self._tolk is None:
@@ -84,7 +84,7 @@ class WindowsNarrator(ScreenReaderBackend):
                 import win32com.client
                 self._accessible = win32com.client.Dispatch("SAPI.SpVoice")
             except Exception:
-                pass
+                pass  # Intentionally silent
     
     def announce(self, text: str, priority: AnnouncementPriority = AnnouncementPriority.NORMAL):
         if self._tolk:
@@ -136,7 +136,7 @@ class LinuxOrca(ScreenReaderBackend):
             import speechd
             self._spd = speechd.SSIPClient("enigma")
         except ImportError:
-            pass
+            pass  # Intentionally silent
     
     def announce(self, text: str, priority: AnnouncementPriority = AnnouncementPriority.NORMAL):
         if self._spd:
@@ -162,7 +162,7 @@ class FallbackTTS(ScreenReaderBackend):
             import pyttsx3
             self._engine = pyttsx3.init()
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def announce(self, text: str, priority: AnnouncementPriority = AnnouncementPriority.NORMAL):
         if self._engine:
@@ -358,7 +358,7 @@ class ScreenReaderSupport:
                 ))
                 
         except ImportError:
-            pass
+            pass  # Intentionally silent
     
     def _on_focus(self, event: Any, widget: Any, name: str, role: str):
         """Handle focus event."""

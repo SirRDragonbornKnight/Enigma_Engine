@@ -635,7 +635,7 @@ def generate_sprite_png(
         # For now, return SVG data - PIL doesn't handle SVG well without extra deps
         return svg.encode('utf-8')
     except ImportError:
-        pass
+        pass  # Intentionally silent
     
     # Fallback: return SVG as bytes
     return svg.encode('utf-8')

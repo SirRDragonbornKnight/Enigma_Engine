@@ -59,7 +59,7 @@ class MemoryBank(nn.Module):
         hidden_size: int,
         memory_size: int,
         num_heads: int
-    ):
+    ) -> None:
         super().__init__()
         self.hidden_size = hidden_size
         self.memory_size = memory_size
@@ -128,7 +128,7 @@ class MemoryBank(nn.Module):
         self,
         key_values: torch.Tensor,  # [batch, seq, hidden]
         importance: Optional[torch.Tensor] = None
-    ):
+    ) -> None:
         """
         Write to memory (update memory content).
         
@@ -169,7 +169,7 @@ class LandmarkAttention(nn.Module):
         num_heads: int,
         num_landmarks: int,
         selection_method: str = "attention"
-    ):
+    ) -> None:
         super().__init__()
         self.hidden_size = hidden_size
         self.num_heads = num_heads
@@ -284,7 +284,7 @@ class ContextCompressor(nn.Module):
         hidden_size: int,
         compress_ratio: int = 4,
         method: str = "mean"
-    ):
+    ) -> None:
         super().__init__()
         self.hidden_size = hidden_size
         self.compress_ratio = compress_ratio
@@ -337,7 +337,7 @@ class StreamingContext:
         self,
         model: nn.Module,
         config: ContextConfig = None
-    ):
+    ) -> None:
         self.model = model
         self.config = config or ContextConfig()
         
@@ -350,7 +350,7 @@ class StreamingContext:
         self._total_tokens = 0
         self._chunks_processed = 0
     
-    def reset(self):
+    def reset(self) -> None:
         """Reset streaming state."""
         self._kv_cache = None
         self._compressed_context = None
@@ -491,7 +491,7 @@ class RingAttention(nn.Module):
         hidden_size: int,
         num_heads: int,
         ring_size: int = 2  # Number of devices in ring
-    ):
+    ) -> None:
         super().__init__()
         self.hidden_size = hidden_size
         self.num_heads = num_heads
@@ -568,7 +568,7 @@ class InfiniteContextModel(nn.Module):
         self,
         base_model: nn.Module,
         config: ContextConfig = None
-    ):
+    ) -> None:
         super().__init__()
         self.base_model = base_model
         self.config = config or ContextConfig()

@@ -123,7 +123,7 @@ class ContextCompressor:
                 from enigma_engine.core.tokenizer import get_tokenizer
                 self._tokenizer = get_tokenizer()
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         # Importance keywords
         self._important_keywords = [
@@ -234,7 +234,7 @@ class ContextCompressor:
             try:
                 return len(self._tokenizer.encode(text))
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         # Rough estimate: ~4 chars per token
         return len(text) // 4

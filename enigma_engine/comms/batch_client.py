@@ -179,7 +179,7 @@ class ResponseCache:
                     data = json.loads(cache_file.read_text())
                     return data.get("response")
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
         
         return None
     
@@ -206,7 +206,7 @@ class ResponseCache:
                     "cached_at": time.time()
                 }))
             except Exception:
-                pass
+                pass  # Intentionally silent
     
     def clear(self):
         """Clear cache."""

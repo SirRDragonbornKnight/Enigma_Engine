@@ -828,7 +828,7 @@ Python, JavaScript, TypeScript, HTML/CSS, SQL, and more!
             hardware["ram_gb"] = psutil.virtual_memory().total / (1024**3)
             hardware["cpu_cores"] = psutil.cpu_count()
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         try:
             import torch
@@ -837,7 +837,7 @@ Python, JavaScript, TypeScript, HTML/CSS, SQL, and more!
                 hardware["gpu_name"] = torch.cuda.get_device_name(0)
                 hardware["gpu_vram_gb"] = torch.cuda.get_device_properties(0).total_memory / (1024**3)
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         return hardware
     

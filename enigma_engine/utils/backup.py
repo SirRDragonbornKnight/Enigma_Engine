@@ -666,7 +666,7 @@ class BackupManager:
                 with open(self._hashes_file) as f:
                     self._file_hashes = json.load(f)
             except Exception:
-                pass
+                pass  # Intentionally silent
     
     def _save_hashes(self):
         """Save file hashes."""
@@ -674,7 +674,7 @@ class BackupManager:
             with open(self._hashes_file, "w") as f:
                 json.dump(self._file_hashes, f)
         except Exception:
-            pass
+            pass  # Intentionally silent
 
 
 # Global instance

@@ -98,7 +98,7 @@ class WakeWordDetector:
             logger.info("Using Porcupine for wake word detection")
             return
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         # Option 2: OpenWakeWord
         try:
@@ -106,7 +106,7 @@ class WakeWordDetector:
             logger.info("Using OpenWakeWord for wake word detection")
             return
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         # Option 3: Snowboy
         try:
@@ -114,7 +114,7 @@ class WakeWordDetector:
             logger.info("Using Snowboy for wake word detection")
             return
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         # Fallback: Simple energy + pattern matching
         self._engine = "simple"
@@ -258,7 +258,7 @@ class AudioCapture:
                 try:
                     self._stream.read(self.chunk_size, exception_on_overflow=False)
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
                 return None
         
         try:
@@ -343,7 +343,7 @@ class BackgroundAssistant:
             result = self._stt_engine.transcribe(audio)
             return result["text"].strip()
         except ImportError:
-            pass
+            pass  # Intentionally silent
         except Exception as e:
             logger.error(f"Whisper transcription error: {e}")
         
@@ -364,7 +364,7 @@ class BackgroundAssistant:
                 logger.error(f"Speech recognition error: {e}")
                 return ""
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         logger.warning("No STT engine available")
         return ""

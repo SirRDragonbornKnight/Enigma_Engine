@@ -179,7 +179,7 @@ class QuestionClassifier:
 class CoTPromptBuilder:
     """Build chain-of-thought prompts."""
     
-    def __init__(self, config: CoTConfig):
+    def __init__(self, config: CoTConfig) -> None:
         self._config = config
         self._classifier = QuestionClassifier()
     
@@ -468,7 +468,7 @@ class TreeOfThought:
 class CoTPrompt:
     """High-level chain-of-thought interface."""
     
-    def __init__(self, config: Optional[CoTConfig] = None):
+    def __init__(self, config: Optional[CoTConfig] = None) -> None:
         self._config = config or CoTConfig()
         self._builder = CoTPromptBuilder(self._config)
         self._extractor = AnswerExtractor()

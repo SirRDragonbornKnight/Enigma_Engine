@@ -299,7 +299,7 @@ class ForgeConfig:
     # Track if config is frozen (immutable after creation)
     _frozen: bool = False
     
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """
         Post-initialization: validate and set computed defaults.
         Called automatically after __init__ (dataclass magic).
@@ -553,7 +553,7 @@ class QuantizationConfig:
     # INT4 specific
     group_size: int = 128  # For grouped quantization
     
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         valid_modes = {"none", "dynamic", "int8", "int4"}
         if self.mode not in valid_modes:
             raise ValueError(f"Invalid quantization mode: {self.mode}. Valid: {valid_modes}")
@@ -738,7 +738,7 @@ class RMSNorm(nn.Module):
       ← TransformerBlock uses this before attention and FFN
     """
 
-    def __init__(self, dim: int, eps: float = 1e-6):
+    def __init__(self, dim: int, eps: float = 1e-6) -> None:
         """
         Args:
             dim: Dimension of input (should match model dim)
@@ -996,7 +996,7 @@ class Attention(nn.Module):
     # Maximum KV-cache size (sliding window for memory efficiency)
     MAX_CACHE_SEQ_LEN = 4096
 
-    def __init__(self, config: ForgeConfig):
+    def __init__(self, config: ForgeConfig) -> None:
         """
         Initialize attention layer.
         
@@ -1169,7 +1169,7 @@ class Attention(nn.Module):
         # ─────────────────────────────────────────────────────────────────────
         return self.wo(output)
 
-    def clear_cache(self):
+    def clear_cache(self) -> None:
         """Clear the KV-cache (call between different sequences)."""
         self.cache_k = self.cache_v = None
 
@@ -1195,7 +1195,7 @@ class FeedForward(nn.Module):
       ← Used by TransformerBlock after attention
     """
 
-    def __init__(self, config: ForgeConfig):
+    def __init__(self, config: ForgeConfig) -> None:
         """
         Args:
             config: Model config with dim, hidden_dim, use_swiglu flag
@@ -1274,7 +1274,7 @@ class MoEFeedForward(nn.Module):
     - Auxiliary loss weight (moe_load_balancing) controls this
     """
 
-    def __init__(self, config: ForgeConfig):
+    def __init__(self, config: ForgeConfig) -> None:
         """
         Args:
             config: Model configuration with MoE settings
@@ -1422,7 +1422,7 @@ class TransformerBlock(nn.Module):
     for training large models on limited hardware.
     """
 
-    def __init__(self, config: ForgeConfig, layer_id: int):
+    def __init__(self, config: ForgeConfig, layer_id: int) -> None:
         """
         Args:
             config: Model configuration
@@ -1488,7 +1488,7 @@ class TransformerBlock(nn.Module):
             )
         return self._forward_impl(x, freqs_cis, mask, use_cache, start_pos)
 
-    def clear_cache(self):
+    def clear_cache(self) -> None:
         """Clear KV-cache in the attention layer."""
         self.attention.clear_cache()
 
@@ -1685,7 +1685,7 @@ class Enigma(nn.Module):
         self.apply(self._init_weights)
         self._init_output_weights()
 
-    def _init_weights(self, module):
+    def _init_weights(self, module) -> None:
         if isinstance(module, nn.Linear):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
             if module.bias is not None:
@@ -1693,7 +1693,7 @@ class Enigma(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def _init_output_weights(self):
+    def _init_output_weights(self) -> None:
         for name, p in self.named_parameters():
             if name.endswith('wo.weight') or name.endswith('w2.weight'):
                 torch.nn.init.normal_(p, mean=0.0, std=0.02 / math.sqrt(2 * self.config.n_layers))
@@ -1747,7 +1747,7 @@ class Enigma(nn.Module):
 
         return logits
 
-    def clear_cache(self):
+    def clear_cache(self) -> None:
         for layer in self.layers:
             layer.clear_cache()
 
@@ -2316,7 +2316,7 @@ class Enigma(nn.Module):
         
         return self
 
-    def _apply_dynamic_quantization(self):
+    def _apply_dynamic_quantization(self) -> None:
         """Apply PyTorch dynamic quantization to linear layers."""
         torch.quantization.quantize_dynamic(
             self,
@@ -2325,14 +2325,14 @@ class Enigma(nn.Module):
             inplace=True
         )
 
-    def _apply_static_int8_quantization(self):
+    def _apply_static_int8_quantization(self) -> None:
         """Apply static INT8 quantization (requires calibration data)."""
         # For static quantization, we'd need calibration data
         # Fall back to dynamic for now
         logger.info("Static INT8 uses dynamic quantization (no calibration data)")
         self._apply_dynamic_quantization()
 
-    def _apply_int4_quantization(self):
+    def _apply_int4_quantization(self) -> None:
         """Apply 4-bit weight-only quantization."""
         # INT4 quantization is more complex, use dynamic as fallback
         # True INT4 would require specialized libraries like bitsandbytes
@@ -3167,11 +3167,11 @@ def create_model_auto(size: str = 'small', vocab_size: Optional[int] = None, **k
     if backend == "torch":
         # User explicitly requested PyTorch
         use_pure = False
-        print(f"[Backend] PyTorch requested explicitly for {size}")
+        logger.info(f"PyTorch requested explicitly for {size}")
     elif backend == "pure":
         # User explicitly requested pure Python
         use_pure = True
-        print(f"[Backend] Pure Python requested explicitly for {size}")
+        logger.info(f"Pure Python requested explicitly for {size}")
     elif backend == "auto":
         # Auto mode: Use pure for small/medium, PyTorch for large (GPU-scale)
         if estimated_params > threshold:
@@ -3179,14 +3179,14 @@ def create_model_auto(size: str = 'small', vocab_size: Optional[int] = None, **k
             try:
                 import torch
                 use_pure = False
-                print(f"[Backend] FALLBACK to PyTorch - model too large ({estimated_params/1e6:.0f}M > {threshold/1e6:.0f}M threshold)")
+                logger.info(f"FALLBACK to PyTorch - model too large ({estimated_params/1e6:.0f}M > {threshold/1e6:.0f}M threshold)")
                 if torch.cuda.is_available():
-                    print(f"[Backend] GPU detected: {torch.cuda.get_device_name(0)}")
+                    logger.info(f"GPU detected: {torch.cuda.get_device_name(0)}")
                 else:
-                    print(f"[Backend] No GPU - PyTorch will use CPU")
+                    logger.info("No GPU - PyTorch will use CPU")
             except ImportError:
                 use_pure = True
-                print(f"[Backend] PyTorch not installed - using Pure Python + Numba for large model")
+                logger.info("PyTorch not installed - using Pure Python + Numba for large model")
         else:
             # Small/medium model - Pure Python + Numba is efficient enough
             use_pure = True
@@ -3198,11 +3198,10 @@ def create_model_auto(size: str = 'small', vocab_size: Optional[int] = None, **k
             set_backend("pure", threshold)
             return get_model_for_size(size)
         except Exception as e:
-            print(f"[Backend] FALLBACK to PyTorch - Pure Python failed: {e}")
-            logger.warning(f"Pure Python backend failed: {e}, falling back to PyTorch")
+            logger.warning(f"FALLBACK to PyTorch - Pure Python failed: {e}")
     
     # Use PyTorch backend (fallback)
-    print(f"[Backend] Using PyTorch for {size}")
+    logger.info(f"Using PyTorch for {size}")
     return create_model(size, vocab_size, **kwargs)
 
 

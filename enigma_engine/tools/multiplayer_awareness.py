@@ -218,7 +218,7 @@ class PlayerDetector:
                         try:
                             player.level = int(match.group(2))
                         except ValueError:
-                            pass
+                            pass  # Intentionally silent
                             
                     players.append(player)
                     

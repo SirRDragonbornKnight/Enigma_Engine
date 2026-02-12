@@ -443,7 +443,7 @@ class ResourceMonitor(QWidget):
             gpu_frac = int(info['gpu_memory_fraction'] * 100)
             self.gpu_frac_label.setText(f"GPU Memory Limit: {gpu_frac}%")
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def record_generation(self, tokens: int, latency: float):
         """

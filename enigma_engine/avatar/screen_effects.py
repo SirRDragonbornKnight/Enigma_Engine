@@ -1018,7 +1018,7 @@ class ScreenEffectManager:
                 controller = get_fullscreen_controller()
                 controller.register_element(f'effect_overlay_{screen_index}', overlay, category='effects')
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         return self._overlays[screen_index]
     
@@ -1174,7 +1174,7 @@ class ScreenEffectManager:
                 y = state.get('y', 300) + offset_y
                 return self.spawn(preset, x=x, y=y, **kwargs)
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         # Fallback to center
         return self.spawn(preset, **kwargs)

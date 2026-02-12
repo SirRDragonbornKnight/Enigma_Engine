@@ -11,6 +11,7 @@ Works with: iOS, Android (native or React Native/Flutter)
 """
 
 import base64
+import logging
 import time
 from datetime import datetime
 from pathlib import Path
@@ -23,6 +24,7 @@ try:
 except ImportError:
     HAS_FLASK = False
 
+logger = logging.getLogger(__name__)
 
 
 class MobileAPI:
@@ -103,7 +105,7 @@ class MobileAPI:
                             engine.runAndWait()
                             return True
                         except Exception:
-                            pass
+                            pass  # Intentionally silent
                         
                         # Try gTTS (Google TTS) - outputs MP3
                         try:
@@ -126,7 +128,7 @@ class MobileAPI:
                                 tts.save(filepath)
                             return True
                         except Exception:
-                            pass
+                            pass  # Intentionally silent
                         
                         # Try edge-tts (Microsoft Edge TTS)
                         try:
@@ -141,7 +143,7 @@ class MobileAPI:
                             asyncio.run(save_edge_tts())
                             return True
                         except Exception:
-                            pass
+                            pass  # Intentionally silent
                         
                         # No TTS engine available
                         raise RuntimeError(
@@ -151,7 +153,7 @@ class MobileAPI:
                 
                 self._voice = SimpleVoice()
             except ImportError as e:
-                print(f"[MobileAPI] Voice not available: {e}")
+                logger.warning("Voice not available: %s", e)
                 self._voice = None
         return self._voice
     
@@ -412,15 +414,15 @@ class MobileAPI:
             try:
                 return recognizer.recognize_google(audio)
             except Exception:
-                pass
+                pass  # Intentionally silent
             
             # Try offline (if available)
             try:
                 return recognizer.recognize_sphinx(audio)
             except Exception:
-                pass
+                pass  # Intentionally silent
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         # Try whisper (if available)
         try:
@@ -429,18 +431,18 @@ class MobileAPI:
             result = model.transcribe(audio_path)
             return result["text"]
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         return None
     
     def run(self, host: str = "0.0.0.0", debug: bool = False):
         """Start the API server."""
-        print(f"Starting Mobile API on {host}:{self.port}")
-        print("Endpoints:")
-        print("  /status - Server status")
-        print("  /chat - Chat with AI")
-        print("  /voice/input - Voice input")
-        print("  /voice/output - TTS output")
+        logger.info("Starting Mobile API on %s:%d", host, self.port)
+        logger.info("Endpoints:")
+        logger.info("  /status - Server status")
+        logger.info("  /chat - Chat with AI")
+        logger.info("  /voice/input - Voice input")
+        logger.info("  /voice/output - TTS output")
         self.app.run(host=host, port=self.port, debug=debug)
 
 

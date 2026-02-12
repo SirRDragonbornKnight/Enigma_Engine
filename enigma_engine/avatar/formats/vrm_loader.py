@@ -19,9 +19,12 @@ Requirements:
 Install: pip install pygltflib trimesh numpy
 """
 
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
+
+logger = logging.getLogger(__name__)
 
 # Check for required libraries
 try:
@@ -165,17 +168,17 @@ class VRMLoader:
             VRMModel or None if loading failed
         """
         if not VRM_AVAILABLE:
-            print("[VRMLoader] Required libraries not installed.")
-            print(f"  Install with: pip install {' '.join(self.get_requirements())}")
+            logger.warning("Required libraries not installed. Install with: pip install %s",
+                           ' '.join(self.get_requirements()))
             return None
         
         path = Path(filepath)
         if not path.exists():
-            print(f"[VRMLoader] File not found: {filepath}")
+            logger.warning("File not found: %s", filepath)
             return None
         
         if path.suffix.lower() not in ['.vrm', '.glb', '.gltf']:
-            print(f"[VRMLoader] Unsupported format: {path.suffix}")
+            logger.warning("Unsupported format: %s", path.suffix)
             return None
         
         # Check cache
@@ -186,7 +189,7 @@ class VRMLoader:
         try:
             return self._load_vrm(path)
         except Exception as e:
-            print(f"[VRMLoader] Error loading {filepath}: {e}")
+            logger.error("Error loading %s: %s", filepath, e)
             return None
     
     def _load_vrm(self, path: Path) -> Optional[VRMModel]:
@@ -213,7 +216,7 @@ class VRMLoader:
             self._parse_vrm1_extension(model, vrm_ext)
         else:
             # No VRM extension, just basic glTF
-            print(f"[VRMLoader] No VRM extension found in {path.name}")
+            logger.warning("No VRM extension found in %s", path.name)
         
         # Cache and return
         self._cache[str(path.absolute())] = model

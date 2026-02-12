@@ -37,7 +37,7 @@ class AIBrain:
             checkpoints/               # Model weights
     """
 
-    def __init__(self, model_name: str, auto_learn: bool = True):
+    def __init__(self, model_name: str, auto_learn: bool = True) -> None:
         self.model_name = model_name
         self.auto_learn = auto_learn
 
@@ -73,7 +73,7 @@ class AIBrain:
         self._lock = threading.Lock()
 
     def record_interaction(self, user_input: str, ai_response: str,
-                           quality: Optional[float] = None):
+                           quality: Optional[float] = None) -> None:
         """
         Record a conversation exchange. If auto_learn is enabled,
         this will be added to training data.
@@ -133,14 +133,14 @@ class AIBrain:
         conv_file.write_text(json.dumps(data, indent=2))
         return str(conv_file)
 
-    def new_conversation(self):
+    def new_conversation(self) -> None:
         """Start a fresh conversation (optionally save current first)."""
         if self.current_conversation:
             self.save_conversation()
         self.current_conversation = []
 
     def add_memory(self, text: str, importance: float = 0.5,
-                   category: str = "general"):
+                   category: str = "general") -> None:
         """Add something to long-term memory."""
         memory = {
             "text": text,
@@ -151,7 +151,7 @@ class AIBrain:
         }
         self._append_to_jsonl(self.memories_file, memory)
 
-    def add_curiosity(self, topic: str):
+    def add_curiosity(self, topic: str) -> None:
         """Add something the AI wants to learn about."""
         if topic not in self.curiosities:
             self.curiosities.append(topic)
@@ -165,7 +165,7 @@ class AIBrain:
         """Get list of things the AI is curious about."""
         return self.curiosities.copy()
 
-    def mark_curiosity_explored(self, topic: str):
+    def mark_curiosity_explored(self, topic: str) -> None:
         """Mark a curiosity as explored."""
         if topic in self.curiosities:
             self.curiosities.remove(topic)
@@ -179,7 +179,7 @@ class AIBrain:
                     try:
                         data.append(json.loads(line))
                     except BaseException:
-                        pass
+                        pass  # Intentionally silent
         return data
 
     def get_training_count(self) -> int:
@@ -217,7 +217,7 @@ class AIBrain:
         return (self.auto_learn and
                 self.interactions_since_train >= self.train_threshold)
 
-    def mark_trained(self):
+    def mark_trained(self) -> None:
         """Mark that training has occurred."""
         self.interactions_since_train = 0
         self.pending_training = []
@@ -234,12 +234,12 @@ class AIBrain:
             "curiosities_count": len(self.curiosities)
         }
 
-    def _append_to_jsonl(self, filepath: Path, data: dict):
+    def _append_to_jsonl(self, filepath: Path, data: dict) -> None:
         """Append JSON line to file."""
         with open(filepath, 'a') as f:
             f.write(json.dumps(data) + '\n')
 
-    def _load_curiosities(self):
+    def _load_curiosities(self) -> None:
         """Load curiosities from file."""
         self.curiosities = []
         if self.curiosities_file.exists():
@@ -250,7 +250,7 @@ class AIBrain:
                         if not entry.get("explored", False):
                             self.curiosities.append(entry["topic"])
                     except BaseException:
-                        pass
+                        pass  # Intentionally silent
 
 
 # Global brain instance cache
@@ -264,7 +264,7 @@ def get_brain(model_name: str, auto_learn: bool = True) -> AIBrain:
     return _brains[model_name]
 
 
-def set_auto_learn(model_name: str, enabled: bool):
+def set_auto_learn(model_name: str, enabled: bool) -> None:
     """Enable/disable auto-learning for a model."""
     brain = get_brain(model_name)
     brain.auto_learn = enabled

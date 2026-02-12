@@ -81,7 +81,7 @@ class MusicGenerateTool(Tool):
                 }
                 
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             # Try bark for audio generation
             try:
@@ -102,7 +102,7 @@ class MusicGenerateTool(Tool):
                 }
                 
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             # Generate simple MIDI as fallback
             try:
@@ -146,7 +146,7 @@ class MusicGenerateTool(Tool):
                 }
                 
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             return {
                 "success": False,
@@ -213,7 +213,7 @@ class RemoveBackgroundTool(Tool):
                 }
                 
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             # Try backgroundremover
             try:
@@ -232,7 +232,7 @@ class RemoveBackgroundTool(Tool):
                 }
                 
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             return {
                 "success": False,
@@ -302,7 +302,7 @@ class UpscaleImageTool(Tool):
                 }
                 
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             # Try PIL/Pillow with LANCZOS (basic upscaling)
             try:
@@ -323,7 +323,7 @@ class UpscaleImageTool(Tool):
                 }
                 
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             return {
                 "success": False,
@@ -415,7 +415,7 @@ class StyleTransferTool(Tool):
                 }
                 
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             return {
                 "success": False,
@@ -484,7 +484,7 @@ class ConvertAudioTool(Tool):
                 }
                 
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             # Try ffmpeg directly
             try:
@@ -507,7 +507,7 @@ class ConvertAudioTool(Tool):
                     return {"success": False, "error": result.stderr}
                     
             except FileNotFoundError:
-                pass
+                pass  # Intentionally silent
             
             return {
                 "success": False,
@@ -566,7 +566,7 @@ class ExtractAudioTool(Tool):
                 }
                 
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             # Try ffmpeg
             try:
@@ -587,7 +587,7 @@ class ExtractAudioTool(Tool):
                     return {"success": False, "error": result.stderr}
                     
             except FileNotFoundError:
-                pass
+                pass  # Intentionally silent
             
             return {
                 "success": False,
@@ -673,7 +673,7 @@ class AudioVisualizeTool(Tool):
                 }
                 
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             return {
                 "success": False,

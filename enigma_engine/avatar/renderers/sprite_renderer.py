@@ -5,6 +5,7 @@ Simple 2D sprite renderer that works out of the box.
 Uses built-in SVG sprites with customizable colors.
 """
 
+import logging
 import time
 from pathlib import Path
 from typing import Optional
@@ -12,6 +13,8 @@ from typing import Optional
 from ..avatar_identity import AvatarAppearance
 from .base import BaseRenderer
 from .default_sprites import SPRITE_TEMPLATES, generate_sprite, save_sprite
+
+logger = logging.getLogger(__name__)
 
 
 class SpriteRenderer(BaseRenderer):
@@ -39,8 +42,8 @@ class SpriteRenderer(BaseRenderer):
         """Show avatar (console output or save to file)."""
         self._visible = True
         pos = self.controller.position
-        print(f"[SpriteRenderer] Avatar shown at ({pos.x}, {pos.y})")
-        print(f"[SpriteRenderer] Current sprite: {self._current_sprite_name}")
+        logger.info("Avatar shown at (%s, %s)", pos.x, pos.y)
+        logger.info("Current sprite: %s", self._current_sprite_name)
         
         # Generate current sprite if needed
         if self._current_appearance:
@@ -49,7 +52,7 @@ class SpriteRenderer(BaseRenderer):
     def hide(self) -> None:
         """Hide avatar."""
         self._visible = False
-        print("[SpriteRenderer] Avatar hidden")
+        logger.info("Avatar hidden")
     
     def set_position(self, x: int, y: int) -> None:
         """
@@ -60,7 +63,7 @@ class SpriteRenderer(BaseRenderer):
             y: Y coordinate
         """
         if self._visible:
-            print(f"[SpriteRenderer] Moved to ({x}, {y})")
+            logger.info("Moved to (%s, %s)", x, y)
     
     def render_frame(self, animation_data: Optional[dict] = None) -> None:
         """
@@ -130,10 +133,12 @@ class SpriteRenderer(BaseRenderer):
         self._sprite_cache.clear()
         
         if self._visible:
-            print(f"[SpriteRenderer] Appearance updated:")
-            print(f"  Style: {appearance.style}")
-            print(f"  Colors: {appearance.primary_color}, {appearance.secondary_color}, {appearance.accent_color}")
-            print(f"  Shape: {appearance.shape}, Size: {appearance.size}")
+            logger.info(
+                "Appearance updated: style=%s, colors=(%s, %s, %s), shape=%s, size=%s",
+                appearance.style, appearance.primary_color,
+                appearance.secondary_color, appearance.accent_color,
+                appearance.shape, appearance.size
+            )
             self._update_sprite()
     
     def set_expression(self, expression: str) -> None:
@@ -152,7 +157,7 @@ class SpriteRenderer(BaseRenderer):
             self._current_sprite_name = "idle"
         
         if self._visible:
-            print(f"[SpriteRenderer] Expression: {expression}")
+            logger.info("Expression: %s", expression)
             self._update_sprite()
     
     def play_animation(self, animation: str, duration: float = 1.0) -> None:
@@ -164,7 +169,7 @@ class SpriteRenderer(BaseRenderer):
             duration: Duration in seconds
         """
         if self._visible:
-            print(f"[SpriteRenderer] Animation: {animation} ({duration}s)")
+            logger.info("Animation: %s (%.1fs)", animation, duration)
         
         # Map animation to appropriate sprite
         anim_sprite_map = {
@@ -197,7 +202,7 @@ class SpriteRenderer(BaseRenderer):
             output_path.mkdir(parents=True, exist_ok=True)
             
             if not self._current_appearance:
-                print("[SpriteRenderer] No appearance set, using defaults")
+                logger.info("No appearance set, using defaults")
                 appearance = AvatarAppearance()
             else:
                 appearance = self._current_appearance
@@ -212,11 +217,11 @@ class SpriteRenderer(BaseRenderer):
                     appearance.accent_color
                 )
             
-            print(f"[SpriteRenderer] Exported {len(SPRITE_TEMPLATES)} sprites to {output_dir}")
+            logger.info("Exported %d sprites to %s", len(SPRITE_TEMPLATES), output_dir)
             return True
             
         except Exception as e:
-            print(f"[SpriteRenderer] Export failed: {e}")
+            logger.error("Export failed: %s", e)
             return False
     
     def get_current_sprite_svg(self) -> Optional[str]:

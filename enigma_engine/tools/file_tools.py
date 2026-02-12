@@ -451,7 +451,7 @@ class DeleteFileTool(Tool):
                 if path.resolve().parent == Path(protected).resolve():
                     return True
             except (OSError, ValueError):
-                pass
+                pass  # Intentionally silent
         return False
     
     def execute(self, path: str, confirm: str = "no", **kwargs) -> dict[str, Any]:

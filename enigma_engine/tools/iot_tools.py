@@ -303,7 +303,7 @@ class GPIOReadTool(Tool):
                 }
                 
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             # Try gpiozero
             try:
@@ -322,7 +322,7 @@ class GPIOReadTool(Tool):
                 }
                 
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             # Fallback: read from sysfs
             try:
@@ -403,7 +403,7 @@ class GPIOWriteTool(Tool):
                 }
                 
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             # Try gpiozero
             try:
@@ -424,7 +424,7 @@ class GPIOWriteTool(Tool):
                 }
                 
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             return {
                 "success": False,
@@ -493,7 +493,7 @@ class GPIOPWMTool(Tool):
                 }
                 
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             # Try gpiozero
             try:
@@ -510,7 +510,7 @@ class GPIOPWMTool(Tool):
                 }
                 
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             return {
                 "success": False,
@@ -570,7 +570,7 @@ class MQTTPublishTool(Tool):
                 }
                 
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             # Fallback: use mosquitto_pub command
             try:
@@ -594,7 +594,7 @@ class MQTTPublishTool(Tool):
                     return {"success": False, "error": result.stderr}
                     
             except FileNotFoundError:
-                pass
+                pass  # Intentionally silent
             
             return {
                 "success": False,
@@ -646,7 +646,7 @@ class MQTTSubscribeTool(Tool):
                 }
                 
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             # Fallback: use mosquitto_sub command
             try:
@@ -669,7 +669,7 @@ class MQTTSubscribeTool(Tool):
             except subprocess.TimeoutExpired:
                 return {"success": False, "error": f"No message received within {timeout}s"}
             except FileNotFoundError:
-                pass
+                pass  # Intentionally silent
             
             return {
                 "success": False,
@@ -740,7 +740,7 @@ class CameraCaptureTool(Tool):
                     return {"success": False, "error": "Failed to capture frame"}
                     
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             # Try picamera for Raspberry Pi
             try:
@@ -765,7 +765,7 @@ class CameraCaptureTool(Tool):
                 }
                 
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             # Try picamera2 (newer Raspberry Pi)
             try:
@@ -786,7 +786,7 @@ class CameraCaptureTool(Tool):
                 }
                 
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             # Try fswebcam command
             try:
@@ -804,7 +804,7 @@ class CameraCaptureTool(Tool):
                     }
                     
             except FileNotFoundError:
-                pass
+                pass  # Intentionally silent
             
             return {
                 "success": False,
@@ -848,7 +848,7 @@ class CameraListTool(Tool):
                         break
                         
             except ImportError:
-                pass
+                pass  # Intentionally silent
             
             # Check for Pi camera
             if Path('/dev/video0').exists() and not cameras:

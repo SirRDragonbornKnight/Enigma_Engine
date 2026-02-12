@@ -544,7 +544,7 @@ class SemanticMemorySearch:
                     embedding_score = self._get_embedding_similarity(query, content)
                     score += embedding_score * 0.2
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
             
             scored.append((msg, min(1.0, score)))
         
@@ -564,7 +564,7 @@ class SemanticMemorySearch:
                 similarity = np.dot(emb1, emb2) / (np.linalg.norm(emb1) * np.linalg.norm(emb2))
                 return float(max(0, similarity))
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         return 0.0
     
@@ -580,7 +580,7 @@ class SemanticMemorySearch:
                     self._embedding_cache[text] = embedding
                 return embedding
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         return None
     

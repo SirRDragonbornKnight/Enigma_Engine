@@ -120,7 +120,7 @@ class SIMDDetector:
                 if 'sve' in cpuinfo.lower():
                     return SIMDLevel.SVE
         except OSError:
-            pass
+            pass  # Intentionally silent
         
         return SIMDLevel.NEON
     
@@ -157,7 +157,7 @@ class SIMDDetector:
                         features.update(line.split(':')[1].lower().split())
                         break
         except OSError:
-            pass
+            pass  # Intentionally silent
         
         try:
             # Try cpuinfo package if available
@@ -166,7 +166,7 @@ class SIMDDetector:
             if 'flags' in info:
                 features.update(info['flags'])
         except (ImportError, Exception):
-            pass
+            pass  # Intentionally silent
         
         # Windows fallback
         if not features and platform.system() == 'Windows':
@@ -464,7 +464,7 @@ if HAS_TORCH:
                     # Would need sample input for this
                     pass
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
                 
                 return model
         
@@ -475,7 +475,7 @@ if HAS_TORCH:
                 model = ipex.optimize(model)
                 logger.info("IPEX optimizations applied")
             except ImportError:
-                pass
+                pass  # Intentionally silent
             except Exception as e:
                 logger.debug(f"IPEX optimization failed: {e}")
             

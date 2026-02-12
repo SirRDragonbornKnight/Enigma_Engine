@@ -331,7 +331,7 @@ class GameSessionTracker:
                     data = json.load(f)
                     games.append(data.get("game", file.stem))
             except Exception:
-                pass
+                pass  # Intentionally silent
         return sorted(set(games))
     
     def get_recent_sessions(self, limit: int = 10) -> List[GameSession]:

@@ -392,7 +392,7 @@ class AutonomousAvatar:
                     base['gesture'] *= 1.3
                     base['express'] *= 1.2
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         return base
     
@@ -664,9 +664,9 @@ class AutonomousAvatar:
                                     region.interest_score = 0.5
                                 self._screen_regions.append(region)
                             except (psutil.NoSuchProcess, psutil.AccessDenied):
-                                pass
+                                pass  # Intentionally silent
                     except ImportError:
-                        pass
+                        pass  # Intentionally silent
                 
         except Exception as e:
             # Screen scanning failed, continue without

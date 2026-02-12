@@ -172,7 +172,7 @@ class AvatarManagementPanel(QWidget):
             from ....avatar.avatar_bundle import list_installed_avatars
             avatars.extend(list_installed_avatars())
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         # Check sample avatars
         samples_dir = Path(CONFIG["data_dir"]) / "avatar" / "samples"
@@ -191,7 +191,7 @@ class AvatarManagementPanel(QWidget):
                                 "author": manifest.get("author", "Enigma AI Engine"),
                             })
                         except Exception:
-                            pass
+                            pass  # Intentionally silent
         
         # Populate gallery
         cols = 4

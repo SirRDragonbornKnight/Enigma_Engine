@@ -567,7 +567,7 @@ class StableDiffusionLocal:
                         device = "cpu"
                         dtype = torch.float32
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
             
             print(f"Loading Stable Diffusion from {self.model_id}...")
             print(f"Device: {device}, dtype: {dtype}")
@@ -586,7 +586,7 @@ class StableDiffusionLocal:
                 try:
                     self.pipe.enable_attention_slicing()
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
             
             self.is_loaded = True
             print("Stable Diffusion loaded successfully!")
@@ -631,7 +631,7 @@ class StableDiffusionLocal:
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
             except ImportError:
-                pass
+                pass  # Intentionally silent
         self.is_loaded = False
     
     def generate(self, prompt: str, width: int = 512, height: int = 512,

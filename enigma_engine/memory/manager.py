@@ -121,13 +121,31 @@ class ConversationManager:
     """
     
     def __init__(self, model_name: Optional[str] = None, vector_db: Optional[SimpleVectorDB] = None):
-        """
-        Initialize the conversation manager.
-        
+        """Initialize the conversation manager.
+
+        Sets up file-based conversation storage and an optional vector
+        database for semantic search.  When a ``model_name`` is provided,
+        conversations are stored in a per-model directory so that each
+        model keeps its own history.
+
         Args:
-            model_name: Name of AI model (stores conversations in models/{name}/conversations/)
-                       If None, uses global data/conversations/ directory
-            vector_db: Optional vector database instance. If None, creates a new one.
+            model_name: Name of the AI model whose conversations this
+                manager handles.  Conversations are saved under
+                ``models/{model_name}/conversations/``.  If ``None``,
+                the global ``data/conversations/`` directory is used
+                (backward-compatible behaviour).
+            vector_db: An existing ``SimpleVectorDB`` instance.  If
+                ``None`` (default), a new database with dimension
+                ``CONFIG["embed_dim"]`` (default 128) is created.
+
+        Raises:
+            OSError: If the conversation directory cannot be created.
+
+        Example:
+            >>> manager = ConversationManager(model_name="my_model")
+            >>> manager.save_conversation("hello", [
+            ...     {"role": "user", "text": "Hi!", "ts": 0}
+            ... ])
         """
         # ─────────────────────────────────────────────────────────────────────
         # STORAGE PATHS - Per-model or global
@@ -369,47 +387,58 @@ class ConversationManager:
     # =========================================================================
 
     def add_to_vector_db(self, id_: str, vector: Any) -> None:
-        """
-        Add a vector to the vector database.
-        
-        📖 WHAT ARE VECTORS?
-        Vectors are lists of numbers that represent the MEANING of text.
-        Similar meanings have similar vectors (close together in space).
-        
-        📐 EXAMPLE:
-        "I love cats" → [0.2, 0.8, 0.1, ...] (128 numbers)
-        "I adore felines" → [0.21, 0.79, 0.12, ...] (similar!)
-        "The weather is nice" → [0.9, 0.1, 0.3, ...] (different)
-        
+        """Add a vector embedding to the semantic search database.
+
+        Vectors are fixed-length lists of floats that encode the *meaning*
+        of a piece of text.  Storing them here enables later retrieval via
+        ``search_vectors()`` using cosine similarity.
+
         Args:
-            id_: Identifier for the vector (usually the original text)
-            vector: Vector to add (list of floats)
+            id_: A unique identifier for this vector -- typically the
+                original text or a message ID.
+            vector: A list (or array) of floats with the same
+                dimensionality as the database (default 128).
+
+        Raises:
+            ValueError: If ``id_`` is empty.
+
+        Example:
+            >>> # Typically you'd use an embedding model to get the vector:
+            >>> vec = embedding_model.encode("I love cats")
+            >>> manager.add_to_vector_db("msg_42", vec)
         """
         if not id_:
             raise ValueError("Vector ID cannot be empty")
         self.vector_db.add(vector, id_)
 
     def search_vectors(self, query_vec: Any, topk: int = 5) -> List[Any]:
-        """
-        Search for similar vectors in the database.
-        
-        📖 HOW SEMANTIC SEARCH WORKS:
-        1. Your query text is converted to a vector
-        2. We find the K vectors in the database closest to your query
-        3. Return the text/IDs associated with those vectors
-        
-        📐 DISTANCE METRICS:
-        We measure "closeness" using cosine similarity:
-        - 1.0 = identical meaning
-        - 0.0 = completely unrelated
-        - -1.0 = opposite meaning
-        
+        """Search the vector database for the most similar embeddings.
+
+        Uses cosine similarity to find the ``topk`` stored vectors that
+        are closest in meaning to ``query_vec``.
+
+        Similarity scores:
+            * **1.0** -- identical meaning
+            * **0.0** -- completely unrelated
+            * **-1.0** -- opposite meaning
+
         Args:
-            query_vec: Query vector (same dimension as stored vectors)
-            topk: Number of results to return
-            
+            query_vec: Query vector with the same dimensionality as the
+                database.
+            topk: Number of nearest neighbours to return.  Must be > 0.
+
         Returns:
-            List of (id, score) tuples, sorted by similarity
+            A list of ``(id, similarity_score)`` tuples sorted by
+            descending similarity.
+
+        Raises:
+            ValueError: If ``topk`` is not positive.
+
+        Example:
+            >>> query = embedding_model.encode("Tell me about pets")
+            >>> results = manager.search_vectors(query, topk=3)
+            >>> for id_, score in results:
+            ...     print(f"{id_}: {score:.3f}")
         """
         if topk <= 0:
             raise ValueError("topk must be positive")
@@ -420,15 +449,34 @@ class ConversationManager:
     # =========================================================================
 
     def export_all(self, output_path: str, format: str = "json") -> Dict[str, Any]:
-        """
-        Export all conversations to a single file.
-        
+        """Export every saved conversation into a single file.
+
+        Useful for backups, migration, or feeding conversation data into
+        training pipelines.
+
         Args:
-            output_path: Path to save exported data
-            format: 'json' or 'jsonl' (one conversation per line)
-            
+            output_path: Destination file path.  Parent directories are
+                created automatically if they do not exist.
+            format: ``"json"`` writes a single JSON object keyed by
+                conversation name.  ``"jsonl"`` writes one JSON object per
+                line (more suitable for streaming ingestion).
+
         Returns:
-            Dict with export stats
+            A dict with export statistics::
+
+                {
+                    "success": True,
+                    "path": str,
+                    "conversations_exported": int,
+                    "total_messages": int
+                }
+
+        Raises:
+            OSError: If the output file cannot be written.
+
+        Example:
+            >>> stats = manager.export_all("backup/conversations.json")
+            >>> print(stats["conversations_exported"])
         """
         conversations = {}
         for name in self.list_conversations():
@@ -457,15 +505,28 @@ class ConversationManager:
         }
 
     def import_all(self, input_path: str, overwrite: bool = False) -> Dict[str, Any]:
-        """
-        Import conversations from an exported file.
-        
+        """Import conversations from a previously exported file.
+
+        Supports both JSON and JSONL formats (auto-detected).
+
         Args:
-            input_path: Path to exported data file
-            overwrite: If True, overwrite existing conversations
-            
+            input_path: Path to the exported data file.
+            overwrite: If ``True``, existing conversations with the same
+                name are replaced.  If ``False`` (default), collisions
+                are silently skipped.
+
         Returns:
-            Dict with import stats
+            A dict with import statistics::
+
+                {
+                    "success": bool,
+                    "imported": int,   # conversations written
+                    "skipped": int     # conversations skipped (existing)
+                }
+
+        Example:
+            >>> result = manager.import_all("backup/conversations.json")
+            >>> print(f"Imported {result['imported']}, skipped {result['skipped']}")
         """
         input_file = Path(input_path)
         if not input_file.exists():
@@ -506,11 +567,23 @@ class ConversationManager:
         }
 
     def get_stats(self) -> Dict[str, Any]:
-        """
-        Get statistics about stored conversations.
-        
+        """Get aggregate statistics about stored conversations.
+
         Returns:
-            Dict with conversation stats
+            A dict containing::
+
+                {
+                    "total_conversations": int,
+                    "total_messages": int,
+                    "total_size_kb": float,    # disk usage
+                    "storage_path": str,       # absolute path
+                    "model_name": str | None
+                }
+
+        Example:
+            >>> stats = manager.get_stats()
+            >>> print(f"{stats['total_conversations']} conversations, "
+            ...       f"{stats['total_messages']} messages")
         """
         conversations = self.list_conversations()
         total_messages = 0
@@ -534,15 +607,35 @@ class ConversationManager:
         }
 
     def search_conversations(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
-        """
-        Search all conversations for a text query.
-        
+        """Search all saved conversations for messages matching a text query.
+
+        Performs a case-insensitive substring search across every message in
+        every saved conversation.  For *semantic* (meaning-based) search use
+        ``search_vectors()`` instead.
+
         Args:
-            query: Text to search for (case-insensitive)
-            limit: Maximum results to return
-            
+            query: Plain-text search string.  The search is
+                case-insensitive and matches anywhere inside the message
+                text.
+            limit: Maximum number of matching messages to return.
+                Defaults to 10.
+
         Returns:
-            List of matching messages with context
+            A list of dicts, each describing one matching message::
+
+                {
+                    "conversation": str,      # conversation file name
+                    "message_index": int,     # 0-based position in history
+                    "role": str,              # "user" or "ai"
+                    "text": str,              # first 200 chars of message
+                    "timestamp": float | None # Unix epoch seconds
+                }
+
+        Example:
+            >>> manager = ConversationManager()
+            >>> results = manager.search_conversations("machine learning")
+            >>> for r in results:
+            ...     print(f"[{r['role']}] {r['text']}")
         """
         query_lower = query.lower()
         results = []

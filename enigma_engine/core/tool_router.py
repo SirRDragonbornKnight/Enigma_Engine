@@ -474,7 +474,7 @@ class ToolRouter:
         # ─────────────────────────────────────────────────────────────────────
         self._auto_assign_from_capabilities()
     
-    def _auto_assign_from_capabilities(self):
+    def _auto_assign_from_capabilities(self) -> None:
         """
         Auto-assign models to tools based on their declared capabilities.
         
@@ -523,7 +523,7 @@ class ToolRouter:
         except Exception as e:
             logger.debug(f"Could not auto-assign from capabilities: {e}")
     
-    def _init_module_manager(self):
+    def _init_module_manager(self) -> None:
         """
         Initialize connection to the ModuleManager.
         
@@ -644,7 +644,7 @@ class ToolRouter:
                 self._cleanup_model(old_model)  # Free memory
                 logger.info(f"Evicted model from cache: {oldest}")
     
-    def _cleanup_model(self, model: Any):
+    def _cleanup_model(self, model: Any) -> None:
         """
         Clean up a model and free GPU memory.
         
@@ -677,11 +677,11 @@ class ToolRouter:
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
             except ImportError:
-                pass
+                pass  # Intentionally silent
         except Exception as e:
             logger.warning(f"Error cleaning up model: {e}")
         
-    def _load_config(self):
+    def _load_config(self) -> None:
         """Load routing configuration."""
         if self.config_path.exists():
             try:
@@ -699,7 +699,7 @@ class ToolRouter:
             # Default assignments
             self._set_defaults()
             
-    def _set_defaults(self):
+    def _set_defaults(self) -> None:
         """Set default model assignments."""
         self.assignments = {
             "chat": [ModelAssignment("forge:default", "enigma_engine", priority=10)],
@@ -718,7 +718,7 @@ class ToolRouter:
         }
         self._save_config()
     
-    def _load_specialized_config(self):
+    def _load_specialized_config(self) -> None:
         """Load specialized models configuration."""
         try:
             config_path = Path(__file__).parent.parent.parent / "information" / "specialized_models.json"
@@ -740,7 +740,7 @@ class ToolRouter:
             logger.warning(f"Failed to load specialized models config: {e}")
             self._specialized_config = {}
     
-    def _get_shared_tokenizer(self):
+    def _get_shared_tokenizer(self) -> Any:
         """Get or load the shared tokenizer for specialized models."""
         if self._shared_tokenizer is not None:
             return self._shared_tokenizer
@@ -767,7 +767,7 @@ class ToolRouter:
             logger.error(f"Failed to load shared tokenizer: {e}")
             return None
     
-    def _load_specialized_model(self, model_type: str):
+    def _load_specialized_model(self, model_type: str) -> Optional[Any]:
         """
         Load a specialized model (router, vision, code, etc.).
         
@@ -1035,7 +1035,7 @@ class ToolRouter:
     # TRAINER AI: Generates and curates training data for other AIs
     # ─────────────────────────────────────────────────────────────────────
     
-    def get_trainer_ai(self):
+    def get_trainer_ai(self) -> Any:
         """Get the TrainerAI instance for data generation and curation."""
         from .trainer_ai import get_trainer_ai
         return get_trainer_ai(model=self.default_model)
@@ -1278,7 +1278,7 @@ class ToolRouter:
                 score = float(rating_text.split()[0])
                 return {"score": score / 10.0, "feedback": rating_text}
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         return {"score": 0.5, "feedback": "Could not parse evaluation"}
     
@@ -1357,7 +1357,7 @@ class ToolRouter:
         # Fallback: return original
         return response
             
-    def _save_config(self):
+    def _save_config(self) -> None:
         """Save routing configuration."""
         data = {
             "assignments": {
@@ -1421,7 +1421,7 @@ class ToolRouter:
         self.assignments[tool_name].sort(key=lambda x: -x.priority)
         self._save_config()
         
-    def unassign_model(self, tool_name: str, model_id: str):
+    def unassign_model(self, tool_name: str, model_id: str) -> None:
         """Remove a model from a tool."""
         if tool_name in self.assignments:
             self.assignments[tool_name] = [
@@ -1508,7 +1508,7 @@ class ToolRouter:
             "total_assignments": total,
         }
     
-    def register_handler(self, tool_name: str, handler: Callable):
+    def register_handler(self, tool_name: str, handler: Callable) -> None:
         """Register a handler function for a tool."""
         self._handlers[tool_name] = handler
         
@@ -1557,7 +1557,7 @@ class ToolRouter:
                 if "tool" in data:
                     return data
         except (json.JSONDecodeError, ValueError):
-            pass
+            pass  # Intentionally silent
             
         # [TOOL: name] format
         match = re.search(r'\[TOOL:\s*(\w+)\](.+)', ai_output, re.IGNORECASE | re.DOTALL)
@@ -1654,9 +1654,22 @@ class ToolRouter:
         """Get an API provider handler."""
         return {"type": "api", "provider": provider}
     
-    def execute_tool(self, tool_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    # Tasks that benefit from AI handoff (free memory when delegating)
+    _HEAVY_TASKS = {"image", "video", "audio", "3d", "code", "vision"}
+    
+    def execute_tool(self, tool_name: str, params: Dict[str, Any], 
+                     use_handoff: bool = True) -> Dict[str, Any]:
         """
         Execute a tool with given parameters.
+        
+        When use_handoff is True and the task is a heavy generation task,
+        this will use the AI handoff system to free GPU memory before
+        executing, allowing the specialized AI to use full resources.
+        
+        Args:
+            tool_name: Name of the tool to execute
+            params: Parameters for the tool
+            use_handoff: Whether to use AI handoff for heavy tasks
         
         Returns:
             {"success": bool, "result": Any, "error": Optional[str]}
@@ -1668,7 +1681,26 @@ class ToolRouter:
         assignments = self.get_assignments(tool_name)
         if not assignments:
             return {"success": False, "error": f"No model assigned to tool: {tool_name}"}
-            
+        
+        # Use AI handoff for heavy tasks to free memory
+        if use_handoff and tool_name in self._HEAVY_TASKS:
+            try:
+                from .ai_handoff import delegate_to_ai
+                
+                with delegate_to_ai(f"{tool_name}_gen", free_memory=True):
+                    return self._execute_tool_inner(tool_name, assignments, params)
+            except ImportError:
+                # Handoff module not available, execute normally
+                pass
+            except Exception as e:
+                logger.debug(f"Handoff failed, executing normally: {e}")
+        
+        # Execute without handoff
+        return self._execute_tool_inner(tool_name, assignments, params)
+    
+    def _execute_tool_inner(self, tool_name: str, assignments: list, 
+                           params: Dict[str, Any]) -> Dict[str, Any]:
+        """Internal tool execution (with or without handoff)."""
         # Try each model in priority order
         for assignment in assignments:
             try:
@@ -2369,7 +2401,7 @@ class ToolRouter:
     # AI-TO-AI NETWORKING - Distributed Task Execution
     # =========================================================================
     
-    def _init_networking(self):
+    def _init_networking(self) -> None:
         """Initialize networking for AI collaboration."""
         try:
             from ..comms.ai_collaboration import get_collaboration_protocol
@@ -2434,7 +2466,7 @@ class ToolRouter:
         
         return success
     
-    def disconnect_from_ai(self, name: str):
+    def disconnect_from_ai(self, name: str) -> None:
         """
         Disconnect from a remote AI peer.
         
@@ -2684,7 +2716,7 @@ class ToolRouter:
         # Default: local execution
         return self.execute_tool(tool_name, params)
     
-    def set_routing_preference(self, preference: str):
+    def set_routing_preference(self, preference: str) -> None:
         """
         Set the routing preference for task distribution.
         
@@ -2719,7 +2751,7 @@ class ToolRouter:
         
         return self._collaboration_protocol.negotiate_task(tool_name, params)
     
-    def broadcast_capability_update(self):
+    def broadcast_capability_update(self) -> None:
         """
         Inform all peers when local capabilities change.
         

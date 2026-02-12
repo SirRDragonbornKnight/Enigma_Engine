@@ -381,7 +381,7 @@ Your comment:"""
                     return response.strip()
                 return None  # AI chose to stay quiet
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         # Fallback: Only comment on specific situations, don't force generic comments
         context_lower = context.lower()
@@ -419,7 +419,7 @@ Emotion:"""
                 if emotion in valid_emotions:
                     return emotion
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         # Fallback: Simple keyword detection
         text_lower = text.lower()
@@ -493,7 +493,7 @@ Emotion:"""
                     "monitor": monitor_info,
                 }
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         return None
     
@@ -532,7 +532,7 @@ Emotion:"""
                     },
                 }
         except Exception:
-            pass
+            pass  # Intentionally silent
         return None
     
     def _get_all_monitors(self) -> list[dict]:
@@ -563,7 +563,7 @@ Emotion:"""
             user32.EnumDisplayMonitors(None, None, MONITORENUMPROC(callback), 0)
             
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         return monitors
     
@@ -577,7 +577,7 @@ Emotion:"""
                     self._seen_windows = set(data.get("seen_windows", []))
                     self._commented_on = set(data.get("commented_on", []))
             except Exception:
-                pass
+                pass  # Intentionally silent
     
     def _save_state(self):
         """Save companion state to disk."""
@@ -589,7 +589,7 @@ Emotion:"""
                     "commented_on": list(self._commented_on)[-100:],
                 }, f)
         except Exception:
-            pass
+            pass  # Intentionally silent
 
 
 # Singleton instance

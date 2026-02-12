@@ -42,6 +42,7 @@ from typing import Any, Callable, Optional, Union
 
 import torch
 import torch.nn as nn
+from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader, Dataset
 
 from ..config import CONFIG
@@ -64,7 +65,7 @@ class TextDataset(Dataset):
         max_len: int = 512,
         stride: Optional[int] = None,
         min_chunk_len: int = 32,
-    ):
+    ) -> None:
         """
         Args:
             text: Raw training text
@@ -153,7 +154,7 @@ class ForgeTrainer:
         gradient_accumulation_steps: int = 1,
         warmup_steps: int = 100,
         max_grad_norm: float = 1.0,
-    ):
+    ) -> None:
         """
         Args:
             model: The model to train
@@ -266,7 +267,7 @@ class ForgeTrainer:
         self.training_history: list[dict[str, Any]] = []
         self.best_loss = float('inf')
 
-    def _get_scheduler(self, num_training_steps: int):
+    def _get_scheduler(self, num_training_steps: int) -> LambdaLR:
         """Create cosine scheduler with warmup."""
         def lr_lambda(step):
             if step < self.warmup_steps:
@@ -285,7 +286,7 @@ class ForgeTrainer:
         eval_every: Optional[int] = None,
         early_stopping_patience: Optional[int] = None,
         callbacks: Optional[list[Callable]] = None,
-    ):
+    ) -> None:
         """
         Train the model.
 
@@ -430,7 +431,7 @@ class ForgeTrainer:
         print(f"Best loss: {self.best_loss:.4f}")
         print(f"{'=' * 60}\n")
 
-    def _save_checkpoint(self):
+    def _save_checkpoint(self) -> None:
         """Save a training checkpoint."""
         model_to_save = self.model.module if self.use_multi_gpu else self.model
 
@@ -442,7 +443,7 @@ class ForgeTrainer:
         )
         print(f"  Checkpoint saved at epoch {self.current_epoch}")
 
-    def _save_best(self):
+    def _save_best(self) -> None:
         """Save the best model so far."""
         model_to_save = self.model.module if self.use_multi_gpu else self.model
 
@@ -455,7 +456,7 @@ class ForgeTrainer:
         )
         print(f"  New best model saved (loss: {self.best_loss:.4f})")
 
-    def _save_final(self):
+    def _save_final(self) -> None:
         """Save final model and update metadata."""
         model_to_save = self.model.module if self.use_multi_gpu else self.model
 
@@ -469,7 +470,7 @@ class ForgeTrainer:
             last_trained=datetime.now().isoformat(),
         )
 
-    def resume_from_checkpoint(self, checkpoint_name: str = "best"):
+    def resume_from_checkpoint(self, checkpoint_name: str = "best") -> 'ForgeTrainer':
         """Resume training from a checkpoint."""
         model, config = self.registry.load_model(
             self.model_name,

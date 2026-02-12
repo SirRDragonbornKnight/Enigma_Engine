@@ -245,7 +245,7 @@ class CharacterTrainer:
                                         characters[name] += 1
                                     break
             except json.JSONDecodeError:
-                pass
+                pass  # Intentionally silent
         
         return characters
     

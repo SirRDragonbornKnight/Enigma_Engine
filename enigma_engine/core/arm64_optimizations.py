@@ -88,7 +88,7 @@ class DeviceProfile:
                 elif "raspberry pi 4" in model:
                     device = ARM64Device.RASPBERRY_PI_4
         except OSError:
-            pass
+            pass  # Intentionally silent
         
         # Check for Apple Silicon
         if platform.system() == "Darwin":
@@ -106,14 +106,14 @@ class DeviceProfile:
                 elif "m3" in brand:
                     device = ARM64Device.APPLE_M3
             except (subprocess.SubprocessError, FileNotFoundError, OSError):
-                pass
+                pass  # Intentionally silent
         
         # Check for Jetson
         try:
             if os.path.exists("/etc/nv_tegra_release"):
                 device = ARM64Device.JETSON_NANO
         except OSError:
-            pass
+            pass  # Intentionally silent
         
         # Set profile based on device
         profiles = {
@@ -159,7 +159,7 @@ class DeviceProfile:
 class NEONKernels:
     """NEON SIMD optimized operations."""
     
-    def __init__(self, profile: DeviceProfile):
+    def __init__(self, profile: DeviceProfile) -> None:
         self.profile = profile
         self.available = profile.has_neon
     
@@ -259,13 +259,13 @@ class NEONKernels:
 class PowerManager:
     """Power management for battery/thermal efficiency."""
     
-    def __init__(self, profile: DeviceProfile):
+    def __init__(self, profile: DeviceProfile) -> None:
         self.profile = profile
         self.power_mode = "balanced"
         self.thermal_limit_c = 80.0
         self._last_check = 0.0
     
-    def set_power_mode(self, mode: str):
+    def set_power_mode(self, mode: str) -> None:
         """
         Set power mode.
         
@@ -284,7 +284,7 @@ class PowerManager:
             self._set_cpu_governor("performance")
             self._set_max_threads(self.profile.max_threads)
     
-    def _set_cpu_governor(self, governor: str):
+    def _set_cpu_governor(self, governor: str) -> None:
         """Set CPU frequency governor (Linux)."""
         try:
             for i in range(self.profile.cores):
@@ -297,7 +297,7 @@ class PowerManager:
         except Exception as e:
             logger.debug(f"CPU governor not available: {e}")
     
-    def _set_max_threads(self, threads: int):
+    def _set_max_threads(self, threads: int) -> None:
         """Set max threads for inference."""
         if torch is not None:
             torch.set_num_threads(threads)
@@ -314,14 +314,14 @@ class PowerManager:
                     with open(path) as f:
                         return float(f.read().strip()) / 1000.0
         except (OSError, ValueError):
-            pass
+            pass  # Intentionally silent
         
         try:
             # Raspberry Pi
             with open("/sys/class/thermal/thermal_zone0/temp") as f:
                 return float(f.read().strip()) / 1000.0
         except (OSError, ValueError):
-            pass
+            pass  # Intentionally silent
         
         try:
             # macOS
@@ -332,7 +332,7 @@ class PowerManager:
             )
             return float(result.stdout.strip().replace("C", ""))
         except (subprocess.SubprocessError, FileNotFoundError, ValueError, OSError):
-            pass
+            pass  # Intentionally silent
         
         return 0.0
     
@@ -366,7 +366,7 @@ class PowerManager:
 class MemoryOptimizer:
     """Memory optimization for constrained ARM devices."""
     
-    def __init__(self, profile: DeviceProfile):
+    def __init__(self, profile: DeviceProfile) -> None:
         self.profile = profile
         self.memory_budget_gb = profile.ram_gb * 0.7  # Use 70% of RAM
     
@@ -392,7 +392,7 @@ class MemoryOptimizer:
         
         return tuple(optimized)
     
-    def enable_memory_mapping(self):
+    def enable_memory_mapping(self) -> None:
         """Enable memory-mapped model loading."""
         if torch is not None:
             # Use mmap for large tensors
@@ -400,7 +400,7 @@ class MemoryOptimizer:
         
         logger.info("Memory mapping enabled")
     
-    def gc_aggressive(self):
+    def gc_aggressive(self) -> None:
         """Aggressive garbage collection."""
         import gc
         gc.collect()
@@ -430,7 +430,7 @@ class ARM64Optimizer:
     Combines NEON kernels, power management, and memory optimization.
     """
     
-    def __init__(self, profile: DeviceProfile = None):
+    def __init__(self, profile: DeviceProfile = None) -> None:
         self.profile = profile or DeviceProfile.detect()
         self.neon = NEONKernels(self.profile)
         self.power = PowerManager(self.profile)

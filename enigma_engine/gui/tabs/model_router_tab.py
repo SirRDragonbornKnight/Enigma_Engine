@@ -667,7 +667,7 @@ class ModelRouterTab(QWidget):
                     for assign in router.get_assignments(tool_id):
                         router.unassign_model(tool_id, assign.model_id)
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
                     
                 # Add new
                 for assign in assigns:
@@ -678,7 +678,7 @@ class ModelRouterTab(QWidget):
                             priority=assign.get("priority", 50)
                         )
                     except Exception:
-                        pass
+                        pass  # Intentionally silent
                         
             self.status_label.setText("Configuration saved!")
             self.status_label.setStyleSheet("color: #2ecc71; font-style: italic;")

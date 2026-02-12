@@ -89,6 +89,13 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+# Import torch BEFORE PyQt5 to prevent DLL conflict on Windows
+# (PyQt5 pollutes the DLL search path, breaking torch's c10.dll loading)
+try:
+    import torch  # noqa: F401
+except ImportError:
+    pass
+
 import time
 
 from PyQt5.QtCore import QSize, Qt, QThread, QTimer, pyqtSignal
@@ -125,231 +132,8 @@ from .gui_modes import GUIMode, GUIModeManager
 # Import dialogs
 from .dialogs.generation_preview import GenerationPreviewPopup
 
-
-# === AI Generation Worker Thread ===
-class AIGenerationWorker(QThread):
-    """Background worker for AI generation to keep GUI responsive."""
-    finished = pyqtSignal(str)  # Emits the response
-    error = pyqtSignal(str)     # Emits error message
-    thinking = pyqtSignal(str)  # Emits thinking/reasoning status
-    stopped = pyqtSignal()      # Emits when stopped by user
-    
-    def __init__(self, engine, text, is_hf, history=None, system_prompt=None, custom_tokenizer=None, parent_window=None):
-        super().__init__()
-        self.engine = engine
-        self.text = text
-        self.is_hf = is_hf
-        self.history = history
-        self.system_prompt = system_prompt
-        self.custom_tokenizer = custom_tokenizer
-        self.parent_window = parent_window
-        self._stop_requested = False
-        self._start_time = None
-    
-    def stop(self):
-        """Request the worker to stop."""
-        self._stop_requested = True
-        
-    def run(self):
-        try:
-            import time
-            self._start_time = time.time()
-            
-            # Emit initial thinking status
-            self.thinking.emit("Analyzing your message...")
-            
-            # Log to terminal
-            if self.parent_window and hasattr(self.parent_window, 'log_terminal'):
-                self.parent_window.log_terminal(f"NEW REQUEST: {self.text}", "info")
-            
-            if self._stop_requested:
-                self.stopped.emit()
-                return
-            
-            if self.is_hf:
-                # HuggingFace model - show reasoning steps
-                self.thinking.emit("Building conversation context...")
-                if self.parent_window and hasattr(self.parent_window, 'log_terminal'):
-                    self.parent_window.log_terminal("Building conversation history...", "debug")
-                time.sleep(0.1)
-                
-                if self._stop_requested:
-                    self.stopped.emit()
-                    return
-                
-                self.thinking.emit("Processing with language model...")
-                if self.parent_window and hasattr(self.parent_window, 'log_terminal'):
-                    self.parent_window.log_terminal("Running inference on model...", "info")
-                
-                # HuggingFace model
-                if hasattr(self.engine.model, 'chat') and not self.custom_tokenizer:
-                    response = self.engine.model.chat(
-                        self.text,
-                        history=self.history if self.history else None,
-                        system_prompt=self.system_prompt,
-                        max_new_tokens=200,
-                        temperature=0.7
-                    )
-                else:
-                    self.thinking.emit("Tokenizing input...")
-                    response = self.engine.model.generate(
-                        self.text,
-                        max_new_tokens=50,
-                        temperature=0.8,
-                        top_p=0.92,
-                        top_k=50,
-                        repetition_penalty=1.2,
-                        do_sample=True,
-                        custom_tokenizer=self.custom_tokenizer
-                    )
-                
-                # Check if response is a tensor (model didn't decode output)
-                if hasattr(response, 'shape') or 'tensor' in str(type(response)).lower():
-                    self.thinking.emit("Decoding model output...")
-                    # Try to decode the tensor
-                    try:
-                        import torch
-                        if isinstance(response, torch.Tensor):
-                            # Try to decode using the model's tokenizer
-                            if hasattr(self.engine.model, 'tokenizer'):
-                                response = self.engine.model.tokenizer.decode(
-                                    response[0] if len(response.shape) > 1 else response,
-                                    skip_special_tokens=True
-                                )
-                            elif self.custom_tokenizer:
-                                response = self.custom_tokenizer.decode(
-                                    response[0] if len(response.shape) > 1 else response,
-                                    skip_special_tokens=True
-                                )
-                            else:
-                                response = (
-                                    "[Warning] Model returned raw tensor data. This usually means:\n"
-                                    "• The model is not properly configured for text generation\n"
-                                    "• Try a different model or check if it needs fine-tuning\n"
-                                    "• Local Forge models need training first"
-                                )
-                    except Exception as decode_err:
-                        response = f"[Warning] Could not decode model output: {decode_err}"
-            else:
-                # Local Forge model - use chat method with history for context
-                self.thinking.emit("Building conversation context...")
-                
-                # Get recent history from parent window (limited to prevent overflow)
-                chat_history = []
-                if self.parent_window and hasattr(self.parent_window, 'chat_messages'):
-                    # Get last 6 messages (3 exchanges) to fit in context
-                    # Use -7:-1 to exclude the current message being processed but get 6 prior
-                    recent = self.parent_window.chat_messages[-7:-1] if len(self.parent_window.chat_messages) > 1 else []
-                    for msg in recent:
-                        role = "user" if msg.get("role") == "user" else "assistant"
-                        chat_history.append({"role": role, "content": msg.get("text", "")})
-                
-                if self.parent_window and hasattr(self.parent_window, 'log_terminal'):
-                    self.parent_window.log_terminal(f"Using {len(chat_history)} history messages for context", "debug")
-                
-                if self._stop_requested:
-                    self.stopped.emit()
-                    return
-                
-                self.thinking.emit("Running inference on local model...")
-                if self.parent_window and hasattr(self.parent_window, 'log_terminal'):
-                    self.parent_window.log_terminal("Generating tokens...", "info")
-                
-                # Use chat() method which handles history truncation and context
-                if hasattr(self.engine, 'chat') and chat_history:
-                    response = self.engine.chat(
-                        message=self.text,
-                        history=chat_history,
-                        system_prompt=self.system_prompt,
-                        max_gen=100,
-                        auto_truncate=True  # Prevent hallucinations!
-                    )
-                    formatted_prompt = self.text  # For cleanup code below
-                else:
-                    # Fallback to simple Q&A format
-                    formatted_prompt = f"Q: {self.text}\nA:"
-                    response = self.engine.generate(formatted_prompt, max_gen=100)
-                
-                if self._stop_requested:
-                    self.stopped.emit()
-                    return
-                
-                self.thinking.emit("Cleaning up response...")
-                
-                # Check if response is a tensor
-                if hasattr(response, 'shape') or 'tensor' in str(type(response)).lower():
-                    response = (
-                        "[Warning] Model returned raw data instead of text.\n"
-                        "This model may need more training. Go to the Train tab."
-                    )
-                else:
-                    # Clean up response
-                    if response.startswith(formatted_prompt):
-                        response = response[len(formatted_prompt):].strip()
-                    elif response.startswith(self.text):
-                        response = response[len(self.text):].strip()
-                        
-                    if "\nQ:" in response:
-                        response = response.split("\nQ:")[0].strip()
-                    if "Q:" in response:
-                        response = response.split("Q:")[0].strip()
-                    if response.startswith("A:"):
-                        response = response[2:].strip()
-                    if response.startswith(":"):
-                        response = response[1:].strip()
-            
-            if self._stop_requested:
-                self.stopped.emit()
-                return
-            
-            if not response:
-                response = "(No response generated - model may need more training)"
-            
-            # Log completion
-            if self.parent_window and hasattr(self.parent_window, 'log_terminal'):
-                self.parent_window.log_terminal(f"Generated {len(response)} characters", "success")
-            
-            # Validate response - detect garbage/code output
-            garbage_indicators = [
-                'torch.tensor', 'np.array', 'def test_', 'assert ', 'import torch',
-                'class Test', 'self.setup', '.to(device)', 'cudnn.enabled',
-                'torch.randn', 'torch.zeros', 'return Tensor', '# Convert',
-                'dtype=torch.float', 'skip_special_tokens', "'cuda:0'", "'cuda:1'",
-                '.to("cuda', 'tensor([[', 'Output:', '# Output:', 'tensors.shape',
-                '.expand(', '```python', 'import torch', 'broadcasting dimension',
-                'tensor(tensor(', '.size() ==', 'expanded_matrix'
-            ]
-            
-            is_garbage = False
-            for indicator in garbage_indicators:
-                if indicator in response:
-                    is_garbage = True
-                    break
-            
-            # Also check if response is mostly code-like
-            if not is_garbage:
-                code_chars = response.count('(') + response.count(')') + response.count('[') + response.count(']') + response.count('=')
-                if len(response) > 50 and code_chars > len(response) * 0.1:
-                    is_garbage = True
-            
-            if is_garbage:
-                response = (
-                    "[Warning] The model generated code/technical text instead of a response.\n\n"
-                    "This can happen with small models like Qwen2-0.5B when asked simple questions.\n"
-                    "Try:\n"
-                    "• Using a larger model (tinyllama_chat, phi2, or qwen2_1.5b_instruct)\n"
-                    "• Being more specific in your question\n"
-                    "• Training your own Forge model with conversational data"
-                )
-            
-            elapsed = time.time() - self._start_time
-            self.thinking.emit(f"Done in {elapsed:.1f}s")
-            self.finished.emit(response)
-        except Exception as e:
-            if self._stop_requested:
-                self.stopped.emit()
-            else:
-                self.error.emit(str(e))
+# Import worker threads
+from .workers import AIGenerationWorker
 
 
 # Import text formatting
@@ -942,7 +726,7 @@ except ImportError:
 class SetupWizard(QWizard):
     """First-run setup wizard for creating a new AI."""
     
-    def __init__(self, registry: ModelRegistry, parent=None):
+    def __init__(self, registry: ModelRegistry, parent=None) -> None:
         super().__init__(parent)
         self.registry = registry
         self.setWindowTitle("Enigma Engine Setup Wizard")
@@ -1373,7 +1157,7 @@ class EnhancedMainWindow(QMainWindow):
     - enigma_engine/modules/ - Module system integration
     """
     
-    def __init__(self):
+    def __init__(self) -> None:
         """
         Initialize the main window.
         
@@ -1417,7 +1201,7 @@ class EnhancedMainWindow(QMainWindow):
                 from .styles import GLOBAL_BASE_STYLE
                 self.setStyleSheet(GLOBAL_BASE_STYLE)
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         # ─────────────────────────────────────────────────────────────────
         # Initialize the Model Registry
@@ -1452,7 +1236,7 @@ class EnhancedMainWindow(QMainWindow):
                     try:
                         self.module_manager.load(mod_id)
                     except Exception:
-                        pass
+                        pass  # Intentionally silent
                 print("Enabled default modules")
         except Exception as e:
             print(f"Could not initialize ModuleManager: {e}")
@@ -1648,7 +1432,7 @@ class EnhancedMainWindow(QMainWindow):
             # Defer model loading to after GUI is shown
             self._show_model_selector_deferred()
     
-    def _on_chat_sync_started(self, user_text: str):
+    def _on_chat_sync_started(self, user_text: str) -> None:
         """Handle when shared ChatSync starts generating (from quick chat)."""
         # Show thinking indicator
         if hasattr(self, 'thinking_frame'):
@@ -1661,7 +1445,7 @@ class EnhancedMainWindow(QMainWindow):
             self.send_btn.setEnabled(False)
             self.send_btn.setText("...")
     
-    def _on_chat_sync_finished(self, response: str):
+    def _on_chat_sync_finished(self, response: str) -> None:
         """Handle when shared ChatSync finishes generating."""
         # Hide thinking indicator
         if hasattr(self, 'thinking_frame'):
@@ -1674,22 +1458,22 @@ class EnhancedMainWindow(QMainWindow):
         if hasattr(self, 'chat_status'):
             self.chat_status.setText("Ready")
     
-    def _on_chat_sync_stopped(self):
+    def _on_chat_sync_stopped(self) -> None:
         """Handle when shared ChatSync generation is stopped."""
         self._on_chat_sync_finished("")
     
-    def _on_avatar_emotion(self, emotion: str):
+    def _on_avatar_emotion(self, emotion: str) -> None:
         """Handle emotion detected by avatar bridge."""
         logger.debug(f"Avatar emotion: {emotion}")
         # The bridge already sets the avatar expression, but we can log or react here
         if hasattr(self, 'chat_status'):
             self.chat_status.setText(f"Emotion: {emotion}")
     
-    def _on_avatar_gesture(self, gesture: str):
+    def _on_avatar_gesture(self, gesture: str) -> None:
         """Handle gesture triggered by avatar bridge."""
         logger.debug(f"Avatar gesture: {gesture}")
     
-    def _notify_avatar_response_start(self):
+    def _notify_avatar_response_start(self) -> None:
         """Notify avatar bridge that AI is starting to respond."""
         if self._avatar_bridge:
             self._avatar_bridge.on_response_start()
@@ -1700,18 +1484,18 @@ class EnhancedMainWindow(QMainWindow):
             return self._avatar_bridge.on_response_chunk(text)
         return text
     
-    def _notify_avatar_response_end(self):
+    def _notify_avatar_response_end(self) -> None:
         """Notify avatar bridge that AI finished responding."""
         if self._avatar_bridge:
             self._avatar_bridge.on_response_end()
     
-    def _on_federated_round_complete(self, round_num: int, improvement: float):
+    def _on_federated_round_complete(self, round_num: int, improvement: float) -> None:
         """Handle when a federated learning round completes."""
         logger.info(f"Federated round {round_num} complete, improvement: {improvement:.4f}")
         if hasattr(self, 'statusBar'):
             self.statusBar().showMessage(f"Federated round {round_num}: +{improvement:.2%} improvement", 5000)
     
-    def _set_window_icon(self):
+    def _set_window_icon(self) -> None:
         """Set the window icon from file or create a default."""
         from pathlib import Path
         try:
@@ -1728,12 +1512,12 @@ class EnhancedMainWindow(QMainWindow):
         except Exception as e:
             print(f"Could not set window icon: {e}")
     
-    def _on_ui_settings_changed(self):
+    def _on_ui_settings_changed(self) -> None:
         """Handle UI settings changes (font scale, theme)."""
         if self.ui_settings:
             self.setStyleSheet(self.ui_settings.get_global_stylesheet())
     
-    def _setup_shortcuts(self):
+    def _setup_shortcuts(self) -> None:
         """Setup keyboard shortcuts including emergency close."""
         from PyQt5.QtGui import QKeySequence
         from PyQt5.QtWidgets import QShortcut
@@ -1755,23 +1539,23 @@ class EnhancedMainWindow(QMainWindow):
         persona_shortcut = QShortcut(QKeySequence("Ctrl+P"), self)
         persona_shortcut.activated.connect(self._quick_persona_switch)
     
-    def _on_escape_pressed(self):
+    def _on_escape_pressed(self) -> None:
         """Handle escape key - if any popup/dialog is open, close it. Otherwise do nothing."""
         # This is mainly for consistency. The tray ESC functionality 
         # is handled via the overlay's keyPressEvent
     
-    def _force_quit(self):
+    def _force_quit(self) -> None:
         """Force quit Enigma AI Engine (Alt+F4)."""
         self._save_gui_settings()
         self._cleanup_and_quit()
     
-    def _emergency_quit(self):
+    def _emergency_quit(self) -> None:
         """Emergency quit - force terminate immediately."""
         import os
         print("[EMERGENCY] Force quitting Enigma AI Engine...")
         os._exit(0)
     
-    def _quick_persona_switch(self):
+    def _quick_persona_switch(self) -> None:
         """Show quick persona switch menu (Ctrl+P hotkey)."""
         from PyQt5.QtWidgets import QMenu
         
@@ -2332,7 +2116,7 @@ class EnhancedMainWindow(QMainWindow):
         layout.addLayout(btn_layout)
         dialog.exec_()
     
-    def _close_action(self, dialog, action):
+    def _close_action(self, dialog, action) -> None:
         """Handle close dialog action."""
         dialog.close()
         
@@ -2349,12 +2133,11 @@ class EnhancedMainWindow(QMainWindow):
             # Quit everything - properly terminate all processes
             self._cleanup_and_quit()
     
-    def _cleanup_and_quit(self):
+    def _cleanup_and_quit(self) -> None:
         """Clean up all resources and quit the application."""
         import os
         
-        print("[Enigma AI Engine] Shutting down all components...")
-        
+        print("[Enigma AI Engine] Shutting down all components...")        
         try:
             # Stop voice systems
             try:
@@ -2511,7 +2294,7 @@ class EnhancedMainWindow(QMainWindow):
         
         menu.exec_(event.globalPos())
     
-    def _new_chat_from_menu(self):
+    def _new_chat_from_menu(self) -> None:
         """Start new chat from context menu."""
         self._switch_to_tab("chat")
         if hasattr(self, 'chat_display'):
@@ -2521,7 +2304,7 @@ class EnhancedMainWindow(QMainWindow):
             self.chat_display.clear()
             self.chat_messages = []
     
-    def _toggle_always_on_top(self, checked):
+    def _toggle_always_on_top(self, checked) -> None:
         """Toggle always-on-top window flag and save setting."""
         if checked:
             self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
@@ -2533,7 +2316,7 @@ class EnhancedMainWindow(QMainWindow):
         self._gui_settings["always_on_top"] = checked
         self._save_gui_settings()
     
-    def _show_options_menu(self):
+    def _show_options_menu(self) -> None:
         """Show options menu from the sidebar menu button."""
         from PyQt5.QtGui import QCursor
         from PyQt5.QtWidgets import QMenu
@@ -3887,19 +3670,19 @@ class EnhancedMainWindow(QMainWindow):
         msg.setText(about_text)
         msg.exec_()
     
-    def _open_url(self, url: str):
+    def _open_url(self, url: str) -> None:
         """Open a URL in the default browser."""
         from PyQt5.QtCore import QUrl
         from PyQt5.QtGui import QDesktopServices
         QDesktopServices.openUrl(QUrl(url))
     
-    def _set_theme(self, theme_name):
+    def _set_theme(self, theme_name) -> None:
         """Set the application theme."""
         if theme_name in THEMES:
             self.setStyleSheet(THEMES[theme_name])
             self.current_theme = theme_name
     
-    def _toggle_auto_speak(self, checked):
+    def _toggle_auto_speak(self, checked) -> None:
         """Toggle auto-speak mode by loading/unloading voice output module."""
         if self.module_manager:
             if checked:
@@ -4069,7 +3852,7 @@ class EnhancedMainWindow(QMainWindow):
                             if voice:
                                 voice.speak(text)
                         except Exception:
-                            pass
+                            pass  # Intentionally silent
                     self._companion.connect_voice(speak_text)
                 
                 self._companion.start()
@@ -4517,7 +4300,7 @@ class EnhancedMainWindow(QMainWindow):
             from ..tools.simple_ocr import extract_text
             ocr_text = extract_text(self._last_screenshot)
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         # Build analysis
         analysis = []
@@ -4535,7 +4318,7 @@ class EnhancedMainWindow(QMainWindow):
                 # Note: Real vision would need multi-modal model
                 analysis.append(f"\n(AI vision analysis requires multi-modal model)")
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         self.vision_text.setPlainText("\n".join(analysis))
     
@@ -5246,7 +5029,7 @@ class EnhancedMainWindow(QMainWindow):
                     self.chat_display.append("<b style='color:#f9e2af;'>Note:</b> "
                                               "Model appears untrained. Go to Train tab first!")
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         # Initialize chat messages list if needed
         if not hasattr(self, 'chat_messages'):
@@ -5267,7 +5050,7 @@ class EnhancedMainWindow(QMainWindow):
             try:
                 _clear_attachments(self)
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         # Mark that user has chatted (for first-run tips)
         if not self._gui_settings.get("has_chatted", False):
@@ -6311,7 +6094,7 @@ When genuinely curious about something the user mentioned, feel free to ask foll
                     if avatar and avatar.is_enabled:
                         avatar.set_expression(emotion)
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
             
             # Auto-speak through avatar if auto_speak is on
             if getattr(self, 'auto_speak', False):
@@ -6324,7 +6107,7 @@ When genuinely curious about something the user mentioned, feel free to ask foll
                         clean_text = re.sub(r'<tool_call>.*?</tool_call>', '', clean_text, flags=re.DOTALL)
                         avatar.speak(clean_text.strip()[:500])  # Limit length
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
         
         # === ROBOT AUTO-CONTROL ===
         # Check if auto-robot is enabled AND robot module is loaded
@@ -6348,7 +6131,7 @@ When genuinely curious about something the user mentioned, feel free to ask foll
                     elif action == 'home':
                         robot.home()
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
         
         # === GAME AUTO-CONTROL ===
         # Check if auto-game is enabled AND there's an active game connection
@@ -6361,7 +6144,7 @@ When genuinely curious about something the user mentioned, feel free to ask foll
                 try:
                     self.game_connection.send(game_command)
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
     
     def _detect_emotion_from_text(self, text: str) -> str:
         """Detect emotion/expression from text content."""
@@ -6625,7 +6408,7 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
                 if confidence < 0.3:
                     emotion = "neutral"
             except Exception:
-                pass
+                pass  # Intentionally silent
             
             # Try to use SpeechSync for coordinated avatar lip sync
             try:
@@ -6657,7 +6440,7 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
                 engine.speak(clean_text)
                 return
             except Exception:
-                pass
+                pass  # Intentionally silent
             
             # Fallback to simple speak
             from ..voice import speak
@@ -6768,7 +6551,7 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
                     }
                 """)
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def _quick_toggle_game_mode(self):
         """Quick toggle game mode from status bar click."""
@@ -6791,7 +6574,7 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
             self._update_game_mode_status()
             print(f"Game detected: {game_name}")
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def _on_game_ended(self):
         """Called when game ends."""
@@ -6799,14 +6582,14 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
             self._update_game_mode_status()
             print("Game ended")
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def _on_game_limits_changed(self, limits):
         """Called when game mode limits change."""
         try:
             self._update_game_mode_status()
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def _on_open_model(self):
         dialog = ModelManagerDialog(self.registry, self.current_model_name, self)

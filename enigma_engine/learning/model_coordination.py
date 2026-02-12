@@ -620,7 +620,7 @@ class ModelCoordinator:
                         confidence=1.0,
                     )
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         return GenerationResult(
             response="No model responded in time.",
@@ -670,7 +670,7 @@ Which response is best? Reply with just the number."""
                             alternatives=ensemble_result.alternatives,
                         )
                 except ValueError:
-                    pass
+                    pass  # Intentionally silent
         
         # Fall back to majority vote
         responses = [alt[1] for alt in ensemble_result.alternatives]

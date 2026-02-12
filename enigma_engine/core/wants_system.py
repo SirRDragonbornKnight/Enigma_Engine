@@ -69,7 +69,7 @@ class AIWantsSystem:
     Learns what it wants from training data, not presets.
     """
     
-    def __init__(self, model_name: str, config_dir: Path):
+    def __init__(self, model_name: str, config_dir: Path) -> None:
         """
         Initialize wants system for an AI.
         
@@ -96,7 +96,7 @@ class AIWantsSystem:
         self.load()
     
     def add_want(self, name: str, description: str, intensity: float = 0.5, 
-                 category: str = "general"):
+                 category: str = "general") -> None:
         """
         AI develops a new want.
         
@@ -116,7 +116,7 @@ class AIWantsSystem:
         logger.info(f"AI developed want: {name} ({intensity:.2f} intensity)")
     
     def add_goal(self, name: str, description: str, priority: int = 5, 
-                 steps: Optional[list[str]] = None):
+                 steps: Optional[list[str]] = None) -> None:
         """
         AI sets a goal to work toward.
         
@@ -136,7 +136,7 @@ class AIWantsSystem:
         self.active_goals.append(name)
         logger.info(f"AI set goal: {name} (priority {priority})")
     
-    def satisfy_want(self, want_name: str, satisfaction_amount: float = 1.0):
+    def satisfy_want(self, want_name: str, satisfaction_amount: float = 1.0) -> None:
         """
         Record that a want has been satisfied.
         
@@ -160,7 +160,7 @@ class AIWantsSystem:
             
             logger.debug(f"Satisfied want: {want_name}")
     
-    def update_goal_progress(self, goal_name: str, progress: float):
+    def update_goal_progress(self, goal_name: str, progress: float) -> None:
         """
         Update progress on a goal.
         
@@ -176,7 +176,7 @@ class AIWantsSystem:
                 logger.info(f"AI completed goal: {goal_name}")
     
     def learn_want_from_interaction(self, user_input: str, ai_response: str,
-                                    context: Optional[dict[str, Any]] = None):
+                                    context: Optional[dict[str, Any]] = None) -> None:
         """
         AI learns what it wants based on interaction patterns.
         
@@ -290,7 +290,7 @@ class AIWantsSystem:
             "active_goals": self.active_goals
         }
     
-    def from_dict(self, data: dict[str, Any]):
+    def from_dict(self, data: dict[str, Any]) -> None:
         """Import from dictionary."""
         self.wants = {
             k: Want(**v) for k, v in data.get("wants", {}).items()
@@ -304,7 +304,7 @@ class AIWantsSystem:
         self.dominant_want = data.get("dominant_want")
         self.active_goals = data.get("active_goals", [])
     
-    def save(self):
+    def save(self) -> None:
         """Save wants system to disk."""
         save_path = self.config_dir / f"{self.model_name}_wants.json"
         try:
@@ -313,7 +313,7 @@ class AIWantsSystem:
         except Exception as e:
             logger.error(f"Failed to save AI wants: {e}")
     
-    def load(self):
+    def load(self) -> None:
         """Load wants system from disk."""
         load_path = self.config_dir / f"{self.model_name}_wants.json"
         if load_path.exists():

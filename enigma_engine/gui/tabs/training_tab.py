@@ -1148,28 +1148,33 @@ def _analyze_training_data(parent):
         parent.data_stats_label.setText("Empty")
         return
     
-    # Parse Q&A pairs
+    # Parse Q&A pairs (handles multi-line answers and code blocks)
     pairs = []
     lines = content.split('\n')
     current_q = None
     current_a = []
+    in_answer = False  # Track answer mode even when first line is empty
     
     for line in lines:
         line_stripped = line.strip()
         if line_stripped.startswith('Q:'):
             # Save previous pair if exists
-            if current_q is not None:
+            if current_q is not None and in_answer:
                 pairs.append((current_q, '\n'.join(current_a).strip()))
             current_q = line_stripped[2:].strip()
             current_a = []
+            in_answer = False
         elif line_stripped.startswith('A:') and current_q is not None:
-            current_a.append(line_stripped[2:].strip())
-        elif current_q is not None and current_a:
-            # Continuation of answer
-            current_a.append(line_stripped)
+            in_answer = True
+            first_line = line_stripped[2:].strip()
+            if first_line:
+                current_a.append(first_line)
+        elif current_q is not None and in_answer:
+            # Continue collecting answer (preserve indentation for code blocks)
+            current_a.append(line.rstrip())
     
     # Save last pair
-    if current_q is not None:
+    if current_q is not None and in_answer:
         pairs.append((current_q, '\n'.join(current_a).strip()))
     
     # Build preview HTML
@@ -1224,20 +1229,28 @@ def _validate_training_data(parent):
             # Non-empty line after Q but no A: marker
             pass  # Allow continuation
     
-    # Check for very short answers
+    # Check for very short answers (parse with code block support)
     pairs = []
     current_q = None
     current_a = []
+    in_answer = False
     for line in lines:
         stripped = line.strip()
         if stripped.startswith('Q:'):
-            if current_q is not None:
+            if current_q is not None and in_answer:
                 pairs.append((current_q, '\n'.join(current_a).strip()))
             current_q = stripped[2:].strip()
             current_a = []
+            in_answer = False
         elif stripped.startswith('A:') and current_q:
-            current_a.append(stripped[2:].strip())
-    if current_q:
+            in_answer = True
+            first_line = stripped[2:].strip()
+            if first_line:
+                current_a.append(first_line)
+        elif current_q and in_answer:
+            # Continue collecting (preserve code blocks)
+            current_a.append(line.rstrip())
+    if current_q and in_answer:
         pairs.append((current_q, '\n'.join(current_a).strip()))
     
     for i, (q, a) in enumerate(pairs, 1):
@@ -1449,24 +1462,40 @@ def _paste_and_convert(parent):
             convert_btn.setText("Convert to Q&A")
     
     def _do_basic_extraction(text, output_widget):
-        """Basic Q&A extraction without AI."""
-        lines = text.split('.')
+        """Basic Q&A extraction without AI (preserves code blocks)."""
+        import re
+        
         qa_output = ""
         
-        for i, sentence in enumerate(lines[:15]):  # Limit to 15 sentences
-            sentence = sentence.strip()
-            if len(sentence) > 20:  # Skip very short sentences
-                # Create a question from the sentence
-                words = sentence.split()
-                if len(words) > 3:
-                    # Simple pattern: "What is X?" where X is the subject
-                    if words[0].lower() in ['the', 'a', 'an']:
-                        subject = ' '.join(words[1:4])
-                    else:
-                        subject = ' '.join(words[:3])
-                    
-                    qa_output += f"Q: What do you know about {subject.lower()}?\n"
-                    qa_output += f"A: {sentence}.\n\n"
+        # First, extract and preserve code blocks
+        code_blocks = []
+        code_pattern = r'```[\w]*\n(.*?)```'
+        
+        def save_code(match):
+            code_blocks.append(match.group(0))
+            return f"__CODE_BLOCK_{len(code_blocks) - 1}__"
+        
+        text_no_code = re.sub(code_pattern, save_code, text, flags=re.DOTALL)
+        
+        # Split into paragraphs (not sentences to preserve code context)
+        paragraphs = re.split(r'\n\s*\n', text_no_code)
+        
+        for i, para in enumerate(paragraphs[:15]):  # Limit to 15 paragraphs
+            para = para.strip()
+            if len(para) < 20:  # Skip very short paragraphs
+                continue
+            
+            # Restore code blocks in paragraph
+            for j, block in enumerate(code_blocks):
+                para = para.replace(f"__CODE_BLOCK_{j}__", block)
+            
+            # Create Q&A from paragraph
+            words = para.split()[:5]  # First 5 words for topic
+            topic = ' '.join(w for w in words if w.isalpha())[:30]
+            
+            if topic:
+                qa_output += f"Q: Explain about {topic.lower()}?\n"
+                qa_output += f"A: {para}\n\n"
         
         current = output_widget.toPlainText()
         output_widget.setPlainText(current + qa_output)

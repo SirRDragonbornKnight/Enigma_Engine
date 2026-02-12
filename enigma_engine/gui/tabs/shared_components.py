@@ -206,7 +206,7 @@ class PresetSelector(QWidget):
                 with open(path) as f:
                     self._custom_presets = json.load(f)
             except Exception:
-                pass
+                pass  # Intentionally silent
     
     def _save_custom_presets(self):
         path = SETTINGS_DIR / f"{self.category}_presets.json"
@@ -214,7 +214,7 @@ class PresetSelector(QWidget):
             with open(path, 'w') as f:
                 json.dump(self._custom_presets, f, indent=2)
         except Exception:
-            pass
+            pass  # Intentionally silent
 
 
 class ColorCustomizer(QWidget):
@@ -317,7 +317,7 @@ class ModuleStateChecker:
             if manager:
                 return manager.is_loaded(module_name)
         except Exception:
-            pass
+            pass  # Intentionally silent
         return False
     
     @staticmethod
@@ -342,7 +342,7 @@ class SettingsPersistence:
             with open(self.path, 'w') as f:
                 json.dump(settings, f, indent=2)
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def load(self) -> dict[str, Any]:
         if self.path.exists():
@@ -350,7 +350,7 @@ class SettingsPersistence:
                 with open(self.path) as f:
                     return json.load(f)
             except Exception:
-                pass
+                pass  # Intentionally silent
         return {}
 
 
@@ -526,7 +526,7 @@ class DirectoryWatcher:
                     try:
                         files[str(f)] = f.stat().st_mtime
                     except OSError:
-                        pass
+                        pass  # Intentionally silent
         return files
     
     def _check(self):
@@ -539,9 +539,9 @@ class DirectoryWatcher:
                     try:
                         cb()
                     except Exception:
-                        pass
+                        pass  # Intentionally silent
         except Exception:
-            pass
+            pass  # Intentionally silent
 
 
 # Export all

@@ -53,7 +53,7 @@ class Template:
     # Settings
     default_values: Dict[str, str] = field(default_factory=dict)
     
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Extract variables if not provided."""
         if not self.variables:
             self.variables = self._extract_variables()
@@ -385,7 +385,7 @@ class PromptLibrary:
     Library of prompt templates.
     """
     
-    def __init__(self, templates_dir: Optional[str] = None):
+    def __init__(self, templates_dir: Optional[str] = None) -> None:
         """
         Initialize library.
         
@@ -415,13 +415,13 @@ class PromptLibrary:
             raise KeyError(f"Template not found: {name}")
         return self._templates[name]
     
-    def add(self, template: Template):
+    def add(self, template: Template) -> None:
         """Add a template to the library."""
         if not template.name:
             raise ValueError("Template must have a name")
         self._templates[template.name] = template
     
-    def remove(self, name: str):
+    def remove(self, name: str) -> None:
         """Remove a template."""
         if name in self._templates:
             del self._templates[name]
@@ -464,7 +464,7 @@ class PromptLibrary:
         
         return results
     
-    def load_directory(self, path: str):
+    def load_directory(self, path: str) -> None:
         """Load templates from a directory."""
         path = Path(path)
         if not path.exists():
@@ -486,7 +486,7 @@ class PromptLibrary:
             except Exception as e:
                 logger.warning(f"Failed to load template from {file_path}: {e}")
     
-    def save_template(self, name: str, path: str):
+    def save_template(self, name: str, path: str) -> None:
         """Save a template to file."""
         if name not in self._templates:
             raise KeyError(f"Template not found: {name}")
@@ -496,7 +496,7 @@ class PromptLibrary:
         with open(path, "w") as f:
             json.dump(template.to_dict(), f, indent=2)
     
-    def save_all(self, path: str):
+    def save_all(self, path: str) -> None:
         """Save all custom templates."""
         path = Path(path)
         path.mkdir(parents=True, exist_ok=True)
@@ -520,7 +520,7 @@ class PromptBuilder:
     Fluent builder for complex prompts.
     """
     
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize builder."""
         self._parts: List[str] = []
         self._variables: Dict[str, str] = {}

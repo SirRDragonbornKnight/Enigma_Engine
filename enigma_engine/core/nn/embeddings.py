@@ -33,7 +33,7 @@ class RotaryEmbedding(nn.Module):
         self.max_seq_len = max_seq_len
         self._build_cache(max_seq_len)
     
-    def _build_cache(self, seq_len: int):
+    def _build_cache(self, seq_len: int) -> None:
         """Build sin/cos cache for the given sequence length."""
         t = torch.arange(seq_len, device=self.inv_freq.device)
         freqs = torch.einsum("i,j->ij", t, self.inv_freq)

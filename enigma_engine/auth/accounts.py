@@ -193,7 +193,7 @@ class TokenManager:
                     if int(expires) > time.time():
                         return {"sub": user_id}
             except (ValueError, IndexError):
-                pass
+                pass  # Intentionally silent
             return None
         
         try:

@@ -39,14 +39,14 @@ try:
     )
     HAVE_HF_HUB = True
 except ImportError:
-    pass
+    pass  # Intentionally silent
 
 HAVE_SAFETENSORS = False
 try:
     from safetensors.torch import save_file as save_safetensors
     HAVE_SAFETENSORS = True
 except ImportError:
-    pass
+    pass  # Intentionally silent
 
 
 class HuggingFaceProvider(ExportProvider):

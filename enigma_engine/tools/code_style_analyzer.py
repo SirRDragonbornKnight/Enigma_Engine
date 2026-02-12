@@ -628,7 +628,7 @@ class ProjectContextExtractor:
                         if pkg and not pkg.startswith('['):
                             self.context.packages.append(pkg)
             except Exception:
-                pass
+                pass  # Intentionally silent
     
     def _parse_requirements(self, path: Path):
         """Parse requirements.txt for dependencies."""
@@ -642,7 +642,7 @@ class ProjectContextExtractor:
                     if pkg:
                         self.context.packages.append(pkg)
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def _parse_package_json(self, path: Path):
         """Parse package.json for dependencies."""
@@ -659,7 +659,7 @@ class ProjectContextExtractor:
             self.context.packages.extend(list(deps.keys())[:10])
             self.context.packages.extend(list(dev_deps.keys())[:5])
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def _parse_cargo_toml(self, path: Path):
         """Parse Cargo.toml for dependencies."""
@@ -678,7 +678,7 @@ class ProjectContextExtractor:
                     if pkg:
                         self.context.packages.append(pkg)
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def _extract_structure(self, directory: Path, max_depth: int):
         """Extract key directory structure."""
@@ -707,7 +707,7 @@ class ProjectContextExtractor:
                     elif item.suffix in ['.py', '.js', '.ts', '.rs', '.go', '.java']:
                         important_files.append(str(rel_path))
             except PermissionError:
-                pass
+                pass  # Intentionally silent
         
         scan(directory, 0)
         
@@ -754,7 +754,7 @@ class ProjectContextExtractor:
                     self.context.readme_summary = ' '.join(summary_lines)[:300]
                     break
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
 
 
 # Global extractor instance

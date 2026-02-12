@@ -185,7 +185,7 @@ class PowerManager:
     def is_paused(self) -> bool:
         return self._paused
     
-    def set_level(self, level: PowerLevel):
+    def set_level(self, level: PowerLevel) -> None:
         """Set power level."""
         with self._lock:
             self._level = level
@@ -197,7 +197,7 @@ class PowerManager:
                     import torch
                     torch.set_num_threads(self._settings.thread_count)
                 except ImportError:
-                    pass
+                    pass  # Intentionally silent
             
             # Apply memory limit for embedded/mobile
             if self._settings.max_memory_mb > 0:
@@ -229,13 +229,13 @@ class PowerManager:
                         try:
                             os.nice(10)
                         except (OSError, AttributeError):
-                            pass
+                            pass  # Intentionally silent
     
-    def pause(self):
+    def pause(self) -> None:
         """Pause AI operations."""
         self._paused = True
     
-    def resume(self):
+    def resume(self) -> None:
         """Resume AI operations."""
         self._paused = False
     
@@ -259,7 +259,7 @@ class PowerManager:
         """Get quantization bits for current mode."""
         return self._settings.quantization_bits
     
-    def wait_if_needed(self):
+    def wait_if_needed(self) -> None:
         """Wait if in low power mode (to reduce CPU spikes)."""
         if self._settings.response_delay > 0:
             import time
@@ -277,13 +277,13 @@ def get_power_manager() -> PowerManager:
     return PowerManager()
 
 
-def set_power_mode(mode: str):
+def set_power_mode(mode: str) -> None:
     """Set power mode by name."""
     level = PowerLevel(mode.lower())
     get_power_manager().set_level(level)
 
 
-def gaming_mode(enabled: bool = True):
+def gaming_mode(enabled: bool = True) -> None:
     """Quick toggle for gaming mode."""
     if enabled:
         set_power_mode("gaming")
@@ -291,7 +291,7 @@ def gaming_mode(enabled: bool = True):
         set_power_mode("full")
 
 
-def embedded_mode(enabled: bool = True):
+def embedded_mode(enabled: bool = True) -> None:
     """Quick toggle for embedded/Pi mode."""
     if enabled:
         set_power_mode("embedded")
@@ -299,7 +299,7 @@ def embedded_mode(enabled: bool = True):
         set_power_mode("balanced")
 
 
-def mobile_mode(enabled: bool = True):
+def mobile_mode(enabled: bool = True) -> None:
     """Quick toggle for mobile mode."""
     if enabled:
         set_power_mode("mobile")
@@ -307,6 +307,6 @@ def mobile_mode(enabled: bool = True):
         set_power_mode("balanced")
 
 
-def auto_power_mode():
+def auto_power_mode() -> PowerLevel:
     """Auto-detect and set optimal power mode based on hardware."""
     return get_power_manager().auto_configure()

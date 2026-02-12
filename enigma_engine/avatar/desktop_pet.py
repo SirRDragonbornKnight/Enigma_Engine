@@ -27,12 +27,15 @@ Usage:
     pet.stop()  # Hide avatar
 """
 
+import logging
 import sys
 import threading
 import time
 from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 # Platform detection
 IS_WINDOWS = sys.platform == 'win32'
@@ -566,7 +569,7 @@ class DesktopPet(QObject):
             return
         
         if not HAS_PYQT:
-            print("[DesktopPet] PyQt5 not available - cannot start desktop pet")
+            logger.warning("PyQt5 not available - cannot start desktop pet")
             return
         
         # Register globally for tool access
@@ -615,7 +618,7 @@ class DesktopPet(QObject):
         # Show window
         self._window.show()
         
-        print("[DesktopPet] Started!")
+        logger.info("Started!")
     
     def stop(self):
         """Stop and hide the desktop pet."""
@@ -633,7 +636,7 @@ class DesktopPet(QObject):
             self._window.deleteLater()
             self._window = None
         
-        print("[DesktopPet] Stopped")
+        logger.info("Stopped")
     
     def is_running(self) -> bool:
         return self._running
@@ -769,7 +772,7 @@ class DesktopPet(QObject):
             if self._current_sprite_key in self._sprites:
                 self._window.set_sprite(self._sprites[self._current_sprite_key])
         
-        print(f"[DesktopPet] Resized to {new_size}px")
+        logger.info("Resized to %dpx", new_size)
     
     def look_at_screen_position(self, x: int, y: int):
         """
@@ -878,10 +881,10 @@ class DesktopPet(QObject):
             elif object_type == "sign":
                 return spawner.spawn_sign(text, int(x), int(y))
             else:
-                print(f"[DesktopPet] Unknown spawn type: {object_type}")
+                logger.warning("Unknown spawn type: %s", object_type)
                 return None
         except Exception as e:
-            print(f"[DesktopPet] Spawn failed: {e}")
+            logger.error("Spawn failed: %s", e)
             return None
     
     def hold(self, item: str, hand: str = "right"):

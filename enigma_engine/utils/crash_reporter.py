@@ -383,7 +383,7 @@ class CrashReporter:
                         filepath.unlink()
                         count += 1
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         logger.info(f"Cleared {count} old crash reports")
 

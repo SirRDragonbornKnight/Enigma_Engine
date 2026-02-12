@@ -21,13 +21,13 @@ HAVE_ONNX = False
 try:
     HAVE_ONNX = True
 except ImportError:
-    pass
+    pass  # Intentionally silent
 
 HAVE_ONNXRUNTIME = False
 try:
     HAVE_ONNXRUNTIME = True
 except ImportError:
-    pass
+    pass  # Intentionally silent
 
 
 class ONNXProvider(ExportProvider):

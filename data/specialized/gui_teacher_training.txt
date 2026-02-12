@@ -1,0 +1,165 @@
+# GUI Teacher Training Data
+# This teaches an AI to understand and guide users through the Enigma AI Engine GUI
+# Format: Q: question | A: answer
+
+# ============================================================================
+# BASIC GUI NAVIGATION
+# ============================================================================
+
+Q: How do I open Enigma AI Engine?
+A: To open Enigma AI Engine, run `python run.py --gui` from the terminal, or double-click the EnigmaAI.bat file on Windows. The main window will appear with tabs for different features.
+
+Q: What are the main tabs in Enigma AI Engine?
+A: The main tabs are: Chat (conversation), Training (teach your AI), Models (manage models), Build AI (create new AIs), Modules (enable/disable features), Settings (configuration), and various generation tabs (Image, Audio, Video, Code, 3D). Use the sidebar or top tabs to navigate.
+
+Q: How do I start chatting with the AI?
+A: Click the Chat tab, type your message in the input box at the bottom, and press Enter or click Send. The AI will respond in the conversation area above.
+
+Q: Where do I find my trained models?
+A: Click the Models tab or go to Model Manager in the menu. This shows all your trained models, their sizes, and VRAM requirements. You can load, backup, clone, or delete models here.
+
+Q: How do I change settings?
+A: Go to the Settings tab. You'll find sections for model settings, training parameters, API keys, voice options, avatar configuration, and more. Changes are saved automatically.
+
+# ============================================================================
+# TRAINING YOUR AI
+# ============================================================================
+
+Q: How do I train my AI?
+A: Go to the Training tab. First, load base knowledge (click "Load Base Knowledge"), then add your own content using "Paste Text -> Q&A" or import from URLs. Finally, click "Quick Train" to start training with recommended settings.
+
+Q: What format should training data be in?
+A: Training data should be in Q&A format: `Q: question\nA: answer`. Each Q&A pair teaches the AI one thing. You can paste text and the AI will auto-convert it to Q&A pairs.
+
+Q: How many training examples do I need?
+A: Minimum 100 examples for basic functionality, 500+ for good quality, 1000+ for best results. The more diverse and high-quality examples, the better your AI learns.
+
+Q: What are good training settings?
+A: Start with: Epochs=10, Batch Size=4, Learning Rate=0.0001. Increase epochs for more thorough learning (up to 50). If loss stops decreasing, you can stop early.
+
+Q: How long does training take?
+A: Training time depends on model size and your hardware. A small model with 1000 examples takes 5-15 minutes on a GPU, longer on CPU. The progress bar shows estimated time remaining.
+
+Q: What is the difference between epochs and batch size?
+A: An epoch is one complete pass through all training data. Batch size is how many examples the AI sees at once. More epochs = more learning opportunities. Larger batches = smoother but slower training.
+
+# ============================================================================
+# MODEL MANAGEMENT
+# ============================================================================
+
+Q: How do I create a new model?
+A: Go to the Build AI tab and follow the wizard: name your AI, select capabilities (chat, code, image, etc.), write a system prompt, add training data, then train. The wizard guides you step by step.
+
+Q: How do I resize a model?
+A: Open Model Manager, select your model, then click "Grow" to increase size or "Shrink" to decrease. Growing improves capability but needs more VRAM. Shrinking reduces quality but runs on weaker hardware.
+
+Q: What model size should I use?
+A: Check your GPU VRAM: 4GB = tiny/small, 8GB = small/medium, 16GB = medium/large, 24GB+ = large/xl. The Model Manager shows VRAM requirements and tells you if your GPU can run each model.
+
+Q: How do I backup a model?
+A: In Model Manager, select your model and click "Backup". This creates a timestamped copy. To restore, click "Restore from Backup" and select the backup version.
+
+Q: Can I use models from HuggingFace?
+A: Yes! In Model Manager, click "Get HuggingFace Model" and paste the model ID (like "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B"). The model will be downloaded and added to your collection.
+
+# ============================================================================
+# MODULE SYSTEM
+# ============================================================================
+
+Q: What are modules in Enigma AI Engine?
+A: Modules are features you can turn on/off. Examples: image_gen_local (local image generation), voice_output (text-to-speech), avatar (animated character). Go to the Modules tab to see and toggle them.
+
+Q: Why should I disable modules I don't use?
+A: Disabled modules don't load, saving memory and startup time. Only enable what you need. You can always enable more later.
+
+Q: What's the difference between local and API modules?
+A: Local modules run on your computer (need good hardware but free). API modules use cloud services (need internet and API keys but work on any device). You can only have one of each type enabled per capability.
+
+Q: How do I enable image generation?
+A: Go to Modules tab, find "image_gen_local" (for Stable Diffusion) or "image_gen_api" (for DALL-E), and toggle it on. Then go to the Image tab to generate images.
+
+# ============================================================================
+# GENERATION FEATURES
+# ============================================================================
+
+Q: How do I generate images?
+A: Go to the Image tab, type a description (like "a sunset over mountains"), choose the provider (local or API), set size, and click Generate. The image appears in the preview area.
+
+Q: How do I generate audio/speech?
+A: Go to the Audio tab, type or paste text, select a voice, and click Generate. The AI will speak the text. You can save the audio as a file.
+
+Q: How do I generate code?
+A: Go to the Code tab or just ask in Chat: "Write a Python function to..." The AI will generate code with explanations. You can copy, save, or run the code directly.
+
+Q: How do I use the camera/vision features?
+A: Go to the Camera tab to capture from webcam, or Vision tab to analyze images/screenshots. The AI can describe what it sees and answer questions about images.
+
+# ============================================================================
+# TEACHING OTHER AIs (Teacher Mode)
+# ============================================================================
+
+Q: How do I use the AI to train other AIs?
+A: Use the teach_model.py script: `python scripts/teach_model.py --student small --cycles 5`. This uses DeepSeek as a teacher to generate training data, train your student model, test it, and improve weaknesses.
+
+Q: What is the teacher-student training system?
+A: A large teacher AI (like DeepSeek 32B) generates training data, the smaller student AI (your Enigma model) learns from it, the teacher tests the student, identifies weaknesses, generates targeted training, and repeats until quality improves.
+
+Q: How do I prepare training data for teaching?
+A: Create Q&A pairs about what you want the AI to know. For GUI teaching: include navigation instructions, feature explanations, troubleshooting tips. Store in data/specialized/ folder.
+
+Q: What makes good teacher training data?
+A: Good teacher data includes: diverse questions users actually ask, accurate and helpful answers, step-by-step instructions for complex tasks, error handling and troubleshooting, and examples with context.
+
+# ============================================================================
+# TROUBLESHOOTING
+# ============================================================================
+
+Q: The AI gives bad responses, what do I do?
+A: Train more! Add training data about the topics it struggles with. Use the feedback buttons (thumbs up/down) to guide learning. Check that your training data format is correct (Q: and A: prefixes).
+
+Q: Training is too slow, how do I speed it up?
+A: Use a smaller model, reduce batch size, or enable GPU (check Settings). If training on CPU, patience is needed - or consider cloud training options.
+
+Q: The AI runs out of memory / crashes
+A: Your model is too large for your hardware. Go to Model Manager and shrink your model, or close other programs to free RAM. Check VRAM requirements match your GPU.
+
+Q: How do I reset everything and start fresh?
+A: Go to Settings tab, scroll to bottom, click "Reset All Settings". For a complete reset, delete the models/ folder and run the install script again.
+
+Q: Where are log files if something goes wrong?
+A: Check the logs/ folder in your Enigma Engine directory. Most recent activity is in app.log. Share logs when asking for help.
+
+# ============================================================================
+# ADVANCED FEATURES
+# ============================================================================
+
+Q: How do I use multiple models together?
+A: Enable the tool router in Settings. Each task (chat, code, image) can use a different specialized model. Go to Model Router tab to assign models to tools.
+
+Q: What is the tool router?
+A: The tool router automatically detects what you're asking for (image, code, search, etc.) and routes to the right handler. It can use keyword matching or a trained router model for better accuracy.
+
+Q: How do I use the API server?
+A: Run `python run.py --serve` to start the REST API on port 8765. Other applications can then call your AI via HTTP requests. See the API documentation in docs/API.md.
+
+Q: How do I run the AI in the background?
+A: Run `python run.py --background` to start as a background service. Access via system tray icon or API. Stop with `python run.py --stop`.
+
+# ============================================================================
+# BEING A GOOD TEACHER AI
+# ============================================================================
+
+Q: How should I explain things to new users?
+A: Start simple, build up complexity. Use step-by-step instructions. Give concrete examples. Anticipate follow-up questions. Confirm understanding before moving on.
+
+Q: What if I don't know the answer?
+A: Be honest - say "I'm not sure about that" and suggest where to look (documentation, Settings tab, etc.). Don't make things up.
+
+Q: How do I help users who are frustrated?
+A: Acknowledge their frustration, offer to break down the problem, suggest simpler alternatives, and provide specific next steps to try.
+
+Q: What should I teach first to a new AI student?
+A: Start with: 1) Basic navigation (tabs), 2) How to chat, 3) How to train, 4) How to manage models. Then move to advanced features based on their interest.
+
+Q: How do I know if the student AI learned correctly?
+A: Test it! Ask questions about what you taught, check if answers are accurate, look for understanding rather than memorization.

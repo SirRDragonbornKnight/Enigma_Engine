@@ -428,7 +428,7 @@ class BatteryManager:
             if battery:
                 return battery.percent, battery.power_plugged, 40.0
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         # Default: assume full power
         return 100.0, True, 40.0

@@ -37,9 +37,10 @@ import os
 import warnings
 from collections.abc import Generator
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
 logger = logging.getLogger(__name__)
@@ -207,7 +208,7 @@ class LowPowerEngine:
             f"max_ctx={self.config.max_context_tokens}"
         )
     
-    def _load_tokenizer(self):
+    def _load_tokenizer(self) -> Any:
         """Load tokenizer."""
         try:
             from .tokenizer import get_tokenizer
@@ -216,7 +217,7 @@ class LowPowerEngine:
             logger.error(f"Could not load tokenizer: {e}")
             raise
     
-    def _load_model(self, model_path: Optional[str]):
+    def _load_model(self, model_path: Optional[str]) -> nn.Module:
         """Load model with memory optimizations."""
         from ..config import CONFIG
 
@@ -272,7 +273,7 @@ class LowPowerEngine:
         model.eval()
         return model
     
-    def _create_model_from_state(self, state_dict: dict[str, torch.Tensor]):
+    def _create_model_from_state(self, state_dict: dict[str, torch.Tensor]) -> nn.Module:
         """Create model architecture from state dict."""
         from .model import MODEL_PRESETS, create_model
 
@@ -312,7 +313,7 @@ class LowPowerEngine:
         
         return model
     
-    def _quantize_model(self, model):
+    def _quantize_model(self, model: nn.Module) -> nn.Module:
         """Apply dynamic quantization to model."""
         bits = self.config.quantization_bits
         
@@ -525,7 +526,7 @@ class LowPowerEngine:
         }
 
 
-def get_engine(force_low_power: bool = False):
+def get_engine(force_low_power: bool = False) -> Any:
     """
     Get appropriate engine for current hardware.
     

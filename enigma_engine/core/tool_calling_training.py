@@ -193,7 +193,7 @@ class ToolCallFormatter:
                 data = json.loads(match.group(1))
                 return data.get("tool"), data.get("arguments", {})
             except json.JSONDecodeError:
-                pass
+                pass  # Intentionally silent
         return None
     
     def _parse_xml(self, text: str) -> Optional[Tuple[str, Dict]]:
@@ -288,7 +288,7 @@ class DatasetGenerator:
             try:
                 augmented.append(template.format(action=action))
             except KeyError:
-                pass
+                pass  # Intentionally silent
         
         return augmented
 

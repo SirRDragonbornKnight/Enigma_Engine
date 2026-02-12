@@ -138,7 +138,7 @@ class AdaptiveEngine:
         if self.config.enable_distributed and self.config.server_url:
             self._init_distributed()
     
-    def _init_gaming_mode(self):
+    def _init_gaming_mode(self) -> None:
         """Initialize gaming mode detection."""
         try:
             from .gaming_mode import get_gaming_mode
@@ -150,7 +150,7 @@ class AdaptiveEngine:
         except ImportError as e:
             logger.warning(f"Gaming mode not available: {e}")
     
-    def _init_distributed(self):
+    def _init_distributed(self) -> None:
         """Initialize distributed connection."""
         try:
             from ..comms.distributed import DistributedNode, NodeRole
@@ -166,13 +166,13 @@ class AdaptiveEngine:
         except ImportError as e:
             logger.warning(f"Distributed mode not available: {e}")
     
-    def _on_game_start(self, game: str, profile):
+    def _on_game_start(self, game: str, profile) -> None:
         """Handle game start event."""
         logger.info(f"Game detected: {game}, switching to gaming mode")
         self._stats["gaming_mode_activations"] += 1
         self._current_mode = AdaptiveMode.GAMING
     
-    def _on_game_end(self, game: str):
+    def _on_game_end(self, game: str) -> None:
         """Handle game end event."""
         logger.info(f"Game ended: {game}, restoring full mode")
         self._current_mode = AdaptiveMode.FULL
@@ -457,7 +457,7 @@ class AdaptiveEngine:
         self._init_distributed()
         return bool(self._distributed and self._distributed.peers)
     
-    def enable_gaming_mode(self, enable: bool = True):
+    def enable_gaming_mode(self, enable: bool = True) -> None:
         """Enable or disable gaming mode detection."""
         self.config.enable_gaming_mode = enable
         

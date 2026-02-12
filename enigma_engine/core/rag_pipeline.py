@@ -150,7 +150,7 @@ class DocumentLoader:
                 pages = [page.extract_text() or "" for page in pdf.pages]
                 return "\n\n".join(pages)
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         try:
             from PyPDF2 import PdfReader
@@ -158,7 +158,7 @@ class DocumentLoader:
             pages = [page.extract_text() or "" for page in reader.pages]
             return "\n\n".join(pages)
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         raise ImportError("PDF loading requires pdfplumber or PyPDF2. "
                          "Install with: pip install pdfplumber")
@@ -270,7 +270,7 @@ class SimpleEmbedder:
     For better quality, use SentenceTransformerEmbedder.
     """
     
-    def __init__(self, dim: int = 384):
+    def __init__(self, dim: int = 384) -> None:
         self.dim = dim
         self.vocab: dict[str, int] = {}
         self._idf: dict[str, float] = {}
@@ -315,7 +315,7 @@ class SimpleEmbedder:
 class SentenceTransformerEmbedder:
     """Embedder using sentence-transformers (high quality)."""
     
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
+    def __init__(self, model_name: str = "all-MiniLM-L6-v2") -> None:
         try:
             from sentence_transformers import SentenceTransformer
             self.model = SentenceTransformer(model_name)
@@ -347,11 +347,11 @@ class SimpleVectorStore:
     For production, consider using FAISS or a vector database.
     """
     
-    def __init__(self):
+    def __init__(self) -> None:
         self.chunks: dict[str, Chunk] = {}
         self.embeddings: dict[str, list[float]] = {}
     
-    def add(self, chunk: Chunk, embedding: list[float]):
+    def add(self, chunk: Chunk, embedding: list[float]) -> None:
         """Add a chunk with its embedding."""
         self.chunks[chunk.id] = chunk
         self.embeddings[chunk.id] = embedding
@@ -386,7 +386,7 @@ class SimpleVectorStore:
         
         return dot / (norm_a * norm_b)
     
-    def save(self, path: Union[str, Path]):
+    def save(self, path: Union[str, Path]) -> None:
         """Save to file."""
         path = Path(path)
         
@@ -406,7 +406,7 @@ class SimpleVectorStore:
         with open(path, 'w') as f:
             json.dump(data, f)
     
-    def load(self, path: Union[str, Path]):
+    def load(self, path: Union[str, Path]) -> None:
         """Load from file."""
         path = Path(path)
         
@@ -424,7 +424,7 @@ class SimpleVectorStore:
         }
         self.embeddings = data["embeddings"]
     
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.chunks)
 
 
@@ -480,7 +480,7 @@ class RAGPipeline:
         self._llm = None
     
     @property
-    def llm(self):
+    def llm(self) -> Any:
         """Lazy-load LLM for answer generation."""
         if self._llm is None:
             try:
@@ -706,7 +706,7 @@ Answer:"""
             query=question
         )
     
-    def save(self, path: Union[str, Path]):
+    def save(self, path: Union[str, Path]) -> None:
         """Save the RAG index to disk."""
         path = Path(path)
         path.mkdir(parents=True, exist_ok=True)
@@ -729,7 +729,7 @@ Answer:"""
         
         logger.info(f"RAG index saved to {path}")
     
-    def load(self, path: Union[str, Path]):
+    def load(self, path: Union[str, Path]) -> None:
         """Load a RAG index from disk."""
         path = Path(path)
         

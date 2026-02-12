@@ -191,37 +191,33 @@ class AIIntegration:
         """Print integration status nicely."""
         status = self.get_integration_status()
         
-        print("\n" + "=" * 60)
-        print("Enigma AI Engine - AI Integration Status")
-        print("=" * 60)
+        logger.info("Enigma AI Engine - AI Integration Status")
         
         working = []
         missing = []
         
         for name, fs in status.items():
             if fs.has_model:
-                working.append(f"✅ {name}: {fs.model_id}")
+                working.append(f"{name}: {fs.model_id}")
             else:
                 req = FEATURE_REQUIREMENTS[name]
-                missing.append(f"❌ {name}: {req['description']}")
+                missing.append(f"{name}: {req['description']}")
         
-        print("\n🟢 Working Features:")
+        logger.info("Working Features:")
         if working:
             for w in working:
-                print(f"   {w}")
+                logger.info(f"  {w}")
         else:
-            print("   None - no models assigned yet!")
+            logger.info("  None - no models assigned yet!")
         
-        print("\n🔴 Missing AI Models:")
+        logger.info("Missing AI Models:")
         if missing:
             for m in missing:
-                print(f"   {m}")
+                logger.info(f"  {m}")
         else:
-            print("   All features have models!")
+            logger.info("  All features have models!")
         
-        print("\n" + "-" * 60)
-        print("To setup: Use Model Manager in GUI or call setup_feature()")
-        print("=" * 60)
+        logger.info("To setup: Use Model Manager in GUI or call setup_feature()")
     
     def setup_feature(self, feature: str, model_id: str, priority: int = 0) -> bool:
         """

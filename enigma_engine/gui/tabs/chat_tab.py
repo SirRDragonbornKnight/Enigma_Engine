@@ -778,7 +778,7 @@ def _on_context_usage_update(parent, usage):
                     _trigger_auto_continue(parent)
             
     except Exception:
-        pass
+        pass  # Intentionally silent
 
 
 def _show_hallucination_warning(parent, usage):
@@ -1358,14 +1358,6 @@ def create_chat_tab(parent):
     
     _create_chat_display(parent, main_layout)
     
-    # Add feedback buttons below chat display if GUI mode manager is available
-    if hasattr(parent, 'gui_mode_manager'):
-        from ..widgets.quick_actions import FeedbackButtons
-        parent.feedback_buttons = FeedbackButtons(parent)
-        parent.feedback_buttons.good_feedback.connect(lambda: _on_feedback(parent, True))
-        parent.feedback_buttons.bad_feedback.connect(lambda: _on_feedback(parent, False))
-        main_layout.addWidget(parent.feedback_buttons)
-    
     _create_thinking_panel(parent, main_layout)
     _create_input_section(parent, main_layout)
     _create_status_bar(parent, main_layout)
@@ -1696,7 +1688,7 @@ def _do_tts(parent, text: str):
                 from ..voice import speak
                 speak(clean_text)
             except Exception:
-                pass
+                pass  # Intentionally silent
     finally:
         # Reset state from main thread
         from PyQt5.QtCore import QTimer
@@ -1923,19 +1915,19 @@ def _handle_branch_link(parent, url):
             idx = int(url_str.replace('branch_prev_', ''))
             _switch_branch(parent, idx, -1)
         except ValueError:
-            pass
+            pass  # Intentionally silent
     elif url_str.startswith('branch_next_'):
         try:
             idx = int(url_str.replace('branch_next_', ''))
             _switch_branch(parent, idx, 1)
         except ValueError:
-            pass
+            pass  # Intentionally silent
     elif url_str.startswith('regenerate_'):
         try:
             idx = int(url_str.replace('regenerate_', ''))
             _regenerate_response(parent, idx)
         except ValueError:
-            pass
+            pass  # Intentionally silent
 
 
 def _stop_tts(parent):
@@ -1950,7 +1942,7 @@ def _stop_tts(parent):
         if hasattr(engine, '_engine') and engine._engine:
             engine._engine.stop()
     except Exception:
-        pass
+        pass  # Intentionally silent
     
     _tts_is_speaking = False
     parent.btn_speak.setEnabled(True)
@@ -2119,7 +2111,7 @@ def _get_prompt_history() -> list:
                 data = json.load(f)
                 return data.get('prompts', [])
         except Exception:
-            pass
+            pass  # Intentionally silent
     return []
 
 
@@ -2299,7 +2291,7 @@ def _new_chat(parent):
         chat_sync = ChatSync.instance()
         chat_sync.clear_chat()  # This clears both main and quick chat displays
     except Exception:
-        pass
+        pass  # Intentionally silent
     
     # ─────────────────────────────────────────────────────────────────────────
     # CLEAR KV-CACHE: Prevents hallucinations from stale context!
@@ -2313,7 +2305,7 @@ def _new_chat(parent):
                 if hasattr(parent, 'log_terminal'):
                     parent.log_terminal("Cleared KV-cache for new conversation", "debug")
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         # Reset HuggingFace conversation history
         if hasattr(parent.engine, 'model') and hasattr(parent.engine.model, 'reset_conversation'):
@@ -2455,7 +2447,7 @@ def _stop_generation(parent):
             chat_sync.stop_generation()
             stopped = True
     except Exception:
-        pass
+        pass  # Intentionally silent
     
     # Update UI
     if stopped:

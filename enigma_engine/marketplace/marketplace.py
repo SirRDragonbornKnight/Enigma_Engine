@@ -256,7 +256,7 @@ class Marketplace:
                     self._update_installed_status()
                     return len(self._plugins)
                 except Exception:
-                    pass
+                    pass  # Intentionally silent
         
         # Fetch from repositories
         all_plugins = []

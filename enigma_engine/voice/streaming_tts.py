@@ -442,7 +442,7 @@ class StreamingTTS:
             try:
                 os.unlink(temp_path)
             except Exception:
-                pass
+                pass  # Intentionally silent
             
             return audio
             
@@ -482,7 +482,7 @@ class StreamingTTS:
             try:
                 os.unlink(temp_path)
             except Exception:
-                pass
+                pass  # Intentionally silent
             
             return audio
             
@@ -521,7 +521,7 @@ class StreamingTTS:
             try:
                 os.unlink(temp_path)
             except Exception:
-                pass
+                pass  # Intentionally silent
             
             return audio
             
@@ -556,7 +556,7 @@ class StreamingTTS:
                 audio = self._resample(audio, sr, self.config.sample_rate)
             return audio.astype(np.float32)
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         try:
             # Try pydub
@@ -567,7 +567,7 @@ class StreamingTTS:
             samples = np.array(audio_seg.get_array_of_samples())
             return samples.astype(np.float32) / 32768.0
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         return None
     

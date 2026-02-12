@@ -106,7 +106,7 @@ if HAS_NUMPY:
                 try:
                     return self.tokenizer.decode([idx])
                 except (KeyError, ValueError, RuntimeError):
-                    pass
+                    pass  # Intentionally silent
             return self.idx_to_token.get(idx, f"<{idx}>")
         
         def get_index(self, token: str) -> int:
@@ -117,7 +117,7 @@ if HAS_NUMPY:
                     if indices:
                         return indices[0]
                 except (ValueError, RuntimeError):
-                    pass
+                    pass  # Intentionally silent
             return self.vocab.get(token, -1)
         
         def find_similar(

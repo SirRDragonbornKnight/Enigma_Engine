@@ -169,6 +169,11 @@ class TrainingConfig:
     max_seq_len: int = 512        # Maximum tokens per training example
     # ^ Longer = more context but slower/more memory
 
+    # ===== VALIDATION =====
+    val_split: float = 0.1        # Fraction of data held out for validation (0-0.5)
+    # ^ Used to detect overfitting: if val_loss goes up while train_loss goes down,
+    #   the model is memorizing rather than learning
+
     def __post_init__(self):
         """Set defaults after initialization."""
         if self.checkpoint_dir is None:
@@ -683,7 +688,7 @@ def detect_training_format(text: str) -> str:
             if 'input' in obj or 'prompt' in obj or 'instruction' in obj:
                 return 'jsonl'
         except (json.JSONDecodeError, IndexError):
-            pass
+            pass  # Intentionally silent
     
     # ChatML
     if '<|im_start|>' in sample or '<|im_end|>' in sample:
@@ -1193,18 +1198,40 @@ class Trainer:
         # ─────────────────────────────────────────────────────────────
         # Convert raw texts into training sequences
         if dataset_type == "qa":
-            dataset = QADataset(
+            full_dataset = QADataset(
                 texts,
                 self.tokenizer,
                 max_length=self.config.max_seq_len
             )
         else:
-            dataset = TextDataset(
+            full_dataset = TextDataset(
                 texts,
                 self.tokenizer,
                 max_length=self.config.max_seq_len,
                 stride=self.config.max_seq_len // 2  # 50% overlap between chunks
             )
+
+        # ─────────────────────────────────────────────────────────────
+        # STEP 2b: VALIDATION SPLIT
+        # ─────────────────────────────────────────────────────────────
+        val_loader = None
+        if self.config.val_split > 0 and len(full_dataset) >= 10:
+            val_size = max(1, int(len(full_dataset) * self.config.val_split))
+            train_size = len(full_dataset) - val_size
+            train_dataset, val_dataset = torch.utils.data.random_split(
+                full_dataset, [train_size, val_size]
+            )
+            dataset = train_dataset
+            val_loader = DataLoader(
+                val_dataset,
+                batch_size=self.config.batch_size,
+                shuffle=False,
+                num_workers=0,
+                pin_memory=self.device.type == "cuda"
+            )
+            logger.info(f"Split: {train_size} train / {val_size} val sequences")
+        else:
+            dataset = full_dataset
 
         # ─────────────────────────────────────────────────────────────
         # STEP 3: CREATE DATALOADER
@@ -1277,17 +1304,41 @@ class Trainer:
         # This is where the actual learning happens!
         start_time = time.time()
         self.loss_history = []
+        val_loss_history: list[float] = []
+        patience_counter = 0
+        patience_limit = 5  # Stop if val_loss doesn't improve for 5 epochs
 
         for epoch in range(epochs):
             # Train for one epoch (see _train_epoch below)
             epoch_loss = self._train_epoch(dataloader, epoch, epochs)
             self.loss_history.append(epoch_loss)
 
+            # Compute validation loss if we have a val set
+            val_loss = None
+            if val_loader is not None:
+                val_loss = self._evaluate(val_loader)
+                val_loss_history.append(val_loss)
+
+                if self.config.verbose:
+                    print(info_msg(f"  Val loss: {val_loss:.4f}"))
+
+                # Early stopping: if val_loss hasn't improved
+                if len(val_loss_history) > 1 and val_loss > min(val_loss_history[:-1]):
+                    patience_counter += 1
+                    if patience_counter >= patience_limit:
+                        logger.info(f"Early stopping at epoch {epoch + 1} (val_loss not improving)")
+                        if self.config.verbose:
+                            print(system_msg(f"Early stopping at epoch {epoch + 1}"))
+                        break
+                else:
+                    patience_counter = 0
+
             # Call the callback if provided (for progress bars, logging, etc.)
             if callback:
                 callback({
                     'epoch': epoch + 1,
                     'loss': epoch_loss,
+                    'val_loss': val_loss,
                     'lr': self.optimizer.param_groups[0]['lr']
                 })
 
@@ -1312,15 +1363,19 @@ class Trainer:
             print(info_msg(f"Total time: {elapsed:.1f}s"))
             print(info_msg(f"Final loss: {self.loss_history[-1]:.4f}"))
             print(info_msg(f"Best loss: {self.best_loss:.4f}"))
+            if val_loss_history:
+                print(info_msg(f"Best val loss: {min(val_loss_history):.4f}"))
             print("=" * 60)
 
-        return {
+        results = {
             'final_loss': self.loss_history[-1],
             'best_loss': self.best_loss,
             'loss_history': self.loss_history,
+            'val_loss_history': val_loss_history,
             'elapsed_time': elapsed,
             'total_steps': self.global_step
         }
+        return results
 
     def _train_epoch(
         self,
@@ -1497,6 +1552,35 @@ class Trainer:
 
         return epoch_loss
 
+    def _evaluate(self, val_loader: DataLoader) -> float:
+        """Compute average loss on a validation set without updating weights.
+
+        Args:
+            val_loader: DataLoader for the validation split.
+
+        Returns:
+            Average cross-entropy loss over the validation set.
+        """
+        self.model.eval()
+        total_loss = 0.0
+        num_batches = 0
+
+        with torch.no_grad():
+            for batch in val_loader:
+                input_ids = batch['input_ids'].to(self.device)
+                labels = batch['labels'].to(self.device)
+                logits = self.model(input_ids)
+                loss = F.cross_entropy(
+                    logits.view(-1, logits.size(-1)),
+                    labels.view(-1),
+                    ignore_index=getattr(self.tokenizer, 'pad_token_id', 0)
+                )
+                total_loss += loss.item()
+                num_batches += 1
+
+        self.model.train()
+        return total_loss / max(1, num_batches)
+
     def _save_checkpoint(self, epoch: int):
         """
         Save training checkpoint for recovery/resume.
@@ -1635,7 +1719,7 @@ def train_model(
     # DEFAULT PATHS: Use sensible defaults if not specified
     # ─────────────────────────────────────────────────────────────────
     if data_path is None:
-        data_path = DATA_DIR / "data.txt"
+        data_path = DATA_DIR / "training.txt"
     data_path = Path(data_path)
 
     if output_path is None:
@@ -1651,19 +1735,22 @@ def train_model(
             f"Please create a training data file or specify a valid path."
         )
 
-    if not data_path.is_file():
-        raise ValueError(f"data_path must be a file, got directory: {data_path}")
-
     # Check file size (empty files won't train anything useful)
-    file_size = data_path.stat().st_size
-    if file_size == 0:
-        raise ValueError(f"Training data file is empty: {data_path}")
+    if data_path.is_file():
+        file_size = data_path.stat().st_size
+        if file_size == 0:
+            raise ValueError(f"Training data file is empty: {data_path}")
 
-    if file_size < 100:
-        logger.warning(
-            f"Training data file is very small ({file_size} bytes). "
-            f"Training may not be effective."
-        )
+        if file_size < 100:
+            logger.warning(
+                f"Training data file is very small ({file_size} bytes). "
+                f"Training may not be effective."
+            )
+    elif data_path.is_dir():
+        txt_files = list(data_path.glob("*.txt"))
+        if not txt_files:
+            raise ValueError(f"No .txt files found in directory: {data_path}")
+        logger.info(f"Training from directory: {data_path} ({len(txt_files)} files)")
 
     # ─────────────────────────────────────────────────────────────────
     # CHECK EXISTING MODEL: Skip if already trained (unless force=True)
@@ -1683,8 +1770,23 @@ def train_model(
     # LOAD TRAINING DATA
     # ─────────────────────────────────────────────────────────────────
     try:
-        texts = [data_path.read_text(encoding='utf-8')]
-        logger.info(f"Loaded {len(texts[0]):,} characters from {data_path}")
+        all_text_parts: list[str] = []
+
+        if data_path.is_dir():
+            # Load all .txt files in the directory
+            txt_files = sorted(data_path.glob("*.txt"))
+            if not txt_files:
+                raise FileNotFoundError(f"No .txt files found in directory: {data_path}")
+            for f in txt_files:
+                content = f.read_text(encoding='utf-8').strip()
+                if content:
+                    all_text_parts.append(content)
+                    logger.info(f"  Loaded {len(content):,} chars from {f.name}")
+        else:
+            all_text_parts.append(data_path.read_text(encoding='utf-8'))
+
+        texts = ["\n\n".join(all_text_parts)]
+        logger.info(f"Loaded {len(texts[0]):,} characters total from {data_path}")
     except (UnicodeDecodeError, OSError) as e:
         raise RuntimeError(f"Failed to read training data: {e}") from e
 

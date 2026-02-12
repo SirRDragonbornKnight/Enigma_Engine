@@ -643,7 +643,7 @@ class WakeWordTrainer:
                 model = WakeWordModel.load(path)
                 models.append(model.wake_phrase)
             except Exception:
-                pass
+                pass  # Intentionally silent
         return models
     
     def load_model(self, wake_phrase: str) -> WakeWordModel | None:
@@ -660,7 +660,7 @@ class WakeWordTrainer:
                 if model.wake_phrase.lower() == wake_phrase.lower():
                     return model
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         return None
     
@@ -713,7 +713,7 @@ def _extract_mfcc(
             )
             return mfcc.T  # (time, features)
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         # Fallback: simple MFCC implementation
         return _simple_mfcc(audio, sample_rate, n_mfcc, n_fft, hop_length)

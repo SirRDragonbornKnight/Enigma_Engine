@@ -52,7 +52,7 @@ class LearnedDesign:
     success_rate: float = 0.5   # How well it worked
     created_at: str = ""
     
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.created_at:
             self.created_at = datetime.now().isoformat()
 
@@ -93,7 +93,7 @@ class AILearnedGenerator:
         
         self.load()
     
-    def learn_from_training_data(self, training_file: Path):
+    def learn_from_training_data(self, training_file: Path) -> None:
         """
         Parse training data to learn design patterns.
         
@@ -132,7 +132,7 @@ class AILearnedGenerator:
         except Exception as e:
             logger.error(f"Error learning from training data: {e}")
     
-    def _integrate_learned_design(self, design_data: dict[str, Any]):
+    def _integrate_learned_design(self, design_data: dict[str, Any]) -> None:
         """Integrate a learned design into the knowledge base."""
         concept = design_data.get("concept", "unknown")
         
@@ -375,7 +375,7 @@ class AILearnedGenerator:
             "generation_history": self.generation_history[-100:]  # Keep last 100
         }
     
-    def from_dict(self, data: dict[str, Any]):
+    def from_dict(self, data: dict[str, Any]) -> None:
         """Import from dictionary."""
         self.learned_avatars = {
             k: LearnedDesign(**v) for k, v in data.get("learned_avatars", {}).items()
@@ -395,7 +395,7 @@ class AILearnedGenerator:
         self.voice_patterns = data.get("voice_patterns", {})
         self.generation_history = data.get("generation_history", [])
     
-    def save(self):
+    def save(self) -> None:
         """Save learned generator to disk."""
         save_path = self.data_dir / f"{self.model_name}_learned_generator.json"
         try:
@@ -404,7 +404,7 @@ class AILearnedGenerator:
         except Exception as e:
             logger.error(f"Failed to save learned generator: {e}")
     
-    def load(self):
+    def load(self) -> None:
         """Load learned generator from disk."""
         load_path = self.data_dir / f"{self.model_name}_learned_generator.json"
         if load_path.exists():

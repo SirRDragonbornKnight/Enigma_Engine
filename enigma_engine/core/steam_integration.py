@@ -104,7 +104,7 @@ class SteamIntegration:
                 winreg.CloseKey(key)
                 possible_paths.insert(0, Path(steam_path))
             except Exception:
-                pass
+                pass  # Intentionally silent
                 
         elif system == "Darwin":
             # macOS

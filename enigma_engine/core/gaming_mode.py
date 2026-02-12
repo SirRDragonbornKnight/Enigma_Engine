@@ -187,7 +187,7 @@ class FPSMonitor:
     3. Process CPU/GPU activity correlation
     """
     
-    def __init__(self, target_fps: float = 60.0, headroom: float = 5.0):
+    def __init__(self, target_fps: float = 60.0, headroom: float = 5.0) -> None:
         self.target_fps = target_fps
         self.headroom = headroom  # How many FPS below target to maintain
         self.stats = FPSStats(target_fps=target_fps)
@@ -203,7 +203,7 @@ class FPSMonitor:
         
         self._detect_available_methods()
     
-    def _detect_available_methods(self):
+    def _detect_available_methods(self) -> None:
         """Detect which FPS monitoring methods are available."""
         # Check for pynvml (NVIDIA)
         try:
@@ -238,7 +238,7 @@ class FPSMonitor:
                 pynvml.nvmlShutdown()
                 return util.gpu, mem.used / (1024 * 1024)
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         return 0.0, 0.0
     
@@ -324,7 +324,7 @@ class FPSMonitor:
         else:
             return 0.0  # Severe drop - pause AI tasks
     
-    def reset(self):
+    def reset(self) -> None:
         """Reset FPS statistics."""
         with self._lock:
             self._fps_history.clear()
@@ -345,7 +345,7 @@ class GamingMode:
         cpu_inference: bool = False,
         custom_profiles: dict[str, GamingProfile] = None,
         check_interval: float = 5.0,
-    ):
+    ) -> None:
         """
         Initialize gaming mode.
         
@@ -414,7 +414,7 @@ class GamingMode:
         """Current resource limits."""
         return self._current_limits
     
-    def enable(self):
+    def enable(self) -> None:
         """Enable gaming mode monitoring."""
         if self._enabled:
             return
@@ -435,18 +435,18 @@ class GamingMode:
             controller = get_fullscreen_controller()
             controller.enable()
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         # Hook up screen effects integration
         try:
             from ..avatar.screen_effects import setup_gaming_mode_integration
             setup_gaming_mode_integration()
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         logger.info("Gaming mode enabled")
     
-    def disable(self):
+    def disable(self) -> None:
         """Disable gaming mode monitoring."""
         if not self._enabled:
             return
@@ -467,7 +467,7 @@ class GamingMode:
         
         logger.info("Gaming mode disabled")
     
-    def _monitor_loop(self):
+    def _monitor_loop(self) -> None:
         """Main monitoring loop."""
         while not self._stop_event.is_set():
             try:
@@ -482,7 +482,7 @@ class GamingMode:
             
             self._stop_event.wait(self.check_interval)
     
-    def _update_fps_monitoring(self):
+    def _update_fps_monitoring(self) -> None:
         """Update FPS stats and adjust resources if needed."""
         stats = self._fps_monitor.update()
         
@@ -501,7 +501,7 @@ class GamingMode:
             self._last_fps_scale = new_scale
             self._adjust_limits_for_fps(new_scale)
     
-    def _adjust_limits_for_fps(self, scale: float):
+    def _adjust_limits_for_fps(self, scale: float) -> None:
         """Adjust resource limits based on FPS scaling factor."""
         if not self._active_profile:
             return
@@ -527,7 +527,7 @@ class GamingMode:
         logger.debug(f"Adjusted limits for FPS (scale={scale:.2f})")
         self._notify_limits_change()
     
-    def _check_games(self):
+    def _check_games(self) -> None:
         """Check for running games and update limits."""
         running_processes = self._get_running_processes()
         
@@ -643,7 +643,7 @@ class GamingMode:
         except Exception:
             return False
     
-    def _apply_profile(self, profile: GamingProfile):
+    def _apply_profile(self, profile: GamingProfile) -> None:
         """Apply a gaming profile's limits."""
         self._current_limits = ResourceLimits(
             max_vram_mb=profile.max_vram_mb,
@@ -663,11 +663,11 @@ class GamingMode:
             controller.set_category_visible('spawned_objects', profile.avatar_enabled)
             controller.set_category_visible('effects', profile.avatar_enabled)
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         self._notify_limits_change()
     
-    def _restore_full_limits(self):
+    def _restore_full_limits(self) -> None:
         """Restore full resource limits."""
         self._current_limits = ResourceLimits()
         self._active_profile = None
@@ -680,11 +680,11 @@ class GamingMode:
             controller.set_category_visible('spawned_objects', True)
             controller.set_category_visible('effects', True)
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         self._notify_limits_change()
     
-    def _notify_limits_change(self):
+    def _notify_limits_change(self) -> None:
         """Notify callbacks of limit changes."""
         for callback in self._on_limits_change:
             try:
@@ -692,7 +692,7 @@ class GamingMode:
             except Exception as e:
                 logger.error(f"Limits change callback error: {e}")
     
-    def _notify_game_start(self, game: str, profile: GamingProfile):
+    def _notify_game_start(self, game: str, profile: GamingProfile) -> None:
         """Notify callbacks of game start."""
         for callback in self._on_game_start:
             try:
@@ -700,7 +700,7 @@ class GamingMode:
             except Exception as e:
                 logger.error(f"Game start callback error: {e}")
     
-    def _notify_game_end(self, game: str):
+    def _notify_game_end(self, game: str) -> None:
         """Notify callbacks of game end."""
         for callback in self._on_game_end:
             try:
@@ -708,7 +708,7 @@ class GamingMode:
             except Exception as e:
                 logger.error(f"Game end callback error: {e}")
     
-    def defer_task(self, task_type: str, task_data: dict[str, Any]):
+    def defer_task(self, task_type: str, task_data: dict[str, Any]) -> None:
         """Queue a task to run after gaming ends."""
         self._deferred_tasks.append({
             "type": task_type,
@@ -717,7 +717,7 @@ class GamingMode:
         })
         logger.debug(f"Deferred task: {task_type}")
     
-    def _process_deferred_tasks(self):
+    def _process_deferred_tasks(self) -> None:
         """Process queued deferred tasks."""
         if not self._deferred_tasks:
             return
@@ -807,30 +807,30 @@ class GamingMode:
             return self._current_limits.batch_size
         return 0  # 0 = default
     
-    def on_game_start(self, callback: Callable[[str, GamingProfile], None]):
+    def on_game_start(self, callback: Callable[[str, GamingProfile], None]) -> None:
         """Register callback for when a game starts."""
         self._on_game_start.append(callback)
     
-    def on_game_end(self, callback: Callable[[str], None]):
+    def on_game_end(self, callback: Callable[[str], None]) -> None:
         """Register callback for when a game ends."""
         self._on_game_end.append(callback)
     
-    def on_limits_change(self, callback: Callable[[ResourceLimits], None]):
+    def on_limits_change(self, callback: Callable[[ResourceLimits], None]) -> None:
         """Register callback for when limits change."""
         self._on_limits_change.append(callback)
     
-    def on_fps_update(self, callback: Callable[[FPSStats], None]):
+    def on_fps_update(self, callback: Callable[[FPSStats], None]) -> None:
         """Register callback for FPS updates."""
         self._on_fps_update.append(callback)
     
-    def set_fps_adaptive(self, enabled: bool):
+    def set_fps_adaptive(self, enabled: bool) -> None:
         """Enable or disable FPS-adaptive resource scaling."""
         self._fps_adaptive_enabled = enabled
         if not enabled:
             self._last_fps_scale = 1.0
         logger.debug(f"FPS adaptive scaling: {enabled}")
     
-    def set_target_fps(self, fps: float):
+    def set_target_fps(self, fps: float) -> None:
         """Set the target FPS for monitoring."""
         self._fps_monitor.target_fps = fps
         self._fps_monitor.stats.target_fps = fps
@@ -844,7 +844,7 @@ class GamingMode:
         """Get current FPS-based resource scaling factor."""
         return self._last_fps_scale
     
-    def add_game_profile(self, profile: GamingProfile, auto_save: bool = True):
+    def add_game_profile(self, profile: GamingProfile, auto_save: bool = True) -> None:
         """Add or update a game profile."""
         key = profile.name.lower().replace(" ", "_")
         self.profiles[key] = profile
@@ -894,7 +894,7 @@ class GamingMode:
         """Get list of all profile names."""
         return list(self.profiles.keys())
     
-    def save_profiles(self, path: Path = None):
+    def save_profiles(self, path: Path = None) -> None:
         """Save custom profiles to file."""
         if path is None:
             from ..config import CONFIG
@@ -921,7 +921,7 @@ class GamingMode:
         with open(path, 'w') as f:
             json.dump(data, f, indent=2)
     
-    def load_profiles(self, path: Path = None):
+    def load_profiles(self, path: Path = None) -> None:
         """Load custom profiles from file."""
         if path is None:
             from ..config import CONFIG

@@ -477,7 +477,7 @@ def load_live2d_model(model_path: Union[str, Path]) -> Optional[Live2DController
                             for p in expr_json.get("Parameters", []):
                                 expr_params[p["Id"]] = p.get("Value", 0)
                         except Exception:
-                            pass
+                            pass  # Intentionally silent
                     
                     expressions[expr_name] = Live2DExpression(
                         name=expr_name,

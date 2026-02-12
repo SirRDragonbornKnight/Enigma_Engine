@@ -15,6 +15,8 @@ Use `from enigma_engine.core import create_model` - it only imports torch when c
 """
 
 # Lazy loading system for fast startup
+from typing import Any
+
 from ..utils.lazy_import import LazyLoader
 
 _loader = LazyLoader(__name__)
@@ -42,7 +44,7 @@ _loader.register_many({
     'train_model': ('.training', 'train_model'),
 })
 
-def __getattr__(name):
+def __getattr__(name: str) -> Any:
     """Lazy load heavy modules only when accessed."""
     if _loader.is_registered(name):
         return _loader.load(name)
@@ -299,7 +301,7 @@ HuggingFaceModel = None
 HuggingFaceEngine = None
 load_huggingface_model = None
 
-def _lazy_load_huggingface():
+def _lazy_load_huggingface() -> tuple[Any, Any, Any]:
     """Lazy load HuggingFace components on first use."""
     global HuggingFaceModel, HuggingFaceEngine, load_huggingface_model
     if HuggingFaceModel is None:
@@ -311,7 +313,7 @@ def _lazy_load_huggingface():
             HuggingFaceEngine = _HFE
             load_huggingface_model = _load
         except ImportError:
-            pass
+            pass  # Intentionally silent
     return HuggingFaceModel, HuggingFaceEngine, load_huggingface_model
 
 # GGUF model loading (optional)
@@ -325,7 +327,7 @@ HuggingFaceExporter = None
 export_model_to_hub = None
 export_model_locally = None
 
-def _lazy_load_hf_exporter():
+def _lazy_load_hf_exporter() -> tuple[Any, Any, Any]:
     """Lazy load HuggingFace exporter on first use."""
     global HuggingFaceExporter, export_model_to_hub, export_model_locally
     if HuggingFaceExporter is None:
@@ -337,7 +339,7 @@ def _lazy_load_hf_exporter():
             export_model_to_hub = _export_hub
             export_model_locally = _export_local
         except ImportError:
-            pass
+            pass  # Intentionally silent
     return HuggingFaceExporter, export_model_to_hub, export_model_locally
 
 # Multi-platform model export system
@@ -345,7 +347,7 @@ ModelExporter = None
 export_model = None
 list_export_providers = None
 
-def _lazy_load_model_exporter():
+def _lazy_load_model_exporter() -> tuple[Any, Any, Any]:
     """Lazy load model export system on first use."""
     global ModelExporter, export_model, list_export_providers
     if ModelExporter is None:
@@ -357,14 +359,14 @@ def _lazy_load_model_exporter():
             export_model = _export
             list_export_providers = _list_providers
         except ImportError:
-            pass
+            pass  # Intentionally silent
     return ModelExporter, export_model, list_export_providers
 
 # AI Wants & Motivation System (optional)
 AIWantsSystem = None
 get_wants_system = None
 
-def _lazy_load_wants_system():
+def _lazy_load_wants_system() -> tuple[Any, Any]:
     """Lazy load AI wants system on first use."""
     global AIWantsSystem, get_wants_system
     if AIWantsSystem is None:
@@ -374,13 +376,13 @@ def _lazy_load_wants_system():
             AIWantsSystem = _AWS
             get_wants_system = _get_wants
         except ImportError:
-            pass
+            pass  # Intentionally silent
     return AIWantsSystem, get_wants_system
 
 # Learned Generator System (optional)
 LearnedGenerator = None
 
-def _lazy_load_learned_generator():
+def _lazy_load_learned_generator() -> Any:
     """Lazy load learned generator on first use."""
     global LearnedGenerator
     if LearnedGenerator is None:
@@ -388,7 +390,7 @@ def _lazy_load_learned_generator():
             from .learned_generator import AILearnedGenerator as _LG
             LearnedGenerator = _LG
         except ImportError:
-            pass
+            pass  # Intentionally silent
     return LearnedGenerator
 
 # Orchestration System (optional)

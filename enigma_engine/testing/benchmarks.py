@@ -518,7 +518,7 @@ def create_forge_benchmarks() -> BenchmarkSuite:
             text = "Hello, this is a test sentence for benchmarking the tokenizer performance."
             tokenizer.encode(text)
         except ImportError:
-            pass
+            pass  # Intentionally silent
     
     @suite.register("embedding_compute")
     def bench_embedding():
@@ -531,7 +531,7 @@ def create_forge_benchmarks() -> BenchmarkSuite:
             y = np.random.randn(512)
             np.dot(x, y) / (np.linalg.norm(x) * np.linalg.norm(y))
         except ImportError:
-            pass
+            pass  # Intentionally silent
     
     @suite.register("json_serialize")
     def bench_json():
@@ -554,7 +554,7 @@ def create_forge_benchmarks() -> BenchmarkSuite:
             b = np.random.randn(256, 256)
             np.matmul(a, b)
         except ImportError:
-            pass
+            pass  # Intentionally silent
     
     return suite
 

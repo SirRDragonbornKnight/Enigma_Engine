@@ -305,13 +305,13 @@ class GameCommands:
         try:
             return int(value)
         except ValueError:
-            pass
+            pass  # Intentionally silent
         
         # Try float
         try:
             return float(value)
         except ValueError:
-            pass
+            pass  # Intentionally silent
         
         # Try bool
         if value.lower() in ('true', 'yes', 'on'):

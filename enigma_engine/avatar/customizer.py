@@ -5,11 +5,14 @@ User tools for customizing avatar appearance.
 """
 
 import json
+import logging
 import shutil
 from pathlib import Path
 from typing import Optional
 
 from .avatar_identity import AvatarAppearance
+
+logger = logging.getLogger(__name__)
 
 
 class AvatarCustomizer:
@@ -110,7 +113,7 @@ class AvatarCustomizer:
             True if successful
         """
         if style not in self.STYLES:
-            print(f"[Customizer] Invalid style: {style}. Available: {self.STYLES}")
+            logger.warning("Invalid style: %s. Available: %s", style, self.STYLES)
             return False
         
         if hasattr(self.avatar, '_identity') and self.avatar._identity:
@@ -120,7 +123,7 @@ class AvatarCustomizer:
             if self.avatar.is_enabled and self.avatar._renderer:
                 self.avatar._renderer.set_appearance(self.avatar._identity.appearance)
             
-            print(f"[Customizer] Style changed to: {style}")
+            logger.info("Style changed to: %s", style)
             return True
         
         return False
@@ -158,7 +161,7 @@ class AvatarCustomizer:
         if self.avatar.is_enabled and self.avatar._renderer:
             self.avatar._renderer.set_appearance(appearance)
         
-        print(f"[Customizer] Colors updated")
+        logger.info("Colors updated")
         return True
     
     def apply_color_preset(self, preset: str) -> bool:
@@ -172,7 +175,7 @@ class AvatarCustomizer:
             True if successful
         """
         if preset not in self.COLOR_PRESETS:
-            print(f"[Customizer] Invalid preset: {preset}. Available: {list(self.COLOR_PRESETS.keys())}")
+            logger.warning("Invalid preset: %s. Available: %s", preset, list(self.COLOR_PRESETS.keys()))
             return False
         
         colors = self.COLOR_PRESETS[preset]
@@ -193,7 +196,7 @@ class AvatarCustomizer:
             True if successful
         """
         if size not in self.SIZES:
-            print(f"[Customizer] Invalid size: {size}. Available: {self.SIZES}")
+            logger.warning("Invalid size: %s. Available: %s", size, self.SIZES)
             return False
         
         if hasattr(self.avatar, '_identity') and self.avatar._identity:
@@ -204,7 +207,7 @@ class AvatarCustomizer:
                 size_map = {"small": 0.7, "medium": 1.0, "large": 1.5}
                 self.avatar.set_scale(size_map[size])
             
-            print(f"[Customizer] Size changed to: {size}")
+            logger.info("Size changed to: %s", size)
             return True
         
         return False
@@ -220,12 +223,12 @@ class AvatarCustomizer:
             True if successful
         """
         if shape not in self.SHAPES:
-            print(f"[Customizer] Invalid shape: {shape}. Available: {self.SHAPES}")
+            logger.warning("Invalid shape: %s. Available: %s", shape, self.SHAPES)
             return False
         
         if hasattr(self.avatar, '_identity') and self.avatar._identity:
             self.avatar._identity.appearance.shape = shape
-            print(f"[Customizer] Shape changed to: {shape}")
+            logger.info("Shape changed to: %s", shape)
             return True
         
         return False
@@ -241,14 +244,14 @@ class AvatarCustomizer:
             True if successful
         """
         if accessory not in self.ACCESSORIES:
-            print(f"[Customizer] Invalid accessory: {accessory}. Available: {self.ACCESSORIES}")
+            logger.warning("Invalid accessory: %s. Available: %s", accessory, self.ACCESSORIES)
             return False
         
         if hasattr(self.avatar, '_identity') and self.avatar._identity:
             appearance = self.avatar._identity.appearance
             if accessory not in appearance.accessories:
                 appearance.accessories.append(accessory)
-                print(f"[Customizer] Added accessory: {accessory}")
+                logger.info("Added accessory: %s", accessory)
                 return True
         
         return False
@@ -267,7 +270,7 @@ class AvatarCustomizer:
             appearance = self.avatar._identity.appearance
             if accessory in appearance.accessories:
                 appearance.accessories.remove(accessory)
-                print(f"[Customizer] Removed accessory: {accessory}")
+                logger.info("Removed accessory: %s", accessory)
                 return True
         
         return False
@@ -293,7 +296,7 @@ class AvatarCustomizer:
         if movement and movement in self.ANIMATIONS["movement"]:
             appearance.movement_style = movement
         
-        print(f"[Customizer] Animations updated")
+        logger.info("Animations updated")
         return True
     
     def import_custom_sprite(self, image_path: str, sprite_name: str = "custom") -> bool:
@@ -309,7 +312,7 @@ class AvatarCustomizer:
         """
         path = Path(image_path)
         if not path.exists():
-            print(f"[Customizer] Image not found: {image_path}")
+            logger.warning("Image not found: %s", image_path)
             return False
         
         # Copy to avatar assets directory
@@ -321,7 +324,7 @@ class AvatarCustomizer:
         dest = assets_dir / f"{sprite_name}{path.suffix}"
         shutil.copy(image_path, dest)
         
-        print(f"[Customizer] Imported sprite: {sprite_name}")
+        logger.info("Imported sprite: %s", sprite_name)
         return True
     
     def export_appearance(self, path: str) -> bool:
@@ -344,10 +347,10 @@ class AvatarCustomizer:
             with open(path, 'w') as f:
                 json.dump(appearance.to_dict(), f, indent=2)
             
-            print(f"[Customizer] Appearance exported to: {path}")
+            logger.info("Appearance exported to: %s", path)
             return True
         except Exception as e:
-            print(f"[Customizer] Export failed: {e}")
+            logger.error("Export failed: %s", e)
             return False
     
     def import_appearance(self, path: str) -> bool:
@@ -361,7 +364,7 @@ class AvatarCustomizer:
             True if successful
         """
         if not Path(path).exists():
-            print(f"[Customizer] File not found: {path}")
+            logger.warning("File not found: %s", path)
             return False
         
         try:
@@ -378,10 +381,10 @@ class AvatarCustomizer:
                 if self.avatar.is_enabled and self.avatar._renderer:
                     self.avatar._renderer.set_appearance(appearance)
                 
-                print(f"[Customizer] Appearance imported from: {path}")
+                logger.info("Appearance imported from: %s", path)
                 return True
         except Exception as e:
-            print(f"[Customizer] Import failed: {e}")
+            logger.error("Import failed: %s", e)
         
         return False
     
@@ -402,7 +405,7 @@ class AvatarCustomizer:
         if self.avatar.is_enabled and self.avatar._renderer:
             self.avatar._renderer.set_appearance(appearance)
         
-        print("[Customizer] Previewing appearance (call apply_preview() or cancel_preview())")
+        logger.info("Previewing appearance (call apply_preview() or cancel_preview())")
     
     def apply_preview(self) -> None:
         """Apply previewed appearance permanently."""
@@ -410,7 +413,7 @@ class AvatarCustomizer:
             self.avatar._identity.appearance = self._preview_appearance
             self._preview_appearance = None
             self._original_appearance = None
-            print("[Customizer] Preview applied")
+            logger.info("Preview applied")
     
     def cancel_preview(self) -> None:
         """Cancel preview and restore original appearance."""
@@ -423,7 +426,7 @@ class AvatarCustomizer:
             
             self._preview_appearance = None
             self._original_appearance = None
-            print("[Customizer] Preview cancelled")
+            logger.info("Preview cancelled")
     
     def interactive_customize(self) -> AvatarAppearance:
         """
@@ -513,7 +516,7 @@ def send_ai_avatar_command(setting: str, value: str) -> bool:
         return True
         
     except Exception as e:
-        print(f"[Avatar] Failed to send AI command: {e}")
+        logger.error("Failed to send AI command: %s", e)
         return False
 
 

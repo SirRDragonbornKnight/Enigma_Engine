@@ -405,13 +405,13 @@ if HAS_NUMPY:
     class GGUFWriter:
         """Write GGUF files compatible with llama.cpp."""
         
-        def __init__(self, filepath: Union[str, Path]):
+        def __init__(self, filepath: Union[str, Path]) -> None:
             self.filepath = Path(filepath)
             self.metadata: dict[str, Any] = {}
             self.tensors: list[GGUFTensor] = []
             self._file: Optional[BinaryIO] = None
         
-        def add_metadata(self, key: str, value: Any):
+        def add_metadata(self, key: str, value: Any) -> None:
             """Add metadata key-value pair."""
             self.metadata[key] = value
         
@@ -420,7 +420,7 @@ if HAS_NUMPY:
             name: str,
             data: Union[np.ndarray, Any],
             tensor_type: GGMLType = GGMLType.F32
-        ):
+        ) -> None:
             """Add tensor to be written."""
             # Convert torch tensor if needed
             if HAS_TORCH and isinstance(data, torch.Tensor):
@@ -433,7 +433,7 @@ if HAS_NUMPY:
                 shape=data.shape if hasattr(data, 'shape') else ()
             ))
         
-        def write(self):
+        def write(self) -> None:
             """Write the GGUF file."""
             with open(self.filepath, 'wb') as f:
                 self._file = f
@@ -444,20 +444,20 @@ if HAS_NUMPY:
             
             logger.info(f"Written GGUF file: {self.filepath}")
         
-        def _write_header(self):
+        def _write_header(self) -> None:
             """Write GGUF header."""
             self._file.write(struct.pack('<I', GGUF_MAGIC))
             self._file.write(struct.pack('<I', GGUF_VERSION))
             self._file.write(struct.pack('<Q', len(self.tensors)))
             self._file.write(struct.pack('<Q', len(self.metadata)))
         
-        def _write_metadata(self):
+        def _write_metadata(self) -> None:
             """Write metadata key-value pairs."""
             for key, value in self.metadata.items():
                 self._write_string(key)
                 self._write_value(value)
         
-        def _write_tensors_info(self):
+        def _write_tensors_info(self) -> None:
             """Write tensor information."""
             for tensor in self.tensors:
                 self._write_string(tensor.name)
@@ -467,7 +467,7 @@ if HAS_NUMPY:
                 self._file.write(struct.pack('<I', tensor.type.value))
                 self._file.write(struct.pack('<Q', 0))  # Offset placeholder
         
-        def _write_tensor_data(self):
+        def _write_tensor_data(self) -> None:
             """Write tensor data with alignment."""
             # Align to 32 bytes
             current_pos = self._file.tell()
@@ -493,13 +493,13 @@ if HAS_NUMPY:
                 padding = (32 - (size % 32)) % 32
                 self._file.write(b'\x00' * padding)
         
-        def _write_string(self, s: str):
+        def _write_string(self, s: str) -> None:
             """Write a string value."""
             encoded = s.encode('utf-8')
             self._file.write(struct.pack('<Q', len(encoded)))
             self._file.write(encoded)
         
-        def _write_value(self, value: Any):
+        def _write_value(self, value: Any) -> None:
             """Write a typed metadata value."""
             if isinstance(value, bool):
                 self._file.write(struct.pack('<I', GGUFValueType.BOOL.value))
@@ -549,7 +549,7 @@ if HAS_NUMPY:
     class GGUFExporter:
         """Export Enigma AI Engine models to GGUF format."""
         
-        def __init__(self, quantization: str = "f16"):
+        def __init__(self, quantization: str = "f16") -> None:
             """
             Initialize exporter.
             
@@ -643,7 +643,7 @@ if HAS_NUMPY:
                     metadata.context_length = config.max_position_embeddings
             return metadata
         
-        def _add_tokenizer_metadata(self, writer: GGUFWriter, tokenizer: Any):
+        def _add_tokenizer_metadata(self, writer: GGUFWriter, tokenizer: Any) -> None:
             """Add tokenizer vocabulary to metadata."""
             try:
                 if hasattr(tokenizer, 'get_vocab'):

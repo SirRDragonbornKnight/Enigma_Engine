@@ -233,7 +233,7 @@ class TaskDecomposer:
         ]
     }
     
-    def __init__(self, model=None):
+    def __init__(self, model=None) -> None:
         self._model = model
     
     def detect_task_type(self, goal: str) -> str:
@@ -321,7 +321,7 @@ Steps:"""
 class PlanExecutor:
     """Executes plans step by step."""
     
-    def __init__(self):
+    def __init__(self) -> None:
         self._callbacks: Dict[str, List[Callable]] = {
             "step_started": [],
             "step_completed": [],
@@ -330,12 +330,12 @@ class PlanExecutor:
         }
         self._stop_requested = False
     
-    def add_callback(self, event: str, callback: Callable):
+    def add_callback(self, event: str, callback: Callable) -> None:
         """Add event callback."""
         if event in self._callbacks:
             self._callbacks[event].append(callback)
     
-    def _emit(self, event: str, *args):
+    def _emit(self, event: str, *args) -> None:
         """Emit event to callbacks."""
         for callback in self._callbacks.get(event, []):
             try:
@@ -343,7 +343,7 @@ class PlanExecutor:
             except Exception as e:
                 logger.error(f"Callback error: {e}")
     
-    def stop(self):
+    def stop(self) -> None:
         """Request execution stop."""
         self._stop_requested = True
     
@@ -424,7 +424,7 @@ class PlanExecutor:
 class TaskPlanner:
     """High-level task planning interface."""
     
-    def __init__(self, model=None):
+    def __init__(self, model=None) -> None:
         """
         Initialize planner.
         
@@ -498,7 +498,7 @@ class TaskPlanner:
         
         return plan
     
-    def add_callback(self, event: str, callback: Callable):
+    def add_callback(self, event: str, callback: Callable) -> None:
         """Add execution callback."""
         self._executor.add_callback(event, callback)
     
@@ -510,7 +510,7 @@ class TaskPlanner:
         """Get all plans."""
         return list(self._plans.values())
     
-    def export_plan(self, plan: Plan, path: str):
+    def export_plan(self, plan: Plan, path: str) -> None:
         """Export plan to JSON."""
         with open(path, "w") as f:
             json.dump(plan.to_dict(), f, indent=2)

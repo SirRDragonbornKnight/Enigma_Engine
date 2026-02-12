@@ -81,7 +81,7 @@ class BuiltinSTT:
                 if result.returncode == 0:
                     mics = ["Default Microphone"]
             except Exception:
-                pass
+                pass  # Intentionally silent
         elif self.platform == "linux":
             try:
                 result = subprocess.run(
@@ -93,7 +93,7 @@ class BuiltinSTT:
                         if 'card' in line.lower():
                             mics.append(line.strip())
             except Exception:
-                pass
+                pass  # Intentionally silent
         
         return mics if mics else ["Default"]
     
@@ -195,7 +195,7 @@ class BuiltinSTT:
                     "error": "Linux STT requires speech_recognition library or vosk. Install with: pip install SpeechRecognition vosk"
                 }
         except Exception:
-            pass
+            pass  # Intentionally silent
         
         return {
             "success": False,

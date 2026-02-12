@@ -539,7 +539,7 @@ class OpenAIServer:
                 if hasattr(self.tokenizer, 'encode'):
                     return len(self.tokenizer.encode(text))
             except (ValueError, RuntimeError):
-                pass
+                pass  # Intentionally silent
         # Rough estimate: ~4 chars per token
         return len(text) // 4
     

@@ -76,7 +76,7 @@ class RLHFConfig:
 class ValueHead(nn.Module):
     """Value head for estimating state values."""
     
-    def __init__(self, hidden_size: int, dropout: float = 0.1):
+    def __init__(self, hidden_size: int, dropout: float = 0.1) -> None:
         super().__init__()
         self.dropout = nn.Dropout(dropout)
         self.summary = nn.Linear(hidden_size, 1)
@@ -108,7 +108,7 @@ class RewardModel(nn.Module):
         self,
         base_model: nn.Module,
         hidden_size: Optional[int] = None
-    ):
+    ) -> None:
         super().__init__()
         self.base_model = base_model
         
@@ -210,7 +210,7 @@ class RewardModelTrainer:
         model: RewardModel,
         tokenizer: Any,
         learning_rate: float = 1e-5
-    ):
+    ) -> None:
         self.model = model
         self.tokenizer = tokenizer
         self.optimizer = torch.optim.AdamW(
@@ -316,7 +316,7 @@ class RewardModelTrainer:
 class PolicyWithValueHead(nn.Module):
     """Policy model with value head for PPO."""
     
-    def __init__(self, policy_model: nn.Module):
+    def __init__(self, policy_model: nn.Module) -> None:
         super().__init__()
         self.policy = policy_model
         
@@ -373,7 +373,7 @@ class RLHFTrainer:
         reward_model: RewardModel,
         tokenizer: Any,
         config: Optional[RLHFConfig] = None
-    ):
+    ) -> None:
         self.config = config or RLHFConfig()
         self.tokenizer = tokenizer
         

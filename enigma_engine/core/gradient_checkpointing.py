@@ -13,7 +13,7 @@ import functools
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable
+from typing import Any, Callable, Optional
 
 try:
     import torch
@@ -67,7 +67,7 @@ if HAS_TORCH:
         """
         
         @staticmethod
-        def forward(ctx, run_function, preserve_rng_state, *args):
+        def forward(ctx: Any, run_function: Callable, preserve_rng_state: bool, *args: Any) -> Any:
             ctx.run_function = run_function
             ctx.preserve_rng_state = preserve_rng_state
             
@@ -88,7 +88,7 @@ if HAS_TORCH:
             return outputs
         
         @staticmethod
-        def backward(ctx, *args):
+        def backward(ctx: Any, *args: Any) -> tuple[None, None, ...]:
             inputs = ctx.saved_tensors
             
             # Restore RNG state
@@ -137,7 +137,7 @@ if HAS_TORCH:
         *args,
         preserve_rng_state: bool = True,
         use_reentrant: bool = True
-    ):
+    ) -> Any:
         """
         Checkpoint a function.
         
@@ -168,13 +168,13 @@ if HAS_TORCH:
         def __init__(
             self,
             module: nn.Module,
-            config: CheckpointConfig = None
-        ):
+            config: Optional[CheckpointConfig] = None
+        ) -> None:
             super().__init__()
             self.module = module
             self.config = config or CheckpointConfig()
         
-        def forward(self, *args, **kwargs):
+        def forward(self, *args, **kwargs) -> Any:
             if self.training:
                 # Wrap kwargs into a lambda
                 def run_fn(*inputs):
@@ -195,11 +195,11 @@ if HAS_TORCH:
         Apply checkpointing selectively to specific layers.
         """
         
-        def __init__(self, config: CheckpointConfig):
+        def __init__(self, config: CheckpointConfig) -> None:
             self.config = config
             self._checkpointed_layers: set[int] = set()
         
-        def apply(self, model: nn.Module, layers_attr: str = "layers"):
+        def apply(self, model: nn.Module, layers_attr: str = "layers") -> None:
             """
             Apply selective checkpointing to model.
             
@@ -254,11 +254,11 @@ if HAS_TORCH:
         Implements various strategies for memory-compute tradeoff.
         """
         
-        def __init__(self, config: CheckpointConfig = None):
+        def __init__(self, config: Optional[CheckpointConfig] = None) -> None:
             self.config = config or CheckpointConfig()
             self._original_forwards: dict[int, Callable] = {}
         
-        def enable(self, model: nn.Module):
+        def enable(self, model: nn.Module) -> None:
             """Enable checkpointing on model."""
             if self.config.strategy == CheckpointStrategy.NONE:
                 return
@@ -269,7 +269,7 @@ if HAS_TORCH:
                 if self._should_checkpoint(idx, len(layers)):
                     self._wrap_layer(layer, idx)
         
-        def disable(self, model: nn.Module):
+        def disable(self, model: nn.Module) -> None:
             """Disable checkpointing and restore original forwards."""
             for layer_id, original_forward in self._original_forwards.items():
                 for module in model.modules():
@@ -319,7 +319,7 @@ if HAS_TORCH:
             
             return False
         
-        def _wrap_layer(self, layer: nn.Module, idx: int):
+        def _wrap_layer(self, layer: nn.Module, idx: int) -> None:
             """Wrap layer forward with checkpointing."""
             original_forward = layer.forward
             self._original_forwards[id(layer)] = original_forward
@@ -412,7 +412,7 @@ if HAS_TORCH:
         model: nn.Module,
         strategy: CheckpointStrategy = CheckpointStrategy.UNIFORM,
         **kwargs
-    ):
+    ) -> 'ActivationCheckpointing':
         """
         Apply gradient checkpointing to a model.
         
@@ -431,7 +431,7 @@ if HAS_TORCH:
         layers: nn.ModuleList,
         segments: int,
         *inputs
-    ):
+    ) -> Any:
         """
         Checkpoint a sequential list of layers.
         

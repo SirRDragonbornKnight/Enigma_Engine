@@ -64,7 +64,7 @@ class CheckpointedSequential(nn.Sequential):
         *args,
         checkpoint_every: int = 1,
         use_reentrant: bool = False
-    ):
+    ) -> None:
         super().__init__(*args)
         self.checkpoint_every = checkpoint_every
         self.use_reentrant = use_reentrant
@@ -103,7 +103,7 @@ class GradientCheckpointer:
         self,
         use_reentrant: bool = False,
         preserve_rng_state: bool = True
-    ):
+    ) -> None:
         self.use_reentrant = use_reentrant
         self.preserve_rng_state = preserve_rng_state
         self._original_forwards = {}
@@ -112,7 +112,7 @@ class GradientCheckpointer:
         self,
         module: nn.Module,
         layer_types: Optional[tuple[type, ...]] = None
-    ):
+    ) -> None:
         """
         Apply checkpointing to a module's submodules.
         
@@ -127,7 +127,7 @@ class GradientCheckpointer:
             # Recurse
             self.checkpoint_module(child, layer_types)
     
-    def _wrap_forward(self, module: nn.Module, name: str):
+    def _wrap_forward(self, module: nn.Module, name: str) -> None:
         """Wrap a module's forward method with checkpointing."""
         original_forward = module.forward
         
@@ -173,7 +173,7 @@ class GradientCheckpointer:
         
         module.forward = checkpointed_forward
     
-    def remove_checkpointing(self, module: nn.Module):
+    def remove_checkpointing(self, module: nn.Module) -> None:
         """Remove checkpointing from a module."""
         module_id = id(module)
         if module_id in self._original_forwards:
@@ -255,7 +255,7 @@ class MemoryEfficientAttention(nn.Module):
         num_heads: int,
         chunk_size: int = 1024,
         dropout: float = 0.0
-    ):
+    ) -> None:
         super().__init__()
         
         self.hidden_size = hidden_size

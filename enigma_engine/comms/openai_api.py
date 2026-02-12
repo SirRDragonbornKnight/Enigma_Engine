@@ -641,18 +641,14 @@ class OpenAICompatibleServer:
     
     def run(self, debug: bool = False):
         """Start the server."""
-        print(f"\n{'='*60}")
-        print("  enigma_engine OpenAI-Compatible API Server")
-        print(f"{'='*60}")
-        print(f"\n  Base URL: http://{self.host}:{self.port}/v1")
-        print(f"\n  Endpoints:")
-        print(f"    POST /v1/chat/completions  - Chat (GPT-4 style)")
-        print(f"    POST /v1/completions       - Text completion")
-        print(f"    POST /v1/embeddings        - Embeddings")
-        print(f"    GET  /v1/models            - List models")
-        print(f"\n  Usage with OpenAI SDK:")
-        print(f'    client = OpenAI(base_url="http://localhost:{self.port}/v1", api_key="not-needed")')
-        print(f"\n{'='*60}\n")
+        logger.info("enigma_engine OpenAI-Compatible API Server starting")
+        logger.info("Base URL: http://%s:%d/v1", self.host, self.port)
+        logger.info("Endpoints:")
+        logger.info("  POST /v1/chat/completions  - Chat (GPT-4 style)")
+        logger.info("  POST /v1/completions       - Text completion")
+        logger.info("  POST /v1/embeddings        - Embeddings")
+        logger.info("  GET  /v1/models            - List models")
+        logger.info('OpenAI SDK: client = OpenAI(base_url="http://localhost:%d/v1", api_key="not-needed")', self.port)
         
         self.app.run(host=self.host, port=self.port, debug=debug, threaded=True)
 

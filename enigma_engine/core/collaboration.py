@@ -106,7 +106,7 @@ class ModelCollaboration:
     - Pipeline processing (task flows through multiple models)
     """
     
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the collaboration manager."""
         self._orchestrator = None  # Set by orchestrator
         self._collaboration_history: list[dict[str, Any]] = []

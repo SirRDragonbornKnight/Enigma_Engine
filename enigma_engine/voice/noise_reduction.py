@@ -99,13 +99,13 @@ class NoiseReducer:
             import noisereduce  # type: ignore
             available.append(NoiseReductionBackend.NOISEREDUCE)
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         try:
             from scipy import signal  # type: ignore
             available.append(NoiseReductionBackend.SPECTRAL_SUBTRACT)
         except ImportError:
-            pass
+            pass  # Intentionally silent
         
         return available
     

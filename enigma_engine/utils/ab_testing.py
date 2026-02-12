@@ -590,7 +590,7 @@ class ABTestingManager:
             self._persistence_file.parent.mkdir(parents=True, exist_ok=True)
             self._persistence_file.write_text(json.dumps(data, indent=2))
         except Exception:
-            pass
+            pass  # Intentionally silent
     
     def _load(self):
         """Load experiments from file."""
@@ -602,7 +602,7 @@ class ABTestingManager:
             for id, exp_data in data.items():
                 self._experiments[id] = Experiment.from_dict(exp_data)
         except Exception:
-            pass
+            pass  # Intentionally silent
 
 
 # Feature flag support

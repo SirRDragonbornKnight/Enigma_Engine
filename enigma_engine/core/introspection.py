@@ -30,7 +30,7 @@ Usage:
 import json
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -162,13 +162,13 @@ class ActivationRecorder:
         self._activations: Dict[str, Any] = {}
         self._hooks: List[Any] = []
     
-    def attach(self, model: Any, layer_names: Optional[List[str]] = None):
+    def attach(self, model: Any, layer_names: Optional[List[str]] = None) -> None:
         """Attach hooks to record activations."""
         if not HAS_TORCH:
             return
         
-        def make_hook(name: str):
-            def hook(module, inp, out):
+        def make_hook(name: str) -> Callable[[Any, Any, Any], None]:
+            def hook(module: Any, inp: Any, out: Any) -> None:
                 if isinstance(out, tuple):
                     self._activations[name] = out[0].detach()
                 else:
@@ -180,7 +180,7 @@ class ActivationRecorder:
                 handle = module.register_forward_hook(make_hook(name))
                 self._hooks.append(handle)
     
-    def detach(self):
+    def detach(self) -> None:
         """Remove all hooks."""
         for hook in self._hooks:
             hook.remove()
@@ -190,7 +190,7 @@ class ActivationRecorder:
         """Get recorded activations."""
         return self._activations
     
-    def clear(self):
+    def clear(self) -> None:
         """Clear recorded activations."""
         self._activations.clear()
 
@@ -203,13 +203,13 @@ class GradientAnalyzer:
         self._gradients: Dict[str, Any] = {}
         self._hooks: List[Any] = []
     
-    def attach(self):
+    def attach(self) -> None:
         """Attach gradient hooks."""
         if not HAS_TORCH:
             return
         
-        def make_hook(name: str):
-            def hook(grad):
+        def make_hook(name: str) -> Callable[[Any], None]:
+            def hook(grad: Any) -> None:
                 self._gradients[name] = grad.detach()
             return hook
         
@@ -218,7 +218,7 @@ class GradientAnalyzer:
                 handle = param.register_hook(make_hook(name))
                 self._hooks.append(handle)
     
-    def detach(self):
+    def detach(self) -> None:
         """Remove gradient hooks."""
         for hook in self._hooks:
             hook.remove()
@@ -262,7 +262,7 @@ class GradientAnalyzer:
         
         return exploding
     
-    def clear(self):
+    def clear(self) -> None:
         """Clear recorded gradients."""
         self._gradients.clear()
 
@@ -456,8 +456,8 @@ class ModelIntrospector:
         # Attach hooks
         attention_outputs = {}
         
-        def make_hook(name: str):
-            def hook(module, inp, out):
+        def make_hook(name: str) -> Callable[[Any, Any, Any], None]:
+            def hook(module: Any, inp: Any, out: Any) -> None:
                 if isinstance(out, tuple) and len(out) > 1:
                     # Attention weights are usually second output
                     attention_outputs[name] = out[1]
@@ -637,7 +637,7 @@ class ModelIntrospector:
             "identical": different == 0
         }
     
-    def export_architecture(self, path: str):
+    def export_architecture(self, path: str) -> None:
         """Export model architecture to JSON."""
         summary = self.summary(verbose=True)
         

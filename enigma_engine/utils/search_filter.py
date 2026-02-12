@@ -644,7 +644,7 @@ class QueryParser:
             try:
                 value = float(value) if "." in value else int(value)
             except ValueError:
-                pass
+                pass  # Intentionally silent
             
             f.where(field)
             if op == ">":
