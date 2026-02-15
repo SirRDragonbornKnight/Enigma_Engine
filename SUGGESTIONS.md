@@ -95,189 +95,34 @@ All 23 model tests passed.
 
 ---
 
-## Future Features (Never Imported But Complete)
+## DO NOT DELETE These Files
 
-These files are complete implementations but currently not integrated. 
-They may be future features or optional modules - **DO NOT DELETE** without review.
-
-### Core AI Features
-| File | Description | Status |
-|------|-------------|--------|
-| `core/gesture_manager.py` | Gesture detection system | Future |
-| `core/ssm.py` | Mamba/S4 state space model | Future |
-| `core/tree_attention.py` | Tree-based attention | Future |
-| `core/infinite_context.py` | Streaming context extension | Future |
-| `core/context_extender.py` | RoPE scaling extension | Future |
-| `core/context_extension.py` | Context window extension | Future |
-| `core/paged_attention.py` | Paged KV cache attention | Used by continuous_batching |
-| `core/dpo.py` | Direct Preference Optimization | Future |
-| `core/rlhf.py` | RLHF training | Future |
-| `core/speculative.py` | Speculative decoding | Future |
-| `core/curriculum.py` | Curriculum learning | Future |
-| `core/api_key_manager.py` | API key management | Future |
-
-### Batching Systems (Interconnected)
-| File | Description | Status |
-|------|-------------|--------|
-| `core/batch_inference.py` | Batch processing | Future |
-| `core/continuous_batching.py` | Continuous batching server | Uses paged_attention |
-| `core/dynamic_batching.py` | Dynamic batch sizing | Future |
-
-### Robotics Package (Complete)
-| File | Description | Status |
-|------|-------------|--------|
-| `robotics/__init__.py` | Package exports | Standalone |
-| `robotics/ros_integration.py` | ROS bridge | Future |
-| `robotics/slam.py` | SLAM implementation | Future |
-| `robotics/manipulation.py` | Robot arm kinematics | Future |
-
-### Tools (Game/Sensor)
-| File | Description | Status |
-|------|-------------|--------|
-| `tools/sensor_fusion.py` | Multi-sensor fusion | Future |
-| `tools/achievement_tracker.py` | Game achievements | Future |
-| `tools/multiplayer_awareness.py` | Multiplayer game AI | Future |
-| `tools/replay_analysis.py` | Game replay analysis | Future |
-| `tools/goal_tracker.py` | Goal tracking system | Future |
-
-### Utils
-| File | Description | Status |
-|------|-------------|--------|
-| `utils/result.py` | Rust-style Result type | Future |
-| `utils/api_keys.py` | API key utilities | Future |
-| `learning/ab_testing.py` | A/B testing for AI | Future |
-
----
-
-## Active & Used Files
-
-These files ARE used and should NOT be removed:
+These appear unused but ARE imported somewhere:
 
 | File | Used By |
-|------|---------|
-| `core/meta_learning.py` | trainer_ai.py (5 imports) |
+|------|--------|
+| `core/meta_learning.py` | trainer_ai.py |
 | `core/prompt_builder.py` | game_router.py, tests |
 | `core/moe.py` | test_moe.py |
 | `utils/battery_manager.py` | __init__.py, integration.py |
 | `utils/api_key_encryption.py` | build_ai_tab.py, trainer_ai.py |
-| `utils/starter_kits.py` | quick_create.py dialog |
-| `federated/*` | enhanced_window.py |
+| `utils/starter_kits.py` | quick_create.py |
 
 ---
 
-## Statistics
+## Future Features (Not Integrated)
 
-| Metric | Count |
-|--------|-------|
-| Files Removed | 15 |
-| Lines Removed | ~8,000 |
-| Tests Passing | 23/23 |
-| Import Errors | 0 |
-| Future Feature Files | ~25 |
+These files exist but are not imported. Keep for potential future use:
 
----
-
-## Pending Items
-
-*No pending suggestions at this time.*
+- `core/ssm.py` - Mamba/S4 state space model
+- `core/tree_attention.py` - Tree-based attention
+- `core/infinite_context.py` - Streaming context extension
+- `core/dpo.py` - Direct Preference Optimization
+- `core/rlhf.py` - RLHF training
+- `core/speculative.py` - Speculative decoding
+- `tools/sensor_fusion.py` - Multi-sensor fusion
+- `tools/achievement_tracker.py` - Game achievements
 
 ---
 
-## Full Codebase Review - Completed Feb 15, 2026
-
-### Package Summary
-
-| Package | Files | Status | Notes |
-|---------|-------|--------|-------|
-| `core/` | ~170 | Core | Main AI engine |
-| `gui/tabs/` | 44 | Core | GUI tabs |
-| `tools/` | ~70 | Core | AI tools |
-| `utils/` | ~80 | Core | Helpers |
-| `memory/` | 39 | Core | Memory storage |
-| `voice/` | 44 | Core | TTS/STT |
-| `avatar/` | ~55 | Core | Avatar control |
-| `comms/` | 32 | Core | API/networking |
-| `modules/` | 7 | Core | Module system |
-| `federated/` | 8 | Used | Federated learning (GUI) |
-| `learning/` | 17 | Used | Learning system (tests) |
-| `agents/` | 12 | Tests only | Multi-agent system |
-| `plugins/` | 5 | Core | Plugin system |
-| `marketplace/` | 4 | Tests | Plugin marketplace |
-| `integrations/` | 7 | Future | External integrations |
-| `network/` | 6 | Minimal use | Network offloading |
-| `web/` | ~12 | Core | Web interface |
-| `auth/` | 1 | Minimal | Authentication |
-| `builtin/` | 12 | Core | Fallback generators |
-| `cli/` | 4 | Core | Command line |
-| `collab/` | 4 | Future | Collaboration |
-| `companion/` | 2 | Future | Companion mode |
-| `config/` | 4 | Core | Configuration |
-| `data/` | 4 | Core | Data handling |
-| `deploy/` | 4 | Future | Deployment tools |
-| `docs/` | 4 | Unused | Doc generators |
-| `edge/` | 4 | Tests only | Edge device support |
-| `game/` | 6 | Core | Game overlay |
-| `hub/` | 2 | Future | Model hub |
-| `i18n/` | 2 | Core | Translations |
-| `mobile/` | 2 | Future | Mobile API |
-| `monitoring/` | 2 | Unused | Prometheus metrics |
-| `personality/` | 2 | Tests only | Curiosity system |
-| `prompts/` | 3 | Future | Prompt library |
-| `robotics/` | 4 | Future | ROS/SLAM |
-| `scripts/` | 2 | Internal | Analysis scripts |
-| `security/` | 6 | Tests only | Security features |
-| `self_improvement/` | 7 | Used | Self-training |
-| `sync/` | 2 | Future | Cloud sync |
-| `testing/` | 3 | Internal | Test utilities |
-| `training/` | 2 | Future | Training generators |
-| `vocab_model/` | N/A | Data | Vocabulary files |
-
----
-
-## Architecture Observations
-
-### Duplicate Implementation: federated/ vs learning/
-
-**Issue:** Two parallel federated learning implementations exist:
-
-| Feature | `federated/` | `learning/` |
-|---------|-------------|-------------|
-| FederatedLearning | ✓ | ✓ |
-| DifferentialPrivacy | ✓ | ✓ |
-| FederatedCoordinator | ✓ | ✓ |
-| Aggregation | ✓ | ✓ |
-| **Used by GUI** | ✓ | ✗ |
-| **Used by tests** | ✗ | ✓ |
-
-**Recommendation:** Consolidate to one package. `learning/` re-exports are used by tests. Consider making `learning/__init__.py` import from `federated/` instead.
-
-### Unused Packages (Safe to Remove Later)
-
-| Package | Files | Notes |
-|---------|-------|-------|
-| `docs/` | 4 | Doc generators - no imports |
-| `monitoring/` | 2 | Prometheus - no imports |
-
-### Packages Used Only in Tests
-
-| Package | Notes |
-|---------|-------|
-| `edge/` | Edge device GPIO/camera |
-| `personality/` | Curiosity system |
-| `security/` | Auth/GDPR features |
-| `agents/` | Multi-agent system |
-
----
-
-## Statistics (Final)
-
-| Category | Count |
-|----------|-------|
-| Total packages | ~45 |
-| Core packages | ~20 |
-| Future/unused packages | ~10 |
-| Test-only packages | ~5 |
-| **Python files** | **816** |
-| **Total lines** | **458,255** |
-| Files removed | 15 |
-| Lines removed | ~8,000 |
+*End of suggestions. This file helps AI assistants understand recent changes.*

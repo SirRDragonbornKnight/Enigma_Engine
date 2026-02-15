@@ -37,15 +37,14 @@ enigma_engine/
 - **Model:** Custom transformer with RoPE, RMSNorm, SwiGLU, GQA, KV-cache
 - **Sizes:** 15 presets from ~500K params (pi_zero) to 70B+ params (omega)
 
-### Full Package List (~45 packages)
+### Package List (682 Python files)
 
 | Category | Packages | Files | Status |
 |----------|----------|-------|--------|
-| **Core** | core, gui/tabs, tools, utils, memory, voice, avatar, comms, modules, builtin, config, web, cli, i18n, game, plugins | ~500 | Active |
-| **Features** | federated, learning, self_improvement, marketplace, network | ~45 | Integrated |
-| **Future** | integrations, robotics, collab, deploy, companion, hub, mobile, sync, training, prompts | ~35 | Complete but not integrated |
-| **Test/Internal** | edge, personality, security, agents, auth, testing, scripts | ~30 | Tests only |
-| **Unused** | docs, monitoring | ~6 | No imports found |
+| **Core** | core, gui/tabs, tools, utils, memory, voice, avatar, comms, modules, builtin, config, web, cli, i18n, game, plugins | ~550 | Active |
+| **Features** | learning, self_improvement, marketplace, network | ~35 | Integrated |
+| **Test/Internal** | security, agents, auth | ~20 | Tests only |
+| **Optional** | companion, mobile | ~4 | Complete but minimal use |
 
 ---
 
