@@ -164,7 +164,7 @@ class ModelSelector(QWidget):
                     elif model_type == "huggingface":
                         self.model_combo.addItem("-- HuggingFace (Free API) --", "__separator__")
                     elif model_type == "enigma_engine":
-                        self.model_combo.addItem("-- Your Forge Models --", "__separator__")
+                        self.model_combo.addItem("-- Your Enigma Models --", "__separator__")
                     current_type = model_type
                 
                 self.model_combo.addItem(display_name, model_id)
@@ -176,7 +176,7 @@ class ModelSelector(QWidget):
                 display_name = opt[1]
                 self.model_combo.addItem(display_name, model_id)
         
-        # Also add any Forge models from registry
+        # Also add any Enigma models from registry
         try:
             from ...core.model_registry import ModelRegistry
             registry = ModelRegistry()
@@ -186,7 +186,7 @@ class ModelSelector(QWidget):
                 for model in models:
                     name = model.get("name", str(model)) if isinstance(model, dict) else str(model)
                     if not name.startswith("enigma:"):
-                        self.model_combo.addItem(f"Forge: {name}", f"enigma:{name}")
+                        self.model_combo.addItem(f"Enigma: {name}", f"enigma:{name}")
         except Exception:
             pass  # Intentionally silent
     

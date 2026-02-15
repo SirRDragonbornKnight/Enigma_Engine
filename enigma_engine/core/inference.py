@@ -1152,6 +1152,27 @@ class EnigmaEngine:
         Dynamic cutoff - keeps more tokens when uncertain, fewer when confident.
         """
         # ─────────────────────────────────────────────────────────────────────
+        # GGUF MODEL HANDLING (llama.cpp)
+        # GGUF models have their own generation - use it directly
+        # ─────────────────────────────────────────────────────────────────────
+        if getattr(self, '_is_gguf', False) or (hasattr(self.model, 'is_loaded') and hasattr(self.model, 'chat')):
+            # This is a GGUFModel - use its native generation
+            try:
+                text = self.model.generate(
+                    prompt,
+                    max_tokens=max_gen,
+                    temperature=temperature,
+                    top_k=top_k,
+                    top_p=top_p,
+                    repeat_penalty=repetition_penalty,
+                    stop=stop_strings
+                )
+                return text
+            except Exception as e:
+                logger.error(f"GGUF generation failed: {e}")
+                return f"Error: {e}"
+        
+        # ─────────────────────────────────────────────────────────────────────
         # INPUT VALIDATION
         # ─────────────────────────────────────────────────────────────────────
         if not isinstance(prompt, str):

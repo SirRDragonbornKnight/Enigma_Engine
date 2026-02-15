@@ -240,10 +240,17 @@ class ChatSync(QObject if HAS_PYQT else object):
     
     def _do_generate(self, user_text: str, source: str):
         """Background generation."""
+        import time
+        start_time = time.time()
+        
+        # Log to terminal
+        self._log_terminal(f"Processing: {user_text[:80]}{'...' if len(user_text) > 80 else ''}", "info")
+        
         try:
             response = None
             
             if self._stop_requested:
+                self._log_terminal("Generation stopped by user", "info")
                 return
             
             # Get conversation history for context
@@ -258,6 +265,8 @@ class ChatSync(QObject if HAS_PYQT else object):
                 engine = self._main_window.engine
             
             if engine:
+                self._log_terminal(f"Using engine: {getattr(engine, 'model_name', type(engine).__name__)}", "debug")
+                
                 # Get system prompt from main window user settings, or use default
                 system_prompt = None
                 if self._main_window and hasattr(self._main_window, '_get_user_system_prompt'):
@@ -282,13 +291,19 @@ class ChatSync(QObject if HAS_PYQT else object):
                     )
             else:
                 response = "[WARNING] No AI model loaded. Open the full GUI to load a model."
+                self._log_terminal("No AI model loaded", "error")
             
             if self._stop_requested:
+                self._log_terminal("Generation stopped by user", "info")
                 return
             
             # Validate response - check for tensor output or other issues
             if response:
                 response = self._clean_response(response)
+            
+            # Calculate timing
+            elapsed = time.time() - start_time
+            self._log_terminal(f"Generated response in {elapsed:.2f}s ({len(response)} chars)", "success")
             
             # Add AI response
             self.add_ai_message(response, source)
@@ -299,9 +314,24 @@ class ChatSync(QObject if HAS_PYQT else object):
             
         except Exception as e:
             self._is_generating = False
+            self._log_terminal(f"Generation error: {e}", "error")
             error_msg = f"<span style='color: #e74c3c;'>Error: {e}</span>"
             self.add_ai_message(error_msg, source)
             self.generation_finished.emit(error_msg)
+    
+    def _log_terminal(self, message: str, level: str = "info"):
+        """Log message to terminal tab if main window is connected."""
+        if self._main_window and hasattr(self._main_window, 'log_terminal'):
+            try:
+                from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                QMetaObject.invokeMethod(
+                    self._main_window, "log_terminal",
+                    Qt.QueuedConnection,
+                    Q_ARG(str, message),
+                    Q_ARG(str, level)
+                )
+            except Exception:
+                pass  # Terminal logging is non-critical
     
     def _clean_response(self, response) -> str:
         """Clean and validate AI response."""

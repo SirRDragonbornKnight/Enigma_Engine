@@ -24,9 +24,11 @@ from PyQt5.QtWidgets import (
     QListWidget,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QTextEdit,
     QVBoxLayout,
     QWizard,
+    QWidget,
 )
 
 from ...core.model_registry import ModelRegistry
@@ -111,6 +113,9 @@ class ModelManagerDialog(QDialog):
         self.setMinimumSize(700, 500)
         self.resize(800, 550)
         
+        # Remove ? help button from titlebar
+        self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
+        
         # Make dialog non-modal so it doesn't block
         self.setModal(False)
         
@@ -172,14 +177,14 @@ class ModelManagerDialog(QDialog):
             QGroupBox {
                 border: 1px solid #45475a;
                 border-radius: 8px;
-                margin-top: 12px;
-                padding-top: 12px;
+                margin-top: 8px;
+                padding-top: 8px;
                 font-weight: bold;
             }
             QGroupBox::title {
                 color: #89b4fa;
                 subcontrol-origin: margin;
-                left: 12px;
+                left: 10px;
             }
             QLabel {
                 color: #cdd6f4;
@@ -188,21 +193,22 @@ class ModelManagerDialog(QDialog):
     
     def _build_ui(self):
         layout = QHBoxLayout(self)
-        layout.setSpacing(10)
-        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(16)
+        layout.setContentsMargins(16, 16, 16, 16)
         
         # Left panel - Model list
         left_panel = QVBoxLayout()
+        left_panel.setSpacing(12)
         
         # Header with refresh
         header = QHBoxLayout()
         title = QLabel("Your Models")
-        title.setStyleSheet("font-size: 12px; font-weight: bold; color: #89b4fa;")
+        title.setStyleSheet("font-size: 14px; font-weight: bold; color: #89b4fa;")
         header.addWidget(title)
         header.addStretch()
         
         refresh_btn = QPushButton("Refresh")
-        refresh_btn.setFixedSize(60, 32)
+        refresh_btn.setFixedSize(70, 32)
         refresh_btn.setToolTip("Refresh list")
         refresh_btn.clicked.connect(self._refresh_list)
         header.addWidget(refresh_btn)
@@ -212,107 +218,59 @@ class ModelManagerDialog(QDialog):
         self.model_list = QListWidget()
         self.model_list.itemClicked.connect(self._on_select_model)
         self.model_list.itemDoubleClicked.connect(self._on_load_model)
+        self.model_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.model_list.customContextMenuRequested.connect(self._show_context_menu)
         left_panel.addWidget(self.model_list)
         
-        # Quick actions under list
+        # Quick actions under list - simplified
         quick_btns = QHBoxLayout()
+        quick_btns.setSpacing(8)
         
-        new_btn = QPushButton("+ New")
+        new_btn = QPushButton("New")
         new_btn.setStyleSheet("background-color: #a6e3a1; color: #1e1e2e;")
+        new_btn.setToolTip("Create a new AI from scratch")
         new_btn.clicked.connect(self._on_new_model)
         quick_btns.addWidget(new_btn)
         
-        template_btn = QPushButton("+ Template")
-        template_btn.setStyleSheet("background-color: #f9e2af; color: #1e1e2e;")
-        template_btn.setToolTip("Create AI from a ready-made template (easiest!)")
-        template_btn.clicked.connect(self._on_quick_create)
-        quick_btns.addWidget(template_btn)
-        
         load_btn = QPushButton("Load")
         load_btn.setStyleSheet("background-color: #89b4fa; color: #1e1e2e;")
+        load_btn.setToolTip("Load selected model for chat")
         load_btn.clicked.connect(self._on_load_model)
         quick_btns.addWidget(load_btn)
         
+        download_btn = QPushButton("External")
+        download_btn.setStyleSheet("background-color: #fab387; color: #1e1e2e;")
+        download_btn.setToolTip("Load external model (HuggingFace, GGUF)")
+        download_btn.clicked.connect(self._on_download_model)
+        quick_btns.addWidget(download_btn)
+        
         left_panel.addLayout(quick_btns)
-        
-        # HuggingFace Models Section
-        hf_group = QGroupBox("HuggingFace Models")
-        hf_layout = QVBoxLayout(hf_group)
-        hf_layout.setSpacing(8)
-        
-        # Preset dropdown with model sizes and categories
-        self.hf_preset_combo = NoScrollComboBox()
-        self.hf_preset_combo.setToolTip("Select a preset HuggingFace model")
-        self.hf_preset_combo.addItem("Select a preset model...")
-        self.hf_preset_combo.addItem("microsoft/DialoGPT-small (162M) [Small] - Fast chat")
-        self.hf_preset_combo.addItem("microsoft/DialoGPT-medium (405M) [Medium] - Conversational")
-        self.hf_preset_combo.addItem("Salesforce/codegen-350M-mono (350M) [Small] - Code")
-        self.hf_preset_combo.addItem("TinyLlama/TinyLlama-1.1B-Chat-v1.0 (1.1B) [Medium] - Fast chat")
-        self.hf_preset_combo.addItem("Qwen/Qwen2-1.5B-Instruct (1.5B) [Medium] - Multilingual")
-        self.hf_preset_combo.addItem("stabilityai/stablelm-2-zephyr-1_6b (1.6B) [Medium] - Stable chat")
-        self.hf_preset_combo.addItem("google/gemma-2b-it (2B) [Medium] - Google Gemma")
-        self.hf_preset_combo.addItem("mistralai/Mistral-7B-Instruct-v0.2 (7B) [Large] GPU")
-        self.hf_preset_combo.addItem("HuggingFaceH4/zephyr-7b-beta (7B) [Large] GPU")
-        self.hf_preset_combo.addItem("meta-llama/Llama-2-7b-chat-hf (7B) [Large] GPU")
-        self.hf_preset_combo.addItem("xai-org/grok-1 (314B) [Huge] Datacenter")
-        hf_layout.addWidget(self.hf_preset_combo)
-        
-        # Custom input
-        hf_input_layout = QHBoxLayout()
-        self.hf_model_input = QLineEdit()
-        self.hf_model_input.setPlaceholderText("Or enter HuggingFace model ID...")
-        hf_input_layout.addWidget(self.hf_model_input)
-        
-        self.hf_add_btn = QPushButton("Add")
-        self.hf_add_btn.setStyleSheet("background-color: #fab387; color: #1e1e2e;")
-        self.hf_add_btn.clicked.connect(self._on_add_hf_model)
-        hf_input_layout.addWidget(self.hf_add_btn)
-        hf_layout.addLayout(hf_input_layout)
-        
-        # Delete HF model button
-        self.hf_delete_btn = QPushButton("Delete Selected HF Model")
-        self.hf_delete_btn.setStyleSheet("background-color: #f38ba8; color: #1e1e2e; font-weight: bold;")
-        self.hf_delete_btn.setToolTip("Delete a HuggingFace model from this system")
-        self.hf_delete_btn.clicked.connect(self._on_delete_hf_model)
-        hf_layout.addWidget(self.hf_delete_btn)
-        
-        # Tokenizer option
-        tokenizer_layout = QHBoxLayout()
-        tokenizer_label = QLabel("Tokenizer:")
-        tokenizer_label.setStyleSheet("color: #a6adc8; font-size: 11px;")
-        tokenizer_layout.addWidget(tokenizer_label)
-        
-        self.hf_tokenizer_combo = NoScrollComboBox()
-        self.hf_tokenizer_combo.addItem("Model's Own (Recommended)")
-        self.hf_tokenizer_combo.addItem("Custom Forge Tokenizer")
-        self.hf_tokenizer_combo.setToolTip("Choose which tokenizer to use with HuggingFace models")
-        self.hf_tokenizer_combo.setStyleSheet("font-size: 11px;")
-        tokenizer_layout.addWidget(self.hf_tokenizer_combo)
-        tokenizer_layout.addStretch()
-        hf_layout.addLayout(tokenizer_layout)
-        
-        # Info label
-        hf_info = QLabel("Note: Large models need good GPU & HF token for gated models")
-        hf_info.setStyleSheet("color: #6c7086; font-size: 12px;")
-        hf_info.setWordWrap(True)
-        hf_layout.addWidget(hf_info)
-        
-        left_panel.addWidget(hf_group)
         
         layout.addLayout(left_panel, stretch=1)
         
-        # Right panel - Details and actions
-        right_panel = QVBoxLayout()
+        # Right panel - Details and actions (scrollable for small windows)
+        right_scroll = QScrollArea()
+        right_scroll.setWidgetResizable(True)
+        right_scroll.setFrameShape(QScrollArea.NoFrame)
+        right_scroll.setStyleSheet("QScrollArea { background: transparent; }")
+        
+        right_widget = QWidget()
+        right_widget.setStyleSheet("background: transparent;")
+        right_panel = QVBoxLayout(right_widget)
+        right_panel.setSpacing(12)
+        right_panel.setContentsMargins(0, 0, 0, 0)
         
         # Model info card
         info_group = QGroupBox("Model Details")
         info_layout = QVBoxLayout(info_group)
+        info_layout.setSpacing(4)
+        info_layout.setContentsMargins(8, 4, 8, 8)
         
         self.info_name = QLabel("Select a model")
-        self.info_name.setStyleSheet("font-size: 12px; font-weight: bold; color: #f9e2af;")
+        self.info_name.setStyleSheet("font-size: 14px; font-weight: bold; color: #f9e2af;")
         info_layout.addWidget(self.info_name)
         
-        self.info_details = QLabel("Click a model from the list to see its details")
+        self.info_details = QLabel("Click a model from the list to see its details\n\nRight-click a model for more actions")
         self.info_details.setWordWrap(True)
         self.info_details.setStyleSheet("color: #a6adc8; font-size: 12px;")
         info_layout.addWidget(self.info_details)
@@ -389,7 +347,10 @@ class ModelManagerDialog(QDialog):
         close_btn.clicked.connect(self.close)
         right_panel.addWidget(close_btn)
         
-        layout.addLayout(right_panel, stretch=1)
+        right_panel.addStretch()  # Push content to top
+        
+        right_scroll.setWidget(right_widget)
+        layout.addWidget(right_scroll, stretch=1)
     
     def _refresh_list(self):
         """Refresh the model list from disk."""
@@ -402,10 +363,13 @@ class ModelManagerDialog(QDialog):
         self.selected_model = None
         self._update_buttons_state()
         self.info_name.setText("Select a model")
-        self.info_details.setText("Click a model from the list to see its details")
+        self.info_details.setText("Click a model from the list to see its details\n\nRight-click a model for more actions")
         
         # Sync models to other tabs (like router)
         self._sync_models_everywhere()
+        
+        # Scan for unregistered GGUF models
+        self._scan_for_gguf_models()
         
         models = self.registry.registry.get("models", {})
         for name, info in sorted(models.items()):
@@ -418,12 +382,66 @@ class ModelManagerDialog(QDialog):
                 # Different icons for different model sources
                 if source == "huggingface":
                     icon = "[HF]"
+                elif source == "gguf":
+                    icon = "[GG]"
                 elif has_weights:
                     icon = "[OK]"
                 else:
                     icon = "[--]"
                     
                 self.model_list.addItem(f"{icon} {name} ({size})")
+        
+        # Select current model if available
+        self._select_current_model()
+    
+    def _scan_for_gguf_models(self):
+        """Scan models directory for unregistered GGUF files."""
+        models_dir = Path(self.registry.models_dir)
+        if not models_dir.exists():
+            return
+        
+        for item in models_dir.iterdir():
+            if item.is_dir():
+                # Check if already registered
+                if item.name in self.registry.registry.get("models", {}):
+                    continue
+                
+                # Look for GGUF files in this folder
+                gguf_files = list(item.glob("*.gguf"))
+                if gguf_files:
+                    # Found unregistered GGUF model - add to registry
+                    gguf_file = gguf_files[0]
+                    file_size_gb = gguf_file.stat().st_size / (1024**3)
+                    
+                    self.registry.registry.setdefault("models", {})[item.name] = {
+                        "path": str(item),
+                        "size": f"GGUF-{file_size_gb:.1f}GB",
+                        "created": datetime.now().isoformat(),
+                        "has_weights": True,
+                        "source": "gguf",
+                        "gguf_file": str(gguf_file),
+                    }
+                    self.registry._save_registry()
+                    print(f"Auto-registered GGUF model: {item.name}")
+
+    def _select_current_model(self):
+        """Select the current model in the list if available."""
+        if not self.current_model:
+            return
+        
+        # Search for the current model in the list
+        for i in range(self.model_list.count()):
+            item = self.model_list.item(i)
+            text = item.text()
+            # Extract model name from "[XX] name (size)" format
+            if "] " in text:
+                name_part = text.split("] ", 1)[1]
+                if " (" in name_part:
+                    name_part = name_part.rsplit(" (", 1)[0]
+                if name_part == self.current_model:
+                    self.model_list.setCurrentItem(item)
+                    self._on_select_model(item)
+                    return
     
     def _update_buttons_state(self):
         """Enable/disable buttons based on selection."""
@@ -464,6 +482,306 @@ class ModelManagerDialog(QDialog):
         except Exception:
             pass  # Don't crash if sync fails
     
+    def _show_context_menu(self, position):
+        """Show right-click context menu for model list."""
+        from PyQt5.QtWidgets import QMenu, QAction
+        
+        item = self.model_list.itemAt(position)
+        if not item:
+            return
+        
+        # Select the item
+        self.model_list.setCurrentItem(item)
+        self._on_select_model(item)
+        
+        menu = QMenu(self)
+        menu.setStyleSheet("""
+            QMenu { background-color: #313244; color: #cdd6f4; border: 1px solid #45475a; }
+            QMenu::item { padding: 8px 24px; }
+            QMenu::item:selected { background-color: #89b4fa; color: #1e1e2e; }
+        """)
+        
+        # Actions
+        load_action = menu.addAction("Load")
+        load_action.triggered.connect(self._on_load_model)
+        
+        menu.addSeparator()
+        
+        backup_action = menu.addAction("Backup")
+        backup_action.triggered.connect(self._on_backup)
+        
+        clone_action = menu.addAction("Clone")
+        clone_action.triggered.connect(self._on_clone)
+        
+        rename_action = menu.addAction("Rename")
+        rename_action.triggered.connect(self._on_rename)
+        
+        folder_action = menu.addAction("Open Folder")
+        folder_action.triggered.connect(self._on_open_folder)
+        
+        menu.addSeparator()
+        
+        # Check if HuggingFace model (can't scale)
+        model_info = self.registry.registry.get("models", {}).get(self.selected_model, {})
+        is_huggingface = model_info.get("source") == "huggingface"
+        
+        if not is_huggingface:
+            grow_action = menu.addAction("Grow (Larger)")
+            grow_action.triggered.connect(self._on_grow)
+            
+            shrink_action = menu.addAction("Shrink (Smaller)")
+            shrink_action.triggered.connect(self._on_shrink)
+            
+            menu.addSeparator()
+        
+        delete_action = menu.addAction("Delete")
+        delete_action.triggered.connect(lambda: self._on_delete_action(False))
+        
+        menu.exec_(self.model_list.mapToGlobal(position))
+    
+    def _on_download_model(self):
+        """Show external model dialog with tabs for HuggingFace and GGUF."""
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QComboBox, QLineEdit, QPushButton, QHBoxLayout, QTabWidget, QWidget, QFileDialog
+        
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Load External Model")
+        dialog.setMinimumWidth(500)
+        layout = QVBoxLayout(dialog)
+        layout.setSpacing(12)
+        
+        # Title
+        title = QLabel("Load External Model")
+        title.setStyleSheet("font-size: 14px; font-weight: bold; color: #fab387;")
+        layout.addWidget(title)
+        
+        # Tab widget for HuggingFace vs GGUF
+        tabs = QTabWidget()
+        
+        # === HuggingFace Tab ===
+        hf_tab = QWidget()
+        hf_layout = QVBoxLayout(hf_tab)
+        hf_layout.setSpacing(8)
+        
+        # Preset dropdown
+        preset_label = QLabel("Popular Models:")
+        preset_label.setStyleSheet("color: #cdd6f4;")
+        hf_layout.addWidget(preset_label)
+        
+        preset_combo = QComboBox()
+        preset_combo.addItem("Select a model...")
+        preset_combo.addItem("TinyLlama/TinyLlama-1.1B-Chat-v1.0 (1.1B) - Fast chat")
+        preset_combo.addItem("Qwen/Qwen2-1.5B-Instruct (1.5B) - Multilingual")
+        preset_combo.addItem("microsoft/DialoGPT-small (162M) - Classic chat")
+        preset_combo.addItem("stabilityai/stablelm-2-zephyr-1_6b (1.6B) - Stable")
+        preset_combo.addItem("google/gemma-2b-it (2B) - Google Gemma")
+        preset_combo.addItem("mistralai/Mistral-7B-Instruct-v0.2 (7B) - Large GPU")
+        hf_layout.addWidget(preset_combo)
+        
+        # Or custom input
+        or_label = QLabel("Or enter HuggingFace model ID:")
+        or_label.setStyleSheet("color: #a6adc8;")
+        hf_layout.addWidget(or_label)
+        
+        model_input = QLineEdit()
+        model_input.setPlaceholderText("e.g., meta-llama/Llama-2-7b-chat-hf")
+        hf_layout.addWidget(model_input)
+        
+        # API Key field
+        key_label = QLabel("HuggingFace Token (for gated models):")
+        key_label.setStyleSheet("color: #a6adc8;")
+        hf_layout.addWidget(key_label)
+        
+        key_input = QLineEdit()
+        key_input.setPlaceholderText("Optional - hf_xxxxxxxxxxxx")
+        key_input.setEchoMode(QLineEdit.Password)
+        hf_layout.addWidget(key_input)
+        
+        hf_layout.addStretch()
+        tabs.addTab(hf_tab, "HuggingFace")
+        
+        # === GGUF Tab ===
+        gguf_tab = QWidget()
+        gguf_layout = QVBoxLayout(gguf_tab)
+        gguf_layout.setSpacing(8)
+        
+        gguf_info = QLabel("Load a GGUF model file from your computer.\nGGUF models are quantized and run efficiently on CPU/GPU.")
+        gguf_info.setStyleSheet("color: #cdd6f4;")
+        gguf_info.setWordWrap(True)
+        gguf_layout.addWidget(gguf_info)
+        
+        gguf_path_layout = QHBoxLayout()
+        gguf_path_input = QLineEdit()
+        gguf_path_input.setPlaceholderText("Path to .gguf file...")
+        gguf_path_layout.addWidget(gguf_path_input)
+        
+        browse_btn = QPushButton("Browse")
+        browse_btn.setStyleSheet("background-color: #89b4fa; color: #1e1e2e;")
+        def browse_gguf():
+            path, _ = QFileDialog.getOpenFileName(dialog, "Select GGUF Model", "", "GGUF Files (*.gguf);;All Files (*)")
+            if path:
+                gguf_path_input.setText(path)
+        browse_btn.clicked.connect(browse_gguf)
+        gguf_path_layout.addWidget(browse_btn)
+        gguf_layout.addLayout(gguf_path_layout)
+        
+        gguf_name_label = QLabel("Model name (optional):")
+        gguf_name_label.setStyleSheet("color: #a6adc8;")
+        gguf_layout.addWidget(gguf_name_label)
+        
+        gguf_name_input = QLineEdit()
+        gguf_name_input.setPlaceholderText("Leave empty to use filename")
+        gguf_layout.addWidget(gguf_name_input)
+        
+        gguf_layout.addStretch()
+        tabs.addTab(gguf_tab, "GGUF File")
+        
+        layout.addWidget(tabs)
+        
+        # Info
+        info = QLabel("Note: Large models need good GPU. Models download on first use.")
+        info.setStyleSheet("color: #6c7086; font-size: 11px;")
+        info.setWordWrap(True)
+        layout.addWidget(info)
+        
+        # Buttons
+        btn_layout = QHBoxLayout()
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(dialog.reject)
+        btn_layout.addWidget(cancel_btn)
+        
+        add_btn = QPushButton("Add Model")
+        add_btn.setStyleSheet("background-color: #a6e3a1; color: #1e1e2e;")
+        btn_layout.addWidget(add_btn)
+        layout.addLayout(btn_layout)
+        
+        def do_add():
+            if tabs.currentIndex() == 0:  # HuggingFace
+                preset_text = preset_combo.currentText()
+                custom_text = model_input.text().strip()
+                
+                model_id = None
+                if custom_text:
+                    model_id = custom_text
+                elif preset_text and not preset_text.startswith("Select"):
+                    model_id = preset_text.split(" (")[0].strip()
+                
+                if not model_id:
+                    QMessageBox.warning(dialog, "Error", "Select or enter a model")
+                    return
+                
+                token = key_input.text().strip()
+                if token:
+                    import os
+                    os.environ["HF_TOKEN"] = token
+                
+                self._add_hf_model_internal(model_id)
+                dialog.accept()
+            else:  # GGUF
+                gguf_path = gguf_path_input.text().strip()
+                if not gguf_path:
+                    QMessageBox.warning(dialog, "Error", "Select a GGUF file")
+                    return
+                    
+                from pathlib import Path
+                gguf_file = Path(gguf_path)
+                if not gguf_file.exists():
+                    QMessageBox.warning(dialog, "Error", f"File not found: {gguf_path}")
+                    return
+                
+                model_name = gguf_name_input.text().strip()
+                if not model_name:
+                    model_name = gguf_file.stem.replace("-", "_").replace(".", "_").lower()
+                
+                self._add_gguf_model_internal(gguf_file, model_name)
+                dialog.accept()
+        
+        add_btn.clicked.connect(do_add)
+        dialog.exec_()
+    
+    def _add_gguf_model_internal(self, gguf_file, model_name: str):
+        """Internal method to add a GGUF model."""
+        from pathlib import Path
+        
+        if model_name in self.registry.registry.get("models", {}):
+            reply = QMessageBox.question(
+                self, "Model Exists",
+                f"'{model_name}' already exists. Overwrite?",
+                QMessageBox.Yes | QMessageBox.No
+            )
+            if reply != QMessageBox.Yes:
+                return
+        
+        try:
+            file_size_gb = gguf_file.stat().st_size / (1024**3)
+            
+            self.registry.registry.setdefault("models", {})[model_name] = {
+                "path": str(gguf_file.parent),
+                "size": f"GGUF-{file_size_gb:.1f}GB",
+                "created": datetime.now().isoformat(),
+                "has_weights": True,
+                "source": "gguf",
+                "gguf_file": str(gguf_file),
+            }
+            self.registry._save_registry()
+            self._refresh_list()
+            
+            QMessageBox.information(
+                self, "Model Added",
+                f"Added GGUF model: {model_name}\n\nSelect it from the list and click Load to use."
+            )
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Failed to add GGUF model: {e}")
+    
+    def _add_hf_model_internal(self, model_id: str):
+        """Internal method to add a HuggingFace model."""
+        local_name = model_id.replace("/", "_").replace("-", "_").lower()
+        
+        if local_name in self.registry.registry.get("models", {}):
+            reply = QMessageBox.question(
+                self, "Model Exists",
+                f"'{local_name}' already exists. Set as active chat AI?",
+                QMessageBox.Yes | QMessageBox.No
+            )
+            if reply == QMessageBox.Yes:
+                self._assign_hf_to_chat(model_id, local_name)
+            return
+        
+        try:
+            model_path = Path(self.registry.models_dir) / local_name
+            model_path.mkdir(parents=True, exist_ok=True)
+            
+            size_str = "huggingface"
+            num_params = 0
+            try:
+                from ...core.huggingface_loader import get_huggingface_model_info
+                info = get_huggingface_model_info(model_id)
+                if not info.get("error"):
+                    size_str = f"HF-{info['size_str']}"
+                    num_params = info.get("num_parameters", 0)
+            except Exception:
+                pass
+            
+            self.registry.registry.setdefault("models", {})[local_name] = {
+                "path": str(model_path),
+                "size": size_str,
+                "created": datetime.now().isoformat(),
+                "has_weights": False,
+                "source": "huggingface",
+                "huggingface_id": model_id,
+                "num_parameters": num_params,
+            }
+            self.registry._save_registry()
+            
+            self._assign_hf_to_chat(model_id, local_name)
+            self._refresh_list()
+            
+            QMessageBox.information(
+                self, "Model Added",
+                f"Added: {model_id}\n\nIt will download when first used."
+            )
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Failed: {e}")
+
     def _on_select_model(self, item):
         """Handle model selection."""
         text = item.text()

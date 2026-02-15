@@ -17,7 +17,6 @@ if TYPE_CHECKING:
     from .chat_tab import create_chat_tab
     from .code_tab import CodeTab, create_code_tab
     from .embeddings_tab import EmbeddingsTab, create_embeddings_tab
-    from .examples_tab import ExamplesTab, create_examples_tab
     from .game.game_connection import create_game_subtab
     from .gif_tab import GIFTab, create_gif_tab
     from .image_tab import ImageTab, create_image_tab
@@ -84,8 +83,8 @@ def __getattr__(name: str):
         'ModulesTab': ('.modules_tab', 'ModulesTab'),
         'ScalingTab': ('.scaling_tab', 'ScalingTab'),
         'create_scaling_tab': ('.scaling_tab', 'create_scaling_tab'),
-        'ExamplesTab': ('.examples_tab', 'ExamplesTab'),
-        'create_examples_tab': ('.examples_tab', 'create_examples_tab'),
+        'ExamplesTab': None,
+        'create_examples_tab': None,
         'ToolManagerTab': ('.tool_manager_tab', 'ToolManagerTab'),
         'ModelRouterTab': ('.model_router_tab', 'ModelRouterTab'),
         'LearningTab': ('.learning_tab', 'LearningTab'),
@@ -208,8 +207,6 @@ __all__ = [
     'ModulesTab',
     'ScalingTab',
     'create_scaling_tab',
-    'ExamplesTab',
-    'create_examples_tab',
     'ImageTab',
     'create_image_tab',
     'CodeTab',

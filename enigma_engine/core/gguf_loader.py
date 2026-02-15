@@ -84,8 +84,12 @@ class GGUFModel:
         """
         if not HAVE_LLAMA_CPP:
             raise RuntimeError(
-                "GGUF loading requires llama-cpp-python. "
-                "Install with: pip install llama-cpp-python"
+                "GGUF models require llama-cpp-python.\n\n"
+                "Options:\n"
+                "1. Install llama-cpp-python: pip install llama-cpp-python\n"
+                "2. Use the HuggingFace version instead (Model Manager > Download)\n\n"
+                "GGUF files are quantized models. If you want the original model,\n"
+                "add it from HuggingFace using the 'Download' button in Model Manager."
             )
         
         self.model_path = Path(model_path)
@@ -270,6 +274,225 @@ class GGUFModel:
         except Exception as e:
             logger.error(f"Chat failed: {e}")
             raise
+    
+    def chat_with_tools(
+        self,
+        messages: list[dict[str, str]],
+        tools: list[dict] = None,
+        tool_choice: str = "auto",
+        max_tokens: int = 512,
+        temperature: float = 0.7,
+        **kwargs
+    ) -> dict:
+        """
+        Chat completion with native function/tool calling support.
+        
+        This gives the AI structured control over tools - much more reliable
+        than parsing <tool_call> tags from text output.
+        
+        Args:
+            messages: List of message dicts with 'role' and 'content'
+            tools: List of tool definitions in OpenAI format:
+                   [{"type": "function", "function": {"name": "...", "description": "...", "parameters": {...}}}]
+            tool_choice: "auto", "none", or {"type": "function", "function": {"name": "..."}}
+            max_tokens: Maximum tokens to generate
+            temperature: Sampling temperature
+            **kwargs: Additional parameters
+            
+        Returns:
+            Dict with 'content' (text response) and 'tool_calls' (list of tool invocations)
+        """
+        if not self.is_loaded:
+            raise RuntimeError("Model not loaded. Call load() first.")
+        
+        # Get default tools if none provided
+        if tools is None:
+            tools = self._get_default_tools()
+        
+        try:
+            response = self.model.create_chat_completion(
+                messages=messages,
+                tools=tools if tools else None,
+                tool_choice=tool_choice if tools else None,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                **kwargs
+            )
+            
+            choice = response['choices'][0]
+            message = choice.get('message', {})
+            
+            return {
+                'content': message.get('content', ''),
+                'tool_calls': message.get('tool_calls', []),
+                'finish_reason': choice.get('finish_reason', 'stop'),
+                'raw_response': response
+            }
+            
+        except Exception as e:
+            logger.error(f"Chat with tools failed: {e}")
+            # Fallback to regular chat
+            logger.info("Falling back to regular chat (tool calling not supported)")
+            try:
+                response = self.model.create_chat_completion(
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                )
+                return {
+                    'content': response['choices'][0]['message'].get('content', ''),
+                    'tool_calls': [],
+                    'finish_reason': 'stop',
+                    'raw_response': response
+                }
+            except Exception as e2:
+                raise RuntimeError(f"Both tool calling and regular chat failed: {e}, {e2}")
+    
+    def _get_default_tools(self) -> list[dict]:
+        """Get default tools in OpenAI function calling format."""
+        return [
+            {
+                "type": "function",
+                "function": {
+                    "name": "generate_image",
+                    "description": "Generate an image from a text description using Stable Diffusion",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "prompt": {
+                                "type": "string",
+                                "description": "Detailed description of the image to generate"
+                            },
+                            "width": {"type": "integer", "default": 512},
+                            "height": {"type": "integer", "default": 512}
+                        },
+                        "required": ["prompt"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "generate_code",
+                    "description": "Generate code for a programming task",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "prompt": {"type": "string", "description": "Description of what code to write"},
+                            "language": {"type": "string", "description": "Programming language", "default": "python"}
+                        },
+                        "required": ["prompt"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "read_file",
+                    "description": "Read the contents of a file",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "path": {"type": "string", "description": "Path to the file to read"}
+                        },
+                        "required": ["path"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "list_directory",
+                    "description": "List files and folders in a directory",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "path": {"type": "string", "description": "Path to the directory"}
+                        },
+                        "required": ["path"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "web_search",
+                    "description": "Search the web for information",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "Search query"}
+                        },
+                        "required": ["query"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "screenshot",
+                    "description": "Take a screenshot of the screen",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {}
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "switch_tab",
+                    "description": "Switch to a different GUI tab",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "tab_name": {
+                                "type": "string",
+                                "description": "Tab to switch to",
+                                "enum": ["chat", "image", "code", "video", "audio", "vision", "settings", "modules", "train"]
+                            }
+                        },
+                        "required": ["tab_name"]
+                    }
+                }
+            },
+            {
+                "type": "function", 
+                "function": {
+                    "name": "adjust_setting",
+                    "description": "Change a GUI setting",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "setting_name": {
+                                "type": "string",
+                                "description": "Setting to change",
+                                "enum": ["chat_zoom", "auto_speak", "always_on_top", "theme"]
+                            },
+                            "value": {
+                                "type": "string",
+                                "description": "New value for the setting"
+                            }
+                        },
+                        "required": ["setting_name", "value"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "run_command",
+                    "description": "Run a system command (requires user permission)",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "command": {"type": "string", "description": "Command to run"}
+                        },
+                        "required": ["command"]
+                    }
+                }
+            }
+        ]
     
     def tokenize(self, text: str) -> list[int]:
         """Tokenize text to token IDs."""

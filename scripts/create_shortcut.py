@@ -13,6 +13,7 @@ Usage:
 
 import os
 import sys
+import subprocess
 from pathlib import Path
 
 
@@ -23,7 +24,7 @@ def create_windows_shortcut():
         from win32com.client import Dispatch
     except ImportError:
         print("Installing required packages...")
-        os.system("pip install pywin32 winshell")
+        subprocess.run([sys.executable, "-m", "pip", "install", "pywin32", "winshell"], check=True)
         import winshell
         from win32com.client import Dispatch
     

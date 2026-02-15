@@ -486,13 +486,14 @@ QMenu::item:selected {{
     background-color: {c.selection};
 }}
 
-/* Tool Tip */
+/* Tool Tip - explicit styling for visibility */
 QToolTip {{
     background-color: {c.tooltip_background};
-    color: {c.on_surface};
+    color: {c.on_background};
     border: 1px solid {c.border};
     border-radius: 4px;
-    padding: 4px;
+    padding: 6px 10px;
+    font-size: 12px;
 }}
 
 /* Status Bar */

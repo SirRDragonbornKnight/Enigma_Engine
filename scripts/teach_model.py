@@ -1,8 +1,8 @@
 """
-Direct AI Teaching System - DeepSeek teaches and improves Enigma models
+Direct AI Teaching System - Teacher models teach and improve Enigma models
 
 This creates a teacher-student loop where:
-1. Teacher (DeepSeek 32B) generates training data
+1. Teacher (DeepSeek-7B or similar) generates training data
 2. Student (Enigma) gets trained on that data
 3. Teacher tests the student with questions
 4. Teacher evaluates student's answers and identifies weaknesses
@@ -12,9 +12,14 @@ This creates a teacher-student loop where:
 This is knowledge distillation with active feedback - the teacher AI
 directly influences and improves the student AI.
 
+Memory Budget (for 61GB RAM / 32GB VRAM):
+- Teacher (7B, 4-bit): ~14GB RAM, ~8GB VRAM
+- Student (large, training): ~15GB RAM, ~8GB VRAM  
+- Buffer for OS/other: ~20GB RAM, ~16GB VRAM
+
 Usage:
-    python scripts/teach_model.py --student small --cycles 5
-    python scripts/teach_model.py --student medium --teacher deepseek-32b --cycles 10
+    python scripts/teach_model.py                          # Default: 7B teacher, large student
+    python scripts/teach_model.py --student medium --cycles 10
 """
 
 import argparse
@@ -33,11 +38,15 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Teacher models (large, high quality)
+# Teacher models (ranked by quality vs resource usage)
+# For 61GB RAM / 32GB VRAM: use 7B or 14B teachers
 TEACHER_MODELS = {
-    "deepseek-32b": "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B",
-    "llama-8b": "meta-llama/Llama-3.1-8B-Instruct",
-    "qwen-7b": "Qwen/Qwen2.5-7B-Instruct",
+    "deepseek-7b": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",  # RECOMMENDED - ~14GB RAM, ~8GB VRAM
+    "qwen-14b": "Qwen/Qwen2.5-14B-Instruct",  # ~28GB RAM, ~10GB VRAM  
+    "llama-8b": "meta-llama/Llama-3.1-8B-Instruct",  # ~16GB RAM, ~6GB VRAM
+    "qwen-7b": "Qwen/Qwen2.5-7B-Instruct",  # ~14GB RAM, ~6GB VRAM
+    "mistral-7b": "mistralai/Mistral-7B-Instruct-v0.3",  # ~14GB RAM, ~6GB VRAM
+    "deepseek-32b": "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B",  # ~64GB RAM - TOO BIG for most
 }
 
 # Student model sizes (Enigma models)
@@ -86,7 +95,7 @@ TEST_CATEGORIES = [
 class TeacherAI:
     """The teacher AI (large model) that trains and evaluates students."""
     
-    def __init__(self, model_id: str = "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B"):
+    def __init__(self, model_id: str = "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"):
         self.model_id = model_id
         self.model = None
         self.tokenizer = None
@@ -118,6 +127,7 @@ class TeacherAI:
             quantization_config=quant_config,
             device_map="auto",
             trust_remote_code=True,
+            low_cpu_mem_usage=True,  # Load layer-by-layer to reduce RAM usage
         )
         
         self._loaded = True
@@ -261,7 +271,7 @@ IMPROVEMENT: [what the student needs to learn]"""
                 try:
                     score = int(re.search(r'\d+', line).group())
                     score = max(1, min(10, score))
-                except:
+                except (ValueError, AttributeError):
                     pass
             elif line.startswith('REASON:'):
                 reason = line[7:].strip()
@@ -735,28 +745,31 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-    # Teach a small Enigma model with 5 cycles
-    python scripts/teach_model.py --student small --cycles 5
+    # Default: DeepSeek-7B teaches a Large Enigma model
+    python scripts/teach_model.py
     
-    # Teach a medium model to score 8.5/10
-    python scripts/teach_model.py --student medium --target 8.5
+    # Teach a large model to score 8.5/10
+    python scripts/teach_model.py --student large --target 8.5
     
-    # Use a specific teacher model
-    python scripts/teach_model.py --teacher llama-8b --student small
+    # Use a different teacher model
+    python scripts/teach_model.py --teacher qwen-14b --student medium
+    
+    # More teaching cycles for better quality
+    python scripts/teach_model.py --cycles 10
 """
     )
     
     parser.add_argument(
         "--teacher", "-t",
-        default="deepseek-32b",
+        default="deepseek-7b",
         choices=list(TEACHER_MODELS.keys()),
-        help="Teacher model to use (default: deepseek-32b)"
+        help="Teacher model to use (default: deepseek-7b - fits in ~14GB RAM)"
     )
     parser.add_argument(
         "--student", "-s",
-        default="small",
+        default="large",
         choices=STUDENT_SIZES,
-        help="Student model size (default: small)"
+        help="Student model size (default: large - ~300M params)"
     )
     parser.add_argument(
         "--cycles", "-c",

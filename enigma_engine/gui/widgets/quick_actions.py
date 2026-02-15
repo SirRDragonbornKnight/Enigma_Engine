@@ -63,12 +63,10 @@ class QuickActionsBar(QWidget):
         """)
         
         # Define actions (label, tooltip, signal)
+        # Removed: Screenshot (use Vision tab), Voice (use voice button), Quick Gen (unclear)
+        # New Chat removed - already in header bar
         actions = [
-            ("Screenshot", "Send screenshot to AI (Ctrl+Shift+S)", self.screenshot_clicked),
-            ("Voice", "Voice input (Ctrl+Shift+V)", self.voice_clicked),
             ("Game Mode", "Toggle game mode (Ctrl+Shift+Space)", self.game_mode_clicked),
-            ("New Chat", "New conversation (Ctrl+N)", self.new_chat_clicked),
-            ("Quick Gen", "Quick image generation (Ctrl+Shift+G)", self.quick_generate_clicked),
         ]
         
         for label, tooltip, signal in actions:
@@ -76,6 +74,7 @@ class QuickActionsBar(QWidget):
             btn.setToolTip(tooltip)
             btn.clicked.connect(signal.emit)
             btn.setFixedHeight(32)
+            btn.setFixedWidth(90)
             layout.addWidget(btn)
         
         layout.addStretch()

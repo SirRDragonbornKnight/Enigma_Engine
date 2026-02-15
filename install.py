@@ -79,19 +79,19 @@ def detect_system():
     # Check if Raspberry Pi
     if info['os'] == 'Linux':
         try:
-            with open('/proc/device-tree/model', 'r') as f:
+            with open('/proc/device-tree/model', 'r', encoding='utf-8') as f:
                 model = f.read()
                 if 'Raspberry Pi' in model:
                     info['is_pi'] = True
                     info['pi_model'] = model.strip().replace('\x00', '')
-        except:
+        except (FileNotFoundError, PermissionError, OSError):
             pass
     
     # Check RAM
     try:
         import psutil
         info['ram_mb'] = psutil.virtual_memory().total // (1024 * 1024)
-    except:
+    except (ImportError, OSError):
         pass
     
     # Check GPU - works on Linux, Windows, and macOS

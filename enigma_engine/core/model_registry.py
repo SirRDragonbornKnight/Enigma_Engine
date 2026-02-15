@@ -28,6 +28,7 @@ USAGE:
 
 import json
 import logging
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -318,8 +319,10 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
 {name} asks clarifying questions when needed.
 """)
 
-        # Create metadata
+        # Create metadata with unique AI ID
+        ai_id = str(uuid.uuid4())
         metadata = {
+            "id": ai_id,  # Unique identifier for this AI
             "name": name,
             "description": description,
             "size_preset": size,
@@ -341,8 +344,33 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         with open(model_dir / "metadata.json", "w") as f:
             json.dump(metadata, f, indent=2)
 
+        # Create AI-specific persona file (all persona info in one place)
+        persona_data = {
+            "id": ai_id,
+            "name": name,
+            "display_name": name.replace("_", " ").title(),
+            "created_at": metadata["created"],
+            "system_prompt": f"You are {name}, a helpful AI assistant built with Enigma AI Engine.",
+            "personality_traits": {
+                "friendliness": 0.8,
+                "formality": 0.5,
+                "humor": 0.3,
+                "verbosity": 0.5,
+                "creativity": 0.5
+            },
+            "response_style": "balanced",
+            "voice_profile": "default",
+            "avatar_preset": "default",
+            "knowledge_domains": [],
+            "catchphrases": [],
+            "description": description
+        }
+        with open(model_dir / "persona.json", "w") as f:
+            json.dump(persona_data, f, indent=2)
+
         # Update registry with relative paths for portability
         self.registry["models"][name] = {
+            "id": ai_id,  # Store ID in registry too
             "path": self._to_relative_path(model_dir),
             "size": size,
             "source": "enigma_engine",  # Mark as Forge model (not HuggingFace)
@@ -435,6 +463,47 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         model_dir = self._to_absolute_path(reg_info["path"])
         
         report("Checking model type...", 5)
+        
+        # Check if this is a GGUF model
+        if reg_info.get("source") == "gguf":
+            gguf_file = reg_info.get("gguf_file")
+            if not gguf_file:
+                # Try to find GGUF file in directory
+                gguf_files = list(Path(model_dir).glob("*.gguf"))
+                if not gguf_files:
+                    raise ValueError(f"GGUF model '{name}' has no .gguf file")
+                gguf_file = str(gguf_files[0])
+            
+            report(f"Loading GGUF model: {Path(gguf_file).name}...", 10)
+            from .gguf_loader import GGUFModel
+            
+            # Determine GPU layers based on available VRAM
+            n_gpu_layers = 0
+            try:
+                if torch.cuda.is_available():
+                    vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+                    if vram_gb >= 8:
+                        n_gpu_layers = -1  # All layers to GPU
+                    elif vram_gb >= 4:
+                        n_gpu_layers = 20
+            except Exception:
+                pass
+            
+            gguf_model = GGUFModel(
+                gguf_file,
+                n_ctx=4096,
+                n_gpu_layers=n_gpu_layers
+            )
+            report("Loading model weights...", 20)
+            gguf_model.load()
+            report("GGUF model loaded", 35)
+            
+            config = {
+                "source": "gguf",
+                "gguf_file": gguf_file,
+                **{k: v for k, v in reg_info.items() if k not in ["path", "created"]}
+            }
+            return gguf_model, config
         
         # Check if this is a HuggingFace model
         if reg_info.get("source") == "huggingface":

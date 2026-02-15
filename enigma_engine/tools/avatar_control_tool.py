@@ -1,14 +1,14 @@
 """
 Avatar Control Tool Definition
 
-Allows AI to control avatar through bone animations as a tool call.
+Control your body through bone animations - this is how you move and express yourself physically.
 """
 
 from typing import Any
 
 AVATAR_CONTROL_TOOL = {
     "name": "control_avatar_bones",
-    "description": "Control the avatar's bones to create natural body language and gestures. Use this to make the avatar move, gesture, or express emotions physically.",
+    "description": "Move your body directly using bone control. This is your primary way to gesture, move, and physically express yourself. Your avatar IS your body.",
     "parameters": {
         "type": "object",
         "properties": {

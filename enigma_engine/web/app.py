@@ -155,6 +155,24 @@ if FLASK_AVAILABLE and app is not None:
         return render_template('ai_profile.html')
 
 
+    @app.route('/mobile')
+    def mobile_chat():
+        """Mobile-friendly simple chat interface."""
+        return render_template('simple_chat.html')
+
+
+    @app.route('/simple')
+    def simple_chat():
+        """Simple chat interface (alias for /mobile)."""
+        return render_template('simple_chat.html')
+
+
+    @app.route('/app')
+    def pwa_app():
+        """Full PWA app - installable on mobile devices."""
+        return render_template('app.html')
+
+
     # =========================================================================
     # Download Routes
     # =========================================================================
@@ -246,6 +264,15 @@ if FLASK_AVAILABLE and app is not None:
         </body>
         </html>
         '''
+
+
+    @app.route('/api/health')
+    def api_health():
+        """Simple health check endpoint for connection testing."""
+        return jsonify({
+            'status': 'ok',
+            'timestamp': datetime.now().isoformat()
+        })
 
 
     @app.route('/api/status')
@@ -351,6 +378,45 @@ if FLASK_AVAILABLE and app is not None:
             })
         except Exception as e:
             return jsonify({'error': str(e)}), 500
+
+
+    @app.route('/api/chat', methods=['POST'])
+    def api_chat():
+        """Chat endpoint for conversational AI."""
+        request_data = request.json
+        message = request_data.get('message', '')
+        max_tokens = request_data.get('max_tokens', DEFAULT_MAX_TOKENS)
+        temperature = request_data.get('temperature', DEFAULT_TEMPERATURE)
+        
+        if not message:
+            return jsonify({'error': 'No message provided', 'success': False}), HTTP_BAD_REQUEST
+        
+        engine = get_engine()
+        if engine is None:
+            return jsonify({'error': 'Model not loaded', 'success': False}), HTTP_SERVER_ERROR
+        
+        try:
+            # Format as conversational prompt
+            prompt = f"User: {message}\nAssistant:"
+            
+            response = engine.generate(
+                prompt,
+                max_gen=max_tokens,
+                temperature=temperature
+            )
+            
+            # Clean up response
+            response = response.strip()
+            if response.startswith("Assistant:"):
+                response = response[10:].strip()
+            
+            return jsonify({
+                'success': True,
+                'response': response,
+                'model': _model_name
+            })
+        except Exception as e:
+            return jsonify({'error': str(e), 'success': False}), 500
 
     @app.route('/api/feedback', methods=['POST'])
     def api_feedback():
@@ -1309,7 +1375,7 @@ def run_web(host: str = '0.0.0.0', port: int = 8080, debug: bool = False):
         return
     
     logger.info(f"{'='*60}")
-    logger.info("FORGE AI WEB DASHBOARD")
+    logger.info("ENIGMA AI WEB DASHBOARD")
     logger.info(f"{'='*60}")
     logger.info(f"Server starting on http://{host}:{port}")
     logger.info(f"Access from:")

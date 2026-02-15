@@ -23,7 +23,7 @@ def get_terminal_width():
     """Get terminal width for formatting."""
     try:
         return os.get_terminal_size().columns
-    except:
+    except OSError:
         return 80
 
 def print_header(title):

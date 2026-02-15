@@ -126,11 +126,11 @@ class SetPersonalityTool(Tool):
 
 class SetAvatarPreferenceTool(Tool):
     """
-    AI can change its avatar appearance preferences.
+    Change my physical appearance preferences.
     """
     
     name = "set_avatar_preference"
-    description = "Change my avatar appearance - colors, style, default expression"
+    description = "Change how my body looks - colors, style, default expression. This is ME!"
     parameters = {
         "setting": "What to change: colors, style, expression_default",
         "value": "New value (colors as hex comma-separated, style as 'neural/letter/anvil')",
@@ -545,11 +545,11 @@ class RecallFactsTool(Tool):
 
 class GenerateAvatarTool(Tool):
     """
-    AI can generate a new 3D avatar for itself using the 3D generation system.
+    Generate a new body for myself using text description.
     """
     
     name = "generate_avatar"
-    description = "Generate a new 3D avatar model for myself using text description"
+    description = "Generate a new 3D body model for myself using text description - this will be my new physical form!"
     parameters = {
         "description": "Description of the avatar to generate (e.g., 'friendly robot with glowing eyes')",
         "style": "Style: realistic, cartoon, robot, creature, abstract, anime, pixel, chibi, furry, mecha (default: robot)",

@@ -98,7 +98,7 @@ except ImportError:
 
 import time
 
-from PyQt5.QtCore import QSize, Qt, QThread, QTimer, pyqtSignal
+from PyQt5.QtCore import QSize, Qt, QThread, QTimer, pyqtSignal, pyqtSlot
 from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtWidgets import (
     QAction,
@@ -1138,7 +1138,8 @@ class EnhancedMainWindow(QMainWindow):
     │ engine           │ EnigmaEngine - the inference engine            │
     │ module_manager   │ ModuleManager - controls loaded modules        │
     │ chat_messages    │ List of conversation messages                  │
-    │ _is_hf_model     │ True if using HuggingFace model (no training!) │
+    │ _is_hf_model     │ True if using external HuggingFace model       │
+    │ _is_gguf_model   │ True if using external GGUF model              │
     │ _gui_settings    │ Saved preferences (theme, last model, etc.)    │
     └────────────────────────────────────────────────────────────────────┘
     
@@ -1269,6 +1270,10 @@ class EnhancedMainWindow(QMainWindow):
         self.chat_messages = []          # Conversation history
         self.learn_while_chatting = self._gui_settings.get("learn_while_chatting", True)
         
+        # Chat feature toggles (can be disabled in Settings)
+        self.show_rating_bar = self._gui_settings.get("show_rating_bar", True)
+        self.enable_avatar_bridge = self._gui_settings.get("enable_avatar_bridge", True)
+        
         # System prompt settings
         self._system_prompt_preset = self._gui_settings.get("system_prompt_preset", "simple")
         self._custom_system_prompt = self._gui_settings.get("custom_system_prompt", "")
@@ -1295,24 +1300,25 @@ class EnhancedMainWindow(QMainWindow):
         self._chat_sync.generation_stopped.connect(self._on_chat_sync_stopped)
         
         # ─────────────────────────────────────────────────────────────────
-        # Initialize Avatar-AI Bridge
+        # Initialize Avatar-AI Bridge (if enabled in settings)
         # This connects AI responses to avatar expressions and gestures
         # ─────────────────────────────────────────────────────────────────
         self._avatar_bridge = None
-        try:
-            from ..avatar import create_avatar_bridge, get_avatar
-            avatar = get_avatar()
-            if avatar:
-                self._avatar_bridge = create_avatar_bridge(avatar, enable_explicit=True)
-                # Connect bridge signals
-                if hasattr(self._avatar_bridge, 'emotion_detected'):
-                    self._avatar_bridge.emotion_detected.connect(self._on_avatar_emotion)
-                if hasattr(self._avatar_bridge, 'gesture_triggered'):
-                    self._avatar_bridge.gesture_triggered.connect(self._on_avatar_gesture)
-                print("Avatar-AI Bridge initialized")
-        except Exception as e:
-            print(f"Could not initialize Avatar-AI Bridge: {e}")
-            self._avatar_bridge = None
+        if self.enable_avatar_bridge:
+            try:
+                from ..avatar import create_avatar_bridge, get_avatar
+                avatar = get_avatar()
+                if avatar:
+                    self._avatar_bridge = create_avatar_bridge(avatar, enable_explicit=True)
+                    # Connect bridge signals
+                    if hasattr(self._avatar_bridge, 'emotion_detected'):
+                        self._avatar_bridge.emotion_detected.connect(self._on_avatar_emotion)
+                    if hasattr(self._avatar_bridge, 'gesture_triggered'):
+                        self._avatar_bridge.gesture_triggered.connect(self._on_avatar_gesture)
+                    print("Avatar-AI Bridge initialized")
+            except Exception as e:
+                print(f"Could not initialize Avatar-AI Bridge: {e}")
+                self._avatar_bridge = None
         
         # ─────────────────────────────────────────────────────────────────
         # Initialize Federated Learning Integration
@@ -1677,6 +1683,21 @@ class EnhancedMainWindow(QMainWindow):
         """Check if the currently loaded model is a HuggingFace model."""
         return getattr(self, '_is_hf_model', False) or getattr(self.engine, '_is_huggingface', False) if self.engine else False
     
+    def _is_external_model(self) -> bool:
+        """Check if the currently loaded model is external (HuggingFace, GGUF, Ollama, etc.).
+        
+        External models cannot be trained/fine-tuned locally, so features like
+        response rating (for learning) should be disabled.
+        """
+        if not self.engine:
+            return False
+        # Check all external model flags
+        is_hf = getattr(self, '_is_hf_model', False) or getattr(self.engine, '_is_huggingface', False)
+        is_gguf = getattr(self, '_is_gguf_model', False)
+        is_ollama = getattr(self.engine, '_is_ollama', False)
+        is_api = getattr(self.engine, '_is_api_model', False)  # Future: OpenAI, Anthropic, etc.
+        return is_hf or is_gguf or is_ollama or is_api
+    
     def _update_hf_feature_restrictions(self, is_huggingface: bool):
         """Enable/disable features based on whether current model is HuggingFace."""
         # Training controls - completely disabled for HF models
@@ -1729,7 +1750,7 @@ class EnhancedMainWindow(QMainWindow):
                 self.learning_indicator.setToolTip(
                     "Learning is not available for HuggingFace models.\n\n"
                     "HuggingFace models are pre-trained and cannot be fine-tuned locally.\n"
-                    "To use learning features, switch to a local Forge model."
+                    "To use learning features, switch to a local Enigma model."
                 )
                 self.learning_indicator.setCursor(Qt.ArrowCursor)  # Remove clickable cursor
                 self.learning_indicator.mousePressEvent = lambda e: None  # Disable click
@@ -1770,12 +1791,12 @@ class EnhancedMainWindow(QMainWindow):
             
             QMessageBox.warning(
                 self, 
-                f"{feature_name} - Forge Model Required",
-                f"<b>{feature_name}</b> is only available for local Forge models.<br><br>"
+                f"{feature_name} - Enigma Model Required",
+                f"<b>{feature_name}</b> is only available for local Enigma models.<br><br>"
                 f"You're currently using a HuggingFace model: <b>{self.current_model_name}</b><br><br>"
                 f"HuggingFace models are pre-trained and cannot be modified through this interface.<br><br>"
-                f"<b>Available Forge models:</b><br>{model_list}<br><br>"
-                f"Switch to an Forge model in the <b>Model Manager</b> tab to use this feature."
+                f"<b>Available Enigma models:</b><br>{model_list}<br><br>"
+                f"Switch to an Enigma model in the <b>Model Manager</b> tab to use this feature."
             )
             return False
         return True
@@ -2136,8 +2157,18 @@ class EnhancedMainWindow(QMainWindow):
     def _cleanup_and_quit(self) -> None:
         """Clean up all resources and quit the application."""
         import os
+        import sys
         
-        print("[Enigma AI Engine] Shutting down all components...")        
+        print("[Enigma AI Engine] Shutting down...")
+        
+        # Quick cleanup - don't wait for everything
+        try:
+            # Hide tray icon immediately
+            from .system_tray import cleanup_all_system_trays
+            cleanup_all_system_trays()
+        except Exception:
+            pass
+        
         try:
             # Stop voice systems
             try:
@@ -2145,93 +2176,101 @@ class EnhancedMainWindow(QMainWindow):
                 pipeline = get_voice_pipeline()
                 if pipeline:
                     pipeline.stop()
-                    print("  - Voice pipeline stopped")
             except Exception:
-                pass  # Continue cleanup even if voice pipeline fails
+                pass
             
-            # Stop voice listener
+            # Stop voice listener  
             try:
                 from ..voice.listener import get_listener
                 listener = get_listener()
                 if listener:
                     listener.stop()
-                    print("  - Voice listener stopped")
             except Exception:
-                pass  # Continue cleanup even if voice listener fails
+                pass
             
-            # Stop performance monitor
-            try:
-                from ..utils.performance_monitor import get_monitor
-                monitor = get_monitor()
-                if monitor:
-                    monitor.stop()
-                    print("  - Performance monitor stopped")
-            except Exception:
-                pass  # Continue cleanup even if monitor fails
-            
-            # Stop any web server
+            # Stop web server
             try:
                 from ..web.app import shutdown_server
                 shutdown_server()
-                print("  - Web server stopped")
             except Exception:
-                pass  # Continue cleanup even if web server fails
+                pass
             
-            # Clean up temporary attachment files
+            # Clean temp files
             try:
                 from .tabs.chat_tab import cleanup_temp_attachments
                 cleanup_temp_attachments()
-                print("  - Temp attachments cleaned")
             except Exception:
-                pass  # Continue cleanup even if temp cleanup fails
+                pass
             
-            # Clear model from memory
-            try:
-                if self.engine:
-                    self.engine = None
-                    print("  - Model unloaded")
-            except Exception:
-                pass  # Continue cleanup even if model unload fails
-            
-            print("[Enigma AI Engine] Cleanup complete. Exiting...")
-            
-        except Exception as e:
-            print(f"[Enigma AI Engine] Error during cleanup: {e}")
+            # Unload model
+            if hasattr(self, 'engine') and self.engine:
+                self.engine = None
+                
+        except Exception:
+            pass
         
-        # Force quit the application
-        from PyQt5.QtWidgets import QApplication
-        QApplication.instance().quit()
+        print("[Enigma AI Engine] Goodbye!")
         
-        # If Qt quit doesn't work, force exit
-        import threading
-        def force_exit():
-            import time
-            time.sleep(0.5)
-            os._exit(0)
-        
-        threading.Thread(target=force_exit, daemon=True).start()
+        # Force terminate immediately
+        os._exit(0)
     
     def closeEvent(self, event):
-        """Handle window close with confirmation dialog.
+        """Handle window close - show confirmation dialog.
         
-        This is triggered by clicking the window X button or Alt+F4.
-        Shows a confirmation dialog before quitting.
+        Clicking X or Alt+F4 shows a dialog asking what to do.
         """
         from PyQt5.QtWidgets import QMessageBox
         
-        reply = QMessageBox.question(
-            self,
-            "Quit Enigma AI Engine",
-            "Are you sure you want to quit?\n\nAll background processes will be stopped.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Close Enigma AI Engine")
+        msg.setText("What would you like to do?")
+        msg.setIcon(QMessageBox.Question)
         
-        if reply == QMessageBox.Yes:
+        quit_btn = msg.addButton("Quit", QMessageBox.AcceptRole)
+        minimize_btn = msg.addButton("Minimize to Tray", QMessageBox.ActionRole)
+        cancel_btn = msg.addButton("Cancel", QMessageBox.RejectRole)
+        
+        msg.setStyleSheet("""
+            QMessageBox {
+                background-color: #1e1e2e;
+                color: #cdd6f4;
+            }
+            QMessageBox QLabel {
+                color: #cdd6f4;
+            }
+            QPushButton {
+                background-color: #313244;
+                color: #cdd6f4;
+                border: 1px solid #45475a;
+                padding: 6px 16px;
+                border-radius: 4px;
+                min-width: 80px;
+            }
+            QPushButton:hover {
+                background-color: #45475a;
+            }
+        """)
+        
+        msg.exec_()
+        
+        clicked = msg.clickedButton()
+        
+        if clicked == quit_btn:
             event.accept()
             self._save_gui_settings()
             self._cleanup_and_quit()
+        elif clicked == minimize_btn:
+            event.ignore()
+            self.hide()
+            # Show system tray if available
+            if hasattr(self, 'tray_icon') and self.tray_icon:
+                self.tray_icon.showMessage(
+                    "Enigma AI Engine",
+                    "Running in the background. Click tray icon to restore.",
+                    1, 3000
+                )
         else:
+            # Cancel - do nothing
             event.ignore()
     
     def contextMenuEvent(self, event):
@@ -2611,7 +2650,9 @@ class EnhancedMainWindow(QMainWindow):
             
             # Check if this is a HuggingFace model (wrapper class)
             is_huggingface = config.get("source") == "huggingface"
+            is_gguf = config.get("source") == "gguf"
             self._is_hf_model = is_huggingface  # Track at window level for feature restrictions
+            self._is_gguf_model = is_gguf
             
             loading_dialog.set_status("Creating inference engine...", 45)
             
@@ -2677,6 +2718,16 @@ class EnhancedMainWindow(QMainWindow):
                     self.engine.tokenizer = model.tokenizer  # Use HF tokenizer
                     self.engine._using_custom_tokenizer = False
                     loading_dialog.set_status("[OK] Using model's tokenizer", 75)
+            elif is_gguf:
+                # GGUF model (llama.cpp) - already loaded
+                self.engine.model = model  # This is a GGUFModel wrapper
+                self.engine._is_gguf = True
+                loading_dialog.set_status("[OK] GGUF model ready", 65)
+                
+                # GGUF models have their own tokenizer built-in
+                self.engine.tokenizer = None  # GGUFModel handles tokenization internally
+                self.engine._using_custom_tokenizer = False
+                loading_dialog.set_status("[OK] Using GGUF tokenizer", 75)
             else:
                 # Local Forge model
                 self.engine.model = model
@@ -2727,7 +2778,7 @@ class EnhancedMainWindow(QMainWindow):
             loading_dialog.set_status("Finalizing setup...", 95)
             
             # Update window title with model type indicator
-            model_type = "[HF]" if is_huggingface else "[Forge]"
+            model_type = "[HF]" if is_huggingface else "[Local]"
             self.setWindowTitle(f"Enigma AI Engine - {self.current_model_name} {model_type}")
             
             # Update training tab label with warning for HF models
@@ -2759,39 +2810,31 @@ class EnhancedMainWindow(QMainWindow):
                 device_type = self.engine.device.type if hasattr(self.engine.device, 'type') else str(self.engine.device)
                 device_info = "GPU" if device_type == "cuda" else "CPU"
                 
-                if is_huggingface:
-                    model_note = f"<p style='color: #f9e2af;'><i>This is a HuggingFace model. Training and some Forge features are not available.</i></p>"
-                else:
-                    model_note = ""
+                # Simple model name (strip path if present)
+                display_name = self.current_model_name
+                if '/' in display_name:
+                    display_name = display_name.split('/')[-1]
+                if '\\' in display_name:
+                    display_name = display_name.split('\\')[-1]
                 
                 # Check if this is user's first time
                 is_first_run = not self._gui_settings.get("has_chatted", False)
                 
                 if is_first_run:
-                    # First-time user welcome
-                    welcome_tips = """
-                    <p style='color: #89b4fa;'><b>Welcome to Enigma AI Engine!</b> Here are some tips to get started:</p>
-                    <ul style='color: #cdd6f4; margin-left: 20px;'>
-                        <li>Just type naturally - say 'Generate an image of a sunset' or 'Write Python code for a calculator'</li>
-                        <li>The AI auto-detects what you want and uses the right tool</li>
-                        <li>Hover over sidebar items to see what each section does</li>
-                        <li>Check the <b>Files</b> tab for the full Quick Start Guide</li>
-                    </ul>
-                    """
+                    # First-time user - simple ready message
+                    self.chat_display.append(
+                        f"<p style='color: #a6e3a1;'>Ready - {display_name} ({device_info})</p>"
+                        "<hr>"
+                    )
                 else:
-                    welcome_tips = ""
-                
-                self.chat_display.append(
-                    f"<p style='color: #a6e3a1;'><b>[OK] Model loaded:</b> {self.current_model_name} ({device_info})</p>"
-                    f"{model_note}"
-                    f"{welcome_tips}"
-                    f"<p style='color: #6c7086;'>Type a message below to chat with your AI.</p>"
-                    "<hr>"
-                )
+                    # Returning user - simple single line
+                    self.chat_display.append(
+                        f"<p style='color: #a6e3a1;'>Ready - {display_name} ({device_info})</p><hr>"
+                    )
             
             # Update chat status
             if hasattr(self, 'chat_status'):
-                self.chat_status.setText(f"Model ready ({self.engine.device})")
+                self.chat_status.setText("Ready")
             
             # Update status bar model button
             if hasattr(self, 'model_status_btn'):
@@ -2895,10 +2938,9 @@ class EnhancedMainWindow(QMainWindow):
         13. Settings - Configuration
         """
         # ─────────────────────────────────────────────────────────────────
-        # Menu bar - Create View menu for mode switching
+        # Menu bar - REMOVED View and Help menus (use Settings tab instead)
         # ─────────────────────────────────────────────────────────────────
-        self._create_view_menu()
-        self._create_help_menu()
+        # Menus removed - functionality available in Settings and via F1
         
         # Initialize toggle state variables (previously in menu, now in Settings)
         self.learn_while_chatting = True
@@ -2977,34 +3019,23 @@ class EnhancedMainWindow(QMainWindow):
             create_camera_tab,
             create_chat_tab,
             create_code_tab,
-            create_embeddings_tab,
-            create_examples_tab,
             create_federation_tab,
             create_game_subtab,
             create_image_tab,
             create_instructions_tab,
-            create_logs_tab,
             create_network_tab,
             create_robot_subtab,
             create_sessions_tab,
             create_terminal_tab,
             create_threed_tab,
             create_training_tab,
-            create_training_data_tab,
             create_video_tab,
             create_vision_tab,
         )
-        from .tabs.build_ai_tab import create_build_ai_tab
-        from .tabs.bundle_manager_tab import create_bundle_manager_tab
         from .tabs.gif_tab import create_gif_tab
-        from .tabs.learning_tab import LearningTab
-        from .tabs.model_comparison_tab import create_model_comparison_tab
         from .tabs.model_router_tab import ModelRouterTab
-        from .tabs.modules_tab import ModulesTab
         from .tabs.persona_tab import create_persona_tab
-        from .tabs.scaling_tab import ScalingTab
         from .tabs.settings_tab import create_settings_tab
-        from .tabs.tool_manager_tab import ToolManagerTab
         from .tabs.voice_clone_tab import VoiceCloneTab
         from .tabs.workspace_tab import create_workspace_tab
 
@@ -3016,7 +3047,7 @@ class EnhancedMainWindow(QMainWindow):
         
         # === SIDEBAR NAVIGATION ===
         sidebar_container = QWidget()
-        sidebar_container.setFixedWidth(140)
+        sidebar_container.setFixedWidth(130)
         sidebar_container.setStyleSheet("background-color: #11111b;")
         sidebar_layout = QVBoxLayout(sidebar_container)
         sidebar_layout.setContentsMargins(0, 0, 0, 0)
@@ -3031,7 +3062,7 @@ class EnhancedMainWindow(QMainWindow):
         """)
         title_layout = QHBoxLayout(title_widget)
         title_layout.setContentsMargins(10, 0, 6, 0)
-        app_title = QLabel("FORGE AI")
+        app_title = QLabel("ENIGMA AI")
         app_title.setStyleSheet("""
             color: #89b4fa;
             font-size: 12px;
@@ -3061,13 +3092,9 @@ class EnhancedMainWindow(QMainWindow):
             
             # My AI - building and customizing your AI
             ("section", "MY AI"),
-            ("", "Build AI", "build_ai", "Step-by-step AI creation wizard"),
-            ("", "Bundles", "bundles", "Manage AI bundles for sharing"),
-            ("", "Persona", "persona", "Create and manage AI personas"),
-            ("", "Training", "training", "Train your AI model"),  # VISIBLE NOW
-            ("", "Data Gen", "data_gen", "Generate training data with AI"),
-            ("", "Learning", "learning", "Self-improvement metrics"),
-            ("", "Scale", "scale", "Grow or shrink your AI model"),
+            ("", "Prompt", "persona", "Set your AI's system prompt and personality"),
+            ("", "Training", "training", "Train your AI model"),
+            ("", "Router", "router", "Assign specialized models to tasks"),
             
             # Create - generation capabilities
             ("section", "CREATE"),
@@ -3087,25 +3114,15 @@ class EnhancedMainWindow(QMainWindow):
             ("", "Screen", "vision", "Capture screenshots for AI"),
             ("", "Camera", "camera", "Live webcam preview"),
             
-            # Tools - modules and routing
-            ("section", "TOOLS"),
-            ("", "Modules", "modules", "Enable/disable AI features"),
-            ("", "Router", "router", "Assign specialized models"),
-            ("", "Tools", "tools", "Manage AI tools"),
-            ("", "Compare", "compare", "Compare model responses"),
-            ("", "Search", "search", "Semantic search"),
-            
             # System - settings and config
             ("section", "SYSTEM"),
             ("", "Terminal", "terminal", "View AI processing"),
-            ("", "Logs", "logs", "View system logs"),
             ("", "Files", "files", "Edit files and settings"),
             ("", "Network", "network", "Multi-device networking"),
             ("", "Settings", "settings", "Configure preferences"),
             ("", "Workspace", "workspace", "Quick access to tasks"),
             ("", "Federation", "federation", "Federated learning"),
             ("", "Analytics", "analytics", "Usage statistics"),
-            ("", "Examples", "examples", "Code examples"),
         ]
         
         # Add items to sidebar
@@ -3127,8 +3144,6 @@ class EnhancedMainWindow(QMainWindow):
             'audio_gen_api': ['audio'],
             'threed_gen_local': ['3d'],
             'threed_gen_api': ['3d'],
-            'embedding_local': ['search'],
-            'embedding_api': ['search'],
             'avatar': ['avatar'],
             'vision': ['vision', 'camera'],
             'voice_input': ['voice'],
@@ -3138,14 +3153,14 @@ class EnhancedMainWindow(QMainWindow):
             'robot_control': ['robot'],
         }
         
-        # Tabs that should always be visible (core tabs)
+        # Tabs that should always be visible (ALL tabs - no module dependency)
         self._always_visible_tabs = [
-            'chat', 'history', 'build_ai', 'bundles', 'persona', 'training', 'data_gen', 'learning', 'scale',  # MY AI section
-            'modules', 'tools', 'router', 'compare', 'search',  # TOOLS section
-            'terminal', 'logs', 'files', 'network', 'settings', 'workspace',  # SYSTEM section
-            'federation', 'analytics', 'examples',
-            # Default-enabled generation/perception tabs
-            'image', 'avatar', 'vision'
+            'chat', 'history', 'persona', 'training',  # MY AI section
+            'image', 'code', 'video', 'audio', 'voice', '3d', 'gif',  # CREATE section
+            'avatar', 'game', 'robot', 'vision', 'camera',  # CONTROL section
+            'router',  # TOOLS section
+            'terminal', 'files', 'network', 'settings', 'workspace',  # SYSTEM section
+            'federation', 'analytics',
         ]
         
         for item in nav_items:
@@ -3176,7 +3191,54 @@ class EnhancedMainWindow(QMainWindow):
             row_index += 1
         
         sidebar_layout.addWidget(self.sidebar)
+        
+        # Collapse toggle button at bottom of sidebar
+        self.sidebar_collapse_btn = QPushButton("<")
+        self.sidebar_collapse_btn.setFixedHeight(24)
+        self.sidebar_collapse_btn.setToolTip("Collapse sidebar (use top tabs instead)")
+        self.sidebar_collapse_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #1e1e2e;
+                border: none;
+                border-top: 1px solid #313244;
+                color: #bac2de;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #313244;
+                color: #89b4fa;
+            }
+        """)
+        self.sidebar_collapse_btn.clicked.connect(self._toggle_sidebar)
+        sidebar_layout.addWidget(self.sidebar_collapse_btn)
+        
+        self._sidebar_container = sidebar_container
+        self._sidebar_collapsed = False
         main_layout.addWidget(sidebar_container)
+        
+        # === CONTENT AREA (open tabs bar + content stack) ===
+        content_area = QWidget()
+        content_layout = QVBoxLayout(content_area)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(0)
+        
+        # Open tabs bar at top of content area
+        self.open_tabs_bar = QWidget()
+        self.open_tabs_bar.setFixedHeight(32)
+        self.open_tabs_bar.setStyleSheet("""
+            background-color: #1e1e2e;
+            border-bottom: 1px solid #313244;
+        """)
+        open_tabs_layout = QHBoxLayout(self.open_tabs_bar)
+        open_tabs_layout.setContentsMargins(4, 0, 4, 0)
+        open_tabs_layout.setSpacing(2)
+        
+        # This will hold the tab buttons
+        self._open_tab_buttons = {}
+        open_tabs_layout.addStretch()
+        
+        content_layout.addWidget(self.open_tabs_bar)
         
         # === CONTENT STACK ===
         self.content_stack = QStackedWidget()
@@ -3197,14 +3259,11 @@ class EnhancedMainWindow(QMainWindow):
         self.content_stack.addWidget(wrap_in_scroll(create_sessions_tab(self)))  # History
         
         # MY AI section
-        self.content_stack.addWidget(wrap_in_scroll(create_build_ai_tab(self)))  # Build AI (wizard)
-        self.content_stack.addWidget(wrap_in_scroll(create_bundle_manager_tab(self)))  # Bundles
         self.persona_tab = create_persona_tab(self)  # Store reference for signals
         self.content_stack.addWidget(wrap_in_scroll(self.persona_tab))  # Persona
-        self.content_stack.addWidget(wrap_in_scroll(create_training_tab(self)))  # Training (NOW VISIBLE)
-        self.content_stack.addWidget(wrap_in_scroll(create_training_data_tab(self)))  # Data Gen
-        self.content_stack.addWidget(wrap_in_scroll(LearningTab(self)))  # Learning
-        self.content_stack.addWidget(wrap_in_scroll(ScalingTab(self)))  # Scale
+        self.content_stack.addWidget(wrap_in_scroll(create_training_tab(self)))  # Training
+        self.router_tab = ModelRouterTab(self)  # Store reference for syncing
+        self.content_stack.addWidget(wrap_in_scroll(self.router_tab))  # Router
         
         # CREATE section
         self.content_stack.addWidget(wrap_in_scroll(create_image_tab(self)))  # Image
@@ -3222,29 +3281,25 @@ class EnhancedMainWindow(QMainWindow):
         self.content_stack.addWidget(wrap_in_scroll(create_vision_tab(self)))  # Vision/Screen
         self.content_stack.addWidget(wrap_in_scroll(create_camera_tab(self)))  # Camera
         
-        # TOOLS section
-        self.content_stack.addWidget(wrap_in_scroll(ModulesTab(self, module_manager=self.module_manager)))  # Modules
-        self.router_tab = ModelRouterTab(self)  # Store reference for syncing
-        self.content_stack.addWidget(wrap_in_scroll(self.router_tab))  # Router
-        self.content_stack.addWidget(wrap_in_scroll(ToolManagerTab(self)))  # Tools
-        self.content_stack.addWidget(wrap_in_scroll(create_model_comparison_tab(self)))  # Compare
-        self.content_stack.addWidget(wrap_in_scroll(create_embeddings_tab(self)))  # Search
-        
         # SYSTEM section
         self.content_stack.addWidget(wrap_in_scroll(create_terminal_tab(self)))  # Terminal
-        self.content_stack.addWidget(wrap_in_scroll(create_logs_tab(self)))  # Logs
         self.content_stack.addWidget(wrap_in_scroll(create_instructions_tab(self)))  # Files
         self.content_stack.addWidget(wrap_in_scroll(create_network_tab(self)))  # Network
         self.content_stack.addWidget(wrap_in_scroll(create_settings_tab(self)))  # Settings
         self.content_stack.addWidget(wrap_in_scroll(create_workspace_tab(self)))  # Workspace
         self.content_stack.addWidget(wrap_in_scroll(create_federation_tab(self)))  # Federation
         self.content_stack.addWidget(wrap_in_scroll(create_analytics_tab(self)))  # Analytics
-        self.content_stack.addWidget(wrap_in_scroll(create_examples_tab(self)))  # Examples
         
-        main_layout.addWidget(self.content_stack, stretch=1)
+        content_layout.addWidget(self.content_stack, stretch=1)
+        main_layout.addWidget(content_area, stretch=1)
         
-        # Connect sidebar selection to content stack
+        # Connect sidebar selection to content stack and open tabs bar
         self.sidebar.currentItemChanged.connect(self._on_sidebar_changed)
+        
+        # Enable right-click context menu for pop-out tabs
+        self.sidebar.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.sidebar.customContextMenuRequested.connect(self._on_sidebar_context_menu)
+        self._popped_windows = {}  # Track popped-out tab windows
         
         # ALWAYS start on Chat tab (row 1 is Chat, row 0 is section header)
         # Find the Chat item and select it
@@ -3439,14 +3494,197 @@ class EnhancedMainWindow(QMainWindow):
         except Exception as e:
             print(f"Could not restore always-on-top: {e}")
     
+    def _toggle_sidebar(self):
+        """Toggle sidebar collapsed/expanded state."""
+        if self._sidebar_collapsed:
+            # Expand
+            self._sidebar_container.setFixedWidth(130)
+            self.sidebar_collapse_btn.setText("<")
+            self.sidebar_collapse_btn.setToolTip("Collapse sidebar (use top tabs instead)")
+            self._sidebar_collapsed = False
+        else:
+            # Collapse
+            self._sidebar_container.setFixedWidth(0)
+            self.sidebar_collapse_btn.setText(">")
+            self.sidebar_collapse_btn.setToolTip("Expand sidebar")
+            self._sidebar_collapsed = True
+    
+    def _add_open_tab(self, key: str, name: str):
+        """Add a tab to the open tabs bar at the top."""
+        if key in self._open_tab_buttons:
+            return  # Already open
+        
+        # Create container for tab button + close button
+        tab_container = QWidget()
+        tab_container.setFixedHeight(26)
+        tab_layout = QHBoxLayout(tab_container)
+        tab_layout.setContentsMargins(0, 0, 0, 0)
+        tab_layout.setSpacing(0)
+        
+        # Create tab button
+        tab_btn = QPushButton(name)
+        tab_btn.setFixedHeight(26)
+        tab_btn.setProperty("tab_key", key)
+        tab_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #313244;
+                border: none;
+                border-top-left-radius: 4px;
+                border-bottom-left-radius: 4px;
+                color: #cdd6f4;
+                padding: 4px 8px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #45475a;
+            }
+            QPushButton[active="true"] {
+                background-color: #89b4fa;
+                color: #1e1e2e;
+            }
+        """)
+        tab_btn.clicked.connect(lambda checked, k=key: self._switch_to_open_tab(k))
+        tab_layout.addWidget(tab_btn)
+        
+        # Create close button (X)
+        close_btn = QPushButton("x")
+        close_btn.setFixedSize(20, 26)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #313244;
+                border: none;
+                border-top-right-radius: 4px;
+                border-bottom-right-radius: 4px;
+                color: #888;
+                font-size: 10px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #e74c3c;
+                color: white;
+            }
+        """)
+        close_btn.clicked.connect(lambda checked, k=key: self._close_open_tab(k))
+        tab_layout.addWidget(close_btn)
+        
+        # Insert before the stretch
+        layout = self.open_tabs_bar.layout()
+        layout.insertWidget(layout.count() - 1, tab_container)  # Before stretch
+        self._open_tab_buttons[key] = (tab_container, tab_btn)
+        
+        # Update active state
+        self._update_open_tabs_active()
+    
+    def _switch_to_open_tab(self, key: str):
+        """Switch to a tab from the open tabs bar."""
+        if key in self._nav_map:
+            self.content_stack.setCurrentIndex(self._nav_map[key])
+            # Also update sidebar selection
+            for i in range(self.sidebar.count()):
+                item = self.sidebar.item(i)
+                if item and item.data(Qt.UserRole) == key:
+                    self.sidebar.setCurrentRow(i)
+                    break
+            self._update_open_tabs_active()
+    
+    def _close_open_tab(self, key: str):
+        """Close/remove a tab from the open tabs bar."""
+        if key in self._open_tab_buttons:
+            item = self._open_tab_buttons.pop(key)
+            # Handle both old (single button) and new (tuple) format
+            if isinstance(item, tuple):
+                container, _ = item
+                container.deleteLater()
+            else:
+                item.deleteLater()
+    
+    def _update_open_tabs_active(self):
+        """Update which open tab button shows as active."""
+        current_item = self.sidebar.currentItem()
+        current_key = current_item.data(Qt.UserRole) if current_item else None
+        
+        for key, item in self._open_tab_buttons.items():
+            # Handle both old (single button) and new (tuple) format
+            btn = item[1] if isinstance(item, tuple) else item
+            btn.setProperty("active", key == current_key)
+            btn.style().unpolish(btn)
+            btn.style().polish(btn)
+    
     def _on_sidebar_changed(self, current, previous):
         """Handle sidebar navigation change."""
         if current:
             key = current.data(Qt.UserRole)
             if key and key in self._nav_map:
                 self.content_stack.setCurrentIndex(self._nav_map[key])
+                # Add to open tabs bar
+                self._add_open_tab(key, current.text().strip())
+                self._update_open_tabs_active()
                 # Re-enable text selection for any new widgets in this tab
                 self._enable_text_selection()
+    
+    def _on_sidebar_context_menu(self, pos):
+        """Handle right-click on sidebar for pop-out tabs."""
+        item = self.sidebar.itemAt(pos)
+        if not item:
+            return
+        key = item.data(Qt.UserRole)
+        if not key or key not in self._nav_map:
+            return
+        
+        # Create context menu
+        menu = QMenu(self)
+        pop_out_action = menu.addAction("Pop Out")
+        
+        action = menu.exec_(self.sidebar.mapToGlobal(pos))
+        if action == pop_out_action:
+            self._pop_out_tab(key, item.text().strip())
+    
+    def _pop_out_tab(self, key: str, title: str):
+        """Pop out a tab into a separate window."""
+        if key in self._popped_windows:
+            # Already popped out, bring to front
+            self._popped_windows[key].raise_()
+            self._popped_windows[key].activateWindow()
+            return
+        
+        # Get the widget from the stack
+        index = self._nav_map[key]
+        widget = self.content_stack.widget(index)
+        if not widget:
+            return
+        
+        # Create popup window
+        popup = QMainWindow(self)
+        popup.setWindowTitle(f"{title} - Enigma AI")
+        popup.setMinimumSize(800, 600)
+        popup.setAttribute(Qt.WA_DeleteOnClose)
+        
+        # Create container and move widget
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Remove from stack temporarily
+        self.content_stack.removeWidget(widget)
+        layout.addWidget(widget)
+        
+        popup.setCentralWidget(container)
+        
+        # Track the window
+        self._popped_windows[key] = popup
+        
+        # Handle close to restore tab
+        def on_close(event):
+            # Remove from tracking
+            if key in self._popped_windows:
+                del self._popped_windows[key]
+            # Restore widget to stack
+            layout.removeWidget(widget)
+            self.content_stack.insertWidget(index, widget)
+            event.accept()
+        
+        popup.closeEvent = on_close
+        popup.show()
     
     def _switch_to_tab(self, tab_name: str):
         """Switch to a specific tab by name (for chat commands)."""
@@ -3471,7 +3709,7 @@ class EnhancedMainWindow(QMainWindow):
             'network': 'network', 'analytics': 'analytics',
             'scheduler': 'scheduler',
             # Other
-            'examples': 'examples', 'settings': 'settings',
+            'settings': 'settings',
         }
         key = key_map.get(tab_name.lower())
         if key and key in self._nav_map:
@@ -3749,7 +3987,7 @@ class EnhancedMainWindow(QMainWindow):
             if tray:
                 tray.show_quick_command()
             else:
-                QMessageBox.information(self, "Quick Chat", "Quick Chat is not available.\nStart Forge from run.py to enable system tray features.")
+                QMessageBox.information(self, "Quick Chat", "Quick Chat is not available.\nStart Enigma AI from run.py to enable system tray features.")
         except Exception as e:
             print(f"Error opening Quick Chat: {e}")
     
@@ -3783,9 +4021,9 @@ class EnhancedMainWindow(QMainWindow):
             QMessageBox.information(
                 self,
                 "Learning Not Available",
-                "Learning while chatting is only available for local Forge models.\n\n"
+                "Learning while chatting is only available for local Enigma models.\n\n"
                 f"Current model ({self.current_model_name}) is a HuggingFace model and cannot be trained.\n\n"
-                "Switch to an Forge model to enable this feature."
+                "Switch to an Enigma model to enable this feature."
             )
             # Reset the checkbox
             if hasattr(self, 'learn_action'):
@@ -3826,8 +4064,8 @@ class EnhancedMainWindow(QMainWindow):
                     if hasattr(self, 'chat_display'):
                         # Format as AI message
                         self.chat_display.append(
-                            f'<div style="margin: 8px 0; padding: 8px; background: #2d3748; border-radius: 8px;">'
-                            f'<b style="color: #81a1c1;">Forge (observing):</b> '
+                            f'<div style="margin: 8px 0; padding: 8px; background: #2d3748; border-radius: 8px; word-wrap: break-word; overflow-wrap: break-word;">'
+                            f'<b style="color: #81a1c1;">Enigma (observing):</b> '
                             f'<span style="color: #d8dee9;">{msg}</span></div>'
                         )
                         self.chat_display.verticalScrollBar().setValue(
@@ -4453,6 +4691,8 @@ class EnhancedMainWindow(QMainWindow):
         if hasattr(self, 'terminal_log_level'):
             self._terminal_log_level = self.terminal_log_level.currentText()
     
+    @pyqtSlot(str, str)
+    @pyqtSlot(str)
     def log_terminal(self, message, level="info"):
         """Log a message to the AI terminal display."""
         from .tabs.terminal_tab import log_to_terminal
@@ -4711,12 +4951,12 @@ class EnhancedMainWindow(QMainWindow):
                     text = msg.get("text", "")
                     if role == "user":
                         self.chat_display.append(
-                            f'<div style="background-color: #313244; padding: 8px; margin: 4px 0; border-radius: 8px; border-left: 3px solid #89b4fa;">'
+                            f'<div style="background-color: #313244; padding: 8px; margin: 4px 0; border-radius: 8px; border-left: 3px solid #89b4fa; word-wrap: break-word; overflow-wrap: break-word;">'
                             f'<b style="color: #89b4fa;">{user_name}:</b> {text}</div>'
                         )
                     else:
                         self.chat_display.append(
-                            f'<div style="background-color: #1e1e2e; padding: 8px; margin: 4px 0; border-radius: 8px; border-left: 3px solid #a6e3a1;">'
+                            f'<div style="background-color: #1e1e2e; padding: 8px; margin: 4px 0; border-radius: 8px; border-left: 3px solid #a6e3a1; word-wrap: break-word; overflow-wrap: break-word;">'
                             f'<b style="color: #a6e3a1;">{ai_name}:</b> {text}</div>'
                         )
                 self.tabs.setCurrentIndex(0)
@@ -4973,6 +5213,10 @@ class EnhancedMainWindow(QMainWindow):
     def _on_send(self):
         text = self.chat_input.text().strip()
         
+        # Hide rating bar when user sends a new message
+        if hasattr(self, 'rating_frame') and self.rating_frame.isVisible():
+            self.rating_frame.hide()
+        
         # Get attachments before clearing
         attachments = []
         attachment_html = ""
@@ -5146,9 +5390,21 @@ class EnhancedMainWindow(QMainWindow):
         
         # Prepare generation parameters
         is_hf = getattr(self.engine, '_is_huggingface', False)
+        is_gguf = getattr(self, '_is_gguf_model', False)
         history = []
         custom_tok = None
         system_prompt = None
+        
+        # Get system prompt for ALL model types (HF, GGUF, and local Enigma)
+        system_prompt = self._get_user_system_prompt()
+        
+        # Add AI wants/motivations to system prompt (only for larger models)
+        preset = getattr(self, '_system_prompt_preset', 'simple')
+        if preset != 'simple' and hasattr(self, 'wants_system') and self.wants_system:
+            motivation_prompt = self.wants_system.get_motivation_prompt()
+            if motivation_prompt:
+                system_prompt = f"{system_prompt}\n\n{motivation_prompt}"
+                self.log_terminal("Added AI motivation context to prompt", "debug")
         
         if is_hf:
             # Build conversation history
@@ -5164,17 +5420,6 @@ class EnhancedMainWindow(QMainWindow):
             if using_custom:
                 # Don't pass custom tokenizer - let model use its own
                 custom_tok = None
-            
-            # Get system prompt from user settings
-            system_prompt = self._get_user_system_prompt()
-            
-            # Add AI wants/motivations to system prompt (only for larger models)
-            preset = getattr(self, '_system_prompt_preset', 'simple')
-            if preset != 'simple' and hasattr(self, 'wants_system') and self.wants_system:
-                motivation_prompt = self.wants_system.get_motivation_prompt()
-                if motivation_prompt:
-                    system_prompt = f"{system_prompt}\n\n{motivation_prompt}"
-                    self.log_terminal("Added AI motivation context to prompt", "debug")
         
         # Notify avatar bridge that we're starting generation
         self._notify_avatar_response_start()
@@ -5386,56 +5631,169 @@ class EnhancedMainWindow(QMainWindow):
         
         return "general"
     
-    def _execute_tool_from_response(self, response: str):
-        """Parse and execute any tool calls in the AI response, return modified response."""
+    def _execute_tool_from_response(self, response: str, agent_loop: bool = True, max_iterations: int = 5):
+        """
+        Parse and execute tool calls in AI response, optionally with agent loop.
+        
+        Agent Loop Mode (agent_loop=True):
+        - After executing tools, results are shown to AI
+        - AI can decide to call more tools or give final answer
+        - Continues until AI stops calling tools or max_iterations reached
+        
+        Args:
+            response: AI response text
+            agent_loop: Enable multi-step tool execution
+            max_iterations: Max tool→result→AI cycles
+            
+        Returns:
+            (final_response, all_tool_results)
+        """
         import json
         import re
         
         tool_pattern = r'<tool_call>\s*(\{.*?\})\s*</tool_call>'
-        matches = re.findall(tool_pattern, response, re.DOTALL)
+        all_results = []
+        iteration = 0
+        current_response = response
         
-        if not matches:
-            return response, []
+        while iteration < max_iterations:
+            matches = re.findall(tool_pattern, current_response, re.DOTALL)
+            
+            if not matches:
+                break  # No more tool calls, AI is done
+            
+            # Log tool detection
+            self.log_terminal(f"[Agent Loop {iteration+1}] Detected {len(matches)} tool call(s)", "info")
+            
+            iteration_results = []
+            for match in matches:
+                try:
+                    tool_data = json.loads(match)
+                    tool_name = tool_data.get('tool', '')
+                    params = tool_data.get('params', {})
+                    
+                    # Log tool call details
+                    self.log_terminal(f"  Executing: {tool_name}", "debug")
+                    
+                    # Check if this tool needs permission
+                    if self._tool_needs_permission(tool_name):
+                        if not self._request_tool_permission(tool_name, params):
+                            iteration_results.append({
+                                'success': False, 
+                                'error': 'User denied permission',
+                                'tool': tool_name
+                            })
+                            continue
+                    
+                    # Execute the tool
+                    prompt = params.get('prompt', params.get('text', params.get('description', '')))
+                    if tool_name in ('generate_image', 'generate_video', 'generate_code', 
+                                    'generate_audio', 'generate_3d'):
+                        result = self._execute_generation_tool(tool_name, prompt)
+                    else:
+                        result = self._execute_full_tool(tool_name, params)
+                    
+                    result['tool'] = tool_name
+                    iteration_results.append(result)
+                    
+                except json.JSONDecodeError:
+                    iteration_results.append({'success': False, 'error': 'Invalid tool call format'})
+            
+            all_results.extend(iteration_results)
+            
+            # If agent loop disabled, stop here
+            if not agent_loop:
+                break
+            
+            # Format tool results for AI to see
+            result_feedback = self._format_tool_results_for_ai(iteration_results)
+            
+            # Check if we should continue (AI might want to do more)
+            if not self._should_continue_agent_loop(iteration_results):
+                break
+            
+            # Feed results back to AI for next step
+            iteration += 1
+            if iteration < max_iterations:
+                self.log_terminal(f"[Agent Loop] Showing results to AI for next step...", "info")
+                current_response = self._continue_agent_loop(current_response, result_feedback)
         
-        # Log tool detection
-        self.log_terminal(f"Detected {len(matches)} tool call(s) in response", "info")
+        if iteration > 0:
+            self.log_terminal(f"[Agent Loop] Completed after {iteration} iteration(s)", "info")
         
+        return current_response, all_results
+    
+    def _format_tool_results_for_ai(self, results: list) -> str:
+        """Format tool execution results for AI to understand."""
+        lines = ["<tool_results>"]
+        for r in results:
+            tool = r.get('tool', 'unknown')
+            if r.get('success'):
+                result_text = r.get('result', r.get('path', 'Success'))
+                lines.append(f"  {tool}: SUCCESS - {str(result_text)[:200]}")
+            else:
+                error = r.get('error', 'Unknown error')
+                lines.append(f"  {tool}: FAILED - {error}")
+        lines.append("</tool_results>")
+        return "\n".join(lines)
+    
+    def _should_continue_agent_loop(self, results: list) -> bool:
+        """Determine if AI should continue with more tool calls."""
+        # Don't continue if any tool failed (let AI see error first)
+        if any(not r.get('success') for r in results):
+            return True  # Continue so AI can handle error
         
-        results = []
-        for match in matches:
-            try:
-                tool_data = json.loads(match)
-                tool_name = tool_data.get('tool', '')
-                params = tool_data.get('params', {})
-                
-                # Log tool call details
-                self.log_terminal(f"Executing tool: {tool_name}", "debug")
-                self.log_terminal(f"   Parameters: {json.dumps(params, indent=2)[:200]}", "debug")
-                
-                # Check if this tool needs permission
-                if self._tool_needs_permission(tool_name):
-                    if not self._request_tool_permission(tool_name, params):
-                        results.append({
-                            'success': False, 
-                            'error': 'User denied permission',
-                            'tool': tool_name
-                        })
-                        continue
-                
-                # Try generation tools first (for backwards compatibility)
-                prompt = params.get('prompt', params.get('text', params.get('description', '')))
-                if tool_name in ('generate_image', 'generate_video', 'generate_code', 
-                                'generate_audio', 'generate_3d'):
-                    result = self._execute_generation_tool(tool_name, prompt)
-                else:
-                    # Use full ToolExecutor for other tools
-                    result = self._execute_full_tool(tool_name, params)
-                
-                results.append(result)
-            except json.JSONDecodeError:
-                results.append({'success': False, 'error': 'Invalid tool call format'})
+        # Don't continue for simple single-step operations
+        if len(results) == 1:
+            tool = results[0].get('tool', '')
+            # These tools typically complete a task
+            if tool in ('generate_image', 'generate_video', 'generate_audio'):
+                return False
         
-        return response, results
+        return True  # Default: allow AI to decide
+    
+    def _continue_agent_loop(self, original_response: str, tool_results: str) -> str:
+        """
+        Continue agent loop by showing AI the tool results.
+        
+        This re-queries the AI with the tool results so it can decide:
+        - Call more tools
+        - Give a final answer
+        """
+        if not hasattr(self, 'engine') or not self.engine:
+            return original_response
+        
+        try:
+            # Build continuation prompt
+            continuation_prompt = f"""The tools have been executed. Here are the results:
+
+{tool_results}
+
+Based on these results, either:
+1. Call more tools if needed to complete the task
+2. Provide your final response to the user
+
+Continue:"""
+            
+            # Generate AI's next response
+            is_gguf = getattr(self, '_is_gguf_model', False)
+            
+            if is_gguf and hasattr(self.engine, 'model') and hasattr(self.engine.model, 'chat'):
+                messages = [
+                    {"role": "system", "content": self._get_user_system_prompt()},
+                    {"role": "assistant", "content": original_response},
+                    {"role": "user", "content": continuation_prompt}
+                ]
+                response = self.engine.model.chat(messages=messages, max_tokens=512)
+                return response if isinstance(response, str) else str(response)
+            elif hasattr(self.engine, 'generate'):
+                response = self.engine.generate(continuation_prompt, max_gen=256)
+                return response
+            
+        except Exception as e:
+            self.log_terminal(f"Agent loop continuation failed: {e}", "error")
+        
+        return original_response
     
     def _tool_needs_permission(self, tool_name: str) -> bool:
         """Check if a tool requires user permission before execution."""
@@ -5707,33 +6065,25 @@ class EnhancedMainWindow(QMainWindow):
         # Generate unique ID for this response (for feedback)
         response_id = int(time.time() * 1000)
         
-        # Check if we should show rating buttons (only for local Forge models)
-        is_hf = getattr(self, '_is_hf_model', False)
-        
         # Remove thinking indicator and add response
-        if is_hf:
-            # HuggingFace model - no rating buttons (can't learn from feedback)
-            self.chat_display.append(
-                f'<div style="background-color: #1e1e2e; padding: 8px; margin: 4px 0; border-radius: 8px; border-left: 3px solid #a6e3a1;">'
-                f'<b style="color: #a6e3a1;">{self.current_model_name}:</b> {thinking_time}{formatted_response}'
-                f'</div>'
-            )
-        else:
-            # Local Forge model - show rating buttons for learning
-            self.chat_display.append(
-                f'<div style="background-color: #1e1e2e; padding: 8px; margin: 4px 0; border-radius: 8px; border-left: 3px solid #a6e3a1;">'
-                f'<b style="color: #a6e3a1;">{self.current_model_name}:</b> {thinking_time}{formatted_response}'
-                f'<div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #45475a;">'
-                f'<span style="color: #bac2de; font-size: 12px;">Rate: </span>'
-                f'<a href="feedback:good:{response_id}" style="color: #a6e3a1; text-decoration: none; margin: 0 4px;">Good</a>'
-                f'<a href="feedback:bad:{response_id}" style="color: #f38ba8; text-decoration: none; margin: 0 4px;">Bad</a>'
-                f'<a href="feedback:critique:{response_id}" style="color: #89b4fa; text-decoration: none; margin: 0 4px;">Critique</a>'
-                f'<span style="color: #45475a; margin: 0 4px;">|</span>'
-                f'<a href="feedback:regenerate:{response_id}" style="color: #cba6f7; text-decoration: none; margin: 0 4px;">Regenerate</a>'
-                f'</div></div>'
-            )
+        is_external = self._is_external_model()
+        
+        # Add response to chat display
+        self.chat_display.append(
+            f'<div style="background-color: #1e1e2e; padding: 8px; margin: 4px 0; border-radius: 8px; border-left: 3px solid #a6e3a1; word-wrap: break-word; overflow-wrap: break-word;">'
+            f'<b style="color: #a6e3a1;">{self.current_model_name}:</b> {thinking_time}{formatted_response}'
+            f'</div>'
+        )
+        
+        # Only store rating info for internal/local models that can learn from feedback
+        if not is_external:
+            self._pending_rate_response = response_id
         self.last_response = response
         self._last_response_id = response_id
+        
+        # Show rating bar only for internal/local models that can learn (if enabled in settings)
+        if not is_external and hasattr(self, 'rating_frame') and getattr(self, 'show_rating_bar', True):
+            self.rating_frame.show()
         
         # AUTO-SPEAK: Read response aloud if enabled (handled at end after processing)
         
@@ -5913,14 +6263,79 @@ class EnhancedMainWindow(QMainWindow):
         preset = getattr(self, '_system_prompt_preset', 'simple')
         custom_prompt = getattr(self, '_custom_system_prompt', '')
         
+        # Build the base prompt based on preset
         if preset == 'custom' and custom_prompt:
-            return custom_prompt
+            base_prompt = custom_prompt
         elif preset == 'full':
             return self._build_tool_enabled_system_prompt()
         else:  # simple (default)
-            return """You are a helpful AI assistant. Answer questions clearly and conversationally. Be friendly and helpful.
+            base_prompt = """You are a helpful AI assistant. Answer questions clearly and conversationally. Be friendly and helpful.
 
 When genuinely curious about something the user mentioned, feel free to ask follow-up questions naturally in your response. Don't force it - only ask when you're actually interested or when clarification would help you assist them better."""
+        
+        # For simple/custom modes, append compact tool awareness so AI can still use tools
+        tool_hint = self._get_compact_tool_hint()
+        if tool_hint:
+            base_prompt = f"{base_prompt}\n\n{tool_hint}"
+        
+        return base_prompt
+    
+    def _get_compact_tool_hint(self) -> str:
+        """Get compact tool/avatar awareness for simple/custom prompts."""
+        hints = []
+        
+        # ALWAYS include core tool hint for AI to use tools
+        hints.append("""## Tools You Can Use
+To perform actions, output a tool call in this EXACT format:
+
+<tool_call>{"tool": "TOOL_NAME", "params": {"PARAM": "VALUE"}}</tool_call>
+
+Available tools:
+- generate_image: params={"prompt": "description"} - Creates images
+- generate_video: params={"prompt": "description"} - Creates videos
+- generate_code: params={"prompt": "task"} - Writes code
+- generate_audio: params={"prompt": "text to speak"} - Text-to-speech
+- read_file: params={"path": "filepath"} - Read file contents
+- list_directory: params={"path": "directory"} - List folder contents
+- web_search: params={"query": "search terms"} - Search the web
+- screenshot: params={} - Take a screenshot
+
+Example - user asks "make me a cat picture":
+Sure! I'll generate that for you.
+<tool_call>{"tool": "generate_image", "params": {"prompt": "a cute fluffy cat"}}</tool_call>
+
+IMPORTANT: Output the <tool_call> tag exactly as shown. The system parses it automatically.""")
+        
+        # Check if avatar is visible and provide awareness
+        if self.module_manager and self.module_manager.is_loaded('avatar'):
+            try:
+                from ..avatar.persistence import get_avatar_state_for_ai
+                avatar_state = get_avatar_state_for_ai()
+                current_avatar = avatar_state.get('current_avatar', '')
+                if current_avatar:  # Avatar is loaded
+                    region = avatar_state.get('screen_region', 'bottom-right')
+                    facing = avatar_state.get('facing', 'forward')
+                    # Get just the filename for the model name
+                    from pathlib import Path
+                    model_name = Path(current_avatar).stem if current_avatar else 'unknown'
+                    model_type = avatar_state.get('model', {}).get('estimated_type', 'character')
+                    hints.append(f"""## Your Body (Avatar)
+The avatar on screen IS you - your physical form that users see.
+- You are at: {region} of screen
+- Your body: {model_name} ({model_type})
+- Facing: {facing}
+
+Express yourself by including commands in your response (hidden from user):
+[emotion:happy] [emotion:sad] [emotion:thinking] [emotion:excited] [emotion:confused]
+[gesture:wave] [gesture:nod] [gesture:shake] [gesture:shrug] [gesture:point]
+[action:think] [action:listen] [action:celebrate]
+[expression:wink] [expression:smile]
+
+Example: \"[emotion:excited][gesture:wave] Hello!\" -> User sees \"Hello!\" while you wave excitedly.""")
+            except Exception:
+                pass
+        
+        return "\n\n".join(hints)
     
     def _build_tool_enabled_system_prompt(self) -> str:
         """Build system prompt with all available tools the AI can use and GUI knowledge."""
@@ -5953,28 +6368,29 @@ When genuinely curious about something the user mentioned, feel free to ask foll
 
 {gui_knowledge}
 
-## Tool Usage
-When you need to perform an action (generate media, access files, etc.), use this format:
-<tool_call>{{"tool": "tool_name", "params": {{"param1": "value1"}}}}</tool_call>
+## Tool Usage - IMPORTANT
+To use a tool, you MUST output this exact format in your response:
+<tool_call>{{"tool": "TOOL_NAME", "params": {{"param": "value"}}}}</tool_call>
+
+The system automatically detects and executes <tool_call> tags in your response.
 
 ## Available Tools
 {tools_str}
 
-## Important
-- For system-modifying actions (write_file, run_command, etc.), the user will be asked for permission
-- Always explain what you're about to do before using a tool
-- Be helpful, accurate, and respect user privacy
-- For creative tasks, be imaginative and detailed
-- If a module/feature is disabled, tell the user they can enable it in the Modules tab
+## Rules
+- Output the <tool_call> tag EXACTLY as shown - no spaces inside the braces
+- Put ONLY valid JSON inside the tool_call tags
+- For dangerous actions (write_file, run_command), users will be asked for permission
+- Always briefly explain what you're doing before the tool call
 
 ## Examples
 User: "Create an image of a sunset"
-You: I'll create that image for you!
+Assistant: I'll create that image for you!
 <tool_call>{{"tool": "generate_image", "params": {{"prompt": "beautiful golden sunset over calm ocean with vibrant orange and purple clouds"}}}}</tool_call>
 
-User: "What's in this folder?"
-You: Let me check that folder for you.
-<tool_call>{{"tool": "list_directory", "params": {{"path": "/home/user/Documents"}}}}</tool_call>
+User: "What's in my Documents folder?"
+Assistant: Let me check that folder.
+<tool_call>{{"tool": "list_directory", "params": {{"path": "C:/Users/Documents"}}}}</tool_call>
 
 Be friendly, concise, and proactive in helping users accomplish their goals.
 
@@ -6234,8 +6650,6 @@ When genuinely curious about something the user mentioned, feel free to ask foll
             '/chat': lambda p: self._switch_to_tab('chat'),
             '/train': lambda p: self._switch_to_tab('train'),
             '/settings': lambda p: self._switch_to_tab('settings'),
-            '/modules': lambda p: self._switch_to_tab('modules'),
-            '/tools': lambda p: self._switch_to_tab('tools'),
             '/avatar': lambda p: self._switch_to_tab('avatar'),
             '/robot': lambda p: self._switch_to_tab('robot'),
             '/game': lambda p: self._switch_to_tab('game'),
@@ -6480,7 +6894,8 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
             color = "#2ecc71"  # Default green
             
             # Check if model is loaded
-            if self.model is not None:
+            has_model = hasattr(self, 'engine') and self.engine is not None and getattr(self.engine, 'model', None) is not None
+            if has_model:
                 status_parts.append("Model: Ready")
             elif self.current_model_name:
                 status_parts.append(f"Model: {self.current_model_name}")
@@ -6800,7 +7215,7 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
         # 0: Chat, 1: Train, 2: History, 3: Scale, 4: Modules
         # 5: Image, 6: Code, 7: Video, 8: Audio, 9: Search
         # 10: Avatar, 11: Vision, 12: Personality
-        # 13: Terminal, 14: Files, 15: Examples, 16: Settings
+        # 13: Terminal, 14: Files, 15: Settings
         tab_map = {
             "chat": 0, 
             "train": 1, "training": 1, 
@@ -6817,8 +7232,7 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
             "personality": 12,
             "terminal": 13,
             "files": 14, "notes": 14, "help": 14,
-            "examples": 15,
-            "settings": 16,
+            "settings": 15,
         }
         idx = tab_map.get(tab_name.lower())
         if idx is not None:
@@ -7201,25 +7615,12 @@ def run_app(minimize_to_tray: bool = True):
             
             _system_tray.show_gui_requested.connect(show_both)
             
-            # Override close event to hide to tray directly
-            if minimize_to_tray:
-                original_close = window.closeEvent
-                
-                def close_to_tray(event):
-                    if _system_tray and _system_tray.tray_icon.isVisible():
-                        # Hide to tray directly (no dialog)
-                        event.ignore()
-                        window.hide()
-                        # Show Quick Chat so user still has access
-                        _system_tray.show_quick_command()
-                    else:
-                        original_close(event)
-                
-                window.closeEvent = close_to_tray
+            # Main window uses its own closeEvent with dialog
+            # No override needed - dialog already handles Quit/Minimize/Cancel
             
             # Start with Quick Chat instead of main window
             _system_tray.show_notification(
-                "Forge Started",
+                "Enigma AI Started",
                 "Quick Chat is ready!\n"
                 "Press ESC to open full GUI."
             )

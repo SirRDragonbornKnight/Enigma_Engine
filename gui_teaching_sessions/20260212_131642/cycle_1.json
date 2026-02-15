@@ -1,0 +1,29 @@
+{
+  "cycle": 1,
+  "timestamp": "2026-02-12T13:18:54.522515",
+  "pre_test": {
+    "overall": 2.8333333333333335,
+    "categories": {
+      "navigation": 2.4,
+      "training": 2.0,
+      "models": 2.0,
+      "modules": 2.4,
+      "teaching_skills": 5.4,
+      "troubleshooting": 2.8
+    }
+  },
+  "training_pairs": 83,
+  "final_loss": 2.6737625426556693,
+  "post_test": {
+    "overall": 1.9666666666666666,
+    "categories": {
+      "navigation": 2.0,
+      "training": 1.8,
+      "models": 2.0,
+      "modules": 2.0,
+      "teaching_skills": 2.0,
+      "troubleshooting": 2.0
+    }
+  },
+  "improvement": -0.8666666666666669
+}

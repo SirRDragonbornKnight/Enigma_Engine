@@ -96,9 +96,10 @@ STYLE_SECONDARY_BTN = """
         background-color: #89b4fa;
         color: #1e1e2e;
         font-weight: bold;
-        padding: 4px 8px;
+        padding: 4px 6px;
         border-radius: 4px;
         border: none;
+        font-size: 11px;
     }
     QPushButton:hover {
         background-color: #b4befe;
@@ -121,118 +122,122 @@ STYLE_THINKING_FRAME = """
 
 STYLE_INPUT_FRAME = """
     QFrame {
-        background: rgba(49, 50, 68, 0.7);
+        background: rgba(49, 50, 68, 0.9);
         border: 1px solid #45475a;
-        border-radius: 8px;
-        padding: 8px;
+        border-radius: 12px;
+        padding: 10px;
     }
 """
 
 STYLE_CHAT_INPUT = """
     QLineEdit {
-        background-color: rgba(50, 50, 50, 0.9);
-        border: 1px solid #555;
-        border-radius: 8px;
-        padding: 10px 15px;
-        font-size: 12px;
-        color: white;
+        background-color: rgba(40, 42, 54, 0.95);
+        border: 2px solid #6272a4;
+        border-radius: 10px;
+        padding: 12px 18px;
+        font-size: 14px;
+        color: #f8f8f2;
     }
     QLineEdit:focus {
-        border-color: #3498db;
+        border-color: #50fa7b;
     }
 """
 
 STYLE_SEND_BTN = """
     QPushButton {
-        background-color: #3498db;
+        background-color: #50fa7b;
         border: none;
-        border-radius: 8px;
-        color: white;
-        font-size: 11px;
+        border-radius: 10px;
+        color: #282a36;
+        font-size: 13px;
         font-weight: bold;
     }
     QPushButton:hover {
-        background-color: #2980b9;
+        background-color: #69ff94;
     }
     QPushButton:pressed {
-        background-color: #1c5980;
+        background-color: #3ad35e;
     }
 """
 
 STYLE_STOP_BTN = """
     QPushButton {
-        background-color: #e74c3c;
+        background-color: #ff5555;
         border: none;
-        border-radius: 8px;
+        border-radius: 10px;
         color: white;
-        font-size: 11px;
+        font-size: 13px;
         font-weight: bold;
     }
     QPushButton:hover {
-        background-color: #c0392b;
+        background-color: #ff6e6e;
     }
     QPushButton:pressed {
-        background-color: #922b21;
+        background-color: #cc4444;
     }
 """
 
 STYLE_REC_BTN = """
     QPushButton {
-        background-color: #444;
-        border: 2px solid #555;
-        border-radius: 8px;
-        color: #bac2de;
-        font-size: 12px;
+        background-color: #44475a;
+        border: 2px solid #6272a4;
+        border-radius: 10px;
+        color: #f8f8f2;
+        font-size: 13px;
         font-weight: bold;
     }
     QPushButton:hover {
         background-color: #555;
-        border-color: #e74c3c;
-        color: #e74c3c;
+        border-color: #ff5555;
+        color: #ff5555;
     }
     QPushButton:checked {
-        background-color: #e74c3c;
-        border-color: #c0392b;
+        background-color: #ff5555;
+        border-color: #ff5555;
         color: white;
     }
     QPushButton:checked:hover {
-        background-color: #c0392b;
+        background-color: #ff6e6e;
     }
 """
 
 STYLE_TTS_BTN = """
     QPushButton {
-        background-color: #cba6f7;
-        color: #1e1e2e;
+        background-color: #bd93f9;
+        color: #282a36;
         font-weight: bold;
-        font-size: 11px;
-        border-radius: 8px;
+        font-size: 13px;
+        border-radius: 10px;
     }
     QPushButton:hover {
-        background-color: #f5c2e7;
+        background-color: #d6acff;
+    }
+    QPushButton:checked {
+        background-color: #ff79c6;
     }
 """
 
-# Button dimensions - consistent sizing for all input buttons
-BUTTON_WIDTH_SMALL = 80
-BUTTON_WIDTH_MEDIUM = 110
-BUTTON_HEIGHT = 36
-TTS_BTN_SIZE = (80, 36)  # Match Send button size
-REC_BTN_SIZE = (80, 36)  # Match Send button size
-ATTACH_BTN_SIZE = (36, 36)
+# Button dimensions - BIG buttons for easy clicking
+BUTTON_WIDTH = 80
+BUTTON_HEIGHT = 50  # Nice tall buttons
+ATTACH_SIZE = 50  # Square attach button
+
+# Header button sizes (smaller, for toolbar)
+BUTTON_WIDTH_SMALL = 70
+BUTTON_WIDTH_MEDIUM = 100
 
 # Attachment styles
 STYLE_ATTACH_BTN = """
     QPushButton {
-        background-color: #45475a;
-        border: 1px solid #585b70;
-        border-radius: 6px;
-        color: #cdd6f4;
-        font-size: 14px;
+        background-color: #44475a;
+        border: 2px solid #6272a4;
+        border-radius: 10px;
+        color: #f8f8f2;
+        font-size: 16px;
     }
     QPushButton:hover {
-        background-color: #585b70;
-        border-color: #89b4fa;
+        background-color: #6272a4;
+        border-color: #8be9fd;
     }
 """
 
@@ -266,6 +271,7 @@ _tts_stop_requested = False
 def _create_header_section(parent, layout):
     """Build the header bar with model indicator and action buttons."""
     header_layout = QHBoxLayout()
+    header_layout.setSpacing(8)
     
     # Model indicator
     initial_model_text = "No model loaded"
@@ -276,61 +282,10 @@ def _create_header_section(parent, layout):
     parent.chat_model_label.setStyleSheet(STYLE_MODEL_LABEL)
     header_layout.addWidget(parent.chat_model_label)
     
-    # Persona dropdown selector
-    parent.persona_combo = QComboBox()
-    parent.persona_combo.setToolTip("Switch AI persona during conversation")
-    parent.persona_combo.setMinimumWidth(120)
-    parent.persona_combo.setMaximumWidth(180)
-    parent.persona_combo.setStyleSheet("""
-        QComboBox {
-            color: #a6e3a1;
-            font-weight: bold;
-            font-size: 11px;
-            padding: 4px 8px;
-            background: rgba(166, 227, 161, 0.15);
-            border: 1px solid rgba(166, 227, 161, 0.3);
-            border-radius: 4px;
-        }
-        QComboBox:hover {
-            background: rgba(166, 227, 161, 0.25);
-            border-color: rgba(166, 227, 161, 0.5);
-        }
-        QComboBox::drop-down {
-            border: none;
-            width: 20px;
-        }
-        QComboBox::down-arrow {
-            image: none;
-            border-left: 4px solid transparent;
-            border-right: 4px solid transparent;
-            border-top: 6px solid #a6e3a1;
-            margin-right: 5px;
-        }
-        QComboBox QAbstractItemView {
-            background: #313244;
-            border: 1px solid #45475a;
-            selection-background-color: rgba(166, 227, 161, 0.3);
-            color: #cdd6f4;
-        }
-    """)
-    
-    # Populate persona dropdown
-    _populate_persona_combo(parent)
-    
-    # Connect persona change
-    parent.persona_combo.currentTextChanged.connect(lambda name: _on_persona_changed(parent, name))
-    
-    header_layout.addWidget(parent.persona_combo)
+    # Persona is now set per-model in Model Router tab (not user-switchable here)
+    parent.persona_combo = None  # Keep attribute for compatibility
     
     header_layout.addStretch()
-    
-    # Prompt History button
-    parent.btn_prompt_history = QPushButton("History")
-    parent.btn_prompt_history.setToolTip("Browse and reuse previous prompts")
-    parent.btn_prompt_history.setMaximumWidth(BUTTON_WIDTH_SMALL)
-    parent.btn_prompt_history.clicked.connect(lambda: _show_prompt_history(parent))
-    parent.btn_prompt_history.setStyleSheet(STYLE_SECONDARY_BTN)
-    header_layout.addWidget(parent.btn_prompt_history)
     
     # New Chat button
     parent.btn_new_chat = QPushButton("+ New Chat")
@@ -356,13 +311,15 @@ def _create_header_section(parent, layout):
     parent.btn_save_chat.setStyleSheet(STYLE_SECONDARY_BTN)
     header_layout.addWidget(parent.btn_save_chat)
     
-    # Summarize button - compress conversation for context/handoff
-    parent.btn_summarize = QPushButton("Summary")
-    parent.btn_summarize.setToolTip("Summarize conversation for context or handoff to another AI")
-    parent.btn_summarize.setMaximumWidth(BUTTON_WIDTH_SMALL)
-    parent.btn_summarize.clicked.connect(lambda: _summarize_chat(parent))
-    parent.btn_summarize.setStyleSheet(STYLE_SECONDARY_BTN)
-    header_layout.addWidget(parent.btn_summarize)
+    # Web Server button
+    parent.btn_web_server = QPushButton("Web")
+    parent.btn_web_server.setToolTip("Start web server for phone access")
+    parent.btn_web_server.setMaximumWidth(BUTTON_WIDTH_SMALL)
+    parent.btn_web_server.clicked.connect(lambda: _toggle_web_server(parent))
+    parent.btn_web_server.setStyleSheet(STYLE_SECONDARY_BTN)
+    parent._web_server_running = False
+    parent._web_server_thread = None
+    header_layout.addWidget(parent.btn_web_server)
     
     layout.addLayout(header_layout)
 
@@ -459,42 +416,34 @@ def _create_chat_display(parent, layout):
     parent.chat_display.setOpenExternalLinks(False)
     parent.chat_display.anchorClicked.connect(lambda url: _handle_chat_link(parent, url))
     
+    # Enable word wrap - text wraps at widget edge
+    parent.chat_display.setLineWrapMode(QTextBrowser.WidgetWidth)
+    parent.chat_display.setWordWrapMode(3)  # WrapAtWordBoundaryOrAnywhere
+    
     # Show welcome message for first-time users
     no_model = not (hasattr(parent, 'current_model_name') and parent.current_model_name)
     if no_model:
         parent.chat_display.setHtml("""
 <div style="text-align: center; padding: 40px;">
-<h2 style="color: #89b4fa;">Welcome to Enigma AI Engine!</h2>
-<p style="color: #cdd6f4; font-size: 14px;">
-Create your first AI to start chatting.
-</p>
-<p style="color: #bac2de; font-size: 12px; margin-top: 20px;">
-<b>Getting Started:</b><br>
-1. Go to <b>Model Manager</b> (bottom-left)<br>
-2. Click <b>+ Template</b> to create from a ready-made kit<br>
-3. Or click <b>+ New</b> for a blank AI
-</p>
-<p style="color: #6c7086; font-size: 11px; margin-top: 30px;">
-Tip: The "Friendly Chatbot" template includes training data<br>
-so your AI can chat right away!
-</p>
+<h2 style="color: #89b4fa;">Welcome to Enigma AI</h2>
 </div>
 """)
     else:
-        parent.chat_display.setPlaceholderText(
-            "Start chatting with your AI...\n\n"
-            "Tips:\n"
-            "- Just ask naturally - 'Generate an image of a sunset'\n"
-            "- The AI auto-detects what you want to create\n"
-            "- Rate responses to help the AI learn\n"
-            "- Click 'Regenerate' on AI responses to get alternate versions\n"
-            "- Press Ctrl+F to search"
-        )
+        parent.chat_display.setPlaceholderText("")
     parent.chat_display.setStyleSheet("""
-        QTextEdit {
+        QTextBrowser, QTextEdit {
             font-size: 12px;
             line-height: 1.5;
             padding: 10px;
+        }
+    """)
+    
+    # Set default document stylesheet for word wrapping
+    parent.chat_display.document().setDefaultStyleSheet("""
+        div, p, span {
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            white-space: pre-wrap;
         }
     """)
     layout.addWidget(parent.chat_display, stretch=1)
@@ -571,8 +520,8 @@ def _create_input_section(parent, layout):
     input_frame.dropEvent = lambda e: _drop_event(parent, e)
     
     input_layout = QHBoxLayout(input_frame)
-    input_layout.setContentsMargins(8, 8, 8, 8)
-    input_layout.setSpacing(8)
+    input_layout.setContentsMargins(12, 12, 12, 12)
+    input_layout.setSpacing(12)
     
     # Attach button (before input) - uses link icon
     from pathlib import Path
@@ -581,31 +530,25 @@ def _create_input_section(parent, layout):
     if icon_path.exists():
         parent.attach_btn.setIcon(QIcon(str(icon_path)))
     else:
-        parent.attach_btn.setText("ATT")  # Fallback text
-    parent.attach_btn.setFixedSize(*ATTACH_BTN_SIZE)
+        parent.attach_btn.setText("+")  # Fallback text
+    parent.attach_btn.setFixedSize(ATTACH_SIZE, ATTACH_SIZE)
     parent.attach_btn.setToolTip("Attach file, image, or video (Ctrl+Shift+V to paste)")
     parent.attach_btn.setStyleSheet(STYLE_ATTACH_BTN)
     parent.attach_btn.clicked.connect(lambda: _attach_file(parent))
     input_layout.addWidget(parent.attach_btn)
     
-    # Text input
+    # Text input - the main chat box
     parent.chat_input = QLineEdit()
     parent.chat_input.setPlaceholderText("Chat here... (drag files or Ctrl+V to paste images)")
     parent.chat_input.returnPressed.connect(parent._on_send)
     parent.chat_input.setToolTip("Type your message and press Enter or click Send")
     parent.chat_input.setStyleSheet(STYLE_CHAT_INPUT)
-    parent.chat_input.textChanged.connect(lambda text: _update_token_count(parent, text))
+    parent.chat_input.setFixedHeight(BUTTON_HEIGHT)
     input_layout.addWidget(parent.chat_input, stretch=1)
-    
-    # Token counter label
-    parent.token_count_label = QLabel("0 chars")
-    parent.token_count_label.setStyleSheet("color: #6c7086; font-size: 10px; min-width: 65px;")
-    parent.token_count_label.setToolTip("Approximate character/token count")
-    input_layout.addWidget(parent.token_count_label)
     
     # Send button
     parent.send_btn = QPushButton("Send")
-    parent.send_btn.setFixedSize(BUTTON_WIDTH_SMALL, BUTTON_HEIGHT)
+    parent.send_btn.setFixedSize(BUTTON_WIDTH, BUTTON_HEIGHT)
     parent.send_btn.clicked.connect(parent._on_send)
     parent.send_btn.setToolTip("Send your message (Enter)")
     parent.send_btn.setStyleSheet(STYLE_SEND_BTN)
@@ -614,7 +557,7 @@ def _create_input_section(parent, layout):
     # Stop button (hidden by default)
     parent.stop_btn = QPushButton("Stop")
     parent.stop_btn.setToolTip("Stop AI generation")
-    parent.stop_btn.setFixedSize(BUTTON_WIDTH_SMALL, BUTTON_HEIGHT)
+    parent.stop_btn.setFixedSize(BUTTON_WIDTH, BUTTON_HEIGHT)
     parent.stop_btn.setStyleSheet(STYLE_STOP_BTN)
     parent.stop_btn.clicked.connect(lambda: _stop_generation(parent))
     parent.stop_btn.hide()
@@ -622,7 +565,7 @@ def _create_input_section(parent, layout):
     
     # Voice record button
     parent.rec_btn = QPushButton("REC")
-    parent.rec_btn.setFixedSize(*REC_BTN_SIZE)
+    parent.rec_btn.setFixedSize(BUTTON_WIDTH, BUTTON_HEIGHT)
     parent.rec_btn.setToolTip("Record - Click to speak (Shift+Click to save as voice message)")
     parent.rec_btn.setCheckable(True)
     parent.rec_btn.setStyleSheet(STYLE_REC_BTN)
@@ -632,7 +575,7 @@ def _create_input_section(parent, layout):
     # TTS button - toggles voice mode
     parent.btn_speak = QPushButton("Voice")
     parent.btn_speak.setToolTip("Toggle voice mode - AI will speak responses aloud")
-    parent.btn_speak.setFixedSize(*TTS_BTN_SIZE)
+    parent.btn_speak.setFixedSize(BUTTON_WIDTH, BUTTON_HEIGHT)
     parent.btn_speak.setCheckable(True)
     parent.btn_speak.setStyleSheet(STYLE_TTS_BTN)
     parent.btn_speak.clicked.connect(lambda: _toggle_voice_mode(parent))
@@ -641,13 +584,16 @@ def _create_input_section(parent, layout):
     # TTS Stop button (hidden by default)
     parent.btn_stop_tts = QPushButton("Stop")
     parent.btn_stop_tts.setToolTip("Stop speech")
-    parent.btn_stop_tts.setFixedSize(*TTS_BTN_SIZE)
+    parent.btn_stop_tts.setFixedSize(BUTTON_WIDTH, BUTTON_HEIGHT)
     parent.btn_stop_tts.setStyleSheet(STYLE_STOP_BTN)
     parent.btn_stop_tts.clicked.connect(lambda: _stop_tts(parent))
     parent.btn_stop_tts.hide()
     input_layout.addWidget(parent.btn_stop_tts)
     
     layout.addWidget(input_frame)
+    
+    # Rating bar - shows after AI response, hides after next user message
+    _create_rating_bar(parent, layout)
     
     # Setup Ctrl+V paste shortcut for images
 
@@ -708,7 +654,7 @@ def _create_status_bar(parent, layout):
         "- Each Q&A pair is saved to the model's training data\n"
         "- After enough interactions, the model can be retrained\n"
         "- This helps the AI learn your preferences and style\n\n"
-        "Note: Learning only works with local Forge models.\n"
+        "Note: Learning only works with local Enigma models.\n"
         "HuggingFace models (GPT-2, Mistral, etc.) don't use this feature.\n\n"
         "Toggle in Settings menu or click here to toggle."
     )
@@ -719,6 +665,94 @@ def _create_status_bar(parent, layout):
     # Note: Voice toggle moved to input area (btn_speak) to reduce redundant indicators
     
     layout.addLayout(bottom_layout)
+
+
+def _create_rating_bar(parent, layout):
+    """Create a compact rating bar that shows after AI responses."""
+    from PyQt5.QtWidgets import QFrame, QHBoxLayout, QPushButton, QLabel
+    
+    parent.rating_frame = QFrame()
+    parent.rating_frame.setStyleSheet("""
+        QFrame {
+            background-color: #313244;
+            border-radius: 6px;
+            padding: 4px;
+            margin: 2px 0;
+        }
+        QPushButton {
+            background-color: transparent;
+            border: 1px solid #45475a;
+            border-radius: 4px;
+            padding: 4px 12px;
+            color: #cdd6f4;
+            font-size: 11px;
+        }
+        QPushButton:hover {
+            background-color: #45475a;
+        }
+    """)
+    
+    rating_layout = QHBoxLayout(parent.rating_frame)
+    rating_layout.setContentsMargins(8, 4, 8, 4)
+    rating_layout.setSpacing(8)
+    
+    # Label
+    rate_label = QLabel("Rate response:")
+    rate_label.setStyleSheet("color: #bac2de; font-size: 11px; border: none;")
+    rating_layout.addWidget(rate_label)
+    
+    # Good button
+    good_btn = QPushButton("Good")
+    good_btn.setStyleSheet("QPushButton { color: #a6e3a1; } QPushButton:hover { background-color: #2d4a2d; }")
+    good_btn.setToolTip("Mark this response as helpful")
+    good_btn.clicked.connect(lambda: _rate_response(parent, 'good'))
+    rating_layout.addWidget(good_btn)
+    
+    # Bad button  
+    bad_btn = QPushButton("Bad")
+    bad_btn.setStyleSheet("QPushButton { color: #f38ba8; } QPushButton:hover { background-color: #4a2d2d; }")
+    bad_btn.setToolTip("Mark this response as unhelpful")
+    bad_btn.clicked.connect(lambda: _rate_response(parent, 'bad'))
+    rating_layout.addWidget(bad_btn)
+    
+    # Critique button
+    critique_btn = QPushButton("Critique")
+    critique_btn.setStyleSheet("QPushButton { color: #89b4fa; } QPushButton:hover { background-color: #2d3a4a; }")
+    critique_btn.setToolTip("Provide detailed feedback and correction")
+    critique_btn.clicked.connect(lambda: _rate_response(parent, 'critique'))
+    rating_layout.addWidget(critique_btn)
+    
+    rating_layout.addStretch()
+    
+    # Dismiss button
+    dismiss_btn = QPushButton("X")
+    dismiss_btn.setFixedWidth(24)
+    dismiss_btn.setToolTip("Hide rating bar")
+    dismiss_btn.clicked.connect(parent.rating_frame.hide)
+    rating_layout.addWidget(dismiss_btn)
+    
+    parent.rating_frame.hide()  # Hidden by default
+    layout.addWidget(parent.rating_frame)
+
+
+def _rate_response(parent, rating_type: str):
+    """Handle rating button clicks from the rating bar."""
+    response_id = getattr(parent, '_pending_rate_response', None)
+    if not response_id:
+        parent.chat_status.setText("No response to rate")
+        parent.rating_frame.hide()
+        return
+    
+    # Create mock URL for the existing feedback handler
+    class MockUrl:
+        def toString(self):
+            return f"feedback:{rating_type}:{response_id}"
+    
+    _handle_feedback_link(parent, MockUrl())
+    
+    # Hide rating bar after rating (unless critique which opens dialog)
+    if rating_type != 'critique':
+        parent.rating_frame.hide()
 
 
 def _init_context_tracker(parent):
@@ -860,7 +894,7 @@ def _smart_continue(parent, show_notification=False):
             # Add summary to chat display
             parent.chat_display.append(
                 f'<div style="color: #89b4fa; font-style: italic; padding: 8px; '
-                f'border-left: 3px solid #89b4fa; margin: 8px 0;">'
+                f'border-left: 3px solid #89b4fa; margin: 8px 0; word-wrap: break-word; overflow-wrap: break-word;">'
                 f'<strong>Continued from previous conversation:</strong><br/>'
                 f'{summary.replace(chr(10), "<br/>")}</div>'
             )
@@ -878,11 +912,11 @@ def _smart_continue(parent, show_notification=False):
             content = msg.get("content", "")
             if role == "user":
                 parent.chat_display.append(
-                    f'<div style="color: #89dceb;"><strong>You:</strong> {content}</div>'
+                    f'<div style="color: #89dceb; word-wrap: break-word; overflow-wrap: break-word;"><strong>You:</strong> {content}</div>'
                 )
             elif role == "assistant":
                 parent.chat_display.append(
-                    f'<div style="color: #a6e3a1;"><strong>AI:</strong> {content}</div>'
+                    f'<div style="color: #a6e3a1; word-wrap: break-word; overflow-wrap: break-word;"><strong>AI:</strong> {content}</div>'
                 )
             
             # Add to conversation history
@@ -1333,8 +1367,8 @@ def create_chat_tab(parent):
     """
     chat_widget = QWidget()
     main_layout = QVBoxLayout()
-    main_layout.setSpacing(6)
-    main_layout.setContentsMargins(6, 6, 6, 6)
+    main_layout.setSpacing(10)
+    main_layout.setContentsMargins(12, 12, 12, 12)
     
     # Build each section using helper functions
     _create_header_section(parent, main_layout)
@@ -1452,7 +1486,11 @@ def _update_voice_button_state(parent):
 
 
 def _update_token_count(parent, text: str):
-    """Update the token counter label as user types."""
+    """Update the token counter label as user types (if it exists)."""
+    # Token counter was removed - this function is kept for backwards compatibility
+    if not hasattr(parent, 'token_count_label'):
+        return
+    
     char_count = len(text)
     # Rough token estimate: ~4 chars per token for English
     token_estimate = char_count // 4
@@ -1885,17 +1923,17 @@ def _refresh_chat_display(parent):
                 '''
             
             html_parts.append(f'''
-            <div style="background: #313244; padding: 10px; margin: 5px 0; border-radius: 8px;">
+            <div style="background: #313244; padding: 10px; margin: 5px 0; border-radius: 8px; word-wrap: break-word; overflow-wrap: break-word;">
                 <b style="color: #89b4fa;">AI:</b>
                 {nav_html}
-                <div style="color: #cdd6f4;">{content}</div>
+                <div style="color: #cdd6f4; word-wrap: break-word; overflow-wrap: break-word;">{content}</div>
             </div>
             ''')
         else:
             html_parts.append(f'''
-            <div style="background: #45475a; padding: 10px; margin: 5px 0; border-radius: 8px;">
+            <div style="background: #45475a; padding: 10px; margin: 5px 0; border-radius: 8px; word-wrap: break-word; overflow-wrap: break-word;">
                 <b style="color: #f9e2af;">You:</b>
-                <div style="color: #cdd6f4;">{content}</div>
+                <div style="color: #cdd6f4; word-wrap: break-word; overflow-wrap: break-word;">{content}</div>
             </div>
             ''')
     
@@ -2339,6 +2377,129 @@ def _save_chat(parent):
         parent.chat_status.setText("Chat saved!")
     else:
         parent.chat_status.setText("Save not available")
+
+
+def _toggle_web_server(parent):
+    """Toggle the web server for phone/remote access."""
+    import socket
+    import threading
+    import webbrowser
+    
+    from PyQt5.QtWidgets import QMessageBox
+    
+    if parent._web_server_running:
+        # Server is running - just open browser
+        port = getattr(parent, '_web_port', 5000)
+        local_ip = _get_local_ip()
+        
+        # Check if we have a tunnel URL
+        tunnel_url = getattr(parent, '_tunnel_url', None)
+        if tunnel_url:
+            url = tunnel_url
+        else:
+            url = f"http://{local_ip}:{port}/app"
+        
+        webbrowser.open(url)
+        parent.chat_status.setText(f"Web UI: {url}")
+    else:
+        # Start the server
+        try:
+            from ...web.app import app as flask_app
+            
+            port = 5000
+            parent._web_port = port
+            parent._flask_app = flask_app
+            
+            def run_server():
+                try:
+                    parent._flask_app.run(
+                        host="0.0.0.0",
+                        port=port,
+                        debug=False,
+                        use_reloader=False,
+                        threaded=True
+                    )
+                except Exception as e:
+                    print(f"Web server error: {e}")
+            
+            parent._web_server_thread = threading.Thread(target=run_server, daemon=True)
+            parent._web_server_thread.start()
+            parent._web_server_running = True
+            
+            # Try to start ngrok tunnel for remote access
+            tunnel_url = None
+            try:
+                import pyngrok.ngrok as ngrok_module
+                tunnel = ngrok_module.connect(port, "http")
+                tunnel_url = tunnel.public_url
+                parent._tunnel_url = tunnel_url
+                parent._ngrok_tunnel = tunnel
+            except ImportError:
+                pass  # ngrok not installed
+            except Exception as e:
+                print(f"Ngrok tunnel failed: {e}")
+            
+            # Update button appearance
+            parent.btn_web_server.setStyleSheet("""
+                QPushButton {
+                    background-color: #a6e3a1;
+                    color: #1e1e2e;
+                    border: none;
+                    border-radius: 4px;
+                    padding: 4px 8px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #94e2d5;
+                }
+            """)
+            parent.btn_web_server.setText("Web ON")
+            
+            local_ip = _get_local_ip()
+            local_url = f"http://{local_ip}:{port}/app"
+            
+            # Build message
+            if tunnel_url:
+                msg_text = (
+                    f"Web server running!\n\n"
+                    f"LOCAL (same WiFi):\n{local_url}\n\n"
+                    f"REMOTE (anywhere):\n{tunnel_url}/app\n\n"
+                    f"Tap 'Install' in the app to add to home screen."
+                )
+                parent.chat_status.setText(f"Web: {tunnel_url}/app")
+            else:
+                msg_text = (
+                    f"Web server running!\n\n"
+                    f"On your phone, open:\n{local_url}\n\n"
+                    f"Both devices must be on same WiFi.\n\n"
+                    f"For remote access anywhere:\n"
+                    f"pip install pyngrok\n"
+                    f"Then restart the web server."
+                )
+                parent.chat_status.setText(f"Web: {local_url}")
+            
+            # Open browser
+            webbrowser.open(local_url)
+            
+            # Show instructions
+            QMessageBox.information(parent, "Web Server Started", msg_text)
+            
+        except Exception as e:
+            parent.chat_status.setText(f"Server error: {e}")
+            QMessageBox.warning(parent, "Error", f"Failed to start web server:\n{e}")
+
+
+def _get_local_ip():
+    """Get the local IP address for network access."""
+    import socket
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "localhost"
 
 
 def _summarize_chat(parent):
@@ -2789,10 +2950,27 @@ def _show_critique_dialog(parent, response_id, response_data):
     
     layout.addWidget(QLabel("<b>What should the AI have said instead?</b>"))
     
+    # Cheat sheet - help users write good corrections
+    cheat_label = QLabel(
+        "<div style='color: #89b4fa; font-size: 11px; padding: 6px; "
+        "background-color: #313244; border-radius: 4px; margin-bottom: 8px;'>"
+        "<b>Tips for good corrections:</b><br>"
+        "- Be specific and direct<br>"
+        "- Include relevant details the AI missed<br>"
+        "- Use natural language (how you'd actually want it to respond)<br>"
+        "- For emotional questions: show empathy (\"I'm doing well!\" not just \"fine\")<br>"
+        "- For factual questions: include the correct facts<br>"
+        "- Keep a consistent tone and personality"
+        "</div>"
+    )
+    cheat_label.setWordWrap(True)
+    layout.addWidget(cheat_label)
+    
     correction_input = QTextEdit()
     correction_input.setPlaceholderText(
         "Write the ideal response here...\n\n"
-        "This will be saved as training data to improve the AI."
+        "Example: If user asked 'How are you?' and AI said 'hi',\n"
+        "you might write: 'I'm doing great, thanks for asking! How about you?'"
     )
     correction_input.setMaximumHeight(150)
     layout.addWidget(correction_input)

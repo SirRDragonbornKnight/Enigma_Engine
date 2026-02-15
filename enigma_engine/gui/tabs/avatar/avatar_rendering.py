@@ -89,14 +89,14 @@ class OpenGL3DWidget(QOpenGLWidget):
         
         # Camera
         self.rotation_x = 15.0  # Slight tilt for better view
-        self.rotation_y = 0.0  # Face forward (front-facing)
+        self.rotation_y = 180.0  # Most 3D models export facing -Z, so 180 shows the front
         self.zoom = 3.0
         self.pan_x = 0.0
         self.pan_y = 0.0
         
         # Default camera settings (for reset)
         self._default_rotation_x = 15.0
-        self._default_rotation_y = 0.0
+        self._default_rotation_y = 180.0
         self._default_zoom = 3.0
         
         # Interaction
@@ -126,6 +126,12 @@ class OpenGL3DWidget(QOpenGLWidget):
         self.model_pitch = 0.0  # Rotation around X axis (radians)
         self.model_yaw = 0.0    # Rotation around Y axis (radians)
         self.model_roll = 0.0   # Rotation around Z axis (radians)
+        
+        # Scene objects - 3D props/items placed in the scene (by user or AI)
+        # Each object: {id: str, path: str, name: str, vertices: np.array, faces: np.array,
+        #               normals: np.array, colors: np.array, position: [x,y,z], rotation: [x,y,z], scale: float}
+        self.scene_objects: list[dict] = []
+        self._next_object_id = 1
         
         # Flag to disable mouse interaction (used in overlay mode where parent handles mouse)
         self.disable_mouse_interaction = False
@@ -559,6 +565,255 @@ class OpenGL3DWidget(QOpenGLWidget):
         """Get the analyzed model metadata for AI use."""
         return getattr(self, '_model_metadata', {})
     
+    # ==========================================================================
+    # Scene Object Management (3D Props/Items)
+    # ==========================================================================
+    
+    def add_scene_object(self, path: str, position: list[float] | None = None,
+                         rotation: list[float] | None = None, scale: float = 1.0) -> str | None:
+        """Add a 3D object to the scene.
+        
+        Args:
+            path: Path to the 3D model file (GLB, GLTF, OBJ, etc.)
+            position: [x, y, z] position in scene (default: [0, 0, 0])
+            rotation: [pitch, yaw, roll] rotation in degrees (default: [0, 0, 0])
+            scale: Scale factor (default: 1.0)
+            
+        Returns:
+            Object ID if successful, None if failed
+        """
+        if not HAS_TRIMESH or trimesh is None or np is None:
+            print("[Scene] Cannot add object - trimesh not available")
+            return None
+        
+        if position is None:
+            position = [0.0, -0.5, 0.0]  # Default on ground
+        if rotation is None:
+            rotation = [0.0, 0.0, 0.0]
+        
+        try:
+            # Load the model
+            scene = trimesh.load(str(path), force='scene')
+            
+            # Collect meshes
+            all_vertices = []
+            all_faces = []
+            all_normals = []
+            all_colors = []
+            vertex_offset = 0
+            
+            if hasattr(scene, 'geometry') and scene.geometry:
+                meshes = list(scene.geometry.values())
+            else:
+                meshes = [scene]
+            
+            for mesh in meshes:
+                if not hasattr(mesh, 'vertices') or len(mesh.vertices) == 0:
+                    continue
+                
+                verts = np.array(mesh.vertices, dtype=np.float32)
+                faces = np.array(mesh.faces, dtype=np.uint32) + vertex_offset
+                
+                all_vertices.append(verts)
+                all_faces.append(faces)
+                
+                # Normals
+                if hasattr(mesh, 'vertex_normals') and mesh.vertex_normals is not None:
+                    all_normals.append(np.array(mesh.vertex_normals, dtype=np.float32))
+                else:
+                    all_normals.append(np.zeros_like(verts))
+                
+                # Colors
+                mesh_colors = self._extract_mesh_colors(mesh, len(verts))
+                all_colors.append(mesh_colors)
+                
+                vertex_offset += len(verts)
+            
+            if not all_vertices:
+                print(f"[Scene] No mesh data in {path}")
+                return None
+            
+            vertices = np.vstack(all_vertices).astype(np.float32)
+            faces = np.vstack(all_faces).astype(np.uint32)
+            normals = np.vstack(all_normals).astype(np.float32) if all_normals else None
+            colors = np.vstack(all_colors).astype(np.float32) if all_colors else None
+            
+            # Create object entry
+            obj_id = f"obj_{self._next_object_id}"
+            self._next_object_id += 1
+            
+            obj = {
+                'id': obj_id,
+                'path': str(path),
+                'name': Path(path).stem,
+                'vertices': vertices,
+                'faces': faces,
+                'normals': normals,
+                'colors': colors,
+                'position': list(position),
+                'rotation': list(rotation),
+                'scale': float(scale),
+            }
+            
+            self.scene_objects.append(obj)
+            self.update()
+            
+            print(f"[Scene] Added object '{obj['name']}' (id: {obj_id}) at {position}")
+            return obj_id
+            
+        except Exception as e:
+            print(f"[Scene] Failed to add object: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
+    def remove_scene_object(self, obj_id: str) -> bool:
+        """Remove a scene object by ID.
+        
+        Args:
+            obj_id: The object ID to remove
+            
+        Returns:
+            True if removed, False if not found
+        """
+        for i, obj in enumerate(self.scene_objects):
+            if obj['id'] == obj_id:
+                removed = self.scene_objects.pop(i)
+                self.update()
+                print(f"[Scene] Removed object '{removed['name']}' (id: {obj_id})")
+                return True
+        print(f"[Scene] Object not found: {obj_id}")
+        return False
+    
+    def move_scene_object(self, obj_id: str, position: list[float]) -> bool:
+        """Move a scene object to a new position.
+        
+        Args:
+            obj_id: The object ID to move
+            position: [x, y, z] new position
+            
+        Returns:
+            True if moved, False if not found
+        """
+        for obj in self.scene_objects:
+            if obj['id'] == obj_id:
+                obj['position'] = list(position)
+                self.update()
+                print(f"[Scene] Moved '{obj['name']}' to {position}")
+                return True
+        return False
+    
+    def rotate_scene_object(self, obj_id: str, rotation: list[float]) -> bool:
+        """Rotate a scene object.
+        
+        Args:
+            obj_id: The object ID to rotate
+            rotation: [pitch, yaw, roll] in degrees
+            
+        Returns:
+            True if rotated, False if not found
+        """
+        for obj in self.scene_objects:
+            if obj['id'] == obj_id:
+                obj['rotation'] = list(rotation)
+                self.update()
+                print(f"[Scene] Rotated '{obj['name']}' to {rotation}")
+                return True
+        return False
+    
+    def scale_scene_object(self, obj_id: str, scale: float) -> bool:
+        """Scale a scene object.
+        
+        Args:
+            obj_id: The object ID to scale
+            scale: Scale factor
+            
+        Returns:
+            True if scaled, False if not found
+        """
+        for obj in self.scene_objects:
+            if obj['id'] == obj_id:
+                obj['scale'] = float(scale)
+                self.update()
+                print(f"[Scene] Scaled '{obj['name']}' to {scale}")
+                return True
+        return False
+    
+    def get_scene_objects(self) -> list[dict]:
+        """Get list of scene objects with their properties (for AI awareness).
+        
+        Returns:
+            List of objects with id, name, position, rotation, scale
+        """
+        return [
+            {
+                'id': obj['id'],
+                'name': obj['name'],
+                'position': obj['position'],
+                'rotation': obj['rotation'],
+                'scale': obj['scale'],
+            }
+            for obj in self.scene_objects
+        ]
+    
+    def clear_scene_objects(self) -> None:
+        """Remove all scene objects."""
+        count = len(self.scene_objects)
+        self.scene_objects.clear()
+        self.update()
+        print(f"[Scene] Cleared {count} objects")
+    
+    def _render_scene_objects(self):
+        """Render all scene objects. Called from paintGL."""
+        if not HAS_OPENGL or GL is None:
+            return
+        
+        for obj in self.scene_objects:
+            GL.glPushMatrix()
+            
+            # Position
+            x, y, z = obj['position']
+            GL.glTranslatef(x, y, z)
+            
+            # Rotation (pitch, yaw, roll in degrees)
+            pitch, yaw, roll = obj['rotation']
+            GL.glRotatef(pitch, 1, 0, 0)
+            GL.glRotatef(yaw, 0, 1, 0)
+            GL.glRotatef(roll, 0, 0, 1)
+            
+            # Scale
+            scale = obj['scale']
+            GL.glScalef(scale, scale, scale)
+            
+            # Render
+            vertices = obj['vertices']
+            faces = obj['faces']
+            normals = obj.get('normals')
+            colors = obj.get('colors')
+            
+            if colors is not None and not self.wireframe_mode:
+                GL.glEnableClientState(GL.GL_COLOR_ARRAY)
+                GL.glColorPointer(3, GL.GL_FLOAT, 0, colors)
+            else:
+                GL.glColor3f(0.6, 0.65, 0.75)  # Default gray
+            
+            GL.glEnableClientState(GL.GL_VERTEX_ARRAY)
+            GL.glVertexPointer(3, GL.GL_FLOAT, 0, vertices)
+            
+            if normals is not None:
+                GL.glEnableClientState(GL.GL_NORMAL_ARRAY)
+                GL.glNormalPointer(GL.GL_FLOAT, 0, normals)
+            
+            GL.glDrawElements(GL.GL_TRIANGLES, len(faces) * 3, GL.GL_UNSIGNED_INT, faces)
+            
+            GL.glDisableClientState(GL.GL_VERTEX_ARRAY)
+            if normals is not None:
+                GL.glDisableClientState(GL.GL_NORMAL_ARRAY)
+            if colors is not None and not self.wireframe_mode:
+                GL.glDisableClientState(GL.GL_COLOR_ARRAY)
+            
+            GL.glPopMatrix()
+
     def _load_vrm_data(self, path: str):
         """Load VRM-specific data (expressions, humanoid bones, metadata)."""
         try:
@@ -967,6 +1222,10 @@ class OpenGL3DWidget(QOpenGLWidget):
                     GL.glDisableClientState(GL.GL_COLOR_ARRAY)
                     
                 GL.glPolygonMode(GL.GL_FRONT_AND_BACK, GL.GL_FILL)
+            
+            # Render scene objects (3D props placed by user or AI)
+            if self.scene_objects:
+                self._render_scene_objects()
         except Exception as e:
             if not getattr(self, '_paint_error_logged', False):
                 print(f"OpenGL paint error: {e}")

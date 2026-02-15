@@ -193,6 +193,37 @@ The module manager automatically prevents:
 - **Font Sizes**: Use 10-12px for most UI elements. Never exceed 14px except for headings.
 - **Consistent Styling**: Follow existing PyQt5 stylesheet patterns in the codebase.
 
+## AI Control System
+
+The AI can control the GUI, system, robots, and more via tools. See **AI_CONTROL_API.md** for complete reference.
+
+### Tool Categories
+| Category | Tools | File |
+|----------|-------|------|
+| Avatar | control_avatar, control_avatar_bones, customize_avatar | tool_definitions.py |
+| Generation | generate_image, generate_code, generate_video, generate_audio | tool_definitions.py |
+| Perception | screenshot, screen_ocr, analyze_image | vision.py |
+| System | run_command, get_system_info, clipboard_read/write | system_tools.py |
+| Files | read_file, write_file, list_directory, search_files | file_tools.py |
+| Web | web_search, fetch_url, browse_page | web_tools.py |
+| Robot | robot_move, robot_gripper, robot_home | robot_tools.py |
+| Game | GameAIRouter for per-game AI configs | game_router.py |
+| Automation | schedule_task, record_macro, play_macro | automation_tools.py |
+
+### Key Files
+- **enigma_engine/tools/tool_executor.py**: Executes tool calls safely with timeouts
+- **enigma_engine/tools/tool_definitions.py**: All tool schemas (ToolDefinition, ToolParameter)
+- **enigma_engine/tools/tool_registry.py**: Tool registration and lookup
+- **enigma_engine/avatar/bone_control.py**: PRIMARY avatar control via bone rigging
+- **enigma_engine/tools/game_router.py**: Game-specific AI routing
+
+### Example Tool Call
+```python
+from enigma_engine.tools.tool_executor import ToolExecutor
+executor = ToolExecutor()
+result = executor.execute("control_avatar", action="jump")
+```
+
 ## What NOT To Do
 
 ❌ **DON'T load conflicting modules** - e.g., both `image_gen_local` AND `image_gen_api`

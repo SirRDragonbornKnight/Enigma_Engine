@@ -234,42 +234,43 @@ FIND_ON_SCREEN = ToolDefinition(
     ],
 )
 
-# --- Avatar Control Tools ---
+# --- Avatar Control Tools (Advanced/Manual Override) ---
+# NOTE: Primary avatar control is through inline commands in AI responses:
+#   [emotion:happy] [gesture:wave] [action:think] etc.
+# These tools are for advanced/programmatic control.
 
 CONTROL_AVATAR = ToolDefinition(
     name="control_avatar",
-    description="Control the desktop avatar - move it, make it jump, pin it in place, or show/hide it. The avatar is a 3D character that appears on the desktop.",
+    description="[ADVANCED] Manual override for avatar control. For normal expression, use inline commands like [emotion:happy] in your response instead. This tool is for programmatic control like moving position or showing/hiding.",
     category="control",
     module="avatar",
     parameters=[
         ToolParameter(
             name="action",
             type="string",
-            description="Action to perform on the avatar",
+            description="Action to perform",
             required=True,
             enum=["show", "hide", "jump", "pin", "unpin", "move", "resize", "orientation"],
         ),
         ToolParameter(
             name="value",
             type="string",
-            description="Value for the action. For 'move': 'x,y' coordinates. For 'resize': pixel size like '250'. For 'orientation': 'front', 'back', 'left', 'right', or 'x,y' rotation angles.",
+            description="Value for the action. For 'move': 'x,y' coordinates. For 'resize': pixel size like '250'. For 'orientation': 'front', 'back', 'left', 'right'.",
             required=False,
             default="",
         ),
     ],
     examples=[
-        "Show the avatar on desktop",
-        "Make the avatar jump",
-        "Pin the avatar in place so it doesn't fall",
-        "Move the avatar to position 100,200",
-        "Hide the avatar",
-        "Turn the avatar to face left",
+        "Show my avatar on desktop",
+        "Move to position 100,200",
+        "Resize to 300 pixels",
+        "Turn to face left",
     ],
 )
 
 CUSTOMIZE_AVATAR = ToolDefinition(
     name="customize_avatar",
-    description="Customize the avatar's visual appearance (colors, lighting, rotation speed)",
+    description="[ADVANCED] Change avatar visual appearance programmatically (colors, lighting). For expressions, use inline [emotion:X] commands instead.",
     category="control",
     module="avatar",
     parameters=[
@@ -299,7 +300,7 @@ CUSTOMIZE_AVATAR = ToolDefinition(
 
 CONTROL_AVATAR_BONES = ToolDefinition(
     name="control_avatar_bones",
-    description="Control individual avatar bones for natural body language, gestures, and expressions. Makes the avatar nod, wave, point, shrug, or perform custom bone movements. PRIMARY control system for rigged 3D avatars.",
+    description="[ADVANCED] Direct bone manipulation for rigged 3D avatars. For normal gestures, use inline [gesture:X] commands in your response instead.",
     category="control",
     module="avatar",
     parameters=[
@@ -353,6 +354,62 @@ CONTROL_AVATAR_BONES = ToolDefinition(
         "Move the avatar's head to look left",
         "Avatar shrug gesture",
         "Reset avatar to neutral position",
+    ],
+)
+
+MANAGE_SCENE_OBJECTS = ToolDefinition(
+    name="manage_scene_objects",
+    description="Add, remove, or manipulate 3D objects/props in the avatar scene. Place items around the avatar for decoration, storytelling, or interaction.",
+    category="control",
+    module="avatar",
+    parameters=[
+        ToolParameter(
+            name="action",
+            type="string",
+            description="Action to perform on scene objects",
+            required=True,
+            enum=["add", "remove", "move", "scale", "rotate", "list", "clear"],
+        ),
+        ToolParameter(
+            name="object_path",
+            type="string",
+            description="Path to 3D model file (for 'add' action). Supports GLB, GLTF, OBJ, FBX.",
+            required=False,
+        ),
+        ToolParameter(
+            name="object_id",
+            type="string",
+            description="ID of existing object (for 'remove', 'move', 'scale', 'rotate' actions)",
+            required=False,
+        ),
+        ToolParameter(
+            name="position",
+            type="string",
+            description="Position as 'x,y,z' coordinates (for 'add' or 'move' actions). Example: '0.5,-0.5,0.3'",
+            required=False,
+        ),
+        ToolParameter(
+            name="scale",
+            type="float",
+            description="Scale factor (for 'add' or 'scale' actions). Default: 1.0",
+            required=False,
+            default=1.0,
+        ),
+        ToolParameter(
+            name="rotation",
+            type="string",
+            description="Rotation as 'pitch,yaw,roll' in degrees (for 'add' or 'rotate' actions)",
+            required=False,
+        ),
+    ],
+    examples=[
+        "Add a hat object to the scene",
+        "Place a chair next to the avatar",
+        "Move the table object to position 0.5, 0, 0.5",
+        "Remove the cup from the scene",
+        "List all objects in the scene",
+        "Clear all scene objects",
+        "Scale the book to half size",
     ],
 )
 
@@ -1505,6 +1562,203 @@ OPTIMIZE_FOR_HARDWARE = ToolDefinition(
 
 
 # =============================================================================
+# Teacher-Student AI Training Tools
+# =============================================================================
+
+TRAIN_MODEL = ToolDefinition(
+    name="train_model",
+    description="Train an AI model on a data file. Returns training results including final loss.",
+    category="training",
+    module=None,
+    parameters=[
+        ToolParameter(
+            name="data_file",
+            type="string",
+            description="Path to training data file (.txt with Q:/A: format)",
+            required=True,
+        ),
+        ToolParameter(
+            name="model_name",
+            type="string",
+            description="Name for the trained model (will be saved as models/{name}.pth)",
+            required=False,
+            default="student",
+        ),
+        ToolParameter(
+            name="model_size",
+            type="string",
+            description="Size of model to train",
+            required=False,
+            enum=["nano", "micro", "tiny", "small", "medium", "large"],
+            default="small",
+        ),
+        ToolParameter(
+            name="epochs",
+            type="int",
+            description="Number of training epochs",
+            required=False,
+            default=30,
+        ),
+        ToolParameter(
+            name="batch_size",
+            type="int",
+            description="Batch size for training",
+            required=False,
+            default=4,
+        ),
+        ToolParameter(
+            name="learning_rate",
+            type="float",
+            description="Learning rate",
+            required=False,
+            default=0.0001,
+        ),
+    ],
+    examples=[
+        "Train a model on my data",
+        "Create student AI from training.txt",
+        "Train small model for 50 epochs",
+    ],
+)
+
+CHAT_WITH_MODEL = ToolDefinition(
+    name="chat_with_model",
+    description="Send a message to a specific model and get its response. Used for testing models.",
+    category="training",
+    module=None,
+    parameters=[
+        ToolParameter(
+            name="model_name",
+            type="string",
+            description="Name of the model to chat with (e.g., 'student', 'small_forge')",
+            required=True,
+        ),
+        ToolParameter(
+            name="message",
+            type="string",
+            description="Message to send to the model",
+            required=True,
+        ),
+        ToolParameter(
+            name="max_tokens",
+            type="int",
+            description="Maximum tokens in response",
+            required=False,
+            default=100,
+        ),
+        ToolParameter(
+            name="temperature",
+            type="float",
+            description="Sampling temperature (0.1-1.5)",
+            required=False,
+            default=0.8,
+        ),
+    ],
+    examples=[
+        "Test the student model",
+        "Ask student 'What is 2+2?'",
+        "Chat with my trained model",
+    ],
+)
+
+GENERATE_TRAINING_DATA = ToolDefinition(
+    name="generate_training_data",
+    description="Generate Q:/A: training data from web content or a topic.",
+    category="training",
+    module=None,
+    parameters=[
+        ToolParameter(
+            name="topic",
+            type="string",
+            description="Topic to generate training data about",
+            required=True,
+        ),
+        ToolParameter(
+            name="num_pairs",
+            type="int",
+            description="Number of Q:/A: pairs to generate",
+            required=False,
+            default=50,
+        ),
+        ToolParameter(
+            name="output_file",
+            type="string",
+            description="Path to save the training data",
+            required=False,
+            default="data/generated_training.txt",
+        ),
+        ToolParameter(
+            name="use_web",
+            type="bool",
+            description="Whether to search the web for information",
+            required=False,
+            default=True,
+        ),
+        ToolParameter(
+            name="difficulty",
+            type="string",
+            description="Difficulty level of questions",
+            required=False,
+            enum=["basic", "intermediate", "advanced", "mixed"],
+            default="mixed",
+        ),
+    ],
+    examples=[
+        "Generate training data about Python",
+        "Create 100 Q&A pairs about machine learning",
+        "Make training data from web search on cooking",
+    ],
+)
+
+EVALUATE_MODEL = ToolDefinition(
+    name="evaluate_model",
+    description="Evaluate a model's performance on a test file. Returns accuracy score.",
+    category="training",
+    module=None,
+    parameters=[
+        ToolParameter(
+            name="model_name",
+            type="string",
+            description="Name of the model to evaluate",
+            required=True,
+        ),
+        ToolParameter(
+            name="test_file",
+            type="string",
+            description="Path to test file with Q:/A: pairs",
+            required=False,
+            default="data/test_questions.txt",
+        ),
+        ToolParameter(
+            name="num_questions",
+            type="int",
+            description="Number of questions to test (0 = all)",
+            required=False,
+            default=0,
+        ),
+    ],
+    examples=[
+        "Test student model accuracy",
+        "Evaluate my trained model",
+        "Run 20 test questions on student",
+    ],
+)
+
+LIST_MODELS = ToolDefinition(
+    name="list_models",
+    description="List all available trained models in the models directory.",
+    category="training",
+    module=None,
+    parameters=[],
+    examples=[
+        "What models do I have?",
+        "Show available models",
+        "List trained AIs",
+    ],
+)
+
+
+# =============================================================================
 # Registry of All Tools
 # =============================================================================
 
@@ -1530,6 +1784,7 @@ ALL_TOOLS = [
     # Control
     CONTROL_AVATAR,
     CONTROL_AVATAR_BONES,
+    MANAGE_SCENE_OBJECTS,
     CUSTOMIZE_AVATAR,
     SPEAK,
     CREATE_VOICE_PROFILE,
@@ -1574,6 +1829,13 @@ ALL_TOOLS = [
     MANAGE_CONVERSATION,
     SHOW_HELP,
     OPTIMIZE_FOR_HARDWARE,
+    
+    # Training - Teacher-Student AI System
+    TRAIN_MODEL,
+    CHAT_WITH_MODEL,
+    GENERATE_TRAINING_DATA,
+    EVALUATE_MODEL,
+    LIST_MODELS,
 ]
 
 # Dictionary for fast lookup
@@ -1618,9 +1880,12 @@ def get_tool_schemas() -> str:
     return "\n".join(schemas)
 
 
-def get_available_tools_for_prompt() -> str:
+def get_available_tools_for_prompt(include_guides: bool = True) -> str:
     """
     Get a formatted description of available tools for including in AI prompts.
+    
+    Args:
+        include_guides: Whether to include AI control guide txt files from data/ai_control/
     
     Returns:
         Formatted string describing all available tools
@@ -1661,7 +1926,42 @@ def get_available_tools_for_prompt() -> str:
                 for ex in tool.examples[:2]:  # Limit to 2 examples
                     lines.append(f"    - {ex}")
     
+    # Include AI control guides from data/ai_control/ folder
+    if include_guides:
+        guide_content = _load_ai_control_guides()
+        if guide_content:
+            lines.append("\n\n" + "=" * 80)
+            lines.append("AI CONTROL GUIDES")
+            lines.append("=" * 80)
+            lines.append(guide_content)
+    
     return "\n".join(lines)
+
+
+def _load_ai_control_guides() -> str:
+    """
+    Load all AI control guide txt files from data/ai_control/ folder.
+    
+    Returns:
+        Combined content of all guide files
+    """
+    from pathlib import Path
+    
+    # Find the data/ai_control directory
+    guide_dir = Path(__file__).parent.parent.parent / "data" / "ai_control"
+    
+    if not guide_dir.exists():
+        return ""
+    
+    guides = []
+    for txt_file in sorted(guide_dir.glob("*.txt")):
+        try:
+            content = txt_file.read_text(encoding="utf-8")
+            guides.append(f"\n--- {txt_file.stem.upper().replace('_', ' ')} ---\n{content}")
+        except Exception:
+            continue
+    
+    return "\n".join(guides)
 
 
 __all__ = [

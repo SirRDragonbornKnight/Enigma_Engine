@@ -154,7 +154,7 @@ def main():
         # Clean up
         try:
             os.remove(test_path)
-        except:
+        except (FileNotFoundError, PermissionError, OSError):
             pass
         return "Can write files"
     test_write_file()

@@ -239,53 +239,19 @@ def create_instructions_tab(parent):
 
 
 def _refresh_file_tree(parent):
-    """Refresh the file tree with .txt files from data and docs folders."""
+    """Refresh the file tree with AI control guide files."""
     parent.file_tree.clear()
     
-    # Get paths
+    # Get data directory
     data_dir = Path(CONFIG.get("data_dir", "data"))
     
-    # Find project root by looking for marker files
-    def find_project_root(start_path: Path) -> Path:
-        """Find project root by looking for common marker files."""
-        current = start_path
-        markers = ['pyproject.toml', 'setup.py', 'README.md', '.git']
-        for _ in range(10):  # Limit search depth
-            for marker in markers:
-                if (current / marker).exists():
-                    return current
-            if current.parent == current:
-                break
-            current = current.parent
-        # Fallback: go up 4 levels from this file
-        return start_path.parent.parent.parent.parent
-    
-    forge_root = find_project_root(Path(__file__).resolve())
-    docs_dir = forge_root / "docs"
-    
-    # Add data folder section
-    if data_dir.exists():
-        data_item = QTreeWidgetItem(parent.file_tree, ["Data Files"])
-        data_item.setData(0, Qt.UserRole, str(data_dir))
-        data_item.setExpanded(True)
-        _add_txt_files_to_tree(data_item, data_dir)
-    
-    # Add docs folder section
-    if docs_dir.exists():
-        docs_item = QTreeWidgetItem(parent.file_tree, ["Documentation"])
-        docs_item.setData(0, Qt.UserRole, str(docs_dir))
-        docs_item.setExpanded(True)
-        _add_txt_files_to_tree(docs_item, docs_dir, include_md=True)
-    
-    # Add root level .txt files
-    root_txt_files = list(forge_root.glob("*.txt"))
-    if root_txt_files:
-        root_item = QTreeWidgetItem(parent.file_tree, ["Root Files"])
-        root_item.setData(0, Qt.UserRole, str(forge_root))
-        root_item.setExpanded(True)
-        for txt_file in sorted(root_txt_files):
-            file_item = QTreeWidgetItem(root_item, [f"{txt_file.name}"])
-            file_item.setData(0, Qt.UserRole, str(txt_file))
+    # Add AI Control files (our main documentation)
+    ai_control_dir = data_dir / "ai_control"
+    if ai_control_dir.exists():
+        ai_item = QTreeWidgetItem(parent.file_tree, ["AI Control Guides"])
+        ai_item.setData(0, Qt.UserRole, str(ai_control_dir))
+        ai_item.setExpanded(True)
+        _add_txt_files_to_tree(ai_item, ai_control_dir)
 
 
 def _add_txt_files_to_tree(parent_item, folder: Path, include_md: bool = False):
@@ -293,7 +259,14 @@ def _add_txt_files_to_tree(parent_item, folder: Path, include_md: bool = False):
     if not folder.exists():
         return
     
-    # Get all relevant files
+    # First add subfolders
+    for subfolder in sorted(folder.iterdir()):
+        if subfolder.is_dir() and not subfolder.name.startswith('.'):
+            sub_item = QTreeWidgetItem(parent_item, [subfolder.name])
+            sub_item.setData(0, Qt.UserRole, str(subfolder))
+            _add_txt_files_to_tree(sub_item, subfolder, include_md)
+    
+    # Then add files in this folder
     files = list(folder.glob("*.txt"))
     if include_md:
         files.extend(folder.glob("*.md"))

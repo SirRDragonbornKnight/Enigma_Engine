@@ -75,6 +75,9 @@ class QuickCreateDialog(QDialog):
         self.created_ai_name = None
         self._worker = None
         
+        # Remove ? help button from titlebar
+        self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
+        
         self._setup_ui()
         self._populate_kits()
         self._apply_style()

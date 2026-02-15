@@ -1115,20 +1115,8 @@ class ImageTab(QWidget):
         prompt_group.setLayout(prompt_layout)
         layout.addWidget(prompt_group)
         
-        # Style Presets (from shared components)
-        try:
-            from .shared_components import PresetSelector
-            
-            preset_row = QHBoxLayout()
-            self.style_preset = PresetSelector("image", self)
-            self.style_preset.preset_changed.connect(self._apply_style_preset)
-            preset_row.addWidget(self.style_preset)
-            preset_row.addStretch()
-            layout.addLayout(preset_row)
-            
-            self._style_suffix = ""  # Will be appended to prompt
-        except ImportError:
-            self._style_suffix = ""
+        # Style suffix for any future preset system
+        self._style_suffix = ""
         
         # Options
         options_group = QGroupBox("Options")
@@ -1138,7 +1126,7 @@ class ImageTab(QWidget):
         self.width_spin = QSpinBox()
         self.width_spin.setRange(256, 2048)
         self.width_spin.setValue(512)
-        self.width_spin.setSingleStep(64)
+        self.width_spin.setSingleStep(16)
         self.width_spin.setToolTip("Image width in pixels (512 is standard, higher = more detail but slower)")
         self.width_spin.valueChanged.connect(self._on_spinbox_changed)
         options_layout.addWidget(self.width_spin)
@@ -1147,7 +1135,7 @@ class ImageTab(QWidget):
         self.height_spin = QSpinBox()
         self.height_spin.setRange(256, 2048)
         self.height_spin.setValue(512)
-        self.height_spin.setSingleStep(64)
+        self.height_spin.setSingleStep(16)
         self.height_spin.setToolTip("Image height in pixels (512 is standard, higher = more detail but slower)")
         self.height_spin.valueChanged.connect(self._on_spinbox_changed)
         options_layout.addWidget(self.height_spin)

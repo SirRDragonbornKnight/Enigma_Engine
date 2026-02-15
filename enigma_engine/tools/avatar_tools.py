@@ -1,10 +1,15 @@
 """
-Avatar Tools - Control and customize the desktop avatar.
+Avatar Tools - Control your physical body on screen.
 
-Tools:
-  - control_avatar: Move, show, hide, jump, pin the avatar
-  - customize_avatar: Change colors, lighting, rotation
-  - avatar_gesture: Make the avatar perform gestures/animations
+PRIMARY CONTROL: Inline commands in AI responses (automatically stripped for user)
+  [emotion:happy] [gesture:wave] [action:think] [expression:smile]
+
+ADVANCED CONTROL: These tools for programmatic/manual override
+  - control_avatar: Position, visibility (show/hide/move/resize)
+  - customize_avatar: Visual appearance (colors, lighting)
+  - avatar_gesture: Direct gesture trigger
+  - avatar_emotion: Direct emotion trigger
+  - adjust_idle_animation: Breathing/sway settings
 """
 
 import json
@@ -34,35 +39,40 @@ def _send_avatar_command(action: str, value: str = "") -> dict[str, Any]:
 
 
 class AvatarControlTool(Tool):
-    """Control the desktop avatar - move, show, hide, jump, pin."""
+    """[ADVANCED] Manual override for avatar positioning and visibility.
+    
+    For normal expression (emotions, gestures), use inline commands in your response:
+    [emotion:happy] [gesture:wave] [action:think] etc.
+    
+    This tool is for programmatic control like moving position or showing/hiding.
+    """
     
     name = "control_avatar"
-    description = "Control the desktop avatar - move it, make it jump, pin it in place, or show/hide it. The avatar is a 3D character that appears on your desktop."
+    description = "[ADVANCED] Manual avatar positioning. For expressions/gestures, use inline [emotion:happy] [gesture:wave] in your response instead."
     category = "avatar"
     
     rich_parameters = [
         RichParameter(
             name="action",
             type="string",
-            description="Action to perform on the avatar",
+            description="Action to perform (positional/visibility only)",
             required=True,
             enum=["show", "hide", "jump", "pin", "unpin", "move", "resize", "orientation"],
         ),
         RichParameter(
             name="value",
             type="string",
-            description="Value for the action. For 'move': 'x,y' coordinates. For 'resize': pixel size like '250'. For 'orientation': 'front', 'back', 'left', 'right'",
+            description="Value for the action. For 'move': 'x,y' coordinates. For 'resize': pixel size like '250'. For 'orientation': 'front', 'back', 'left', 'right'.",
             required=False,
             default="",
         ),
     ]
     
     examples = [
-        "Show the avatar on desktop",
-        "Make the avatar jump",
-        "Pin the avatar in place",
-        "Move the avatar to position 100,200",
-        "Hide the avatar",
+        "Show my avatar on desktop",
+        "Move to position 100,200",
+        "Resize to 300 pixels",
+        "Turn to face left",
     ]
     
     # Legacy simple parameters for backwards compatibility
@@ -71,12 +81,14 @@ class AvatarControlTool(Tool):
         "value": "Value for action (coords for move, size for resize, direction for orientation)",
     }
     
+    # Valid actions - positional/visibility only
+    VALID_ACTIONS = ["show", "hide", "jump", "pin", "unpin", "move", "resize", "orientation"]
+    
     def execute(self, action: str, value: str = "", **kwargs) -> dict[str, Any]:
         action = action.lower().strip()
         
-        valid_actions = ["show", "hide", "jump", "pin", "unpin", "move", "resize", "orientation"]
-        if action not in valid_actions:
-            return {"success": False, "error": f"Invalid action '{action}'. Valid: {valid_actions}"}
+        if action not in self.VALID_ACTIONS:
+            return {"success": False, "error": f"Invalid action '{action}'. Valid: {self.VALID_ACTIONS}. For gestures/emotions, use inline commands like [emotion:happy] in your response."}
         
         # Format value for specific actions
         if action == "orientation" and value:
@@ -88,10 +100,10 @@ class AvatarControlTool(Tool):
 
 
 class AvatarCustomizeTool(Tool):
-    """Customize the avatar's visual appearance."""
+    """Customize your body's visual appearance."""
     
     name = "customize_avatar"
-    description = "Customize the avatar's colors, lighting, rotation speed, and visual effects"
+    description = "Customize your appearance - colors, lighting, and visual effects. This is how you look!"
     category = "avatar"
     
     rich_parameters = [
@@ -141,10 +153,10 @@ class AvatarCustomizeTool(Tool):
 
 
 class AvatarGestureTool(Tool):
-    """Make the avatar perform gestures/animations."""
+    """[ADVANCED] Direct gesture trigger. Use inline [gesture:wave] in response instead."""
     
     name = "avatar_gesture"
-    description = "Make the avatar perform a gesture or animation like waving, nodding, or blinking"
+    description = "[ADVANCED] Direct gesture trigger. For normal use, include [gesture:wave] in your response instead - it gets stripped for the user."
     category = "avatar"
     
     rich_parameters = [
@@ -195,10 +207,10 @@ class AvatarGestureTool(Tool):
 
 
 class AvatarEmotionTool(Tool):
-    """Set the avatar's emotional expression."""
+    """[ADVANCED] Direct emotion trigger. Use inline [emotion:happy] in response instead."""
     
     name = "avatar_emotion"
-    description = "Set the avatar's emotional expression/mood. Changes facial expression and body language."
+    description = "[ADVANCED] Direct emotion trigger. For normal use, include [emotion:happy] in your response instead - it gets stripped for the user."
     category = "avatar"
     
     rich_parameters = [
@@ -241,12 +253,12 @@ class AvatarEmotionTool(Tool):
 
 class AdjustIdleAnimationTool(Tool):
     """
-    Adjust the avatar's idle animations - breathing, blinking, sway, and micro-expressions.
-    AI can use this to show emotion through subtle animation changes.
+    Adjust your idle animations - breathing, blinking, sway, and micro-expressions.
+    Use this to express your mood through subtle body language.
     """
     
     name = "adjust_idle_animation"
-    description = "Adjust avatar idle animations - breathing rate, sway, blinking. Use to show mood through subtle movement (calm = slow breathing, nervous = fast breathing)"
+    description = "Adjust your breathing, sway, and blinking to express your current mood. Breathe slow when calm, fast when excited or nervous."
     category = "avatar"
     
     rich_parameters = [

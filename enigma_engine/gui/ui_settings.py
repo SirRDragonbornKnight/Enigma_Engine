@@ -199,7 +199,7 @@ class UISettings:
     def __init__(self):
         self._font_sizes = FontSizes()
         self._scale = 1.0
-        self._opacity = 0.95  # Dialog transparency (0.0 = invisible, 1.0 = solid)
+        self._opacity = 1.0  # Dialog transparency disabled (1.0 = solid)
         self._theme_name = "cerulean"  # Default to cerulean
         self._theme = THEMES["cerulean"]
         self._listeners: list[Callable[[], None]] = []
@@ -730,18 +730,13 @@ def apply_dialog_transparency(dialog):
     """
     Apply the configured transparency to a QDialog.
     
-    Call this in your dialog's __init__ after setting up the UI.
+    Note: Transparency is disabled to avoid visual issues.
+    This function does nothing but is kept for API compatibility.
     
     Args:
-        dialog: QDialog instance to apply transparency to
+        dialog: QDialog instance (unused)
     """
-    try:
-        settings = get_ui_settings()
-        opacity = settings.get_opacity()
-        if opacity < 1.0:
-            dialog.setWindowOpacity(opacity)
-    except Exception:
-        pass  # Silently fail if PyQt5 not available
+    pass  # Transparency disabled
 
 
 __all__ = [

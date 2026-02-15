@@ -2876,7 +2876,9 @@ class Avatar3DOverlayWindow(QWidget):
         self._command_timer = QTimer()
         self._command_timer.timeout.connect(self._check_ai_commands)
         self._command_timer.start(500)
-        self._last_command_time = 0
+        import time
+        self._last_command_time = time.time()  # Ignore stale commands from before startup
+        self._is_pinned = False  # When pinned, avatar can't be dragged
         
         # Main layout
         main_layout = QVBoxLayout(self)
@@ -3430,8 +3432,8 @@ class Avatar3DOverlayWindow(QWidget):
     def mousePressEvent(self, event):
         """Handle mouse press - avatar is clickable, background passes through."""
         if event.button() == Qt_LeftButton:
-            # Only start drag if reposition is enabled
-            if getattr(self, '_reposition_enabled', True):
+            # Only start drag if reposition is enabled and not pinned
+            if getattr(self, '_reposition_enabled', True) and not getattr(self, '_is_pinned', False):
                 self._drag_bar_offset = event.globalPos() - self.pos()
                 self._is_dragging = True
                 self.setCursor(QCursor(Qt_ClosedHandCursor))
@@ -3827,6 +3829,19 @@ class Avatar3DOverlayWindow(QWidget):
         except Exception:
             pass  # Intentionally silent
 
+    def _set_view_angle(self, rotation_x: float, rotation_y: float):
+        """Set the avatar view angle (camera rotation).
+        
+        Args:
+            rotation_x: X-axis rotation in degrees (pitch - up/down tilt)
+            rotation_y: Y-axis rotation in degrees (yaw - left/right rotation)
+        """
+        if self._gl_widget:
+            self._gl_widget.rotation_x = rotation_x
+            self._gl_widget.rotation_y = rotation_y
+            self._base_rotation_y = rotation_y  # Update base rotation for idle sway
+            self._gl_widget.update()
+
     def _check_ai_commands(self):
         """Check for AI commands and execute them."""
         import json
@@ -3855,6 +3870,15 @@ class Avatar3DOverlayWindow(QWidget):
             elif action == "hide":
                 self.hide()
                 self.closed.emit()
+            elif action == "jump":
+                # Make avatar jump
+                self._do_jump_animation()
+            elif action == "pin":
+                # Pin avatar in place (prevent dragging)
+                self._is_pinned = True
+            elif action == "unpin":
+                # Unpin avatar (allow dragging)
+                self._is_pinned = False
             elif action == "move":
                 try:
                     parts = value.split(",")
@@ -3903,6 +3927,11 @@ class Avatar3DOverlayWindow(QWidget):
                 if self._animator:
                     self._animator.set_emotion(value)
             
+            elif action == "emote":
+                # Alias for emotion
+                if self._animator:
+                    self._animator.set_emotion(value)
+            
             elif action == "nod":
                 # Nod gesture (yes)
                 if self._animator:
@@ -3919,10 +3948,20 @@ class Avatar3DOverlayWindow(QWidget):
                 else:
                     self._do_shake_fallback()
             
+            elif action == "shake_head":
+                # Alias for shake
+                if self._animator:
+                    intensity = float(value) if value else 1.0
+                    self._animator.shake(intensity)
+                else:
+                    self._do_shake_fallback()
+            
             elif action == "wave":
                 # Wave gesture
                 if self._animator:
                     self._animator.wave()
+                else:
+                    self._do_wave_fallback()
             
             elif action == "blink":
                 # Blink
@@ -3930,16 +3969,22 @@ class Avatar3DOverlayWindow(QWidget):
                     self._animator.blink()
             
             elif action == "look_at":
-                # Look at position
+                # Look at position or default to looking at screen/user
                 if self._animator:
                     try:
-                        parts = value.split(",")
-                        if len(parts) >= 2:
-                            x, y = float(parts[0].strip()), float(parts[1].strip())
-                            z = float(parts[2].strip()) if len(parts) > 2 else 0.0
-                            self._animator.look_at(x, y, z)
+                        # Handle special values
+                        if not value or value.lower() in ("screen", "user", "camera", "front"):
+                            # Look straight at the user/camera
+                            self._animator.look_at(0, 0, 1)
+                        else:
+                            parts = value.split(",")
+                            if len(parts) >= 2:
+                                x, y = float(parts[0].strip()), float(parts[1].strip())
+                                z = float(parts[2].strip()) if len(parts) > 2 else 0.0
+                                self._animator.look_at(x, y, z)
                     except ValueError:
-                        pass  # Intentionally silent
+                        # Default to looking at camera on parse error
+                        self._animator.look_at(0, 0, 1)
             
             elif action == "get_capabilities":
                 # Write avatar capabilities for AI to read
@@ -3981,6 +4026,28 @@ class Avatar3DOverlayWindow(QWidget):
         # Don't do weird pulsing on human-shaped avatars
         # Proper lip sync should be handled by AdaptiveAnimator if model supports it
     
+    def _do_jump_animation(self):
+        """Make the avatar jump by moving the window up and down."""
+        import threading
+        def animate():
+            import time
+            original_y = self.y()
+            jump_height = 50  # Jump 50 pixels
+            # Jump up
+            for i in range(10):
+                t = i / 10.0
+                offset = -jump_height * math.sin(t * math.pi)  # Arc
+                self.move(self.x(), original_y + int(offset))
+                time.sleep(0.02)
+            # Fall down
+            for i in range(10):
+                t = i / 10.0
+                offset = -jump_height * math.sin((1 - t) * math.pi)
+                self.move(self.x(), original_y + int(offset))
+                time.sleep(0.02)
+            self.move(self.x(), original_y)
+        threading.Thread(target=animate, daemon=True).start()
+    
     def _do_nod_fallback(self):
         """Fallback nod animation."""
         if not self._gl_widget:
@@ -4014,6 +4081,23 @@ class Avatar3DOverlayWindow(QWidget):
             self._gl_widget.update()
         threading.Thread(target=animate, daemon=True).start()
     
+    def _do_wave_fallback(self):
+        """Fallback wave animation - side-to-side rotation."""
+        if not self._gl_widget:
+            return
+        import threading
+        def animate():
+            import time
+            original_y = self._gl_widget.rotation_y
+            # Wave motion - left-right rotation
+            for i in range(16):
+                self._gl_widget.rotation_y = original_y + math.sin(i * 0.8) * 25 * (1 - i/16)
+                self._gl_widget.update()
+                time.sleep(0.05)
+            self._gl_widget.rotation_y = original_y
+            self._gl_widget.update()
+        threading.Thread(target=animate, daemon=True).start()
+
     def _close(self):
         self._command_timer.stop()
         self._idle_timer.stop()
@@ -4297,33 +4381,10 @@ def create_avatar_subtab(parent):
     # Left side - Preview and basic controls
     left_panel = QVBoxLayout()
     
-    # Header with format help
+    # Header
     header = QLabel("Avatar Display")
     header.setObjectName("header")
     left_panel.addWidget(header)
-    
-    # Format help section - collapsible info box
-    format_help = QLabel(
-        "2D: PNG, JPG, GIF | 3D: GLB (best), GLTF, OBJ, FBX\n"
-        "GLB = single file with textures | GLTF = folder with separate files\n"
-        "Free avatars: VRoid Hub, Mixamo, Ready Player Me, Sketchfab"
-    )
-    format_help.setStyleSheet(
-        "color: #89b4fa; font-size: 10px; padding: 4px 8px; "
-        "background: #1e1e2e; border: 1px solid #45475a; border-radius: 4px;"
-    )
-    format_help.setWordWrap(True)
-    format_help.setToolTip(
-        "GLB vs GLTF:\\n"
-        "- GLB: Single binary file, includes all textures. RECOMMENDED - just drag and drop!\\n"
-        "- GLTF: JSON file + separate texture images. Need to keep all files together.\\n\\n"
-        "Best sources for free avatars:\\n"
-        "- VRoid Hub (anime style, VRM format - convert to GLB)\\n"
-        "- Ready Player Me (realistic, free GLB export)\\n"
-        "- Mixamo (animated characters)\\n"
-        "- Sketchfab (search for 'avatar' with downloadable filter)"
-    )
-    left_panel.addWidget(format_help)
     
     # Get avatar controller
     avatar = get_avatar()
@@ -4387,6 +4448,26 @@ def create_avatar_subtab(parent):
     parent.avatar_auto_run_checkbox.toggled.connect(lambda c: _toggle_auto_run(parent, c))
     settings_row.addWidget(parent.avatar_auto_run_checkbox)
     
+    settings_row.addStretch()
+    left_panel.addLayout(settings_row)
+    
+    # Webcam reactions toggle row
+    webcam_row = QHBoxLayout()
+    parent.webcam_reactions_checkbox = QCheckBox("Webcam Reactions")
+    parent.webcam_reactions_checkbox.setToolTip(
+        "Avatar reacts to your face via webcam:\n"
+        "- Waves when you appear\n"
+        "- Follows your face with eyes\n"
+        "- Mirrors your expression (if detected)"
+    )
+    parent.webcam_reactions_checkbox.toggled.connect(lambda c: _toggle_webcam_reactions(parent, c))
+    webcam_row.addWidget(parent.webcam_reactions_checkbox)
+    webcam_row.addStretch()
+    left_panel.addLayout(webcam_row)
+    
+    # Reset Position row
+    reset_row = QHBoxLayout()
+    
     # Reset Position button - moves avatar back to visible area
     parent.reset_position_btn = QPushButton("Reset Position")
     parent.reset_position_btn.setToolTip("Reset avatar position to center of screen (use if avatar went off-screen)")
@@ -4403,10 +4484,10 @@ def create_avatar_subtab(parent):
         }
     """)
     parent.reset_position_btn.clicked.connect(lambda: _reset_avatar_position(parent))
-    settings_row.addWidget(parent.reset_position_btn)
+    reset_row.addWidget(parent.reset_position_btn)
     
-    settings_row.addStretch()
-    left_panel.addLayout(settings_row)
+    reset_row.addStretch()
+    left_panel.addLayout(reset_row)
     
     # 3D rendering toggle (only if libraries available)
     if HAS_OPENGL and HAS_TRIMESH:
@@ -4443,13 +4524,8 @@ def create_avatar_subtab(parent):
         render_row.addStretch()
         left_panel.addLayout(render_row)
     else:
-        # Show message that 3D libraries are missing
+        # 3D libraries missing - checkbox disabled
         parent.use_3d_render_checkbox = None
-        missing_3d_label = QLabel("3D avatars need: pip install trimesh PyOpenGL")
-        missing_3d_label.setStyleSheet(
-            "color: #fab387; font-size: 10px; padding: 2px;"
-        )
-        left_panel.addWidget(missing_3d_label)
     
     # Preview widgets (stacked - 2D and 3D)
     parent.avatar_preview_2d = AvatarPreviewWidget()
@@ -4502,23 +4578,17 @@ def create_avatar_subtab(parent):
     select_row.addWidget(btn_refresh)
     left_panel.addLayout(select_row)
     
-    # Load and Apply buttons
+    # File browser button
     btn_row2 = QHBoxLayout()
-    parent.load_btn = QPushButton("Load Avatar")
+    parent.load_btn = QPushButton("Files")
     parent.load_btn.setToolTip(
-        "Load an avatar file from your computer.\\n\\n"
+        "Browse avatar files from your computer.\\n\\n"
         "2D Images: PNG, JPG, GIF, BMP, WEBP\\n"
         "3D Models: GLB, GLTF, OBJ, FBX, DAE\\n\\n"
         "Free 3D avatars: VRoid Hub, Mixamo, Sketchfab"
     )
     parent.load_btn.clicked.connect(lambda: _load_avatar_file(parent))
     btn_row2.addWidget(parent.load_btn)
-    
-    parent.apply_btn = QPushButton("Apply Avatar")
-    parent.apply_btn.setToolTip("Make the selected avatar your active avatar")
-    parent.apply_btn.clicked.connect(lambda: _apply_avatar(parent))
-    parent.apply_btn.setStyleSheet("background: #89b4fa; color: #1e1e2e; font-weight: bold;")
-    btn_row2.addWidget(parent.apply_btn)
     left_panel.addLayout(btn_row2)
     
     # Status
@@ -4530,210 +4600,6 @@ def create_avatar_subtab(parent):
     
     # Right side - Customization Controls
     right_panel = QVBoxLayout()
-    
-    # === Quick Actions ===
-    actions_group = QGroupBox("Quick Actions")
-    actions_layout = QVBoxLayout()
-    
-# Auto-design from personality (only for built-in sprites)
-    parent.auto_design_btn = QPushButton("AI Auto-Design (Sprites)")
-    parent.auto_design_btn.setToolTip("Randomly generate a 2D sprite style. For 3D models, use the 3D tab instead.")
-    parent.auto_design_btn.clicked.connect(lambda: _auto_design_avatar(parent))
-    actions_layout.addWidget(parent.auto_design_btn)
-
-    # Export sprite button (only for built-in sprites)
-    parent.export_btn = QPushButton("Export Current Sprite")
-    parent.export_btn.setToolTip("Export the built-in 2D sprite to SVG/PNG file. Only works with sprites, not 3D models.")
-    parent.export_btn.clicked.connect(lambda: _export_sprite(parent))
-    actions_layout.addWidget(parent.export_btn)
-    
-    actions_group.setLayout(actions_layout)
-    right_panel.addWidget(actions_group)
-    
-    # === Parallax 2.5D Effect (for 2D images) ===
-    parallax_group = QGroupBox("2.5D Parallax Effect (NEW!)")
-    parallax_group.setStyleSheet("""
-        QGroupBox {
-            border: 2px solid #f5c2e7;
-            border-radius: 8px;
-            margin-top: 8px;
-            padding-top: 8px;
-            font-weight: bold;
-        }
-        QGroupBox::title {
-            color: #f5c2e7;
-            subcontrol-origin: margin;
-            left: 10px;
-            padding: 0 5px;
-        }
-    """)
-    parallax_group.setToolTip(
-        "Make 2D images look 3D by splitting into layers that move at different speeds.\\n"
-        "Works with any PNG/JPG image - AI can auto-generate layers!"
-    )
-    parallax_layout = QVBoxLayout()
-    parallax_layout.setSpacing(6)
-    
-    # Enable parallax
-    parent.parallax_check = QCheckBox("Enable Parallax Effect")
-    parent.parallax_check.setChecked(False)
-    parent.parallax_check.setToolTip("Enable 2.5D depth effect for 2D avatars")
-    parent.parallax_check.stateChanged.connect(
-        lambda state: _toggle_parallax(parent, state == 2)
-    )
-    parallax_layout.addWidget(parent.parallax_check)
-    
-    # Mouse tracking for parallax
-    parent.parallax_mouse_check = QCheckBox("Follow Cursor")
-    parent.parallax_mouse_check.setChecked(True)
-    parent.parallax_mouse_check.setToolTip("Layers react to mouse position (like eyes following you)")
-    parent.parallax_mouse_check.setEnabled(False)  # Enabled when parallax is on
-    parent.parallax_mouse_check.stateChanged.connect(
-        lambda state: _toggle_parallax_mouse(parent, state == 2)
-    )
-    parallax_layout.addWidget(parent.parallax_mouse_check)
-    
-    # Intensity slider
-    intensity_row = QHBoxLayout()
-    intensity_row.addWidget(QLabel("Depth:"))
-    parent.parallax_intensity_slider = QSlider(Qt.Horizontal)
-    parent.parallax_intensity_slider.setRange(5, 40)
-    parent.parallax_intensity_slider.setValue(15)
-    parent.parallax_intensity_slider.setToolTip("How much the layers move (5=subtle, 40=dramatic)")
-    parent.parallax_intensity_slider.setEnabled(False)
-    parent.parallax_intensity_slider.valueChanged.connect(
-        lambda v: _set_parallax_intensity(parent, v)
-    )
-    intensity_row.addWidget(parent.parallax_intensity_slider)
-    parent.parallax_intensity_label = QLabel("15")
-    intensity_row.addWidget(parent.parallax_intensity_label)
-    parallax_layout.addLayout(intensity_row)
-    
-    # AI Generate Layers button
-    parent.ai_generate_layers_btn = QPushButton("AI: Generate Layers")
-    parent.ai_generate_layers_btn.setToolTip(
-        "Use AI to automatically split your 2D image into depth layers.\\n"
-        "Creates: background, body, face, eyes/accessories"
-    )
-    parent.ai_generate_layers_btn.setStyleSheet(
-        "background: #f5c2e7; color: #1e1e2e; font-weight: bold;"
-    )
-    parent.ai_generate_layers_btn.clicked.connect(lambda: _ai_generate_parallax_layers(parent))
-    parallax_layout.addWidget(parent.ai_generate_layers_btn)
-    
-    # Load custom layers button
-    parent.load_layers_btn = QPushButton("Load Layer Files")
-    parent.load_layers_btn.setToolTip(
-        "Load your own layer files (e.g., avatar_bg.png, avatar_body.png, avatar_face.png).\\n"
-        "Name files with _bg, _body, _face, _eyes suffixes for auto-depth ordering."
-    )
-    parent.load_layers_btn.clicked.connect(lambda: _load_parallax_layers(parent))
-    parallax_layout.addWidget(parent.load_layers_btn)
-    
-    parallax_group.setLayout(parallax_layout)
-    right_panel.addWidget(parallax_group)
-    
-    # === Behavior Controls ===
-    behavior_group = QGroupBox("Behavior Controls")
-    behavior_layout = QVBoxLayout()
-    behavior_layout.setSpacing(8)
-    
-    # Auto expressions from AI text
-    parent.auto_avatar_check = QCheckBox("Auto Expressions (from AI text)")
-    parent.auto_avatar_check.setChecked(True)
-    parent.auto_avatar_check.setToolTip("Avatar changes expression based on AI responses")
-    parent.auto_avatar_check.stateChanged.connect(
-        lambda state: setattr(parent, 'auto_avatar_enabled', state == 2)
-    )
-    parent.auto_avatar_enabled = True
-    behavior_layout.addWidget(parent.auto_avatar_check)
-    
-    # Eye tracking - follow mouse cursor
-    parent.eye_tracking_check = QCheckBox("Eye Tracking (look at cursor)")
-    parent.eye_tracking_check.setChecked(False)
-    parent.eye_tracking_check.setToolTip("Avatar eyes/head follows your mouse cursor")
-    parent.eye_tracking_check.stateChanged.connect(
-        lambda state: _toggle_eye_tracking(parent, state == 2)
-    )
-    parent.eye_tracking_enabled = False
-    behavior_layout.addWidget(parent.eye_tracking_check)
-    
-    # Autonomous mode (react to screen)
-    parent.avatar_autonomous_check = QCheckBox("Autonomous Mode (react to screen)")
-    parent.avatar_autonomous_check.setChecked(False)
-    parent.avatar_autonomous_check.setToolTip("Avatar watches screen and reacts to content")
-    parent.avatar_autonomous_check.stateChanged.connect(
-        lambda state: _toggle_avatar_autonomous(parent, state)
-    )
-    behavior_layout.addWidget(parent.avatar_autonomous_check)
-    
-    # Activity level slider
-    activity_row = QHBoxLayout()
-    activity_row.addWidget(QLabel("Activity:"))
-    parent.avatar_activity_slider = QSlider(Qt.Horizontal)
-    parent.avatar_activity_slider.setRange(1, 10)
-    parent.avatar_activity_slider.setValue(5)
-    parent.avatar_activity_slider.setToolTip("How active the avatar is (1=calm, 10=energetic)")
-    activity_row.addWidget(parent.avatar_activity_slider)
-    parent.activity_value_label = QLabel("5")
-    parent.avatar_activity_slider.valueChanged.connect(
-        lambda v: parent.activity_value_label.setText(str(v))
-    )
-    activity_row.addWidget(parent.activity_value_label)
-    behavior_layout.addLayout(activity_row)
-    
-    # Behavior status
-    parent.avatar_behavior_status = QLabel("Mode: Manual")
-    parent.avatar_behavior_status.setStyleSheet("color: #bac2de; font-style: italic;")
-    behavior_layout.addWidget(parent.avatar_behavior_status)
-    
-    behavior_group.setLayout(behavior_layout)
-    right_panel.addWidget(behavior_group)
-
-    # === Avatar Gallery ===
-    gallery_group = QGroupBox("Avatar Gallery")
-    gallery_layout = QVBoxLayout()
-    
-    # Browse avatars button
-    parent.browse_avatars_btn = QPushButton("Browse Avatars...")
-    parent.browse_avatars_btn.setToolTip("Browse and select from installed avatars")
-    parent.browse_avatars_btn.clicked.connect(lambda: _browse_avatars(parent))
-    gallery_layout.addWidget(parent.browse_avatars_btn)
-    
-    # Import avatar button (single file)
-    parent.import_avatar_btn = QPushButton("Import Avatar...")
-    parent.import_avatar_btn.setToolTip("Import a new avatar from files or .forgeavatar bundle")
-    parent.import_avatar_btn.clicked.connect(lambda: _import_avatar(parent))
-    gallery_layout.addWidget(parent.import_avatar_btn)
-    
-    # Import multiple files button
-    parent.import_multiple_btn = QPushButton("Import Multiple Files...")
-    parent.import_multiple_btn.setToolTip("Select and import multiple avatar files at once (images or 3D models)")
-    parent.import_multiple_btn.clicked.connect(lambda: _import_multiple_avatars(parent))
-    gallery_layout.addWidget(parent.import_multiple_btn)
-    
-    # Import from Downloads button
-    parent.import_downloads_btn = QPushButton("Import from Downloads")
-    parent.import_downloads_btn.setToolTip("Quick import avatars from your Downloads folder")
-    parent.import_downloads_btn.setStyleSheet("background: #89b4fa; color: #1e1e2e; font-weight: bold;")
-    parent.import_downloads_btn.clicked.connect(lambda: _import_from_downloads(parent))
-    gallery_layout.addWidget(parent.import_downloads_btn)
-    
-    # Import & Extract ZIP button  
-    parent.import_zip_btn = QPushButton("Import ZIP/Archive...")
-    parent.import_zip_btn.setToolTip("Import and extract avatar ZIP files (e.g., downloaded glTF models)")
-    parent.import_zip_btn.setStyleSheet("background: #f5c2e7; color: #1e1e2e; font-weight: bold;")
-    parent.import_zip_btn.clicked.connect(lambda: _import_zip_archive(parent))
-    gallery_layout.addWidget(parent.import_zip_btn)
-    
-    # Generate samples button
-    parent.generate_samples_btn = QPushButton("Generate Samples")
-    parent.generate_samples_btn.setToolTip("Generate sample avatars to get started")
-    parent.generate_samples_btn.clicked.connect(lambda: _generate_sample_avatars(parent))
-    gallery_layout.addWidget(parent.generate_samples_btn)
-    
-    gallery_group.setLayout(gallery_layout)
-    right_panel.addWidget(gallery_group)
     
     # === 3D Viewer Settings (Sketchfab-style) ===
     if HAS_OPENGL and HAS_TRIMESH:
@@ -4817,21 +4683,22 @@ def create_avatar_subtab(parent):
         viewer_layout.addLayout(roll_row)
         
         # Simple view buttons row (combined)
+        # Note: Most 3D models export facing -Z, so Front=180, Back=0
         view_row = QHBoxLayout()
         view_front = QPushButton("Front")
-        view_front.clicked.connect(lambda: _set_camera_view(parent, 0, 0))
+        view_front.clicked.connect(lambda: _set_camera_view(parent, 0, 180))
         view_row.addWidget(view_front)
         
         view_back = QPushButton("Back")
-        view_back.clicked.connect(lambda: _set_camera_view(parent, 0, 180))
+        view_back.clicked.connect(lambda: _set_camera_view(parent, 0, 0))
         view_row.addWidget(view_back)
         
         view_left = QPushButton("Left")
-        view_left.clicked.connect(lambda: _set_camera_view(parent, 0, -90))
+        view_left.clicked.connect(lambda: _set_camera_view(parent, 0, 90))
         view_row.addWidget(view_left)
         
         view_right = QPushButton("Right")
-        view_right.clicked.connect(lambda: _set_camera_view(parent, 0, 90))
+        view_right.clicked.connect(lambda: _set_camera_view(parent, 0, -90))
         view_row.addWidget(view_right)
         viewer_layout.addLayout(view_row)
         
@@ -4890,6 +4757,83 @@ def create_avatar_subtab(parent):
         
         viewer_group.setLayout(viewer_layout)
         right_panel.addWidget(viewer_group)
+        
+        # === Scene Objects (3D Props) ===
+        scene_group = QGroupBox("Scene Objects")
+        scene_layout = QVBoxLayout()
+        
+        scene_info = QLabel("Add 3D objects to the avatar scene")
+        scene_info.setStyleSheet("color: #89b4fa; font-size: 10px;")
+        scene_layout.addWidget(scene_info)
+        
+        # Object list
+        parent.scene_objects_list = NoScrollComboBox()
+        parent.scene_objects_list.setToolTip("Select a scene object to modify or remove")
+        parent.scene_objects_list.setPlaceholderText("No objects in scene")
+        parent.scene_objects_list.currentIndexChanged.connect(lambda: _load_selected_object_settings(parent))
+        scene_layout.addWidget(parent.scene_objects_list)
+        
+        # Add/Remove buttons
+        scene_btn_row = QHBoxLayout()
+        
+        parent.add_scene_obj_btn = QPushButton("Add Object")
+        parent.add_scene_obj_btn.setToolTip("Add a 3D model file to the scene")
+        parent.add_scene_obj_btn.clicked.connect(lambda: _add_scene_object(parent))
+        parent.add_scene_obj_btn.setStyleSheet("background: #a6e3a1; color: #1e1e2e; font-weight: bold;")
+        scene_btn_row.addWidget(parent.add_scene_obj_btn)
+        
+        parent.remove_scene_obj_btn = QPushButton("Remove")
+        parent.remove_scene_obj_btn.setToolTip("Remove the selected object from the scene")
+        parent.remove_scene_obj_btn.clicked.connect(lambda: _remove_scene_object(parent))
+        parent.remove_scene_obj_btn.setStyleSheet("background: #f38ba8; color: #1e1e2e;")
+        scene_btn_row.addWidget(parent.remove_scene_obj_btn)
+        
+        parent.clear_scene_btn = QPushButton("Clear All")
+        parent.clear_scene_btn.setToolTip("Remove all objects from the scene")
+        parent.clear_scene_btn.clicked.connect(lambda: _clear_scene_objects(parent))
+        scene_btn_row.addWidget(parent.clear_scene_btn)
+        
+        scene_layout.addLayout(scene_btn_row)
+        
+        # Position controls
+        pos_row = QHBoxLayout()
+        pos_row.addWidget(QLabel("Pos:"))
+        parent.scene_obj_x = QSlider(Qt.Horizontal if hasattr(Qt, 'Horizontal') else 0x01)
+        parent.scene_obj_x.setRange(-200, 200)
+        parent.scene_obj_x.setValue(0)
+        parent.scene_obj_x.setToolTip("X position")
+        parent.scene_obj_x.valueChanged.connect(lambda v: _update_scene_object_position(parent))
+        pos_row.addWidget(parent.scene_obj_x)
+        parent.scene_obj_y = QSlider(Qt.Horizontal if hasattr(Qt, 'Horizontal') else 0x01)
+        parent.scene_obj_y.setRange(-200, 200)
+        parent.scene_obj_y.setValue(-50)
+        parent.scene_obj_y.setToolTip("Y position (height)")
+        parent.scene_obj_y.valueChanged.connect(lambda v: _update_scene_object_position(parent))
+        pos_row.addWidget(parent.scene_obj_y)
+        parent.scene_obj_z = QSlider(Qt.Horizontal if hasattr(Qt, 'Horizontal') else 0x01)
+        parent.scene_obj_z.setRange(-200, 200)
+        parent.scene_obj_z.setValue(0)
+        parent.scene_obj_z.setToolTip("Z position")
+        parent.scene_obj_z.valueChanged.connect(lambda v: _update_scene_object_position(parent))
+        pos_row.addWidget(parent.scene_obj_z)
+        scene_layout.addLayout(pos_row)
+        
+        # Scale control
+        scale_row = QHBoxLayout()
+        scale_row.addWidget(QLabel("Scale:"))
+        parent.scene_obj_scale = QSlider(Qt.Horizontal if hasattr(Qt, 'Horizontal') else 0x01)
+        parent.scene_obj_scale.setRange(10, 300)
+        parent.scene_obj_scale.setValue(100)
+        parent.scene_obj_scale.setToolTip("Object scale (100 = normal)")
+        parent.scene_obj_scale.valueChanged.connect(lambda v: _update_scene_object_scale(parent))
+        scale_row.addWidget(parent.scene_obj_scale)
+        parent.scene_obj_scale_label = QLabel("1.0x")
+        parent.scene_obj_scale_label.setFixedWidth(40)
+        scale_row.addWidget(parent.scene_obj_scale_label)
+        scene_layout.addLayout(scale_row)
+        
+        scene_group.setLayout(scene_layout)
+        right_panel.addWidget(scene_group)
     
     # AI Activity Log - shows what the AI is doing with the avatar
     activity_group = QGroupBox("AI Activity")
@@ -4949,6 +4893,11 @@ def create_avatar_subtab(parent):
     parent._avatar_auto_load = False
     parent._avatar_resize_enabled = False  # Default OFF - user must enable via right-click menu
     
+    # Default behavior settings (AI-controlled, no UI)
+    parent.auto_avatar_enabled = True  # Avatar expressions from AI text
+    parent.eye_tracking_enabled = False  # AI controls eye tracking
+    parent.avatar_autonomous_enabled = False  # AI controls autonomous mode
+    
     # Create directories
     AVATAR_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     AVATAR_MODELS_DIR.mkdir(parents=True, exist_ok=True)
@@ -4977,6 +4926,12 @@ def create_avatar_subtab(parent):
     parent._ai_customize_watcher.start(1000)  # Check every 1 second
     parent._last_ai_customize_time = 0.0
     
+    # Set up AI scene command polling (for 3D object placement)
+    parent._scene_command_watcher = QTimer()
+    parent._scene_command_watcher.timeout.connect(lambda: _poll_scene_commands(parent))
+    parent._scene_command_watcher.start(500)  # Check every 0.5 seconds
+    parent._last_scene_command_time = 0.0
+    
     # Set up AI activity log polling
     parent._activity_log_watcher = QTimer()
     parent._activity_log_watcher.timeout.connect(lambda: _update_activity_log(parent))
@@ -4995,10 +4950,10 @@ def create_avatar_subtab(parent):
     avatar.on("expression", _on_expression_change)
     parent._expression_callback = _on_expression_change  # Keep reference
     
-    # Show default sprite on initialization (unless auto-loading)
-    if not getattr(parent, '_avatar_auto_loaded', False):
-        parent._using_builtin_sprite = True
-        _show_default_preview(parent)
+    # Don't show default sprite - only show avatar when user loads one
+    # if not getattr(parent, '_avatar_auto_loaded', False):
+    #     parent._using_builtin_sprite = True
+    #     _show_default_preview(parent)
     
     return widget
 
@@ -5188,6 +5143,71 @@ def _toggle_auto_run(parent, enabled: bool):
     _save_auto_settings(parent)
 
 
+# Global webcam reactor reference
+_webcam_reactor = None
+
+
+def _toggle_webcam_reactions(parent, enabled: bool):
+    """Toggle webcam reactions for avatar."""
+    global _webcam_reactor
+    
+    try:
+        from ....avatar.webcam_reactions import WebcamReactor, AvatarReaction
+    except ImportError:
+        parent.avatar_status.setText("Webcam reactions unavailable (missing opencv)")
+        parent.avatar_status.setStyleSheet("color: #fab387;")
+        parent.webcam_reactions_checkbox.setChecked(False)
+        return
+    
+    parent._webcam_reactions_enabled = enabled
+    
+    if enabled:
+        # Create reaction handler
+        def handle_webcam_reaction(reaction: AvatarReaction):
+            """Handle reactions from webcam detection."""
+            try:
+                if reaction.action == "wave":
+                    # Trigger wave gesture
+                    parent.avatar_status.setText("Webcam: Wave detected!")
+                    parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+                    _log_avatar_activity("webcam_wave", "User appeared")
+                    
+                elif reaction.action == "look_at":
+                    # Log gaze tracking (happens frequently, so be quiet)
+                    pass
+                    
+                elif reaction.action == "expression":
+                    # Change avatar expression
+                    expression = reaction.value
+                    parent.avatar_status.setText(f"Webcam: {expression}")
+                    parent.avatar_status.setStyleSheet("color: #89b4fa;")
+                    _log_avatar_activity("webcam_expression", expression)
+                    
+            except Exception as e:
+                logger.error(f"Webcam reaction error: {e}")
+        
+        # Start webcam reactor
+        _webcam_reactor = WebcamReactor(on_reaction=handle_webcam_reaction)
+        _webcam_reactor.start()
+        
+        parent.avatar_status.setText("Webcam reactions enabled - watching for faces")
+        parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+        _log_avatar_activity("webcam_reactions", "enabled")
+        
+    else:
+        # Stop webcam reactor
+        if _webcam_reactor:
+            _webcam_reactor.stop()
+            _webcam_reactor = None
+        
+        parent.avatar_status.setText("Webcam reactions disabled")
+        parent.avatar_status.setStyleSheet("color: #6c7086;")
+        _log_avatar_activity("webcam_reactions", "disabled")
+    
+    # Save setting
+    _save_auto_settings(parent)
+
+
 def _save_auto_settings(parent):
     """Save avatar auto-load/auto-run settings to gui_settings.json."""
     try:
@@ -5210,6 +5230,7 @@ def _save_auto_settings(parent):
         # Update auto settings
         settings["avatar_auto_load"] = getattr(parent, '_avatar_auto_load', False)
         settings["avatar_auto_run"] = getattr(parent, '_avatar_auto_run', False)
+        settings["webcam_reactions_enabled"] = getattr(parent, '_webcam_reactions_enabled', False)
         
         # Save back
         settings_path.parent.mkdir(parents=True, exist_ok=True)
@@ -5463,6 +5484,80 @@ def _poll_ai_customizations(parent):
         
     except Exception:
         pass  # Silently ignore errors in background check
+
+
+def _poll_scene_commands(parent):
+    """Check for AI-requested scene object commands."""
+    try:
+        from pathlib import Path
+        cmd_path = Path(__file__).parent.parent.parent.parent.parent / "information" / "avatar" / "scene_command.json"
+        
+        if not cmd_path.exists():
+            return
+        
+        # Read command
+        cmd = json.loads(cmd_path.read_text())
+        timestamp = cmd.get("timestamp", 0)
+        
+        # Skip if already processed
+        if timestamp <= parent._last_scene_command_time:
+            return
+        
+        parent._last_scene_command_time = timestamp
+        
+        # Get 3D widget
+        widget_3d = getattr(parent, 'avatar_preview_3d', None)
+        if not widget_3d:
+            return
+        
+        action = cmd.get("action", "")
+        
+        if action == "add":
+            obj_path = cmd.get("object_path", "")
+            if obj_path:
+                position = cmd.get("position")
+                scale = cmd.get("scale", 1.0)
+                rotation = cmd.get("rotation")
+                widget_3d.add_scene_object(obj_path, position=position, rotation=rotation, scale=scale)
+                _refresh_scene_objects_list(parent)
+        
+        elif action == "remove":
+            obj_id = cmd.get("object_id", "")
+            if obj_id:
+                widget_3d.remove_scene_object(obj_id)
+                _refresh_scene_objects_list(parent)
+        
+        elif action == "move":
+            obj_id = cmd.get("object_id", "")
+            position = cmd.get("position")
+            if obj_id and position:
+                widget_3d.move_scene_object(obj_id, position)
+        
+        elif action == "scale":
+            obj_id = cmd.get("object_id", "")
+            scale = cmd.get("scale", 1.0)
+            if obj_id:
+                widget_3d.scale_scene_object(obj_id, scale)
+        
+        elif action == "rotate":
+            obj_id = cmd.get("object_id", "")
+            rotation = cmd.get("rotation")
+            if obj_id and rotation:
+                widget_3d.rotate_scene_object(obj_id, rotation)
+        
+        elif action == "list":
+            objects = widget_3d.get_scene_objects()
+            print(f"[Scene] Objects: {objects}")
+        
+        elif action == "clear":
+            widget_3d.clear_scene_objects()
+            _refresh_scene_objects_list(parent)
+        
+        # Clear command file after processing
+        cmd_path.write_text(json.dumps({"_processed": True}))
+        
+    except Exception as e:
+        print(f"[Scene] Error polling commands: {e}")
 
 
 def _apply_ai_customization(parent, setting: str, value: str):
@@ -6745,8 +6840,157 @@ def _reset_all_avatar(parent):
     # Reset expression
     parent.current_expression = "neutral"
     
+    # Clear scene objects
+    if hasattr(parent, 'avatar_preview_3d') and parent.avatar_preview_3d:
+        parent.avatar_preview_3d.clear_scene_objects()
+    _refresh_scene_objects_list(parent)
+    
     parent.avatar_status.setText("All avatar settings reset to defaults")
     parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+
+
+# =============================================================================
+# Scene Object Management Functions
+# =============================================================================
+
+def _add_scene_object(parent):
+    """Open file dialog to add a 3D object to the scene."""
+    if not hasattr(parent, 'avatar_preview_3d') or not parent.avatar_preview_3d:
+        parent.avatar_status.setText("Enable 3D Rendering first")
+        parent.avatar_status.setStyleSheet("color: #f38ba8;")
+        return
+    
+    file_path, _ = QFileDialog.getOpenFileName(
+        parent.avatar_preview_3d,
+        "Add 3D Object to Scene",
+        str(AVATAR_MODELS_DIR),
+        "3D Models (*.glb *.gltf *.obj *.fbx *.dae);;All Files (*)"
+    )
+    
+    if file_path:
+        obj_id = parent.avatar_preview_3d.add_scene_object(
+            file_path,
+            position=[0.0, -0.5, 0.5],  # Default position in front of avatar
+            scale=0.5  # Default smaller scale for props
+        )
+        if obj_id:
+            _refresh_scene_objects_list(parent)
+            parent.avatar_status.setText(f"Added: {Path(file_path).stem}")
+            parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+        else:
+            parent.avatar_status.setText("Failed to add object")
+            parent.avatar_status.setStyleSheet("color: #f38ba8;")
+
+
+def _remove_scene_object(parent):
+    """Remove the selected scene object."""
+    if not hasattr(parent, 'avatar_preview_3d') or not parent.avatar_preview_3d:
+        return
+    
+    # Get selected object ID from combo
+    obj_id = parent.scene_objects_list.currentData()
+    if obj_id:
+        if parent.avatar_preview_3d.remove_scene_object(obj_id):
+            _refresh_scene_objects_list(parent)
+            parent.avatar_status.setText("Object removed")
+            parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+
+
+def _clear_scene_objects(parent):
+    """Clear all scene objects."""
+    if not hasattr(parent, 'avatar_preview_3d') or not parent.avatar_preview_3d:
+        return
+    
+    parent.avatar_preview_3d.clear_scene_objects()
+    _refresh_scene_objects_list(parent)
+    parent.avatar_status.setText("Scene cleared")
+    parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+
+
+def _refresh_scene_objects_list(parent):
+    """Refresh the scene objects dropdown."""
+    if not hasattr(parent, 'scene_objects_list'):
+        return
+    
+    parent.scene_objects_list.clear()
+    
+    if hasattr(parent, 'avatar_preview_3d') and parent.avatar_preview_3d:
+        objects = parent.avatar_preview_3d.get_scene_objects()
+        for obj in objects:
+            parent.scene_objects_list.addItem(
+                f"{obj['name']} ({obj['id']})",
+                obj['id']
+            )
+        
+        # Update sliders to match selected object
+        if objects:
+            _load_selected_object_settings(parent)
+
+
+def _load_selected_object_settings(parent):
+    """Load the selected object's settings into the sliders."""
+    if not hasattr(parent, 'avatar_preview_3d') or not parent.avatar_preview_3d:
+        return
+    
+    obj_id = parent.scene_objects_list.currentData()
+    if not obj_id:
+        return
+    
+    objects = parent.avatar_preview_3d.get_scene_objects()
+    for obj in objects:
+        if obj['id'] == obj_id:
+            # Block signals to prevent feedback loop
+            parent.scene_obj_x.blockSignals(True)
+            parent.scene_obj_y.blockSignals(True)
+            parent.scene_obj_z.blockSignals(True)
+            parent.scene_obj_scale.blockSignals(True)
+            
+            # Set values (convert from float to slider integers)
+            parent.scene_obj_x.setValue(int(obj['position'][0] * 100))
+            parent.scene_obj_y.setValue(int(obj['position'][1] * 100))
+            parent.scene_obj_z.setValue(int(obj['position'][2] * 100))
+            parent.scene_obj_scale.setValue(int(obj['scale'] * 100))
+            parent.scene_obj_scale_label.setText(f"{obj['scale']:.1f}x")
+            
+            # Unblock signals
+            parent.scene_obj_x.blockSignals(False)
+            parent.scene_obj_y.blockSignals(False)
+            parent.scene_obj_z.blockSignals(False)
+            parent.scene_obj_scale.blockSignals(False)
+            break
+
+
+def _update_scene_object_position(parent):
+    """Update the selected object's position from sliders."""
+    if not hasattr(parent, 'avatar_preview_3d') or not parent.avatar_preview_3d:
+        return
+    
+    obj_id = parent.scene_objects_list.currentData()
+    if not obj_id:
+        return
+    
+    # Convert slider values to float positions
+    x = parent.scene_obj_x.value() / 100.0
+    y = parent.scene_obj_y.value() / 100.0
+    z = parent.scene_obj_z.value() / 100.0
+    
+    parent.avatar_preview_3d.move_scene_object(obj_id, [x, y, z])
+
+
+def _update_scene_object_scale(parent):
+    """Update the selected object's scale from slider."""
+    if not hasattr(parent, 'avatar_preview_3d') or not parent.avatar_preview_3d:
+        return
+    
+    obj_id = parent.scene_objects_list.currentData()
+    if not obj_id:
+        return
+    
+    # Convert slider value to scale (10-300 → 0.1-3.0)
+    scale = parent.scene_obj_scale.value() / 100.0
+    parent.scene_obj_scale_label.setText(f"{scale:.1f}x")
+    
+    parent.avatar_preview_3d.scale_scene_object(obj_id, scale)
 
 
 def _refresh_avatar(parent):
@@ -6916,8 +7160,8 @@ def _on_avatar_selected(parent):
         parent._is_3d_model = True
         _preview_3d_model(parent, path)
     
-    parent.avatar_status.setText(f"Selected: {path.name} - Click 'Apply Avatar' to load")
-    parent.avatar_status.setStyleSheet("color: #fab387;")
+    # Auto-apply the selected avatar
+    _apply_avatar(parent)
 
 
 def _preview_image(parent, path: Path):

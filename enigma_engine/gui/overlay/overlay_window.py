@@ -241,6 +241,8 @@ class AIOverlay(QWidget):
         self.response_area = QTextEdit()
         self.response_area.setReadOnly(True)
         self.response_area.setMaximumHeight(80)
+        self.response_area.setLineWrapMode(QTextEdit.WidgetWidth)
+        self.response_area.setWordWrapMode(3)  # WrapAtWordBoundaryOrAnywhere
         self.response_area.setPlaceholderText("AI response will appear here...")
         layout.addWidget(self.response_area)
         
@@ -309,12 +311,16 @@ class AIOverlay(QWidget):
             self.chat_area = QTextEdit()
             self.chat_area.setReadOnly(True)
             self.chat_area.setPlaceholderText("Chat history will appear here...")
+            self.chat_area.setLineWrapMode(QTextEdit.WidgetWidth)
+            self.chat_area.setWordWrapMode(3)  # WrapAtWordBoundaryOrAnywhere
             layout.addWidget(self.chat_area)
         else:
             # Response area only
             self.response_area = QTextEdit()
             self.response_area.setReadOnly(True)
             self.response_area.setPlaceholderText("AI response will appear here...")
+            self.response_area.setLineWrapMode(QTextEdit.WidgetWidth)
+            self.response_area.setWordWrapMode(3)  # WrapAtWordBoundaryOrAnywhere
             layout.addWidget(self.response_area)
             
         # Input area
@@ -490,9 +496,9 @@ class AIOverlay(QWidget):
         
         # Update UI to show user message
         if hasattr(self, 'chat_area'):
-            self.chat_area.append(f"<b>You:</b> {text}")
+            self.chat_area.append(f"<div style='word-wrap: break-word; overflow-wrap: break-word;'><b>You:</b> {text}</div>")
         elif hasattr(self, 'response_area'):
-            self.response_area.append(f"<b>You:</b> {text}")
+            self.response_area.append(f"<div style='word-wrap: break-word; overflow-wrap: break-word;'><b>You:</b> {text}</div>")
             
         # Send via bridge
         self.chat_bridge.send_message(text)
@@ -501,7 +507,7 @@ class AIOverlay(QWidget):
         """Handle AI response."""
         # Update UI with response
         if hasattr(self, 'chat_area'):
-            self.chat_area.append(f"<b>AI:</b> {response}")
+            self.chat_area.append(f"<div style='word-wrap: break-word; overflow-wrap: break-word;'><b>AI:</b> {response}</div>")
         elif hasattr(self, 'response_area'):
             self.response_area.setText(response)
         elif hasattr(self, 'response_label'):

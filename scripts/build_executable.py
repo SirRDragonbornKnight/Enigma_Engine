@@ -21,6 +21,7 @@ import os
 import sys
 import shutil
 import argparse
+import subprocess
 from pathlib import Path
 
 
@@ -31,7 +32,8 @@ def check_pyinstaller():
         return True
     except ImportError:
         print("PyInstaller not found. Installing...")
-        os.system(f"{sys.executable} -m pip install pyinstaller")
+        import subprocess
+        subprocess.run([sys.executable, "-m", "pip", "install", "pyinstaller"], check=True)
         return True
 
 
@@ -119,9 +121,9 @@ def build_executable(onefile=False, portable=False):
     print(f"Command: {' '.join(cmd_parts[:5])}...")
     
     os.chdir(project_root)
-    result = os.system(" ".join(f'"{p}"' if " " in p else p for p in cmd_parts))
+    result = subprocess.run(cmd_parts)
     
-    if result != 0:
+    if result.returncode != 0:
         print("\nBuild failed!")
         return False
     

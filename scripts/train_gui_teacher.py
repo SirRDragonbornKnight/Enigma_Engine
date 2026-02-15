@@ -251,7 +251,7 @@ IMPROVEMENT: [what the student needs to learn about the GUI]"""
                 try:
                     score = int(re.search(r'\d+', line).group())
                     score = max(1, min(10, score))
-                except:
+                except (ValueError, AttributeError):
                     pass
             elif line.startswith('IMPROVEMENT:'):
                 improvement = line[12:].strip()

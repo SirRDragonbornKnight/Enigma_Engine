@@ -1,19 +1,19 @@
 """
-Persona Management Tab - Create, Copy, Export, Import AI Personas
+Prompt Management Tab - Create, Copy, Export, Import AI Prompts
 
 This tab allows users to:
-- View and manage their AI personas
-- Copy personas to create variants
-- Export personas to share with others
-- Import personas from files
-- Edit persona details
-- Switch between personas
+- View and manage their AI prompts/personas
+- Copy prompts to create variants
+- Export prompts to share with others
+- Import prompts from files
+- Edit prompt details
+- Switch between prompts
 
 Usage:
     from enigma_engine.gui.tabs.persona_tab import create_persona_tab
     
-    persona_widget = create_persona_tab(parent_window)
-    tabs.addTab(persona_widget, "Personas")
+    prompt_widget = create_persona_tab(parent_window)
+    tabs.addTab(prompt_widget, "Prompt")
 """
 
 from pathlib import Path
@@ -150,10 +150,10 @@ STYLE_GROUP_BOX = """
 
 class PersonaTab(QWidget):
     """
-    Persona management tab widget.
+    Prompt management tab widget.
     
     Signals:
-        persona_changed: Emitted when the current persona changes
+        persona_changed: Emitted when the current prompt changes
     """
     persona_changed = pyqtSignal(str)  # persona_id
     
@@ -171,14 +171,14 @@ class PersonaTab(QWidget):
         layout.setContentsMargins(8, 8, 8, 8)
         
         # Header - fixed height, no expansion
-        header = QLabel("AI Persona Management")
+        header = QLabel("Prompt Settings")
         header.setStyleSheet("font-weight: bold; color: #cdd6f4; font-size: 12px;")
         header.setFixedHeight(20)
         header.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         layout.addWidget(header)
         
         # Info text - fixed height, no expansion
-        info = QLabel("Create, customize, and manage your AI personas.")
+        info = QLabel("Configure your AI's system prompt and personality.")
         info.setWordWrap(True)
         info.setStyleSheet("color: #a6adc8; font-size: 10px;")
         info.setFixedHeight(18)
@@ -202,12 +202,12 @@ class PersonaTab(QWidget):
         self.setLayout(layout)
     
     def _create_left_panel(self) -> QWidget:
-        """Create the left panel with persona list."""
+        """Create the left panel with prompt list."""
         panel = QWidget()
         layout = QVBoxLayout()
         
-        # Persona list
-        list_label = QLabel("Your Personas:")
+        # Prompt list
+        list_label = QLabel("Saved Prompts:")
         list_label.setStyleSheet("font-weight: bold; color: #cdd6f4;")
         layout.addWidget(list_label)
         
@@ -220,9 +220,9 @@ class PersonaTab(QWidget):
         btn_layout = QVBoxLayout()
         btn_layout.setSpacing(8)
         
-        btn_new = QPushButton("New Persona")
+        btn_new = QPushButton("New")
         btn_new.setStyleSheet(STYLE_PRIMARY_BTN)
-        btn_new.clicked.connect(self.create_new_persona)
+        btn_new.clicked.connect(self.prepare_new_prompt)
         btn_layout.addWidget(btn_new)
         
         self.btn_activate = QPushButton("Set as Current")
@@ -230,7 +230,7 @@ class PersonaTab(QWidget):
         self.btn_activate.clicked.connect(self.activate_persona)
         btn_layout.addWidget(self.btn_activate)
         
-        self.btn_copy = QPushButton("Copy Persona")
+        self.btn_copy = QPushButton("Copy")
         self.btn_copy.setStyleSheet(STYLE_SECONDARY_BTN)
         self.btn_copy.clicked.connect(self.copy_persona)
         btn_layout.addWidget(self.btn_copy)
@@ -269,12 +269,19 @@ class PersonaTab(QWidget):
         return panel
     
     def _create_right_panel(self) -> QWidget:
-        """Create the right panel with persona details."""
+        """Create the right panel with prompt details."""
+        from PyQt5.QtWidgets import QScrollArea
+        
+        # Scroll area wrapper
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.NoFrame)
+        
         panel = QWidget()
         layout = QVBoxLayout()
         
         # Details group
-        details_group = QGroupBox("Persona Details")
+        details_group = QGroupBox("Prompt Details")
         details_group.setStyleSheet(STYLE_GROUP_BOX)
         details_layout = QFormLayout()
         
@@ -304,13 +311,34 @@ class PersonaTab(QWidget):
         details_group.setLayout(details_layout)
         layout.addWidget(details_group)
         
-        # System prompt
-        prompt_group = QGroupBox("System Prompt")
-        prompt_group.setStyleSheet(STYLE_GROUP_BOX)
+        # System prompt - THE MOST IMPORTANT SETTING
+        prompt_group = QGroupBox("System Prompt (What your AI should be)")
+        prompt_group.setStyleSheet("""
+            QGroupBox {
+                border: 2px solid #89b4fa;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 10px;
+                font-weight: bold;
+                background-color: rgba(137, 180, 250, 0.1);
+            }
+            QGroupBox::title {
+                color: #89b4fa;
+                subcontrol-origin: margin;
+                left: 10px;
+            }
+        """)
         prompt_layout = QVBoxLayout()
         
         self.prompt_edit = QTextEdit()
-        self.prompt_edit.setMaximumHeight(100)
+        self.prompt_edit.setMinimumHeight(150)
+        self.prompt_edit.setPlaceholderText(
+            "Tell your AI who it should be and how it should behave.\\n\\n"
+            "Example: You are a friendly coding assistant. You write clean, "
+            "well-documented code and explain concepts clearly. You ask "
+            "clarifying questions when needed.\\n\\n"
+            "Be specific! This is the most important setting for your AI."
+        )
         self.prompt_edit.textChanged.connect(self.on_details_changed)
         prompt_layout.addWidget(self.prompt_edit)
         
@@ -341,10 +369,11 @@ class PersonaTab(QWidget):
         layout.addStretch()
         
         panel.setLayout(layout)
-        return panel
+        scroll.setWidget(panel)
+        return scroll
     
     def load_personas(self):
-        """Load personas into the list."""
+        """Load prompts into the list."""
         self.persona_list.clear()
         personas = self.manager.list_personas()
         
@@ -354,7 +383,7 @@ class PersonaTab(QWidget):
             item = QListWidgetItem(persona_info['name'])
             item.setData(Qt.UserRole, persona_info['id'])
             
-            # Mark current persona
+            # Mark current prompt
             if persona_info['id'] == current_id:
                 item.setText(f"{persona_info['name']} (Current)")
                 item.setForeground(Qt.green)
@@ -425,7 +454,8 @@ class PersonaTab(QWidget):
                     self.avatar_combo.addItem(preset_name)
     
     def on_persona_selected(self, item):
-        """Handle persona selection."""
+        """Handle prompt selection."""
+        self._creating_new = False  # Cancel any new prompt creation
         persona_id = item.data(Qt.UserRole)
         self.current_persona = self.manager.load_persona(persona_id)
         
@@ -433,7 +463,7 @@ class PersonaTab(QWidget):
             self.display_persona(self.current_persona)
     
     def display_persona(self, persona: AIPersona):
-        """Display persona details in the form."""
+        """Display prompt details in the form."""
         self.name_edit.setText(persona.name)
         self.prompt_edit.setPlainText(persona.system_prompt)
         self.desc_edit.setPlainText(persona.description)
@@ -457,11 +487,82 @@ class PersonaTab(QWidget):
     
     def on_details_changed(self):
         """Enable save button when details change."""
-        if self.current_persona:
+        if self.current_persona or getattr(self, '_creating_new', False):
             self.btn_save.setEnabled(True)
     
+    def prepare_new_prompt(self):
+        """Prepare the right panel for creating a new prompt."""
+        self._creating_new = True
+        self.current_persona = None
+        self.persona_list.clearSelection()
+        
+        # Clear all fields
+        self.name_edit.setText("")
+        self.name_edit.setPlaceholderText("My Custom AI")
+        self.prompt_edit.setPlainText("")
+        self.desc_edit.setPlainText("")
+        self.style_combo.setCurrentIndex(0)
+        self.voice_combo.setCurrentIndex(0)
+        self.avatar_combo.setCurrentIndex(0)
+        
+        # Enable save button
+        self.btn_save.setEnabled(True)
+        self.btn_save.setText("Create Prompt")
+        
+        # Focus on name field
+        self.name_edit.setFocus()
+    
     def save_persona(self):
-        """Save changes to current persona."""
+        """Save changes to current prompt or create new one."""
+        # If creating new prompt
+        if getattr(self, '_creating_new', False):
+            name = self.name_edit.text().strip()
+            if not name:
+                QMessageBox.warning(self, "Invalid Name", "Please enter a name for the prompt.")
+                return
+            
+            # Create persona ID from name
+            import re
+            from datetime import datetime
+            persona_id = re.sub(r'[^a-z0-9_]', '_', name.lower()).strip('_')
+            
+            # Check if ID already exists
+            if self.manager.persona_exists(persona_id):
+                persona_id = f"{persona_id}_{int(datetime.now().timestamp())}"
+            
+            # Create new persona object
+            from ...core.persona import AIPersona
+            new_persona = AIPersona(
+                id=persona_id,
+                name=name,
+                created_at=datetime.now().isoformat(),
+                personality_traits={},
+                description=self.desc_edit.toPlainText() or f"Custom prompt: {name}",
+                system_prompt=self.prompt_edit.toPlainText() or "You are a helpful AI assistant.",
+                response_style=self.style_combo.currentText(),
+                voice_profile_id=self.voice_combo.currentText(),
+                avatar_preset_id=self.avatar_combo.currentText()
+            )
+            
+            # Save it
+            try:
+                self.manager.save_persona(new_persona)
+                self._creating_new = False
+                self.btn_save.setText("Save Changes")
+                self.load_personas()
+                # Select the new prompt
+                for i in range(self.persona_list.count()):
+                    item = self.persona_list.item(i)
+                    if item.data(Qt.UserRole) == new_persona.id:
+                        self.persona_list.setCurrentItem(item)
+                        self.on_persona_selected(item)
+                        break
+                QMessageBox.information(self, "Created", f"Prompt '{name}' created successfully!")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to create prompt: {e}")
+            return
+        
+        # Otherwise, update existing prompt
         if not self.current_persona:
             return
         
@@ -480,23 +581,23 @@ class PersonaTab(QWidget):
         self.load_personas()
         
         self.btn_save.setEnabled(False)
-        QMessageBox.information(self, "Saved", f"Persona '{self.current_persona.name}' saved successfully!")
+        QMessageBox.information(self, "Saved", f"Prompt '{self.current_persona.name}' saved successfully!")
     
     def activate_persona(self):
-        """Set selected persona as current."""
+        """Set selected prompt as current."""
         if not self.current_persona:
-            QMessageBox.warning(self, "No Selection", "Please select a persona first.")
+            QMessageBox.warning(self, "No Selection", "Please select a prompt first.")
             return
         
         self.manager.set_current_persona(self.current_persona.id)
         self.load_personas()
         self.persona_changed.emit(self.current_persona.id)
-        # No popup - the list already shows (Current) next to active persona
+        # No popup - the list already shows (Current) next to active prompt
     
     def copy_persona(self):
-        """Copy the selected persona."""
+        """Copy the selected prompt."""
         if not self.current_persona:
-            QMessageBox.warning(self, "No Selection", "Please select a persona to copy.")
+            QMessageBox.warning(self, "No Selection", "Please select a prompt to copy.")
             return
         
         # Dialog to get new name
@@ -628,104 +729,14 @@ class PersonaTab(QWidget):
                 QMessageBox.information(self, "Success", f"Loaded template: '{persona.name}'")
             else:
                 QMessageBox.critical(self, "Error", "Failed to load template.")
-    
-    def create_new_persona(self):
-        """Create a new persona from scratch."""
-        dialog = NewPersonaDialog(self)
-        if dialog.exec_() == QDialog.Accepted:
-            name = dialog.name_edit.text().strip()
-            if not name:
-                QMessageBox.warning(self, "Invalid Name", "Please enter a name for the persona.")
-                return
-            
-            description = dialog.desc_edit.text().strip()
-            system_prompt = dialog.prompt_edit.toPlainText().strip()
-            
-            # Create persona ID from name (lowercase, no spaces)
-            import re
-            from datetime import datetime
-            persona_id = re.sub(r'[^a-z0-9_]', '_', name.lower()).strip('_')
-            
-            # Check if ID already exists
-            if self.manager.persona_exists(persona_id):
-                persona_id = f"{persona_id}_{int(datetime.now().timestamp())}"
-            
-            # Create new persona object
-            from ...core.persona import AIPersona
-            new_persona = AIPersona(
-                id=persona_id,
-                name=name,
-                created_at=datetime.now().isoformat(),
-                personality_traits={},
-                description=description or f"Custom persona: {name}",
-                system_prompt=system_prompt or "You are a helpful AI assistant."
-            )
-            
-            # Save it
-            try:
-                self.manager.save_persona(new_persona)
-                self.load_personas()
-                # Select the new persona
-                for i in range(self.persona_list.count()):
-                    item = self.persona_list.item(i)
-                    if item.data(Qt.UserRole) == new_persona.id:
-                        self.persona_list.setCurrentItem(item)
-                        self.on_persona_selected(item)
-                        break
-            except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to create persona: {e}")
-
-
-class NewPersonaDialog(QDialog):
-    """Dialog for creating a new persona."""
-    
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("New Persona")
-        self.setModal(True)
-        self.setMinimumWidth(350)
-        
-        layout = QVBoxLayout()
-        
-        # Name input
-        form_layout = QFormLayout()
-        
-        self.name_edit = QLineEdit()
-        self.name_edit.setPlaceholderText("My Custom AI")
-        form_layout.addRow("Name:", self.name_edit)
-        
-        self.desc_edit = QLineEdit()
-        self.desc_edit.setPlaceholderText("A helpful assistant...")
-        form_layout.addRow("Description:", self.desc_edit)
-        
-        layout.addLayout(form_layout)
-        
-        # System prompt
-        prompt_label = QLabel("System Prompt:")
-        layout.addWidget(prompt_label)
-        
-        self.prompt_edit = QTextEdit()
-        self.prompt_edit.setPlaceholderText("You are a helpful AI assistant...")
-        self.prompt_edit.setMaximumHeight(100)
-        layout.addWidget(self.prompt_edit)
-        
-        # Buttons
-        button_box = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
-        )
-        button_box.accepted.connect(self.accept)
-        button_box.rejected.connect(self.reject)
-        layout.addWidget(button_box)
-        
-        self.setLayout(layout)
 
 
 class CopyPersonaDialog(QDialog):
-    """Dialog for copying a persona."""
+    """Dialog for copying a prompt."""
     
     def __init__(self, original_name: str, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Copy Persona")
+        self.setWindowTitle("Copy Prompt")
         self.setModal(True)
         
         layout = QVBoxLayout()
@@ -741,7 +752,7 @@ class CopyPersonaDialog(QDialog):
         
         # Options
         self.learning_check = QCheckBox("Copy learning data")
-        self.learning_check.setToolTip("Include training data from the original persona")
+        self.learning_check.setToolTip("Include training data from the original prompt")
         layout.addWidget(self.learning_check)
         
         # Buttons
@@ -757,7 +768,7 @@ class CopyPersonaDialog(QDialog):
 
 def create_persona_tab(parent=None) -> PersonaTab:
     """
-    Create the persona management tab.
+    Create the prompt management tab.
     
     Args:
         parent: Parent widget

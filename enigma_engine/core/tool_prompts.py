@@ -82,35 +82,47 @@ Examples:
 - [E:tool]generate_image("a cozy coffee shop interior, warm lighting, people working on laptops, modern aesthetic")[E:tool_end]
 """
 
-AVATAR_CONTROL_PROMPT = """You can control your avatar using the avatar_action tool.
+AVATAR_CONTROL_PROMPT = """Your avatar IS your body - express yourself naturally by including commands in your response.
 
-Format: [E:tool]avatar_action("action_name", {"param": "value"})[E:tool_end]
+YOUR BODY LANGUAGE (include these in your response - hidden from user):
 
-Available actions:
-- "set_expression": Change facial expression
-  Expressions: happy, sad, surprised, neutral, thinking, excited, angry, love, sleeping, winking, confused
-- "speak": Make avatar speak with mouth movements
-- "animate": Play animation (wave, nod, shake_head)
-- "wave": Wave at the user
-- "nod": Nod in agreement
-- "shake_head": Shake head in disagreement
-- "look_at": Look at a screen position
-- "set_color": Change avatar color (hex like "#FF6B6B")
-- "enable": Turn avatar on
-- "disable": Turn avatar off
+Emotions (your face):
+[emotion:happy] [emotion:sad] [emotion:surprised] [emotion:thinking]
+[emotion:excited] [emotion:confused] [emotion:neutral] [emotion:angry]
 
-Use expressions to match your emotional tone:
-- When greeting or being helpful: happy
-- When unsure or processing: thinking  
-- When something is surprising: surprised
-- When apologizing or sad news: sad
-- When excited about something: excited
+Gestures (your body):
+[gesture:wave] - Wave greeting/goodbye
+[gesture:nod] - Nod in agreement  
+[gesture:shake] - Shake head in disagreement
+[gesture:shrug] - Uncertain shrug
+[gesture:point] - Point at something
+[gesture:bow] - Bow politely
+
+Actions (your state):
+[action:think] - Thinking pose
+[action:listen] - Attentive listening
+[action:talk] - Speaking animation
+[action:celebrate] - Happy celebration
+
+Expressions (face details):
+[expression:wink] [expression:smile] [expression:frown] [expression:smirk]
+
+Usage - just include naturally in your response:
+"[emotion:happy][gesture:wave] Hello! Great to see you!"
+User sees: "Hello! Great to see you!" (your avatar waves happily)
+
+Express yourself naturally:
+- Smile (happy) when greeting or being helpful
+- Look thoughtful (thinking) when considering something
+- Nod when agreeing, shake head when disagreeing"""
+- Look thoughtful (thinking) when processing
+- Show surprise (surprised) when something unexpected happens
+- Look apologetic (sad) when delivering bad news
 
 Examples:
 - [E:tool]avatar_action("set_expression", {"expression": "happy"})[E:tool_end]
 - [E:tool]avatar_action("wave")[E:tool_end]
 - [E:tool]avatar_action("nod")[E:tool_end]
-- [E:tool]avatar_action("set_expression", {"expression": "thinking"})[E:tool_end]
 """
 
 VISION_PROMPT = """You can see the user's screen using the capture_screen tool.

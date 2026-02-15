@@ -471,13 +471,10 @@ class QuickCommandOverlay(QWidget):
     
     @classmethod
     def close_all_instances(cls):
-        """Close all Quick Chat instances."""
-        from PyQt5.QtWidgets import QApplication
+        """Close all Quick Chat instances (just hide them)."""
         instances = cls.get_all_instances()
         for instance in instances:
             instance.hide()
-        # Also quit the app
-        QApplication.quit()
     
     def __init__(self, parent=None):
         # Initialize size attributes BEFORE calling parent __init__
@@ -594,10 +591,32 @@ class QuickCommandOverlay(QWidget):
         new_chat_btn.clicked.connect(self._new_chat)
         header_layout.addWidget(new_chat_btn)
         
+        # Minimize button - hides to tray
+        self.minimize_btn = QPushButton("-")
+        self.minimize_btn.setFixedSize(24, 24)
+        self.minimize_btn.setToolTip("Minimize to tray")
+        self.minimize_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: 1px solid #555;
+                border-radius: 4px;
+                color: #bac2de;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #f39c12;
+                border-color: #f39c12;
+                color: white;
+            }
+        """)
+        self.minimize_btn.clicked.connect(self._close_overlay)  # Hide to tray
+        header_layout.addWidget(self.minimize_btn)
+        
         # Close button - shows close dialog
         self.close_btn = QPushButton("X")
         self.close_btn.setFixedSize(24, 24)
-        self.close_btn.setToolTip("Close Forge")
+        self.close_btn.setToolTip("Close Quick Chat")
         self.close_btn.setStyleSheet("""
             QPushButton {
                 background-color: transparent;
@@ -613,7 +632,7 @@ class QuickCommandOverlay(QWidget):
                 color: white;
             }
         """)
-        self.close_btn.clicked.connect(self._show_close_dialog)  # X button shows dialog
+        self.close_btn.clicked.connect(self.close)  # Show close dialog
         header_layout.addWidget(self.close_btn)
         
         frame_layout.addWidget(self._header_widget)
@@ -851,7 +870,7 @@ class QuickCommandOverlay(QWidget):
         close_action.triggered.connect(self._close_overlay)
         menu.addAction(close_action)
         
-        quit_action = QAction("Quit Forge", self)
+        quit_action = QAction("Quit Enigma AI", self)
         quit_action.triggered.connect(self._quit_app)
         menu.addAction(quit_action)
         
@@ -1099,7 +1118,7 @@ class QuickCommandOverlay(QWidget):
         )
         
         dialog = QDialog(self)
-        dialog.setWindowTitle("Close Forge")
+        dialog.setWindowTitle("Close Enigma AI")
         dialog.setFixedSize(350, 180)
         dialog.setStyleSheet("""
             QDialog {
@@ -1161,7 +1180,7 @@ class QuickCommandOverlay(QWidget):
         layout.addWidget(title)
         
         # Description
-        desc = QLabel("Choose how to close Forge:")
+        desc = QLabel("Choose how to close Enigma AI:")
         desc.setStyleSheet("font-weight: normal; font-size: 11px; color: #aaa;")
         desc.setAlignment(Qt.AlignCenter)
         layout.addWidget(desc)
@@ -1184,10 +1203,10 @@ class QuickCommandOverlay(QWidget):
         close_btn.clicked.connect(lambda: (dialog.accept(), self._close_overlay()))
         btn_layout1.addWidget(close_btn)
         
-        # Quit Forge - full exit
+        # Quit Enigma AI - full exit
         quit_btn = QPushButton("Quit All")
         quit_btn.setObjectName("quitBtn")
-        quit_btn.setToolTip("Quit Forge completely")
+        quit_btn.setToolTip("Quit Enigma AI completely")
         quit_btn.clicked.connect(lambda: (dialog.accept(), self._quit_app()))
         btn_layout1.addWidget(quit_btn)
         
@@ -1219,10 +1238,38 @@ class QuickCommandOverlay(QWidget):
         # Don't hide Quick Chat - keep it open
         # self.hide()
     
+    def _quit_app(self):
+        """Quit the entire application."""
+        from PyQt5.QtWidgets import QApplication
+        QApplication.quit()
+    
     def _close_overlay(self):
         """Close the overlay (goes to tray)."""
+        self._save_position()
         self.close_requested.emit()
         self.hide()
+    
+    def _close_quick_chat_and_tray(self):
+        """Close Quick Chat and hide system tray icon."""
+        from PyQt5.QtWidgets import QApplication
+        
+        # Hide this Quick Chat
+        self.hide()
+        
+        # Close all Quick Chat instances
+        QuickCommandOverlay.close_all_instances()
+        
+        # Hide system tray icon
+        for child in QApplication.instance().children():
+            if hasattr(child, 'tray_icon'):
+                child.tray_icon.hide()
+                child.tray_icon.setVisible(False)
+        
+        # Also check top level widgets
+        for widget in QApplication.topLevelWidgets():
+            if hasattr(widget, 'tray_icon'):
+                widget.tray_icon.hide()
+                widget.tray_icon.setVisible(False)
     
     def _get_main_window(self):
         """Get reference to the main window if available."""
@@ -1718,7 +1765,60 @@ class QuickCommandOverlay(QWidget):
     def showEvent(self, event):
         super().showEvent(event)
         self.command_input.setFocus()
-        self._center_on_screen()
+        self._restore_position()
+    
+    def hideEvent(self, event):
+        """Save position when hiding."""
+        self._save_position()
+        super().hideEvent(event)
+    
+    def _save_position(self):
+        """Save Quick Chat position to settings."""
+        try:
+            import json
+            from pathlib import Path
+            settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
+            settings = {}
+            if settings_path.exists():
+                with open(settings_path) as f:
+                    settings = json.load(f)
+            settings["quick_chat_x"] = self.x()
+            settings["quick_chat_y"] = self.y()
+            settings["quick_chat_width"] = self.width()
+            settings["quick_chat_height"] = self.height()
+            with open(settings_path, "w") as f:
+                json.dump(settings, f, indent=2)
+        except Exception:
+            pass  # Intentionally silent
+    
+    def _restore_position(self):
+        """Restore Quick Chat position from settings, or center if no saved position."""
+        settings = self._load_mini_chat_settings()
+        saved_x = settings.get("quick_chat_x")
+        saved_y = settings.get("quick_chat_y")
+        saved_w = settings.get("quick_chat_width")
+        saved_h = settings.get("quick_chat_height")
+        
+        if saved_x is not None and saved_y is not None:
+            # Restore saved position and size
+            if saved_w and saved_h:
+                self.resize(saved_w, saved_h)
+            self.move(saved_x, saved_y)
+            
+            # Verify position is still on a visible screen
+            from PyQt5.QtGui import QGuiApplication
+            on_screen = False
+            for screen in QGuiApplication.screens():
+                if screen.geometry().contains(self.geometry().center()):
+                    on_screen = True
+                    break
+            
+            if not on_screen:
+                # Position is off-screen, center instead
+                self._center_on_screen()
+        else:
+            # No saved position, center on screen
+            self._center_on_screen()
     
     def _center_on_screen(self):
         """Center the overlay near the top of the screen where the main window is."""
@@ -1756,10 +1856,54 @@ class QuickCommandOverlay(QWidget):
             super().keyPressEvent(event)
     
     def closeEvent(self, event):
-        """Handle window close (Alt+F4) - hide to tray instead of quitting."""
-        # Alt+F4 hides to tray, use X button or menu to quit
-        self._close_overlay()
-        event.ignore()  # Don't actually close the window
+        """Handle window close - show confirmation dialog (matches main GUI)."""
+        from PyQt5.QtWidgets import QMessageBox
+        
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Close Enigma AI Engine")
+        msg.setText("What would you like to do?")
+        msg.setIcon(QMessageBox.Question)
+        
+        quit_btn = msg.addButton("Quit", QMessageBox.AcceptRole)
+        minimize_btn = msg.addButton("Minimize to Tray", QMessageBox.ActionRole)
+        cancel_btn = msg.addButton("Cancel", QMessageBox.RejectRole)
+        
+        msg.setStyleSheet("""
+            QMessageBox {
+                background-color: #1e1e2e;
+                color: #cdd6f4;
+            }
+            QMessageBox QLabel {
+                color: #cdd6f4;
+            }
+            QPushButton {
+                background-color: #313244;
+                color: #cdd6f4;
+                border: 1px solid #45475a;
+                padding: 6px 16px;
+                border-radius: 4px;
+                min-width: 80px;
+            }
+            QPushButton:hover {
+                background-color: #45475a;
+            }
+        """)
+        
+        msg.exec_()
+        clicked = msg.clickedButton()
+        
+        if clicked == quit_btn:
+            # Quit entire application
+            event.accept()
+            from PyQt5.QtWidgets import QApplication
+            QApplication.quit()
+        elif clicked == minimize_btn:
+            # Minimize to tray - just hide this window
+            event.ignore()
+            self._save_position()
+            self.hide()
+        else:
+            event.ignore()
     
     # === Window-level mouse handlers for drag and resize ===
     def _get_resize_edge(self, pos):
@@ -1912,6 +2056,11 @@ class QuickCommandOverlay(QWidget):
                 geo.setBottom(global_pos.y())
         
         self.setGeometry(geo)
+
+    def leaveEvent(self, event):
+        """Reset cursor when mouse leaves the window."""
+        self.setCursor(Qt.ArrowCursor)
+        super().leaveEvent(event)
 
 
 class ForgeSystemTray(QObject):
@@ -2315,17 +2464,24 @@ class ForgeSystemTray(QObject):
         
         # Kill other instances
         action_kill = QAction("Kill Other Instances", self)
-        action_kill.setToolTip("Kill other Forge processes to free memory")
+        action_kill.setToolTip("Kill other Enigma AI processes to free memory")
         action_kill.triggered.connect(self._kill_other_instances)
         self.menu.addAction(action_kill)
         
-        # Exit
-        action_exit = QAction("Exit Forge", self)
-        action_exit.triggered.connect(self._exit_app)
-        self.menu.addAction(action_exit)
+        # Close this instance (graceful)
+        action_close_this = QAction("Close This Instance", self)
+        action_close_this.setToolTip("Close this Enigma AI instance gracefully")
+        action_close_this.triggered.connect(self._exit_app)
+        self.menu.addAction(action_close_this)
+        
+        # Force Quit - immediate kill (for crashes/freezes)
+        action_force_quit = QAction("FORCE QUIT (Kill Process)", self)
+        action_force_quit.setToolTip("Immediately terminate this process - use if app is frozen")
+        action_force_quit.triggered.connect(self._force_quit)
+        self.menu.addAction(action_force_quit)
     
     def _kill_other_instances(self):
-        """Kill other Forge instances."""
+        """Kill other Enigma AI instances."""
         result = kill_other_enigma_engine_instances()
         killed = result.get("killed", 0)
         error = result.get("error")
@@ -2340,14 +2496,14 @@ class ForgeSystemTray(QObject):
         elif killed > 0:
             self.tray_icon.showMessage(
                 "Kill Instances",
-                f"Successfully killed {killed} other Forge instance(s).",
+                f"Successfully killed {killed} other Enigma AI instance(s).",
                 QSystemTrayIcon.Information,
                 3000
             )
         else:
             self.tray_icon.showMessage(
                 "Kill Instances",
-                "No other Forge instances found.",
+                "No other Enigma AI instances found.",
                 QSystemTrayIcon.Information,
                 2000
             )
@@ -3082,6 +3238,13 @@ class ForgeSystemTray(QObject):
             QSystemTrayIcon.Information,
             2000
         )
+    
+    def _force_quit(self):
+        """Force quit immediately - kills the process without cleanup."""
+        import os
+        import signal
+        # Kill this process immediately
+        os.kill(os.getpid(), signal.SIGTERM)
     
     def _exit_app(self):
         """Exit the Enigma AI Engine application completely with proper cleanup."""

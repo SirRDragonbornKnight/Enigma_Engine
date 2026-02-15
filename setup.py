@@ -11,7 +11,7 @@ def read_requirements():
     """Read base requirements from requirements.txt."""
     reqs = []
     try:
-        with open("requirements.txt", "r") as f:
+        with open("requirements.txt", "r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 # Skip comments and optional packages
@@ -28,7 +28,7 @@ setup(
     name="enigma-engine",
     version="1.1.0",
     description="Enigma AI Engine - Personal AI Framework to train and deploy your own AI with GUI, voice, vision, and more",
-    long_description=open("README.md").read() if __import__("os").path.exists("README.md") else "",
+    long_description=open("README.md", encoding="utf-8").read() if __import__("os").path.exists("README.md") else "",
     long_description_content_type="text/markdown",
     author="SirRDragonbornKnight",
     author_email="sirknighth3@gmail.com",

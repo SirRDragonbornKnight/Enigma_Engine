@@ -108,6 +108,9 @@ class ThemeEditorDialog(QDialog):
         self.edit_theme = edit_theme
         self.color_buttons: dict[str, ColorButton] = {}
         
+        # Remove ? help button from titlebar
+        self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
+        
         self._setup_ui()
         
         # Apply transparency

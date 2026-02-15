@@ -170,6 +170,10 @@ class FontSelector(QDialog):
             bold_headings=self._settings.bold_headings
         )
         self._callbacks: list[Callable[[FontSettings], None]] = []
+        
+        # Remove ? help button from titlebar
+        self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
+        
         self._setup_ui()
         self._update_preview()
         

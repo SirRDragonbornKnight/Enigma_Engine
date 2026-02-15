@@ -26,8 +26,9 @@ try:
     from PIL import Image, ImageDraw, ImageFont, ImageFilter
 except ImportError:
     print("Installing Pillow...")
-    import os
-    os.system("pip install pillow")
+    import subprocess
+    import sys
+    subprocess.run([sys.executable, "-m", "pip", "install", "pillow"], check=True)
     from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 

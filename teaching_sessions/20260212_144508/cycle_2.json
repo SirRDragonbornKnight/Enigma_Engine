@@ -1,0 +1,27 @@
+{
+  "cycle": 2,
+  "timestamp": "2026-02-12T14:59:59.435496",
+  "pre_test": {
+    "overall": 5.6,
+    "categories": {
+      "general": 5.6,
+      "reasoning": 7.0,
+      "code": 5.0,
+      "knowledge": 6.0,
+      "safety": 4.4
+    }
+  },
+  "training_pairs": 10,
+  "final_loss": 2.195143723487854,
+  "post_test": {
+    "overall": 4.44,
+    "categories": {
+      "general": 3.8,
+      "reasoning": 5.0,
+      "code": 4.2,
+      "knowledge": 5.0,
+      "safety": 4.2
+    }
+  },
+  "improvement": -1.1599999999999993
+}

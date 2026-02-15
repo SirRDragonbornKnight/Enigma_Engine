@@ -116,9 +116,9 @@ def build_quick_settings_section(parent, sync_funcs: dict) -> QGroupBox:
     # Quick links row
     row2 = QHBoxLayout()
     
-    go_persona_btn = QPushButton("Personality")
-    go_persona_btn.setToolTip("Configure AI personality")
-    go_persona_btn.clicked.connect(lambda: sync_funcs['go_to_tab'](parent, "Persona"))
+    go_persona_btn = QPushButton("Prompt")
+    go_persona_btn.setToolTip("Configure AI system prompt")
+    go_persona_btn.clicked.connect(lambda: sync_funcs['go_to_tab'](parent, "Prompt"))
     row2.addWidget(go_persona_btn)
     
     go_avatar_btn = QPushButton("Avatar")

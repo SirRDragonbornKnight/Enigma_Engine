@@ -587,6 +587,8 @@ class ToolExecutor:
             return self._execute_control_avatar(module, params)
         elif tool_name == "control_avatar_bones":
             return self._execute_control_avatar_bones(params)
+        elif tool_name == "manage_scene_objects":
+            return self._execute_manage_scene_objects(params)
         elif tool_name == "customize_avatar":
             return self._execute_customize_avatar(module, params)
         elif tool_name == "speak":
@@ -684,6 +686,18 @@ class ToolExecutor:
         # Handle direct generation tools (bypass module system)
         elif tool_name == "generate_image":
             return self._execute_generate_image(None, params)
+        
+        # Handle Teacher-Student AI Training tools
+        elif tool_name == "train_model":
+            return self._execute_train_model(params)
+        elif tool_name == "chat_with_model":
+            return self._execute_chat_with_model(params)
+        elif tool_name == "generate_training_data":
+            return self._execute_generate_training_data(params)
+        elif tool_name == "evaluate_model":
+            return self._execute_evaluate_model(params)
+        elif tool_name == "list_models":
+            return self._execute_list_models(params)
         
         # For other builtin tools, use registry
         registry = self._get_tool_registry()
@@ -980,6 +994,80 @@ class ToolExecutor:
                 "success": False,
                 "error": str(e),
                 "tool": "control_avatar_bones",
+            }
+    
+    def _execute_manage_scene_objects(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute scene object management for avatar scene."""
+        try:
+            action = params.get("action", "list")
+            object_path = params.get("object_path", "")
+            object_id = params.get("object_id", "")
+            position_str = params.get("position", "")
+            scale = params.get("scale", 1.0)
+            rotation_str = params.get("rotation", "")
+            
+            # Parse position
+            position = None
+            if position_str:
+                try:
+                    parts = [float(x.strip()) for x in position_str.split(",")]
+                    if len(parts) == 3:
+                        position = parts
+                except (ValueError, AttributeError):
+                    pass
+            
+            # Parse rotation
+            rotation = None
+            if rotation_str:
+                try:
+                    parts = [float(x.strip()) for x in rotation_str.split(",")]
+                    if len(parts) == 3:
+                        rotation = parts
+                except (ValueError, AttributeError):
+                    pass
+            
+            # Store request for GUI to process (since we may not have direct widget access)
+            import json
+            from pathlib import Path
+            scene_cmd_path = Path(__file__).parent.parent.parent / "information" / "avatar" / "scene_command.json"
+            scene_cmd_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            cmd = {
+                "action": action,
+                "object_path": object_path,
+                "object_id": object_id,
+                "position": position,
+                "scale": scale,
+                "rotation": rotation,
+                "timestamp": __import__("time").time(),
+            }
+            
+            scene_cmd_path.write_text(json.dumps(cmd, indent=2))
+            
+            # Return appropriate message based on action
+            messages = {
+                "add": f"Adding object to scene: {object_path or 'no path specified'}",
+                "remove": f"Removing object: {object_id or 'no ID specified'}",
+                "move": f"Moving object {object_id} to {position or 'unspecified position'}",
+                "scale": f"Scaling object {object_id} to {scale}",
+                "rotate": f"Rotating object {object_id} to {rotation or 'unspecified rotation'}",
+                "list": "Listing all scene objects",
+                "clear": "Clearing all scene objects",
+            }
+            
+            return {
+                "success": True,
+                "result": messages.get(action, f"Scene object action: {action}"),
+                "tool": "manage_scene_objects",
+                "action": action,
+            }
+        
+        except Exception as e:
+            logger.error(f"Error in manage_scene_objects: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "tool": "manage_scene_objects",
             }
     
     def _execute_customize_avatar(self, module, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -2237,6 +2325,477 @@ class ToolExecutor:
                 "success": False,
                 "error": str(e),
                 "tool": "optimize_for_hardware",
+            }
+    
+    # =========================================================================
+    # Teacher-Student AI Training Tools
+    # =========================================================================
+    
+    def _execute_train_model(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Train an AI model on data file."""
+        try:
+            from pathlib import Path
+            from ..core.training import train_model
+            from ..config import CONFIG
+            
+            data_file = params.get("data_file", "")
+            model_name = params.get("model_name", "student")
+            model_size = params.get("model_size", "small")
+            epochs = params.get("epochs", 30)
+            batch_size = params.get("batch_size", 4)
+            learning_rate = params.get("learning_rate", 0.0001)
+            
+            # Resolve data path
+            data_path = Path(data_file)
+            if not data_path.is_absolute():
+                data_path = Path(CONFIG.get("data_dir", "data")) / data_file
+            
+            if not data_path.exists():
+                return {
+                    "success": False,
+                    "error": f"Training data file not found: {data_path}",
+                    "tool": "train_model",
+                }
+            
+            # Output path
+            models_dir = Path(CONFIG.get("models_dir", "models"))
+            output_path = models_dir / f"{model_name}.pth"
+            
+            logger.info(f"Starting training: {data_path} -> {output_path}")
+            logger.info(f"Config: size={model_size}, epochs={epochs}, batch={batch_size}, lr={learning_rate}")
+            
+            # Run training
+            result = train_model(
+                data_path=str(data_path),
+                epochs=epochs,
+                model_size=model_size,
+                output_path=str(output_path),
+                learning_rate=learning_rate,
+                batch_size=batch_size,
+            )
+            
+            return {
+                "success": result.get("status") == "success",
+                "result": f"Model trained successfully. Final loss: {result.get('final_loss', 'N/A'):.4f}",
+                "tool": "train_model",
+                "model_path": str(output_path),
+                "final_loss": result.get("final_loss"),
+                "epochs_completed": result.get("epochs_completed", epochs),
+            }
+            
+        except Exception as e:
+            logger.exception(f"Error training model: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "tool": "train_model",
+            }
+    
+    def _execute_chat_with_model(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Send a message to a specific model and get response."""
+        try:
+            from pathlib import Path
+            from ..core.inference import EnigmaEngine
+            from ..config import CONFIG
+            
+            model_name = params.get("model_name", "")
+            message = params.get("message", "")
+            max_tokens = params.get("max_tokens", 100)
+            temperature = params.get("temperature", 0.8)
+            
+            if not model_name:
+                return {
+                    "success": False,
+                    "error": "model_name is required",
+                    "tool": "chat_with_model",
+                }
+            
+            if not message:
+                return {
+                    "success": False,
+                    "error": "message is required",
+                    "tool": "chat_with_model",
+                }
+            
+            # Find model file
+            models_dir = Path(CONFIG.get("models_dir", "models"))
+            model_path = models_dir / f"{model_name}.pth"
+            
+            if not model_path.exists():
+                # Try with different extensions/patterns
+                possible_paths = [
+                    models_dir / f"{model_name}.pth",
+                    models_dir / f"{model_name}_forge.pth",
+                    models_dir / model_name / "model.pth",
+                ]
+                model_path = None
+                for p in possible_paths:
+                    if p.exists():
+                        model_path = p
+                        break
+                
+                if model_path is None:
+                    return {
+                        "success": False,
+                        "error": f"Model not found: {model_name}. Available: {[p.stem for p in models_dir.glob('*.pth')]}",
+                        "tool": "chat_with_model",
+                    }
+            
+            # Load engine for this model
+            engine = EnigmaEngine(model_path=str(model_path))
+            
+            # Generate response
+            response = engine.generate(
+                prompt=message,
+                max_gen=max_tokens,
+                temperature=temperature,
+            )
+            
+            # Extract just the generated part (after the prompt)
+            if response.startswith(message):
+                response = response[len(message):].strip()
+            
+            return {
+                "success": True,
+                "result": response,
+                "tool": "chat_with_model",
+                "model": model_name,
+                "prompt": message,
+            }
+            
+        except Exception as e:
+            logger.exception(f"Error chatting with model: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "tool": "chat_with_model",
+            }
+    
+    def _execute_generate_training_data(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate Q:/A: training data from web or topic."""
+        try:
+            from pathlib import Path
+            from ..config import CONFIG
+            
+            topic = params.get("topic", "")
+            num_pairs = params.get("num_pairs", 50)
+            output_file = params.get("output_file", "data/generated_training.txt")
+            use_web = params.get("use_web", True)
+            difficulty = params.get("difficulty", "mixed")
+            
+            if not topic:
+                return {
+                    "success": False,
+                    "error": "topic is required",
+                    "tool": "generate_training_data",
+                }
+            
+            # Will store generated Q/A pairs
+            qa_pairs = []
+            web_content = ""
+            
+            # Step 1: Fetch web content if enabled
+            if use_web:
+                try:
+                    # Use existing web_search tool
+                    registry = self._get_tool_registry()
+                    if registry:
+                        search_result = registry.execute("web_search", query=f"{topic} tutorial guide faq")
+                        if isinstance(search_result, dict) and search_result.get("success"):
+                            web_content = str(search_result.get("result", ""))
+                        elif isinstance(search_result, str):
+                            web_content = search_result
+                except Exception as e:
+                    logger.warning(f"Web search failed: {e}, generating without web content")
+            
+            # Step 2: Generate Q/A pairs
+            # Template-based generation for common topics
+            templates = {
+                "basic": [
+                    ("What is {topic}?", "{{topic}} is {{definition}}."),
+                    ("How do I start with {topic}?", "To start with {{topic}}, you should {{first_step}}."),
+                    ("Why is {topic} important?", "{{topic}} is important because {{reason}}."),
+                ],
+                "intermediate": [
+                    ("How does {topic} work?", "{{topic}} works by {{mechanism}}."),
+                    ("What are the main features of {topic}?", "The main features of {{topic}} include {{features}}."),
+                    ("What are common uses of {topic}?", "{{topic}} is commonly used for {{uses}}."),
+                ],
+                "advanced": [
+                    ("What are best practices for {topic}?", "Best practices for {{topic}} include {{practices}}."),
+                    ("How do I troubleshoot {topic}?", "To troubleshoot {{topic}}, check {{steps}}."),
+                    ("What are advanced techniques in {topic}?", "Advanced {{topic}} techniques include {{techniques}}."),
+                ],
+            }
+            
+            # Generate basic Q/A pairs from the topic
+            generated_count = 0
+            
+            # Simple factual questions
+            basic_questions = [
+                f"Q: What is {topic}?\nA: {topic} is a subject that involves learning and understanding key concepts.\n",
+                f"Q: How do I learn {topic}?\nA: You can learn {topic} by studying documentation, practicing examples, and building projects.\n",
+                f"Q: Why should I learn {topic}?\nA: Learning {topic} helps you develop useful skills and knowledge.\n",
+                f"Q: What are the basics of {topic}?\nA: The basics include understanding fundamental concepts, terminology, and common patterns.\n",
+                f"Q: Where can I find resources about {topic}?\nA: You can find resources online, in tutorials, documentation, and community forums.\n",
+            ]
+            
+            intermediate_questions = [
+                f"Q: What are common mistakes when learning {topic}?\nA: Common mistakes include skipping fundamentals, not practicing enough, and not asking for help.\n",
+                f"Q: How long does it take to learn {topic}?\nA: Learning time varies, but with consistent practice you can understand basics in weeks.\n",
+                f"Q: What tools do I need for {topic}?\nA: You'll need learning materials, practice environments, and patience.\n",
+            ]
+            
+            advanced_questions = [
+                f"Q: How do experts approach {topic}?\nA: Experts break down complex problems, use proven patterns, and continuously learn.\n",
+                f"Q: What are advanced topics in {topic}?\nA: Advanced topics include optimization, scalability, and integration with other systems.\n",
+            ]
+            
+            # Select based on difficulty
+            if difficulty == "basic":
+                qa_pairs = basic_questions[:num_pairs]
+            elif difficulty == "intermediate":
+                qa_pairs = (basic_questions + intermediate_questions)[:num_pairs]
+            elif difficulty == "advanced":
+                qa_pairs = (basic_questions + intermediate_questions + advanced_questions)[:num_pairs]
+            else:  # mixed
+                qa_pairs = (basic_questions + intermediate_questions + advanced_questions)[:num_pairs]
+            
+            # If we have web content, try to extract more Q/A pairs
+            if web_content and len(qa_pairs) < num_pairs:
+                # Extract sentences from web content and create Q/A pairs
+                sentences = [s.strip() for s in web_content.split('.') if len(s.strip()) > 20]
+                for sentence in sentences[:num_pairs - len(qa_pairs)]:
+                    # Create a question from the sentence
+                    qa_pairs.append(f"Q: Tell me about: {sentence[:50]}...?\nA: {sentence}.\n")
+            
+            # Ensure we have the requested number (duplicate with variations if needed)
+            while len(qa_pairs) < num_pairs:
+                idx = len(qa_pairs) % len(basic_questions)
+                qa_pairs.append(basic_questions[idx].replace(topic, f"{topic} more"))
+            
+            # Truncate to requested number
+            qa_pairs = qa_pairs[:num_pairs]
+            
+            # Step 3: Write to file
+            output_path = Path(output_file)
+            if not output_path.is_absolute():
+                output_path = Path(CONFIG.get("data_dir", "data")) / output_file
+            
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write(f"# Training data for: {topic}\n")
+                f.write(f"# Generated automatically\n\n")
+                for pair in qa_pairs:
+                    f.write(pair)
+                    f.write("\n")
+            
+            return {
+                "success": True,
+                "result": f"Generated {len(qa_pairs)} Q/A pairs about '{topic}' and saved to {output_path}",
+                "tool": "generate_training_data",
+                "output_path": str(output_path),
+                "num_pairs": len(qa_pairs),
+                "used_web": use_web and bool(web_content),
+            }
+            
+        except Exception as e:
+            logger.exception(f"Error generating training data: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "tool": "generate_training_data",
+            }
+    
+    def _execute_evaluate_model(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Evaluate a model's performance on test questions."""
+        try:
+            from pathlib import Path
+            from ..core.inference import EnigmaEngine
+            from ..config import CONFIG
+            
+            model_name = params.get("model_name", "")
+            test_file = params.get("test_file", "data/test_questions.txt")
+            num_questions = params.get("num_questions", 0)  # 0 = all
+            
+            if not model_name:
+                return {
+                    "success": False,
+                    "error": "model_name is required",
+                    "tool": "evaluate_model",
+                }
+            
+            # Find model
+            models_dir = Path(CONFIG.get("models_dir", "models"))
+            model_path = models_dir / f"{model_name}.pth"
+            
+            if not model_path.exists():
+                model_path = models_dir / f"{model_name}_forge.pth"
+            
+            if not model_path.exists():
+                return {
+                    "success": False,
+                    "error": f"Model not found: {model_name}",
+                    "tool": "evaluate_model",
+                }
+            
+            # Load test file
+            test_path = Path(test_file)
+            if not test_path.is_absolute():
+                test_path = Path(CONFIG.get("data_dir", "data")) / test_file
+            
+            if not test_path.exists():
+                return {
+                    "success": False,
+                    "error": f"Test file not found: {test_path}",
+                    "tool": "evaluate_model",
+                }
+            
+            # Parse Q/A pairs from test file
+            with open(test_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Extract Q/A pairs
+            qa_pairs = []
+            lines = content.split('\n')
+            current_q = None
+            current_a = None
+            
+            for line in lines:
+                line = line.strip()
+                if line.startswith('Q:'):
+                    if current_q and current_a:
+                        qa_pairs.append((current_q, current_a))
+                    current_q = line[2:].strip()
+                    current_a = None
+                elif line.startswith('A:'):
+                    current_a = line[2:].strip()
+            
+            if current_q and current_a:
+                qa_pairs.append((current_q, current_a))
+            
+            if not qa_pairs:
+                return {
+                    "success": False,
+                    "error": "No Q/A pairs found in test file",
+                    "tool": "evaluate_model",
+                }
+            
+            # Limit questions if specified
+            if num_questions > 0:
+                qa_pairs = qa_pairs[:num_questions]
+            
+            # Load model
+            engine = EnigmaEngine(model_path=str(model_path))
+            
+            # Test each question
+            correct = 0
+            results = []
+            
+            for question, expected in qa_pairs:
+                response = engine.generate(
+                    prompt=f"Q: {question}\nA:",
+                    max_gen=50,
+                    temperature=0.3,  # Lower temperature for more deterministic
+                )
+                
+                # Extract answer
+                if "A:" in response:
+                    answer = response.split("A:")[-1].strip()
+                else:
+                    answer = response.strip()
+                
+                # Simple similarity check (word overlap)
+                expected_words = set(expected.lower().split())
+                answer_words = set(answer.lower().split())
+                overlap = len(expected_words & answer_words) / max(len(expected_words), 1)
+                
+                is_correct = overlap > 0.3  # 30% word overlap threshold
+                if is_correct:
+                    correct += 1
+                
+                results.append({
+                    "question": question,
+                    "expected": expected,
+                    "got": answer[:100],
+                    "correct": is_correct,
+                })
+            
+            accuracy = correct / len(qa_pairs) if qa_pairs else 0
+            
+            return {
+                "success": True,
+                "result": f"Model '{model_name}' scored {accuracy:.1%} ({correct}/{len(qa_pairs)} correct)",
+                "tool": "evaluate_model",
+                "accuracy": accuracy,
+                "correct": correct,
+                "total": len(qa_pairs),
+                "details": results[:5],  # First 5 results for context
+            }
+            
+        except Exception as e:
+            logger.exception(f"Error evaluating model: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "tool": "evaluate_model",
+            }
+    
+    def _execute_list_models(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """List all available trained models."""
+        try:
+            from pathlib import Path
+            from ..config import CONFIG
+            
+            models_dir = Path(CONFIG.get("models_dir", "models"))
+            
+            if not models_dir.exists():
+                return {
+                    "success": True,
+                    "result": "No models directory found. Train a model first!",
+                    "tool": "list_models",
+                    "models": [],
+                }
+            
+            # Find all model files
+            models = []
+            for pattern in ["*.pth", "*.pt", "*.safetensors", "*.gguf"]:
+                for path in models_dir.glob(pattern):
+                    size_mb = path.stat().st_size / (1024 * 1024)
+                    models.append({
+                        "name": path.stem,
+                        "file": path.name,
+                        "size_mb": round(size_mb, 2),
+                    })
+            
+            if not models:
+                return {
+                    "success": True,
+                    "result": "No models found in models directory.",
+                    "tool": "list_models",
+                    "models": [],
+                }
+            
+            # Format result
+            model_list = "\n".join([
+                f"  - {m['name']} ({m['size_mb']} MB)"
+                for m in models
+            ])
+            
+            return {
+                "success": True,
+                "result": f"Available models:\n{model_list}",
+                "tool": "list_models",
+                "models": models,
+            }
+            
+        except Exception as e:
+            logger.exception(f"Error listing models: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "tool": "list_models",
             }
     
     def format_tool_result(self, result: Dict[str, Any]) -> str:

@@ -507,6 +507,11 @@ class AvatarController:
         - move: Move to position "x,y"
         - resize: Resize to "pixels" 
         - orientation: Set view angle "front", "back", "left", "right" or "x,y"
+        - wave: Make avatar wave hello
+        - nod: Make avatar nod yes
+        - shake_head: Make avatar shake head no
+        - speak: Lip-sync animation with text
+        - emote: Set emotion (happy, sad, thinking, surprised, neutral)
         
         Returns:
             Dict with success status and result/error message
@@ -613,6 +618,32 @@ class AvatarController:
                 cb(text)
             except Exception as e:
                 logger.warning(f"Speak callback error: {e}")
+    
+    def start_talking(self) -> None:
+        """
+        Signal that avatar should enter talking state.
+        
+        Called when AI starts generating a response. Sets the avatar
+        to SPEAKING state and begins lip sync animation loop.
+        """
+        if not self.is_enabled:
+            return
+        
+        self._set_state(AvatarState.SPEAKING)
+        self.control("start_talking", "")
+    
+    def stop_talking(self) -> None:
+        """
+        Signal that avatar should stop talking state.
+        
+        Called when AI finishes generating a response. Returns avatar
+        to IDLE state and stops lip sync animation.
+        """
+        if not self.is_enabled:
+            return
+        
+        self._set_state(AvatarState.IDLE)
+        self.control("stop_talking", "")
     
     def _speak_with_voice_profile(self, text: str) -> None:
         """Speak text using avatar's configured voice profile."""
@@ -758,6 +789,16 @@ class AvatarController:
             
             # Also send emotion to desktop overlay via file bridge
             self.control("emotion", expression)
+    
+    def set_emotion(self, emotion: str) -> None:
+        """
+        Set avatar emotion (alias for set_expression).
+        
+        Args:
+            emotion: The emotion to display (happy, sad, thinking, etc.)
+        """
+        self.set_expression(emotion, requester="ai_bridge", 
+                           priority=ControlPriority.AI_TOOL_CALL)
     
     def execute_action(self, action: str, params: dict = None) -> dict:
         """

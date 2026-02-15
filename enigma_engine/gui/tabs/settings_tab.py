@@ -62,7 +62,7 @@ def _go_to_tab(parent, tab_name: str):
             # Map common tab names to keys
             key_map = {
                 'Chat': 'chat', 'Workspace': 'workspace', 'History': 'history',
-                'Persona': 'persona', 'Scale': 'scale', 'Modules': 'modules',
+                'Prompt': 'persona', 'Scale': 'scale', 'Modules': 'modules',
                 'Tools': 'tools', 'Router': 'router', 'Image': 'image',
                 'Code': 'code', 'Video': 'video', 'Audio': 'audio',
                 'Voice': 'voice', '3D': '3d', 'GIF': 'gif', 'Search': 'search',
@@ -2064,7 +2064,7 @@ def create_settings_tab(parent):
     
     go_persona_btn = QPushButton("Personality")
     go_persona_btn.setToolTip("Configure AI personality")
-    go_persona_btn.clicked.connect(lambda: _go_to_tab(parent, "Persona"))
+    go_persona_btn.clicked.connect(lambda: _go_to_tab(parent, "Prompt"))
     quick_row2.addWidget(go_persona_btn)
     
     go_avatar_btn = QPushButton("Avatar")
@@ -4492,26 +4492,30 @@ def _toggle_autonomous(parent, state):
         # Get current model name
         model_name = getattr(parent, 'current_model_name', 'enigma_engine')
         
-        # Check if using HuggingFace model
+        # Check if using external model (HuggingFace, GGUF, etc.)
         main_window = parent.window()
-        is_hf = False
-        if main_window and hasattr(main_window, 'engine'):
-            is_hf = getattr(main_window.engine, '_is_huggingface', False)
+        is_external = False
+        if main_window and hasattr(main_window, '_is_external_model'):
+            is_external = main_window._is_external_model()
+        elif main_window and hasattr(main_window, 'engine'):
+            # Fallback to individual checks
+            is_external = (getattr(main_window.engine, '_is_huggingface', False) or 
+                          getattr(main_window, '_is_gguf_model', False))
         
         autonomous = AutonomousManager.get(model_name)
         
         if state == Checked:
-            # Warn about HF model limitations
-            if is_hf:
+            # Warn about external model limitations
+            if is_external:
                 QMessageBox.warning(parent, "Limited Functionality",
-                    "Autonomous mode has limited functionality with HuggingFace models.\n\n"
+                    "Autonomous mode has limited functionality with external models.\n\n"
                     "What works:\n"
-                    "• Web browsing and learning\n"
-                    "• Personality evolution\n"
-                    "• Curiosity exploration\n\n"
+                    "- Web browsing and learning\n"
+                    "- Personality evolution\n"
+                    "- Curiosity exploration\n\n"
                     "What doesn't work:\n"
-                    "• Model self-improvement (HF models are read-only)\n"
-                    "• Response practice (requires training)\n\n"
+                    "- Model self-improvement (external models are read-only)\n"
+                    "- Response practice (requires local training)\n\n"
                     "For full autonomous features, use a local Forge model."
                 )
             

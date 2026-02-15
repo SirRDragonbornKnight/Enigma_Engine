@@ -1,16 +1,17 @@
 """
 Model Router Tab - Assign models to tools.
 
-Clean, modern interface for configuring which AI models handle which tasks.
+Simple interface for configuring which AI models handle which tasks.
 """
 
-from typing import Optional
+import json
+from pathlib import Path
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import (
     QAbstractItemView,
-    QFrame,
+    QDialog,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -18,15 +19,11 @@ from PyQt5.QtWidgets import (
     QListWidgetItem,
     QMessageBox,
     QPushButton,
-    QSpinBox,
-    QSplitter,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
-
-from .shared_components import NoScrollComboBox
 
 # Tool categories and styling
 TOOL_CATEGORIES = {
@@ -34,9 +31,9 @@ TOOL_CATEGORIES = {
         "color": "#e91e63",
         "tools": ["chat", "image", "code", "video", "audio", "3d", "gif"]
     },
-    "Code (Specialized)": {
+    "Code (Other)": {
         "color": "#f39c12",
-        "tools": ["code_python", "code_javascript", "code_rust", "code_cpp", "code_java"]
+        "tools": ["code_other"]
     },
     "Perception": {
         "color": "#3498db",
@@ -49,18 +46,18 @@ TOOL_CATEGORIES = {
     "Output": {
         "color": "#2ecc71",
         "tools": ["avatar", "web"]
+    },
+    "Training": {
+        "color": "#00bcd4",
+        "tools": ["teach"]
     }
 }
 
 TOOL_INFO = {
     "chat": {"name": "Chat", "desc": "Text conversation and reasoning"},
     "image": {"name": "Image Gen", "desc": "Generate images from text"},
-    "code": {"name": "Code Gen", "desc": "Generate and edit code (general)"},
-    "code_python": {"name": "Python", "desc": "Specialized Python code generation"},
-    "code_javascript": {"name": "JavaScript", "desc": "Specialized JS/TS code generation"},
-    "code_rust": {"name": "Rust", "desc": "Specialized Rust code generation"},
-    "code_cpp": {"name": "C/C++", "desc": "Specialized C/C++ code generation"},
-    "code_java": {"name": "Java", "desc": "Specialized Java/Kotlin code generation"},
+    "code": {"name": "Code Gen", "desc": "Generate and edit code"},
+    "code_other": {"name": "Other Languages", "desc": "Fallback for other programming languages"},
     "video": {"name": "Video Gen", "desc": "Generate video clips"},
     "audio": {"name": "Audio/TTS", "desc": "Text-to-speech and audio"},
     "3d": {"name": "3D Gen", "desc": "Generate 3D models"},
@@ -71,274 +68,338 @@ TOOL_INFO = {
     "memory": {"name": "Memory", "desc": "Conversation storage"},
     "avatar": {"name": "Avatar", "desc": "Visual AI representation"},
     "web": {"name": "Web Tools", "desc": "Web search and fetch"},
-}
-
-# Model presets by category
-MODEL_PRESETS = {
-    "Local Modules": [
-        ("local:stable-diffusion", "Stable Diffusion (Image)"),
-        ("local:code", "Local Code Generator"),
-        ("local:tts", "Local TTS"),
-        ("local:video", "AnimateDiff (Video)"),
-        ("local:3d", "Shap-E (3D)"),
-    ],
-    "Chat/LLM Models": [
-        ("huggingface:Qwen/Qwen2.5-3B-Instruct", "Qwen 2.5 3B"),
-        ("huggingface:TinyLlama/TinyLlama-1.1B-Chat-v1.0", "TinyLlama 1.1B"),
-        ("huggingface:microsoft/phi-2", "Phi-2"),
-        ("huggingface:mistralai/Mistral-7B-Instruct-v0.2", "Mistral 7B"),
-    ],
-    "Code Models - General": [
-        ("huggingface:Qwen/Qwen2.5-Coder-1.5B-Instruct", "Qwen Coder 1.5B"),
-        ("huggingface:bigcode/starcoder2-3b", "StarCoder2 3B"),
-        ("huggingface:Salesforce/codegen-350M-mono", "CodeGen 350M Mono"),
-        ("huggingface:WizardLMTeam/WizardCoder-15B-V1.0", "WizardCoder 15B"),
-    ],
-    "Code Models - Python": [
-        ("huggingface:Salesforce/codegen-350M-mono", "CodeGen 350M Python"),
-        ("huggingface:bigcode/starcoder2-3b", "StarCoder2 3B"),
-        ("huggingface:replit/replit-code-v1-3b", "Replit Code 3B"),
-    ],
-    "Code Models - JavaScript": [
-        ("huggingface:Salesforce/codegen-350M-multi", "CodeGen 350M Multi"),
-        ("huggingface:bigcode/starcoder2-3b", "StarCoder2 3B"),
-    ],
-    "Code Models - Rust": [
-        ("huggingface:bigcode/starcoder2-3b", "StarCoder2 3B"),
-        ("huggingface:Salesforce/codegen-350M-multi", "CodeGen 350M Multi"),
-    ],
-    "Image Models": [
-        ("huggingface:nota-ai/bk-sdm-small", "BK-SDM Small (Fast)"),
-        ("huggingface:stabilityai/sd-turbo", "SD Turbo"),
-        ("huggingface:stabilityai/stable-diffusion-xl-base-1.0", "SDXL Base"),
-    ],
-    "Audio Models": [
-        ("huggingface:hexgrad/Kokoro-82M", "Kokoro TTS 82M"),
-        ("huggingface:suno/bark-small", "Bark Small"),
-        ("huggingface:myshell-ai/MeloTTS-English", "MeloTTS"),
-    ],
-    "Vision Models": [
-        ("huggingface:microsoft/Florence-2-base", "Florence-2 Base"),
-        ("huggingface:Salesforce/blip2-opt-2.7b", "BLIP-2"),
-    ],
-    "Embedding Models": [
-        ("huggingface:sentence-transformers/all-MiniLM-L6-v2", "MiniLM-L6"),
-        ("huggingface:BAAI/bge-small-en-v1.5", "BGE Small"),
-    ],
-    "API Providers": [
-        ("api:openai", "OpenAI API"),
-        ("api:replicate", "Replicate API"),
-        ("api:elevenlabs", "ElevenLabs API"),
-    ],
+    "teach": {"name": "Teacher AI", "desc": "Train and evaluate student models"},
 }
 
 
-class ModelRouterTab(QWidget):
-    """Modern model router configuration tab."""
+class ModelSelectDialog(QDialog):
+    """Simple dialog to select a model for a tool."""
     
-    def __init__(self, parent=None):
+    def __init__(self, tool_name: str, current_model: str = "", parent=None):
         super().__init__(parent)
-        self.assignments: dict[str, list[dict]] = {}  # tool -> [{model_id, priority}]
+        self.selected_model = current_model
+        self.setWindowTitle(f"Select Model for {tool_name}")
+        self.setMinimumSize(400, 500)
         self._setup_ui()
-        self._load_config()
         
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setSpacing(8)
-        layout.setContentsMargins(8, 8, 8, 8)
         
-        # Header
-        header = QHBoxLayout()
+        # Instructions
+        label = QLabel("Select a model to handle this task:")
+        label.setStyleSheet("font-size: 12px; margin-bottom: 8px;")
+        layout.addWidget(label)
         
-        title = QLabel("Model Router")
-        title.setStyleSheet("font-size: 14px; font-weight: bold;")
-        header.addWidget(title)
+        # Model list
+        self.model_list = QListWidget()
+        self.model_list.setStyleSheet("""
+            QListWidget {
+                border: 1px solid #444;
+                border-radius: 4px;
+                background: #1a1a2e;
+                font-size: 12px;
+            }
+            QListWidget::item {
+                padding: 10px;
+                border-bottom: 1px solid #333;
+            }
+            QListWidget::item:selected {
+                background: #3498db;
+            }
+            QListWidget::item:hover {
+                background: #2d2d44;
+            }
+        """)
+        self.model_list.itemDoubleClicked.connect(self._select_and_close)
+        layout.addWidget(self.model_list)
         
-        header.addStretch()
+        # Populate models
+        self._populate_models()
         
-        # Quick assign dropdown
-        header.addWidget(QLabel("Quick Assign:"))
-        self.quick_model = NoScrollComboBox()
-        self.quick_model.setMinimumWidth(200)
-        self._populate_model_dropdown(self.quick_model)
-        header.addWidget(self.quick_model)
+        # Buttons
+        btn_layout = QHBoxLayout()
         
-        self.quick_tool = NoScrollComboBox()
-        self.quick_tool.setMinimumWidth(120)
-        for tool_id, info in TOOL_INFO.items():
-            self.quick_tool.addItem(info["name"], tool_id)
-        header.addWidget(self.quick_tool)
+        clear_btn = QPushButton("Clear Assignment")
+        clear_btn.setStyleSheet("""
+            QPushButton {
+                background: #e74c3c;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 10px 20px;
+            }
+            QPushButton:hover { background: #c0392b; }
+        """)
+        clear_btn.clicked.connect(self._clear_assignment)
+        btn_layout.addWidget(clear_btn)
         
-        quick_add_btn = QPushButton("Assign")
-        quick_add_btn.setStyleSheet("""
+        btn_layout.addStretch()
+        
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        btn_layout.addWidget(cancel_btn)
+        
+        select_btn = QPushButton("Select")
+        select_btn.setStyleSheet("""
             QPushButton {
                 background: #2ecc71;
                 color: #1e1e2e;
                 border: none;
                 border-radius: 4px;
-                padding: 6px 16px;
+                padding: 10px 20px;
                 font-weight: bold;
             }
             QPushButton:hover { background: #27ae60; }
         """)
-        quick_add_btn.clicked.connect(self._quick_assign)
-        header.addWidget(quick_add_btn)
+        select_btn.clicked.connect(self._select_model)
+        btn_layout.addWidget(select_btn)
         
-        layout.addLayout(header)
+        layout.addLayout(btn_layout)
         
-        # Main content with splitter
-        splitter = QSplitter(Qt.Orientation.Horizontal)
+    def _populate_models(self):
+        """Populate the model list from registry."""
+        self.model_list.clear()
         
-        # Left side - Tool list
-        left_panel = QWidget()
-        left_layout = QVBoxLayout(left_panel)
-        left_layout.setContentsMargins(0, 0, 0, 0)
+        # Get models from registry
+        try:
+            from enigma_engine.core.model_registry import ModelRegistry
+            registry = ModelRegistry()
+            models = registry.list_models()
+            
+            if models:
+                for model_name, model_info in models.items():
+                    item = QListWidgetItem(model_name)
+                    item.setData(Qt.ItemDataRole.UserRole, model_name)
+                    
+                    # Add size info if available
+                    size = model_info.get("size", "")
+                    if size:
+                        item.setText(f"{model_name}  ({size})")
+                    
+                    # Highlight current selection
+                    if model_name == self.selected_model:
+                        item.setSelected(True)
+                        self.model_list.setCurrentItem(item)
+                    
+                    self.model_list.addItem(item)
+        except Exception as e:
+            item = QListWidgetItem(f"Error loading models: {e}")
+            item.setFlags(Qt.ItemFlag.NoItemFlags)
+            self.model_list.addItem(item)
+            
+        # Add "None" option
+        none_item = QListWidgetItem("(No model - use default)")
+        none_item.setData(Qt.ItemDataRole.UserRole, "")
+        none_item.setForeground(QColor("#888"))
+        self.model_list.insertItem(0, none_item)
         
-        left_layout.addWidget(QLabel("Tools"))
+        if not self.selected_model:
+            self.model_list.setCurrentRow(0)
+            
+    def _select_model(self):
+        """Select the highlighted model."""
+        current = self.model_list.currentItem()
+        if current:
+            self.selected_model = current.data(Qt.ItemDataRole.UserRole) or ""
+            self.accept()
+            
+    def _select_and_close(self, item):
+        """Double-click to select and close."""
+        self.selected_model = item.data(Qt.ItemDataRole.UserRole) or ""
+        self.accept()
         
-        self.tool_table = QTableWidget()
-        self.tool_table.setColumnCount(3)
-        self.tool_table.setHorizontalHeaderLabels(["Tool", "Model", "Status"])
-        self.tool_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self.tool_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.tool_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        self.tool_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.tool_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.tool_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.tool_table.itemSelectionChanged.connect(self._on_tool_selected)
-        self.tool_table.setStyleSheet("""
-            QTableWidget {
+    def _clear_assignment(self):
+        """Clear the assignment."""
+        self.selected_model = ""
+        self.accept()
+
+
+class PromptSelectDialog(QDialog):
+    """Dialog to select a prompt/persona for a model."""
+    
+    def __init__(self, tool_name: str, current_prompt: str = "", parent=None):
+        super().__init__(parent)
+        self.selected_prompt = current_prompt
+        self.setWindowTitle(f"Select Prompt for {tool_name}")
+        self.setMinimumSize(400, 400)
+        self._setup_ui()
+        
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        
+        label = QLabel("Select a prompt/persona for this model:")
+        label.setStyleSheet("font-size: 12px; margin-bottom: 8px;")
+        layout.addWidget(label)
+        
+        self.prompt_list = QListWidget()
+        self.prompt_list.setStyleSheet("""
+            QListWidget {
                 border: 1px solid #444;
                 border-radius: 4px;
                 background: #1a1a2e;
+                font-size: 12px;
+            }
+            QListWidget::item {
+                padding: 10px;
+                border-bottom: 1px solid #333;
+            }
+            QListWidget::item:selected { background: #9b59b6; }
+            QListWidget::item:hover { background: #2d2d44; }
+        """)
+        self.prompt_list.itemDoubleClicked.connect(self._select_and_close)
+        layout.addWidget(self.prompt_list)
+        
+        self._populate_prompts()
+        
+        btn_layout = QHBoxLayout()
+        
+        clear_btn = QPushButton("Clear Prompt")
+        clear_btn.setStyleSheet("background: #e74c3c; color: white; border: none; border-radius: 4px; padding: 10px 20px;")
+        clear_btn.clicked.connect(self._clear_prompt)
+        btn_layout.addWidget(clear_btn)
+        
+        btn_layout.addStretch()
+        
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        btn_layout.addWidget(cancel_btn)
+        
+        select_btn = QPushButton("Select")
+        select_btn.setStyleSheet("background: #9b59b6; color: white; border: none; border-radius: 4px; padding: 10px 20px; font-weight: bold;")
+        select_btn.clicked.connect(self._select_prompt)
+        btn_layout.addWidget(select_btn)
+        
+        layout.addLayout(btn_layout)
+        
+    def _populate_prompts(self):
+        """Populate prompts from personas folder."""
+        self.prompt_list.clear()
+        
+        # Add "None" option
+        none_item = QListWidgetItem("(No prompt - use default)")
+        none_item.setData(Qt.ItemDataRole.UserRole, "")
+        none_item.setForeground(QColor("#888"))
+        self.prompt_list.addItem(none_item)
+        
+        try:
+            from enigma_engine.config import CONFIG
+            personas_dir = Path(CONFIG.get("data_dir", "data")) / "personas"
+            
+            if personas_dir.exists():
+                for p in sorted(personas_dir.iterdir()):
+                    if p.is_dir():
+                        persona_file = p / "persona.json"
+                        if persona_file.exists():
+                            try:
+                                with open(persona_file, encoding='utf-8') as f:
+                                    data = json.load(f)
+                                name = data.get("name", p.name)
+                                item = QListWidgetItem(name)
+                                item.setData(Qt.ItemDataRole.UserRole, p.name)
+                                
+                                if p.name == self.selected_prompt:
+                                    item.setSelected(True)
+                                    self.prompt_list.setCurrentItem(item)
+                                    
+                                self.prompt_list.addItem(item)
+                            except (json.JSONDecodeError, OSError, KeyError):
+                                pass
+        except Exception as e:
+            item = QListWidgetItem(f"Error: {e}")
+            item.setFlags(Qt.ItemFlag.NoItemFlags)
+            self.prompt_list.addItem(item)
+            
+        if not self.selected_prompt:
+            self.prompt_list.setCurrentRow(0)
+            
+    def _select_prompt(self):
+        current = self.prompt_list.currentItem()
+        if current:
+            self.selected_prompt = current.data(Qt.ItemDataRole.UserRole) or ""
+            self.accept()
+            
+    def _select_and_close(self, item):
+        self.selected_prompt = item.data(Qt.ItemDataRole.UserRole) or ""
+        self.accept()
+        
+    def _clear_prompt(self):
+        self.selected_prompt = ""
+        self.accept()
+
+
+class ModelRouterTab(QWidget):
+    """Simple model router configuration tab."""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.assignments: dict[str, str] = {}  # tool -> model_name
+        self.prompts: dict[str, str] = {}  # tool -> prompt_id
+        self._setup_ui()
+        self._load_config()
+        
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+        layout.setContentsMargins(12, 12, 12, 12)
+        
+        # Header
+        header = QHBoxLayout()
+        
+        title = QLabel("Model Router")
+        title.setStyleSheet("font-size: 16px; font-weight: bold;")
+        header.addWidget(title)
+        
+        header.addStretch()
+        
+        # Help text
+        help_label = QLabel("Click a tool to assign a model")
+        help_label.setStyleSheet("color: #888; font-size: 11px;")
+        header.addWidget(help_label)
+        
+        layout.addLayout(header)
+        
+        # Description
+        desc = QLabel("Assign specialized models to different tasks. If no model is assigned, the default model is used.")
+        desc.setStyleSheet("color: #bac2de; font-size: 11px; margin-bottom: 8px;")
+        desc.setWordWrap(True)
+        layout.addWidget(desc)
+        
+        # Tool table - 3 columns now
+        self.tool_table = QTableWidget()
+        self.tool_table.setColumnCount(3)
+        self.tool_table.setHorizontalHeaderLabels(["Task", "Model", "Prompt"])
+        self.tool_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.tool_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.tool_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        self.tool_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.tool_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.tool_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.tool_table.cellDoubleClicked.connect(self._on_cell_double_clicked)
+        self.tool_table.setStyleSheet("""
+            QTableWidget {
+                border: 1px solid #444;
+                border-radius: 6px;
+                background: #1a1a2e;
+                gridline-color: #333;
             }
             QTableWidget::item {
-                padding: 8px;
+                padding: 12px;
             }
             QTableWidget::item:selected {
                 background: #3d5a80;
             }
             QHeaderView::section {
                 background: #2d2d44;
-                padding: 8px;
+                padding: 10px;
                 border: none;
                 font-weight: bold;
+                font-size: 12px;
             }
         """)
-        left_layout.addWidget(self.tool_table)
+        layout.addWidget(self.tool_table)
         
-        splitter.addWidget(left_panel)
-        
-        # Right side - Assignment details
-        right_panel = QWidget()
-        right_layout = QVBoxLayout(right_panel)
-        right_layout.setContentsMargins(6, 0, 0, 0)
-        
-        self.detail_title = QLabel("Select a tool")
-        self.detail_title.setStyleSheet("font-size: 13px; font-weight: bold;")
-        right_layout.addWidget(self.detail_title)
-        
-        self.detail_desc = QLabel("")
-        self.detail_desc.setStyleSheet("color: #bac2de; font-size: 11px;")
-        self.detail_desc.setWordWrap(True)
-        right_layout.addWidget(self.detail_desc)
-        
-        # Assigned models list
-        right_layout.addWidget(QLabel("Assigned Models (higher priority tried first):"))
-        
-        self.assigned_list = QListWidget()
-        self.assigned_list.setStyleSheet("""
-            QListWidget {
-                border: 1px solid #444;
-                border-radius: 4px;
-                background: #1a1a2e;
-            }
-            QListWidget::item {
-                padding: 8px;
-                border-bottom: 1px solid #333;
-            }
-            QListWidget::item:selected {
-                background: #3d5a80;
-            }
-        """)
-        self.assigned_list.setMinimumHeight(150)
-        right_layout.addWidget(self.assigned_list)
-        
-        # Add model controls
-        add_frame = QFrame()
-        add_frame.setStyleSheet("QFrame { background: #2d2d44; border-radius: 4px; padding: 6px; }")
-        add_layout = QVBoxLayout(add_frame)
-        add_layout.setSpacing(6)
-        
-        add_layout.addWidget(QLabel("Add Model:"))
-        
-        model_row = QHBoxLayout()
-        self.model_combo = NoScrollComboBox()
-        self._populate_model_dropdown(self.model_combo)
-        self.model_combo.setMinimumWidth(200)
-        model_row.addWidget(self.model_combo, stretch=1)
-        
-        model_row.addWidget(QLabel("Priority:"))
-        self.priority_spin = QSpinBox()
-        self.priority_spin.setRange(1, 100)
-        self.priority_spin.setValue(50)
-        self.priority_spin.setToolTip("Higher = tried first (100=primary, 50=backup)")
-        self.priority_spin.setFixedWidth(60)
-        model_row.addWidget(self.priority_spin)
-        
-        add_layout.addLayout(model_row)
-        
-        btn_row = QHBoxLayout()
-        
-        add_btn = QPushButton("Add Model")
-        add_btn.setStyleSheet("""
-            QPushButton {
-                background: #2ecc71;
-                color: #1e1e2e;
-                border: none;
-                border-radius: 4px;
-                padding: 8px 16px;
-                font-weight: bold;
-            }
-            QPushButton:hover { background: #27ae60; }
-        """)
-        add_btn.clicked.connect(self._add_model)
-        btn_row.addWidget(add_btn)
-        
-        remove_btn = QPushButton("Remove Selected")
-        remove_btn.setStyleSheet("""
-            QPushButton {
-                background: #e74c3c;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                padding: 8px 16px;
-                font-weight: bold;
-            }
-            QPushButton:hover { background: #c0392b; }
-        """)
-        remove_btn.clicked.connect(self._remove_model)
-        btn_row.addWidget(remove_btn)
-        
-        btn_row.addStretch()
-        add_layout.addLayout(btn_row)
-        
-        right_layout.addWidget(add_frame)
-        right_layout.addStretch()
-        
-        splitter.addWidget(right_panel)
-        splitter.setSizes([400, 400])
-        splitter.setStyleSheet("""
-            QSplitter::handle {
-                background: #444;
-                width: 4px;
-            }
-            QSplitter::handle:hover {
-                background: #666;
-            }
-        """)
-        
-        layout.addWidget(splitter)
+        # Populate table
+        self._populate_tool_table()
         
         # Bottom buttons
         bottom = QHBoxLayout()
@@ -353,7 +414,7 @@ class ModelRouterTab(QWidget):
         refresh_btn.clicked.connect(self._load_config)
         bottom.addWidget(refresh_btn)
         
-        reset_btn = QPushButton("Reset Defaults")
+        reset_btn = QPushButton("Clear All")
         reset_btn.setStyleSheet("""
             QPushButton {
                 background: #2d2d2d;
@@ -367,47 +428,23 @@ class ModelRouterTab(QWidget):
         reset_btn.clicked.connect(self._reset_defaults)
         bottom.addWidget(reset_btn)
         
-        save_btn = QPushButton("Save Configuration")
+        save_btn = QPushButton("Save")
         save_btn.setStyleSheet("""
             QPushButton {
-                background: #007bb5;
-                color: white;
+                background: #2ecc71;
+                color: #1e1e2e;
                 border: none;
                 border-radius: 4px;
                 padding: 8px 20px;
                 font-weight: bold;
             }
-            QPushButton:hover { background: #0095d9; }
+            QPushButton:hover { background: #27ae60; }
         """)
         save_btn.clicked.connect(self._save_config)
         bottom.addWidget(save_btn)
         
         layout.addLayout(bottom)
         
-        # Populate tool table
-        self._populate_tool_table()
-        
-    def _populate_model_dropdown(self, combo: NoScrollComboBox):
-        """Populate a model dropdown with presets."""
-        combo.clear()
-        combo.addItem("Select a model...", "")
-        
-        for category, models in MODEL_PRESETS.items():
-            combo.addItem(f"-- {category} --", "")
-            for model_id, display_name in models:
-                combo.addItem(f"  {display_name}", model_id)
-        
-        # Add Forge models
-        combo.addItem("-- Forge Models --", "")
-        try:
-            from enigma_engine.core.model_registry import ModelRegistry
-            registry = ModelRegistry()
-            for model in registry.list_models():
-                model_name = model.get("name", model) if isinstance(model, dict) else str(model)
-                combo.addItem(f"  {model_name}", f"forge:{model_name}")
-        except Exception:
-            combo.addItem("  default", "forge:default")
-            
     def _populate_tool_table(self):
         """Populate the tools table."""
         self.tool_table.setRowCount(len(TOOL_INFO))
@@ -425,290 +462,149 @@ class ModelRouterTab(QWidget):
             name_item = QTableWidgetItem(info["name"])
             name_item.setData(Qt.ItemDataRole.UserRole, tool_id)
             name_item.setForeground(QColor(color))
+            name_item.setToolTip(info["desc"])
             self.tool_table.setItem(row, 0, name_item)
             
             # Model (placeholder)
-            model_item = QTableWidgetItem("No model")
+            model_item = QTableWidgetItem("(default)")
             model_item.setForeground(QColor("#666"))
             self.tool_table.setItem(row, 1, model_item)
             
-            # Status
-            status_item = QTableWidgetItem("--")
-            status_item.setForeground(QColor("#666"))
-            self.tool_table.setItem(row, 2, status_item)
+            # Prompt (placeholder)
+            prompt_item = QTableWidgetItem("(default)")
+            prompt_item.setForeground(QColor("#666"))
+            self.tool_table.setItem(row, 2, prompt_item)
             
             row += 1
             
-    def _update_tool_row(self, tool_id: str):
-        """Update a single tool row in the table."""
-        for row in range(self.tool_table.rowCount()):
-            item = self.tool_table.item(row, 0)
-            if item and item.data(Qt.ItemDataRole.UserRole) == tool_id:
-                assigns = self.assignments.get(tool_id, [])
-                
-                if assigns:
-                    # Show primary model
-                    sorted_assigns = sorted(assigns, key=lambda x: -x.get("priority", 0))
-                    primary = sorted_assigns[0]["model_id"]
-                    # Shorten display
-                    display = primary.split(":")[-1]
-                    if len(display) > 20:
-                        display = display[:18] + "..."
-                    
-                    model_item = QTableWidgetItem(display)
-                    model_item.setForeground(QColor("#cdd6f4"))
-                    model_item.setToolTip(f"Primary: {primary}\nTotal: {len(assigns)} model(s)")
-                    self.tool_table.setItem(row, 1, model_item)
-                    
-                    status_item = QTableWidgetItem("Ready")
-                    status_item.setForeground(QColor("#2ecc71"))
-                    self.tool_table.setItem(row, 2, status_item)
-                else:
-                    model_item = QTableWidgetItem("No model")
-                    model_item.setForeground(QColor("#666"))
-                    self.tool_table.setItem(row, 1, model_item)
-                    
-                    status_item = QTableWidgetItem("--")
-                    status_item.setForeground(QColor("#666"))
-                    self.tool_table.setItem(row, 2, status_item)
-                break
-                
-    def _on_tool_selected(self):
-        """Handle tool selection."""
-        items = self.tool_table.selectedItems()
-        if not items:
+    def _on_cell_double_clicked(self, row, column):
+        """Handle double-click - column 1 for model, column 2 for prompt."""
+        tool_item = self.tool_table.item(row, 0)
+        if not tool_item:
             return
             
-        tool_id = items[0].data(Qt.ItemDataRole.UserRole)
-        if not tool_id:
-            return
+        tool_id = tool_item.data(Qt.ItemDataRole.UserRole)
+        tool_name = TOOL_INFO.get(tool_id, {}).get("name", tool_id)
+        
+        if column == 1:
+            # Model selection
+            current_model = self.assignments.get(tool_id, "")
+            dialog = ModelSelectDialog(tool_name, current_model, self)
+            if dialog.exec_() == QDialog.DialogCode.Accepted:
+                self.assignments[tool_id] = dialog.selected_model
+                self._update_tool_row(tool_id, row)
+                self.status_label.setText(f"Changed {tool_name} model - save!")
+                self.status_label.setStyleSheet("color: #f39c12; font-style: italic;")
+        elif column == 2:
+            # Prompt selection
+            current_prompt = self.prompts.get(tool_id, "")
+            dialog = PromptSelectDialog(tool_name, current_prompt, self)
+            if dialog.exec_() == QDialog.DialogCode.Accepted:
+                self.prompts[tool_id] = dialog.selected_prompt
+                self._update_tool_row(tool_id, row)
+                self.status_label.setText(f"Changed {tool_name} prompt - save!")
+                self.status_label.setStyleSheet("color: #f39c12; font-style: italic;")
             
-        info = TOOL_INFO.get(tool_id, {"name": tool_id, "desc": ""})
-        
-        self.detail_title.setText(info["name"])
-        self.detail_desc.setText(info["desc"])
-        
-        # Update assigned list
-        self._refresh_assigned_list(tool_id)
-        
-    def _refresh_assigned_list(self, tool_id: str):
-        """Refresh the assigned models list for a tool."""
-        self.assigned_list.clear()
-        
-        assigns = self.assignments.get(tool_id, [])
-        sorted_assigns = sorted(assigns, key=lambda x: -x.get("priority", 0))
-        
-        for assign in sorted_assigns:
-            model_id = assign["model_id"]
-            priority = assign.get("priority", 50)
-            
-            # Determine icon/color
-            if model_id.startswith("forge:"):
-                prefix = "[Forge]"
-                color = "#3498db"
-            elif model_id.startswith("huggingface:"):
-                prefix = "[HF]"
-                color = "#f39c12"
-            elif model_id.startswith("local:"):
-                prefix = "[Local]"
-                color = "#2ecc71"
-            elif model_id.startswith("api:"):
-                prefix = "[API]"
-                color = "#e91e63"
-            else:
-                prefix = "[?]"
-                color = "#bac2de"
-                
-            display = model_id.split(":")[-1]
-            item = QListWidgetItem(f"{prefix} {display}  [Priority: {priority}]")
-            item.setData(Qt.ItemDataRole.UserRole, model_id)
-            item.setForeground(QColor(color))
-            item.setToolTip(f"Full ID: {model_id}\nPriority: {priority}")
-            self.assigned_list.addItem(item)
-            
-    def _get_selected_tool(self) -> Optional[str]:
-        """Get currently selected tool ID."""
-        items = self.tool_table.selectedItems()
-        if items:
-            return items[0].data(Qt.ItemDataRole.UserRole)
-        return None
-        
-    def _add_model(self):
-        """Add a model to the selected tool."""
-        tool_id = self._get_selected_tool()
-        if not tool_id:
-            QMessageBox.warning(self, "No Tool Selected", "Please select a tool first.")
-            return
-            
-        model_id = self.model_combo.currentData()
-        if not model_id:
-            QMessageBox.warning(self, "No Model Selected", "Please select a model to add.")
-            return
-            
-        priority = self.priority_spin.value()
-        
-        # Check if already assigned
-        if tool_id not in self.assignments:
-            self.assignments[tool_id] = []
-            
-        for assign in self.assignments[tool_id]:
-            if assign["model_id"] == model_id:
-                QMessageBox.warning(self, "Already Assigned", 
-                    f"This model is already assigned to {tool_id}.")
+    def _update_tool_row(self, tool_id: str, row: int = None):
+        """Update a single row in the table."""
+        if row is None:
+            # Find the row
+            for r in range(self.tool_table.rowCount()):
+                item = self.tool_table.item(r, 0)
+                if item and item.data(Qt.ItemDataRole.UserRole) == tool_id:
+                    row = r
+                    break
+            if row is None:
                 return
                 
-        self.assignments[tool_id].append({
-            "model_id": model_id,
-            "priority": priority
-        })
-        
-        self._refresh_assigned_list(tool_id)
-        self._update_tool_row(tool_id)
-        self.status_label.setText(f"Added model to {tool_id} - remember to save!")
-        self.status_label.setStyleSheet("color: #f39c12; font-style: italic;")
-        
-    def _remove_model(self):
-        """Remove selected model from the tool."""
-        tool_id = self._get_selected_tool()
-        if not tool_id:
-            return
+        # Update model column
+        model = self.assignments.get(tool_id, "")
+        model_item = self.tool_table.item(row, 1)
+        if model:
+            model_item.setText(model)
+            model_item.setForeground(QColor("#2ecc71"))
+        else:
+            model_item.setText("(default)")
+            model_item.setForeground(QColor("#666"))
             
-        current = self.assigned_list.currentItem()
-        if not current:
-            QMessageBox.warning(self, "No Model Selected", "Please select a model to remove.")
-            return
+        # Update prompt column
+        prompt = self.prompts.get(tool_id, "")
+        prompt_item = self.tool_table.item(row, 2)
+        if prompt:
+            prompt_item.setText(prompt)
+            prompt_item.setForeground(QColor("#9b59b6"))
+        else:
+            prompt_item.setText("(default)")
+            prompt_item.setForeground(QColor("#666"))
             
-        model_id = current.data(Qt.ItemDataRole.UserRole)
-        
-        if tool_id in self.assignments:
-            self.assignments[tool_id] = [
-                a for a in self.assignments[tool_id] 
-                if a["model_id"] != model_id
-            ]
-            
-        self._refresh_assigned_list(tool_id)
-        self._update_tool_row(tool_id)
-        self.status_label.setText(f"Removed model from {tool_id} - remember to save!")
-        self.status_label.setStyleSheet("color: #f39c12; font-style: italic;")
-        
-    def _quick_assign(self):
-        """Quick assign model to tool."""
-        model_id = self.quick_model.currentData()
-        tool_id = self.quick_tool.currentData()
-        
-        if not model_id or not tool_id:
-            return
-            
-        if tool_id not in self.assignments:
-            self.assignments[tool_id] = []
-            
-        # Check if already assigned
-        for assign in self.assignments[tool_id]:
-            if assign["model_id"] == model_id:
-                QMessageBox.information(self, "Already Assigned", 
-                    f"This model is already assigned to {TOOL_INFO[tool_id]['name']}.")
-                return
-                
-        self.assignments[tool_id].append({
-            "model_id": model_id,
-            "priority": 50
-        })
-        
-        self._update_tool_row(tool_id)
-        
-        # Select the tool to show details
-        for row in range(self.tool_table.rowCount()):
-            item = self.tool_table.item(row, 0)
-            if item and item.data(Qt.ItemDataRole.UserRole) == tool_id:
-                self.tool_table.selectRow(row)
-                break
-                
-        self.status_label.setText(f"Assigned to {TOOL_INFO[tool_id]['name']} - remember to save!")
-        self.status_label.setStyleSheet("color: #2ecc71; font-style: italic;")
-        
     def _load_config(self):
-        """Load routing configuration."""
+        """Load routing configuration from file."""
         self.assignments.clear()
+        self.prompts.clear()
         
         try:
-            from enigma_engine.core.tool_router import get_router
-            router = get_router()
+            from enigma_engine.config import CONFIG
+            config_path = Path(CONFIG.get("data_dir", "data")) / "tool_routing.json"
             
-            for tool_id in TOOL_INFO:
-                try:
-                    assigns = router.get_assignments(tool_id)
-                    self.assignments[tool_id] = [
-                        {"model_id": a.model_id, "priority": a.priority}
-                        for a in assigns
-                    ]
-                except Exception:
-                    self.assignments[tool_id] = []
+            if config_path.exists():
+                with open(config_path) as f:
+                    data = json.load(f)
+                    self.assignments = data.get("assignments", {})
+                    self.prompts = data.get("prompts", {})
                     
             # Update all rows
-            for tool_id in TOOL_INFO:
-                self._update_tool_row(tool_id)
-                
+            for row in range(self.tool_table.rowCount()):
+                item = self.tool_table.item(row, 0)
+                if item:
+                    tool_id = item.data(Qt.ItemDataRole.UserRole)
+                    self._update_tool_row(tool_id, row)
+                    
             self.status_label.setText("Configuration loaded")
             self.status_label.setStyleSheet("color: #bac2de; font-style: italic;")
             
         except Exception as e:
-            self.status_label.setText(f"Error loading config: {e}")
+            self.status_label.setText(f"Error loading: {e}")
             self.status_label.setStyleSheet("color: #e74c3c; font-style: italic;")
             
     def _save_config(self):
-        """Save routing configuration."""
+        """Save routing configuration to file."""
         try:
-            from enigma_engine.core.tool_router import get_router
-            router = get_router()
+            from enigma_engine.config import CONFIG
+            config_path = Path(CONFIG.get("data_dir", "data")) / "tool_routing.json"
+            config_path.parent.mkdir(parents=True, exist_ok=True)
             
-            for tool_id, assigns in self.assignments.items():
-                # Clear existing
-                try:
-                    for assign in router.get_assignments(tool_id):
-                        router.unassign_model(tool_id, assign.model_id)
-                except Exception:
-                    pass  # Intentionally silent
-                    
-                # Add new
-                for assign in assigns:
-                    try:
-                        router.assign_model(
-                            tool_id, 
-                            assign["model_id"],
-                            priority=assign.get("priority", 50)
-                        )
-                    except Exception:
-                        pass  # Intentionally silent
-                        
-            self.status_label.setText("Configuration saved!")
+            with open(config_path, "w") as f:
+                json.dump({
+                    "assignments": self.assignments,
+                    "prompts": self.prompts
+                }, f, indent=2)
+                
+            self.status_label.setText("Saved!")
             self.status_label.setStyleSheet("color: #2ecc71; font-style: italic;")
-            
-            QMessageBox.information(self, "Saved", "Model routing configuration saved successfully!")
             
         except Exception as e:
             self.status_label.setText(f"Error saving: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to save configuration: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to save: {e}")
             
     def _reset_defaults(self):
-        """Reset to default configuration."""
+        """Clear all assignments."""
         reply = QMessageBox.question(
-            self, "Reset?",
-            "Reset all tool assignments to defaults?",
+            self, "Clear All?",
+            "Clear all model and prompt assignments?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         
         if reply == QMessageBox.StandardButton.Yes:
-            try:
-                from enigma_engine.core.tool_router import get_router
-                router = get_router()
-                router._set_defaults()
-                self._load_config()
-                self.status_label.setText("Reset to defaults")
-            except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to reset: {e}")
-                
+            self.assignments.clear()
+            self.prompts.clear()
+            for row in range(self.tool_table.rowCount()):
+                item = self.tool_table.item(row, 0)
+                if item:
+                    tool_id = item.data(Qt.ItemDataRole.UserRole)
+                    self._update_tool_row(tool_id, row)
+            self.status_label.setText("Cleared - remember to save!")
+            self.status_label.setStyleSheet("color: #f39c12; font-style: italic;")
+            
     def refresh_models(self):
-        """Refresh model dropdowns."""
-        self._populate_model_dropdown(self.quick_model)
-        self._populate_model_dropdown(self.model_combo)
-        self.status_label.setText("Model list refreshed")
+        """Refresh (called from parent when models change)."""
+        pass  # No dropdowns to refresh anymore
