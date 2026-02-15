@@ -35,13 +35,17 @@
 | - personality/ | 2 | ✅ Removed |
 | - federated/ | 4 | ✅ Removed |
 | - integrations/ | 7 | ✅ Removed |
-| **TOTAL** | **~134** | ✅ Verified |
+| **Phase 3 - More Files** | | |
+| - utils/ | 59 | ✅ Done |
+| - gui/tabs/ | 16 | ✅ Done |
+| - core/ | 49 | ✅ Done |
+| **TOTAL** | **~258** | ✅ Verified |
 
 **Original:** 816 Python files  
-**Current:** 682 Python files  
-**Reduction:** 16.4% of codebase removed  
+**Current:** 558 Python files  
+**Reduction:** 31.6% of codebase removed  
 
-All tests pass after cleanup (33 passed, 3 skipped).
+All 23 model tests pass after cleanup.
 
 ---
 

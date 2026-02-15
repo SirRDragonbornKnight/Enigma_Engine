@@ -17,35 +17,8 @@ from .battery_manager import (
     get_battery_manager,
 )
 
-# Constants - centralized magic numbers
-# Structured error handling
-from .errors import (
-    ErrorAggregator,
-    ErrorCode,
-    ErrorContext,
-    ErrorSeverity,
-    ForgeError,
-    Result,
-    as_result,
-    ensure,
-    ensure_not_none,
-    from_tool_result,
-    handle_errors,
-    make_quiet,
-    quiet_callback,
-    retry,
-    safe_call,
-)
 from .error_handler import ErrorHandler, GracefulFileHandler
 from .feedback import FeedbackCollector
-
-# GPU utilities - common operations to avoid duplication
-from .json_cache import (
-    get_cache_stats,
-    invalidate_cache,
-    read_json_cached,
-    write_json_cached,
-)
 
 # Performance monitoring
 from .performance_monitor import (
@@ -211,20 +184,6 @@ __all__ = [
     'format_number',
     'format_bytes',
     'print_section',
-    # Error handling
-    'ForgeError',
-    'ErrorCode',
-    'ErrorSeverity',
-    'ErrorContext',
-    'ErrorAggregator',
-    'Result',
-    'safe_call',
-    'handle_errors',
-    'ensure',
-    'ensure_not_none',
-    'from_tool_result',
-    'as_result',
-    'retry',
     # Enigma AI Engine Messages
     'MessagePrefix',
     'system_msg',
@@ -249,11 +208,6 @@ __all__ = [
     'find_closest_match',
     'suggest_command',
     'format_did_you_mean',
-    # JSON caching
-    'read_json_cached',
-    'write_json_cached',
-    'invalidate_cache',
-    'get_cache_stats',
     # Battery management
     'BatteryManager',
     'PowerState',

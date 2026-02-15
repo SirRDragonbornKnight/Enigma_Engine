@@ -29,27 +29,35 @@ testing/, scripts/, training/, sync/, prompts/, data/, edge/, personality/, inte
 
 ### Removed Files (Feb 15, 2026)
 ```
+# Phase 1 (core/)
 core/gguf_export.py, core/gguf_exporter.py, core/moe_router.py, core/moe_routing.py
 core/dpo_training.py, core/rlhf_training.py, core/speculative_decoding.py
 core/curriculum_learning.py, core/kv_compression.py, core/kv_cache_compression.py
 core/kv_cache_quantization.py, core/prompts.py, core/prompt_manager.py, core/prompt_templates.py
+
+# Phase 2
 tools/battery_manager.py, tools/home_assistant.py, tools/manipulation.py, tools/slam.py
 tools/goal_tracker.py, tools/robot_platforms.py, tools/system_awareness.py
 + 15 voice files, 20 memory files, 20 avatar files, 15 comms files
+
+# Phase 3
+utils/ - 59 dead files (ab_testing, backup, circuit_breaker, encryption, hotkeys, etc.)
+gui/tabs/ - 16 unused tabs (dashboard, personality, build_ai, modules, etc.)
+core/ - 49 dead files (flash_attention, multi_gpu, dpo, rlhf, distillation, etc.)
 ```
 
 ---
 
-## Current Package Structure (682 files)
+## Current Package Structure (558 files)
 
 | Package | Files | Purpose |
 |---------|-------|---------|
-| core/ | 188 | AI model, inference, training |
-| gui/ | 131 | PyQt5 interface (44 tabs) |
-| utils/ | 82 | Utilities and helpers |
+| core/ | 121 | AI model, inference, training |
+| gui/ | 115 | PyQt5 interface (28 tabs) |
 | tools/ | 65 | AI tool implementations |
 | avatar/ | 42 | Avatar control system |
 | voice/ | 29 | TTS/STT features |
+| utils/ | 23 | Utilities and helpers |
 | memory/ | 19 | Conversation/vector storage |
 | comms/ | 17 | API server, networking |
 | learning/ | 16 | Learning system |

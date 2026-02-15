@@ -21,7 +21,7 @@ Enigma AI Engine is a **fully modular AI framework** where everything is a toggl
 ```
 enigma_engine/
 ├── core/          # AI model, inference, training, tokenizer
-├── gui/           # PyQt5 interface with 44 tabs
+├── gui/           # PyQt5 interface with 28 tabs
 ├── modules/       # Module manager, registry, state handling
 ├── tools/         # Vision, web, file, document tools
 ├── memory/        # Conversation storage, vector DB
@@ -37,11 +37,11 @@ enigma_engine/
 - **Model:** Custom transformer with RoPE, RMSNorm, SwiGLU, GQA, KV-cache
 - **Sizes:** 15 presets from ~500K params (pi_zero) to 70B+ params (omega)
 
-### Package List (682 Python files)
+### Package List (558 Python files)
 
 | Category | Packages | Files | Status |
 |----------|----------|-------|--------|
-| **Core** | core, gui/tabs, tools, utils, memory, voice, avatar, comms, modules, builtin, config, web, cli, i18n, game, plugins | ~550 | Active |
+| **Core** | core, gui/tabs, tools, utils, memory, voice, avatar, comms, modules, builtin, config, web, cli, i18n, game, plugins | ~450 | Active |
 | **Features** | learning, self_improvement, marketplace, network | ~35 | Integrated |
 | **Test/Internal** | security, agents, auth | ~20 | Tests only |
 | **Optional** | companion, mobile | ~4 | Complete but minimal use |
@@ -64,7 +64,7 @@ enigma_engine/
 
 ## GUI Tabs Summary
 
-**Total Tabs:** 44
+**Total Tabs:** 28 (16 unused tabs removed Feb 15, 2026)
 
 ### Quick Reference
 
@@ -72,42 +72,32 @@ enigma_engine/
 |-----|-------|---------|
 | chat_tab | 2869 | Main AI conversation interface |
 | settings_tab | 4721 | Application settings & API keys |
-| build_ai_tab | 2498 | Step-by-step AI creation wizard |
 | image_tab | 1449 | Image generation |
 | training_tab | 1424 | Model training interface |
-| modules_tab | 1383 | Toggle modules on/off |
 | workspace_tab | 1001 | Training data preparation |
 | bundle_manager_tab | 991 | Package models for sharing |
 | training_data_tab | 987 | Generate training data |
-| character_trainer_tab | 980 | Train character personas |
 | voice_clone_tab | 923 | Voice cloning |
-| dashboard_tab | 831 | System monitoring |
-| task_offloading_tab | 773 | Multi-device task distribution |
 | persona_tab | 761 | Prompt/persona management |
 | audio_tab | 747 | Text-to-speech |
 | threed_tab | 718 | 3D model generation |
 | network_tab | 717 | Multi-device networking |
 | scheduler_tab | 694 | Task scheduling |
-| import_models_tab | 691 | Import external models |
 | analytics_tab | 671 | Usage analytics |
 | base_generation_tab | 655 | Base class for generation tabs |
-| model_comparison_tab | 635 | Compare model outputs |
 | embeddings_tab | 633 | Vector embeddings |
 | video_tab | 623 | Video generation |
 | code_tab | 607 | Code generation |
 | model_router_tab | 599 | Assign models to tasks |
-| scaling_tab | 575 | Model scaling options |
-| marketplace_tab | 541 | Download community content |
-| devices_tab | 534 | Device management |
 | federation_tab | 526 | Federated learning |
 | notes_tab | 523 | Notes and bookmarks |
-| learning_tab | 517 | Learning settings |
 | gif_tab | 485 | GIF generation |
 | camera_tab | 468 | Webcam capture |
-| tool_manager_tab | 427 | Manage AI tools |
-| personality_tab | 423 | Personality settings |
-| logs_tab | 389 | View application logs |
 | instructions_tab | 364 | Help and documentation |
+| vision_tab | 212 | Image/screen analysis |
+| terminal_tab | 189 | Embedded terminal |
+| sessions_tab | 178 | Session management |
+| avatar_tab | 46 | Avatar display |
 | vision_tab | 212 | Image/screen analysis |
 | ai_tab | 193 | AI assistant panel |
 | terminal_tab | 189 | Embedded terminal |
