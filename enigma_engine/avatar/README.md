@@ -67,29 +67,96 @@ customizer.apply_color_preset("sunset")
 customizer.add_accessory("hat")
 ```
 
-## Files & Structure
+### Movement
+
+```python
+avatar = get_avatar()
+avatar.enable()
+
+# Move to specific screen coordinates
+avatar.move_to(500, 300)
+
+# Move relative to current position
+avatar.move_relative(dx=100, dy=-50)  # Right 100px, up 50px
+
+# Center on screen (auto-detects screen size)
+avatar.center_on_screen()
+```
+
+### Gestures & Actions
+
+```python
+# Built-in gestures
+avatar.control("wave")          # Wave hello
+avatar.control("nod")           # Nod yes
+avatar.control("shake_head")    # Shake head no
+avatar.control("jump")          # Jump animation
+
+# Lip-sync speaking
+avatar.speak("Hello, how are you?")  # With TTS
+avatar.animate_speak("Silent lip sync", duration=2.0)  # Without audio
+
+# Thinking animation
+avatar.think(duration=3.0)
+
+# Set emotion/expression
+avatar.set_expression("happy")  # happy, sad, thinking, surprised, neutral
+avatar.control("emote", "excited")
+```
+
+### Bone Control (3D Rigged Models)
+
+```python
+from enigma_engine.avatar.bone_control import get_bone_controller
+
+bones = get_bone_controller()
+
+# Move individual bones (rotations in degrees)
+bones.move_bone("head", pitch=15, yaw=-10)      # Look down-right
+bones.move_bone("left_arm", pitch=45, roll=20)  # Raise arm
+bones.move_bone("right_hand", yaw=30)           # Turn wrist
+
+# System auto-clamps to safe limits (elbows don't bend backwards, etc.)
+```
+
+## Files & How They Work
 
 ```
 enigma_engine/avatar/
-├── __init__.py                    # Main exports
-├── controller.py                  # Avatar controller (enhanced)
-├── avatar_identity.py             # AI self-design system
-├── emotion_sync.py                # Emotion synchronization
-├── lip_sync.py                    # Speaking animations
-├── customizer.py                  # User customization tools
-├── renderers/                     # Rendering backends
-│   ├── __init__.py
-│   ├── base.py                    # Base renderer interface
-│   ├── sprite_renderer.py         # Default console renderer
-│   ├── qt_renderer.py             # PyQt5 overlay
-│   ├── web_renderer.py            # Web dashboard
-│   └── default_sprites.py         # Built-in SVG sprites
-└── assets/                        # Built-in assets
-    └── themes/                    # Theme definitions
-        ├── default.json
-        ├── dark.json
-        └── colorful.json
 ```
+
+### Core Control
+
+| File | How It Works |
+|------|-------------|
+| `controller.py` | Main brain - manages avatar state machine (OFF/IDLE/SPEAKING/THINKING/MOVING), coordinates all subsystems via priority system. Higher priority systems (bone control=100) override lower ones (idle animation=30). Writes commands to `data/avatar/ai_command.json` for GUI to read. |
+| `bone_control.py` | Directly manipulates 3D skeleton joints. Each bone has rotation limits based on human anatomy (elbow only bends one way, head turns max 80 degrees). Clamps unsafe movements, limits speed to prevent jerkiness. |
+| `adaptive_animator.py` | Detects model capabilities (has arms? has head bone? can blink?) then plays appropriate animations. Falls back gracefully (no arms = wiggle whole body for wave). |
+| `animation_system.py` | Queue-based animation player. Animations are dicts like `{type: "wave", duration: 1.0}`. Background thread processes queue at 20 FPS. |
+
+### AI Integration
+
+| File | How It Works |
+|------|-------------|
+| `avatar_identity.py` | Maps AI personality traits to appearance. High playfulness = rounded shape + bright colors. High formality = tie accessory + muted tones. Uses trait vectors (0-1) to interpolate between extremes. |
+| `emotion_sync.py` | Monitors AI text output for emotion keywords/sentiment. Automatically triggers expression changes. "I'm excited!" = switch to excited sprite. |
+| `lip_sync.py` | Analyzes speech audio for phonemes (mouth shapes). Maps phonemes to mouth sprites. Syncs animation timing with TTS audio. |
+
+### Rendering
+
+| File | How It Works |
+|------|-------------|
+| `desktop_pet.py` | Creates frameless, transparent PyQt5 window that floats on desktop. Handles click-through, always-on-top, mouse dragging. |
+| `unified_avatar.py` | Abstracts 2D sprites vs 3D models. Same API regardless of avatar type - picks correct renderer internally. |
+| `renderers/qt_renderer.py` | PyQt5 OpenGL renderer for 3D models. Uses QOpenGLWidget for hardware acceleration. |
+| `renderers/sprite_renderer.py` | Simple 2D sprite display. Cycles through PNG/SVG frames for animation. Falls back to console ASCII if no GUI. |
+
+### Customization
+
+| File | How It Works |
+|------|-------------|
+| `customizer.py` | Stateful appearance builder. Stacks modifications: base style + colors + accessories + size. Export/import as JSON for sharing. |
+| `avatar_manager.py` | Multi-avatar support. Load multiple avatars, switch between them, sync states across instances. |
 
 ## Documentation
 
