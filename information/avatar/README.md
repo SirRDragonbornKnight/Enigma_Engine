@@ -1,120 +1,67 @@
 # Avatar System Documentation
 
-## Overview
+> **Main Documentation:** See [enigma_engine/avatar/README.md](../../enigma_engine/avatar/README.md) for full docs.
 
-The Enigma AI Engine Avatar System provides a visual representation of the AI that can:
-- Display on screen (image-based or overlay)
-- Express emotions through different expression images
-- Move around the desktop (when overlay enabled)
-- "Interact" with windows and files visually
-- Integrate with game/robot control
+## Quick Reference
 
-## Architecture
+### Enable & Move
 
-```
-enigma_engine/avatar/
-├── __init__.py          # Package exports
-└── controller.py        # AvatarController - main backend logic
-
-enigma_engine/gui/tabs/
-├── avatar_tab.py        # Container with sub-tabs
-└── avatar/
-    ├── __init__.py
-    └── avatar_display.py  # GUI for avatar display
-```
-
-## Components
-
-### AvatarController (avatar.controller)
-The main backend controller for avatar functionality:
-- **Enable/Disable**: Turn avatar on/off (default: OFF)
-- **Movement**: Move around screen, follow mouse
-- **Speaking**: Animate when AI speaks
-- **Expressions**: Set facial expressions
-- **Window Interaction**: Visual effects of "touching" windows
-- **Configuration**: Save/load settings
-
-### Avatar Display (GUI Tab)
-The GUI component that shows:
-- Avatar image display
-- Expression state
-- Enable/disable toggle
-- Config file selector
-
-## Usage
-
-### Basic Usage
 ```python
-from enigma_engine.avatar import get_avatar, enable_avatar, disable_avatar
+from enigma_engine.avatar import get_avatar
 
-# Get the global avatar instance
 avatar = get_avatar()
-
-# Enable (turn on)
 avatar.enable()
 
-# Move avatar
-avatar.move_to(500, 300)
+# Movement
+avatar.move_to(500, 300)           # Absolute position
+avatar.move_relative(100, -50)     # Relative move
+avatar.center_on_screen()          # Center on screen
 
-# Show expression
-avatar.set_expression("happy")
+# Gestures
+avatar.control("wave")             # Wave hello
+avatar.control("nod")              # Nod yes
+avatar.control("shake_head")       # Shake head no
+avatar.control("jump")             # Jump
 
-# Speak (animates mouth)
-avatar.speak("Hello, I'm Enigma AI Engine!")
+# Speaking
+avatar.speak("Hello!")             # With TTS
+avatar.think(duration=2.0)         # Thinking animation
 
-# Disable (turn off)
+# Expressions
+avatar.set_expression("happy")     # happy, sad, thinking, surprised, neutral
+
 avatar.disable()
 ```
 
-### In AI Responses
-The AI can control the avatar during responses:
+### Bone Control (3D Models)
+
 ```python
-from enigma_engine.gui.tabs.avatar import set_avatar_expression
+from enigma_engine.avatar.bone_control import get_bone_controller
 
-# When AI generates a happy response
-set_avatar_expression(main_window, "happy")
-
-# When AI is thinking
-set_avatar_expression(main_window, "thinking")
+bones = get_bone_controller()
+bones.move_bone("head", pitch=15, yaw=-10)  # Look down-right
+bones.move_bone("left_arm", pitch=45)       # Raise arm
 ```
 
-## Configuration
+### AI Self-Design
 
-Avatar configs are stored in `data/avatar/` as JSON files:
-
-```json
-{
-    "name": "My Avatar",
-    "image": "avatar.png",
-    "expressions": {
-        "neutral": "avatar.png",
-        "happy": "avatar_happy.png",
-        "sad": "avatar_sad.png",
-        "thinking": "avatar_thinking.png",
-        "surprised": "avatar_surprised.png",
-        "confused": "avatar_confused.png"
-    },
-    "description": "My custom avatar"
-}
+```python
+avatar.link_personality(personality)
+avatar.auto_design()  # AI designs its own appearance
+avatar.describe_desired_appearance("friendly and creative")
 ```
 
-## Supported Expressions
-- `neutral` - Default state
-- `happy` - Positive response
-- `sad` - Negative/empathetic response
-- `thinking` - Processing/generating
-- `surprised` - Unexpected input
-- `confused` - Unclear input
-- `angry` - (optional) Frustrated state
+## Key Files
 
-## Future Enhancements
-See `docs/avatar_roadmap.md` for planned features:
-- Live2D animated avatars
-- 3D VRM model support
-- Lip-sync with TTS
-- Motion tracking integration
-- Environment simulation
+| File | Purpose |
+|------|---------|
+| `controller.py` | Main state machine + priority system |
+| `bone_control.py` | 3D skeleton joint control with anatomical limits |
+| `adaptive_animator.py` | Capability-aware animations (wave, nod, blink) |
+| `avatar_identity.py` | Personality to appearance mapping |
+| `emotion_sync.py` | Auto-expression from AI text sentiment |
+| `desktop_pet.py` | Floating transparent window overlay |
 
 ## Default State
-**IMPORTANT**: Avatar is OFF by default. User must explicitly enable it.
-This prevents unexpected overlay windows on user's desktop.
+
+**Avatar is OFF by default.** User must call `avatar.enable()` to show it.
