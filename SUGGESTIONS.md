@@ -46,11 +46,14 @@
 | - security/ | 3 | ✅ Done |
 | - learning/ | 5 | ✅ Done |
 | - gui/widgets/ | 4 | ✅ Done |
-| **TOTAL** | **~304** | ✅ Verified |
+| - gui/ | 14 | ✅ Done |
+| - gui/tabs/avatar/ | 2 | ✅ Done |
+| - config/ | 2 | ✅ Done |
+| **TOTAL** | **~322** | ✅ Verified |
 
 **Original:** 816 Python files  
-**Current:** 512 Python files  
-**Reduction:** 37.3% of codebase removed  
+**Current:** 494 Python files  
+**Reduction:** 39.5% of codebase removed  
 
 All 23 model tests pass after cleanup.
 

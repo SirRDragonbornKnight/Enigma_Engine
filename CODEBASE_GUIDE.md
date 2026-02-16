@@ -52,16 +52,21 @@ web/ - 3 dead files (session_middleware, api_docs, training_dashboard)
 security/ - 3 dead files (gdpr, pii_scrubber, tls)
 learning/ - 5 dead files (ab_testing, critic_model, model_coordination, etc.)
 gui/widgets/ - 4 dead files (image_paste, split_view, feedback_widget, quick_settings)
+
+# Phase 5
+gui/ - 14 dead files (accessibility, chat_features, notification_system, etc.)
+gui/tabs/avatar/ - 2 dead files (avatar_management, widgets)
+config/ - 2 dead files (migration, validation)
 ```
 
 ---
 
-## Current Package Structure (512 files)
+## Current Package Structure (494 files)
 
 | Package | Files | Purpose |
 |---------|-------|---------|
 | core/ | 121 | AI model, inference, training |
-| gui/ | 115 | PyQt5 interface (28 tabs) |
+| gui/ | 97 | PyQt5 interface (28 tabs) |
 | tools/ | 44 | AI tool implementations |
 | avatar/ | 42 | Avatar control system |
 | voice/ | 29 | TTS/STT features |
@@ -79,7 +84,7 @@ gui/widgets/ - 4 dead files (image_paste, split_view, feedback_widget, quick_set
 | security/ | 3 | Auth/security |
 | plugins/ | 5 | Plugin system |
 | cli/ | 4 | Command line |
-| config/ | 4 | Configuration |
+| config/ | 2 | Configuration |
 | marketplace/ | 4 | Plugin marketplace |
 | auth/ | 2 | Authentication |
 | companion/ | 2 | Companion mode |
