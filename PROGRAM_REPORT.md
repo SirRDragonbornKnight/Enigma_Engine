@@ -48,17 +48,17 @@ enigma_engine/
 
 ---
 
-## Core Components
+## Core Components - How They Work
 
-| Component | File | Purpose |
-|-----------|------|---------|
-| Model | `core/model.py` | Transformer neural network |
-| Inference | `core/inference.py` | Text generation engine |
-| Training | `core/training.py` | Model training system |
-| Tokenizer | `core/tokenizer.py` | Text ↔ numbers conversion |
-| Tool Router | `core/tool_router.py` | Intent detection and routing |
-| Module Manager | `modules/manager.py` | Module lifecycle management |
-| Tool Executor | `tools/tool_executor.py` | Safe tool execution |
+| Component | File | How It Works |
+|-----------|------|-------------|
+| Model | `core/model.py` | Stacks N transformer blocks. Each block: RMSNorm → self-attention (Q/K/V matrices with RoPE position encoding) → feedforward (SwiGLU activation). Grouped-Query Attention shares keys/values across heads. KV-cache stores past computations. Output: probability distribution over vocabulary. |
+| Inference | `core/inference.py` | Generation loop: tokenize input → run through model → get next-token probabilities → sample (greedy/top-k/top-p/temperature) → append token → repeat until EOS or max length. Supports streaming via Python generators. |
+| Training | `core/training.py` | Forward pass: compute cross-entropy loss between model output and target. Backward pass: AdamW optimizer updates weights. Handles batching, gradient accumulation, learning rate warmup + cosine decay. Checkpoints every N steps. |
+| Tokenizer | `core/tokenizer.py` | BPE (byte-pair encoding): learns common subword patterns from corpus. Unknown words split into known pieces. "playing" → ["play", "ing"]. Special tokens: [PAD], [EOS], [BOS]. Vocabulary 32K-100K tokens. |
+| Tool Router | `core/tool_router.py` | Scans user input for keywords ("draw" → image, "search" → web). Each tool has priority-ordered model assignments. Extracts parameters from natural language. Routes to tool_executor for execution. |
+| Module Manager | `modules/manager.py` | State machine: UNLOADED → LOADING → LOADED → ACTIVE. Checks dependencies (inference needs model+tokenizer). Prevents conflicts (can't load image_gen_local AND image_gen_api). Tracks memory per module. |
+| Tool Executor | `tools/tool_executor.py` | Parses `<tool_call>{JSON}</tool_call>` from AI output. Validates against schema. Runs handler with timeout (SIGALRM on Unix, threading.Timer on Windows). Blocks dangerous paths via security.py. |
 
 ---
 
@@ -101,884 +101,149 @@ enigma_engine/
 
 ---
 
-## GUI Tabs Detailed
+## GUI Tabs Detailed - How They Work
 
-> **Note:** Some detailed sections below document deleted tabs and are outdated.
+### Core Interface Tabs
 
-### chat_tab.py (2869 lines)
-**Purpose:** Main chat interface for conversing with the AI
+#### chat_tab.py (2869 lines)
+**How it works:** QTextEdit captures user input. On send: message added to QScrollArea display → EnigmaEngine.generate() called in QThread to avoid freezing UI → response tokens streamed via Qt signal/slot as they generate → each token appended to display for typing effect. Conversation history stored via memory/manager.py as JSON. Model switcher dropdown triggers engine reload.
 
-**Main Components:**
-- `create_chat_tab()` - Factory function
+#### settings_tab.py (4721 lines)
+**How it works:** Loads forge_config.json on init. QFormLayout with QLineEdit/QComboBox for each setting. API keys encrypted via Fernet (AES-128) before saving to ~/.enigma_engine/keys. Changes emit configChanged signal so other tabs can react. Sections collapsible via QToolButton toggles.
 
-**Key Features:**
-- Model selection dropdown
-- Message display scroll area
-- Conversation management (new, clear, save)
-- Thinking/status indicator
-- Tool calling support
+#### training_tab.py (1424 lines)
+**How it works:** 3-step workflow: 1) File picker selects dataset → validates Q&A format 2) Hyperparameter sliders set lr, batch_size, epochs 3) Start button creates Trainer instance in QThread. Progress callback updates QProgressBar. Training loop: forward pass → loss → backward → optimizer step. Checkpoints saved every N steps.
 
-**Connected Files:**
-- `enigma_engine/core/inference.py` - AI responses
-- `enigma_engine/memory/manager.py` - Conversation history
+### Generation Tabs (inherit BaseGenerationTab)
 
----
+#### image_tab.py (1449 lines)
+**How it works:** Provider pattern - StableDiffusionLocal wraps diffusers pipeline (UNet + VAE + scheduler), OpenAIImage calls DALL-E API, ReplicateImage uses their hosted models. User selects provider → enters prompt → Generate button starts QThread → provider.generate() runs → result path emitted → QLabel displays image with ResizableImagePreview allowing drag-to-resize.
 
-### settings_tab.py (4721 lines)
-**Purpose:** Central application settings and API key management
+#### code_tab.py (607 lines)
+**How it works:** ForgeCode uses local model with code-specific system prompt ("You are a coding assistant..."). OpenAICode calls GPT-4 API. Output displayed in QTextEdit with QSyntaxHighlighter for color-coded keywords. Language dropdown changes syntax rules and prompt template.
 
-**Main Components:**
-- `create_settings_tab()` - Factory function
+#### video_tab.py (623 lines)
+**How it works:** LocalVideo wraps AnimateDiff pipeline - generates sequence of latents, decodes each to frame, assembles into video. ReplicateVideo calls external API. Output saved as MP4 (via moviepy) or GIF (via PIL). Frame count and FPS sliders control output.
 
-**Key Features:**
-- API key management (OpenAI, Anthropic, HuggingFace, etc.)
-- Feature toggles
-- Theme/UI customization
-- Robot mode control
-- Game mode detection
-- Device profile selection
+#### audio_tab.py (747 lines)
+**How it works:** LocalTTS wraps pyttsx3 engine (system voices). ElevenLabsTTS sends text to their API with voice_id, receives audio bytes. Audio played via QMediaPlayer or sounddevice. Voice/rate/volume sliders control TTS parameters.
 
-**Connected Files:**
-- `enigma_engine/config/` - CONFIG object
-- `gui/shared_components.py` - UI components
+#### threed_tab.py (718 lines)
+**How it works:** Local3DGen wraps Shap-E model - generates implicit neural representation → marching cubes extracts mesh → exports as OBJ. Cloud3DGen calls Replicate API. Preview uses QOpenGLWidget with rotation controls, or matplotlib 3D plot fallback.
 
----
+### Model Management Tabs
 
-### build_ai_tab.py (2498 lines)
-**Purpose:** Step-by-step wizard for creating custom AI models
+#### modules_tab.py (1383 lines)
+**How it works:** Reads MODULE_REGISTRY dict from registry.py. Each module displayed as custom widget with toggle switch, dependency list, GPU/API badges. Toggle triggers ModuleManager.load()/unload() in QThread. Dependencies grayed out if prereqs missing. Search box filters by name.
 
-**Main Components:**
-- `create_build_ai_tab()` - Factory function
+#### model_router_tab.py (599 lines)
+**How it works:** Visual tool→model mapping. Each tool category has QComboBox listing available models. Selection changes saved to tool_routing.json. ToolRouter.reload_config() called to apply immediately. Color-coded categories for visual organization.
 
-**Key Features:**
-- 7-step wizard workflow
-- Manual vs AI Trainer modes
-- Tool capabilities selection
-- Router position definitions
-- Training with progress tracking
+#### training_data_tab.py (987 lines)
+**How it works:** AI-assisted dataset generation. User enters topic → GeneratorWorker QThread calls Claude/GPT-4 API with prompt template → API returns Q&A pairs → parsed and formatted → appended to training data file. Supports multiple output formats: Q&A, conversation, instruction.
 
-**Connected Files:**
-- `enigma_engine/config/` - Settings
-- `enigma_engine/utils/api_key_encryption.py` - API keys
+### Utility Tabs
 
----
+#### network_tab.py (717 lines)
+**How it works:** NetworkScanner QThread sends UDP broadcast on local network → other Enigma instances respond with capabilities JSON → results displayed in QListWidget with device info. Connect button establishes TCP socket for distributed inference. API server toggle starts/stops Flask server.
 
-### image_tab.py (1449 lines)
-**Purpose:** Generate images from text prompts
+#### camera_tab.py (468 lines)
+**How it works:** CameraThread wraps OpenCV VideoCapture. Runs at 30fps in background thread, emits QPixmap via signal → QLabel displays frame. Capture button saves current frame to disk. Analyze button sends frame to vision model for description.
 
-**Main Components:**
-- `ImageTab` - Main tab class
-- `ResizableImagePreview` - Preview widget
+#### analytics_tab.py (671 lines)  
+**How it works:** Reads JSON files from ~/.enigma_engine/analytics/ directory. AnalyticsRecorder logs events during usage. Tab aggregates data by day/week → displays charts via pyqtgraph line plots or matplotlib bar charts. Shows: tool usage counts, chat sessions, model performance metrics.
 
-**Key Features:**
-- Providers: Stable Diffusion (local), DALL-E 3, Replicate
-- Resizable preview
-- Auto-save to outputs/images/
-- Provider-specific controls
+#### voice_clone_tab.py (923 lines)
+**How it works:** Audio upload → audio_analyzer.py extracts features (pitch, rate, timbre) → voice_generator.py creates VoiceProfile dataclass → saved as JSON. Clone uses these parameters to modify TTS output. Preview plays sample with cloned voice settings.
 
-**Connected Files:**
-- `enigma_engine/config/` - Output directory
+### Container Tabs (organize other tabs)
+
+#### avatar_tab.py (46 lines)
+**How it works:** Just a QTabWidget container. Adds sub-tabs: avatar_display.py (shows avatar), game_connection.py (game controls), robot_control.py (robot commands). Routes to appropriate sub-tab based on user selection.
+
+#### sessions_tab.py (178 lines)
+**How it works:** Lists saved conversations from memory/manager.py. QListWidget sidebar shows session names by date. Clicking loads conversation JSON → displays in read-only QTextEdit. AI selector dropdown filters sessions by model.
 
 ---
 
-### training_tab.py (1424 lines)
-**Purpose:** Train AI models with simplified workflow
-
-**Main Components:**
-- `create_training_tab()` - Factory function
-
-**Key Features:**
-- 3-step quick start workflow
-- Text-to-QA conversion
-- URL data import
-- Hyperparameter controls
-
-**Connected Files:**
-- `enigma_engine/config/` - Training settings
-
----
-
-### modules_tab.py (1383 lines)
-**Purpose:** Toggle AI capabilities on/off
-
-**Main Components:**
-- `ModuleListItem` - Module toggle widget
-
-**Key Features:**
-- Module ON/OFF switches
-- Category organization
-- GPU/API requirements display
-- Dependency tracking
-- Search/filter
-
-**Connected Files:**
-- `enigma_engine/modules/manager.py` - Module control
-- `enigma_engine/modules/registry.py` - Module definitions
-
----
-
-### workspace_tab.py (1001 lines)
-**Purpose:** Unified workspace for data preparation
-
-**Main Components:**
-- `create_workspace_tab()` - Factory function
-
-**Key Features:**
-- Training data editing
-- Prompt template library
-- Notes management
-- Sub-tab organization
-
-**Connected Files:**
-- `enigma_engine/config/` - Paths
-
----
-
-### bundle_manager_tab.py (991 lines)
-**Purpose:** Package AI models for sharing
-
-**Main Components:**
-- `BundleManagerTab` - Tab class
-- `BundleDisplayInfo` - Dataclass
-
-**Key Features:**
-- Create/load .enigma-bundle files
-- Export for sharing
-- Clone bundles
-- Metadata display
-
-**Connected Files:**
-- `enigma_engine/config/` - Bundle paths
-
----
-
-### training_data_tab.py (987 lines)
-**Purpose:** Generate training data using AI
-
-**Main Components:**
-- `GeneratorWorker` - QThread worker
-
-**Key Features:**
-- API providers (Claude, GPT-4)
-- Local models (TinyLlama, Phi-2, Mistral)
-- Q&A, conversation, instruction formats
-- Topic-based generation
-
-**Connected Files:**
-- `enigma_engine/config/` - API keys
-
----
-
-### character_trainer_tab.py (980 lines)
-**Purpose:** Train specialized character models
-
-**Main Components:**
-- `CharacterTrainerTab` - Tab class
-- `ScanWorker`, `ExtractWorker` - Thread workers
-
-**Key Features:**
-- Scan data for characters
-- Extract personality traits
-- Generate character datasets
-- Task training
-
-**Connected Files:**
-- `enigma_engine/tools/data_trainer.py` - Character tools
-
----
-
-### voice_clone_tab.py (923 lines)
-**Purpose:** Create custom voices
-
-**Main Components:**
-- `VoiceGenerationWorker` - QThread worker
-
-**Key Features:**
-- Clone voice from audio clips
-- AI-generated voices from text
-- Voice profile management
-- Real-time preview
-
-**Connected Files:**
-- `enigma_engine/voice/audio_analyzer.py`
-- `enigma_engine/voice/voice_generator.py`
-- `enigma_engine/voice/voice_profile.py`
-
----
-
-### dashboard_tab.py (831 lines)
-**Purpose:** Visual system overview
-
-**Main Components:**
-- `CircularGauge` - Resource gauge widget
-- `MiniLineChart` - Usage chart widget
-- `QuickActionButton` - Action button
-
-**Key Features:**
-- CPU/RAM/Disk monitoring
-- Historical charts
-- Module status
-- System alerts
-
-**Connected Files:**
-- `psutil` - System monitoring
-
----
-
-### audio_tab.py (747 lines)
-**Purpose:** Text-to-speech generation
-
-**Main Components:**
-- `LocalTTS` - Local TTS provider
-- `AudioTab` - Tab class
-
-**Key Features:**
-- Local TTS (pyttsx3)
-- ElevenLabs cloud TTS
-- Replicate audio
-- Voice/rate/volume controls
-
-**Connected Files:**
-- `enigma_engine/builtin/` - Fallback TTS
-- `enigma_engine/config/` - Output paths
-
----
-
-### persona_tab.py (761 lines)
-**Purpose:** Manage AI personas/prompts
-
-**Main Components:**
-- `create_persona_tab()` - Factory function
-
-**Key Features:**
-- Create/edit personas
-- Copy to create variants
-- Export/import
-- Quick switching
-
-**Connected Files:**
-- `enigma_engine/core/persona.py` - AIPersona class
-
----
-
-### task_offloading_tab.py (773 lines)
-**Purpose:** Distribute tasks across devices
-
-**Main Components:**
-- `TaskType` - Task enum
-- `RoutingMode` - Routing enum
-- `TaskConfig`, `QueuedTask` - Dataclasses
-
-**Key Features:**
-- Per-task device assignment
-- Task queue visualization
-- Routing modes (auto, round-robin, etc.)
-- Priority/timeout configuration
-
-**Connected Files:**
-- (Standalone tab)
-
----
-
-### network_tab.py (717 lines)
-**Purpose:** Multi-device management
-
-**Main Components:**
-- `NetworkTab` - Tab class
-- `NetworkScanner` - QThread scanner
-
-**Key Features:**
-- Scan for Forge devices
-- Start/stop API server
-- Connect to remote instances
-- Model sync
-
-**Connected Files:**
-- `enigma_engine/comms/discovery.py` - Device discovery
-
----
-
-### threed_tab.py (718 lines)
-**Purpose:** Generate 3D models
-
-**Main Components:**
-- `Local3DGen` - Local provider
-- `ThreeDTab` - Tab class
-
-**Key Features:**
-- Shap-E local generation
-- Replicate cloud generation
-- OBJ fallback
-- GPU/CPU mode
-
-**Connected Files:**
-- `enigma_engine/builtin/` - Fallback 3D
-- `enigma_engine/config/` - Output paths
-
----
-
-### analytics_tab.py (697 lines)
-**Purpose:** Usage statistics and performance insights
-
-**Main Components:**
-- `AnalyticsRecorder` - Global analytics helper
-- `AnalyticsTab` - Main tab class
-
-**Key Features:**
-- Tool usage statistics
-- Chat session metrics
-- Model performance tracking
-- Training history charts
-- Visual graphs
-
-**Connected Files:**
-- Standalone (stores in ~/.enigma_engine/analytics/)
-
----
-
-### import_models_tab.py (721 lines)
-**Purpose:** Import external AI models into Enigma Engine
-
-**Main Components:**
-- `ImportWorker` - Background import thread
-- Factory function
-
-**Key Features:**
-- HuggingFace model import
-- GGUF (llama.cpp) model loading
-- Local model file import
-- Conversion for training
-
-**Connected Files:**
-- `enigma_engine/core/huggingface_loader.py`
-- `enigma_engine/core/gguf_loader.py`
-
----
-
-### scheduler_tab.py (708 lines)
-**Purpose:** View and manage scheduled tasks
-
-**Main Components:**
-- Task management dialogs
-
-**Key Features:**
-- Create scheduled tasks
-- Edit/delete existing tasks
-- Run tasks manually
-- View task history
-- Cron-like scheduling
-
-**Connected Files:**
-- Standalone (stores in ~/.enigma_engine/scheduled_tasks.json)
-
----
-
-### model_comparison_tab.py (671 lines)
-**Purpose:** Compare responses from multiple models
-
-**Main Components:**
-- Comparison worker thread
-- Side-by-side display
-
-**Key Features:**
-- Select 2-4 models for comparison
-- Simultaneous response generation
-- Latency and token count metrics
-- Rating system for responses
-- Save comparison results
-
-**Connected Files:**
-- `enigma_engine/core/inference.py`
-
----
-
-### base_generation_tab.py (690 lines)
-**Purpose:** Base class for all generation tabs
-
-**Main Components:**
-- `BaseGenerationTab` - Abstract base class
-
-**Key Features:**
-- Consistent header styling
-- Standard progress/status layout
-- Provider management patterns
-- Auto-open functionality
-- Device-aware styling
-
-**Connected Files:**
-- Child tabs: image_tab, code_tab, video_tab, audio_tab, etc.
-- `unified_patterns.py` - Styling
-
----
-
-### embeddings_tab.py (656 lines)
-**Purpose:** Generate and compare text embeddings
-
-**Main Components:**
-- `LocalEmbedding` - Local provider
-- `EmbeddingsTab` - Tab class
-
-**Key Features:**
-- Local: sentence-transformers
-- Cloud: OpenAI embeddings API
-- Similarity comparison
-- Export embeddings to JSON
-
-**Connected Files:**
-- `enigma_engine/memory/vector_db.py`
-
----
-
-### video_tab.py (646 lines)
-**Purpose:** Generate videos from prompts
-
-**Main Components:**
-- `LocalVideo` - AnimateDiff provider
-- `VideoTab` - Tab class
-
-**Key Features:**
-- Local: AnimateDiff generation
-- Cloud: Replicate video API
-- GIF fallback for simple animations
-- Frame count and FPS control
-
-**Connected Files:**
-- `enigma_engine/config/` - Output paths
-
----
-
-### code_tab.py (631 lines)
-**Purpose:** Generate code from prompts
-
-**Main Components:**
-- `ForgeCode` - Local code provider
-- `OpenAICode` - GPT-4 provider
-- `CodeTab` - Tab class
-
-**Key Features:**
-- Local model code generation
-- GPT-4 cloud generation
-- Language selection
-- Syntax highlighting
-- Export to file
-
-**Connected Files:**
-- `enigma_engine/core/inference.py`
-
----
-
-### model_router_tab.py (611 lines)
-**Purpose:** Assign models to specific tasks
-
-**Main Components:**
-- Model-to-tool assignment UI
-- Category-organized tools
-
-**Key Features:**
-- Map models to tool categories
-- Generation, perception, memory tasks
-- Visual category color coding
-- Load/save configurations
-
-**Connected Files:**
-- `enigma_engine/core/tool_router.py`
-
----
-
-### scaling_tab.py (592 lines)
-**Purpose:** Select model sizes
-
-**Main Components:**
-- Model card list
-- Spec detail panel
-
-**Key Features:**
-- 15 model size presets
-- Visual size comparison
-- RAM/VRAM requirements
-- Hardware tier recommendations
-
-**Connected Files:**
-- `enigma_engine/core/model.py` - ForgeConfig
-
----
-
-### marketplace_tab.py (561 lines)
-**Purpose:** Browse and install community plugins
-
-**Main Components:**
-- `MarketplaceTab` - Browse interface
-- Plugin cards with ratings
-
-**Key Features:**
-- Search plugins
-- One-click installation
-- Rating display
-- Category filtering
-
-**Connected Files:**
-- `enigma_engine/plugins/` - Plugin directory
-
----
-
-### devices_tab.py (544 lines)
-**Purpose:** Manage network devices
-
-**Main Components:**
-- `DeviceItem` - Device display widget
-- `DevicesTab` - Main tab class
-
-**Key Features:**
-- View connected devices
-- Device capability display
-- Task offloading settings
-- Device status monitoring
-
-**Connected Files:**
-- `enigma_engine/comms/discovery.py`
-
----
-
-### federation_tab.py (539 lines)
-**Purpose:** Federated learning management
-
-**Main Components:**
-- `FederationTab` - Main tab class
-
-**Key Features:**
-- Create/join federations
-- View federation statistics
-- Privacy settings
-- Monitor training rounds
-- Participant management
-
-**Connected Files:**
-- `enigma_engine/federated/` - Federated learning package
-
----
-
-### notes_tab.py (538 lines)
-**Purpose:** Quick notes and bookmarks
-
-**Main Components:**
-- `NotesManager` - Storage backend
-- Notes list and editor
-
-**Key Features:**
-- Create/edit/delete notes
-- Tag-based organization
-- Search functionality
-- Markdown preview
-- Bookmarks viewer
-
-**Connected Files:**
-- Standalone (stores in ~/.enigma_engine/notes/)
-
----
-
-### learning_tab.py (524 lines)
-**Purpose:** Self-improvement dashboard
-
-**Main Components:**
-- `LearningTab` - Main tab class
-
-**Key Features:**
-- Real-time metrics display
-- Training examples count
-- Learning progress visualization
-- Manual training trigger
-- Autonomous learning toggle
-
-**Connected Files:**
-- `enigma_engine/learning/` - Learning package
-
----
-
-### gif_tab.py (502 lines)
-**Purpose:** Create animated GIFs
-
-**Main Components:**
-- `GIFGenerationWorker` - Background thread
-- `GIFTab` - Tab class
-
-**Key Features:**
-- Generate GIFs from prompts
-- Animate image sequences
-- Morph between prompts
-- FPS and loop control
-
-**Connected Files:**
-- `enigma_engine/config/` - Output paths
-
----
-
-### personality_tab.py (500 lines)
-**Purpose:** Configure AI personality
-
-**Main Components:**
-- Trait sliders
-- Preset selector
-
-**Key Features:**
-- Adjustable personality traits
-- Preset personalities (Professional, Friendly, etc.)
-- Personality evolution toggle
-- Live description preview
-
-**Connected Files:**
-- `enigma_engine/core/persona.py`
-
----
-
-### camera_tab.py (482 lines)
-**Purpose:** Live camera preview and capture
-
-**Main Components:**
-- `CameraThread` - OpenCV capture thread
-- `CameraTab` - Tab class
-
-**Key Features:**
-- Webcam preview
-- Photo capture
-- Resolution controls
-- Camera device selection
-- AI analysis integration
-
-**Connected Files:**
-- Requires OpenCV (cv2)
-- `enigma_engine/config/` - Image storage
-
----
-
-### tool_manager_tab.py (434 lines)
-**Purpose:** Enable/disable AI tools
-
-**Main Components:**
-- `ToolManagerTab` - Main tab class
-- Tool tree widget
-
-**Key Features:**
-- Tool enable/disable toggles
-- Preset profiles (minimal, standard, full)
-- Dependency visualization
-- Save/load custom profiles
-
-**Connected Files:**
-- `enigma_engine/tools/tool_manager.py`
-
----
-
-### instructions_tab.py (411 lines)
-**Purpose:** Help and documentation viewer
-
-**Main Components:**
-- File tree browser
-- Text editor
-
-**Key Features:**
-- Quick start guide
-- Training data format help
-- Model size documentation
-- Edit model data files
-
-**Connected Files:**
-- Standalone help content
-
----
-
-### logs_tab.py (402 lines)
-**Purpose:** View system logs
-
-**Main Components:**
-- `LogViewerWidget` - Log display
-- Multiple log tabs
-
-**Key Features:**
-- Real-time log viewing
-- Filter by level (DEBUG, INFO, etc.)
-- Search within logs
-- Export logs to file
-- Clear logs
-
-**Connected Files:**
-- Project logs/ directory
-- ~/.enigma_engine/logs/
-
----
-
-### vision_tab.py (230 lines)
-**Purpose:** Screen capture and image analysis
-
-**Main Components:**
-- `create_vision_tab()` - Factory function
-
-**Key Features:**
-- Screen capture
-- Load images for analysis
-- AI image description
-- History list
-
-**Connected Files:**
-- `enigma_engine/tools/vision.py`
-
----
-
-### ai_tab.py (205 lines)
-**Purpose:** Consolidated AI configuration
-
-**Main Components:**
-- `AITab` - Tab class with sub-tabs
-
-**Key Features:**
-- Combines: Avatar, Modules, Scaling, Training
-- Sub-tab navigation
-- Standard mode interface
-
-**Connected Files:**
-- References modules_tab, scaling_tab, training_tab
-
----
-
-### terminal_tab.py (197 lines)
-**Purpose:** AI processing terminal
-
-**Main Components:**
-- `create_terminal_tab()` - Factory function
-
-**Key Features:**
-- View AI processing in real-time
-- Auto-scroll toggle
-- Clear terminal
-- Monospace font display
-
-**Connected Files:**
-- Standalone (receives logs from inference)
-
----
-
-### create_tab.py (189 lines)
-**Purpose:** Consolidated creation interface
-
-**Main Components:**
-- Sub-tab container
-
-**Key Features:**
-- Combines: Image, Code, Video, Audio tabs
-- Cleaner Standard mode interface
-
-**Connected Files:**
-- References image_tab, code_tab, video_tab, audio_tab
-
----
-
-### sessions_tab.py (183 lines)
-**Purpose:** View chat history
-
-**Main Components:**
-- `create_sessions_tab()` - Factory function
-
-**Key Features:**
-- Per-AI chat history
-- Session list sidebar
-- Chat content viewer
-- AI model selector
-
-**Connected Files:**
-- `enigma_engine/memory/manager.py`
-
----
-
-### avatar_tab.py (54 lines)
-**Purpose:** Avatar/Game/Robot control container
-
-**Main Components:**
-- Sub-tab container only
-
-**Key Features:**
-- Avatar display sub-tab
-- Game connection sub-tab
-- Robot control sub-tab
-
-**Connected Files:**
-- `gui/tabs/avatar/avatar_display.py`
-- `gui/tabs/game/game_connection.py`
-- `gui/tabs/robot/robot_control.py`
-
----
-
-## Core Package Summary (~170 files)
+## Core Package Summary - How Key Files Work
 
 ### Model & Inference
-| File | Lines | Purpose |
-|------|-------|---------|
-| model.py | 3,214 | Transformer model (Enigma class, ForgeConfig) |
-| inference.py | 2,167 | Text generation engine (EnigmaEngine) |
-| training.py | 1,974 | Training loops (Trainer, TrainingConfig) |
-| tokenizer.py | 826 | Text ↔ tokens (get_tokenizer, SimpleTokenizer) |
-| tool_router.py | 3,374 | Intent detection, specialized model routing |
+
+| File | How It Works |
+|------|-------------|
+| model.py | Transformer brain. Stacks N blocks: RMSNorm → self-attention (Q/K/V with RoPE encoding) → feedforward (SwiGLU). GQA shares K/V across heads. KV-cache stores past tokens. Output: vocabulary probability distribution. |
+| inference.py | Generation loop: tokenize → run model → get probabilities → sample token (greedy/top-k/top-p) → append → repeat until EOS. Streaming yields tokens as generated. |
+| training.py | Forward: compute cross-entropy loss. Backward: AdamW updates weights. Handles batching, gradient accumulation, lr warmup + cosine decay. |
+| tokenizer.py | BPE encoder. Learns subword patterns. "playing" → ["play", "ing"]. Vocab 32K-100K. Special: [PAD], [EOS], [BOS]. |
+| tool_router.py | Intent detector. Scans for keywords, routes to tools. Priority-ordered model assignments per tool. |
 
 ### Advanced Features
-| File | Purpose |
-|------|---------|
-| moe.py | Mixture of Experts architecture |
-| ssm.py | Mamba/S4 state space models |
-| flash_attention.py | Flash attention for speed |
-| infinite_context.py | Streaming context extension |
-| paged_attention.py | Memory-efficient KV cache |
+
+| File | How It Works |
+|------|-------------|
+| moe.py | Routes each token to 2 of N expert networks via gating function. Increases capacity without proportional compute. |
+| ssm.py | Mamba/S4 architecture. State-space model processes sequences in O(n) vs O(n²) for attention. Good for very long sequences. |
+| flash_attention.py | Memory-efficient attention. Computes in tiles, never materializes full NxN attention matrix. 2-4x faster. |
+| infinite_context.py | Streaming context extension. Processes chunks, compresses old context into summary, maintains bounded memory for unbounded input. |
+| paged_attention.py | KV-cache in pages. Allocates memory only as needed. Allows variable-length sequences without wasting memory on padding. |
 
 ### Quantization & Loading
-| File | Purpose |
-|------|---------|
-| quantization.py | INT8/4-bit quantization |
-| awq_quantization.py | AWQ quantization method |
-| gptq_quantization.py | GPTQ quantization method |
-| huggingface_loader.py | Load HuggingFace models |
-| gguf_loader.py | Load GGUF (llama.cpp) models |
-| ollama_loader.py | Load Ollama models |
+
+| File | How It Works |
+|------|-------------|
+| quantization.py | Converts float32 → int8/int4. Calibrates with sample data to minimize accuracy loss. Reduces memory 4-8x. |
+| awq_quantization.py | Activation-aware quantization. Identifies important weights, keeps them higher precision. Better than naive quantization. |
+| gptq_quantization.py | Layer-by-layer quantization. Uses calibration data to find optimal rounding. Slower to quantize but better quality. |
+| huggingface_loader.py | Downloads from HF Hub, converts weight names to Enigma format. Auto-detects architecture from config.json. |
+| gguf_loader.py | Parses GGUF binary format. Reads metadata, dequantizes weights on-the-fly or keeps quantized for llama.cpp inference. |
+| ollama_loader.py | Connects to local Ollama server. Translates Enigma API calls to Ollama API format. Model stays in Ollama process. |
 
 ### Training Variants
-| File | Purpose |
-|------|---------|
-| lora_training.py | LoRA fine-tuning |
-| qlora.py | QLoRA (quantized LoRA) |
-| dpo.py | Direct Preference Optimization |
-| rlhf.py | RLHF training |
-| distillation.py | Model distillation |
+
+| File | How It Works |
+|------|-------------|
+| lora_training.py | Efficient fine-tuning. Adds small trainable A×B matrices to attention layers. Original weights frozen. 90%+ memory savings. |
+| qlora.py | Quantized LoRA. Base model quantized to 4-bit, only LoRA adapters in fp16. Fine-tune 70B models on consumer GPU. |
+| dpo.py | Direct Preference Optimization. Learns from preference pairs (good response vs bad response). No reward model needed. |
+| rlhf.py | Reinforcement Learning from Human Feedback. Trains reward model on human rankings, then uses PPO to optimize policy. |
+| distillation.py | Teacher-student training. Large teacher model generates soft labels, smaller student learns to match. Compress models. |
 
 ---
 
-## Tools Package Summary (~70 files)
+## Tools Package Summary - How Key Files Work
 
 ### Core Tool System
-| File | Lines | Purpose |
-|------|-------|---------|
-| tool_executor.py | 2,877 | Safe tool execution with timeouts |
-| tool_definitions.py | ~1,500 | Tool schemas (ToolDefinition, ToolParameter) |
-| tool_registry.py | ~800 | Tool registration and lookup |
-| tool_manager.py | ~600 | Enable/disable tools, presets |
+
+| File | How It Works |
+|------|-------------|
+| tool_executor.py | Parses `<tool_call>{JSON}</tool_call>`. Validates against schema. Runs with timeout (SIGALRM Unix/threading Windows). Blocks dangerous paths. Returns structured result. |
+| tool_definitions.py | Schema registry. Each tool: name, description, parameters (name, type, required), handler function. Used for validation and AI prompt injection. |
+| tool_registry.py | Central registry dict. Tools register on import. get_tool() looks up by name. list_tools() returns all available. |
+| tool_manager.py | Enable/disable tools at runtime. Presets: minimal (5 tools), standard (15), full (all). Saves config to JSON. |
 
 ### Tool Categories
-| Category | Files | Examples |
-|----------|-------|----------|
-| Vision | vision.py, simple_ocr.py | Screen capture, image analysis |
-| Web | web_tools.py, browser_tools.py | Web search, fetch URLs |
-| Files | file_tools.py, document_tools.py | Read/write files |
-| System | system_tools.py | Run commands, system info |
-| Gaming | game_router.py, game_state.py | Game AI routing |
-| Robot | robot_tools.py, robot_modes.py | Robot control |
+
+| Category | Files | How They Work |
+|----------|-------|---------------|
+| Vision | vision.py, simple_ocr.py | PIL captures screen → sent to vision model or tesseract for OCR → returns description/text |
+| Web | web_tools.py, browser_tools.py | requests + BeautifulSoup parse pages. Rate limiting prevents abuse. Browser automation via playwright. |
+| Files | file_tools.py, document_tools.py | Read/write with path blocking via security.py. PDF via PyPDF2, DOCX via python-docx. |
+| System | system_tools.py | subprocess.run() with timeout. Captures stdout/stderr. Blocks dangerous commands. |
+| Gaming | game_router.py, game_state.py | Detects game via window title → loads game config → routes through game-specific prompts |
+| Robot | robot_tools.py, robot_modes.py | Abstracts hardware. GPIO for Pi, serial for Arduino. Actions: move, gripper, home. |
 
 ---
 
-## Utils Package Summary (~80 files)
+## Utils Package Summary - How Key Files Work
 
-### Key Utilities
-| File | Purpose |
-|------|---------|
-| security.py | Path blocking, sandboxing |
-| lazy_import.py | LazyLoader for fast startup |
-| api_key_encryption.py | Secure API key storage |
-| battery_manager.py | Power management |
-| backup.py | Model/data backup |
+| File | How It Works |
+|------|-------------|
+| security.py | `is_path_blocked()` checks against blocklist (~/.ssh, /etc/passwd, system dirs). Called before all file operations. |
+| lazy_import.py | LazyLoader replaces heavy imports with proxies. Actual import on first attribute access. 5-10x faster startup. |
+| api_key_encryption.py | Fernet (AES-128) encryption. Master key from machine ID + password. Keys stored encrypted in ~/.enigma_engine/keys. |
+| battery_manager.py | Monitors power state via psutil. Adjusts behavior on battery (reduce batch size, disable GPU). |
+| backup.py | Copies models/data to timestamped backup folder. Compression optional. Restore copies back. |
 
 ---
 
