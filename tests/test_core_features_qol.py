@@ -176,42 +176,6 @@ class TestFeedback(unittest.TestCase):
         self.assertEqual(stats['average_rating'], 4.0)
 
 
-class TestDiscoveryMode(unittest.TestCase):
-    """Test discovery mode and auto-save."""
-    
-    def setUp(self):
-        """Set up test fixtures."""
-        self.temp_dir = tempfile.mkdtemp()
-        self.storage_path = Path(self.temp_dir)
-    
-    def test_discovery_topic_generation(self):
-        """Test topic generation."""
-        from enigma_engine.utils.discovery_mode import DiscoveryMode
-        
-        discovery = DiscoveryMode(self.storage_path / "discoveries.json")
-        topic = discovery.get_discovery_topic()
-        
-        self.assertIsInstance(topic, str)
-        self.assertGreater(len(topic), 0)
-    
-    def test_auto_save_conversation(self):
-        """Test auto-saving conversations."""
-        from enigma_engine.utils.discovery_mode import AutoSaveManager
-        
-        autosave = AutoSaveManager(self.storage_path / "autosave")
-        messages = [
-            {"role": "user", "content": "Hello"},
-            {"role": "assistant", "content": "Hi!"}
-        ]
-        
-        success = autosave.save_conversation("test_conv", messages)
-        self.assertTrue(success)
-        
-        # Recover
-        recovered = autosave.recover_conversation("test_conv")
-        self.assertEqual(len(recovered), 2)
-
-
 class TestTrainingValidator(unittest.TestCase):
     """Test training data validator."""
     

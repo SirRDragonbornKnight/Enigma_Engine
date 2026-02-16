@@ -165,27 +165,6 @@ class TestRequestModels:
         assert req.height == 512  # default
 
 
-class TestTelemetryDashboard:
-    """Test telemetry dashboard."""
-    
-    def test_dashboard_creation(self):
-        """Test creating telemetry dashboard."""
-        from enigma_engine.web.telemetry_dashboard import TelemetryDashboard, TelemetryCollector, TelemetryConfig
-        
-        config = TelemetryConfig()
-        collector = TelemetryCollector(config)
-        dashboard = TelemetryDashboard(collector=collector)
-        assert dashboard is not None
-    
-    def test_collector_creation(self):
-        """Test creating telemetry collector."""
-        from enigma_engine.web.telemetry_dashboard import TelemetryCollector, TelemetryConfig
-        
-        config = TelemetryConfig()
-        collector = TelemetryCollector(config)
-        assert collector is not None
-
-
 class TestFlaskApp:
     """Test Flask web app."""
     

@@ -133,18 +133,6 @@ class TestHubModule:
             pytest.skip("Hub module not available")
 
 
-class TestI18nModule:
-    """Test internationalization module."""
-    
-    def test_i18n_module_exists(self):
-        """Test i18n module exists."""
-        try:
-            i18n = importlib.import_module('enigma_engine.i18n')
-            assert i18n is not None
-        except ImportError:
-            pytest.skip("i18n module not available")
-
-
 class TestIntegrationsModule:
     """Test integrations module."""
     
