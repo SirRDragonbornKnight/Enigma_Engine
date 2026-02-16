@@ -57,15 +57,19 @@ gui/widgets/ - 4 dead files (image_paste, split_view, feedback_widget, quick_set
 gui/ - 14 dead files (accessibility, chat_features, notification_system, etc.)
 gui/tabs/avatar/ - 2 dead files (avatar_management, widgets)
 config/ - 2 dead files (migration, validation)
+
+# Phase 6 (final)
+modules/ - 1 dead file (error_messages)
+core/nn/ - 4 dead files (activations, attention, embeddings, normalization)
 ```
 
 ---
 
-## Current Package Structure (494 files)
+## Current Package Structure (489 files)
 
 | Package | Files | Purpose |
 |---------|-------|---------|
-| core/ | 121 | AI model, inference, training |
+| core/ | 117 | AI model, inference, training |
 | gui/ | 97 | PyQt5 interface (28 tabs) |
 | tools/ | 44 | AI tool implementations |
 | avatar/ | 42 | Avatar control system |
@@ -77,7 +81,7 @@ config/ - 2 dead files (migration, validation)
 | agents/ | 2 | Multi-agent system |
 | builtin/ | 11 | Fallback generators |
 | web/ | 6 | Web dashboard |
-| modules/ | 7 | Module manager |
+| modules/ | 6 | Module manager |
 | self_improvement/ | 7 | Self-training |
 | game/ | 6 | Game overlay |
 | network/ | 6 | Network offloading |
