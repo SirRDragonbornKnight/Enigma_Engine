@@ -69,8 +69,8 @@ core/nn/ - 4 dead files (activations, attention, embeddings, normalization)
 
 | Package | Files | Purpose |
 |---------|-------|---------|
-| core/ | 117 | AI model, inference, training |
-| gui/ | 97 | PyQt5 interface (28 tabs) |
+| core/ | 135 | AI model, inference, training |
+| gui/ | 95 | PyQt5 interface (28 tabs) |
 | tools/ | 44 | AI tool implementations |
 | avatar/ | 42 | Avatar control system |
 | voice/ | 29 | TTS/STT features |
@@ -101,25 +101,25 @@ core/nn/ - 4 dead files (activations, attention, embeddings, normalization)
 
 ```
 enigma_engine/
-├── core/           # AI model, inference, training (188 files)
+├── core/           # AI model, inference, training (135 files)
 ├── gui/            # PyQt5 interface
-│   └── tabs/       # 44 tab files (*_tab.py)
+│   └── tabs/       # 28 tab files (*_tab.py)
 ├── modules/        # Module manager system
-├── tools/          # AI tools (65 files)
+├── tools/          # AI tools (44 files)
 ├── memory/         # Conversation storage, vector DB
 ├── voice/          # TTS/STT
 ├── avatar/         # Avatar control
 ├── comms/          # API server, networking
 ├── learning/       # Learning utilities
 ├── config/         # Global CONFIG
-└── utils/          # Helpers (82 files)
+└── utils/          # Helpers (23 files)
 ```
 
 ---
 
 ## Package Details
 
-### core/ - AI Engine (188 files)
+### core/ - AI Engine (135 files)
 | Category | Key Files | Purpose |
 |----------|-----------|---------|
 | **Model** | model.py, layers.py, nn/* | Transformer architecture |
@@ -132,7 +132,7 @@ enigma_engine/
 | **Advanced** | moe.py, ssm.py, flash_attention.py | Experimental architectures |
 | **Loading** | huggingface_loader.py, gguf_loader.py, ollama_loader.py | External models |
 
-### tools/ - AI Capabilities (65 files)
+### tools/ - AI Capabilities (44 files)
 | Category | Key Files | Purpose |
 |----------|-----------|---------|
 | **Execution** | tool_executor.py, tool_registry.py, tool_manager.py | Tool system core |
@@ -143,7 +143,7 @@ enigma_engine/
 | **Gaming** | game_router.py, game_detector.py, game_state.py | Game AI |
 | **Robot** | robot_tools.py, robot_modes.py, pi_robot.py | Robot control |
 
-### utils/ - Helpers (82 files)
+### utils/ - Helpers (23 files)
 | Category | Key Files | Purpose |
 |----------|-----------|---------|
 | **Security** | security.py, encryption.py, api_key_encryption.py | Security utilities |
@@ -168,7 +168,7 @@ enigma_engine/
 
 ---
 
-## GUI Tabs (44 total)
+## GUI Tabs (28 total)
 
 ### Largest/Most Complex
 | Tab | Lines | Purpose |
@@ -299,9 +299,9 @@ These are ready to use when needed:
 
 | Category | Count |
 |----------|-------|
-| **Total Python files** | **682** |
-| GUI tabs | 44 |
-| Core modules | 188 |
+| **Total Python files** | **489** |
+| GUI tabs | 28 |
+| Core modules | 135 |
 | Test files | 50+ |
 
 ---
