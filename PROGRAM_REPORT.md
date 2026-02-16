@@ -37,7 +37,7 @@ enigma_engine/
 - **Model:** Custom transformer with RoPE, RMSNorm, SwiGLU, GQA, KV-cache
 - **Sizes:** 15 presets from ~500K params (pi_zero) to 70B+ params (omega)
 
-### Package List (521 Python files)
+### Package List (512 Python files)
 
 | Category | Packages | Files | Status |
 |----------|----------|-------|--------|

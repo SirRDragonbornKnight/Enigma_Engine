@@ -44,11 +44,13 @@
 | - agents/ | 10 | ✅ Done |
 | - web/ | 3 | ✅ Done |
 | - security/ | 3 | ✅ Done |
-| **TOTAL** | **~295** | ✅ Verified |
+| - learning/ | 5 | ✅ Done |
+| - gui/widgets/ | 4 | ✅ Done |
+| **TOTAL** | **~304** | ✅ Verified |
 
 **Original:** 816 Python files  
-**Current:** 521 Python files  
-**Reduction:** 36.2% of codebase removed  
+**Current:** 512 Python files  
+**Reduction:** 37.3% of codebase removed  
 
 All 23 model tests pass after cleanup.
 

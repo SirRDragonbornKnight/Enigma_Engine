@@ -50,11 +50,13 @@ tools/ - 21 dead files (game_*, sensor_*, replay_analysis, etc.)
 agents/ - 10 dead files (debate, swarm, tournament, visual_workspace, etc.)
 web/ - 3 dead files (session_middleware, api_docs, training_dashboard)
 security/ - 3 dead files (gdpr, pii_scrubber, tls)
+learning/ - 5 dead files (ab_testing, critic_model, model_coordination, etc.)
+gui/widgets/ - 4 dead files (image_paste, split_view, feedback_widget, quick_settings)
 ```
 
 ---
 
-## Current Package Structure (521 files)
+## Current Package Structure (512 files)
 
 | Package | Files | Purpose |
 |---------|-------|---------|
@@ -66,7 +68,7 @@ security/ - 3 dead files (gdpr, pii_scrubber, tls)
 | utils/ | 23 | Utilities and helpers |
 | memory/ | 19 | Conversation/vector storage |
 | comms/ | 17 | API server, networking |
-| learning/ | 16 | Learning system |
+| learning/ | 11 | Learning system |
 | agents/ | 2 | Multi-agent system |
 | builtin/ | 11 | Fallback generators |
 | web/ | 6 | Web dashboard |
