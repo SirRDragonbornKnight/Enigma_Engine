@@ -37,7 +37,7 @@ enigma_engine/
 - **Model:** Custom transformer with RoPE, RMSNorm, SwiGLU, GQA, KV-cache
 - **Sizes:** 15 presets from ~500K params (pi_zero) to 70B+ params (omega)
 
-### Package List (558 Python files)
+### Package List (521 Python files)
 
 | Category | Packages | Files | Status |
 |----------|----------|-------|--------|
@@ -98,16 +98,12 @@ enigma_engine/
 | terminal_tab | 189 | Embedded terminal |
 | sessions_tab | 178 | Session management |
 | avatar_tab | 46 | Avatar display |
-| vision_tab | 212 | Image/screen analysis |
-| ai_tab | 193 | AI assistant panel |
-| terminal_tab | 189 | Embedded terminal |
-| create_tab | 179 | Quick creation shortcuts |
-| sessions_tab | 178 | Session management |
-| avatar_tab | 46 | Avatar display |
 
 ---
 
 ## GUI Tabs Detailed
+
+> **Note:** Some detailed sections below document deleted tabs and are outdated.
 
 ### chat_tab.py (2869 lines)
 **Purpose:** Main chat interface for conversing with the AI

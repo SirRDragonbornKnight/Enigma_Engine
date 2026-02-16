@@ -39,11 +39,16 @@
 | - utils/ | 59 | ✅ Done |
 | - gui/tabs/ | 16 | ✅ Done |
 | - core/ | 49 | ✅ Done |
-| **TOTAL** | **~258** | ✅ Verified |
+| **Phase 4 - More Files** | | |
+| - tools/ | 21 | ✅ Done |
+| - agents/ | 10 | ✅ Done |
+| - web/ | 3 | ✅ Done |
+| - security/ | 3 | ✅ Done |
+| **TOTAL** | **~295** | ✅ Verified |
 
 **Original:** 816 Python files  
-**Current:** 558 Python files  
-**Reduction:** 31.6% of codebase removed  
+**Current:** 521 Python files  
+**Reduction:** 36.2% of codebase removed  
 
 All 23 model tests pass after cleanup.
 

@@ -44,31 +44,37 @@ tools/goal_tracker.py, tools/robot_platforms.py, tools/system_awareness.py
 utils/ - 59 dead files (ab_testing, backup, circuit_breaker, encryption, hotkeys, etc.)
 gui/tabs/ - 16 unused tabs (dashboard, personality, build_ai, modules, etc.)
 core/ - 49 dead files (flash_attention, multi_gpu, dpo, rlhf, distillation, etc.)
+
+# Phase 4
+tools/ - 21 dead files (game_*, sensor_*, replay_analysis, etc.)
+agents/ - 10 dead files (debate, swarm, tournament, visual_workspace, etc.)
+web/ - 3 dead files (session_middleware, api_docs, training_dashboard)
+security/ - 3 dead files (gdpr, pii_scrubber, tls)
 ```
 
 ---
 
-## Current Package Structure (558 files)
+## Current Package Structure (521 files)
 
 | Package | Files | Purpose |
 |---------|-------|---------|
 | core/ | 121 | AI model, inference, training |
 | gui/ | 115 | PyQt5 interface (28 tabs) |
-| tools/ | 65 | AI tool implementations |
+| tools/ | 44 | AI tool implementations |
 | avatar/ | 42 | Avatar control system |
 | voice/ | 29 | TTS/STT features |
 | utils/ | 23 | Utilities and helpers |
 | memory/ | 19 | Conversation/vector storage |
 | comms/ | 17 | API server, networking |
 | learning/ | 16 | Learning system |
-| agents/ | 12 | Multi-agent system |
+| agents/ | 2 | Multi-agent system |
 | builtin/ | 11 | Fallback generators |
-| web/ | 9 | Web dashboard |
+| web/ | 6 | Web dashboard |
 | modules/ | 7 | Module manager |
 | self_improvement/ | 7 | Self-training |
 | game/ | 6 | Game overlay |
 | network/ | 6 | Network offloading |
-| security/ | 6 | Auth/security |
+| security/ | 3 | Auth/security |
 | plugins/ | 5 | Plugin system |
 | cli/ | 4 | Command line |
 | config/ | 4 | Configuration |
