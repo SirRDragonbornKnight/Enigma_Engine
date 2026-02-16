@@ -117,71 +117,189 @@ enigma_engine/
 
 ---
 
-## Package Details
+## Package Details - How Each File Works
 
 ### core/ - AI Engine (135 files)
-| Category | Key Files | Purpose |
-|----------|-----------|---------|
-| **Model** | model.py, layers.py, nn/* | Transformer architecture |
-| **Inference** | inference.py, streaming.py, kv_cache.py | Text generation |
-| **Training** | training.py, trainer.py, lora_training.py | Model training |
-| **Tokenizer** | tokenizer.py, bpe_tokenizer.py, char_tokenizer.py | Text processing |
-| **Quantization** | quantization.py, awq_quantization.py, gptq_quantization.py | Model compression |
-| **Routing** | tool_router.py, universal_router.py, orchestrator.py | Intent detection |
-| **Context** | context_extender.py, infinite_context.py, paged_attention.py | Long context |
-| **Advanced** | moe.py, ssm.py, flash_attention.py | Experimental architectures |
-| **Loading** | huggingface_loader.py, gguf_loader.py, ollama_loader.py | External models |
+
+| File | How It Works |
+|------|-------------|
+| `model.py` | The neural network brain. Stacks transformer layers: input → embedding → N attention blocks → output probabilities. Each layer does: RMSNorm → self-attention (queries/keys/values) → feedforward (SwiGLU activation). Uses RoPE for position encoding so model knows word order. KV-cache stores past computations to avoid recalculating during generation. |
+| `inference.py` | The voice - converts your text to AI response. Loop: tokenize input → run through model → get probability distribution for next token → sample one (greedy/top-k/top-p) → add to sequence → repeat until EOS or max length. Supports streaming (yield each token as generated). |
+| `training.py` | Teaches the model. Forward pass: run input through model, compare output to target with cross-entropy loss. Backward pass: compute gradients, update weights via AdamW optimizer. Handles batching, gradient accumulation, learning rate scheduling (warmup + cosine decay). |
+| `tokenizer.py` | Converts text↔numbers. BPE (byte-pair encoding): learns common subword patterns, encodes unknown words as pieces. "playing" might become ["play", "ing"]. Vocabulary typically 32K-100K tokens. Special tokens: [PAD], [EOS], [BOS]. |
+| `tool_router.py` | The dispatcher that reads user intent. Scans input for keywords ("draw" → image, "explain" → chat). Each tool has priority-ordered model assignments. Routes request to tool_executor with parameters extracted from user text. |
+| `kv_cache.py` | Speed optimization. Stores key/value tensors from previous tokens so attention doesn't recalculate them. On token N, only computes attention for new token vs all previous. Turns O(n²) into O(n). |
+| `quantization.py` | Shrinks models to use less memory. Converts float32 weights to int8/int4. AWQ: finds important weights, keeps them higher precision. GPTQ: layer-by-layer quantization with calibration data. |
+| `streaming.py` | Yields tokens as they're generated instead of waiting for full response. Uses Python generators. GUI hooks into this for live typing effect. |
+| `lora_training.py` | Efficient fine-tuning. Instead of updating all weights, adds small trainable matrices (A×B) to attention layers. Original weights frozen, only LoRA adapters trained. Saves 90%+ memory vs full fine-tuning. |
+| `huggingface_loader.py` | Loads external models. Downloads from HuggingFace Hub, converts weight names to Enigma format, handles different architectures (LLaMA, Mistral, GPT-2). Auto-detects model type from config.json. |
+| `gguf_loader.py` | Loads llama.cpp quantized models. Parses GGUF binary format, reads metadata (vocab, architecture), dequantizes weights on-the-fly or keeps quantized for inference. |
+| `moe.py` | Mixture of Experts. Routes each token to 2 of N expert networks (instead of one big feedforward). Gating network decides which experts. Increases capacity without proportional compute. |
+| `paged_attention.py` | Memory-efficient attention for long sequences. Splits KV cache into pages, only allocates pages as needed. Allows variable-length sequences without wasting memory on padding. |
 
 ### tools/ - AI Capabilities (44 files)
-| Category | Key Files | Purpose |
-|----------|-----------|---------|
-| **Execution** | tool_executor.py, tool_registry.py, tool_manager.py | Tool system core |
-| **Vision** | vision.py, simple_ocr.py | Image analysis, OCR |
-| **Web** | web_tools.py, browser_tools.py, url_safety.py | Web access |
-| **Files** | file_tools.py, document_tools.py, document_ingestion.py | File operations |
-| **System** | system_tools.py | System control |
-| **Gaming** | game_router.py, game_detector.py, game_state.py | Game AI |
-| **Robot** | robot_tools.py, robot_modes.py, pi_robot.py | Robot control |
+
+| File | How It Works |
+|------|-------------|
+| `tool_executor.py` | Safe execution sandbox. Parses `<tool_call>{JSON}</tool_call>` from AI output. Validates parameters against tool schema. Runs with timeout (Unix: SIGALRM, Windows: threading.Timer). Blocks dangerous paths via security.py. Returns structured result or error. |
+| `tool_definitions.py` | Schema registry. Each tool defined with: name, description, parameters (name, type, required, description), handler function. Used by executor for validation and by AI for knowing what tools exist. |
+| `vision.py` | Screenshot + image analysis. Uses PIL for capture, sends to AI vision model (or API like GPT-4V) for description. OCR via simple_ocr.py: binarize → find text regions → tesseract. |
+| `web_tools.py` | Web access. `web_search`: queries DuckDuckGo/Google API, parses results. `fetch_url`: requests + BeautifulSoup to extract text content. Rate limiting prevents abuse. |
+| `file_tools.py` | File operations with security. read_file/write_file/list_dir with path blocking (can't access ~/.ssh, system dirs). Operations go through is_path_blocked() check first. |
+| `document_ingestion.py` | Extracts text from files. PDF: PyPDF2 or pdfplumber. DOCX: python-docx. EPUB: ebooklib. Chunks large documents into overlapping segments for vector search. |
+| `game_router.py` | Game-specific AI routing. Detects running game via window title. Loads game config (keybinds, state patterns). Routes inputs through game-specific prompt templates. |
+| `game_detector.py` | Identifies running games. Scans window titles against known game patterns. Checks process names. Returns game ID and config path. |
+| `robot_tools.py` | Hardware control abstraction. Sends commands to robot backends (pi_robot.py for Raspberry Pi GPIO, serial for Arduino). Actions: move, gripper_open/close, home. |
+
+### modules/ - Module System (6 files)
+
+| File | How It Works |
+|------|-------------|
+| `manager.py` | Lifecycle controller. State machine: UNLOADED → LOADING → LOADED → ACTIVE. Checks dependencies before loading (inference needs model+tokenizer). Prevents conflicts (can't load image_gen_local AND image_gen_api). Tracks memory usage per module. |
+| `registry.py` | Module catalog. Each module class defines: init (setup), load (allocate resources), unload (cleanup), dependencies, conflicts. 50+ modules registered covering all capabilities. |
+| `sandbox.py` | Isolated execution. Runs module code with restricted imports, timeout, memory limits. Catches crashes without taking down main app. |
 
 ### utils/ - Helpers (23 files)
-| Category | Key Files | Purpose |
-|----------|-----------|---------|
-| **Security** | security.py, encryption.py, api_key_encryption.py | Security utilities |
-| **Performance** | lazy_import.py, performance.py, memory_profiler.py | Optimization |
-| **Storage** | storage.py, backup.py, json_cache.py | Data persistence |
-| **Networking** | network_fallback.py, circuit_breaker.py, bulkhead.py | Resilience |
+
+| File | How It Works |
+|------|-------------|
+| `lazy_import.py` | Deferred loading. `LazyLoader` class replaces heavy imports (torch, transformers) with proxies. Actual import happens on first attribute access. Speeds up startup 5-10x. |
+| `security.py` | Path blocking. `is_path_blocked()` checks path against blocklist (~/.ssh, /etc/passwd, C:\\Windows). Called by file_tools before any operation. Config in blocked_paths.json. |
+| `api_key_encryption.py` | Secure key storage. Encrypts API keys with Fernet (AES-128). Master key derived from machine ID + user password. Keys stored encrypted in ~/.enigma_engine/keys. |
+
+### memory/ - Conversation Storage (19 files)
+
+| File | How It Works |
+|------|-------------|
+| `manager.py` | Conversation history. Stores messages as list of {role, content, timestamp}. Auto-truncates to fit context window. Saves/loads conversations as JSON. |
+| `vector_db.py` | Semantic search. Embeds text chunks via sentence-transformers. Stores vectors in FAISS index. Query: embed search text → find k nearest neighbors → return matching chunks. |
+
+### voice/ - TTS/STT (29 files)
+
+| File | How It Works |
+|------|-------------|
+| `voice_generator.py` | TTS synthesis. Backend options: pyttsx3 (local), ElevenLabs API, built-in. Queues text chunks, plays audio via sounddevice. Voice profile sets pitch/rate/voice ID. |
+| `listener.py` | Speech recognition. Captures mic audio via sounddevice. Sends to Whisper (local) or cloud STT. Returns transcribed text. Wake word detection optional. |
+| `voice_profile.py` | Voice identity storage. Dataclass with: voice_id, pitch, rate, volume, custom settings. Save/load as JSON. Used by TTS and avatar. |
+
+### comms/ - Networking (17 files)
+
+| File | How It Works |
+|------|-------------|
+| `api_server.py` | REST API. Flask app with routes: /generate (text), /chat, /tools/{name}. Auth via API key header. CORS enabled for web clients. Runs in background thread. |
+| `discovery.py` | Network device finder. UDP broadcast on local network. Other Enigma instances respond with capabilities. Used for distributed inference. |
+| `network.py` | Multi-device coordination. ForgeNode class represents a peer. Message passing via TCP. ModelExporter sends model shards to peers for parallel inference. |
 
 ---
 
-## Core Files (CRITICAL - Be Careful)
+## Data Flow - How a Chat Message is Processed
 
-| File | Purpose | Lines |
-|------|---------|-------|
-| `core/model.py` | Transformer model (Enigma class) | 3,214 |
-| `core/inference.py` | Text generation (EnigmaEngine) | 2,167 |
-| `core/training.py` | Model training (Trainer) | 1,974 |
-| `core/tokenizer.py` | Text ↔ tokens | 826 |
-| `core/tool_router.py` | Intent detection & routing | 3,374 |
-| `modules/manager.py` | Module lifecycle | 1,874 |
-| `modules/registry.py` | Module definitions | 3,095 |
-| `tools/tool_executor.py` | Safe tool execution | 2,877 |
+```
+USER TYPES: "Draw me a sunset over mountains"
+     │
+     ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  chat_tab.py                                                        │
+│  - Captures text from input box                                     │
+│  - Adds to conversation history                                     │
+│  - Calls EnigmaEngine.chat() or .generate()                         │
+└──────────────────────────────┬──────────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  inference.py (EnigmaEngine)                                        │
+│  - Tokenizes input text → [15496, 502, 257, 24536, ...]            │
+│  - If use_routing=True, sends to tool_router first                  │
+└──────────────────────────────┬──────────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  tool_router.py                                                     │
+│  - Scans for keywords: "draw" detected                              │
+│  - Matches to "image" tool                                          │
+│  - Extracts parameters: prompt="sunset over mountains"              │
+└──────────────────────────────┬──────────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  tool_executor.py                                                   │
+│  - Validates parameters against tool schema                         │
+│  - Checks security (no blocked paths)                               │
+│  - Calls image generation handler with timeout                      │
+└──────────────────────────────┬──────────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  image_tab.py (generator)                                           │
+│  - Runs Stable Diffusion locally OR calls DALL-E API                │
+│  - Saves image to outputs/images/                                   │
+│  - Returns path to generated image                                  │
+└──────────────────────────────┬──────────────────────────────────────┘
+                               │
+                               ▼
+RESULT: Image of sunset displayed in chat + saved to disk
+```
 
 ---
 
-## GUI Tabs (28 total)
+## GUI Tabs (28 total) - How They Work
 
-### Largest/Most Complex
-| Tab | Lines | Purpose |
-|-----|-------|---------|
-| settings_tab.py | 4,721 | App settings, API keys |
-| chat_tab.py | 2,869 | Main chat interface |
-| build_ai_tab.py | 2,498 | AI creation wizard |
-| image_tab.py | 1,449 | Image generation |
-| training_tab.py | 1,424 | Model training |
-| modules_tab.py | 1,383 | Module toggles |
+### Core Interface Tabs
 
-### Tab Naming Pattern
-All tabs follow: `{name}_tab.py` with `create_{name}_tab()` or `{Name}Tab` class.
+| Tab | How It Works |
+|-----|-------------|
+| `chat_tab.py` | Main conversation UI. QTextEdit for input, QScrollArea for messages. On send: adds user message to display → calls EnigmaEngine.generate() in QThread → streams response tokens via signal/slot → appends AI response. Manages conversation history via memory/manager.py. |
+| `settings_tab.py` | Config editor. Loads forge_config.json on init. QFormLayout with input fields for each setting. API keys encrypted via api_key_encryption.py before saving. Emits configChanged signal so other tabs can react. |
+| `training_tab.py` | Training UI. File picker for dataset → validates format → creates Trainer instance → runs training in QThread with progress callback → updates progress bar → saves model checkpoint. |
+
+### Generation Tabs (all inherit BaseGenerationTab)
+
+| Tab | How It Works |
+|-----|-------------|
+| `image_tab.py` | Provider pattern: StableDiffusionLocal (diffusers), OpenAIImage (DALL-E API), ReplicateImage. User picks provider, enters prompt → QThread runs generate() → emits signal with result path → displays in QLabel with resize handles. |
+| `code_tab.py` | Same provider pattern. ForgeCode uses local model with code-specific prompt template. OpenAICode calls GPT-4 API. Output displayed in QTextEdit with syntax highlighting (QSyntaxHighlighter). |
+| `video_tab.py` | LocalVideo wraps AnimateDiff pipeline. Chains multiple image generations, interpolates frames. ReplicateVideo calls external API. Saves as MP4 or GIF. |
+| `audio_tab.py` | LocalTTS wraps pyttsx3 engine. ElevenLabsTTS calls their API with voice_id. Plays audio via QMediaPlayer or sounddevice. |
+| `threed_tab.py` | Local3DGen wraps Shap-E model. Generates point cloud → converts to mesh → exports OBJ. Preview via QOpenGLWidget (if available) or matplotlib fallback. |
+
+### Model Management Tabs
+
+| Tab | How It Works |
+|-----|-------------|
+| `modules_tab.py` | Displays all modules from registry.py as toggle switches. On toggle: calls ModuleManager.load()/unload() in QThread. Shows dependencies (grayed if missing prereqs). Filters by category dropdown. |
+| `model_router_tab.py` | Visual tool→model assignment. Dropdowns for each tool category. Saves to tool_routing.json. Changes take effect immediately via ToolRouter.reload_config(). |
+| `training_data_tab.py` | AI-assisted dataset generation. User enters topic → calls Claude/GPT-4 API to generate Q&A pairs → formats as training data → appends to data file. |
+
+### Utility Tabs
+
+| Tab | How It Works |
+|-----|-------------|
+| `network_tab.py` | Scans local network via discovery.py UDP broadcast. Displays found devices in QListWidget. "Connect" button establishes TCP connection for distributed inference. |
+| `camera_tab.py` | OpenCV camera feed in QLabel. QThread captures frames at 30fps, emits as QPixmap. "Capture" saves current frame. "Analyze" sends to vision model. |
+| `analytics_tab.py` | Reads JSON logs from ~/.enigma_engine/analytics/. Aggregates by day/week. Displays charts via pyqtgraph or matplotlib. |
+
+### Tab Creation Pattern
+
+All tabs follow one of two patterns:
+
+```python
+# Pattern 1: Factory function (older style)
+def create_my_tab(parent):
+    tab = QWidget()
+    layout = QVBoxLayout(tab)
+    # ... setup widgets ...
+    return tab
+
+# Pattern 2: Class-based (newer style)
+class MyTab(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._setup_ui()
+    
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        # ... setup widgets ...
+```
 
 ---
 
