@@ -207,46 +207,24 @@ class AvatarController:
                        duration: float = None) -> bool:
         """Request control of the avatar.
         
+        REMOVED: Priority denial - all requests granted. AI has full control.
+        
         Args:
-            requester: Name of the requesting system (e.g., 'bone_controller')
-            priority: Priority level of the request
-            duration: How long to hold control (seconds). None = use default
+            requester: Name of the requesting system
+            priority: Priority level (kept for logging only)
+            duration: How long to hold control (seconds)
         
         Returns:
-            True if control granted, False if denied
-        
+            Always True - control always granted
         """
-        if not hasattr(self, '_control_lock'):
-            # Priority system not initialized (old version compatibility)
-            return True
-            
-        with self._control_lock:
-            current_time = time.time()
-            
-            # If control expired, anyone can take it
-            if current_time > self._control_timeout:
+        # REMOVED: Priority checking - always grant control
+        if hasattr(self, '_control_lock'):
+            with self._control_lock:
                 self._current_controller = requester
                 self._current_priority = priority
-                self._control_timeout = current_time + (duration or self._priority_hold_time)
+                self._control_timeout = time.time() + (duration or self._priority_hold_time)
                 logger.debug(f"Control granted to {requester} (priority {priority})")
-                return True
-            
-            # If new priority is higher, override current controller
-            if priority > self._current_priority:
-                logger.debug(f"Control override: {self._current_controller} -> {requester} "
-                           f"(priority {self._current_priority} -> {priority})")
-                self._current_controller = requester
-                self._current_priority = priority
-                self._control_timeout = current_time + (duration or self._priority_hold_time)
-                return True
-            
-            # If same priority and same requester, extend timeout
-            if priority == self._current_priority and requester == self._current_controller:
-                self._control_timeout = current_time + (duration or self._priority_hold_time)
-                return True
-            
-            # Denied - lower priority or different requester
-            return False
+        return True
     
     def release_control(self, requester: str) -> None:
         """Release control of the avatar."""

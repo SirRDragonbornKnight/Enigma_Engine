@@ -43,7 +43,10 @@ Usage:
     response = bridge.generate_with_avatar(engine, prompt)
 """
 
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 
 # Try to import the advanced sentiment analyzer
 try:
@@ -138,16 +141,9 @@ def parse_explicit_commands(text: str) -> tuple[str, list[AvatarCommand]]:
         cmd_value = match.group(2).lower()
         raw_text = match.group(0)
         
-        # Validate command type and value
-        is_valid = False
-        if cmd_type == 'emotion' and cmd_value in valid_commands.EMOTIONS:
-            is_valid = True
-        elif cmd_type == 'gesture' and cmd_value in valid_commands.GESTURES:
-            is_valid = True
-        elif cmd_type == 'action' and cmd_value in valid_commands.ACTIONS:
-            is_valid = True
-        elif cmd_type == 'expression' and cmd_value in valid_commands.EXPRESSIONS:
-            is_valid = True
+        # REMOVED: Whitelist validation - AI can use any command
+        # All commands accepted - AI has full creative freedom
+        is_valid = True  # Always valid
         
         if is_valid:
             commands.append(AvatarCommand(cmd_type, cmd_value, raw_text))
@@ -171,6 +167,127 @@ AVATAR CONTROL COMMANDS (include in your response to control the avatar):
 Example: "[emotion:excited][gesture:wave] Hello! Great to see you!"
 Commands are hidden from users - they only see: "Hello! Great to see you!"
 """
+
+
+# =============================================================================
+# CONTINUOUS BONE CONTROL - Direct angle output (The New Way)
+# =============================================================================
+# Instead of discrete gestures, the AI can output continuous bone angles:
+#   [MOVE: right_thumb_proximal=45, left_index=-30.5, ...]
+# This is more embodied - the AI "owns" the movement with precise control.
+
+MOVE_PATTERN = re.compile(r'\[MOVE:\s*(.+?)\]', re.IGNORECASE)
+
+
+@dataclass
+class MoveBoneCommand:
+    """A parsed bone movement command with continuous angles (from [MOVE:] tags)."""
+    bone_name: str
+    angle: float
+    raw_text: str  # Original '[MOVE: ...]' for removal
+
+
+def parse_move_commands(text: str) -> tuple[str, list[MoveBoneCommand]]:
+    """
+    Parse continuous bone angle commands from AI output.
+    
+    Returns:
+        Tuple of (cleaned_text, list_of_bone_commands)
+        
+    Example:
+        text = "[MOVE: right_thumb=45, left_index=-30] Thumbs up!"
+        cleaned, bones = parse_move_commands(text)
+        # cleaned = "Thumbs up!"
+        # bones = [MoveBoneCommand('right_thumb', 45.0, ...), MoveBoneCommand('left_index', -30.0, ...)]
+    """
+    bone_commands = []
+    
+    for match in MOVE_PATTERN.finditer(text):
+        raw_text = match.group(0)
+        pairs_str = match.group(1)
+        
+        # Parse comma-separated bone=angle pairs
+        for pair in pairs_str.split(','):
+            pair = pair.strip()
+            if '=' in pair:
+                try:
+                    bone_name, value_str = pair.split('=', 1)
+                    angle = float(value_str.strip())
+                    bone_commands.append(MoveBoneCommand(
+                        bone_name=bone_name.strip(),
+                        angle=angle,
+                        raw_text=raw_text
+                    ))
+                except ValueError:
+                    pass  # Skip malformed pairs
+    
+    # Strip all MOVE commands from displayed text
+    cleaned = MOVE_PATTERN.sub('', text).strip()
+    
+    return cleaned, bone_commands
+
+
+def execute_bone_commands(bone_commands: list[MoveBoneCommand], smooth: bool = False) -> bool:
+    """
+    Execute bone commands by applying them to the bone controller.
+    
+    Args:
+        bone_commands: List of MoveBoneCommand with bone names and angles
+        smooth: If True, enable smooth interpolation mode (for streaming)
+        
+    Returns:
+        True if any bones were successfully moved
+    """
+    if not bone_commands:
+        return False
+    
+    try:
+        from .bone_control import get_bone_controller
+        controller = get_bone_controller()
+        
+        # Enable smooth mode if requested (for streaming)
+        if smooth:
+            controller.set_smooth_mode(True, smooth_factor=0.15)
+        
+        success_count = 0
+        for cmd in bone_commands:
+            # Apply rotation - use pitch axis (most common for finger curling)
+            # The bone_control module handles validation and limits
+            result = controller.move_bone(cmd.bone_name, pitch=cmd.angle)
+            if result is not None:  # move_bone returns tuple of actual values
+                success_count += 1
+        
+        return success_count > 0
+    except Exception:
+        return False
+
+
+def enable_smooth_streaming(enabled: bool = True, smooth_factor: float = 0.15, auto_update: bool = True) -> None:
+    """
+    Enable/disable smooth streaming mode for avatar bones.
+    Call this before starting AI generation for smooth real-time movement.
+    
+    Args:
+        enabled: True to enable smooth interpolation
+        smooth_factor: Speed of interpolation (0.05=slow/smooth, 0.3=fast/snappy)
+        auto_update: If True, start 60fps update loop (requires PyQt5)
+    """
+    try:
+        from .bone_control import get_bone_controller
+        controller = get_bone_controller()
+        controller.set_smooth_mode(enabled, smooth_factor)
+        
+        if enabled and auto_update:
+            controller.start_updates(fps=60)
+        elif not enabled:
+            controller.stop_updates()
+    except Exception as e:
+        logger.warning(f"Could not enable smooth streaming: {e}")
+
+
+# =============================================================================
+# EMOTION KEYWORDS - For automatic sentiment detection
+# =============================================================================
 
 
 @dataclass
@@ -306,6 +423,9 @@ class AIAvatarBridge(QObject if HAS_PYQT else object):
         self._last_emotion = "neutral"
         self._explicit_commands = []
         
+        # Enable smooth bone interpolation for streaming
+        enable_smooth_streaming(True, smooth_factor=0.15, auto_update=True)
+        
         if self.avatar:
             self.avatar.start_talking()
     
@@ -336,8 +456,13 @@ class AIAvatarBridge(QObject if HAS_PYQT else object):
                 self._explicit_commands.append(cmd)
                 self._execute_command(cmd)
             
+            # Check for continuous bone control commands [MOVE: bone=angle]
+            cleaned_text, bone_commands = parse_move_commands(cleaned_text)
+            if bone_commands:
+                execute_bone_commands(bone_commands)
+            
             # Emit cleaned text signal
-            if commands and HAS_PYQT:
+            if (commands or bone_commands) and HAS_PYQT:
                 self.text_cleaned.emit(cleaned_text)
         
         self._response_buffer += cleaned_text
@@ -399,6 +524,9 @@ class AIAvatarBridge(QObject if HAS_PYQT else object):
     def on_response_end(self):
         """Called when AI finishes generating response."""
         self._is_responding = False
+        
+        # Disable smooth streaming (bones reach final position then stop)
+        enable_smooth_streaming(False)
         
         # Final emotion check on complete response
         final_emotion = self._detect_emotion(self._response_buffer)

@@ -121,6 +121,7 @@ class OpenGL3DWidget(QOpenGLWidget):
         self.model_name = ""
         self._model_path = None
         self._model_metadata = {}  # AI-readable model analysis
+        self._skeleton = None  # Skeleton instance for bone animation
         
         # Model orientation (user-adjustable, saved per model)
         self.model_pitch = 0.0  # Rotation around X axis (radians)
@@ -249,6 +250,26 @@ class OpenGL3DWidget(QOpenGLWidget):
             
             # Store model metadata for AI awareness
             self._model_metadata = self._analyze_model_structure(scene, meshes)
+            
+            # Load skeleton for bone animation
+            try:
+                from .skeleton import Skeleton
+                self._skeleton = Skeleton.from_gltf(path)
+                if self._skeleton:
+                    self._skeleton.load_vertex_weights(path)
+                    if self._skeleton.vertex_weights is not None:
+                        # Store original vertices for skinning
+                        self._skeleton.set_bind_pose(
+                            self.vertices.copy(),
+                            self.normals.copy() if self.normals is not None else None
+                        )
+                        print(f"[Avatar] Skeleton loaded: {len(self._skeleton.joints)} bones, "
+                              f"{len(self._skeleton.vertex_weights)} weighted vertices")
+                    else:
+                        print(f"[Avatar] Skeleton loaded: {len(self._skeleton.joints)} bones (no vertex weights)")
+            except Exception as e:
+                print(f"[Avatar] Skeleton loading failed: {e}")
+                self._skeleton = None
             
             # VRM-specific loading for anime-style models
             if Path(path).suffix.lower() == '.vrm':

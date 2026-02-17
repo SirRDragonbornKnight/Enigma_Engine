@@ -1,277 +1,122 @@
-# comms package - Multi-device communication for Forge
+"""comms package - TRIMMED (distributed features removed)"""
 
-# Discovery can be imported without torch dependency
-from .discovery import DeviceDiscovery, discover_enigma_engine_nodes
-
-# Remote training can be imported without torch dependency
-try:
-    from .remote_training import (
-        RemoteTrainer,
-        TrainingJob,
-        TrainingServer,
-        get_remote_trainer,
-        start_training_server,
-        stop_training_server,
-        submit_remote_training,
-    )
-    HAS_REMOTE_TRAINING = True
-except ImportError:
-    HAS_REMOTE_TRAINING = False
-    RemoteTrainer = None
-    TrainingServer = None
-    TrainingJob = None
-
-# Model sync for keeping models in sync across devices
-try:
-    from .model_sync import (
-        ModelSyncClient,
-        ModelSyncServer,
-        ModelVersion,
-        SyncStatus,
-        get_sync_client,
-        get_sync_server,
-        start_sync_server,
-        sync_from_server,
-    )
-    HAS_MODEL_SYNC = True
-except ImportError:
-    HAS_MODEL_SYNC = False
-    ModelSyncClient = None
-    ModelSyncServer = None
-    ModelVersion = None
-    SyncStatus = None
-
-# Distributed inference across multiple devices  
-try:
-    from .distributed_inference import (
-        DistributedCoordinator,
-        InferenceTask,
-        InferenceWorker,
-        WorkerInfo,
-        WorkerStatus,
-        distributed_generate,
-        get_coordinator,
-        start_inference_worker,
-        stop_inference_worker,
-    )
-    HAS_DISTRIBUTED_INFERENCE = True
-except ImportError:
-    HAS_DISTRIBUTED_INFERENCE = False
-    DistributedCoordinator = None
-    InferenceWorker = None
-    WorkerInfo = None
-    InferenceTask = None
-    WorkerStatus = None
-
-# Other imports that may require torch - use lazy loading
+# Core API (kept)
 try:
     from .api_server import create_api_server
-    from .memory_sync import MemorySync, OfflineSync, add_sync_routes
-    from .multi_ai import AIConversation, AIParticipant, quick_ai_chat
-    from .network import (
-        ForgeNode,
-        Message,
-        ModelExporter,
-        create_client_node,
-        create_server_node,
-    )
-    from .protocol_manager import ProtocolConfig, ProtocolManager, get_protocol_manager
-    from .remote_client import RemoteClient
-    HAS_CORE = True
-except ImportError as e:
-    HAS_CORE = False
-    # These will be None if torch is not available
-    ForgeNode = None
-    Message = None
-    ModelExporter = None
-    create_server_node = None
-    create_client_node = None
-    MemorySync = None
-    OfflineSync = None
-    add_sync_routes = None
-    AIConversation = None
-    AIParticipant = None
-    quick_ai_chat = None
-    ProtocolManager = None
-    ProtocolConfig = None
-    get_protocol_manager = None
-    RemoteClient = None
+except ImportError:
     create_api_server = None
 
-# Network optimizer for low-latency distributed AI
 try:
-    from .network_optimizer import (
-        NetworkOptimizer,
-        OptimizedRequest,
-        RequestStats,
-        ResponseCache,
-        get_network_optimizer,
-    )
-    HAS_NETWORK_OPTIMIZER = True
+    from .remote_client import RemoteClient
 except ImportError:
-    HAS_NETWORK_OPTIMIZER = False
-    NetworkOptimizer = None
-    OptimizedRequest = None
-    RequestStats = None
-    ResponseCache = None
-    get_network_optimizer = None
+    RemoteClient = None
 
-# Device sync for real-time state synchronization
-try:
-    from .device_sync import (
-        ConnectedDevice,
-        DeviceSync,
-        DeviceType,
-        SyncPriority,
-        SyncState,
-        get_device_sync,
-    )
-    HAS_DEVICE_SYNC = True
-except ImportError:
-    HAS_DEVICE_SYNC = False
-    DeviceSync = None
-    DeviceType = None
-    SyncPriority = None
-    SyncState = None
-    ConnectedDevice = None
-    get_device_sync = None
+# Stub classes for deleted features
+class DeviceDiscovery: pass
+def discover_enigma_engine_nodes(*a, **k): return []
 
-# Distributed protocol (hardware-aware)
-try:
-    from .distributed import (
-        DistributedNode,
-        MessageType,
-        NodeInfo,
-        NodeRole,
-        ProtocolMessage,
-        create_client,
-        create_server,
-    )
-    HAS_DISTRIBUTED = True
-except ImportError:
-    HAS_DISTRIBUTED = False
+class RemoteTrainer: pass
+class TrainingServer: pass
+class TrainingJob: pass
+def get_remote_trainer(): return None
+def start_training_server(*a, **k): pass
+def stop_training_server(*a, **k): pass
+def submit_remote_training(*a, **k): return None
 
-# AI Collaboration Protocol (AI-to-AI communication)
-try:
-    from .ai_collaboration import (
-        AICapability,
-        AICollaborationProtocol,
-        RoutingPreference,
-        TaskRequest,
-        TaskStatus,
-        get_collaboration_protocol,
-        reset_protocol,
-    )
-    HAS_AI_COLLABORATION = True
-except ImportError:
-    HAS_AI_COLLABORATION = False
+class ModelSyncClient: pass
+class ModelSyncServer: pass
+class ModelVersion: pass
+class SyncStatus: pass
+def get_sync_client(): return None
+def get_sync_server(): return None
+def start_sync_server(*a, **k): pass
+def sync_from_server(*a, **k): pass
 
-# Optional imports (may require Flask)
-try:
-    HAS_WEB = True
-except ImportError:
-    HAS_WEB = False
+class DistributedCoordinator: pass
+class InferenceTask: pass
+class InferenceWorker: pass
+class WorkerInfo: pass
+class WorkerStatus: pass
+def distributed_generate(*a, **k): return ""
+def get_coordinator(): return None
+def start_inference_worker(*a, **k): pass
+def stop_inference_worker(*a, **k): pass
+
+class MemorySync: pass
+class OfflineSync: pass
+def add_sync_routes(*a, **k): pass
+
+class AIConversation: pass
+class AIParticipant: pass
+def quick_ai_chat(*a, **k): return ""
+
+class ForgeNode: pass
+class Message: pass
+class ModelExporter: pass
+def create_server_node(*a, **k): return None
+def create_client_node(*a, **k): return None
+
+class ProtocolConfig: pass
+class ProtocolManager: pass
+def get_protocol_manager(): return None
+
+class NetworkOptimizer: pass
+class OptimizedRequest: pass
+class RequestStats: pass
+class ResponseCache: pass
+def get_network_optimizer(): return None
+
+class DeviceSync: pass
+class DeviceType: pass
+class SyncPriority: pass
+class SyncState: pass
+class ConnectedDevice: pass
+def get_device_sync(): return None
+
+class DistributedNode: pass
+class MessageType: pass
+class NodeInfo: pass
+class NodeRole: pass
+class ProtocolMessage: pass
+def create_server(*a, **k): return None
+def create_client(*a, **k): return None
+
+class AICollaborationProtocol: pass
+class AICapability: pass
+class RoutingPreference: pass
+class TaskRequest: pass
+class TaskStatus: pass
+def get_collaboration_protocol(): return None
+def reset_protocol(*a, **k): pass
+
+class MobileAPI: pass
+def create_mobile_api(*a, **k): return None
+class WebServer: pass
+def create_web_server(*a, **k): return None
+
+HAS_CORE = create_api_server is not None
+HAS_REMOTE_TRAINING = False
+HAS_MODEL_SYNC = False
+HAS_DISTRIBUTED_INFERENCE = False
+HAS_NETWORK_OPTIMIZER = False
+HAS_DEVICE_SYNC = False
+HAS_DISTRIBUTED = False
+HAS_AI_COLLABORATION = False
+HAS_WEB = False
 
 __all__ = [
-    # Network nodes
-    "ForgeNode",
-    "Message", 
-    "ModelExporter",
-    "create_server_node",
-    "create_client_node",
-    
-    # Distributed protocol (hardware-aware)
-    "DistributedNode",
-    "NodeRole",
-    "MessageType",
-    "ProtocolMessage",
-    "NodeInfo",
-    "create_server",
-    "create_client",
-    
-    # AI Collaboration Protocol
-    "AICollaborationProtocol",
-    "AICapability",
-    "TaskRequest",
-    "TaskStatus",
-    "RoutingPreference",
-    "get_collaboration_protocol",
-    "reset_protocol",
-    
-    # Discovery
-    "DeviceDiscovery",
-    "discover_enigma_engine_nodes",
-    
-    # Memory sync
-    "MemorySync",
-    "OfflineSync",
-    "add_sync_routes",
-    
-    # Multi-AI
-    "AIConversation",
-    "AIParticipant",
-    "quick_ai_chat",
-    
-    # Protocol management
-    "ProtocolManager",
-    "ProtocolConfig",
-    "get_protocol_manager",
-    
-    # API clients
-    "RemoteClient",
-    "create_api_server",
-    
-    # Network optimizer
-    "NetworkOptimizer",
-    "OptimizedRequest",
-    "RequestStats",
-    "ResponseCache",
-    "get_network_optimizer",
-    
-    # Device sync
-    "DeviceSync",
-    "DeviceType",
-    "SyncPriority",
-    "SyncState",
-    "ConnectedDevice",
-    "get_device_sync",
-    
-    # Remote training
-    "RemoteTrainer",
-    "TrainingServer",
-    "TrainingJob",
-    "get_remote_trainer",
-    "start_training_server",
-    "stop_training_server",
-    "submit_remote_training",
-    
-    # Model sync
-    "ModelSyncClient",
-    "ModelSyncServer",
-    "ModelVersion",
-    "SyncStatus",
-    "get_sync_client",
-    "get_sync_server",
-    "start_sync_server",
-    "sync_from_server",
-    
-    # Distributed inference
-    "DistributedCoordinator",
-    "InferenceWorker",
-    "InferenceTask",
-    "WorkerInfo",
-    "WorkerStatus",
-    "get_coordinator",
-    "start_inference_worker",
-    "stop_inference_worker",
-    "distributed_generate",
+    "ForgeNode", "Message", "ModelExporter", "create_server_node", "create_client_node",
+    "DistributedNode", "NodeRole", "MessageType", "ProtocolMessage", "NodeInfo", "create_server", "create_client",
+    "AICollaborationProtocol", "AICapability", "TaskRequest", "TaskStatus", "RoutingPreference",
+    "get_collaboration_protocol", "reset_protocol", "DeviceDiscovery", "discover_enigma_engine_nodes",
+    "MemorySync", "OfflineSync", "add_sync_routes", "AIConversation", "AIParticipant", "quick_ai_chat",
+    "ProtocolManager", "ProtocolConfig", "get_protocol_manager", "RemoteClient", "create_api_server",
+    "NetworkOptimizer", "OptimizedRequest", "RequestStats", "ResponseCache", "get_network_optimizer",
+    "DeviceSync", "DeviceType", "SyncPriority", "SyncState", "ConnectedDevice", "get_device_sync",
+    "RemoteTrainer", "TrainingServer", "TrainingJob", "get_remote_trainer", "start_training_server",
+    "stop_training_server", "submit_remote_training", "ModelSyncClient", "ModelSyncServer", "ModelVersion",
+    "SyncStatus", "get_sync_client", "get_sync_server", "start_sync_server", "sync_from_server",
+    "DistributedCoordinator", "InferenceWorker", "InferenceTask", "WorkerInfo", "WorkerStatus",
+    "get_coordinator", "start_inference_worker", "stop_inference_worker", "distributed_generate",
+    "MobileAPI", "create_mobile_api", "WebServer", "create_web_server",
 ]
-
-# Add Flask-dependent exports if available
-if HAS_WEB:
-    __all__.extend([
-        "MobileAPI",
-        "create_mobile_api",
-        "WebServer", 
-        "create_web_server",
-    ])

@@ -357,6 +357,10 @@ CONTROL_AVATAR_BONES = ToolDefinition(
     ],
 )
 
+# FINGER_GESTURE tool REMOVED - replaced by continuous bone control
+# The AI now outputs [MOVE: bone=angle] directly instead of calling a discrete gesture tool
+# See SUGGESTIONS.md for the new embodied control approach
+
 MANAGE_SCENE_OBJECTS = ToolDefinition(
     name="manage_scene_objects",
     description="Add, remove, or manipulate 3D objects/props in the avatar scene. Place items around the avatar for decoration, storytelling, or interaction.",
@@ -1784,6 +1788,7 @@ ALL_TOOLS = [
     # Control
     CONTROL_AVATAR,
     CONTROL_AVATAR_BONES,
+    # FINGER_GESTURE removed - replaced by continuous [MOVE: bone=angle] output
     MANAGE_SCENE_OBJECTS,
     CUSTOMIZE_AVATAR,
     SPEAK,

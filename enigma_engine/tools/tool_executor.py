@@ -587,6 +587,7 @@ class ToolExecutor:
             return self._execute_control_avatar(module, params)
         elif tool_name == "control_avatar_bones":
             return self._execute_control_avatar_bones(params)
+        # finger_gesture removed - replaced by continuous [MOVE: bone=angle] control
         elif tool_name == "manage_scene_objects":
             return self._execute_manage_scene_objects(params)
         elif tool_name == "customize_avatar":
@@ -921,11 +922,11 @@ class ToolExecutor:
             }
     
     def _execute_control_avatar_bones(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute bone-level avatar control."""
+        """Execute bone-level avatar control using the unified bone_control module."""
         try:
-            from ..avatar.ai_control import BoneCommand, get_ai_avatar_control
+            from ..avatar.bone_control import get_bone_controller
             
-            ai_control = get_ai_avatar_control()
+            controller = get_bone_controller()
             action = params.get("action", "")
             
             if action == "move_bone":
@@ -941,50 +942,61 @@ class ToolExecutor:
                 yaw = params.get("yaw")
                 roll = params.get("roll")
                 
-                command = BoneCommand(bone_name, pitch=pitch, yaw=yaw, roll=roll)
-                ai_control.execute_commands([command])
+                result = controller.move_bone(bone_name, pitch=pitch, yaw=yaw, roll=roll)
                 
                 return {
                     "success": True,
-                    "result": f"Moved {bone_name} (pitch={pitch}, yaw={yaw}, roll={roll})",
+                    "result": f"Moved {bone_name} to pitch={result[0]:.1f}, yaw={result[1]:.1f}, roll={result[2]:.1f}",
                     "tool": "control_avatar_bones",
                 }
             
-            elif action == "gesture":
-                gesture_name = params.get("gesture_name")
-                if not gesture_name:
+            elif action == "pose":
+                pose_name = params.get("pose_name")
+                hand = params.get("hand", "right")
+                
+                if not pose_name:
                     return {
                         "success": False,
-                        "error": "gesture_name required for gesture action",
+                        "error": "pose_name required for pose action",
                         "tool": "control_avatar_bones",
                     }
                 
-                success = ai_control.execute_gesture(gesture_name)
+                success = controller.apply_finger_pose(pose_name, hand)
                 if success:
                     return {
                         "success": True,
-                        "result": f"Executed gesture: {gesture_name}",
+                        "result": f"Applied pose '{pose_name}' to {hand} hand",
                         "tool": "control_avatar_bones",
                     }
                 else:
                     return {
                         "success": False,
-                        "error": f"Unknown gesture: {gesture_name}",
+                        "error": f"Unknown pose: {pose_name}",
                         "tool": "control_avatar_bones",
                     }
             
             elif action == "reset_pose":
-                ai_control.reset_pose()
+                # Reset all bones to neutral
+                controller.reset_all()
                 return {
                     "success": True,
                     "result": "Avatar reset to neutral pose",
                     "tool": "control_avatar_bones",
                 }
             
+            elif action == "get_info":
+                # Return bone info for AI
+                info = controller.get_bone_info_for_ai()
+                return {
+                    "success": True,
+                    "result": info,
+                    "tool": "control_avatar_bones",
+                }
+            
             else:
                 return {
                     "success": False,
-                    "error": f"Unknown action: {action}",
+                    "error": f"Unknown action: {action}. Valid: move_bone, pose, reset_pose, get_info",
                     "tool": "control_avatar_bones",
                 }
         
@@ -996,6 +1008,10 @@ class ToolExecutor:
                 "tool": "control_avatar_bones",
             }
     
+    # _execute_finger_gesture REMOVED - replaced by continuous bone control
+    # The AI now outputs [MOVE: bone=angle] directly, parsed in ai_bridge.py
+    # See SUGGESTIONS.md for the new embodied control approach
+
     def _execute_manage_scene_objects(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute scene object management for avatar scene."""
         try:

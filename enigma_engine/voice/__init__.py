@@ -1,472 +1,156 @@
-"""
-Voice Package - Unified TTS and STT interface with voice customization.
+"""Voice Package - Unified TTS and STT interface (trimmed version)."""
 
-Usage:
-    from enigma_engine.voice import speak, listen, set_voice
-    
-    # Basic usage
-    speak("Hello!")
-    text = listen()
-    
-    # Use a character voice
-    set_voice("glados")
-    speak("Hello, test subject.")
-    
-    # Create custom voice
-    from enigma_engine.voice import VoiceProfile, VoiceEngine
-    
-    my_voice = VoiceProfile(
-        name="MyCharacter",
-        pitch=0.8,      # Lower pitch
-        speed=1.1,      # Slightly faster
-        voice="female"
-    )
-    my_voice.save()
-    set_voice("MyCharacter")
-    
-    # AI voice discovery
-    from enigma_engine.voice import AIVoiceIdentity, discover_voice
-    from enigma_engine.core.personality import load_personality
-    
-    personality = load_personality("my_model")
-    voice_profile = discover_voice(personality)
-    
-    # Dynamic voice adaptation
-    from enigma_engine.voice import adapt_voice_for_emotion
-    
-    happy_voice = adapt_voice_for_emotion("happy", my_voice)
-
-Available Preset Voices:
-    - default   : Standard neutral voice
-    - glados    : Cold, sarcastic AI (Portal)
-    - jarvis    : Formal British assistant
-    - wheatley  : Nervous, rambling AI
-    - hal9000   : Calm, deliberate AI
-    - robot     : Classic robotic voice
-    - cheerful  : Happy, energetic
-    - wise      : Slow, thoughtful mentor
-
-Components:
-    - tts_simple.py: Basic text-to-speech
-    - stt_simple.py: Speech-to-text (SpeechRecognition)
-    - voice_profile.py: Voice customization system
-    - voice_generator.py: AI voice generation from personality
-    - voice_identity.py: AI voice self-discovery
-    - voice_effects.py: Enhanced voice effects system
-    - dynamic_adapter.py: Context-aware voice adaptation
-    - voice_customizer.py: User customization tools
-    - audio_analyzer.py: Audio analysis for cloning
-    - whisper_stt.py: High-quality Whisper STT (optional)
-    - natural_tts.py: Natural TTS with Coqui/Bark (optional)
-    - trigger_phrases.py: Wake word detection
-"""
-
-# Audio analysis
-from .audio_analyzer import (
-    AudioAnalyzer,
-    analyze_audio,
-)
-from .audio_analyzer import compare_voices as compare_voice_audio
-from .audio_analyzer import (
-    estimate_voice_profile,
-)
-
-# Dynamic voice adaptation
-from .dynamic_adapter import (
-    DynamicVoiceAdapter,
-    adapt_voice_for_context,
-    adapt_voice_for_emotion,
-    adapt_voice_for_personality,
-)
+# Core voice from kept files
 from .natural_tts import NaturalTTS
 from .stt_simple import transcribe_from_mic as listen
-
-# Wake word detection
-from .trigger_phrases import (
-    SmartWakeWords,
-    TriggerPhraseDetector,
-    is_wake_word_active,
-    start_wake_word_detection,
-    stop_wake_word_detection,
-    suggest_wake_phrases,
-    train_custom_wake_phrase,
-)
-
-# Local/offline wake word detection
-from .wake_word import (
-    WakeWordDetector,
-    WakeWordConfig,
-    WakeWordBackend,
-    create_wake_word_detector,
-)
-
-# User customization tools
-from .voice_customizer import (
-    VoiceCustomizer,
-    compare_voices,
-    export_voice_profile,
-    import_voice_profile,
-    interactive_tuning,
-)
-
-# Voice effects system
-from .voice_effects import (
-    VoiceEffects,
-    apply_effect,
-    apply_effects,
-    effect_for_context,
-    effect_for_emotion,
-)
-
-# Voice generation and cloning
-from .voice_generator import (
-    AIVoiceGenerator,
-    create_voice_from_samples,
-    generate_voice_for_personality,
-)
-
-# AI voice identity and self-discovery
-from .voice_identity import (
-    AIVoiceIdentity,
-    adjust_voice_from_feedback,
-    describe_voice,
-    discover_voice,
-)
-from .voice_profile import (
-    PRESET_PROFILES,
-    VoiceEngine,
-    VoiceProfile,
-    get_engine,
-    list_custom_profiles,
-    list_presets,
-    list_system_voices,
-    set_voice,
-    speak,
-)
-
-# New voice options (optional dependencies)
+from .voice_generator import AIVoiceGenerator, generate_voice_for_personality, create_voice_from_samples
 from .whisper_stt import WhisperSTT
+from .vad import VAD as VADProcessor, VADConfig, get_vad
 
-__all__ = [
-    # Basic TTS/STT
-    'speak',
-    'listen', 
-    'set_voice',
-    'VoiceProfile',
-    'VoiceEngine',
-    'get_engine',
-    'list_presets',
-    'list_custom_profiles',
-    'list_system_voices',
-    'PRESET_PROFILES',
-    
-    # Voice generation
-    'AIVoiceGenerator',
-    'generate_voice_for_personality',
-    'create_voice_from_samples',
-    
-    # AI voice identity
-    'AIVoiceIdentity',
-    'discover_voice',
-    'describe_voice',
-    'adjust_voice_from_feedback',
-    
-    # Voice effects
-    'VoiceEffects',
-    'apply_effect',
-    'apply_effects',
-    'effect_for_emotion',
-    'effect_for_context',
-    
-    # Dynamic adaptation
-    'DynamicVoiceAdapter',
-    'adapt_voice_for_emotion',
-    'adapt_voice_for_context',
-    'adapt_voice_for_personality',
-    
-    # User customization
-    'VoiceCustomizer',
-    'interactive_tuning',
-    'import_voice_profile',
-    'export_voice_profile',
-    'compare_voices',
-    
-    # Audio analysis
-    'AudioAnalyzer',
-    'analyze_audio',
-    'estimate_voice_profile',
-    'compare_voice_audio',
-    
-    # Wake words
-    'TriggerPhraseDetector',
-    'SmartWakeWords',
-    'suggest_wake_phrases',
-    'train_custom_wake_phrase',
-    'start_wake_word_detection',
-    'stop_wake_word_detection',
-    'is_wake_word_active',
-    
-    # Local/offline wake word detection
-    'WakeWordDetector',
-    'WakeWordConfig',
-    'WakeWordBackend',
-    'create_wake_word_detector',
-    
-    # Noise reduction
-    'NoiseReducer',
-    'NoiseReductionConfig',
-    'reduce_noise',
-    
-    # Echo cancellation
-    'EchoCanceller',
-    'EchoCancellationConfig',
-    'cancel_echo',
-    
-    # Audio ducking
-    'AudioDucker',
-    'AudioDuckingConfig',
-    'duck_audio',
-    'get_ducker',
-    
-    # SSML support
-    'SSMLParser',
-    'SSMLProcessor',
-    'SSMLSegment',
-    'SSMLDocument',
-    'ssml_to_text',
-    'strip_ssml',
-    
-    # Emotional TTS
-    'EmotionalTTS',
-    'Emotion',
-    'EmotionProfile',
-    'EmotionDetector',
-    'detect_emotion',
-    'emotional_ssml',
-    
-    # Multilingual TTS
-    'MultilingualTTS',
-    'Language',
-    'LanguageDetector',
-    'VoiceInfo',
-    'detect_language',
-    'get_language_name',
-    
-    # Speed control
-    'SpeedController',
-    'SpeedConfig',
-    'SpeedPreset',
-    'set_speed',
-    'get_speed',
-    
-    # Interruption handling
-    'InterruptionHandler',
-    'InterruptionConfig',
-    'InterruptionMode',
-    'start_barge_in_detection',
-    'stop_barge_in_detection',
-    'was_interrupted',
-    
-    # Streaming TTS
-    'StreamingTTS',
-    'StreamingConfig',
-    'AudioChunk',
-    'stream_speak',
-    'stream_chunks',
-    
-    # Audio file input
-    'AudioFileTranscriber',
-    'TranscriptionConfig',
-    'TranscriptionResult',
-    'transcribe_file',
-    'transcribe_with_timestamps',
-    
-    # Optional advanced features
-    'WhisperSTT',
-    'NaturalTTS',
-    
-    # Voice pipeline (unified voice I/O)
-    'VoicePipeline',
-    'VoiceConfig',
-    'VoiceMode',
-    'VoiceDevice',
-    'SpeechSegment',
-    'get_voice_pipeline',
-]
-
-# Voice pipeline for unified STT/TTS
+# Voice pipeline
 try:
     from .voice_pipeline import (
-        SpeechSegment,
-        VoiceConfig,
-        VoiceDevice,
-        VoiceMode,
-        VoicePipeline,
-        get_voice_pipeline,
+        SpeechSegment, VoiceConfig, VoiceDevice, VoiceMode, VoicePipeline, get_voice_pipeline,
     )
 except ImportError:
-    VoicePipeline = None
-    VoiceConfig = None
-    VoiceMode = None
-    VoiceDevice = None
-    SpeechSegment = None
-    get_voice_pipeline = None
+    VoicePipeline = VoiceConfig = VoiceMode = VoiceDevice = SpeechSegment = get_voice_pipeline = None
 
-# Noise reduction
-try:
-    from .noise_reduction import (
-        NoiseReducer,
-        NoiseReductionConfig,
-        reduce_noise,
-    )
-except ImportError:
-    NoiseReducer = None
-    NoiseReductionConfig = None
-    reduce_noise = None
+# Stub classes for deleted features
+class VoiceProfile: pass
+class VoiceEngine: pass
+class VoiceListener: pass
+def get_engine(): return None
+def list_presets(): return []
+def list_custom_profiles(): return []
+def list_system_voices(): return []
+def set_voice(*a, **k): pass
+def speak(*a, **k): pass
+PRESET_PROFILES = {}
 
-# Echo cancellation
-try:
-    from .echo_cancellation import (
-        EchoCancellationConfig,
-        EchoCanceller,
-        cancel_echo,
-    )
-except ImportError:
-    EchoCanceller = None
-    EchoCancellationConfig = None
-    cancel_echo = None
+class AIVoiceIdentity: pass
+def discover_voice(*a, **k): return None
+def describe_voice(*a, **k): return ""
+def adjust_voice_from_feedback(*a, **k): return None
 
-# Audio ducking
-try:
-    from .audio_ducking import (
-        AudioDucker,
-        AudioDuckingConfig,
-        duck_audio,
-        get_ducker,
-    )
-except ImportError:
-    AudioDucker = None
-    AudioDuckingConfig = None
-    duck_audio = None
-    get_ducker = None
+class VoiceEffects: pass
+def apply_effect(*a, **k): return None
+def apply_effects(*a, **k): return None
+def effect_for_emotion(*a, **k): return None
+def effect_for_context(*a, **k): return None
 
-# SSML support
-try:
-    from .ssml import (
-        SSMLDocument,
-        SSMLParser,
-        SSMLProcessor,
-        SSMLSegment,
-        ssml_to_text,
-        strip_ssml,
-    )
-except ImportError:
-    SSMLParser = None
-    SSMLProcessor = None
-    SSMLSegment = None
-    SSMLDocument = None
-    ssml_to_text = None
-    strip_ssml = None
+class DynamicVoiceAdapter: pass
+def adapt_voice_for_emotion(*a, **k): return None
+def adapt_voice_for_context(*a, **k): return None
+def adapt_voice_for_personality(*a, **k): return None
 
-# Emotional TTS
-try:
-    from .emotional_tts import (
-        Emotion,
-        EmotionalTTS,
-        EmotionDetector,
-        EmotionProfile,
-        detect_emotion,
-        emotional_ssml,
-    )
-except ImportError:
-    EmotionalTTS = None
-    Emotion = None
-    EmotionProfile = None
-    EmotionDetector = None
-    detect_emotion = None
-    emotional_ssml = None
+class VoiceCustomizer: pass
+def interactive_tuning(*a, **k): pass
+def import_voice_profile(*a, **k): return None
+def export_voice_profile(*a, **k): pass
+def compare_voices(*a, **k): return {}
 
-# Multilingual TTS
-try:
-    from .multilingual_tts import (
-        Language,
-        LanguageDetector,
-        MultilingualTTS,
-        VoiceInfo,
-        detect_language,
-        get_language_name,
-    )
-except ImportError:
-    MultilingualTTS = None
-    Language = None
-    LanguageDetector = None
-    VoiceInfo = None
-    detect_language = None
-    get_language_name = None
+class AudioAnalyzer: pass
+def analyze_audio(*a, **k): return {}
+def estimate_voice_profile(*a, **k): return None
+def compare_voice_audio(*a, **k): return {}
 
-# Speed control
-try:
-    from .speed_control import (
-        SpeedConfig,
-        SpeedController,
-        SpeedPreset,
-        get_speed,
-        set_speed,
-    )
-except ImportError:
-    SpeedController = None
-    SpeedConfig = None
-    SpeedPreset = None
-    set_speed = None
-    get_speed = None
+class TriggerPhraseDetector: pass
+class SmartWakeWords: pass
+def suggest_wake_phrases(*a, **k): return []
+def train_custom_wake_phrase(*a, **k): pass
+def start_wake_word_detection(*a, **k): pass
+def stop_wake_word_detection(*a, **k): pass
+def is_wake_word_active(): return False
 
-# Interruption handling
-try:
-    from .interruption import (
-        InterruptionConfig,
-        InterruptionHandler,
-        InterruptionMode,
-        start_barge_in_detection,
-        stop_barge_in_detection,
-        was_interrupted,
-    )
-except ImportError:
-    InterruptionHandler = None
-    InterruptionConfig = None
-    InterruptionMode = None
-    start_barge_in_detection = None
-    stop_barge_in_detection = None
-    was_interrupted = None
+class WakeWordDetector: pass
+class WakeWordConfig: pass
+class WakeWordBackend: pass
+def create_wake_word_detector(*a, **k): return None
 
-# Streaming TTS
-try:
-    from .streaming_tts import (
-        AudioChunk,
-        StreamingConfig,
-        StreamingTTS,
-        stream_chunks,
-        stream_speak,
-    )
-except ImportError:
-    StreamingTTS = None
-    StreamingConfig = None
-    AudioChunk = None
-    stream_speak = None
-    stream_chunks = None
+class NoiseReducer: pass
+class NoiseReductionConfig: pass
+def reduce_noise(*a, **k): return None
 
-# Audio file input
-try:
-    from .audio_file_input import (
-        AudioFileTranscriber,
-        TranscriptionConfig,
-        TranscriptionResult,
-        transcribe_file,
-        transcribe_with_timestamps,
-    )
-except ImportError:
-    AudioFileTranscriber = None
-    TranscriptionConfig = None
-    TranscriptionResult = None
-    transcribe_file = None
-    transcribe_with_timestamps = None
+class EchoCanceller: pass
+class EchoCancellationConfig: pass
+def cancel_echo(*a, **k): return None
+
+class AudioDucker: pass
+class AudioDuckingConfig: pass
+def duck_audio(*a, **k): return None
+def get_ducker(): return None
+
+class SSMLParser: pass
+class SSMLProcessor: pass
+class SSMLSegment: pass
+class SSMLDocument: pass
+def ssml_to_text(*a, **k): return ""
+def strip_ssml(*a, **k): return ""
+
+class EmotionalTTS: pass
+class Emotion: pass
+class EmotionProfile: pass
+class EmotionDetector: pass
+def detect_emotion(*a, **k): return None
+def emotional_ssml(*a, **k): return ""
+
+class MultilingualTTS: pass
+class Language: pass
+class LanguageDetector: pass
+class VoiceInfo: pass
+def detect_language(*a, **k): return None
+def get_language_name(*a, **k): return ""
+
+class SpeedController: pass
+class SpeedConfig: pass  
+class SpeedPreset: pass
+def set_speed(*a, **k): pass
+def get_speed(): return 1.0
+
+class InterruptionHandler: pass
+class InterruptionConfig: pass
+class InterruptionMode: pass
+def start_barge_in_detection(*a, **k): pass
+def stop_barge_in_detection(*a, **k): pass
+def was_interrupted(): return False
+
+class StreamingTTS: pass
+class StreamingConfig: pass
+class AudioChunk: pass
+def stream_speak(*a, **k): return
+def stream_chunks(*a, **k): return
+
+class AudioFileTranscriber: pass
+class TranscriptionConfig: pass
+class TranscriptionResult: pass
+def transcribe_file(*a, **k): return None
+def transcribe_with_timestamps(*a, **k): return None
+
+__all__ = [
+    # Core (from kept files)
+    'speak', 'listen', 'set_voice', 'VoiceProfile', 'VoiceEngine', 'get_engine',
+    'list_presets', 'list_custom_profiles', 'list_system_voices', 'PRESET_PROFILES',
+    'AIVoiceGenerator', 'generate_voice_for_personality', 'create_voice_from_samples',
+    'AIVoiceIdentity', 'discover_voice', 'describe_voice', 'adjust_voice_from_feedback',
+    'VoiceEffects', 'apply_effect', 'apply_effects', 'effect_for_emotion', 'effect_for_context',
+    'DynamicVoiceAdapter', 'adapt_voice_for_emotion', 'adapt_voice_for_context', 'adapt_voice_for_personality',
+    'VoiceCustomizer', 'interactive_tuning', 'import_voice_profile', 'export_voice_profile', 'compare_voices',
+    'AudioAnalyzer', 'analyze_audio', 'estimate_voice_profile', 'compare_voice_audio',
+    'TriggerPhraseDetector', 'SmartWakeWords', 'suggest_wake_phrases', 'train_custom_wake_phrase',
+    'start_wake_word_detection', 'stop_wake_word_detection', 'is_wake_word_active',
+    'WakeWordDetector', 'WakeWordConfig', 'WakeWordBackend', 'create_wake_word_detector',
+    'NoiseReducer', 'NoiseReductionConfig', 'reduce_noise',
+    'EchoCanceller', 'EchoCancellationConfig', 'cancel_echo',
+    'AudioDucker', 'AudioDuckingConfig', 'duck_audio', 'get_ducker',
+    'SSMLParser', 'SSMLProcessor', 'SSMLSegment', 'SSMLDocument', 'ssml_to_text', 'strip_ssml',
+    'EmotionalTTS', 'Emotion', 'EmotionProfile', 'EmotionDetector', 'detect_emotion', 'emotional_ssml',
+    'MultilingualTTS', 'Language', 'LanguageDetector', 'VoiceInfo', 'detect_language', 'get_language_name',
+    'SpeedController', 'SpeedConfig', 'SpeedPreset', 'set_speed', 'get_speed',
+    'InterruptionHandler', 'InterruptionConfig', 'InterruptionMode',
+    'start_barge_in_detection', 'stop_barge_in_detection', 'was_interrupted',
+    'StreamingTTS', 'StreamingConfig', 'AudioChunk', 'stream_speak', 'stream_chunks',
+    'AudioFileTranscriber', 'TranscriptionConfig', 'TranscriptionResult', 'transcribe_file', 'transcribe_with_timestamps',
+    'WhisperSTT', 'NaturalTTS', 'VADProcessor',
+    'VoicePipeline', 'VoiceConfig', 'VoiceMode', 'VoiceDevice', 'SpeechSegment', 'get_voice_pipeline',
+]
 

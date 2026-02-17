@@ -454,6 +454,87 @@ class Avatar3DWidget(QOpenGLWidget):
         # Calculate final matrices
         self._calculate_bone_matrices()
     
+    def set_bone_rotation(self, bone_name: str, pitch: float, yaw: float, roll: float) -> bool:
+        """
+        Set bone rotation directly (from BoneController).
+        
+        Converts euler angles to quaternion and applies to bone.
+        
+        Args:
+            bone_name: Name of bone to rotate
+            pitch: Rotation around X axis (degrees)
+            yaw: Rotation around Y axis (degrees)
+            roll: Rotation around Z axis (degrees)
+            
+        Returns:
+            True if bone was found and rotated
+        """
+        # Find bone by name
+        bone_idx = None
+        for i, bone in enumerate(self.bones):
+            if bone.name.lower() == bone_name.lower():
+                bone_idx = i
+                break
+        
+        if bone_idx is None:
+            return False
+        
+        bone = self.bones[bone_idx]
+        
+        # Convert euler to quaternion
+        # Order: pitch (X) -> yaw (Y) -> roll (Z)
+        import math
+        
+        hp = math.radians(pitch) * 0.5
+        hy = math.radians(yaw) * 0.5
+        hr = math.radians(roll) * 0.5
+        
+        cp, sp = math.cos(hp), math.sin(hp)
+        cy, sy = math.cos(hy), math.sin(hy)
+        cr, sr = math.cos(hr), math.sin(hr)
+        
+        # Quaternion xyzw
+        qx = sp * cy * cr - cp * sy * sr
+        qy = cp * sy * cr + sp * cy * sr
+        qz = cp * cy * sr - sp * sy * cr
+        qw = cp * cy * cr + sp * sy * sr
+        
+        bone.local_rotation = (qx, qy, qz, qw)
+        
+        # Recalculate matrices and redraw
+        self._calculate_bone_matrices()
+        self.update()
+        
+        return True
+    
+    def get_bone_names(self) -> list[str]:
+        """Get list of available bone names."""
+        return [bone.name for bone in self.bones]
+    
+    def connect_bone_controller(self):
+        """
+        Connect to BoneController to receive rotation updates.
+        
+        Call this after loading a model to enable AI bone control.
+        """
+        try:
+            from .bone_control import get_bone_controller
+            controller = get_bone_controller()
+            
+            # Set available bones
+            controller.set_avatar_bones(self.get_bone_names())
+            
+            # Register callback
+            controller.add_callback(self._on_bone_update)
+            print(f"[3D Native] Connected to BoneController with {len(self.bones)} bones")
+            
+        except Exception as e:
+            print(f"[3D Native] Could not connect to BoneController: {e}")
+    
+    def _on_bone_update(self, bone_name: str, pitch: float, yaw: float, roll: float):
+        """Callback from BoneController when a bone is moved."""
+        self.set_bone_rotation(bone_name, pitch, yaw, roll)
+    
     def _interpolate_keyframes(self, keyframes: list[AnimationKeyframe], time: float) -> tuple:
         """Linear interpolation between keyframes."""
         if not keyframes:
@@ -596,6 +677,58 @@ class Avatar3DWidget(QOpenGLWidget):
             glVertex3f(vx, vy, vz)
         
         glEnd()
+    
+    def capture_frame(self) -> Optional['QImage']:
+        """
+        Capture the current avatar frame as an image.
+        
+        This allows the AI to see what it looks like (self-vision).
+        Used for embodied AI control feedback loop.
+        
+        Returns:
+            QImage of current avatar state, or None if capture fails
+        """
+        try:
+            # Force a render update
+            self.update()
+            self.repaint()
+            
+            # Grab the widget as a pixmap
+            pixmap = self.grab()
+            
+            # Convert to QImage
+            return pixmap.toImage()
+        except Exception as e:
+            print(f"[Avatar3D] Failed to capture frame: {e}")
+            return None
+    
+    def capture_frame_bytes(self, format: str = "PNG") -> Optional[bytes]:
+        """
+        Capture current frame and return as bytes.
+        
+        Useful for sending to vision models or saving.
+        
+        Args:
+            format: Image format (PNG, JPEG, etc.)
+            
+        Returns:
+            Image bytes or None if capture fails
+        """
+        try:
+            from PyQt5.QtCore import QBuffer, QIODevice
+            
+            image = self.capture_frame()
+            if not image:
+                return None
+            
+            # Convert to bytes
+            buffer = QBuffer()
+            buffer.open(QIODevice.WriteOnly)
+            image.save(buffer, format)
+            return bytes(buffer.data())
+        except Exception as e:
+            print(f"[Avatar3D] Failed to capture frame bytes: {e}")
+            return None
 
 
 class NativeAvatar3D(QObject):
@@ -622,11 +755,36 @@ class NativeAvatar3D(QObject):
             self._widget.setFixedSize(width, height)
         return self._widget
     
-    def load_model(self, path: str) -> bool:
-        """Load a 3D model."""
+    def load_model(self, path: str, connect_bones: bool = True) -> bool:
+        """
+        Load a 3D model.
+        
+        Args:
+            path: Path to GLB/GLTF file
+            connect_bones: If True, connect to BoneController for AI control
+            
+        Returns:
+            True if model loaded successfully
+        """
         if not self._widget:
             self.get_widget()
-        return self._widget.load_model(path)
+        
+        success = self._widget.load_model(path)
+        if success and connect_bones:
+            self._widget.connect_bone_controller()
+        return success
+    
+    def get_bone_names(self) -> list[str]:
+        """Get list of available bone names."""
+        if self._widget:
+            return self._widget.get_bone_names()
+        return []
+    
+    def set_bone_rotation(self, bone_name: str, pitch: float = 0, yaw: float = 0, roll: float = 0) -> bool:
+        """Set bone rotation directly (bypasses BoneController)."""
+        if self._widget:
+            return self._widget.set_bone_rotation(bone_name, pitch, yaw, roll)
+        return False
     
     def map_state_to_animation(self, state: Animation3DState, animation_name: str):
         """Map state to animation name."""

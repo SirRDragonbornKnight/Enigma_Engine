@@ -1,24 +1,10 @@
-"""
-Companion Package - Always-on AI desktop companion.
+"""Companion Package - STUBBED (legacy companion mode removed)"""
 
-The companion watches the screen, comments on what's happening,
-offers help proactively, and behaves like a lifelike assistant.
-"""
+class CompanionConfig: pass
+class CompanionMode: pass
+class CompanionState: pass
+def get_companion(): return None
+def start_companion(*a, **k): pass
+def stop_companion(*a, **k): pass
 
-from .companion_mode import (
-    CompanionConfig,
-    CompanionMode,
-    CompanionState,
-    get_companion,
-    start_companion,
-    stop_companion,
-)
-
-__all__ = [
-    "CompanionMode",
-    "CompanionConfig", 
-    "CompanionState",
-    "get_companion",
-    "start_companion",
-    "stop_companion",
-]
+__all__ = ['CompanionMode', 'CompanionConfig', 'CompanionState', 'get_companion', 'start_companion', 'stop_companion']

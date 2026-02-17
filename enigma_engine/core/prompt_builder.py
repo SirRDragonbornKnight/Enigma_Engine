@@ -38,6 +38,111 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
+# EMBODIED CONTEXT INJECTION - Smart detection for avatar/game/robot/camera
+# =============================================================================
+
+# Trigger words for different embodied systems
+AVATAR_TRIGGERS = [
+    "gesture", "pose", "wave", "point", "hand", "finger", "thumbs", "fist",
+    "avatar", "move your", "show me", "nod", "shake", "shrug", "salute",
+    "peace sign", "rock on", "ok sign", "thumbs up", "thumbs down"
+]
+
+GAME_TRIGGERS = [
+    "play", "game", "controller", "press", "button", "joystick", "wasd",
+    "keyboard", "mouse", "gaming"
+]
+
+ROBOT_TRIGGERS = [
+    "robot", "motor", "servo", "gripper", "arm", "wheel", "sensor"
+]
+
+CAMERA_TRIGGERS = [
+    "camera", "pan", "tilt", "zoom", "look at", "focus on", "webcam"
+]
+
+
+def get_embodied_context(user_message: str) -> str:
+    """
+    Get embodied context to inject based on user message triggers.
+    
+    Only adds context when relevant - saves tokens on normal chat.
+    
+    Args:
+        user_message: The user's message to check for triggers
+        
+    Returns:
+        Context string to append to system prompt, or empty string
+    """
+    msg_lower = user_message.lower()
+    context_parts = []
+    
+    # Check avatar triggers
+    if any(trigger in msg_lower for trigger in AVATAR_TRIGGERS):
+        avatar_context = _get_avatar_context()
+        if avatar_context:
+            context_parts.append(avatar_context)
+    
+    # Check game triggers  
+    if any(trigger in msg_lower for trigger in GAME_TRIGGERS):
+        context_parts.append(_get_game_context())
+    
+    # Check robot triggers
+    if any(trigger in msg_lower for trigger in ROBOT_TRIGGERS):
+        context_parts.append(_get_robot_context())
+    
+    # Check camera triggers
+    if any(trigger in msg_lower for trigger in CAMERA_TRIGGERS):
+        context_parts.append(_get_camera_context())
+    
+    return "\n".join(context_parts) if context_parts else ""
+
+
+def _get_avatar_context() -> str:
+    """Get avatar bone context from loaded avatar."""
+    try:
+        from ..avatar.bone_control import get_bone_controller
+        controller = get_bone_controller()
+        info = controller.get_bone_info_for_ai()
+        
+        # Compact format to save tokens
+        bones = info.get("available_bones", [])[:30]  # Limit to 30 most relevant
+        if not bones:
+            return ""
+        
+        poses = list(info.get("available_poses", {}).keys())[:10]  # Sample poses
+        
+        return f"""[AVATAR CONTROL]
+Your bones: {', '.join(bones[:15])}{'...' if len(bones) > 15 else ''}
+Preset poses: {', '.join(poses)}
+To move bones: [MOVE: bone=angle, bone2=angle2]
+Example: [MOVE: right_thumb_proximal=-10, right_index_proximal=90]"""
+    except Exception:
+        return ""
+
+
+def _get_game_context() -> str:
+    """Get game input context."""
+    return """[GAME CONTROL]
+To send inputs, output: [INPUT: key=value, ...]
+Example: [INPUT: W=1, mouse_x=+5] to move forward and look right"""
+
+
+def _get_robot_context() -> str:
+    """Get robot motor context."""
+    return """[ROBOT CONTROL]
+To control motors, output: [MOTOR: motor=value, ...]
+Example: [MOTOR: left_wheel=50, right_wheel=50] to move forward"""
+
+
+def _get_camera_context() -> str:
+    """Get camera PTZ context."""
+    return """[CAMERA CONTROL]
+To control camera, output: [LOOK: pan=deg, tilt=deg, zoom=factor]
+Example: [LOOK: pan=45, tilt=-10, zoom=2] to look right and down"""
+
+
+# =============================================================================
 # PROMPT TEMPLATES - Configurable formats
 # =============================================================================
 
@@ -180,7 +285,8 @@ class PromptBuilder:
         history: Optional[list[dict[str, str]]] = None,
         system_prompt: Optional[str] = None,
         personality_prompt: Optional[str] = None,
-        include_generation_prefix: bool = True
+        include_generation_prefix: bool = True,
+        inject_embodied_context: bool = True
     ) -> str:
         """
         Build a complete chat prompt from components.
@@ -191,6 +297,7 @@ class PromptBuilder:
             system_prompt: System instruction (overrides custom if set)
             personality_prompt: Optional personality prompt to append to system
             include_generation_prefix: Add assistant prefix at end for generation
+            inject_embodied_context: Auto-inject avatar/game/robot context when relevant
         
         Returns:
             Formatted prompt string ready for model input
@@ -206,6 +313,15 @@ class PromptBuilder:
             effective_system = f"{effective_system}\n\n{personality_prompt}"
         elif personality_prompt:
             effective_system = personality_prompt
+        
+        # Inject embodied context based on message triggers (smart detection)
+        if inject_embodied_context:
+            embodied_context = get_embodied_context(message)
+            if embodied_context:
+                if effective_system:
+                    effective_system = f"{effective_system}\n\n{embodied_context}"
+                else:
+                    effective_system = embodied_context
         
         # Add system prompt
         if effective_system:

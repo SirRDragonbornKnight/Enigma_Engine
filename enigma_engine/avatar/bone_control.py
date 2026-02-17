@@ -126,6 +126,54 @@ DEFAULT_BONE_LIMITS = BoneLimits(
 )
 
 
+# Predefined finger poses (bone angles for common gestures)
+# Each pose maps bone names to rotation values
+FINGER_POSES: dict[str, dict[str, dict[str, float]]] = {
+    "open": {
+        "thumb": {"pitch": 0, "yaw": 0, "roll": 0},
+        "index": {"pitch": 0, "yaw": 0, "roll": 0},
+        "middle": {"pitch": 0, "yaw": 0, "roll": 0},
+        "ring": {"pitch": 0, "yaw": 0, "roll": 0},
+        "pinky": {"pitch": 0, "yaw": 0, "roll": 0},
+    },
+    "fist": {
+        "thumb": {"pitch": 45, "yaw": 30, "roll": 0},
+        "index": {"pitch": 90, "yaw": 0, "roll": 0},
+        "middle": {"pitch": 90, "yaw": 0, "roll": 0},
+        "ring": {"pitch": 90, "yaw": 0, "roll": 0},
+        "pinky": {"pitch": 90, "yaw": 0, "roll": 0},
+    },
+    "point": {
+        "thumb": {"pitch": 30, "yaw": 20, "roll": 0},
+        "index": {"pitch": 0, "yaw": 0, "roll": 0},
+        "middle": {"pitch": 90, "yaw": 0, "roll": 0},
+        "ring": {"pitch": 90, "yaw": 0, "roll": 0},
+        "pinky": {"pitch": 90, "yaw": 0, "roll": 0},
+    },
+    "thumbs_up": {
+        "thumb": {"pitch": -10, "yaw": -30, "roll": 0},
+        "index": {"pitch": 90, "yaw": 0, "roll": 0},
+        "middle": {"pitch": 90, "yaw": 0, "roll": 0},
+        "ring": {"pitch": 90, "yaw": 0, "roll": 0},
+        "pinky": {"pitch": 90, "yaw": 0, "roll": 0},
+    },
+    "peace": {
+        "thumb": {"pitch": 45, "yaw": 30, "roll": 0},
+        "index": {"pitch": 0, "yaw": -5, "roll": 0},
+        "middle": {"pitch": 0, "yaw": 5, "roll": 0},
+        "ring": {"pitch": 90, "yaw": 0, "roll": 0},
+        "pinky": {"pitch": 90, "yaw": 0, "roll": 0},
+    },
+    "wave": {
+        "thumb": {"pitch": 10, "yaw": 10, "roll": 0},
+        "index": {"pitch": 10, "yaw": 0, "roll": 0},
+        "middle": {"pitch": 10, "yaw": 0, "roll": 0},
+        "ring": {"pitch": 10, "yaw": 0, "roll": 0},
+        "pinky": {"pitch": 10, "yaw": 0, "roll": 0},
+    },
+}
+
+
 @dataclass
 class BoneState:
     """Current state of a bone."""
