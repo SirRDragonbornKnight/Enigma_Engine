@@ -5,14 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "enigma-engine"
 version = "1.1.0"
-description = "Enigma AI Engine - Personal AI Framework to train and deploy your own AI with GUI, voice, vision, camera, and 26+ tools"
+description = "Enigma AI Engine - Personal AI Framework to train and deploy your own AI locally"
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
 authors = [
     {name = "SirRDragonbornKnight", email = "sirknighth3@gmail.com"}
 ]
-keywords = ["ai", "machine-learning", "transformer", "language-model", "local-ai", "tools", "voice", "vision"]
+keywords = ["ai", "machine-learning", "transformer", "language-model", "local-ai"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",

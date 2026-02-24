@@ -1,1973 +1,1175 @@
 """
-================================================================================
-          CHAPTER 4: THE TRAINING GROUNDS - WHERE AIS GROW STRONGER
-================================================================================
+Training Module for Enigma AI Engine
 
-    "A mind without training is like a sword without an edge."
+Provides:
+- TrainingConfig: Configuration for training
+- Trainer: Basic fine-tuning with progress callbacks
+- best_of_n: Generate N responses, return best one
+- collect_training_data: Run best-of-N on tasks, collect winners
+- evolutionary_training: Self-play training loop
 
-Welcome to the TRAINING GROUNDS! This is where your AI transforms from a
-random number generator into an intelligent conversationalist. Feed it text,
-watch it learn, and marvel as patterns emerge from chaos.
-
-WHY THIS FILE MATTERS:
-    Your AI starts knowing NOTHING. Through training, it learns language,
-    facts, personality, and capabilities. This file orchestrates that
-    entire learning process - from raw text to trained intelligence.
-
-THE TRAINING RITUAL:
-    ┌─────────────────────────────────────────────────────────────────┐
-    │                                                                 │
-    │  1. PREPARE: Load your training text                           │
-    │     data/training.txt → "Hello! I am helpful and friendly..."  │
-    │                    ↓                                            │
-    │  2. TOKENIZE: Convert words to numbers                         │
-    │     "Hello" → [15496, 995, ...]                                │
-    │                    ↓                                            │
-    │  3. FEED: Show batches to the model                            │
-    │     Model sees input, predicts next word, checks if correct    │
-    │                    ↓                                            │
-    │  4. LEARN: Adjust weights based on errors                      │
-    │     Got it wrong? Update neurons. Repeat thousands of times.   │
-    │                    ↓                                            │
-    │  5. SAVE: Store the trained brain                              │
-    │     models/forge.pth (your trained AI!)                        │
-    │                                                                 │
-    └─────────────────────────────────────────────────────────────────┘
-
-TRAINING WISDOM:
-    | Setting           | Too Low              | Too High             |
-    |-------------------|----------------------|----------------------|
-    | Learning Rate     | Learns nothing       | Forgets everything   |
-    | Epochs            | Undertrained         | Overfitted           |
-    | Batch Size        | Noisy learning       | Memory crash         |
-
-QUICK START:
-    # From command line (easiest)
-    python run.py --train
-
-    # From code (more control)
-    >>> from enigma_engine.core.training import train_model
-    >>> train_model("data/training.txt", epochs=30, model_size="small")
-
-YOUR QUEST HERE:
-    Training takes time. Start small (5 epochs) to test, then go big.
-    Watch the loss - if it stops going down, training is complete.
-
-CONNECTED PATHS:
-    Input comes from → data/training.txt (your training data)
-    Brain comes from → model.py (Chapter 1: The Forge)
-    GUI interface   → gui/tabs/training_tab.py
-    Output saved to → models/forge.pth
-
-SEE ALSO:
-    • enigma_engine/core/trainer.py  - Advanced ForgeTrainer class
-    • docs/HOW_TO_TRAIN.md      - Training guide
-    • docs/TRAINING_DATA_FORMAT.md - Data format guide
+Usage:
+    from enigma_engine.core.training import Trainer, TrainingConfig
+    
+    config = TrainingConfig(epochs=10, batch_size=4, learning_rate=1e-4)
+    trainer = Trainer(model, tokenizer, config)
+    trainer.train(data)
 """
-import logging  # For log messages
-import math  # For cosine learning rate schedule
-import time  # For timing training
-from dataclasses import dataclass  # For clean config classes
-from pathlib import Path  # For file paths (cross-platform)
-from typing import Any, Callable, Dict, List, Optional, Union  # Type hints
 
-# =============================================================================
-# IMPORTS - What libraries we need
-# =============================================================================
-# PyTorch is the deep learning framework that powers everything
-import torch  # Main PyTorch library
-import torch.nn as nn  # Neural network building blocks
-import torch.nn.functional as F  # Functions like cross_entropy loss
-from torch.cuda.amp import GradScaler  # Mixed precision scaler (faster on GPU)
-from torch.amp import autocast  # Mixed precision autocast
-from torch.utils.data import DataLoader, Dataset  # For loading training data
+from __future__ import annotations
 
-from ..config import CONFIG  # → Global settings
-from ..utils.system_messages import (  # → Pretty printing
-    info_msg,
-    system_msg,
-    warning_msg,
-)
+import json
+import logging
+import math
+import random
+import re
+import threading
+import time
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Callable
 
-# Our own modules
-from .model import MODEL_PRESETS, create_model  # → Creates the neural network
-from .tokenizer import get_tokenizer, train_tokenizer  # → Converts text↔numbers
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.optim import AdamW
+from torch.optim.lr_scheduler import CosineAnnealingLR
+
+from ..config import CONFIG
 
 logger = logging.getLogger(__name__)
 
-# =============================================================================
-# 📁 DEFAULT PATHS - Where things are stored
-# =============================================================================
-# MODELS_DIR: Where trained models are saved (e.g., models/forge.pth)
-# DATA_DIR: Where training data lives (e.g., data/training.txt)
-MODELS_DIR = Path(CONFIG.get("models_dir", "models"))
-DATA_DIR = Path(CONFIG.get("data_dir", "data"))
-
 
 # =============================================================================
-# ⚙️ TRAINING CONFIGURATION - All the knobs you can turn
+# CONFIGURATION
 # =============================================================================
-# This class holds ALL the settings for training. Think of it like a recipe.
-# You can create one with defaults: config = TrainingConfig()
-# Or customize: config = TrainingConfig(epochs=50, learning_rate=0.001)
 
 @dataclass
 class TrainingConfig:
+    """Configuration for model training.
+    
+    Attributes:
+        epochs: Number of training epochs
+        batch_size: Training batch size
+        learning_rate: Initial learning rate
+        weight_decay: L2 regularization
+        warmup_steps: Steps for learning rate warmup
+        gradient_clip: Max gradient norm (0 to disable)
+        save_every: Save checkpoint every N epochs
+        checkpoint_dir: Directory for saving checkpoints
+        eval_every: Evaluate every N steps (0 to disable)
+        log_every: Log metrics every N steps
+        use_amp: Use automatic mixed precision (fp16)
+        max_grad_accumulation: Gradient accumulation steps
     """
-    Configuration for training - all the hyperparameters in one place.
+    epochs: int = 10
+    batch_size: int = 4
+    learning_rate: float = 1e-4
+    weight_decay: float = 0.01
+    warmup_steps: int = 100
+    gradient_clip: float = 1.0
+    save_every: int = 1
+    checkpoint_dir: str = "models/checkpoints"
+    eval_every: int = 0
+    log_every: int = 10
+    use_amp: bool = True
+    max_grad_accumulation: int = 1
     
-    🎛️ HYPERPARAMETERS EXPLAINED:
-    
-    epochs: How many times to go through ALL the training data
-        → More epochs = more learning, but too many = overfitting
-        → Start with 30, increase if loss is still dropping
-        
-    batch_size: How many examples to process at once
-        → Bigger = faster but needs more memory
-        → 8 is safe for most GPUs, try 16/32 if you have VRAM
-        
-    learning_rate: How big of steps to take when learning
-        → Too high = unstable, too low = slow learning
-        → 3e-4 (0.0003) is a good default, rarely go above 1e-3
-        
-    weight_decay: Prevents model from memorizing (regularization)
-        → 0.1 is standard for transformers
-    """
-    
-    # ===== CORE TRAINING SETTINGS =====
-    epochs: int = 30              # Number of full passes through data
-    batch_size: int = 8           # Examples per forward pass
-    learning_rate: float = 3e-4   # Step size for optimizer (0.0003)
-    weight_decay: float = 0.1     # L2 regularization strength
-
-    # ===== LEARNING RATE SCHEDULE =====
-    # Learning rate starts low (warmup), peaks, then slowly decreases (cosine)
-    warmup_steps: int = 100       # Steps to ramp up LR from 0
-    min_lr: float = 1e-5          # Minimum LR at end of training
-
-    # ===== GRADIENT SETTINGS =====
-    # Gradient clipping prevents "exploding gradients" that break training
-    grad_clip: float = 1.0        # Max gradient norm (clips if larger)
-    grad_accumulation_steps: int = 4  # Accumulate N batches before updating
-    # ^ This lets you simulate larger batch sizes without more memory
-    # effective_batch_size = batch_size × grad_accumulation_steps
-
-    # ===== MIXED PRECISION (AMP) =====
-    # Uses float16 for some operations - 2x faster on modern GPUs!
-    use_amp: bool = True          # Enable automatic mixed precision
-
-    # ===== CHECKPOINTING =====
-    # Save model periodically so you don't lose progress
-    save_every: int = 5           # Save checkpoint every N epochs
-    checkpoint_dir: Optional[str] = None  # Where to save checkpoints
-
-    # ===== LOGGING =====
-    log_every: int = 10           # Print progress every N steps
-    verbose: bool = True          # Show detailed progress
-
-    # ===== SEQUENCE SETTINGS =====
-    max_seq_len: int = 512        # Maximum tokens per training example
-    # ^ Longer = more context but slower/more memory
-
-    # ===== VALIDATION =====
-    val_split: float = 0.1        # Fraction of data held out for validation (0-0.5)
-    # ^ Used to detect overfitting: if val_loss goes up while train_loss goes down,
-    #   the model is memorizing rather than learning
-
-    def __post_init__(self):
-        """Set defaults after initialization."""
-        if self.checkpoint_dir is None:
-            self.checkpoint_dir = str(MODELS_DIR / "checkpoints")
-
-    @classmethod
-    def from_device_profile(cls, **overrides) -> 'TrainingConfig':
-        """
-        Create TrainingConfig with device-aware defaults.
-        
-        Automatically adjusts batch_size, max_seq_len, use_amp, and grad_accumulation
-        based on detected hardware capabilities.
-        
-        📐 USAGE:
-            # Auto-detect best settings for your hardware
-            config = TrainingConfig.from_device_profile()
-            
-            # Override specific settings
-            config = TrainingConfig.from_device_profile(epochs=50)
-        
-        🖥️ DEVICE ADJUSTMENTS:
-            EMBEDDED (Pi): batch=1, seq=128, no AMP, high grad_accum
-            MOBILE: batch=2, seq=256, no AMP
-            LAPTOP_LOW: batch=4, seq=256, AMP disabled
-            LAPTOP_MID: batch=4, seq=512, AMP enabled
-            DESKTOP_CPU: batch=4, seq=512, no AMP
-            DESKTOP_GPU: batch=8, seq=512, AMP enabled
-            WORKSTATION: batch=16, seq=1024, AMP enabled
-            DATACENTER: batch=32, seq=2048, AMP enabled
-        
-        Returns:
-            TrainingConfig optimized for current hardware
-        """
-        try:
-            from .device_profiles import DeviceClass, get_device_profiler
-            
-            profiler = get_device_profiler()
-            device_class = profiler.classify()
-            caps = profiler.detect()  # Returns DeviceCapabilities
-            
-            # Device-specific defaults
-            defaults = {
-                DeviceClass.EMBEDDED: {
-                    'batch_size': 1,
-                    'max_seq_len': 128,
-                    'use_amp': False,
-                    'grad_accumulation_steps': 16,  # Simulate larger batch
-                    'save_every': 10,  # Save less often (slow storage)
-                },
-                DeviceClass.MOBILE: {
-                    'batch_size': 2,
-                    'max_seq_len': 256,
-                    'use_amp': False,
-                    'grad_accumulation_steps': 8,
-                },
-                DeviceClass.LAPTOP_LOW: {
-                    'batch_size': 4,
-                    'max_seq_len': 256,
-                    'use_amp': False,
-                    'grad_accumulation_steps': 4,
-                },
-                DeviceClass.LAPTOP_MID: {
-                    'batch_size': 4,
-                    'max_seq_len': 512,
-                    'use_amp': True,
-                    'grad_accumulation_steps': 4,
-                },
-                DeviceClass.DESKTOP_CPU: {
-                    'batch_size': 4,
-                    'max_seq_len': 512,
-                    'use_amp': False,
-                    'grad_accumulation_steps': 4,
-                },
-                DeviceClass.DESKTOP_GPU: {
-                    'batch_size': 8,
-                    'max_seq_len': 512,
-                    'use_amp': True,
-                    'grad_accumulation_steps': 4,
-                },
-                DeviceClass.WORKSTATION: {
-                    'batch_size': 16,
-                    'max_seq_len': 1024,
-                    'use_amp': True,
-                    'grad_accumulation_steps': 2,
-                },
-                DeviceClass.DATACENTER: {
-                    'batch_size': 32,
-                    'max_seq_len': 2048,
-                    'use_amp': True,
-                    'grad_accumulation_steps': 1,
-                },
-            }
-            
-            # Get defaults for detected device
-            device_defaults = defaults.get(device_class, defaults[DeviceClass.LAPTOP_LOW])
-            
-            # Adjust based on actual VRAM if GPU available
-            if caps.has_cuda and caps.vram_total_mb:
-                vram_gb = caps.vram_total_mb / 1024
-                if vram_gb >= 24:
-                    device_defaults['batch_size'] = min(32, device_defaults['batch_size'] * 2)
-                    device_defaults['max_seq_len'] = min(2048, device_defaults['max_seq_len'] * 2)
-                elif vram_gb >= 12:
-                    device_defaults['batch_size'] = min(16, device_defaults['batch_size'])
-                elif vram_gb < 6:
-                    device_defaults['batch_size'] = max(2, device_defaults['batch_size'] // 2)
-                    device_defaults['max_seq_len'] = min(256, device_defaults['max_seq_len'])
-            
-            # Apply user overrides
-            device_defaults.update(overrides)
-            
-            logger.info(f"[Training] Using device-aware config for {device_class.name}: "
-                       f"batch={device_defaults.get('batch_size')}, "
-                       f"seq_len={device_defaults.get('max_seq_len')}, "
-                       f"amp={device_defaults.get('use_amp')}")
-            
-            return cls(**device_defaults)
-            
-        except ImportError:
-            logger.warning("[Training] Device profiles not available, using defaults")
-            return cls(**overrides)
-
-
-# =============================================================================
-# 📊 DATASET CLASSES - How we prepare text for training
-# =============================================================================
-# Neural networks can't read text directly - they need numbers!
-# These classes convert text into sequences of token IDs that the model 
-# can learn from.
-#
-# HOW IT WORKS:
-#   "Hello world" → tokenizer → [15496, 995] → Dataset → Model
-#
-# The model learns to predict the NEXT token given previous tokens:
-#   Input:  [Hello]     → Target: [world]
-#   Input:  [Hello, world] → Target: [!]
-
-class TextDataset(Dataset):
-    """
-    Dataset for language model training.
-    
-    📖 WHAT THIS DOES:
-    1. Takes raw text ("Hello world, how are you?")
-    2. Converts to token IDs using tokenizer
-    3. Splits into overlapping chunks of max_length
-    4. Creates input/target pairs for next-token prediction
-    
-    📐 EXAMPLE with max_length=4, stride=2:
-    Text: "The quick brown fox jumps"
-    Tokens: [1, 2, 3, 4, 5]
-    
-    Sequences created:
-      Chunk 1: [1, 2, 3, 4, 5] → input=[1,2,3,4], target=[2,3,4,5]
-      Chunk 2: [3, 4, 5, ...]  → (overlapping for better learning)
-    
-    🔗 CONNECTS TO:
-      → Uses tokenizer from enigma_engine/core/tokenizer.py
-      ← Used by Trainer class below
-    """
-
-    def __init__(
-        self,
-        texts: list[str],
-        tokenizer: Any,
-        max_length: int = 512,
-        stride: int = 256
-    ):
-        """
-        Initialize dataset.
-
-        Args:
-            texts: List of training texts (e.g., loaded from file)
-            tokenizer: Tokenizer to convert text→numbers
-            max_length: Maximum tokens per sequence (longer = more context)
-            stride: Step size when creating sequences (smaller = more overlap)
-        """
-        self.tokenizer = tokenizer
-        self.max_length = max_length
-        self.stride = stride
-        self.sequences = []  # Will hold all our training sequences
-
-        # Process each text document into sequences
-        for text in texts:
-            self._process_text(text)
-
-        logger.info(f"Created {len(self.sequences)} training sequences")
-
-    def _process_text(self, text: str):
-        """
-        Process a text into training sequences.
-        
-        📖 WHAT HAPPENS HERE:
-        1. Convert text to token IDs (numbers)
-        2. Slide a window across the tokens to create chunks
-        3. Each chunk becomes one training example
-        
-        📐 SLIDING WINDOW EXAMPLE:
-        Text tokens: [1, 2, 3, 4, 5, 6, 7, 8]
-        max_length=4, stride=2
-        
-        Window 1: [1, 2, 3, 4, 5] ← positions 0-4
-        Window 2: [3, 4, 5, 6, 7] ← positions 2-6 (overlap!)
-        Window 3: [5, 6, 7, 8]    ← final chunk
-        
-        WHY OVERLAP? It helps the model see the same content from
-        different positions, improving learning.
-        """
-        # ─────────────────────────────────────────────────────────────
-        # STEP 1: Convert text to token IDs
-        # ─────────────────────────────────────────────────────────────
-        # Different tokenizers have different interfaces, so we handle both:
-        # - .encode() method (most tokenizers like tiktoken, SentencePiece)
-        # - callable (HuggingFace tokenizers return dict)
-        if hasattr(self.tokenizer, 'encode'):
-            # Direct encode method - returns list of integers
-            ids = self.tokenizer.encode(text, add_special_tokens=False)
-        else:
-            # HuggingFace style - returns dict with 'input_ids'
-            enc = self.tokenizer(text, add_special_tokens=False)
-            ids = enc['input_ids']
-            # Convert from tensor to list if needed
-            if hasattr(ids, 'tolist'):
-                ids = ids.tolist()
-            # Handle batched output (list of lists)
-            if isinstance(ids[0], list):
-                ids = ids[0]
-
-        # ─────────────────────────────────────────────────────────────
-        # STEP 2: Create overlapping sequences with sliding window
-        # ─────────────────────────────────────────────────────────────
-        # We add +1 to max_length because we need one extra token for the
-        # TARGET (what we're predicting). If max_length=512, we grab 513
-        # tokens: 512 for input, last one for target.
-        for i in range(0, max(1, len(ids) - self.max_length), self.stride):
-            seq = ids[i:i + self.max_length + 1]  # +1 for target token
-            if len(seq) > 2:  # Need at least a few tokens to learn anything
-                self.sequences.append(seq)
-
-        # ─────────────────────────────────────────────────────────────
-        # STEP 3: Don't forget the last chunk!
-        # ─────────────────────────────────────────────────────────────
-        # The sliding window might not reach the end perfectly,
-        # so we grab the final portion of the text too
-        if len(ids) > self.max_length:
-            seq = ids[-self.max_length - 1:]  # Last max_length+1 tokens
-            if len(seq) > 2:
-                self.sequences.append(seq)
-        elif len(ids) > 2:
-            # Short text - just use it all as one sequence
-            self.sequences.append(ids)
-
-    def __len__(self) -> int:
-        """Return number of training sequences (used by DataLoader)."""
-        return len(self.sequences)
-
-    def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
-        """
-        Get a single training example.
-        
-        📖 WHAT HAPPENS HERE:
-        Takes a sequence like [1, 2, 3, 4, 5] and creates:
-        - input_ids: [1, 2, 3, 4] ← What the model sees
-        - labels:    [2, 3, 4, 5] ← What the model should predict
-        
-        This is called "next token prediction" - given tokens 1,2,3,4
-        the model learns to predict 2,3,4,5 (each shifted by one).
-        """
-        seq = self.sequences[idx]
-
-        # ─────────────────────────────────────────────────────────────
-        # PADDING: Make all sequences the same length
-        # ─────────────────────────────────────────────────────────────
-        # Neural networks need fixed-size inputs for batching.
-        # Short sequences get padded with a special pad_token_id.
-        if len(seq) < self.max_length + 1:
-            pad_id = getattr(self.tokenizer, 'pad_token_id', 0)
-            seq = seq + [pad_id] * (self.max_length + 1 - len(seq))
-
-        seq = seq[:self.max_length + 1]  # Truncate if somehow too long
-
-        # ─────────────────────────────────────────────────────────────
-        # CREATE INPUT/TARGET PAIRS
-        # ─────────────────────────────────────────────────────────────
-        # Input: all tokens except the last one  [T1, T2, T3, T4]
-        # Target: all tokens except the first one [T2, T3, T4, T5]
-        # The model learns: given T1 predict T2, given T1,T2 predict T3, etc.
-        input_ids = torch.tensor(seq[:-1], dtype=torch.long)
-        target_ids = torch.tensor(seq[1:], dtype=torch.long)
-
-        return {
-            'input_ids': input_ids,   # Model input
-            'labels': target_ids       # What model should predict
-        }
-
-
-# =============================================================================
-# 📝 Q&A DATASET - For question/answer style training
-# =============================================================================
-# This is a SPECIALIZED dataset for training chatbots and assistants.
-# Instead of learning from raw text, it learns from Q&A pairs.
-#
-# INPUT FORMAT (in your training file):
-#   Q: What is Python?
-#   A: Python is a programming language known for its simplicity.
-#   
-#   Q: How do I learn coding?
-#   A: Start with basics, practice daily, build projects.
-#
-# The model learns the PATTERN of question→answer, making it better
-# at responding to user questions.
-
-class QADataset(Dataset):
-    """
-    Dataset for Q&A format training.
-    
-    📖 WHAT THIS DOES:
-    1. Parses "Q: question\\nA: answer" format from text files
-    2. Creates training examples that teach the model to answer questions
-    3. Helps the model learn conversational patterns
-    
-    📐 EXAMPLE:
-    Input file:
-        Q: What's your name?
-        A: I'm Forge, an AI assistant.
-        Q: What can you do?
-        A: I can chat, generate images, write code, and more!
-    
-    Creates 2 training examples, each teaching a Q→A pattern.
-    
-    🔗 CONNECTS TO:
-      → Uses tokenizer from enigma_engine/core/tokenizer.py
-      ← Used by Trainer class for chatbot training
-      
-    💡 TIP: Use this for:
-      - Chatbot personality training
-      - FAQ-style knowledge
-      - Customer support responses
-      
-    📋 SUPPORTED FORMATS:
-      - Q&A: Q: question\\nA: answer
-      - JSONL: {"input": "...", "output": "..."}
-      - Conversation: User: ... Assistant: ...
-      - Instruction: ### Instruction\\n...\\n### Response\\n...
-      - ChatML: <|im_start|>user\\n...<|im_end|>
-    """
-
-    def __init__(
-        self,
-        texts: list[str],
-        tokenizer: Any,
-        max_length: int = 512,
-        format: str = 'auto'
-    ):
-        """
-        Initialize Q&A dataset.
-        
-        Args:
-            texts: List of texts containing training data
-            tokenizer: Tokenizer to convert text→numbers
-            max_length: Maximum tokens per example
-            format: Data format ('qa', 'jsonl', 'conversation', 'instruction', 
-                    'chatml', 'plain', 'auto' for auto-detect)
-        """
-        self.tokenizer = tokenizer
-        self.max_length = max_length
-        self.format = format
-        self.examples = []  # Will hold parsed Q&A pairs
-
-        # Parse training data from each text using multi-format parser
-        for text in texts:
-            # Use multi-format parser for flexibility
-            parsed = parse_training_data(text, self.format)
-            self.examples.extend(parsed)
-
-        logger.info(f"Created {len(self.examples)} training examples (format: {format})")
-
-    def _parse_qa(self, text: str):
-        """
-        Parse Q:/A: format into training examples.
-        
-        📖 PARSING LOGIC:
-        1. Split text on "Q:" markers to find questions
-        2. Within each chunk, split on "A:" to find the answer
-        3. Combine back into "Q: question\\nA: answer" format
-        
-        This handles various formatting styles:
-          Q: question     (with space)
-          Q:question      (without space)
-          q: question     (lowercase)
-        """
-        import re
-
-        # ─────────────────────────────────────────────────────────────
-        # STEP 1: Split on "Q:" to find all questions
-        # ─────────────────────────────────────────────────────────────
-        # re.IGNORECASE makes it work with Q:, q:, even Q :
-        parts = re.split(r'\n?Q:\s*', text, flags=re.IGNORECASE)
-
-        for part in parts:
-            if not part.strip():
-                continue  # Skip empty parts
-
-            # ─────────────────────────────────────────────────────────
-            # STEP 2: Split each part on "A:" to separate Q from A
-            # ─────────────────────────────────────────────────────────
-            # maxsplit=1 means only split on FIRST "A:" (answer might contain "A:")
-            qa_split = re.split(r'\n?A:\s*', part, maxsplit=1, flags=re.IGNORECASE)
-
-            if len(qa_split) == 2:
-                question = qa_split[0].strip()
-                answer = qa_split[1].strip()
-
-                if question and answer:
-                    # ─────────────────────────────────────────────────
-                    # STEP 3: Create the training example
-                    # ─────────────────────────────────────────────────
-                    # We format it consistently so the model learns
-                    # the exact pattern we want
-                    full_text = f"Q: {question}\nA: {answer}"
-                    self.examples.append(full_text)
-
-    def __len__(self) -> int:
-        """Return number of Q&A examples."""
-        return len(self.examples)
-
-    def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
-        """
-        Get a single Q&A training example.
-        
-        📖 SAME LOGIC AS TextDataset:
-        Converts text to tokens, creates input/target pairs for
-        next-token prediction. The model learns to generate the
-        answer when given the question.
-        """
-        text = self.examples[idx]
-
-        # ─────────────────────────────────────────────────────────────
-        # ENCODE: Convert Q&A text to token IDs
-        # ─────────────────────────────────────────────────────────────
-        if hasattr(self.tokenizer, 'encode'):
-            ids = self.tokenizer.encode(text, add_special_tokens=True)
-        else:
-            enc = self.tokenizer(text, add_special_tokens=True)
-            ids = enc['input_ids']
-            if hasattr(ids, 'tolist'):
-                ids = ids.tolist()
-            if isinstance(ids[0], list):
-                ids = ids[0]
-
-        # ─────────────────────────────────────────────────────────────
-        # PAD/TRUNCATE: Make all sequences the same length
-        # ─────────────────────────────────────────────────────────────
-        pad_id = getattr(self.tokenizer, 'pad_token_id', 0)
-
-        if len(ids) < self.max_length + 1:
-            ids = ids + [pad_id] * (self.max_length + 1 - len(ids))
-        ids = ids[:self.max_length + 1]
-
-        input_ids = torch.tensor(ids[:-1], dtype=torch.long)
-        target_ids = torch.tensor(ids[1:], dtype=torch.long)
-
-        return {
-            'input_ids': input_ids,
-            'labels': target_ids
-        }
-
-
-# =============================================================================
-# � MULTI-FORMAT TRAINING DATA SUPPORT
-# =============================================================================
-# Supports multiple common formats for training data. Auto-detects format
-# or can be explicitly specified.
-#
-# SUPPORTED FORMATS:
-#   1. Q&A Format:      Q: Hello\nA: Hi there!
-#   2. JSONL:           {"input": "Hello", "output": "Hi!", "system": "optional"}
-#   3. Conversation:    User: Hello\nAssistant: Hi there!
-#   4. Instruction:     ### Instruction\nHello\n### Response\nHi there!
-#   5. ChatML:          <|im_start|>user\nHello<|im_end|>...
-#   6. Plain Text:      Just raw text for language modeling
-
-TRAINING_FORMATS = {
-    'qa': 'Q&A Format (Q: question\\nA: answer)',
-    'jsonl': 'JSON Lines ({\"input\": ..., \"output\": ...})',
-    'conversation': 'Conversation (User: ... Assistant: ...)',
-    'instruction': 'Instruction (### Instruction\\n...\\n### Response\\n...)',
-    'chatml': 'ChatML (<|im_start|>user\\n...<|im_end|>)',
-    'plain': 'Plain Text (raw text, no special formatting)',
-    'auto': 'Auto-detect format'
-}
-
-
-def detect_training_format(text: str) -> str:
-    """
-    Auto-detect the format of training data.
-    
-    Args:
-        text: Training data content
-        
-    Returns:
-        Format identifier: 'qa', 'jsonl', 'conversation', 'instruction', 'chatml', 'plain'
-    """
-    # Check first 2000 chars for format markers
-    sample = text[:2000]
-    
-    # JSONL - starts with { and contains "input"/"output" or "prompt"/"completion"
-    if sample.strip().startswith('{'):
-        try:
-            import json
-            first_line = sample.split('\n')[0].strip()
-            obj = json.loads(first_line)
-            if 'input' in obj or 'prompt' in obj or 'instruction' in obj:
-                return 'jsonl'
-        except (json.JSONDecodeError, IndexError):
-            pass  # Intentionally silent
-    
-    # ChatML
-    if '<|im_start|>' in sample or '<|im_end|>' in sample:
-        return 'chatml'
-    
-    # Instruction format
-    if '### Instruction' in sample or '### Response' in sample:
-        return 'instruction'
-    
-    # Q&A format (case insensitive)
-    import re
-    if re.search(r'^\s*Q:\s*', sample, re.MULTILINE | re.IGNORECASE):
-        return 'qa'
-    
-    # Conversation format
-    if re.search(r'^\s*(User|Human):\s*', sample, re.MULTILINE | re.IGNORECASE):
-        return 'conversation'
-    
-    # Default to plain text
-    return 'plain'
-
-
-def parse_training_data(text: str, format: str = 'auto') -> list[str]:
-    """
-    Parse training data in various formats into usable training examples.
-    
-    Args:
-        text: Raw training data content
-        format: Format type ('qa', 'jsonl', 'conversation', 'instruction', 
-                'chatml', 'plain', 'auto')
-                
-    Returns:
-        List of training example strings in consistent Q: A: format
-    """
-    if format == 'auto':
-        format = detect_training_format(text)
-    
-    parsers = {
-        'qa': _parse_qa_format,
-        'jsonl': _parse_jsonl_format,
-        'conversation': _parse_conversation_format,
-        'instruction': _parse_instruction_format,
-        'chatml': _parse_chatml_format,
-        'plain': _parse_plain_format,
-    }
-    
-    parser = parsers.get(format, _parse_qa_format)
-    examples = parser(text)
-    
-    logger.info(f"Parsed {len(examples)} examples from {format} format")
-    return examples
-
-
-def _parse_qa_format(text: str) -> list[str]:
-    """Parse Q:/A: format."""
-    import re
-    examples = []
-    
-    # Split on Q: markers
-    parts = re.split(r'\n?Q:\s*', text, flags=re.IGNORECASE)
-    
-    for part in parts:
-        if not part.strip():
-            continue
-        
-        # Split on A: to separate question and answer
-        qa_split = re.split(r'\n?A:\s*', part, maxsplit=1, flags=re.IGNORECASE)
-        
-        if len(qa_split) == 2:
-            question = qa_split[0].strip()
-            answer = qa_split[1].strip()
-            if question and answer:
-                examples.append(f"Q: {question}\nA: {answer}")
-    
-    return examples
-
-
-def _parse_jsonl_format(text: str) -> list[str]:
-    """Parse JSONL format."""
-    import json
-    examples = []
-    
-    for line in text.strip().split('\n'):
-        line = line.strip()
-        if not line:
-            continue
-        
-        try:
-            obj = json.loads(line)
-            
-            # Support various key names
-            input_text = obj.get('input') or obj.get('prompt') or obj.get('instruction') or obj.get('question', '')
-            output_text = obj.get('output') or obj.get('completion') or obj.get('response') or obj.get('answer', '')
-            system_text = obj.get('system') or obj.get('context', '')
-            
-            if input_text and output_text:
-                if system_text:
-                    examples.append(f"Q: {system_text} {input_text}\nA: {output_text}")
-                else:
-                    examples.append(f"Q: {input_text}\nA: {output_text}")
-                    
-        except json.JSONDecodeError:
-            continue
-    
-    return examples
-
-
-def _parse_conversation_format(text: str) -> list[str]:
-    """Parse User:/Assistant: conversation format."""
-    import re
-    examples = []
-    
-    # Pattern to match User/Human and Assistant/AI markers
-    pattern = r'(?:User|Human):\s*(.*?)\s*(?:Assistant|AI):\s*(.*?)(?=(?:User|Human):|$)'
-    matches = re.findall(pattern, text, re.IGNORECASE | re.DOTALL)
-    
-    for user_msg, assistant_msg in matches:
-        user_msg = user_msg.strip()
-        assistant_msg = assistant_msg.strip()
-        if user_msg and assistant_msg:
-            examples.append(f"Q: {user_msg}\nA: {assistant_msg}")
-    
-    return examples
-
-
-def _parse_instruction_format(text: str) -> list[str]:
-    """Parse ### Instruction/### Response format."""
-    import re
-    examples = []
-    
-    # Pattern for instruction format
-    pattern = r'###\s*Instruction[:\s]*(.*?)###\s*Response[:\s]*(.*?)(?=###\s*Instruction|$)'
-    matches = re.findall(pattern, text, re.IGNORECASE | re.DOTALL)
-    
-    for instruction, response in matches:
-        instruction = instruction.strip()
-        response = response.strip()
-        if instruction and response:
-            examples.append(f"Q: {instruction}\nA: {response}")
-    
-    return examples
-
-
-def _parse_chatml_format(text: str) -> list[str]:
-    """Parse ChatML format."""
-    import re
-    examples = []
-    
-    # Pattern for ChatML
-    pattern = r'<\|im_start\|>user\s*(.*?)<\|im_end\|>\s*<\|im_start\|>assistant\s*(.*?)<\|im_end\|>'
-    matches = re.findall(pattern, text, re.IGNORECASE | re.DOTALL)
-    
-    for user_msg, assistant_msg in matches:
-        user_msg = user_msg.strip()
-        assistant_msg = assistant_msg.strip()
-        if user_msg and assistant_msg:
-            examples.append(f"Q: {user_msg}\nA: {assistant_msg}")
-    
-    return examples
-
-
-def _parse_plain_format(text: str) -> list[str]:
-    """Parse plain text - create chunks for language modeling."""
-    examples = []
-    
-    # Split into paragraphs/chunks
-    paragraphs = text.split('\n\n')
-    
-    for para in paragraphs:
-        para = para.strip()
-        if len(para) > 50:  # Skip very short paragraphs
-            # For plain text, we don't use Q/A format
-            # Just return raw text for language modeling
-            examples.append(para)
-    
-    return examples
-
-
-def convert_to_format(examples: list[str], target_format: str) -> str:
-    """
-    Convert training examples to a specific output format.
-    
-    Args:
-        examples: List of Q: A: formatted examples
-        target_format: Target format ('qa', 'jsonl', 'conversation', 'instruction', 'chatml')
-        
-    Returns:
-        Formatted training data string
-    """
-    import re
-    import json
-    
-    output_lines = []
-    
-    for example in examples:
-        # Parse the Q: A: format
-        match = re.match(r'Q:\s*(.*?)\nA:\s*(.*)', example, re.DOTALL)
-        if not match:
-            continue
-        
-        question = match.group(1).strip()
-        answer = match.group(2).strip()
-        
-        if target_format == 'qa':
-            output_lines.append(f"Q: {question}\nA: {answer}\n")
-        
-        elif target_format == 'jsonl':
-            obj = {"input": question, "output": answer}
-            output_lines.append(json.dumps(obj))
-        
-        elif target_format == 'conversation':
-            output_lines.append(f"User: {question}\nAssistant: {answer}\n")
-        
-        elif target_format == 'instruction':
-            output_lines.append(f"### Instruction\n{question}\n### Response\n{answer}\n")
-        
-        elif target_format == 'chatml':
-            output_lines.append(
-                f"<|im_start|>user\n{question}<|im_end|>\n"
-                f"<|im_start|>assistant\n{answer}<|im_end|>\n"
+    # Early-stopping / safety guardrails
+    early_stopping_patience: int = 0  # 0 = disabled
+    max_loss: float = 100.0  # abort if loss exceeds this
+    max_training_seconds: float = 0  # 0 = unlimited
+
+    def validate(self) -> None:
+        """Raise *ValueError* if any field is nonsensical."""
+        if self.epochs < 1:
+            raise ValueError(f"epochs must be >= 1, got {self.epochs}")
+        if self.batch_size < 1:
+            raise ValueError(f"batch_size must be >= 1, got {self.batch_size}")
+        if self.learning_rate <= 0:
+            raise ValueError(f"learning_rate must be > 0, got {self.learning_rate}")
+        if self.gradient_clip < 0:
+            raise ValueError(f"gradient_clip must be >= 0, got {self.gradient_clip}")
+        if self.max_grad_accumulation < 1:
+            raise ValueError(
+                f"max_grad_accumulation must be >= 1, got {self.max_grad_accumulation}"
             )
-    
-    return '\n'.join(output_lines)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert config to dictionary."""
+        return {
+            "epochs": self.epochs,
+            "batch_size": self.batch_size,
+            "learning_rate": self.learning_rate,
+            "weight_decay": self.weight_decay,
+            "warmup_steps": self.warmup_steps,
+            "gradient_clip": self.gradient_clip,
+            "save_every": self.save_every,
+            "checkpoint_dir": self.checkpoint_dir,
+            "eval_every": self.eval_every,
+            "log_every": self.log_every,
+            "use_amp": self.use_amp,
+            "max_grad_accumulation": self.max_grad_accumulation,
+            "early_stopping_patience": self.early_stopping_patience,
+            "max_loss": self.max_loss,
+            "max_training_seconds": self.max_training_seconds,
+        }
+
+
+@dataclass
+class TrainingState:
+    """Tracks training state for checkpointing and resume."""
+    epoch: int = 0
+    step: int = 0
+    best_loss: float = float('inf')
+    total_tokens: int = 0
+    training_losses: list[float] = field(default_factory=list)
+    validation_losses: list[float] = field(default_factory=list)
 
 
 # =============================================================================
-# �📈 LEARNING RATE SCHEDULER - Controls how fast the model learns
+# TRAINER CLASS
 # =============================================================================
-# Learning rate is THE most important hyperparameter in deep learning.
-# Too high = model learns garbage (loss explodes)
-# Too low = model learns too slowly (training takes forever)
-#
-# This scheduler uses a proven strategy:
-# 1. WARMUP: Start very low, gradually increase (like warming up a car engine)
-# 2. COSINE DECAY: After warmup, slowly decrease (fine-tuning gets gentler)
-#
-#     Learning Rate
-#         │
-#    max  │        ╭───╮
-#         │       ╱     ╲
-#         │      ╱       ╲
-#         │     ╱         ╲
-#    min  │────╱           ╲────
-#         └────────────────────→ Steps
-#            Warmup  Cosine Decay
-
-class CosineWarmupScheduler:
-    """
-    Cosine annealing with linear warmup.
-    
-    📖 WHAT THIS DOES:
-    Phase 1 - WARMUP (first N steps):
-      Learning rate: 0 → max_lr (linear increase)
-      WHY: Prevents early training from being too aggressive
-      
-    Phase 2 - COSINE DECAY (remaining steps):
-      Learning rate: max_lr → min_lr (smooth cosine curve)
-      WHY: Gentler learning as model gets better
-    
-    📐 EXAMPLE with warmup=100, total=1000, max_lr=0.001:
-      Step 0:    lr = 0.0        (starting cold)
-      Step 50:   lr = 0.0005     (halfway through warmup)
-      Step 100:  lr = 0.001      (peak learning rate)
-      Step 500:  lr = 0.0005     (halfway through decay)
-      Step 1000: lr = 0.00001    (minimum, fine-tuning)
-    
-    🔗 CONNECTS TO:
-      ← Created by Trainer class
-      → Updates optimizer learning rate each step
-    """
-
-    def __init__(
-        self,
-        optimizer: torch.optim.Optimizer,  # The optimizer whose LR we'll modify
-        warmup_steps: int,                  # How many steps to warm up
-        total_steps: int,                   # Total training steps
-        max_lr: float,                      # Peak learning rate
-        min_lr: float = 1e-5                # Minimum learning rate at end
-    ):
-        """Initialize the scheduler with warmup and decay settings."""
-        self.optimizer = optimizer
-        self.warmup_steps = warmup_steps
-        self.total_steps = total_steps
-        self.max_lr = max_lr
-        self.min_lr = min_lr
-        self.current_step = 0  # Tracks where we are in training
-
-    def step(self) -> None:
-        """
-        Update learning rate for the current step.
-        Called once per training step (after optimizer.step()).
-        """
-        self.current_step += 1
-        lr = self.get_lr()  # Calculate new learning rate
-
-        # Update the learning rate in the optimizer
-        # (optimizers can have multiple param groups, we update all of them)
-        for param_group in self.optimizer.param_groups:
-            param_group['lr'] = lr
-
-    def get_lr(self) -> float:
-        """
-        Calculate the learning rate for the current step.
-        
-        📖 THE MATH:
-        
-        WARMUP PHASE (step < warmup_steps):
-          lr = max_lr * (current_step / warmup_steps)
-          This is just linear interpolation from 0 to max_lr
-          
-        COSINE DECAY PHASE (step >= warmup_steps):
-          progress = (step - warmup) / (total - warmup)
-          lr = min_lr + 0.5 * (max_lr - min_lr) * (1 + cos(π * progress))
-          
-          The cosine function gives a smooth S-curve from max to min
-        """
-        if self.current_step < self.warmup_steps:
-            # ─────────────────────────────────────────────────────────
-            # WARMUP PHASE: Linear increase from 0 to max_lr
-            # ─────────────────────────────────────────────────────────
-            return self.max_lr * self.current_step / self.warmup_steps
-
-        # ─────────────────────────────────────────────────────────────
-        # COSINE DECAY PHASE: Smooth decrease from max_lr to min_lr
-        # ─────────────────────────────────────────────────────────────
-        # Calculate how far through the decay phase we are (0.0 to 1.0)
-        progress = (self.current_step - self.warmup_steps) / \
-            max(1, self.total_steps - self.warmup_steps)
-        progress = min(1.0, progress)  # Cap at 1.0 if we go over
-
-        # Cosine formula: starts at max_lr, smoothly decreases to min_lr
-        # math.cos(0) = 1, math.cos(π) = -1
-        # So (1 + cos(π*0)) = 2 → full max_lr contribution
-        # And (1 + cos(π*1)) = 0 → no max_lr contribution, just min_lr
-        return self.min_lr + 0.5 * (self.max_lr - self.min_lr) * (1 + math.cos(math.pi * progress))
-
-
-# =============================================================================
-# 🏋️ TRAINER CLASS - The main training engine
-# =============================================================================
-# This is the HEART of model training. It orchestrates everything:
-# - Loading data into batches
-# - Running forward/backward passes
-# - Updating model weights
-# - Saving checkpoints
-# - Tracking progress
-#
-# TRAINING LOOP OVERVIEW:
-#   ┌─────────────────────────────────────────────────────────────────┐
-#   │  for each epoch:                                                 │
-#   │    for each batch:                                               │
-#   │      1. Forward pass: model(input) → predictions                 │
-#   │      2. Calculate loss: how wrong are the predictions?           │
-#   │      3. Backward pass: compute gradients (which direction?)      │
-#   │      4. Optimizer step: update weights (move that direction)     │
-#   │      5. Scheduler step: adjust learning rate                     │
-#   └─────────────────────────────────────────────────────────────────┘
 
 class Trainer:
     """
-    Production-grade trainer for Forge models.
+    Trainer for fine-tuning Enigma models.
     
-    📖 WHAT THIS DOES:
-    Takes a model and training data, runs the training loop,
-    and produces a trained model that can generate text.
+    Supports:
+    - Basic fine-tuning on text data
+    - Q&A pair training
+    - JSONL training data
+    - Progress callbacks for GUI integration
+    - Checkpoint saving/loading
+    - Gradient accumulation
+    - Mixed precision training
     
-    ⚡ KEY FEATURES:
-    
-    1. Mixed Precision (AMP):
-       Uses 16-bit floats where possible → 2x faster, less memory
-       
-    2. Gradient Accumulation:
-       Simulates larger batches on limited GPU memory
-       batch_size=4 with accumulation=8 acts like batch_size=32
-       
-    3. Cosine Warmup Schedule:
-       Learning rate starts low, peaks, then decays
-       
-    4. Gradient Clipping:
-       Prevents exploding gradients from ruining training
-       
-    5. Checkpointing:
-       Saves progress regularly so you can resume if interrupted
-    
-    📐 EXAMPLE USAGE:
-        trainer = Trainer(model, tokenizer)
-        results = trainer.train(texts, epochs=3)
-        logger.info(f"Final loss: {results['final_loss']}")
-    
-    🔗 CONNECTS TO:
-      → Uses datasets (TextDataset, QADataset) defined above
-      → Uses CosineWarmupScheduler for learning rate
-      → Model from enigma_engine/core/model.py
-      → Tokenizer from enigma_engine/core/tokenizer.py
-      ← Called by train_model() function below
+    Usage:
+        trainer = Trainer(model, tokenizer, config)
+        trainer.on_progress = lambda pct, msg: print(f"{pct}% - {msg}")
+        trainer.train(data)
     """
-
+    
     def __init__(
         self,
         model: nn.Module,
         tokenizer: Any,
-        config: Optional[TrainingConfig] = None,
-        device: Optional[str] = None
+        config: TrainingConfig | None = None
     ):
         """
         Initialize trainer.
-
+        
         Args:
-            model: The neural network to train (Forge model)
-            tokenizer: Tokenizer for text→numbers conversion
-            config: Training settings (learning rate, epochs, etc.)
-            device: "cuda" for GPU or "cpu" for CPU
+            model: The Enigma model to train
+            tokenizer: Tokenizer for encoding text
+            config: Training configuration
         """
-        # Use default config if none provided
-        self.config = config or TrainingConfig()
-
-        # ─────────────────────────────────────────────────────────────
-        # DEVICE SELECTION: GPU is ~10-100x faster than CPU
-        # ─────────────────────────────────────────────────────────────
-        if device is None:
-            # Auto-detect: use GPU if available, otherwise CPU
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.device = torch.device(device)
-
-        # ─────────────────────────────────────────────────────────────
-        # MODEL SETUP: Move model to the chosen device
-        # ─────────────────────────────────────────────────────────────
-        self.model = model.to(self.device)  # .to() moves all parameters
+        self.model = model
         self.tokenizer = tokenizer
-
-        # ─────────────────────────────────────────────────────────────
-        # MIXED PRECISION (AMP) SETUP
-        # ─────────────────────────────────────────────────────────────
-        # GradScaler handles the tricky parts of 16-bit training:
-        # - Scales loss up before backward pass (prevents underflow)
-        # - Scales gradients down before optimizer step
-        # - Automatically adjusts scale if NaN/Inf detected
-        # Only works on CUDA (GPU), CPU doesn't support FP16 acceleration
-        self.scaler = GradScaler() if self.config.use_amp and self.device.type == "cuda" else None
-
-        # ─────────────────────────────────────────────────────────────
-        # TRAINING STATE: Initialized in train(), stored here for resume
-        # ─────────────────────────────────────────────────────────────
-        self.optimizer = None     # Will be AdamW
-        self.scheduler = None     # Will be CosineWarmupScheduler
-        self.global_step = 0      # Total steps taken across all epochs
-        self.best_loss = float('inf')  # Best loss seen (for checkpointing)
-
-        # Track losses for reporting and graphing
-        self.loss_history = []
-
-        # Log configuration for debugging
-        logger.info(f"Trainer initialized on {self.device}")
-        logger.info(f"  Model parameters: {sum(p.numel() for p in model.parameters()):,}")
-        logger.info(f"  AMP enabled: {self.scaler is not None}")
-
-    def train(
-        self,
-        texts: list[str],
-        epochs: Optional[int] = None,
-        dataset_type: str = "auto",
-        callback: Optional[Callable[[dict], None]] = None
-    ) -> dict[str, Any]:
+        self.config = config or TrainingConfig()
+        self.config.validate()  # fail-fast on bad config
+        self.state = TrainingState()
+        
+        # Device
+        self.device = next(model.parameters()).device
+        
+        # Callbacks for progress updates
+        self.on_progress: Callable[[int, str], None] | None = None
+        self.on_loss: Callable[[float], None] | None = None
+        self.on_epoch_complete: Callable[[int, float], None] | None = None
+        
+        # Training control
+        self._stop_requested = False
+        self._lock = threading.Lock()
+        
+        # Setup optimizer and scheduler
+        self._setup_optimizer()
+        
+        # Mixed precision scaler
+        self.scaler = torch.amp.GradScaler('cuda') if self.config.use_amp and torch.cuda.is_available() else None
+        
+        logger.info(f"Trainer initialized: device={self.device}, config={self.config.to_dict()}")
+    
+    def _setup_optimizer(self) -> None:
+        """Setup optimizer and learning rate scheduler."""
+        # Separate weight decay for different parameter types
+        decay_params = []
+        no_decay_params = []
+        
+        for name, param in self.model.named_parameters():
+            if not param.requires_grad:
+                continue
+            if 'bias' in name or 'norm' in name:
+                no_decay_params.append(param)
+            else:
+                decay_params.append(param)
+        
+        self.optimizer = AdamW([
+            {'params': decay_params, 'weight_decay': self.config.weight_decay},
+            {'params': no_decay_params, 'weight_decay': 0.0}
+        ], lr=self.config.learning_rate)
+        
+        # Cosine annealing scheduler
+        self.scheduler = None  # Will be set when we know total steps
+    
+    def _emit_progress(self, percent: int, message: str) -> None:
+        """Emit progress update via callback."""
+        if self.on_progress:
+            try:
+                self.on_progress(percent, message)
+            except Exception as e:
+                logger.debug(f"Progress callback error: {e}")
+    
+    def _emit_loss(self, loss: float) -> None:
+        """Emit loss update via callback."""
+        if self.on_loss:
+            try:
+                self.on_loss(loss)
+            except Exception as e:
+                logger.debug(f"Loss callback error: {e}")
+    
+    def request_stop(self) -> None:
+        """Request graceful stop of training."""
+        with self._lock:
+            self._stop_requested = True
+        logger.info("Training stop requested")
+    
+    def _should_stop(self) -> bool:
+        """Check if stop was requested."""
+        with self._lock:
+            return self._stop_requested
+    
+    def _parse_training_data(self, data: str | list[dict]) -> list[str]:
         """
-        Train the model on texts.
+        Parse training data into sequences.
         
-        📖 THIS IS THE MAIN TRAINING METHOD!
+        Supports:
+        - Raw text (split by newlines or double newlines)
+        - Q&A format: "Q: question\\nA: answer"
+        - JSONL format: {"prompt": "...", "completion": "..."}
         
-        It sets up everything needed for training:
-        1. Creates a Dataset from your texts
-        2. Creates a DataLoader for batching
-        3. Sets up optimizer and scheduler
-        4. Runs the training loop for N epochs
-        5. Returns metrics about the training run
-
         Args:
-            texts: List of training texts (loaded from file usually)
-            epochs: Number of epochs (full passes through data)
-            dataset_type: "text", "qa", or "auto" (auto-detects from content)
-            callback: Function called after each epoch for progress updates
-
+            data: Raw text or list of dicts
+            
         Returns:
-            Dictionary with training metrics:
-            - final_loss: Loss after last epoch
-            - best_loss: Lowest loss seen during training
-            - loss_history: List of loss per epoch
-            - elapsed_time: Total training time in seconds
-            - total_steps: Total optimizer steps taken
+            List of training sequences
         """
-        epochs = epochs or self.config.epochs
-
-        # ─────────────────────────────────────────────────────────────
-        # STEP 1: DETECT DATASET TYPE
-        # ─────────────────────────────────────────────────────────────
-        # Look at the data to decide if it's Q&A format or plain text
-        # Q&A format: "Q: question\nA: answer"
-        # Text format: Just regular paragraphs
-        if dataset_type == "auto":
-            sample = "\n".join(texts[:10])  # Look at first 10 texts
-            if "Q:" in sample or "A:" in sample:
-                dataset_type = "qa"
-            else:
-                dataset_type = "text"
-
-        # ─────────────────────────────────────────────────────────────
-        # STEP 2: CREATE DATASET
-        # ─────────────────────────────────────────────────────────────
-        # Convert raw texts into training sequences
-        if dataset_type == "qa":
-            full_dataset = QADataset(
-                texts,
-                self.tokenizer,
-                max_length=self.config.max_seq_len
-            )
-        else:
-            full_dataset = TextDataset(
-                texts,
-                self.tokenizer,
-                max_length=self.config.max_seq_len,
-                stride=self.config.max_seq_len // 2  # 50% overlap between chunks
-            )
-
-        # ─────────────────────────────────────────────────────────────
-        # STEP 2b: VALIDATION SPLIT
-        # ─────────────────────────────────────────────────────────────
-        val_loader = None
-        if self.config.val_split > 0 and len(full_dataset) >= 10:
-            val_size = max(1, int(len(full_dataset) * self.config.val_split))
-            train_size = len(full_dataset) - val_size
-            train_dataset, val_dataset = torch.utils.data.random_split(
-                full_dataset, [train_size, val_size]
-            )
-            dataset = train_dataset
-            val_loader = DataLoader(
-                val_dataset,
-                batch_size=self.config.batch_size,
-                shuffle=False,
-                num_workers=0,
-                pin_memory=self.device.type == "cuda"
-            )
-            logger.info(f"Split: {train_size} train / {val_size} val sequences")
-        else:
-            dataset = full_dataset
-
-        # ─────────────────────────────────────────────────────────────
-        # STEP 3: CREATE DATALOADER
-        # ─────────────────────────────────────────────────────────────
-        # DataLoader batches sequences together and shuffles them
-        # This is more efficient than processing one sequence at a time
-        dataloader = DataLoader(
-            dataset,
-            batch_size=self.config.batch_size,   # How many sequences per batch
-            shuffle=True,                         # Randomize order each epoch
-            num_workers=0,  # Keep simple for compatibility (no multiprocessing)
-            pin_memory=self.device.type == "cuda"  # Faster GPU transfer
-        )
-
-        # ─────────────────────────────────────────────────────────────
-        # STEP 4: CALCULATE TRAINING STEPS
-        # ─────────────────────────────────────────────────────────────
-        steps_per_epoch = len(dataloader)  # Number of batches
-        total_steps = steps_per_epoch * epochs  # Total training steps
-
-        # ─────────────────────────────────────────────────────────────
-        # STEP 5: INITIALIZE OPTIMIZER (AdamW)
-        # ─────────────────────────────────────────────────────────────
-        # AdamW is the go-to optimizer for transformers:
-        # - Adam: Adaptive learning rates per parameter
-        # - W: Weight decay (prevents overfitting)
-        # - betas: Momentum parameters (0.9, 0.95) standard for transformers
-        self.optimizer = torch.optim.AdamW(
-            self.model.parameters(),           # What to optimize
-            lr=self.config.learning_rate,      # Base learning rate
-            weight_decay=self.config.weight_decay,  # Regularization
-            betas=(0.9, 0.95)                  # Momentum coefficients
-        )
-
-        # ─────────────────────────────────────────────────────────────
-        # STEP 6: INITIALIZE LEARNING RATE SCHEDULER
-        # ─────────────────────────────────────────────────────────────
-        self.scheduler = CosineWarmupScheduler(
-            self.optimizer,
-            warmup_steps=min(self.config.warmup_steps, total_steps // 10),
-            total_steps=total_steps,
-            max_lr=self.config.learning_rate,
-            min_lr=self.config.min_lr
-        )
-
-        # ─────────────────────────────────────────────────────────────
-        # STEP 7: PRINT TRAINING INFO (if verbose)
-        # ─────────────────────────────────────────────────────────────
-        if self.config.verbose:
-            print("=" * 60)
-            print(system_msg("FORGE AI TRAINING"))
-            print("=" * 60)
-            print(info_msg(f"Device: {self.device}"))
-            print(info_msg(f"Model parameters: {sum(p.numel() for p in self.model.parameters()):,}"))
-            print(info_msg(f"Dataset size: {len(dataset):,} sequences"))
-            print(info_msg(f"Batch size: {self.config.batch_size}"))
-            print(info_msg(f"Gradient accumulation: {self.config.grad_accumulation_steps}"))
-            effective_batch = self.config.batch_size * self.config.grad_accumulation_steps
-            print(info_msg(f"Effective batch size: {effective_batch}"))
-            print(info_msg(f"Steps per epoch: {steps_per_epoch}"))
-            print(info_msg(f"Total steps: {total_steps}"))
-            print(info_msg(f"Epochs: {epochs}"))
-            print(info_msg(f"Learning rate: {self.config.learning_rate}"))
-            print(info_msg(f"AMP: {self.scaler is not None}"))
-            print("=" * 60)
-
-        # ─────────────────────────────────────────────────────────────
-        # STEP 8: THE TRAINING LOOP
-        # ─────────────────────────────────────────────────────────────
-        # This is where the actual learning happens!
-        start_time = time.time()
-        self.loss_history = []
-        val_loss_history: list[float] = []
-        patience_counter = 0
-        patience_limit = 5  # Stop if val_loss doesn't improve for 5 epochs
-
-        for epoch in range(epochs):
-            # Train for one epoch (see _train_epoch below)
-            epoch_loss = self._train_epoch(dataloader, epoch, epochs)
-            self.loss_history.append(epoch_loss)
-
-            # Compute validation loss if we have a val set
-            val_loss = None
-            if val_loader is not None:
-                val_loss = self._evaluate(val_loader)
-                val_loss_history.append(val_loss)
-
-                if self.config.verbose:
-                    print(info_msg(f"  Val loss: {val_loss:.4f}"))
-
-                # Early stopping: if val_loss hasn't improved
-                if len(val_loss_history) > 1 and val_loss > min(val_loss_history[:-1]):
-                    patience_counter += 1
-                    if patience_counter >= patience_limit:
-                        logger.info(f"Early stopping at epoch {epoch + 1} (val_loss not improving)")
-                        if self.config.verbose:
-                            print(system_msg(f"Early stopping at epoch {epoch + 1}"))
-                        break
-                else:
-                    patience_counter = 0
-
-            # Call the callback if provided (for progress bars, logging, etc.)
-            if callback:
-                callback({
-                    'epoch': epoch + 1,
-                    'loss': epoch_loss,
-                    'val_loss': val_loss,
-                    'lr': self.optimizer.param_groups[0]['lr']
-                })
-
-            # Save checkpoint periodically (in case of crash)
-            if (epoch + 1) % self.config.save_every == 0:
-                self._save_checkpoint(epoch + 1)
-
-            # Track best loss (for selecting best model)
-            if epoch_loss < self.best_loss:
-                self.best_loss = epoch_loss
-
-        # ─────────────────────────────────────────────────────────────
-        # STEP 9: TRAINING COMPLETE - RETURN RESULTS
-        # ─────────────────────────────────────────────────────────────
-        elapsed = time.time() - start_time
-
-        if self.config.verbose:
-            print()
-            print("=" * 60)
-            print(system_msg("TRAINING COMPLETE"))
-            print("=" * 60)
-            print(info_msg(f"Total time: {elapsed:.1f}s"))
-            print(info_msg(f"Final loss: {self.loss_history[-1]:.4f}"))
-            print(info_msg(f"Best loss: {self.best_loss:.4f}"))
-            if val_loss_history:
-                print(info_msg(f"Best val loss: {min(val_loss_history):.4f}"))
-            print("=" * 60)
-
-        results = {
-            'final_loss': self.loss_history[-1],
-            'best_loss': self.best_loss,
-            'loss_history': self.loss_history,
-            'val_loss_history': val_loss_history,
-            'elapsed_time': elapsed,
-            'total_steps': self.global_step
-        }
-        return results
-
-    def _train_epoch(
-        self,
-        dataloader: DataLoader,
-        epoch: int,
-        total_epochs: int
-    ) -> float:
+        sequences = []
+        
+        if isinstance(data, list):
+            # Already parsed list of dicts
+            for item in data:
+                if isinstance(item, dict):
+                    prompt = item.get("prompt", item.get("question", ""))
+                    completion = item.get("completion", item.get("answer", ""))
+                    if prompt and completion:
+                        sequences.append(f"Q: {prompt}\nA: {completion}")
+                elif isinstance(item, str):
+                    sequences.append(item)
+            return sequences
+        
+        # Raw text - detect format
+        data = data.strip()
+        
+        # Try JSONL first
+        if data.startswith('{'):
+            for line in data.split('\n'):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    item = json.loads(line)
+                    prompt = item.get("prompt", item.get("question", ""))
+                    completion = item.get("completion", item.get("answer", ""))
+                    if prompt and completion:
+                        sequences.append(f"Q: {prompt}\nA: {completion}")
+                except json.JSONDecodeError:
+                    continue
+            if sequences:
+                return sequences
+        
+        # Try Q&A format
+        qa_pattern = re.compile(r'Q:\s*(.+?)\s*A:\s*(.+?)(?=Q:|$)', re.DOTALL)
+        matches = qa_pattern.findall(data)
+        if matches:
+            for q, a in matches:
+                sequences.append(f"Q: {q.strip()}\nA: {a.strip()}")
+            return sequences
+        
+        # Fall back to paragraph splitting
+        paragraphs = data.split('\n\n')
+        for para in paragraphs:
+            para = para.strip()
+            if len(para) > 20:  # Skip very short paragraphs
+                sequences.append(para)
+        
+        if not sequences:
+            # Last resort: split by lines
+            sequences = [line.strip() for line in data.split('\n') if line.strip()]
+        
+        return sequences
+    
+    def _create_batches(
+        self, 
+        sequences: list[str],
+        max_length: int = 512
+    ) -> list[torch.Tensor]:
         """
-        Train for one epoch (one full pass through the dataset).
+        Create batches from sequences.
         
-        📖 THE CORE TRAINING LOOP:
-        This is where the magic happens! For each batch:
-        
-        1. FORWARD PASS: Input → Model → Predictions
-           The model sees the input tokens and predicts the next tokens
-           
-        2. LOSS CALCULATION: How wrong were the predictions?
-           Cross-entropy loss measures the difference between
-           predictions and actual targets
-           
-        3. BACKWARD PASS: Compute gradients
-           Backpropagation calculates how to adjust each weight
-           to reduce the loss
-           
-        4. OPTIMIZER STEP: Update weights
-           Move weights in the direction that reduces loss
-           
-        📐 GRADIENT ACCUMULATION EXPLAINED:
-        If you want batch_size=32 but only have memory for 4:
-        - Process 8 mini-batches of 4
-        - Accumulate gradients (don't update yet)
-        - After 8 batches, do one big update
-        - Effect: Same as batch_size=32!
-        
-        Returns:
-            Average loss for this epoch
-        """
-        # ─────────────────────────────────────────────────────────────
-        # SET MODEL TO TRAINING MODE
-        # ─────────────────────────────────────────────────────────────
-        # model.train() enables:
-        # - Dropout (randomly zeros neurons - prevents overfitting)
-        # - BatchNorm training statistics
-        # Without this, the model would be in eval mode and not learn!
-        self.model.train()
-        total_loss = 0.0
-        num_batches = 0
-
-        epoch_start = time.time()
-
-        # ─────────────────────────────────────────────────────────────
-        # MAIN BATCH LOOP
-        # ─────────────────────────────────────────────────────────────
-        for step, batch in enumerate(dataloader):
-            # ─────────────────────────────────────────────────────────
-            # MOVE DATA TO DEVICE (CPU → GPU if available)
-            # ─────────────────────────────────────────────────────────
-            # Data must be on the same device as the model
-            input_ids = batch['input_ids'].to(self.device)
-            labels = batch['labels'].to(self.device)
-
-            # ─────────────────────────────────────────────────────────
-            # FORWARD PASS + LOSS CALCULATION
-            # ─────────────────────────────────────────────────────────
-            # Two paths: with AMP (faster, less memory) or without
-            if self.scaler is not None:
-                # AMP PATH: Use 16-bit floats for speed
-                with autocast(device_type=self.device.type):  # Automatic mixed precision context
-                    # Forward: input_ids → model → logits (predictions)
-                    logits = self.model(input_ids)
-                    
-                    # Calculate cross-entropy loss
-                    # - logits.view(-1, vocab_size): flatten to [batch*seq, vocab]
-                    # - labels.view(-1): flatten to [batch*seq]
-                    # - ignore_index: don't count padding tokens in loss
-                    loss = F.cross_entropy(
-                        logits.view(-1, logits.size(-1)),
-                        labels.view(-1),
-                        ignore_index=getattr(self.tokenizer, 'pad_token_id', 0)
-                    )
-                    # Divide by accumulation steps (will be summed up later)
-                    loss = loss / self.config.grad_accumulation_steps
-
-                # BACKWARD PASS with gradient scaling (AMP)
-                # Scaler prevents underflow in 16-bit gradients
-                self.scaler.scale(loss).backward()
-            else:
-                # STANDARD PATH: Full precision (32-bit floats)
-                logits = self.model(input_ids)
-                loss = F.cross_entropy(
-                    logits.view(-1, logits.size(-1)),
-                    labels.view(-1),
-                    ignore_index=getattr(self.tokenizer, 'pad_token_id', 0)
-                )
-                loss = loss / self.config.grad_accumulation_steps
-                # Standard backward pass - computes gradients
-                loss.backward()
-
-            # Track loss for reporting
-            total_loss += loss.item() * self.config.grad_accumulation_steps
-            num_batches += 1
-
-            # ─────────────────────────────────────────────────────────
-            # GRADIENT ACCUMULATION CHECK
-            # ─────────────────────────────────────────────────────────
-            # Only update weights every N steps (accumulation)
-            if (step + 1) % self.config.grad_accumulation_steps == 0:
-                if self.scaler is not None:
-                    # AMP: Unscale gradients before clipping
-                    self.scaler.unscale_(self.optimizer)
-                    # Clip gradients to prevent exploding gradients
-                    torch.nn.utils.clip_grad_norm_(
-                        self.model.parameters(),
-                        self.config.grad_clip
-                    )
-                    # Update weights (with AMP scaling)
-                    self.scaler.step(self.optimizer)
-                    self.scaler.update()  # Adjust scale for next iteration
-                else:
-                    # Standard: Just clip and step
-                    torch.nn.utils.clip_grad_norm_(
-                        self.model.parameters(),
-                        self.config.grad_clip
-                    )
-                    # Update weights
-                    self.optimizer.step()
-
-                # Zero gradients for next accumulation cycle
-                self.optimizer.zero_grad()
-                # Update learning rate
-                self.scheduler.step()
-                self.global_step += 1
-
-                # ─────────────────────────────────────────────────────
-                # LOGGING: Print progress periodically
-                # ─────────────────────────────────────────────────────
-                if self.config.verbose and self.global_step % self.config.log_every == 0:
-                    avg_loss = total_loss / num_batches
-                    lr = self.optimizer.param_groups[0]['lr']
-                    print(f"  Step {self.global_step:,} | Loss: {avg_loss:.4f} | LR: {lr:.2e}")
-
-        # ─────────────────────────────────────────────────────────────
-        # HANDLE REMAINING GRADIENTS
-        # ─────────────────────────────────────────────────────────────
-        # If dataset size isn't divisible by accumulation steps,
-        # there might be leftover gradients to apply
-        if len(dataloader) % self.config.grad_accumulation_steps != 0:
-            if self.scaler is not None:
-                self.scaler.unscale_(self.optimizer)
-                torch.nn.utils.clip_grad_norm_(
-                    self.model.parameters(),
-                    self.config.grad_clip
-                )
-                self.scaler.step(self.optimizer)
-                self.scaler.update()
-            else:
-                torch.nn.utils.clip_grad_norm_(
-                    self.model.parameters(),
-                    self.config.grad_clip
-                )
-                self.optimizer.step()
-
-            self.optimizer.zero_grad()
-            self.global_step += 1
-
-        # ─────────────────────────────────────────────────────────────
-        # EPOCH COMPLETE - RETURN AVERAGE LOSS
-        # ─────────────────────────────────────────────────────────────
-        epoch_loss = total_loss / max(1, num_batches)
-        epoch_time = time.time() - epoch_start
-
-        if self.config.verbose:
-            print(info_msg(f"Epoch {epoch + 1}/{total_epochs} | Loss: {epoch_loss:.4f} | Time: {epoch_time:.1f}s"))
-
-        return epoch_loss
-
-    def _evaluate(self, val_loader: DataLoader) -> float:
-        """Compute average loss on a validation set without updating weights.
-
         Args:
-            val_loader: DataLoader for the validation split.
-
+            sequences: List of text sequences
+            max_length: Maximum sequence length
+            
         Returns:
-            Average cross-entropy loss over the validation set.
+            List of batched tensors
         """
-        self.model.eval()
-        total_loss = 0.0
-        num_batches = 0
-
-        with torch.no_grad():
-            for batch in val_loader:
-                input_ids = batch['input_ids'].to(self.device)
-                labels = batch['labels'].to(self.device)
-                logits = self.model(input_ids)
-                loss = F.cross_entropy(
-                    logits.view(-1, logits.size(-1)),
-                    labels.view(-1),
-                    ignore_index=getattr(self.tokenizer, 'pad_token_id', 0)
-                )
-                total_loss += loss.item()
-                num_batches += 1
-
+        # Encode all sequences
+        encoded = []
+        for seq in sequences:
+            tokens = self.tokenizer.encode(seq)
+            if len(tokens) > max_length:
+                tokens = tokens[:max_length]
+            if len(tokens) > 1:  # Need at least 2 tokens for next-token prediction
+                encoded.append(tokens)
+        
+        if not encoded:
+            raise ValueError("No valid sequences after encoding")
+        
+        # Sort by length for efficient batching
+        encoded.sort(key=len, reverse=True)
+        
+        # Create batches
+        batches = []
+        batch_size = self.config.batch_size
+        
+        for i in range(0, len(encoded), batch_size):
+            batch_tokens = encoded[i:i + batch_size]
+            
+            # Pad to max length in batch
+            max_len = max(len(t) for t in batch_tokens)
+            padded = []
+            for tokens in batch_tokens:
+                padding = [0] * (max_len - len(tokens))  # 0 = pad token
+                padded.append(tokens + padding)
+            
+            batch_tensor = torch.tensor(padded, dtype=torch.long, device=self.device)
+            batches.append(batch_tensor)
+        
+        return batches
+    
+    def train(self, data: str | list[dict]) -> TrainingState:
+        """
+        Train the model on data.
+        
+        Args:
+            data: Training data (text, Q&A pairs, or JSONL)
+            
+        Returns:
+            Final training state
+        """
+        self._stop_requested = False
         self.model.train()
-        return total_loss / max(1, num_batches)
-
-    def _save_checkpoint(self, epoch: int):
-        """
-        Save training checkpoint for recovery/resume.
+        self._training_start_time = time.monotonic()
+        self._epochs_without_improvement = 0
         
-        📖 WHAT THIS SAVES:
-        - epoch: Which epoch we just finished
-        - model_state_dict: All model weights
-        - optimizer_state_dict: Optimizer state (momentum, etc.)
-        - loss: Current loss value
-        - global_step: Total steps taken
-        - config: Training configuration
+        self._emit_progress(0, "Preparing training data...")
+        logger.info("Starting training")
         
-        💡 WHY CHECKPOINTS MATTER:
-        Training can take hours/days. If it crashes, checkpoints
-        let you resume from where you left off instead of starting over!
+        # Parse data
+        try:
+            sequences = self._parse_training_data(data)
+            logger.info(f"Parsed {len(sequences)} training sequences")
+        except Exception as e:
+            logger.error(f"Failed to parse training data: {e}")
+            raise
         
-        🔗 CONNECTS TO:
-          → Saved to config.checkpoint_dir (usually models/checkpoints/)
-          ← Called by train() every config.save_every epochs
-        """
+        if not sequences:
+            raise ValueError("No training sequences found in data")
+        
+        self._emit_progress(5, f"Creating batches from {len(sequences)} sequences...")
+        
+        # Create batches
+        try:
+            batches = self._create_batches(sequences)
+            logger.info(f"Created {len(batches)} batches")
+        except Exception as e:
+            logger.error(f"Failed to create batches: {e}")
+            raise
+        
+        # Setup scheduler
+        total_steps = len(batches) * self.config.epochs
+        self.scheduler = CosineAnnealingLR(
+            self.optimizer, 
+            T_max=total_steps,
+            eta_min=self.config.learning_rate * 0.1
+        )
+        
+        # Warmup lambda
+        def warmup_lambda(step):
+            if step < self.config.warmup_steps:
+                return step / max(1, self.config.warmup_steps)
+            return 1.0
+        
+        # Training loop
         checkpoint_dir = Path(self.config.checkpoint_dir)
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
-
-        # Bundle everything needed to resume training
-        checkpoint = {
-            'epoch': epoch,                                    # Where we stopped
-            'model_state_dict': self.model.state_dict(),       # Model weights
-            'optimizer_state_dict': self.optimizer.state_dict(),  # Optimizer state
-            'loss': self.loss_history[-1] if self.loss_history else None,
-            'global_step': self.global_step,                   # Step counter
-            'config': self.config.__dict__                     # Settings
-        }
-
-        path = checkpoint_dir / f"checkpoint_epoch_{epoch}.pt"
-        torch.save(checkpoint, path)
-
-        logger.info(f"Saved checkpoint to {path}")
-
-    def save_model(self, path: Union[str, Path]) -> None:
-        """
-        Save the trained model weights.
         
-        📖 WHAT THIS DOES:
-        Saves ONLY the model weights (not optimizer, not config).
-        This is the final model file you'll use for inference.
-        
-        💡 TIP:
-        Use checkpoints during training, use this for final model.
-        """
-        path = Path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
+        for epoch in range(self.config.epochs):
+            if self._should_stop():
+                logger.info("Training stopped by user")
+                break
 
-        torch.save(self.model.state_dict(), path)
-        logger.info(f"Saved model to {path}")
+            # Time-limit guard
+            if (
+                self.config.max_training_seconds > 0
+                and time.monotonic() - self._training_start_time
+                > self.config.max_training_seconds
+            ):
+                logger.info("Training stopped: time limit reached")
+                break
+            
+            epoch_loss = 0.0
+            epoch_tokens = 0
+            
+            progress_base = int(5 + (epoch / self.config.epochs) * 90)
+            self._emit_progress(progress_base, f"Epoch {epoch + 1}/{self.config.epochs}")
+            
+            # Shuffle batches each epoch
+            random.shuffle(batches)
+            
+            for batch_idx, batch in enumerate(batches):
+                if self._should_stop():
+                    break
+                
+                # Forward pass
+                with torch.amp.autocast('cuda', enabled=self.config.use_amp and torch.cuda.is_available()):
+                    # Input is all but last token, target is all but first token
+                    input_ids = batch[:, :-1]
+                    targets = batch[:, 1:]
+                    
+                    logits, loss = self.model(input_ids, targets=targets)
+                    
+                    # Add MoE auxiliary loss if available
+                    if hasattr(self.model, 'get_moe_aux_loss'):
+                        aux_loss = self.model.get_moe_aux_loss()
+                        loss = loss + aux_loss * 0.01
+                    
+                    # Scale loss for gradient accumulation
+                    loss = loss / self.config.max_grad_accumulation
+                
+                # Backward pass
+                if self.scaler is not None:
+                    self.scaler.scale(loss).backward()
+                else:
+                    loss.backward()
+                
+                # Gradient accumulation
+                if (batch_idx + 1) % self.config.max_grad_accumulation == 0:
+                    # Gradient clipping
+                    if self.config.gradient_clip > 0:
+                        if self.scaler is not None:
+                            self.scaler.unscale_(self.optimizer)
+                        torch.nn.utils.clip_grad_norm_(
+                            self.model.parameters(), 
+                            self.config.gradient_clip
+                        )
+                    
+                    # Optimizer step
+                    if self.scaler is not None:
+                        self.scaler.step(self.optimizer)
+                        self.scaler.update()
+                    else:
+                        self.optimizer.step()
+                    
+                    self.optimizer.zero_grad()
+                    
+                    # Warmup + scheduler step
+                    warmup_factor = warmup_lambda(self.state.step)
+                    for param_group in self.optimizer.param_groups:
+                        param_group['lr'] = self.config.learning_rate * warmup_factor
+                    if self.state.step >= self.config.warmup_steps:
+                        self.scheduler.step()
+                
+                # Track metrics
+                batch_loss = loss.item() * self.config.max_grad_accumulation
+
+                # Loss explosion guard
+                if math.isnan(batch_loss) or math.isinf(batch_loss):
+                    logger.error("Training aborted: NaN/Inf loss detected")
+                    self.model.eval()
+                    return self.state
+                if batch_loss > self.config.max_loss:
+                    logger.error(
+                        f"Training aborted: loss {batch_loss:.4f} exceeded "
+                        f"max_loss {self.config.max_loss}"
+                    )
+                    self.model.eval()
+                    return self.state
+
+                batch_tokens = batch.numel()
+                epoch_loss += batch_loss * batch_tokens
+                epoch_tokens += batch_tokens
+                self.state.step += 1
+                self.state.total_tokens += batch_tokens
+                
+                # Log periodically
+                if self.state.step % self.config.log_every == 0:
+                    avg_loss = epoch_loss / max(1, epoch_tokens)
+                    logger.debug(f"Step {self.state.step}: loss={avg_loss:.4f}")
+                    self._emit_loss(avg_loss)
+                
+                # Update progress
+                batch_progress = int(progress_base + (batch_idx / len(batches)) * (90 / self.config.epochs))
+                self._emit_progress(batch_progress, f"Epoch {epoch + 1}: Batch {batch_idx + 1}/{len(batches)}")
+            
+            # Epoch complete
+            avg_epoch_loss = epoch_loss / max(1, epoch_tokens)
+            self.state.training_losses.append(avg_epoch_loss)
+            self.state.epoch = epoch + 1
+            
+            logger.info(f"Epoch {epoch + 1} complete: loss={avg_epoch_loss:.4f}")
+            
+            if self.on_epoch_complete:
+                self.on_epoch_complete(epoch + 1, avg_epoch_loss)
+            
+            # Save checkpoint
+            if (epoch + 1) % self.config.save_every == 0:
+                self._save_checkpoint(checkpoint_dir / f"checkpoint_epoch_{epoch + 1}.pt")
+            
+            # Track best loss + early stopping
+            if avg_epoch_loss < self.state.best_loss:
+                self.state.best_loss = avg_epoch_loss
+                self._epochs_without_improvement = 0
+                self._save_checkpoint(checkpoint_dir / "best_model.pt")
+            else:
+                self._epochs_without_improvement += 1
+                if (
+                    self.config.early_stopping_patience > 0
+                    and self._epochs_without_improvement
+                    >= self.config.early_stopping_patience
+                ):
+                    logger.info(
+                        f"Early stopping: no improvement for "
+                        f"{self._epochs_without_improvement} epochs"
+                    )
+                    break
+        
+        # Final save
+        self._emit_progress(95, "Saving final model...")
+        self._save_checkpoint(checkpoint_dir / "final_model.pt")
+        
+        # Restore model to eval mode for inference
+        self.model.eval()
+        
+        self._emit_progress(100, "Training complete!")
+        logger.info(f"Training complete: {self.state.epoch} epochs, best_loss={self.state.best_loss:.4f}")
+        
+        return self.state
+    
+    def _save_checkpoint(self, path: Path) -> None:
+        """Save model checkpoint."""
+        try:
+            checkpoint = {
+                'model_state_dict': self.model.state_dict(),
+                'optimizer_state_dict': self.optimizer.state_dict(),
+                'training_state': {
+                    'epoch': self.state.epoch,
+                    'step': self.state.step,
+                    'best_loss': self.state.best_loss,
+                    'total_tokens': self.state.total_tokens,
+                },
+                'config': self.config.to_dict(),
+            }
+            if hasattr(self.model, 'config'):
+                checkpoint['model_config'] = self.model.config.__dict__
+            
+            torch.save(checkpoint, path)
+            logger.info(f"Saved checkpoint: {path}")
+        except Exception as e:
+            logger.error(f"Failed to save checkpoint: {e}")
+    
+    def load_checkpoint(self, path: Path) -> None:
+        """Load model checkpoint."""
+        try:
+            checkpoint = torch.load(path, map_location=self.device)
+            
+            self.model.load_state_dict(checkpoint['model_state_dict'])
+            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            
+            state = checkpoint.get('training_state', {})
+            self.state.epoch = state.get('epoch', 0)
+            self.state.step = state.get('step', 0)
+            self.state.best_loss = state.get('best_loss', float('inf'))
+            self.state.total_tokens = state.get('total_tokens', 0)
+            
+            logger.info(f"Loaded checkpoint: {path}")
+        except Exception as e:
+            logger.error(f"Failed to load checkpoint: {e}")
+            raise
 
 
 # =============================================================================
-# 🎯 CONVENIENCE FUNCTIONS - Easy-to-use training interface
+# EVOLUTIONARY TRAINING (BEST-OF-N SAMPLING)
 # =============================================================================
-# These functions wrap the Trainer class with sensible defaults,
-# making it easy to train a model with one function call.
 
-def train_model(
-    data_path: Optional[Union[str, Path]] = None,
-    epochs: int = 30,
-    model_size: str = "small",
-    output_path: Optional[Union[str, Path]] = None,
-    train_tokenizer_first: bool = True,
-    force: bool = False,
-    **kwargs
-) -> dict[str, Any]:
+def score_response(
+    prompt: str, 
+    response: str,
+    method: str = "length_quality"
+) -> float:
     """
-    High-level training function - THE EASY WAY TO TRAIN!
+    Score a response for quality.
     
-    📖 WHAT THIS DOES:
-    1. Loads your training data
-    2. Trains a tokenizer (optional)
-    3. Creates a model
-    4. Trains the model
-    5. Saves everything
+    Scoring methods:
+    - "length_quality": Balance between length and coherence
+    - "consistency": Compare with other responses
+    - "perplexity": Model's own confidence
+    - "rule_based": Check for patterns
     
-    📐 SIMPLE USAGE:
-        # Train with defaults
-        results = train_model("data/training.txt")
-        
-        # Custom training
-        results = train_model(
-            data_path="my_data.txt",
-            epochs=50,
-            model_size="medium",
-            learning_rate=0.0001
-        )
-    
-    🔗 CONNECTS TO:
-      → Uses Trainer class (above)
-      → Uses create_model from enigma_engine/core/model.py
-      → Uses get_tokenizer from enigma_engine/core/tokenizer.py
-      ← Called from run.py --train or GUI
-
     Args:
-        data_path: Path to training data file (default: data/data.txt)
-        epochs: Number of training epochs (must be > 0)
-        model_size: Model size preset:
-            - "nano", "micro", "tiny": Very small, fast training
-            - "small": Default, good balance
-            - "medium", "large": Better quality, slower
-            - "xl", "xxl": Best quality, needs good GPU
-        output_path: Where to save the trained model
-        train_tokenizer_first: Train a tokenizer on your data (recommended)
-        force: Train even if model already exists
-        **kwargs: Additional TrainingConfig parameters
-
+        prompt: Original prompt
+        response: Generated response
+        method: Scoring method
+        
     Returns:
-        Dictionary with results:
-            - status: 'success', 'skipped', or 'failed'
-            - model_path: Path to saved model
-            - final_loss: Final training loss
-            - epochs_completed: Number of epochs completed
-
-    Raises:
-        ValueError: If parameters are invalid (epochs, paths)
-        TypeError: If parameter types are incorrect
-        FileNotFoundError: If data file doesn't exist
-        RuntimeError: If training fails
+        Score from 0-100
     """
-    # ─────────────────────────────────────────────────────────────────
-    # VALIDATION: Check inputs before doing anything
-    # ─────────────────────────────────────────────────────────────────
-    if epochs <= 0:
-        raise ValueError(f"epochs must be positive, got {epochs}")
-
-    if not isinstance(model_size, str):
-        raise TypeError(f"model_size must be a string, got {type(model_size).__name__}")
-
-    # ─────────────────────────────────────────────────────────────────
-    # DEFAULT PATHS: Use sensible defaults if not specified
-    # ─────────────────────────────────────────────────────────────────
-    if data_path is None:
-        data_path = DATA_DIR / "training.txt"
-    data_path = Path(data_path)
-
-    if output_path is None:
-        output_path = MODELS_DIR / f"{model_size}_forge.pth"
-    output_path = Path(output_path)
-
-    # ─────────────────────────────────────────────────────────────────
-    # FILE VALIDATION: Make sure data exists and is readable
-    # ─────────────────────────────────────────────────────────────────
-    if not data_path.exists():
-        raise FileNotFoundError(
-            f"Training data not found: {data_path}\n"
-            f"Please create a training data file or specify a valid path."
-        )
-
-    # Check file size (empty files won't train anything useful)
-    if data_path.is_file():
-        file_size = data_path.stat().st_size
-        if file_size == 0:
-            raise ValueError(f"Training data file is empty: {data_path}")
-
-        if file_size < 100:
-            logger.warning(
-                f"Training data file is very small ({file_size} bytes). "
-                f"Training may not be effective."
-            )
-    elif data_path.is_dir():
-        txt_files = list(data_path.glob("*.txt"))
-        if not txt_files:
-            raise ValueError(f"No .txt files found in directory: {data_path}")
-        logger.info(f"Training from directory: {data_path} ({len(txt_files)} files)")
-
-    # ─────────────────────────────────────────────────────────────────
-    # CHECK EXISTING MODEL: Skip if already trained (unless force=True)
-    # ─────────────────────────────────────────────────────────────────
-    if output_path.exists() and not force:
-        logger.warning(f"Model already exists at {output_path}")
-        logger.info("Use force=True to retrain")
-        return {"status": "skipped", "path": str(output_path)}
-
-    # Ensure output directory exists
-    try:
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-    except (OSError, PermissionError) as e:
-        raise RuntimeError(f"Cannot create output directory: {e}") from e
-
-    # ─────────────────────────────────────────────────────────────────
-    # LOAD TRAINING DATA
-    # ─────────────────────────────────────────────────────────────────
-    try:
-        all_text_parts: list[str] = []
-
-        if data_path.is_dir():
-            # Load all .txt files in the directory
-            txt_files = sorted(data_path.glob("*.txt"))
-            if not txt_files:
-                raise FileNotFoundError(f"No .txt files found in directory: {data_path}")
-            for f in txt_files:
-                content = f.read_text(encoding='utf-8').strip()
-                if content:
-                    all_text_parts.append(content)
-                    logger.info(f"  Loaded {len(content):,} chars from {f.name}")
+    score = 50.0  # Base score
+    
+    if method == "length_quality":
+        # Score based on response characteristics
+        
+        # Length scoring (prefer medium length)
+        length = len(response)
+        if length < 10:
+            score -= 20
+        elif length < 50:
+            score -= 10
+        elif length < 200:
+            score += 10
+        elif length < 500:
+            score += 20
+        elif length < 1000:
+            score += 15
         else:
-            all_text_parts.append(data_path.read_text(encoding='utf-8'))
-
-        texts = ["\n\n".join(all_text_parts)]
-        logger.info(f"Loaded {len(texts[0]):,} characters total from {data_path}")
-    except (UnicodeDecodeError, OSError) as e:
-        raise RuntimeError(f"Failed to read training data: {e}") from e
-
-    # ─────────────────────────────────────────────────────────────────
-    # TOKENIZER: Train or load
-    # ─────────────────────────────────────────────────────────────────
-    # Training a tokenizer on YOUR data gives better results than
-    # using a generic one, especially for specialized domains
-    if train_tokenizer_first:
-        logger.info("Training tokenizer...")
-        try:
-            tokenizer = train_tokenizer(
-                data_paths=[str(data_path)],
-                vocab_size=8000,
-                tokenizer_type="bpe"
-            )
-        except Exception as e:
-            logger.error(f"Tokenizer training failed: {e}")
-            raise RuntimeError(f"Tokenizer training failed: {e}") from e
-    else:
-        try:
-            tokenizer = get_tokenizer()
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to load tokenizer: {e}\n"
-                f"Try setting train_tokenizer_first=True"
-            ) from e
-
-    # ─────────────────────────────────────────────────────────────────
-    # CREATE MODEL: Initialize with random weights
-    # ─────────────────────────────────────────────────────────────────
-    logger.info(f"Creating {model_size} model...")
-    try:
-        model = create_model(model_size, vocab_size=tokenizer.vocab_size)
-    except (ValueError, RuntimeError) as e:
-        raise RuntimeError(f"Model creation failed: {e}") from e
-
-    # ─────────────────────────────────────────────────────────────────
-    # TRAIN: This is where the magic happens!
-    # ─────────────────────────────────────────────────────────────────
-    config = TrainingConfig(
-        epochs=epochs,
-        **{k: v for k, v in kwargs.items() if hasattr(TrainingConfig, k)}
-    )
-
-    try:
-        trainer = Trainer(model, tokenizer, config)
-        results = trainer.train(texts)
-    except Exception as e:
-        logger.error(f"Training failed: {e}")
-        raise RuntimeError(f"Training failed: {e}") from e
-
-    # ─────────────────────────────────────────────────────────────────
-    # SAVE EVERYTHING: Model and tokenizer
-    # ─────────────────────────────────────────────────────────────────
-    try:
-        trainer.save_model(output_path)
-        logger.info(f"Model saved to {output_path}")
-    except OSError as e:
-        raise RuntimeError(f"Failed to save model: {e}") from e
-
-    # Save tokenizer alongside model (so they stay together)
-    tokenizer_path = output_path.parent / f"{output_path.stem}_tokenizer.json"
-    if hasattr(tokenizer, 'save'):
-        try:
-            tokenizer.save(tokenizer_path)
-            logger.info(f"Tokenizer saved to {tokenizer_path}")
-        except Exception as e:
-            logger.warning(f"Failed to save tokenizer: {e}")
-
-    results['model_path'] = str(output_path)
-    results['tokenizer_path'] = str(tokenizer_path)
-
-    return results
+            score += 5  # Very long responses slightly less preferred
+        
+        # Coherence checks
+        words = response.split()
+        if len(words) > 5:
+            # Check for repetition
+            unique_ratio = len(set(words)) / len(words)
+            if unique_ratio < 0.3:
+                score -= 30  # Heavy repetition
+            elif unique_ratio < 0.5:
+                score -= 15
+            elif unique_ratio > 0.7:
+                score += 10
+        
+        # Punctuation check
+        if any(p in response for p in '.!?'):
+            score += 5  # Has sentence endings
+        
+        # Check for code patterns (if prompt asks for code)
+        if 'code' in prompt.lower() or 'function' in prompt.lower():
+            if 'def ' in response or 'function' in response or '()' in response:
+                score += 15
+        
+        # Check for explanation pattern
+        if 'explain' in prompt.lower() or 'what is' in prompt.lower():
+            if len(response) > 100:
+                score += 10
+    
+    elif method == "rule_based":
+        # Simple rule-based scoring
+        
+        # Positive patterns
+        if response.strip():
+            score += 10
+        if len(response) > 50:
+            score += 10
+        if '\n' in response:  # Has structure
+            score += 5
+        
+        # Negative patterns
+        if response.count(response.split()[0] if response.split() else '') > 5:
+            score -= 20  # Repetitive
+        if 'error' in response.lower() or 'sorry' in response.lower():
+            score -= 10
+    
+    return max(0, min(100, score))
 
 
-def load_trained_model(
-    model_path: Union[str, Path],
-    device: Optional[str] = None
-) -> tuple:
+def best_of_n(
+    model: nn.Module,
+    tokenizer: Any,
+    prompt: str,
+    n: int = 5,
+    temperature_range: tuple[float, float] = (0.5, 1.0),
+    max_tokens: int = 256,
+    scoring_method: str = "length_quality"
+) -> tuple[str, float]:
     """
-    Load a trained model and tokenizer.
+    Generate N responses and return the best one.
     
-    📖 WHAT THIS DOES:
-    Loads a previously trained model from disk so you can use it
-    for inference (generating text).
+    This is the core of evolutionary training:
+    - Generate multiple responses with varied settings
+    - Score each response
+    - Return the winner
     
-    📐 USAGE:
-        model, tokenizer = load_trained_model("models/small_forge.pth")
-        # Now you can generate text with the model
-    
-    🔗 CONNECTS TO:
-      → Model weights saved by Trainer.save_model()
-      → Tokenizer saved during train_model()
-      ← Used by EnigmaEngine in inference.py
-
     Args:
-        model_path: Path to saved model (.pth file)
-        device: Device to load to ("cuda" or "cpu")
-
+        model: The model to generate from
+        tokenizer: Tokenizer for encoding/decoding
+        prompt: Input prompt
+        n: Number of responses to generate
+        temperature_range: Range for random temperature
+        max_tokens: Maximum tokens to generate
+        scoring_method: Method for scoring responses
+        
     Returns:
-        (model, tokenizer) tuple ready for inference
+        Tuple of (best_response, score)
     """
-    from .model_registry import safe_load_weights
-    model_path = Path(model_path)
-
-    # Auto-detect device if not specified
-    if device is None:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    # ─────────────────────────────────────────────────────────────────
-    # LOAD MODEL WEIGHTS
-    # ─────────────────────────────────────────────────────────────────
-    state_dict = safe_load_weights(model_path, map_location=device)
-
-    # ─────────────────────────────────────────────────────────────────
-    # INFER MODEL SIZE FROM WEIGHTS
-    # ─────────────────────────────────────────────────────────────────
-    # We need to know the model architecture to load the weights.
-    # We can figure this out from the embedding layer dimensions.
-    embed_key = None
-    for key in state_dict.keys():
-        if 'embed' in key.lower() or 'token' in key.lower():
-            embed_key = key
-            break
-
-    if embed_key:
-        vocab_size, hidden_dim = state_dict[embed_key].shape
-    else:
-        # Default values if we can't detect
-        vocab_size = 8000
-        hidden_dim = 512
-
-    # Find matching preset based on hidden dimension
-    model_size = "small"  # Default
-    for name, preset in MODEL_PRESETS.items():
-        preset_dim = preset.dim if hasattr(preset, 'dim') else preset.get('hidden_dim', 512)
-        if preset_dim == hidden_dim:
-            model_size = name
-            break
-
-    # ─────────────────────────────────────────────────────────────────
-    # CREATE MODEL AND LOAD WEIGHTS
-    # ─────────────────────────────────────────────────────────────────
-    model = create_model(model_size, vocab_size=vocab_size)
-    model.load_state_dict(state_dict)
-    model = model.to(device)
-    model.eval()  # Set to evaluation mode (disables dropout, etc.)
-
-    # ─────────────────────────────────────────────────────────────────
-    # LOAD MATCHING TOKENIZER
-    # ─────────────────────────────────────────────────────────────────
-    # Look for tokenizer saved alongside the model
-    tokenizer_path = model_path.parent / f"{model_path.stem}_tokenizer.json"
-    if tokenizer_path.exists():
-        from .advanced_tokenizer import AdvancedBPETokenizer
-        tokenizer = AdvancedBPETokenizer(vocab_file=tokenizer_path)
-    else:
-        # Fall back to default tokenizer
-        tokenizer = get_tokenizer()
-
-    return model, tokenizer
+    model.eval()
+    device = next(model.parameters()).device
+    
+    responses = []
+    
+    for i in range(n):
+        # Vary temperature for diversity
+        temperature = random.uniform(*temperature_range)
+        
+        # Encode prompt
+        input_ids = tokenizer.encode(prompt)
+        input_tensor = torch.tensor([input_ids], dtype=torch.long, device=device)
+        
+        # Generate
+        with torch.no_grad():
+            output_ids = model.generate(
+                input_tensor,
+                max_new_tokens=max_tokens,
+                temperature=temperature,
+                do_sample=True,
+                top_p=0.9
+            )
+        
+        # Get only the new tokens (skip the input)
+        if hasattr(output_ids, 'squeeze'):
+            output_ids = output_ids.squeeze(0)
+        new_tokens = output_ids[len(input_ids):].tolist()
+        response = tokenizer.decode(new_tokens)
+        
+        # Score response
+        score = score_response(prompt, response, method=scoring_method)
+        responses.append((response, score, temperature))
+        
+        logger.debug(f"Response {i+1}/{n}: score={score:.1f}, temp={temperature:.2f}")
+    
+    # Return best
+    best = max(responses, key=lambda x: x[1])
+    logger.info(f"Best of {n}: score={best[1]:.1f}, temp={best[2]:.2f}")
+    
+    return best[0], best[1]
 
 
 # =============================================================================
-# 📦 MODULE EXPORTS - What's available when you import this module
+# MULTI-INSTANCE (PARALLEL GENERATION)
 # =============================================================================
 
-__all__ = [
-    # Main classes
-    "Trainer",           # The training engine
-    "TrainingConfig",    # Training settings
-    "TextDataset",       # Dataset for plain text
-    "QADataset",         # Dataset for Q&A format
-    "CosineWarmupScheduler",  # Learning rate scheduler
+def _generate_single_response(
+    model: nn.Module,
+    tokenizer: Any,
+    prompt: str,
+    temperature: float,
+    max_tokens: int,
+    device: torch.device,
+    scoring_method: str
+) -> tuple[str, float, float]:
+    """
+    Generate a single response (for use in parallel execution).
+    
+    Args:
+        model: Model to generate from
+        tokenizer: Tokenizer
+        prompt: Input prompt
+        temperature: Generation temperature
+        max_tokens: Max tokens to generate
+        device: Device to run on
+        scoring_method: Scoring method
+        
+    Returns:
+        Tuple of (response, score, temperature)
+    """
+    try:
+        # Encode prompt
+        input_ids = tokenizer.encode(prompt)
+        input_tensor = torch.tensor([input_ids], dtype=torch.long, device=device)
+        
+        # Generate
+        with torch.no_grad():
+            output_ids = model.generate(
+                input_tensor,
+                max_new_tokens=max_tokens,
+                temperature=temperature,
+                do_sample=True,
+                top_p=0.9
+            )
+        
+        # Decode
+        if hasattr(output_ids, 'squeeze'):
+            output_ids = output_ids.squeeze(0)
+        new_tokens = output_ids[len(input_ids):].tolist()
+        response = tokenizer.decode(new_tokens)
+        
+        # Score
+        score = score_response(prompt, response, method=scoring_method)
+        
+        return (response, score, temperature)
+    except Exception as e:
+        logger.error(f"Generation failed: {e}")
+        return ("", 0.0, temperature)
 
-    # Functions
-    "train_model",       # High-level training function
-    "load_trained_model",  # Load a trained model
 
-    # Constants
-    "MODELS_DIR",        # Where models are saved
-    "DATA_DIR",          # Where training data lives
-]
+def parallel_best_of_n(
+    model: nn.Module,
+    tokenizer: Any,
+    prompt: str,
+    n: int = 5,
+    max_workers: int = 4,
+    temperature_range: tuple[float, float] = (0.5, 1.0),
+    max_tokens: int = 256,
+    scoring_method: str = "length_quality"
+) -> tuple[str, float]:
+    """
+    Generate N responses in parallel and return the best one.
+    
+    Uses ThreadPoolExecutor for parallel generation. Note that due to
+    Python's GIL, this provides speedup mainly for I/O-bound operations.
+    For GPU inference, the actual speedup may be limited, but this
+    enables running multiple inference processes.
+    
+    Args:
+        model: Model to generate from
+        tokenizer: Tokenizer
+        prompt: Input prompt
+        n: Number of responses to generate
+        max_workers: Maximum parallel workers
+        temperature_range: Range for random temperature
+        max_tokens: Max tokens to generate
+        scoring_method: Scoring method
+        
+    Returns:
+        Tuple of (best_response, score)
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    
+    model.eval()
+    device = next(model.parameters()).device
+    
+    # Create varied temperatures for each instance
+    temperatures = [random.uniform(*temperature_range) for _ in range(n)]
+    
+    responses = []
+    
+    # Use thread pool for parallel generation
+    with ThreadPoolExecutor(max_workers=min(max_workers, n)) as executor:
+        futures = {}
+        for i, temp in enumerate(temperatures):
+            future = executor.submit(
+                _generate_single_response,
+                model, tokenizer, prompt, temp, max_tokens, device, scoring_method
+            )
+            futures[future] = i
+        
+        for future in as_completed(futures):
+            idx = futures[future]
+            try:
+                result = future.result()
+                responses.append(result)
+                logger.debug(f"Instance {idx+1}/{n}: score={result[1]:.1f}, temp={result[2]:.2f}")
+            except Exception as e:
+                logger.error(f"Instance {idx+1} failed: {e}")
+    
+    if not responses:
+        return "", 0.0
+    
+    # Return best
+    best = max(responses, key=lambda x: x[1])
+    logger.info(f"Parallel best of {n}: score={best[1]:.1f}, temp={best[2]:.2f}")
+    
+    return best[0], best[1]
+
+
+def multi_instance_collect(
+    model: nn.Module,
+    tokenizer: Any,
+    tasks: list[str],
+    n_per_task: int = 5,
+    max_workers: int = 4,
+    score_threshold: float = 60.0,
+    on_progress: Callable[[int, str], None] | None = None
+) -> list[dict]:
+    """
+    Collect training data using parallel generation.
+    
+    Args:
+        model: Model to generate from
+        tokenizer: Tokenizer
+        tasks: List of prompts/tasks
+        n_per_task: Responses per task
+        max_workers: Parallel workers
+        score_threshold: Minimum score to keep
+        on_progress: Progress callback
+        
+    Returns:
+        List of training examples
+    """
+    training_data = []
+    
+    for i, task in enumerate(tasks):
+        if on_progress:
+            on_progress(int(i / len(tasks) * 100), f"Task {i+1}/{len(tasks)}")
+        
+        try:
+            best_response, score = parallel_best_of_n(
+                model, tokenizer, task,
+                n=n_per_task,
+                max_workers=max_workers
+            )
+            
+            if score >= score_threshold:
+                training_data.append({
+                    "prompt": task,
+                    "completion": best_response,
+                    "score": score
+                })
+                logger.info(f"Task {i+1}: score={score:.1f} - KEPT")
+            else:
+                logger.info(f"Task {i+1}: score={score:.1f} - BELOW THRESHOLD")
+        
+        except Exception as e:
+            logger.error(f"Task {i+1} failed: {e}")
+    
+    logger.info(f"Collected {len(training_data)} examples from {len(tasks)} tasks (parallel)")
+    return training_data
+
+
+def collect_training_data(
+    model: nn.Module,
+    tokenizer: Any,
+    tasks: list[str],
+    n_per_task: int = 5,
+    score_threshold: float = 60.0,
+    on_progress: Callable[[int, str], None] | None = None
+) -> list[dict]:
+    """
+    Generate training data by running best-of-N on tasks.
+    
+    Args:
+        model: Model to generate from
+        tokenizer: Tokenizer
+        tasks: List of prompts/tasks
+        n_per_task: Number of generations per task
+        score_threshold: Minimum score to include
+        on_progress: Progress callback
+        
+    Returns:
+        List of training examples: [{"prompt": str, "completion": str, "score": float}]
+    """
+    training_data = []
+    
+    for i, task in enumerate(tasks):
+        if on_progress:
+            on_progress(int(i / len(tasks) * 100), f"Task {i+1}/{len(tasks)}")
+        
+        try:
+            best_response, score = best_of_n(
+                model, tokenizer, task, 
+                n=n_per_task
+            )
+            
+            if score >= score_threshold:
+                training_data.append({
+                    "prompt": task,
+                    "completion": best_response,
+                    "score": score
+                })
+                logger.info(f"Task {i+1}: score={score:.1f} - KEPT")
+            else:
+                logger.info(f"Task {i+1}: score={score:.1f} - BELOW THRESHOLD")
+        
+        except Exception as e:
+            logger.error(f"Task {i+1} failed: {e}")
+    
+    logger.info(f"Collected {len(training_data)} training examples from {len(tasks)} tasks")
+    return training_data
+
+
+def evolutionary_training(
+    model: nn.Module,
+    tokenizer: Any,
+    tasks: list[str],
+    generations: int = 10,
+    n_per_task: int = 5,
+    training_config: TrainingConfig | None = None,
+    checkpoint_dir: str = "models/evolutionary",
+    on_progress: Callable[[int, str], None] | None = None
+) -> nn.Module:
+    """
+    Train model through evolutionary selection (self-play).
+    
+    The loop:
+    1. Generate N responses per task
+    2. Score responses
+    3. Keep only the best response per task
+    4. Fine-tune model on winning outputs
+    5. Repeat with improved model
+    
+    Args:
+        model: Initial model
+        tokenizer: Tokenizer
+        tasks: Training tasks/prompts
+        generations: Number of evolutionary generations
+        n_per_task: Responses to generate per task
+        training_config: Config for fine-tuning step
+        checkpoint_dir: Where to save generation checkpoints
+        on_progress: Progress callback
+        
+    Returns:
+        Trained model
+    """
+    config = training_config or TrainingConfig(epochs=1, save_every=1)
+    checkpoint_path = Path(checkpoint_dir)
+    checkpoint_path.mkdir(parents=True, exist_ok=True)
+    
+    logger.info(f"Starting evolutionary training: {generations} generations, {len(tasks)} tasks")
+    
+    for gen in range(generations):
+        gen_progress = int(gen / generations * 100)
+        if on_progress:
+            on_progress(gen_progress, f"Generation {gen + 1}/{generations}")
+        
+        logger.info(f"=== Generation {gen + 1} ===")
+        
+        # Collect training data from best-of-N
+        training_data = collect_training_data(
+            model, tokenizer, tasks,
+            n_per_task=n_per_task,
+            on_progress=lambda p, m: on_progress(gen_progress + int(p * 0.5 / generations), m) if on_progress else None
+        )
+        
+        if not training_data:
+            logger.warning(f"Generation {gen + 1}: No training data collected, skipping")
+            continue
+        
+        # Prepare training text
+        train_text = "\n\n".join([
+            f"Q: {ex['prompt']}\nA: {ex['completion']}"
+            for ex in training_data
+        ])
+        
+        # Fine-tune on winning outputs
+        trainer = Trainer(model, tokenizer, config)
+        trainer.config.checkpoint_dir = str(checkpoint_path / f"gen_{gen + 1}")
+        
+        if on_progress:
+            trainer.on_progress = lambda p, m: on_progress(
+                gen_progress + 50 + int(p * 0.5 / generations), 
+                f"Gen {gen + 1}: {m}"
+            )
+        
+        trainer.train(train_text)
+        
+        # Save generation checkpoint
+        gen_checkpoint = checkpoint_path / f"generation_{gen + 1}.pt"
+        torch.save({
+            'model_state_dict': model.state_dict(),
+            'generation': gen + 1,
+            'training_data_count': len(training_data),
+            'avg_score': sum(ex['score'] for ex in training_data) / len(training_data)
+        }, gen_checkpoint)
+        
+        logger.info(f"Generation {gen + 1} complete: {len(training_data)} examples, saved to {gen_checkpoint}")
+    
+    # Save final model
+    final_path = checkpoint_path / "final_evolved_model.pt"
+    torch.save({
+        'model_state_dict': model.state_dict(),
+        'total_generations': generations,
+    }, final_path)
+    
+    logger.info(f"Evolutionary training complete: {generations} generations")
+    if on_progress:
+        on_progress(100, "Evolutionary training complete!")
+    
+    return model
+
+
+def save_training_data(
+    data: list[dict],
+    path: str | Path,
+    format: str = "jsonl"
+) -> None:
+    """
+    Save collected training data to file.
+    
+    Args:
+        data: List of training examples
+        path: Output file path
+        format: "jsonl" or "txt"
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    
+    if format == "jsonl":
+        with open(path, 'w', encoding='utf-8') as f:
+            for item in data:
+                f.write(json.dumps(item, ensure_ascii=False) + '\n')
+    else:
+        with open(path, 'w', encoding='utf-8') as f:
+            for item in data:
+                f.write(f"Q: {item['prompt']}\n")
+                f.write(f"A: {item['completion']}\n\n")
+    
+    logger.info(f"Saved {len(data)} training examples to {path}")
+
+
+def load_training_data(path: str | Path) -> list[dict]:
+    """
+    Load training data from file.
+    
+    Args:
+        path: Input file path (jsonl or txt)
+        
+    Returns:
+        List of training examples
+    """
+    path = Path(path)
+    data = []
+    
+    with open(path, 'r', encoding='utf-8') as f:
+        content = f.read()
+    
+    # Try JSONL
+    if path.suffix == '.jsonl' or content.strip().startswith('{'):
+        for line in content.split('\n'):
+            line = line.strip()
+            if line:
+                try:
+                    data.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+        if data:
+            return data
+    
+    # Try Q&A format
+    qa_pattern = re.compile(r'Q:\s*(.+?)\s*A:\s*(.+?)(?=Q:|$)', re.DOTALL)
+    matches = qa_pattern.findall(content)
+    for q, a in matches:
+        data.append({
+            "prompt": q.strip(),
+            "completion": a.strip()
+        })
+    
+    logger.info(f"Loaded {len(data)} training examples from {path}")
+    return data

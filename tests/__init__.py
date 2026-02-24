@@ -1,5 +1,1 @@
-"""
-Enigma AI Engine - Test Suite
-
-This package contains comprehensive tests for all Enigma components.
-"""
+# Enigma Engine Tests

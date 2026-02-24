@@ -57,6 +57,35 @@ GGUF_QUANT_TYPES = {
 }
 
 
+class GGUFConfig:
+    """
+    Config-like object for GGUF models.
+    
+    Provides compatibility with GUI code that expects engine.model.config.
+    """
+    def __init__(
+        self,
+        model_path: str = "",
+        n_ctx: int = 8192,
+        n_gpu_layers: int = 0,
+        dim: int = 0,
+        n_layers: int = 0,
+        n_heads: int = 0,
+        n_kv_heads: int = 0,
+        vocab_size: int = 0,
+        max_seq_len: int = 8192,
+    ):
+        self.model_path = model_path
+        self.n_ctx = n_ctx
+        self.n_gpu_layers = n_gpu_layers
+        self.dim = dim
+        self.n_layers = n_layers
+        self.n_heads = n_heads
+        self.n_kv_heads = n_kv_heads
+        self.vocab_size = vocab_size
+        self.max_seq_len = max_seq_len
+
+
 class GGUFModel:
     """
     GGUF model loader using llama.cpp bindings.
@@ -67,7 +96,7 @@ class GGUFModel:
     def __init__(
         self,
         model_path: str,
-        n_ctx: int = 2048,
+        n_ctx: int = 8192,
         n_gpu_layers: int = 0,
         n_threads: Optional[int] = None,
         verbose: bool = False
@@ -77,7 +106,7 @@ class GGUFModel:
         
         Args:
             model_path: Path to .gguf model file
-            n_ctx: Context window size (max tokens)
+            n_ctx: Context window size (max tokens, default 8192)
             n_gpu_layers: Number of layers to offload to GPU (0 = CPU only)
             n_threads: Number of CPU threads (None = auto)
             verbose: Enable verbose logging
@@ -104,6 +133,13 @@ class GGUFModel:
         self.model = None
         self.is_loaded = False
         
+        # Create a config-like object for GUI compatibility
+        self.config = GGUFConfig(
+            model_path=str(model_path),
+            n_ctx=n_ctx,
+            n_gpu_layers=n_gpu_layers,
+        )
+        
         logger.info(f"GGUF model initialized: {model_path}")
     
     def load(self) -> bool:
@@ -129,6 +165,19 @@ class GGUFModel:
             )
             
             self.is_loaded = True
+            
+            # Try to extract model metadata for config
+            try:
+                metadata = self.model.metadata
+                self.config.n_layers = metadata.get('llama.block_count', 0)
+                self.config.n_heads = metadata.get('llama.attention.head_count', 0)
+                self.config.n_kv_heads = metadata.get('llama.attention.head_count_kv', 0)
+                self.config.dim = metadata.get('llama.embedding_length', 0)
+                self.config.vocab_size = metadata.get('llama.vocab_size', 0)
+                self.config.max_seq_len = metadata.get('llama.context_length', self.n_ctx)
+            except Exception as e:
+                logger.debug(f"Could not extract GGUF metadata: {e}")
+            
             logger.info(f"[OK] Model loaded successfully")
             logger.info(f"  Context size: {self.n_ctx}")
             logger.info(f"  GPU layers: {self.n_gpu_layers}")
@@ -355,7 +404,7 @@ class GGUFModel:
                 "type": "function",
                 "function": {
                     "name": "generate_image",
-                    "description": "Generate an image from a text description using Stable Diffusion",
+                    "description": "Generate an image from a text description",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -424,57 +473,6 @@ class GGUFModel:
                             "query": {"type": "string", "description": "Search query"}
                         },
                         "required": ["query"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "screenshot",
-                    "description": "Take a screenshot of the screen",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {}
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "switch_tab",
-                    "description": "Switch to a different GUI tab",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "tab_name": {
-                                "type": "string",
-                                "description": "Tab to switch to",
-                                "enum": ["chat", "image", "code", "video", "audio", "vision", "settings", "modules", "train"]
-                            }
-                        },
-                        "required": ["tab_name"]
-                    }
-                }
-            },
-            {
-                "type": "function", 
-                "function": {
-                    "name": "adjust_setting",
-                    "description": "Change a GUI setting",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "setting_name": {
-                                "type": "string",
-                                "description": "Setting to change",
-                                "enum": ["chat_zoom", "auto_speak", "always_on_top", "theme"]
-                            },
-                            "value": {
-                                "type": "string",
-                                "description": "New value for the setting"
-                            }
-                        },
-                        "required": ["setting_name", "value"]
                     }
                 }
             },
@@ -580,461 +578,22 @@ def recommend_gpu_layers(model_size_gb: float, vram_gb: float) -> int:
         return 999  # Use a large number to offload all layers
 
 
-def parse_gguf_header(f) -> dict[str, Any]:
-    """
-    Parse GGUF file header.
-    
-    GGUF format structure:
-    - Magic number: 4 bytes ('GGUF')
-    - Version: 4 bytes (uint32)
-    - Tensor count: 8 bytes (uint64)
-    - Metadata KV count: 8 bytes (uint64)
-    
-    Args:
-        f: Open file handle (binary mode)
-        
-    Returns:
-        Dictionary with header information:
-        - version: GGUF version
-        - tensor_count: Number of tensors
-        - metadata_kv_count: Number of metadata key-value pairs
-        
-    Raises:
-        ValueError: If not a valid GGUF file
-    """
-    import struct
+# ---------------------------------------------------------------------------
+# GGUF parsing: delegated to the shared implementation in gguf.py
+# Re-exported here for backward compatibility.
+# ---------------------------------------------------------------------------
+from .gguf import parse_gguf_header, parse_gguf_metadata, read_gguf_value  # noqa: E402, F401
 
-    # GGUF magic number (4 bytes)
-    magic = f.read(4)
-    if magic != b'GGUF':
-        raise ValueError(f"Not a valid GGUF file (magic: {magic})")
-    
-    # Version (4 bytes, little-endian uint32)
-    version = struct.unpack('<I', f.read(4))[0]
-    
-    # Tensor count (8 bytes, little-endian uint64)
-    tensor_count = struct.unpack('<Q', f.read(8))[0]
-    
-    # Metadata KV count (8 bytes, little-endian uint64)
-    metadata_kv_count = struct.unpack('<Q', f.read(8))[0]
-    
-    logger.debug(f"GGUF header: version={version}, tensors={tensor_count}, metadata_kvs={metadata_kv_count}")
-    
-    return {
-        'version': version,
-        'tensor_count': tensor_count,
-        'metadata_kv_count': metadata_kv_count
-    }
-
-
-def parse_gguf_metadata(f, header: dict) -> dict[str, Any]:
-    """
-    Parse metadata key-value pairs from GGUF file.
-    
-    Each metadata entry consists of:
-    - Key length: 8 bytes (uint64)
-    - Key: N bytes (UTF-8 string)
-    - Value type: 4 bytes (uint32)
-    - Value: Variable length based on type
-    
-    Args:
-        f: Open file handle (binary mode)
-        header: Parsed header dictionary
-        
-    Returns:
-        Dictionary of metadata key-value pairs
-    """
-    import struct
-    
-    metadata = {}
-    
-    # GGUF value types
-    GGUF_TYPE_UINT8 = 0
-    GGUF_TYPE_INT8 = 1
-    GGUF_TYPE_UINT16 = 2
-    GGUF_TYPE_INT16 = 3
-    GGUF_TYPE_UINT32 = 4
-    GGUF_TYPE_INT32 = 5
-    GGUF_TYPE_FLOAT32 = 6
-    GGUF_TYPE_BOOL = 7
-    GGUF_TYPE_STRING = 8
-    GGUF_TYPE_ARRAY = 9
-    GGUF_TYPE_UINT64 = 10
-    GGUF_TYPE_INT64 = 11
-    GGUF_TYPE_FLOAT64 = 12
-    
-    for _ in range(header['metadata_kv_count']):
-        # Read key
-        key_len = struct.unpack('<Q', f.read(8))[0]
-        key = f.read(key_len).decode('utf-8', errors='replace')
-        
-        # Read value type
-        value_type = struct.unpack('<I', f.read(4))[0]
-        
-        # Read value based on type
-        value = None
-        try:
-            if value_type == GGUF_TYPE_UINT8:
-                value = struct.unpack('<B', f.read(1))[0]
-            elif value_type == GGUF_TYPE_INT8:
-                value = struct.unpack('<b', f.read(1))[0]
-            elif value_type == GGUF_TYPE_UINT16:
-                value = struct.unpack('<H', f.read(2))[0]
-            elif value_type == GGUF_TYPE_INT16:
-                value = struct.unpack('<h', f.read(2))[0]
-            elif value_type == GGUF_TYPE_UINT32:
-                value = struct.unpack('<I', f.read(4))[0]
-            elif value_type == GGUF_TYPE_INT32:
-                value = struct.unpack('<i', f.read(4))[0]
-            elif value_type == GGUF_TYPE_UINT64:
-                value = struct.unpack('<Q', f.read(8))[0]
-            elif value_type == GGUF_TYPE_INT64:
-                value = struct.unpack('<q', f.read(8))[0]
-            elif value_type == GGUF_TYPE_FLOAT32:
-                value = struct.unpack('<f', f.read(4))[0]
-            elif value_type == GGUF_TYPE_FLOAT64:
-                value = struct.unpack('<d', f.read(8))[0]
-            elif value_type == GGUF_TYPE_BOOL:
-                value = struct.unpack('<B', f.read(1))[0] != 0
-            elif value_type == GGUF_TYPE_STRING:
-                str_len = struct.unpack('<Q', f.read(8))[0]
-                value = f.read(str_len).decode('utf-8', errors='replace')
-            elif value_type == GGUF_TYPE_ARRAY:
-                # Array type - skip for now (complex nested structure)
-                array_type = struct.unpack('<I', f.read(4))[0]
-                array_len = struct.unpack('<Q', f.read(8))[0]
-                # Skip array data - would need recursive parsing
-                logger.warning(f"Skipping array metadata: {key}")
-                value = f"<array of {array_len} items>"
-            else:
-                logger.warning(f"Unknown GGUF value type {value_type} for key {key}")
-                value = None
-        except Exception as e:
-            logger.warning(f"Failed to parse metadata value for {key}: {e}")
-            value = None
-        
-        metadata[key] = value
-        logger.debug(f"Metadata: {key} = {value}")
-    
-    return metadata
-
-
-def parse_gguf_tensors(
-    f,
-    header: dict,
-    dequantize: bool = True
-) -> dict[str, 'torch.Tensor']:
-    """
-    Parse and extract tensors from GGUF file.
-    
-    ⚠️ NOTE: Full dequantization of all GGUF quantization types is not yet
-    implemented. This function will work for F32 and F16 tensors, but will
-    raise NotImplementedError for quantized types unless the gguf library
-    is available.
-    
-    Args:
-        f: Open file handle (binary mode)
-        header: Parsed header dictionary
-        dequantize: If True, dequantize quantized tensors to float32
-        
-    Returns:
-        Dictionary mapping tensor names to PyTorch tensors
-        
-    Raises:
-        NotImplementedError: If quantized tensors are encountered without gguf library
-    """
-    import struct
-    
-    if not HAVE_TORCH:
-        raise RuntimeError("torch required for tensor parsing")
-    
-    import numpy as np
-    import torch
-    
-    tensors = {}
-    
-    # GGUF quantization types
-    GGML_TYPE_F32 = 0
-    GGML_TYPE_F16 = 1
-    GGML_TYPE_Q4_0 = 2
-    GGML_TYPE_Q4_1 = 3
-    GGML_TYPE_Q5_0 = 6
-    GGML_TYPE_Q5_1 = 7
-    GGML_TYPE_Q8_0 = 8
-    
-    # Read tensor info entries
-    tensor_infos = []
-    for _ in range(header['tensor_count']):
-        # Read tensor name
-        name_len = struct.unpack('<Q', f.read(8))[0]
-        name = f.read(name_len).decode('utf-8', errors='replace')
-        
-        # Read number of dimensions
-        n_dims = struct.unpack('<I', f.read(4))[0]
-        
-        # Read dimensions
-        dims = []
-        for _ in range(n_dims):
-            dims.append(struct.unpack('<Q', f.read(8))[0])
-        
-        # Read tensor type
-        tensor_type = struct.unpack('<I', f.read(4))[0]
-        
-        # Read offset
-        offset = struct.unpack('<Q', f.read(8))[0]
-        
-        tensor_infos.append({
-            'name': name,
-            'dims': tuple(reversed(dims)),  # GGUF stores dims reversed
-            'type': tensor_type,
-            'offset': offset
-        })
-    
-    # Align to tensor data section (GGUF aligns to 32-byte boundary)
-    current_pos = f.tell()
-    alignment = 32
-    aligned_pos = ((current_pos + alignment - 1) // alignment) * alignment
-    f.seek(aligned_pos)
-    
-    tensor_data_start = f.tell()
-    
-    # Read tensor data
-    for info in tensor_infos:
-        name = info['name']
-        dims = info['dims']
-        tensor_type = info['type']
-        offset = info['offset']
-        
-        # Seek to tensor data
-        f.seek(tensor_data_start + offset)
-        
-        # Calculate tensor size
-        n_elements = 1
-        for dim in dims:
-            n_elements *= dim
-        
-        # Read and convert based on type
-        if tensor_type == GGML_TYPE_F32:
-            # Float32
-            data = np.fromfile(f, dtype=np.float32, count=n_elements)
-            tensor = torch.from_numpy(data.reshape(dims))
-        elif tensor_type == GGML_TYPE_F16:
-            # Float16
-            data = np.fromfile(f, dtype=np.float16, count=n_elements)
-            tensor = torch.from_numpy(data.reshape(dims))
-            if dequantize:
-                tensor = tensor.float()
-        elif tensor_type == GGML_TYPE_Q4_0:
-            # Q4_0 quantized
-            if dequantize:
-                block_size = 32
-                bytes_per_block = 18
-                n_blocks = (n_elements + block_size - 1) // block_size
-                n_bytes = n_blocks * bytes_per_block
-                raw_data = f.read(n_bytes)
-                tensor = dequantize_q4_0(raw_data, tuple(dims))
-            else:
-                logger.warning(f"Skipping quantized tensor (no dequantize): {name}")
-                continue
-        elif tensor_type == GGML_TYPE_Q8_0:
-            # Q8_0 quantized
-            if dequantize:
-                block_size = 32
-                bytes_per_block = 34
-                n_blocks = (n_elements + block_size - 1) // block_size
-                n_bytes = n_blocks * bytes_per_block
-                raw_data = f.read(n_bytes)
-                tensor = dequantize_q8_0(raw_data, tuple(dims))
-            else:
-                logger.warning(f"Skipping quantized tensor (no dequantize): {name}")
-                continue
-        elif tensor_type in [GGML_TYPE_Q4_1, GGML_TYPE_Q5_0, GGML_TYPE_Q5_1]:
-            # Other quantized types - not yet implemented
-            if dequantize:
-                logger.warning(f"Dequantization of GGML type {tensor_type} not yet implemented, skipping: {name}")
-                continue
-            else:
-                logger.warning(f"Skipping quantized tensor: {name}")
-                continue
-        else:
-            logger.warning(f"Unknown tensor type {tensor_type} for {name}")
-            continue
-        
-        tensors[name] = tensor
-        logger.debug(f"Loaded tensor: {name}, shape: {tensor.shape}, type: {tensor_type}")
-    
-    return tensors
-
-
-def extract_config_from_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
-    """
-    Extract Forge config parameters from GGUF metadata.
-    
-    Args:
-        metadata: Parsed GGUF metadata dictionary
-        
-    Returns:
-        Dictionary with config parameters
-    """
-    config = {}
-    
-    # Extract common LLaMA-style metadata
-    if 'llama.embedding_length' in metadata:
-        config['dim'] = metadata['llama.embedding_length']
-    elif 'llama.embed_length' in metadata:
-        config['dim'] = metadata['llama.embed_length']
-    
-    if 'llama.block_count' in metadata:
-        config['n_layers'] = metadata['llama.block_count']
-    
-    if 'llama.attention.head_count' in metadata:
-        config['n_heads'] = metadata['llama.attention.head_count']
-    
-    if 'llama.attention.head_count_kv' in metadata:
-        config['n_kv_heads'] = metadata['llama.attention.head_count_kv']
-    
-    if 'llama.context_length' in metadata:
-        config['max_seq_len'] = metadata['llama.context_length']
-    
-    # Try to get vocab size from tokenizer metadata
-    if 'tokenizer.ggml.tokens' in metadata:
-        tokens = metadata['tokenizer.ggml.tokens']
-        if isinstance(tokens, list):
-            config['vocab_size'] = len(tokens)
-        elif isinstance(tokens, str) and '<array' in tokens:
-            # Parse array size from string like "<array of 32000 items>"
-            import re
-            match = re.search(r'(\d+)\s+items', tokens)
-            if match:
-                config['vocab_size'] = int(match.group(1))
-    
-    # Set defaults for missing values
-    if 'vocab_size' not in config:
-        config['vocab_size'] = 32000  # Common default
-    if 'dim' not in config:
-        config['dim'] = 4096
-    if 'n_layers' not in config:
-        config['n_layers'] = 32
-    if 'n_heads' not in config:
-        config['n_heads'] = 32
-    if 'max_seq_len' not in config:
-        config['max_seq_len'] = 2048
-    
-    return config
-
-
-def dequantize_q4_0(data: bytes, shape: tuple) -> 'torch.Tensor':
-    """
-    Dequantize Q4_0 format (4-bit quantization, block size 32).
-    
-    Q4_0 format:
-    - Block size: 32 elements
-    - Each block: 1 float16 scale + 16 bytes (32 x 4-bit values)
-    - Total: 18 bytes per block
-    
-    Args:
-        data: Raw quantized bytes
-        shape: Original tensor shape
-        
-    Returns:
-        Dequantized PyTorch tensor
-    """
-    import numpy as np
-    
-    if not HAVE_TORCH:
-        raise RuntimeError("PyTorch required for dequantization")
-    
-    block_size = 32
-    bytes_per_block = 18  # 2 (scale) + 16 (data)
-    
-    # Convert to numpy array
-    data_array = np.frombuffer(data, dtype=np.uint8)
-    n_blocks = len(data_array) // bytes_per_block
-    
-    # Calculate total elements
-    n_elements = n_blocks * block_size
-    output = np.zeros(n_elements, dtype=np.float32)
-    
-    for i in range(n_blocks):
-        block_start = i * bytes_per_block
-        
-        # Extract scale (float16)
-        scale_bytes = data_array[block_start:block_start + 2]
-        scale = np.frombuffer(scale_bytes.tobytes(), dtype=np.float16)[0]
-        
-        # Extract packed 4-bit values
-        packed = data_array[block_start + 2:block_start + 18]
-        
-        # Unpack 4-bit values (2 per byte)
-        for j in range(16):
-            byte_val = packed[j]
-            low = (byte_val & 0xF) - 8  # Signed 4-bit (-8 to 7)
-            high = ((byte_val >> 4) & 0xF) - 8
-            
-            output[i * block_size + j * 2] = float(scale) * low
-            output[i * block_size + j * 2 + 1] = float(scale) * high
-    
-    # Reshape to original shape
-    total_elements = 1
-    for dim in shape:
-        total_elements *= dim
-    
-    output = output[:total_elements]
-    return torch.from_numpy(output.reshape(shape))
-
-
-def dequantize_q8_0(data: bytes, shape: tuple) -> 'torch.Tensor':
-    """
-    Dequantize Q8_0 format (8-bit quantization, block size 32).
-    
-    Q8_0 format:
-    - Block size: 32 elements
-    - Each block: 1 float16 scale + 32 bytes (32 x 8-bit values)
-    - Total: 34 bytes per block
-    
-    Args:
-        data: Raw quantized bytes
-        shape: Original tensor shape
-        
-    Returns:
-        Dequantized PyTorch tensor
-    """
-    import numpy as np
-    
-    if not HAVE_TORCH:
-        raise RuntimeError("PyTorch required for dequantization")
-    
-    block_size = 32
-    bytes_per_block = 34  # 2 (scale) + 32 (data)
-    
-    # Convert to numpy array
-    data_array = np.frombuffer(data, dtype=np.uint8)
-    n_blocks = len(data_array) // bytes_per_block
-    
-    # Calculate total elements
-    n_elements = n_blocks * block_size
-    output = np.zeros(n_elements, dtype=np.float32)
-    
-    for i in range(n_blocks):
-        block_start = i * bytes_per_block
-        
-        # Extract scale (float16)
-        scale_bytes = data_array[block_start:block_start + 2]
-        scale = np.frombuffer(scale_bytes.tobytes(), dtype=np.float16)[0]
-        
-        # Extract 8-bit signed values
-        values = data_array[block_start + 2:block_start + 34].astype(np.int8)
-        
-        # Dequantize: value * scale
-        output[i * block_size:(i + 1) * block_size] = values.astype(np.float32) * float(scale)
-    
-    # Reshape to original shape
-    total_elements = 1
-    for dim in shape:
-        total_elements *= dim
-    
-    output = output[:total_elements]
-    return torch.from_numpy(output.reshape(shape))
+# ---------------------------------------------------------------------------
+# Tensor parsing & dequantization: moved to gguf_dequant.py
+# Re-exported here for backward compatibility.
+# ---------------------------------------------------------------------------
+from .gguf_dequant import (  # noqa: E402, F401
+    parse_gguf_tensors,
+    extract_config_from_metadata,
+    dequantize_q4_0,
+    dequantize_q8_0,
+)
 
 
 def load_gguf_model(
