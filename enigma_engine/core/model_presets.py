@@ -1,0 +1,522 @@
+"""
+Model presets and configuration dataclasses for Enigma Engine.
+
+Contains ForgeConfig, QuantizationConfig, MODEL_PRESETS, and related
+utility functions. This module has no torch dependency at import time.
+"""
+from __future__ import annotations
+
+import copy
+import logging
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Optional
+
+if TYPE_CHECKING:
+    import torch
+
+logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# ⚙️ CONFIGURATION - Model Settings
+# =============================================================================
+# ForgeConfig holds ALL the settings that define a model's architecture.
+# Think of it as a blueprint - same settings = same model structure.
+
+@dataclass
+class ForgeConfig:
+    """
+    Model configuration with sensible defaults.
+    
+    📖 WHAT EACH SETTING DOES:
+    
+    CORE ARCHITECTURE:
+    ┌────────────────────────────────────────────────────────────────────────┐
+    │ vocab_size  │ How many unique tokens the model knows (like vocabulary)│
+    │ dim         │ Hidden dimension - the "width" of neural pathways       │
+    │ n_layers    │ Number of transformer blocks (depth of the network)     │
+    │ n_heads     │ Attention heads (parallel attention computations)       │
+    │ n_kv_heads  │ Key/Value heads for GQA (memory optimization)          │
+    │ hidden_dim  │ FFN hidden size (typically 4x dim for expansion)       │
+    └────────────────────────────────────────────────────────────────────────┘
+    
+    LIMITS & REGULARIZATION:
+    ┌────────────────────────────────────────────────────────────────────────┐
+    │ max_seq_len │ Maximum tokens in one sequence (context window)         │
+    │ dropout     │ Randomly zero neurons during training (prevents overfit)│
+    └────────────────────────────────────────────────────────────────────────┘
+    
+    ARCHITECTURE FLAGS (modern transformer tricks):
+    ┌────────────────────────────────────────────────────────────────────────┐
+    │ use_rope    │ Rotary Position Embeddings (better position awareness)  │
+    │ use_rms_norm│ RMSNorm instead of LayerNorm (faster, equally good)    │
+    │ use_swiglu  │ SwiGLU activation (better than ReLU/GELU)              │
+    │ use_bias    │ Add bias terms (usually False in modern models)        │
+    └────────────────────────────────────────────────────────────────────────┘
+    
+    UNIVERSAL MODEL ENHANCEMENTS:
+    ┌────────────────────────────────────────────────────────────────────────┐
+    │ rope_scaling_type   │ RoPE scaling for extended context              │
+    │ rope_scaling_factor │ Scaling multiplier for context extension       │
+    │ use_moe            │ Enable Mixture of Experts architecture          │
+    │ num_experts        │ Number of expert networks (MoE)                 │
+    │ num_experts_per_tok│ Experts activated per token (MoE)               │
+    │ sliding_window     │ Sliding window attention length                 │
+    │ use_paged_attn     │ Enable paged attention for better memory        │
+    └────────────────────────────────────────────────────────────────────────┘
+    """
+    # ─────────────────────────────────────────────────────────────────────────
+    # CORE PARAMETERS
+    # ─────────────────────────────────────────────────────────────────────────
+    vocab_size: int = 8000      # Size of vocabulary (tokenizer determines this)
+    dim: int = 512              # Model hidden dimension (larger = smarter but slower)
+    n_layers: int = 8           # Number of transformer layers (deeper = more capable)
+    n_heads: int = 8            # Attention heads (more = better pattern recognition)
+    n_kv_heads: Optional[int] = None  # KV heads for GQA (None = same as n_heads)
+    hidden_dim: Optional[int] = None  # FFN dimension (None = auto-calculate)
+    max_seq_len: int = 1024     # Maximum sequence length (context window)
+    dropout: float = 0.1        # Dropout rate (0.1 = 10% neurons randomly zeroed)
+    
+    # ─────────────────────────────────────────────────────────────────────────
+    # ARCHITECTURE FLAGS - Modern transformer improvements
+    # ─────────────────────────────────────────────────────────────────────────
+    use_rope: bool = True       # RoPE: Better position encoding than absolute
+    use_rms_norm: bool = True   # RMSNorm: Faster normalization, works just as well
+    use_swiglu: bool = True     # SwiGLU: Superior activation function
+    use_bias: bool = False      # Bias: Usually disabled in modern transformers
+    rope_theta: float = 10000.0 # RoPE base frequency (higher = longer context)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # ROPE SCALING - Extended context support
+    # ─────────────────────────────────────────────────────────────────────────
+    rope_scaling_type: Optional[str] = None  # "linear", "dynamic", "yarn", None
+    rope_scaling_factor: float = 1.0  # Context extension multiplier (>1.0 extends)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # MIXTURE OF EXPERTS (MoE)
+    # ─────────────────────────────────────────────────────────────────────────
+    use_moe: bool = False       # Enable MoE architecture
+    num_experts: int = 8        # Number of expert networks
+    num_experts_per_token: int = 2  # Top-k experts to activate per token
+    moe_load_balancing: float = 0.01  # Load balancing loss weight
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # ENHANCED KV-CACHE
+    # ─────────────────────────────────────────────────────────────────────────
+    sliding_window: Optional[int] = None  # Sliding window attention length
+    use_paged_attn: bool = False  # Enable paged attention (better memory)
+    kv_cache_dtype: Optional[str] = None  # "int8", "fp16", None (same as model)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # MEMORY OPTIMIZATION
+    # ─────────────────────────────────────────────────────────────────────────
+    use_gradient_checkpointing: bool = False  # Trade compute for memory during training
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # MULTI-MODAL SUPPORT
+    # ─────────────────────────────────────────────────────────────────────────
+    vision_hidden_size: Optional[int] = None  # Vision encoder dimension
+    audio_hidden_size: Optional[int] = None   # Audio encoder dimension
+    
+    # ─────────────────────────────────────────────────────────────────────────
+    # LEGACY ALIASES - For backwards compatibility
+    # ─────────────────────────────────────────────────────────────────────────
+    depth: Optional[int] = None      # Old name for n_layers
+    heads: Optional[int] = None      # Old name for n_heads
+    max_len: Optional[int] = None    # Old name for max_seq_len
+    embed_dim: Optional[int] = None  # Old name for dim
+
+    # Track if config is frozen (immutable after creation)
+    _frozen: bool = False
+    
+    def __post_init__(self) -> None:
+        """
+        Post-initialization: validate and set computed defaults.
+        Called automatically after __init__ (dataclass magic).
+        """
+        # ─────────────────────────────────────────────────────────────────────
+        # MAP LEGACY NAMES: Support old config files
+        # ─────────────────────────────────────────────────────────────────────
+        if self.depth:
+            self.n_layers = self.depth
+        if self.heads:
+            self.n_heads = self.heads
+        if self.max_len:
+            self.max_seq_len = self.max_len
+        if self.embed_dim:
+            self.dim = self.embed_dim
+
+        # ─────────────────────────────────────────────────────────────────────
+        # AUTO-CALCULATE KV HEADS: Default to same as n_heads (no GQA)
+        # ─────────────────────────────────────────────────────────────────────
+        if self.n_kv_heads is None:
+            self.n_kv_heads = self.n_heads
+
+        # ─────────────────────────────────────────────────────────────────────
+        # AUTO-CALCULATE HIDDEN DIM: The "expansion" in feed-forward layers
+        # ─────────────────────────────────────────────────────────────────────
+        # Standard: hidden_dim = 4 * dim (4x expansion)
+        # SwiGLU: Needs 2/3 of that because it has 3 matrices instead of 2
+        # MoE: May need adjustment based on num_experts
+        # We also round up to nearest 64 for GPU efficiency
+        if self.hidden_dim is None:
+            if self.use_swiglu:
+                # SwiGLU formula: 2/3 * (4 * dim), rounded to multiple of 64
+                self.hidden_dim = int(2 * (4 * self.dim) / 3)
+                self.hidden_dim = 64 * ((self.hidden_dim + 63) // 64)
+            else:
+                self.hidden_dim = 4 * self.dim
+
+        # ─────────────────────────────────────────────────────────────────────
+        # VALIDATION: Catch configuration errors early
+        # ─────────────────────────────────────────────────────────────────────
+        if self.vocab_size <= 0:
+            raise ValueError(f"vocab_size must be positive, got {self.vocab_size}")
+        
+        if self.dim <= 0:
+            raise ValueError(f"dim must be positive, got {self.dim}")
+        
+        if self.n_layers <= 0:
+            raise ValueError(f"n_layers must be positive, got {self.n_layers}")
+        
+        if self.n_heads <= 0:
+            raise ValueError(f"n_heads must be positive, got {self.n_heads}")
+        
+        if not (0 <= self.dropout <= 1):
+            raise ValueError(f"dropout must be between 0 and 1, got {self.dropout}")
+        
+        if self.max_seq_len <= 0:
+            raise ValueError(f"max_seq_len must be positive, got {self.max_seq_len}")
+        
+        # dim must be divisible by n_heads (each head gets dim/n_heads dimensions)
+        if self.dim % self.n_heads != 0:
+            # Calculate helpful suggestions
+            head_dim = self.dim // self.n_heads
+            suggested_dim = self.n_heads * (head_dim + 1)
+            suggested_heads = self.dim // (head_dim + 1) if head_dim + 1 > 0 else self.n_heads
+            raise ValueError(
+                f"n_heads ({self.n_heads}) must divide evenly into dim ({self.dim}). "
+                f"Got remainder: {self.dim % self.n_heads}. "
+                f"Try: dim={suggested_dim} (with {self.n_heads} heads) or "
+                f"n_heads={suggested_heads} (with dim={self.dim})"
+            )
+        
+        # n_heads must be divisible by n_kv_heads (for GQA grouping)
+        if self.n_heads % self.n_kv_heads != 0:
+            raise ValueError(
+                f"n_kv_heads ({self.n_kv_heads}) must divide evenly into n_heads ({self.n_heads}). "
+                f"Got remainder: {self.n_heads % self.n_kv_heads}"
+            )
+        
+        # ─────────────────────────────────────────────────────────────────────
+        # VALIDATE NEW FEATURES
+        # ─────────────────────────────────────────────────────────────────────
+        # RoPE scaling validation
+        if self.rope_scaling_type is not None:
+            valid_scaling = {"linear", "dynamic", "yarn"}
+            if self.rope_scaling_type not in valid_scaling:
+                raise ValueError(
+                    f"rope_scaling_type must be one of {valid_scaling}, "
+                    f"got {self.rope_scaling_type}"
+                )
+            if self.rope_scaling_factor <= 0:
+                raise ValueError(
+                    f"rope_scaling_factor must be positive, got {self.rope_scaling_factor}"
+                )
+        
+        # MoE validation
+        if self.use_moe:
+            if self.num_experts <= 0:
+                raise ValueError(f"num_experts must be positive, got {self.num_experts}")
+            if self.num_experts_per_token <= 0 or self.num_experts_per_token > self.num_experts:
+                raise ValueError(
+                    f"num_experts_per_token must be in (0, {self.num_experts}], "
+                    f"got {self.num_experts_per_token}"
+                )
+
+    def validate(self) -> bool:
+        """
+        Re-run validation on the config.
+        
+        Delegates to __post_init__ to avoid duplicating validation logic.
+        
+        Returns:
+            True if valid
+            
+        Raises:
+            ValueError: If any validation fails
+        """
+        self.__post_init__()
+        return True
+    
+    def freeze(self) -> ForgeConfig:
+        """
+        Freeze the config to prevent further modifications.
+        
+        Once frozen, any attempt to modify attributes will raise an error.
+        This is useful for ensuring config immutability after model creation.
+        
+        Returns:
+            self (for chaining)
+        """
+        object.__setattr__(self, '_frozen', True)
+        return self
+    
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Override setattr to enforce frozen state."""
+        if getattr(self, '_frozen', False) and name != '_frozen':
+            raise AttributeError(
+                f"Cannot modify frozen ForgeConfig. "
+                f"Create a new config with the desired changes instead."
+            )
+        object.__setattr__(self, name, value)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            'vocab_size': self.vocab_size,
+            'dim': self.dim,
+            'n_layers': self.n_layers,
+            'n_heads': self.n_heads,
+            'n_kv_heads': self.n_kv_heads,
+            'hidden_dim': self.hidden_dim,
+            'max_seq_len': self.max_seq_len,
+            'dropout': self.dropout,
+            'use_rope': self.use_rope,
+            'use_rms_norm': self.use_rms_norm,
+            'use_swiglu': self.use_swiglu,
+            'use_bias': self.use_bias,
+            'rope_theta': self.rope_theta,
+            # New parameters
+            'rope_scaling_type': self.rope_scaling_type,
+            'rope_scaling_factor': self.rope_scaling_factor,
+            'use_moe': self.use_moe,
+            'num_experts': self.num_experts,
+            'num_experts_per_token': self.num_experts_per_token,
+            'moe_load_balancing': self.moe_load_balancing,
+            'sliding_window': self.sliding_window,
+            'use_paged_attn': self.use_paged_attn,
+            'kv_cache_dtype': self.kv_cache_dtype,
+            'use_gradient_checkpointing': self.use_gradient_checkpointing,
+            'vision_hidden_size': self.vision_hidden_size,
+            'audio_hidden_size': self.audio_hidden_size,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> ForgeConfig:
+        known = {
+            'vocab_size', 'dim', 'n_layers', 'n_heads', 'n_kv_heads',
+            'hidden_dim', 'max_seq_len', 'dropout', 'use_rope', 'use_rms_norm',
+            'use_swiglu', 'use_bias', 'rope_theta', 'depth', 'heads',
+            'max_len', 'embed_dim',
+            # New parameters
+            'rope_scaling_type', 'rope_scaling_factor', 'use_moe', 'num_experts',
+            'num_experts_per_token', 'moe_load_balancing', 'sliding_window',
+            'use_paged_attn', 'kv_cache_dtype', 'use_gradient_checkpointing',
+            'vision_hidden_size', 'audio_hidden_size'
+        }
+        return cls(**{k: v for k, v in d.items() if k in known})
+
+
+# =============================================================================
+# ⚡ QUANTIZATION CONFIG - Memory-Efficient Model Deployment
+# =============================================================================
+
+@dataclass
+class QuantizationConfig:
+    """
+    Configuration for model quantization.
+    
+    📖 WHAT THIS DOES:
+    Quantization reduces model precision to save memory and speed up inference.
+    
+    📐 QUANTIZATION TYPES:
+    ┌────────────┬────────────────────────────────────────────────────────────┐
+    │ Type       │ Description                                                │
+    ├────────────┼────────────────────────────────────────────────────────────┤
+    │ none       │ Full FP32 precision (default, most accurate)              │
+    │ dynamic    │ Dynamic INT8 quantization (good for CPU)                  │
+    │ int8       │ Static INT8 quantization (requires calibration)           │
+    │ int4       │ 4-bit quantization (smallest, some quality loss)          │
+    └────────────┴────────────────────────────────────────────────────────────┘
+    
+    ⚡ MEMORY SAVINGS:
+    - FP32: 4 bytes/param (baseline)
+    - FP16: 2 bytes/param (50% savings)
+    - INT8: 1 byte/param (75% savings)
+    - INT4: 0.5 bytes/param (87.5% savings)
+    
+    🍓 PI RECOMMENDATIONS:
+    - Pi Zero: int4 quantization (fits in 512MB RAM)
+    - Pi 4 (4GB): int8 quantization
+    - Pi 5 (8GB): dynamic quantization
+    """
+    mode: str = "none"  # "none", "dynamic", "int8", "int4"
+    
+    # Static quantization options
+    calibration_data: Optional[list[torch.Tensor]] = None
+    num_calibration_batches: int = 100
+    
+    # Dynamic quantization options
+    dtype: Optional[torch.dtype] = None  # torch.qint8 for dynamic
+    
+    # Which layers to quantize
+    quantize_linear: bool = True
+    quantize_embedding: bool = False  # Usually keep embeddings in FP32
+    
+    # INT4 specific
+    group_size: int = 128  # For grouped quantization
+    
+    def __post_init__(self) -> None:
+        valid_modes = {"none", "dynamic", "int8", "int4"}
+        if self.mode not in valid_modes:
+            raise ValueError(f"Invalid quantization mode: {self.mode}. Valid: {valid_modes}")
+
+
+# =============================================================================
+# 📊 MODEL PRESETS - From Raspberry Pi to Server Farm!
+# =============================================================================
+# These presets make it easy to create models of different sizes.
+# Just pick a preset name and the config is ready to go!
+#
+# HOW TO CHOOSE A PRESET:
+#   1. What hardware do you have? (RAM, GPU VRAM)
+#   2. What quality do you need?
+#   3. How fast does it need to be?
+#
+# ROUGH GUIDELINES:
+#   • 4GB RAM/VRAM → tiny or mini
+#   • 8GB VRAM → small or medium  
+#   • 16GB VRAM → large or xl
+#   • 24GB+ VRAM → xxl or larger
+#   • Multi-GPU → huge, giant, etc.
+
+MODEL_PRESETS = {
+    # ─────────────────────────────────────────────────────────────────────────
+    # RASPBERRY PI OPTIMIZED (~500K-8M params) - Specifically tuned for Pi
+    # ─────────────────────────────────────────────────────────────────────────
+    # Pi Zero 2W (512MB RAM): Ultra-minimal footprint
+    'pi_zero': ForgeConfig(dim=64, n_layers=2, n_heads=2, n_kv_heads=1, max_seq_len=256, dropout=0.0),
+    # Pi 4 (4GB RAM): Good balance of capability and memory
+    'pi_4': ForgeConfig(dim=192, n_layers=4, n_heads=4, n_kv_heads=2, max_seq_len=512, dropout=0.05),
+    # Pi 5 (8GB RAM): Maximum Pi capability
+    'pi_5': ForgeConfig(dim=256, n_layers=6, n_heads=8, n_kv_heads=4, max_seq_len=1024, dropout=0.05),
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # EMBEDDED / IoT (~1-2M params) - For microcontrollers and tiny devices
+    # ─────────────────────────────────────────────────────────────────────────
+    'nano': ForgeConfig(dim=128, n_layers=4, n_heads=4, n_kv_heads=2, max_seq_len=256),
+    'micro': ForgeConfig(dim=192, n_layers=4, n_heads=4, n_kv_heads=2, max_seq_len=384),
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # EDGE / Raspberry Pi (~5-15M params) - For single-board computers
+    # ─────────────────────────────────────────────────────────────────────────
+    'tiny': ForgeConfig(dim=256, n_layers=6, n_heads=8, n_kv_heads=4, max_seq_len=512),
+    'mini': ForgeConfig(dim=384, n_layers=6, n_heads=6, n_kv_heads=3, max_seq_len=512),
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # CONSUMER GPU (~27-85M params) - RTX 2080 to RTX 3070
+    # ─────────────────────────────────────────────────────────────────────────
+    'small': ForgeConfig(dim=512, n_layers=8, n_heads=8, n_kv_heads=4, max_seq_len=1024),
+    'medium': ForgeConfig(dim=768, n_layers=12, n_heads=12, n_kv_heads=4, max_seq_len=2048),
+    'base': ForgeConfig(dim=896, n_layers=14, n_heads=14, n_kv_heads=2, max_seq_len=2048),
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # PROSUMER GPU (~200M-600M params) - RTX 3080, RTX 4080, RTX 4090
+    # ─────────────────────────────────────────────────────────────────────────
+    'large': ForgeConfig(dim=1024, n_layers=16, n_heads=16, n_kv_heads=4, max_seq_len=4096),
+    'xl': ForgeConfig(dim=1536, n_layers=24, n_heads=24, n_kv_heads=6, max_seq_len=4096, dropout=0.05),
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # MULTI-GPU / SERVER (~1B-3B params) - 2-4x A100, workstation setups
+    # ─────────────────────────────────────────────────────────────────────────
+    'xxl': ForgeConfig(dim=2048, n_layers=32, n_heads=32, n_kv_heads=8, max_seq_len=8192, dropout=0.05),
+    'huge': ForgeConfig(dim=2560, n_layers=40, n_heads=40, n_kv_heads=8, max_seq_len=8192, dropout=0.05),
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # DATACENTER / CLOUD (~7B-13B params) - 8x A100, cloud instances
+    # ─────────────────────────────────────────────────────────────────────────
+    'giant': ForgeConfig(dim=4096, n_layers=32, n_heads=32, n_kv_heads=8, max_seq_len=8192, dropout=0.05),
+    'colossal': ForgeConfig(dim=4096, n_layers=48, n_heads=32, n_kv_heads=8, max_seq_len=16384, dropout=0.05),
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # MAXIMUM SCALE (~30B+ params) - Full datacenter, research frontier
+    # ─────────────────────────────────────────────────────────────────────────
+    'titan': ForgeConfig(dim=6144, n_layers=48, n_heads=48, n_kv_heads=12, max_seq_len=16384, dropout=0.05),
+    'omega': ForgeConfig(dim=8192, n_layers=64, n_heads=64, n_kv_heads=16, max_seq_len=32768, dropout=0.05),
+}
+
+# Human-readable descriptions
+MODEL_DESCRIPTIONS = {
+    # Pi-optimized presets
+    'pi_zero': "Pi Zero (~500K) - Raspberry Pi Zero 2W, minimal responses",
+    'pi_4': "Pi 4 (~3M) - Raspberry Pi 4 (4GB), balanced performance",
+    'pi_5': "Pi 5 (~8M) - Raspberry Pi 5 (8GB), best Pi experience",
+    # Standard presets
+    'nano': "Minimal (~1M) - Microcontrollers, basic responses",
+    'micro': "Tiny (~2M) - IoT devices, simple tasks",
+    'tiny': "Small (~5M) - Raspberry Pi, edge devices",
+    'mini': "Compact (~10M) - Mobile, low-power devices",
+    'small': "Standard (~27M) - Entry GPU, good learning",
+    'medium': "Capable (~85M) - Mid-range GPU, solid results",
+    'base': "Balanced (~125M) - Good GPU, versatile",
+    'large': "Powerful (~200M) - RTX 3080+, high quality",
+    'xl': "Advanced (~600M) - RTX 4090, excellent results",
+    'xxl': "Massive (~1.5B) - Multi-GPU, near-production",
+    'huge': "Enterprise (~3B) - Server GPU, production ready",
+    'giant': "Datacenter (~7B) - Multi-node, commercial grade",
+    'colossal': "Cloud (~13B) - Distributed, competitive",
+    'titan': "Maximum (~30B) - Full datacenter, state-of-art",
+    'omega': "Ultimate (~70B+) - Cluster, research frontier",
+}
+
+
+def get_preset(name: str, vocab_size: int = 8000) -> ForgeConfig:
+    """Get a preset configuration."""
+    if name not in MODEL_PRESETS:
+        raise ValueError(f"Unknown preset: {name}. Available: {list(MODEL_PRESETS.keys())}")
+
+    # Create a copy with vocab_size
+    preset = MODEL_PRESETS[name]
+    return ForgeConfig(
+        vocab_size=vocab_size,
+        dim=preset.dim,
+        n_layers=preset.n_layers,
+        n_heads=preset.n_heads,
+        n_kv_heads=preset.n_kv_heads,
+        max_seq_len=preset.max_seq_len,
+        dropout=preset.dropout,
+    )
+
+
+def estimate_parameters(config: ForgeConfig) -> int:
+    """Estimate number of parameters for a config."""
+    # Embedding: vocab_size * dim
+    embed = config.vocab_size * config.dim
+
+    # Per layer: attention + FFN
+    # Attention: 4 * dim * dim (Q, K, V, O)
+    # FFN: 3 * dim * hidden_dim (SwiGLU has 3 matrices)
+    per_layer = (4 * config.dim * config.dim +
+                 3 * config.dim * (config.hidden_dim or 4 * config.dim))
+
+    # Total
+    return embed + (per_layer * config.n_layers) + config.dim
+
+
+def list_presets() -> dict:
+    """List all presets with descriptions and estimated parameters."""
+    result = {}
+    for name, config in MODEL_PRESETS.items():
+        # IMPORTANT: Create a copy to avoid mutating the global preset!
+        # Without copy, setting vocab_size corrupts the shared config object.
+        config_copy = copy.deepcopy(config)
+        config_copy.vocab_size = 32000  # Standard for estimation
+        result[name] = {
+            'description': MODEL_DESCRIPTIONS.get(name, ""),
+            'estimated_params': estimate_parameters(config_copy),
+            'dim': config_copy.dim,
+            'layers': config_copy.n_layers,
+            'heads': config_copy.n_heads,
+            'max_seq_len': config_copy.max_seq_len,
+        }
+    return result

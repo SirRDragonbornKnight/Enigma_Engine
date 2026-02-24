@@ -18,16 +18,17 @@ from pathlib import Path
 from typing import Any, Optional
 
 try:
+    import torch
     HAS_TORCH = True
 except ImportError:
     HAS_TORCH = False
 
 try:
+    import numpy as np
     HAS_NUMPY = True
 except ImportError:
     HAS_NUMPY = False
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -307,91 +308,22 @@ class OllamaModelLoader:
         except ImportError:
             logger.warning("GGUF loader not available, attempting direct load")
         
-        # Basic GGUF parsing
+        # Fallback: shared GGUF parsing from gguf.py
+        from .gguf import parse_gguf_header, parse_gguf_metadata
+
         with open(path, "rb") as f:
-            # GGUF magic
-            magic = f.read(4)
-            if magic != b"GGUF":
-                raise ValueError("Invalid GGUF file")
-            
-            # Version
-            version = struct.unpack("<I", f.read(4))[0]
-            logger.info(f"GGUF version: {version}")
-            
-            # Tensor count
-            tensor_count = struct.unpack("<Q", f.read(8))[0]
-            metadata_kv_count = struct.unpack("<Q", f.read(8))[0]
-            
-            logger.info(f"Tensors: {tensor_count}, Metadata: {metadata_kv_count}")
-            
-            # Parse metadata
-            metadata = self._parse_gguf_metadata(f, metadata_kv_count)
-            
-            # Parse tensor info
-            tensors = self._parse_gguf_tensors(f, tensor_count)
-            
+            header = parse_gguf_header(f)
+            logger.info(
+                "GGUF version: %d  Tensors: %d  Metadata: %d",
+                header['version'], header['tensor_count'], header['metadata_kv_count'],
+            )
+            metadata = parse_gguf_metadata(f, header)
+            tensors = self._parse_gguf_tensors(f, header['tensor_count'])
             return {
                 "metadata": metadata,
                 "tensors": tensors,
-                "path": str(path)
+                "path": str(path),
             }
-    
-    def _parse_gguf_metadata(
-        self,
-        f,
-        count: int
-    ) -> dict[str, Any]:
-        """Parse GGUF metadata."""
-        metadata = {}
-        
-        for _ in range(count):
-            # Key
-            key_len = struct.unpack("<Q", f.read(8))[0]
-            key = f.read(key_len).decode("utf-8")
-            
-            # Value type
-            value_type = struct.unpack("<I", f.read(4))[0]
-            
-            # Value
-            value = self._read_gguf_value(f, value_type)
-            metadata[key] = value
-        
-        return metadata
-    
-    def _read_gguf_value(self, f, value_type: int) -> Any:
-        """Read GGUF value based on type."""
-        # GGUF types
-        if value_type == 0:  # UINT8
-            return struct.unpack("<B", f.read(1))[0]
-        elif value_type == 1:  # INT8
-            return struct.unpack("<b", f.read(1))[0]
-        elif value_type == 2:  # UINT16
-            return struct.unpack("<H", f.read(2))[0]
-        elif value_type == 3:  # INT16
-            return struct.unpack("<h", f.read(2))[0]
-        elif value_type == 4:  # UINT32
-            return struct.unpack("<I", f.read(4))[0]
-        elif value_type == 5:  # INT32
-            return struct.unpack("<i", f.read(4))[0]
-        elif value_type == 6:  # FLOAT32
-            return struct.unpack("<f", f.read(4))[0]
-        elif value_type == 7:  # BOOL
-            return bool(struct.unpack("<B", f.read(1))[0])
-        elif value_type == 8:  # STRING
-            str_len = struct.unpack("<Q", f.read(8))[0]
-            return f.read(str_len).decode("utf-8")
-        elif value_type == 9:  # ARRAY
-            array_type = struct.unpack("<I", f.read(4))[0]
-            array_len = struct.unpack("<Q", f.read(8))[0]
-            return [self._read_gguf_value(f, array_type) for _ in range(array_len)]
-        elif value_type == 10:  # UINT64
-            return struct.unpack("<Q", f.read(8))[0]
-        elif value_type == 11:  # INT64
-            return struct.unpack("<q", f.read(8))[0]
-        elif value_type == 12:  # FLOAT64
-            return struct.unpack("<d", f.read(8))[0]
-        
-        return None
     
     def _parse_gguf_tensors(
         self,

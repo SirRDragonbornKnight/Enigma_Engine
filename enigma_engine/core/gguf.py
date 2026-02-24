@@ -247,6 +247,111 @@ WEIGHT_NAME_MAP = {
 }
 
 
+# =============================================================================
+# GGUF Reading / Parsing  (shared by gguf_loader.py & ollama_loader.py)
+# =============================================================================
+
+def read_gguf_value(f: BinaryIO, value_type: int) -> Any:
+    """
+    Read a single GGUF metadata value from an open file handle.
+
+    Args:
+        f: Open file handle (binary mode), positioned at the value bytes.
+        value_type: One of :class:`GGUFValueType` integer codes.
+
+    Returns:
+        The decoded Python value, or *None* for unknown types.
+    """
+    vt = GGUFValueType
+    if value_type == vt.UINT8:
+        return struct.unpack('<B', f.read(1))[0]
+    if value_type == vt.INT8:
+        return struct.unpack('<b', f.read(1))[0]
+    if value_type == vt.UINT16:
+        return struct.unpack('<H', f.read(2))[0]
+    if value_type == vt.INT16:
+        return struct.unpack('<h', f.read(2))[0]
+    if value_type == vt.UINT32:
+        return struct.unpack('<I', f.read(4))[0]
+    if value_type == vt.INT32:
+        return struct.unpack('<i', f.read(4))[0]
+    if value_type == vt.FLOAT32:
+        return struct.unpack('<f', f.read(4))[0]
+    if value_type == vt.BOOL:
+        return struct.unpack('<B', f.read(1))[0] != 0
+    if value_type == vt.STRING:
+        str_len = struct.unpack('<Q', f.read(8))[0]
+        return f.read(str_len).decode('utf-8', errors='replace')
+    if value_type == vt.ARRAY:
+        array_type = struct.unpack('<I', f.read(4))[0]
+        array_len = struct.unpack('<Q', f.read(8))[0]
+        return [read_gguf_value(f, array_type) for _ in range(array_len)]
+    if value_type == vt.UINT64:
+        return struct.unpack('<Q', f.read(8))[0]
+    if value_type == vt.INT64:
+        return struct.unpack('<q', f.read(8))[0]
+    if value_type == vt.FLOAT64:
+        return struct.unpack('<d', f.read(8))[0]
+    logger.warning("Unknown GGUF value type %d", value_type)
+    return None
+
+
+def parse_gguf_header(f: BinaryIO) -> dict[str, Any]:
+    """
+    Parse a GGUF file header.
+
+    Returns dict with keys *version*, *tensor_count*, *metadata_kv_count*.
+
+    Raises:
+        ValueError: If the file does not start with the GGUF magic bytes.
+    """
+    magic = f.read(4)
+    if magic != b'GGUF':
+        raise ValueError(f"Not a valid GGUF file (magic: {magic!r})")
+    version = struct.unpack('<I', f.read(4))[0]
+    tensor_count = struct.unpack('<Q', f.read(8))[0]
+    metadata_kv_count = struct.unpack('<Q', f.read(8))[0]
+    logger.debug(
+        "GGUF header: version=%d, tensors=%d, metadata_kvs=%d",
+        version, tensor_count, metadata_kv_count,
+    )
+    return {
+        'version': version,
+        'tensor_count': tensor_count,
+        'metadata_kv_count': metadata_kv_count,
+    }
+
+
+def parse_gguf_metadata(f: BinaryIO, header: dict[str, Any]) -> dict[str, Any]:
+    """
+    Parse all metadata key-value pairs that follow the header.
+
+    Args:
+        f: Open file handle positioned right after the header.
+        header: Dict returned by :func:`parse_gguf_header`.
+
+    Returns:
+        ``{key: value}`` mapping for every metadata entry.
+    """
+    metadata: dict[str, Any] = {}
+    for _ in range(header['metadata_kv_count']):
+        key_len = struct.unpack('<Q', f.read(8))[0]
+        key = f.read(key_len).decode('utf-8', errors='replace')
+        value_type = struct.unpack('<I', f.read(4))[0]
+        try:
+            value = read_gguf_value(f, value_type)
+        except Exception as exc:
+            logger.warning("Failed to parse metadata value for %s: %s", key, exc)
+            value = None
+        metadata[key] = value
+        logger.debug("Metadata: %s = %s", key, value)
+    return metadata
+
+
+# =============================================================================
+# Tensor Name Mapping
+# =============================================================================
+
 def convert_tensor_name(pytorch_name: str) -> str:
     """Convert PyTorch tensor name to GGUF convention."""
     name = pytorch_name
@@ -752,6 +857,9 @@ __all__ = [
     'GGUFExporter',
     'export_to_gguf',
     'convert_tensor_name',
+    'read_gguf_value',
+    'parse_gguf_header',
+    'parse_gguf_metadata',
     'QUANT_TYPES',
     'GGML_BLOCK_SIZES',
     'GGUF_MAGIC',

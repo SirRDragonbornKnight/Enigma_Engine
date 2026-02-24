@@ -1,56 +1,8 @@
 """
-================================================================================
-               THE KINGDOM OF Enigma AI Engine - YOUR ADVENTURE BEGINS HERE
-================================================================================
+Enigma AI Engine - Modular AI Framework
 
-    "Every great journey has a starting point. This is yours."
-
-Welcome, adventurer! You have discovered Enigma AI Engine - a fully modular AI
-framework where EVERYTHING is a toggleable module. Whether you're running
-on a tiny Raspberry Pi or a massive datacenter, Enigma AI Engine adapts to you.
-
-WHAT IS THIS FILE?
-    This is the FRONT GATE of the kingdom. When you write:
-        from enigma_engine import something
-    Python reads THIS FILE first to know what's available.
-
-THE KINGDOM MAP:
-    ┌─────────────────────────────────────────────────────────────────┐
-    │  enigma_engine/                                                      │
-    │  ├── core/       THE ENGINE   - AI brains (model, inference)   │
-    │  ├── modules/    THE ARMORY   - Load/unload capabilities       │
-    │  ├── gui/        THE CASTLE   - Visual interface (PyQt5)       │
-    │  ├── memory/     THE LIBRARY  - Conversation storage           │
-    │  ├── comms/      THE NETWORK  - API server, remote access      │
-    │  ├── voice/      THE HERALD   - TTS/STT voice features         │
-    │  ├── avatar/     THE CHAMPION - Virtual character control      │
-    │  ├── tools/      THE WORKSHOP - Vision, web, file tools        │
-    │  ├── utils/      THE UTILITY  - Common helpers                 │
-    │  └── config/     THE CODEX    - Configuration settings         │
-    └─────────────────────────────────────────────────────────────────┘
-
-YOUR FIRST QUEST:
-    >>> from enigma_engine.core import create_model, EnigmaEngine
-    >>> model = create_model('small')      # Create an AI brain
-    >>> engine = EnigmaEngine()            # Create a way to talk to it
-    >>> response = engine.generate("Hello, how are you?")
-    >>> print(response)                    # Magic!
-
-CHOOSE YOUR PATH (Entry Points):
-    | Command               | Destination            | Description          |
-    |-----------------------|------------------------|----------------------|
-    | python run.py --gui   | gui/enhanced_window.py | Visual interface     |
-    | python run.py --train | core/training.py       | Teach your AI        |
-    | python run.py --run   | core/inference.py      | Chat in terminal     |
-    | python run.py --serve | comms/api_server.py    | REST API server      |
-
-DOCUMENTATION SCROLLS:
-    • README.md              - Getting started guide
-    • CODE_ADVENTURE_TOUR.md - Interactive code exploration
-    • QUICK_FILE_LOCATOR.md  - Find files fast
-    • docs/CODE_TOUR.md      - Detailed technical docs
-
-May your training converge and your gradients flow smoothly!
+Simple imports:
+    from enigma_engine.core import EnigmaEngine
 """
 from pathlib import Path
 
@@ -64,42 +16,8 @@ MODELS_DIR = Path(CONFIG["models_dir"])
 DB_PATH = Path(CONFIG["db_path"])
 
 # Version info
-__version__ = "0.1.0"
-__author__ = "Enigma AI Engine Team"
-
-# Cross-device integration (Pi + Phone + Gaming PC)
-try:
-    from .integration import (
-        CrossDeviceSystem,
-        DeviceEndpoint,
-        SystemRole,
-        quick_setup_gaming_pc,
-        quick_setup_phone,
-        quick_setup_pi,
-    )
-    HAS_INTEGRATION = True
-except ImportError:
-    HAS_INTEGRATION = False
-
-# Quick API for simple operations
-from .quick import (
-    QuickError,
-    chat,
-    complete,
-    fetch,
-    ls,
-    read,
-    recall,
-    remember,
-    run,
-    screenshot,
-    search,
-    search_memory,
-    sysinfo,
-    translate,
-    wiki,
-    write,
-)
+__version__ = "1.1.0"
+__author__ = "SirRDragonbornKnight"
 
 __all__ = [
     # Configuration
@@ -113,28 +31,4 @@ __all__ = [
     'DB_PATH',
     # Version
     '__version__',
-    # Quick API
-    'QuickError',
-    'chat',
-    'complete',
-    'search',
-    'fetch',
-    'read',
-    'write',
-    'ls',
-    'screenshot',
-    'sysinfo',
-    'run',
-    'remember',
-    'recall',
-    'search_memory',
-    'wiki',
-    'translate',
-    # Cross-device integration
-    'CrossDeviceSystem',
-    'SystemRole',
-    'DeviceEndpoint',
-    'quick_setup_gaming_pc',
-    'quick_setup_phone',
-    'quick_setup_pi',
 ]

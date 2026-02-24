@@ -353,17 +353,16 @@ class BPETokenizer:
             if idx in self.id_to_token:
                 token = self.id_to_token[idx]
 
-                if skip_special_tokens and token in self.special_tokens:
-                    # Convert special tokens back to readable form
-                    if token == '<Q>':
-                        tokens.append('Q: ')
-                    elif token == '<A>':
-                        tokens.append('A: ')
-                    elif token == '<USER>':
-                        tokens.append('User: ')
-                    elif token == '<BOT>':
-                        tokens.append('Bot: ')
-                    # Skip other special tokens like <s>, </s>, <pad>
+                if token in self.special_tokens:
+                    if skip_special_tokens:
+                        # Drop all special tokens entirely
+                        continue
+                    # When keeping special tokens, show readable forms
+                    readable = {
+                        '<Q>': 'Q: ', '<A>': 'A: ',
+                        '<USER>': 'User: ', '<BOT>': 'Bot: ',
+                    }
+                    tokens.append(readable.get(token, token))
                     continue
 
                 tokens.append(token)
@@ -400,8 +399,7 @@ class BPETokenizer:
             data = json.load(f)
 
         self.token_to_id = data['token_to_id']
-        self.id_to_token = {int(v) if isinstance(v, str) else v: k
-                            for k, v in self.token_to_id.items()}
+        # Build reverse mapping — values in token_to_id are ints (token IDs)
         self.id_to_token = {v: k for k, v in self.token_to_id.items()}
 
         self.merges = [tuple(m) for m in data['merges']]

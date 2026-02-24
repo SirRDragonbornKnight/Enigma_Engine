@@ -91,7 +91,7 @@ CONFIG = {
     "vocab_dir": str(BASE_DIR / "enigma_engine" / "vocab_model"),
     "logs_dir": str(BASE_DIR / "logs"),
     "personas_dir": str(BASE_DIR / "data" / "personas"),  # AI persona storage
-
+    
     # =========================================================================
     # THE ARCHITECT'S BLUEPRINT - Model Architecture
     # =========================================================================
@@ -116,11 +116,8 @@ CONFIG = {
     # it absorbs knowledge, how many times it studies the texts.
     
     "learning_rate": 1e-4,
-    "default_learning_rate": 1e-4,  # Alias for GUI
     "batch_size": 32,
-    "default_batch_size": 32,       # Alias for GUI
     "epochs": 10,
-    "default_epochs": 10,           # Alias for GUI
     "warmup_steps": 100,
     "gradient_accumulation_steps": 1,
     "weight_decay": 0.1,
@@ -154,26 +151,6 @@ CONFIG = {
     "enigma_api_key": None,        # Set via env ENIGMA_API_KEY or forge_config.json
 
     # =========================================================================
-    # THE WEB INTERFACE - Remote Access Configuration
-    # =========================================================================
-    # Modern web interface for accessing Enigma AI Engine from any device.
-    # Built with FastAPI and WebSocket for real-time communication.
-    
-    "web_interface": {
-        "enabled": True,
-        "host": "0.0.0.0",              # 0.0.0.0 = accessible from network
-        "port": 8080,
-        "auto_start": False,            # Start web server automatically with GUI
-        "require_auth": True,           # Require authentication token
-        "allow_training": False,        # Disable training from web (security)
-        "allow_settings_change": True,  # Allow changing settings from web
-        "cors_origins": ["*"],          # CORS allowed origins (* = all)
-        "max_connections": 10,          # Maximum concurrent connections
-        "enable_discovery": True,       # Enable mDNS/Bonjour local discovery
-        "token_lifetime_hours": 720     # Token expiration (30 days)
-    },
-
-    # =========================================================================
     # THE FORGE'S HEART - Hardware Configuration
     # =========================================================================
     # What powers drive the forge? CPU, GPU, or the mystical MPS of Apple?
@@ -183,271 +160,40 @@ CONFIG = {
     "precision": "float32", # "float32", "float16", "bfloat16"
     
     # Backend selection for neural network operations
-    # "auto" - Uses Pure Python + Numba as primary, PyTorch as fallback for large models
-    # "pure" - Always use pure Python + Numba (fast with Numba, zero PyTorch dependency)
-    # "torch" - Always use PyTorch (fastest on GPU, requires torch installed)
+    # "auto" - Auto-detect (PyTorch if available, CPU fallback)
+    # "torch" - Always use PyTorch
     "nn_backend": "auto",
-    "nn_backend_threshold": 100_000_000,  # Use PyTorch for models >100M params (GPU recommended)
 
     # =========================================================================
-    # THE FEATURES MANIFEST - Capability Toggles
+    # Capability Toggles
     # =========================================================================
-    "enable_voice": True,
-    "enable_vision": True,
-    "enable_avatar": True,
-    "enable_hotkeys": True,  # Enable global hotkey system
-    
-    # =========================================================================
-    # THE CONTEXT WINDOW - Memory Display and Auto-Continue
-    # =========================================================================
-    # Track AI's context usage and prevent hallucinations from overflow.
-    "context_window": {
-        "display_tokens": True,           # Show token counter in chat UI
-        "warning_threshold": 75,          # Yellow warning at this percentage
-        "critical_threshold": 90,         # Red warning at this percentage
-        "auto_continue_enabled": True,    # Enable auto-continue when context full
-        "auto_continue_threshold": 85,    # Trigger auto-continue at this percentage
-        "auto_continue_keep_messages": 3, # Keep last N messages when continuing
-        "auto_continue_include_summary": True,  # Generate summary for new chat
-        "auto_save_on_continue": True,    # Save old chat when auto-continuing
-    },
-    
-    # =========================================================================
-    # THE INTERFACE REALM - GUI Configuration
-    # =========================================================================
-    "gui_mode": "standard",  # "simple", "standard", "advanced", "gaming"
-    "gui_theme": "dark",      # "dark", "light", "shadow", "midnight", "gaming"
-    "enable_quick_actions": True,
-    "enable_feedback_buttons": True,
-    "show_game_mode_indicator": True,
-    
-    # =========================================================================
-    # THE OVERLAY WINDOW - Gaming and Multitasking Interface
-    # =========================================================================
-    "overlay": {
-        "enabled": True,
-        "mode": "compact",                    # "minimal", "compact", "full", "hidden"
-        "position": "top_right",              # "top_left", "top_right", "bottom_left", "bottom_right", "center", "custom"
-        "opacity": 0.9,                       # 0.0 to 1.0
-        "click_through": False,               # Pass clicks through to game
-        "always_on_top": True,                # Float above all windows
-        "theme": "gaming",                    # "dark", "light", "gaming", "minimal", "cyberpunk", "stealth"
-        "hotkey": "Ctrl+Shift+A",            # Hotkey to show/hide overlay
-        "remember_position": True,            # Remember window position
-        "show_on_startup": False,             # Show overlay when Enigma AI Engine starts
-    },
+    # Features that have backing code set to True, others commented out
+    "enable_offloading": False,   # CPU+GPU layer offloading (inference.py supports this)
+    "offload_folder": None,       # Folder for offloaded weights (None = temp)
+    "max_gpu_layers": None,       # Max layers on GPU (None = auto)
 
     # =========================================================================
-    # THE COUNCIL CHAMBER - Multi-Model Support
-    # =========================================================================
-    "allow_multiple_models": True,
-    "max_concurrent_models": 4,
-    
-    # =========================================================================
-    # THE ORCHESTRATOR - Deep Multi-Model Integration
-    # =========================================================================
-    "orchestrator": {
-        "default_chat_model": "auto",           # Auto-select best available
-        "default_code_model": "auto",           # Auto-select best available
-        "default_vision_model": "auto",         # Auto-select best available
-        "default_image_gen_model": "auto",      # Auto-select best available
-        "max_loaded_models": 3,                 # Maximum models loaded at once
-        "gpu_memory_limit_mb": 8000,            # GPU memory limit
-        "cpu_memory_limit_mb": 16000,           # CPU memory limit
-        "enable_collaboration": True,           # Enable model-to-model communication
-        "enable_auto_fallback": True,           # Enable automatic fallback chains
-        "fallback_to_cpu": True,                # Fallback to CPU if GPU full
-        "enable_hot_swap": True,                # Allow hot-swapping models
-    },
-
-    # =========================================================================
-    # THE RESOURCE WARDEN - Memory and CPU Limits
+    # Resource Management
     # =========================================================================
     "resource_mode": "performance",  # "minimal", "balanced", "performance"
     "cpu_threads": 0,             # 0 = auto
     "memory_limit_mb": 0,         # 0 = no limit
     "gpu_memory_fraction": 0.85,  # Use 85% of GPU VRAM
-    "low_priority": False,
-    
+
     # =========================================================================
-    # THE GAME MODE - Zero Lag Gaming with AI Companion
+    # Security Settings
     # =========================================================================
-    "game_mode": {
-        "auto_detect": True,          # Automatically detect games
-        "aggressive": False,          # False = balanced, True = maximum performance
-        "custom_games": [],           # User-defined game executables
-        "excluded_games": [],         # Games where AI can stay active
-        "hotkey_toggle": "Ctrl+Shift+G",  # Hotkey to toggle game mode
-        "show_notification": True,    # Show notification when game detected
-        "resume_delay_seconds": 5,    # Wait before resuming after game closes
-    },
-    
-    # =========================================================================
-    # THE BRIDGE BETWEEN WORLDS - Device Offloading
-    # =========================================================================
-    "enable_offloading": False,   # Enable CPU+GPU layer offloading
-    "offload_folder": None,       # Folder for offloaded weights (None = temp)
-    "offload_to_disk": False,     # Also offload to disk for very large models
-    "max_gpu_layers": None,       # Max layers on GPU (None = auto)
-    
-    # =========================================================================
-    # THE LEARNING COLLECTIVE - Federated Learning
-    # =========================================================================
-    # Privacy-preserving distributed learning where devices share only
-    # model improvements (weight updates), never raw data.
-    "federated": {
-        "mode": "opt_in",                    # "opt_in", "opt_out", "disabled"
-        "privacy_level": "high",             # "none", "low", "medium", "high", "maximum"
-        "epsilon": 1.0,                      # Privacy budget (lower = more private)
-        "delta": 1e-5,                       # Privacy parameter
-        "min_devices": 2,                    # Minimum devices for aggregation
-        "round_duration": 300,               # Training round duration in seconds (5 min)
-        "aggregation_method": "weighted",    # "simple", "weighted", "median", "secure"
-        "min_trust_score": 0.3,              # Minimum trust score to accept updates
-        "byzantine_threshold": 3.0,          # Std devs for Byzantine detection
-        "enable_data_filtering": True,       # Filter training data for privacy
-        "remove_pii": True,                  # Remove personally identifiable info
-        "remove_inappropriate": True,        # Remove inappropriate content
-    },
-    
-    # =========================================================================
-    # THE GUARDIAN'S DECREE - Security Settings
-    # =========================================================================
-    # These sacred protections CANNOT be modified by the AI.
-    # They define territories forbidden to artificial minds.
-    
-    "blocked_paths": [
-        # Add paths here that the AI should never access
-        # Example: "C:/Windows/System32",
-        # Example: "/etc/passwd",
-    ],
+    "blocked_paths": [],
     "blocked_patterns": [
-        # Glob patterns for blocked files
-        "*.exe",
-        "*.dll",
-        "*.sys",
-        "*.pem",
-        "*.key",
-        "*password*",
-        "*secret*",
-        "*.env",
-        ".git/config",
+        "*.exe", "*.dll", "*.sys", "*.pem", "*.key",
+        "*password*", "*secret*", "*.env", ".git/config",
     ],
 
     # =========================================================================
-    # THE CHRONICLER'S SETTINGS - Logging Configuration
+    # Logging
     # =========================================================================
     "log_level": "INFO",
     "log_to_file": False,
-    
-    # =========================================================================
-    # THE HOTKEY BINDINGS - Global Keyboard Shortcuts
-    # =========================================================================
-    "hotkeys": {
-        "summon_ai": "Ctrl+Shift+Space",        # Open AI overlay
-        "dismiss_ai": "Escape",                  # Close AI overlay
-        "push_to_talk": "Ctrl+Shift+T",          # Hold to speak
-        "toggle_game_mode": "Ctrl+Shift+G",      # Toggle game mode
-        "quick_command": "Ctrl+Shift+C",         # Quick command input
-        "screenshot_to_ai": "Ctrl+Shift+S",      # Screenshot and ask AI
-    },
-    
-    # =========================================================================
-    # THE FEDERATION - Federated Learning Configuration
-    # =========================================================================
-    "federated_learning": {
-        "enabled": False,                  # Opt-in by default
-        "mode": "peer_to_peer",            # "centralized" or "peer_to_peer"
-        "privacy_level": "high",           # "none", "low", "medium", "high", "maximum"
-        
-        # Differential Privacy
-        "differential_privacy": {
-            "enabled": True,
-            "epsilon": 1.0,                # Privacy budget (lower = more privacy)
-            "delta": 1e-5,                 # Privacy delta
-        },
-        
-        # Data Filtering
-        "data_filtering": {
-            "exclude_private_chats": True,
-            "exclude_keywords": [
-                "password", "passwd", "pwd",
-                "credit card", "creditcard",
-                "ssn", "social security",
-                "api key", "api_key",
-                "secret", "private key",
-            ],
-            "allowed_categories": [],      # Empty = all categories (if filtering by category)
-            "sanitize_pii": True,          # Remove personal info
-            "min_length": 10,              # Minimum text length
-            "max_length": 10000,           # Maximum text length
-        },
-        
-        # Participation
-        "participation": {
-            "auto_join_rounds": True,
-            "max_rounds_per_day": 3,
-            "min_training_samples": 10,    # Need at least this many samples
-            "contribution_limit": None,    # Max data per round (null = no limit)
-        },
-        
-        # Trust & Security
-        "trust": {
-            "verify_signatures": True,
-            "min_reputation": 0.5,         # Only accept from trusted devices
-            "detect_poisoning": True,
-            "max_update_magnitude": 10.0,  # Maximum allowed update size
-        },
-        
-        # Coordinator Settings
-        "coordinator": {
-            "min_participants": 2,         # Minimum devices for a round
-            "round_timeout": 300,          # Seconds to wait for updates
-        },
-    },
-    
-    # =========================================================================
-    # THE SELF-IMPROVEMENT ENGINE - Learning and Growth
-    # =========================================================================
-    "self_improvement": {
-        "enabled": True,                    # Enable self-improvement system
-        "autonomous_learning": False,       # Autonomous learning mode (off by default)
-        "feedback_learning": True,          # Learn from user feedback
-        
-        # Automatic Training
-        "auto_training": {
-            "enabled": True,                # Automatically trigger LoRA training
-            "min_examples": 100,            # Min examples before training
-            "interval_hours": 24,           # Min hours between training runs
-            "min_quality_score": 0.6,       # Only use high-quality examples
-            "max_examples_per_training": 1000,  # Max examples per training run
-        },
-        
-        # LoRA Configuration
-        "lora_config": {
-            "rank": 8,                      # LoRA rank (lower = faster, higher = better)
-            "alpha": 16,                    # LoRA alpha scaling
-            "dropout": 0.1,                 # Dropout rate
-            "target_modules": ["q_proj", "v_proj"],  # Which layers to adapt
-        },
-        
-        # Storage Limits
-        "storage": {
-            "max_examples": 10000,          # Maximum learning examples to keep
-            "max_feedback_entries": 5000,   # Maximum feedback entries
-            "cleanup_old_data_days": 30,    # Remove data older than N days
-        },
-        
-        # Autonomous Learning Settings
-        "autonomous": {
-            "interval": 300,                # Seconds between autonomous actions
-            "max_actions_per_hour": 12,     # Rate limit
-            "min_quality_for_learning": 0.6,  # Quality threshold
-            "reflection_depth": 10,         # How many conversations to analyze
-            "evolution_rate": 0.02,         # Personality evolution rate
-            "balance_threshold": 0.5,       # Personality balance threshold
-        },
-    },
 }
 
 

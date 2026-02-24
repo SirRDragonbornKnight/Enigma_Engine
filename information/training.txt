@@ -1,4 +1,0 @@
-# Training Data
-
-Q: Hello
-A: Hi there!

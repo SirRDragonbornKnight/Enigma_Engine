@@ -27,7 +27,7 @@ def read_requirements():
 setup(
     name="enigma-engine",
     version="1.1.0",
-    description="Enigma AI Engine - Personal AI Framework to train and deploy your own AI with GUI, voice, vision, and more",
+    description="Enigma AI Engine - Personal AI Framework to train and deploy your own AI locally",
     long_description=open("README.md", encoding="utf-8").read() if __import__("os").path.exists("README.md") else "",
     long_description_content_type="text/markdown",
     author="SirRDragonbornKnight",
@@ -94,12 +94,12 @@ setup(
     entry_points={
         "console_scripts": [
             # Main CLI (Ollama-style)
+            "enigma=enigma_engine.cli.main:main",
+            # Legacy commands (keep for compatibility)
             "forge=enigma_engine.cli.main:main",
-            # Legacy commands
-            "forge-ai=run:main",
-            "forge-ai-train=run:train",
-            "forge-ai-serve=run:serve",
-            "forge-ai-gui=run:gui",
+            "enigma-train=run:train",
+            "enigma-serve=run:serve",
+            "enigma-gui=run:gui",
         ],
     },
     include_package_data=True,

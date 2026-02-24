@@ -5,13 +5,9 @@ Model Download Progress - Progress bars for downloading HuggingFace models.
 
 Provides progress tracking for model downloads:
 - CLI progress bars with tqdm/rich
-- GUI progress callbacks for PyQt5
 - Download speed and ETA estimation
 - Resumable downloads
 - Multi-file tracking
-
-NOTE: This module integrates with enigma_engine.utils.progress for GUI callbacks.
-      Use ProgressTracker for general progress, DownloadTracker for model downloads.
 
 USAGE:
     from enigma_engine.core.download_progress import DownloadTracker, download_with_progress
@@ -25,10 +21,6 @@ USAGE:
     
     tracker = DownloadTracker(callback=on_progress)
     path = tracker.download_model("gpt2")
-    
-    # GUI integration
-    tracker = DownloadTracker(gui_mode=True)
-    tracker.set_progress_signal(qt_signal)  # Emits progress to PyQt
 """
 
 from __future__ import annotations
@@ -41,10 +33,28 @@ from pathlib import Path
 from threading import Lock
 from typing import Any, Callable
 
-# Import common progress utilities for GUI integration
-from ..utils.progress import ProgressState
-
 logger = logging.getLogger(__name__)
+
+
+# Simple progress state dataclass (previously from utils.progress)
+@dataclass
+class ProgressState:
+    """Progress state for tracking operations."""
+    task_name: str = ""
+    total: int | None = None
+    current: int = 0
+    status: str = ""
+    started_at: float | None = None
+    finished_at: float | None = None
+
+
+def format_bytes(size_bytes: int) -> str:
+    """Format bytes as human-readable string."""
+    for unit in ('B', 'KB', 'MB', 'GB', 'TB'):
+        if size_bytes < 1024:
+            return f"{size_bytes:.1f} {unit}"
+        size_bytes /= 1024
+    return f"{size_bytes:.1f} PB"
 
 
 class DownloadState(Enum):
@@ -119,15 +129,8 @@ class DownloadProgress:
         )
 
 
-# Use format_bytes from utils - consolidated from duplicate implementations
-from enigma_engine.utils import format_bytes
-
-
 def format_size(size_bytes: int) -> str:
-    """Format bytes as human-readable string.
-    
-    Note: Uses format_bytes from utils (DRY - was duplicated).
-    """
+    """Format bytes as human-readable string."""
     return format_bytes(size_bytes)
 
 
@@ -163,14 +166,16 @@ class ProgressCallback:
         
         # Check for progress libraries
         try:
+            import tqdm  # noqa: F401
             self._tqdm_available = True
         except ImportError:
-            pass  # Intentionally silent
+            pass
         
         try:
+            import rich  # noqa: F401
             self._rich_available = True
         except ImportError:
-            pass  # Intentionally silent
+            pass
     
     def __call__(
         self,
@@ -271,7 +276,6 @@ class DownloadTracker:
         self,
         callback: Callable[[DownloadProgress], None] | None = None,
         show_cli: bool = True,
-        gui_mode: bool = False,
         cache_dir: Path | None = None
     ):
         """
@@ -280,34 +284,19 @@ class DownloadTracker:
         Args:
             callback: Function to call with progress updates
             show_cli: Show CLI progress bars
-            gui_mode: Enable GUI-friendly mode (no CLI output)
             cache_dir: Custom cache directory for downloads
         """
         self.callback = callback
-        self.show_cli = show_cli and not gui_mode
-        self.gui_mode = gui_mode
+        self.show_cli = show_cli
         self.cache_dir = cache_dir
         
         self._progress_callback: ProgressCallback | None = None
         self._cancelled = False
-        self._qt_signal: Any | None = None
-    
-    def set_progress_signal(self, signal: Any) -> None:
-        """
-        Set PyQt5 signal for GUI progress updates.
-        
-        Args:
-            signal: pyqtSignal that accepts DownloadProgress
-        """
-        self._qt_signal = signal
     
     def _emit_progress(self, progress: DownloadProgress) -> None:
         """Emit progress to all listeners."""
         if self.callback:
             self.callback(progress)
-        
-        if self._qt_signal:
-            self._qt_signal.emit(progress)
     
     def download_model(
         self,
@@ -575,85 +564,3 @@ def list_model_files(model_id: str) -> list[dict[str, Any]]:
     except Exception as e:
         logger.debug(f"Could not list model files: {e}")
         return []
-
-
-# GUI Widget for download progress (optional PyQt5 integration)
-def create_download_widget():
-    """
-    Create a PyQt5 widget for download progress.
-    
-    Returns:
-        QWidget subclass or None if PyQt5 not available
-    """
-    try:
-        from PyQt5.QtCore import pyqtSignal
-        from PyQt5.QtWidgets import (
-            QHBoxLayout,
-            QLabel,
-            QProgressBar,
-            QPushButton,
-            QVBoxLayout,
-            QWidget,
-        )
-        
-        class DownloadWidget(QWidget):
-            """Widget showing download progress."""
-            
-            progress_updated = pyqtSignal(object)  # DownloadProgress
-            
-            def __init__(self, parent=None):
-                super().__init__(parent)
-                self._setup_ui()
-                self.progress_updated.connect(self._on_progress)
-            
-            def _setup_ui(self):
-                layout = QVBoxLayout(self)
-                
-                # File name
-                self.file_label = QLabel("Ready to download")
-                layout.addWidget(self.file_label)
-                
-                # Progress bar
-                self.progress_bar = QProgressBar()
-                self.progress_bar.setMinimum(0)
-                self.progress_bar.setMaximum(100)
-                layout.addWidget(self.progress_bar)
-                
-                # Status line
-                status_layout = QHBoxLayout()
-                self.size_label = QLabel("")
-                self.speed_label = QLabel("")
-                self.eta_label = QLabel("")
-                status_layout.addWidget(self.size_label)
-                status_layout.addStretch()
-                status_layout.addWidget(self.speed_label)
-                status_layout.addWidget(self.eta_label)
-                layout.addLayout(status_layout)
-                
-                # Cancel button
-                self.cancel_btn = QPushButton("Cancel")
-                self.cancel_btn.setEnabled(False)
-                layout.addWidget(self.cancel_btn)
-            
-            def _on_progress(self, progress: DownloadProgress):
-                self.file_label.setText(progress.file_name or "Downloading...")
-                self.progress_bar.setValue(int(progress.percentage))
-                self.size_label.setText(progress.size_str)
-                self.speed_label.setText(progress.speed_str)
-                self.eta_label.setText(f"ETA: {progress.eta_str}")
-                
-                if progress.state == DownloadState.DOWNLOADING:
-                    self.cancel_btn.setEnabled(True)
-                else:
-                    self.cancel_btn.setEnabled(False)
-            
-            def get_tracker(self) -> DownloadTracker:
-                """Get a tracker connected to this widget."""
-                tracker = DownloadTracker(gui_mode=True)
-                tracker.set_progress_signal(self.progress_updated)
-                return tracker
-        
-        return DownloadWidget
-        
-    except ImportError:
-        return None

@@ -60,8 +60,9 @@ Converts sentences into sequences of integers for the neural network.
 """
 import json
 import logging
+import threading
 from pathlib import Path
-from typing import Any, Dict, Optional, Protocol, Union, runtime_checkable
+from typing import Any, Optional, Protocol, runtime_checkable
 
 logger = logging.getLogger(__name__)
 
@@ -538,13 +539,14 @@ class TiktokenWrapper:
     def __init__(self, encoding: str = "cl100k_base"):
         import tiktoken
         self.enc = tiktoken.get_encoding(encoding)
-        self.vocab_size = self.enc.n_vocab
-        
-        # Special tokens for compatibility
-        self.pad_token_id = 0
-        self.bos_token_id = 1
-        self.eos_token_id = 2
-        self.unk_token_id = 3
+        # Reserve IDs above the real vocab range so they never collide
+        # with actual tiktoken token IDs (0 .. n_vocab-1).
+        base = self.enc.n_vocab
+        self.pad_token_id = base
+        self.bos_token_id = base + 1
+        self.eos_token_id = base + 2
+        self.unk_token_id = base + 3
+        self.vocab_size = base + 4  # real tokens + 4 special
     
     def encode(self, text: str, add_special_tokens: bool = True) -> list[int]:
         """Encode text to token IDs."""
@@ -594,13 +596,13 @@ class TiktokenWrapper:
 # =============================================================================
 
 # Tokenizer cache for reuse - maps (tokenizer_type, vocab_path) to instance
-_tokenizer_cache: Dict[tuple, Any] = {}
-_tokenizer_cache_lock = __import__('threading').Lock()
+_tokenizer_cache: dict[tuple, Any] = {}
+_tokenizer_cache_lock = threading.Lock()
 
 
 def get_tokenizer(
     tokenizer_type: str = "auto",
-    vocab_path: Optional[Union[str, Path]] = None,
+    vocab_path: Optional[str | Path] = None,
     use_cache: bool = True
 ) -> Any:
     """

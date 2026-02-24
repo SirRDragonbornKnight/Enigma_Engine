@@ -1,14 +1,10 @@
 # Enigma AI Engine Requirements
-# Last Updated: January 2026
+# Last Updated: February 2026
 # Minimum Python version: 3.9+
 
 # === CORE (Required) ===
-python-dotenv>=0.19.0
-flask>=2.0.0
-flask-cors>=3.0.10
-sqlalchemy>=1.4.0
 numpy>=1.21.0
-cryptography>=41.0.0
+python-dotenv>=0.19.0
 
 # === MODEL & TRAINING ===
 # PyTorch - install manually for your platform:
@@ -16,137 +12,47 @@ cryptography>=41.0.0
 # NVIDIA (RTX 20-40): pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 # NVIDIA (RTX 50):    pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128
 # Apple Silicon:    pip install torch torchvision torchaudio
-# Raspberry Pi:     pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-# Or use: python install.py --standard  (auto-detects your hardware)
 torch>=1.12; platform_system!="Darwin" or platform_machine=="arm64"
 
-# Safetensors - secure model loading (recommended for torch < 2.6)
+# Safetensors - secure model loading
 safetensors>=0.4.0
 
-# Tokenizers (for BPE, optional - we have character-level built-in)
+# LoRA/QLoRA Training (for efficient fine-tuning)
+peft>=0.10.0              # Parameter-Efficient Fine-Tuning (LoRA)
+bitsandbytes>=0.43.0      # 4-bit/8-bit quantization for QLoRA
+accelerate>=0.28.0        # Distributed training + CPU offloading
+
+# HuggingFace Integration (for loading pre-trained models)
 tokenizers>=0.13.0
 transformers>=4.20.0
-
-# === GUI (PyQt5) ===
-# Note: On Raspberry Pi, use system package instead:
-#   sudo apt install python3-pyqt5
-PyQt5>=5.15.0
-
-# === VOICE ===
-pyttsx3>=2.90
-SpeechRecognition>=3.8.0
-sounddevice>=0.4.0
-vosk>=0.3.0
-# PyAudio - may need system dependencies:
-#   Ubuntu/Debian: sudo apt install portaudio19-dev python3-pyaudio
-#   macOS: brew install portaudio
-#   Windows: pip will handle it
-pyaudio>=0.2.11
-
-# === VISION ===
-pillow>=9.0.0
-mss>=6.1.0
-pyscreenshot>=3.0
-
-# === DEVELOPMENT & TESTING (Optional) ===
-# Uncomment for development work:
-# pytest>=7.0.0
-# pytest-cov>=3.0.0
-# flake8>=5.0.0
-# mypy>=0.990
-# autopep8>=2.0.0
-
-# === MONITORING (Optional) ===
-# For resource monitoring:
-psutil>=5.9.0
-pynvml>=11.0.0            # NVIDIA GPU monitoring
-GPUtil>=1.4.0             # GPU utilization
-
-# === VOICE (Advanced) ===
-# Whisper for high-quality speech recognition:
-openai-whisper>=20230314
-
-# === CAMERA (Recommended) ===
-# For webcam support - install if using Camera tab:
-opencv-python>=4.5.0
-# For Raspberry Pi camera:
-# picamera2>=0.3.0
-
-# === MOTION TRACKING (Optional) ===
-# For user gesture mimicry:
-# mediapipe>=0.10.0
-# opencv-python>=4.5.0
-
-# === 3D GENERATION (Optional) ===
-# For local 3D model generation:
-# shap-e>=0.0.1  # Shap-E for 3D generation
-# point-e>=0.0.1  # Point-E alternative
-trimesh>=3.20.0  # For 3D mesh manipulation and viewing
-
-# === 3D AVATAR ANIMATION (Optional) ===
-# For real-time 3D skeletal animation (Cortana/JARVIS style):
-# panda3d>=1.10.0  # 3D engine with skeletal animation
-# panda3d-gltf>=1.0.0  # glTF/GLB model support for Panda3D
-# Install both with: pip install panda3d panda3d-gltf
-
-# === GGUF MODELS (Optional) ===
-# For loading llama.cpp compatible models:
-# llama-cpp-python>=0.2.0
-
-# === DOCUMENTS (Optional) ===
-# Uncomment to enable document parsing:
-# pypdf2>=2.0.0
-# python-docx>=0.8.11
-# ebooklib>=0.18
-
-# === WEB (Optional) ===
-# Uncomment to enable web scraping:
-# requests>=2.28.0
-# beautifulsoup4>=4.11.0
-
-# === LINUX X11 WINDOW MANAGEMENT (Optional) ===
-# For internal window management on Linux (no external tools needed):
-# python-xlib>=0.33  # Uncomment for Linux X11 support
-# pynput>=1.7.0  # For keyboard/mouse control
-
-# === SAFETY & FILTERING ===
-beautifulsoup4>=4.11.0    # For content extraction
-
-# === VECTOR DATABASES (Optional) ===
-# Uncomment to enable advanced memory features:
-# faiss-cpu>=1.7.0  # For FAISS vector database (CPU version)
-# faiss-gpu>=1.7.0  # For FAISS vector database (GPU version)
-# pinecone-client>=2.2.0  # For Pinecone cloud vector database
+huggingface-hub>=0.20.0
 
 # === SYSTEM MONITORING ===
-psutil>=5.9.0             # For power mode CPU/memory monitoring
+psutil>=5.9.0             # Hardware detection, resource monitoring
 
-# === AI SERVICES (Optional, Cloud-based) ===
-# Uncomment if using cloud AI services:
-# openai>=1.0.0  # For DALL-E, GPT-4, embeddings
-# replicate>=0.15.0  # For SDXL, video, music generation
-# elevenlabs>=0.2.0  # For premium TTS
+# === WEB UI (for --serve) ===
+fastapi>=0.100.0
+uvicorn>=0.20.0
+jinja2>=3.1.0
+python-multipart>=0.0.5
 
-# === VIDEO & GIF EDITING (Optional) ===
-# Uncomment to enable video editing and advanced GIF features:
-# moviepy>=1.0.3  # For video editing, conversion to GIF, frame extraction
+# === OPTIONAL ===
 
-# === WEB DASHBOARD & MOBILE ===
-flask-socketio>=5.0.0
-fastapi>=0.104.0          # Modern async web framework
-uvicorn[standard]>=0.24.0 # ASGI server for FastAPI
-websockets>=12.0          # WebSocket support
-qrcode[pil]>=7.4.0        # QR code generation
-zeroconf>=0.131.0         # mDNS/Bonjour local network discovery
-python-multipart>=0.0.6   # For file uploads in FastAPI
+# Voice input (speech-to-text for GUI mic button)
+# SpeechRecognition>=3.10.0
+# PyAudio>=0.2.14
 
-# === HUGGINGFACE INTEGRATION ===
-huggingface-hub>=0.20.0
-# transformers already included above (>=4.20.0)
+# HTTP test client (uncomment for API tests)
+# httpx>=0.24.0
 
-# === TUNNELING (Optional) ===
-# Uncomment to enable public internet tunneling (for remote access):
-# pyngrok>=5.0.0  # Python wrapper for ngrok
-# For localtunnel: npm install -g localtunnel
-# For bore: Install from https://github.com/ekzhang/bore
+# GGUF Models (uncomment for llama.cpp support)
+# llama-cpp-python>=0.2.0
+
+# Fast tokenizer (uncomment for GPT-style tokenization)
+# tiktoken>=0.5.0
+
+# === DEVELOPMENT (Optional) ===
+# pytest>=7.0.0
+# pytest-cov>=3.0.0
+# mypy>=0.990
 

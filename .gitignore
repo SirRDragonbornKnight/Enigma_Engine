@@ -178,12 +178,6 @@ models/**/pytorch_model.bin
 models/*/checkpoints/epoch_*.pth
 models/*/checkpoints/latest.pth
 
-# Large avatar models (keep structure)
-data/avatar/models/*.glb
-data/avatar/models/*.gltf
-data/avatar/models/*.fbx
-!data/avatar/models/.gitkeep
-
 # Voice samples and generated audio
 *.wav
 *.mp3

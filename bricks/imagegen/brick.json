@@ -1,0 +1,77 @@
+{
+    "name": "Image Generation Brick",
+    "id": "imagegen",
+    "version": "1.0.0",
+    "description": "Generate images from text prompts using Stable Diffusion or other image models",
+    "author": "Enigma AI Engine",
+    "port": 9902,
+    "commands": [
+        {
+            "name": "generate",
+            "description": "Generate an image from a text prompt",
+            "args": {
+                "prompt": {"type": "string", "required": true, "description": "Text description of the image to generate"},
+                "negative_prompt": {"type": "string", "required": false, "description": "What to avoid in the image"},
+                "width": {"type": "integer", "required": false, "default": 512},
+                "height": {"type": "integer", "required": false, "default": 512},
+                "steps": {"type": "integer", "required": false, "default": 20},
+                "cfg_scale": {"type": "float", "required": false, "default": 7.5},
+                "seed": {"type": "integer", "required": false, "default": -1}
+            }
+        },
+        {
+            "name": "status",
+            "description": "Get brick status and available backends"
+        },
+        {
+            "name": "stop",
+            "description": "Stop the brick"
+        },
+        {
+            "name": "list_models",
+            "description": "List available image generation models"
+        },
+        {
+            "name": "set_model",
+            "description": "Select which model to use for generation",
+            "args": {
+                "model": {"type": "string", "required": true}
+            }
+        }
+    ],
+    "dependencies": [
+        "pillow",
+        "requests"
+    ],
+    "settings": {
+        "backend": "auto",
+        "backends": {
+            "sdwebui": {
+                "enabled": true,
+                "url": "http://127.0.0.1:7860"
+            },
+            "diffusers": {
+                "enabled": false,
+                "model": "runwayml/stable-diffusion-v1-5",
+                "device": "auto"
+            },
+            "comfyui": {
+                "enabled": false,
+                "url": "http://127.0.0.1:8188"
+            }
+        },
+        "output_dir": "outputs/images",
+        "save_images": true
+    },
+    "ui": {
+        "layout": "vertical",
+        "widgets": [
+            {"type": "text_area", "id": "prompt", "label": "Prompt", "rows": 3},
+            {"type": "text_input", "id": "negative_prompt", "label": "Negative Prompt"},
+            {"type": "number", "id": "width", "label": "Width", "default": 512},
+            {"type": "number", "id": "height", "label": "Height", "default": 512},
+            {"type": "button", "id": "generate", "label": "Generate", "command": "generate"}
+        ]
+    },
+    "prompt": "For image generation, use: brick.send imagegen generate <prompt>. Options: negative_prompt, width, height, steps, seed."
+}

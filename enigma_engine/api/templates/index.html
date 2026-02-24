@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enigma Engine</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app">
+
+    <!-- ============ Header ============ -->
+    <header class="header">
+        <div class="header-brand">
+            <div class="logo">E</div>
+            <span>Enigma Engine</span>
+        </div>
+        <div class="header-status">
+            <span>
+                <span class="status-dot offline" id="status-dot"></span>
+                <span id="status-label">No model loaded</span>
+            </span>
+            <button class="btn btn-ghost btn-sm" id="clear-btn">Clear Chat</button>
+        </div>
+    </header>
+
+    <!-- ============ Sidebar ============ -->
+    <aside class="sidebar">
+        <div class="sidebar-section">
+            <h3>Models</h3>
+            <ul class="sidebar-list" id="model-list">
+                <li style="color: var(--text-muted)">Loading...</li>
+            </ul>
+        </div>
+        <div class="sidebar-section">
+            <h3>Profiles</h3>
+            <ul class="sidebar-list" id="profile-list">
+                <li style="color: var(--text-muted)">Loading...</li>
+            </ul>
+        </div>
+    </aside>
+
+    <!-- ============ Chat Area ============ -->
+    <main class="chat">
+        <div class="chat-messages" id="chat-messages">
+            <!-- Messages injected by JS -->
+        </div>
+
+        <div class="chat-input-area">
+            <div class="chat-input-wrapper">
+                <textarea id="chat-input" rows="1" placeholder="Type a message... (Enter to send, Shift+Enter for newline)"></textarea>
+                <button class="btn btn-primary" id="send-btn">Send</button>
+            </div>
+        </div>
+    </main>
+
+    <!-- ============ Right Panel ============ -->
+    <aside class="panel-right">
+        <div class="panel-tabs">
+            <div class="panel-tab active" data-tab="config">Config</div>
+            <div class="panel-tab" data-tab="model">Model</div>
+            <div class="panel-tab" data-tab="system">System</div>
+        </div>
+
+        <div class="panel-content">
+            <!-- Config Tab -->
+            <div class="tab-panel" id="tab-config" style="display: block;">
+                <div class="panel-section">
+                    <h4>Generation Settings</h4>
+
+                    <div class="config-control">
+                        <label for="cfg-temperature">Temperature</label>
+                        <input type="number" id="cfg-temperature"
+                               min="0" max="2" step="0.1" value="0.8"
+                               oninput="onConfigChange('temperature', this.value)">
+                    </div>
+
+                    <div class="config-control">
+                        <label for="cfg-top_p">Top P</label>
+                        <input type="number" id="cfg-top_p"
+                               min="0" max="1" step="0.05" value="0.9"
+                               oninput="onConfigChange('top_p', this.value)">
+                    </div>
+
+                    <div class="config-control">
+                        <label for="cfg-top_k">Top K</label>
+                        <input type="number" id="cfg-top_k"
+                               min="1" max="200" step="1" value="50"
+                               oninput="onConfigChange('top_k', this.value)">
+                    </div>
+
+                    <div class="config-control">
+                        <label for="cfg-max_tokens">Max Tokens</label>
+                        <input type="number" id="cfg-max_tokens"
+                               min="16" max="4096" step="16" value="100"
+                               oninput="onConfigChange('max_tokens', this.value)">
+                    </div>
+
+                    <div class="config-control">
+                        <label for="cfg-repetition_penalty">Repetition Penalty</label>
+                        <input type="number" id="cfg-repetition_penalty"
+                               min="1.0" max="2.0" step="0.05" value="1.1"
+                               oninput="onConfigChange('repetition_penalty', this.value)">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Model Tab -->
+            <div class="tab-panel" id="tab-model" style="display: none;">
+                <div class="panel-section">
+                    <h4>Loaded Model</h4>
+                    <div id="model-info">
+                        <p style="color: var(--text-muted); font-size: 13px;">No model loaded</p>
+                    </div>
+                    <button class="btn btn-ghost btn-sm" id="unload-btn" style="margin-top: 12px; display: none;">Unload Model</button>
+                </div>
+            </div>
+
+            <!-- System Tab -->
+            <div class="tab-panel" id="tab-system" style="display: none;">
+                <div class="panel-section">
+                    <h4>Hardware</h4>
+                    <div id="system-info">
+                        <p style="color: var(--text-muted); font-size: 13px;">Loading...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

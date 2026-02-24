@@ -9,6 +9,7 @@ This is a proper character-level tokenizer that:
 """
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -243,9 +244,13 @@ class CharacterTokenizer:
 
         # Handle special characters and Q&A markers
         text = text.replace('\n', ' <nl> ').replace('\t', ' <tab> ')
-        text = text.replace('Q:', ' <Q> ').replace('A:', ' <A> ')
-        text = text.replace('User:', ' <USER> ').replace('Bot:', ' <BOT> ')
-        text = text.replace('Human:', ' <USER> ').replace('Assistant:', ' <BOT> ')
+        # Use word-boundary match so "FAQ:" doesn't become "FA <Q> "
+        text = re.sub(r'(?<![A-Za-z])Q:', ' <Q> ', text)
+        text = re.sub(r'(?<![A-Za-z])A:', ' <A> ', text)
+        text = re.sub(r'(?<![A-Za-z])User:', ' <USER> ', text)
+        text = re.sub(r'(?<![A-Za-z])Bot:', ' <BOT> ', text)
+        text = re.sub(r'(?<![A-Za-z])Human:', ' <USER> ', text)
+        text = re.sub(r'(?<![A-Za-z])Assistant:', ' <BOT> ', text)
 
         # Tokenize
         i = 0

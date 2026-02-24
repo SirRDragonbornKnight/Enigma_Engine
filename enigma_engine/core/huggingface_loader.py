@@ -44,7 +44,6 @@ torch: Any = None
 AutoModelForCausalLM: Any = None
 AutoTokenizer: Any = None
 TextIteratorStreamer: Any = None
-GenerationConfig: Any = None
 BitsAndBytesConfig: Any = None
 
 try:
