@@ -13,12 +13,6 @@ import argparse
 import sys
 from pathlib import Path
 
-# Import torch early to avoid DLL conflicts on Windows
-try:
-    import torch
-except ImportError:
-    pass
-
 
 def main():
     parser = argparse.ArgumentParser(
@@ -29,8 +23,8 @@ Examples:
   python run.py                                   Test imports and show info
   python run.py --gui                             Launch desktop GUI
   python run.py --gui --model models/my.pth       Desktop GUI with model pre-loaded
-  python run.py --serve                           Start web UI on port 8080
-  python run.py --serve --model models/my.pth     Web UI with model pre-loaded
+  python run.py --serve                           Start API server on port 8080
+  python run.py --serve --model models/my.pth     API server with model pre-loaded
   python run.py --chat                            CLI chat (requires trained model)
   python run.py --chat --model models/my.pth      Chat with specific model
   python run.py --train data/training.txt         Train model on text data
@@ -39,9 +33,21 @@ Examples:
         """
     )
     parser.add_argument("--gui", action="store_true", help="Launch desktop GUI")
-    parser.add_argument("--serve", action="store_true", help="Start web UI server")
-    parser.add_argument("--port", type=int, default=8080, help="Web UI port (default: 8080)")
+    parser.add_argument("--serve", action="store_true", help="Start local API server")
+    parser.add_argument("--port", type=int, default=None,
+                        help="API server port (default: reads from CONFIG, fallback 8080)")
+    parser.add_argument("--host", type=str, default="127.0.0.1",
+                        help="Server bind address (default: 127.0.0.1, use 0.0.0.0 for network)")
+    parser.add_argument("--api-key", type=str, default=None,
+                        help="API key for server authentication (Bearer token)")
+    parser.add_argument("--cors-origins", type=str, default=None,
+                        help="Comma-separated CORS origins (e.g. http://localhost:3000). "
+                             "CORS is disabled when omitted")
     parser.add_argument("--chat", action="store_true", help="Simple CLI chat")
+    parser.add_argument("--profile", type=str, default=None,
+                        help="AI profile to load for --chat (e.g. assistant, creative_writer)")
+    parser.add_argument("--temperature", type=float, default=None,
+                        help="Generation temperature for --chat (e.g. 0.7)")
     parser.add_argument("--train", type=str, nargs="?", const="auto", default=None,
                         metavar="DATA_PATH", help="Train model (path to .txt or .jsonl)")
     parser.add_argument("--train-tokenizer", type=str, nargs="?", const="auto", default=None,
@@ -63,11 +69,22 @@ Examples:
     elif args.train is not None:
         run_train(args.train, args.model, args.model_size, args.epochs, args.batch_size, args.lr)
     elif args.serve:
-        run_serve(args.model, args.port)
+        cors = None
+        if args.cors_origins:
+            cors = [o.strip() for o in args.cors_origins.split(",") if o.strip()]
+        # Resolve port: CLI flag > CONFIG > fallback 8080
+        port = args.port
+        if port is None:
+            try:
+                from enigma_engine import CONFIG
+                port = int(CONFIG.get("api_port", 8080))
+            except Exception:
+                port = 8080
+        run_serve(args.model, port, args.host, args.api_key, cors)
     elif args.gui:
         run_gui_app(args.model)
     elif args.chat:
-        run_chat(args.model)
+        run_chat(args.model, args.profile, args.temperature)
     else:
         show_info()
 
@@ -92,18 +109,21 @@ def run_gui_app(model_path: str = None):
         sys.exit(1)
 
 
-def run_serve(model_path: str = None, port: int = 8080):
-    """Start the web UI server."""
+def run_serve(model_path: str = None, port: int = 8080,
+              host: str = "127.0.0.1", api_key: str = None,
+              cors_origins: list = None):
+    """Start the local API server."""
     print("\n" + "=" * 50)
-    print("  Enigma AI Engine - Web UI")
+    print("  Enigma AI Engine - API Server")
     print("=" * 50 + "\n")
 
     try:
         from enigma_engine.api.server import run_server
-        run_server(host="0.0.0.0", port=port, model_path=model_path)
+        run_server(host=host, port=port, model_path=model_path,
+                   api_key=api_key, cors_origins=cors_origins)
     except ImportError as e:
-        print(f"  [ERROR] Missing web dependencies: {e}")
-        print(f"  Install them:  pip install fastapi uvicorn jinja2")
+        print(f"  [ERROR] Missing server dependencies: {e}")
+        print(f"  Install them:  pip install fastapi uvicorn")
         sys.exit(1)
     except Exception as e:
         print(f"  [ERROR] Server failed: {e}")
@@ -161,7 +181,7 @@ def show_info():
     print("\n" + "=" * 50)
     print("  Commands:")
     print("    python run.py --gui                 Launch desktop GUI")
-    print("    python run.py --serve              Start web UI")
+    print("    python run.py --serve              Start API server")
     print("    python run.py --chat               Start CLI chat")
     print("    python run.py --train <data>        Train a model")
     print("    python run.py --train-tokenizer <data>  Train tokenizer")
@@ -278,7 +298,7 @@ def run_train(data_path: str, model_path: str, model_size: str,
         print(f"  Device: {device}")
         if torch.cuda.is_available():
             print(f"  GPU: {torch.cuda.get_device_name(0)}")
-            vram = torch.cuda.get_device_properties(0).total_mem / (1024**3)
+            vram = torch.cuda.get_device_properties(0).total_memory / (1024**3)
             print(f"  VRAM: {vram:.1f} GB")
         
         # Load tokenizer
@@ -292,7 +312,7 @@ def run_train(data_path: str, model_path: str, model_size: str,
             from enigma_engine.core.model_registry import safe_load_weights
             
             # Load model config from checkpoint
-            checkpoint = safe_load_weights(model_path, device=device)
+            checkpoint = safe_load_weights(model_path, map_location=device)
             if "config" in checkpoint:
                 from enigma_engine.core.model import ForgeConfig
                 config_dict = checkpoint["config"]
@@ -388,7 +408,8 @@ def run_train(data_path: str, model_path: str, model_size: str,
                 "losses": state.training_losses,
             },
         }
-        torch.save(save_data, output_path)
+        from enigma_engine.core.safe_save import atomic_torch_save
+        atomic_torch_save(save_data, output_path)
         
         # Save tokenizer alongside model
         tok_path = output_path.parent / f"enigma_{model_size}_tokenizer.json"
@@ -411,21 +432,51 @@ def run_train(data_path: str, model_path: str, model_size: str,
         sys.exit(1)
 
 
-def run_chat(model_path: str = None):
-    """Simple CLI chat interface."""
+def run_chat(model_path: str = None, profile: str = None,
+             temperature: float = None):
+    """Simple CLI chat interface with streaming output."""
+    import sys
+
     print("\n" + "=" * 50)
     print("  Enigma AI Engine - Chat")
     print("  Type 'quit' to exit")
     print("=" * 50 + "\n")
-    
+
     try:
         from enigma_engine.core import EnigmaEngine
-        
+
         # Try to load engine
         print("Loading model...")
         engine = EnigmaEngine(model_path=model_path) if model_path else EnigmaEngine()
-        print("Model loaded!\n")
+        print("Model loaded!")
+
+        # Load AI profile if specified
+        system_prompt = None
+        gen_kwargs: dict = {}
+        if profile:
+            try:
+                from enigma_engine.core.ai_profile import AIProfile
+                p = AIProfile.load_profile(profile)
+                system_prompt = p.system_prompt
+                if p.generation:
+                    gen_kwargs = p.generation.__dict__.copy()
+                print(f"Profile: {p.name}")
+            except Exception as e:
+                print(f"  [WARN] Could not load profile '{profile}': {e}")
+
+        # CLI temperature override takes precedence
+        if temperature is not None:
+            gen_kwargs["temperature"] = temperature
+
+        if gen_kwargs:
+            names = ", ".join(f"{k}={v}" for k, v in gen_kwargs.items()
+                              if v is not None)
+            if names:
+                print(f"Config: {names}")
+        print()
         
+        history: list[dict[str, str]] = []
+
         # Chat loop
         while True:
             try:
@@ -436,8 +487,30 @@ def run_chat(model_path: str = None):
                 if not user_input:
                     continue
                 
-                response = engine.chat(user_input)
-                print(f"AI: {response}\n")
+                sys.stdout.write("AI: ")
+                sys.stdout.flush()
+
+                full_response = ""
+                chat_kwargs: dict = {"history": history}
+                if system_prompt:
+                    chat_kwargs["system_prompt"] = system_prompt
+                chat_kwargs.update(
+                    {k: v for k, v in gen_kwargs.items()
+                     if v is not None})
+                for token in engine.stream_chat(
+                    user_input, **chat_kwargs
+                ):
+                    sys.stdout.write(token)
+                    sys.stdout.flush()
+                    full_response += token
+
+                # Newline after streamed response
+                sys.stdout.write("\n\n")
+                sys.stdout.flush()
+
+                # Maintain conversation history
+                history.append({"role": "user", "content": user_input})
+                history.append({"role": "assistant", "content": full_response})
                 
             except KeyboardInterrupt:
                 print("\nGoodbye!")

@@ -159,7 +159,7 @@ class GGUFTensor:
     type: GGMLType = GGMLType.F32
     n_dims: int = 0
     shape: tuple[int, ...] = field(default_factory=tuple)
-    
+
     def __post_init__(self):
         if self.n_dims == 0 and self.shape:
             self.n_dims = len(self.shape)
@@ -175,7 +175,7 @@ class GGUFMetadata:
     general_description: str = ""
     general_license: str = "Apache-2.0"
     general_file_type: int = 1  # F16
-    
+
     # Model architecture
     context_length: int = 2048
     embedding_length: int = 4096
@@ -185,14 +185,14 @@ class GGUFMetadata:
     attention_head_count_kv: int = 32
     rope_dimension_count: int = 128
     rope_freq_base: float = 10000.0
-    
+
     # Tokenizer
     tokenizer_model: str = "llama"
     vocab_size: int = 32000
     bos_token_id: int = 1
     eos_token_id: int = 2
     pad_token_id: int = 0
-    
+
     def to_dict(self) -> dict[str, Any]:
         arch = self.general_architecture
         return {
@@ -365,109 +365,109 @@ def convert_tensor_name(pytorch_name: str) -> str:
 # =============================================================================
 
 if HAS_NUMPY:
-    
+
     class GGUFQuantizer:
         """Quantize tensors for GGUF format."""
-        
+
         BLOCK_SIZE = 32
-        
+
         @classmethod
         def quantize_q4_0(cls, data: np.ndarray) -> tuple[np.ndarray, GGMLType]:
             """Quantize to Q4_0 format (4-bit with block-wise scaling)."""
             data = data.flatten().astype(np.float32)
             block_size = cls.BLOCK_SIZE
-            
+
             # Pad to block size
             n = len(data)
             padded_n = ((n + block_size - 1) // block_size) * block_size
             if padded_n > n:
                 data = np.pad(data, (0, padded_n - n))
-            
+
             data = data.reshape(-1, block_size)
             n_blocks = len(data)
-            
+
             # Compute scales
             max_vals = np.abs(data).max(axis=1)
             scales = np.where(max_vals > 0, max_vals / 7.0, 1.0)
-            
+
             # Quantize
             quantized = np.round(data / scales[:, None]).astype(np.int8)
             quantized = np.clip(quantized, -8, 7)
-            
+
             # Pack into 4-bit pairs
             packed = np.zeros((n_blocks, block_size // 2), dtype=np.uint8)
             for i in range(block_size // 2):
                 low = (quantized[:, 2*i] + 8).astype(np.uint8)
                 high = (quantized[:, 2*i + 1] + 8).astype(np.uint8)
                 packed[:, i] = low | (high << 4)
-            
+
             # Create output: [scale (fp16), packed data]
             scales_fp16 = scales.astype(np.float16)
             output = np.zeros(n_blocks * (2 + block_size // 2), dtype=np.uint8)
-            
+
             for i in range(n_blocks):
                 offset = i * (2 + block_size // 2)
                 output[offset:offset+2] = scales_fp16[i].view(np.uint8)
                 output[offset+2:offset+2+block_size//2] = packed[i]
-            
+
             return output, GGMLType.Q4_0
-        
+
         @classmethod
         def quantize_q8_0(cls, data: np.ndarray) -> tuple[np.ndarray, GGMLType]:
             """Quantize to Q8_0 format (8-bit with block-wise scaling)."""
             data = data.flatten().astype(np.float32)
             block_size = cls.BLOCK_SIZE
-            
+
             # Pad to block size
             n = len(data)
             padded_n = ((n + block_size - 1) // block_size) * block_size
             if padded_n > n:
                 data = np.pad(data, (0, padded_n - n))
-            
+
             data = data.reshape(-1, block_size)
             n_blocks = len(data)
-            
+
             # Compute scales
             max_vals = np.abs(data).max(axis=1)
             scales = np.where(max_vals > 0, max_vals / 127.0, 1.0)
-            
+
             # Quantize
             quantized = np.round(data / scales[:, None]).astype(np.int8)
             quantized = np.clip(quantized, -127, 127)
-            
+
             # Create output: [scale (fp16), quantized data]
             scales_fp16 = scales.astype(np.float16)
             output = np.zeros(n_blocks * (2 + block_size), dtype=np.uint8)
-            
+
             for i in range(n_blocks):
                 offset = i * (2 + block_size)
                 output[offset:offset+2] = scales_fp16[i].view(np.uint8)
                 output[offset+2:offset+2+block_size] = quantized[i].view(np.uint8)
-            
+
             return output, GGMLType.Q8_0
-        
+
         @classmethod
         def quantize_q4_k(cls, data: np.ndarray) -> tuple[np.ndarray, GGMLType]:
             """Quantize to Q4_K format (super blocks with multiple scales)."""
             data = data.flatten().astype(np.float32)
             block_size = 256
-            
+
             # Pad to block size
             n = len(data)
             padded_n = ((n + block_size - 1) // block_size) * block_size
             if padded_n > n:
                 data = np.pad(data, (0, padded_n - n))
-            
+
             n_blocks = len(data) // block_size
             output = bytearray()
-            
+
             for i in range(n_blocks):
                 block = data[i * block_size:(i + 1) * block_size]
-                
+
                 # Split into 8 sub-blocks of 32
                 sub_scales = []
                 sub_mins = []
-                
+
                 for j in range(8):
                     sub_block = block[j * 32:(j + 1) * 32]
                     sub_max = sub_block.max()
@@ -475,51 +475,51 @@ if HAS_NUMPY:
                     scale = (sub_max - sub_min) / 15.0 if sub_max != sub_min else 1.0
                     sub_scales.append(scale)
                     sub_mins.append(sub_min)
-                
+
                 # Super block scale and min
                 d = max(sub_scales) if max(sub_scales) > 0 else 1.0
                 dmin = min(sub_mins)
-                
+
                 # Write header
                 output.extend(np.float16(d).tobytes())
                 output.extend(np.float16(dmin).tobytes())
-                
+
                 # Pack sub-block scales/mins
                 for s in sub_scales:
                     output.append(int(np.round(s / d * 63)) & 0x3F)
                 for m in sub_mins:
                     output.append(int(np.round((m - dmin) / d * 63)) & 0x3F)
-                
+
                 # Quantize data
                 packed = bytearray(128)
                 for j in range(8):
                     sub_block = block[j * 32:(j + 1) * 32]
                     scale = sub_scales[j]
                     min_val = sub_mins[j]
-                    
+
                     for k in range(16):
                         low = int(np.round((sub_block[k * 2] - min_val) / scale)) & 0xF
                         high = int(np.round((sub_block[k * 2 + 1] - min_val) / scale)) & 0xF
                         packed[j * 16 + k] = low | (high << 4)
-                
+
                 output.extend(packed)
-            
+
             return np.frombuffer(bytes(output), dtype=np.uint8), GGMLType.Q4_K
-    
-    
+
+
     class GGUFWriter:
         """Write GGUF files compatible with llama.cpp."""
-        
+
         def __init__(self, filepath: Union[str, Path]) -> None:
             self.filepath = Path(filepath)
             self.metadata: dict[str, Any] = {}
             self.tensors: list[GGUFTensor] = []
             self._file: Optional[BinaryIO] = None
-        
+
         def add_metadata(self, key: str, value: Any) -> None:
             """Add metadata key-value pair."""
             self.metadata[key] = value
-        
+
         def add_tensor(
             self,
             name: str,
@@ -530,14 +530,14 @@ if HAS_NUMPY:
             # Convert torch tensor if needed
             if HAS_TORCH and isinstance(data, torch.Tensor):
                 data = data.detach().cpu().numpy()
-            
+
             self.tensors.append(GGUFTensor(
                 name=name,
                 data=data,
                 type=tensor_type,
                 shape=data.shape if hasattr(data, 'shape') else ()
             ))
-        
+
         def write(self) -> None:
             """Write the GGUF file."""
             with open(self.filepath, 'wb') as f:
@@ -546,22 +546,22 @@ if HAS_NUMPY:
                 self._write_metadata()
                 self._write_tensors_info()
                 self._write_tensor_data()
-            
+
             logger.info(f"Written GGUF file: {self.filepath}")
-        
+
         def _write_header(self) -> None:
             """Write GGUF header."""
             self._file.write(struct.pack('<I', GGUF_MAGIC))
             self._file.write(struct.pack('<I', GGUF_VERSION))
             self._file.write(struct.pack('<Q', len(self.tensors)))
             self._file.write(struct.pack('<Q', len(self.metadata)))
-        
+
         def _write_metadata(self) -> None:
             """Write metadata key-value pairs."""
             for key, value in self.metadata.items():
                 self._write_string(key)
                 self._write_value(value)
-        
+
         def _write_tensors_info(self) -> None:
             """Write tensor information."""
             for tensor in self.tensors:
@@ -571,17 +571,17 @@ if HAS_NUMPY:
                     self._file.write(struct.pack('<Q', dim))
                 self._file.write(struct.pack('<I', tensor.type.value))
                 self._file.write(struct.pack('<Q', 0))  # Offset placeholder
-        
+
         def _write_tensor_data(self) -> None:
             """Write tensor data with alignment."""
             # Align to 32 bytes
             current_pos = self._file.tell()
             padding = (32 - (current_pos % 32)) % 32
             self._file.write(b'\x00' * padding)
-            
+
             for tensor in self.tensors:
                 data = tensor.data
-                
+
                 # Convert to appropriate format
                 if tensor.type == GGMLType.F32:
                     data = data.astype(np.float32)
@@ -590,20 +590,20 @@ if HAS_NUMPY:
                 elif tensor.type == GGMLType.BF16:
                     data = data.astype(np.float32).view(np.uint32)
                     data = (data >> 16).astype(np.uint16)
-                
+
                 self._file.write(data.tobytes())
-                
+
                 # Pad to alignment
                 size = len(data.tobytes())
                 padding = (32 - (size % 32)) % 32
                 self._file.write(b'\x00' * padding)
-        
+
         def _write_string(self, s: str) -> None:
             """Write a string value."""
             encoded = s.encode('utf-8')
             self._file.write(struct.pack('<Q', len(encoded)))
             self._file.write(encoded)
-        
+
         def _write_value(self, value: Any) -> None:
             """Write a typed metadata value."""
             if isinstance(value, bool):
@@ -624,7 +624,7 @@ if HAS_NUMPY:
                 self._write_string(value)
             elif isinstance(value, (list, tuple)):
                 self._file.write(struct.pack('<I', GGUFValueType.ARRAY.value))
-                
+
                 if len(value) == 0:
                     self._file.write(struct.pack('<I', GGUFValueType.UINT32.value))
                     self._file.write(struct.pack('<Q', 0))
@@ -638,10 +638,10 @@ if HAS_NUMPY:
                         elem_type = GGUFValueType.FLOAT32
                     else:
                         elem_type = GGUFValueType.UINT32
-                    
+
                     self._file.write(struct.pack('<I', elem_type.value))
                     self._file.write(struct.pack('<Q', len(value)))
-                    
+
                     for item in value:
                         if elem_type == GGUFValueType.STRING:
                             self._write_string(item)
@@ -649,11 +649,11 @@ if HAS_NUMPY:
                             self._file.write(struct.pack('<q', item))
                         elif elem_type == GGUFValueType.FLOAT32:
                             self._file.write(struct.pack('<f', item))
-    
-    
+
+
     class GGUFExporter:
         """Export Enigma AI Engine models to GGUF format."""
-        
+
         def __init__(self, quantization: str = "f16") -> None:
             """
             Initialize exporter.
@@ -662,7 +662,7 @@ if HAS_NUMPY:
                 quantization: Quantization type (f32, f16, q8_0, q4_0, q4_k)
             """
             self.quantization = quantization.lower()
-        
+
         def export(
             self,
             model: Any,
@@ -678,33 +678,33 @@ if HAS_NUMPY:
             """
             if not HAS_TORCH:
                 raise ImportError("PyTorch required for model export")
-            
+
             output_path = Path(output_path)
             if not output_path.suffix:
                 output_path = output_path.with_suffix('.gguf')
-            
+
             writer = GGUFWriter(str(output_path))
-            
+
             # Add metadata
             if metadata is None:
                 metadata = GGUFMetadata()
                 metadata = self._infer_metadata(model, metadata)
-            
+
             for key, value in metadata.to_dict().items():
                 writer.add_metadata(key, value)
-            
+
             # Add tokenizer vocab if available
             if tokenizer:
                 self._add_tokenizer_metadata(writer, tokenizer)
-            
+
             # Convert and add tensors
             state_dict = model.state_dict() if hasattr(model, 'state_dict') else model
-            
+
             for name, tensor in state_dict.items():
                 gguf_name = convert_tensor_name(name)
                 data = tensor.detach().cpu().numpy()
                 tensor_type = GGMLType.F32
-                
+
                 # Quantize if needed
                 if self.quantization == "q4_0" and self._should_quantize(gguf_name):
                     data, tensor_type = GGUFQuantizer.quantize_q4_0(data)
@@ -715,39 +715,74 @@ if HAS_NUMPY:
                 elif self.quantization == "f16":
                     data = data.astype(np.float16)
                     tensor_type = GGMLType.F16
-                
+
                 writer.add_tensor(gguf_name, data, tensor_type)
-            
+
             writer.write()
             logger.info(f"Exported model to {output_path}")
-            
+
             return str(output_path)
-        
+
         def _should_quantize(self, name: str) -> bool:
             """Check if tensor should be quantized."""
             skip_patterns = ["embd", "norm", "bias"]
             return not any(p in name.lower() for p in skip_patterns)
-        
+
         def _infer_metadata(self, model: Any, metadata: GGUFMetadata) -> GGUFMetadata:
-            """Infer metadata from model config."""
+            """Infer metadata from model config.
+
+            Supports both HuggingFace-style configs (hidden_size, num_hidden_layers)
+            and ForgeConfig-style configs (dim, n_layers, n_heads, etc.).
+            """
             if hasattr(model, 'config'):
                 config = model.config
+
+                # Embedding dimension: HF hidden_size or ForgeConfig dim
                 if hasattr(config, 'hidden_size'):
                     metadata.embedding_length = config.hidden_size
+                elif hasattr(config, 'dim'):
+                    metadata.embedding_length = config.dim
+
+                # Layer count: HF num_hidden_layers or ForgeConfig n_layers
                 if hasattr(config, 'num_hidden_layers'):
                     metadata.block_count = config.num_hidden_layers
+                elif hasattr(config, 'n_layers'):
+                    metadata.block_count = config.n_layers
+
+                # Feed-forward dimension: HF intermediate_size or ForgeConfig hidden_dim
                 if hasattr(config, 'intermediate_size'):
                     metadata.feed_forward_length = config.intermediate_size
+                elif hasattr(config, 'hidden_dim'):
+                    metadata.feed_forward_length = config.hidden_dim
+
+                # Attention heads: HF num_attention_heads or ForgeConfig n_heads
                 if hasattr(config, 'num_attention_heads'):
                     metadata.attention_head_count = config.num_attention_heads
+                elif hasattr(config, 'n_heads'):
+                    metadata.attention_head_count = config.n_heads
+
+                # KV heads: HF num_key_value_heads or ForgeConfig n_kv_heads
                 if hasattr(config, 'num_key_value_heads'):
                     metadata.attention_head_count_kv = config.num_key_value_heads
+                elif hasattr(config, 'n_kv_heads'):
+                    metadata.attention_head_count_kv = config.n_kv_heads
+
+                # Vocab size (same attr name in both)
                 if hasattr(config, 'vocab_size'):
                     metadata.vocab_size = config.vocab_size
+
+                # Context length: HF max_position_embeddings or ForgeConfig max_seq_len
                 if hasattr(config, 'max_position_embeddings'):
                     metadata.context_length = config.max_position_embeddings
+                elif hasattr(config, 'max_seq_len'):
+                    metadata.context_length = config.max_seq_len
+
+                # RoPE theta (ForgeConfig)
+                if hasattr(config, 'rope_theta') and config.rope_theta:
+                    metadata.rope_freq_base = config.rope_theta
+
             return metadata
-        
+
         def _add_tokenizer_metadata(self, writer: GGUFWriter, tokenizer: Any) -> None:
             """Add tokenizer vocabulary to metadata."""
             try:
@@ -757,14 +792,14 @@ if HAS_NUMPY:
                     for token, idx in vocab.items():
                         if idx < len(tokens):
                             tokens[idx] = token
-                    
+
                     writer.add_metadata("tokenizer.ggml.tokens", tokens)
                     writer.add_metadata("tokenizer.ggml.scores", [0.0] * len(tokens))
                     writer.add_metadata("tokenizer.ggml.token_type", [0] * len(tokens))
             except Exception as e:
                 logger.warning(f"Could not add tokenizer metadata: {e}")
-    
-    
+
+
     def export_to_gguf(
         model: Any,
         output_path: Union[str, Path],
@@ -801,7 +836,7 @@ if HAS_NUMPY:
             quant_lower = 'f16'
         else:
             quant_lower = 'f16'
-        
+
         # Create metadata if custom values provided
         if metadata is None and (model_name or description):
             metadata = GGUFMetadata()
@@ -809,34 +844,34 @@ if HAS_NUMPY:
                 metadata.general_name = model_name
             if description:
                 metadata.general_description = description
-        
+
         exporter = GGUFExporter(quantization=quant_lower)
         return exporter.export(model, str(output_path), metadata, tokenizer)
 
 
 else:
     # Stub implementations when NumPy not available
-    
+
     class GGUFQuantizer:
         """Stub when NumPy not available."""
         @classmethod
         def quantize_q4_0(cls, *args, **kwargs):
             raise ImportError("NumPy required for quantization")
-        
+
         @classmethod
         def quantize_q8_0(cls, *args, **kwargs):
             raise ImportError("NumPy required for quantization")
-    
+
     class GGUFWriter:
         """Stub when NumPy not available."""
         def __init__(self, *args, **kwargs):
             raise ImportError("NumPy required for GGUF export")
-    
+
     class GGUFExporter:
         """Stub when NumPy not available."""
         def __init__(self, *args, **kwargs):
             raise ImportError("NumPy required for GGUF export")
-    
+
     def export_to_gguf(*args, **kwargs):
         """Stub when NumPy not available."""
         raise ImportError("NumPy required for GGUF export")
@@ -848,7 +883,7 @@ else:
 
 __all__ = [
     'GGMLType',
-    'GGUFValueType', 
+    'GGUFValueType',
     'GGUFMetadataType',
     'GGUFTensor',
     'GGUFMetadata',

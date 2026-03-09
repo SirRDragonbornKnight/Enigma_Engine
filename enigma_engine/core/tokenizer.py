@@ -25,10 +25,12 @@ Converts sentences into sequences of integers for the neural network.
     3. SimpleTokenizer     - Basic character + common words (NO dependencies!)
 
 🏷️ SPECIAL TOKENS:
-    • <pad> - Padding (ID: 0)
-    • <s>   - Start of sequence (ID: 1)
-    • </s>  - End of sequence (ID: 2)
-    • <unk> - Unknown token (ID: 3)
+    • <pad>    - Padding (ID: 0)
+    • <s>      - Start of sequence (ID: 1)
+    • </s>     - End of sequence (ID: 2)
+    • <unk>    - Unknown token (ID: 3)
+    • <think>  - Start of reasoning block (ID: 4)
+    • </think> - End of reasoning block (ID: 5)
 
 🔗 CONNECTED FILES:
     → USES:      enigma_engine/vocab_model/ (vocabulary files)
@@ -94,11 +96,11 @@ class TokenizerProtocol(Protocol):
     eos_token_id: int
     bos_token_id: int
     pad_token_id: int
-    
+
     def encode(self, text: str, add_special_tokens: bool = True) -> list[int]:
         """Convert text to token IDs."""
         ...
-    
+
     def decode(self, ids: list[int], skip_special_tokens: bool = True) -> str:
         """Convert token IDs back to text."""
         ...
@@ -148,19 +150,19 @@ def encode_text(
         ids = result.get('input_ids', result) if isinstance(result, dict) else result
     else:
         raise TypeError(f"Tokenizer {type(tokenizer)} has no encode method")
-    
+
     # Handle nested lists (batch encoding)
     if ids and isinstance(ids, list) and isinstance(ids[0], list):
         ids = ids[0]
-    
+
     # Handle tensor returns
     if hasattr(ids, 'tolist'):
         ids = ids.tolist()
-    
+
     # Truncate if needed
     if max_length and truncate and len(ids) > max_length:
         ids = ids[:max_length]
-    
+
     return ids
 
 
@@ -216,16 +218,19 @@ def get_special_token_ids(tokenizer: Any) -> dict[str, int]:
     """
     Get special token IDs from any tokenizer.
     
-    Returns dict with keys: 'pad', 'bos', 'eos', 'unk'
+    Returns dict with keys: 'pad', 'bos', 'eos', 'unk',
+    'think_start', 'think_end'
     """
     result = {}
-    
+
     # Standard attribute names
     for name, attrs in [
         ('pad', ['pad_token_id', 'pad_id']),
         ('bos', ['bos_token_id', 'bos_id', 'start_token_id']),
         ('eos', ['eos_token_id', 'eos_id', 'end_token_id']),
         ('unk', ['unk_token_id', 'unk_id']),
+        ('think_start', ['think_start_id']),
+        ('think_end', ['think_end_id']),
     ]:
         for attr in attrs:
             if hasattr(tokenizer, attr):
@@ -235,8 +240,12 @@ def get_special_token_ids(tokenizer: Any) -> dict[str, int]:
                     break
         # Default fallbacks
         if name not in result:
-            result[name] = {'pad': 0, 'bos': 1, 'eos': 2, 'unk': 3}[name]
-    
+            defaults = {
+                'pad': 0, 'bos': 1, 'eos': 2, 'unk': 3,
+                'think_start': 4, 'think_end': 5,
+            }
+            result[name] = defaults.get(name, -1)
+
     return result
 
 
@@ -295,6 +304,8 @@ class SimpleTokenizer:
             "<s>": 1,     # Start - marks beginning of text
             "</s>": 2,    # End - marks end of text
             "<unk>": 3,   # Unknown - used for characters not in vocab
+            "<think>": 4,  # Start of reasoning block
+            "</think>": 5, # End of reasoning block
         }
 
         # Convenient ID lookups
@@ -302,6 +313,8 @@ class SimpleTokenizer:
         self.bos_token_id = 1
         self.eos_token_id = 2
         self.unk_token_id = 3
+        self.think_start_id = 4
+        self.think_end_id = 5
 
         # ─────────────────────────────────────────────────────────────────────
         # LOAD OR CREATE VOCABULARY
@@ -402,6 +415,14 @@ class SimpleTokenizer:
         # Start with beginning-of-sequence token
         if add_special_tokens:
             ids.append(self.bos_token_id)
+
+        # ─────────────────────────────────────────────────────────────────────
+        # PRE-TOKENIZE: Separate multi-char special tokens from adjacent text
+        # so they are encoded as single tokens, not character-by-character.
+        # ─────────────────────────────────────────────────────────────────────
+        for token in self.special_tokens:
+            if len(token) > 1 and token in text:
+                text = text.replace(token, f" {token} ")
 
         # ─────────────────────────────────────────────────────────────────────
         # TOKENIZE: Try words first, fall back to characters
@@ -535,7 +556,7 @@ class SimpleTokenizer:
 
 class TiktokenWrapper:
     """Wrapper for tiktoken (GPT-style fast tokenizer)."""
-    
+
     def __init__(self, encoding: str = "cl100k_base"):
         import tiktoken
         self.enc = tiktoken.get_encoding(encoding)
@@ -546,23 +567,26 @@ class TiktokenWrapper:
         self.bos_token_id = base + 1
         self.eos_token_id = base + 2
         self.unk_token_id = base + 3
-        self.vocab_size = base + 4  # real tokens + 4 special
-    
+        self.think_start_id = base + 4
+        self.think_end_id = base + 5
+        self.vocab_size = base + 6  # real tokens + 6 special
+
     def encode(self, text: str, add_special_tokens: bool = True) -> list[int]:
         """Encode text to token IDs."""
         ids = self.enc.encode(text)
         if add_special_tokens:
             ids = [self.bos_token_id] + ids + [self.eos_token_id]
         return ids
-    
+
     def decode(self, ids: list[int], skip_special_tokens: bool = True) -> str:
         """Decode token IDs to text."""
         if skip_special_tokens:
-            # Filter out special tokens
-            ids = [i for i in ids if i not in [self.pad_token_id, self.bos_token_id, 
-                                                 self.eos_token_id, self.unk_token_id]]
+            # Filter out special tokens (all reserved IDs above real vocab)
+            special = {self.pad_token_id, self.bos_token_id, self.eos_token_id,
+                       self.unk_token_id, self.think_start_id, self.think_end_id}
+            ids = [i for i in ids if i not in special]
         return self.enc.decode(ids)
-    
+
     def __call__(
         self,
         text: str,
@@ -574,19 +598,19 @@ class TiktokenWrapper:
     ) -> dict[str, Any]:
         """Tokenize text (HuggingFace-compatible interface)."""
         ids = self.encode(text, add_special_tokens=add_special_tokens)
-        
+
         if truncation and max_length and len(ids) > max_length:
             ids = ids[:max_length]
-        
+
         if padding and max_length and len(ids) < max_length:
             ids = ids + [self.pad_token_id] * (max_length - len(ids))
-        
+
         if return_tensors == "pt":
             import torch
             return {"input_ids": torch.tensor([ids])}
-        
+
         return {"input_ids": ids}
-    
+
     def __len__(self) -> int:
         return self.vocab_size
 
@@ -623,7 +647,7 @@ def get_tokenizer(
         Tokenizer instance
     """
     vocab_path = Path(vocab_path) if vocab_path else VOCAB_DIR
-    
+
     # Check cache first
     cache_key = (tokenizer_type, str(vocab_path))
     if use_cache:
@@ -668,7 +692,7 @@ def get_tokenizer(
                 # Return untrained BPE tokenizer
                 logger.warning("BPE tokenizer not trained. Use train_tokenizer() first.")
                 return _cache_and_return(AdvancedBPETokenizer())
-        except Exception as e:
+        except ImportError as e:
             logger.warning(f"Could not load BPE tokenizer: {e}")
             if tokenizer_type in ("bpe", "advanced"):
                 raise
@@ -691,25 +715,29 @@ def get_tokenizer(
                 tok.save_vocab(VOCAB_DIR / "char_vocab.json")
                 logger.info("Created new character tokenizer")
                 return _cache_and_return(tok)
-        except Exception as e:
+        except ImportError as e:
             logger.warning(f"Could not load character tokenizer: {e}")
             if tokenizer_type in ("char", "character"):
                 raise
 
-    # Fall back to Simple tokenizer
-    simple_vocab = vocab_path / "simple_vocab.json" if vocab_path.is_dir() else vocab_path
-
-    if simple_vocab.exists():
-        tok = SimpleTokenizer(simple_vocab)
-        logger.info(f"Loaded simple tokenizer from {simple_vocab}")
+    # Explicit simple tokenizer (never auto-selected)
+    if tokenizer_type == "simple":
+        simple_vocab = vocab_path / "simple_vocab.json" if vocab_path.is_dir() else vocab_path
+        if simple_vocab.exists():
+            tok = SimpleTokenizer(simple_vocab)
+            logger.info(f"Loaded simple tokenizer from {simple_vocab}")
+            return _cache_and_return(tok)
+        tok = SimpleTokenizer()
+        VOCAB_DIR.mkdir(parents=True, exist_ok=True)
+        tok.save_vocab(VOCAB_DIR / "simple_vocab.json")
+        logger.info("Created new simple tokenizer")
         return _cache_and_return(tok)
 
-    # Create new simple tokenizer
-    tok = SimpleTokenizer()
-    VOCAB_DIR.mkdir(parents=True, exist_ok=True)
-    tok.save_vocab(VOCAB_DIR / "simple_vocab.json")
-    logger.info("Created new simple tokenizer")
-    return _cache_and_return(tok)
+    # Auto mode exhausted all viable backends
+    raise RuntimeError(
+        "No usable tokenizer found. Install tiktoken (pip install tiktoken) "
+        "or train a BPE tokenizer (python run.py --train-tokenizer)."
+    )
 
 
 def load_tokenizer(tokenizer_type: str = "auto") -> Any:
@@ -761,9 +789,9 @@ def train_tokenizer(
     logger.info(f"Training {tokenizer_type} tokenizer on {len(texts)} files...")
 
     if tokenizer_type in ("bpe", "advanced"):
-        from .advanced_tokenizer import AdvancedBPETokenizer
+        from .bpe_tokenizer import BPETokenizer
 
-        tokenizer = AdvancedBPETokenizer()
+        tokenizer = BPETokenizer()
         tokenizer.train(texts, vocab_size=vocab_size, verbose=True)
 
         # Save

@@ -48,6 +48,8 @@ class CharacterTokenizer:
             "<A>": 10,     # Answer marker
             "<USER>": 11,  # User turn
             "<BOT>": 12,   # Bot turn
+            "<think>": 13,  # Start of reasoning block
+            "</think>": 14, # End of reasoning block
         }
 
         self.pad_token = "<pad>"
@@ -120,8 +122,8 @@ class CharacterTokenizer:
                         self.token_to_id[char] = next_id
                         self.id_to_token[next_id] = char
                         next_id += 1
-                except BaseException:
-                    pass  # Intentionally silent
+                except Exception:
+                    pass  # Skip invalid code points
 
         # Add dictionary words if enabled
         if use_dictionary:
@@ -244,6 +246,8 @@ class CharacterTokenizer:
 
         # Handle special characters and Q&A markers
         text = text.replace('\n', ' <nl> ').replace('\t', ' <tab> ')
+        # Separate reasoning tags so they are matched as whole tokens
+        text = text.replace('<think>', ' <think> ').replace('</think>', ' </think> ')
         # Use word-boundary match so "FAQ:" doesn't become "FA <Q> "
         text = re.sub(r'(?<![A-Za-z])Q:', ' <Q> ', text)
         text = re.sub(r'(?<![A-Za-z])A:', ' <A> ', text)
@@ -255,9 +259,16 @@ class CharacterTokenizer:
         # Tokenize
         i = 0
         while i < len(text):
-            # Try to find the longest matching token
-            best_match = None
-            best_len = 0
+            # Check for multi-character special tokens (e.g. <think>, </think>)
+            matched_special = False
+            for token, tid in self.special_tokens.items():
+                if len(token) > 1 and text[i:i + len(token)] == token:
+                    ids.append(tid)
+                    i += len(token)
+                    matched_special = True
+                    break
+            if matched_special:
+                continue
 
             # Look for word boundaries
             if text[i].isalnum() or text[i] in "'":

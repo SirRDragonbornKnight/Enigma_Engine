@@ -20,10 +20,10 @@ Welcome to Enigma Engine — a fully local AI system.
 | CORE | Chat with the AI. History sidebar, system prompt editor |
 | CMD | Terminal. Run system commands or engine commands |
 | MODELS | Create and delete model files |
-| ROUTER | Assign models to routes (chat, training, bricks) |
-| FORGE | Train models and tokenizers, edit training data |
+| ROUTER | Assign models to routes (chat, training, mods) |
+| FORGE | Train models and tokenizers |
 | CONFIG | Generation parameters and directory paths |
-| DOCS | Documentation, prompts, and reference files |
+| DOCS | Documentation browser, file editor, profile management |
 
 ---
 
@@ -32,8 +32,8 @@ Welcome to Enigma Engine — a fully local AI system.
 ```bash
 python run.py                                         # Show system info
 python run.py --gui                                    # Launch desktop GUI
-python run.py --serve                                  # Start web GUI on port 8080
-python run.py --serve --port 9090                      # Web GUI on custom port
+python run.py --serve                                  # Start API server on port 8080
+python run.py --serve --port 9090                      # API server on custom port
 python run.py --chat --model PATH                      # CLI chat with a model
 python run.py --train data/training.txt --epochs 10    # Train model
 python run.py --train-tokenizer data/training.txt      # Train BPE tokenizer
@@ -49,7 +49,7 @@ python run.py --help                                   # Show all options
 | models/ | AI model files (.gguf, .pth, etc.) |
 | data/ | Training data, settings, sessions |
 | profiles/ | AI personality profiles (JSON) |
-| bricks/ | Plugin bricks (each in its own folder) |
+| mods/ | Plugin mods (each in its own folder) |
 | information/ | Documentation and reference files |
 | outputs/ | Generated content (images, code, etc.) |
 | memory/ | Persistent memory storage |
@@ -58,8 +58,9 @@ python run.py --help                                   # Show all options
 
 ## Tips
 
+- **Route prompts** — edit per-route AI prompts from DOCS page (PROMPTS category)
 - **Profiles** change the AI personality and generation settings
-- **System prompt** shapes how the AI responds (edit in CORE sidebar)
+- **System prompt** shapes how the AI responds (edit in CORE sidebar or DOCS page)
 - **KV-cache** is cleared on NEW chat to prevent hallucinations
-- **Bricks** are plugins that extend the AI (image generation, etc.)
+- **Mods** are plugins that extend the AI (image generation, etc.)
 - All text in the GUI is selectable and copyable

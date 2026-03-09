@@ -56,7 +56,7 @@ class KVCache:
     2. In-place updates via indexing
     3. Optional INT8 quantization (2x memory reduction)
     """
-    
+
     def __init__(
         self,
         batch_size: int,
@@ -86,10 +86,10 @@ class KVCache:
         self.device = device
         self.dtype = dtype
         self.quantize = quantize_to_int8
-        
+
         # Current position in cache (how many tokens have been cached)
         self.current_pos = 0
-        
+
         # Pre-allocate cache tensors
         # Shape: [batch, max_seq_len, n_kv_heads, head_dim]
         if quantize_to_int8:
@@ -116,42 +116,42 @@ class KVCache:
             )
             self._scale_k = None
             self._scale_v = None
-        
+
         logger.debug(
             f"KVCache allocated: {batch_size}x{max_seq_len}x{n_kv_heads}x{head_dim}, "
             f"dtype={'int8' if quantize_to_int8 else dtype}, "
             f"memory={self.memory_usage_mb():.1f}MB"
         )
-    
+
     def memory_usage_mb(self) -> float:
         """Calculate memory usage in MB."""
         bytes_per_element = 1 if self.quantize else self._cache_k.element_size()
         cache_bytes = 2 * self._cache_k.numel() * bytes_per_element
-        
+
         if self._scale_k is not None:
             cache_bytes += 2 * self._scale_k.numel() * 4  # float32 scales
-        
+
         return cache_bytes / (1024 * 1024)
-    
+
     def _quantize_tensor(self, tensor: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Quantize a tensor to INT8 with per-token scaling."""
         # Get scale per token (max abs value per head)
         # Shape: [batch, seq, n_heads, head_dim] -> [batch, seq, n_heads]
         scale = tensor.abs().amax(dim=-1, keepdim=False).clamp(min=1e-8)
-        
+
         # Quantize: scale to [-127, 127] range
         quantized = (tensor / scale.unsqueeze(-1) * 127).round().clamp(-127, 127).to(torch.int8)
-        
+
         return quantized, scale
-    
+
     def _dequantize_tensor(
-        self, 
-        quantized: torch.Tensor, 
+        self,
+        quantized: torch.Tensor,
         scale: torch.Tensor
     ) -> torch.Tensor:
         """Dequantize INT8 tensor back to float."""
         return quantized.to(self.dtype) * (scale.unsqueeze(-1) / 127)
-    
+
     def update(
         self,
         k: torch.Tensor,
@@ -171,15 +171,15 @@ class KVCache:
         """
         if position is None:
             position = self.current_pos
-        
+
         seq_len = k.shape[1]
         end_pos = position + seq_len
-        
+
         # Handle overflow with sliding window
         if end_pos > self.max_seq_len:
             # Shift existing cache left to make room
             shift = end_pos - self.max_seq_len
-            
+
             if self.quantize:
                 self._cache_k[:, :-shift] = self._cache_k[:, shift:].clone()
                 self._cache_v[:, :-shift] = self._cache_v[:, shift:].clone()
@@ -188,15 +188,15 @@ class KVCache:
             else:
                 self._cache_k[:, :-shift] = self._cache_k[:, shift:].clone()
                 self._cache_v[:, :-shift] = self._cache_v[:, shift:].clone()
-            
+
             position = self.max_seq_len - seq_len
             end_pos = self.max_seq_len
-        
+
         # Store new K, V (with optional quantization)
         if self.quantize:
             q_k, s_k = self._quantize_tensor(k)
             q_v, s_v = self._quantize_tensor(v)
-            
+
             self._cache_k[:, position:end_pos] = q_k
             self._cache_v[:, position:end_pos] = q_v
             self._scale_k[:, position:end_pos] = s_k
@@ -204,12 +204,12 @@ class KVCache:
         else:
             self._cache_k[:, position:end_pos] = k
             self._cache_v[:, position:end_pos] = v
-        
+
         self.current_pos = end_pos
         return self.current_pos
-    
+
     def get(
-        self, 
+        self,
         up_to_position: Optional[int] = None
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """
@@ -223,9 +223,9 @@ class KVCache:
         """
         if up_to_position is None:
             up_to_position = self.current_pos
-        
+
         up_to_position = min(up_to_position, self.current_pos, self.max_seq_len)
-        
+
         if self.quantize:
             k = self._dequantize_tensor(
                 self._cache_k[:, :up_to_position],
@@ -236,11 +236,14 @@ class KVCache:
                 self._scale_v[:, :up_to_position]
             )
         else:
-            k = self._cache_k[:, :up_to_position]
-            v = self._cache_v[:, :up_to_position]
-        
+            # Clone to prevent caller mutations from corrupting the cache.
+            # The quantized path already returns new tensors from
+            # _dequantize_tensor — this makes both paths consistent.
+            k = self._cache_k[:, :up_to_position].clone()
+            v = self._cache_v[:, :up_to_position].clone()
+
         return k, v
-    
+
     def clear(self):
         """Clear the cache (reset position, zero out data)."""
         self.current_pos = 0
@@ -249,7 +252,7 @@ class KVCache:
         if self._scale_k is not None:
             self._scale_k.fill_(1.0)
             self._scale_v.fill_(1.0)
-    
+
     def clone(self) -> 'KVCache':
         """Create a copy of this cache (for beam search, etc.)."""
         new_cache = KVCache(
@@ -284,7 +287,7 @@ class KVCacheManager:
             manager.update(i, k, v)
             cached_k, cached_v = manager.get(i)
     """
-    
+
     def __init__(
         self,
         n_layers: int,
@@ -314,15 +317,15 @@ class KVCacheManager:
         self.device = device or torch.device('cpu')
         self.dtype = dtype
         self.quantize = quantize
-        
+
         self._caches: list[KVCache] = []
         self._allocated = False
-    
+
     def allocate(self, batch_size: int = 1):
         """Pre-allocate caches for all layers."""
         if self._allocated:
             self.clear()
-        
+
         self._caches = [
             KVCache(
                 batch_size=batch_size,
@@ -336,36 +339,36 @@ class KVCacheManager:
             for _ in range(self.n_layers)
         ]
         self._allocated = True
-        
+
         total_mb = sum(c.memory_usage_mb() for c in self._caches)
         logger.info(f"KV caches allocated: {self.n_layers} layers, {total_mb:.1f}MB total")
-    
+
     def update(self, layer_idx: int, k: torch.Tensor, v: torch.Tensor) -> int:
         """Update cache for a specific layer."""
         if not self._allocated:
             raise RuntimeError("Call allocate() before using the cache manager")
         return self._caches[layer_idx].update(k, v)
-    
+
     def get(self, layer_idx: int) -> tuple[torch.Tensor, torch.Tensor]:
         """Get cached K, V for a specific layer."""
         if not self._allocated:
             raise RuntimeError("Call allocate() before using the cache manager")
         return self._caches[layer_idx].get()
-    
+
     def clear(self):
         """Clear all caches."""
         for cache in self._caches:
             cache.clear()
-    
+
     def deallocate(self):
         """Free all cache memory."""
         self._caches = []
         self._allocated = False
-    
+
     def total_memory_mb(self) -> float:
         """Get total memory usage across all layers."""
         return sum(c.memory_usage_mb() for c in self._caches) if self._caches else 0
-    
+
     @property
     def current_pos(self) -> int:
         """Get current position (same across all layers)."""

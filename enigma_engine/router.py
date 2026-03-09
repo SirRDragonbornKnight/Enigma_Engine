@@ -1,10 +1,10 @@
 """
-Brick Router - Central hub for brick connections with background training.
+Mod Router - Central hub for mod connections with background training.
 
 The router:
-1. Accepts brick connections on port 9900
-2. Routes messages between bricks and the engine
-3. Runs background training while bricks operate
+1. Accepts mod connections on port 9900
+2. Routes messages between mods and the engine
+3. Runs background training while mods operate
 """
 
 from __future__ import annotations
@@ -19,9 +19,18 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-import torch
-
 logger = logging.getLogger(__name__)
+
+# Deferred torch import — loaded on first use to avoid 540 MB idle RAM
+_torch = None
+
+def _ensure_torch() -> Any:
+    """Import torch on first use."""
+    global _torch
+    if _torch is None:
+        import torch
+        _torch = torch
+    return _torch
 
 
 # =============================================================================
@@ -29,9 +38,9 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 @dataclass
-class BrickConnection:
-    """Represents a connected brick."""
-    brick_id: str
+class ModConnection:
+    """Represents a connected mod."""
+    mod_id: str
     name: str
     socket: socket.socket
     address: tuple
@@ -60,8 +69,14 @@ class BackgroundTrainer(threading.Thread):
     
     Runs continuously while the router is active, processing training
     examples in a queue without blocking the main application.
-    """
     
+    Smart features (BT-B + BT-D):
+    - Replay buffer: rolling collection of recent examples.
+      Periodic retraining on the full buffer prevents catastrophic
+      forgetting.
+    - DPO pairs: can be populated externally for preference training.
+    """
+
     def __init__(
         self,
         model=None,
@@ -70,6 +85,8 @@ class BackgroundTrainer(threading.Thread):
         batch_size: int = 2,
         save_interval: int = 100,
         checkpoint_dir: str = "models/checkpoints/router_training",
+        replay_buffer_size: int = 1000,
+        retrain_interval: int = 200,
     ):
         super().__init__(daemon=True)
         self.model = model
@@ -78,69 +95,105 @@ class BackgroundTrainer(threading.Thread):
         self.batch_size = batch_size
         self.save_interval = save_interval
         self.checkpoint_dir = Path(checkpoint_dir)
-        
+
         # System prompt for context (set from PromptTab)
         self.system_prompt: str = ""
-        
+
         # Training state
         self.example_queue: queue.Queue[TrainingExample] = queue.Queue()
         self.examples_processed = 0
         self.total_loss = 0.0
         self.running = False
         self.paused = False
-        
+
+        # Lock to prevent train/eval mode conflicts with inference
+        self._train_lock = threading.Lock()
+
         # Optimizer (created when model is set)
-        self.optimizer: torch.optim.Optimizer | None = None
-        
+        self.optimizer: Any | None = None
+
         # Callbacks
         self.on_progress: Callable[[int, float], None] | None = None
         self.on_checkpoint: Callable[[str], None] | None = None
-        
+
+        # --- Smart features (BT-B + BT-D) ---
+
+        # Replay buffer: capped at max size, keeps recent examples
+        # for periodic retraining to prevent catastrophic forgetting.
+        self.replay_buffer_size: int = replay_buffer_size
+        self.replay_buffer: list[TrainingExample] = []
+        self._replay_lock = threading.Lock()
+
+        # DPO preference pairs: (rejected_example, chosen_response)
+        # Can be populated externally for preference training.
+        self.dpo_pairs: list[dict[str, str]] = []
+
+        # Retrain on replay buffer every N examples processed
+        self.retrain_interval: int = retrain_interval
+
         # Ensure checkpoint directory exists
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
-        
-    def set_model(self, model, tokenizer):
+
+    def set_model(self, model, tokenizer) -> None:
         """Set or update the model to train."""
         self.model = model
         self.tokenizer = tokenizer
         if model is not None:
+            torch = _ensure_torch()
             self.optimizer = torch.optim.AdamW(
                 model.parameters(),
                 lr=self.learning_rate,
                 weight_decay=0.01
             )
-            model.train()  # Set to training mode
+            # Keep model in eval mode — _train_batch switches to
+            # train mode only inside the lock and restores eval after.
+            model.eval()
             logger.info("BackgroundTrainer: Model set for training")
-        
-    def add_example(self, prompt: str, response: str, score: float = 1.0, source: str = "chat"):
-        """Add a training example to the queue."""
+
+    def add_example(self, prompt: str, response: str, score: float = 1.0, source: str = "chat") -> None:
+        """Add a training example to the queue and replay buffer.
+
+        All examples are queued for training and stored in the
+        replay buffer (capped by recency).
+        """
         example = TrainingExample(
             prompt=prompt,
             response=response,
             score=score,
             source=source
         )
+
+        # Add to training queue
         self.example_queue.put(example)
-        logger.debug(f"Added training example (queue size: {self.example_queue.qsize()})")
-        
-    def run(self):
-        """Main training loop."""
+
+        # Add to replay buffer, capped by recency
+        with self._replay_lock:
+            self.replay_buffer.append(example)
+            if len(self.replay_buffer) > self.replay_buffer_size:
+                self.replay_buffer = self.replay_buffer[-self.replay_buffer_size:]
+
+        logger.debug(
+            "Added training example (queue=%d, replay=%d)",
+            self.example_queue.qsize(),
+            len(self.replay_buffer))
+
+    def run(self) -> None:
         self.running = True
         batch: list[TrainingExample] = []
-        
+
         logger.info("BackgroundTrainer started")
-        
+
         while self.running:
             # Check if paused
             if self.paused:
                 time.sleep(0.5)
                 continue
-                
+
             # Check if model is available
             if self.model is None or self.tokenizer is None:
                 time.sleep(1.0)
                 continue
-            
+
             # Collect batch
             try:
                 example = self.example_queue.get(timeout=1.0)
@@ -152,133 +205,230 @@ class BackgroundTrainer(threading.Thread):
                     self._train_batch(batch)
                     batch = []
                 continue
-            
+
             # Train when batch is full
             if len(batch) >= self.batch_size:
                 self._train_batch(batch)
                 batch = []
-                
+
         logger.info("BackgroundTrainer stopped")
-        
-    def _train_batch(self, batch: list[TrainingExample]):
-        """Train on a batch of examples."""
+
+    def _train_batch(self, batch: list[TrainingExample]) -> None:
+        """Train on a batch of examples.
+
+        Trains on all examples equally.
+        Triggers replay retrain periodically (BT-D).
+        """
         if not batch or self.model is None:
             return
-            
+
         try:
-            self.model.train()
-            total_batch_loss = 0.0
-            
-            for example in batch:
-                # Prepare input with optional system prompt context
-                if self.system_prompt:
-                    text = f"System: {self.system_prompt}\n\nUser: {example.prompt}\n\nAssistant: {example.response}"
-                else:
-                    text = f"User: {example.prompt}\n\nAssistant: {example.response}"
-                
-                # Tokenize
-                if hasattr(self.tokenizer, 'encode'):
-                    tokens = self.tokenizer.encode(text)
-                else:
-                    tokens = self.tokenizer(text)
-                    
-                if not tokens or len(tokens) < 2:
-                    continue
-                    
-                # Convert to tensor
-                input_ids = torch.tensor([tokens[:-1]], dtype=torch.long)
-                target_ids = torch.tensor([tokens[1:]], dtype=torch.long)
-                
-                # Move to device
-                device = next(self.model.parameters()).device
-                input_ids = input_ids.to(device)
-                target_ids = target_ids.to(device)
-                
-                # Forward pass
-                self.optimizer.zero_grad()
-                logits = self.model(input_ids)
-                
-                # Calculate loss
-                loss = torch.nn.functional.cross_entropy(
-                    logits.view(-1, logits.size(-1)),
-                    target_ids.view(-1)
-                )
-                
-                # Weight by score
-                loss = loss * example.score
-                
-                # Backward pass
-                loss.backward()
-                
-                # Gradient clipping
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
-                
-                # Update weights
-                self.optimizer.step()
-                
-                total_batch_loss += loss.item()
-                
-            # Restore eval mode so inference isn't affected by dropout
-            self.model.eval()
-            
+            with self._train_lock:
+                self.model.train()
+                try:
+                    total_batch_loss = 0.0
+
+                    for example in batch:
+                        # Prepare input with optional system prompt context
+                        if self.system_prompt:
+                            text = f"System: {self.system_prompt}\n\nUser: {example.prompt}\n\nAssistant: {example.response}"
+                        else:
+                            text = f"User: {example.prompt}\n\nAssistant: {example.response}"
+
+                        # Tokenize
+                        if hasattr(self.tokenizer, 'encode'):
+                            tokens = self.tokenizer.encode(text)
+                        else:
+                            tokens = self.tokenizer(text)
+
+                        if not tokens or len(tokens) < 2:
+                            continue
+
+                        # Convert to tensor
+                        torch = _ensure_torch()
+                        input_ids = torch.tensor([tokens[:-1]], dtype=torch.long)
+                        target_ids = torch.tensor([tokens[1:]], dtype=torch.long)
+
+                        # Move to device
+                        device = next(self.model.parameters()).device
+                        input_ids = input_ids.to(device)
+                        target_ids = target_ids.to(device)
+
+                        # Forward pass
+                        self.optimizer.zero_grad()
+                        output = self.model(input_ids)
+                        # Unpack tuple if model returns (logits, loss)
+                        logits = output[0] if isinstance(output, tuple) else output
+
+                        # Calculate loss
+                        loss = _ensure_torch().nn.functional.cross_entropy(
+                            logits.reshape(-1, logits.size(-1)),
+                            target_ids.reshape(-1)
+                        )
+
+                        # Backward pass
+                        loss.backward()
+
+                        # Gradient clipping
+                        _ensure_torch().nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+
+                        # Update weights
+                        self.optimizer.step()
+
+                        total_batch_loss += loss.item()
+                finally:
+                    # Always restore eval mode — even on exception — so
+                    # dropout / batchnorm don't corrupt inference output.
+                    self.model.eval()
+
             # Update stats
             self.examples_processed += len(batch)
-            avg_loss = total_batch_loss / len(batch)
+            avg_loss = total_batch_loss / max(1, len(batch))
             self.total_loss = 0.9 * self.total_loss + 0.1 * avg_loss  # EMA
-            
+
             # Callback
             if self.on_progress:
                 self.on_progress(self.examples_processed, self.total_loss)
-                
+
             # Periodic checkpoint
             if self.examples_processed % self.save_interval == 0:
                 self._save_checkpoint()
-                
+
+            # Periodic retrain on replay buffer (BT-D)
+            if (self.retrain_interval > 0
+                    and self.examples_processed % self.retrain_interval == 0
+                    and len(self.replay_buffer) >= self.batch_size):
+                self._retrain_on_replay()
+
             logger.debug(
-                f"Trained batch: {len(batch)} examples, "
-                f"loss={avg_loss:.4f}, total={self.examples_processed}"
-            )
-            
+                "Trained batch: %d examples, "
+                "loss=%.4f, total=%d",
+                len(batch),
+                avg_loss, self.examples_processed)
+
         except Exception as e:
             logger.error(f"Training batch error: {e}")
-            
-    def _save_checkpoint(self):
+
+    def _retrain_on_replay(self) -> None:
+        """Retrain on the best examples in the replay buffer (BT-D).
+
+        Takes a snapshot of the top examples from the replay buffer
+        and runs a mini training pass.  This prevents catastrophic
+        forgetting by periodically reinforcing the best exchanges.
+        """
+        if self.model is None or not self.replay_buffer:
+            return
+
+        with self._replay_lock:
+            # Take the top half of replay buffer (already sorted by score desc)
+            top_k = min(len(self.replay_buffer), self.replay_buffer_size // 2)
+            replay_batch = list(self.replay_buffer[:top_k])
+
+        if not replay_batch:
+            return
+
+        logger.info(
+            "BackgroundTrainer: retraining on %d replay examples",
+            len(replay_batch))
+
+        try:
+            with self._train_lock:
+                self.model.train()
+                try:
+                    for example in replay_batch:
+                        if self.system_prompt:
+                            text = (
+                                f"System: {self.system_prompt}\n\n"
+                                f"User: {example.prompt}\n\n"
+                                f"Assistant: {example.response}")
+                        else:
+                            text = (
+                                f"User: {example.prompt}\n\n"
+                                f"Assistant: {example.response}")
+
+                        if hasattr(self.tokenizer, "encode"):
+                            tokens = self.tokenizer.encode(text)
+                        else:
+                            tokens = self.tokenizer(text)
+
+                        if not tokens or len(tokens) < 2:
+                            continue
+
+                        torch = _ensure_torch()
+                        input_ids = torch.tensor(
+                            [tokens[:-1]], dtype=torch.long)
+                        target_ids = torch.tensor(
+                            [tokens[1:]], dtype=torch.long)
+
+                        device = next(self.model.parameters()).device
+                        input_ids = input_ids.to(device)
+                        target_ids = target_ids.to(device)
+
+                        self.optimizer.zero_grad()
+                        output = self.model(input_ids)
+                        logits = (output[0] if isinstance(output, tuple)
+                                  else output)
+                        loss = torch.nn.functional.cross_entropy(
+                            logits.reshape(-1, logits.size(-1)),
+                            target_ids.reshape(-1))
+                        # Lower learning rate for replay to avoid
+                        # over-fitting on the same examples
+                        loss = loss * 0.5
+                        loss.backward()
+                        torch.nn.utils.clip_grad_norm_(
+                            self.model.parameters(), 1.0)
+                        self.optimizer.step()
+                finally:
+                    self.model.eval()
+
+            logger.info("BackgroundTrainer: replay retrain complete")
+
+        except Exception as e:
+            logger.error("Replay retrain error: %s", e)
+
+    def _save_checkpoint(self) -> None:
         """Save a training checkpoint."""
         if self.model is None:
             return
-            
+
         checkpoint_path = self.checkpoint_dir / f"router_ckpt_{self.examples_processed}.pth"
-        
+
         try:
-            torch.save({
+            from enigma_engine.core.safe_save import atomic_torch_save
+            save_data = {
                 'model_state_dict': self.model.state_dict(),
                 'optimizer_state_dict': self.optimizer.state_dict() if self.optimizer else None,
                 'examples_processed': self.examples_processed,
                 'total_loss': self.total_loss,
-            }, checkpoint_path)
-            
+                'replay_buffer_size': len(self.replay_buffer),
+            }
+            if hasattr(self.model, 'config'):
+                save_data['model_config'] = self.model.config.__dict__
+                save_data['config'] = self.model.config.__dict__
+            atomic_torch_save(save_data, checkpoint_path)
+
             logger.info(f"Saved checkpoint: {checkpoint_path}")
-            
+
             if self.on_checkpoint:
                 self.on_checkpoint(str(checkpoint_path))
-                
+
         except Exception as e:
             logger.error(f"Failed to save checkpoint: {e}")
-            
-    def pause(self):
+
+    def pause(self) -> None:
         """Pause training."""
         self.paused = True
         logger.info("BackgroundTrainer paused")
-        
-    def resume(self):
+
+    def resume(self) -> None:
         """Resume training."""
         self.paused = False
         logger.info("BackgroundTrainer resumed")
-        
-    def stop(self):
+
+    def stop(self) -> None:
         """Stop the training thread."""
         self.running = False
-        
+
     def get_stats(self) -> dict:
         """Get training statistics."""
         return {
@@ -288,24 +438,37 @@ class BackgroundTrainer(threading.Thread):
             'queue_size': self.example_queue.qsize(),
             'average_loss': self.total_loss,
             'has_model': self.model is not None,
+            'replay_buffer_size': len(self.replay_buffer),
+            'replay_buffer_max': self.replay_buffer_size,
+            'dpo_pairs': len(self.dpo_pairs),
         }
 
+    @property
+    def train_lock(self) -> threading.Lock:
+        """Expose the training lock so inference code can coordinate.
+
+        Inference callers should ``with trainer.train_lock:`` around
+        their forward pass to prevent train/eval mode interleaving
+        and gradient corruption when the same model is shared.
+        """
+        return self._train_lock
+
 
 # =============================================================================
-# BRICK ROUTER
+# MOD ROUTER
 # =============================================================================
 
-class BrickRouter:
+class ModRouter:
     """
-    Central router for brick connections.
+    Central router for mod connections.
     
     Handles:
     - TCP server on port 9900
-    - Brick connection management
-    - Message routing between bricks and engine
+    - Mod connection management
+    - Message routing between mods and engine
     - Background training from conversations
     """
-    
+
     def __init__(
         self,
         host: str = "127.0.0.1",
@@ -319,43 +482,43 @@ class BrickRouter:
         self.enable_training = enable_training
         self.heartbeat_interval = heartbeat_interval
         self.max_connections = max_connections
-        
+
         # Server state
         self.server_socket: socket.socket | None = None
         self.running = False
         self.accept_thread: threading.Thread | None = None
         self._heartbeat_thread: threading.Thread | None = None
-        
-        # Connected bricks
-        self.bricks: dict[str, BrickConnection] = {}
-        self.brick_lock = threading.Lock()
-        
+
+        # Connected mods
+        self.mods: dict[str, ModConnection] = {}
+        self.mod_lock = threading.Lock()
+
         # Multi-purpose prompts for different contexts
         self.prompts: dict[str, str] = {
             "chat": "You are a helpful AI assistant.",
             "gui_usage": "You can control the application using [CMD]command[/CMD] blocks.",
             "training_scorer": "Score this response from 1-100 based on helpfulness, accuracy, and clarity.",
-            "brick_router": "Route tasks to the appropriate brick based on the request type.",
+            "mod_router": "Route tasks to the appropriate mod based on the request type.",
             "safety": "Be helpful, harmless, and honest. Refuse harmful requests politely.",
         }
-        
+
         # Training
         self.trainer = BackgroundTrainer() if enable_training else None
-        
+
         # Callbacks
-        self.on_brick_connected: Callable[[BrickConnection], None] | None = None
-        self.on_brick_disconnected: Callable[[str], None] | None = None
+        self.on_mod_connected: Callable[[ModConnection], None] | None = None
+        self.on_mod_disconnected: Callable[[str], None] | None = None
         self.on_message: Callable[[str, dict], None] | None = None
-        
+
         # Message handlers
         self.message_handlers: dict[str, Callable] = {}
-        
+
     def start(self) -> bool:
         """Start the router server."""
         if self.running:
             logger.warning("Router already running")
             return False
-            
+
         try:
             # Create server socket
             self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -363,13 +526,13 @@ class BrickRouter:
             self.server_socket.bind((self.host, self.port))
             self.server_socket.listen(10)
             self.server_socket.settimeout(1.0)  # For clean shutdown
-            
+
             self.running = True
-            
+
             # Start accept thread
             self.accept_thread = threading.Thread(target=self._accept_loop, daemon=True)
             self.accept_thread.start()
-            
+
             # Start training thread
             if self.trainer:
                 self.trainer.start()
@@ -379,217 +542,224 @@ class BrickRouter:
                 target=self._heartbeat_loop, daemon=True
             )
             self._heartbeat_thread.start()
-                
+
             logger.info(f"Router started on {self.host}:{self.port}")
             return True
-            
+
         except Exception as e:
             logger.error(f"Failed to start router: {e}")
             self.running = False
             return False
-            
-    def stop(self):
+
+    def stop(self) -> None:
         """Stop the router server."""
         self.running = False
-        
+
         # Stop trainer
         if self.trainer:
             self.trainer.stop()
-            
-        # Close all brick connections
-        with self.brick_lock:
-            for brick in list(self.bricks.values()):
+
+        # Close all mod connections
+        with self.mod_lock:
+            for mod in list(self.mods.values()):
                 try:
-                    brick.socket.close()
-                except Exception:
-                    pass
-            self.bricks.clear()
-            
+                    mod.socket.close()
+                except Exception as e:
+                    logger.debug("Error closing mod socket: %s", e)
+            self.mods.clear()
+
         # Close server socket
         if self.server_socket:
             try:
                 self.server_socket.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Error closing server socket: %s", e)
             self.server_socket = None
-            
+
         logger.info("Router stopped")
-        
-    def _heartbeat_loop(self):
-        """Periodically ping bricks and remove dead connections."""
+
+    def _heartbeat_loop(self) -> None:
+        """Periodically ping mods and remove dead connections."""
         while self.running:
             time.sleep(self.heartbeat_interval)
             if not self.running:
                 break
+            # Snapshot mods to ping outside the lock — socket I/O can block
+            to_ping: list[tuple[str, "ModConnection"]] = []
             dead: list[str] = []
-            with self.brick_lock:
+            with self.mod_lock:
                 now = time.time()
-                for brick_id, brick in self.bricks.items():
-                    if now - brick.last_seen > self.heartbeat_interval * 3:
-                        dead.append(brick_id)
+                for mod_id, mod in self.mods.items():
+                    if now - mod.last_seen > self.heartbeat_interval * 3:
+                        dead.append(mod_id)
                     else:
+                        to_ping.append((mod_id, mod))
+            # Ping outside the lock to avoid blocking other mod ops
+            for mod_id, mod in to_ping:
+                try:
+                    self._send_message(mod.socket, {"type": "ping"})
+                except Exception:
+                    dead.append(mod_id)
+            # Remove dead mods under lock
+            with self.mod_lock:
+                for mod_id in dead:
+                    mod = self.mods.pop(mod_id, None)
+                    if mod:
                         try:
-                            self._send_message(brick.socket, {"type": "ping"})
-                        except Exception:
-                            dead.append(brick_id)
-                for brick_id in dead:
-                    brick = self.bricks.pop(brick_id, None)
-                    if brick:
-                        try:
-                            brick.socket.close()
+                            mod.socket.close()
                         except Exception:
                             pass
-            for brick_id in dead:
-                logger.info(f"Heartbeat: removed dead brick {brick_id}")
-                if self.on_brick_disconnected:
-                    self.on_brick_disconnected(brick_id)
+            for mod_id in dead:
+                logger.info(f"Heartbeat: removed dead mod {mod_id}")
+                if self.on_mod_disconnected:
+                    self.on_mod_disconnected(mod_id)
 
-    def _accept_loop(self):
-        """Accept incoming brick connections."""
+    def _accept_loop(self) -> None:
+        """Accept incoming mod connections."""
         while self.running:
             try:
                 # Reject when at capacity
-                if len(self.bricks) >= self.max_connections:
+                if len(self.mods) >= self.max_connections:
                     time.sleep(0.5)
                     continue
 
                 client_socket, address = self.server_socket.accept()
                 logger.info(f"New connection from {address}")
-                
+
                 # Start handler thread
                 handler = threading.Thread(
-                    target=self._handle_brick,
+                    target=self._handle_mod,
                     args=(client_socket, address),
                     daemon=True
                 )
                 handler.start()
-                
+
             except socket.timeout:
                 continue
             except Exception as e:
                 if self.running:
                     logger.error(f"Accept error: {e}")
-                    
-    def _handle_brick(self, client_socket: socket.socket, address: tuple):
-        """Handle a connected brick."""
-        brick_id = None
-        
+
+    def _handle_mod(self, client_socket: socket.socket, address: tuple) -> None:
+        """Handle a connected mod."""
+        mod_id = None
+
         try:
             client_socket.settimeout(30.0)  # 30s timeout for registration
-            
+
             # Wait for registration message
             data = self._receive_message(client_socket)
             if not data:
                 logger.warning(f"No registration from {address}")
                 client_socket.close()
                 return
-                
+
             if data.get('type') != 'register':
                 logger.warning(f"Expected register, got {data.get('type')}")
                 client_socket.close()
                 return
-                
-            # Create brick connection
-            brick_id = data.get('brick_id', f"brick_{time.time()}")
-            
-            brick = BrickConnection(
-                brick_id=brick_id,
-                name=data.get('name', 'Unknown Brick'),
+
+            # Create mod connection
+            mod_id = data.get('mod_id', f"mod_{time.time()}")
+
+            mod = ModConnection(
+                mod_id=mod_id,
+                name=data.get('name', 'Unknown Mod'),
                 socket=client_socket,
                 address=address,
                 capabilities=data.get('capabilities', [])
             )
-            
-            # Store brick
-            with self.brick_lock:
-                self.bricks[brick_id] = brick
-                
+
+            # Store mod
+            with self.mod_lock:
+                self.mods[mod_id] = mod
+
             # Send acknowledgment
             self._send_message(client_socket, {
                 'type': 'registered',
-                'brick_id': brick_id,
+                'mod_id': mod_id,
                 'status': 'ok'
             })
-            
-            logger.info(f"Brick registered: {brick.name} ({brick_id})")
-            
-            if self.on_brick_connected:
-                self.on_brick_connected(brick)
-                
+
+            logger.info(f"Mod registered: {mod.name} ({mod_id})")
+
+            if self.on_mod_connected:
+                self.on_mod_connected(mod)
+
             # Set normal timeout
             client_socket.settimeout(60.0)
-            
+
             # Message loop
             while self.running:
                 data = self._receive_message(client_socket)
                 if data is None:
                     break
-                    
-                self._handle_message(brick_id, data)
-                
+
+                self._handle_message(mod_id, data)
+
         except socket.timeout:
-            logger.debug(f"Brick timeout: {brick_id or address}")
+            logger.debug(f"Mod timeout: {mod_id or address}")
         except ConnectionResetError:
-            logger.debug(f"Brick disconnected: {brick_id or address}")
+            logger.debug(f"Mod disconnected: {mod_id or address}")
         except Exception as e:
-            logger.error(f"Brick handler error: {e}")
+            logger.error(f"Mod handler error: {e}")
         finally:
             # Cleanup
-            if brick_id:
-                with self.brick_lock:
-                    if brick_id in self.bricks:
-                        del self.bricks[brick_id]
-                        
-                if self.on_brick_disconnected:
-                    self.on_brick_disconnected(brick_id)
-                    
-                logger.info(f"Brick disconnected: {brick_id}")
-                
+            if mod_id:
+                with self.mod_lock:
+                    if mod_id in self.mods:
+                        del self.mods[mod_id]
+
+                if self.on_mod_disconnected:
+                    self.on_mod_disconnected(mod_id)
+
+                logger.info(f"Mod disconnected: {mod_id}")
+
             try:
                 client_socket.close()
             except Exception:
                 pass
-                
-    def _handle_message(self, brick_id: str, data: dict):
-        """Handle a message from a brick."""
+
+    def _handle_message(self, mod_id: str, data: dict) -> None:
+        """Handle a message from a mod."""
         msg_type = data.get('type', 'unknown')
-        
+
         # Check for registered handler
         if msg_type in self.message_handlers:
             try:
-                self.message_handlers[msg_type](brick_id, data)
+                self.message_handlers[msg_type](mod_id, data)
             except Exception as e:
                 logger.error(f"Handler error for {msg_type}: {e}")
             return
-            
+
         # Default handling
         if msg_type == 'response':
-            # Brick completed a task
+            # Mod completed a task
             prompt = data.get('prompt', '')
             response = data.get('response', '')
             score = data.get('score', 1.0)
-            
+
             # Add to training queue
             if self.trainer and prompt and response:
-                self.trainer.add_example(prompt, response, score, source=f"brick:{brick_id}")
-                
+                self.trainer.add_example(prompt, response, score, source=f"mod:{mod_id}")
+
         elif msg_type == 'ping':
             # Respond to ping
-            brick = self.bricks.get(brick_id)
-            if brick:
-                brick.last_seen = time.time()
-                self._send_message(brick.socket, {'type': 'pong'})
+            mod = self.mods.get(mod_id)
+            if mod:
+                mod.last_seen = time.time()
+                self._send_message(mod.socket, {'type': 'pong'})
 
         elif msg_type == 'pong':
             # Heartbeat reply — update last_seen
-            brick = self.bricks.get(brick_id)
-            if brick:
-                brick.last_seen = time.time()
-                
+            mod = self.mods.get(mod_id)
+            if mod:
+                mod.last_seen = time.time()
+
         # Callback
         if self.on_message:
-            self.on_message(brick_id, data)
-            
+            self.on_message(mod_id, data)
+
     def _receive_message(self, sock: socket.socket) -> dict | None:
         """Receive a JSON message."""
         try:
@@ -600,13 +770,13 @@ class BrickRouter:
                 if not chunk:
                     return None
                 length_data += chunk
-                
+
             length = int.from_bytes(length_data, 'big')
-            
+
             if length > 1_000_000:  # 1MB max
                 logger.warning(f"Message too large: {length}")
                 return None
-                
+
             # Read message
             data = b''
             while len(data) < length:
@@ -614,16 +784,16 @@ class BrickRouter:
                 if not chunk:
                     return None
                 data += chunk
-                
+
             return json.loads(data.decode('utf-8'))
-            
+
         except json.JSONDecodeError as e:
             logger.error(f"Invalid JSON: {e}")
             return None
         except Exception as e:
             logger.debug(f"Receive error: {e}")
             return None
-            
+
     def _send_message(self, sock: socket.socket, data: dict) -> bool:
         """Send a JSON message."""
         try:
@@ -634,117 +804,136 @@ class BrickRouter:
         except Exception as e:
             logger.error(f"Send error: {e}")
             return False
-            
+
     # =========================================================================
     # PUBLIC API
     # =========================================================================
-    
-    def send_to_brick(self, brick_id: str, message: dict) -> bool:
-        """Send a message to a specific brick."""
-        with self.brick_lock:
-            brick = self.bricks.get(brick_id)
-            if brick:
-                return self._send_message(brick.socket, message)
+
+    def send_to_mod(self, mod_id: str, message: dict) -> bool:
+        """Send a message to a specific mod."""
+        with self.mod_lock:
+            mod = self.mods.get(mod_id)
+            if mod:
+                return self._send_message(mod.socket, message)
         return False
-        
-    def broadcast(self, message: dict, exclude: list[str] | None = None):
-        """Broadcast a message to all connected bricks."""
+
+    def broadcast(self, message: dict, exclude: list[str] | None = None) -> None:
+        """Broadcast a message to all connected mods."""
         exclude_set = set(exclude or [])
-        with self.brick_lock:
-            for brick_id, brick in self.bricks.items():
-                if brick_id not in exclude_set:
-                    self._send_message(brick.socket, message)
-                    
-    def get_connected_bricks(self) -> list[dict]:
-        """Get list of connected bricks."""
-        with self.brick_lock:
+        with self.mod_lock:
+            for mod_id, mod in self.mods.items():
+                if mod_id not in exclude_set:
+                    self._send_message(mod.socket, message)
+
+    def get_connected_mods(self) -> list[dict]:
+        """Get list of connected mods."""
+        with self.mod_lock:
             return [
                 {
-                    'brick_id': b.brick_id,
+                    'mod_id': b.mod_id,
                     'name': b.name,
                     'capabilities': b.capabilities,
                     'connected_at': b.connected_at,
                     'uptime': time.time() - b.connected_at,
                 }
-                for b in self.bricks.values()
+                for b in self.mods.values()
             ]
-            
-    def add_training_example(self, prompt: str, response: str, score: float = 1.0):
+
+    def add_training_example(self, prompt: str, response: str, score: float = 1.0) -> None:
         """Add a training example from chat."""
         if self.trainer:
             self.trainer.add_example(prompt, response, score, source="chat")
-            
-    def set_training_model(self, model, tokenizer, system_prompt: str = ""):
+
+    def set_training_model(self, model, tokenizer, system_prompt: str = "") -> None:
         """Set the model for background training."""
         if self.trainer:
             self.trainer.set_model(model, tokenizer)
             if system_prompt:
                 self.trainer.system_prompt = system_prompt
-                
-    def set_system_prompt(self, prompt: str):
+
+    def set_system_prompt(self, prompt: str) -> None:
         """Set the system prompt for training context."""
         if self.trainer:
             self.trainer.system_prompt = prompt
-            
+
     def get_training_stats(self) -> dict:
         """Get training statistics."""
         if self.trainer:
             return self.trainer.get_stats()
         return {'enabled': False}
-        
-    def pause_training(self):
+
+    def get_train_lock(self) -> threading.Lock | None:
+        """Return the training lock for inference coordination.
+
+        When background training and inference share the same model,
+        wrap the inference forward pass with::
+
+            lock = router.get_train_lock()
+            if lock:
+                with lock:
+                    output = model(input_ids)
+            else:
+                output = model(input_ids)
+
+        Returns None if no trainer is active.
+        """
+        if self.trainer:
+            return self.trainer.train_lock
+        return None
+
+    def pause_training(self) -> None:
         """Pause background training."""
         if self.trainer:
             self.trainer.pause()
-            
-    def resume_training(self):
+
+    def resume_training(self) -> None:
         """Resume background training."""
         if self.trainer:
             self.trainer.resume()
-            
+
     def get_status(self) -> dict:
         """Get full router status."""
         return {
             'running': self.running,
             'host': self.host,
             'port': self.port,
-            'connected_bricks': len(self.bricks),
-            'bricks': self.get_connected_bricks(),
+            'connected_mods': len(self.mods),
+            'mods': self.get_connected_mods(),
             'training': self.get_training_stats(),
         }
-    
+
     def get_prompt(self, purpose: str) -> str:
         """
         Get a prompt by purpose.
         
         Args:
             purpose: One of 'chat', 'gui_usage', 'training_scorer', 
-                     'brick_router', 'safety', or a brick name
+                     'mod_router', 'safety', or a mod name
         
         Returns:
             The prompt text, or empty string if not found
         """
         return self.prompts.get(purpose, "")
-    
-    def set_prompt(self, purpose: str, prompt: str):
+
+    def set_prompt(self, purpose: str, prompt: str) -> None:
         """
         Set or update a prompt for a specific purpose.
         
         Args:
-            purpose: The prompt identifier (e.g., 'chat', 'safety', brick name)
+            purpose: The prompt identifier (e.g., 'chat', 'safety', mod name)
             prompt: The prompt text
         """
         self.prompts[purpose] = prompt
-        
+
         # If setting the main system prompt, also update trainer
         if purpose == "chat" and self.trainer:
             self.trainer.system_prompt = prompt
-    
-    def add_brick_prompt(self, brick_name: str, prompt: str):
-        """Add a prompt snippet from a brick (called during registration)."""
+
+    def add_mod_prompt(self, mod_name: str, prompt: str) -> None:
+        """Add a prompt snippet from a mod (called during registration)."""
         if prompt:
-            self.prompts[f"brick_{brick_name}"] = prompt
-    
+            self.prompts[f"mod_{mod_name}"] = prompt
+
     def get_combined_prompt(self, *purposes: str) -> str:
         """
         Combine multiple prompts into one.
@@ -761,8 +950,8 @@ class BrickRouter:
             if prompt:
                 parts.append(prompt)
         return "\n\n".join(parts)
-        
-    def register_handler(self, msg_type: str, handler: Callable):
+
+    def register_handler(self, msg_type: str, handler: Callable) -> None:
         """Register a custom message handler."""
         self.message_handlers[msg_type] = handler
 
@@ -771,14 +960,14 @@ class BrickRouter:
 # SINGLETON ROUTER INSTANCE
 # =============================================================================
 
-_router_instance: BrickRouter | None = None
+_router_instance: ModRouter | None = None
 
 
-def get_router() -> BrickRouter:
+def get_router() -> ModRouter:
     """Get or create the global router instance."""
     global _router_instance
     if _router_instance is None:
-        _router_instance = BrickRouter()
+        _router_instance = ModRouter()
     return _router_instance
 
 
@@ -790,7 +979,7 @@ def start_router(host: str = "127.0.0.1", port: int = 9900) -> bool:
     return router.start()
 
 
-def stop_router():
+def stop_router() -> None:
     """Stop the global router."""
     global _router_instance
     if _router_instance:

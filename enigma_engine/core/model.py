@@ -24,7 +24,6 @@ Usage:
 import json
 import logging
 import math
-import os
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any, Optional, Union
@@ -178,7 +177,7 @@ class Enigma(nn.Module):
             logger.info(f"Added vision projection: {self.config.vision_hidden_size} → {self.config.dim}")
         else:
             self.vision_projection = None
-        
+
         if self.config.audio_hidden_size is not None:
             self.audio_projection = nn.Linear(
                 self.config.audio_hidden_size,
@@ -261,7 +260,8 @@ class Enigma(nn.Module):
 
     def forward(
         self, input_ids: torch.Tensor, targets: Optional[torch.Tensor] = None,
-        use_cache: bool = False, start_pos: int = 0, return_loss: bool = False
+        use_cache: bool = False, start_pos: int = 0, return_loss: bool = False,
+        pad_token_id: int = 0,
     ) -> Union[torch.Tensor, tuple[torch.Tensor, Optional[torch.Tensor]]]:
         """
         Forward pass.
@@ -272,6 +272,8 @@ class Enigma(nn.Module):
             use_cache: Whether to use KV cache
             start_pos: Starting position for RoPE
             return_loss: If True, always return (logits, loss) tuple
+            pad_token_id: Token ID used for padding — ignored in loss
+                computation via ``ignore_index``.
 
         Returns:
             logits if no targets and return_loss=False, else (logits, loss)
@@ -299,8 +301,9 @@ class Enigma(nn.Module):
         # Compute loss if targets provided
         loss = None
         if targets is not None:
-            loss = F.cross_entropy(logits.view(-1, logits.size(-1)),
-                                   targets.view(-1), ignore_index=0)
+            loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)),
+                                   targets.reshape(-1),
+                                   ignore_index=pad_token_id)
 
         # Return format depends on whether loss was computed
         if targets is not None or return_loss:
@@ -330,7 +333,7 @@ class Enigma(nn.Module):
         """
         if not self.config.use_moe:
             return torch.tensor(0.0, device=next(self.parameters()).device)
-        
+
         aux_loss = torch.tensor(0.0, device=next(self.parameters()).device)
         for layer in self.layers:
             aux_loss = aux_loss + layer.get_moe_aux_loss()
@@ -367,7 +370,7 @@ class Enigma(nn.Module):
             )
         """
         embeddings_list = []
-        
+
         # Process vision features
         if vision_features is not None:
             if self.vision_projection is None:
@@ -376,7 +379,7 @@ class Enigma(nn.Module):
                 )
             vision_embeds = self.vision_projection(vision_features)
             embeddings_list.append(vision_embeds)
-        
+
         # Process audio features
         if audio_features is not None:
             if self.audio_projection is None:
@@ -385,39 +388,39 @@ class Enigma(nn.Module):
                 )
             audio_embeds = self.audio_projection(audio_features)
             embeddings_list.append(audio_embeds)
-        
+
         # Process text
         if input_ids is not None:
             text_embeds = self.tok_embeddings(input_ids)
             embeddings_list.append(text_embeds)
-        
+
         if not embeddings_list:
             raise ValueError("At least one of input_ids, vision_features, or audio_features must be provided")
-        
+
         # Concatenate all modalities
         combined_embeds = torch.cat(embeddings_list, dim=1)
-        
+
         # Continue with standard forward pass
         B, T, _ = combined_embeds.shape
         h = combined_embeds
-        
+
         # Add positional embeddings if not using RoPE
         if not self.config.use_rope and hasattr(self, 'pos'):
             if T <= self.config.max_seq_len:
                 h = h + self.pos[:, :T]
-        
+
         # Build causal mask
         mask = None
         if T > 1:
             mask = self._causal_mask[:T, :T].unsqueeze(0).unsqueeze(0)
-        
+
         # Transform through layers
         for layer in self.layers:
             h = layer(h, self.freqs_cis, mask, kwargs.get('use_cache', False), kwargs.get('start_pos', 0))
-        
+
         # Output projection
         logits = self.output(self.norm(h))
-        
+
         return logits
 
     @torch.no_grad()
@@ -458,14 +461,14 @@ class Enigma(nn.Module):
         # Validate temperature
         if temperature <= 0:
             raise ValueError(f"temperature must be positive, got {temperature}")
-            
+
         # Delegate to streaming generator if requested
         if stream:
             return self.generate_stream(
                 input_ids, max_new_tokens, temperature, top_k, top_p,
                 repetition_penalty, stop_tokens
             )
-        
+
         self.clear_cache()
         stop_tokens = stop_tokens or [2]
 
@@ -547,23 +550,23 @@ class Enigma(nn.Module):
         """
         self.clear_cache()
         stop_tokens = stop_tokens or [2]
-        
+
         generated = input_ids
         logits = self.forward(input_ids, use_cache=True)
-        
+
         for _ in range(max_new_tokens):
             next_token = sample_next_token(
                 logits[:, -1, :], generated, temperature,
                 top_k, top_p, repetition_penalty,
             )
-            
+
             # Yield the token immediately
             yield next_token.squeeze()
-            
+
             # Check for stop tokens
             if next_token.item() in stop_tokens:
                 break
-            
+
             # Update generated sequence and get next logits
             generated = torch.cat([generated, next_token], dim=1)
             logits = self.forward(next_token, use_cache=True, start_pos=generated.shape[1] - 1)
@@ -571,9 +574,6 @@ class Enigma(nn.Module):
     @property
     def num_parameters(self) -> int:
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
-
-    def get_config(self) -> dict[str, Any]:
-        return self.config.to_dict()
 
     @classmethod
     def from_config(cls, config: dict[str, Any]) -> 'Enigma':
@@ -586,106 +586,18 @@ class Enigma(nn.Module):
         config_file = path / 'config.json' if path.is_dir() else path.with_suffix('.json')
 
         if config_file.exists():
-            with open(config_file) as f:
+            with open(config_file, encoding='utf-8') as f:
                 model = cls.from_config(json.load(f))
         else:
             model = cls()
 
         weights_file = path / 'weights.pth' if path.is_dir() else path
         if weights_file.exists():
-            state_dict = safe_load_weights(weights_file, map_location='cpu')
+            from .model_registry import get_state_dict
+            raw = safe_load_weights(weights_file, map_location='cpu')
+            state_dict = get_state_dict(raw)
             model.load_state_dict(state_dict, strict=False)
 
-        return model
-
-    @classmethod
-    def from_pretrained_quantized(cls, path: Path, quantization: str = "dynamic") -> 'Enigma':
-        """
-        Load a pretrained model with quantization applied.
-        
-        📖 WHAT THIS DOES:
-        Loads a model from disk and immediately applies quantization to reduce
-        memory footprint. Ideal for deployment on memory-constrained devices.
-        
-        📐 QUANTIZATION FLOW:
-        1. Load model weights to CPU
-        2. Apply specified quantization
-        3. Return memory-optimized model
-        
-        Args:
-            path: Path to model weights or directory
-            quantization: Type of quantization ("dynamic", "int8", "int4")
-        
-        Returns:
-            Quantized Forge model
-        
-        Example:
-            # Load quantized model for Pi deployment
-            model = Forge.from_pretrained_quantized("models/forge.pth", "int8")
-        """
-        # Load model first
-        model = cls.from_pretrained(path)
-        
-        # Apply quantization
-        model.quantize(quantization)
-        
-        return model
-
-    @classmethod
-    def load_mmap(cls, path: Path) -> 'Enigma':
-        """
-        Load model using memory-mapped file loading.
-        
-        📖 WHAT THIS DOES:
-        Uses mmap to load model weights without loading everything into RAM.
-        This is useful for loading large models on memory-constrained devices.
-        
-        📐 HOW IT WORKS:
-        Instead of loading the entire file into RAM, mmap creates a virtual
-        mapping that loads pages on-demand from disk. This dramatically
-        reduces peak memory usage during loading.
-        
-        ⚠️ LIMITATIONS:
-        - Slightly slower inference (disk reads on cache miss)
-        - Model file must be on fast storage (SSD recommended)
-        - Not compatible with CUDA (model stays on CPU)
-        
-        Args:
-            path: Path to model weights (.pth file)
-        
-        Returns:
-            Memory-mapped Forge model
-        """
-        path = Path(path)
-        config_file = path / 'config.json' if path.is_dir() else path.with_suffix('.json')
-        
-        # Load config
-        if config_file.exists():
-            with open(config_file) as f:
-                model = cls.from_config(json.load(f))
-        else:
-            model = cls()
-        
-        # Load weights with mmap
-        weights_file = path / 'weights.pth' if path.is_dir() else path
-        if weights_file.exists():
-            # Use mmap_mode for memory-efficient loading
-            # weights_only=True for security against pickle attacks
-            try:
-                state_dict = torch.load(
-                    weights_file, 
-                    map_location='cpu',
-                    mmap=True,  # Memory-mapped loading (PyTorch 2.0+)
-                    weights_only=True
-                )
-            except TypeError:
-                # Fallback for older PyTorch versions
-                logger.warning("mmap loading not available, using standard load")
-                state_dict = torch.load(weights_file, map_location='cpu', weights_only=True)
-            
-            model.load_state_dict(state_dict, strict=False)
-        
-        logger.info(f"Loaded model with mmap from: {path}")
         return model
 
     @classmethod
@@ -718,23 +630,23 @@ class Enigma(nn.Module):
         """
         try:
             from .hardware_detection import detect_hardware, get_optimal_config
-            
+
             profile = detect_hardware()
             config = get_optimal_config(profile)
-            
-            logger.info(f"Auto-configured for: {profile.cpu_model}")
-            logger.info(f"Recommended: {config['size']} with {config.get('quantization', 'none')} quantization")
-            
+
+            logger.info(f"Auto-configured for: {profile.hardware_type}")
+            logger.info(f"Recommended: {config['model_size']} with {config.get('quantization', 'none')} quantization")
+
             # Create model with recommended size
-            model = create_model(config['size'], vocab_size=vocab_size)
-            
+            model = create_model(config['model_size'], vocab_size=vocab_size)
+
             # Apply quantization if recommended
             quant = config.get('quantization', 'none')
             if quant and quant != 'none':
                 model.quantize(quant)
-            
+
             return model
-            
+
         except ImportError as e:
             logger.warning(f"Hardware detection not available: {e}, using default config")
             return create_model('small', vocab_size=vocab_size)
@@ -775,13 +687,13 @@ class Enigma(nn.Module):
         if mode == "none":
             logger.info("No quantization applied")
             return self
-        
+
         # Ensure model is on CPU for quantization
         device = next(self.parameters()).device
         if device.type != 'cpu':
             logger.info("Moving model to CPU for quantization")
             self.cpu()
-        
+
         if mode == "dynamic":
             # Dynamic quantization - fastest, good quality
             try:
@@ -789,7 +701,7 @@ class Enigma(nn.Module):
                 logger.info("Applied dynamic INT8 quantization")
             except Exception as e:
                 logger.warning(f"Dynamic quantization failed: {e}")
-                
+
         elif mode == "int8":
             # Static INT8 quantization
             try:
@@ -797,7 +709,7 @@ class Enigma(nn.Module):
                 logger.info("Applied static INT8 quantization")
             except Exception as e:
                 logger.warning(f"Static INT8 quantization failed: {e}")
-                
+
         elif mode == "int4":
             # 4-bit quantization (most aggressive)
             try:
@@ -807,7 +719,7 @@ class Enigma(nn.Module):
                 logger.warning(f"INT4 quantization failed: {e}")
         else:
             logger.warning(f"Unknown quantization mode: {mode}")
-        
+
         return self
 
     def _apply_dynamic_quantization(self) -> None:
@@ -841,7 +753,7 @@ class Enigma(nn.Module):
                     parent_name = '.'.join(name.split('.')[:-1])
                     child_name = name.split('.')[-1]
                     parent = self.get_submodule(parent_name) if parent_name else self
-                    
+
                     new_layer = bnb.nn.Linear4bit(
                         module.in_features,
                         module.out_features,
@@ -853,108 +765,16 @@ class Enigma(nn.Module):
                     )
                     if module.bias is not None:
                         new_layer.bias = module.bias
-                    
+
                     setattr(parent, child_name, new_layer)
-                    
+
             logger.info("Applied bitsandbytes INT4 quantization")
-            
+
         except ImportError:
             # Fallback to dynamic quantization
             logger.warning("bitsandbytes not available, using dynamic quantization")
             self._apply_dynamic_quantization()
 
-    # =========================================================================
-    # 🌐 UNIVERSAL MODEL LOADING - Load from any format
-    # =========================================================================
-    
-    @classmethod
-    def from_any(cls, path: Union[str, Path], **kwargs) -> 'Enigma':
-        """
-        Universal model loader - auto-detects format and loads appropriately.
-        
-        📖 WHAT THIS DOES:
-        Automatically detects the model format and uses the appropriate loader.
-        Supports: HuggingFace, Safetensors, GGUF, ONNX, and native Forge format.
-        
-        📐 FORMAT DETECTION:
-        - Directory with config.json + model files → HuggingFace format
-        - *.safetensors → Safetensors format
-        - *.gguf → GGUF/llama.cpp format
-        - *.onnx → ONNX format
-        - *.pth, *.pt → Native PyTorch/Forge format
-        
-        Args:
-            path: Path to model file or directory
-            **kwargs: Additional arguments passed to specific loader
-        
-        Returns:
-            Loaded Forge model
-        
-        Example:
-            model = Forge.from_any("microsoft/phi-2")  # HuggingFace
-            model = Forge.from_any("model.gguf")        # GGUF
-            model = Forge.from_any("model.safetensors") # Safetensors
-        """
-        path = Path(path) if not isinstance(path, Path) else path
-        
-        # Check if it's a HuggingFace model ID (format: org/model, no file extensions)
-        path_str = str(path)
-        # HF IDs: don't exist as files, contain exactly one '/', no file extension
-        is_hf_id = (
-            not os.path.exists(path_str) and 
-            '/' in path_str and 
-            path_str.count('/') == 1 and  # org/model format
-            not path_str.startswith('/') and  # not absolute path
-            '.' not in Path(path_str).name  # no file extension
-        )
-        if is_hf_id:
-            logger.info(f"Detected HuggingFace model ID: {path_str}")
-            return cls.from_huggingface(path_str, **kwargs)
-        
-        # Check if path exists
-        if not path.exists():
-            raise FileNotFoundError(f"Model path not found: {path}")
-        
-        # Directory - check for HuggingFace format
-        if path.is_dir():
-            config_file = path / 'config.json'
-            if config_file.exists():
-                # Could be HuggingFace or Forge format
-                with open(config_file) as f:
-                    config_data = json.load(f)
-                    # HuggingFace configs have 'model_type' or 'architectures'
-                    if 'model_type' in config_data or 'architectures' in config_data:
-                        logger.info("Detected HuggingFace format (directory)")
-                        return cls.from_huggingface(path, **kwargs)
-            # Default to Forge format
-            logger.info("Using Forge format loader")
-            return cls.from_pretrained(path)
-        
-        # File - check extension
-        suffix = path.suffix.lower()
-        
-        if suffix == '.safetensors':
-            logger.info("Detected Safetensors format")
-            return cls.from_safetensors(path, **kwargs)
-        
-        elif suffix == '.gguf':
-            logger.info("Detected GGUF format")
-            return cls.from_gguf(path, **kwargs)
-        
-        elif suffix == '.onnx':
-            logger.info("Detected ONNX format")
-            return cls.from_onnx(path, **kwargs)
-        
-        elif suffix in ['.pth', '.pt', '.bin']:
-            logger.info("Detected PyTorch/Forge format")
-            return cls.from_pretrained(path)
-        
-        else:
-            raise ValueError(
-                f"Unknown model format: {suffix}. "
-                f"Supported: .pth, .pt, .safetensors, .gguf, .onnx, or HuggingFace ID"
-            )
-    
     @classmethod
     def from_huggingface(cls, model_id: str, **kwargs) -> 'Enigma':
         """
@@ -988,7 +808,7 @@ class Enigma(nn.Module):
         except Exception as e:
             logger.error(f"Failed to load HuggingFace model: {e}")
             raise
-    
+
     @classmethod
     def from_safetensors(cls, path: Union[str, Path], **kwargs) -> 'Forge':
         """
@@ -1016,25 +836,25 @@ class Enigma(nn.Module):
                 "Install with: pip install safetensors"
             )
             raise
-        
+
         path = Path(path)
-        
+
         # Load config if available
         config_file = path.with_suffix('.json')
         if config_file.exists():
-            with open(config_file) as f:
+            with open(config_file, encoding='utf-8') as f:
                 model = cls.from_config(json.load(f))
         else:
             logger.warning("No config file found, using default config")
             model = cls()
-        
+
         # Load weights
         logger.info(f"Loading Safetensors from: {path}")
         state_dict = load_file(str(path), device=kwargs.get('map_location', 'cpu'))
         model.load_state_dict(state_dict, strict=False)
-        
+
         return model
-    
+
     @classmethod
     def from_gguf(cls, path: Union[str, Path], **kwargs) -> 'Forge':
         """
@@ -1072,7 +892,7 @@ class Enigma(nn.Module):
         except Exception as e:
             logger.error(f"Failed to load GGUF model: {e}")
             raise
-    
+
     @classmethod
     def from_onnx(cls, path: Union[str, Path], **kwargs) -> 'Forge':
         """
@@ -1097,7 +917,7 @@ class Enigma(nn.Module):
             model = Forge.from_onnx("model.onnx")
         """
         logger.info(f"Loading ONNX model from: {path}")
-        
+
         try:
             from .onnx_loader import load_onnx_model
             return load_onnx_model(str(path), **kwargs)
@@ -1110,14 +930,14 @@ class Enigma(nn.Module):
         except Exception as e:
             logger.error(f"Failed to load ONNX model: {e}")
             raise
-    
+
     # =========================================================================
     # 🎯 LORA & ADAPTER SUPPORT
     # =========================================================================
-    
+
     def load_lora(
-        self, 
-        path: Union[str, Path], 
+        self,
+        path: Union[str, Path],
         adapter_name: str = "default",
         merge: bool = False
     ) -> None:
@@ -1146,12 +966,12 @@ class Enigma(nn.Module):
         except ImportError:
             logger.error("LoRA support requires lora_utils module")
             raise
-        
+
         logger.info(f"Loading LoRA adapter '{adapter_name}' from: {path}")
-        
+
         # Load LoRA weights
         lora_weights = load_lora_weights(path)
-        
+
         # Apply to model
         if merge:
             # Merge into base weights immediately
@@ -1164,7 +984,7 @@ class Enigma(nn.Module):
             self._lora_adapters[adapter_name] = lora_weights
             apply_lora(self, lora_weights, adapter_name=adapter_name)
             logger.info(f"Loaded LoRA adapter '{adapter_name}'")
-    
+
     def merge_lora(self, adapter_name: Optional[str] = None) -> None:
         """
         Merge LoRA adapters into base model weights.
@@ -1183,13 +1003,13 @@ class Enigma(nn.Module):
         if not hasattr(self, '_lora_adapters'):
             logger.warning("No LoRA adapters loaded")
             return
-        
+
         try:
             from .lora_utils import merge_lora_weights
         except ImportError:
             logger.error("LoRA support requires lora_utils module")
             raise
-        
+
         if adapter_name is None:
             # Merge all adapters
             for name in list(self._lora_adapters.keys()):
@@ -1203,11 +1023,11 @@ class Enigma(nn.Module):
             merge_lora_weights(self, self._lora_adapters[adapter_name])
             del self._lora_adapters[adapter_name]
             logger.info(f"Merged LoRA adapter: {adapter_name}")
-    
+
     # =========================================================================
     # � MODEL EXPORT METHODS
     # =========================================================================
-    
+
     def export_to_safetensors(self, path: Union[str, Path]) -> None:
         """
         Export model to Safetensors format.
@@ -1231,23 +1051,23 @@ class Enigma(nn.Module):
             raise ImportError(
                 "Safetensors export requires safetensors library. "
                 "Install with: pip install safetensors"
-            )
-        
+            ) from None
+
         path = Path(path)
-        
+
         # Save weights
         save_file(self.state_dict(), str(path))
         logger.info(f"Exported weights to: {path}")
-        
+
         # Save config alongside
         config_path = path.with_suffix('.json')
-        with open(config_path, 'w') as f:
+        with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(self.config.to_dict(), f, indent=2)
         logger.info(f"Exported config to: {config_path}")
-    
+
     def export_to_onnx(
-        self, 
-        path: Union[str, Path], 
+        self,
+        path: Union[str, Path],
         opset_version: int = 14,
         input_names: Optional[list[str]] = None,
         output_names: Optional[list[str]] = None,
@@ -1279,7 +1099,7 @@ class Enigma(nn.Module):
             # Use with ONNX Runtime for fast inference
         """
         path = Path(path)
-        
+
         # Default configurations
         input_names = input_names or ['input_ids']
         output_names = output_names or ['logits']
@@ -1287,14 +1107,14 @@ class Enigma(nn.Module):
             'input_ids': {0: 'batch', 1: 'sequence'},
             'logits': {0: 'batch', 1: 'sequence'}
         }
-        
+
         # Create dummy input (representative of actual input)
         dummy_input = torch.randint(
-            0, self.vocab_size, 
+            0, self.vocab_size,
             (1, min(128, self.max_len)),
             device=next(self.parameters()).device
         )
-        
+
         # Export
         logger.info(f"Exporting to ONNX (opset {opset_version})...")
         torch.onnx.export(
@@ -1308,13 +1128,13 @@ class Enigma(nn.Module):
             do_constant_folding=True,  # Optimize constants
         )
         logger.info(f"Exported to ONNX: {path}")
-        
+
         # Save config alongside
         config_path = path.with_suffix('.json')
-        with open(config_path, 'w') as f:
+        with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(self.config.to_dict(), f, indent=2)
         logger.info(f"Exported config to: {config_path}")
-    
+
     def export_to_pytorch(self, path: Union[str, Path]) -> None:
         """
         Export model to standard PyTorch format (.pth).
@@ -1330,23 +1150,61 @@ class Enigma(nn.Module):
             model.export_to_pytorch("models/my_model.pth")
         """
         path = Path(path)
-        
-        # Save weights
-        torch.save(self.state_dict(), path)
+
+        # Save weights in checkpoint format (compatible with gui_forge loader)
+        from enigma_engine.core.safe_save import atomic_torch_save
+        atomic_torch_save({
+            'model_state_dict': self.state_dict(),
+            'config': self.config.to_dict(),
+        }, path)
         logger.info(f"Exported weights to: {path}")
-        
-        # Save config alongside
+
+        # Save config alongside as JSON for external tools
         config_path = path.with_suffix('.json')
-        with open(config_path, 'w') as f:
+        with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(self.config.to_dict(), f, indent=2)
         logger.info(f"Exported config to: {config_path}")
-    
+
+
+    def export_to_gguf(
+        self,
+        path: Union[str, Path],
+        quant_type: str = "F16",
+        tokenizer: Any = None,
+        model_name: Optional[str] = None,
+        description: Optional[str] = None
+    ) -> str:
+        """
+        Export model to GGUF format for use with llama.cpp.
+
+        Args:
+            path: Output path for .gguf file
+            quant_type: Quantization type (F16, Q4_0, Q4_K_M, Q5_K_M, Q6_K, Q8_0)
+            tokenizer: Tokenizer for vocabulary metadata
+            model_name: Optional model name for metadata
+            description: Optional description for metadata
+
+        Returns:
+            Path to exported file
+
+        Example:
+            model.export_to_gguf("model-q8.gguf", quant_type="Q8_0")
+        """
+        from enigma_engine.core.gguf import export_to_gguf
+        return export_to_gguf(
+            self, str(path),
+            quant_type=quant_type,
+            tokenizer=tokenizer,
+            model_name=model_name,
+            description=description,
+        )
+
     # =========================================================================
     # �🚀 SPECULATIVE DECODING
     # =========================================================================
-    
+
     def enable_speculative_decoding(
-        self, 
+        self,
         draft_model: 'Forge',
         num_speculative_tokens: int = 4
     ) -> None:
@@ -1377,13 +1235,13 @@ class Enigma(nn.Module):
         logger.info(
             f"Enabled speculative decoding with {num_speculative_tokens} tokens"
         )
-    
+
     def disable_speculative_decoding(self) -> None:
         """Disable speculative decoding and return to standard generation."""
         self._use_speculation = False
         self._draft_model = None
         logger.info("Disabled speculative decoding")
-    
+
     @torch.no_grad()
     def generate_speculative(
         self,
@@ -1409,13 +1267,13 @@ class Enigma(nn.Module):
         if not hasattr(self, '_use_speculation') or not self._use_speculation:
             # Fall back to standard generation
             return self.generate(input_ids, max_new_tokens=max_new_tokens, **kwargs)
-        
+
         draft_model = self._draft_model
         num_spec = self._num_speculative_tokens
-        
+
         generated = input_ids
         tokens_generated = 0
-        
+
         while tokens_generated < max_new_tokens:
             # Step 1: Draft model generates K tokens
             draft_tokens = draft_model.generate(
@@ -1423,21 +1281,35 @@ class Enigma(nn.Module):
                 max_new_tokens=num_spec,
                 **kwargs
             )
-            
+
             # Step 2: Main model verifies all K tokens in one pass
             # Concatenate draft tokens to input
             candidate_ids = torch.cat([generated, draft_tokens[:, generated.shape[1]:]], dim=1)
-            
+
+            # Draft may produce fewer than num_spec tokens (e.g. stop token)
+            actual_draft = draft_tokens.shape[1] - generated.shape[1]
+            if actual_draft == 0:
+                # Draft produced nothing — generate one token with main model
+                logits = self.forward(generated)
+                next_token_logits = logits[:, -1, :]
+                next_token = torch.multinomial(
+                    F.softmax(next_token_logits / kwargs.get('temperature', 0.8), dim=-1),
+                    num_samples=1
+                )
+                generated = torch.cat([generated, next_token], dim=1)
+                tokens_generated += 1
+                continue
+
             # Get probabilities from main model
             logits = self.forward(candidate_ids)
-            probs = F.softmax(logits[:, -num_spec-1:-1, :], dim=-1)
-            
+            probs = F.softmax(logits[:, -actual_draft-1:-1, :], dim=-1)
+
             # Step 3: Accept or reject using rejection sampling
             # Proper speculative decoding: accept if r < min(1, p_main / p_draft)
-            draft_logits = draft_model.forward(candidate_ids)  
-            draft_probs = F.softmax(draft_logits[:, -num_spec-1:-1, :], dim=-1)
+            draft_logits = draft_model.forward(candidate_ids)
+            draft_probs = F.softmax(draft_logits[:, -actual_draft-1:-1, :], dim=-1)
             accepted = 0
-            for i in range(num_spec):
+            for i in range(actual_draft):
                 draft_token = draft_tokens[:, generated.shape[1] + i]
                 p_main = probs[:, i, draft_token].item()
                 p_draft = draft_probs[:, i, draft_token].item()
@@ -1446,7 +1318,7 @@ class Enigma(nn.Module):
                     accepted += 1
                 else:
                     break
-            
+
             # Add accepted tokens
             if accepted > 0:
                 generated = candidate_ids[:, :generated.shape[1] + accepted]
@@ -1460,7 +1332,7 @@ class Enigma(nn.Module):
                 )
                 generated = torch.cat([generated, next_token], dim=1)
                 tokens_generated += 1
-        
+
         return generated
 
 

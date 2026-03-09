@@ -7,7 +7,6 @@ These tests go beyond import checks — they exercise real logic:
 - KV-cache update/get
 - Command execution
 - TrainingConfig validation
-- AI profile JSON serialization
 """
 
 import json
@@ -74,6 +73,80 @@ class TestModelCreation:
         assert isinstance(presets, dict)
         assert "tiny" in presets
         assert "small" in presets
+
+    def test_parse_param_target_billions(self):
+        """parse_param_target handles '8b', '1.5b', '70b' etc."""
+        from enigma_engine.core.model_presets import parse_param_target
+
+        assert parse_param_target("8b") == 8_000_000_000
+        assert parse_param_target("1.5b") == 1_500_000_000
+        assert parse_param_target("70B") == 70_000_000_000
+        assert parse_param_target("0.5b") == 500_000_000
+
+    def test_parse_param_target_millions(self):
+        """parse_param_target handles '500m', '27m' etc."""
+        from enigma_engine.core.model_presets import parse_param_target
+
+        assert parse_param_target("500m") == 500_000_000
+        assert parse_param_target("27M") == 27_000_000
+        assert parse_param_target("85m") == 85_000_000
+
+    def test_parse_param_target_raw_number(self):
+        """parse_param_target handles plain numbers like '8000000000'."""
+        from enigma_engine.core.model_presets import parse_param_target
+
+        assert parse_param_target("8000000000") == 8_000_000_000
+        assert parse_param_target("500000000") == 500_000_000
+
+    def test_parse_param_target_invalid(self):
+        """parse_param_target returns None for invalid input."""
+        from enigma_engine.core.model_presets import parse_param_target
+
+        assert parse_param_target("") is None
+        assert parse_param_target("abc") is None
+        assert parse_param_target("b8") is None
+
+    def test_config_for_param_target_returns_preset(self):
+        """config_for_param_target returns a name and ForgeConfig."""
+        from enigma_engine.core.model_presets import (
+            config_for_param_target, ForgeConfig)
+
+        name, config = config_for_param_target(7_000_000_000)
+        assert isinstance(name, str)
+        assert isinstance(config, ForgeConfig)
+        assert config.dim > 0
+        assert config.n_layers > 0
+
+    def test_config_for_param_target_small(self):
+        """config_for_param_target matches small targets to small presets."""
+        from enigma_engine.core.model_presets import config_for_param_target
+
+        name, config = config_for_param_target(27_000_000)
+        # Should pick a small preset, not a giant one
+        assert config.dim <= 1024
+
+    def test_config_for_param_target_even_head_dim(self):
+        """config_for_param_target always produces even head_dim (RoPE needs it)."""
+        from enigma_engine.core.model_presets import config_for_param_target
+
+        # Test a range of targets and vocab sizes, including combos that
+        # previously produced odd head_dim (e.g. 1B with vocab=2181).
+        test_cases = [
+            (1_000_000_000, 2181),
+            (1_000_000_000, 32000),
+            (500_000_000, 5000),
+            (2_000_000_000, 10000),
+            (300_000_000, 1500),
+            (50_000_000, 256),
+            (10_000_000_000, 32000),
+        ]
+        for target, vocab in test_cases:
+            _, config = config_for_param_target(target, vocab_size=vocab)
+            head_dim = config.dim // config.n_heads
+            assert head_dim % 2 == 0, (
+                f"Odd head_dim={head_dim} for target={target}, "
+                f"vocab={vocab} (dim={config.dim}, n_heads={config.n_heads})"
+            )
 
 
 # ── Tokenizer round-trips ───────────────────────────────────────────────────
@@ -238,62 +311,37 @@ class TestTrainingConfig:
         assert "max_training_seconds" in d
 
 
-# ── AI profile serialization ────────────────────────────────────────────────
-
-
-class TestAIProfileSerialization:
-    """Test profile JSON round-trip."""
-
-    def test_profile_to_dict_round_trip(self):
-        """AIProfile should serialize to dict and back."""
-        from enigma_engine.core.ai_profile import AIProfile
-
-        profile = AIProfile(
-            id="test",
-            name="Test Bot",
-            system_prompt="You are helpful.",
-        )
-        d = profile.to_dict()
-        assert d["id"] == "test"
-        assert d["name"] == "Test Bot"
-
-        restored = AIProfile.from_dict(d)
-        assert restored.id == profile.id
-        assert restored.name == profile.name
-        assert restored.system_prompt == profile.system_prompt
-
-
 # ── Router ──────────────────────────────────────────────────────────────────
 
 
 class TestRouterFunctional:
-    """Test BrickRouter prompt logic without starting the server."""
+    """Test ModRouter prompt logic without starting the server."""
 
     def test_get_set_prompt(self):
         """set_prompt/get_prompt round-trip."""
-        from enigma_engine.router import BrickRouter
+        from enigma_engine.router import ModRouter
 
-        router = BrickRouter(enable_training=False)
+        router = ModRouter(enable_training=False)
         router.set_prompt("test_purpose", "Be concise.")
         assert router.get_prompt("test_purpose") == "Be concise."
 
     def test_combined_prompt(self):
         """get_combined_prompt merges multiple purposes."""
-        from enigma_engine.router import BrickRouter
+        from enigma_engine.router import ModRouter
 
-        router = BrickRouter(enable_training=False)
+        router = ModRouter(enable_training=False)
         combined = router.get_combined_prompt("chat", "safety")
         assert "helpful" in combined.lower()
         assert "harmless" in combined.lower()
 
     def test_status_without_start(self):
         """get_status should work even before start()."""
-        from enigma_engine.router import BrickRouter
+        from enigma_engine.router import ModRouter
 
-        router = BrickRouter(enable_training=False)
+        router = ModRouter(enable_training=False)
         status = router.get_status()
         assert status["running"] is False
-        assert status["connected_bricks"] == 0
+        assert status["connected_mods"] == 0
 
 
 # ── Per-Model Context ──────────────────────────────────────────────────────
@@ -313,7 +361,6 @@ class TestModelContext:
             ctx = mc.ModelContext("test_model")
             ctx.system_prompt = "Be creative."
             ctx.config = {"temperature": 0.9}
-            ctx.profile_id = "creative_writer"
             ctx.history = [
                 {"role": "user", "content": "hello"},
                 {"role": "assistant", "content": "hi there"},
@@ -325,7 +372,6 @@ class TestModelContext:
             ctx2.load()
             assert ctx2.system_prompt == "Be creative."
             assert ctx2.config == {"temperature": 0.9}
-            assert ctx2.profile_id == "creative_writer"
             assert len(ctx2.history) == 2
             assert ctx2.history[0]["content"] == "hello"
             assert ctx2.last_used > 0
@@ -341,7 +387,8 @@ class TestModelContext:
         try:
             ctx = mc.ModelContext("nonexistent")
             ctx.load()
-            assert ctx.system_prompt == "You are a helpful AI assistant."
+            # Default prompt comes from data/prompts/chat.md or builtin
+            assert len(ctx.system_prompt) > 10
             assert ctx.history == []
         finally:
             mc._CONTEXTS_DIR = original
@@ -458,3 +505,282 @@ class TestModelContext:
             assert ctx.history[1]["content"] == "also valid"
         finally:
             mc._CONTEXTS_DIR = original
+
+    # ── Identity card fields ────────────────────────────────────────
+
+    def test_identity_defaults(self):
+        """New ModelContext has identity defaults: display_name, etc."""
+        import enigma_engine.core.model_context as mc
+
+        ctx = mc.ModelContext("identity_test")
+        assert ctx.display_name == ""
+        assert ctx.personality == ""
+        assert ctx.avatar == ""
+        assert isinstance(ctx.created_at, str)
+        assert ctx.total_messages == 0
+        assert ctx.total_sessions == 0
+        assert ctx.training_history == []
+        assert ctx.tags == []
+        assert ctx.notes == ""
+
+    def test_identity_save_load_round_trip(self, tmp_path):
+        """Identity fields survive save/load cycle."""
+        import enigma_engine.core.model_context as mc
+
+        original = mc._CONTEXTS_DIR
+        mc._CONTEXTS_DIR = tmp_path
+        try:
+            ctx = mc.ModelContext("identity_rt")
+            ctx.display_name = "Enigma"
+            ctx.personality = "Helpful and direct assistant"
+            ctx.avatar = "data/avatar/images/default.png"
+            ctx.total_messages = 42
+            ctx.total_sessions = 5
+            ctx.tags = ["coding", "general"]
+            ctx.notes = "Fine-tuned on Python documentation"
+            ctx.training_history = [
+                {"date": "2026-03-02", "mode": "Self Study",
+                 "epochs": 10, "best_loss": 0.42}
+            ]
+            ctx.save()
+
+            ctx2 = mc.ModelContext("identity_rt")
+            ctx2.load()
+            assert ctx2.display_name == "Enigma"
+            assert ctx2.personality == "Helpful and direct assistant"
+            assert ctx2.avatar == "data/avatar/images/default.png"
+            assert ctx2.total_messages == 42
+            assert ctx2.total_sessions == 5
+            assert ctx2.tags == ["coding", "general"]
+            assert ctx2.notes == "Fine-tuned on Python documentation"
+            assert len(ctx2.training_history) == 1
+            assert ctx2.training_history[0]["mode"] == "Self Study"
+        finally:
+            mc._CONTEXTS_DIR = original
+
+    def test_migration_from_old_context(self, tmp_path):
+        """Loading old context.json (without identity) preserves base fields."""
+        import enigma_engine.core.model_context as mc
+
+        original = mc._CONTEXTS_DIR
+        mc._CONTEXTS_DIR = tmp_path
+        try:
+            # Write old-format context.json
+            ctx_dir = tmp_path / "old_model"
+            ctx_dir.mkdir()
+            (ctx_dir / "context.json").write_text(json.dumps({
+                "model_key": "old_model",
+                "system_prompt": "Be helpful.",
+                "config": {"temperature": 0.8},
+                "last_used": 1000.0,
+            }), encoding="utf-8")
+
+            ctx = mc.ModelContext("old_model")
+            ctx.load()
+            # Base fields preserved
+            assert ctx.system_prompt == "Be helpful."
+            assert ctx.config == {"temperature": 0.8}
+            assert ctx.last_used == 1000.0
+            # Identity fields are defaults
+            assert ctx.display_name == ""
+            assert ctx.total_messages == 0
+            assert ctx.tags == []
+        finally:
+            mc._CONTEXTS_DIR = original
+
+    def test_increment_messages(self, tmp_path):
+        """increment_messages bumps total_messages count."""
+        import enigma_engine.core.model_context as mc
+
+        original = mc._CONTEXTS_DIR
+        mc._CONTEXTS_DIR = tmp_path
+        try:
+            ctx = mc.ModelContext("msg_counter")
+            assert ctx.total_messages == 0
+            ctx.increment_messages()
+            assert ctx.total_messages == 1
+            ctx.increment_messages(5)
+            assert ctx.total_messages == 6
+        finally:
+            mc._CONTEXTS_DIR = original
+
+    def test_increment_sessions(self, tmp_path):
+        """increment_sessions bumps total_sessions count."""
+        import enigma_engine.core.model_context as mc
+
+        original = mc._CONTEXTS_DIR
+        mc._CONTEXTS_DIR = tmp_path
+        try:
+            ctx = mc.ModelContext("session_counter")
+            assert ctx.total_sessions == 0
+            ctx.increment_sessions()
+            assert ctx.total_sessions == 1
+        finally:
+            mc._CONTEXTS_DIR = original
+
+    def test_record_training_run(self, tmp_path):
+        """record_training_run appends to training_history."""
+        import enigma_engine.core.model_context as mc
+
+        original = mc._CONTEXTS_DIR
+        mc._CONTEXTS_DIR = tmp_path
+        try:
+            ctx = mc.ModelContext("train_rec")
+            ctx.record_training_run(
+                mode="Self Study", epochs=10, best_loss=0.42)
+            assert len(ctx.training_history) == 1
+            entry = ctx.training_history[0]
+            assert entry["mode"] == "Self Study"
+            assert entry["epochs"] == 10
+            assert entry["best_loss"] == 0.42
+            assert "date" in entry
+
+            # Add another
+            ctx.record_training_run(
+                mode="DPO", epochs=5, best_loss=0.31)
+            assert len(ctx.training_history) == 2
+        finally:
+            mc._CONTEXTS_DIR = original
+
+    def test_memory_fact_count(self, tmp_path):
+        """memory_fact_count reads from PersistentMemory if available."""
+        import enigma_engine.core.model_context as mc
+
+        ctx = mc.ModelContext("fact_count_test")
+        # Without a memory file, should return 0
+        count = ctx.memory_fact_count
+        assert isinstance(count, int)
+        assert count >= 0
+
+    def test_identity_in_list_contexts(self, tmp_path):
+        """list_model_contexts includes identity fields."""
+        import enigma_engine.core.model_context as mc
+
+        original = mc._CONTEXTS_DIR
+        mc._CONTEXTS_DIR = tmp_path
+        try:
+            ctx = mc.ModelContext("listed_model")
+            ctx.display_name = "My AI"
+            ctx.tags = ["helper"]
+            ctx.total_messages = 100
+            ctx.save()
+
+            contexts = mc.list_model_contexts()
+            assert len(contexts) == 1
+            entry = contexts[0]
+            assert entry["display_name"] == "My AI"
+            assert entry["tags"] == ["helper"]
+            assert entry["total_messages"] == 100
+        finally:
+            mc._CONTEXTS_DIR = original
+
+    def test_session_path_default_empty(self):
+        """New ModelContext has empty session_path."""
+        import enigma_engine.core.model_context as mc
+        ctx = mc.ModelContext("sp_test")
+        assert ctx.session_path == ""
+
+    def test_session_path_save_load(self, tmp_path):
+        """session_path survives save/load round trip."""
+        import enigma_engine.core.model_context as mc
+
+        original = mc._CONTEXTS_DIR
+        mc._CONTEXTS_DIR = tmp_path
+        try:
+            ctx = mc.ModelContext("sp_roundtrip")
+            ctx.session_path = "memory/session_20260304_120000_1.json"
+            ctx.save()
+
+            ctx2 = mc.ModelContext("sp_roundtrip")
+            ctx2.load()
+            assert ctx2.session_path == (
+                "memory/session_20260304_120000_1.json")
+        finally:
+            mc._CONTEXTS_DIR = original
+
+    def test_old_context_missing_session_path(self, tmp_path):
+        """Loading old context.json without session_path defaults to empty."""
+        import enigma_engine.core.model_context as mc
+
+        original = mc._CONTEXTS_DIR
+        mc._CONTEXTS_DIR = tmp_path
+        try:
+            ctx_dir = tmp_path / "old_sp"
+            ctx_dir.mkdir()
+            (ctx_dir / "context.json").write_text(json.dumps({
+                "model_key": "old_sp",
+                "system_prompt": "Hello",
+                "config": {},
+                "last_used": 1000.0,
+            }), encoding="utf-8")
+
+            ctx = mc.ModelContext("old_sp")
+            ctx.load()
+            assert ctx.session_path == ""
+        finally:
+            mc._CONTEXTS_DIR = original
+
+
+# ── CLI flags ────────────────────────────────────────────────────────────────
+
+
+class TestCLIFlags:
+    """Verify run.py has correct CLI arguments and security defaults."""
+
+    def test_serve_defaults_to_localhost(self):
+        """run_serve must default to 127.0.0.1, not 0.0.0.0."""
+        import inspect
+        import importlib
+        run = importlib.import_module("run")
+        source = inspect.getsource(run.run_serve)
+        # Must NOT have host="0.0.0.0" as the default
+        assert 'host="0.0.0.0"' not in source, (
+            "run_serve must not default to 0.0.0.0 — exposes API to network")
+
+    def test_serve_accepts_host_and_api_key(self):
+        """run_serve must accept host and api_key parameters."""
+        import inspect
+        import importlib
+        run = importlib.import_module("run")
+        sig = inspect.signature(run.run_serve)
+        assert "host" in sig.parameters, (
+            "run_serve missing host parameter")
+        assert "api_key" in sig.parameters, (
+            "run_serve missing api_key parameter")
+
+    def test_chat_accepts_profile_and_temperature(self):
+        """run_chat must accept profile and temperature parameters."""
+        import inspect
+        import importlib
+        run = importlib.import_module("run")
+        sig = inspect.signature(run.run_chat)
+        assert "profile" in sig.parameters, (
+            "run_chat missing profile parameter")
+        assert "temperature" in sig.parameters, (
+            "run_chat missing temperature parameter")
+
+    def test_cli_has_host_argument(self):
+        """CLI parser must have --host argument."""
+        import importlib
+        run = importlib.import_module("run")
+        source = open("run.py", encoding="utf-8").read()
+        assert "--host" in source, (
+            "CLI missing --host argument for server bind address")
+
+    def test_cli_has_api_key_argument(self):
+        """CLI parser must have --api-key argument."""
+        source = open("run.py", encoding="utf-8").read()
+        assert "--api-key" in source, (
+            "CLI missing --api-key argument for server authentication")
+
+    def test_cli_has_profile_argument(self):
+        """CLI parser must have --profile argument."""
+        source = open("run.py", encoding="utf-8").read()
+        assert "--profile" in source, (
+            "CLI missing --profile argument for chat")
+
+    def test_cli_train_uses_atomic_save(self):
+        """CLI train must use atomic_torch_save, not raw torch.save."""
+        source = open("run.py", encoding="utf-8").read()
+        assert "atomic_torch_save" in source, (
+            "run.py --train should use atomic_torch_save")

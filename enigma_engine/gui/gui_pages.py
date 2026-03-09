@@ -5,36 +5,43 @@ Enigma Engine - GUI Page Builders
 Mixin providing page construction methods for EnigmaGUI.
 Each page is a separate method building its widget tree.
 
-Pages: CORE, MODELS, ROUTER, FORGE, CONFIG
+Pages: CORE, MODELS, ROUTER (here)
+FORGE page: gui_pages_forge.py
+CONFIG page: gui_pages_config.py
 """
 from __future__ import annotations
+
+import logging
+from pathlib import Path
 
 import customtkinter as ctk
 
 from enigma_engine.gui.widgets import (
     C_ACCENT, C_ACCENT_DIM, C_ACCENT_MUTED, C_BG, C_BORDER,
-    C_BORDER_ACCENT, C_CYAN, C_GREEN, C_GREEN_DIM, C_INPUT,
-    C_PANEL, C_PURPLE, C_RED, C_SURFACE, C_TEXT, C_TEXT_BRIGHT,
+    C_CYAN, C_GREEN, C_GREEN_DIM, C_INPUT,
+    C_ORANGE, C_PANEL, C_PURPLE,
+    C_RED, C_SURFACE, C_TEXT, C_TEXT_BRIGHT,
     C_TEXT_DIM,
-    FONT_BODY, FONT_CHAT, FONT_INPUT, FONT_MONO,
+    CollapsiblePanel,
+    FONT_BODY, FONT_CHAT, FONT_INPUT,
     FONT_SECTION, FONT_SMALL, FONT_TINY,
-    CollapsiblePanel, HUDFrame, SectionLabel, SelectableTextbox,
+    HUDFrame, SectionLabel, SelectableLabel, SelectableTextbox,
     StatusDot, ToggleButton, Tooltip,
     themed_entry, themed_dropdown, themed_scroll,
 )
-from enigma_engine.gui.scanners import (
-    CONFIG_DESCRIPTIONS, CONFIG_DISPLAY_NAMES, CONFIG_LIMITS,
-    PATH_SETTINGS,
-)
 # Re-export so existing imports keep working
-from enigma_engine.gui.gui_brick_page import BrickPageMixin  # noqa: F401
+from enigma_engine.gui.gui_mod_page import ModPageMixin  # noqa: F401
+from enigma_engine.gui.gui_pages_forge import ForgePageMixin  # noqa: F401
+from enigma_engine.gui.gui_pages_config import ConfigPageMixin  # noqa: F401
+
+logger = logging.getLogger(__name__)
 
 
-class PagesMixin:
+class PagesMixin(ForgePageMixin, ConfigPageMixin):
     """Mixin providing page builder methods for EnigmaGUI.
 
     Expects the host class to have attributes set in __init__:
-    - profiles_data, models_data, training_files, bricks_data
+    - profiles_data, models_data, training_files, mods_data
     - config_overrides, config_entries
     - Various widget references (set during page construction)
     """
@@ -45,13 +52,12 @@ class PagesMixin:
 
     def _build_page_core(self):
         page = self._make_page("CORE")
-        page.grid_columnconfigure(0, weight=3)
-        page.grid_columnconfigure(1, weight=1, minsize=200)
+        page.grid_columnconfigure(0, weight=1)
         page.grid_rowconfigure(1, weight=1)
 
-        # Top bar: label + profile
+        # Top bar: label
         top = ctk.CTkFrame(page, fg_color="transparent", height=48)
-        top.grid(row=0, column=0, columnspan=2, sticky="ew",
+        top.grid(row=0, column=0, sticky="ew",
                  padx=10, pady=(8, 2))
 
         SectionLabel(top, "Neural Interface").pack(
@@ -74,31 +80,39 @@ class PagesMixin:
             text_color=C_ACCENT, command=self._toggle_sidebar)
         self._sidebar_toggle_btn.pack(side="right", padx=(4, 0))
 
-        # Active profile indicator (managed from DOCS page)
-        self._core_profile_label = ctk.CTkLabel(
-            top, text="", font=FONT_TINY,
-            text_color=C_PURPLE)
-        self._core_profile_label.pack(side="right", padx=(0, 8))
+        # Resizable paned layout: chat | sidebar
+        import tkinter as tk
+        self._core_pane = tk.PanedWindow(
+            page, orient="horizontal", sashwidth=6,
+            bg=C_BG, borderwidth=0, sashpad=0,
+            opaqueresize=True)
+        self._core_pane.grid(row=1, column=0, sticky="nsew",
+                             padx=0, pady=(2, 8))
+        # Style the sash cursor
+        self._core_pane.configure(sashcursor="sb_h_double_arrow")
 
         # Left column: chat + input
-        chat_col = ctk.CTkFrame(page, fg_color="transparent")
-        chat_col.grid(row=1, column=0, sticky="nsew",
-                      padx=(10, 4), pady=(2, 8))
+        chat_col = ctk.CTkFrame(self._core_pane, fg_color="transparent")
         chat_col.grid_columnconfigure(0, weight=1)
         chat_col.grid_rowconfigure(0, weight=1)
 
-        # Chat display
-        chat_frame = HUDFrame(chat_col, glow_color=C_BORDER)
-        chat_frame.grid(row=0, column=0, sticky="nsew")
-        chat_frame.grid_columnconfigure(0, weight=1)
-        chat_frame.grid_rowconfigure(0, weight=1)
-
+        # Chat display — native CTkTextbox scrollbar handles scrolling.
+        # Previous design wrapped the textbox in CTkScrollableFrame and
+        # tried to auto-expand the widget height, but the height
+        # estimation was unreliable, causing text to be hidden.
+        # The tk.Text widget handles its own scrolling natively, so we
+        # just let the built-in scrollbar do the job.
         self.chat_display = SelectableTextbox(
-            chat_frame, wrap="word",
+            chat_col, wrap="word",
             font=FONT_CHAT, fg_color=C_PANEL, text_color=C_TEXT,
-            border_width=0, corner_radius=2)
+            border_width=1, border_color=C_BORDER,
+            corner_radius=2, height=100,
+            scrollbar_button_color=C_ACCENT_DIM,
+            scrollbar_button_hover_color=C_ACCENT)
         self.chat_display.grid(
-            row=0, column=0, sticky="nsew", padx=4, pady=4)
+            row=0, column=0, sticky="nsew", padx=0, pady=0)
+        # Backward compat — _chat_scroll no longer needed
+        self._chat_scroll = None
 
         # Color tags for chat
         tb = self.chat_display._textbox
@@ -112,6 +126,12 @@ class PagesMixin:
                          lmargin1=12, lmargin2=12)
         tb.tag_configure("error", foreground=C_RED,
                          lmargin1=12, lmargin2=12)
+        tb.tag_configure("system_prefix", foreground=C_ORANGE,
+                         font=("Consolas", 16, "bold"),
+                         lmargin1=12)
+        tb.tag_configure("system_msg", foreground=C_ORANGE,
+                         lmargin1=12, lmargin2=12, rmargin=12,
+                         spacing1=2)
         tb.tag_configure("timestamp", foreground=C_TEXT_DIM,
                          font=("Consolas", 12))
         tb.tag_configure("user_prefix", foreground=C_PURPLE,
@@ -123,14 +143,53 @@ class PagesMixin:
         tb.tag_configure("file_tag", foreground=C_CYAN,
                          font=("Consolas", 13),
                          lmargin1=12)
+        # Clickable link tag (cyan, underlined, hand cursor)
+        tb.tag_configure("link", foreground=C_CYAN,
+                         underline=True,
+                         lmargin1=12, lmargin2=12, rmargin=12)
+        tb.tag_bind("link", "<Enter>",
+                    lambda e: tb.configure(cursor="hand2"))
+        tb.tag_bind("link", "<Leave>",
+                    lambda e: tb.configure(cursor=""))
+        tb.tag_bind("link", "<Button-1>", self._on_link_click)
+        # Media caption (dim, small, under images)
+        tb.tag_configure("media_caption", foreground=C_TEXT_DIM,
+                         font=("Consolas", 12),
+                         lmargin1=12, lmargin2=12)
+        # Video label tag (cyan, clickable)
+        tb.tag_configure("video_link", foreground=C_CYAN,
+                         font=("Consolas", 14, "bold"),
+                         underline=True,
+                         lmargin1=12, lmargin2=12)
+        tb.tag_bind("video_link", "<Enter>",
+                    lambda e: tb.configure(cursor="hand2"))
+        tb.tag_bind("video_link", "<Leave>",
+                    lambda e: tb.configure(cursor=""))
+        tb.tag_bind("video_link", "<Button-1>",
+                    self._on_video_click)
+        # Reasoning / chain-of-thought tag (dim italic)
+        tb.tag_configure("reasoning", foreground=C_TEXT_DIM,
+                         font=("Consolas", 13, "italic"),
+                         lmargin1=24, lmargin2=24, rmargin=12,
+                         spacing1=2)
+        tb.tag_configure("reasoning_label", foreground=C_TEXT_DIM,
+                         font=("Consolas", 12, "bold"),
+                         lmargin1=12)
+        # Store media references for click handling
+        self._chat_media_refs = {}
+        self._chat_gif_animations = []
+        # Per-URL tag-to-URL mapping for precise link clicks
+        self._link_urls = {}
 
         # Input area
         input_area = ctk.CTkFrame(chat_col, fg_color="transparent")
         input_area.grid(row=1, column=0, sticky="ew", pady=(6, 0))
         input_area.grid_columnconfigure(0, weight=1)
+        # Lock indicator row height so it never shifts the chat
+        input_area.grid_rowconfigure(0, minsize=24)
 
         # File attachment indicator (blue)
-        self.file_indicator = ctk.CTkLabel(
+        self.file_indicator = SelectableLabel(
             input_area, text="", font=FONT_TINY,
             text_color=C_ACCENT, height=20)
         self.file_indicator.grid(
@@ -138,7 +197,7 @@ class PagesMixin:
 
         # Thinking indicator (fixed width so animation
         # does not shift the layout as dots change)
-        self.thinking_label = ctk.CTkLabel(
+        self.thinking_label = SelectableLabel(
             input_area, text="", font=FONT_TINY,
             text_color=C_ACCENT_DIM, height=20,
             width=140, anchor="e")
@@ -152,8 +211,16 @@ class PagesMixin:
             border_width=1, text_color=C_TEXT_BRIGHT, corner_radius=2)
         self.chat_input.grid(row=1, column=0, sticky="nsew",
                              padx=(0, 4))
+        # Enable undo/redo in the underlying tk.Text widget
+        self.chat_input._textbox.configure(undo=True, maxundo=-1)
         self.chat_input.bind("<Return>", self._on_input_enter)
         self.chat_input.bind("<Shift-Return>", lambda e: None)
+        self.chat_input.bind("<KeyRelease>", self._auto_resize_input)
+        self.chat_input.bind("<Button-3>", self._chat_input_context_menu)
+        # Up/Down arrow input history recall
+        self._init_input_history()
+        self.chat_input.bind("<Up>", self._on_input_up)
+        self.chat_input.bind("<Down>", self._on_input_down)
 
         # SEND button to the right of the input
         self.send_btn = ctk.CTkButton(
@@ -161,26 +228,22 @@ class PagesMixin:
             font=FONT_SECTION, corner_radius=2,
             fg_color=C_GREEN_DIM, hover_color="#1a5a2a",
             text_color=C_GREEN, command=self._send_message)
-        self.send_btn.grid(row=1, column=1, sticky="ns")
+        self.send_btn.grid(row=1, column=1, sticky="s")
 
-        # Utility toolbar below the input (voice, mic, attach, new)
+        # STOP button (same slot as SEND, shown during generation)
+        self.stop_btn = ctk.CTkButton(
+            input_area, text="STOP", width=80, height=56,
+            font=FONT_SECTION, corner_radius=2,
+            fg_color="#3b1111", hover_color="#5a1a1a",
+            text_color=C_RED, command=self._stop_generation)
+        # Hidden until generation starts (SEND grid slot is reused)
+
+        # Utility toolbar below the input
         toolbar = ctk.CTkFrame(input_area, fg_color="transparent")
-        toolbar.grid(row=2, column=0, columnspan=2, sticky="w",
+        toolbar.grid(row=2, column=0, columnspan=2, sticky="ew",
                      pady=(4, 0))
 
-        self.voice_btn = ToggleButton(
-            toolbar, text_on="\U0001f50a", text_off="\U0001f507",
-            on_toggle=self._on_voice_toggle, start_on=False,
-            width=38, height=32)
-        self.voice_btn.pack(side="left", padx=(0, 4))
-
-        self.mic_btn = ctk.CTkButton(
-            toolbar, text="\U0001f3a4", width=38, height=32,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
-            text_color=C_TEXT_DIM, command=self._toggle_voice_input)
-        self.mic_btn.pack(side="left", padx=(0, 4))
-
+        # Left side: attach, new, web access
         self._attach_btn = ctk.CTkButton(
             toolbar, text="\U0001f4ce", width=38, height=32,
             font=FONT_SMALL, corner_radius=2,
@@ -195,20 +258,66 @@ class PagesMixin:
             text_color=C_TEXT_DIM, command=self._new_chat)
         self._new_btn.pack(side="left", padx=(0, 4))
 
-        self._web_btn = ctk.CTkButton(
-            toolbar, text="\U0001f310", width=38, height=32,
+        self._web_btn = ToggleButton(
+            toolbar, text_on="\U0001f310", text_off="\U0001f310",
+            on_toggle=self._on_web_access_toggle, start_on=False,
+            width=38, height=32)
+        self._web_btn.pack(side="left")
+
+        # Reasoning toggle (chain-of-thought)
+        self._reasoning_btn = ToggleButton(
+            toolbar, text_on="\U0001f9e0", text_off="\U0001f9e0",
+            on_toggle=self._on_reasoning_toggle, start_on=False,
+            width=38, height=32)
+        self._reasoning_btn.pack(side="left", padx=(4, 0))
+
+        # RAG toggle (document Q&A)
+        self._rag_btn = ToggleButton(
+            toolbar, text_on="\U0001f4da", text_off="\U0001f4da",
+            on_toggle=self._on_rag_toggle, start_on=False,
+            width=38, height=32)
+        self._rag_btn.pack(side="left", padx=(4, 0))
+
+        # Edit last message button
+        self._edit_btn = ctk.CTkButton(
+            toolbar, text="\u270E", width=38, height=32,
             font=FONT_SMALL, corner_radius=2,
             fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
-            text_color=C_CYAN, command=self._web_search_dialog)
-        self._web_btn.pack(side="left")
+            text_color=C_TEXT_DIM,
+            command=self._edit_last_message)
+        self._edit_btn.pack(side="left", padx=(4, 0))
+
+        # Right side: voice output + mic input
+        self.mic_btn = ctk.CTkButton(
+            toolbar, text="\U0001f3a4", width=38, height=32,
+            font=FONT_SMALL, corner_radius=2,
+            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
+            text_color=C_TEXT_DIM, command=self._toggle_voice_input)
+        self.mic_btn.pack(side="right", padx=(4, 0))
+
+        self.voice_btn = ToggleButton(
+            toolbar, text_on="\U0001f50a", text_off="\U0001f507",
+            on_toggle=self._on_voice_toggle, start_on=False,
+            width=38, height=32)
+        self.voice_btn.pack(side="right")
+
+        # Token counter label (right side of toolbar)
+        self._token_counter = SelectableLabel(
+            toolbar, text="0 tokens", font=FONT_TINY,
+            text_color=C_TEXT_DIM, height=20, anchor="e")
+        self._token_counter.pack(side="right", padx=(8, 8))
 
         # Tooltips for CORE page buttons
         Tooltip(self.send_btn, "Send message (Enter)")
+        Tooltip(self.stop_btn, "Stop AI generation")
         Tooltip(self.voice_btn, "Voice output on/off")
         Tooltip(self.mic_btn, "Voice input (mic)")
-        Tooltip(self._attach_btn, "Attach file")
+        Tooltip(self._attach_btn, "Attach file or image")
         Tooltip(self._new_btn, "Start new conversation")
-        Tooltip(self._web_btn, "Web search")
+        Tooltip(self._web_btn, "AI web access on/off")
+        Tooltip(self._reasoning_btn, "Chain-of-thought reasoning on/off")
+        Tooltip(self._rag_btn, "Document Q&A — index files for context")
+        Tooltip(self._edit_btn, "Edit last message")
         Tooltip(self._sidebar_toggle_btn, "Toggle sidebar")
 
         # Exit fullscreen button (hidden by default)
@@ -220,13 +329,17 @@ class PagesMixin:
             command=self._exit_chat_fullscreen)
         # Not packed until fullscreen is entered
 
+        # Add chat_col to paned window
+        self._core_pane.add(chat_col, stretch="always",
+                            minsize=300)
+
         # Right sidebar: history + system prompt
-        sidebar = ctk.CTkFrame(page, fg_color="transparent")
-        sidebar.grid(row=1, column=1, sticky="nsew",
-                     padx=(4, 10), pady=(2, 8))
+        sidebar = ctk.CTkFrame(self._core_pane, fg_color="transparent")
         sidebar.grid_columnconfigure(0, weight=1)
         sidebar.grid_rowconfigure(0, weight=1)
         sidebar.grid_rowconfigure(1, weight=1)
+        self._core_pane.add(sidebar, stretch="never",
+                            minsize=180, width=320)
 
         # --- Collapsible HISTORY panel ---
         self._hist_panel = CollapsiblePanel(
@@ -248,20 +361,79 @@ class PagesMixin:
             border_width=0, corner_radius=2, wrap="word")
         self.history_list.grid(
             row=0, column=0, sticky="nsew", padx=4, pady=4)
+        # Bind click to load session
+        self.history_list._textbox.bind(
+            "<Button-1>", self._on_history_click)
 
         hist_btns = ctk.CTkFrame(hist_frame, fg_color="transparent")
         hist_btns.grid(row=1, column=0, sticky="ew", padx=4, pady=4)
 
+        _hist_tooltips = {
+            "RENAME": "Rename selected session",
+            "DELETE": "Delete selected session",
+            "EXPORT": "Export chat (Markdown, JSON, or text)",
+        }
         for text, color, cmd in [
-                ("SAVE", C_TEXT_BRIGHT, self._save_session),
-                ("LOAD", C_TEXT_DIM, self._load_session),
+                ("RENAME", C_TEXT_BRIGHT, self._rename_session),
+                ("DELETE", C_RED, self._delete_session),
                 ("EXPORT", C_TEXT_DIM, self._export_chat)]:
-            ctk.CTkButton(
-                hist_btns, text=text, width=70, height=30,
+            btn = ctk.CTkButton(
+                hist_btns, text=text, width=60, height=30,
                 font=FONT_TINY, corner_radius=2,
                 fg_color=C_SURFACE, hover_color=C_BORDER,
                 text_color=color, command=cmd
-            ).pack(side="left", padx=(0, 4))
+            )
+            btn.pack(side="left", padx=(0, 3))
+            Tooltip(btn, _hist_tooltips[text])
+
+        # Inline rename row (hidden until RENAME is clicked)
+        self._rename_row = ctk.CTkFrame(
+            hist_frame, fg_color="transparent")
+        # Not gridded until _rename_session shows it
+        self._rename_entry = ctk.CTkEntry(
+            self._rename_row, height=28, font=FONT_TINY,
+            fg_color=C_INPUT, border_color=C_ACCENT_DIM,
+            border_width=1, text_color=C_TEXT_BRIGHT,
+            corner_radius=2, placeholder_text="New name")
+        self._rename_entry.pack(
+            side="left", fill="x", expand=True, padx=(0, 4))
+        _ok_rename = ctk.CTkButton(
+            self._rename_row, text="OK", width=40, height=28,
+            font=FONT_TINY, corner_radius=2,
+            fg_color=C_GREEN_DIM, hover_color="#1a5a2a",
+            text_color=C_GREEN, command=self._confirm_rename)
+        _ok_rename.pack(side="left", padx=(0, 2))
+        _cancel_rename = ctk.CTkButton(
+            self._rename_row, text="X", width=30, height=28,
+            font=FONT_TINY, corner_radius=2,
+            fg_color=C_SURFACE, hover_color=C_BORDER,
+            text_color=C_TEXT_DIM, command=self._cancel_rename)
+        _cancel_rename.pack(side="left")
+        self._rename_entry.bind(
+            "<Return>", lambda e: self._confirm_rename())
+        self._rename_entry.bind(
+            "<Escape>", lambda e: self._cancel_rename())
+
+        # Inline delete confirmation row (hidden until DELETE is clicked)
+        self._delete_confirm_row = ctk.CTkFrame(
+            hist_frame, fg_color="transparent")
+        # Not gridded until _delete_session shows it
+        _del_label = SelectableLabel(
+            self._delete_confirm_row, text="Delete?",
+            font=FONT_TINY, text_color=C_RED, anchor="w")
+        _del_label.pack(side="left", padx=(4, 4))
+        _del_yes = ctk.CTkButton(
+            self._delete_confirm_row, text="YES", width=40, height=28,
+            font=FONT_TINY, corner_radius=2,
+            fg_color="#3a1111", hover_color="#5a1a1a",
+            text_color=C_RED, command=self._confirm_delete_session)
+        _del_yes.pack(side="left", padx=(0, 2))
+        _del_no = ctk.CTkButton(
+            self._delete_confirm_row, text="NO", width=40, height=28,
+            font=FONT_TINY, corner_radius=2,
+            fg_color=C_SURFACE, hover_color=C_BORDER,
+            text_color=C_TEXT_DIM, command=self._cancel_delete_session)
+        _del_no.pack(side="left")
 
         # --- Collapsible SYSTEM PROMPT panel ---
         self._prompt_panel = CollapsiblePanel(
@@ -283,6 +455,8 @@ class PagesMixin:
             wrap="word")
         self.prompt_editor.grid(
             row=0, column=0, sticky="nsew", padx=4, pady=4)
+        # Enable undo/redo
+        self.prompt_editor._textbox.configure(undo=True, maxundo=-1)
 
         default_prompt = self._load_system_prompt()
         self.prompt_editor.insert("1.0", default_prompt)
@@ -290,19 +464,23 @@ class PagesMixin:
         prompt_btns = ctk.CTkFrame(prompt_frame, fg_color="transparent")
         prompt_btns.grid(row=1, column=0, sticky="ew", padx=4, pady=4)
 
-        ctk.CTkButton(
+        apply_btn = ctk.CTkButton(
             prompt_btns, text="APPLY", width=70, height=30,
             font=FONT_TINY, corner_radius=2,
             fg_color=C_ACCENT_DIM, hover_color=C_ACCENT_MUTED,
             text_color=C_ACCENT, command=self._apply_system_prompt
-        ).pack(side="left", padx=(0, 4))
+        )
+        apply_btn.pack(side="left", padx=(0, 4))
+        Tooltip(apply_btn, "Apply prompt to current session")
 
-        ctk.CTkButton(
+        reset_btn = ctk.CTkButton(
             prompt_btns, text="RESET", width=70, height=30,
             font=FONT_TINY, corner_radius=2,
             fg_color=C_SURFACE, hover_color=C_BORDER,
             text_color=C_TEXT_DIM, command=self._reset_system_prompt
-        ).pack(side="left")
+        )
+        reset_btn.pack(side="left")
+        Tooltip(reset_btn, "Reset prompt to default")
 
         # Store sidebar ref for rebalancing
         self._sidebar = sidebar
@@ -319,17 +497,17 @@ class PagesMixin:
 
         When hidden, the chat column expands to full width.
         When shown, the sidebar reappears with its panels.
+        Uses PanedWindow to allow drag-to-resize.
         """
         if self._sidebar_visible:
-            self._sidebar.grid_forget()
-            self._core_page.grid_columnconfigure(1, weight=0, minsize=0)
+            # Remove sidebar pane from the PanedWindow
+            self._core_pane.forget(self._sidebar)
             self._sidebar_visible = False
             self._sidebar_toggle_btn.configure(text_color=C_TEXT_DIM)
         else:
-            self._sidebar.grid(
-                row=1, column=1, sticky="nsew",
-                padx=(4, 10), pady=(2, 8))
-            self._core_page.grid_columnconfigure(1, weight=1, minsize=200)
+            # Re-add sidebar pane to the PanedWindow
+            self._core_pane.add(self._sidebar, stretch="never",
+                                minsize=180, width=320)
             self._sidebar_visible = True
             self._sidebar_toggle_btn.configure(text_color=C_ACCENT)
             self._rebalance_sidebar()
@@ -373,9 +551,7 @@ class PagesMixin:
 
         # Hide sidebar to maximize chat space
         if self._sidebar_visible:
-            self._sidebar.grid_forget()
-            self._core_page.grid_columnconfigure(
-                1, weight=0, minsize=0)
+            self._core_pane.forget(self._sidebar)
             self._sidebar_visible = False
 
         # Switch to CORE page if not already
@@ -397,8 +573,8 @@ class PagesMixin:
             return
         self._chat_fullscreen = False
 
-        # Unbind Escape
-        self.unbind("<Escape>")
+        # Rebind Escape to stop-generation
+        self._bind_escape_stop()
 
         # Hide exit button, restore fullscreen + sidebar toggle buttons
         self._exit_fullscreen_btn.pack_forget()
@@ -425,18 +601,70 @@ class PagesMixin:
 
         # Restore sidebar
         if self._fs_was_sidebar_visible:
-            self._sidebar.grid(
-                row=1, column=1, sticky="nsew",
-                padx=(4, 10), pady=(2, 8))
-            self._core_page.grid_columnconfigure(
-                1, weight=1, minsize=200)
+            self._core_pane.add(self._sidebar, stretch="never",
+                                minsize=180, width=320)
             self._sidebar_visible = True
             self._sidebar_toggle_btn.configure(text_color=C_ACCENT)
             self._rebalance_sidebar()
 
     def _on_escape_fullscreen(self, event):
-        """Handle Escape key to exit fullscreen."""
+        """Handle Escape key in fullscreen.
+
+        If AI is generating, stop generation first.
+        If not generating, exit fullscreen.
+        """
+        if getattr(self, '_is_generating', False):
+            self._stop_generation()
+            return
         self._exit_chat_fullscreen()
+
+    # ================================================================
+    # CORE - Chat input context menu
+    # ================================================================
+
+    def _chat_input_context_menu(self, event):
+        """Show right-click context menu for multi-line chat input."""
+        import tkinter as tk
+        menu = tk.Menu(self, tearoff=0)
+        tb = self.chat_input._textbox
+        has_sel = bool(tb.tag_ranges("sel"))
+        menu.add_command(
+            label="Cut",
+            state="normal" if has_sel else "disabled",
+            command=lambda: (
+                self.clipboard_clear(),
+                self.clipboard_append(tb.get("sel.first", "sel.last")),
+                tb.delete("sel.first", "sel.last"),
+            ))
+        menu.add_command(
+            label="Copy",
+            state="normal" if has_sel else "disabled",
+            command=lambda: (
+                self.clipboard_clear(),
+                self.clipboard_append(tb.get("sel.first", "sel.last")),
+            ))
+        menu.add_command(
+            label="Paste",
+            command=self._paste_into_chat_input)
+        menu.add_separator()
+        menu.add_command(
+            label="Select All",
+            command=lambda: (
+                tb.tag_add("sel", "1.0", "end-1c"),
+                tb.mark_set("insert", "end-1c"),
+            ))
+        menu.tk_popup(event.x_root, event.y_root)
+
+    def _paste_into_chat_input(self):
+        """Paste clipboard text into chat input, replacing selection."""
+        try:
+            text = self.clipboard_get()
+        except Exception:
+            return
+        tb = self.chat_input._textbox
+        if tb.tag_ranges("sel"):
+            tb.delete("sel.first", "sel.last")
+        tb.insert("insert", text)
 
     # ================================================================
     # PAGE: MODELS - Model management (create / delete)
@@ -465,32 +693,58 @@ class PagesMixin:
         form_row = ctk.CTkFrame(create_frame, fg_color="transparent")
         form_row.pack(fill="x")
 
-        ctk.CTkLabel(
+        SelectableLabel(
             form_row, text="Name:", font=FONT_TINY,
             text_color=C_TEXT_DIM
         ).pack(side="left", padx=(0, 4))
         self.new_model_name = themed_entry(
-            form_row, width=160, height=30, font=FONT_SMALL)
+            form_row, width=200, height=30, font=FONT_SMALL)
         self.new_model_name.pack(side="left", padx=(0, 8))
 
-        ctk.CTkLabel(
-            form_row, text="Size:", font=FONT_TINY,
-            text_color=C_TEXT_DIM
-        ).pack(side="left", padx=(0, 4))
-        self.new_model_size = themed_dropdown(
-            form_row,
-            ["pi_zero", "nano", "tiny", "small",
-             "medium", "large"],
-            width=120, height=30)
-        self.new_model_size.set("small")
-        self.new_model_size.pack(side="left", padx=(0, 8))
-
-        ctk.CTkButton(
+        _create_btn = ctk.CTkButton(
             form_row, text="CREATE", width=90, height=30,
             font=FONT_SMALL, corner_radius=2,
             fg_color=C_ACCENT_DIM, hover_color=C_ACCENT_MUTED,
-            text_color=C_ACCENT, command=self._create_new_model
-        ).pack(side="left")
+            text_color=C_ACCENT, command=self._create_new_model)
+        _create_btn.pack(side="left")
+        Tooltip(_create_btn, "Create a new empty model")
+
+        _import_btn = ctk.CTkButton(
+            form_row, text="IMPORT", width=90, height=30,
+            font=FONT_SMALL, corner_radius=2,
+            fg_color=C_ACCENT_DIM, hover_color=C_ACCENT_MUTED,
+            text_color=C_ACCENT, command=self._import_model)
+        _import_btn.pack(side="left", padx=(8, 0))
+        Tooltip(_import_btn, "Import a model file from disk")
+
+        _download_btn = ctk.CTkButton(
+            form_row, text="DOWNLOAD", width=100, height=30,
+            font=FONT_SMALL, corner_radius=2,
+            fg_color=C_ACCENT_DIM, hover_color=C_ACCENT_MUTED,
+            text_color=C_ACCENT, command=self._download_huggingface)
+        _download_btn.pack(side="left", padx=(8, 0))
+        Tooltip(_download_btn, "Download a model from HuggingFace")
+
+        # HuggingFace download row (inline entry for repo ID)
+        hf_row = ctk.CTkFrame(create_frame, fg_color="transparent")
+        hf_row.pack(fill="x", pady=(4, 0))
+        SelectableLabel(
+            hf_row, text="HuggingFace:", font=FONT_TINY,
+            text_color=C_TEXT_DIM
+        ).pack(side="left", padx=(0, 4))
+        self._hf_repo_entry = themed_entry(
+            hf_row, width=260, height=30, font=FONT_SMALL)
+        self._hf_repo_entry.pack(side="left", padx=(0, 4))
+        self._hf_repo_entry.configure(
+            placeholder_text="e.g. gpt2 or username/model-name")
+        self._hf_repo_entry.bind(
+            "<Return>", lambda e: self._download_huggingface())
+
+        # Status label for create/delete feedback (visible on this page)
+        self._models_status = SelectableLabel(
+            create_frame, text="", font=FONT_TINY,
+            text_color=C_TEXT_DIM, anchor="w")
+        self._models_status.pack(anchor="w", pady=(4, 0))
 
         # Separator
         ctk.CTkFrame(
@@ -504,7 +758,7 @@ class PagesMixin:
         self.model_cards_frame = scroll
 
         if not self.models_data:
-            ctk.CTkLabel(
+            SelectableLabel(
                 scroll, text="No model files in models/",
                 font=FONT_BODY, text_color=C_TEXT_DIM
             ).pack(anchor="w", padx=8, pady=20)
@@ -533,6 +787,14 @@ class PagesMixin:
             state="disabled")
         self.unload_btn.pack(side="right")
 
+        self.suspend_btn = ctk.CTkButton(
+            top, text="SUSPEND", width=110, height=34,
+            font=FONT_SMALL, corner_radius=2,
+            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
+            text_color=C_TEXT_DIM, command=self._suspend_model_memory,
+            state="disabled")
+        self.suspend_btn.pack(side="right", padx=(0, 6))
+
         # Route connections
         route_section = HUDFrame(page, glow_color=C_BORDER)
         route_section.grid(row=1, column=0, sticky="nsew",
@@ -558,19 +820,26 @@ class PagesMixin:
             "AI model for conversations",
             model_names)
 
-        # Trainer route - model to be trained in the Forge
+        # Trainer route - teacher model in the Forge
         self._build_route_card(
             route_scroll, "TRAINER",
-            "Target model for training in the Forge",
+            "Teacher model that generates curriculum and tests the student",
             model_names)
 
-        # Per-brick routes
-        for brick in self.bricks_data:
-            desc = brick.get("description", "")
+        # Student route - the AI being trained
+        self._build_route_card(
+            route_scroll, "STUDENT",
+            "AI model being trained and evaluated",
+            model_names)
+
+        # Per-mod routes
+        for mod in self.mods_data:
+            desc = mod.get("description", "")
             if not desc:
-                desc = f"Brick module (port {brick.get('port', '?')})"
+                desc = f"Mod module (port {mod.get('port', '?')})"
+            # Use mod ID as route key (matches CMD page and route_assignments)
             self._build_route_card(
-                route_scroll, brick["name"].upper(), desc,
+                route_scroll, mod["id"].upper(), desc,
                 model_names)
 
     def _build_route_card(self, parent, name: str, desc: str,
@@ -586,17 +855,17 @@ class PagesMixin:
         dot = StatusDot(inner, color=C_TEXT_DIM)
         dot.grid(row=0, column=0, rowspan=3, padx=(0, 8))
 
-        ctk.CTkLabel(
+        SelectableLabel(
             inner, text=name, font=FONT_SECTION,
             text_color=C_TEXT_BRIGHT, anchor="w"
         ).grid(row=0, column=1, sticky="w")
 
-        ctk.CTkLabel(
+        SelectableLabel(
             inner, text=desc, font=FONT_TINY,
             text_color=C_TEXT_DIM, anchor="w"
         ).grid(row=1, column=1, sticky="w")
 
-        status_lbl = ctk.CTkLabel(
+        status_lbl = SelectableLabel(
             inner, text="No model", font=FONT_SMALL,
             text_color=C_TEXT_DIM)
         status_lbl.grid(row=0, column=2, rowspan=2, padx=(8, 0))
@@ -610,7 +879,7 @@ class PagesMixin:
             assign_row = ctk.CTkFrame(card, fg_color="transparent")
             assign_row.pack(fill="x", padx=10, pady=(0, 6))
 
-            ctk.CTkLabel(
+            SelectableLabel(
                 assign_row, text="Model:", font=FONT_TINY,
                 text_color=C_TEXT_DIM
             ).pack(side="left", padx=(0, 4))
@@ -624,7 +893,22 @@ class PagesMixin:
             self._route_menus[route_key] = menu
 
     def _populate_model_cards(self, parent):
+        """Build a card for each model with identity info and actions."""
+        from enigma_engine.core.model_context import (
+            ModelContext, model_key_from_path,
+        )
+        # Native formats that support resize/training
+        native_formats = {"pth", "pt"}
+
         for model in self.models_data:
+            fmt = model["format"]
+            is_native = fmt in native_formats
+
+            # Load identity context for this model
+            key = model_key_from_path(model["path"])
+            ctx = ModelContext(key)
+            ctx.load()
+
             card = HUDFrame(parent, glow_color=C_BORDER)
             card.pack(fill="x", padx=4, pady=3)
 
@@ -632,453 +916,363 @@ class PagesMixin:
             inner.pack(fill="x", padx=10, pady=8)
             inner.grid_columnconfigure(0, weight=1)
 
-            ctk.CTkLabel(
-                inner, text=model["name"], font=FONT_SECTION,
-                text_color=C_TEXT_BRIGHT, anchor="w"
-            ).grid(row=0, column=0, sticky="w")
+            # Row 0 — Model name (editable inline) + action buttons
+            identity_name = ctx.display_name
+            file_name = model["name"]
+            param_str = model.get("params")
 
-            info = f"{model['format'].upper()}  //  {model['size_mb']} MB"
-            ctk.CTkLabel(
-                inner, text=info, font=FONT_TINY,
-                text_color=C_TEXT_DIM, anchor="w"
-            ).grid(row=1, column=0, sticky="w")
+            if identity_name:
+                title_text = identity_name
+            else:
+                title_text = file_name
 
-            ctk.CTkButton(
-                inner, text="DELETE", width=80, height=34,
-                font=FONT_SMALL, corner_radius=2,
+            # Inline-editable name entry (looks like a label
+            # until EDIT is clicked)
+            name_entry = ctk.CTkEntry(
+                inner, font=FONT_SECTION, height=32,
+                fg_color="transparent", border_width=0,
+                text_color=C_TEXT_BRIGHT, corner_radius=2,
+                state="disabled")
+            name_entry.grid(row=0, column=0, sticky="ew")
+            # Insert text while enabled, then disable
+            name_entry.configure(state="normal")
+            name_entry.insert(0, title_text)
+            name_entry.configure(state="disabled")
+
+            # Param count shown separately so it never gets
+            # mixed into the editable name field
+            if param_str:
+                SelectableLabel(
+                    inner, text=f"({param_str})",
+                    font=FONT_TINY, text_color=C_TEXT_DIM,
+                    anchor="w"
+                ).grid(row=0, column=0, sticky="e", padx=(0, 8))
+
+            btn_frame = ctk.CTkFrame(inner, fg_color="transparent")
+            btn_frame.grid(row=0, column=1, padx=(8, 0), sticky="e")
+
+            # Inline save/cancel row (hidden until EDIT clicked)
+            edit_row = ctk.CTkFrame(inner, fg_color="transparent")
+            _save_btn = ctk.CTkButton(
+                edit_row, text="SAVE", width=50, height=24,
+                font=FONT_TINY, corner_radius=2,
+                fg_color=C_GREEN_DIM, hover_color="#1a5a2a",
+                text_color=C_GREEN,
+                command=lambda e=name_entry, m=model,
+                er=edit_row: self._save_inline_name(e, m, er))
+            _save_btn.pack(side="left", padx=(0, 4))
+            _cancel_btn = ctk.CTkButton(
+                edit_row, text="CANCEL", width=60, height=24,
+                font=FONT_TINY, corner_radius=2,
+                fg_color=C_SURFACE, hover_color=C_BORDER,
+                text_color=C_TEXT_DIM,
+                command=lambda e=name_entry, m=model,
+                er=edit_row: self._cancel_inline_name(e, m, er))
+            _cancel_btn.pack(side="left")
+            # Bind Enter/Escape while editing
+            name_entry.bind(
+                "<Return>",
+                lambda ev, e=name_entry, m=model,
+                er=edit_row: self._save_inline_name(e, m, er))
+            name_entry.bind(
+                "<Escape>",
+                lambda ev, e=name_entry, m=model,
+                er=edit_row: self._cancel_inline_name(e, m, er))
+
+            _edit = ctk.CTkButton(
+                btn_frame, text="EDIT", width=65, height=28,
+                font=FONT_TINY, corner_radius=2,
+                fg_color=C_ACCENT_DIM, hover_color=C_ACCENT_MUTED,
+                text_color=C_ACCENT,
+                command=lambda e=name_entry,
+                er=edit_row: self._start_inline_edit(e, er))
+            _edit.pack(side="left", padx=(0, 4))
+            Tooltip(_edit, "Edit display name")
+
+            _export = ctk.CTkButton(
+                btn_frame, text="EXPORT", width=75, height=28,
+                font=FONT_TINY, corner_radius=2,
+                fg_color=C_SURFACE, hover_color=C_ACCENT_MUTED,
+                text_color=C_TEXT_DIM,
+                command=lambda m=model: self._export_identity(m))
+            _export.pack(side="left", padx=(0, 4))
+            Tooltip(_export, "Export identity card to JSON")
+
+            _copy = ctk.CTkButton(
+                btn_frame, text="COPY", width=70, height=28,
+                font=FONT_TINY, corner_radius=2,
+                fg_color=C_SURFACE, hover_color=C_ACCENT_MUTED,
+                text_color=C_TEXT_DIM,
+                command=lambda m=model: self._copy_model(m))
+            _copy.pack(side="left", padx=(0, 4))
+            Tooltip(_copy, "Duplicate this model")
+
+            _delete = ctk.CTkButton(
+                btn_frame, text="DELETE", width=75, height=28,
+                font=FONT_TINY, corner_radius=2,
                 fg_color=C_SURFACE, hover_color=C_RED,
                 text_color=C_TEXT_DIM,
-                command=lambda m=model: self._delete_model(m)
-            ).grid(row=0, column=1, rowspan=2, padx=(8, 0),
-                   sticky="e")
+                command=lambda m=model: self._delete_model(m))
+            _delete.pack(side="left")
+            Tooltip(_delete, "Permanently delete this model")
 
-    # ================================================================
-    # PAGE: FORGE - Training
-    # ================================================================
+            # Right-click context menu on the card
+            def _show_card_menu(event, m=model, e=name_entry,
+                                er=edit_row):
+                import tkinter as tk
+                menu = tk.Menu(self, tearoff=0)
+                menu.add_command(
+                    label="Rename file",
+                    command=lambda: self._start_file_rename(e, m, er))
+                menu.add_command(
+                    label="Delete",
+                    command=lambda: self._delete_model(m))
+                menu.tk_popup(event.x_root, event.y_root)
 
-    def _build_page_forge(self):
-        page = self._make_page("FORGE")
-        page.grid_columnconfigure(0, weight=1)
-        page.grid_columnconfigure(1, weight=1)
-        page.grid_columnconfigure(2, weight=1)
-        page.grid_rowconfigure(1, weight=1)
+            card.bind("<Button-3>", _show_card_menu)
+            inner.bind("<Button-3>", _show_card_menu)
+            name_entry.bind(
+                "<Button-3>", _show_card_menu)
 
-        top = ctk.CTkFrame(page, fg_color="transparent", height=48)
-        top.grid(row=0, column=0, columnspan=3, sticky="ew",
-                 padx=10, pady=(8, 2))
-        SectionLabel(top, "The Forge").pack(
-            side="left", fill="x", expand=True)
-
-        # Left: controls
-        controls = HUDFrame(page, glow_color=C_BORDER)
-        controls.grid(row=1, column=0, sticky="nsew",
-                      padx=(10, 4), pady=4)
-        ctrl_scroll = themed_scroll(controls)
-        ctrl_scroll.pack(fill="both", expand=True, padx=4, pady=4)
-
-        self._forge_heading(ctrl_scroll, "TRAIN MODEL")
-
-        self._forge_label(ctrl_scroll, "Data source")
-        self.train_data_var = ctk.StringVar(
-            value=self.training_files[0]["path"]
-            if self.training_files else "")
-        data_opts = [
-            f"{f['name']} ({f['size_kb']} KB)"
-            for f in self.training_files]
-        if data_opts:
-            self.train_data_menu = themed_dropdown(
-                ctrl_scroll, data_opts, width=280,
-                command=self._on_data_selected)
-            self.train_data_menu.pack(anchor="w", padx=10, pady=(0, 6))
-        else:
-            ctk.CTkLabel(
-                ctrl_scroll, text="No data files in data/",
-                font=FONT_TINY, text_color=C_TEXT_DIM
-            ).pack(anchor="w", padx=10, pady=(0, 6))
-
-        self._forge_label(ctrl_scroll, "Model size")
-        self.model_size_var = ctk.StringVar(value="small")
-        themed_dropdown(
-            ctrl_scroll,
-            ["pi_zero", "nano", "tiny", "small",
-             "medium", "large"],
-            variable=self.model_size_var
-        ).pack(anchor="w", padx=10, pady=(0, 6))
-
-        self._forge_label(ctrl_scroll, "Epochs")
-        self.epochs_entry = self._forge_entry(ctrl_scroll, "10")
-
-        self._forge_label(ctrl_scroll, "Batch size")
-        self.batch_entry = self._forge_entry(ctrl_scroll, "4")
-
-        self._forge_label(ctrl_scroll, "Learning rate")
-        self.lr_entry = self._forge_entry(ctrl_scroll, "0.0001")
-
-        btn_row = ctk.CTkFrame(ctrl_scroll, fg_color="transparent")
-        btn_row.pack(fill="x", padx=10, pady=(8, 4))
-
-        self.train_model_btn = ctk.CTkButton(
-            btn_row, text="START TRAINING", width=170, height=38,
-            font=FONT_SECTION, corner_radius=2,
-            fg_color=C_ACCENT_DIM, hover_color=C_ACCENT_MUTED,
-            text_color=C_ACCENT, command=self._start_model_training)
-        self.train_model_btn.pack(side="left")
-
-        self.stop_train_btn = ctk.CTkButton(
-            btn_row, text="STOP", width=80, height=38,
-            font=FONT_SECTION, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_RED,
-            text_color=C_TEXT_DIM, command=self._stop_training,
-            state="disabled")
-        self.stop_train_btn.pack(side="left", padx=(6, 0))
-
-        self._forge_heading(ctrl_scroll, "TRAIN TOKENIZER")
-        self._forge_label(ctrl_scroll, "Vocabulary size")
-        self.vocab_entry = self._forge_entry(ctrl_scroll, "8000")
-
-        self.train_tok_btn = ctk.CTkButton(
-            ctrl_scroll, text="TRAIN TOKENIZER", width=180, height=38,
-            font=FONT_SECTION, corner_radius=2,
-            fg_color=C_ACCENT_DIM, hover_color=C_ACCENT_MUTED,
-            text_color=C_ACCENT, command=self._start_tokenizer_training)
-        self.train_tok_btn.pack(anchor="w", padx=10, pady=(6, 10))
-
-        # Center: data editor
-        editor_panel = HUDFrame(page, glow_color=C_BORDER)
-        editor_panel.grid(row=1, column=1, sticky="nsew",
-                          padx=4, pady=4)
-
-        editor_top = ctk.CTkFrame(
-            editor_panel, fg_color="transparent")
-        editor_top.pack(fill="x", padx=8, pady=(8, 2))
-        SectionLabel(editor_top, "Data Editor",
-                     color=C_CYAN).pack(
-            side="left", fill="x", expand=True)
-
-        self.data_file_label = ctk.CTkLabel(
-            editor_panel, text="No file selected",
-            font=FONT_TINY, text_color=C_TEXT_DIM)
-        self.data_file_label.pack(anchor="w", padx=10,
-                                  pady=(0, 2))
-
-        self.data_editor = ctk.CTkTextbox(
-            editor_panel, font=FONT_MONO, fg_color=C_INPUT,
-            text_color=C_TEXT, border_width=0,
-            corner_radius=2, wrap="word")
-        self.data_editor.pack(fill="both", expand=True,
-                              padx=6, pady=(2, 4))
-
-        editor_btns = ctk.CTkFrame(
-            editor_panel, fg_color="transparent")
-        editor_btns.pack(fill="x", padx=8, pady=(0, 6))
-
-        ctk.CTkButton(
-            editor_btns, text="SAVE", width=80, height=30,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_GREEN_DIM, hover_color="#1a5a2a",
-            text_color=C_GREEN, command=self._save_data_file
-        ).pack(side="left", padx=(0, 4))
-
-        ctk.CTkButton(
-            editor_btns, text="NEW FILE", width=100, height=30,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_ACCENT_DIM, hover_color=C_ACCENT_MUTED,
-            text_color=C_ACCENT, command=self._new_data_file
-        ).pack(side="left", padx=(0, 4))
-
-        ctk.CTkButton(
-            editor_btns, text="REFRESH", width=90, height=30,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_BORDER,
-            text_color=C_TEXT_DIM,
-            command=self._refresh_data_files
-        ).pack(side="left")
-
-        # Right: log output
-        log_panel = HUDFrame(page, glow_color=C_BORDER)
-        log_panel.grid(row=1, column=2, sticky="nsew",
-                       padx=(4, 10), pady=4)
-
-        SectionLabel(log_panel, "Output Log", color=C_GREEN).pack(
-            anchor="w", padx=8, pady=(8, 4))
-
-        self.train_log = SelectableTextbox(
-            log_panel, font=FONT_MONO,
-            fg_color=C_PANEL, text_color=C_GREEN,
-            border_width=0, corner_radius=2)
-        self.train_log.pack(fill="both", expand=True, padx=6, pady=(0, 6))
-
-        # Load initial data file into editor
-        self._editing_data_path = None
-        if self.training_files:
-            self._load_data_into_editor(self.training_files[0]["path"])
-
-    def _forge_heading(self, parent, text: str):
-        ctk.CTkLabel(
-            parent, text=text, font=FONT_SECTION,
-            text_color=C_TEXT_BRIGHT
-        ).pack(anchor="w", padx=10, pady=(12, 2))
-        ctk.CTkFrame(
-            parent, height=1, fg_color=C_ACCENT_DIM, corner_radius=0
-        ).pack(fill="x", padx=10, pady=(0, 6))
-
-    def _forge_label(self, parent, text: str):
-        ctk.CTkLabel(
-            parent, text=text, font=FONT_TINY, text_color=C_TEXT_DIM
-        ).pack(anchor="w", padx=10, pady=(2, 0))
-
-    def _forge_entry(self, parent, default: str) -> ctk.CTkEntry:
-        entry = themed_entry(parent)
-        entry.insert(0, default)
-        entry.pack(anchor="w", padx=10, pady=(0, 6))
-        return entry
-
-    # ================================================================
-    # PAGE: CONFIG
-    # ================================================================
-
-    def _build_page_config(self):
-        page = self._make_page("CONFIG")
-        page.grid_columnconfigure(0, weight=1)
-        page.grid_rowconfigure(1, weight=1)
-
-        top = ctk.CTkFrame(page, fg_color="transparent", height=48)
-        top.grid(row=0, column=0, sticky="ew", padx=10, pady=(8, 2))
-        SectionLabel(top, "Settings").pack(
-            side="left", fill="x", expand=True)
-
-        scroll = themed_scroll(page, fg_color=C_BG, corner_radius=0)
-        scroll.grid(row=1, column=0, sticky="nsew", padx=10, pady=4)
-        scroll.grid_columnconfigure(0, weight=1)
-
-        ctk.CTkLabel(
-            scroll,
-            text="These settings control how the AI generates text.",
-            font=FONT_SMALL, text_color=C_TEXT_DIM
-        ).pack(anchor="w", padx=8, pady=(4, 8))
-
-        self.config_entries: dict[str, ctk.CTkEntry] = {}
-
-        for name, (lo, hi, step) in CONFIG_LIMITS.items():
-            card = HUDFrame(scroll, glow_color=C_BORDER)
-            card.pack(fill="x", padx=4, pady=3)
-
-            inner = ctk.CTkFrame(card, fg_color="transparent")
-            inner.pack(fill="x", padx=10, pady=6)
-            inner.grid_columnconfigure(0, weight=1)
-
-            display_name = CONFIG_DISPLAY_NAMES.get(
-                name, name.replace("_", " ").upper())
-            ctk.CTkLabel(
-                inner, text=display_name, font=FONT_SECTION,
-                text_color=C_TEXT_BRIGHT, anchor="w"
-            ).grid(row=0, column=0, sticky="w")
-
-            desc = CONFIG_DESCRIPTIONS.get(name, "")
-            ctk.CTkLabel(
-                inner, text=desc, font=FONT_TINY,
-                text_color=C_TEXT_DIM, anchor="w", wraplength=500
-            ).grid(row=1, column=0, sticky="w")
-
-            ctk.CTkLabel(
-                inner, text=f"Range: {lo} to {hi}", font=FONT_TINY,
-                text_color=C_ACCENT_DIM, anchor="w"
-            ).grid(row=2, column=0, sticky="w", pady=(2, 0))
-
-            entry = themed_entry(inner, width=120, height=36)
-            entry.grid(
-                row=0, column=1, rowspan=3, padx=(8, 0), sticky="e")
-            entry.bind(
-                "<FocusOut>",
-                lambda e, n=name: self._validate_config(n))
-            entry.bind(
-                "<Return>",
-                lambda e, n=name: self._validate_config(n))
-            self.config_entries[name] = entry
-
-        # --- Display names section ---
-        names_card = HUDFrame(scroll, glow_color=C_ACCENT_DIM)
-        names_card.pack(fill="x", padx=4, pady=(10, 4))
-        names_inner = ctk.CTkFrame(
-            names_card, fg_color="transparent")
-        names_inner.pack(fill="x", padx=10, pady=8)
-
-        ctk.CTkLabel(
-            names_inner, text="DISPLAY NAMES",
-            font=FONT_SECTION, text_color=C_TEXT_BRIGHT
-        ).pack(anchor="w")
-        ctk.CTkLabel(
-            names_inner,
-            text="Customize how you and the AI appear in chat.",
-            font=FONT_TINY, text_color=C_TEXT_DIM, wraplength=500
-        ).pack(anchor="w", pady=(2, 6))
-
-        user_row = ctk.CTkFrame(
-            names_inner, fg_color="transparent")
-        user_row.pack(fill="x", pady=2)
-        user_row.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(
-            user_row, text="Your Name",
-            font=FONT_SMALL, text_color=C_TEXT,
-            width=140, anchor="w"
-        ).grid(row=0, column=0, sticky="w", padx=(0, 4))
-        self._user_name_entry = themed_entry(
-            user_row, width=200, height=30, font=FONT_SMALL)
-        self._user_name_entry.grid(
-            row=0, column=1, sticky="w", padx=(0, 4))
-        self._user_name_entry.insert(0, self.user_name)
-
-        ai_row = ctk.CTkFrame(
-            names_inner, fg_color="transparent")
-        ai_row.pack(fill="x", pady=2)
-        ai_row.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(
-            ai_row, text="AI Name",
-            font=FONT_SMALL, text_color=C_TEXT,
-            width=140, anchor="w"
-        ).grid(row=0, column=0, sticky="w", padx=(0, 4))
-        self._ai_name_entry = themed_entry(
-            ai_row, width=200, height=30, font=FONT_SMALL)
-        self._ai_name_entry.grid(
-            row=0, column=1, sticky="w", padx=(0, 4))
-        self._ai_name_entry.insert(0, self.ai_name)
-
-        name_btns = ctk.CTkFrame(
-            names_inner, fg_color="transparent")
-        name_btns.pack(fill="x", pady=(6, 0))
-        ctk.CTkButton(
-            name_btns, text="SAVE NAMES", width=120, height=30,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_ACCENT_DIM, hover_color=C_ACCENT_MUTED,
-            text_color=C_ACCENT, command=self._save_display_names
-        ).pack(side="left", padx=(0, 4))
-        ctk.CTkButton(
-            name_btns, text="RESET", width=80, height=30,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_BORDER,
-            text_color=C_TEXT_DIM,
-            command=self._reset_display_names
-        ).pack(side="left")
-
-        # Active profile display
-        prof_card = HUDFrame(scroll, glow_color=C_PURPLE)
-        prof_card.pack(fill="x", padx=4, pady=(10, 4))
-        prof_inner = ctk.CTkFrame(prof_card, fg_color="transparent")
-        prof_inner.pack(fill="x", padx=10, pady=8)
-
-        ctk.CTkLabel(
-            prof_inner, text="ACTIVE PROFILE",
-            font=FONT_SECTION, text_color=C_PURPLE
-        ).pack(anchor="w")
-
-        self.active_profile_label = ctk.CTkLabel(
-            prof_inner, text="None selected", font=FONT_BODY,
-            text_color=C_TEXT_DIM)
-        self.active_profile_label.pack(anchor="w", pady=(2, 0))
-
-        ctk.CTkLabel(
-            prof_inner,
-            text="Switch profiles from the CORE page dropdown. "
-                 "Profiles automatically set generation parameters.",
-            font=FONT_TINY, text_color=C_TEXT_DIM, wraplength=500
-        ).pack(anchor="w", pady=(4, 0))
-
-        # Brick info section
-        brick_card = HUDFrame(scroll, glow_color=C_BORDER)
-        brick_card.pack(fill="x", padx=4, pady=(10, 4))
-        brick_inner = ctk.CTkFrame(brick_card, fg_color="transparent")
-        brick_inner.pack(fill="x", padx=10, pady=8)
-
-        ctk.CTkLabel(
-            brick_inner, text="BRICK MODULES",
-            font=FONT_SECTION, text_color=C_TEXT_BRIGHT
-        ).pack(anchor="w")
-        ctk.CTkLabel(
-            brick_inner,
-            text="Bricks are plugin programs that connect to the "
-                 "engine. They auto-start when the app launches.",
-            font=FONT_TINY, text_color=C_TEXT_DIM, wraplength=500
-        ).pack(anchor="w", pady=(2, 0))
-
-        for brick in self.bricks_data:
-            row = ctk.CTkFrame(brick_inner, fg_color="transparent")
-            row.pack(fill="x", pady=2)
-            ctk.CTkLabel(
-                row,
-                text=f"{brick['name']} v{brick['version']}",
-                font=FONT_SMALL, text_color=C_TEXT
-            ).pack(side="left")
-            if brick.get("description"):
-                ctk.CTkLabel(
-                    row,
-                    text=f"  {brick['description'][:60]}",
-                    font=FONT_TINY, text_color=C_TEXT_DIM
-                ).pack(side="left", padx=(8, 0))
-
-        # --- Paths section ---
-        paths_card = HUDFrame(scroll, glow_color=C_BORDER)
-        paths_card.pack(fill="x", padx=4, pady=(10, 4))
-        paths_inner = ctk.CTkFrame(
-            paths_card, fg_color="transparent")
-        paths_inner.pack(fill="x", padx=10, pady=8)
-
-        ctk.CTkLabel(
-            paths_inner, text="DIRECTORY PATHS",
-            font=FONT_SECTION, text_color=C_TEXT_BRIGHT
-        ).pack(anchor="w")
-        ctk.CTkLabel(
-            paths_inner,
-            text="Set where the engine reads and writes files. "
-                 "Changes take effect on next launch.",
-            font=FONT_TINY, text_color=C_TEXT_DIM, wraplength=500
-        ).pack(anchor="w", pady=(2, 6))
-
-        self.path_entries: dict[str, ctk.CTkEntry] = {}
-
-        for key, (display_name, default) in PATH_SETTINGS.items():
-            path_row = ctk.CTkFrame(
-                paths_inner, fg_color="transparent")
-            path_row.pack(fill="x", pady=2)
-            path_row.grid_columnconfigure(1, weight=1)
-
-            ctk.CTkLabel(
-                path_row, text=display_name,
-                font=FONT_SMALL, text_color=C_TEXT,
-                width=140, anchor="w"
-            ).grid(row=0, column=0, sticky="w", padx=(0, 4))
-
-            entry = themed_entry(
-                path_row, width=300, height=30,
-                font=FONT_SMALL)
-            entry.grid(row=0, column=1, sticky="ew", padx=(0, 4))
-            entry.insert(0, str(default))
-            self.path_entries[key] = entry
-
-            ctk.CTkButton(
-                path_row, text="...", width=36, height=30,
-                font=FONT_SMALL, corner_radius=2,
-                fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
+            # Inline delete confirmation row (hidden)
+            delete_row = ctk.CTkFrame(inner, fg_color="transparent")
+            _del_msg = SelectableLabel(
+                delete_row, text=f"Delete {model['name']}?",
+                font=FONT_TINY, text_color=C_RED, anchor="w")
+            _del_msg.pack(side="left", padx=(0, 6))
+            _del_yes = ctk.CTkButton(
+                delete_row, text="YES", width=45, height=24,
+                font=FONT_TINY, corner_radius=2,
+                fg_color="#3a1111", hover_color="#5a1a1a",
+                text_color=C_RED,
+                command=lambda m=model,
+                dr=delete_row: self._confirm_delete_model(m, dr))
+            _del_yes.pack(side="left", padx=(0, 4))
+            _del_no = ctk.CTkButton(
+                delete_row, text="NO", width=45, height=24,
+                font=FONT_TINY, corner_radius=2,
+                fg_color=C_SURFACE, hover_color=C_BORDER,
                 text_color=C_TEXT_DIM,
-                command=lambda k=key: self._browse_path(k)
-            ).grid(row=0, column=2)
+                command=lambda dr=delete_row: dr.grid_forget())
+            _del_no.pack(side="left")
+            # Store references so _delete_model can find the right card
+            card._delete_row = delete_row
+            delete_row._model = model
 
-        path_btns = ctk.CTkFrame(
-            paths_inner, fg_color="transparent")
-        path_btns.pack(fill="x", pady=(6, 0))
+            # Row 1 — Tag + format info + file name when identity name differs
+            tag = "NATIVE" if is_native else "EXTERNAL"
+            tag_color = C_GREEN if is_native else C_ORANGE
+            info = f"{fmt.upper()}  //  {model['size_mb']} MB"
 
-        ctk.CTkButton(
-            path_btns, text="SAVE PATHS", width=120, height=30,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_ACCENT_DIM, hover_color=C_ACCENT_MUTED,
-            text_color=C_ACCENT, command=self._save_paths
-        ).pack(side="left", padx=(0, 4))
+            info_frame = ctk.CTkFrame(inner, fg_color="transparent")
+            info_frame.grid(row=1, column=0, columnspan=2,
+                            sticky="w", pady=(2, 0))
 
-        ctk.CTkButton(
-            path_btns, text="RESET", width=80, height=30,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_BORDER,
-            text_color=C_TEXT_DIM, command=self._reset_paths
-        ).pack(side="left")
+            SelectableLabel(
+                info_frame, text=tag, font=FONT_TINY,
+                text_color=tag_color, anchor="w"
+            ).pack(side="left", padx=(0, 6))
 
-        # Load saved path overrides into entries
-        self._load_path_settings()
+            # TRAINABLE badge for native models that support training
+            if is_native:
+                SelectableLabel(
+                    info_frame, text="TRAINABLE", font=FONT_TINY,
+                    text_color=C_CYAN, anchor="w"
+                ).pack(side="left", padx=(0, 6))
+
+            SelectableLabel(
+                info_frame, text=info, font=FONT_TINY,
+                text_color=C_TEXT_DIM, anchor="w"
+            ).pack(side="left")
+
+            # Show file name as subtitle if identity name is set
+            if identity_name:
+                SelectableLabel(
+                    info_frame, text=f"  ({file_name})",
+                    font=FONT_TINY, text_color=C_TEXT_DIM, anchor="w"
+                ).pack(side="left")
+
+            # Row 2 — Identity info (personality, stats, tags)
+            has_identity = (
+                ctx.personality or ctx.total_messages > 0
+                or ctx.tags or ctx.training_history
+            )
+            if has_identity:
+                id_frame = ctk.CTkFrame(inner, fg_color="transparent")
+                id_frame.grid(row=2, column=0, columnspan=2,
+                              sticky="w", pady=(4, 0))
+
+                if ctx.personality:
+                    SelectableLabel(
+                        id_frame, text=ctx.personality,
+                        font=FONT_TINY, text_color=C_TEXT,
+                        anchor="w"
+                    ).pack(anchor="w")
+
+                # Stats line: messages, sessions, training runs
+                stats_parts = []
+                if ctx.total_messages > 0:
+                    stats_parts.append(
+                        f"{ctx.total_messages} messages")
+                if ctx.total_sessions > 0:
+                    stats_parts.append(
+                        f"{ctx.total_sessions} sessions")
+                if ctx.training_history:
+                    stats_parts.append(
+                        f"{len(ctx.training_history)} training runs")
+                if stats_parts:
+                    SelectableLabel(
+                        id_frame, text="  //  ".join(stats_parts),
+                        font=FONT_TINY, text_color=C_TEXT_DIM,
+                        anchor="w"
+                    ).pack(anchor="w")
+
+                # Tags row
+                if ctx.tags:
+                    tags_text = "  ".join(
+                        f"[{t}]" for t in ctx.tags)
+                    SelectableLabel(
+                        id_frame, text=tags_text,
+                        font=FONT_TINY, text_color=C_ACCENT,
+                        anchor="w"
+                    ).pack(anchor="w")
+
+    # ================================================================
+    # Identity editing — inline name field
+    # ================================================================
+
+    def _start_inline_edit(self, entry, edit_row):
+        """Activate inline name editing on a model card."""
+        entry.configure(
+            state="normal",
+            fg_color=C_INPUT,
+            border_width=1,
+            border_color=C_ACCENT)
+        entry.focus_set()
+        entry.select_range(0, "end")
+        edit_row.grid(
+            row=3, column=0, columnspan=2,
+            sticky="w", pady=(4, 0))
+
+    def _start_file_rename(self, entry, model, edit_row):
+        """Activate inline file rename on a model card.
+
+        Similar to display-name editing but saves to the filesystem
+        via _rename_model() instead of ModelContext.
+        """
+        src = Path(model["path"])
+        # Show the actual filename stem for file rename
+        entry.configure(state="normal")
+        entry.delete(0, "end")
+        entry.insert(0, src.stem)
+        entry.configure(
+            fg_color=C_INPUT,
+            border_width=1,
+            border_color=C_ORANGE)
+        entry.focus_set()
+        entry.select_range(0, "end")
+        # Tag the entry so save knows this is a file rename
+        entry._file_rename_model = model
+        edit_row.grid(
+            row=3, column=0, columnspan=2,
+            sticky="w", pady=(4, 0))
+
+    def _save_inline_name(self, entry, model, edit_row):
+        """Save the edited name — display name or file rename."""
+        # Check if this is a file rename (set by _start_file_rename)
+        file_rename_model = getattr(entry, "_file_rename_model", None)
+        if file_rename_model is not None:
+            new_name = entry.get().strip()
+            entry._file_rename_model = None
+            # Return to read-only appearance first
+            entry.configure(
+                state="disabled",
+                fg_color="transparent",
+                border_width=0,
+                border_color=C_BORDER)
+            edit_row.grid_forget()
+            # Delegate to the actual file rename logic
+            self._rename_model(file_rename_model, new_name=new_name)
+            return
+
+        # Normal display-name edit flow
+        from enigma_engine.core.model_context import (
+            ModelContext, model_key_from_path,
+        )
+        new_name = entry.get().strip()
+        key = model_key_from_path(model["path"])
+        ctx = ModelContext(key)
+        ctx.load()
+
+        # If the name matches the filename, clear display_name
+        file_stem = Path(model["path"]).stem
+        if new_name == file_stem:
+            ctx.display_name = ""
+        else:
+            ctx.display_name = new_name
+        ctx.save()
+
+        # Return to read-only appearance
+        entry.configure(
+            state="disabled",
+            fg_color="transparent",
+            border_width=0)
+        edit_row.grid_forget()
+        self.status_bar.set_left(
+            f"Name updated for {key}")
+
+    def _cancel_inline_name(self, entry, model, edit_row):
+        """Cancel editing and restore original display name."""
+        # Clear file rename tag if set
+        entry._file_rename_model = None
+        from enigma_engine.core.model_context import (
+            ModelContext, model_key_from_path,
+        )
+        key = model_key_from_path(model["path"])
+        ctx = ModelContext(key)
+        ctx.load()
+
+        original = ctx.display_name or model["name"]
+        entry.configure(state="normal")
+        entry.delete(0, "end")
+        entry.insert(0, original)
+        entry.configure(
+            state="disabled",
+            fg_color="transparent",
+            border_width=0,
+            border_color=C_BORDER)
+        edit_row.grid_forget()
+
+    def _export_identity(self, model: dict):
+        """Export a model's identity card to a JSON file."""
+        from tkinter import filedialog
+        from enigma_engine.core.model_context import (
+            ModelContext, model_key_from_path,
+        )
+        import json
+
+        key = model_key_from_path(model["path"])
+        ctx = ModelContext(key)
+        ctx.load()
+
+        data = ctx.export_identity()
+        default_name = f"{key}_identity.json"
+
+        path = filedialog.asksaveasfilename(
+            title="Export Identity Card",
+            initialfile=default_name,
+            defaultextension=".json",
+            filetypes=[("JSON files", "*.json")],
+            parent=self)
+        if not path:
+            return
+
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            self.status_bar.set_left(
+                f"\u2728 Identity exported: {Path(path).name}")
+        except OSError as exc:
+            err_msg = str(exc)
+            self.status_bar.set_left(f"Export failed: {err_msg}")
+

@@ -6,9 +6,13 @@ Each AI model gets its own directory with persistent history and prompt.
 When a model is loaded, its context auto-loads. When switching models,
 the current model's context auto-saves.
 
+Every model also has an identity — display name, personality, avatar,
+stats (message/session counts), training history, tags, and notes.
+This makes each model feel like a distinct AI with its own profile.
+
 Directory layout:
     data/model_contexts/<model_stem>/
-        context.json   — system prompt, config overrides, metadata
+        context.json   — system prompt, config overrides, identity, metadata
         history.json   — chat messages array
 
 Usage:
@@ -16,6 +20,7 @@ Usage:
     ctx.load()
     ctx.history.append({"role": "user", "content": "hello"})
     ctx.system_prompt = "You are helpful."
+    ctx.display_name = "Enigma"
     ctx.save()
 """
 from __future__ import annotations
@@ -23,6 +28,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 # Base directory for all model contexts
 _CONTEXTS_DIR = Path(__file__).parent.parent.parent / "data" / "model_contexts"
+_PROMPTS_DIR = Path(__file__).parent.parent.parent / "data" / "prompts"
 
 
 def get_contexts_dir() -> Path:
@@ -38,24 +45,61 @@ def get_contexts_dir() -> Path:
 
 
 class ModelContext:
-    """Persistent per-model storage for history and prompt.
+    """Persistent per-model storage for history, prompt, and identity.
 
     Attributes:
-        model_key:     Unique key derived from model filename stem.
-        system_prompt: The system prompt for this model.
-        history:       List of chat messages (role/content dicts).
-        config:        Config overrides (temperature, etc.).
-        last_used:     Timestamp of last save.
-        profile_id:    ID of the active profile, if any.
+        model_key:        Unique key derived from model filename stem.
+        system_prompt:    The system prompt for this model.
+        history:          List of chat messages (role/content dicts).
+        config:           Config overrides (temperature, etc.).
+        last_used:        Timestamp of last save.
+
+        Identity fields:
+        display_name:     Human-friendly name for this AI.
+        personality:      Short personality description.
+        avatar:           Path to avatar image file.
+        created_at:       ISO timestamp of first creation.
+        total_messages:   Lifetime message count.
+        total_sessions:   Lifetime session count.
+        training_history: List of training run records.
+        tags:             User-defined tags for organization.
+        notes:            Freeform notes about this model.
     """
 
     def __init__(self, model_key: str) -> None:
         self.model_key = model_key
-        self.system_prompt: str = "You are a helpful AI assistant."
+        self.system_prompt: str = self._default_prompt()
         self.history: list[dict[str, str]] = []
         self.config: dict[str, Any] = {}
         self.last_used: float = 0.0
-        self.profile_id: str = ""
+
+        # Active session file path — persisted so reload resumes
+        # the same session instead of creating a duplicate.
+        self.session_path: str = ""
+
+        # Identity fields
+        self.display_name: str = ""
+        self.personality: str = ""
+        self.avatar: str = ""
+        self.created_at: str = datetime.now(
+            timezone.utc).isoformat(timespec="seconds")
+        self.total_messages: int = 0
+        self.total_sessions: int = 0
+        self.training_history: list[dict[str, Any]] = []
+        self.tags: list[str] = []
+        self.notes: str = ""
+
+    @staticmethod
+    def _default_prompt() -> str:
+        """Load default prompt from data/prompts/chat.md, fallback to builtin."""
+        for suffix in (".md", ".txt"):
+            path = _PROMPTS_DIR / f"chat{suffix}"
+            if path.exists():
+                try:
+                    return path.read_text(encoding="utf-8").strip()
+                except OSError:
+                    continue
+        return "You are a helpful AI assistant."
 
     # ----------------------------------------------------------------
     # Paths
@@ -86,7 +130,7 @@ class ModelContext:
         self._load_history()
 
     def _load_context(self) -> None:
-        """Read context.json into attributes."""
+        """Read context.json into attributes (supports old + new format)."""
         if not self.context_path.exists():
             return
         try:
@@ -96,7 +140,21 @@ class ModelContext:
                 "system_prompt", self.system_prompt)
             self.config = data.get("config", self.config)
             self.last_used = data.get("last_used", 0.0)
-            self.profile_id = data.get("profile_id", "")
+
+            # Identity fields — graceful defaults for old context.json
+            self.session_path = data.get("session_path", "")
+            self.display_name = data.get("display_name", "")
+            self.personality = data.get("personality", "")
+            self.avatar = data.get("avatar", "")
+            self.created_at = data.get(
+                "created_at", self.created_at)
+            self.total_messages = data.get("total_messages", 0)
+            self.total_sessions = data.get("total_sessions", 0)
+            self.training_history = data.get(
+                "training_history", [])
+            self.tags = data.get("tags", [])
+            self.notes = data.get("notes", "")
+
             logger.info(
                 "Loaded context for model: %s", self.model_key)
         except (json.JSONDecodeError, OSError) as exc:
@@ -142,17 +200,27 @@ class ModelContext:
         self._save_history()
 
     def _save_context(self) -> None:
-        """Write context.json from current attributes."""
+        """Write context.json from current attributes (includes identity)."""
         data = {
             "model_key": self.model_key,
             "system_prompt": self.system_prompt,
             "config": self.config,
             "last_used": self.last_used,
-            "profile_id": self.profile_id,
+            "session_path": self.session_path,
+            # Identity fields
+            "display_name": self.display_name,
+            "personality": self.personality,
+            "avatar": self.avatar,
+            "created_at": self.created_at,
+            "total_messages": self.total_messages,
+            "total_sessions": self.total_sessions,
+            "training_history": self.training_history,
+            "tags": self.tags,
+            "notes": self.notes,
         }
         try:
-            self.context_path.write_text(
-                json.dumps(data, indent=2), encoding="utf-8")
+            from enigma_engine.core.safe_save import atomic_write_json
+            atomic_write_json(self.context_path, data)
         except OSError as exc:
             logger.error(
                 "Failed to save context for %s: %s",
@@ -167,12 +235,65 @@ class ModelContext:
             "messages": self.history,
         }
         try:
-            self.history_path.write_text(
-                json.dumps(data, indent=2), encoding="utf-8")
+            from enigma_engine.core.safe_save import atomic_write_json
+            atomic_write_json(self.history_path, data)
         except OSError as exc:
             logger.error(
                 "Failed to save history for %s: %s",
                 self.model_key, exc)
+
+    # ----------------------------------------------------------------
+    # Identity helpers
+    # ----------------------------------------------------------------
+
+    def increment_messages(self, count: int = 1) -> None:
+        """Increment the lifetime message counter."""
+        self.total_messages += count
+
+    def increment_sessions(self) -> None:
+        """Increment the lifetime session counter."""
+        self.total_sessions += 1
+
+    def record_training_run(
+        self, *, mode: str, epochs: int, best_loss: float,
+    ) -> None:
+        """Append a training run record to training_history."""
+        self.training_history.append({
+            "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            "mode": mode,
+            "epochs": epochs,
+            "best_loss": round(best_loss, 4),
+        })
+
+    @property
+    def memory_fact_count(self) -> int:
+        """Return the number of facts in PersistentMemory (0 if unavailable)."""
+        try:
+            from enigma_engine.core.memory import PersistentMemory
+            mem = PersistentMemory()
+            return len(mem.facts)
+        except Exception:
+            return 0
+
+    def export_identity(self) -> dict[str, Any]:
+        """Export identity fields as a standalone dict for sharing.
+
+        Returns a dict with all identity fields plus model_key.
+        Can be written to a JSON file for sharing or backup.
+        """
+        return {
+            "model_key": self.model_key,
+            "display_name": self.display_name,
+            "personality": self.personality,
+            "avatar": self.avatar,
+            "created_at": self.created_at,
+            "total_messages": self.total_messages,
+            "total_sessions": self.total_sessions,
+            "training_history": list(self.training_history),
+            "tags": list(self.tags),
+            "notes": self.notes,
+            "memory_facts": self.memory_fact_count,
+        }
 
     # ----------------------------------------------------------------
     # Utility
@@ -227,7 +348,7 @@ def list_model_contexts() -> list[dict[str, Any]]:
 
     Returns:
         List of dicts with model_key, last_used, message_count,
-        system_prompt preview, and path.
+        system_prompt preview, identity fields, and path.
     """
     results: list[dict[str, Any]] = []
     if not _CONTEXTS_DIR.exists():
@@ -243,6 +364,11 @@ def list_model_contexts() -> list[dict[str, Any]]:
             "last_used": 0.0,
             "message_count": 0,
             "system_prompt": "",
+            # Identity fields
+            "display_name": "",
+            "tags": [],
+            "total_messages": 0,
+            "total_sessions": 0,
         }
         if context_file.exists():
             try:
@@ -251,6 +377,13 @@ def list_model_contexts() -> list[dict[str, Any]]:
                 entry["last_used"] = data.get("last_used", 0.0)
                 entry["system_prompt"] = data.get(
                     "system_prompt", "")[:80]
+                entry["display_name"] = data.get(
+                    "display_name", "")
+                entry["tags"] = data.get("tags", [])
+                entry["total_messages"] = data.get(
+                    "total_messages", 0)
+                entry["total_sessions"] = data.get(
+                    "total_sessions", 0)
             except (json.JSONDecodeError, OSError):
                 pass
         if history_file.exists():

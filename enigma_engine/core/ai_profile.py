@@ -9,7 +9,7 @@ Each AI model can have its own profile file (ai_profile.json) that defines:
 - Memory settings
 - Available commands
 
-This allows hot-swapping AI profiles like we do with bricks.
+This allows hot-swapping AI profiles like we do with mods.
 
 Usage:
     from enigma_engine.core.ai_profile import AIProfile, load_profile, save_profile
@@ -28,7 +28,7 @@ import json
 import logging
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +65,7 @@ class AIProfile:
     """
     Complete AI profile definition.
     
-    Similar to brick.json but for AI models. Defines everything
+    Similar to mod.json but for AI models. Defines everything
     needed to load and configure an AI personality.
     
     Attributes:
@@ -95,11 +95,11 @@ class AIProfile:
     id: str = "default"
     version: str = "1.0"
     description: str = "A helpful AI assistant"
-    
+
     # Model
     model_path: str = ""
     model_type: str = "auto"  # auto, gguf, pytorch, huggingface, ollama
-    
+
     # Personality
     system_prompt: str = "You are a helpful AI assistant."
     personality: Dict[str, Any] = field(default_factory=lambda: {
@@ -108,57 +108,60 @@ class AIProfile:
         "formality": "casual",
         "humor": "occasional",
     })
-    
+
     # Chat
     chat_template: Optional[str] = None  # None = auto-detect from model
-    
+
     # Generation
     generation: GenerationConfig = field(default_factory=GenerationConfig)
-    
+
     # Memory
     memory: MemoryConfig = field(default_factory=MemoryConfig)
-    
+
     # Commands
     commands: List[str] = field(default_factory=list)  # Empty = all allowed
     disabled_commands: List[str] = field(default_factory=list)
-    
+
     # Metadata
     author: str = ""
     tags: List[str] = field(default_factory=list)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert profile to dictionary for saving."""
-        data = asdict(self)
-        # Convert nested dataclasses
-        data['generation'] = asdict(self.generation)
-        data['memory'] = asdict(self.memory)
-        return data
-    
+        # asdict() already recursively converts nested dataclasses
+        return asdict(self)
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'AIProfile':
         """Create profile from dictionary."""
-        # Handle nested configs
+        # Work on a copy so we don't mutate the caller's dict
+        data = dict(data)
+        # Handle nested configs — filter unknown keys to prevent crashes
         if 'generation' in data and isinstance(data['generation'], dict):
-            data['generation'] = GenerationConfig(**data['generation'])
+            gen_fields = {f.name for f in GenerationConfig.__dataclass_fields__.values()}
+            gen_data = {k: v for k, v in data['generation'].items() if k in gen_fields}
+            data['generation'] = GenerationConfig(**gen_data)
         if 'memory' in data and isinstance(data['memory'], dict):
-            data['memory'] = MemoryConfig(**data['memory'])
-        
+            mem_fields = {f.name for f in MemoryConfig.__dataclass_fields__.values()}
+            mem_data = {k: v for k, v in data['memory'].items() if k in mem_fields}
+            data['memory'] = MemoryConfig(**mem_data)
+
         # Filter out unknown fields
         valid_fields = {f.name for f in cls.__dataclass_fields__.values()}
         filtered_data = {k: v for k, v in data.items() if k in valid_fields}
-        
+
         return cls(**filtered_data)
-    
+
     def can_use_command(self, command: str) -> bool:
         """Check if this AI can use a specific command."""
         # Check disabled first
         if command in self.disabled_commands:
             return False
-        
+
         # If commands list is empty, allow all
         if not self.commands:
             return True
-        
+
         # Check if in allowed list
         return command in self.commands
 
@@ -181,22 +184,22 @@ def load_profile(path: str) -> AIProfile:
         profile = load_profile("profiles/coding_assistant.json")
     """
     path = Path(path)
-    
+
     if not path.exists():
         raise FileNotFoundError(f"Profile not found: {path}")
-    
+
     try:
         with open(path, 'r', encoding='utf-8') as f:
             data = json.load(f)
-        
+
         profile = AIProfile.from_dict(data)
         logger.info(f"Loaded AI profile: {profile.name} ({profile.id})")
         return profile
-        
+
     except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON in profile: {e}")
+        raise ValueError(f"Invalid JSON in profile: {e}") from e
     except Exception as e:
-        raise ValueError(f"Failed to load profile: {e}")
+        raise ValueError(f"Failed to load profile: {e}") from e
 
 
 def save_profile(profile: AIProfile, path: str) -> Path:
@@ -215,12 +218,12 @@ def save_profile(profile: AIProfile, path: str) -> Path:
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     data = profile.to_dict()
-    
-    with open(path, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-    
+
+    from enigma_engine.core.safe_save import atomic_write_json
+    atomic_write_json(path, data)
+
     logger.info(f"Saved AI profile to: {path}")
     return path
 
@@ -241,24 +244,24 @@ def list_profiles(profiles_dir: str = "profiles") -> List[Dict[str, str]]:
             print(f"{p['name']}: {p['description']}")
     """
     profiles_path = Path(profiles_dir)
-    
+
     if not profiles_path.exists():
         return []
-    
+
     results = []
-    
+
     for profile_file in profiles_path.glob("*.json"):
         try:
             with open(profile_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-            
+
             profile_id = data.get("id", profile_file.stem)
-            
+
             # Get conversation_dir from memory config, default to profiles/<id>/conversations
             memory_config = data.get("memory", {})
             default_conv_dir = f"profiles/{profile_id}/conversations"
             conversation_dir = memory_config.get("conversation_dir", default_conv_dir)
-            
+
             results.append({
                 "name": data.get("name", profile_file.stem),
                 "id": profile_id,
@@ -270,7 +273,7 @@ def list_profiles(profiles_dir: str = "profiles") -> List[Dict[str, str]]:
             })
         except Exception as e:
             logger.debug(f"Could not read profile {profile_file}: {e}")
-    
+
     return results
 
 
@@ -282,7 +285,7 @@ class AIProfileManager:
     """
     Manager for AI profiles with hot-swap support.
     
-    Like the brick system, allows loading/unloading AI profiles
+    Like the mod system, allows loading/unloading AI profiles
     at runtime without restarting the application.
     
     Example:
@@ -296,25 +299,25 @@ class AIProfileManager:
         for p in manager.list_profiles():
             print(p['name'])
     """
-    
+
     def __init__(self, profiles_dir: str = "profiles"):
         self.profiles_dir = Path(profiles_dir)
         self.profiles_dir.mkdir(parents=True, exist_ok=True)
-        
+
         self._loaded_profiles: Dict[str, AIProfile] = {}
         self._active_profile: Optional[str] = None
-        
+
         # Callbacks for hot-swap
-        self.on_profile_loaded: Optional[callable] = None
-        self.on_profile_switched: Optional[callable] = None
-    
+        self.on_profile_loaded: Optional[Callable] = None
+        self.on_profile_switched: Optional[Callable] = None
+
     @property
     def active_profile(self) -> Optional[AIProfile]:
         """Get the currently active profile."""
         if self._active_profile and self._active_profile in self._loaded_profiles:
             return self._loaded_profiles[self._active_profile]
         return None
-    
+
     def load_profile(self, path_or_id: str) -> AIProfile:
         """
         Load a profile from file or by ID.
@@ -334,17 +337,17 @@ class AIProfileManager:
             if not profile_path.exists():
                 raise FileNotFoundError(f"Profile not found: {path_or_id}")
             profile = load_profile(str(profile_path))
-        
+
         # Store in loaded profiles
         self._loaded_profiles[profile.id] = profile
-        
+
         # Callback
         if self.on_profile_loaded:
             self.on_profile_loaded(profile)
-        
+
         logger.info(f"Loaded profile: {profile.name} ({profile.id})")
         return profile
-    
+
     def switch_profile(self, profile_id: str) -> AIProfile:
         """
         Switch to a different profile.
@@ -358,36 +361,36 @@ class AIProfileManager:
         # Load if not already loaded
         if profile_id not in self._loaded_profiles:
             self.load_profile(profile_id)
-        
+
         old_profile = self._active_profile
         self._active_profile = profile_id
         profile = self._loaded_profiles[profile_id]
-        
+
         # Callback
         if self.on_profile_switched:
             self.on_profile_switched(old_profile, profile)
-        
+
         logger.info(f"Switched from {old_profile} to {profile.name}")
         return profile
-    
+
     def unload_profile(self, profile_id: str) -> None:
         """Unload a profile from memory."""
         if profile_id in self._loaded_profiles:
             del self._loaded_profiles[profile_id]
-            
+
             if self._active_profile == profile_id:
                 self._active_profile = None
-            
+
             logger.info(f"Unloaded profile: {profile_id}")
-    
+
     def list_profiles(self) -> List[Dict[str, Any]]:
         """List all available profiles."""
         return list_profiles(str(self.profiles_dir))
-    
+
     def list_loaded(self) -> List[str]:
         """List IDs of currently loaded profiles."""
         return list(self._loaded_profiles.keys())
-    
+
     def create_profile(
         self,
         name: str,
@@ -409,7 +412,7 @@ class AIProfileManager:
         """
         # Generate ID from name
         profile_id = name.lower().replace(" ", "_").replace("-", "_")
-        
+
         profile = AIProfile(
             name=name,
             id=profile_id,
@@ -417,11 +420,11 @@ class AIProfileManager:
             system_prompt=system_prompt,
             **kwargs
         )
-        
+
         # Save to profiles dir
         save_path = self.profiles_dir / f"{profile_id}.json"
         save_profile(profile, str(save_path))
-        
+
         return profile
 
 
@@ -444,7 +447,7 @@ Be concise, helpful, and friendly.""",
         },
         tags=["general", "assistant"],
     ),
-    
+
     "coding_helper": AIProfile(
         name="Code Assistant",
         id="coding_helper",
@@ -464,7 +467,7 @@ Be precise and technical. Show code examples.""",
         ),
         tags=["coding", "developer", "technical"],
     ),
-    
+
     "creative_writer": AIProfile(
         name="Creative Writer",
         id="creative_writer",
@@ -484,7 +487,7 @@ poems, scripts, and creative content. Be imaginative and expressive.""",
         ),
         tags=["creative", "writing", "stories"],
     ),
-    
+
     "researcher": AIProfile(
         name="Research Assistant",
         id="researcher",
@@ -518,10 +521,10 @@ def create_default_profiles(profiles_dir: str = "profiles") -> None:
     """
     profiles_path = Path(profiles_dir)
     profiles_path.mkdir(parents=True, exist_ok=True)
-    
+
     for profile_id, profile in DEFAULT_PROFILES.items():
         profile_file = profiles_path / f"{profile_id}.json"
-        
+
         # Don't overwrite existing profiles
         if not profile_file.exists():
             save_profile(profile, str(profile_file))
@@ -544,12 +547,12 @@ def get_profile_for_model(model_path: str, profiles_dir: str = "profiles") -> Op
         Matching profile or None
     """
     model_path = Path(model_path).resolve()
-    
+
     for profile_info in list_profiles(profiles_dir):
         profile_model = Path(profile_info.get("model_path", ""))
         if profile_model.resolve() == model_path:
             return load_profile(profile_info["path"])
-    
+
     return None
 
 
@@ -570,9 +573,9 @@ def apply_profile_to_engine(profile: AIProfile, engine) -> None:
         engine.top_k = profile.generation.top_k
     if hasattr(engine, 'max_tokens'):
         engine.max_tokens = profile.generation.max_tokens
-    
+
     # Apply system prompt
     if hasattr(engine, 'system_prompt'):
         engine.system_prompt = profile.system_prompt
-    
+
     logger.info(f"Applied profile '{profile.name}' to engine")

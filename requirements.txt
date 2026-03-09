@@ -30,13 +30,16 @@ huggingface-hub>=0.20.0
 # === SYSTEM MONITORING ===
 psutil>=5.9.0             # Hardware detection, resource monitoring
 
-# === WEB UI (for --serve) ===
+# === API SERVER (for --serve) ===
 fastapi>=0.100.0
 uvicorn>=0.20.0
-jinja2>=3.1.0
 python-multipart>=0.0.5
 
 # === OPTIONAL ===
+
+# Document parsing (for PDF and Word files in DOCS/training)
+# pymupdf>=1.24.0          # PDF text extraction
+# python-docx>=1.1.0       # Word .docx text extraction
 
 # Voice input (speech-to-text for GUI mic button)
 # SpeechRecognition>=3.10.0

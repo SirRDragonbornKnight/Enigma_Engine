@@ -1,0 +1,471 @@
+"""
+Enigma Engine - Forge Queue & Dataset Tools
+===============================================
+
+GUI callbacks for training queue (TS-B), overnight plan (TS-C),
+and curated dataset review (DA-C).
+
+Split from gui_forge_tools.py to keep files under 800 lines.
+"""
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+from tkinter import filedialog
+
+from enigma_engine.gui.scanners import DATA_DIR, MODELS_DIR
+
+logger = logging.getLogger(__name__)
+
+# Persistent paths
+_QUEUE_PATH = DATA_DIR / "training_queue.json"
+_DATASET_PATH = DATA_DIR / "curated_dataset.jsonl"
+
+
+class ForgeQueueMixin:
+    """Queue, overnight plan, and curated dataset GUI callbacks.
+
+    Expects the host class to have:
+    - _log, _update_forge_progress, _reset_forge_progress
+    - status_bar, route_assignments
+    - training_mode_var, training_stage_var, train_data_var
+    - epochs_entry, lr_entry, forge_batch_entry
+    - _read_forge_train_params, _start_training_by_mode
+    """
+
+    # ================================================================
+    # Lazy singletons — avoids importing core at module level
+    # ================================================================
+
+    def _get_training_queue(self):
+        """Return the shared TrainingQueue singleton (lazy init)."""
+        queue = getattr(self, "_training_queue", None)
+        if queue is None:
+            from enigma_engine.core.training_queue import TrainingQueue
+            queue = TrainingQueue(save_path=_QUEUE_PATH)
+            queue.load_state()
+            queue.on_progress = self._on_queue_progress
+            queue.on_job_complete = self._on_queue_job_complete
+            queue.on_job_failed = self._on_queue_job_failed
+            queue.on_queue_complete = self._on_queue_complete
+            queue.executor = self._execute_queue_job
+            self._training_queue = queue
+        return queue
+
+    def _get_curated_dataset(self):
+        """Return the shared CuratedDataset singleton (lazy init)."""
+        ds = getattr(self, "_curated_dataset", None)
+        if ds is None:
+            from enigma_engine.core.curated_dataset import CuratedDataset
+            ds = CuratedDataset(_DATASET_PATH)
+            self._curated_dataset = ds
+        return ds
+
+    # ================================================================
+    # TS-B: Training Queue
+    # ================================================================
+
+    def _add_to_training_queue(self):
+        """Add the current FORGE settings as a job to the queue."""
+        from enigma_engine.core.training_queue import TrainingJob
+
+        student_path = self.route_assignments.get("student", "")
+        if not student_path or not Path(student_path).exists():
+            self._log("[!] No STUDENT model assigned — "
+                      "cannot add to queue.")
+            return
+
+        # Read current UI settings
+        mode_var = getattr(self, "training_mode_var", None)
+        mode = mode_var.get() if mode_var else "Self Study"
+        # Translate display name → internal key
+        mode_key_map = getattr(self, "_MODE_DISPLAY_TO_KEY", {})
+        mode = mode_key_map.get(mode, mode)
+
+        stage_var = getattr(self, "training_stage_var", None)
+        stage = stage_var.get() if stage_var else "basics"
+
+        data_path = self.train_data_var.get()
+
+        try:
+            epochs = int(self.epochs_entry.get())
+            if epochs < 1:
+                epochs = 10
+        except (ValueError, AttributeError):
+            epochs = 10
+
+        try:
+            lr = float(self.lr_entry.get())
+        except (ValueError, AttributeError):
+            lr = 1e-4
+
+        params = self._read_forge_train_params()
+
+        job = TrainingJob(
+            mode=mode,
+            model_path=str(student_path),
+            data_path=data_path if data_path else "",
+            stage=stage,
+            epochs=epochs,
+            learning_rate=lr,
+            batch_size=params.get("batch_size", 4),
+            extra_config={
+                "rolling_best_k": params.get("rolling_best_k", 0),
+                "use_gradient_checkpointing": params.get(
+                    "use_gradient_checkpointing", False),
+                "max_grad_accumulation": params.get(
+                    "max_grad_accumulation", 1),
+            },
+        )
+
+        queue = self._get_training_queue()
+        queue.add_job(job)
+
+        self._log(f"[Queue] Added job: {mode} "
+                  f"({epochs} epochs, stage={stage})")
+        self._log(f"  Queue now has {queue.pending_count} "
+                  f"pending job(s)")
+        self.status_bar.set_left(
+            f"Job added to queue ({queue.pending_count} pending)")
+
+    def _show_training_queue(self):
+        """Display the current queue state in the forge log."""
+        queue = self._get_training_queue()
+        jobs = queue.jobs
+
+        if not jobs:
+            self._log("[Queue] Queue is empty. "
+                      "Use ADD TO QUEUE to enqueue jobs.")
+            return
+
+        self._log("\n--- TRAINING QUEUE ---")
+        self._log(queue.summary())
+        self._log("")
+
+    def _run_training_queue(self):
+        """Start (or resume) the training queue."""
+        queue = self._get_training_queue()
+
+        if queue.is_running:
+            # Already running — offer pause
+            queue.pause()
+            self._log("[Queue] Paused. Click RUN to resume.")
+            self.after(0, lambda: getattr(
+                self, "_forge_run_queue_btn", None) and
+                self._forge_run_queue_btn.configure(text="RUN"))
+            return
+
+        if queue.is_paused:
+            queue.resume()
+            self._log("[Queue] Resumed.")
+            self.after(0, lambda: getattr(
+                self, "_forge_run_queue_btn", None) and
+                self._forge_run_queue_btn.configure(text="PAUSE"))
+            return
+
+        if queue.pending_count == 0:
+            self._log("[Queue] No pending jobs to run.")
+            return
+
+        self._log("[Queue] Starting queue execution...")
+        self.after(0, lambda: getattr(
+            self, "_forge_run_queue_btn", None) and
+            self._forge_run_queue_btn.configure(text="PAUSE"))
+        queue.start()
+
+    def _execute_queue_job(self, job):
+        """Execute a single training job (called by the queue thread).
+
+        This bridges the TrainingQueue executor to the existing
+        training infrastructure. Runs synchronously — the queue
+        thread blocks until this returns.
+
+        Returns the best loss achieved.
+        """
+        from enigma_engine.core.training import Trainer, TrainingConfig
+
+        # Load student model
+        self._log(f"\n[Queue] Running job #{job.job_id}: "
+                  f"{job.mode} ({job.epochs} epochs)")
+
+        student_path = job.model_path
+        if not student_path or not Path(student_path).exists():
+            raise FileNotFoundError(
+                f"Student model not found: {student_path}")
+
+        # Load/parse training data
+        data_text = ""
+        if job.data_path and Path(job.data_path).exists():
+            data_text = Path(job.data_path).read_text(
+                encoding="utf-8")
+
+        # Build config
+        config = TrainingConfig(
+            epochs=job.epochs,
+            learning_rate=job.learning_rate,
+            batch_size=job.batch_size,
+            rolling_best_k=job.extra_config.get(
+                "rolling_best_k", 0),
+            use_gradient_checkpointing=job.extra_config.get(
+                "use_gradient_checkpointing", False),
+            max_grad_accumulation=job.extra_config.get(
+                "max_grad_accumulation", 1),
+        )
+
+        # Load model + tokenizer
+        from enigma_engine.core.inference import load_engine
+        from enigma_engine.core.tokenizer import load_tokenizer
+
+        engine = load_engine(student_path)
+        model = engine.model if hasattr(engine, "model") else engine
+        tokenizer = load_tokenizer(student_path)
+
+        # Parse data
+        trainer = Trainer(config)
+        sequences = trainer._parse_training_data(data_text, tokenizer)
+
+        if not sequences:
+            raise ValueError("No valid training data parsed")
+
+        # Progress callback for the queue
+        def on_epoch(epoch, loss, total_epochs):
+            pct = int((epoch / total_epochs) * 100)
+            job.progress = pct
+            job.message = f"Epoch {epoch}/{total_epochs} loss={loss:.4f}"
+            if self._get_training_queue().on_progress:
+                self._get_training_queue().on_progress(job, pct, job.message)
+
+        # Train
+        self._log(f"  Training {len(sequences)} sequences...")
+        best_loss = trainer.train(
+            model, sequences, tokenizer,
+            checkpoint_dir=str(MODELS_DIR / "checkpoints"),
+            progress_callback=on_epoch,
+        )
+
+        # Save model
+        from enigma_engine.core.safe_save import atomic_torch_save
+        state = {
+            "model_state_dict": model.state_dict(),
+            "config": model.config.__dict__
+            if hasattr(model.config, "__dict__") else {},
+        }
+        atomic_torch_save(state, student_path)
+        self._log(f"  Saved model (loss={best_loss:.4f})")
+
+        return best_loss
+
+    # Queue callbacks (called from background thread)
+
+    def _on_queue_progress(self, job, pct, msg):
+        """Update forge progress bar from queue."""
+        self._update_forge_progress(pct, msg)
+
+    def _on_queue_job_complete(self, job):
+        """Handle a queue job completing."""
+        self._log(f"[Queue] Job #{job.job_id} ({job.mode}) "
+                  f"completed — loss={job.best_loss:.4f}")
+        self._reset_forge_progress()
+
+    def _on_queue_job_failed(self, job, error):
+        """Handle a queue job failing."""
+        self._log(f"[Queue] Job #{job.job_id} ({job.mode}) "
+                  f"FAILED: {error}")
+        self._reset_forge_progress()
+
+    def _on_queue_complete(self):
+        """Handle the queue finishing all jobs."""
+        queue = self._get_training_queue()
+        self._log("\n--- QUEUE COMPLETE ---")
+        self._log(queue.summary())
+        self.after(0, lambda: self.status_bar.set_left(
+            "Training queue finished"))
+        self.after(0, lambda: getattr(
+            self, "_forge_run_queue_btn", None) and
+            self._forge_run_queue_btn.configure(text="RUN"))
+        self.after(0, self._refresh_models)
+
+    # ================================================================
+    # TS-C: Overnight Plan (save/load/resume)
+    # ================================================================
+
+    def _save_overnight_plan(self):
+        """Save the current queue contents as an overnight plan."""
+        from enigma_engine.core.training_queue import OvernightPlan
+
+        queue = self._get_training_queue()
+        jobs = queue.jobs
+
+        if not jobs:
+            self._log("[Plan] Queue is empty — nothing to save.\n"
+                      "  Add jobs with ADD TO QUEUE first.")
+            return
+
+        # Build plan from queue jobs
+        plan = OvernightPlan(
+            name="Overnight Training",
+            auto_checkpoint=True,
+            auto_evaluate=False,
+        )
+        for job in jobs:
+            if job.status in ("pending", "running"):
+                plan.add_job_config(
+                    mode=job.mode,
+                    model_path=job.model_path,
+                    data_path=job.data_path,
+                    stage=job.stage,
+                    epochs=job.epochs,
+                    learning_rate=job.learning_rate,
+                    batch_size=job.batch_size,
+                    **job.extra_config,
+                )
+
+        if not plan.jobs:
+            self._log("[Plan] No pending jobs to save.")
+            return
+
+        # Save via file dialog
+        plan_dir = DATA_DIR
+        plan_dir.mkdir(parents=True, exist_ok=True)
+        dest = filedialog.asksaveasfilename(
+            title="Save Overnight Plan",
+            initialdir=str(plan_dir),
+            defaultextension=".json",
+            filetypes=[
+                ("JSON plan files", "*.json"),
+                ("All files", "*.*")],
+            initialfile="overnight_plan.json")
+        if not dest:
+            return
+
+        plan.save(dest)
+        self._log(f"[Plan] Saved: {Path(dest).name}")
+        self._log(f"  {plan.total_jobs} job(s) in plan")
+        self.status_bar.set_left(
+            f"Overnight plan saved ({plan.total_jobs} jobs)")
+
+    def _load_overnight_plan(self):
+        """Load an overnight plan and populate the queue."""
+        from enigma_engine.core.training_queue import OvernightPlan
+
+        plan_dir = DATA_DIR
+        src = filedialog.askopenfilename(
+            title="Load Overnight Plan",
+            initialdir=str(plan_dir),
+            filetypes=[
+                ("JSON plan files", "*.json"),
+                ("All files", "*.*")])
+        if not src:
+            return
+
+        try:
+            plan = OvernightPlan.load(src)
+        except Exception as exc:
+            self._log(f"[Plan] Failed to load: {exc}")
+            return
+
+        if plan.is_complete:
+            self._log("[Plan] This plan is already complete.")
+            self._log(plan.summary())
+            return
+
+        # Convert remaining plan jobs → queue jobs and add
+        queue = self._get_training_queue()
+        new_jobs = plan.to_queue_jobs()
+        for job in new_jobs:
+            queue.add_job(job)
+
+        self._log(f"\n[Plan] Loaded: {plan.name}")
+        self._log(f"  Added {len(new_jobs)} job(s) to queue")
+        self._log(f"  Queue now has {queue.pending_count} "
+                  f"pending job(s)")
+        self._log(plan.summary())
+        self.status_bar.set_left(
+            f"Loaded plan: {len(new_jobs)} jobs added to queue")
+
+    # ================================================================
+    # DA-C: Curated Dataset Review
+    # ================================================================
+
+    def _review_curated_dataset(self):
+        """Display curated dataset summary and pending entries."""
+        ds = self._get_curated_dataset()
+
+        if ds.count == 0:
+            self._log("[Dataset] Curated dataset is empty.\n"
+                      "  Data from training, generation, and "
+                      "web learn will appear here.\n"
+                      "  You can review and approve entries "
+                      "before training.")
+            return
+
+        self._log("\n--- CURATED DATASET ---")
+        self._log(ds.summary())
+
+        # Show pending entries for review
+        pending = ds.get_pending()
+        if not pending:
+            self._log("\nNo pending entries to review.")
+            return
+
+        self._log(f"\n--- PENDING ENTRIES ({len(pending)}) ---")
+        for i, entry in enumerate(pending):
+            idx = ds.entries.index(entry)
+            # Show first 120 chars of text
+            preview = entry.text[:120].replace("\n", " ")
+            if len(entry.text) > 120:
+                preview += "..."
+            source_tag = f" [{entry.source}]" if entry.source else ""
+            stage_tag = f" ({entry.stage})" if entry.stage else ""
+            self._log(f"  [{idx}]{source_tag}{stage_tag} {preview}")
+
+            # Only show first 20 pending entries
+            if i >= 19:
+                remaining = len(pending) - 20
+                if remaining > 0:
+                    self._log(f"  ... and {remaining} more pending")
+                break
+
+        self._log("\nUse APPROVE ALL to approve all pending,")
+        self._log("or reject individual entries on the DOCS page.")
+
+    def _approve_all_dataset(self):
+        """Approve all pending entries in the curated dataset."""
+        ds = self._get_curated_dataset()
+
+        pending = ds.pending_count
+        if pending == 0:
+            self._log("[Dataset] No pending entries to approve.")
+            return
+
+        count = ds.approve_all_pending()
+        ds.save()
+
+        self._log(f"[Dataset] Approved {count} entries.")
+        self._log(f"  {ds.approved_count} total approved, "
+                  f"ready for training.")
+        self.status_bar.set_left(
+            f"Approved {count} dataset entries")
+
+    # ================================================================
+    # Dataset integration helpers
+    # ================================================================
+
+    def _add_to_curated_dataset(
+        self,
+        text: str,
+        source: str = "",
+        stage: str = "",
+    ) -> None:
+        """Add a training text to the curated dataset.
+
+        Called from data generation, guided training, web learn,
+        and chat background training to accumulate training data.
+        """
+        if not text or not text.strip():
+            return
+        ds = self._get_curated_dataset()
+        ds.add(text, source=source, stage=stage)
+        ds.save()
+        logger.debug("Added to curated dataset: %s (%d chars)",
+                     source, len(text))

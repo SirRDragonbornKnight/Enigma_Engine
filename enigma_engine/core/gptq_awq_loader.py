@@ -31,35 +31,57 @@ from enum import Enum
 
 logger = logging.getLogger(__name__)
 
-# Check for required libraries
+# Deferred imports — loaded on first use to save ~90 MB at startup
+_imports_checked = False
 HAVE_TORCH = False
 HAVE_AUTO_GPTQ = False
 HAVE_AWQ = False
 HAVE_TRANSFORMERS = False
+torch: Any = None
+AutoTokenizer: Any = None
+AutoConfig: Any = None
+AutoGPTQForCausalLM: Any = None
+BaseQuantizeConfig: Any = None
+AutoAWQForCausalLM: Any = None
 
-try:
-    import torch
-    HAVE_TORCH = True
-except ImportError:
-    torch = None  # type: ignore
 
-try:
-    from transformers import AutoTokenizer, AutoConfig
-    HAVE_TRANSFORMERS = True
-except ImportError:
-    pass  # Intentionally silent
-
-try:
-    from auto_gptq import AutoGPTQForCausalLM, BaseQuantizeConfig
-    HAVE_AUTO_GPTQ = True
-except ImportError:
-    pass  # Intentionally silent
-
-try:
-    from awq import AutoAWQForCausalLM
-    HAVE_AWQ = True
-except ImportError:
-    pass  # Intentionally silent
+def _ensure_imports() -> None:
+    """Load torch, transformers, auto_gptq, awq on first call."""
+    global _imports_checked, HAVE_TORCH, HAVE_TRANSFORMERS, HAVE_AUTO_GPTQ
+    global HAVE_AWQ, torch, AutoTokenizer, AutoConfig
+    global AutoGPTQForCausalLM, BaseQuantizeConfig, AutoAWQForCausalLM
+    if _imports_checked:
+        return
+    _imports_checked = True
+    try:
+        import torch as _torch
+        torch = _torch
+        HAVE_TORCH = True
+    except ImportError:
+        pass
+    try:
+        from transformers import AutoTokenizer as _AT, AutoConfig as _AC
+        AutoTokenizer = _AT
+        AutoConfig = _AC
+        HAVE_TRANSFORMERS = True
+    except ImportError:
+        pass
+    try:
+        from auto_gptq import (
+            AutoGPTQForCausalLM as _GPTQ,
+            BaseQuantizeConfig as _BQC,
+        )
+        AutoGPTQForCausalLM = _GPTQ
+        BaseQuantizeConfig = _BQC
+        HAVE_AUTO_GPTQ = True
+    except ImportError:
+        pass
+    try:
+        from awq import AutoAWQForCausalLM as _AWQ
+        AutoAWQForCausalLM = _AWQ
+        HAVE_AWQ = True
+    except ImportError:
+        pass
 
 
 class QuantizationType(Enum):
@@ -77,7 +99,7 @@ class QuantConfig:
     desc_act: bool = True  # Descending activation order
     sym: bool = False  # Symmetric quantization
     true_sequential: bool = True  # True sequential quantization
-    
+
     # AWQ specific
     version: str = "gemm"  # "gemm" or "gemv"
     zero_point: bool = True  # Use zero point
@@ -101,7 +123,7 @@ class ModelMetadata:
 
 class BaseQuantizedModel:
     """Base class for quantized model loading."""
-    
+
     def __init__(
         self,
         model_path: str,
@@ -122,35 +144,36 @@ class BaseQuantizedModel:
             max_memory: GPU memory limits per device
             low_cpu_mem_usage: Reduce CPU memory during loading
         """
+        _ensure_imports()
         if not HAVE_TORCH:
             raise RuntimeError("PyTorch required. Install with: pip install torch")
         if not HAVE_TRANSFORMERS:
             raise RuntimeError("Transformers required. Install with: pip install transformers")
-        
+
         self.model_path = model_path
         self.device = device
         self.trust_remote_code = trust_remote_code
         self.use_safetensors = use_safetensors
         self.max_memory = max_memory
         self.low_cpu_mem_usage = low_cpu_mem_usage
-        
+
         self.model = None
         self.tokenizer = None
         self.config = None
         self.metadata: Optional[ModelMetadata] = None
         self._loaded = False
-    
+
     def _detect_device(self) -> str:
         """Auto-detect best available device."""
         if self.device != "auto":
             return self.device
-        
+
         if HAVE_TORCH and torch.cuda.is_available():
             return "cuda"
         elif HAVE_TORCH and hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
             return "mps"
         return "cpu"
-    
+
     def _load_tokenizer(self) -> None:
         """Load tokenizer."""
         self.tokenizer = AutoTokenizer.from_pretrained(
@@ -158,15 +181,15 @@ class BaseQuantizedModel:
             trust_remote_code=self.trust_remote_code,
             use_fast=True,
         )
-        
+
         # Ensure pad token
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
-    
+
     def _extract_metadata(self) -> ModelMetadata:
         """Extract model metadata from config."""
         metadata = ModelMetadata(name=str(self.model_path))
-        
+
         if self.config:
             metadata.vocab_size = getattr(self.config, 'vocab_size', 0)
             metadata.hidden_size = getattr(self.config, 'hidden_size', 0)
@@ -174,13 +197,13 @@ class BaseQuantizedModel:
             metadata.num_attention_heads = getattr(self.config, 'num_attention_heads', 0)
             metadata.context_length = getattr(self.config, 'max_position_embeddings', 2048)
             metadata.model_type = getattr(self.config, 'model_type', '')
-        
+
         return metadata
-    
+
     def load(self) -> bool:
         """Load the model. Override in subclasses."""
         raise NotImplementedError
-    
+
     def unload(self) -> None:
         """Unload model to free memory."""
         if self.model is not None:
@@ -189,13 +212,13 @@ class BaseQuantizedModel:
         if self.tokenizer is not None:
             del self.tokenizer
             self.tokenizer = None
-        
+
         if HAVE_TORCH and torch.cuda.is_available():
             torch.cuda.empty_cache()
-        
+
         self._loaded = False
         logger.info(f"Unloaded model: {self.model_path}")
-    
+
     def generate(
         self,
         prompt: str,
@@ -225,7 +248,7 @@ class BaseQuantizedModel:
         """
         if not self._loaded or self.model is None:
             raise RuntimeError("Model not loaded. Call load() first.")
-        
+
         # Tokenize input
         inputs = self.tokenizer(
             prompt,
@@ -233,11 +256,11 @@ class BaseQuantizedModel:
             padding=True,
             truncation=True,
         )
-        
+
         # Move to device
         device = self._detect_device()
         inputs = {k: v.to(device) for k, v in inputs.items()}
-        
+
         # Generate
         with torch.no_grad():
             outputs = self.model.generate(
@@ -252,14 +275,14 @@ class BaseQuantizedModel:
                 eos_token_id=self.tokenizer.eos_token_id,
                 **kwargs
             )
-        
+
         # Decode, removing input prompt
         input_length = inputs['input_ids'].shape[1]
         generated = outputs[0][input_length:]
         result = self.tokenizer.decode(generated, skip_special_tokens=True)
-        
+
         return result
-    
+
     def generate_streaming(
         self,
         prompt: str,
@@ -274,22 +297,22 @@ class BaseQuantizedModel:
         """
         if not self._loaded or self.model is None:
             raise RuntimeError("Model not loaded. Call load() first.")
-        
+
         from transformers import TextIteratorStreamer
         from threading import Thread
-        
+
         # Tokenize
         inputs = self.tokenizer(prompt, return_tensors="pt")
         device = self._detect_device()
         inputs = {k: v.to(device) for k, v in inputs.items()}
-        
+
         # Setup streamer
         streamer = TextIteratorStreamer(
             self.tokenizer,
             skip_prompt=True,
             skip_special_tokens=True
         )
-        
+
         # Generation kwargs
         gen_kwargs = {
             **inputs,
@@ -299,17 +322,17 @@ class BaseQuantizedModel:
             "do_sample": temperature > 0,
             **kwargs
         }
-        
+
         # Run generation in thread
         thread = Thread(target=self.model.generate, kwargs=gen_kwargs)
         thread.start()
-        
+
         # Yield tokens
         for text in streamer:
             yield text
-        
+
         thread.join()
-    
+
     def chat(
         self,
         messages: List[Dict[str, str]],
@@ -335,7 +358,7 @@ class BaseQuantizedModel:
             full_messages = messages.copy()
             if system_prompt:
                 full_messages.insert(0, {"role": "system", "content": system_prompt})
-            
+
             prompt = self.tokenizer.apply_chat_template(
                 full_messages,
                 tokenize=False,
@@ -351,9 +374,9 @@ class BaseQuantizedModel:
                 content = msg.get("content", "")
                 prompt += f"{role}: {content}\n"
             prompt += "Assistant:"
-        
+
         return self.generate(prompt, max_new_tokens=max_new_tokens, **kwargs)
-    
+
     def get_model_info(self) -> Dict[str, Any]:
         """Get model information."""
         info = {
@@ -361,7 +384,7 @@ class BaseQuantizedModel:
             "loaded": self._loaded,
             "device": self._detect_device(),
         }
-        
+
         if self.metadata:
             info.update({
                 "name": self.metadata.name,
@@ -374,8 +397,11 @@ class BaseQuantizedModel:
                 "num_layers": self.metadata.num_layers,
                 "context_length": self.metadata.context_length,
             })
-        
+
         return info
+
+    # Alias for ModelBackend Protocol conformance
+    get_info = get_model_info
 
 
 class GPTQModel(BaseQuantizedModel):
@@ -388,7 +414,7 @@ class GPTQModel(BaseQuantizedModel):
     
     Requires: pip install auto-gptq
     """
-    
+
     def __init__(
         self,
         model_path: str,
@@ -412,65 +438,66 @@ class GPTQModel(BaseQuantizedModel):
             disable_exllama: Disable ExLlama kernels
             disable_exllamav2: Disable ExLlamaV2 kernels
         """
+        _ensure_imports()
         if not HAVE_AUTO_GPTQ:
             raise RuntimeError(
                 "GPTQ loading requires auto-gptq. "
                 "Install with: pip install auto-gptq"
             )
-        
+
         super().__init__(model_path, device, **kwargs)
-        
+
         self.use_triton = use_triton
         self.inject_fused_attention = inject_fused_attention
         self.inject_fused_mlp = inject_fused_mlp
         self.disable_exllama = disable_exllama
         self.disable_exllamav2 = disable_exllamav2
         self.quant_config: Optional[BaseQuantizeConfig] = None
-    
+
     def _detect_gptq_config(self) -> Optional[Dict[str, Any]]:
         """Detect GPTQ configuration from model files."""
         model_dir = Path(self.model_path)
-        
+
         # Check for quantize_config.json
         config_path = model_dir / "quantize_config.json"
         if config_path.exists():
-            with open(config_path) as f:
+            with open(config_path, encoding='utf-8') as f:
                 return json.load(f)
-        
+
         # Check for config.json with quantization_config
         config_path = model_dir / "config.json"
         if config_path.exists():
-            with open(config_path) as f:
+            with open(config_path, encoding='utf-8') as f:
                 config = json.load(f)
                 if "quantization_config" in config:
                     return config["quantization_config"]
-        
+
         return None
-    
+
     def load(self) -> bool:
         """Load GPTQ model."""
         try:
             logger.info(f"Loading GPTQ model from: {self.model_path}")
-            
+
             # Load config
             self.config = AutoConfig.from_pretrained(
                 self.model_path,
                 trust_remote_code=self.trust_remote_code,
             )
-            
+
             # Detect quantization config
             gptq_config = self._detect_gptq_config()
             if gptq_config:
                 logger.info(f"GPTQ config: {gptq_config.get('bits', 4)}-bit, "
                            f"group_size={gptq_config.get('group_size', 128)}")
-            
+
             # Load tokenizer
             self._load_tokenizer()
-            
+
             # Determine device
             device = self._detect_device()
             device_map = "auto" if device == "cuda" else device
-            
+
             # Load GPTQ model
             self.model = AutoGPTQForCausalLM.from_quantized(
                 self.model_path,
@@ -485,22 +512,22 @@ class GPTQModel(BaseQuantizedModel):
                 max_memory=self.max_memory,
                 low_cpu_mem_usage=self.low_cpu_mem_usage,
             )
-            
+
             # Extract metadata
             self.metadata = self._extract_metadata()
             self.metadata.quant_type = QuantizationType.GPTQ
             if gptq_config:
                 self.metadata.bits = gptq_config.get('bits', 4)
                 self.metadata.group_size = gptq_config.get('group_size', 128)
-            
+
             self._loaded = True
             logger.info(f"Successfully loaded GPTQ model on {device}")
             return True
-            
+
         except Exception as e:
             logger.error(f"Failed to load GPTQ model: {e}")
             raise
-    
+
     @staticmethod
     def quantize(
         model_path: str,
@@ -528,13 +555,14 @@ class GPTQModel(BaseQuantizedModel):
         Returns:
             Path to quantized model
         """
+        _ensure_imports()
         if not HAVE_AUTO_GPTQ:
             raise RuntimeError("auto-gptq required for quantization")
-        
+
         from transformers import AutoModelForCausalLM
-        
+
         logger.info(f"Quantizing model to {bits}-bit GPTQ...")
-        
+
         # Load original model
         tokenizer = AutoTokenizer.from_pretrained(model_path)
         model = AutoModelForCausalLM.from_pretrained(
@@ -542,7 +570,7 @@ class GPTQModel(BaseQuantizedModel):
             torch_dtype=torch.float16,
             device_map="auto",
         )
-        
+
         # Create quantization config
         quant_config = BaseQuantizeConfig(
             bits=bits,
@@ -550,7 +578,7 @@ class GPTQModel(BaseQuantizedModel):
             desc_act=desc_act,
             sym=sym,
         )
-        
+
         # Prepare calibration dataset
         def prepare_data(examples):
             return tokenizer(
@@ -560,26 +588,26 @@ class GPTQModel(BaseQuantizedModel):
                 max_length=2048,
                 return_tensors="pt"
             )
-        
+
         # Quantize
         quantized_model = AutoGPTQForCausalLM.from_pretrained(
             model,
             quant_config,
         )
-        
+
         # Calibrate and quantize
         quantized_model.quantize(
             calibration_data,
             batch_size=batch_size,
         )
-        
+
         # Save
         output_path = Path(output_path)
         output_path.mkdir(parents=True, exist_ok=True)
-        
+
         quantized_model.save_quantized(str(output_path), use_safetensors=True)
         tokenizer.save_pretrained(str(output_path))
-        
+
         logger.info(f"Quantized model saved to: {output_path}")
         return str(output_path)
 
@@ -593,7 +621,7 @@ class AWQModel(BaseQuantizedModel):
     
     Requires: pip install autoawq
     """
-    
+
     def __init__(
         self,
         model_path: str,
@@ -611,63 +639,64 @@ class AWQModel(BaseQuantizedModel):
             fuse_layers: Use fused layers for speed
             max_seq_len: Maximum sequence length
         """
+        _ensure_imports()
         if not HAVE_AWQ:
             raise RuntimeError(
                 "AWQ loading requires autoawq. "
                 "Install with: pip install autoawq"
             )
-        
+
         super().__init__(model_path, device, **kwargs)
-        
+
         self.fuse_layers = fuse_layers
         self.max_seq_len = max_seq_len
-    
+
     def _detect_awq_config(self) -> Optional[Dict[str, Any]]:
         """Detect AWQ configuration from model files."""
         model_dir = Path(self.model_path)
-        
+
         # Check for quant_config.json
         for config_name in ["quant_config.json", "quantize_config.json"]:
             config_path = model_dir / config_name
             if config_path.exists():
-                with open(config_path) as f:
+                with open(config_path, encoding='utf-8') as f:
                     return json.load(f)
-        
+
         # Check config.json
         config_path = model_dir / "config.json"
         if config_path.exists():
-            with open(config_path) as f:
+            with open(config_path, encoding='utf-8') as f:
                 config = json.load(f)
                 if "quantization_config" in config:
                     qc = config["quantization_config"]
                     if qc.get("quant_method") == "awq":
                         return qc
-        
+
         return None
-    
+
     def load(self) -> bool:
         """Load AWQ model."""
         try:
             logger.info(f"Loading AWQ model from: {self.model_path}")
-            
+
             # Load config first
             self.config = AutoConfig.from_pretrained(
                 self.model_path,
                 trust_remote_code=self.trust_remote_code,
             )
-            
+
             # Detect AWQ config
             awq_config = self._detect_awq_config()
             if awq_config:
                 logger.info(f"AWQ config: {awq_config.get('bits', 4)}-bit, "
                            f"group_size={awq_config.get('group_size', 128)}")
-            
+
             # Load tokenizer
             self._load_tokenizer()
-            
+
             # Determine device
             device = self._detect_device()
-            
+
             # Load AWQ model
             self.model = AutoAWQForCausalLM.from_quantized(
                 self.model_path,
@@ -676,26 +705,26 @@ class AWQModel(BaseQuantizedModel):
                 safetensors=self.use_safetensors,
                 max_seq_len=self.max_seq_len,
             )
-            
+
             # Move to device if needed
             if device == "cuda" and hasattr(self.model, 'to'):
                 self.model = self.model.to(device)
-            
+
             # Extract metadata
             self.metadata = self._extract_metadata()
             self.metadata.quant_type = QuantizationType.AWQ
             if awq_config:
                 self.metadata.bits = awq_config.get('bits', 4)
                 self.metadata.group_size = awq_config.get('group_size', 128)
-            
+
             self._loaded = True
             logger.info(f"Successfully loaded AWQ model on {device}")
             return True
-            
+
         except Exception as e:
             logger.error(f"Failed to load AWQ model: {e}")
             raise
-    
+
     @staticmethod
     def quantize(
         model_path: str,
@@ -721,15 +750,16 @@ class AWQModel(BaseQuantizedModel):
         Returns:
             Path to quantized model
         """
+        _ensure_imports()
         if not HAVE_AWQ:
             raise RuntimeError("autoawq required for quantization")
-        
+
         logger.info(f"Quantizing model to {bits}-bit AWQ...")
-        
+
         # Load model
         model = AutoAWQForCausalLM.from_pretrained(model_path)
         tokenizer = AutoTokenizer.from_pretrained(model_path)
-        
+
         # Quantization config
         quant_config = {
             "zero_point": zero_point,
@@ -737,21 +767,21 @@ class AWQModel(BaseQuantizedModel):
             "w_bit": bits,
             "version": version,
         }
-        
+
         # Quantize
         model.quantize(
             tokenizer,
             quant_config=quant_config,
             calib_data=calibration_data,
         )
-        
+
         # Save
         output_path = Path(output_path)
         output_path.mkdir(parents=True, exist_ok=True)
-        
+
         model.save_quantized(str(output_path))
         tokenizer.save_pretrained(str(output_path))
-        
+
         logger.info(f"Quantized model saved to: {output_path}")
         return str(output_path)
 
@@ -767,10 +797,10 @@ def detect_quantization_type(model_path: str) -> Optional[QuantizationType]:
         Detected quantization type or None
     """
     model_dir = Path(model_path)
-    
+
     # Check for explicit config files
     if (model_dir / "quantize_config.json").exists():
-        with open(model_dir / "quantize_config.json") as f:
+        with open(model_dir / "quantize_config.json", encoding='utf-8') as f:
             config = json.load(f)
             if "quant_method" in config:
                 method = config["quant_method"].lower()
@@ -781,11 +811,11 @@ def detect_quantization_type(model_path: str) -> Optional[QuantizationType]:
             # GPTQ configs typically have 'bits' and 'group_size' without method
             if "bits" in config and "group_size" in config:
                 return QuantizationType.GPTQ
-    
+
     # Check config.json
     config_path = model_dir / "config.json"
     if config_path.exists():
-        with open(config_path) as f:
+        with open(config_path, encoding='utf-8') as f:
             config = json.load(f)
             if "quantization_config" in config:
                 qc = config["quantization_config"]
@@ -794,14 +824,14 @@ def detect_quantization_type(model_path: str) -> Optional[QuantizationType]:
                     return QuantizationType.AWQ
                 elif method == "gptq":
                     return QuantizationType.GPTQ
-    
+
     # Check model name patterns
     path_str = str(model_path).lower()
     if "awq" in path_str:
         return QuantizationType.AWQ
     elif "gptq" in path_str:
         return QuantizationType.GPTQ
-    
+
     return None
 
 
@@ -828,13 +858,13 @@ def load_quantized_model(
     # Auto-detect if not specified
     if quant_type is None or quant_type == QuantizationType.AUTO:
         quant_type = detect_quantization_type(model_path)
-        
+
         if quant_type is None:
             raise ValueError(
                 f"Could not auto-detect quantization type for: {model_path}. "
                 "Specify quant_type explicitly."
             )
-    
+
     # Load appropriate model
     if quant_type == QuantizationType.GPTQ:
         model = GPTQModel(model_path, **kwargs)
@@ -842,7 +872,7 @@ def load_quantized_model(
         model = AWQModel(model_path, **kwargs)
     else:
         raise ValueError(f"Unknown quantization type: {quant_type}")
-    
+
     model.load()
     return model
 
@@ -853,7 +883,7 @@ class QuantizedModelRegistry:
     
     Supports lazy loading and caching for efficient memory use.
     """
-    
+
     def __init__(self, max_loaded: int = 2):
         """
         Initialize registry.
@@ -864,7 +894,7 @@ class QuantizedModelRegistry:
         self._models: Dict[str, Union[GPTQModel, AWQModel]] = {}
         self._load_order: List[str] = []  # LRU tracking
         self.max_loaded = max_loaded
-    
+
     def register(
         self,
         name: str,
@@ -875,7 +905,7 @@ class QuantizedModelRegistry:
         """Register a model without loading it."""
         if quant_type is None or quant_type == QuantizationType.AUTO:
             quant_type = detect_quantization_type(model_path)
-        
+
         if quant_type == QuantizationType.GPTQ:
             model = GPTQModel(model_path, **kwargs)
         elif quant_type == QuantizationType.AWQ:
@@ -883,9 +913,9 @@ class QuantizedModelRegistry:
         else:
             # Default to GPTQ
             model = GPTQModel(model_path, **kwargs)
-        
+
         self._models[name] = model
-    
+
     def get(self, name: str) -> Union[GPTQModel, AWQModel]:
         """
         Get a model by name, loading if necessary.
@@ -894,9 +924,9 @@ class QuantizedModelRegistry:
         """
         if name not in self._models:
             raise KeyError(f"Model not registered: {name}")
-        
+
         model = self._models[name]
-        
+
         # Load if needed
         if not model._loaded:
             # Evict oldest if at capacity
@@ -911,7 +941,7 @@ class QuantizedModelRegistry:
                         break
                 else:
                     break
-            
+
             model.load()
             self._load_order.append(name)
         else:
@@ -919,23 +949,23 @@ class QuantizedModelRegistry:
             if name in self._load_order:
                 self._load_order.remove(name)
             self._load_order.append(name)
-        
+
         return model
-    
+
     def unload(self, name: str) -> None:
         """Unload a specific model."""
         if name in self._models and self._models[name]._loaded:
             self._models[name].unload()
             if name in self._load_order:
                 self._load_order.remove(name)
-    
+
     def unload_all(self) -> None:
         """Unload all models."""
         for model in self._models.values():
             if model._loaded:
                 model.unload()
         self._load_order.clear()
-    
+
     def list_models(self) -> List[Dict[str, Any]]:
         """List all registered models and their status."""
         return [

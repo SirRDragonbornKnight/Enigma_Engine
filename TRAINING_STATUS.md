@@ -1,6 +1,6 @@
 # Training & Model Status
 
-**Updated:** February 19, 2026
+**Updated:** February 28, 2026
 
 ---
 
@@ -8,9 +8,10 @@
 
 | Model | Size | Type | Status |
 |-------|------|------|--------|
-| `enigma_small.pth` | 106 MB | PyTorch (Llama-style) | ✅ Loads |
-| `enigma_tiny.pth` | 20 MB | PyTorch (Llama-style) | ✅ Loads |
-| `qwen2.5-32b-instruct/` | ~20 GB | GGUF | ✅ Works with templates |
+| `base.pth` | Native | PyTorch (Llama-style) | ✅ Loads |
+| `base_14.pth` | Native | PyTorch (Llama-style) | ✅ Loads |
+| `qwen3-30b-a3b/` | ~30.5B (3.3B active, MoE) | GGUF Q4_K_M (17.28 GB) | ✅ Works with llama-server backend |
+| `qwen3-8b/` | ~8.2B | HuggingFace safetensors (15.27 GB) | ✅ Fine-tunable with FORGE QLoRA |
 
 ---
 
@@ -18,28 +19,45 @@
 
 | Method | Code | GUI | Works? |
 |--------|------|-----|--------|
-| **SFT (Supervised Fine-tuning)** | ✅ `Trainer` class | ✅ Wired | 🔨 Untested |
+| **SFT (Supervised Fine-tuning)** | ✅ `Trainer` class | ✅ Solo Training | ✅ Working |
+| **Guided Training (3-phase)** | ✅ `_start_guided_training()` | ✅ Wired | ✅ Working — TRAINER creates curriculum, trains STUDENT, tests readiness |
 | **Best-of-N** | ✅ `best_of_n()` | ✅ Shows info | N/A (inference, not training) |
-| **Evolutionary** | ✅ `evolutionary_training()` | ✅ Wired | 🔨 Untested |
-| **LoRA/QLoRA** | ❌ Not built | ❌ Shows "Coming Soon" | Needs PEFT library |
-| **DPO** | ❌ Not built | ❌ Shows "Coming Soon" | Needs preference data |
+| **Evolutionary** | ✅ `evolutionary_training()` | ✅ Wired | ✅ Working |
+| **LoRA/QLoRA** | ✅ `lora_utils.py` | ✅ Wired | ✅ Working (requires PEFT) |
+| **Generate Data** | ✅ `_generate_training_data()` | ✅ Wired | ✅ Autonomous — TRAINER generates Q/A pairs |
+| **Evaluate** | ✅ `_evaluate_student()` | ✅ Wired | ✅ Interactive — TRAINER judges STUDENT answers 1-10 |
+| **Web Learn** | ✅ `_web_learn()` | ✅ Wired | ✅ DuckDuckGo search + page fetch + Q/A generation |
+| **DPO** | ❌ Not built | ❌ Not in GUI | Needs preference data |
 
 ---
 
 ## Training Code Location
 
 ```
-enigma_engine/core/training.py (926 lines)
+enigma_engine/core/training.py (~1181 lines)
 ├── TrainingConfig      - Configuration dataclass
 ├── TrainingState       - Tracks epoch, step, loss
 ├── Trainer            - Main training class
 │   ├── train()        - Main training loop
 │   ├── _train_epoch() - Single epoch
 │   └── save/load      - Checkpoint management
-├── score_response()   - Score output quality
+├── best_of_n()        - Generate N, pick random non-empty
 ├── best_of_n()        - Generate N, pick best
 ├── collect_training_data() - Gather winners
 └── evolutionary_training() - Self-play loop
+
+enigma_engine/gui/gui_forge.py (~2776 lines)
+├── _build_trainer_system_prompt() - System prompt w/ student context, stages, personality
+├── _load_engine_for_path()        - Load any model format via EnigmaEngine
+├── _extract_prompts()             - Parse Q/A, JSONL, User/AI, raw text
+├── _start_solo_training()         - Train STUDENT directly on data (SFT)
+├── _start_guided_training()       - 3-phase: generate curriculum → train → test readiness
+├── _generate_training_data()      - Autonomous: TRAINER generates N Q/A pairs
+├── _evaluate_student()            - Interactive: TRAINER judges STUDENT answers 1-10
+├── _web_learn()                   - Search web + generate training pairs from content
+├── _save_forge_checkpoint()       - Save STUDENT to named checkpoint
+├── _load_forge_checkpoint()       - Restore from checkpoint file
+└── _display_loss_curve()          - Text-based bar chart of per-epoch losses
 ```
 
 ---

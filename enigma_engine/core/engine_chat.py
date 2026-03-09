@@ -14,16 +14,105 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Generator
-from typing import Any
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# ChatContext — shared preparation result for chat() and stream_chat()
+# =============================================================================
+
+@dataclass
+class ChatContext:
+    """Prepared context returned by ``_prepare_chat()``.
+
+    Both ``chat()`` and ``stream_chat()`` call ``_prepare_chat()`` to
+    build this once, then diverge only for the generation path.
+
+    Attributes:
+        messages: GGUF-style message list (system + history + user).
+        prompt: Formatted text prompt for native ``generate()``.
+        stop_strings: Sequences that terminate generation.
+        max_gen: Effective max generation length (boosted when reasoning).
+        temperature: Sampling temperature.
+        repeat_penalty: Repetition penalty.
+        top_p: Nucleus sampling threshold.
+        top_k: Top-k sampling count.
+        is_gguf: Whether the model uses the GGUF backend.
+        has_server_backend: Whether the GGUF model uses llama-server.
+    """
+    messages: list[dict[str, str]]
+    prompt: str
+    stop_strings: list[str]
+    max_gen: int
+    temperature: float
+    repeat_penalty: float
+    top_p: float
+    top_k: int
+    is_gguf: bool
+    has_server_backend: bool
 
 
 class _ChatMixin:
     """Chat and tool-aware generation methods mixed into EnigmaEngine."""
 
     # =========================================================================
-    # 💬 Chat Interface
+    # �️ Vision Encoding for Chat
+    # =========================================================================
+
+    def _encode_images_for_chat(
+        self,
+        image_paths: list[str],
+    ):
+        """Encode image paths into vision features for multimodal chat.
+
+        Uses the loaded ``vision_encoder`` to preprocess and encode each
+        image, then concatenates the features along the sequence dimension.
+
+        Args:
+            image_paths: List of file paths to images.
+
+        Returns:
+            Batched vision features tensor ``[1, total_patches, dim]``,
+            or ``None`` if no vision encoder is loaded.
+        """
+        encoder = getattr(self, "vision_encoder", None)
+        if encoder is None:
+            logger.debug("No vision encoder loaded — skipping image encoding")
+            return None
+
+        try:
+            import torch
+            from .vision_encoder import preprocess_image
+        except ImportError:
+            logger.warning("Vision encoder dependencies not available")
+            return None
+
+        features_list = []
+        for path in image_paths:
+            try:
+                img_tensor = preprocess_image(
+                    path, image_size=encoder.config.image_size,
+                )
+                device = getattr(self, "device", None)
+                if device is not None:
+                    img_tensor = img_tensor.to(device)
+                    encoder = encoder.to(device)
+                with torch.no_grad():
+                    feat = encoder(img_tensor)  # [1, patches, dim]
+                features_list.append(feat)
+            except Exception as exc:
+                logger.warning("Failed to encode image %s: %s", path, exc)
+
+        if not features_list:
+            return None
+
+        # Concatenate along sequence dim → [1, total_patches, dim]
+        return torch.cat(features_list, dim=1)
+
+    # =========================================================================
+    # �💬 Chat Interface
     # =========================================================================
 
     def _truncate_history(
@@ -51,52 +140,152 @@ class _ChatMixin:
         """
         if not history:
             return []
-        
+
         # Calculate available space
         max_context = self.get_max_context_length()
-        
+
         # Reserve space for: system prompt + current message + response
         reserved = reserve_for_response
         if system_prompt:
             reserved += self.count_tokens(f"System: {system_prompt}\n")
         reserved += self.count_tokens(f"User: {current_message}\nAssistant:")
-        
+
         max_history_tokens = max_history_tokens or (max_context - reserved)
-        
+
         # If very limited context, keep only last exchange
         if max_history_tokens < 100:
             logger.warning(f"Very limited context ({max_context} tokens), keeping only last exchange")
             return history[-2:] if len(history) >= 2 else history[-1:]
-        
+
         # Build history from most recent, counting tokens
         truncated = []
         total_tokens = 0
-        
+
         for msg in reversed(history):
             role = msg.get("role", "user").capitalize()
             content = msg.get("content", "")
             msg_text = f"{role}: {content}\n"
             msg_tokens = self.count_tokens(msg_text)
-            
+
             if total_tokens + msg_tokens > max_history_tokens:
                 # Don't add this message, we're at limit
                 break
-            
+
             truncated.insert(0, msg)
             total_tokens += msg_tokens
-        
+
         if len(truncated) < len(history):
             logger.info(f"Truncated history: {len(history)} -> {len(truncated)} messages ({total_tokens} tokens)")
-        
+
         return truncated
+
+    def _prepare_chat(
+        self,
+        message: str,
+        history: list[dict[str, str]] | None = None,
+        system_prompt: str | None = None,
+        max_gen: int = 2048,
+        auto_truncate: bool = True,
+        reasoning: bool = False,
+        **kwargs,
+    ) -> ChatContext:
+        """Shared preparation for ``chat()`` and ``stream_chat()``.
+
+        Handles history truncation, reasoning injection, GGUF message
+        list construction, prompt building, and kwarg extraction.
+
+        Returns:
+            A :class:`ChatContext` with everything both callers need.
+        """
+        # ── Truncate history to prevent context overflow ─────────────────
+        if auto_truncate and history:
+            history = self._truncate_history(
+                history,
+                current_message=message,
+                system_prompt=system_prompt,
+                reserve_for_response=max_gen,
+            )
+
+        # ── Reasoning: inject chain-of-thought instruction ───────────────
+        if reasoning:
+            from .reasoning import build_reasoning_instruction
+            reasoning_instruction = build_reasoning_instruction()
+            if system_prompt:
+                system_prompt = f"{system_prompt}\n\n{reasoning_instruction}"
+            else:
+                system_prompt = reasoning_instruction
+            # Give extra token budget for the thinking section
+            max_gen = int(max_gen * 1.5)
+
+        # ── Build GGUF-style messages list ───────────────────────────────
+        messages: list[dict[str, str]] = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        if history:
+            messages.extend(history)
+        messages.append({"role": "user", "content": message})
+
+        # ── Build native text prompt ─────────────────────────────────────
+        try:
+            from .prompt_builder import get_prompt_builder
+            builder = get_prompt_builder()
+            full_prompt = builder.build_chat_prompt(
+                message=message,
+                history=history,
+                system_prompt=system_prompt,
+                include_generation_prefix=True,
+            )
+            stop_strings = builder.get_stop_sequences()
+        except ImportError:
+            prompt_parts = []
+            if system_prompt:
+                prompt_parts.append(f"System: {system_prompt}\n")
+            if history:
+                for msg in history:
+                    role = msg.get("role", "user").capitalize()
+                    content = msg.get("content", "")
+                    prompt_parts.append(f"{role}: {content}")
+            prompt_parts.append(f"User: {message}")
+            prompt_parts.append("Assistant:")
+            full_prompt = "\n".join(prompt_parts)
+            stop_strings = ["\nUser:", "\n\n", "User:"]
+
+        # ── Extract common kwargs ────────────────────────────────────────
+        temperature = kwargs.get("temperature", 0.8)
+        repeat_penalty = kwargs.get(
+            "repeat_penalty",
+            kwargs.get("repetition_penalty", 1.1),
+        )
+        top_p = kwargs.get("top_p", 0.9)
+        top_k = kwargs.get("top_k", 50)
+
+        is_gguf = bool(getattr(self, "_is_gguf", False))
+        has_server = bool(
+            is_gguf and getattr(getattr(self, "model", None), "_server", None)
+        )
+
+        return ChatContext(
+            messages=messages,
+            prompt=full_prompt,
+            stop_strings=stop_strings,
+            max_gen=max_gen,
+            temperature=temperature,
+            repeat_penalty=repeat_penalty,
+            top_p=top_p,
+            top_k=top_k,
+            is_gguf=is_gguf,
+            has_server_backend=has_server,
+        )
 
     def chat(
         self,
         message: str,
         history: list[dict[str, str]] | None = None,
         system_prompt: str | None = None,
-        max_gen: int = 200,
+        max_gen: int = 2048,
         auto_truncate: bool = True,
+        reasoning: bool = False,
+        images: list[str] | None = None,
         **kwargs
     ) -> str:
         """Chat-style generation with conversation history.
@@ -111,6 +300,12 @@ class _ChatMixin:
         that exceeds ``max_seq_len`` -- a common cause of hallucinations
         and garbled output.
 
+        When ``reasoning`` is enabled, a chain-of-thought instruction is
+        injected into the system prompt so the model produces
+        ``<think>...</think>`` blocks before answering.  The raw response
+        (including reasoning tags) is returned; the caller (e.g. the GUI)
+        is responsible for extracting and displaying the thinking section.
+
         Args:
             message: The user's current message.
             history: Previous turns as a list of dicts, each with
@@ -123,11 +318,20 @@ class _ChatMixin:
                 assistant reply.
             auto_truncate: If ``True``, older history entries are dropped
                 when the prompt would exceed the model's context window.
+            reasoning: If ``True``, inject chain-of-thought instructions
+                so the model thinks step-by-step inside
+                ``<think>...</think>`` tags before answering.
+            images: Optional list of image file paths to include as
+                visual context.  Requires a loaded ``vision_encoder``.
+                Each image is encoded through the vision encoder and the
+                resulting features are passed to ``forward_multimodal``.
             **kwargs: Extra keyword arguments forwarded to ``generate()``
                 (e.g. ``temperature``, ``top_k``, ``top_p``).
 
         Returns:
             The assistant's response text (without prompt or history).
+            When ``reasoning=True`` the response may contain
+            ``<think>...</think>`` blocks.
 
         Raises:
             RuntimeError: If the underlying model is not loaded or the
@@ -145,84 +349,64 @@ class _ChatMixin:
             ...     {"role": "assistant", "content": "Hello! How can I help?"},
             ... ]
             >>> reply = engine.chat("Tell me a joke", history=history)
+            >>>
+            >>> # Chain-of-thought reasoning
+            >>> reply = engine.chat("What is 15 * 23?", reasoning=True)
+            >>> # reply may contain <think>...</think> block
         """
-        # ─────────────────────────────────────────────────────────────────────
-        # GGUF MODEL: Use native chat completion (handles templates properly)
-        # ─────────────────────────────────────────────────────────────────────
-        if getattr(self, '_is_gguf', False) and hasattr(self.model, 'chat'):
-            # Build messages list for chat API
-            messages = []
-            if system_prompt:
-                messages.append({"role": "system", "content": system_prompt})
-            if history:
-                messages.extend(history)
-            messages.append({"role": "user", "content": message})
-            
+        # ── Shared preparation (truncation, reasoning, prompt/messages) ──
+        ctx = self._prepare_chat(
+            message,
+            history=history,
+            system_prompt=system_prompt,
+            max_gen=max_gen,
+            auto_truncate=auto_truncate,
+            reasoning=reasoning,
+            **kwargs,
+        )
+
+        # ── GGUF model: use native chat completion ──────────────────────
+        if ctx.is_gguf and hasattr(self.model, "chat"):
             try:
-                # Use native chat completion - handles Qwen/Llama/etc templates
-                temperature = kwargs.get('temperature', 0.8)
+                effective_max = kwargs.get("max_tokens", ctx.max_gen)
                 response = self.model.chat(
-                    messages=messages,
-                    max_tokens=max_gen,
-                    temperature=temperature,
-                    top_p=kwargs.get('top_p', 0.9),
-                    top_k=kwargs.get('top_k', 50),
+                    messages=ctx.messages,
+                    max_tokens=effective_max,
+                    temperature=ctx.temperature,
+                    top_p=ctx.top_p,
+                    top_k=ctx.top_k,
+                    repeat_penalty=ctx.repeat_penalty,
                 )
                 return response
-            except Exception as e:
-                logger.warning(f"GGUF chat failed, falling back to generate: {e}")
-                # Fall through to standard generation
-        
-        # ─────────────────────────────────────────────────────────────────────
-        # TRUNCATE HISTORY TO PREVENT HALLUCINATIONS
-        # This is critical! Without this, long conversations overflow the
-        # context window and cause the model to hallucinate.
-        # ─────────────────────────────────────────────────────────────────────
-        if auto_truncate and history:
-            history = self._truncate_history(
-                history,
-                current_message=message,
-                system_prompt=system_prompt,
-                reserve_for_response=max_gen
+            except Exception:
+                # Let the error propagate — no silent fallback (Suggestion #9A)
+                raise
+
+        # ── Vision: encode attached images ───────────────────────────────
+        vision_features = None
+        if images:
+            vision_features = self._encode_images_for_chat(images)
+            if vision_features is not None:
+                logger.info(
+                    "Encoded %d image(s) → vision features %s",
+                    len(images), tuple(vision_features.shape),
+                )
+
+        if vision_features is not None and not ctx.is_gguf:
+            response = self._generate_with_vision(
+                prompt=ctx.prompt,
+                vision_features=vision_features,
+                max_gen=ctx.max_gen,
+                stop_strings=ctx.stop_strings,
+                **kwargs,
             )
-        
-        # Use centralized prompt builder for consistent formatting
-        try:
-            from .prompt_builder import get_prompt_builder
-            builder = get_prompt_builder()
-            full_prompt = builder.build_chat_prompt(
-                message=message,
-                history=history,
-                system_prompt=system_prompt,
-                include_generation_prefix=True
+        else:
+            response = self.generate(
+                ctx.prompt,
+                max_gen=ctx.max_gen,
+                stop_strings=ctx.stop_strings,
+                **kwargs,
             )
-            stop_strings = builder.get_stop_sequences()
-        except ImportError:
-            # Fallback to inline prompt building
-            prompt_parts = []
-
-            if system_prompt:
-                prompt_parts.append(f"System: {system_prompt}\n")
-
-            if history:
-                for msg in history:
-                    role = msg.get("role", "user").capitalize()
-                    content = msg.get("content", "")
-                    prompt_parts.append(f"{role}: {content}")
-
-            prompt_parts.append(f"User: {message}")
-            prompt_parts.append("Assistant:")
-
-            full_prompt = "\n".join(prompt_parts)
-            stop_strings = ["\nUser:", "\n\n", "User:"]
-
-        # Generate
-        response = self.generate(
-            full_prompt,
-            max_gen=max_gen,
-            stop_strings=stop_strings,
-            **kwargs
-        )
 
         # Extract assistant's response
         if "Assistant:" in response:
@@ -263,21 +447,22 @@ class _ChatMixin:
             if fallback_to_chat:
                 logger.warning("universal_router module not available, falling back to chat")
                 return self.chat(message, history=history, system_prompt=system_prompt, max_gen=max_gen, **kwargs)
-            raise RuntimeError("universal_router module is not installed — cannot use chat_with_tools")
+            raise RuntimeError("universal_router module is not installed — cannot use chat_with_tools") from None
 
         # Create a chat function that preserves history/system prompt
         def chat_fn(msg, **kw):
+            merged = {**kwargs, **kw}
             return self.chat(
-                msg, 
-                history=history, 
+                msg,
+                history=history,
                 system_prompt=system_prompt,
-                max_gen=max_gen, 
-                **kwargs
+                max_gen=max_gen,
+                **merged
             )
-        
+
         return universal_chat(
-            message, 
-            chat_fn, 
+            message,
+            chat_fn,
             fallback_to_chat=fallback_to_chat
         )
 
@@ -286,249 +471,97 @@ class _ChatMixin:
         message: str,
         history: list[dict[str, str]] | None = None,
         system_prompt: str | None = None,
-        max_gen: int = 200,
+        max_gen: int = 2048,
+        auto_truncate: bool = True,
+        reasoning: bool = False,
         **kwargs
     ) -> Generator[str]:
         """
-        Stream chat-style generation.
+        Stream chat-style generation token-by-token.
+
+        Works with both native PyTorch models (via ``stream_generate``)
+        and GGUF models (via ``create_chat_completion(stream=True)``).
+
+        When ``reasoning`` is enabled, chain-of-thought instructions are
+        injected into the system prompt (same as ``chat()``).
 
         Args:
             message: User's message
             history: Conversation history
             system_prompt: Optional system prompt
-            max_gen: Maximum tokens
+            max_gen: Maximum tokens to generate
+            auto_truncate: If True, truncate history to fit context
+            reasoning: If True, inject chain-of-thought instructions
             **kwargs: Additional parameters
 
         Yields:
             Generated tokens one at a time
         """
-        # Use centralized prompt builder for consistent formatting
-        try:
-            from .prompt_builder import get_prompt_builder
-            builder = get_prompt_builder()
-            full_prompt = builder.build_chat_prompt(
-                message=message,
-                history=history,
-                system_prompt=system_prompt,
-                include_generation_prefix=True
-            )
-            stop_strings = builder.get_stop_sequences()
-        except ImportError:
-            # Fallback to inline prompt building
-            prompt_parts = []
+        # ── Shared preparation (truncation, reasoning, prompt/messages) ──
+        ctx = self._prepare_chat(
+            message,
+            history=history,
+            system_prompt=system_prompt,
+            max_gen=max_gen,
+            auto_truncate=auto_truncate,
+            reasoning=reasoning,
+            **kwargs,
+        )
 
-            if system_prompt:
-                prompt_parts.append(f"System: {system_prompt}\n")
+        # ── GGUF streaming path ──────────────────────────────────────────
+        if ctx.is_gguf and hasattr(self.model, "chat"):
+            # Server backend — no streaming helper yet, yield in one piece
+            if ctx.has_server_backend:
+                response = self.model.chat(
+                    ctx.messages,
+                    max_tokens=ctx.max_gen,
+                    temperature=ctx.temperature,
+                    repeat_penalty=ctx.repeat_penalty,
+                    top_p=ctx.top_p,
+                    top_k=ctx.top_k,
+                )
+                yield response
+                return
 
-            if history:
-                for msg in history:
-                    role = msg.get("role", "user").capitalize()
-                    content = msg.get("content", "")
-                    prompt_parts.append(f"{role}: {content}")
+            # In-process llama-cpp-python — true streaming
+            try:
+                stream_resp = self.model.model.create_chat_completion(
+                    messages=ctx.messages,
+                    max_tokens=ctx.max_gen,
+                    temperature=ctx.temperature,
+                    repeat_penalty=ctx.repeat_penalty,
+                    top_p=ctx.top_p,
+                    top_k=ctx.top_k,
+                    stream=True,
+                )
+                for chunk in stream_resp:
+                    choices = chunk.get("choices", [])
+                    if choices:
+                        delta = choices[0].get("delta", {})
+                        text = delta.get("content", "")
+                        if text:
+                            yield text
+                return
+            except Exception:
+                # Let the error propagate — no silent fallback (Suggestion #9A)
+                raise
 
-            prompt_parts.append(f"User: {message}")
-            prompt_parts.append("Assistant:")
-
-            full_prompt = "\n".join(prompt_parts)
-            stop_strings = ["\nUser:", "\n\n"]
-
-        # Stream generation
+        # ── Native model streaming path ──────────────────────────────────
         buffer = ""
-        for token in self.stream_generate(full_prompt, max_gen=max_gen, **kwargs):
+        for token in self.stream_generate(ctx.prompt, max_gen=ctx.max_gen, **kwargs):
             buffer += token
 
             # Check for stop conditions
             stopped = False
-            for stop in stop_strings:
+            for stop in ctx.stop_strings:
                 if stop in buffer:
                     buffer = buffer[:buffer.find(stop)]
                     stopped = True
                     break
-            
+
             if stopped:
                 break
 
             yield token
 
-    # =========================================================================
-    # 🛠️ Tool-Aware Generation
-    # =========================================================================
-    
-    def generate_with_tools(
-        self,
-        prompt: str,
-        module_manager=None,
-        max_gen: int = 200,
-        max_tool_iterations: int = 5,
-        temperature: float = 0.8,
-        top_k: int = 50,
-        top_p: float = 0.9,
-        repetition_penalty: float = 1.1,
-        include_system_prompt: bool = True,
-        **kwargs
-    ) -> str:
-        """
-        Generate text with tool execution support.
-        
-        The AI can invoke tools during generation, and the results are fed back
-        for continued generation. This enables the AI to:
-          - Generate images when asked
-          - Control avatar expressions
-          - Search the web for information
-          - Read/write files
-          - And more
-        
-        Args:
-            prompt: Input text or user query
-            module_manager: ModuleManager instance for tool access
-            max_gen: Maximum tokens per generation step
-            max_tool_iterations: Maximum number of tool calls in sequence
-            temperature: Sampling temperature
-            top_k: Top-k sampling
-            top_p: Top-p sampling
-            repetition_penalty: Repetition penalty
-            include_system_prompt: Prepend tool usage instructions
-            **kwargs: Additional generation parameters
-            
-        Returns:
-            Complete generated text with tool results
-        """
-        try:
-            from .tool_interface import ToolInterface
-            from .tool_prompts import get_tool_enabled_system_prompt
-        except ImportError:
-            raise RuntimeError(
-                "tool_interface / tool_prompts modules are not installed — "
-                "generate_with_tools is not available yet"
-            )
 
-        # Create tool interface
-        tool_interface = ToolInterface(module_manager)
-        
-        # Prepend system prompt if requested
-        if include_system_prompt:
-            system_prompt = get_tool_enabled_system_prompt()
-            full_prompt = f"{system_prompt}\n\nUser: {prompt}\nAssistant:"
-        else:
-            full_prompt = prompt
-        
-        # Generate with tool support
-        current_prompt = full_prompt
-        full_output = ""
-        iterations = 0
-        
-        while iterations < max_tool_iterations:
-            # Generate next chunk
-            output = self.generate(
-                current_prompt,
-                max_gen=max_gen,
-                temperature=temperature,
-                top_k=top_k,
-                top_p=top_p,
-                repetition_penalty=repetition_penalty,
-                use_cache=True
-            )
-            
-            # Extract new content (remove the prompt if it's in the output)
-            if current_prompt in output:
-                new_content = output[len(current_prompt):]
-            else:
-                new_content = output
-            
-            # Check for tool calls in the new content
-            tool_call = tool_interface.parse_tool_call(new_content)
-            
-            if tool_call:
-                # Execute the tool
-                result = tool_interface.execute_tool(tool_call)
-                result_str = tool_interface.format_tool_result(result)
-                
-                # Append tool call and result to output
-                full_output += new_content[:tool_call.end_pos - tool_call.start_pos]
-                full_output += "\n" + result_str + "\n"
-                
-                # Update prompt for next iteration
-                current_prompt = full_prompt + full_output
-                iterations += 1
-                
-                # Continue generation after tool result
-                continue
-            else:
-                # No tool call found, we're done
-                full_output += new_content
-                break
-        
-        return full_output
-    
-    def stream_generate_with_tools(
-        self,
-        prompt: str,
-        module_manager=None,
-        max_gen: int = 200,
-        max_tool_iterations: int = 5,
-        include_system_prompt: bool = True,
-        **kwargs
-    ) -> Generator[str]:
-        """
-        Stream generation with tool execution support.
-        
-        Yields tokens as they're generated, pausing for tool execution
-        when tool calls are detected.
-        
-        Args:
-            prompt: Input text
-            module_manager: ModuleManager for tool access
-            max_gen: Maximum tokens per step
-            max_tool_iterations: Maximum tool calls
-            include_system_prompt: Include tool instructions
-            **kwargs: Additional parameters
-            
-        Yields:
-            Generated tokens, including tool results
-        """
-        try:
-            from .tool_interface import ToolInterface
-            from .tool_prompts import get_tool_enabled_system_prompt
-        except ImportError:
-            raise RuntimeError(
-                "tool_interface / tool_prompts modules are not installed — "
-                "stream_generate_with_tools is not available yet"
-            )
-        
-        tool_interface = ToolInterface(module_manager)
-        
-        if include_system_prompt:
-            system_prompt = get_tool_enabled_system_prompt()
-            full_prompt = f"{system_prompt}\n\nUser: {prompt}\nAssistant:"
-        else:
-            full_prompt = prompt
-        
-        current_prompt = full_prompt
-        buffer = ""
-        iterations = 0
-        
-        while iterations < max_tool_iterations:
-            # Stream generate
-            for token in self.stream_generate(current_prompt, max_gen=max_gen, **kwargs):
-                buffer += token
-                yield token
-                
-                # Check if we have a complete tool call
-                if '<|tool_end|>' in buffer:
-                    tool_call = tool_interface.parse_tool_call(buffer)
-                    if tool_call:
-                        # Execute tool
-                        result = tool_interface.execute_tool(tool_call)
-                        result_str = tool_interface.format_tool_result(result)
-                        
-                        # Yield result
-                        yield "\n" + result_str + "\n"
-                        
-                        # Update prompt
-                        current_prompt = full_prompt + buffer + "\n" + result_str + "\n"
-                        buffer = ""
-                        iterations += 1
-                        break
-            else:
-                # Generation completed without tool call
-                break

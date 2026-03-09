@@ -5,6 +5,7 @@ Detects hardware capabilities and recommends optimal model configurations.
 """
 import logging
 import platform
+import threading
 from dataclasses import dataclass
 from typing import Any, Optional
 
@@ -32,33 +33,40 @@ class HardwareProfile:
     has_cuda: bool = False
     has_mps: bool = False
     is_arm: bool = False
-    
+
     def __str__(self) -> str:
         if self.gpu_available:
             return f"{self.gpu_name} ({self.gpu_vram_gb:.1f}GB VRAM)"
         return f"{self.cpu_cores} CPU cores, {self.ram_gb:.1f}GB RAM"
 
+    def to_dict(self) -> dict[str, Any]:
+        """Convert profile to dictionary."""
+        import dataclasses
+        return dataclasses.asdict(self)
+
 
 _cached_profile: Optional[HardwareProfile] = None
+_profile_lock = threading.Lock()
 
 
 def detect_hardware() -> HardwareProfile:
     """Detect hardware capabilities of the current system."""
     global _cached_profile
-    if _cached_profile is not None:
-        return _cached_profile
-    
+    with _profile_lock:
+        if _cached_profile is not None:
+            return _cached_profile
+
     profile = HardwareProfile()
-    
+
     # CPU info
     import os
     profile.cpu_cores = os.cpu_count() or 1
     profile.cpu_threads = profile.cpu_cores
-    
+
     # Check for ARM architecture
     machine = platform.machine().lower()
     profile.is_arm = machine in ('arm64', 'aarch64', 'armv7l', 'armv8')
-    
+
     # RAM info
     try:
         import psutil
@@ -69,23 +77,23 @@ def detect_hardware() -> HardwareProfile:
         profile.ram_gb = 8.0  # Default assumption
         profile.available_ram_gb = profile.ram_gb * 0.5
     profile.total_ram_gb = profile.ram_gb
-    
+
     # Check for Raspberry Pi
     try:
-        with open('/proc/device-tree/model', 'r') as f:
+        with open('/proc/device-tree/model', 'r', encoding='utf-8') as f:
             model = f.read()
             if 'Raspberry Pi' in model:
                 profile.is_raspberry_pi = True
-                profile.pi_model = model.strip()
+                profile.pi_model = model.strip().rstrip('\x00')
                 profile.hardware_type = "raspberry_pi"
-    except Exception:
+    except (FileNotFoundError, OSError):
         pass
-    
+
     # Check for Apple Silicon
     if platform.system() == 'Darwin' and platform.machine() == 'arm64':
         profile.is_apple_silicon = True
         profile.hardware_type = "apple_silicon"
-    
+
     # GPU detection
     try:
         import torch
@@ -106,7 +114,7 @@ def detect_hardware() -> HardwareProfile:
             profile.gpu_vram_gb = profile.ram_gb * 0.75
     except ImportError:
         pass
-    
+
     # Set default hardware type if not set
     if profile.hardware_type == "unknown":
         if profile.gpu_available:
@@ -115,20 +123,23 @@ def detect_hardware() -> HardwareProfile:
             profile.hardware_type = "server"
         else:
             profile.hardware_type = "desktop_cpu"
-    
-    _cached_profile = profile
+
+    with _profile_lock:
+        _cached_profile = profile
     return profile
 
 
 def get_cached_profile() -> Optional[HardwareProfile]:
     """Get cached hardware profile if available."""
-    return _cached_profile
+    with _profile_lock:
+        return _cached_profile
 
 
 def clear_cached_profile() -> None:
     """Clear cached hardware profile."""
     global _cached_profile
-    _cached_profile = None
+    with _profile_lock:
+        _cached_profile = None
 
 
 def recommend_model_size(profile: Optional[HardwareProfile] = None) -> str:
@@ -140,15 +151,15 @@ def recommend_model_size(profile: Optional[HardwareProfile] = None) -> str:
     """
     if profile is None:
         profile = detect_hardware()
-    
+
     # Raspberry Pi or very low memory
     if profile.is_raspberry_pi or profile.ram_gb < 2:
         return "pi_zero"
-    
+
     # Low memory systems
     if profile.ram_gb < 4:
         return "nano"
-    
+
     # No GPU - use smaller models
     if not profile.gpu_available:
         if profile.ram_gb < 8:
@@ -157,7 +168,7 @@ def recommend_model_size(profile: Optional[HardwareProfile] = None) -> str:
             return "small"
         else:
             return "medium"
-    
+
     # GPU available - use larger models
     if profile.gpu_vram_gb >= 24:
         return "large"
@@ -180,9 +191,9 @@ def get_optimal_config(profile: Optional[HardwareProfile] = None) -> dict[str, A
     """
     if profile is None:
         profile = detect_hardware()
-    
+
     model_size = recommend_model_size(profile)
-    
+
     config = {
         "model_size": model_size,
         "device": profile.device,
@@ -190,7 +201,7 @@ def get_optimal_config(profile: Optional[HardwareProfile] = None) -> dict[str, A
         "batch_size": 1,
         "max_seq_len": 512,
     }
-    
+
     # Adjust based on VRAM/RAM
     if profile.gpu_available and profile.gpu_vram_gb >= 8:
         config["batch_size"] = 4
@@ -201,7 +212,7 @@ def get_optimal_config(profile: Optional[HardwareProfile] = None) -> dict[str, A
     elif profile.ram_gb >= 16:
         config["batch_size"] = 2
         config["max_seq_len"] = 512
-    
+
     return config
 
 
@@ -228,13 +239,13 @@ def estimate_memory_usage(
         "xl": 600e6,
         "xxl": 1.5e9,
     }
-    
+
     params = param_counts.get(model_size, 27e6)
     bytes_per_param = 2 if use_half else 4
-    
+
     # Model weight memory
     model_gb = (params * bytes_per_param) / (1024**3)
-    
+
     # KV-cache estimate (rough)
     # For transformer: 2 * layers * 2 * hidden_dim * seq_len * batch_size
     hidden_dims = {
@@ -248,18 +259,54 @@ def estimate_memory_usage(
         "xxl": 2048,
     }
     layers = {"pi_zero": 4, "nano": 6, "tiny": 8, "small": 12, "medium": 16, "large": 24, "xl": 32, "xxl": 48}
-    
+
     dim = hidden_dims.get(model_size, 512)
     n_layers = layers.get(model_size, 12)
-    
+
     kv_bytes = 2 * n_layers * 2 * dim * seq_len * batch_size * bytes_per_param
     kv_gb = kv_bytes / (1024**3)
-    
+
     return {
         "model_memory": model_gb,
         "kv_cache": kv_gb,
         "total": model_gb + kv_gb,
     }
+
+
+def recommend_training_batch_size(
+    profile: Optional[HardwareProfile] = None,
+) -> int:
+    """Recommend a safe training batch size based on detected VRAM.
+
+    Uses simple VRAM tiers rather than formula estimation.
+    Conservative defaults to avoid OOM during training (training
+    uses ~3x model memory due to gradients + optimizer states).
+
+    Args:
+        profile: Hardware profile.  Detected automatically if None.
+
+    Returns:
+        Recommended batch size (1, 2, 4, 8, or 16).
+    """
+    if profile is None:
+        profile = detect_hardware()
+
+    if not profile.gpu_available:
+        # CPU-only: always use batch size 1
+        if profile.ram_gb >= 32:
+            return 2
+        return 1
+
+    vram = profile.gpu_vram_gb
+    if vram >= 48:
+        return 16
+    if vram >= 24:
+        return 8
+    if vram >= 12:
+        return 4
+    if vram >= 6:
+        return 2
+    return 1
 
 
 # Backward compatibility - get_hardware alias
@@ -277,4 +324,5 @@ __all__ = [
     'estimate_memory_usage',
     'get_cached_profile',
     'clear_cached_profile',
+    'recommend_training_batch_size',
 ]

@@ -42,11 +42,8 @@ try:
 except ImportError:
     CharacterTokenizer = None
 
-# KV Cache
-try:
-    from .kv_cache import KVCache
-except ImportError:
-    KVCache = None
+# KV Cache — lazy to avoid torch import at startup
+# Accessed via __getattr__ below.
 
 # Streaming
 try:
@@ -63,40 +60,31 @@ except ImportError:
     parse_commands = None
     CommandResult = None
 
-# External model loaders
-try:
-    from .gguf_loader import load_gguf_model
-except ImportError:
-    load_gguf_model = None
+# External model loaders — lazy-loaded to avoid importing torch/transformers
+# at startup. Accessed via __getattr__ below.
 
+# Reasoning / Chain-of-thought
 try:
-    from .huggingface_loader import load_huggingface_model
+    from .reasoning import (
+        THINK_START, THINK_END,
+        extract_reasoning, strip_reasoning, has_reasoning,
+        wrap_reasoning, build_reasoning_instruction, format_reasoning_example,
+        extract_all_reasoning, count_reasoning_steps,
+        build_multistep_reasoning_instruction, format_multistep_example,
+    )
 except ImportError:
-    load_huggingface_model = None
-
-try:
-    from .ollama_loader import load_ollama_model
-except ImportError:
-    load_ollama_model = None
-
-try:
-    from .onnx_loader import load_onnx_model
-except ImportError:
-    load_onnx_model = None
-
-try:
-    from .gptq_awq_loader import load_gptq_model, load_awq_model
-except ImportError:
-    load_gptq_model = None
-    load_awq_model = None
-
-# AI Profiles
-try:
-    from .ai_profile import AIProfile, load_profile, save_profile
-except ImportError:
-    AIProfile = None
-    load_profile = None
-    save_profile = None
+    THINK_START = None
+    THINK_END = None
+    extract_reasoning = None
+    strip_reasoning = None
+    has_reasoning = None
+    wrap_reasoning = None
+    build_reasoning_instruction = None
+    format_reasoning_example = None
+    extract_all_reasoning = None
+    count_reasoning_steps = None
+    build_multistep_reasoning_instruction = None
+    format_multistep_example = None
 
 # Per-model context storage
 try:
@@ -110,6 +98,9 @@ except ImportError:
     load_model_context = None
     list_model_contexts = None
 
+# Vision encoder (lazy to avoid torch import at startup)
+# Accessed via __getattr__ below.
+
 # Core model and inference (lazy imports to avoid torch import at startup)
 def _lazy_load_model():
     from .model import Enigma, ForgeConfig, create_model, MODEL_PRESETS
@@ -121,6 +112,38 @@ def _lazy_load_inference():
 
 # Expose commonly accessed items through __getattr__ for lazy loading
 _lazy_cache = {}
+
+# Lazy loader mappings: attribute name → (module, attr, cache_key)
+_LAZY_LOADER_MAP = {
+    'load_gguf_model': ('.gguf_loader', 'load_gguf_model', 'gguf_loader'),
+    'load_huggingface_model': ('.huggingface_loader', 'load_huggingface_model', 'hf_loader'),
+    'load_ollama_model': ('.ollama_loader', 'load_ollama_model', 'ollama_loader'),
+    'load_onnx_model': ('.onnx_loader', 'load_onnx_model', 'onnx_loader'),
+    'load_gptq_model': ('.gptq_awq_loader', 'load_gptq_model', 'gptq_awq_loader'),
+    'load_awq_model': ('.gptq_awq_loader', 'load_awq_model', 'gptq_awq_loader'),
+    # Vision encoder
+    'VisionEncoder': ('.vision_encoder', 'VisionEncoder', 'vision_encoder'),
+    'VisionEncoderConfig': ('.vision_encoder', 'VisionEncoderConfig', 'vision_encoder'),
+    'VISION_PRESETS': ('.vision_encoder', 'VISION_PRESETS', 'vision_encoder'),
+    'CNNStem': ('.vision_encoder', 'CNNStem', 'vision_encoder'),
+    'encode_image': ('.vision_encoder', 'encode_image', 'vision_encoder'),
+    'preprocess_image': ('.vision_encoder', 'preprocess_image', 'vision_encoder'),
+    'encode_screen': ('.vision_encoder', 'encode_screen', 'vision_encoder'),
+    'encode_camera': ('.vision_encoder', 'encode_camera', 'vision_encoder'),
+    'encode_video_frames': ('.vision_encoder', 'encode_video_frames', 'vision_encoder'),
+    # Multi-GPU (MG-B / MG-C)
+    'get_gpu_count': ('.multi_gpu', 'get_gpu_count', 'multi_gpu'),
+    'get_gpu_info': ('.multi_gpu', 'get_gpu_info', 'multi_gpu'),
+    'is_multi_gpu': ('.multi_gpu', 'is_multi_gpu', 'multi_gpu'),
+    'wrap_data_parallel': ('.multi_gpu', 'wrap_data_parallel', 'multi_gpu'),
+    'unwrap_data_parallel': ('.multi_gpu', 'unwrap_data_parallel', 'multi_gpu'),
+    'DistributedConfig': ('.multi_gpu', 'DistributedConfig', 'multi_gpu'),
+    'DistributedTrainer': ('.multi_gpu', 'DistributedTrainer', 'multi_gpu'),
+    # Chat export
+    'export_html': ('.chat_export', 'export_html', 'chat_export'),
+    'export_pdf': ('.chat_export', 'export_pdf', 'chat_export'),
+    'history_to_html': ('.chat_export', 'history_to_html', 'chat_export'),
+}
 
 def __getattr__(name):
     """Lazy load torch-dependent modules only when accessed."""
@@ -134,7 +157,7 @@ def __getattr__(name):
                 'MODEL_PRESETS': MODEL_PRESETS,
             }
         return _lazy_cache['model'][name]
-    
+
     if name in ('EnigmaEngine', 'ForgeEngine', 'generate', 'load_engine'):
         if 'inference' not in _lazy_cache:
             EnigmaEngine, ForgeEngine, generate, load_engine = _lazy_load_inference()
@@ -145,7 +168,37 @@ def __getattr__(name):
                 'load_engine': load_engine,
             }
         return _lazy_cache['inference'][name]
-    
+
+    # Lazy-load external model loaders (avoids torch/transformers at import)
+    if name in _LAZY_LOADER_MAP:
+        mod_path, attr, cache_key = _LAZY_LOADER_MAP[name]
+        if cache_key not in _lazy_cache:
+            import importlib
+            try:
+                mod = importlib.import_module(mod_path, __name__)
+                _lazy_cache[cache_key] = {
+                    a: getattr(mod, a, None)
+                    for a in _LAZY_LOADER_MAP
+                    if _LAZY_LOADER_MAP[a][2] == cache_key
+                }
+            except ImportError:
+                _lazy_cache[cache_key] = {
+                    a: None
+                    for a in _LAZY_LOADER_MAP
+                    if _LAZY_LOADER_MAP[a][2] == cache_key
+                }
+        return _lazy_cache[cache_key].get(name)
+
+    # Lazy-load KVCache (imports torch at module level)
+    if name == 'KVCache':
+        if 'kv_cache' not in _lazy_cache:
+            try:
+                from .kv_cache import KVCache as _KV
+                _lazy_cache['kv_cache'] = _KV
+            except ImportError:
+                _lazy_cache['kv_cache'] = None
+        return _lazy_cache['kv_cache']
+
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -178,10 +231,19 @@ __all__ = [
     'load_onnx_model',
     'load_gptq_model',
     'load_awq_model',
-    # AI Profiles
-    'AIProfile',
-    'load_profile',
-    'save_profile',
+    # Reasoning
+    'THINK_START',
+    'THINK_END',
+    'extract_reasoning',
+    'strip_reasoning',
+    'has_reasoning',
+    'wrap_reasoning',
+    'build_reasoning_instruction',
+    'format_reasoning_example',
+    'extract_all_reasoning',
+    'count_reasoning_steps',
+    'build_multistep_reasoning_instruction',
+    'format_multistep_example',
     # Per-model context
     'ModelContext',
     'model_key_from_path',
@@ -197,4 +259,16 @@ __all__ = [
     'ForgeEngine',
     'generate',
     'load_engine',
+    # Multi-GPU (lazy)
+    'get_gpu_count',
+    'get_gpu_info',
+    'is_multi_gpu',
+    'wrap_data_parallel',
+    'unwrap_data_parallel',
+    'DistributedConfig',
+    'DistributedTrainer',
+    # Chat export (lazy)
+    'export_html',
+    'export_pdf',
+    'history_to_html',
 ]
