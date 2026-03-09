@@ -18,6 +18,9 @@ var/
 wheels/
 *.egg-info/
 .installed.cfg
+
+# Bundled binaries (llama-server, CUDA DLLs — ~1GB, downloaded separately)
+enigma_engine/bin/
 *.egg
 MANIFEST
 
@@ -32,8 +35,7 @@ forge_modules.json
 forge_config.json
 data/gui_settings.json
 !data/gui_settings.example.json
-data/overlay_settings.json
-!data/overlay_settings.example.json
+
 memory/web_tokens.json
 models/registry.json
 
@@ -132,7 +134,6 @@ data/*
 !data/personas/
 !data/personas/templates/
 !data/gui_settings.example.json
-!data/overlay_settings.example.json
 
 # Keep models structure
 models/*

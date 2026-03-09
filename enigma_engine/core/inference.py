@@ -61,20 +61,12 @@ from pathlib import Path
 from typing import Any, Optional
 
 import torch
-import torch.nn.functional as F
 
 from ..config import CONFIG
 from .engine_chat import _ChatMixin
 from .engine_generation import _GenerationMixin
 from .model import MODEL_PRESETS, Forge, create_model
 from .tokenizer import get_tokenizer
-
-# Simple message functions (previously from utils.system_messages)
-def info_msg(msg: str) -> str:
-    return f"[INFO] {msg}"
-
-def system_msg(msg: str) -> str:
-    return f"[SYSTEM] {msg}"
 
 logger = logging.getLogger(__name__)
 
@@ -183,6 +175,48 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
             Specialised model routing for vision, code, etc.
     """
 
+    def _init_common(
+        self,
+        device: str | None = None,
+        use_half: bool = False
+    ) -> None:
+        """Initialize attributes shared by ``__init__`` and ``from_model``.
+
+        Both constructors call this first to set safe defaults for every
+        attribute, then override specific fields as needed.  Adding a new
+        attribute here guarantees it exists on *all* engine instances.
+        """
+        self._generation_lock = threading.Lock()
+        self.device = self._select_device(device)
+        self.use_half = use_half and self.device.type == "cuda"
+
+        # Feature flags (overridden by __init__ from constructor args)
+        self.enable_tools = False
+        self.module_manager = None
+        self.use_routing = False
+        self.use_offloading = False
+
+        # Subsystem refs
+        self._tool_executor = None
+        self._tool_router = None
+        self._is_gguf = False
+        self._web_enabled = False
+        self.vision_encoder = None
+
+        # Model metadata
+        self.model_metadata: dict[str, Any] = {
+            "supports_nsfw": False,
+            "content_rating": "sfw",
+            "trained_date": None,
+            "training_tasks": [],
+        }
+
+        # Chat mixin state
+        self._chat_media_refs: dict = {}
+        self._link_urls: dict = {}
+        self._chat_history: list = []
+        self._token_count_cache: dict[str, int] = {}
+
     @classmethod
     def from_model(
         cls,
@@ -193,66 +227,31 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
     ) -> EnigmaEngine:
         """
         Create engine directly from model and tokenizer objects.
-        
-        ðŸ“– USE THIS WHEN:
-        You already have a loaded model and tokenizer, and don't want
-        the engine to load them again from disk.
-        
-        ðŸ“ EXAMPLE:
-            model = create_model('small')
-            model.load_state_dict(torch.load('my_model.pth'))
-            tokenizer = get_tokenizer()
-            engine = EnigmaEngine.from_model(model, tokenizer)
-        
+
+        Use this when you already have a loaded model and tokenizer,
+        and don't want the engine to load them again from disk.
+
         Args:
             model: An Enigma model instance (already loaded)
             tokenizer: A tokenizer instance
             device: Device to use ("cuda", "cpu", or auto-detected)
             use_half: Use FP16 for faster inference (GPU only)
-            
+
         Returns:
             EnigmaEngine instance ready for generation
         """
-        import torch
-
-        # Create instance without calling __init__ (bypass normal initialization)
         engine = object.__new__(cls)
-        
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        # INITIALIZE REQUIRED ATTRIBUTES
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        engine._generation_lock = threading.Lock()  # Thread safety for KV-cache
-        engine.device = torch.device(device) if device else (
-            torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-        )
-        engine.use_half = use_half and engine.device.type == "cuda"
-        engine.enable_tools = False
-        engine.module_manager = None
-        engine.use_routing = False
-        engine.use_offloading = False
-        engine._tool_executor = None
-        engine._tool_router = None
-        engine._is_gguf = False
-        engine._web_enabled = False
-        engine.model_metadata = {
-            "supports_nsfw": False,
-            "content_rating": "sfw",
-            "trained_date": None,
-            "training_tasks": [],
-        }
-        
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        # SET MODEL AND TOKENIZER DIRECTLY
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        engine._init_common(device, use_half)
+
         engine.tokenizer = tokenizer
         engine.model = model
-        
+
         # Move model to device and set precision
         engine.model.to(engine.device)
         if engine.use_half:
-            engine.model.half()  # Convert to FP16
-        engine.model.eval()  # Set to evaluation mode (disable dropout)
-        
+            engine.model.half()
+        engine.model.eval()
+
         return engine
 
     def __init__(
@@ -288,39 +287,19 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
             module_manager: ModuleManager for tool execution
             use_routing: Enable specialized model routing
         """
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        # THREAD SAFETY: Lock for KV-cache operations
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        # The KV-cache is stateful - only one generation can run at a time
-        self._generation_lock = threading.Lock()
-        
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        # DEVICE SELECTION: Pick the best available hardware
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        self.device = self._select_device(device)
-        self.use_half = use_half and self.device.type == "cuda"
-        
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        # STORE CONFIGURATION
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # Set all shared defaults first
+        self._init_common(device, use_half)
+
+        # Override from constructor args
         self.enable_tools = enable_tools
         self.module_manager = module_manager
         self.use_routing = use_routing
-        
-        # Check if CPU/GPU offloading is enabled in config
         self.use_offloading = CONFIG.get("enable_offloading", False)
-        
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        # TOOL SYSTEM SETUP (optional)
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        self._tool_executor = None
+
+        # Tool system setup (optional)
         if enable_tools:
             from ..tools.tool_executor import ToolExecutor
             self._tool_executor = ToolExecutor(module_manager=module_manager)
-        
-        # Tool router for specialized models (vision, code, etc.)
-        # Note: tool_router module not yet implemented
-        self._tool_router = None
 
         # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         # LOAD TOKENIZER
@@ -345,7 +324,7 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
                 self.model.to(self.device)
                 if self.use_half:
                     self.model.half()
-            
+
             # Set to evaluation mode (disables dropout, etc.)
             self.model.eval()
 
@@ -394,10 +373,10 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
             if mem_info["gpus"]:
                 for gpu in mem_info["gpus"]:
                     logger.info(f"[Forge:Offload] GPU {gpu['index']}: {gpu['free_gb']:.1f}GB free")
-            
+
             # Get offloading config
             config = OffloadingConfig.from_config()
-            
+
             # Apply offloading
             self.model = apply_offloading(
                 self.model,
@@ -405,9 +384,9 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
                 offload_folder=config.offload_folder,
                 offload_to_disk=config.offload_to_disk
             )
-            
+
             logger.info("[Forge:Offload] Model offloading applied successfully")
-            
+
         except ImportError:
             logger.warning("[Forge:Offload] Could not import offloading module, using standard device")
             self.model.to(self.device)
@@ -454,7 +433,7 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
             for f in MODELS_DIR.glob("*.pth"):
                 detected_model = f
                 break
-        
+
         if detected_model:
             tok_path = detected_model.parent / f"{detected_model.stem}_tokenizer.json"
             if tok_path.exists():
@@ -490,20 +469,20 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
         # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         auto_quantize = False
         quantization_mode = "none"
-        
+
         if model_size == "auto":
             try:
                 from .hardware_detection import detect_hardware, get_optimal_config
 
                 # Detect hardware
                 profile = detect_hardware()
-                
+
                 # Get optimal configuration
                 config = get_optimal_config(profile)
                 model_size = config["model_size"]
                 auto_quantize = config.get("quantization", "none") != "none"
                 quantization_mode = config.get("quantization", "none")
-                
+
                 logger.info(f"[Auto-Detect] Hardware: {profile.hardware_type}")
                 if profile.is_raspberry_pi:
                     logger.info(f"[Auto-Detect] Raspberry Pi Model: {profile.pi_model}")
@@ -511,14 +490,14 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
                 logger.info(f"[Auto-Detect] Recommended model: {model_size}")
                 if auto_quantize:
                     logger.info(f"[Auto-Detect] Quantization: {quantization_mode}")
-                
+
             except ImportError:
                 logger.warning("[Auto-Detect] Hardware detection not available, using 'small'")
                 model_size = "small"
             except Exception as e:
                 logger.warning(f"[Auto-Detect] Detection failed: {e}, using 'small'")
                 model_size = "small"
-        
+
         # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         # FIND MODEL FILE
         # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -540,57 +519,89 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
             for f in MODELS_DIR.glob("*.pth"):
                 model_file = f
                 break
-        
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        # GGUF MODEL HANDLING (llama.cpp)
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        if model_file and model_file.suffix.lower() == '.gguf':
-            logger.info(f"Detected GGUF model: {model_file}")
-            try:
-                from .gguf_loader import GGUFModel
-                
-                # Auto-detect GPU layers based on available VRAM
-                n_gpu_layers = 0
-                n_ctx = 8192  # Default context size
-                try:
-                    import torch
-                    if torch.cuda.is_available():
-                        vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-                        # Rough estimate: more VRAM = more layers on GPU
-                        if vram_gb >= 24:
-                            n_gpu_layers = 100  # Full GPU offload
-                            n_ctx = 16384  # Larger context with plenty of VRAM
-                        elif vram_gb >= 16:
-                            n_gpu_layers = 50
-                            n_ctx = 8192
-                        elif vram_gb >= 8:
-                            n_gpu_layers = 30
-                            n_ctx = 4096
-                        elif vram_gb >= 4:
-                            n_gpu_layers = 15
-                            n_ctx = 2048
-                        logger.info(f"Auto-detected {vram_gb:.1f}GB VRAM, using {n_gpu_layers} GPU layers, {n_ctx} context")
-                except Exception:
-                    pass
-                
-                model = GGUFModel(
-                    str(model_file),
-                    n_ctx=n_ctx,
-                    n_gpu_layers=n_gpu_layers,
-                    verbose=False
-                )
-                model.load()
-                self._is_gguf = True
-                return model
-            except ImportError as e:
-                raise RuntimeError(
-                    f"GGUF model detected but llama-cpp-python not installed.\n"
-                    f"Install with: pip install llama-cpp-python\n"
-                    f"Error: {e}"
-                ) from e
-            except Exception as e:
-                raise RuntimeError(f"Failed to load GGUF model: {e}") from e
 
+
+        # Dispatch to format-specific loader
+        if model_file and model_file.suffix.lower() == '.gguf':
+            return self._load_gguf(model_file)
+
+        return self._load_pytorch(
+            model_file, model_size, auto_quantize, quantization_mode
+        )
+
+
+    def _load_gguf(self, model_file: Path) -> Any:
+        """Load a GGUF model via llama.cpp backend."""
+        logger.info(f"Detected GGUF model: {model_file}")
+        try:
+            # Ensure PyTorch CUDA DLLs are in PATH for llama.cpp GPU support
+            import sys as _sys, os as _os
+            _torch_lib = _os.path.join(
+                _sys.prefix, 'Lib', 'site-packages', 'torch', 'lib'
+            )
+            if _os.path.isdir(_torch_lib) and _torch_lib not in _os.environ.get('PATH', ''):
+                _os.environ['PATH'] = _torch_lib + _os.pathsep + _os.environ.get('PATH', '')
+
+            from .gguf_loader import GGUFModel
+
+            # Auto-detect GPU layers based on available VRAM
+            n_gpu_layers = 0
+            n_ctx = 4096  # Default context size
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+                    gpu_name = torch.cuda.get_device_name(0)
+                    # Scale GPU offload and context by available VRAM
+                    if vram_gb >= 24:
+                        n_gpu_layers = -1  # All layers on GPU
+                        n_ctx = 32768
+                    elif vram_gb >= 16:
+                        n_gpu_layers = -1  # All layers on GPU
+                        n_ctx = 16384
+                    elif vram_gb >= 8:
+                        n_gpu_layers = -1  # Try full offload
+                        n_ctx = 8192
+                    elif vram_gb >= 4:
+                        n_gpu_layers = 20
+                        n_ctx = 4096
+                    elif vram_gb >= 2:
+                        n_gpu_layers = 10
+                        n_ctx = 2048
+                    logger.info(
+                        f"GPU: {gpu_name} ({vram_gb:.1f}GB VRAM) — "
+                        f"n_gpu_layers={n_gpu_layers}, n_ctx={n_ctx}"
+                    )
+            except Exception as e:
+                logger.debug(f"GPU auto-detection failed: {e}")
+
+            model = GGUFModel(
+                str(model_file),
+                n_ctx=n_ctx,
+                n_gpu_layers=n_gpu_layers,
+                verbose=False
+            )
+            model.load()
+            self._is_gguf = True
+            return model
+        except ImportError as e:
+            raise RuntimeError(
+                f"GGUF model detected but llama-cpp-python not installed.\n"
+                f"Install with: pip install llama-cpp-python\n"
+                f"Error: {e}"
+            ) from e
+        except Exception as e:
+            raise RuntimeError(f"Failed to load GGUF model: {e}") from e
+
+
+    def _load_pytorch(
+        self,
+        model_file: Path | None,
+        model_size: str,
+        auto_quantize: bool,
+        quantization_mode: str
+    ) -> Forge:
+        """Load a PyTorch (.pth) model or raise if none found."""
         vocab_size = getattr(self.tokenizer, "vocab_size", 8000)
 
         if model_file and model_file.exists():
@@ -604,21 +615,16 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
                     from .hardware_detection import detect_hardware
                     profile = detect_hardware()
                     if profile.total_ram_gb < 4 or profile.is_raspberry_pi:
-                        use_mmap = True
+                        use_mmap = True  # noqa: F841 — reserved for future mmap loading
                         logger.info("[Memory] Using memory-mapped loading for low-memory device")
                 except ImportError:
                     logger.debug("Hardware detection not available for memory-mapped loading check")
-            
+
             # Load state dict to infer model architecture
             try:
-                from .model_registry import safe_load_weights
-                
-                if use_mmap:
-                    # Memory-mapped loading for constrained devices
-                    state_dict = safe_load_weights(model_file, map_location="cpu")
-                else:
-                    state_dict = safe_load_weights(model_file, map_location="cpu")
-                    
+                from .model_registry import safe_load_weights, get_state_dict
+                raw_checkpoint = safe_load_weights(model_file, map_location="cpu")
+
             except Exception as e:
                 raise RuntimeError(
                     f"Failed to load model weights from {model_file}: {e}\n"
@@ -629,10 +635,25 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
                     f"  3. Check if the file is a valid PyTorch checkpoint"
                 ) from e
 
-            # Infer model config from state dict
+            # Unwrap checkpoint dict → bare state dict of weight tensors
+            state_dict = get_state_dict(raw_checkpoint)
+
+            # Try to read saved model config from checkpoint before inferring
+            saved_config = None
+            if isinstance(raw_checkpoint, dict):
+                saved_config = raw_checkpoint.get('model_config') or raw_checkpoint.get('config')
+                # Reject TrainingConfig dicts that leaked into the 'config' key
+                if isinstance(saved_config, dict) and 'epochs' in saved_config:
+                    saved_config = raw_checkpoint.get('model_config')
+
+            # Infer model config from state dict (used as fallback)
             inferred_config = self._infer_model_config(state_dict)
             detected_size = self._infer_model_size(state_dict)
-            
+
+            # Merge saved config over inferred config
+            if isinstance(saved_config, dict):
+                inferred_config.update(saved_config)
+
             vocab_size = inferred_config.get('vocab_size', 8000)
             max_seq_len = inferred_config.get('max_seq_len', 1024)
             n_layers = inferred_config.get('n_layers')
@@ -667,7 +688,7 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
                     f"The model will be initialized with random weights."
                 )
                 logger.warning(f"Could not load weights: {e}")
-            
+
             # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             # APPLY AUTO-QUANTIZATION IF NEEDED
             # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -701,31 +722,32 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
 
         return model
 
+
     def _infer_model_config(self, state_dict: dict) -> dict:
         """Infer full model config from state dict weights."""
         config = {}
-        
+
         # Get vocab_size and dim from embedding
         for key, tensor in state_dict.items():
             if ('embed' in key.lower() or 'token' in key.lower()) and tensor.dim() == 2:
                 config['vocab_size'] = tensor.shape[0]
                 config['dim'] = tensor.shape[1]
                 break
-        
+
         # Fallback dim from norm weights
         if 'dim' not in config:
             for key, tensor in state_dict.items():
                 if ('norm' in key.lower()) and tensor.dim() == 1:
                     config['dim'] = tensor.shape[0]
                     break
-        
+
         # Get max_seq_len and head_dim from freqs_cis
         # freqs_cis shape = [max_seq_len*2, head_dim/2]
         if 'freqs_cis' in state_dict:
             freqs_shape = state_dict['freqs_cis'].shape
             config['max_seq_len'] = freqs_shape[0] // 2
             config['head_dim'] = freqs_shape[1] * 2  # freqs_cis stores head_dim/2
-        
+
         # Count layers
         layer_nums = set()
         for key in state_dict.keys():
@@ -739,19 +761,19 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
                             pass
         if layer_nums:
             config['n_layers'] = max(layer_nums) + 1
-        
+
         # Compute n_heads from dim and head_dim
         dim = config.get('dim', 512)
         head_dim = config.get('head_dim', 64)
         config['n_heads'] = dim // head_dim
-        
+
         # Infer n_kv_heads from wk weight shape
         for key, tensor in state_dict.items():
             if 'attention.wk.weight' in key and tensor.dim() == 2:
                 kv_dim = tensor.shape[0]
                 config['n_kv_heads'] = kv_dim // head_dim
                 break
-        
+
         return config
 
     def _infer_model_size(self, state_dict: dict) -> str:
@@ -778,26 +800,26 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
         2. 'metadata' key inside the checkpoint dict
         """
         import json
-        
+
         self.model_metadata = {
             "supports_nsfw": False,
             "content_rating": "sfw",
             "trained_date": None,
             "training_tasks": [],
         }
-        
+
         try:
             # Try to find metadata file
             if model_path:
                 model_dir = Path(model_path).parent if Path(model_path).is_file() else Path(model_path)
                 metadata_file = model_dir / "model_metadata.json"
-                
+
                 if metadata_file.exists():
-                    with open(metadata_file, 'r') as f:
+                    with open(metadata_file, 'r', encoding='utf-8') as f:
                         loaded_metadata = json.load(f)
                     self.model_metadata.update(loaded_metadata)
                     logger.info(f"Loaded model metadata from {metadata_file}")
-                
+
         except Exception as e:
             logger.debug(f"Could not load model metadata: {e}")
 
@@ -809,7 +831,7 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
             if hasattr(self.model, 'model_path'):
                 logger.info(f"Model: {self.model.model_path}")
             return
-            
+
         num_params = sum(p.numel() for p in self.model.parameters())
 
         logger.info(f"EnigmaEngine initialized on {self.device}")
@@ -905,13 +927,13 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
             max_gen = max_new_tokens
         if max_length is not None:
             max_gen = max_length
-        
+
         # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         # STEP 1: Determine if tools should be executed
         # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         if execute_tools is None:
             execute_tools = self.enable_tools
-        
+
         # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         # STEP 2: Check if specialized routing should handle this
         # Some prompts can bypass the main AI for faster execution
@@ -921,7 +943,7 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
             # Classify what the user wants (image, code, web, etc.)
             intent = self._tool_router.classify_intent(prompt)
             logger.info(f"Classified intent: {intent}")
-            
+
             # Check if this needs AI creativity (ambiguous/creative requests)
             # "surprise me" â†’ needs AI, "draw a cat" â†’ can route directly
             if self._needs_ai_creativity(prompt):
@@ -932,41 +954,26 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
                 direct_result = self._try_direct_routing(intent, prompt)
                 if direct_result is not None:
                     return direct_result
-        
+
         # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         # STEP 3: Thread-safe generation (protects KV-cache state)
         # Only one generation can happen at a time!
         # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        lock = getattr(self, '_generation_lock', None)
-        if lock:
-            lock.acquire()
-        
-        try:
-            # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-            # STEP 4: Standard text generation
-            # This is where the actual model inference happens
-            # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        with self._generation_lock:
             text = self._generate_text(
-                prompt, max_gen, temperature, top_k, top_p, 
+                prompt, max_gen, temperature, top_k, top_p,
                 repetition_penalty, stop_strings, use_cache
             )
-            
-            # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-            # STEP 5: Tool execution loop
-            # If AI generated tool calls, execute them and continue
-            # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
             if execute_tools and self._tool_executor:
                 text = self._execute_tools_in_text(
                     text, max_iterations=max_tool_iterations,
                     max_gen=max_gen, temperature=temperature,
-                    top_k=top_k, top_p=top_p, 
+                    top_k=top_k, top_p=top_p,
                     repetition_penalty=repetition_penalty,
                     stop_strings=stop_strings, use_cache=use_cache
                 )
-        finally:
-            if lock:
-                lock.release()
-        
+
         return text
 
     def stream(
@@ -1023,7 +1030,7 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
         # Handle case where output is already a string
         if isinstance(output_ids, str):
             return output_ids
-        
+
         # Handle tensor output
         try:
             ids = output_ids[0].cpu().tolist()
@@ -1046,7 +1053,7 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
     # =========================================================================
     # Cache & Token Utilities
     # =========================================================================
-    
+
     def clear_kv_cache(self) -> None:
         """
         Clear the KV-cache to prevent hallucinations from stale context.
@@ -1068,32 +1075,55 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
         # Also clear any internal cache
         if hasattr(self, '_cache'):
             self._cache = None
-    
+
     def count_tokens(self, text: str) -> int:
         """
         Count the number of tokens in a text string.
+
+        Results are cached so repeated calls with the same text
+        (e.g. history messages during truncation) are free.
         
         Args:
             text: Text to count tokens in
             
         Returns:
             Number of tokens
+
+        Raises:
+            RuntimeError: If no tokenizer with ``encode()`` or
+                ``__call__()`` is available.
         """
+        cache = getattr(self, "_token_count_cache", None)
+        if cache is not None:
+            cached = cache.get(text)
+            if cached is not None:
+                return cached
+
         if hasattr(self.tokenizer, 'encode'):
-            return len(self.tokenizer.encode(text, add_special_tokens=False))
+            count = len(self.tokenizer.encode(text, add_special_tokens=False))
         elif hasattr(self.tokenizer, '__call__'):
             result = self.tokenizer(text, return_tensors=None)
-            return len(result.get('input_ids', []))
+            count = len(result.get('input_ids', []))
         else:
-            # Rough estimate: ~4 chars per token
-            return len(text) // 4
-    
+            raise RuntimeError(
+                "No tokenizer with encode() or __call__() available. "
+                "Load a model first or ensure a tokenizer is configured."
+            )
+
+        if cache is not None:
+            # Cap cache at 4096 entries to prevent unbounded growth
+            if len(cache) >= 4096:
+                cache.clear()
+            cache[text] = count
+
+        return count
+
     def get_max_context_length(self) -> int:
         """Get the model's maximum context length."""
         if hasattr(self.model, 'config'):
             return getattr(self.model.config, 'max_seq_len', 1024)
         return 1024  # Safe default
-    
+
 # =============================================================================
 # Convenience Functions
 # =============================================================================

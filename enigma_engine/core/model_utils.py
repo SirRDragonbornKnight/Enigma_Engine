@@ -101,13 +101,13 @@ def apply_repetition_penalty(
     """
     if penalty == 1.0:
         return logits
-    
+
     # Clone to avoid in-place mutation (important for beam search, speculative decoding)
     logits = logits.clone()
-    
+
     vocab_size = logits.shape[-1]
     seq_len = generated_tokens.numel()
-    
+
     if seq_len < 1000:
         # Set-based for short sequences (lower overhead)
         unique_tokens = set(generated_tokens.view(-1).tolist())
@@ -126,7 +126,7 @@ def apply_repetition_penalty(
             logits[appeared_mask] /= penalty
         else:
             logits[..., appeared_mask] /= penalty
-    
+
     return logits
 
 
@@ -194,9 +194,10 @@ def detect_hardware() -> dict[str, Any]:
     Returns dict with: total_ram_gb, gpu_vram_gb, is_raspberry_pi, is_arm, etc.
     """
     try:
+        import dataclasses
         from .hardware_detection import detect_hardware as _detect
         profile = _detect()
-        return profile.to_dict()
+        return dataclasses.asdict(profile)
     except ImportError:
         # Fallback basic detection
         ram_gb = os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES') / (1024**3) if hasattr(os, 'sysconf') else 4.0
@@ -220,7 +221,7 @@ def recommend_model_size(hardware: Optional[dict[str, Any]] = None) -> str:
     """
     if hardware is None:
         hardware = detect_hardware()
-    
+
     return hardware.get("recommended_model_size", "small")
 
 

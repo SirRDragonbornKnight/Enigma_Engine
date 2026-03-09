@@ -11,29 +11,47 @@ Usage:
     model = load_onnx_model("model.onnx")
     # Returns a Forge model with loaded weights
 """
+from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
+
+if TYPE_CHECKING:
+    from enigma_engine.core.model import Forge
 
 logger = logging.getLogger(__name__)
 
-# Check for required dependencies
+# Deferred imports — loaded on first use to save RAM at startup
+_onnx_imports_checked = False
 HAVE_ONNX = False
 HAVE_TORCH = False
+onnx: Any = None
+numpy_helper: Any = None
+torch: Any = None
 
-try:
-    import onnx
-    from onnx import numpy_helper
-    HAVE_ONNX = True
-except ImportError:
-    logger.warning("onnx not available - ONNX loading disabled")
 
-try:
-    import torch
-    HAVE_TORCH = True
-except ImportError:
-    logger.warning("torch not available - ONNX loading disabled")
+def _ensure_onnx_imports() -> None:
+    """Load onnx and torch on first call."""
+    global _onnx_imports_checked, HAVE_ONNX, HAVE_TORCH
+    global onnx, numpy_helper, torch
+    if _onnx_imports_checked:
+        return
+    _onnx_imports_checked = True
+    try:
+        import onnx as _onnx
+        from onnx import numpy_helper as _nh
+        onnx = _onnx
+        numpy_helper = _nh
+        HAVE_ONNX = True
+    except ImportError:
+        logger.warning("onnx not available - ONNX loading disabled")
+    try:
+        import torch as _torch
+        torch = _torch
+        HAVE_TORCH = True
+    except ImportError:
+        logger.warning("torch not available - ONNX loading disabled")
 
 
 def extract_onnx_weights(onnx_model_path: Union[str, Path]) -> dict[str, torch.Tensor]:
@@ -46,46 +64,47 @@ def extract_onnx_weights(onnx_model_path: Union[str, Path]) -> dict[str, torch.T
     Returns:
         Dictionary mapping parameter names to PyTorch tensors
     """
+    _ensure_onnx_imports()
     if not HAVE_ONNX:
         raise RuntimeError(
             "ONNX loading requires onnx library. "
             "Install with: pip install onnx"
         )
-    
+
     if not HAVE_TORCH:
         raise RuntimeError(
             "ONNX loading requires torch library. "
             "Install with: pip install torch"
         )
-    
+
     logger.info(f"Loading ONNX model from: {onnx_model_path}")
-    
+
     # Load ONNX model
     onnx_model = onnx.load(str(onnx_model_path))
-    
+
     # Check model is valid
     try:
         onnx.checker.check_model(onnx_model)
         logger.info("ONNX model structure is valid")
     except Exception as e:
         logger.warning(f"ONNX model validation warning: {e}")
-    
+
     # Extract initializers (weights)
     weights = {}
-    
+
     for initializer in onnx_model.graph.initializer:
         # Convert ONNX tensor to numpy array
         np_array = numpy_helper.to_array(initializer)
-        
+
         # Convert to PyTorch tensor
         tensor = torch.from_numpy(np_array)
-        
+
         # Store with parameter name
         weights[initializer.name] = tensor
         logger.debug(f"Extracted weight: {initializer.name}, shape: {tensor.shape}")
-    
+
     logger.info(f"Extracted {len(weights)} weight tensors from ONNX model")
-    
+
     return weights
 
 
@@ -105,7 +124,7 @@ def infer_config_from_onnx(onnx_weights: dict[str, torch.Tensor]) -> dict[str, A
         'n_layers': 0,
         'n_heads': None,
     }
-    
+
     # Try to infer vocabulary size from embedding or output layer
     for name, tensor in onnx_weights.items():
         if 'embed' in name.lower() and tensor.dim() == 2:
@@ -118,7 +137,7 @@ def infer_config_from_onnx(onnx_weights: dict[str, torch.Tensor]) -> dict[str, A
             config['dim'] = tensor.shape[1]
             logger.info(f"Inferred vocab_size={config['vocab_size']}, dim={config['dim']}")
             break
-    
+
     # Infer number of layers by counting layer-specific weights
     layer_indices = set()
     for name in onnx_weights.keys():
@@ -127,11 +146,11 @@ def infer_config_from_onnx(onnx_weights: dict[str, torch.Tensor]) -> dict[str, A
         for i, part in enumerate(parts):
             if part.isdigit() and i > 0:  # Avoid false positives
                 layer_indices.add(int(part))
-    
+
     if layer_indices:
         config['n_layers'] = max(layer_indices) + 1
         logger.info(f"Inferred n_layers={config['n_layers']}")
-    
+
     # Try to infer number of heads from attention projection shapes
     for name, tensor in onnx_weights.items():
         if ('attn' in name.lower() or 'attention' in name.lower()) and tensor.dim() == 2:
@@ -142,7 +161,7 @@ def infer_config_from_onnx(onnx_weights: dict[str, torch.Tensor]) -> dict[str, A
                     if config['n_heads'] > 1:
                         logger.info(f"Inferred n_heads={config['n_heads']}")
                         break
-    
+
     return config
 
 
@@ -174,40 +193,41 @@ def load_onnx_model(
         FileNotFoundError: If model file not found
         ValueError: If model structure incompatible
     """
+    _ensure_onnx_imports()
     if not HAVE_ONNX or not HAVE_TORCH:
         raise RuntimeError(
             "ONNX loading requires onnx and torch libraries. "
             "Install with: pip install onnx torch"
         )
-    
+
     # Import here to avoid circular imports
     from .model import Forge, ForgeConfig
     from .weight_mapping import WeightMapper
-    
+
     onnx_model_path = Path(onnx_model_path)
-    
+
     if not onnx_model_path.exists():
         raise FileNotFoundError(f"ONNX model not found: {onnx_model_path}")
-    
+
     # Extract weights from ONNX
     logger.info("Extracting weights from ONNX model...")
     onnx_weights = extract_onnx_weights(onnx_model_path)
-    
+
     if not onnx_weights:
         raise ValueError("No weights found in ONNX model")
-    
+
     # Infer or validate config
     if config is None:
         logger.info("No config provided, inferring from ONNX model...")
         inferred_config = infer_config_from_onnx(onnx_weights)
-        
+
         # Validate inferred config
         if inferred_config['vocab_size'] is None or inferred_config['dim'] is None:
             raise ValueError(
                 "Could not infer model configuration from ONNX model. "
                 "Please provide a ForgeConfig explicitly."
             )
-        
+
         # Use inferred config with defaults for missing values
         config = ForgeConfig(
             vocab_size=inferred_config['vocab_size'],
@@ -220,44 +240,44 @@ def load_onnx_model(
     elif not isinstance(config, ForgeConfig):
         # Convert dict to ForgeConfig
         config = ForgeConfig(**config)
-    
+
     # Create Forge model
     logger.info("Creating Forge model...")
     forge_model = Forge(config=config)
-    
+
     # Map ONNX weights to Forge format
     logger.info("Mapping ONNX weights to Forge format...")
     mapper = WeightMapper()
     forge_weights = mapper.map_onnx_to_forge(onnx_weights, config)
-    
+
     # Load weights into model (with strict=False to allow partial loading)
     logger.info("Loading weights into Forge model...")
     try:
         missing_keys, unexpected_keys = forge_model.load_state_dict(forge_weights, strict=False)
-        
+
         if missing_keys:
             logger.warning(f"Missing keys ({len(missing_keys)}): {missing_keys[:5]}...")
             logger.info("Missing keys will be randomly initialized")
-        
+
         if unexpected_keys:
             logger.warning(f"Unexpected keys ({len(unexpected_keys)}): {unexpected_keys[:5]}...")
-    
+
     except Exception as e:
         logger.error(f"Failed to load weights: {e}")
-        raise ValueError(f"Weight loading failed: {e}")
-    
+        raise ValueError(f"Weight loading failed: {e}") from e
+
     logger.info("ONNX model successfully loaded into Forge format")
-    
+
     # Set to eval mode by default
     forge_model.eval()
-    
+
     # Validate the loaded model
     try:
         validate_loaded_model(forge_model)
     except Exception as e:
         logger.warning(f"Model validation warning: {e}")
         # Continue anyway - model may still work for some use cases
-    
+
     return forge_model
 
 
@@ -274,38 +294,39 @@ def validate_loaded_model(model: 'Forge') -> None:
         RuntimeError: If model validation fails
         ValueError: If output shape is incorrect
     """
+    _ensure_onnx_imports()
     if not HAVE_TORCH:
         logger.warning("Cannot validate model without torch")
         return
-    
+
     try:
         # Verify model has required attributes
         if not hasattr(model, 'vocab_size'):
             logger.warning("Model missing vocab_size attribute, cannot validate")
             return
-        
+
         # Test forward pass with random input
         batch_size = 1
         seq_len = 10
         input_ids = torch.randint(0, model.vocab_size, (batch_size, seq_len))
-        
+
         with torch.no_grad():
             output = model(input_ids)
-        
+
         expected_shape = (batch_size, seq_len, model.vocab_size)
         if output.shape != expected_shape:
             raise ValueError(
                 f"Output shape mismatch: got {output.shape}, expected {expected_shape}"
             )
-        
+
         # Check for NaN values
         if torch.isnan(output).any():
             raise ValueError("Model output contains NaN values")
-        
+
         logger.info(f"✓ Model validation passed: output shape {output.shape}")
-        
+
     except Exception as e:
-        raise RuntimeError(f"Model validation failed: {e}")
+        raise RuntimeError(f"Model validation failed: {e}") from e
 
 
 def validate_onnx_model(onnx_model_path: Union[str, Path]) -> dict[str, Any]:
@@ -323,23 +344,24 @@ def validate_onnx_model(onnx_model_path: Union[str, Path]) -> dict[str, Any]:
         - output_names: List of output names
         - inferred_config: Inferred configuration
     """
+    _ensure_onnx_imports()
     if not HAVE_ONNX:
         return {
             'valid': False,
             'error': 'onnx library not installed'
         }
-    
+
     try:
         onnx_model = onnx.load(str(onnx_model_path))
         onnx.checker.check_model(onnx_model)
-        
+
         # Extract info
         weights = extract_onnx_weights(onnx_model_path)
         inferred_config = infer_config_from_onnx(weights)
-        
+
         input_names = [inp.name for inp in onnx_model.graph.input]
         output_names = [out.name for out in onnx_model.graph.output]
-        
+
         return {
             'valid': True,
             'num_weights': len(weights),
@@ -348,7 +370,7 @@ def validate_onnx_model(onnx_model_path: Union[str, Path]) -> dict[str, Any]:
             'inferred_config': inferred_config,
             'file_size_mb': Path(onnx_model_path).stat().st_size / (1024 * 1024)
         }
-    
+
     except Exception as e:
         return {
             'valid': False,
@@ -359,32 +381,32 @@ def validate_onnx_model(onnx_model_path: Union[str, Path]) -> dict[str, Any]:
 if __name__ == "__main__":
     # Test ONNX loading
     import sys
-    
+
     if len(sys.argv) < 2:
         print("Usage: python onnx_loader.py <path_to_onnx_model>")
         print("\nThis will validate the ONNX model and show its structure.")
         sys.exit(1)
-    
+
     model_path = sys.argv[1]
-    
+
     print(f"Validating ONNX model: {model_path}")
     print("=" * 60)
-    
+
     info = validate_onnx_model(model_path)
-    
+
     if info['valid']:
         print("[OK] Model is valid")
-        print(f"\nModel Information:")
+        print("\nModel Information:")
         print(f"  File size: {info['file_size_mb']:.2f} MB")
         print(f"  Number of weights: {info['num_weights']}")
         print(f"  Inputs: {info['input_names']}")
         print(f"  Outputs: {info['output_names']}")
-        print(f"\nInferred Configuration:")
+        print("\nInferred Configuration:")
         for key, value in info['inferred_config'].items():
             print(f"  {key}: {value}")
-        
+
         print("\n[INFO] You can load this model with:")
-        print(f"  from enigma_engine.core.onnx_loader import load_onnx_model")
+        print("  from enigma_engine.core.onnx_loader import load_onnx_model")
         print(f"  model = load_onnx_model('{model_path}')")
     else:
         print(f"[ERROR] Model validation failed: {info['error']}")

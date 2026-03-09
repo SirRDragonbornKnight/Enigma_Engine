@@ -20,7 +20,7 @@ class AdvancedBPETokenizer:
     - Standard BPE format (token_to_id, id_to_token, merges)
     - Enigma format (encoder, special_tokens)
     """
-    
+
     def __init__(self, vocab_file: Optional[Path] = None, **kwargs):
         """
         Initialize the Advanced BPE Tokenizer.
@@ -35,43 +35,45 @@ class AdvancedBPETokenizer:
             "<s>": 1,
             "</s>": 2,
             "<unk>": 3,
+            "<think>": 4,
+            "</think>": 5,
         }
-        
+
         self.pad_token = "<pad>"
         self.eos_token = "</s>"
         self.bos_token = "<s>"
         self.unk_token = "<unk>"
-        
+
         self.pad_token_id = 0
         self.eos_token_id = 2
         self.bos_token_id = 1
         self.unk_token_id = 3
-        
+
         # Vocabulary mappings
         self.token_to_id: dict[str, int] = {}
         self.id_to_token: dict[int, str] = {}
-        
+
         # BPE merge rules
         self.merges: list[tuple[str, str]] = []
         self.merge_ranks: dict[tuple[str, str], int] = {}
-        
+
         # Cache for encoding
-        self.cache: dict[str, list[int]] = {}
-        
+        self.cache: dict[str, list[str]] = {}
+
         if vocab_file and Path(vocab_file).exists():
             self.load(vocab_file)
         else:
             self._init_base_vocab()
-        
+
         self.vocab_size = len(self.token_to_id)
-    
+
     def _init_base_vocab(self):
         """Initialize with special tokens and base characters."""
         self.token_to_id = dict(self.special_tokens)
         self.id_to_token = {v: k for k, v in self.special_tokens.items()}
-        
+
         next_id = len(self.special_tokens)
-        
+
         # Add all printable ASCII as base tokens
         for i in range(256):
             char = bytes([i]).decode('latin-1')
@@ -79,25 +81,25 @@ class AdvancedBPETokenizer:
                 self.token_to_id[char] = next_id
                 self.id_to_token[next_id] = char
                 next_id += 1
-    
+
     def load(self, vocab_file: Union[str, Path]) -> None:
         """Load vocabulary from file."""
         vocab_file = Path(vocab_file)
-        
+
         with open(vocab_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
-        
+
         # Handle different formats
         if 'encoder' in data:
             # Enigma format
             self.token_to_id = data['encoder']
             self.id_to_token = {v: k for k, v in self.token_to_id.items()}
-            
+
             # Update special tokens from file
             if 'special_tokens' in data:
                 for token, idx in data['special_tokens'].items():
                     self.special_tokens[token] = idx
-                    
+
                 # Map standard names to Enigma format
                 if '[E:pad]' in data['special_tokens']:
                     self.pad_token_id = data['special_tokens']['[E:pad]']
@@ -111,38 +113,38 @@ class AdvancedBPETokenizer:
                 if '[E:unk]' in data['special_tokens']:
                     self.unk_token_id = data['special_tokens']['[E:unk]']
                     self.unk_token = '[E:unk]'
-            
+
             self.vocab_size = data.get('vocab_size', len(self.token_to_id))
-            
+
         elif 'token_to_id' in data:
             # Standard BPE format
             self.token_to_id = data['token_to_id']
             self.id_to_token = {v: k for k, v in self.token_to_id.items()}
-            
+
             if 'merges' in data:
                 self.merges = [tuple(m) for m in data['merges']]
                 self.merge_ranks = {m: i for i, m in enumerate(self.merges)}
-            
+
             self.vocab_size = len(self.token_to_id)
         else:
             raise ValueError(f"Unknown tokenizer format in {vocab_file}")
-        
+
         logger.info(f"Loaded tokenizer from {vocab_file} with {self.vocab_size} tokens")
-    
+
     def save(self, vocab_file: Union[str, Path]) -> None:
         """Save vocabulary to file."""
         vocab_file = Path(vocab_file)
-        
+
         data = {
             'version': '2.1',
             'vocab_size': self.vocab_size,
             'encoder': self.token_to_id,
             'special_tokens': self.special_tokens,
         }
-        
+
         with open(vocab_file, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
-    
+
     def _tokenize_word(self, word: str) -> list[str]:
         """Tokenize a single word using learned BPE merges."""
         # Check cache
@@ -198,19 +200,23 @@ class AdvancedBPETokenizer:
         """Encode text to token IDs using BPE merges."""
         if not text:
             return []
-        
+
         ids = []
-        
+
         if add_special_tokens:
             ids.append(self.bos_token_id)
-        
+
         # If we have merges, use BPE encoding
         if self.merges:
             import re
+            # Pre-split reasoning tags so they stay as whole tokens
+            for token in self.special_tokens:
+                if len(token) > 1 and token in text:
+                    text = text.replace(token, f" {token} ")
             # Split into words (keep punctuation separate)
             pattern = r"'s|'t|'re|'ve|'m|'ll|'d|\w+|[^\s\w]+|\s+"
             words = re.findall(pattern, text)
-            
+
             for word in words:
                 if not word:
                     continue
@@ -241,18 +247,18 @@ class AdvancedBPETokenizer:
                     ids.append(self.token_to_id[char])
                 else:
                     ids.append(self.unk_token_id)
-        
+
         if add_special_tokens:
             ids.append(self.eos_token_id)
-        
+
         return ids
-    
+
     def decode(self, token_ids: list[int], skip_special_tokens: bool = True) -> str:
         """Decode token IDs to text."""
         chars = []
-        
+
         special_ids = set(self.special_tokens.values()) if skip_special_tokens else set()
-        
+
         for tid in token_ids:
             if tid in special_ids:
                 continue
@@ -260,9 +266,9 @@ class AdvancedBPETokenizer:
                 chars.append(self.id_to_token[tid])
             else:
                 chars.append(self.unk_token)
-        
+
         return ''.join(chars)
-    
+
     def encode_chat(
         self,
         messages: list[dict[str, str]],
@@ -270,11 +276,11 @@ class AdvancedBPETokenizer:
     ) -> list[int]:
         """Encode a list of chat messages."""
         tokens = []
-        
+
         for msg in messages:
             role = msg.get("role", "user")
             content = msg.get("content", "")
-            
+
             if role == "system":
                 if '[E:system]' in self.token_to_id:
                     tokens.append(self.token_to_id['[E:system]'])
@@ -287,13 +293,13 @@ class AdvancedBPETokenizer:
                 if '[E:assistant]' in self.token_to_id:
                     tokens.append(self.token_to_id['[E:assistant]'])
                 tokens.extend(self.encode(content))
-        
+
         if add_generation_prompt:
             if '[E:assistant]' in self.token_to_id:
                 tokens.append(self.token_to_id['[E:assistant]'])
-        
+
         return tokens
-    
+
     def get_vocab_stats(self) -> dict[str, Any]:
         """Get vocabulary statistics."""
         return {
@@ -302,7 +308,7 @@ class AdvancedBPETokenizer:
             "special_tokens": list(self.special_tokens.keys()),
             "cache_size": len(self.cache),
         }
-    
+
     @classmethod
     def from_file(cls, path: Union[str, Path]) -> "AdvancedBPETokenizer":
         """Load tokenizer from file."""

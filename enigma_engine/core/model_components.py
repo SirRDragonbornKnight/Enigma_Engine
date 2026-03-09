@@ -88,8 +88,8 @@ class RMSNorm(nn.Module):
 # RoPE encodes position by ROTATING the vectors - elegant and effective.
 
 def precompute_rope_frequencies(
-    dim: int, 
-    max_seq_len: int, 
+    dim: int,
+    max_seq_len: int,
     theta: float = 10000.0,
     scaling_type: Optional[str] = None,
     scaling_factor: float = 1.0
@@ -130,13 +130,13 @@ def precompute_rope_frequencies(
     # Calculate base frequencies: lower dimensions rotate faster
     # freqs[i] = 1 / (theta^(2i/dim))
     freqs = 1.0 / (theta ** (torch.arange(0, dim, 2).float() / dim))
-    
+
     # Apply RoPE scaling if specified
     if scaling_type == "linear":
         # Linear scaling: compress frequencies uniformly
         freqs = freqs / scaling_factor
         logger.debug(f"Applied linear RoPE scaling (factor={scaling_factor})")
-        
+
     elif scaling_type == "dynamic":
         # Dynamic NTK-aware scaling: adjust theta based on extension
         # Better quality than linear for moderate extensions
@@ -145,7 +145,7 @@ def precompute_rope_frequencies(
         adjusted_theta = theta * (alpha ** (dim / (dim - 2)))
         freqs = 1.0 / (adjusted_theta ** (torch.arange(0, dim, 2).float() / dim))
         logger.debug(f"Applied dynamic NTK RoPE scaling (factor={scaling_factor})")
-        
+
     elif scaling_type == "yarn":
         # YaRN (Yet another RoPE extensioN): Best for very long contexts
         # Uses attention-aware scaling with ramp function
@@ -153,24 +153,24 @@ def precompute_rope_frequencies(
         # YaRN applies different scaling to different frequency bands
         beta_fast = 32  # Low frequency threshold
         beta_slow = 1   # High frequency threshold
-        
+
         # Compute frequency-dependent scaling
         dim_indices = torch.arange(0, dim, 2).float()
         # Ramp function: smoothly transition between fast and slow scaling
         ramp = (dim_indices / dim - beta_slow) / (beta_fast / dim - beta_slow)
         ramp = torch.clamp(ramp, 0, 1)
-        
+
         # Apply scaled freqs with ramp
         freqs_scaled = freqs / alpha
         freqs = freqs_scaled * ramp + freqs * (1 - ramp)
         logger.debug(f"Applied YaRN RoPE scaling (factor={scaling_factor})")
-    
+
     # Create position indices: [0, 1, 2, ..., max_seq_len-1]
     positions = torch.arange(max_seq_len)
-    
+
     # Outer product: angles[pos, dim] = pos * freq[dim]
     angles = torch.outer(positions, freqs)
-    
+
     # Convert to complex numbers for rotation: e^(i*angle) = cos(angle) + i*sin(angle)
     return torch.polar(torch.ones_like(angles), angles)
 
@@ -202,16 +202,16 @@ def apply_rotary_embedding(
     seq_len = x.shape[1]
     # Get the right slice of frequencies for our positions
     freqs = freqs_cis[start_pos:start_pos + seq_len]
-    
+
     # Reshape x to treat pairs of dims as complex: [batch, seq, heads, dim/2, 2]
     x_complex = torch.view_as_complex(x.float().reshape(*x.shape[:-1], -1, 2))
-    
+
     # Add batch and head dimensions to freqs for broadcasting
     freqs = freqs.unsqueeze(0).unsqueeze(2)
-    
+
     # Complex multiplication = rotation!
     x_rotated = x_complex * freqs
-    
+
     # Convert back to real numbers and original shape
     return torch.view_as_real(x_rotated).flatten(-2).type_as(x)
 
@@ -246,7 +246,7 @@ class Attention(nn.Module):
       → Uses RoPE (apply_rotary_embedding) for position encoding
       ← Used by TransformerBlock
     """
-    
+
     # Maximum KV-cache size (sliding window for memory efficiency)
     MAX_CACHE_SEQ_LEN = 4096
 
@@ -262,7 +262,7 @@ class Attention(nn.Module):
         self.n_kv_heads = config.n_kv_heads    # Number of key/value heads (for GQA)
         self.head_dim = config.dim // config.n_heads  # Dimension per head
         self.n_rep = self.n_heads // self.n_kv_heads  # How many Q heads per KV head
-        
+
         # Cache size limit from config or default
         self.max_cache_len = min(
             config.max_seq_len if hasattr(config, 'max_seq_len') else self.MAX_CACHE_SEQ_LEN,
@@ -312,9 +312,9 @@ class Attention(nn.Module):
         # ─────────────────────────────────────────────────────────────────────
         # STEP 1: Project input to Q, K, V
         # ─────────────────────────────────────────────────────────────────────
-        q = self.wq(x).view(B, T, self.n_heads, self.head_dim)
-        k = self.wk(x).view(B, T, self.n_kv_heads, self.head_dim)
-        v = self.wv(x).view(B, T, self.n_kv_heads, self.head_dim)
+        q = self.wq(x).reshape(B, T, self.n_heads, self.head_dim)
+        k = self.wk(x).reshape(B, T, self.n_kv_heads, self.head_dim)
+        v = self.wv(x).reshape(B, T, self.n_kv_heads, self.head_dim)
 
         # ─────────────────────────────────────────────────────────────────────
         # STEP 2: Apply RoPE position embeddings to Q and K
@@ -331,7 +331,7 @@ class Attention(nn.Module):
             # if someone accidentally backprops with use_cache=True
             k = k.detach()
             v = v.detach()
-            
+
             if self.cache_k is None:
                 # First token - just store K, V
                 self.cache_k, self.cache_v = k, v
@@ -339,13 +339,13 @@ class Attention(nn.Module):
                 # Append new K, V to cache
                 self.cache_k = torch.cat([self.cache_k, k], dim=1)
                 self.cache_v = torch.cat([self.cache_v, v], dim=1)
-                
+
                 # Sliding window: trim if cache gets too big
                 if self.cache_k.shape[1] > self.max_cache_len:
                     trim_amount = self.cache_k.shape[1] - self.max_cache_len
                     self.cache_k = self.cache_k[:, trim_amount:, :, :]
                     self.cache_v = self.cache_v[:, trim_amount:, :, :]
-                    
+
             k, v = self.cache_k, self.cache_v
 
         # ─────────────────────────────────────────────────────────────────────
@@ -384,7 +384,7 @@ class Attention(nn.Module):
             and not use_cache  # Flash doesn't support incremental decode
             and (mask is None or T == k.shape[1])  # Full sequence, not cached
         )
-        
+
         if use_flash:
             # ─────────────────────────────────────────────────────────────────
             # FLASH ATTENTION PATH: O(n) memory, 2-4x faster
@@ -398,14 +398,14 @@ class Attention(nn.Module):
                 softmax_scale=1.0 / math.sqrt(self.head_dim)
             )
             # output is [batch, seq, heads, dim], need [batch, seq, dim]
-            output = output.view(B, T, -1)
+            output = output.reshape(B, T, -1)
         else:
             # ─────────────────────────────────────────────────────────────────
             # STANDARD ATTENTION PATH: Works everywhere (CPU, MPS, any dtype)
             # ─────────────────────────────────────────────────────────────────
             # Transpose for batched matrix multiply: [batch, heads, seq, dim]
             q, k, v = q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2)
-            
+
             # scores = Q @ K.T / sqrt(head_dim) - scaled dot-product attention
             scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.head_dim)
             if mask is not None:
@@ -414,9 +414,9 @@ class Attention(nn.Module):
             # Softmax and dropout, then weighted sum of values
             attn = self.dropout(F.softmax(scores, dim=-1))
             output = torch.matmul(attn, v)
-            
+
             # Reshape back: [batch, heads, seq, dim] -> [batch, seq, heads*dim]
-            output = output.transpose(1, 2).contiguous().view(B, T, -1)
+            output = output.transpose(1, 2).reshape(B, T, -1)
 
         # ─────────────────────────────────────────────────────────────────────
         # STEP 6: Project back to model dimension
@@ -537,15 +537,15 @@ class MoEFeedForward(nn.Module):
         self.num_experts = config.num_experts
         self.num_experts_per_token = config.num_experts_per_token
         self.aux_loss_weight = config.moe_load_balancing
-        
+
         # Router: determines which experts to use for each token
         self.gate = nn.Linear(config.dim, config.num_experts, bias=False)
-        
+
         # Expert networks (each is a standard FeedForward)
         self.experts = nn.ModuleList([
             FeedForward(config) for _ in range(config.num_experts)
         ])
-        
+
         # Track load balancing loss for training
         self.load_balancing_loss = 0.0
 
@@ -564,36 +564,36 @@ class MoEFeedForward(nn.Module):
         """
         B, T, D = x.shape
         num_tokens = B * T
-        
+
         # Flatten batch and sequence dimensions for routing
-        x_flat = x.view(-1, D)  # [num_tokens, D]
-        
+        x_flat = x.reshape(-1, D)  # [num_tokens, D]
+
         # Compute router scores
         router_logits = self.gate(x_flat)  # [num_tokens, num_experts]
         router_probs = F.softmax(router_logits, dim=-1)
-        
+
         # Select top-k experts for each token
         top_k_probs, top_k_indices = torch.topk(
             router_probs, self.num_experts_per_token, dim=-1
         )  # Both: [num_tokens, k]
-        
+
         # Normalize selected expert weights
         top_k_probs = top_k_probs / top_k_probs.sum(dim=-1, keepdim=True)
-        
+
         # Compute load balancing loss for training (vectorized)
         if self.training:
             # Use one_hot + sum for vectorized counting (no loop)
             # Flatten top_k_indices and create one-hot encoding
-            flat_indices = top_k_indices.view(-1)  # [num_tokens * k]
+            flat_indices = top_k_indices.reshape(-1)  # [num_tokens * k]
             expert_counts = torch.bincount(
                 flat_indices, minlength=self.num_experts
             ).float()
-            
+
             # Ideal distribution is uniform
             ideal_count = (num_tokens * self.num_experts_per_token) / self.num_experts
             # Loss is variance from ideal (encourages balance)
             self.load_balancing_loss = ((expert_counts - ideal_count) ** 2).mean()
-        
+
         # ─────────────────────────────────────────────────────────────────────
         # VECTORIZED EXPERT ROUTING: Process each expert once with batched tokens
         # ─────────────────────────────────────────────────────────────────────
@@ -602,47 +602,47 @@ class MoEFeedForward(nn.Module):
         # 2. Sort/group by expert
         # 3. Process each expert's batch once
         # 4. Scatter results back
-        
+
         # Expand token indices for all k selections
         token_indices = torch.arange(num_tokens, device=x.device)
         token_indices = token_indices.unsqueeze(1).expand(-1, self.num_experts_per_token)
         # token_indices: [num_tokens, k] - which token each assignment belongs to
-        
+
         # Flatten everything for batched processing
         flat_token_idx = token_indices.reshape(-1)  # [num_tokens * k]
         flat_expert_idx = top_k_indices.reshape(-1)  # [num_tokens * k]
         flat_weights = top_k_probs.reshape(-1)  # [num_tokens * k]
-        
+
         # Initialize output accumulator
         output = torch.zeros_like(x_flat)  # [num_tokens, D]
-        
+
         # Process each expert's tokens in a single batch
         for expert_id in range(self.num_experts):
             # Find all assignments to this expert
             expert_mask = (flat_expert_idx == expert_id)
-            
+
             if not expert_mask.any():
                 continue
-            
+
             # Get token indices and weights for this expert
             selected_token_idx = flat_token_idx[expert_mask]
             selected_weights = flat_weights[expert_mask]
-            
+
             # Gather input tokens for this expert (single gather operation)
             expert_input = x_flat[selected_token_idx]  # [num_selected, D]
-            
+
             # Process all tokens through this expert at once
             expert_output = self.experts[expert_id](expert_input)  # [num_selected, D]
-            
+
             # Weight the outputs
             weighted_output = expert_output * selected_weights.unsqueeze(-1)
-            
+
             # Scatter-add back to output (handles duplicate token indices)
             output.index_add_(0, selected_token_idx, weighted_output)
-        
+
         # Reshape back to [B, T, D]
-        return output.view(B, T, D)
-    
+        return output.reshape(B, T, D)
+
     def get_aux_loss(self) -> torch.Tensor:
         """Get the auxiliary load balancing loss for training."""
         return self.load_balancing_loss * self.aux_loss_weight
@@ -689,11 +689,11 @@ class TransformerBlock(nn.Module):
 
         # Choose normalization type based on config
         Norm = RMSNorm if config.use_rms_norm else nn.LayerNorm
-        
+
         # Two normalizations: one before attention, one before FFN
         self.attention_norm = Norm(config.dim)
         self.ffn_norm = Norm(config.dim)
-        
+
         # The actual computation modules
         self.attention = Attention(config)
         # Use MoE feed-forward if enabled, otherwise standard feed-forward

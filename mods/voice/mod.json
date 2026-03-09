@@ -1,0 +1,145 @@
+{
+    "name": "Voice Mod",
+    "id": "voice",
+    "version": "1.1.0",
+    "description": "Unified speech-to-text and text-to-speech/audio generation service using Whisper, SpeechRecognition, pyttsx3, ElevenLabs, and system fallback",
+    "author": "Enigma AI Engine",
+    "port": 9907,
+    "commands": [
+        {
+            "name": "listen",
+            "description": "Listen from microphone and return transcribed text",
+            "args": {
+                "duration": {"type": "integer", "required": false, "description": "Max seconds to listen"},
+                "language": {"type": "string", "required": false, "description": "Language code for recognition"}
+            }
+        },
+        {
+            "name": "speak",
+            "description": "Speak text via TTS pipeline",
+            "args": {
+                "text": {"type": "string", "required": true, "description": "Text to speak aloud"},
+                "provider": {"type": "string", "required": false, "description": "TTS provider (pyttsx3, elevenlabs, system)"}
+            }
+        },
+        {
+            "name": "transcribe",
+            "description": "Transcribe an audio file to text",
+            "args": {
+                "path": {"type": "string", "required": true, "description": "Path to audio file"},
+                "language": {"type": "string", "required": false, "description": "Language code"}
+            }
+        },
+        {
+            "name": "generate_audio",
+            "description": "Generate audio file from text",
+            "args": {
+                "text": {"type": "string", "required": true, "description": "Text to convert to audio"},
+                "provider": {"type": "string", "required": false, "description": "TTS provider (pyttsx3, elevenlabs, system)"},
+                "filename": {"type": "string", "required": false, "description": "Output filename"}
+            }
+        },
+        {
+            "name": "generate",
+            "description": "Alias for generate_audio",
+            "args": {
+                "text": {"type": "string", "required": true, "description": "Text to convert to audio"},
+                "provider": {"type": "string", "required": false, "description": "TTS provider (pyttsx3, elevenlabs, system)"}
+            }
+        },
+        {
+            "name": "start_continuous",
+            "description": "Start continuous microphone listening in background"
+        },
+        {
+            "name": "stop_continuous",
+            "description": "Stop continuous microphone listening"
+        },
+        {
+            "name": "set_voice",
+            "description": "Set TTS voice by index",
+            "args": {
+                "index": {"type": "integer", "required": true, "description": "Voice index to select"},
+                "provider": {"type": "string", "required": false, "description": "Provider to apply voice index to"}
+            }
+        },
+        {
+            "name": "set_rate",
+            "description": "Set speech rate",
+            "args": {
+                "rate": {"type": "integer", "required": true, "description": "Speech rate (words per minute)"}
+            }
+        },
+        {
+            "name": "set_volume",
+            "description": "Set speech volume",
+            "args": {
+                "volume": {"type": "float", "required": true, "description": "Volume level (0.0 to 1.0)"}
+            }
+        },
+        {
+            "name": "list_voices",
+            "description": "List available TTS voices",
+            "args": {
+                "provider": {"type": "string", "required": false, "description": "Provider to list voices for"}
+            }
+        },
+        {
+            "name": "load_provider",
+            "description": "Load a TTS provider",
+            "args": {
+                "provider": {"type": "string", "required": false, "description": "Provider name to load"}
+            }
+        },
+        {
+            "name": "unload_provider",
+            "description": "Unload a TTS provider",
+            "args": {
+                "provider": {"type": "string", "required": false, "description": "Provider name to unload"}
+            }
+        },
+        {
+            "name": "list_providers",
+            "description": "List all TTS providers and loaded state"
+        },
+        {
+            "name": "set_default",
+            "description": "Set default TTS provider",
+            "args": {
+                "provider": {"type": "string", "required": true, "description": "Provider name to set as default"}
+            }
+        },
+        {
+            "name": "load",
+            "description": "Load STT and TTS pipelines"
+        },
+        {
+            "name": "status",
+            "description": "Get service and pipeline status"
+        }
+    ],
+    "ui": {
+        "layout": "vertical",
+        "widgets": [
+            {"type": "text_area", "id": "text", "label": "Text", "placeholder": "Enter text to speak..."},
+            {"type": "dropdown", "id": "provider", "label": "Provider", "options": ["pyttsx3", "elevenlabs", "system"], "default": "pyttsx3"},
+            {"type": "button", "id": "listen", "label": "Listen", "command": "listen"},
+            {"type": "button", "id": "speak", "label": "Speak", "command": "speak"},
+            {"type": "button", "id": "generate_audio", "label": "Generate Audio", "command": "generate_audio"},
+            {"type": "button", "id": "transcribe", "label": "Transcribe", "command": "transcribe"}
+        ]
+    },
+    "prompt": "For voice/audio tasks, use: mod.send voice listen, mod.send voice speak <text> --provider pyttsx3|elevenlabs|system, mod.send voice generate_audio <text>, mod.send voice transcribe <path>",
+    "rules": [
+        "Use this single voice mod for both speech and audio generation tasks.",
+        "Prefer pyttsx3 or system for local/offline usage.",
+        "Use elevenlabs only when API key and network access are available."
+    ],
+    "dependencies": ["pyttsx3"],
+    "settings": {
+        "stt_engine": "google",
+        "tts_engine": "pyttsx3",
+        "default_provider": "pyttsx3",
+        "output_dir": "outputs/voice"
+    }
+}

@@ -74,13 +74,46 @@ BASE_DIR = Path(__file__).parent.parent.parent
 # These are the foundational settings upon which Enigma AI Engine is built.
 # Each section governs a different aspect of the forge's operation.
 
-CONFIG = {
+
+class _LazyConfig(dict):
+    """Dict that triggers lazy initialization on first read access."""
+
+    def __getitem__(self, key):
+        _ensure_initialized()
+        return super().__getitem__(key)
+
+    def get(self, key, default=None):
+        _ensure_initialized()
+        return super().get(key, default)
+
+    def __contains__(self, key):
+        _ensure_initialized()
+        return super().__contains__(key)
+
+    def __iter__(self):
+        _ensure_initialized()
+        return super().__iter__()
+
+    def items(self):
+        _ensure_initialized()
+        return super().items()
+
+    def values(self):
+        _ensure_initialized()
+        return super().values()
+
+    def keys(self):
+        _ensure_initialized()
+        return super().keys()
+
+
+CONFIG = _LazyConfig({
     # =========================================================================
     # THE MAP OF REALMS - Path Configuration
     # =========================================================================
     # Every treasure has its place. These paths define where Enigma AI Engine
     # stores its knowledge, memories, and creations.
-    
+
     "root": str(BASE_DIR),
     "data_dir": str(BASE_DIR / "data"),              # Training data, icons, themes
     "info_dir": str(BASE_DIR / "information"),       # Runtime settings, tasks, reminders
@@ -91,13 +124,13 @@ CONFIG = {
     "vocab_dir": str(BASE_DIR / "enigma_engine" / "vocab_model"),
     "logs_dir": str(BASE_DIR / "logs"),
     "personas_dir": str(BASE_DIR / "data" / "personas"),  # AI persona storage
-    
+
     # =========================================================================
     # THE ARCHITECT'S BLUEPRINT - Model Architecture
     # =========================================================================
     # These settings define the structure of the AI's mind - how many
     # layers of thought, how wide its neural pathways, how far it can see.
-    
+
     "default_model": "enigma_engine",
     "embed_dim": 256,
     "depth": 6,            # Alias: num_layers (for compatibility)
@@ -114,7 +147,7 @@ CONFIG = {
     # =========================================================================
     # When the AI learns, these settings guide its education - how quickly
     # it absorbs knowledge, how many times it studies the texts.
-    
+
     "learning_rate": 1e-4,
     "batch_size": 32,
     "epochs": 10,
@@ -131,19 +164,19 @@ CONFIG = {
     # =========================================================================
     # When the AI speaks, these settings color its responses - how creative,
     # how focused, how varied its words shall be.
-    
+
     "temperature": 0.8,
     "top_k": 50,
     "top_p": 0.9,
     "repetition_penalty": 1.1,
-    "max_gen": 100,
+    "max_gen": 2048,
 
     # =========================================================================
     # THE MESSENGER'S GATE - Server Defaults
     # =========================================================================
     # The API server allows distant travelers to commune with the AI.
     # These settings control access and security.
-    
+
     "api_host": "127.0.0.1",
     "api_port": 5000,
     "enable_cors": True,
@@ -155,10 +188,10 @@ CONFIG = {
     # =========================================================================
     # What powers drive the forge? CPU, GPU, or the mystical MPS of Apple?
     # The precision of calculations affects both speed and quality.
-    
+
     "device": "auto",       # "auto", "cpu", "cuda", "mps"
     "precision": "float32", # "float32", "float16", "bfloat16"
-    
+
     # Backend selection for neural network operations
     # "auto" - Auto-detect (PyTorch if available, CPU fallback)
     # "torch" - Always use PyTorch
@@ -188,13 +221,17 @@ CONFIG = {
         "*.exe", "*.dll", "*.sys", "*.pem", "*.key",
         "*password*", "*secret*", "*.env", ".git/config",
     ],
+    # Plugin allowlist — only these plugin filenames are loaded.
+    # Empty list means ALL discovered plugins are loaded (legacy behavior).
+    # Example: ["hello.py", "my_tools.py"]
+    "trusted_plugins": [],
 
     # =========================================================================
     # Logging
     # =========================================================================
     "log_level": "INFO",
     "log_to_file": False,
-}
+})
 
 
 # =============================================================================
@@ -355,18 +392,27 @@ def save_config(path: Optional[str] = None) -> None:
 
 
 # =============================================================================
-# THE AWAKENING - Module Initialization
+# THE AWAKENING - Lazy Module Initialization
 # =============================================================================
-# When this module is imported, it performs the sacred rituals:
-# 1. Creates necessary directories
-# 2. Loads user configuration
-# 3. Applies environment variable overrides
+# Directory creation and config loading are deferred until CONFIG is first
+# accessed.  This avoids filesystem side effects at import time, making the
+# module safer to import in tests and scripts.
 
-for dir_key in ["data_dir", "models_dir", "memory_dir", "logs_dir"]:
-    try:
-        Path(CONFIG[dir_key]).mkdir(parents=True, exist_ok=True)
-    except (OSError, PermissionError) as e:
-        logger.warning(f"Could not create directory {CONFIG[dir_key]}: {e}")
+_initialized = False
 
-_load_user_config()
-_load_env_config()
+
+def _ensure_initialized() -> None:
+    """Run the one-time initialization (dirs + user config + env vars)."""
+    global _initialized
+    if _initialized:
+        return
+    _initialized = True
+
+    for dir_key in ["data_dir", "models_dir", "memory_dir", "logs_dir"]:
+        try:
+            Path(CONFIG[dir_key]).mkdir(parents=True, exist_ok=True)
+        except (OSError, PermissionError) as e:
+            logger.warning(f"Could not create directory {CONFIG[dir_key]}: {e}")
+
+    _load_user_config()
+    _load_env_config()

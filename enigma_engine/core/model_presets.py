@@ -76,7 +76,7 @@ class ForgeConfig:
     hidden_dim: Optional[int] = None  # FFN dimension (None = auto-calculate)
     max_seq_len: int = 1024     # Maximum sequence length (context window)
     dropout: float = 0.1        # Dropout rate (0.1 = 10% neurons randomly zeroed)
-    
+
     # ─────────────────────────────────────────────────────────────────────────
     # ARCHITECTURE FLAGS - Modern transformer improvements
     # ─────────────────────────────────────────────────────────────────────────
@@ -117,7 +117,7 @@ class ForgeConfig:
     # ─────────────────────────────────────────────────────────────────────────
     vision_hidden_size: Optional[int] = None  # Vision encoder dimension
     audio_hidden_size: Optional[int] = None   # Audio encoder dimension
-    
+
     # ─────────────────────────────────────────────────────────────────────────
     # LEGACY ALIASES - For backwards compatibility
     # ─────────────────────────────────────────────────────────────────────────
@@ -128,7 +128,7 @@ class ForgeConfig:
 
     # Track if config is frozen (immutable after creation)
     _frozen: bool = False
-    
+
     def __post_init__(self) -> None:
         """
         Post-initialization: validate and set computed defaults.
@@ -172,22 +172,22 @@ class ForgeConfig:
         # ─────────────────────────────────────────────────────────────────────
         if self.vocab_size <= 0:
             raise ValueError(f"vocab_size must be positive, got {self.vocab_size}")
-        
+
         if self.dim <= 0:
             raise ValueError(f"dim must be positive, got {self.dim}")
-        
+
         if self.n_layers <= 0:
             raise ValueError(f"n_layers must be positive, got {self.n_layers}")
-        
+
         if self.n_heads <= 0:
             raise ValueError(f"n_heads must be positive, got {self.n_heads}")
-        
+
         if not (0 <= self.dropout <= 1):
             raise ValueError(f"dropout must be between 0 and 1, got {self.dropout}")
-        
+
         if self.max_seq_len <= 0:
             raise ValueError(f"max_seq_len must be positive, got {self.max_seq_len}")
-        
+
         # dim must be divisible by n_heads (each head gets dim/n_heads dimensions)
         if self.dim % self.n_heads != 0:
             # Calculate helpful suggestions
@@ -200,14 +200,14 @@ class ForgeConfig:
                 f"Try: dim={suggested_dim} (with {self.n_heads} heads) or "
                 f"n_heads={suggested_heads} (with dim={self.dim})"
             )
-        
+
         # n_heads must be divisible by n_kv_heads (for GQA grouping)
         if self.n_heads % self.n_kv_heads != 0:
             raise ValueError(
                 f"n_kv_heads ({self.n_kv_heads}) must divide evenly into n_heads ({self.n_heads}). "
                 f"Got remainder: {self.n_heads % self.n_kv_heads}"
             )
-        
+
         # ─────────────────────────────────────────────────────────────────────
         # VALIDATE NEW FEATURES
         # ─────────────────────────────────────────────────────────────────────
@@ -223,7 +223,7 @@ class ForgeConfig:
                 raise ValueError(
                     f"rope_scaling_factor must be positive, got {self.rope_scaling_factor}"
                 )
-        
+
         # MoE validation
         if self.use_moe:
             if self.num_experts <= 0:
@@ -236,9 +236,10 @@ class ForgeConfig:
 
     def validate(self) -> bool:
         """
-        Re-run validation on the config.
+        Run read-only validation on the config.
         
-        Delegates to __post_init__ to avoid duplicating validation logic.
+        This does not auto-calculate fields or assign attributes,
+        so it is safe to call on frozen configs.
         
         Returns:
             True if valid
@@ -246,9 +247,57 @@ class ForgeConfig:
         Raises:
             ValueError: If any validation fails
         """
-        self.__post_init__()
+        if self.vocab_size <= 0:
+            raise ValueError(
+                f"vocab_size must be positive, got {self.vocab_size}")
+        if self.dim <= 0:
+            raise ValueError(
+                f"dim must be positive, got {self.dim}")
+        if self.n_layers <= 0:
+            raise ValueError(
+                f"n_layers must be positive, got {self.n_layers}")
+        if self.n_heads <= 0:
+            raise ValueError(
+                f"n_heads must be positive, got {self.n_heads}")
+        if not (0 <= self.dropout <= 1):
+            raise ValueError(
+                f"dropout must be between 0 and 1, got {self.dropout}")
+        if self.max_seq_len <= 0:
+            raise ValueError(
+                f"max_seq_len must be positive, got {self.max_seq_len}")
+        if self.dim % self.n_heads != 0:
+            raise ValueError(
+                f"n_heads ({self.n_heads}) must divide evenly into "
+                f"dim ({self.dim})")
+        n_kv = self.n_kv_heads if self.n_kv_heads is not None \
+            else self.n_heads
+        if self.n_heads % n_kv != 0:
+            raise ValueError(
+                f"n_heads ({self.n_heads}) must be divisible by "
+                f"n_kv_heads ({n_kv})")
+        if self.use_rope and self.rope_scaling_type is not None:
+            valid = {"linear", "dynamic", "yarn"}
+            if self.rope_scaling_type not in valid:
+                raise ValueError(
+                    f"rope_scaling_type must be one of {valid}, "
+                    f"got {self.rope_scaling_type}")
+            if self.rope_scaling_factor <= 0:
+                raise ValueError(
+                    f"rope_scaling_factor must be positive, "
+                    f"got {self.rope_scaling_factor}")
+        if self.use_moe:
+            if self.num_experts <= 0:
+                raise ValueError(
+                    f"num_experts must be positive, "
+                    f"got {self.num_experts}")
+            if (self.num_experts_per_token <= 0
+                    or self.num_experts_per_token > self.num_experts):
+                raise ValueError(
+                    f"num_experts_per_token must be in "
+                    f"(0, {self.num_experts}], "
+                    f"got {self.num_experts_per_token}")
         return True
-    
+
     def freeze(self) -> ForgeConfig:
         """
         Freeze the config to prevent further modifications.
@@ -261,13 +310,13 @@ class ForgeConfig:
         """
         object.__setattr__(self, '_frozen', True)
         return self
-    
+
     def __setattr__(self, name: str, value: Any) -> None:
         """Override setattr to enforce frozen state."""
         if getattr(self, '_frozen', False) and name != '_frozen':
             raise AttributeError(
-                f"Cannot modify frozen ForgeConfig. "
-                f"Create a new config with the desired changes instead."
+                "Cannot modify frozen ForgeConfig. "
+                "Create a new config with the desired changes instead."
             )
         object.__setattr__(self, name, value)
 
@@ -351,21 +400,21 @@ class QuantizationConfig:
     - Pi 5 (8GB): dynamic quantization
     """
     mode: str = "none"  # "none", "dynamic", "int8", "int4"
-    
+
     # Static quantization options
     calibration_data: Optional[list[torch.Tensor]] = None
     num_calibration_batches: int = 100
-    
+
     # Dynamic quantization options
     dtype: Optional[torch.dtype] = None  # torch.qint8 for dynamic
-    
+
     # Which layers to quantize
     quantize_linear: bool = True
     quantize_embedding: bool = False  # Usually keep embeddings in FP32
-    
+
     # INT4 specific
     group_size: int = 128  # For grouped quantization
-    
+
     def __post_init__(self) -> None:
         valid_modes = {"none", "dynamic", "int8", "int4"}
         if self.mode not in valid_modes:
@@ -385,7 +434,7 @@ class QuantizationConfig:
 #
 # ROUGH GUIDELINES:
 #   • 4GB RAM/VRAM → tiny or mini
-#   • 8GB VRAM → small or medium  
+#   • 8GB VRAM → small or medium
 #   • 16GB VRAM → large or xl
 #   • 24GB+ VRAM → xxl or larger
 #   • Multi-GPU → huge, giant, etc.
@@ -486,6 +535,176 @@ def get_preset(name: str, vocab_size: int = 8000) -> ForgeConfig:
         max_seq_len=preset.max_seq_len,
         dropout=preset.dropout,
     )
+
+
+# =============================================================================
+# Parameter target parsing — lets users type "8b", "500m", etc.
+# =============================================================================
+
+import re as _re
+
+
+def parse_param_target(text: str) -> Optional[int]:
+    """
+    Parse a human-friendly parameter count string.
+
+    Accepted formats:
+        "8b"   → 8,000,000,000
+        "1.5b" → 1,500,000,000
+        "500m" → 500,000,000
+        "27M"  → 27,000,000
+        "8000000000" → 8,000,000,000 (raw number)
+
+    Returns None if the input cannot be parsed.
+    """
+    if not text or not isinstance(text, str):
+        return None
+
+    text = text.strip().lower()
+    if not text:
+        return None
+
+    # Match number + optional suffix (b or m)
+    match = _re.match(r'^(\d+(?:\.\d+)?)\s*(b|m)?$', text)
+    if not match:
+        return None
+
+    number = float(match.group(1))
+    suffix = match.group(2)
+
+    if suffix == 'b':
+        return int(number * 1_000_000_000)
+    elif suffix == 'm':
+        return int(number * 1_000_000)
+    else:
+        # Raw number — must be a reasonable integer
+        if number < 1:
+            return None
+        return int(number)
+
+
+def config_for_param_target(
+    target: int, vocab_size: int = 32000
+) -> tuple:
+    """
+    Build a ForgeConfig that matches a target parameter count.
+
+    First checks presets for a close match (within 20%).  If no preset
+    is close enough, computes a custom config by scaling dim from the
+    nearest preset to hit the target.  This means there is **no upper
+    limit** — any parameter count can be requested.
+
+    Args:
+        target: Target number of parameters (e.g. 8_000_000_000).
+        vocab_size: Vocabulary size for estimation (default 32000).
+
+    Returns:
+        (name, ForgeConfig) — preset name if matched, or 'custom_<target>'
+        for computed configs.
+    """
+    import math
+
+    best_name = "small"
+    best_distance = float("inf")
+    best_est = 0
+
+    for name, config in MODEL_PRESETS.items():
+        config_copy = copy.deepcopy(config)
+        config_copy.vocab_size = vocab_size
+        est = estimate_parameters(config_copy)
+        distance = abs(est - target)
+        if distance < best_distance:
+            best_distance = distance
+            best_name = name
+            best_est = est
+
+    # If closest preset is within 20% of target, use it directly
+    if best_est > 0 and best_distance / best_est < 0.2:
+        preset = MODEL_PRESETS[best_name]
+        result = ForgeConfig(
+            vocab_size=vocab_size,
+            dim=preset.dim,
+            n_layers=preset.n_layers,
+            n_heads=preset.n_heads,
+            n_kv_heads=preset.n_kv_heads,
+            max_seq_len=preset.max_seq_len,
+            dropout=preset.dropout,
+        )
+        return best_name, result
+
+    # No close preset — compute a custom config to match the target
+    # Use the closest preset as a template for layer/head ratios
+    ref = MODEL_PRESETS[best_name]
+    n_layers = ref.n_layers
+    head_ratio = ref.n_heads / ref.n_kv_heads if ref.n_kv_heads else 1
+
+    # Solve for dim from: target ≈ vocab*dim + n_layers*(4*dim² + 8*dim²) + dim
+    # Simplified: target ≈ 12 * n_layers * dim² + vocab * dim
+    # Quadratic: a*dim² + b*dim - target = 0
+    a = 12 * n_layers
+    b = vocab_size
+    discriminant = b * b + 4 * a * target
+    dim = int((-b + math.sqrt(discriminant)) / (2 * a))
+
+    # Ensure dim is at least 64
+    dim = max(64, dim)
+
+    # Pick n_heads so dim is divisible by n_heads
+    # Start from the ref ratio and find the best fit
+    n_heads = ref.n_heads
+    # Scale n_heads proportionally with dim
+    if dim > ref.dim:
+        n_heads = max(ref.n_heads, dim // (ref.dim // ref.n_heads))
+    # Round dim UP to nearest multiple of 2*n_heads so that
+    # head_dim (dim // n_heads) is always even — RoPE requires it.
+    step = 2 * n_heads
+    if dim % step != 0:
+        dim = step * ((dim + step - 1) // step)
+
+    # Compute n_kv_heads preserving the original ratio
+    n_kv_heads = max(1, n_heads // int(head_ratio))
+    # Ensure n_heads is divisible by n_kv_heads
+    while n_heads % n_kv_heads != 0 and n_kv_heads > 1:
+        n_kv_heads -= 1
+
+    # Scale n_layers if dim alone can't reach the target
+    # (e.g. for very large targets, increase depth too)
+    test_cfg = ForgeConfig(
+        vocab_size=vocab_size, dim=dim,
+        n_layers=n_layers, n_heads=n_heads,
+        n_kv_heads=n_kv_heads, max_seq_len=ref.max_seq_len)
+    est = estimate_parameters(test_cfg)
+    if est < target * 0.8:
+        # Scale layers proportionally to close the gap
+        scale = target / max(1, est)
+        n_layers = max(n_layers, int(n_layers * scale))
+
+    # Scale max_seq_len with model size (larger models get more context)
+    if target >= 30_000_000_000:
+        max_seq_len = 32768
+    elif target >= 7_000_000_000:
+        max_seq_len = 16384
+    elif target >= 1_000_000_000:
+        max_seq_len = 8192
+    else:
+        max_seq_len = ref.max_seq_len
+
+    # Format a human-readable name
+    if target >= 1_000_000_000:
+        label = f"{target / 1_000_000_000:.1f}b"
+    else:
+        label = f"{target / 1_000_000:.0f}m"
+
+    result = ForgeConfig(
+        vocab_size=vocab_size,
+        dim=dim,
+        n_layers=n_layers,
+        n_heads=n_heads,
+        n_kv_heads=n_kv_heads,
+        max_seq_len=max_seq_len,
+        dropout=ref.dropout,
+    )
+    return f"custom_{label}", result
 
 
 def estimate_parameters(config: ForgeConfig) -> int:

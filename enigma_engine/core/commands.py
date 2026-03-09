@@ -1,4 +1,3 @@
-from __future__ import annotations
 """
 Command Registry - AI-controlled command system.
 
@@ -8,11 +7,41 @@ This module parses and executes them.
 Commands are registered by category (config, model, system, file, etc.)
 and can be executed by name. CLI-only - no GUI dependencies.
 """
+from __future__ import annotations
 
+import logging
 from typing import Callable, Any, Optional
 from dataclasses import dataclass
-import json
 import re
+
+logger = logging.getLogger(__name__)
+
+# Shell metacharacters that must never appear in command arguments.
+# These could be used for injection if an AI-generated argument
+# reaches a subprocess or shell eval.
+SHELL_METACHARACTERS = frozenset(";|&$`\\!{}")
+
+
+def sanitize_args(args: list[str]) -> list[str]:
+    """Strip shell metacharacters from command arguments.
+
+    Removes characters in :data:`SHELL_METACHARACTERS` from every arg
+    and logs a warning when anything is stripped.  This is a defence-in-depth
+    measure — command handlers should never pass args to a shell, but this
+    prevents accidental injection if they do.
+
+    Returns a new list; the original is not mutated.
+    """
+    cleaned: list[str] = []
+    for arg in args:
+        stripped = "".join(ch for ch in arg if ch not in SHELL_METACHARACTERS)
+        if stripped != arg:
+            logger.warning(
+                "Sanitized command arg: %r → %r (removed shell metacharacters)",
+                arg, stripped,
+            )
+        cleaned.append(stripped)
+    return cleaned
 
 
 @dataclass
@@ -39,12 +68,12 @@ class CommandRegistry:
     Commands are registered by category (gui, config, model, etc.)
     and can be executed by name.
     """
-    
+
     def __init__(self):
         self._commands: dict[str, Command] = {}
         self._context: dict[str, Any] = {}
         self._history: list[str] = []  # Track executed commands
-    
+
     def register(self, name: str, handler: Callable, description: str = "", usage: str = "") -> None:
         """Register a command."""
         self._commands[name] = Command(
@@ -53,15 +82,15 @@ class CommandRegistry:
             description=description or f"Execute {name}",
             usage=usage or name
         )
-    
+
     def set_context(self, key: str, value: Any) -> None:
         """Set context value (engine, window, etc.)."""
         self._context[key] = value
-    
+
     def get_context(self, key: str) -> Any:
         """Get context value."""
         return self._context.get(key)
-    
+
     def execute(self, command_str: str) -> CommandResult:
         """
         Execute a command string.
@@ -75,22 +104,22 @@ class CommandRegistry:
         parts = command_str.strip().split()
         if not parts:
             return CommandResult(False, "[ERROR] Empty command")
-        
+
         cmd_name = parts[0]
-        args = parts[1:] if len(parts) > 1 else []
-        
+        args = sanitize_args(parts[1:]) if len(parts) > 1 else []
+
         if cmd_name not in self._commands:
             return CommandResult(False, f"[ERROR] Unknown command: {cmd_name}")
-        
+
         cmd = self._commands[cmd_name]
-        
+
         # Track in history (skip history command itself to avoid recursion)
         if cmd_name != "history":
             self._history.append(command_str.strip())
             # Keep only last 100 commands
             if len(self._history) > 100:
                 self._history = self._history[-100:]
-        
+
         try:
             result = cmd.handler(args, self._context)
             if isinstance(result, CommandResult):
@@ -98,17 +127,17 @@ class CommandRegistry:
             return CommandResult(True, f"[OK] {result}")
         except Exception as e:
             return CommandResult(False, f"[ERROR] {cmd_name}: {e}")
-    
+
     def get_history(self, count: int = 20) -> list[str]:
         """Get recent command history."""
         return self._history[-count:]
-    
+
     def list_commands(self, prefix: str = "") -> list[Command]:
         """List all commands, optionally filtered by prefix."""
         if prefix:
             return [c for c in self._commands.values() if c.name.startswith(prefix)]
         return list(self._commands.values())
-    
+
     def get_help(self, cmd_name: str = "") -> str:
         """Get help text for a command or all commands."""
         if cmd_name:
@@ -116,7 +145,7 @@ class CommandRegistry:
                 cmd = self._commands[cmd_name]
                 return f"{cmd.name}\n  {cmd.description}\n  Usage: {cmd.usage}"
             return f"Unknown command: {cmd_name}"
-        
+
         # All commands grouped by category
         categories: dict[str, list[Command]] = {}
         for cmd in self._commands.values():
@@ -124,13 +153,13 @@ class CommandRegistry:
             if cat not in categories:
                 categories[cat] = []
             categories[cat].append(cmd)
-        
+
         lines = ["Available commands:"]
         for cat in sorted(categories.keys()):
             lines.append(f"\n{cat.upper()}")
             for cmd in sorted(categories[cat], key=lambda c: c.name):
                 lines.append(f"  {cmd.usage:<30} - {cmd.description}")
-        
+
         return "\n".join(lines)
 
 
@@ -161,4 +190,7 @@ def get_registry() -> CommandRegistry:
         _registry = CommandRegistry()
         from .builtin_commands import register_builtin_commands
         register_builtin_commands(_registry)
+        # Load user plugins from plugins/ directory
+        from .plugin_loader import load_all_plugins
+        load_all_plugins(_registry)
     return _registry

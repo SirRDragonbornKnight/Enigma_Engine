@@ -3,81 +3,432 @@ Enigma Engine - GUI Logic Methods
 ===================================
 
 Mixin providing business logic for EnigmaGUI.
-Handles config, model loading, chat,
-history, profiles, and route assignments.
+Handles config, model loading, route assignments,
+config paths, display names, and feature toggles.
 
-Training / model management: see gui_forge.py (ForgeMixin)
-Brick process management:    see gui_bricks.py (BrickMixin)
+Chat logic:            see gui_logic_chat.py (LogicChatMixin)
+Media & voice:         see gui_logic_media.py (LogicMediaMixin)
+Training / model mgmt: see gui_forge.py (ForgeMixin)
+Mod process mgmt:      see gui_mods.py (ModMixin)
 """
 from __future__ import annotations
 
 import json
-import sys
+import logging
 import threading
-import time
 from pathlib import Path
-from tkinter import filedialog
 from typing import Any
 
-import customtkinter as ctk
+logger = logging.getLogger(__name__)
 
 from enigma_engine.gui.widgets import (
-    C_ACCENT, C_ACCENT_DIM, C_GREEN, C_ORANGE,
-    C_PURPLE, C_RED, C_SURFACE, C_TEXT_DIM,
+    C_GREEN, C_ORANGE,
+    C_RED, C_TEXT_DIM,
 )
 from enigma_engine.gui.scanners import (
-    CONFIG_LIMITS, DATA_DIR, MEMORY_DIR, PROFILES_DIR,
+    CONFIG_LIMITS, DATA_DIR, INFO_DIR,
     ROUTE_KEYS, PATH_SETTINGS,
-    clamp_config, scan_models, scan_sessions,
+    clamp_config,
     load_path_settings, save_path_settings,
-)
-from enigma_engine.core.model_context import (
-    ModelContext, model_key_from_path, load_model_context,
+    load_route_assignments, save_route_assignments,
 )
 # Re-export so existing imports keep working
 from enigma_engine.gui.gui_forge import ForgeMixin  # noqa: F401
-from enigma_engine.gui.gui_bricks import BrickMixin  # noqa: F401
+from enigma_engine.gui.gui_mods import ModMixin  # noqa: F401
+from enigma_engine.gui.gui_logic_chat import LogicChatMixin  # noqa: F401
+from enigma_engine.gui.gui_logic_media import LogicMediaMixin  # noqa: F401
 
 
-class LogicMixin:
+def _estimate_gguf_params(engine: Any, path: str) -> int:
+    """Estimate parameter count for a GGUF model.
+
+    Uses a 3-tier approach:
+    1. Metadata formula: dim, n_layers, vocab_size → approximate params
+    2. File-size heuristic: file_bytes / bytes_per_param (Q4 ≈ 0.55)
+    3. Returns 0 if nothing works
+    """
+    # Tier 1: metadata-based estimation
+    model = getattr(engine, 'model', None)
+    if model is not None:
+        cfg = getattr(model, 'config', None)
+        if cfg is not None:
+            dim = getattr(cfg, 'dim', 0) or 0
+            n_layers = getattr(cfg, 'n_layers', 0) or 0
+            vocab = getattr(cfg, 'vocab_size', 0) or 0
+            if dim > 0 and n_layers > 0:
+                # Standard transformer param estimation
+                # 12 * dim^2 per layer (attn + FFN) + vocab embedding
+                per_layer = 12 * dim * dim
+                embed = vocab * dim if vocab > 0 else 0
+                return per_layer * n_layers + embed
+
+    # Tier 2: file-size heuristic
+    try:
+        file_size = Path(path).stat().st_size
+        if file_size > 0:
+            # Q4_K_M ≈ 0.55 bytes per param; Q8 ≈ 1.1; rough middle
+            return int(file_size / 0.55)
+    except OSError:
+        pass
+
+    return 0
+
+
+class LogicMixin(LogicChatMixin, LogicMediaMixin):
     """Mixin providing logic methods for EnigmaGUI.
 
-    Expects the host class to have:
-    - engine, model_path, active_profile, config_overrides
-    - history, brick_processes, training_active
-    - voice_enabled, attached_file
-    - route_assignments: dict mapping route keys to model paths
-    - model_context: ModelContext | None for per-model storage
-    - Widget references from page builders
+    Combines LogicChatMixin (chat, sessions, history) and
+    LogicMediaMixin (media rendering, voice I/O) with
+    config, model loading, route management, and toggles.
     """
+
+    # ================================================================
+    # Logic - GUI Context for AI awareness
+    # ================================================================
+
+    def _build_gui_context(self) -> str:
+        """Build a context string describing current GUI state.
+
+        This is injected into the system prompt so the AI knows
+        what models are loaded, what routes are assigned, which
+        mods are running, etc.
+        """
+        lines: list[str] = []
+        lines.append("[SYSTEM CONTEXT — Current Engine State]")
+
+        # Active chat model
+        if self.engine and self.model_path:
+            name = Path(self.model_path).stem
+            lines.append(f"You are running as: {self._active_ai_name()}")
+            lines.append(f"Chat model: {name}")
+        else:
+            lines.append("No chat model loaded.")
+
+        # Route assignments
+        if self.route_assignments:
+            lines.append("")
+            lines.append("Assigned Routes:")
+            for key, path in self.route_assignments.items():
+                model_name = Path(path).stem if path else "None"
+                lines.append(f"  {key.upper()}: {model_name}")
+
+        # Available models
+        if self.models_data:
+            lines.append("")
+            lines.append("Available Models:")
+            for m in self.models_data:
+                lines.append(
+                    f"  {m['name']} ({m['format'].upper()}, "
+                    f"{m['size_mb']} MB)")
+
+        # Available tools (all mods, running and stopped)
+        try:
+            from enigma_engine.core.mod_tools import format_tools_for_prompt
+            tools_ctx = format_tools_for_prompt(self.mods_data)
+            if tools_ctx:
+                lines.append("")
+                lines.append(tools_ctx)
+        except Exception as exc:
+            logger.debug("Tool prompt build failed: %s", exc)
+
+        # Config overrides
+        if self.config_overrides:
+            lines.append("")
+            lines.append("Config Overrides:")
+            for k, v in self.config_overrides.items():
+                lines.append(f"  {k}: {v}")
+
+        # Web access
+        if self.web_access:
+            lines.append("")
+            lines.append(
+                "Web Access: ENABLED — You may use [CMD] search.web <query> "
+                "to search the web when you need current information. "
+                "Include the results in your response.")
+        else:
+            lines.append("")
+            lines.append("Web Access: DISABLED")
+
+        # Persistent memory — inject remembered facts
+        try:
+            from enigma_engine.core.memory import get_memory
+            mem = get_memory()
+            mem.reload()  # pick up hand-edits
+            mem_ctx = mem.build_context(max_tokens=400)
+            if mem_ctx:
+                lines.append("")
+                lines.append(mem_ctx)
+        except Exception as exc:
+            logger.debug("Memory context build failed: %s", exc)
+
+        # RAG — inject retrieved document context for this query
+        rag_index = getattr(self, "_rag_index", None)
+        if rag_index and getattr(rag_index, "is_built", False):
+            # Peek at the latest user message for retrieval
+            last_msg = ""
+            if self.history:
+                for msg in reversed(self.history):
+                    if msg.get("role") == "user":
+                        last_msg = msg.get("content", "")
+                        break
+            # Also include what the user typed (may not be in history yet)
+            try:
+                input_text = self.chat_input.get("1.0", "end").strip()
+            except Exception:
+                input_text = ""
+            query = input_text or last_msg
+            if query:
+                from enigma_engine.core.rag import RAGIndex
+                results = rag_index.query(query, top_k=5)
+                ctx = RAGIndex.format_context(results, max_chars=2000)
+                if ctx:
+                    lines.append("")
+                    lines.append("[RETRIEVED DOCUMENT CONTEXT]")
+                    lines.append(ctx)
+                    lines.append("[END DOCUMENT CONTEXT]")
+
+        # Memory commands — tell the AI it can save notes
+        lines.append("")
+        lines.append(
+            "Persistent Memory: You can remember important facts "
+            "about the user across conversations. Use "
+            "[CMD]memory.remember <fact>[/CMD] to save something "
+            "worth remembering. "
+            "Actively observe the user's patterns, preferences, "
+            "habits, and coding style — save them without being "
+            "asked. If you notice a better approach or alternative "
+            "to what the user is doing, suggest it and explain why. "
+            "Always ask permission before changing an established "
+            "pattern or workflow the user already follows. "
+            "Do NOT announce when you save a memory.")
+
+        lines.append("")
+        lines.append(
+            "Code Execution: You can run Python code in a sandboxed "
+            "subprocess using [CMD]code.run <python_code>[/CMD]. "
+            "Output is captured and shown in chat. "
+            "Write access is restricted to outputs/ only. "
+            "Use this for math, data processing, or code demos.")
+
+        lines.append("")
+        lines.append(
+            "Image Generation: You can generate images from text "
+            "prompts using [CMD]imagegen.generate <prompt>[/CMD]. "
+            "Optional flags: --width N, --height N, --steps N, "
+            "--seed N, --negative <text>. "
+            "The image will be rendered inline in chat. "
+            "Use [CMD]imagegen.status[/CMD] to check available "
+            "backends (SD WebUI, ComfyUI, diffusers).")
+
+        # Terminal agent capability
+        lines.append("")
+        lines.append(
+            "Terminal Access: You can execute system commands using "
+            "[CMD]system.exec <shell_command>[/CMD]. The command "
+            "runs in the system shell and output is returned. "
+            "Use this for file operations, package management, "
+            "or checking system state. "
+            "Requires AI ACCESS to be enabled by the user.")
+
+        # Mod management
+        lines.append("")
+        lines.append(
+            "Mod Management: Use [CMD]mod.start <mod_id>[/CMD] to "
+            "start a tool mod, [CMD]mod.stop <mod_id>[/CMD] to stop "
+            "one, or [CMD]mod.list[/CMD] to see all installed mods "
+            "and their status.")
+
+        # Learning mode status
+        try:
+            settings_path = DATA_DIR / "gui_settings.json"
+            learn_on = False
+            if settings_path.exists():
+                sdata = json.loads(
+                    settings_path.read_text(encoding="utf-8"))
+                learn_on = sdata.get("learn_while_chatting", False)
+            if learn_on:
+                lines.append("")
+                lines.append(
+                    "Learning Mode: ACTIVE — Your responses are being "
+                    "used to improve the local model. Provide "
+                    "thorough, accurate answers to maximise "
+                    "learning quality.")
+        except Exception:
+            pass
+
+        lines.append("[END SYSTEM CONTEXT]")
+        return "\n".join(lines)
+
+    # ================================================================
+    # Logic - GUI Command Registration
+    # ================================================================
+
+    def _register_gui_commands(self):
+        """Register mod management commands in the engine registry.
+
+        Also auto-registers all mod commands from mod.json files
+        so the AI can invoke any installed mod via [CMD] blocks.
+        """
+        from enigma_engine.core.commands import CommandResult, get_registry
+
+        registry = get_registry()
+        registry.set_context("gui", self)
+
+        # mod.start — start a mod subprocess
+        def mod_start(args: list, ctx: dict) -> CommandResult:
+            gui = ctx.get("gui")
+            if not gui or not args:
+                return CommandResult(
+                    False, "[ERROR] Usage: mod.start <mod_id>")
+            mod_id = args[0]
+            for mod in gui.mods_data:
+                if mod["id"] == mod_id:
+                    gui.after(0, lambda m=mod: gui._start_mod(m))
+                    return CommandResult(True, f"Starting mod: {mod_id}")
+            return CommandResult(False, f"[ERROR] Unknown mod: {mod_id}")
+
+        registry.register(
+            "mod.start", mod_start,
+            "Start a mod subprocess",
+            "mod.start <mod_id>")
+
+        # mod.stop — stop a mod subprocess
+        def mod_stop(args: list, ctx: dict) -> CommandResult:
+            gui = ctx.get("gui")
+            if not gui or not args:
+                return CommandResult(
+                    False, "[ERROR] Usage: mod.stop <mod_id>")
+            mod_id = args[0]
+            for mod in gui.mods_data:
+                if mod["id"] == mod_id:
+                    gui.after(0, lambda m=mod: gui._stop_mod(m))
+                    return CommandResult(True, f"Stopping mod: {mod_id}")
+            return CommandResult(False, f"[ERROR] Unknown mod: {mod_id}")
+
+        registry.register(
+            "mod.stop", mod_stop,
+            "Stop a mod subprocess",
+            "mod.stop <mod_id>")
+
+        # mod.list — list installed mods and status
+        def mod_list(args: list, ctx: dict) -> CommandResult:
+            gui = ctx.get("gui")
+            if not gui:
+                return CommandResult(False, "[ERROR] No GUI context")
+            lines = ["Installed mods:"]
+            for mod in gui.mods_data:
+                status = "RUNNING" if mod.get("_running") else "STOPPED"
+                lines.append(f"  {mod['id']}: {mod['name']} ({status})")
+            return CommandResult(True, "\n".join(lines))
+
+        registry.register(
+            "mod.list", mod_list,
+            "List installed mods with status",
+            "mod.list")
+
+        # Auto-register all mod commands from mod.json files
+        try:
+            from enigma_engine.core.mod_tools import register_mod_commands
+            from enigma_engine.gui.scanners import MODS_DIR
+            count = register_mod_commands(
+                registry, MODS_DIR, router=self._router)
+            if count:
+                logger.info(
+                    "Registered %d mod commands from mod.json files",
+                    count)
+        except Exception as exc:
+            logger.debug("Mod command registration failed: %s", exc)
+
+    def _get_engine_for_route(self, route_key: str):
+        """Return the engine instance for a given route.
+
+        If the route is assigned to the same model as chat,
+        reuse the already loaded engine instead of loading
+        a second copy.  Returns None if no model is assigned.
+        """
+        assigned = self.route_assignments.get(route_key)
+        if not assigned:
+            return None
+        # If chat engine is loaded and same model, reuse it
+        if (self.engine is not None
+                and self.model_path
+                and Path(self.model_path).resolve()
+                == Path(assigned).resolve()):
+            return self.engine
+        # Otherwise a separate engine would need to be loaded
+        # (not done automatically — mods handle their own loading)
+        return None
 
     # ================================================================
     # Logic - Config
     # ================================================================
 
     def _load_config_defaults(self):
+        """Populate CONFIG page entries with defaults and saved overrides."""
         try:
             from enigma_engine.config import CONFIG
             defaults = {
                 "temperature": CONFIG.get("temperature", 0.8),
                 "top_p": CONFIG.get("top_p", 0.9),
                 "top_k": CONFIG.get("top_k", 50),
-                "max_tokens": CONFIG.get("max_gen", 100),
+                "max_tokens": CONFIG.get("max_gen", 2048),
                 "repetition_penalty": CONFIG.get(
                     "repetition_penalty", 1.1),
             }
         except ImportError:
             defaults = {
                 "temperature": 0.8, "top_p": 0.9, "top_k": 50,
-                "max_tokens": 100, "repetition_penalty": 1.1,
+                "max_tokens": 2048, "repetition_penalty": 1.1,
             }
+
+        # Restore saved overrides from gui_settings.json
+        saved = self._load_saved_config_overrides()
+        for name in defaults:
+            if name in saved:
+                defaults[name] = saved[name]
+                self.config_overrides[name] = saved[name]
+
         for name, val in defaults.items():
             entry = self.config_entries.get(name)
             if entry:
                 entry.delete(0, "end")
                 entry.insert(0, str(val))
 
+    def _load_saved_config_overrides(self) -> dict:
+        """Load saved config overrides from gui_settings.json."""
+        import json
+        from enigma_engine.gui.scanners import DATA_DIR
+        settings_path = DATA_DIR / "gui_settings.json"
+        if not settings_path.exists():
+            return {}
+        try:
+            data = json.loads(
+                settings_path.read_text(encoding="utf-8"))
+            return data.get("config_overrides", {})
+        except (json.JSONDecodeError, OSError):
+            return {}
+
+    def _save_config_overrides(self):
+        """Save config overrides to gui_settings.json."""
+        import json
+        from enigma_engine.gui.scanners import DATA_DIR
+        settings_path = DATA_DIR / "gui_settings.json"
+        data = {}
+        if settings_path.exists():
+            try:
+                data = json.loads(
+                    settings_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                pass
+        data["config_overrides"] = dict(self.config_overrides)
+        try:
+            settings_path.write_text(
+                json.dumps(data, indent=2), encoding="utf-8")
+        except OSError:
+            pass
+
     def _validate_config(self, name: str):
+        """Validate and clamp a config entry, then store the override."""
         entry = self.config_entries.get(name)
         if not entry:
             return
@@ -101,9 +452,11 @@ class LogicMixin:
     # ================================================================
 
     def _load_model(self, path: str):
+        """Load a model file in a background thread and update the UI."""
         if self.engine is not None:
             self._unload_model()
 
+        self._model_loading = True
         self._set_header_status("LOADING...", C_ORANGE)
         self.header_dot.set_color(C_ORANGE)
         self._chat_system(f"Loading {Path(path).name}...")
@@ -116,30 +469,76 @@ class LogicMixin:
                 self.model_path = path
                 pc = 0
                 if (hasattr(self.engine, "model")
-                        and self.engine.model is not None):
+                        and self.engine.model is not None
+                        and hasattr(self.engine.model, "parameters")):
                     pc = sum(
                         p.numel()
                         for p in self.engine.model.parameters())
+                # GGUF models lack .parameters() — estimate from metadata
+                if pc == 0 and getattr(self.engine, '_is_gguf', False):
+                    pc = _estimate_gguf_params(self.engine, path)
                 self.after(0, lambda: self._on_model_loaded(path, pc))
             except Exception as exc:
-                self.after(0, lambda: self._on_model_error(str(exc)))
+                msg = str(exc)
+                self.after(0, lambda m=msg: self._on_model_error(m))
 
         threading.Thread(target=_load, daemon=True).start()
 
     def _on_model_loaded(self, path: str, param_count: int):
+        """Handle successful model load — update header, routes, and context."""
+        self._model_loading = False
+
+        # Read the actual device from the loaded engine
         device = "CPU"
+        gpu_name = ""
         try:
             import torch
-            device = "CUDA" if torch.cuda.is_available() else "CPU"
+            # Check engine's actual device first
+            if hasattr(self.engine, '_is_gguf') and self.engine._is_gguf:
+                # GGUF models use llama.cpp — check if GPU layers are offloaded
+                gguf_model = getattr(self.engine, 'model', None)
+                n_gpu = getattr(gguf_model, 'n_gpu_layers', 0)
+                if n_gpu != 0 and torch.cuda.is_available():
+                    gpu_name = torch.cuda.get_device_name(0)
+                    device = gpu_name
+                else:
+                    device = "CPU"
+            elif hasattr(self.engine, 'device'):
+                eng_device = str(self.engine.device)
+                if 'cuda' in eng_device and torch.cuda.is_available():
+                    gpu_name = torch.cuda.get_device_name(0)
+                    device = gpu_name
+                elif 'mps' in eng_device:
+                    device = "MPS"
+                else:
+                    device = "CPU"
+            elif torch.cuda.is_available():
+                gpu_name = torch.cuda.get_device_name(0)
+                device = gpu_name
         except ImportError:
             pass
 
+        # Build short device label for header and full name for system message
+        short_device = device
+        if gpu_name:
+            # Shorten "NVIDIA GeForce RTX 5090" → "RTX 5090"
+            for prefix in ("NVIDIA GeForce ", "NVIDIA ", "AMD Radeon ", "AMD "):
+                if gpu_name.startswith(prefix):
+                    short_device = gpu_name[len(prefix):]
+                    break
+
         name = Path(path).stem
         self._set_header_status(
-            f"{name.upper()} // {device}", C_GREEN)
+            f"{name.upper()} // {short_device}", C_GREEN)
         self.header_dot.set_color(C_GREEN)
         self.send_btn.configure(state="normal")
         self.unload_btn.configure(state="normal")
+        suspend_btn = getattr(self, "suspend_btn", None)
+        if suspend_btn:
+            suspend_btn.configure(
+                state="normal",
+                text="SUSPEND",
+                command=self._suspend_model_memory)
         self.status_bar.set_left(f"\u26a1 {name.upper()} LOADED")
 
         # Load AI display name from model folder
@@ -152,6 +551,7 @@ class LogicMixin:
 
         # Track the loaded model in chat route assignment
         self.route_assignments["chat"] = path
+        save_route_assignments(self.route_assignments)
 
         # Update the chat route dropdown to show the loaded model
         route_menus = getattr(self, "_route_menus", {})
@@ -168,6 +568,8 @@ class LogicMixin:
         self._update_route_status()
 
     def _on_model_error(self, error: str):
+        """Handle model load failure — show error and re-enable controls."""
+        self._model_loading = False
         self._set_header_status("LOAD FAILED", C_RED)
         self.header_dot.set_color(C_RED)
         self._chat_error(f"Failed to load model: {error}")
@@ -204,591 +606,124 @@ class LogicMixin:
             return model_name
         return getattr(self, "ai_name", "ENIGMA")
 
+    def _release_loaded_engine(self):
+        """Release the active engine and any backend resources.
+
+        This is the hard-stop path used by GUI shutdown and unload flows.
+        For GGUF server backends, this calls model.unload() explicitly so the
+        llama-server subprocess is terminated immediately instead of waiting for
+        Python garbage collection.
+        """
+        if self.engine is None:
+            return
+
+        engine = self.engine
+
+        # Prefer explicit model unload over destructor-based cleanup.
+        try:
+            model = getattr(engine, "model", None)
+            unload = getattr(model, "unload", None)
+            if callable(unload):
+                unload()
+        except Exception as exc:
+            logger.debug("Engine model unload failed: %s", exc)
+
+        self.engine = None
+        self.model_path = None
+
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except ImportError:
+            pass
+        except Exception as exc:
+            logger.debug("CUDA cache cleanup failed: %s", exc)
+
     def _unload_model(self):
+        """Unload the current model, free GPU memory, and reset UI."""
         # Save per-model context before unloading
         self._save_model_context()
         self._model_display_name = None
+        self._model_suspended_by_minimize = False
+        self._suspended_model_path = None
         if self.engine is not None:
-            del self.engine
-            self.engine = None
-            self.model_path = None
-            try:
-                import torch
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-            except ImportError:
-                pass
+            self._release_loaded_engine()
         self._set_header_status("NO MODEL", C_TEXT_DIM)
         self.header_dot.set_color(C_TEXT_DIM)
         self.unload_btn.configure(state="disabled")
+        suspend_btn = getattr(self, "suspend_btn", None)
+        if suspend_btn:
+            suspend_btn.configure(
+                state="disabled",
+                text="SUSPEND",
+                command=self._suspend_model_memory)
         self._chat_system("Model unloaded.")
         self.status_bar.set_left("\u26a1 READY")
         # Clear chat route assignment
         self.route_assignments.pop("chat", None)
+        save_route_assignments(self.route_assignments)
         route_menus = getattr(self, "_route_menus", {})
         chat_menu = route_menus.get("chat")
         if chat_menu:
             chat_menu.set("None")
         self._update_route_status()
 
-    # ================================================================
-    # Logic - Chat
-    # ================================================================
-
-    def _on_input_enter(self, event):
-        """Enter sends message. Shift+Enter adds newline."""
-        if event.state & 0x1:
-            return
-        self._send_message()
-        return "break"
-
-    def _send_message(self):
-        msg = self.chat_input.get("1.0", "end").strip()
-        if not msg:
-            return
+    def _suspend_model_memory(self, silent: bool = False):
+        """Temporarily release model memory while preserving chat route."""
         if self.engine is None:
-            self._chat_system(
-                "No model loaded. Go to ROUTER and load one first.")
-            return
+            return False
+        if getattr(self, "_model_loading", False):
+            return False
+        if getattr(self, "_is_generating", False):
+            return False
+        if getattr(self, "training_active", False):
+            return False
 
-        # Handle file attachment
-        file_context = ""
-        if self.attached_file:
-            try:
-                content = Path(self.attached_file).read_text(
-                    encoding="utf-8", errors="replace")
-                if len(content) > 4000:
-                    content = content[:4000] + "\n[...truncated]"
-                file_context = (
-                    f"\n[Attached file: "
-                    f"{Path(self.attached_file).name}]"
-                    f"\n{content}\n")
-            except OSError:
-                file_context = (
-                    f"\n[Failed to read: {self.attached_file}]")
-            self._clear_attachment()
-
-        self.chat_input.delete("1.0", "end")
-        timestamp = time.strftime("%H:%M")
-        self._chat_append(
-            "timestamp", f"\n  {timestamp} ",
-            "user_prefix", f"{self.user_name}  ",
-            "user", msg + "\n")
-        if file_context:
-            self._chat_append("file_tag", "  [file attached]\n")
-        self.send_btn.configure(state="disabled")
-        self._show_thinking()
-
-        full_msg = msg + file_context
-
-        def _gen():
-            try:
-                kwargs: dict[str, Any] = {}
-                kwargs.update(self.config_overrides)
-                try:
-                    resp = self.engine.chat(full_msg, **kwargs)
-                except TypeError:
-                    resp = self.engine.chat(full_msg)
-                self.history.append(
-                    {"role": "user", "content": msg})
-                self.history.append(
-                    {"role": "assistant", "content": resp})
-                # Auto-save per-model context after each exchange
-                self._save_model_context()
-                ts = time.strftime("%H:%M")
-                def _show(r=resp, t=ts):
-                    self._hide_thinking()
-                    ai = self._active_ai_name()
-                    self._chat_append(
-                        "timestamp", f"\n  {t} ",
-                        "assistant_prefix", f"{ai}  ")
-                    self._typewriter("assistant", r + "\n")
-                self.after(0, _show)
-            except Exception as exc:
-                def _err(e=str(exc)):
-                    self._hide_thinking()
-                    self._chat_error(e)
-                self.after(0, _err)
-            finally:
-                self.after(0, lambda: self.send_btn.configure(
-                    state="normal"))
-
-        threading.Thread(target=_gen, daemon=True).start()
-
-    def _chat_append(self, *tag_text_pairs):
-        """Append multiple (tag, text) pairs to chat display."""
-        self.chat_display.configure(state="normal")
-        tb = self.chat_display._textbox
-        for i in range(0, len(tag_text_pairs), 2):
-            tag = tag_text_pairs[i]
-            text = tag_text_pairs[i + 1]
-            tb.insert("end", text, tag)
-        self.chat_display.configure(state="disabled")
-        self.chat_display.see("end")
-
-    def _chat_system(self, text: str):
-        self._chat_append("system", f"\n  // {text}\n")
-
-    def _chat_error(self, text: str):
-        self._chat_append("error", f"\n  [!] {text}\n")
-
-    def _reset_display(self):
-        """Clear the chat display widget only."""
-        self.chat_display.configure(state="normal")
-        self.chat_display.delete("1.0", "end")
-        self.chat_display.configure(state="disabled")
-
-    def _new_chat(self):
-        """Start a fresh conversation - clear chat and reset AI state."""
-        self._reset_display()
-        self.history.clear()
-        # Save cleared history to model context
-        self._save_model_context()
-        if self.engine:
-            if hasattr(self.engine, "clear_history"):
-                self.engine.clear_history()
-            if hasattr(self.engine, "clear_kv_cache"):
-                self.engine.clear_kv_cache()
-        self._chat_system("New conversation started.")
-
-    # ================================================================
-    # Logic - Per-model context
-    # ================================================================
-
-    def _save_model_context(self):
-        """Save current history and prompt to the loaded model's context."""
-        ctx = getattr(self, "model_context", None)
-        if ctx is None:
-            return
-        ctx.history = list(self.history)
-        # Capture current system prompt
-        try:
-            prompt = self.prompt_editor.get("1.0", "end").strip()
-            if prompt:
-                ctx.system_prompt = prompt
-        except Exception:
-            pass
-        # Capture config overrides
-        ctx.config = dict(self.config_overrides)
-        ctx.profile_id = self.active_profile or ""
-        ctx.save()
-
-    def _load_model_context(self, model_path: str):
-        """Load per-model context when a model is loaded."""
-        ctx = load_model_context(model_path)
-        self.model_context = ctx
-        # Restore history
-        self.history = list(ctx.history)
-        # Restore system prompt into editor
-        if ctx.system_prompt:
-            try:
-                self.prompt_editor.delete("1.0", "end")
-                self.prompt_editor.insert("1.0", ctx.system_prompt)
-                if (self.engine
-                        and hasattr(self.engine, "system_prompt")):
-                    self.engine.system_prompt = ctx.system_prompt
-            except Exception:
-                pass
-        # Restore config overrides
-        if ctx.config:
-            for key, val in ctx.config.items():
-                if key in CONFIG_LIMITS:
-                    clamped = clamp_config(key, val)
-                    self.config_overrides[key] = clamped
-                    entry = self.config_entries.get(key)
-                    if entry:
-                        lo, hi, step = CONFIG_LIMITS[key]
-                        entry.delete(0, "end")
-                        if step == int(step) and lo == int(lo):
-                            entry.insert(0, str(int(clamped)))
-                        else:
-                            entry.insert(0, str(round(clamped, 2)))
-        # Restore profile
-        if ctx.profile_id:
-            self.active_profile = ctx.profile_id
-        # Display loaded history in chat
-        self._restore_history_display()
-
-    def _restore_history_display(self):
-        """Replay loaded history into the chat display widget."""
-        self._reset_display()
-        if not self.history:
-            return
-        ai = self._active_ai_name()
-        for msg in self.history:
-            role = msg.get("role", "system")
-            content = msg.get("content", "")
-            if role == "user":
-                self._chat_append(
-                    "user_prefix", f"\n  {self.user_name}  ",
-                    "user", content + "\n")
-            elif role == "assistant":
-                self._chat_append(
-                    "assistant_prefix", f"\n  {ai}  ",
-                    "assistant", content + "\n")
-            else:
-                self._chat_system(content)
-        count = len(self.history)
-        self._chat_system(
-            f"Restored {count} messages from model context.")
-
-    # ================================================================
-    # Logic - Thinking indicator
-    # ================================================================
-
-    def _show_thinking(self):
-        """Show animated processing indicator."""
-        self._thinking_active = True
-        self._think_n = 0
-        self._do_think()
-
-    def _do_think(self):
-        if not self._thinking_active:
-            return
-        self._think_n += 1
-        dots = "." * (self._think_n % 4)
-        try:
-            self.thinking_label.configure(
-                text=f"  PROCESSING{dots}")
-        except Exception:
-            return
-        self.after(350, self._do_think)
-
-    def _hide_thinking(self):
-        self._thinking_active = False
-        try:
-            self.thinking_label.configure(text="")
-        except Exception:
-            pass
-
-    # ================================================================
-    # Logic - Typewriter effect
-    # ================================================================
-
-    def _typewriter(self, tag: str, text: str, idx: int = 0):
-        """Insert text into chat character-by-character."""
-        if idx >= len(text):
-            return
-        end = min(idx + 3, len(text))
-        self.chat_display.configure(state="normal")
-        self.chat_display._textbox.insert(
-            "end", text[idx:end], tag)
-        self.chat_display.configure(state="disabled")
-        self.chat_display.see("end")
-        self.after(8, lambda: self._typewriter(tag, text, end))
-
-    # ================================================================
-    # Logic - Voice toggle
-    # ================================================================
-
-    def _on_voice_toggle(self, is_on: bool):
-        self.voice_enabled = is_on
-        state = "ON" if is_on else "OFF"
-        self._chat_system(f"Voice output {state}")
-
-    # ================================================================
-    # Logic - Voice input (speech-to-text)
-    # ================================================================
-
-    def _toggle_voice_input(self):
-        """Start or stop voice input recording.
-
-        Uses listen_in_background so the user can click again
-        to immediately stop recording instead of waiting for
-        a timeout.
-        """
-        # If already recording, stop it
-        if getattr(self, "_voice_recording", False):
-            self._voice_recording = False
-            stopper = getattr(self, "_voice_stopper", None)
-            if stopper:
-                stopper(wait_for_stop=False)
-                self._voice_stopper = None
-            self._voice_input_done()
-            self._chat_system("Recording stopped.")
-            return
-
-        try:
-            import speech_recognition as sr
-        except ImportError:
-            self._chat_error(
-                "speech_recognition not installed. "
-                "Run: pip install SpeechRecognition")
-            return
-
-        self._voice_recording = True
-        self._voice_got_audio = False
-        self.mic_btn.configure(
-            fg_color=C_RED, text_color="#ffffff")
-        self._chat_system("Listening... click mic again to stop.")
-
-        recognizer = sr.Recognizer()
-        recognizer.dynamic_energy_threshold = True
-
-        def _on_audio(rec, audio):
-            """Called in background when speech is detected."""
-            if not self._voice_recording or self._voice_got_audio:
-                return
-            self._voice_got_audio = True
-            # Stop the background listener
-            stopper = getattr(self, "_voice_stopper", None)
-            if stopper:
-                stopper(wait_for_stop=False)
-                self._voice_stopper = None
-            try:
-                text = rec.recognize_google(audio)
-                self.after(0, lambda t=text: self._on_voice_text(t))
-            except Exception as exc:
-                err = str(exc) if str(exc) else type(exc).__name__
-                self.after(0, lambda e=err: self._chat_error(
-                    f"Voice input failed: {e}"))
-            finally:
-                self._voice_recording = False
-                self.after(0, self._voice_input_done)
-
-        try:
-            mic = sr.Microphone()
-            # Store the stopper so clicking mic again can cancel
-            self._voice_stopper = recognizer.listen_in_background(
-                mic, _on_audio, phrase_time_limit=30)
-        except Exception as exc:
-            self._voice_recording = False
-            self._voice_input_done()
-            err = str(exc) if str(exc) else type(exc).__name__
-            self._chat_error(f"Microphone error: {err}")
-
-    def _on_voice_text(self, text: str):
-        """Insert transcribed text into the chat input."""
-        if not text:
-            return
-        current = self.chat_input.get("1.0", "end").strip()
-        if current:
-            self.chat_input.insert("end", " " + text)
-        else:
-            self.chat_input.delete("1.0", "end")
-            self.chat_input.insert("1.0", text)
-        self._chat_system(f"Voice: \"{text}\"")
-
-    def _voice_input_done(self):
-        """Reset mic button after recording ends."""
-        try:
-            self.mic_btn.configure(
-                fg_color=C_SURFACE, text_color=C_TEXT_DIM)
-        except Exception:
-            pass
-
-    # ================================================================
-    # Logic - File attachment
-    # ================================================================
-
-    def _attach_file(self):
-        path = filedialog.askopenfilename(
-            title="Attach File",
-            filetypes=[
-                ("Text files", "*.txt *.md *.py *.json *.csv *.log"),
-                ("All files", "*.*"),
-            ])
-        if path:
-            self.attached_file = path
-            name = Path(path).name
-            self.file_indicator.configure(
-                text=f"\U0001f4ce {name}  [click SEND to include]")
-
-    def _clear_attachment(self):
-        self.attached_file = None
-        self.file_indicator.configure(text="")
-
-    # ================================================================
-    # Logic - History / Sessions
-    # ================================================================
-
-    def _refresh_history_list(self):
-        sessions = scan_sessions()
-        self.history_list.configure(state="normal")
-        self.history_list.delete("1.0", "end")
-        if not sessions:
-            self.history_list.insert("1.0", "// No saved sessions\n")
-        else:
-            for s in sessions:
-                ts = ""
-                if s["saved_at"]:
-                    ts = time.strftime(
-                        " %m/%d %H:%M",
-                        time.localtime(s["saved_at"]))
-                self.history_list.insert(
-                    "end",
-                    f"\u25cb {s['name']}"
-                    f" ({s['messages']} msgs){ts}\n")
-        self.history_list.configure(state="disabled")
-
-    def _save_session(self):
-        if not self.history:
-            self._chat_system("Nothing to save (chat is empty).")
-            return
-        MEMORY_DIR.mkdir(parents=True, exist_ok=True)
-        name = time.strftime("session_%Y%m%d_%H%M%S")
-        path = MEMORY_DIR / f"{name}.json"
-        data = {
-            "name": name,
-            "saved_at": time.time(),
-            "message_count": len(self.history),
-            "messages": self.history,
-        }
-        path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-        # Also persist to per-model context
-        self._save_model_context()
-        self._chat_system(f"Session saved: {name}")
-        self._refresh_history_list()
-
-    def _load_session(self):
-        path = filedialog.askopenfilename(
-            title="Load Session",
-            initialdir=str(MEMORY_DIR),
-            filetypes=[("JSON files", "*.json")])
+        path = self.model_path or self.route_assignments.get("chat")
         if not path:
-            return
-        try:
-            data = json.loads(
-                Path(path).read_text(encoding="utf-8"))
-            messages = data.get("messages", [])
-            self.history = messages
-            self._reset_display()
-            for msg in messages:
-                role = msg.get("role", "system")
-                content = msg.get("content", "")
-                if role == "user":
-                    self._chat_append(
-                        "user_prefix", "\n  YOU  ",
-                        "user", content + "\n")
-                elif role == "assistant":
-                    self._chat_append(
-                        "assistant_prefix", "\n  ENIGMA  ",
-                        "assistant", content + "\n")
-                else:
-                    self._chat_system(content)
-            name = data.get("name", Path(path).stem)
-            self._chat_system(
-                f"Loaded session: {name} "
-                f"({len(messages)} messages)")
-        except (json.JSONDecodeError, OSError) as exc:
-            self._chat_error(f"Failed to load: {exc}")
+            return False
 
-    def _export_chat(self):
-        if not self.history:
-            self._chat_system("Nothing to export.")
-            return
-        path = filedialog.asksaveasfilename(
-            title="Export Chat",
-            defaultextension=".txt",
-            filetypes=[("Text files", "*.txt")])
-        if not path:
-            return
-        lines = []
-        for msg in self.history:
-            role = msg.get("role", "?").upper()
-            content = msg.get("content", "")
-            lines.append(f"[{role}]\n{content}\n")
-        Path(path).write_text(
-            "\n".join(lines), encoding="utf-8")
-        self._chat_system(f"Exported to {Path(path).name}")
-
-    # ================================================================
-    # Logic - System prompt
-    # ================================================================
-
-    def _load_system_prompt(self) -> str:
-        prompts_path = DATA_DIR / "prompts.json"
-        if prompts_path.exists():
-            try:
-                data = json.loads(
-                    prompts_path.read_text(encoding="utf-8"))
-                return data.get("current", {}).get(
-                    "system_prompt",
-                    "You are a helpful AI assistant.")
-            except (json.JSONDecodeError, OSError):
-                pass
-        return "You are a helpful AI assistant."
-
-    def _apply_system_prompt(self):
-        prompt = self.prompt_editor.get("1.0", "end").strip()
-        if not prompt:
-            self._chat_system("Prompt cannot be empty.")
-            return
-        if self.engine and hasattr(self.engine, "system_prompt"):
-            self.engine.system_prompt = prompt
-        # Persist to prompts.json
-        prompts_path = DATA_DIR / "prompts.json"
-        try:
-            if prompts_path.exists():
-                data = json.loads(
-                    prompts_path.read_text(encoding="utf-8"))
-            else:
-                data = {"current": {}, "templates": {},
-                        "prompts_by_purpose": {}}
-            data["current"]["system_prompt"] = prompt
-            prompts_path.write_text(
-                json.dumps(data, indent=2), encoding="utf-8")
-        except (json.JSONDecodeError, OSError):
-            pass
-        # Also save to per-model context
         self._save_model_context()
-        self._chat_system("System prompt updated.")
+        self._release_loaded_engine()
+        self._model_suspended_by_minimize = True
+        self._suspended_model_path = path
+        self._set_header_status("SUSPENDED", C_ORANGE)
+        self.header_dot.set_color(C_ORANGE)
+        self.unload_btn.configure(state="disabled")
 
-    def _reset_system_prompt(self):
-        default = self._load_system_prompt()
-        self.prompt_editor.delete("1.0", "end")
-        self.prompt_editor.insert("1.0", default)
-        self._chat_system("System prompt reset to default.")
+        suspend_btn = getattr(self, "suspend_btn", None)
+        if suspend_btn:
+            suspend_btn.configure(
+                state="normal",
+                text="RESUME",
+                command=self._resume_suspended_model)
 
-    # ================================================================
-    # Logic - Profiles
-    # ================================================================
+        if not silent:
+            self._chat_system("Model suspended. Click RESUME to reload.")
+        self.status_bar.set_left("\u26a1 MODEL SUSPENDED")
+        return True
 
-    def _on_profile_selected(self, choice: str):
-        for p in self.profiles_data:
-            if p["name"] == choice:
-                self._activate_profile(p)
-                return
+    def _resume_suspended_model(self):
+        """Reload a model that was suspended to free memory."""
+        if self.engine is not None:
+            return False
+        if getattr(self, "_model_loading", False):
+            return False
 
-    def _activate_profile(self, profile: dict):
-        profile_id = profile["id"]
-        path = PROFILES_DIR / f"{profile_id}.json"
-        if not path.exists():
-            self._chat_error(f"Profile missing: {profile_id}")
-            return
+        path = self._suspended_model_path or self.route_assignments.get("chat")
+        self._model_suspended_by_minimize = False
+        self._suspended_model_path = None
+        if not path:
+            return False
+        if not Path(path).exists():
+            self._chat_error(f"Suspended model path missing: {path}")
+            return False
 
-        data = json.loads(path.read_text(encoding="utf-8"))
-        self.active_profile = profile_id
+        self.status_bar.set_left("\u26a1 RESUMING MODEL")
+        self.after(150, lambda p=path: self._load_model(p))
+        return True
 
-        gen = data.get("generation", {})
-        for key, val in gen.items():
-            if key in CONFIG_LIMITS:
-                clamped = clamp_config(key, val)
-                self.config_overrides[key] = clamped
-                entry = self.config_entries.get(key)
-                if entry:
-                    lo, hi, step = CONFIG_LIMITS[key]
-                    entry.delete(0, "end")
-                    if step == int(step) and lo == int(lo):
-                        entry.insert(0, str(int(clamped)))
-                    else:
-                        entry.insert(0, str(round(clamped, 2)))
-
-        sys_prompt = data.get("system_prompt", "")
-        if sys_prompt:
-            self.prompt_editor.delete("1.0", "end")
-            self.prompt_editor.insert("1.0", sys_prompt)
-            if self.engine and hasattr(self.engine, "system_prompt"):
-                self.engine.system_prompt = sys_prompt
-
-        name = data.get("name", profile_id)
-        self.active_profile_label.configure(
-            text=name, text_color=C_PURPLE)
-        # Update CORE page profile indicator
-        if hasattr(self, "_core_profile_label"):
-            self._core_profile_label.configure(
-                text=f"PROFILE: {name}")
-        self._chat_system(f"Profile activated: {name}")
 
     # ================================================================
     # Logic - Route assignments
@@ -798,7 +733,7 @@ class LogicMixin:
         """Assign a model to a specific route.
 
         Args:
-            route_key: Route identifier (e.g. 'chat', 'trainer', brick name).
+            route_key: Route identifier (e.g. 'chat', 'trainer', mod name).
             choice: Model name from dropdown, or 'None' to clear.
         """
         if choice == "None":
@@ -816,25 +751,38 @@ class LogicMixin:
             return
 
         self.route_assignments[route_key] = model_path
+        # Persist route assignments to disk
+        save_route_assignments(self.route_assignments)
 
         # If assigning to chat, load the model into the engine
         if route_key == "chat":
             self._load_model(model_path)
         else:
-            self._chat_system(
-                f"Route {route_key.upper()} assigned: {choice}")
+            # Check if this model is already loaded for chat (reuse)
+            shared = self._get_engine_for_route(route_key)
+            if shared is not None:
+                msg = (f"Route {route_key.upper()} assigned: "
+                       f"{choice} (sharing chat engine)")
+            else:
+                msg = (f"Route {route_key.upper()} assigned: "
+                       f"{choice}")
+            self._chat_system(msg)
+            self.status_bar.set_left(msg)
 
         self._update_route_status()
 
     def _unassign_route(self, route_key: str):
         """Remove model assignment from a route."""
         self.route_assignments.pop(route_key, None)
+        # Persist route assignments to disk
+        save_route_assignments(self.route_assignments)
 
         if route_key == "chat" and self.engine is not None:
             self._unload_model()
         else:
-            self._chat_system(
-                f"Route {route_key.upper()} cleared.")
+            msg = f"Route {route_key.upper()} cleared."
+            self._chat_system(msg)
+            self.status_bar.set_left(msg)
 
         self._update_route_status()
 
@@ -860,15 +808,15 @@ class LogicMixin:
                 lbl.configure(
                     text="No model", text_color=C_TEXT_DIM)
 
-        # Update brick routes
-        for brick in self.bricks_data:
-            brick_key = brick["name"].lower()
-            ref = route_labels.get(brick_key)
+        # Update mod routes
+        for mod in self.mods_data:
+            mod_key = mod["name"].lower()
+            ref = route_labels.get(mod_key)
             if not ref:
                 continue
             dot, lbl = ref
-            assigned = self.route_assignments.get(brick_key)
-            running = brick.get("_running", False)
+            assigned = self.route_assignments.get(mod_key)
+            running = mod.get("_running", False)
             if assigned:
                 name = Path(assigned).stem
                 status = f"{name}"
@@ -887,11 +835,64 @@ class LogicMixin:
                 lbl.configure(
                     text="Stopped", text_color=C_TEXT_DIM)
 
+        # Update FORGE page model status cards
+        updater = getattr(self, "_update_forge_cards", None)
+        if updater:
+            updater()
+
     # ================================================================
     # Helpers
     # ================================================================
 
+    def _load_route_assignments(self):
+        """Load saved route assignments from disk and restore dropdowns.
+
+        Non-chat routes are restored into route_assignments and
+        their dropdowns updated. Chat route auto-loads the model.
+        """
+        saved = load_route_assignments()
+        if not saved:
+            return
+        route_menus = getattr(self, "_route_menus", {})
+
+        for route_key, model_path in saved.items():
+            # Verify the model file still exists
+            if not Path(model_path).exists():
+                continue
+            # Find display name for the dropdown
+            display = "None"
+            for m in self.models_data:
+                if m["path"] == model_path:
+                    display = m["name"]
+                    break
+            if display == "None":
+                continue
+
+            # Update the dropdown to show the saved selection
+            menu = route_menus.get(route_key)
+            if menu:
+                menu.set(display)
+
+            # Restore the assignment (don't load chat model yet)
+            if route_key != "chat":
+                self.route_assignments[route_key] = model_path
+
+        # Load chat model last (triggers full load sequence)
+        # Only auto-load if enabled and no model was given on command line
+        chat_path = saved.get("chat")
+        if (chat_path and Path(chat_path).exists()
+            and getattr(self, "_auto_load_chat_model", True)
+                and not self.model_path):
+            for m in self.models_data:
+                if m["path"] == chat_path:
+                    self.after(
+                        300, lambda p=chat_path: self._load_model(p))
+                    break
+
+        self._update_route_status()
+
     def _set_header_status(self, text: str, color: str):
+        """Update the header status label text and color."""
         self.header_status.configure(text=text, text_color=color)
 
     # ================================================================
@@ -1002,42 +1003,91 @@ class LogicMixin:
     # Logic - Web search
     # ================================================================
 
-    def _web_search_dialog(self):
-        """Open a dialog to search the web and insert results into chat."""
-        dialog = ctk.CTkInputDialog(
-            text="Enter your search query:",
-            title="Web Search")
-        query = dialog.get_input()
-        if not query or not query.strip():
-            return
-        query = query.strip()
-        self._chat_system(f"Searching the web for: {query}")
+    def _on_web_access_toggle(self, is_on: bool):
+        """Toggle whether the AI is allowed to use web search."""
+        self.web_access = is_on
+        state = "ENABLED" if is_on else "DISABLED"
+        self._chat_system(f"AI web access {state}")
 
-        def _search():
-            try:
-                from enigma_engine.core.commands import get_registry
-                registry = get_registry()
-                result = registry.execute(f"search.web {query}")
-                def _show():
-                    if result.success:
-                        self._chat_append(
-                            "system",
-                            f"\n  // Web results:\n")
-                        self._chat_append(
-                            "assistant", result.output + "\n")
+    # ================================================================
+    # Logic - RAG (Document Q&A)
+    # ================================================================
+
+    def _on_rag_toggle(self, is_on: bool):
+        """Toggle RAG — index data/ and information/ for context retrieval."""
+        if is_on:
+            self._chat_system("Building document index...")
+            import threading
+            threading.Thread(
+                target=self._build_rag_index, daemon=True).start()
+        else:
+            self._rag_index = None
+            self._chat_system("Document Q&A DISABLED")
+
+    def _build_rag_index(self):
+        """Build RAG index from data/ and information/ in a background thread."""
+        try:
+            from enigma_engine.core.rag import RAGIndex
+            from enigma_engine.core.document_readers import (
+                read_document, SUPPORTED_EXTENSIONS)
+
+            index = RAGIndex()
+            indexed = 0
+
+            # Index data/ and information/ directories
+            for directory in (DATA_DIR, INFO_DIR):
+                if not directory.exists():
+                    continue
+                for p in sorted(directory.rglob("*")):
+                    if not p.is_file():
+                        continue
+                    ext = p.suffix.lower()
+                    # Skip config files
+                    if p.name in {
+                        "gui_settings.json", "prompts.json",
+                        "route_assignments.json", "path_settings.json",
+                    }:
+                        continue
+                    if ext in SUPPORTED_EXTENSIONS:
+                        text = read_document(p)
+                    elif ext in (".txt", ".md", ".jsonl"):
+                        try:
+                            text = p.read_text(encoding="utf-8")
+                        except (OSError, UnicodeDecodeError):
+                            continue
                     else:
-                        self._chat_error(result.output)
-                self.after(0, _show)
-            except Exception as exc:
-                self.after(
-                    0, lambda: self._chat_error(str(exc)))
+                        continue
+                    if text and text.strip():
+                        n = index.add_document(str(p), text)
+                        indexed += n
 
-        import threading
-        threading.Thread(target=_search, daemon=True).start()
+            if index.chunks:
+                index.build()
+                self._rag_index = index
+                self.after(0, lambda: self._chat_system(
+                    f"Document Q&A ENABLED — indexed {indexed} chunks "
+                    f"from {len(set(index.sources))} files"))
+            else:
+                self.after(0, lambda: self._chat_system(
+                    "No documents found to index."))
+
+        except Exception as e:
+            err_msg = str(e)
+            logger.warning("RAG index build failed: %s", err_msg)
+            self.after(0, lambda: self._chat_system(
+                f"Document index failed: {err_msg}"))
+
+    # ================================================================
+    # Logic - Reasoning toggle
+    # ================================================================
+
+    def _on_reasoning_toggle(self, is_on: bool):
+        """Toggle chain-of-thought reasoning mode."""
+        self.reasoning_enabled = is_on
+        state = "ENABLED" if is_on else "DISABLED"
+        self._chat_system(f"Chain-of-thought reasoning {state}")
 
     def destroy(self):
+        """Clean up training flag and destroy the window."""
         self.training_active = False
-        for proc in self.brick_processes.values():
-            if proc.poll() is None:
-                proc.terminate()
         super().destroy()

@@ -162,14 +162,14 @@ class WeightMapper:
         forge_weights = mapper.map_gguf_to_forge(gguf_tensors, config)
         forge_weights = mapper.map_onnx_to_forge(onnx_weights, config)
     """
-    
+
     def __init__(self):
         self._stats = {
             "mapped": 0,
             "skipped": 0,
             "failed": 0,
         }
-    
+
     def _apply_mapping(self, source_dict: dict, mapping_rules: list) -> dict:
         """
         Apply regex mapping rules to convert weight names.
@@ -183,10 +183,10 @@ class WeightMapper:
         """
         result = {}
         self._stats = {"mapped": 0, "skipped": 0, "failed": 0}
-        
+
         for source_name, tensor in source_dict.items():
             mapped = False
-            
+
             for pattern, replacement in mapping_rules:
                 match = re.fullmatch(pattern, source_name)
                 if match:
@@ -196,18 +196,18 @@ class WeightMapper:
                     mapped = True
                     logger.debug(f"Mapped: {source_name} → {forge_name}")
                     break
-            
+
             if not mapped:
                 # Keep unmapped weights with a warning
                 self._stats["skipped"] += 1
                 logger.debug(f"Skipped unmapped weight: {source_name}")
-        
+
         logger.info(
             f"Weight mapping: {self._stats['mapped']} mapped, "
             f"{self._stats['skipped']} skipped"
         )
         return result
-    
+
     def _detect_hf_model_type(self, state_dict: dict) -> str:
         """
         Auto-detect HuggingFace model type from weight names.
@@ -217,7 +217,7 @@ class WeightMapper:
         """
         sample_keys = list(state_dict.keys())[:20]
         key_str = " ".join(sample_keys)
-        
+
         if "transformer.h." in key_str and "transformer.wte" in key_str:
             return "gpt2"
         if "model.layers." in key_str and "self_attn.q_proj" in key_str:
@@ -227,10 +227,10 @@ class WeightMapper:
             if any("mlp.fc1" in k for k in state_dict.keys()):
                 return "phi"
             return "llama"  # Default for this pattern
-        
+
         logger.warning("Could not auto-detect model type, defaulting to llama")
         return "llama"
-    
+
     def map_huggingface_to_forge(
         self,
         hf_state_dict: dict,
@@ -249,15 +249,15 @@ class WeightMapper:
         """
         if model_type is None:
             model_type = self._detect_hf_model_type(hf_state_dict)
-        
+
         model_type = model_type.lower()
         mapping_rules = HF_MODEL_MAPS.get(model_type, HF_LLAMA_MAP)
-        
+
         logger.info(f"Mapping HuggingFace weights (type={model_type}, "
                     f"rules={len(mapping_rules)})")
-        
+
         return self._apply_mapping(hf_state_dict, mapping_rules)
-    
+
     def map_gguf_to_forge(self, gguf_tensors: dict, config: Any = None) -> dict:
         """
         Convert GGUF tensors to Forge format.
@@ -271,7 +271,7 @@ class WeightMapper:
         """
         logger.info(f"Mapping {len(gguf_tensors)} GGUF tensors to Forge format")
         return self._apply_mapping(gguf_tensors, GGUF_WEIGHT_MAP)
-    
+
     def map_onnx_to_forge(self, onnx_weights: dict, config: Any = None) -> dict:
         """
         Convert ONNX weights to Forge format.
@@ -291,23 +291,23 @@ class WeightMapper:
             Forge-compatible state dict
         """
         logger.info(f"Mapping {len(onnx_weights)} ONNX weights to Forge format")
-        
+
         # Try HuggingFace mapping first (most ONNX models come from HF)
         model_type = self._detect_hf_model_type(onnx_weights)
         mapping_rules = HF_MODEL_MAPS.get(model_type, [])
-        
+
         # Combine with GGUF mapping as fallback
         all_rules = mapping_rules + GGUF_WEIGHT_MAP
-        
+
         result = self._apply_mapping(onnx_weights, all_rules)
-        
+
         if not result and config is not None:
             # Last resort: shape-based heuristic matching
             logger.info("Trying shape-based heuristic matching...")
             result = self._shape_based_mapping(onnx_weights, config)
-        
+
         return result
-    
+
     def _shape_based_mapping(self, weights: dict, config: Any) -> dict:
         """
         Map weights based on tensor shapes when name-based mapping fails.
@@ -317,26 +317,26 @@ class WeightMapper:
         result = {}
         dim = getattr(config, 'dim', None)
         vocab_size = getattr(config, 'vocab_size', None)
-        
+
         if dim is None or vocab_size is None:
             logger.warning("Cannot do shape-based mapping without dim and vocab_size in config")
             return result
-        
+
         for name, tensor in weights.items():
             shape = tuple(tensor.shape) if hasattr(tensor, 'shape') else ()
-            
+
             # Token embeddings: [vocab_size, dim]
             if shape == (vocab_size, dim) and "tok_embeddings.weight" not in result:
                 result["tok_embeddings.weight"] = tensor
                 logger.info(f"Shape-matched: {name} → tok_embeddings.weight")
-            
+
             # Final norm: [dim]
             elif shape == (dim,) and "norm.weight" not in result:
                 # Could be any norm - skip for safety
                 pass
-        
+
         return result
-    
+
     def get_stats(self) -> dict:
         """Get statistics from the last mapping operation."""
         return self._stats.copy()

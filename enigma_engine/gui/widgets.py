@@ -6,43 +6,191 @@ Reusable components for the desktop GUI.
 """
 from __future__ import annotations
 
+import tkinter as tk
+
 import customtkinter as ctk
 
+from enigma_engine.gui.themes import load_active_theme
 
 # -------------------------------------------------------------------
-# Color Palette - Dark theme with silver/gray accent
+# Color Palette - loaded from the active theme at import time
 # -------------------------------------------------------------------
-C_BG = "#080808"
-C_PANEL = "#0e0e0e"
-C_SURFACE = "#181818"
-C_INPUT = "#1c1c1c"
-C_ACCENT = "#8B95A5"
-C_ACCENT_DIM = "#2a2a2a"
-C_ACCENT_MUTED = "#3d3d3d"
-C_PURPLE = "#a855f7"
-C_CYAN = "#22d3ee"
-C_TEXT = "#b0b0b0"
-C_TEXT_DIM = "#555555"
-C_TEXT_BRIGHT = "#e8e8e8"
-C_GREEN = "#22c55e"
-C_GREEN_DIM = "#0e3a1e"
-C_RED = "#ef4444"
-C_ORANGE = "#f97316"
-C_BORDER = "#1f1f1f"
-C_BORDER_ACCENT = "#2e2e2e"
+_theme = load_active_theme()
+
+C_BG = _theme.bg
+C_PANEL = _theme.panel
+C_SURFACE = _theme.surface
+C_INPUT = _theme.input
+C_ACCENT = _theme.accent
+C_ACCENT_DIM = _theme.accent_dim
+C_ACCENT_MUTED = _theme.accent_muted
+C_PURPLE = _theme.purple
+C_PURPLE_DIM = _theme.purple_dim
+C_PURPLE_MUTED = _theme.purple_muted
+C_CYAN = _theme.cyan
+C_TEXT = _theme.text
+C_TEXT_DIM = _theme.text_dim
+C_TEXT_BRIGHT = _theme.text_bright
+C_GREEN = _theme.green
+C_GREEN_DIM = _theme.green_dim
+C_RED = _theme.red
+C_ORANGE = _theme.orange
+C_BORDER = _theme.border
+C_BORDER_ACCENT = _theme.border_accent
+
+# App version — single source in enigma_engine/__init__.py
+from enigma_engine import __version__ as VERSION  # noqa: F401 (re-exported)
 
 # -------------------------------------------------------------------
 # Fonts - monospace, all sizes +5 from base
 # -------------------------------------------------------------------
-FONT_TITLE = ("Consolas", 26, "bold")
-FONT_SECTION = ("Consolas", 17, "bold")
-FONT_BODY = ("Consolas", 16)
-FONT_SMALL = ("Consolas", 15)
-FONT_TINY = ("Consolas", 14)
-FONT_CHAT = ("Consolas", 16)
-FONT_INPUT = ("Consolas", 17)
-FONT_MONO = ("Consolas", 16)
-FONT_CMD = ("Consolas", 15)
+FONT_FAMILY = "Consolas"
+
+# Base sizes before any offset
+_FONT_BASE_SIZES = {
+    "FONT_TITLE": 26,
+    "FONT_SECTION": 17,
+    "FONT_BODY": 16,
+    "FONT_SMALL": 15,
+    "FONT_TINY": 14,
+    "FONT_CHAT": 16,
+    "FONT_INPUT": 17,
+    "FONT_MONO": 16,
+    "FONT_CMD": 15,
+}
+_font_size_offset: int = 0
+
+FONT_TITLE = (FONT_FAMILY, 26, "bold")
+FONT_SECTION = (FONT_FAMILY, 17, "bold")
+FONT_BODY = (FONT_FAMILY, 16)
+FONT_SMALL = (FONT_FAMILY, 15)
+FONT_TINY = (FONT_FAMILY, 14)
+FONT_CHAT = (FONT_FAMILY, 16)
+FONT_INPUT = (FONT_FAMILY, 17)
+FONT_MONO = (FONT_FAMILY, 16)
+FONT_CMD = (FONT_FAMILY, 15)
+
+
+def get_font_size_offset() -> int:
+    """Return the current font size offset (0 = default)."""
+    return _font_size_offset
+
+
+def set_font_size_offset(offset: int) -> None:
+    """Apply a font size offset to all FONT_* tuples.
+
+    Offset is added to each base size. For example, offset=2
+    makes FONT_BODY go from size 16 to 18. Offset can be negative.
+    Clamped to [-4, 8] range for safety.
+    """
+    global _font_size_offset  # noqa: PLW0603
+    global FONT_TITLE, FONT_SECTION, FONT_BODY, FONT_SMALL  # noqa: PLW0603
+    global FONT_TINY, FONT_CHAT, FONT_INPUT, FONT_MONO, FONT_CMD  # noqa: PLW0603
+
+    offset = max(-4, min(8, offset))
+    _font_size_offset = offset
+
+    FONT_TITLE = (FONT_FAMILY, _FONT_BASE_SIZES["FONT_TITLE"] + offset, "bold")
+    FONT_SECTION = (FONT_FAMILY, _FONT_BASE_SIZES["FONT_SECTION"] + offset, "bold")
+    FONT_BODY = (FONT_FAMILY, _FONT_BASE_SIZES["FONT_BODY"] + offset)
+    FONT_SMALL = (FONT_FAMILY, _FONT_BASE_SIZES["FONT_SMALL"] + offset)
+    FONT_TINY = (FONT_FAMILY, _FONT_BASE_SIZES["FONT_TINY"] + offset)
+    FONT_CHAT = (FONT_FAMILY, _FONT_BASE_SIZES["FONT_CHAT"] + offset)
+    FONT_INPUT = (FONT_FAMILY, _FONT_BASE_SIZES["FONT_INPUT"] + offset)
+    FONT_MONO = (FONT_FAMILY, _FONT_BASE_SIZES["FONT_MONO"] + offset)
+    FONT_CMD = (FONT_FAMILY, _FONT_BASE_SIZES["FONT_CMD"] + offset)
+
+
+# Load font size offset from settings at import time
+def _load_font_size_offset() -> None:
+    """Load persisted font_size_offset from gui_settings.json."""
+    import json as _json
+    from pathlib import Path as _Path
+    settings_path = (
+        _Path(__file__).parent.parent.parent / "data" / "gui_settings.json")
+    try:
+        if settings_path.exists():
+            data = _json.loads(
+                settings_path.read_text(encoding="utf-8"))
+            offset = data.get("font_size_offset", 0)
+            if isinstance(offset, int) and offset != 0:
+                set_font_size_offset(offset)
+    except Exception:
+        pass
+
+
+_load_font_size_offset()
+
+
+def reload_theme(name: str) -> dict[str, str]:
+    """Switch to a new theme and update all C_* module constants.
+
+    Returns a mapping of old hex colours (lowercase) to new ones
+    so callers can walk existing widgets and remap their colours.
+    Also propagates updated constants to all enigma_engine.gui.*
+    modules that imported them.
+    """
+    import sys
+    from dataclasses import fields as dc_fields
+    from enigma_engine.gui.themes import Theme, get_theme
+
+    global _theme  # noqa: PLW0603
+    global C_BG, C_PANEL, C_SURFACE, C_INPUT  # noqa: PLW0603
+    global C_ACCENT, C_ACCENT_DIM, C_ACCENT_MUTED  # noqa: PLW0603
+    global C_PURPLE, C_PURPLE_DIM, C_PURPLE_MUTED  # noqa: PLW0603
+    global C_CYAN, C_TEXT, C_TEXT_DIM, C_TEXT_BRIGHT  # noqa: PLW0603
+    global C_GREEN, C_GREEN_DIM, C_RED, C_ORANGE  # noqa: PLW0603
+    global C_BORDER, C_BORDER_ACCENT  # noqa: PLW0603
+
+    old = _theme
+    new = get_theme(name)
+
+    # Build old→new colour mapping (lowercase for case-insensitive match)
+    color_map: dict[str, str] = {}
+    for f in dc_fields(Theme):
+        if f.name == "name":
+            continue
+        old_val = getattr(old, f.name)
+        new_val = getattr(new, f.name)
+        if old_val != new_val:
+            color_map[old_val.lower()] = new_val
+
+    # Update module-level constants
+    _theme = new
+    C_BG = new.bg
+    C_PANEL = new.panel
+    C_SURFACE = new.surface
+    C_INPUT = new.input
+    C_ACCENT = new.accent
+    C_ACCENT_DIM = new.accent_dim
+    C_ACCENT_MUTED = new.accent_muted
+    C_PURPLE = new.purple
+    C_PURPLE_DIM = new.purple_dim
+    C_PURPLE_MUTED = new.purple_muted
+    C_CYAN = new.cyan
+    C_TEXT = new.text
+    C_TEXT_DIM = new.text_dim
+    C_TEXT_BRIGHT = new.text_bright
+    C_GREEN = new.green
+    C_GREEN_DIM = new.green_dim
+    C_RED = new.red
+    C_ORANGE = new.orange
+    C_BORDER = new.border
+    C_BORDER_ACCENT = new.border_accent
+
+    # Propagate to all GUI modules that imported C_* constants
+    this_mod = sys.modules[__name__]
+    c_names = [k for k in vars(this_mod) if k.startswith("C_")]
+    for mod_name, mod in list(sys.modules.items()):
+        if mod is None or mod is this_mod:
+            continue
+        if not mod_name.startswith("enigma_engine.gui."):
+            continue
+        for c_name in c_names:
+            if hasattr(mod, c_name):
+                setattr(mod, c_name, getattr(this_mod, c_name))
+
+    return color_map
 
 
 # -------------------------------------------------------------------
@@ -96,6 +244,167 @@ class HUDFrame(ctk.CTkFrame):
 
 # Backward compat alias
 GlowFrame = HUDFrame
+
+
+# -------------------------------------------------------------------
+# SelectableLabel - label with click-drag text selection
+# -------------------------------------------------------------------
+
+def _resolve_parent_bg(widget, fg_color):
+    """Walk up the parent chain to find the actual background color.
+
+    For widgets with fg_color='transparent', this finds the first
+    ancestor with a real background color. Falls back to C_BG.
+    """
+    if fg_color and fg_color != "transparent":
+        if isinstance(fg_color, (list, tuple)):
+            return fg_color[1]  # dark mode value
+        return fg_color
+    parent = widget
+    while parent:
+        try:
+            fg = parent.cget("fg_color")
+            if fg and fg != "transparent":
+                if isinstance(fg, (list, tuple)):
+                    return fg[1]
+                return fg
+        except Exception:
+            try:
+                bg = parent.cget("bg")
+                if bg:
+                    return bg
+            except Exception:
+                pass
+        parent = getattr(parent, "master", None)
+    return C_BG
+
+
+class SelectableLabel(ctk.CTkFrame):
+    """Label that supports click-drag text selection and copy.
+
+    Uses a tkinter Entry widget in readonly state so users can
+    click-drag to select text, Ctrl+C to copy, and right-click
+    for a copy menu. No blinking cursor (insertwidth=0).
+
+    Drop-in replacement for CTkLabel in display/read-only contexts.
+    Does NOT support wraplength (use CTkLabel for wrapped text).
+    """
+
+    def __init__(self, master, text="", font=FONT_BODY,
+                 text_color=C_TEXT, fg_color="transparent",
+                 anchor="w", width=0, height=0, **kwargs):
+        # Build frame container
+        frame_kw: dict = {
+            "fg_color": fg_color, "corner_radius": 0}
+        if height:
+            frame_kw["height"] = height
+        if width:
+            frame_kw["width"] = width
+        # Pop CTkLabel-specific kwargs that don't apply to CTkFrame
+        kwargs.pop("wraplength", None)
+        kwargs.pop("justify", None)
+        kwargs.pop("image", None)
+        kwargs.pop("compound", None)
+        kwargs.pop("cursor", None)
+        super().__init__(master, **frame_kw, **kwargs)
+
+        self._text_val = str(text)
+        self._text_color = text_color
+        self._font_val = font
+
+        # Map anchor to Entry justify
+        justify_map = {"w": "left", "center": "center", "e": "right"}
+        justify = justify_map.get(anchor, "left")
+
+        # Resolve actual background color for seamless look
+        bg = _resolve_parent_bg(master, fg_color)
+
+        # Readonly Entry — allows selection, blocks editing
+        self._var = tk.StringVar(value=self._text_val)
+        self._entry = tk.Entry(
+            self, textvariable=self._var,
+            font=font, fg=text_color,
+            readonlybackground=bg,
+            borderwidth=0, highlightthickness=0,
+            relief="flat", insertwidth=0,
+            state="readonly",
+            selectbackground=C_ACCENT_DIM,
+            selectforeground=C_TEXT_BRIGHT,
+            justify=justify,
+            cursor="arrow",
+            width=max(len(self._text_val), 1))
+        self._entry.pack(fill="both", expand=True)
+
+        # Right-click copy menu
+        self._entry.bind("<Button-3>", self._show_copy_menu)
+
+    def configure(self, **kwargs):
+        """Support text, text_color, and font updates."""
+        text = kwargs.pop("text", None)
+        text_color = kwargs.pop("text_color", None)
+        font = kwargs.pop("font", None)
+        # Ignore CTkLabel-only kwargs silently
+        kwargs.pop("wraplength", None)
+        kwargs.pop("justify", None)
+        kwargs.pop("image", None)
+        kwargs.pop("compound", None)
+        kwargs.pop("cursor", None)
+
+        if text is not None:
+            self._text_val = str(text)
+            self._var.set(self._text_val)
+            self._entry.configure(
+                width=max(len(self._text_val), 1))
+        if text_color is not None:
+            self._text_color = text_color
+            self._entry.configure(fg=text_color)
+        if font is not None:
+            self._font_val = font
+            self._entry.configure(font=font)
+
+        # Pass remaining to CTkFrame
+        if kwargs:
+            super().configure(**kwargs)
+
+    def cget(self, attribute):
+        """Read widget attributes."""
+        if attribute == "text":
+            return self._text_val
+        if attribute == "text_color":
+            return self._text_color
+        if attribute == "font":
+            return self._font_val
+        return super().cget(attribute)
+
+    def _show_copy_menu(self, event):
+        """Right-click context menu with Copy and Select All."""
+        menu = tk.Menu(self, tearoff=0)
+        try:
+            sel = self._entry.selection_get()
+            if sel:
+                menu.add_command(
+                    label="Copy",
+                    command=lambda: self._copy(sel))
+        except Exception:
+            pass
+        text = self._text_val
+        if text:
+            menu.add_command(
+                label="Copy All",
+                command=lambda: self._copy(text))
+            menu.add_command(
+                label="Select All",
+                command=self._select_all)
+        menu.tk_popup(event.x_root, event.y_root)
+
+    def _copy(self, text):
+        """Copy text to system clipboard."""
+        self.clipboard_clear()
+        self.clipboard_append(text)
+
+    def _select_all(self):
+        """Select all text in the entry."""
+        self._entry.selection_range(0, "end")
 
 
 # -------------------------------------------------------------------
@@ -164,7 +473,7 @@ class SectionLabel(ctk.CTkFrame):
         kwargs.setdefault("height", 34)
         super().__init__(master, **kwargs)
 
-        ctk.CTkLabel(
+        SelectableLabel(
             self, text=text.upper(), font=FONT_SECTION,
             text_color=color
         ).pack(side="left")
@@ -261,7 +570,7 @@ class CollapsiblePanel(ctk.CTkFrame):
             font=("Consolas", 12), text_color=C_TEXT_DIM, width=20)
         self._chevron.pack(side="left", padx=(8, 0))
 
-        self._title_label = ctk.CTkLabel(
+        self._title_label = SelectableLabel(
             self._header, text=title.upper(),
             font=FONT_SMALL, text_color=color)
         self._title_label.pack(side="left", padx=(4, 0))
@@ -330,6 +639,8 @@ class SelectableTextbox(ctk.CTkTextbox):
         # Strip state param — always stay "normal" for selection
         kwargs.pop("state", None)
         super().__init__(master, **kwargs)
+        # Hide the blinking insertion cursor — read-only, not editable
+        self._textbox.configure(insertwidth=0)
         # Block editing keys on the underlying tkinter Text widget
         self._textbox.bind("<Key>", self._on_key)
         # Right-click copy menu
@@ -418,15 +729,15 @@ class StatusBar(ctk.CTkFrame):
             self, height=1, fg_color=C_BORDER,
             corner_radius=0).pack(fill="x", side="top")
 
-        self._left = ctk.CTkLabel(
+        self._left = SelectableLabel(
             self, text="", font=FONT_TINY, text_color=C_TEXT_DIM)
         self._left.pack(side="left", padx=12)
 
-        self._right = ctk.CTkLabel(
+        self._right = SelectableLabel(
             self, text="", font=FONT_TINY, text_color=C_TEXT_DIM)
         self._right.pack(side="right", padx=12)
 
-        self._center = ctk.CTkLabel(
+        self._center = SelectableLabel(
             self, text="", font=FONT_TINY, text_color=C_TEXT_DIM)
         self._center.pack(expand=True)
 
@@ -484,9 +795,9 @@ class Tooltip:
         tw.attributes("-topmost", True)
         label = tk.Label(
             tw, text=self._text, justify="left",
-            background="#1c1c1c", foreground="#b0b0b0",
+            background=C_INPUT, foreground=C_TEXT,
             relief="solid", borderwidth=1,
-            font=("Consolas", 12), padx=6, pady=3)
+            font=FONT_TINY, padx=6, pady=3)
         label.pack()
 
     def _hide(self):

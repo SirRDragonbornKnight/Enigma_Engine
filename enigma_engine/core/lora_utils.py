@@ -26,7 +26,7 @@ import logging
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import torch
 import torch.nn as nn
@@ -50,14 +50,14 @@ except ImportError:
     logger.debug("PEFT not installed - install with: pip install peft")
 
 try:
-    import bitsandbytes as bnb
+    import bitsandbytes as bnb  # noqa: F401
     from transformers import BitsAndBytesConfig
     BITSANDBYTES_AVAILABLE = True
 except ImportError:
     logger.debug("bitsandbytes not installed - install with: pip install bitsandbytes")
 
 try:
-    from accelerate import Accelerator, dispatch_model, infer_auto_device_map
+    from accelerate import Accelerator, dispatch_model, infer_auto_device_map  # noqa: F401
     ACCELERATE_AVAILABLE = True
 except ImportError:
     logger.debug("accelerate not installed - install with: pip install accelerate")
@@ -81,7 +81,7 @@ def clear_vram() -> None:
         torch.cuda.empty_cache()
         torch.cuda.synchronize()
         logger.info("VRAM cache cleared")
-    
+
     # Also run Python garbage collection
     gc.collect()
 
@@ -105,7 +105,7 @@ def get_memory_info() -> Dict[str, float]:
         print(f"VRAM: {info['vram_available_gb']:.1f}GB free")
     """
     import psutil
-    
+
     # System RAM
     ram = psutil.virtual_memory()
     info = {
@@ -116,20 +116,20 @@ def get_memory_info() -> Dict[str, float]:
         'vram_used_gb': 0.0,
         'vram_available_gb': 0.0,
     }
-    
+
     # GPU VRAM (if available)
     if torch.cuda.is_available():
         try:
             # Get VRAM info for default device
             device = torch.cuda.current_device()
             props = torch.cuda.get_device_properties(device)
-            
+
             info['vram_total_gb'] = props.total_memory / (1024 ** 3)
             info['vram_used_gb'] = torch.cuda.memory_allocated(device) / (1024 ** 3)
             info['vram_available_gb'] = info['vram_total_gb'] - info['vram_used_gb']
         except Exception as e:
             logger.debug(f"Could not get VRAM info: {e}")
-    
+
     return info
 
 
@@ -168,42 +168,42 @@ def estimate_training_memory(
         print(f"Need ~{mem['total_vram_gb']:.1f}GB VRAM")
     """
     bytes_per_param = 4  # fp32
-    
+
     if use_qlora:
         bytes_per_param = 0.5  # 4-bit = 0.5 bytes
     elif use_lora:
         bytes_per_param = 2  # fp16 for base model
-    
+
     # Model memory
     model_memory = model_params * bytes_per_param
-    
+
     # LoRA adds small number of trainable params
     if use_lora:
         # Rough estimate: LoRA adds ~0.1-1% trainable params
         lora_params = int(model_params * 0.01 * (lora_rank / 8))
         model_memory += lora_params * 4  # LoRA weights in fp32
-    
+
     # Optimizer states (AdamW needs 2x params for momentum + variance)
     if use_lora:
         optimizer_memory = lora_params * 4 * 2  # Only LoRA params
     else:
         optimizer_memory = model_params * 4 * 2  # Full model
-    
+
     # Gradients
     if use_lora:
         gradient_memory = lora_params * 4
     else:
         gradient_memory = model_params * 4
-    
+
     # Activations (rough estimate based on batch size and seq length)
     activation_memory = batch_size * seq_length * 768 * 4  # Assume hidden_size 768
     if gradient_checkpointing:
         activation_memory *= 0.3  # Checkpointing reduces by ~70%
-    
+
     # Convert to GB
     total_vram = (model_memory + gradient_memory + activation_memory) / (1024 ** 3)
     optimizer_gb = optimizer_memory / (1024 ** 3)
-    
+
     return {
         'model_memory_gb': model_memory / (1024 ** 3),
         'optimizer_memory_gb': optimizer_gb,
@@ -248,12 +248,12 @@ class LoraConfig:
     target_modules: List[str] = field(default_factory=lambda: ["q_proj", "v_proj", "k_proj", "o_proj"])
     bias: str = "none"
     task_type: str = "CAUSAL_LM"
-    
+
     def to_peft_config(self):
         """Convert to PEFT LoraConfig."""
         if not PEFT_AVAILABLE:
             raise ImportError("PEFT not installed. Run: pip install peft")
-        
+
         return PeftLoraConfig(
             r=self.rank,
             lora_alpha=self.alpha,
@@ -287,14 +287,14 @@ class QLoraConfig(LoraConfig):
     bnb_4bit_quant_type: str = "nf4"
     bnb_4bit_compute_dtype: str = "bfloat16"
     bnb_4bit_use_double_quant: bool = True
-    
+
     def to_bnb_config(self):
         """Convert to BitsAndBytesConfig for quantization."""
         if not BITSANDBYTES_AVAILABLE:
             raise ImportError("bitsandbytes not installed. Run: pip install bitsandbytes")
-        
+
         compute_dtype = torch.bfloat16 if self.bnb_4bit_compute_dtype == "bfloat16" else torch.float16
-        
+
         return BitsAndBytesConfig(
             load_in_4bit=self.load_in_4bit,
             bnb_4bit_quant_type=self.bnb_4bit_quant_type,
@@ -357,20 +357,20 @@ def create_lora_model(
     """
     if not PEFT_AVAILABLE:
         raise ImportError("PEFT not installed. Run: pip install peft")
-    
+
     config = config or LoraConfig()
     peft_config = config.to_peft_config()
-    
+
     logger.info(f"Creating LoRA model with rank={config.rank}, alpha={config.alpha}")
-    
+
     # Wrap model with PEFT
     lora_model = get_peft_model(model, peft_config)
-    
+
     # Log trainable params
     trainable = sum(p.numel() for p in lora_model.parameters() if p.requires_grad)
     total = sum(p.numel() for p in lora_model.parameters())
     logger.info(f"LoRA trainable params: {trainable:,} / {total:,} ({100*trainable/total:.2f}%)")
-    
+
     return lora_model
 
 
@@ -400,23 +400,23 @@ def create_qlora_model(
         raise ImportError("PEFT not installed. Run: pip install peft")
     if not BITSANDBYTES_AVAILABLE:
         raise ImportError("bitsandbytes not installed. Run: pip install bitsandbytes")
-    
+
     config = config or QLoraConfig()
-    
+
     logger.info(f"Creating QLoRA model (4-bit) with rank={config.rank}")
-    
+
     # Prepare model for k-bit training
     model = prepare_model_for_kbit_training(model)
-    
+
     # Add LoRA adapters
     peft_config = config.to_peft_config()
     qlora_model = get_peft_model(model, peft_config)
-    
+
     # Log memory savings
     trainable = sum(p.numel() for p in qlora_model.parameters() if p.requires_grad)
     total = sum(p.numel() for p in qlora_model.parameters())
     logger.info(f"QLoRA trainable params: {trainable:,} / {total:,} ({100*trainable/total:.2f}%)")
-    
+
     return qlora_model
 
 
@@ -438,19 +438,19 @@ def load_lora_weights(path: Union[str, Path]) -> Dict[str, torch.Tensor]:
         weights = load_lora_weights("my_adapter.pth")
     """
     path = Path(path)
-    
+
     if not path.exists():
         raise FileNotFoundError(f"LoRA weights not found: {path}")
-    
+
     if path.suffix == ".safetensors":
         try:
             from safetensors.torch import load_file
             weights = load_file(str(path))
         except ImportError:
-            raise ImportError("safetensors required for .safetensors files")
+            raise ImportError("safetensors required for .safetensors files") from None
     else:
-        weights = torch.load(path, map_location="cpu")
-    
+        weights = torch.load(path, map_location="cpu", weights_only=True)
+
     logger.info(f"Loaded LoRA weights from: {path} ({len(weights)} tensors)")
     return weights
 
@@ -477,19 +477,19 @@ def apply_lora(
     if merge:
         merge_lora_weights(model, lora_weights)
         return
-    
+
     # Apply without merging - keep as separate adapter
     if not hasattr(model, '_lora_adapters'):
         model._lora_adapters = {}
-    
+
     model._lora_adapters[adapter_name] = lora_weights
-    
+
     # Load weights into model's LoRA layers
     state_dict = model.state_dict()
     for key, value in lora_weights.items():
         if key in state_dict:
             state_dict[key] = value
-    
+
     model.load_state_dict(state_dict, strict=False)
     logger.info(f"Applied LoRA adapter: {adapter_name}")
 
@@ -516,15 +516,15 @@ def merge_lora_weights(
         model.merge_and_unload()
         logger.info("Merged LoRA using PEFT merge_and_unload")
         return
-    
+
     # Manual merge for non-PEFT models
     state_dict = model.state_dict()
-    
+
     for key, lora_weight in lora_weights.items():
         if key in state_dict:
             # Simple addition for merged weights
             state_dict[key] = state_dict[key] + lora_weight
-    
+
     model.load_state_dict(state_dict)
     logger.info("Merged LoRA weights into base model")
 
@@ -554,7 +554,7 @@ class LoraTrainer:
         trainer.train(training_data)
         trainer.save_adapter("my_lora.pth")
     """
-    
+
     def __init__(
         self,
         model: nn.Module,
@@ -586,48 +586,48 @@ class LoraTrainer:
         self.offload_config = offload_config or OffloadConfig()
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         self.learning_rate = learning_rate
         self.batch_size = batch_size
         self.epochs = epochs
         self.gradient_accumulation_steps = gradient_accumulation_steps
-        
+
         # Apply LoRA to model
         if isinstance(self.lora_config, QLoraConfig):
             self.model = create_qlora_model(model, self.lora_config)
         else:
             self.model = create_lora_model(model, self.lora_config)
-        
+
         # Enable gradient checkpointing if configured
         if self.offload_config.gradient_checkpointing:
             if hasattr(self.model, 'gradient_checkpointing_enable'):
                 self.model.gradient_checkpointing_enable()
                 logger.info("Gradient checkpointing enabled")
-        
+
         # Callbacks
         self.on_progress: Optional[Callable[[int, str], None]] = None
         self.on_loss: Optional[Callable[[float], None]] = None
-        
+
         # Training state
         self._stop_requested = False
         self._lock = threading.Lock()
-        
+
         # Clear VRAM before training
         clear_vram()
-        
+
         logger.info(f"LoraTrainer initialized: rank={self.lora_config.rank}, "
                    f"offload={self.offload_config.cpu_offload}")
-    
+
     def request_stop(self) -> None:
         """Request graceful stop of training."""
         with self._lock:
             self._stop_requested = True
-    
+
     def _should_stop(self) -> bool:
         """Check if stop was requested."""
         with self._lock:
             return self._stop_requested
-    
+
     def _emit_progress(self, percent: int, message: str) -> None:
         """Emit progress callback."""
         if self.on_progress:
@@ -635,7 +635,7 @@ class LoraTrainer:
                 self.on_progress(percent, message)
             except Exception:
                 pass
-    
+
     def train(
         self,
         data: Union[str, List[Dict[str, str]]],
@@ -659,22 +659,22 @@ class LoraTrainer:
         """
         self._stop_requested = False
         self._emit_progress(0, "Preparing training data...")
-        
+
         # Parse data
         if isinstance(data, str):
             data = [{"prompt": "", "completion": data}]
-        
+
         # Clear VRAM before starting
         clear_vram()
-        
+
         # Check memory
         mem_info = get_memory_info()
         logger.info(f"Starting training - VRAM: {mem_info['vram_available_gb']:.1f}GB, "
                    f"RAM: {mem_info['ram_available_gb']:.1f}GB")
-        
+
         # Setup device (with CPU offload if needed)
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        
+
         if self.offload_config.cpu_offload and ACCELERATE_AVAILABLE:
             # Use accelerate for smart device placement
             accelerator = Accelerator(
@@ -682,35 +682,36 @@ class LoraTrainer:
                 cpu=self.offload_config.offload_optimizer,
             )
             self.model, optimizer, data_loader = accelerator.prepare(
-                self.model, 
+                self.model,
                 self._get_optimizer(),
                 self._create_dataloader(data, max_length)
             )
         else:
             self.model = self.model.to(device)
             optimizer = self._get_optimizer()
-        
+
         self.model.train()
-        
+
         # Training loop
         total_loss = 0.0
+        epoch_loss = 0.0
         step = 0
-        
+
         self._emit_progress(5, f"Training for {self.epochs} epochs...")
-        
+
         for epoch in range(self.epochs):
             if self._should_stop():
                 break
-            
+
             epoch_loss = 0.0
-            
+
             for batch_idx, batch in enumerate(self._create_batches(data, max_length)):
                 if self._should_stop():
                     break
-                
+
                 # Move batch to device
                 input_ids = batch.to(device)
-                
+
                 # Forward pass
                 try:
                     outputs = self.model(input_ids, labels=input_ids)
@@ -722,57 +723,57 @@ class LoraTrainer:
                         clear_vram()
                         continue
                     raise
-                
+
                 # Backward pass
                 loss = loss / self.gradient_accumulation_steps
                 loss.backward()
-                
+
                 if (batch_idx + 1) % self.gradient_accumulation_steps == 0:
                     optimizer.step()
                     optimizer.zero_grad()
-                    
+
                     # Clear cache periodically
                     if batch_idx % 10 == 0:
                         clear_vram()
-                
+
                 epoch_loss += loss.item()
                 step += 1
-                
+
                 # Progress update
                 progress = int(5 + 90 * (epoch * len(data) + batch_idx) / (self.epochs * len(data)))
                 self._emit_progress(progress, f"Epoch {epoch+1}/{self.epochs}, Loss: {loss.item():.4f}")
-                
+
                 if self.on_loss:
                     self.on_loss(loss.item())
-            
+
             total_loss += epoch_loss
             logger.info(f"Epoch {epoch+1}/{self.epochs} - Loss: {epoch_loss:.4f}")
-        
+
         # Final cleanup
         clear_vram()
-        
+
         self._emit_progress(100, "Training complete!")
-        
+
         return {
             "total_loss": total_loss,
             "epochs": self.epochs,
             "steps": step,
-            "final_loss": epoch_loss if 'epoch_loss' in dir() else 0,
+            'final_loss': epoch_loss,
         }
-    
+
     def _get_optimizer(self):
         """Create optimizer for training."""
         from torch.optim import AdamW
-        
+
         # Only optimize LoRA parameters
         trainable_params = [p for p in self.model.parameters() if p.requires_grad]
-        
+
         return AdamW(
             trainable_params,
             lr=self.learning_rate,
             weight_decay=0.01,
         )
-    
+
     def _create_batches(
         self,
         data: List[Dict[str, str]],
@@ -780,44 +781,44 @@ class LoraTrainer:
     ) -> List[torch.Tensor]:
         """Create batches from training data."""
         batches = []
-        
+
         for item in data:
             text = item.get("prompt", "") + item.get("completion", "")
             if not text:
                 continue
-            
+
             tokens = self.tokenizer.encode(text)
             if len(tokens) > max_length:
                 tokens = tokens[:max_length]
             if len(tokens) < 2:
                 continue
-            
+
             batches.append(torch.tensor([tokens], dtype=torch.long))
-        
+
         return batches
-    
+
     def _create_dataloader(self, data, max_length):
         """Create a DataLoader for accelerate."""
         from torch.utils.data import DataLoader, Dataset
-        
+
         class SimpleDataset(Dataset):
             def __init__(self, data, tokenizer, max_length):
                 self.data = data
                 self.tokenizer = tokenizer
                 self.max_length = max_length
-            
+
             def __len__(self):
                 return len(self.data)
-            
+
             def __getitem__(self, idx):
                 item = self.data[idx]
                 text = item.get("prompt", "") + item.get("completion", "")
                 tokens = self.tokenizer.encode(text)[:self.max_length]
                 return torch.tensor(tokens)
-        
+
         dataset = SimpleDataset(data, self.tokenizer, max_length)
         return DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
-    
+
     def save_adapter(self, path: Optional[Union[str, Path]] = None) -> Path:
         """
         Save LoRA adapter weights.
@@ -835,9 +836,9 @@ class LoraTrainer:
             path = self.output_dir / "adapter.pth"
         else:
             path = Path(path)
-        
+
         path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         # Get only LoRA weights
         if hasattr(self.model, 'save_pretrained'):
             # PEFT model
@@ -849,88 +850,182 @@ class LoraTrainer:
             for name, param in self.model.named_parameters():
                 if param.requires_grad:
                     lora_weights[name] = param.data.cpu()
-            
-            torch.save(lora_weights, path)
+
+            from enigma_engine.core.safe_save import atomic_torch_save
+            atomic_torch_save(lora_weights, path)
             logger.info(f"Saved LoRA weights to: {path}")
-        
+
         return path
 
 
 # =============================================================================
-# CONVENIENCE FUNCTIONS
+# LORA ADAPTER MANAGER (FP-D) — per-task LoRA adapters
 # =============================================================================
 
-def auto_configure_training(
-    model_params: int,
-    available_vram_gb: Optional[float] = None,
-    available_ram_gb: Optional[float] = None
-) -> Tuple[LoraConfig, OffloadConfig]:
-    """
-    Automatically configure training based on available memory.
-    
+class LoRAAdapterManager:
+    """Manage multiple LoRA adapters per task/skill.
+
+    Each task (e.g. "coding", "math", "writing") gets its own LoRA
+    weights stored in a subdirectory.  You can create, switch, list,
+    and merge adapters without losing specializations.
+
+    This prevents catastrophic forgetting: the base model stays frozen
+    and each skill lives in a separate adapter file.
+
     Args:
-        model_params: Number of model parameters
-        available_vram_gb: Available VRAM (auto-detected if None)
-        available_ram_gb: Available RAM (auto-detected if None)
-    
-    Returns:
-        Tuple of (LoraConfig, OffloadConfig) optimized for your hardware
-    
-    Example:
-        lora_cfg, offload_cfg = auto_configure_training(7_000_000_000)
+        base_dir: Root directory for adapter storage.
+            Defaults to ``models/lora_adapters/``.
+
+    Example::
+
+        mgr = LoRAAdapterManager()
+        mgr.create("coding", model, LoraConfig(rank=16))
+        mgr.save("coding", model)
+        mgr.switch("math", model)   # loads math adapter weights
     """
-    # Auto-detect memory
-    mem = get_memory_info()
-    vram = available_vram_gb or mem['vram_available_gb']
-    ram = available_ram_gb or mem['ram_available_gb']
-    
-    # Estimate memory needs
-    est = estimate_training_memory(model_params, use_lora=True)
-    
-    # Decide configuration based on available VRAM
-    if vram >= est['total_vram_gb'] * 1.2:
-        # Plenty of VRAM - use standard LoRA
-        lora_config = LoraConfig(rank=16, alpha=32)
-        offload_config = OffloadConfig(
-            cpu_offload=False,
-            gradient_checkpointing=False
-        )
-        logger.info(f"Auto-config: Standard LoRA (VRAM sufficient: {vram:.1f}GB)")
-    
-    elif vram >= est['total_vram_gb'] * 0.5:
-        # Moderate VRAM - use gradient checkpointing
-        lora_config = LoraConfig(rank=8, alpha=16)
-        offload_config = OffloadConfig(
-            cpu_offload=False,
-            gradient_checkpointing=True
-        )
-        logger.info(f"Auto-config: LoRA + checkpointing (VRAM moderate: {vram:.1f}GB)")
-    
-    else:
-        # Limited VRAM - use QLoRA with offloading
-        est_qlora = estimate_training_memory(model_params, use_qlora=True)
-        
-        if vram >= est_qlora['total_vram_gb']:
-            # QLoRA fits
-            lora_config = QLoraConfig(rank=8, alpha=16)
-            offload_config = OffloadConfig(
-                cpu_offload=True,
-                offload_optimizer=True,
-                gradient_checkpointing=True,
-                max_memory_gpu=vram * 0.9,
-                max_memory_cpu=ram * 0.5
-            )
-            logger.info(f"Auto-config: QLoRA + offload (VRAM limited: {vram:.1f}GB, using RAM: {ram:.1f}GB)")
-        else:
-            # Need aggressive offloading
-            lora_config = QLoraConfig(rank=4, alpha=8)
-            offload_config = OffloadConfig(
-                cpu_offload=True,
-                offload_optimizer=True,
-                gradient_checkpointing=True,
-                max_memory_gpu=vram * 0.8,
-                max_memory_cpu=ram * 0.7
-            )
-            logger.info(f"Auto-config: QLoRA + aggressive offload (VRAM very limited: {vram:.1f}GB)")
-    
-    return lora_config, offload_config
+
+    def __init__(self, base_dir: Union[str, Path, None] = None):
+        self.base_dir = Path(base_dir or "models/lora_adapters")
+        self.base_dir.mkdir(parents=True, exist_ok=True)
+        self._active_task: Optional[str] = None
+
+    # -- directory helpers --
+
+    def _task_dir(self, task: str) -> Path:
+        return self.base_dir / task
+
+    def _weights_path(self, task: str) -> Path:
+        return self._task_dir(task) / "adapter.pth"
+
+    def _meta_path(self, task: str) -> Path:
+        return self._task_dir(task) / "meta.json"
+
+    # -- public API --
+
+    def list_tasks(self) -> List[str]:
+        """Return sorted list of available task adapters."""
+        tasks = []
+        if self.base_dir.exists():
+            for child in sorted(self.base_dir.iterdir()):
+                if child.is_dir() and (child / "adapter.pth").exists():
+                    tasks.append(child.name)
+        return tasks
+
+    @property
+    def active_task(self) -> Optional[str]:
+        return self._active_task
+
+    def create(
+        self,
+        task: str,
+        model: nn.Module,
+        config: Optional[LoraConfig] = None,
+    ) -> Path:
+        """Create a new LoRA adapter for a task and save initial weights.
+
+        If the task already exists, this is a no-op (returns existing path).
+        """
+        wpath = self._weights_path(task)
+        if wpath.exists():
+            logger.info("Adapter '%s' already exists at %s", task, wpath)
+            return wpath
+
+        self._task_dir(task).mkdir(parents=True, exist_ok=True)
+        config = config or LoraConfig()
+
+        # Save metadata
+        import json
+        meta = {
+            "task": task,
+            "rank": config.rank,
+            "alpha": config.alpha,
+            "target_modules": config.target_modules,
+        }
+        self._meta_path(task).write_text(
+            json.dumps(meta, indent=2), encoding="utf-8")
+
+        # Save initial adapter (trainable params only)
+        lora_weights: Dict[str, torch.Tensor] = {}
+        for name, param in model.named_parameters():
+            if param.requires_grad:
+                lora_weights[name] = param.data.cpu()
+
+        from enigma_engine.core.safe_save import atomic_torch_save
+        atomic_torch_save(lora_weights, wpath)
+
+        logger.info("Created LoRA adapter '%s' (%d tensors)", task, len(lora_weights))
+        return wpath
+
+    def save(
+        self,
+        task: str,
+        model: nn.Module,
+    ) -> Path:
+        """Save current trainable weights as an adapter for *task*."""
+        self._task_dir(task).mkdir(parents=True, exist_ok=True)
+        wpath = self._weights_path(task)
+
+        lora_weights: Dict[str, torch.Tensor] = {}
+        for name, param in model.named_parameters():
+            if param.requires_grad:
+                lora_weights[name] = param.data.cpu()
+
+        from enigma_engine.core.safe_save import atomic_torch_save
+        atomic_torch_save(lora_weights, wpath)
+
+        self._active_task = task
+        logger.info("Saved adapter '%s' (%d tensors)", task, len(lora_weights))
+        return wpath
+
+    def switch(
+        self,
+        task: str,
+        model: nn.Module,
+        save_current: bool = True,
+    ) -> None:
+        """Switch the model to a different task adapter.
+
+        If *save_current* is True, saves the active adapter first.
+        Then loads the requested task's adapter weights.
+        """
+        if save_current and self._active_task is not None:
+            self.save(self._active_task, model)
+
+        wpath = self._weights_path(task)
+        if not wpath.exists():
+            raise FileNotFoundError(
+                f"No adapter for task '{task}'. "
+                f"Available: {self.list_tasks()}")
+
+        weights = load_lora_weights(wpath)
+        apply_lora(model, weights, adapter_name=task)
+        self._active_task = task
+        logger.info("Switched to adapter '%s'", task)
+
+    def delete(self, task: str) -> None:
+        """Delete a task adapter from disk."""
+        tdir = self._task_dir(task)
+        if tdir.exists():
+            import shutil
+            shutil.rmtree(tdir)
+            if self._active_task == task:
+                self._active_task = None
+            logger.info("Deleted adapter '%s'", task)
+
+    def merge_into_base(
+        self,
+        task: str,
+        model: nn.Module,
+    ) -> None:
+        """Permanently merge a task adapter into the base model.
+
+        After merging, the adapter's specialization becomes part of
+        the base weights and the adapter file can be deleted.
+        """
+        wpath = self._weights_path(task)
+        if not wpath.exists():
+            raise FileNotFoundError(f"No adapter for task '{task}'")
+
+        weights = load_lora_weights(wpath)
+        merge_lora_weights(model, weights)
+        logger.info("Merged adapter '%s' into base model", task)

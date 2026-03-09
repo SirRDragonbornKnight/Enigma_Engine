@@ -43,6 +43,8 @@ class BPETokenizer:
             "<A>": 7,
             "<USER>": 8,
             "<BOT>": 9,
+            "<think>": 10,
+            "</think>": 11,
         }
 
         self.pad_token = "<pad>"
@@ -64,7 +66,7 @@ class BPETokenizer:
         self.merge_ranks: dict[tuple[str, str], int] = {}
 
         # Cache for encoding
-        self.cache: dict[str, list[int]] = {}
+        self.cache: dict[str, list[str]] = {}
 
         if vocab_file and vocab_file.exists():
             self.load(vocab_file)
@@ -185,8 +187,9 @@ class BPETokenizer:
         result = []
 
         # Handle special markers first - extract them before regex processing
-        # Pattern to match Q:, A:, User:, Bot:, Human:, Assistant:
-        special_pattern = r'(Q:|A:|User:|Bot:|Human:|Assistant:)'
+        # Pattern to match Q:, A:, User:, Bot:, Human:, Assistant:,
+        # and reasoning tags <think>, </think>
+        special_pattern = r'(<think>|</think>|Q:|A:|User:|Bot:|Human:|Assistant:)'
 
         parts = re.split(special_pattern, text)
 
@@ -195,7 +198,9 @@ class BPETokenizer:
                 continue
 
             # Map markers to special tokens
-            if part == 'Q:':
+            if part in ('<think>', '</think>'):
+                result.append(part)
+            elif part == 'Q:':
                 result.append('<Q>')
             elif part == 'A:':
                 result.append('<A>')

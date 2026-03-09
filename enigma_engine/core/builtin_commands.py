@@ -1,4 +1,3 @@
-from __future__ import annotations
 """
 Built-in command implementations for the Enigma Engine command system.
 
@@ -6,6 +5,7 @@ All default commands are registered here via ``register_builtin_commands()``.
 The function is called once by :func:`commands.get_registry` when the global
 registry is first created.
 """
+from __future__ import annotations
 
 import json
 
@@ -17,6 +17,35 @@ from .commands import CommandResult, CommandRegistry
 # evaluated at runtime, so we only need the name available in the module
 # namespace for tools that *do* resolve annotations (e.g. get_type_hints).
 from typing import Dict  # noqa: F401
+
+
+# ── Constants (extracted from inline magic numbers) ──────────────
+# HTTP timeouts (seconds)
+HTTP_TIMEOUT_HEALTH = 2         # Quick health/connectivity check
+HTTP_TIMEOUT_SHORT = 5          # TTS, subprocess communicate
+HTTP_TIMEOUT_DEFAULT = 10       # Standard web requests
+HTTP_TIMEOUT_FETCH = 15         # Fetching page content
+HTTP_TIMEOUT_LONG = 30          # Large downloads, subprocess
+HTTP_TIMEOUT_GENERATE = 120     # Image/video generation endpoints
+
+# Output truncation limits (characters)
+PREVIEW_LIMIT = 50              # Short previews of text content
+SNIPPET_LIMIT = 100             # Code/search snippet length
+CONTENT_PREVIEW = 500           # File content preview
+OUTPUT_LIMIT = 1000             # Command output cap
+FETCH_MAX_CHARS = 2000          # Web page text extraction cap
+ERROR_TAIL = 1000               # Stderr tail capture
+
+# List display limits (items)
+LIST_DISPLAY_LIMIT = 20         # Max items shown in list output
+SEARCH_MAX_RESULTS = 5          # Default DDG search count
+HISTORY_DEFAULT_COUNT = 20      # Default history items to show
+NOTES_DISPLAY_LIMIT = 10        # Max notes shown in list
+CONFIG_LIST_LIMIT = 6           # Config value preview lines
+
+# Polling
+POLL_ITERATIONS = 60            # Max iterations for generation poll
+POLL_INTERVAL = 2               # Seconds between poll checks
 
 
 def register_builtin_commands(registry: CommandRegistry) -> None:
@@ -52,8 +81,14 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
         # Type conversion
         if value.lower() in ("true", "false"):
             value = value.lower() == "true"
-        elif value.replace(".", "").replace("-", "").isdigit():
-            value = float(value) if "." in value else int(value)
+        else:
+            try:
+                value = int(value)
+            except ValueError:
+                try:
+                    value = float(value)
+                except ValueError:
+                    pass  # keep as string
 
         config[key] = value
         return CommandResult(True, f"[OK] {key} = {value}")
@@ -139,7 +174,17 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
             try:
                 from enigma_engine.core.inference import EnigmaEngine
                 new_engine = EnigmaEngine(model_path=str(model_path))
+                # Clean up old engine to free GPU memory
+                old_engine = ctx.get("engine")
                 ctx["engine"] = new_engine
+                if old_engine is not None:
+                    del old_engine
+                    try:
+                        import torch
+                        if torch.cuda.is_available():
+                            torch.cuda.empty_cache()
+                    except ImportError:
+                        pass
                 return CommandResult(True, f"[OK] Loaded model: {model_path.name}")
             except Exception as e:
                 return CommandResult(False, f"[ERROR] Failed to load: {e}")
@@ -246,13 +291,16 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
 
         try:
             import subprocess
+            import sys
             # Use platform-native clipboard
             process = subprocess.Popen(
-                ["clip"] if __import__("sys").platform == "win32" else ["xclip", "-selection", "clipboard"],
-                stdin=subprocess.PIPE
+                ["clip"] if sys.platform == "win32" else ["xclip", "-selection", "clipboard"],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
             )
-            process.communicate(text.encode("utf-8"))
-            preview = text[:50] + "..." if len(text) > 50 else text
+            process.communicate(text.encode("utf-8"), timeout=HTTP_TIMEOUT_SHORT)
+            preview = text[:PREVIEW_LIMIT] + "..." if len(text) > PREVIEW_LIMIT else text
             return CommandResult(True, f"[OK] Copied to clipboard: {preview}")
         except Exception as e:
             return CommandResult(False, f"[ERROR] Failed to copy: {e}")
@@ -265,8 +313,9 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
         """Stop current AI generation."""
         engine = ctx.get("engine")
 
-        if engine and hasattr(engine, '_generation_lock'):
-            # Signal the engine to stop (best effort)
+        if engine:
+            # Set cancel flag that the generation loop checks
+            engine._cancel_generation = True
             return CommandResult(True, "[OK] Stop signal sent")
 
         return CommandResult(True, "[OK] No active generation to stop")
@@ -296,8 +345,8 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
         if not items:
             return CommandResult(True, "[OK] (empty directory)")
 
-        return CommandResult(True, f"[OK] {', '.join(items[:20])}" +
-                           (" ..." if len(items) > 20 else ""), items)
+        return CommandResult(True, f"[OK] {', '.join(items[:LIST_DISPLAY_LIMIT])}" +
+                           (" ..." if len(items) > LIST_DISPLAY_LIMIT else ""), items)
 
     def file_read(args: list[str], ctx: Dict) -> CommandResult:
         """Read file contents."""
@@ -316,8 +365,8 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
         try:
             content = path.read_text(encoding="utf-8")
             # Truncate for display
-            if len(content) > 500:
-                display = content[:500] + f"\n... ({len(content)} chars total)"
+            if len(content) > CONTENT_PREVIEW:
+                display = content[:CONTENT_PREVIEW] + f"\n... ({len(content)} chars total)"
             else:
                 display = content
             return CommandResult(True, f"[OK] {path.name}:\n{display}", content)
@@ -381,15 +430,18 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
 
     def memory_save(args: list[str], ctx: Dict) -> CommandResult:
         """Save current conversation to memory."""
+        from pathlib import Path
         if not args:
             return CommandResult(False, "[ERROR] Usage: memory.save <name>")
 
-        name = args[0]
+        # Sanitise name — prevent path traversal
+        name = Path(args[0]).name
+        if not name or name in (".", ".."):
+            return CommandResult(False, "[ERROR] Invalid memory name")
 
         # Get memory directory from context or use default
         memory_dir = ctx.get("memory_dir")
         if memory_dir is None:
-            from pathlib import Path
             memory_dir = Path("memory")
 
         memory_dir.mkdir(parents=True, exist_ok=True)
@@ -418,15 +470,18 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
 
     def memory_load(args: list[str], ctx: Dict) -> CommandResult:
         """Load a conversation from memory."""
+        from pathlib import Path
         if not args:
             return CommandResult(False, "[ERROR] Usage: memory.load <name>")
 
-        name = args[0]
+        # Sanitise name — prevent path traversal
+        name = Path(args[0]).name
+        if not name or name in (".", ".."):
+            return CommandResult(False, "[ERROR] Invalid memory name")
 
         # Get memory directory from context or use default
         memory_dir = ctx.get("memory_dir")
         if memory_dir is None:
-            from pathlib import Path
             memory_dir = Path("memory")
 
         memory_file = memory_dir / f"{name}.json"
@@ -475,6 +530,77 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
     registry.register("memory.load", memory_load, "Load conversation from memory", "memory.load <name>")
     registry.register("memory.list", memory_list, "List saved memories", "memory.list")
 
+    # ========== Persistent Memory (AI Notes) ==========
+
+    def memory_remember(args: list[str], ctx: Dict) -> CommandResult:
+        """Save a fact to persistent memory.
+
+        The AI can call this to remember something important.
+        Facts persist across conversations and restarts.
+        """
+        if not args:
+            return CommandResult(
+                False,
+                "[ERROR] Usage: memory.remember <fact to remember>")
+        from .memory import get_memory
+        fact = " ".join(args)
+        mem = get_memory()
+        if mem.add(fact):
+            return CommandResult(
+                True, f"[OK] Remembered: {fact}")
+        return CommandResult(
+            True, f"[OK] Already known: {fact}")
+
+    def memory_forget(args: list[str], ctx: Dict) -> CommandResult:
+        """Remove a fact from persistent memory."""
+        if not args:
+            return CommandResult(
+                False,
+                "[ERROR] Usage: memory.forget <fact or keyword>")
+        from .memory import get_memory
+        query = " ".join(args)
+        mem = get_memory()
+        if mem.remove(query):
+            return CommandResult(True, f"[OK] Forgot: {query}")
+        return CommandResult(
+            False, f"[ERROR] No matching memory: {query}")
+
+    def memory_notes(args: list[str], ctx: Dict) -> CommandResult:
+        """Show all persistent memory notes."""
+        from .memory import get_memory
+        mem = get_memory()
+        if not mem.facts:
+            return CommandResult(
+                True, "[OK] No persistent memories yet.")
+        lines = [f"[OK] {mem.count} memories:"]
+        for i, fact in enumerate(mem.facts):
+            lines.append(f"  {i + 1}. {fact}")
+        return CommandResult(True, "\n".join(lines), mem.facts)
+
+    def memory_clear_notes(args: list[str], ctx: Dict) -> CommandResult:
+        """Clear all persistent memory notes."""
+        from .memory import get_memory
+        mem = get_memory()
+        mem.clear()
+        return CommandResult(True, "[OK] All persistent memories cleared.")
+
+    registry.register(
+        "memory.remember", memory_remember,
+        "Remember a fact about the user",
+        "memory.remember <fact>")
+    registry.register(
+        "memory.forget", memory_forget,
+        "Forget a fact from memory",
+        "memory.forget <keyword>")
+    registry.register(
+        "memory.notes", memory_notes,
+        "Show all remembered facts",
+        "memory.notes")
+    registry.register(
+        "memory.clear_notes", memory_clear_notes,
+        "Clear all persistent memories",
+        "memory.clear_notes")
+
     # ========== Training Commands ==========
 
     def train_status(args: list[str], ctx: Dict) -> CommandResult:
@@ -511,67 +637,67 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
     registry.register("train.start", train_start, "Start training", "train.start <data> [--epochs N]")
     registry.register("train.stop", train_stop, "Stop training", "train.stop")
 
-    # ========== Brick Commands ==========
+    # ========== Mod Commands ==========
 
-    def brick_list(args: list[str], ctx: Dict) -> CommandResult:
-        """List installed bricks."""
+    def mod_list(args: list[str], ctx: Dict) -> CommandResult:
+        """List installed mods."""
         from pathlib import Path
 
-        bricks_dir = Path("bricks")
-        if not bricks_dir.exists():
-            return CommandResult(True, "[OK] No bricks directory")
+        mods_dir = Path("mods")
+        if not mods_dir.exists():
+            return CommandResult(True, "[OK] No mods directory")
 
-        bricks = []
-        for brick_folder in sorted(bricks_dir.iterdir()):
-            if brick_folder.is_dir() and brick_folder.name != "_template":
-                brick_json = brick_folder / "brick.json"
-                if brick_json.exists():
+        mods = []
+        for mod_folder in sorted(mods_dir.iterdir()):
+            if mod_folder.is_dir() and mod_folder.name != "_template":
+                mod_json = mod_folder / "mod.json"
+                if mod_json.exists():
                     try:
-                        with open(brick_json, 'r') as f:
+                        with open(mod_json, 'r', encoding='utf-8') as f:
                             config = json.load(f)
-                        name = config.get('name', brick_folder.name)
-                        brick_type = config.get('type', 'unknown')
-                        bricks.append(f"{name} ({brick_type})")
+                        name = config.get('name', mod_folder.name)
+                        mod_type = config.get('type', 'unknown')
+                        mods.append(f"{name} ({mod_type})")
                     except Exception:
-                        bricks.append(f"{brick_folder.name} (invalid)")
+                        mods.append(f"{mod_folder.name} (invalid)")
 
-        if not bricks:
-            return CommandResult(True, "[OK] No bricks installed")
+        if not mods:
+            return CommandResult(True, "[OK] No mods installed")
 
-        return CommandResult(True, f"[OK] Bricks: {', '.join(bricks)}", bricks)
+        return CommandResult(True, f"[OK] Mods: {', '.join(mods)}", mods)
 
-    def brick_status(args: list[str], ctx: Dict) -> CommandResult:
-        """Show brick router status."""
+    def mod_status(args: list[str], ctx: Dict) -> CommandResult:
+        """Show mod router status."""
         try:
             from enigma_engine.router import get_router
             router = get_router()
 
             if not router.running:
-                return CommandResult(True, "[OK] Router not running. Start it from Bricks tab.")
+                return CommandResult(True, "[OK] Router not running. Start it from Mods tab.")
 
             status = router.get_status()
-            connected = status.get('connected_bricks', 0)
+            connected = status.get('connected_mods', 0)
             training = status.get('training', {})
 
             lines = [
-                f"[OK] Router Status:",
+                "[OK] Router Status:",
                 f"  Running on port {status['port']}",
-                f"  Connected bricks: {connected}",
+                f"  Connected mods: {connected}",
             ]
 
             if training.get('running'):
                 lines.append(f"  Training: {training.get('examples_processed', 0)} examples processed")
 
             if connected > 0:
-                for brick in status.get('bricks', []):
-                    lines.append(f"  - {brick['name']} ({brick['brick_id']})")
+                for mod in status.get('mods', []):
+                    lines.append(f"  - {mod['name']} ({mod['mod_id']})")
 
             return CommandResult(True, "\n".join(lines), status)
         except Exception as e:
             return CommandResult(False, f"[ERROR] {e}")
 
-    def brick_start(args: list[str], ctx: Dict) -> CommandResult:
-        """Start the brick router."""
+    def mod_start(args: list[str], ctx: Dict) -> CommandResult:
+        """Start the mod router."""
         try:
             from enigma_engine.router import get_router
             router = get_router()
@@ -580,14 +706,14 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
                 return CommandResult(True, "[OK] Router already running")
 
             if router.start():
-                return CommandResult(True, "[OK] Router started on port 9900")
+                return CommandResult(True, f"[OK] Router started on port {router.port}")
             else:
                 return CommandResult(False, "[ERROR] Failed to start router")
         except Exception as e:
             return CommandResult(False, f"[ERROR] {e}")
 
-    def brick_stop(args: list[str], ctx: Dict) -> CommandResult:
-        """Stop the brick router."""
+    def mod_stop(args: list[str], ctx: Dict) -> CommandResult:
+        """Stop the mod router."""
         try:
             from enigma_engine.router import get_router
             router = get_router()
@@ -600,12 +726,12 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
         except Exception as e:
             return CommandResult(False, f"[ERROR] {e}")
 
-    def brick_send(args: list[str], ctx: Dict) -> CommandResult:
-        """Send command to a brick."""
+    def mod_send(args: list[str], ctx: Dict) -> CommandResult:
+        """Send command to a mod."""
         if len(args) < 2:
-            return CommandResult(False, "[ERROR] Usage: brick.send <brick_id> <command> [args...]")
+            return CommandResult(False, "[ERROR] Usage: mod.send <mod_id> <command> [args...]")
 
-        brick_id = args[0]
+        mod_id = args[0]
         command = args[1]
         cmd_args = args[2:] if len(args) > 2 else []
 
@@ -622,18 +748,18 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
                 'args': cmd_args
             }
 
-            if router.send_to_brick(brick_id, message):
-                return CommandResult(True, f"[OK] Sent '{command}' to {brick_id}")
+            if router.send_to_mod(mod_id, message):
+                return CommandResult(True, f"[OK] Sent '{command}' to {mod_id}")
             else:
-                return CommandResult(False, f"[ERROR] Brick not connected: {brick_id}")
+                return CommandResult(False, f"[ERROR] Mod not connected: {mod_id}")
         except Exception as e:
             return CommandResult(False, f"[ERROR] {e}")
 
-    registry.register("brick.list", brick_list, "List installed bricks", "brick.list")
-    registry.register("brick.status", brick_status, "Show router status", "brick.status")
-    registry.register("brick.start", brick_start, "Start brick router", "brick.start")
-    registry.register("brick.stop", brick_stop, "Stop brick router", "brick.stop")
-    registry.register("brick.send", brick_send, "Send command to brick", "brick.send <brick_id> <cmd> [args]")
+    registry.register("mod.list", mod_list, "List installed mods", "mod.list")
+    registry.register("mod.status", mod_status, "Show router status", "mod.status")
+    registry.register("mod.start", mod_start, "Start mod router", "mod.start")
+    registry.register("mod.stop", mod_stop, "Stop mod router", "mod.stop")
+    registry.register("mod.send", mod_send, "Send command to mod", "mod.send <mod_id> <cmd> [args]")
 
     # ========== Search Commands ==========
 
@@ -654,9 +780,9 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
                 return CommandResult(True, f"[OK] No files matching: {pattern}")
 
             # Limit results for display
-            display_matches = matches[:20]
+            display_matches = matches[:LIST_DISPLAY_LIMIT]
             names = [Path(m).name for m in display_matches]
-            extra = f" ... (+{len(matches) - 20} more)" if len(matches) > 20 else ""
+            extra = f" ... (+{len(matches) - LIST_DISPLAY_LIMIT} more)" if len(matches) > LIST_DISPLAY_LIMIT else ""
 
             return CommandResult(True, f"[OK] Found {len(matches)} files: {', '.join(names)}{extra}", matches)
         except Exception as e:
@@ -693,7 +819,7 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
                 return CommandResult(True, f"[OK] No files contain: {query}")
 
             # Deduplicate and limit
-            unique_matches = list(set(matches))[:20]
+            unique_matches = list(set(matches))[:LIST_DISPLAY_LIMIT]
             return CommandResult(True, f"[OK] Found in {len(matches)} files: {', '.join(unique_matches)}", unique_matches)
         except Exception as e:
             return CommandResult(False, f"[ERROR] Search failed: {e}")
@@ -711,80 +837,22 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
         query = " ".join(args)
 
         try:
-            import requests
-            from urllib.parse import quote_plus
+            from enigma_engine.core.web_utils import ddg_search
 
-            # Use DuckDuckGo HTML search (no API key needed)
-            url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-            }
-
-            response = requests.get(url, headers=headers, timeout=10)
-            response.raise_for_status()
-
-            # Parse results
-            from html.parser import HTMLParser
-
-            class DDGParser(HTMLParser):
-                def __init__(self):
-                    super().__init__()
-                    self.results = []
-                    self.current_title = ""
-                    self.current_url = ""
-                    self.current_snippet = ""
-                    self.in_result = False
-                    self.in_title = False
-                    self.in_snippet = False
-
-                def handle_starttag(self, tag, attrs):
-                    attrs_dict = dict(attrs)
-                    if tag == "a" and "result__a" in attrs_dict.get("class", ""):
-                        self.in_title = True
-                        self.current_url = attrs_dict.get("href", "")
-                    if tag == "a" and "result__snippet" in attrs_dict.get("class", ""):
-                        self.in_snippet = True
-
-                def handle_endtag(self, tag):
-                    if tag == "a" and self.in_title:
-                        self.in_title = False
-                    if tag == "a" and self.in_snippet:
-                        self.in_snippet = False
-                        if self.current_title and self.current_snippet:
-                            self.results.append({
-                                "title": self.current_title.strip(),
-                                "url": self.current_url,
-                                "snippet": self.current_snippet.strip()
-                            })
-                            self.current_title = ""
-                            self.current_url = ""
-                            self.current_snippet = ""
-
-                def handle_data(self, data):
-                    if self.in_title:
-                        self.current_title += data
-                    if self.in_snippet:
-                        self.current_snippet += data
-
-            parser = DDGParser()
-            parser.feed(response.text)
-
-            if not parser.results:
+            results = ddg_search(query, max_results=SEARCH_MAX_RESULTS)
+            if not results:
                 return CommandResult(True, f"[OK] No results for: {query}")
 
-            # Format results
-            results = parser.results[:5]  # Top 5 results
             lines = [f"[OK] Web search: {query}"]
             for i, r in enumerate(results, 1):
                 lines.append(f"\n{i}. {r['title']}")
-                lines.append(f"   {r['snippet'][:100]}...")
+                snippet = r.get("snippet", "")
+                lines.append(f"   {snippet[:SNIPPET_LIMIT]}...")
 
             return CommandResult(True, "\n".join(lines), results)
 
         except ImportError:
             return CommandResult(False, "[ERROR] requests library not installed. Run: pip install requests")
-        except requests.RequestException as e:
-            return CommandResult(False, f"[ERROR] Web search failed: {e}")
         except Exception as e:
             return CommandResult(False, f"[ERROR] {e}")
 
@@ -797,57 +865,48 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
 
         try:
             import requests
+            from enigma_engine.core.web_utils import (
+                fetch_page_text)
 
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-            }
+            content_type = ""
+            try:
+                resp = requests.head(
+                    url, headers={"User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; "
+                        "x64) AppleWebKit/537.36")},
+                    timeout=HTTP_TIMEOUT_DEFAULT, allow_redirects=True)
+                content_type = resp.headers.get(
+                    "Content-Type", "")
+            except Exception:
+                pass
 
-            response = requests.get(url, headers=headers, timeout=15)
-            response.raise_for_status()
-
-            # Try to extract text content
-            content_type = response.headers.get("Content-Type", "")
-
-            if "text/html" in content_type:
-                # Parse HTML, extract text
-                from html.parser import HTMLParser
-
-                class TextExtractor(HTMLParser):
-                    def __init__(self):
-                        super().__init__()
-                        self.text = []
-                        self.skip_tags = {"script", "style", "nav", "footer", "header"}
-                        self.current_tag = ""
-
-                    def handle_starttag(self, tag, attrs):
-                        self.current_tag = tag
-
-                    def handle_data(self, data):
-                        if self.current_tag not in self.skip_tags:
-                            text = data.strip()
-                            if text and len(text) > 2:
-                                self.text.append(text)
-
-                extractor = TextExtractor()
-                extractor.feed(response.text)
-
-                content = " ".join(extractor.text)
-                # Limit content length
-                if len(content) > 2000:
-                    content = content[:2000] + "... [truncated]"
-
-                return CommandResult(True, f"[OK] Fetched {url}:\n\n{content}", content)
+            if not content_type or "text/html" in content_type:
+                content = fetch_page_text(url, max_chars=FETCH_MAX_CHARS)
+                if not content:
+                    return CommandResult(
+                        False, f"[ERROR] No content at: {url}")
+                return CommandResult(
+                    True,
+                    f"[OK] Fetched {url}:\n\n{content}",
+                    content)
             else:
-                # Non-HTML, return raw (limited)
-                content = response.text[:2000]
-                return CommandResult(True, f"[OK] Fetched {url}:\n\n{content}", content)
+                # Non-HTML — fetch raw text
+                resp = requests.get(url, headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; "
+                        "Win64; x64) AppleWebKit/537.36")},
+                    timeout=HTTP_TIMEOUT_FETCH)
+                resp.raise_for_status()
+                content = resp.text[:FETCH_MAX_CHARS]
+                return CommandResult(
+                    True,
+                    f"[OK] Fetched {url}:\n\n{content}",
+                    content)
 
         except ImportError:
             return CommandResult(False, "[ERROR] requests library not installed")
-        except requests.RequestException as e:
-            return CommandResult(False, f"[ERROR] Failed to fetch: {e}")
         except Exception as e:
-            return CommandResult(False, f"[ERROR] {e}")
+            return CommandResult(False, f"[ERROR] Failed to fetch: {e}")
 
     registry.register("search.web", search_web, "Search the web", "search.web <query>")
     registry.register("web.fetch", web_fetch, "Fetch URL content", "web.fetch <url>")
@@ -901,17 +960,17 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
 
             # Show last 10 notes with previews
             lines = ["[OK] Recent notes:"]
-            for note in notes[:10]:
+            for note in notes[:NOTES_DISPLAY_LIMIT]:
                 try:
                     content = note.read_text(encoding="utf-8")
-                    preview = content[:50].replace("\n", " ")
-                    if len(content) > 50:
+                    preview = content[:PREVIEW_LIMIT].replace("\n", " ")
+                    if len(content) > PREVIEW_LIMIT:
                         preview += "..."
                     lines.append(f"  {note.name}: {preview}")
                 except Exception:
                     lines.append(f"  {note.name}: (unreadable)")
 
-            return CommandResult(True, "\n".join(lines), [n.name for n in notes[:10]])
+            return CommandResult(True, "\n".join(lines), [n.name for n in notes[:NOTES_DISPLAY_LIMIT]])
         except Exception as e:
             return CommandResult(False, f"[ERROR] Failed to list notes: {e}")
 
@@ -926,7 +985,7 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
         if not registry:
             return CommandResult(True, "[OK] No history available")
 
-        count = 20
+        count = HISTORY_DEFAULT_COUNT
         if args:
             try:
                 count = int(args[0])
@@ -999,8 +1058,8 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
             q_count = sum(1 for l in lines if l.startswith("Q:"))
 
             # Show preview
-            preview = "\n".join(lines[:6])
-            if len(lines) > 6:
+            preview = "\n".join(lines[:CONFIG_LIST_LIMIT])
+            if len(lines) > CONFIG_LIST_LIMIT:
                 preview += f"\n... ({len(lines)} total lines, ~{q_count} Q&A pairs)"
 
             return CommandResult(True, f"[OK] Training data:\n{preview}", lines)
@@ -1065,7 +1124,7 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
                 shell=False,
                 capture_output=True,
                 text=True,
-                timeout=30,
+                timeout=HTTP_TIMEOUT_LONG,
                 cwd=ctx.get("cwd", None)
             )
 
@@ -1075,8 +1134,8 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
             if result.returncode == 0:
                 if output:
                     # Truncate long output
-                    if len(output) > 1000:
-                        output = output[:1000] + f"\n... ({len(output)} chars total)"
+                    if len(output) > OUTPUT_LIMIT:
+                        output = output[:OUTPUT_LIMIT] + f"\n... ({len(output)} chars total)"
                     return CommandResult(True, f"[OK] {output}", {"stdout": output, "returncode": 0})
                 return CommandResult(True, "[OK] Command completed (no output)")
             else:
@@ -1089,6 +1148,517 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
             return CommandResult(False, f"[ERROR] Failed to run command: {e}")
 
     registry.register("shell", shell_cmd, "Run terminal command", "shell <command>")
+
+    # ========== Code Sandbox ==========
+
+    def code_run(args: list[str], ctx: Dict) -> CommandResult:
+        """Execute Python code in a sandboxed subprocess.
+
+        The code runs in a fresh Python process with a 30-second
+        timeout and restricted filesystem access (outputs/ only).
+        """
+        import subprocess
+        import sys
+        import tempfile
+        import textwrap
+        from pathlib import Path
+
+        if not args:
+            return CommandResult(
+                False,
+                "[ERROR] Usage: code.run <python_code>")
+
+        code = " ".join(args)
+        # Unwrap code blocks that the AI may wrap in triple backticks
+        code = code.strip()
+        if code.startswith("```"):
+            lines = code.split("\n")
+            # Remove first and last lines (``` markers)
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            code = "\n".join(lines)
+
+        # Safety: disallow dangerous operations
+        forbidden = [
+            "shutil.rmtree", "os.remove", "os.rmdir", "os.unlink",
+            "__import__('os').system", "subprocess.call",
+            "subprocess.Popen", "subprocess.run",
+            "exec(", "eval(",
+        ]
+        for pattern in forbidden:
+            if pattern in code:
+                return CommandResult(
+                    False,
+                    f"[ERROR] Forbidden operation: {pattern}")
+
+        # Write code to a temp file and execute
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".py", delete=False,
+                encoding="utf-8"
+            ) as f:
+                # Prepend safety wrapper
+                wrapper = textwrap.dedent("""\
+                    import sys
+                    import os
+                    # Restrict write access to outputs/ directory
+                    _original_open = open
+                    def _safe_open(path, mode='r', *a, **kw):
+                        if any(m in str(mode) for m in ('w', 'a', 'x')):
+                            from pathlib import Path
+                            p = Path(path).resolve()
+                            outputs = Path('outputs').resolve()
+                            if not str(p).startswith(str(outputs)):
+                                raise PermissionError(
+                                    f"Write access restricted to outputs/ only")
+                        return _original_open(path, mode, *a, **kw)
+                    import builtins
+                    builtins.open = _safe_open
+                """)
+                f.write(wrapper + "\n" + code)
+                tmp_path = f.name
+
+            result = subprocess.run(
+                [sys.executable, tmp_path],
+                capture_output=True, text=True, timeout=HTTP_TIMEOUT_LONG,
+                cwd=str(Path(".")),
+            )
+
+            # Clean up temp file
+            try:
+                Path(tmp_path).unlink()
+            except OSError:
+                pass
+
+            output = result.stdout.strip()
+            error = result.stderr.strip()
+
+            if result.returncode == 0:
+                if output:
+                    if len(output) > FETCH_MAX_CHARS:
+                        output = (
+                            output[:FETCH_MAX_CHARS]
+                            + f"\n... ({len(output)} chars total)")
+                    return CommandResult(
+                        True, f"[OK]\n{output}",
+                        {"stdout": output, "returncode": 0})
+                return CommandResult(
+                    True, "[OK] Code executed (no output)")
+            else:
+                # Show last ERROR_TAIL chars of error
+                if len(error) > ERROR_TAIL:
+                    error = error[-ERROR_TAIL:]
+                return CommandResult(
+                    False, f"[ERROR]\n{error}",
+                    {"stderr": error, "returncode": result.returncode})
+
+        except subprocess.TimeoutExpired:
+            try:
+                Path(tmp_path).unlink()
+            except (OSError, NameError):
+                pass
+            return CommandResult(
+                False, "[ERROR] Code execution timed out (30s limit)")
+        except Exception as e:
+            return CommandResult(
+                False, f"[ERROR] Failed to execute code: {e}")
+
+    registry.register(
+        "code.run", code_run,
+        "Execute Python code in a sandboxed subprocess",
+        "code.run <python_code>")
+
+    # ========== Image Generation Commands ==========
+
+    def imagegen_generate(args: list[str], ctx: Dict) -> CommandResult:
+        """Generate an image from a text prompt.
+
+        Detects available backends automatically:
+        1. Stable Diffusion WebUI (AUTOMATIC1111) on port 7860
+        2. ComfyUI on port 8188
+        3. Local diffusers library (requires GPU)
+
+        If no backend is running, falls back to the imagegen mod
+        via the router (if connected).
+        """
+        if not args:
+            return CommandResult(
+                False,
+                "[ERROR] Usage: imagegen.generate <prompt> "
+                "[--width N] [--height N] [--steps N] [--seed N] "
+                "[--negative <text>]")
+
+        from pathlib import Path as _Path
+        import json as _json
+        from datetime import datetime as _dt
+
+        # Parse args: everything before -- flags is the prompt
+        prompt_parts: list[str] = []
+        width = 512
+        height = 512
+        steps = 20
+        seed = -1
+        negative = ""
+        i = 0
+        while i < len(args):
+            a = args[i]
+            if a == "--width" and i + 1 < len(args):
+                width = int(args[i + 1]); i += 2; continue
+            elif a == "--height" and i + 1 < len(args):
+                height = int(args[i + 1]); i += 2; continue
+            elif a == "--steps" and i + 1 < len(args):
+                steps = int(args[i + 1]); i += 2; continue
+            elif a == "--seed" and i + 1 < len(args):
+                seed = int(args[i + 1]); i += 2; continue
+            elif a == "--negative" and i + 1 < len(args):
+                neg_parts: list[str] = []
+                i += 1
+                while i < len(args) and not args[i].startswith("--"):
+                    neg_parts.append(args[i]); i += 1
+                negative = " ".join(neg_parts); continue
+            else:
+                prompt_parts.append(a); i += 1
+
+        prompt = " ".join(prompt_parts)
+        if not prompt:
+            return CommandResult(
+                False, "[ERROR] Prompt text is required")
+
+        output_dir = _Path("outputs/images")
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Try backends in order
+        generated_path = None
+        backend_used = None
+
+        # --- Backend 1: Stable Diffusion WebUI ---
+        try:
+            import requests
+            url = "http://127.0.0.1:7860"
+            r = requests.get(
+                f"{url}/sdapi/v1/sd-models", timeout=HTTP_TIMEOUT_HEALTH)
+            if r.status_code == 200:
+                payload = {
+                    "prompt": prompt,
+                    "negative_prompt": negative,
+                    "width": width,
+                    "height": height,
+                    "steps": steps,
+                    "cfg_scale": 7.5,
+                    "seed": seed,
+                }
+                resp = requests.post(
+                    f"{url}/sdapi/v1/txt2img",
+                    json=payload, timeout=HTTP_TIMEOUT_GENERATE)
+                if resp.status_code == 200:
+                    import base64
+                    data = resp.json()
+                    images = data.get("images", [])
+                    if images:
+                        img_bytes = base64.b64decode(images[0])
+                        timestamp = _dt.now().strftime(
+                            "%Y%m%d_%H%M%S")
+                        filename = f"img_{timestamp}.png"
+                        saved = output_dir / filename
+                        saved.write_bytes(img_bytes)
+                        generated_path = str(saved)
+                        _json.loads(
+                            data.get("info", "{}"))
+                        backend_used = "SD WebUI"
+        except Exception:
+            pass
+
+        # --- Backend 2: ComfyUI ---
+        if generated_path is None:
+            try:
+                import requests
+                url = "http://127.0.0.1:8188"
+                r = requests.get(
+                    f"{url}/system_stats", timeout=HTTP_TIMEOUT_HEALTH)
+                if r.status_code == 200:
+                    # ComfyUI needs a workflow — use simple
+                    # txt2img with polling
+                    import time as _time
+                    workflow = {
+                        "3": {
+                            "class_type": "KSampler",
+                            "inputs": {
+                                "cfg": 7.5,
+                                "denoise": 1,
+                                "latent_image": ["5", 0],
+                                "model": ["4", 0],
+                                "negative": ["7", 0],
+                                "positive": ["6", 0],
+                                "sampler_name": "euler",
+                                "scheduler": "normal",
+                                "seed": seed if seed > 0 else 42,
+                                "steps": steps,
+                            },
+                        },
+                        "4": {
+                            "class_type":
+                                "CheckpointLoaderSimple",
+                            "inputs": {
+                                "ckpt_name":
+                                    "v1-5-pruned-emaonly"
+                                    ".safetensors",
+                            },
+                        },
+                        "5": {
+                            "class_type": "EmptyLatentImage",
+                            "inputs": {
+                                "batch_size": 1,
+                                "height": height,
+                                "width": width,
+                            },
+                        },
+                        "6": {
+                            "class_type": "CLIPTextEncode",
+                            "inputs": {
+                                "clip": ["4", 1],
+                                "text": prompt,
+                            },
+                        },
+                        "7": {
+                            "class_type": "CLIPTextEncode",
+                            "inputs": {
+                                "clip": ["4", 1],
+                                "text": negative,
+                            },
+                        },
+                        "8": {
+                            "class_type": "VAEDecode",
+                            "inputs": {
+                                "samples": ["3", 0],
+                                "vae": ["4", 2],
+                            },
+                        },
+                        "9": {
+                            "class_type": "SaveImage",
+                            "inputs": {
+                                "filename_prefix": "enigma",
+                                "images": ["8", 0],
+                            },
+                        },
+                    }
+                    resp = requests.post(
+                        f"{url}/prompt",
+                        json={"prompt": workflow},
+                        timeout=HTTP_TIMEOUT_GENERATE)
+                    if resp.status_code == 200:
+                        prompt_id = resp.json().get(
+                            "prompt_id")
+                        # Poll for completion
+                        for _ in range(POLL_ITERATIONS):
+                            _time.sleep(POLL_INTERVAL)
+                            hist = requests.get(
+                                f"{url}/history/{prompt_id}",
+                                timeout=HTTP_TIMEOUT_SHORT)
+                            if hist.status_code == 200:
+                                hd = hist.json()
+                                if prompt_id in hd:
+                                    outs = hd[prompt_id].get(
+                                        "outputs", {})
+                                    if ("9" in outs
+                                            and outs["9"].get(
+                                                "images")):
+                                        img_info = (
+                                            outs["9"]["images"][0])
+                                        fname = img_info.get(
+                                            "filename", "")
+                                        # Fetch image data
+                                        img_resp = requests.get(
+                                            f"{url}/view?"
+                                            f"filename={fname}",
+                                            timeout=HTTP_TIMEOUT_DEFAULT)
+                                        if (img_resp.status_code
+                                                == 200):
+                                            timestamp = (
+                                                _dt.now().strftime(
+                                                    "%Y%m%d_%H%M%S"))
+                                            saved = (
+                                                output_dir
+                                                / f"img_{timestamp}"
+                                                  ".png")
+                                            saved.write_bytes(
+                                                img_resp.content)
+                                            generated_path = str(
+                                                saved)
+                                            backend_used = "ComfyUI"
+                                        break
+            except Exception:
+                pass
+
+        # --- Backend 3: Local diffusers ---
+        if generated_path is None:
+            try:
+                import torch
+                from diffusers import StableDiffusionPipeline
+
+                device = ("cuda" if torch.cuda.is_available()
+                          else "cpu")
+                dtype = (torch.float16 if device == "cuda"
+                         else torch.float32)
+                pipe = StableDiffusionPipeline.from_pretrained(
+                    "runwayml/stable-diffusion-v1-5",
+                    torch_dtype=dtype)
+                pipe = pipe.to(device)
+
+                generator = None
+                if seed > 0:
+                    generator = torch.Generator(
+                        device).manual_seed(seed)
+
+                image = pipe(
+                    prompt,
+                    negative_prompt=negative or None,
+                    width=width, height=height,
+                    num_inference_steps=steps,
+                    guidance_scale=7.5,
+                    generator=generator,
+                ).images[0]
+
+                timestamp = _dt.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"img_{timestamp}.png"
+                saved = output_dir / filename
+                image.save(str(saved))
+                generated_path = str(saved)
+                backend_used = "diffusers (local)"
+
+                # Free VRAM
+                del pipe
+                torch.cuda.empty_cache()
+            except ImportError:
+                pass
+            except Exception:
+                pass
+
+        # --- Fallback: mod router ---
+        if generated_path is None:
+            try:
+                from enigma_engine.router import get_router
+                router = get_router()
+                if router.running:
+                    message = {
+                        "type": "command",
+                        "command": "generate",
+                        "args": {
+                            "prompt": prompt,
+                            "width": width,
+                            "height": height,
+                            "steps": steps,
+                            "seed": seed,
+                            "negative_prompt": negative,
+                        },
+                    }
+                    if router.send_to_mod("imagegen", message):
+                        # Mod saves to outputs/images/ — poll
+                        import time as _time
+                        import glob
+                        before = set(glob.glob(
+                            str(output_dir / "img_*.png")))
+                        for _ in range(POLL_ITERATIONS // 2):
+                            _time.sleep(POLL_INTERVAL)
+                            after = set(glob.glob(
+                                str(output_dir / "img_*.png")))
+                            new = after - before
+                            if new:
+                                generated_path = max(
+                                    new, key=lambda p: (
+                                        _Path(p).stat().st_mtime))
+                                backend_used = "imagegen mod"
+                                break
+            except Exception:
+                pass
+
+        if generated_path is None:
+            return CommandResult(
+                False,
+                "[ERROR] No image generation backend available. "
+                "Start Stable Diffusion WebUI (port 7860), "
+                "ComfyUI (port 8188), install diffusers, "
+                "or start the imagegen mod.")
+
+        return CommandResult(
+            True,
+            f"[OK] Image generated via {backend_used}: "
+            f"{generated_path}",
+            {"path": generated_path, "backend": backend_used})
+
+    def imagegen_status(args: list[str], ctx: Dict) -> CommandResult:
+        """Check which image generation backends are available."""
+        backends: list[str] = []
+
+        try:
+            import requests
+            try:
+                r = requests.get(
+                    "http://127.0.0.1:7860/sdapi/v1/sd-models",
+                    timeout=HTTP_TIMEOUT_HEALTH)
+                if r.status_code == 200:
+                    count = len(r.json())
+                    backends.append(
+                        f"SD WebUI (port 7860) — "
+                        f"{count} model(s)")
+            except Exception:
+                pass
+
+            try:
+                r = requests.get(
+                    "http://127.0.0.1:8188/system_stats",
+                    timeout=HTTP_TIMEOUT_HEALTH)
+                if r.status_code == 200:
+                    backends.append("ComfyUI (port 8188)")
+            except Exception:
+                pass
+        except ImportError:
+            pass
+
+        try:
+            from diffusers import StableDiffusionPipeline  # noqa: F401
+            backends.append("diffusers (local)")
+        except ImportError:
+            pass
+
+        # Check imagegen mod
+        try:
+            from enigma_engine.router import get_router
+            router = get_router()
+            if router.running:
+                mods = router.get_connected_mods()
+                for m in mods:
+                    if m["mod_id"] == "imagegen":
+                        backends.append("imagegen mod (connected)")
+                        break
+        except Exception:
+            pass
+
+        if not backends:
+            return CommandResult(
+                True,
+                "[OK] No image generation backends detected.\n"
+                "Options:\n"
+                "  • Start Stable Diffusion WebUI on port 7860\n"
+                "  • Start ComfyUI on port 8188\n"
+                "  • Install diffusers: pip install diffusers\n"
+                "  • Start the imagegen mod")
+
+        lines = ["[OK] Available backends:"]
+        for b in backends:
+            lines.append(f"  • {b}")
+        return CommandResult(True, "\n".join(lines))
+
+    registry.register(
+        "imagegen.generate", imagegen_generate,
+        "Generate image from text prompt",
+        "imagegen.generate <prompt> [--width N] [--height N] "
+        "[--steps N] [--seed N] [--negative <text>]")
+    registry.register(
+        "imagegen.status", imagegen_status,
+        "Check available image generation backends",
+        "imagegen.status")
 
     # ========== Help Command ==========
 

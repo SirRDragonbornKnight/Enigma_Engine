@@ -1,0 +1,27 @@
+enigma_engine_direct|enigma_engine/api/server.py, enigma_engine/gui/widgets.py, run.py, tests/test_core.py, tests/test_gui.py
+router_py|enigma_engine/core/builtin_commands.py, enigma_engine/gui/desktop.py, enigma_engine/gui/gui_mods.py, mods/avatar/test_brick.py, tests/test_core.py, tests/test_functional.py
+api_init|NONE
+api_server|run.py, tests/test_api.py, tests/test_gui.py
+config_init|enigma_engine/__init__.py, enigma_engine/api/server.py, enigma_engine/config/defaults.py, enigma_engine/core/gguf_loader.py, enigma_engine/gui/gui_logic.py, tests/test_core.py, tests/test_gui.py
+config_defaults|enigma_engine/config/__init__.py, tests/test_gui.py
+gui_init|tests/test_gui.py
+gui_desktop|enigma_engine/gui/desktop.py, run.py, tests/test_gui.py
+gui_cmd_page|enigma_engine/gui/desktop.py, tests/test_core.py, tests/test_gui.py
+gui_docs_page|enigma_engine/gui/desktop.py, tests/test_gui.py
+gui_forge_exact|enigma_engine/gui/desktop.py, enigma_engine/gui/gui_forge_advanced.py, enigma_engine/gui/gui_forge_models.py, enigma_engine/gui/gui_forge_tools.py, enigma_engine/gui/gui_forge_training.py, enigma_engine/gui/gui_logic.py, tests/test_core.py, tests/test_gui.py
+gui_forge_advanced|enigma_engine/gui/gui_forge.py
+gui_forge_models|enigma_engine/gui/gui_forge.py
+gui_forge_tools|enigma_engine/gui/gui_forge.py
+gui_forge_training|enigma_engine/gui/gui_forge.py
+gui_logic_exact|enigma_engine/gui/desktop.py, enigma_engine/gui/gui_logic_chat.py, enigma_engine/gui/gui_logic_media.py, enigma_engine/gui/gui_mods.py, tests/test_core.py, tests/test_gui.py
+gui_logic_chat|enigma_engine/gui/gui_logic.py
+gui_logic_media|enigma_engine/gui/gui_logic.py
+gui_mods_exact|enigma_engine/gui/desktop.py, enigma_engine/gui/gui_logic.py, tests/test_gui.py
+gui_mod_page|enigma_engine/gui/desktop.py, enigma_engine/gui/gui_pages.py, tests/test_gui.py
+gui_pages_exact|enigma_engine/gui/desktop.py, enigma_engine/gui/gui_mod_page.py, enigma_engine/gui/gui_pages_config.py, enigma_engine/gui/gui_pages_forge.py, tests/test_gui.py
+gui_pages_config|enigma_engine/gui/gui_pages.py, tests/test_gui.py
+gui_pages_forge|enigma_engine/gui/gui_pages.py
+gui_media|enigma_engine/gui/gui_logic_chat.py, enigma_engine/gui/gui_logic_media.py, tests/test_gui.py
+gui_scanners|enigma_engine/core/model_context.py, enigma_engine/gui/desktop.py, enigma_engine/gui/gui_cmd_page.py, enigma_engine/gui/gui_docs_page.py, enigma_engine/gui/gui_forge.py, enigma_engine/gui/gui_forge_advanced.py, enigma_engine/gui/gui_forge_models.py, enigma_engine/gui/gui_forge_tools.py, enigma_engine/gui/gui_forge_training.py, enigma_engine/gui/gui_logic.py, enigma_engine/gui/gui_logic_chat.py, enigma_engine/gui/gui_pages_config.py, enigma_engine/gui/gui_pages_forge.py, tests/test_core.py, tests/test_gui.py
+gui_themes|enigma_engine/gui/gui_pages_config.py, enigma_engine/gui/widgets.py, tests/test_core.py
+gui_widgets|enigma_engine/gui/desktop.py, enigma_engine/gui/gui_cmd_page.py, enigma_engine/gui/gui_docs_page.py, enigma_engine/gui/gui_forge.py, enigma_engine/gui/gui_forge_models.py, enigma_engine/gui/gui_forge_tools.py, enigma_engine/gui/gui_logic.py, enigma_engine/gui/gui_logic_chat.py, enigma_engine/gui/gui_logic_media.py, enigma_engine/gui/gui_mod_page.py, enigma_engine/gui/gui_mods.py, enigma_engine/gui/gui_pages.py, enigma_engine/gui/gui_pages_config.py, enigma_engine/gui/gui_pages_forge.py, tests/test_core.py, tests/test_gui.py
