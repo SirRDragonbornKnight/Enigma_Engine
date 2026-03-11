@@ -1,0 +1,9 @@
+# fixes.txt
+
+Existing content...
+
+## Phase 1 critical fixes
+- **RMSNorm float32 upcast** in `enigma_engine/core/model_components.py` and `enigma_engine/core/vision_encoder.py`
+- **AdamW betas configurable** in `TrainingConfig` (beta1=0.9, beta2=0.95) and use in `training.py` and `lora_utils.py`
+- **Cosine scheduler** `eta_min=lr*0.1` in `training.py`
+- **Sequence packing** + vocab size follow-ups
