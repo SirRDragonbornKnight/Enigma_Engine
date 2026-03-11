@@ -89,8 +89,16 @@ class ForgeAdaptiveMixin:
             num_pairs = 20
 
         # Data file is optional — supplements curriculum
-        data_path = self.train_data_var.get()
-        has_data = data_path and Path(data_path).exists()
+        # In AI-Guided mode, read from the supplement picker
+        _mode_var = getattr(self, "training_mode_var", None)
+        _current_mode = _mode_var.get() if _mode_var else "Basic"
+        if _current_mode == "AI-Guided":
+            _suppl_var = getattr(self, "ai_supplement_var", None)
+            _suppl = _suppl_var.get() if _suppl_var else "(none)"
+            data_path = "" if _suppl == "(none)" else _suppl
+        else:
+            data_path = self.train_data_var.get()
+        has_data = bool(data_path) and Path(data_path).exists()
 
         trainer_name = Path(trainer_path).stem
         student_name = Path(student_path).stem
@@ -111,13 +119,18 @@ class ForgeAdaptiveMixin:
         self._clear_forge_param_count()
         self._reset_forge_progress()
 
-        # Build training brief and focus
+        # Build training brief
         training_brief = self._build_training_brief()
         self._save_training_brief()
+        # Focus field widget was removed in 3-mode FORGE.
         focus_field = ""
-        ff_widget = getattr(self, "forge_focus_field", None)
-        if ff_widget is not None:
-            focus_field = ff_widget.get().strip()
+        # Start from selected stage — "start here, then continue forward"
+        _stage_var = getattr(self, "training_stage_var", None)
+        _selected_stage = _stage_var.get() if _stage_var else "basics"
+        from enigma_engine.core.adaptive_trainer import ALL_STAGES as _ALL_STAGES
+        _start_idx = (_ALL_STAGES.index(_selected_stage)
+                      if _selected_stage in _ALL_STAGES else 0)
+        plan_stages = _ALL_STAGES[_start_idx:]
 
         def _adaptive():
             all_losses = []
@@ -167,8 +180,8 @@ class ForgeAdaptiveMixin:
                         epochs_per_stage=epochs,
                         pairs_per_stage=num_pairs,
                         learning_rate=lr,
-                        training_brief=training_brief,
-                        focus_field=focus_field)
+                        stages=list(plan_stages),
+                        training_brief=training_brief)
                 plan.status = "running"
                 plan.save(plan_path)
 

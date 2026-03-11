@@ -45,6 +45,7 @@ MAX_GIF_FRAMES = 120
 MAX_IMAGE_DOWNLOAD_BYTES = 10 * 1024 * 1024   # 10 MB
 MAX_GIF_DOWNLOAD_BYTES = 20 * 1024 * 1024     # 20 MB
 MAX_CHAT_IMAGES = 200  # Cap retained PhotoImage refs per conversation
+MAX_CHAT_HISTORY = 500  # Cap in-memory messages (prevents RAM leak during long sessions)
 MEDIA_DOWNLOAD_TIMEOUT = 10                   # seconds
 
 # -------------------------------------------------------------------

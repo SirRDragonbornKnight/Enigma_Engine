@@ -256,14 +256,21 @@ class ModelContext:
 
     def record_training_run(
         self, *, mode: str, epochs: int, best_loss: float,
+        before_perplexity: float | None = None,
+        after_perplexity: float | None = None,
     ) -> None:
         """Append a training run record to training_history."""
-        self.training_history.append({
+        entry: dict = {
             "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
             "mode": mode,
             "epochs": epochs,
             "best_loss": round(best_loss, 4),
-        })
+        }
+        if before_perplexity is not None:
+            entry["before_perplexity"] = round(before_perplexity, 4)
+        if after_perplexity is not None:
+            entry["after_perplexity"] = round(after_perplexity, 4)
+        self.training_history.append(entry)
 
     @property
     def memory_fact_count(self) -> int:

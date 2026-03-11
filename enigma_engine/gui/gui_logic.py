@@ -149,18 +149,6 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
             lines.append("")
             lines.append("Web Access: DISABLED")
 
-        # Persistent memory — inject remembered facts
-        try:
-            from enigma_engine.core.memory import get_memory
-            mem = get_memory()
-            mem.reload()  # pick up hand-edits
-            mem_ctx = mem.build_context(max_tokens=400)
-            if mem_ctx:
-                lines.append("")
-                lines.append(mem_ctx)
-        except Exception as exc:
-            logger.debug("Memory context build failed: %s", exc)
-
         # RAG — inject retrieved document context for this query
         rag_index = getattr(self, "_rag_index", None)
         if rag_index and getattr(rag_index, "is_built", False):
@@ -190,17 +178,36 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
         # Memory commands — tell the AI it can save notes
         lines.append("")
         lines.append(
-            "Persistent Memory: You can remember important facts "
-            "about the user across conversations. Use "
-            "[CMD]memory.remember <fact>[/CMD] to save something "
-            "worth remembering. "
-            "Actively observe the user's patterns, preferences, "
-            "habits, and coding style — save them without being "
-            "asked. If you notice a better approach or alternative "
-            "to what the user is doing, suggest it and explain why. "
+            "Persistent Memory: You have long-term memory across "
+            "conversations. Use [CMD]memory.search <query>[/CMD] "
+            "to search for relevant facts when needed "
+            "(e.g., user's name, preferences, past discussions). "
+            "Use [CMD]memory.remember <fact>[/CMD] to save "
+            "important insights about the user. "
+            "Memory retrieval is ACTIVE not PASSIVE — search only "
+            "when contextually relevant, like recalling someone's "
+            "name when they greet you. "
+            "Actively observe patterns, preferences, habits, and "
+            "coding style — save them without being asked. "
+            "Suggest alternatives or better approaches when you "
+            "notice a pattern that could be improved. "
             "Always ask permission before changing an established "
             "pattern or workflow the user already follows. "
             "Do NOT announce when you save a memory.")
+
+        lines.append("")
+        lines.append(
+            "File Access: You can read and write files using "
+            "[CMD]file.read <path>[/CMD] to view file contents, "
+            "[CMD]file.write <path> <content>[/CMD] to create or "
+            "overwrite a file, and "
+            "[CMD]file.append <path> <content>[/CMD] to add to "
+            "an existing file. "
+            "Use [CMD]file.list [path][/CMD] to browse directories. "
+            "You can write documentation, notes, and guides in the "
+            "information/ and data/notes/ folders. "
+            "Always confirm with the user before modifying existing "
+            "files, but you can freely create new files when asked.")
 
         lines.append("")
         lines.append(

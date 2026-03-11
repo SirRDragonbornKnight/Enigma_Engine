@@ -585,6 +585,11 @@ class ConfigPageMixin:
             settings_path.write_text(
                 json.dumps(settings, indent=2),
                 encoding="utf-8")
+            self._chat_learning_enabled = enabled
+            if hasattr(self, "_refresh_performance_mode"):
+                self._refresh_performance_mode()
+            if hasattr(self, "_sync_router_training_state"):
+                self._sync_router_training_state()
             state = "enabled" if enabled else "disabled"
             self.status_bar.set_left(
                 f"\u26a1 Learn while chatting {state}")
@@ -607,6 +612,8 @@ class ConfigPageMixin:
                 json.dumps(settings, indent=2),
                 encoding="utf-8")
             self._auto_load_chat_model = enabled
+            if hasattr(self, "_refresh_performance_mode"):
+                self._refresh_performance_mode()
             self.status_bar.set_left(
                 "\u26a1 Auto-load chat model "
                 f"{'enabled' if enabled else 'disabled'} (next launch)")
@@ -629,6 +636,8 @@ class ConfigPageMixin:
                 json.dumps(settings, indent=2),
                 encoding="utf-8")
             self._auto_start_mods = enabled
+            if hasattr(self, "_refresh_performance_mode"):
+                self._refresh_performance_mode()
             self.status_bar.set_left(
                 "\u26a1 Auto-start mods "
                 f"{'enabled' if enabled else 'disabled'} (next launch)")
@@ -651,6 +660,8 @@ class ConfigPageMixin:
                 json.dumps(settings, indent=2),
                 encoding="utf-8")
             self._auto_unload_on_minimize = enabled
+            if hasattr(self, "_refresh_performance_mode"):
+                self._refresh_performance_mode()
             self.status_bar.set_left(
                 "\u26a1 Minimize unload "
                 f"{'enabled' if enabled else 'disabled'}")
@@ -671,6 +682,7 @@ class ConfigPageMixin:
             settings["auto_load_chat_model"] = False
             settings["auto_start_mods"] = False
             settings["auto_unload_on_minimize"] = True
+            settings["learn_while_chatting"] = False
             settings_path.write_text(
                 json.dumps(settings, indent=2),
                 encoding="utf-8")
@@ -678,6 +690,7 @@ class ConfigPageMixin:
             self._auto_load_chat_model = False
             self._auto_start_mods = False
             self._auto_unload_on_minimize = True
+            self._chat_learning_enabled = False
 
             if hasattr(self, "_auto_load_chat_model_var"):
                 self._auto_load_chat_model_var.set(False)
@@ -685,9 +698,15 @@ class ConfigPageMixin:
                 self._auto_start_mods_var.set(False)
             if hasattr(self, "_auto_unload_on_minimize_var"):
                 self._auto_unload_on_minimize_var.set(True)
+            if hasattr(self, "_learn_while_chatting_var"):
+                self._learn_while_chatting_var.set(False)
+            if hasattr(self, "_refresh_performance_mode"):
+                self._refresh_performance_mode()
+            if hasattr(self, "_sync_router_training_state"):
+                self._sync_router_training_state()
 
             self.status_bar.set_left(
-                "\u26a1 Gaming mode applied (launch low-memory defaults)")
+                "\u26a1 Gaming mode applied (low-overhead mode active)")
         except Exception as exc:
             logger.debug("Could not apply gaming mode preset: %s", exc)
 

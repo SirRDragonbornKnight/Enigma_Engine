@@ -307,6 +307,13 @@ class SelectableLabel(ctk.CTkFrame):
         kwargs.pop("compound", None)
         kwargs.pop("cursor", None)
         super().__init__(master, **frame_kw, **kwargs)
+        # When explicit dimensions are provided, keep this widget's
+        # requested size stable even as text changes.
+        self._fixed_width = bool(width)
+        self._fixed_height = bool(height)
+        if self._fixed_width or self._fixed_height:
+            self.pack_propagate(False)
+            self.grid_propagate(False)
 
         self._text_val = str(text)
         self._text_color = text_color
@@ -353,8 +360,10 @@ class SelectableLabel(ctk.CTkFrame):
         if text is not None:
             self._text_val = str(text)
             self._var.set(self._text_val)
-            self._entry.configure(
-                width=max(len(self._text_val), 1))
+            # Keep requested size stable for fixed-size labels.
+            if not self._fixed_width:
+                self._entry.configure(
+                    width=max(len(self._text_val), 1))
         if text_color is not None:
             self._text_color = text_color
             self._entry.configure(fg=text_color)

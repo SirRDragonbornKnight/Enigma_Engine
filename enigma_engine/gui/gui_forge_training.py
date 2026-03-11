@@ -146,7 +146,8 @@ class ForgeTrainingMixin:
                     use_gradient_checkpointing=forge_params["use_gradient_checkpointing"],
                     save_every=max(1, epochs // 5),
                     checkpoint_dir=str(MODELS_DIR / "checkpoints"),
-                    use_amp=torch.cuda.is_available())
+                    use_amp=torch.cuda.is_available(),
+                    run_evaluation=True)  # Enable before/after evaluation
 
                 trainer = Trainer(
                     model, tokenizer, train_config)
@@ -166,6 +167,21 @@ class ForgeTrainingMixin:
                 self._log("Training...\n")
                 state = trainer.train(text)
 
+                # Log evaluation results if available
+                ppl_before = None
+                ppl_after = None
+                if hasattr(state, "before_eval") and hasattr(state, "after_eval"):
+                    before = state.before_eval
+                    after = state.after_eval
+                    ppl_before = before["perplexity"]
+                    ppl_after = after["perplexity"]
+                    improvement = ppl_before - ppl_after
+                    improvement_pct = (improvement / ppl_before * 100) if ppl_before > 0 else 0
+                    self._log("\n--- EVALUATION RESULTS ---")
+                    self._log(f"Before: perplexity = {ppl_before:.2f}")
+                    self._log(f"After:  perplexity = {ppl_after:.2f}")
+                    self._log(f"Improvement: {improvement:.2f} ({improvement_pct:.1f}%)")
+
                 # Save back to the student model file
                 out = Path(student_path)
                 from enigma_engine.core.safe_save import atomic_torch_save
@@ -184,7 +200,9 @@ class ForgeTrainingMixin:
                 self._update_forge_progress(100, "Complete")
                 self._save_training_run(
                     "Solo", model_name, epochs,
-                    state.best_loss)
+                    state.best_loss,
+                    before_perplexity=ppl_before,
+                    after_perplexity=ppl_after)
                 self.after(0, lambda pc=pc: self._update_forge_param_count(pc))
                 if losses:
                     self._display_loss_curve(losses)
@@ -749,6 +767,8 @@ class ForgeTrainingMixin:
                 pc = sum(p.numel() for p in model.parameters())
                 self._log(f"Params  : {pc:,}")
 
+                ppl_before = None
+                ppl_after = None
                 # Try PEFT LoRA first, fall back to manual
                 try:
                     from enigma_engine.core.lora_utils import (
@@ -826,7 +846,8 @@ class ForgeTrainingMixin:
                         use_gradient_checkpointing=forge_params["use_gradient_checkpointing"],
                         save_every=max(1, epochs // 5),
                         checkpoint_dir=str(MODELS_DIR / "checkpoints"),
-                        use_amp=torch.cuda.is_available())
+                        use_amp=torch.cuda.is_available(),
+                        run_evaluation=True)  # Enable before/after evaluation
 
                     trainer = Trainer(model, tokenizer, train_config)
 
@@ -840,7 +861,20 @@ class ForgeTrainingMixin:
                     trainer.on_epoch_complete = on_epoch
 
                     self._log("Training (partial freeze)...\n")
-                    trainer.train(text)
+                    state = trainer.train(text)
+
+                    # Log evaluation results if available
+                    if hasattr(state, "before_eval") and hasattr(state, "after_eval"):
+                        before = state.before_eval
+                        after = state.after_eval
+                        ppl_before = before["perplexity"]
+                        ppl_after = after["perplexity"]
+                        improvement = ppl_before - ppl_after
+                        improvement_pct = (improvement / ppl_before * 100) if ppl_before > 0 else 0
+                        self._log("\n--- EVALUATION RESULTS ---")
+                        self._log(f"Before: perplexity = {ppl_before:.2f}")
+                        self._log(f"After:  perplexity = {ppl_after:.2f}")
+                        self._log(f"Improvement: {improvement:.2f} ({improvement_pct:.1f}%)")
 
                     # Re-enable all parameters after training
                     for param in model.parameters():
@@ -864,7 +898,9 @@ class ForgeTrainingMixin:
                 self._log("--- LoRA TRAINING COMPLETE ---")
                 self._update_forge_progress(100, "Complete")
                 self._save_training_run(
-                    "LoRA", model_name, epochs, best_loss)
+                    "LoRA", model_name, epochs, best_loss,
+                    before_perplexity=ppl_before,
+                    after_perplexity=ppl_after)
                 self.after(0, lambda pc=pc: self._update_forge_param_count(pc))
                 if losses:
                     self._display_loss_curve(losses)

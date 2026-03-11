@@ -159,6 +159,7 @@ Live status strip auto-refreshes every 5 seconds with device, RAM, VRAM, model, 
 | memory.forget \<keyword\> | Remove a fact from persistent memory |
 | memory.notes | Show all remembered facts |
 | memory.clear_notes | Clear all persistent memories |
+| memory.search \<query\> | Search remembered facts by keyword/topic |
 | system.info | System information |
 | (all engine commands) | Full command registry available |
 
@@ -232,11 +233,12 @@ Each mod gets its own page, dynamically built from the mod's `mod.json` config.
 |---------|-----------|-------------|------|
 | Chat display | SelectableTextbox (CTkTextbox subclass) with native scrollbar, word wrap, 12px left/right margins | Shows conversation: purple for YOU, silver for ENIGMA, orange for SYSTEM (with timestamps), red for errors. When AI uses chain-of-thought reasoning, a `🧠 Reasoning:` section appears before the answer showing the `<think>` content in dim text. Native scrollbar handles all scrolling — no wrapper frame needed. Fills available space via sticky="nsew" | gui_pages.py |
 | File indicator | Tiny cyan text above input | Shows attached filename when a file is attached | gui_pages.py |
-| Thinking indicator | Tiny dim text, right side, fixed 140px width | Shows "PROCESSING..." with animated dots while AI generates response. Fixed width prevents layout shift | gui_pages.py |
+| Thinking indicator | Tiny dim text, right side, fixed 140px width | Shows "PROCESSING..." with animated dots while AI generates response. Layout stability is enforced at two layers: `input_area.grid_columnconfigure(1, minsize=140)` locks the control column width, and fixed-size `SelectableLabel` instances do not resize on text updates. This prevents residual jitter during animation | gui_pages.py, widgets.py |
 | Chat input | Multi-line text box, 56px default | Type messages here. Enter sends. Shift+Enter for newline. Blocked during generation. Auto-expands from 56px to 200px as content grows, resets to 56px after sending | gui_pages.py |
 | SEND button | Green button, right of input | Sends the message (or Enter key). Hidden during generation. Tooltip: "Send message (Enter)" | gui_pages.py |
 | STOP button | Red button, same slot as SEND | Shown during generation. Stops AI mid-response. Also Escape key. Tooltip: "Stop AI generation" | gui_pages.py |
 | Token counter | SelectableLabel on right side of toolbar | Shows current conversation token count (e.g. "128 tokens"). Updates on page show and new chat | gui_pages.py |
+| In-memory history cap | Logic behavior (not a direct widget) | Caps `self.history` at `MAX_CHAT_HISTORY = 500` via `_trim_chat_history()` to prevent RAM growth. Full session still auto-saves to disk in `memory/session_*.json` | gui_logic_chat.py |
 | Utility toolbar | Row below input | Left side: attach, new, web toggle, edit. Right side: voice, mic — separated from SEND to prevent misclicks | gui_pages.py |
 | Attach button | Square button in toolbar (left) | Opens file picker to attach a text file to next message. Tooltip: "Attach file" | gui_pages.py |
 | NEW button | Dark button in toolbar (left) | Starts a new conversation: clears chat, history, and KV cache. No confirmation needed — current chat auto-saves | gui_pages.py |
@@ -424,55 +426,48 @@ Cards update live via `_update_forge_cards()` whenever route assignments change.
 #### Train (unified section)
 | Element | What It Is | What It Does | File |
 |---------|-----------|-------------|------|
-| Training mode dropdown | Option menu (7 modes with display names) | Selects the training mode. Description text updates. Irrelevant UI sections are hidden/shown per mode | gui_pages.py |
-| Mode description | Dim text, updates with mode | Explains the selected training mode behavior, requirements, and when to use it | gui_pages.py |
-| Train with AI checkbox | CTkCheckBox with green accent | Enables AI-assisted training on any mode. When ON: shows stages, brief, pairs sections; data becomes optional; dispatches to guided training flow. Requires TRAINER route assigned | gui_pages.py |
-| Include reasoning checkbox | CTkCheckBox | When ON, data generation and guided training include `<think>` reasoning chains in generated examples. Teaches STUDENT to reason, not just answer. Tooltip explains feature | gui_pages_forge.py |
-| Data source dropdown | Option menu (mode-adaptive) | Pick which file from data/ to train on. Always includes "(none)" as first option so data can be deselected. Label changes per mode: "required" (Self Study), "optional" (with Train with AI), "required .jsonl" (Preference Tuning), "task list" (Trial & Error). Hidden for Conversation and Image Training | gui_pages.py |
-| Focus field entry | Text input, optional | Domain focus for training (e.g. "medical", "coding", "cooking"). Injected into all training prompts when set | gui_pages.py |
-| Training stage buttons | 4 CTkButtons (BASICS/CONVERSATION/COMMANDS/WEB) | Selects curriculum focus. Only shown when Train with AI is enabled | gui_pages.py |
-| Training brief | CollapsiblePanel with quick profile fields + custom text | Describes what kind of AI to create. Only shown when Train with AI is enabled (passed to TRAINER system prompt) | gui_pages.py |
-| Training preset dropdown | Option menu (Custom/Quick/Balanced/Thorough) | Pre-fills epochs, learning rate, and batch size. Quick: 3 epochs, fast results. Balanced: 10 epochs, good quality. Thorough: 30 epochs, best quality. Custom: set your own values below | gui_pages.py |
-| Epochs entry | Text input, default "5" | How many training passes. Tooltip: "Number of passes through the training data. More epochs = better learning, longer training." | gui_pages.py |
-| Learning rate entry | Text input, default "0.00005" | Training learning rate. Tooltip: "How fast the model adapts to training data. Too high = unstable, too low = slow learning." | gui_pages.py |
+| Training mode cards | 3 radio-card options (`BASIC`, `AI-GUIDED`, `IMAGE`) | Replaces old multi-mode dropdown. User chooses one clear path, then only relevant sections are shown | gui_pages_forge.py |
+| Include reasoning checkbox | CTkCheckBox | When ON, AI-generated training data can include `<think>` reasoning chains | gui_pages_forge.py |
+| Basic data source dropdown | Option menu | For Basic mode training data. Supports `(none)` and file selection from `data/` | gui_pages_forge.py |
+| **Auto-LoRA trigger** | Automatic detection | When training in Basic mode, detects STUDENT model param count. Auto-selects LoRA if > 7B params, full fine-tuning if ≤ 7B params. No user toggle needed — happens automatically at training start. Shows info log message about detected size and selected method | gui_forge.py |
+| AI-guided topic/goal entry | Text input (required for AI-Guided) | Defines what the trainer should teach the student. If empty, training logs guidance and does not start | gui_pages_forge.py |
+| AI-guided supplement data dropdown | Option menu (optional) | Optional seed data for AI-guided curriculum generation. Wired to `ai_supplement_var` and used by the adaptive backend/tool flows | gui_pages_forge.py |
+| Training stage buttons | 4 CTkButtons (`BASICS/CONVERSATION/COMMANDS/WEB`) | Select the adaptive pipeline start stage. Runtime contract is “start here, then continue forward” | gui_pages_forge.py |
+| Training brief panel | CollapsiblePanel with quick profile fields + custom text | Refines trainer instructions for AI-guided runs | gui_pages_forge.py |
+| Image data directory | Text input + Browse button | Folder with image-text pairs used by Image mode | gui_pages_forge.py |
+| Encoder size dropdown | Option menu (`tiny/small/medium`) | Vision encoder size for Image mode | gui_pages_forge.py |
+| Training preset dropdown | Option menu (`Quick/Balanced/Thorough/Custom`) | Pre-fills epochs, learning rate, and batch size | gui_pages_forge.py |
+| Epochs entry | Text input, default `10` | Number of training passes | gui_pages_forge.py |
+| Learning rate entry | Text input, default `0.00005` | Training learning rate | gui_pages_forge.py |
 | Batch size entry | Text input, default "4" | Training batch size. Lower = less VRAM | gui_pages.py |
 | Grad accumulation entry | Text input, default "1" | Gradient accumulation steps | gui_pages.py |
 | Gradient checkpointing | Checkbox | Saves VRAM by recomputing activations | gui_pages.py |
-| Rolling best K entry | Text input, default "0" | Keep K best checkpoints by loss during training. 0 = disabled. Auto-deletes worst when full. Tooltip explains feature | gui_pages_forge.py |
-| Pairs/Rounds entry | Text input, default "20" | Q/A pairs (with Train with AI) or conversation rounds (Conversation). Only shown for those modes | gui_pages.py |
-| Image data directory | Text input + Browse button | Folder with image+text pairs for Image Training. Browse opens folder picker. Only shown for Image Training mode | gui_pages.py |
-| Encoder size dropdown | Option menu (tiny/small/medium) | Vision encoder size for Image Training. tiny ~500K, small ~4M, medium ~25M params | gui_pages.py |
-| LoRA rank entry | Text input, default "16" | Low-rank adapter dimension. Only shown for Quick Tune (LoRA) mode | gui_pages.py |
-| LoRA alpha entry | Text input, default "32" | LoRA scaling factor. Only shown for Quick Tune (LoRA) mode | gui_pages.py |
-| Evo generations entry | Text input, default "3" | Number of evolutionary generations. Only shown for Trial & Error mode | gui_pages.py |
-| Evo candidates entry | Text input, default "4" | Candidates per task in each generation. Only shown for Trial & Error mode | gui_pages.py |
+| Rolling best K entry | Text input, default "0" | Keep K best checkpoints by loss during training. 0 = disabled | gui_pages_forge.py |
+| AI-guided pairs entry | Text input, default "20" | Number of generated examples per stage for AI-guided flow | gui_pages_forge.py |
+| LoRA rank/alpha entries | Text inputs (`8`/`16`) | Advanced LoRA controls (used when LoRA path is selected in backend flow) | gui_pages_forge.py |
 | TRAIN button | Green button | Starts training with the selected mode | gui_pages.py |
 | STOP button | Dark button, disabled until training starts | Stops training after current epoch | gui_pages.py |
 | Auto-train checkbox | CTkCheckBox, tiny dim text | When checked, GENERATE DATA and WEB LEARN automatically select the new file and start training after completion | gui_pages.py |
 
-**Mode-adaptive UI:** When you switch training modes, only relevant controls are shown. The "Train with AI" checkbox overlays additional sections (stages, brief, pairs) onto any mode:
+**Mode-adaptive UI:** Switching between `BASIC`, `AI-GUIDED`, and `IMAGE` shows only the relevant controls.
 
-| Section | Self Study | Conversation | Preference Tuning | Image Training | Quick Tune (LoRA) | Trial & Error | Adaptive Pipeline |
-|---------|------------|--------------|-------------------|----------------|-------------------|---------------|-------------------|
-| Data source | Required | Hidden | Required (.jsonl) | Hidden | Required | Required (task list) | Hidden |
-| Focus field | Shown | Shown | Shown | Shown | Shown | Shown | Shown |
-| Stage buttons | With AI | With AI | Hidden | Hidden | Hidden | Hidden | Shown |
-| Training brief | With AI | With AI | Hidden | Hidden | Hidden | Hidden | Shown |
-| Pairs/rounds | With AI (pairs) | Shown (rounds) | Hidden | Hidden | Hidden | Hidden | Shown |
-| Vision section | Hidden | Hidden | Hidden | Shown | Hidden | Hidden | Hidden |
-| LoRA section | Hidden | Hidden | Hidden | Hidden | Shown | Hidden | Hidden |
-| Evo section | Hidden | Hidden | Hidden | Hidden | Hidden | Shown | Hidden |
+| Section | Basic | AI-Guided | Image |
+|---------|-------|-----------|-------|
+| Data source picker | Shown | Optional supplement | Hidden |
+| Topic/goal | Hidden | Required | Hidden |
+| Stage buttons | Hidden | Shown | Hidden |
+| Training brief | Hidden | Shown | Hidden |
+| Pairs per stage | Hidden | Shown | Hidden |
+| Image folder + encoder | Hidden | Hidden | Shown |
 
 **Training modes:**
 | Display Name | Internal Key | Description | Requirements |
 |-------------|-------------|-------------|-------------|
-| Self Study | Solo | Train STUDENT directly on data via SFT. No TRAINER needed | STUDENT route + data file |
-| Conversation | Dialogue | TRAINER↔STUDENT conversation: TRAINER asks, STUDENT answers, TRAINER corrects | TRAINER + STUDENT routes |
-| Preference Tuning | DPO | Direct Preference Optimization. Aligns STUDENT to prefer chosen over rejected answers | STUDENT route + .jsonl data file |
-| Image Training | Vision | Train STUDENT on image-text pairs using VisionEncoder | STUDENT route + image folder |
-| Quick Tune (LoRA) | LoRA | Lightweight fine-tuning via low-rank adapters. Fast and low memory | STUDENT route + data file |
-| Trial & Error | Evolutionary | Best-of-N self-play: generate multiple answers, keep the best, train on winners | STUDENT route + task file |
-| Adaptive Pipeline | Adaptive | Auto-chains BASICS→CONVERSATION→COMMANDS→WEB with difficulty adjustment and save/resume | TRAINER + STUDENT routes |
+| Basic | Basic | User trains on selected data file. Backend can route to full fine-tune or LoRA path | STUDENT route + data file |
+| AI-Guided | AI-Guided | TRAINER generates/teaches curriculum for STUDENT from user topic and optional supplement data | TRAINER + STUDENT routes + topic/goal |
+| Image | Vision | Vision training on image-text pairs from selected folder | STUDENT route + image folder |
+
+**Contract note (intentional):** The FORGE page contract is now these 3 modes. Legacy mode names (Self Study, Dialogue, DPO, LoRA, Evolutionary, RLHF, Self-Play) are not part of the primary FORGE UI contract.
 
 **Backend-only modes (fully implemented but not in dropdown):**
 | Display Name | Internal Key | Description | Requirements |
@@ -480,15 +475,27 @@ Cards update live via `_update_forge_cards()` whenever route assignments change.
 | RLHF | RLHF | Two-phase: trains reward model on preference data, then PPO-trains STUDENT against it with KL penalty | STUDENT route + .jsonl data file |
 | Self-Play | SelfPlay | TRAINER scores STUDENT responses as reward signal, REINFORCE policy gradient updates | TRAINER + STUDENT routes |
 
-**Train with AI checkbox:** Overlays AI-assisted training on any mode. When enabled, the TRAINER model generates curriculum (in stage-appropriate format), trains the STUDENT, then tests what it learned. Generated curricula are saved to `data/guided_{student}_{stage}_{timestamp}.txt` and appear on the DOCS page. Requires TRAINER route assigned. Dialogue mode always uses the teacher regardless of toggle (inherent to the mode).
+**AI-Guided validation:** If topic/goal is empty, training does not start and the output log explicitly tells the user what to fill in and why.
+
+**AI-Guided execution note:** The current backend path goes through the adaptive pipeline. Supplement selection and start-stage selection are now wired. The pipeline still intentionally auto-chains remaining stages after the selected start point.
+
+**Migration note (Completed March 9, 2026):** All GUI tests have been updated to validate the 3-mode contract. Test class renamed from `TestRLHFSelfPlayDropdown` to `TestTrainingModes` with 9 tests covering Basic, AI-Guided, and Image modes. Legacy mode references in tests removed. Code passes linting and tests pass.
+
+**Forge status (March 9, 2026):** Core FORGE work is complete for day-to-day training: 3-mode UX, automatic LoRA routing for large models, and automatic before/after perplexity logging are all active. Remaining roadmap items are tool success-rate persistence and Discovery mode orchestration.
+
+**Reality check (March 10, 2026):** The visible FORGE UI is mostly aligned with the backend now:
+- The AI-Guided supplement dropdown is wired through the adaptive/tool paths.
+- Stage buttons define the adaptive start stage, then the pipeline intentionally continues forward through later stages.
+- The adaptive plan records test scores, but progression still auto-advances rather than using score thresholds.
+- The old focus-field widget is gone; Training Topic + Training Brief are the active control surfaces.
 
 **Training stage buttons:**
 | Stage | Tooltip | What TRAINER teaches |
 |-------|---------|---------------------|
-| BASICS | Teach fundamental language patterns, grammar, and basic responses | Adaptive: probes STUDENT level first. Blank models get simple words/sentences/repetition; capable models get greetings, short answers, basic facts, everyday vocabulary |
-| CONVERSATION | Teach natural dialogue flow and contextual responses | Multi-sentence responses, turn-taking, follow-ups, personality |
-| COMMANDS | Teach command recognition and structured outputs | [CMD]command[/CMD] syntax, when to use commands |
-| WEB | Teach web content understanding and information extraction | search.web, web.fetch, summarize web results |
+| BASICS | Teach fundamental language patterns, grammar, and basic responses | If selected, adaptive training starts here and then continues forward through later stages |
+| CONVERSATION | Teach natural dialogue flow and contextual responses | If selected, adaptive training starts here and then continues forward through later stages |
+| COMMANDS | Teach command recognition and structured outputs | If selected, adaptive training starts here and then continues forward through later stages |
+| WEB | Teach web content understanding and information extraction | If selected, adaptive training starts here; no later stages remain |
 
 **Stage data formats:** Each stage generates training data in its own format via `_build_generation_prompt()` and `_format_training_pair()`:
 | Stage | Generation Format | Supplement Format |
@@ -523,7 +530,7 @@ Cards update live via `_update_forge_cards()` whenever route assignments change.
 | REVIEW DATASET button | Dark button | Shows curated dataset summary and pending entries in forge log. Lists source, stage, and text preview | gui_pages_forge.py |
 | APPROVE ALL button | Dark button | Approves all pending entries in the curated dataset for training use. Saves to JSONL | gui_pages_forge.py |
 
-**Web Learn behavior:** Uses shared `web_utils.py` (ddg_search + fetch_page_text) to search DuckDuckGo for the topic and fetch top N pages. Extracts text content (limited to 3000 chars per page), breaks into chunks. TRAINER generates one training pair per chunk in stage-appropriate format using `_build_trainer_system_prompt()` (respects training brief, focus field, and stage) and `_format_training_pair()`. Updates progress bar throughout (search → fetch → generate → save). Saves all pairs as `web_<topic>.txt` in data/. When Auto-train is checked, automatically selects the new file and starts training.
+**Web Learn behavior:** Uses shared `web_utils.py` (ddg_search + fetch_page_text) to search DuckDuckGo for the topic and fetch top N pages. Extracts text content (limited to 3000 chars per page), breaks into chunks. TRAINER generates one training pair per chunk in stage-appropriate format using `_build_trainer_system_prompt()` (respects training brief and stage) and `_format_training_pair()`. Updates progress bar throughout (search → fetch → generate → save). Saves all pairs as `web_<topic>.txt` in data/. When Auto-train is checked, routes the new file to the active mode selector and starts training.
 
 ### Right Column: Log
 | Element | What It Is | What It Does | File |
@@ -539,6 +546,8 @@ Cards update live via `_update_forge_cards()` whenever route assignments change.
 **Loss curve (text):** Text-based bar chart rendered in the log after training. Shows per-epoch loss with block characters (█) proportional to loss magnitude.
 
 **Loss curve (graphical):** Canvas line chart in a collapsible panel between the progress bar and log. Green line = actual loss per step/epoch. Accent line = smoothed moving average. Three horizontal grid lines with loss values. Auto-expands when training completes. Includes perplexity info when available from TrainingMonitor.
+
+**Evaluation results:** When training completes (Solo or LoRA modes), the log displays before/after perplexity measurements evaluated on a fixed set of test prompts. Shows "Before: perplexity = X.XX", "After: perplexity = Y.YY", and "Improvement: Z.ZZ (N.N%)". Lower perplexity indicates better language modeling. Evaluation is automatic (enabled via `run_evaluation=True` in TrainingConfig). Uses `evaluate_model()` from `training_evaluation.py`.
 
 ---
 
@@ -775,7 +784,7 @@ All fonts are Consolas monospace. Defined at lines 63-71.
 | widgets.py | 666 | Theme-driven C_* color constants, fonts, reload_theme() for live switching, widget classes (HUDFrame, StatusDot, NavButton, SectionLabel, SelectableLabel, ToggleButton, StatusBar, CollapsiblePanel, SelectableTextbox, Tooltip), factory functions (themed_entry, themed_dropdown, themed_scroll) |
 | desktop.py | 772 | Window shell: header (pin toggle, shortcuts inline dropdown), nav rail (collapsible via grid_columnconfigure), status bar, label copy (right-click on CTkLabels that still use wraplength), auto-start mods, status ticker, display name loading, Escape-to-stop binding, TTS lifecycle (init/shutdown), deferred boot scanning, window geometry persistence (save/restore), live theme switching (_apply_theme_live, _retheme_tree), parent watchdog. Inherits 7 mixins. |
 | gui_pages.py | 1102 | Page builders: CORE (fullscreen + web toggle + token counter + resizable sidebar + clickable history + media tags + STOP/EDIT buttons + auto-expanding input + reasoning display), MODELS (cards with param count + tooltips + COPY/RENAME/DELETE + IMPORT/DOWNLOAD + NATIVE/EXTERNAL tags), ROUTER. Inherits ForgePageMixin + ConfigPageMixin |
-| gui_pages_forge.py | 815 | FORGE page layout: unified TRAIN with 7-mode dropdown + Train with AI toggle + Include reasoning checkbox + Auto-train checkbox + display name mapping + stage buttons with tooltips + CollapsiblePanel tools + vision browse + lora/evo config + focus field + student param count label + hyperparameter presets + progress bar + loss chart canvas panel + rolling best K + queue/plan/dataset buttons (ForgePageMixin) |
+| gui_pages_forge.py | 815 | FORGE page layout: 3-mode radio-card selector (`Basic`, `AI-Guided`, `Image`) + reasoning checkbox + mode-specific sections + Auto-train checkbox + stage buttons with tooltips + CollapsiblePanel tools + vision browse + LoRA advanced subsection + student param count label + hyperparameter presets + progress bar + loss chart canvas panel + rolling best K + queue/plan/dataset buttons (ForgePageMixin) |
 | gui_pages_config.py | 585 | CONFIG page layout: generation parameters, paths, display names, live theme picker (no restart), font size control, learn-while-chatting toggle, backup/restore (ConfigPageMixin) |
 | gui_docs_page.py | 798 | DOCS page: documentation browser with search filter, path tooltips, file editor with path label and stats footer, inline file rename, blank doc creation, unsaved change detection, Ctrl+S shortcut, Ctrl+F find bar with match navigation, right-click context menu, auto-save (30s timer), notes category, CRUD operations |
 | gui_logic.py | 881 | Logic hub: config, model loading, routes, display names, toggles, path settings, web access toggle, GUI context, CMD activity pipeline, GGUF param estimation. Inherits LogicChatMixin + LogicMediaMixin |

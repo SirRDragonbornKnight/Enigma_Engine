@@ -379,6 +379,13 @@ class TestCorePage:
         assert "_enable_label_copy" in inspect.getsource(
             EnigmaGUI.__init__)
 
+    def test_selectable_label_keeps_fixed_width_stable(self):
+        """Fixed-width SelectableLabel should not resize on text updates."""
+        from enigma_engine.gui.widgets import SelectableLabel
+        source = inspect.getsource(SelectableLabel)
+        assert "_fixed_width" in source
+        assert "if not self._fixed_width" in source
+
 
 # ================================================================
 # Voice input
@@ -753,8 +760,8 @@ class TestDisplayNames:
         from enigma_engine.gui.gui_forge import ForgeMixin
         source = inspect.getsource(ForgeMixin._start_training_by_mode)
         assert "solo" in source.lower()
-        assert "guided" in source.lower()  # AI-assisted path
-        assert "dialogue" in source.lower()
+        assert "guided" in source.lower()  # AI-Guided mode
+        assert "image" in source.lower()   # Image/Vision mode
 
 
 # ================================================================
@@ -1481,7 +1488,7 @@ class TestForgeModeUI:
         """_build_page_forge creates _forge_data_section container."""
         from enigma_engine.gui.gui_pages import PagesMixin
         source = inspect.getsource(PagesMixin._build_page_forge)
-        assert "_forge_data_section" in source
+        assert "_forge_basic_section" in source
 
     def test_forge_stages_section_container_exists(self):
         """_build_page_forge creates _forge_stages_section container."""
@@ -1506,7 +1513,7 @@ class TestForgeModeUI:
         from enigma_engine.gui.gui_forge import ForgeMixin
         source = inspect.getsource(
             ForgeMixin._on_training_mode_changed)
-        assert "_forge_data_section" in source
+        assert "_forge_basic_section" in source
 
     def test_mode_changed_handles_stages_section(self):
         """_on_training_mode_changed manages _forge_stages_section."""
@@ -1534,7 +1541,7 @@ class TestForgeModeUI:
         from enigma_engine.gui.gui_forge import ForgeMixin
         source = inspect.getsource(
             ForgeMixin._on_training_mode_changed)
-        assert "_forge_data_label" in source
+        assert "_forge_ai_section" in source
 
     def test_solo_hides_trainer_only_sections(self):
         """Solo mode hides brief, stages, pairs sections."""
@@ -1594,9 +1601,9 @@ class TestForgeNewModes:
         from enigma_engine.gui.gui_pages import PagesMixin
         source = inspect.getsource(PagesMixin._build_page_forge)
         # Dropdown uses display names, not internal keys
-        assert "Image Training" in source
-        assert "Quick Tune (LoRA)" in source
-        assert "Trial & Error" in source
+        assert "Basic" in source
+        assert "AI-Guided" in source
+        assert "Image" in source
 
     def test_dispatcher_handles_vision(self):
         """_start_training_by_mode dispatches Vision mode."""
@@ -1609,15 +1616,16 @@ class TestForgeNewModes:
         """_start_training_by_mode dispatches LoRA mode."""
         from enigma_engine.gui.gui_forge import ForgeMixin
         source = inspect.getsource(ForgeMixin._start_training_by_mode)
-        assert "LoRA" in source
-        assert "_start_lora_training" in source
+        # LoRA is auto-dispatched from Basic mode based on param count
+        basic_source = inspect.getsource(ForgeMixin._start_basic_training)
+        assert "_start_lora_training" in basic_source
 
     def test_dispatcher_handles_evolutionary(self):
         """_start_training_by_mode dispatches Evolutionary mode."""
         from enigma_engine.gui.gui_forge import ForgeMixin
         source = inspect.getsource(ForgeMixin._start_training_by_mode)
-        assert "Evolutionary" in source
-        assert "_start_evolutionary_training" in source
+        # Evolutionary mode is available as a standalone method
+        assert hasattr(ForgeMixin, "_start_evolutionary_training")
 
     def test_vision_training_method_exists(self):
         """ForgeMixin._start_vision_training is defined."""
@@ -1665,46 +1673,51 @@ class TestForgeNewModes:
         """_build_page_forge creates _forge_vision_section container."""
         from enigma_engine.gui.gui_pages import PagesMixin
         source = inspect.getsource(PagesMixin._build_page_forge)
-        assert "_forge_vision_section" in source
+        assert "_forge_image_section" in source
 
     def test_lora_section_in_forge_page(self):
         """_build_page_forge creates _forge_lora_section container."""
         from enigma_engine.gui.gui_pages import PagesMixin
         source = inspect.getsource(PagesMixin._build_page_forge)
-        assert "_forge_lora_section" in source
+        # LoRA is auto-selected in Basic mode — no dedicated section needed
+        assert "_forge_basic_section" in source
 
     def test_evolutionary_section_in_forge_page(self):
         """_build_page_forge creates _forge_evo_section container."""
         from enigma_engine.gui.gui_pages import PagesMixin
         source = inspect.getsource(PagesMixin._build_page_forge)
-        assert "_forge_evo_section" in source
+        # Evolutionary mode was consolidated into Basic mode
+        assert "_forge_basic_section" in source
 
     def test_focus_field_entry_in_forge_page(self):
         """_build_page_forge has a focus field entry for specific topics."""
         from enigma_engine.gui.gui_pages import PagesMixin
         source = inspect.getsource(PagesMixin._build_page_forge)
-        assert "forge_focus_field" in source
+        # Focus field is part of the AI-Guided section (training brief)
+        assert "_forge_ai_section" in source or "_forge_brief_section" in source
 
     def test_mode_changed_handles_vision_section(self):
         """_on_training_mode_changed manages _forge_vision_section."""
         from enigma_engine.gui.gui_forge import ForgeMixin
         source = inspect.getsource(
             ForgeMixin._on_training_mode_changed)
-        assert "_forge_vision_section" in source
+        assert "_forge_image_section" in source
 
     def test_mode_changed_handles_lora_section(self):
         """_on_training_mode_changed manages _forge_lora_section."""
         from enigma_engine.gui.gui_forge import ForgeMixin
         source = inspect.getsource(
             ForgeMixin._on_training_mode_changed)
-        assert "_forge_lora_section" in source
+        # LoRA is auto-selected in Basic mode — managed via _forge_basic_section
+        assert "_forge_basic_section" in source
 
     def test_mode_changed_handles_evo_section(self):
         """_on_training_mode_changed manages _forge_evo_section."""
         from enigma_engine.gui.gui_forge import ForgeMixin
         source = inspect.getsource(
             ForgeMixin._on_training_mode_changed)
-        assert "_forge_evo_section" in source
+        # Evolutionary mode was consolidated — main 3-mode sections still managed
+        assert "_forge_ai_section" in source
 
     def test_display_name_mapping_covers_all_modes(self):
         """_MODE_DISPLAY_TO_KEY maps all 9 display names to keys."""
@@ -1746,11 +1759,41 @@ class TestForgeNewModes:
         from enigma_engine.gui.gui_forge import ForgeMixin
         source = inspect.getsource(
             ForgeMixin._on_training_mode_changed)
-        assert "_MODE_DISPLAY_TO_KEY" in source
+        # 3-mode contract: dispatcher uses mode names directly
+        assert "AI-Guided" in source
 
 
 class TestImportModel:
     """Test the import external model feature on the MODELS page."""
+
+
+class TestForgeThreeModeConnections:
+    """Regression tests for 3-mode FORGE wiring."""
+
+    def test_generate_data_uses_ai_supplement_in_guided_mode(self):
+        """_generate_training_data should read ai_supplement_var for AI-Guided mode."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        source = inspect.getsource(ForgeMixin._generate_training_data)
+        assert "ai_supplement_var" in source
+
+    def test_evaluate_student_does_not_read_removed_focus_field(self):
+        """_evaluate_student should not reference removed forge_focus_field widget."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        source = inspect.getsource(ForgeMixin._evaluate_student)
+        assert "forge_focus_field" not in source
+
+    def test_auto_train_routes_generated_data_by_mode(self):
+        """Auto-train should support AI-Guided supplement routing."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        source = inspect.getsource(ForgeMixin._generate_training_data)
+        assert "training_mode_var" in source
+        assert "ai_supplement_var" in source
+
+    def test_adaptive_training_no_undefined_focus_field(self):
+        """_start_adaptive_training should not reference undefined focus_field."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        source = inspect.getsource(ForgeMixin._start_adaptive_training)
+        assert 'focus_field = ""' in source
 
     def test_import_model_method_exists(self):
         """ForgeMixin._import_model is defined."""
@@ -2333,7 +2376,7 @@ class TestDialogueTraining:
         """FORGE page supports dialogue training mode."""
         from enigma_engine.gui.gui_pages import PagesMixin
         source = inspect.getsource(PagesMixin._build_page_forge)
-        assert "Dialogue" in source
+        assert "dialogue" in source.lower()
 
 
 # ================================================================
@@ -2985,6 +3028,21 @@ class TestTrainingBrief:
         assert hasattr(ForgeMixin, "_save_training_brief")
         assert hasattr(ForgeMixin, "_load_training_brief")
 
+    def test_training_mode_selection_is_persisted(self):
+        """FORGE should persist the selected training mode."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        save_source = inspect.getsource(ForgeMixin._save_training_brief)
+        load_source = inspect.getsource(ForgeMixin._load_training_brief)
+        assert '_training_mode' in save_source
+        assert '_training_mode' in load_source
+        assert '_on_training_mode_changed' in load_source
+
+    def test_forge_page_radio_uses_mode_selection_helper(self):
+        """Selecting a FORGE mode should immediately save the choice."""
+        from enigma_engine.gui.gui_pages import PagesMixin
+        source = inspect.getsource(PagesMixin._build_page_forge)
+        assert '_on_training_mode_selected' in source
+
     def test_forge_page_has_training_brief_panel(self):
         """FORGE page builder creates the Training Brief panel."""
         from enigma_engine.gui.gui_pages import PagesMixin
@@ -3051,6 +3109,42 @@ class TestTrainingBrief:
 # ================================================================
 # FORGE: UI Polish
 # ================================================================
+
+class TestAutoLoRA:
+    """Test auto-LoRA trigger for models > 7B params in Basic mode."""
+
+    def test_get_model_param_count_exists(self):
+        """ForgeMixin._get_model_param_count method is defined."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        assert hasattr(ForgeMixin, "_get_model_param_count")
+        assert callable(getattr(ForgeMixin, "_get_model_param_count"))
+
+    def test_start_basic_training_calls_get_param_count(self):
+        """_start_basic_training calls _get_model_param_count."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        source = inspect.getsource(ForgeMixin._start_basic_training)
+        assert "_get_model_param_count" in source
+
+    def test_start_basic_training_dispatches_lora_if_large(self):
+        """_start_basic_training calls _start_lora_training for > 7B models."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        source = inspect.getsource(ForgeMixin._start_basic_training)
+        assert "_start_lora_training" in source
+        assert "7_000_000_000" in source or "7B" in source
+
+    def test_start_basic_training_dispatches_solo_if_small(self):
+        """_start_basic_training calls _start_solo_training for <= 7B models."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        source = inspect.getsource(ForgeMixin._start_basic_training)
+        assert "_start_solo_training" in source
+
+    def test_get_param_count_returns_int(self):
+        """_get_model_param_count returns int (0 on error)."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        source = inspect.getsource(ForgeMixin._get_model_param_count)
+        assert "int" in source
+        assert "return 0" in source
+
 
 class TestForgeUIPolish:
     """Test FORGE page UI polish improvements."""
@@ -4877,6 +4971,64 @@ class TestDeferredBootParam:
             "cpuinfo must not be called inside _tick — "
             "it blocks the UI for seconds")
 
+    def test_status_ticker_uses_low_overhead_interval(self, monkeypatch):
+        """Low-overhead mode slows the steady-state status refresh rate."""
+        from enigma_engine.gui.desktop import EnigmaGUI
+        import enigma_engine.gui.desktop as desktop_mod
+
+        after_calls = []
+
+        class DummyStatusBar:
+            def set_right(self, text):
+                pass
+
+            def set_center(self, text):
+                pass
+
+        class DummyThread:
+            def __init__(self, target=None, daemon=None):
+                self.target = target
+
+            def start(self):
+                pass
+
+        monkeypatch.setattr(desktop_mod.threading, "Thread", DummyThread)
+
+        obj = object.__new__(EnigmaGUI)
+        obj._gaming_mode_active = True
+        obj._status_tick_ms = 5000
+        obj._boot_time = 0.0
+        obj._hw_device_label = "CPU"
+        obj.status_bar = DummyStatusBar()
+
+        def after(ms, callback):
+            after_calls.append(ms)
+            if len(after_calls) == 1:
+                callback()
+
+        obj.after = after
+
+        obj._start_status_ticker()
+
+        assert after_calls == [100, 5000]
+
+    def test_count_model_params_skips_in_low_overhead_mode(self, monkeypatch):
+        """Low-overhead mode must not start exact param counting threads."""
+        from enigma_engine.gui.desktop import EnigmaGUI
+        import enigma_engine.gui.desktop as desktop_mod
+
+        class UnexpectedThread:
+            def __init__(self, *args, **kwargs):
+                raise AssertionError("thread should not start")
+
+        monkeypatch.setattr(desktop_mod.threading, "Thread", UnexpectedThread)
+
+        obj = object.__new__(EnigmaGUI)
+        obj._gaming_mode_active = True
+        obj.models_data = [{"format": "pth", "params": None, "path": "fake"}]
+
+        obj._count_model_params_background()
+
 
 # ================================================================
 # TTS Queue Drain: Stop Clears Pending Chunks
@@ -6188,6 +6340,43 @@ class TestForgeTrainingHistory:
         assert len(runs) == 200
         assert runs[-1]["mode"] == "New"
 
+    def test_save_training_run_persists_perplexity(
+            self, tmp_path, monkeypatch):
+        """When perplexity values are supplied they are saved to history."""
+        import json
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        history_file = tmp_path / "training_history.json"
+        monkeypatch.setattr(
+            "enigma_engine.gui.gui_forge.ForgeMixin._HISTORY_FILE",
+            history_file)
+
+        obj = object.__new__(ForgeMixin)
+        obj._save_training_run(
+            "Solo", "test_model", 5, 0.1234,
+            before_perplexity=3.75, after_perplexity=2.40)
+
+        runs = json.loads(history_file.read_text(encoding="utf-8"))
+        assert len(runs) == 1
+        assert runs[0]["before_perplexity"] == 3.75
+        assert runs[0]["after_perplexity"] == 2.40
+
+    def test_save_training_run_no_perplexity_omitted(
+            self, tmp_path, monkeypatch):
+        """When perplexity is not provided the fields are absent from history."""
+        import json
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        history_file = tmp_path / "training_history.json"
+        monkeypatch.setattr(
+            "enigma_engine.gui.gui_forge.ForgeMixin._HISTORY_FILE",
+            history_file)
+
+        obj = object.__new__(ForgeMixin)
+        obj._save_training_run("Solo", "test_model", 5, 0.1234)
+
+        runs = json.loads(history_file.read_text(encoding="utf-8"))
+        assert "before_perplexity" not in runs[0]
+        assert "after_perplexity" not in runs[0]
+
 
 class TestForgeProgressBar:
     """Progress bar update/reset methods exist and are callable."""
@@ -6234,14 +6423,20 @@ class TestLearnWhileChatting:
             def set_left(self, text):
                 pass
 
+        sync_calls = []
+
         obj = object.__new__(PagesMixin)
         obj._learn_while_chatting_var = MockVar()
         obj.status_bar = MockStatusBar()
+        obj._refresh_performance_mode = lambda: sync_calls.append("refresh")
+        obj._sync_router_training_state = lambda: sync_calls.append("sync")
 
         obj._toggle_learn_while_chatting()
 
         data = json.loads(settings_file.read_text(encoding="utf-8"))
         assert data["learn_while_chatting"] is True
+        assert obj._chat_learning_enabled is True
+        assert sync_calls == ["refresh", "sync"]
 
     def test_gui_logic_reads_setting(self):
         """gui_logic._feed_background_trainer checks the setting."""
@@ -6278,6 +6473,55 @@ class TestLearnWhileChatting:
         assert "_reset_forge_progress" in source
         assert "_update_forge_progress" in source
         assert "_save_training_run" in source
+
+
+class TestGamingModePreset:
+    """Gaming preset should apply the full low-overhead profile."""
+
+    def test_apply_gaming_mode_preset_disables_learning(self, tmp_path, monkeypatch):
+        """Preset disables chat learning and syncs runtime state."""
+        import json
+        from enigma_engine.gui.gui_pages import PagesMixin
+
+        monkeypatch.setattr(
+            "enigma_engine.gui.gui_pages_config.DATA_DIR", tmp_path)
+        settings_file = tmp_path / "gui_settings.json"
+        settings_file.write_text("{}", encoding="utf-8")
+
+        class MockVar:
+            def __init__(self):
+                self.value = None
+
+            def set(self, value):
+                self.value = value
+
+        class MockStatusBar:
+            def __init__(self):
+                self.last = ""
+
+            def set_left(self, text):
+                self.last = text
+
+        sync_calls = []
+        obj = object.__new__(PagesMixin)
+        obj.status_bar = MockStatusBar()
+        obj._auto_load_chat_model_var = MockVar()
+        obj._auto_start_mods_var = MockVar()
+        obj._auto_unload_on_minimize_var = MockVar()
+        obj._learn_while_chatting_var = MockVar()
+        obj._refresh_performance_mode = lambda: sync_calls.append("refresh")
+        obj._sync_router_training_state = lambda: sync_calls.append("sync")
+
+        obj._apply_gaming_mode_preset()
+
+        data = json.loads(settings_file.read_text(encoding="utf-8"))
+        assert data["auto_load_chat_model"] is False
+        assert data["auto_start_mods"] is False
+        assert data["auto_unload_on_minimize"] is True
+        assert data["learn_while_chatting"] is False
+        assert obj._chat_learning_enabled is False
+        assert obj._learn_while_chatting_var.value is False
+        assert sync_calls == ["refresh", "sync"]
 
     def test_training_hooks_in_dialogue(self):
         """Dialogue training has progress bar hooks."""
@@ -6479,110 +6723,60 @@ class TestPerformanceSettings:
 
 
 # ================================================================
-# FORGE Page: Train with AI Toggle
+# FORGE Page: 3-Mode Contract
 # ================================================================
 
-class TestTrainWithAIToggle:
-    """Test the 'Train with AI' toggle that replaces the old
-    'Teacher + Student' dropdown mode with a checkbox overlay."""
+class TestForgeThreeModeContract:
+    """Test the current FORGE contract with 3 user-facing modes."""
 
-    def test_toggle_variable_in_forge_page(self):
-        """_build_page_forge creates train_with_ai_var."""
-        from enigma_engine.gui.gui_pages import PagesMixin
-        source = inspect.getsource(PagesMixin._build_page_forge)
-        assert "train_with_ai_var" in source
-
-    def test_toggle_checkbox_in_forge_page(self):
-        """_build_page_forge creates train_with_ai_cb checkbox."""
-        from enigma_engine.gui.gui_pages import PagesMixin
-        source = inspect.getsource(PagesMixin._build_page_forge)
-        assert "train_with_ai_cb" in source
-
-    def test_toggle_text_is_train_with_ai(self):
-        """Toggle button text says 'Train with AI'."""
-        from enigma_engine.gui.gui_pages import PagesMixin
-        source = inspect.getsource(PagesMixin._build_page_forge)
-        assert "Train with AI" in source
-
-    def test_teacher_student_removed_from_dropdown(self):
-        """'Teacher + Student' is no longer a dropdown option."""
-        from enigma_engine.gui.gui_pages import PagesMixin
-        source = inspect.getsource(PagesMixin._build_page_forge)
+    def test_teacher_student_removed_from_forge_ui(self):
+        """Legacy 'Teacher + Student' option is gone from FORGE page."""
+        from enigma_engine.gui.gui_pages_forge import ForgePageMixin
+        source = inspect.getsource(ForgePageMixin._build_page_forge)
         assert "Teacher + Student" not in source
 
-    def test_guided_removed_from_mode_map(self):
-        """'Guided' is no longer in _MODE_DISPLAY_TO_KEY."""
+    def test_legacy_train_with_ai_toggle_removed(self):
+        """Legacy Train-with-AI checkbox contract is removed."""
+        from enigma_engine.gui.gui_pages_forge import ForgePageMixin
+        source = inspect.getsource(ForgePageMixin._build_page_forge)
+        assert "train_with_ai_var" not in source
+        assert "train_with_ai_cb" not in source
+
+    def test_three_modes_in_ui(self):
+        """UI displays the 3 training modes: Basic, AI-Guided, Image."""
+        from enigma_engine.gui.gui_pages_forge import ForgePageMixin
+        source = inspect.getsource(ForgePageMixin._build_page_forge)
+        assert '"Basic"' in source
+        assert '"AI-Guided"' in source
+        assert '"Image"' in source
+
+    def test_default_mode_is_basic(self):
+        """FORGE defaults to Basic mode."""
+        from enigma_engine.gui.gui_pages_forge import ForgePageMixin
+        source = inspect.getsource(ForgePageMixin._build_page_forge)
+        assert 'value="Basic"' in source
+
+    def test_dispatcher_routes_current_modes(self):
+        """Dispatcher routes Basic, AI-Guided, and Image modes."""
         from enigma_engine.gui.gui_forge import ForgeMixin
-        assert "Guided" not in ForgeMixin._MODE_DISPLAY_TO_KEY.values()
+        source = inspect.getsource(ForgeMixin._start_training_by_mode)
+        assert 'mode_name == "Basic"' in source
+        assert 'mode_name == "AI-Guided"' in source
+        assert 'mode_name == "Image"' in source
+        assert "_start_basic_training" in source
+        assert "_start_ai_guided_training" in source
+        assert "_start_vision_training" in source
 
-    def test_guided_removed_from_descriptions(self):
-        """'Guided' is no longer in _TRAINING_MODE_DESCRIPTIONS."""
+    def test_mode_changed_uses_three_mode_visibility(self):
+        """Visibility logic follows the new 3-mode section model."""
         from enigma_engine.gui.gui_forge import ForgeMixin
-        assert "Guided" not in ForgeMixin._TRAINING_MODE_DESCRIPTIONS
-
-    def test_guided_removed_from_visibility(self):
-        """'Guided' is no longer in _MODE_SECTION_VISIBILITY."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        assert "Guided" not in ForgeMixin._MODE_SECTION_VISIBILITY
-
-    def test_guided_removed_from_data_labels(self):
-        """'Guided' is no longer in _MODE_DATA_LABELS."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        assert "Guided" not in ForgeMixin._MODE_DATA_LABELS
-
-    def test_on_train_ai_toggled_method_exists(self):
-        """ForgeMixin._on_train_ai_toggled is defined."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        assert hasattr(ForgeMixin, "_on_train_ai_toggled")
-        assert callable(getattr(ForgeMixin, "_on_train_ai_toggled"))
-
-    def test_dispatcher_checks_ai_toggle(self):
-        """_start_training_by_mode checks train_with_ai_var."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        source = inspect.getsource(
-            ForgeMixin._start_training_by_mode)
-        assert "train_with_ai_var" in source
-
-    def test_dispatcher_routes_to_guided_when_ai_on(self):
-        """When AI toggle is ON, dispatcher calls guided training."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        source = inspect.getsource(
-            ForgeMixin._start_training_by_mode)
-        assert "_start_guided_training" in source
-
-    def test_mode_changed_checks_ai_toggle(self):
-        """_on_training_mode_changed respects AI toggle for sections."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        source = inspect.getsource(
-            ForgeMixin._on_training_mode_changed)
-        assert "train_with_ai_var" in source
-
-    def test_guided_training_log_says_ai_assisted(self):
-        """_start_guided_training logs 'AI-ASSISTED' not 'GUIDED'."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        source = inspect.getsource(
-            ForgeMixin._start_guided_training)
-        assert "AI-ASSISTED TRAINING" in source
-
-    def test_eleven_modes_in_dropdown(self):
-        """Dropdown has 9 modes after audit cleanup."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        mapping = ForgeMixin._MODE_DISPLAY_TO_KEY
-        assert len(mapping) == 9
-
-    def test_default_mode_is_self_study(self):
-        """Default dropdown value is 'Self Study'."""
-        from enigma_engine.gui.gui_pages import PagesMixin
-        source = inspect.getsource(PagesMixin._build_page_forge)
-        # The StringVar default should be Self Study
-        assert 'value="Self Study"' in source
-
-    def test_toggle_has_tooltip(self):
-        """Train with AI checkbox has a Tooltip."""
-        from enigma_engine.gui.gui_pages import PagesMixin
-        source = inspect.getsource(PagesMixin._build_page_forge)
-        # Should have tooltip mentioning TRAINER
-        assert "TRAINER" in source
+        source = inspect.getsource(ForgeMixin._on_training_mode_changed)
+        assert 'if mode == "Basic"' in source
+        assert 'elif mode == "AI-Guided"' in source
+        assert 'elif mode == "Image"' in source
+        assert 'visible = {"basic"}' in source
+        assert 'visible = {"ai", "stages", "brief", "pairs"}' in source
+        assert 'visible = {"image"}' in source
 
 
 # ================================================================
@@ -6707,12 +6901,11 @@ class TestWebLearnOptimized:
         assert "#0d2137" not in source
         assert "#163352" not in source
 
-    def test_no_double_pack_mode_desc(self):
-        """_training_mode_desc is packed only once."""
-        from enigma_engine.gui.gui_pages import PagesMixin
-        source = inspect.getsource(PagesMixin._build_page_forge)
-        count = source.count("_training_mode_desc.pack(")
-        assert count == 1
+    def test_legacy_mode_desc_widget_removed(self):
+        """Old single-description widget is removed in card-based UI."""
+        from enigma_engine.gui.gui_pages_forge import ForgePageMixin
+        source = inspect.getsource(ForgePageMixin._build_page_forge)
+        assert "_training_mode_desc" not in source
 
 
 # ================================================================
@@ -7215,9 +7408,10 @@ class TestTokenCounter:
         assert hasattr(LogicChatMixin, "_update_token_counter")
 
     def test_token_counter_called_after_send(self):
-        """_send_message updates the token counter."""
+        """Token counter is updated after response finishes typing."""
         from enigma_engine.gui.gui_logic_chat import LogicChatMixin
-        source = inspect.getsource(LogicChatMixin._send_message)
+        # Moved to _typewriter so it updates AFTER the response finishes typing
+        source = inspect.getsource(LogicChatMixin._typewriter)
         assert "_update_token_counter" in source
 
 
@@ -7404,6 +7598,49 @@ class TestInputHistory:
         from enigma_engine.gui.gui_logic_chat import LogicChatMixin
         assert LogicChatMixin._INPUT_HISTORY_MAX == 50
 
+
+class TestChatHistoryTrimming:
+    """Verify chat history is trimmed to prevent RAM leaks."""
+
+    def test_trim_chat_history_method_exists(self):
+        """LogicChatMixin has _trim_chat_history method."""
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+        assert hasattr(LogicChatMixin, "_trim_chat_history")
+
+    def test_max_chat_history_constant(self):
+        """MAX_CHAT_HISTORY constant exists and is reasonable."""
+        from enigma_engine.gui.media import MAX_CHAT_HISTORY
+        assert isinstance(MAX_CHAT_HISTORY, int)
+        assert 100 <= MAX_CHAT_HISTORY <= 1000
+
+    def test_trim_chat_history_removes_oldest(self):
+        """_trim_chat_history removes oldest messages when over cap."""
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+        from enigma_engine.gui.media import MAX_CHAT_HISTORY
+        obj = object.__new__(LogicChatMixin)
+        # Simulate a history with messages over the cap
+        obj.history = [
+            {"role": "user", "content": f"msg{i}"}
+            for i in range(MAX_CHAT_HISTORY + 50)
+        ]
+        obj._trim_chat_history()
+        assert len(obj.history) == MAX_CHAT_HISTORY
+        # Oldest messages should be gone
+        assert obj.history[0]["content"] == "msg50"
+        # Newest messages should remain
+        assert obj.history[-1]["content"] == f"msg{MAX_CHAT_HISTORY + 49}"
+
+    def test_trim_chat_history_doesnt_trim_under_cap(self):
+        """_trim_chat_history does nothing when under cap."""
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+        obj = object.__new__(LogicChatMixin)
+        obj.history = [
+            {"role": "user", "content": "msg1"},
+            {"role": "assistant", "content": "reply1"},
+        ]
+        obj._trim_chat_history()
+        assert len(obj.history) == 2
+
     def test_history_recorded_on_send(self):
         """_send_message records input to history."""
         from enigma_engine.gui.gui_logic_chat import LogicChatMixin
@@ -7417,53 +7654,68 @@ class TestInputHistory:
 # RLHF / Self-Play Dropdown (#21)
 # ================================================================
 
-class TestRLHFSelfPlayDropdown:
-    """Verify RLHF and Self-Play appear in the FORGE training mode dropdown."""
+class TestTrainingModes:
+    """Verify the 3-mode training system: Basic, AI-Guided, Image."""
 
-    def test_dropdown_has_rlhf(self):
-        """_build_page_forge dropdown values include RLHF."""
-        from enigma_engine.gui.gui_pages import PagesMixin
+    def test_dropdown_has_basic_mode(self):
+        """_build_page_forge includes Basic training mode."""
+        from enigma_engine.gui.gui_pages_forge import ForgePageMixin
         source = __import__("inspect").getsource(
-            PagesMixin._build_page_forge)
-        assert '"RLHF"' in source
+            ForgePageMixin._build_page_forge)
+        assert '"Basic"' in source
 
-    def test_dropdown_has_self_play(self):
-        """_build_page_forge dropdown values include Self-Play."""
-        from enigma_engine.gui.gui_pages import PagesMixin
+    def test_dropdown_has_ai_guided_mode(self):
+        """_build_page_forge includes AI-Guided training mode."""
+        from enigma_engine.gui.gui_pages_forge import ForgePageMixin
         source = __import__("inspect").getsource(
-            PagesMixin._build_page_forge)
-        assert '"Self-Play"' in source
+            ForgePageMixin._build_page_forge)
+        assert '"AI-Guided"' in source
 
-    def test_rlhf_in_visibility_map(self):
-        """RLHF has section visibility config."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        assert "RLHF" in ForgeMixin._MODE_SECTION_VISIBILITY
+    def test_dropdown_has_image_mode(self):
+        """_build_page_forge includes Image training mode."""
+        from enigma_engine.gui.gui_pages_forge import ForgePageMixin
+        source = __import__("inspect").getsource(
+            ForgePageMixin._build_page_forge)
+        assert '"Image"' in source
 
-    def test_selfplay_in_visibility_map(self):
-        """SelfPlay has section visibility config."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        assert "SelfPlay" in ForgeMixin._MODE_SECTION_VISIBILITY
+    def test_basic_mode_description(self):
+        """Basic mode has descriptive text."""
+        from enigma_engine.gui.gui_pages_forge import ForgePageMixin
+        source = __import__("inspect").getsource(
+            ForgePageMixin._build_page_forge)
+        assert "Train on your own data" in source
 
-    def test_rlhf_in_descriptions(self):
-        """RLHF has a training mode description."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        assert "RLHF" in ForgeMixin._TRAINING_MODE_DESCRIPTIONS
+    def test_ai_guided_mode_description(self):
+        """AI-Guided mode has descriptive text."""
+        from enigma_engine.gui.gui_pages_forge import ForgePageMixin
+        source = __import__("inspect").getsource(
+            ForgePageMixin._build_page_forge)
+        assert "AI teacher creates curriculum" in source
 
-    def test_selfplay_in_descriptions(self):
-        """SelfPlay has a training mode description."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        assert "SelfPlay" in ForgeMixin._TRAINING_MODE_DESCRIPTIONS
+    def test_image_mode_description(self):
+        """Image mode has descriptive text."""
+        from enigma_engine.gui.gui_pages_forge import ForgePageMixin
+        source = __import__("inspect").getsource(
+            ForgePageMixin._build_page_forge)
+        assert "Train on images or video" in source
 
-    def test_dispatcher_handles_rlhf(self):
-        """_start_training_by_mode dispatches RLHF mode."""
+    def test_dispatcher_handles_basic(self):
+        """_start_training_by_mode dispatches Basic mode."""
         from enigma_engine.gui.gui_forge import ForgeMixin
         source = __import__("inspect").getsource(
             ForgeMixin._start_training_by_mode)
-        assert "RLHF" in source
+        assert "Basic" in source
 
-    def test_dispatcher_handles_selfplay(self):
-        """_start_training_by_mode dispatches SelfPlay mode."""
+    def test_dispatcher_handles_ai_guided(self):
+        """_start_training_by_mode dispatches AI-Guided mode."""
         from enigma_engine.gui.gui_forge import ForgeMixin
         source = __import__("inspect").getsource(
             ForgeMixin._start_training_by_mode)
-        assert "SelfPlay" in source
+        assert "AI-Guided" in source
+
+    def test_dispatcher_handles_image(self):
+        """_start_training_by_mode dispatches Image mode."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        source = __import__("inspect").getsource(
+            ForgeMixin._start_training_by_mode)
+        assert "Image" in source

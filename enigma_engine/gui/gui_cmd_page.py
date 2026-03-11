@@ -506,6 +506,25 @@ class CMDPageMixin:
                 kwargs = {}
                 if hasattr(self, "config_overrides"):
                     kwargs.update(self.config_overrides)
+
+                # CMD-page policy: only emit [CMD] blocks when a command is
+                # truly required, and provide valid arguments.
+                cmd_policy = (
+                    "You are in Enigma CMD ask-mode. Default to plain text "
+                    "answers. Use [CMD]...[/CMD] only when command execution "
+                    "is strictly necessary to satisfy the user's request. "
+                    "Do not emit speculative commands. "
+                    "If using code.run, provide Python code only (no markdown "
+                    "fences, no leading 'python'). "
+                    "If a required backend/tool is unavailable, explain it "
+                    "instead of issuing failing commands."
+                )
+                existing_sp = kwargs.get("system_prompt", "")
+                if isinstance(existing_sp, str) and existing_sp.strip():
+                    kwargs["system_prompt"] = existing_sp + "\n\n" + cmd_policy
+                else:
+                    kwargs["system_prompt"] = cmd_policy
+
                 try:
                     resp = self.engine.chat(question, **kwargs)
                 except TypeError:
@@ -801,6 +820,9 @@ class CMDPageMixin:
         Returns any output text to append to the chat response.
         Also stores generated image paths in self._cmd_image_paths
         for inline rendering by the chat display.
+        
+        File operations (file.write, file.append) require user confirmation
+        to prevent unwanted file creation.
         """
         if not commands:
             return ""
@@ -811,6 +833,7 @@ class CMDPageMixin:
 
         results: list[str] = []
         image_paths: list[str] = []
+        file_paths: list[str] = []
         try:
             from enigma_engine.core.commands import get_registry
             registry = get_registry()
@@ -826,6 +849,14 @@ class CMDPageMixin:
             self._cmd_activity("prompt", "AI>> ")
             self._cmd_activity("command", cmd_str + "\n")
 
+            # Check if this is a file operation that needs confirmation
+            if self._should_confirm_file_operation(cmd_str):
+                if not self._ask_file_operation_confirmation(cmd_str):
+                    self._cmd_activity(
+                        "info", 
+                        "[User skipped file operation]\n")
+                    continue
+
             try:
                 result = registry.execute(cmd_str)
                 if result.success:
@@ -837,6 +868,7 @@ class CMDPageMixin:
                             and isinstance(result.data, dict)
                             and "path" in result.data):
                         p = result.data["path"]
+                        file_paths.append(str(p))
                         ext = str(p).lower().rsplit(".", 1)[-1]
                         if ext in (
                             "png", "jpg", "jpeg",
@@ -852,9 +884,47 @@ class CMDPageMixin:
 
         # Store image paths for the caller to render inline
         self._cmd_image_paths = image_paths
+        self._cmd_file_paths = file_paths
 
         self._cmd_activity("divider", "\n")
         return "\n".join(results)
+
+    def _should_confirm_file_operation(self, cmd_str: str) -> bool:
+        """Check if a command is a file operation needing confirmation."""
+        cmd_str = cmd_str.strip().lower()
+        return cmd_str.startswith("file.write") or \
+               cmd_str.startswith("file.append")
+
+    def _ask_file_operation_confirmation(self, cmd_str: str) -> bool:
+        """Show confirmation dialog for file operations.
+        
+        Returns True if user approves, False if user declines.
+        """
+        from tkinter import messagebox
+        
+        # Parse command to extract file path if possible
+        parts = cmd_str.split(None, 2)
+        cmd_name = parts[0] if parts else ""
+        file_path = parts[1] if len(parts) > 1 else "unknown"
+        
+        # Clean up path for display (resolve to absolute)
+        from pathlib import Path
+        try:
+            file_path_abs = str(Path(file_path).resolve())
+        except Exception:
+            file_path_abs = file_path
+        
+        action = "write to" if "write" in cmd_name else "append to"
+        msg = (f"The AI wants to {action} a file:\n\n"
+               f"{file_path_abs}\n\n"
+               f"Allow this operation?")
+        
+        result = messagebox.askyesno(
+            "File Operation Confirmation",
+            msg,
+            icon=messagebox.QUESTION)
+        
+        return result
 
     # ================================================================
     # CMD - Info commands

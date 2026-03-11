@@ -11,9 +11,10 @@ Facts are added two ways:
   2. **AI command** — ``[CMD]memory.remember <fact>[/CMD]`` lets the
      AI voluntarily save things. Works well with capable models.
 
-The memory file is injected into the system prompt so the AI always
-has access to its notes. Capped at a configurable token budget so it
-doesn't eat the context window.
+Memory retrieval is now active at runtime: the AI uses
+``[CMD]memory.search <query>[/CMD]`` when contextually relevant,
+rather than receiving all facts in every system prompt.
+The ``build_context()`` helper still exists for optional/manual use.
 
 The user can also hand-edit ``data/notes/memory.md`` at any time —
 full transparency, no black box.

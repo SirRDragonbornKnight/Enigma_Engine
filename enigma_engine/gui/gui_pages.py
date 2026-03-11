@@ -167,6 +167,17 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
                     lambda e: tb.configure(cursor=""))
         tb.tag_bind("video_link", "<Button-1>",
                     self._on_video_click)
+        # File link tag (cyan, clickable)
+        tb.tag_configure("file_link", foreground=C_CYAN,
+                 font=("Consolas", 13, "bold"),
+                 underline=True,
+                 lmargin1=12, lmargin2=12)
+        tb.tag_bind("file_link", "<Enter>",
+                lambda e: tb.configure(cursor="hand2"))
+        tb.tag_bind("file_link", "<Leave>",
+                lambda e: tb.configure(cursor=""))
+        tb.tag_bind("file_link", "<Button-1>",
+                self._on_file_click)
         # Reasoning / chain-of-thought tag (dim italic)
         tb.tag_configure("reasoning", foreground=C_TEXT_DIM,
                          font=("Consolas", 13, "italic"),
@@ -185,6 +196,9 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
         input_area = ctk.CTkFrame(chat_col, fg_color="transparent")
         input_area.grid(row=1, column=0, sticky="ew", pady=(6, 0))
         input_area.grid_columnconfigure(0, weight=1)
+        # Keep control column width fixed so PROCESSING text
+        # never shifts the chat input width.
+        input_area.grid_columnconfigure(1, minsize=140)
         # Lock indicator row height so it never shifts the chat
         input_area.grid_rowconfigure(0, minsize=24)
 

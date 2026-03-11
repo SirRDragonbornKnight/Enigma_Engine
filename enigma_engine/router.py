@@ -844,6 +844,22 @@ class ModRouter:
         if self.trainer:
             self.trainer.add_example(prompt, response, score, source="chat")
 
+    def set_training_enabled(self, enabled: bool) -> None:
+        """Enable or disable the background trainer at runtime."""
+        if enabled:
+            if self.trainer is not None:
+                return
+            self.trainer = BackgroundTrainer()
+            if self.running:
+                self.trainer.start()
+            return
+
+        trainer = self.trainer
+        if trainer is None:
+            return
+        self.trainer = None
+        trainer.stop()
+
     def set_training_model(self, model, tokenizer, system_prompt: str = "") -> None:
         """Set the model for background training."""
         if self.trainer:

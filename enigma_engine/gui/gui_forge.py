@@ -141,17 +141,24 @@ class ForgeMixin(
     # ================================================================
 
     def _build_training_brief(self) -> str:
-        """Assemble training brief from quick profile fields + custom text.
+        """Assemble training brief from training topic, quick profile fields, + custom text.
 
         Reads the student model name from the route assignment,
-        the quick profile entries, and the custom brief textbox,
-        then combines them into a single string for injection into
-        the trainer system prompt.
+        training topic (for AI-Guided mode), the quick profile entries,
+        and the custom brief textbox, then combines them into a single
+        string for injection into the trainer system prompt.
 
         Returns:
             Combined brief string, or empty string if nothing filled.
         """
         parts = []
+
+        # Include training topic if present (AI-Guided mode)
+        topic_widget = getattr(self, "forge_training_topic", None)
+        if topic_widget is not None:
+            topic = topic_widget.get().strip()
+            if topic:
+                parts.append(f"Training Goal: {topic}")
 
         # Auto-include the student model name from route assignment
         student_path = getattr(self, "route_assignments", {}).get("student", "")
@@ -183,6 +190,16 @@ class ForgeMixin(
         import json
 
         data = {}
+
+        mode_var = getattr(self, "training_mode_var", None)
+        if mode_var is not None:
+            data["_training_mode"] = mode_var.get()
+        
+        # Save training topic (AI-Guided mode)
+        topic_widget = getattr(self, "forge_training_topic", None)
+        if topic_widget is not None:
+            data["_training_topic"] = topic_widget.get().strip()
+        
         quick_fields = getattr(self, "_brief_field_entries", {})
         for label, entry in quick_fields.items():
             value = entry.get().strip() if hasattr(entry, "get") else ""
@@ -217,6 +234,20 @@ class ForgeMixin(
         except (OSError, json.JSONDecodeError):
             return
 
+        mode_var = getattr(self, "training_mode_var", None)
+        saved_mode = data.get("_training_mode", "")
+        if mode_var is not None and saved_mode:
+            mode_var.set(saved_mode)
+            self._on_training_mode_changed(saved_mode)
+
+        # Load training topic (AI-Guided mode)
+        topic_widget = getattr(self, "forge_training_topic", None)
+        if topic_widget is not None:
+            topic_value = data.get("_training_topic", "")
+            if topic_value:
+                topic_widget.delete(0, "end")
+                topic_widget.insert(0, topic_value)
+        
         quick_fields = getattr(self, "_brief_field_entries", {})
         for label, entry in quick_fields.items():
             value = data.get(label, "")
@@ -232,6 +263,13 @@ class ForgeMixin(
                 custom_tb.insert("1.0", custom_val)
             except Exception:
                 pass
+
+    def _on_training_mode_selected(self):
+        """Apply and persist the selected FORGE training mode."""
+        mode_var = getattr(self, "training_mode_var", None)
+        mode = mode_var.get() if mode_var is not None else "Basic"
+        self._on_training_mode_changed(mode)
+        self._save_training_brief()
 
     # ================================================================
     # Shared helpers for FORGE operations
@@ -869,73 +907,45 @@ class ForgeMixin(
     def _on_training_mode_changed(self, mode: str):
         """Update UI sections visibility when training mode changes.
 
-        Shows/hides data source, stage buttons, training brief,
-        and pairs/rounds sections based on the selected mode.
-        Also updates the data source label and pairs/rounds label.
-        When 'Train with AI' is enabled, stages/brief/pairs are
-        always shown regardless of the selected mode.
+        New simplified system with 3 modes:
+        - Basic: Shows data picker + hyperparameters
+        - AI-Guided: Shows topic/goal + stages + brief + pairs
+        - Image: Shows image folder + encoder size + hyperparameters
 
         Args:
-            mode: Display name from dropdown (e.g. 'Image Training').
-                  Translated to internal key (e.g. 'Vision') for lookup.
+            mode: One of "Basic", "AI-Guided", or "Image"
         """
-        # Translate display name → internal key
-        mode = self._MODE_DISPLAY_TO_KEY.get(mode, mode)
-        desc = self._TRAINING_MODE_DESCRIPTIONS.get(mode, "")
-        if hasattr(self, "_training_mode_desc"):
-            self._training_mode_desc.configure(text=desc)
-
-        # Show/hide sections based on mode
-        vis = dict(self._MODE_SECTION_VISIBILITY.get(mode, {}))
-
-        # When Train with AI is ON, overlay teacher sections
-        ai_var = getattr(self, "train_with_ai_var", None)
-        ai_on = ai_var.get() if ai_var else False
-        if ai_on:
-            vis["stages"] = True
-            vis["brief"] = True
-            vis["pairs"] = True
-            vis["data"] = True
-
+        # Section visibility map
         section_map = {
-            "data": getattr(self, "_forge_data_section", None),
+            "basic": getattr(self, "_forge_basic_section", None),
+            "ai": getattr(self, "_forge_ai_section", None),
+            "image": getattr(self, "_forge_image_section", None),
             "stages": getattr(self, "_forge_stages_section", None),
             "brief": getattr(self, "_forge_brief_section", None),
             "pairs": getattr(self, "_forge_pairs_section", None),
-            "vision": getattr(self, "_forge_vision_section", None),
-            "lora": getattr(self, "_forge_lora_section", None),
-            "evo": getattr(self, "_forge_evo_section", None),
         }
+        
+        # Define visibility per mode
+        if mode == "Basic":
+            visible = {"basic"}
+        elif mode == "AI-Guided":
+            visible = {"ai", "stages", "brief", "pairs"}
+        elif mode == "Image":
+            visible = {"image"}
+        else:
+            visible = {"basic"}  # Default
+        
+        # Show/hide sections
         for key, widget in section_map.items():
             if widget is None:
                 continue
-            if vis.get(key, True):
-                # Re-pack only if not already visible
+            if key in visible:
                 if not widget.winfo_manager():
-                    widget.pack(fill="x", padx=0, pady=0)
+                    widget.pack(fill="x", padx=0, pady=(8, 0))
             else:
                 widget.pack_forget()
-
-        # Update data source label text per mode
-        data_label = getattr(self, "_forge_data_label", None)
-        if data_label is not None:
-            if ai_on:
-                label_text = "Training data (optional)"
-            else:
-                label_text = self._MODE_DATA_LABELS.get(
-                    mode, "Data source")
-            data_label.configure(text=label_text)
-
-        # Update pairs/rounds label text
-        if hasattr(self, "_pairs_rounds_label"):
-            if mode == "Dialogue":
-                self._pairs_rounds_label.configure(
-                    text="Conversation rounds")
-            else:
-                self._pairs_rounds_label.configure(
-                    text="Pairs to generate")
-
-        # Update stage button states
+        
+        # Update stage button colors
         if hasattr(self, "_stage_buttons"):
             active = getattr(self, "training_stage_var", None)
             active_stage = active.get() if active else "basics"
@@ -947,55 +957,165 @@ class ForgeMixin(
                     btn.configure(fg_color=C_SURFACE,
                                   text_color=C_TEXT)
 
-    def _on_train_ai_toggled(self):
-        """Show/hide teacher sections when Train with AI is toggled.
-
-        Re-triggers mode visibility with current mode so the
-        stages/brief/pairs overlay is applied or removed.
-        """
-        mode = getattr(self, "training_mode_var", None)
-        if mode:
-            self._on_training_mode_changed(mode.get())
-
     def _start_training_by_mode(self):
         """Dispatch to the correct training method based on mode.
 
-        When 'Train with AI' is enabled, routes to guided training
-        (AI-assisted) which uses the TRAINER model to generate
-        curriculum, train the student, then test what it learned.
-        Dialogue mode always uses both models regardless of toggle.
+        New simplified dispatch:
+        - Basic: Solo training with auto-LoRA if model > 7B
+        - AI-Guided: Check for topic/goal, generate curriculum, train
+        - Image: Vision training with auto-caption detection
         """
         mode = getattr(self, "training_mode_var", None)
-        display_mode = mode.get() if mode else "Self Study"
-        # Translate display name → internal key
-        mode = self._MODE_DISPLAY_TO_KEY.get(display_mode, display_mode)
+        mode_name = mode.get() if mode else "Basic"
 
-        # Check Train with AI toggle
-        ai_var = getattr(self, "train_with_ai_var", None)
-        ai_on = ai_var.get() if ai_var else False
-
-        # Dialogue always uses teacher (inherent to the mode)
-        if mode == "Dialogue":
-            self._start_dialogue_training()
-        elif mode == "Adaptive":
-            self._start_adaptive_training()
-        elif ai_on:
-            # AI-assisted: teacher generates curriculum → trains → tests
-            self._start_guided_training()
-        elif mode == "Solo":
-            self._start_solo_training()
-        elif mode == "DPO":
-            self._start_dpo_training()
-        elif mode == "Vision":
+        # Ensure a new run starts with a fresh chart (no stale prior losses).
+        if hasattr(self, "_clear_loss_chart"):
+            self._clear_loss_chart()
+        
+        if mode_name == "Basic":
+            self._start_basic_training()
+        elif mode_name == "AI-Guided":
+            self._start_ai_guided_training()
+        elif mode_name == "Image":
             self._start_vision_training()
-        elif mode == "LoRA":
-            self._start_lora_training()
-        elif mode == "Evolutionary":
-            self._start_evolutionary_training()
-        elif mode == "RLHF":
-            self._start_rlhf_training()
-        elif mode == "SelfPlay":
-            self._start_selfplay_training()
         else:
+            self._start_basic_training()  # Fallback
+    
+    def _get_model_param_count(self, model_path: str) -> int:
+        """Load a model and count its parameters.
+        
+        Returns the total parameter count, or 0 if load fails.
+        Handles native Forge models (.pth) only.
+        """
+        try:
+            import torch
+            from enigma_engine.core.model import Enigma
+            from enigma_engine.core.model_presets import ForgeConfig
+            from enigma_engine.core.model_registry import (
+                get_state_dict, safe_load_weights)
+            
+            device = ("cuda" if torch.cuda.is_available() else "cpu")
+            checkpoint = safe_load_weights(
+                model_path, map_location=device)
+            
+            # Get config
+            cfg_dict = (checkpoint.get("model_config") or 
+                       checkpoint.get("config", {}))
+            if isinstance(cfg_dict, dict) and "epochs" in cfg_dict:
+                cfg_dict = checkpoint.get("model_config", {})
+            
+            if not cfg_dict:
+                return 0
+            
+            config = ForgeConfig(**cfg_dict)
+            model = Enigma(config=config)
+            state_dict = get_state_dict(checkpoint)
+            model.load_state_dict(state_dict)
+            
+            # Count parameters
+            param_count = sum(p.numel() for p in model.parameters())
+            return param_count
+        except Exception as exc:
+            self._log(f"[!] Could not determine param count: {exc}")
+            return 0
+    
+    def _start_basic_training(self):
+        """Start basic training on user-provided data.
+        
+        Auto-selects LoRA if the student model is > 7B parameters.
+        Otherwise uses full fine-tuning (Solo mode).
+        """
+        # Check for data
+        data_path = self.train_data_var.get()
+        if not data_path or data_path == "(none)" or not Path(data_path).exists():
+            self._log(
+                "[!] No training data selected.\n"
+                "    Select a data file from the dropdown.")
+            return
+        
+        # Check model size to decide LoRA vs full fine-tune
+        student_path = self.route_assignments.get("student")
+        if not student_path or not Path(student_path).exists():
+            self._log(
+                "[!] No model assigned to STUDENT route.\n"
+                "    Go to ROUTER and assign the model to train.")
+            return
+        
+        # Check actual param count and auto-enable LoRA if > 7B
+        param_count = self._get_model_param_count(student_path)
+        
+        if param_count == 0:
+            # Could not determine size, default to solo training
             self._start_solo_training()
+        elif param_count > 7_000_000_000:  # > 7B params
+            self._log(
+                f"[i] Auto-detected {param_count / 1e9:.1f}B model.\n"
+                "    Using LoRA training (more efficient for large models).")
+            self._start_lora_training()
+        else:
+            self._log(
+                f"[i] Auto-detected {param_count / 1e9:.2f}B model.\n"
+                "    Using full fine-tuning.")
+            self._start_solo_training()
+    
+    def _start_ai_guided_training(self):
+        """Start AI-guided training with curriculum generation.
+        
+        Checks for training topic/goal. If empty, prompts user to provide one.
+        If provided, uses adaptive trainer to generate curriculum and train.
+        """
+        # Check for TRAINER and STUDENT models
+        trainer_path = self.route_assignments.get("trainer")
+        student_path = self.route_assignments.get("student")
+        
+        if not trainer_path or not Path(trainer_path).exists():
+            self._log(
+                "[!] No model assigned to TRAINER route.\n"
+                "    AI-Guided mode requires both TRAINER and STUDENT.\n"
+                "    Go to ROUTER and assign models to both routes.")
+            return
+        
+        if not student_path or not Path(student_path).exists():
+            self._log(
+                "[!] No model assigned to STUDENT route.\n"
+                "    Go to ROUTER and assign the model to train.")
+            return
+        
+        # Check for training topic/goal
+        topic_widget = getattr(self, "forge_training_topic", None)
+        topic = topic_widget.get().strip() if topic_widget else ""
+        
+        if not topic:
+            # No topic provided - ask user
+            self._log(
+                "[!] Training topic/goal is required.\n"
+                "    Please enter what you want the AI to learn.\n"
+                "    Examples: 'coding assistant', 'medical Q&A', 'creative writer'\n"
+                "    \n"
+                "    The TRAINER will generate a curriculum based on your topic.\n"
+                "    Without a topic, the AI doesn't know what to teach.")
+            return
+        
+        # Check for supplement data (optional)
+        supplement_var = getattr(self, "ai_supplement_var", None)
+        supplement = supplement_var.get() if supplement_var else "(none)"
+        if supplement == "(none)":
+            supplement = None
+        
+        # Log start
+        self._log("=" * 40)
+        self._log("  AI-Guided Training")
+        self._log("=" * 40)
+        self._log(f"Topic       : {topic}")
+        if supplement:
+            self._log(f"Supplement  : {Path(supplement).name}")
+        self._log(f"Trainer     : {Path(trainer_path).stem}")
+        self._log(f"Student     : {Path(student_path).stem}")
+        self._log("")
+        self._log("Phase 1: Generating curriculum...")
+        self._log("(This may take a few minutes)")
+        self._log("")
+        
+        # Start adaptive training with the topic
+        self._start_adaptive_training()
 

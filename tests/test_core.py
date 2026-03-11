@@ -73,6 +73,39 @@ class TestRouter:
         assert hasattr(ModRouter, "get_prompt")
         assert hasattr(ModRouter, "set_prompt")
 
+    def test_router_training_can_toggle_runtime(self, monkeypatch):
+        """ModRouter can create and remove its trainer after init."""
+        from enigma_engine import router as router_mod
+
+        created = []
+
+        class DummyTrainer:
+            def __init__(self):
+                self.started = False
+                self.stopped = False
+                created.append(self)
+
+            def start(self):
+                self.started = True
+
+            def stop(self):
+                self.stopped = True
+
+        monkeypatch.setattr(router_mod, "BackgroundTrainer", DummyTrainer)
+
+        router = router_mod.ModRouter(enable_training=False)
+        router.running = True
+
+        router.set_training_enabled(True)
+
+        assert router.trainer is created[0]
+        assert created[0].started is True
+
+        router.set_training_enabled(False)
+
+        assert router.trainer is None
+        assert created[0].stopped is True
+
 
 class TestModelRegistry:
     """Test model registry."""
@@ -469,6 +502,39 @@ class TestCodeSandbox:
         source = inspect.getsource(LogicMixin._build_gui_context)
         assert "code.run" in source
 
+    def test_execute_preserves_raw_code_for_code_run(self):
+        """CommandRegistry.execute should pass raw code as one arg for code.run."""
+        from enigma_engine.core.commands import CommandRegistry, CommandResult
+
+        reg = CommandRegistry()
+        captured: list[str] = []
+
+        def capture(args, _ctx):
+            captured.extend(args)
+            return CommandResult(True, "[OK]")
+
+        reg.register("code.run", capture, "capture", "code.run <python_code>")
+        reg.execute("code.run ```python\nprint('a;b|c')\n```")
+
+        assert len(captured) == 1
+        assert "```python" in captured[0]
+        assert "a;b|c" in captured[0]
+
+    def test_code_run_accepts_fenced_multiline_code(self):
+        """code.run should execute fenced multiline Python without syntax mangling."""
+        from enigma_engine.core.commands import get_registry
+
+        reg = get_registry()
+        cmd = (
+            "code.run ```python\n"
+            "print('hello from fenced code')\n"
+            "```"
+        )
+        result = reg.execute(cmd)
+
+        assert result.success
+        assert "hello from fenced code" in result.message
+
 
 class TestDPOTraining:
     """Verify DPO training infrastructure."""
@@ -497,17 +563,19 @@ class TestDPOTraining:
         assert loss.item() >= 0  # DPO loss is non-negative (logsigmoid(0) = -ln2)
 
     def test_forge_has_dpo_mode(self):
-        """FORGE training mode dropdown should include DPO."""
+        """FORGE still has DPO method available."""
         from enigma_engine.gui.gui_forge import ForgeMixin
-        assert "DPO" in ForgeMixin._TRAINING_MODE_DESCRIPTIONS
+        # DPO available but not in main 3-mode UI
+        assert hasattr(ForgeMixin, "_start_dpo_training")
 
-    def test_forge_dispatches_dpo(self):
-        """_start_training_by_mode should handle DPO mode."""
+    def test_forge_dispatches_three_modes(self):
+        """_start_training_by_mode handles simplified 3 modes."""
         import inspect
         from enigma_engine.gui.gui_forge import ForgeMixin
         source = inspect.getsource(ForgeMixin._start_training_by_mode)
-        assert "DPO" in source
-        assert "_start_dpo_training" in source
+        assert "Basic" in source
+        assert "AI-Guided" in source or "AI-guided" in source
+        assert "Image" in source or "Vision" in source
 
 
 class TestImageGenIntegration:
@@ -558,11 +626,13 @@ class TestImageGenIntegration:
         assert "_cmd_image_paths" in source
 
     def test_chat_renders_cmd_images(self):
-        """_show closure should render images from _cmd_image_paths."""
+        """Images from _cmd_image_paths are rendered after typewriter finishes."""
         import inspect
-        from enigma_engine.gui.gui_logic import LogicMixin
-        source = inspect.getsource(LogicMixin._send_message)
-        assert "_cmd_image_paths" in source
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+        # Check that _insert_media is called from _typewriter
+        # (moved there to show images AFTER response finishes typing)
+        source = inspect.getsource(LogicChatMixin._typewriter)
+        assert "_cmd_image_paths" in source or "_insert_media" in source
         assert "_insert_media" in source
 
 
@@ -5988,12 +6058,14 @@ class TestForgeNewModes:
             assert mode in labels, f"Missing label for {mode}"
 
     def test_dispatch_has_new_modes(self):
-        """_start_training_by_mode handles new modes."""
+        """_start_training_by_mode handles 3 simplified modes."""
         import inspect
         from enigma_engine.gui.gui_forge import ForgeMixin
         source = inspect.getsource(ForgeMixin._start_training_by_mode)
-        assert "_start_rlhf_training" in source
-        assert "_start_selfplay_training" in source
+        # New simplified dispatch: Basic, AI-Guided, Image
+        assert "Basic" in source or "_start_basic_training" in source
+        assert "AI-Guided" in source or "_start_ai_guided_training" in source
+        assert "Image" in source or "_start_vision_training" in source
 
     def test_new_modes_mixin_exists(self):
         """ForgeNewModesMixin is in the inheritance chain."""
@@ -6919,3 +6991,61 @@ class TestRunPyPortFromConfig:
         source = run_path.read_text(encoding="utf-8")
         assert "CONFIG" in source
         assert "api_port" in source
+
+def test_memory_search_finds_matches():
+    '''Test that memory.search finds matching facts.'''
+    from enigma_engine.core.builtin_commands import register_builtin_commands
+    from enigma_engine.core.commands import CommandRegistry
+    registry = CommandRegistry()
+    register_builtin_commands(registry)
+    
+    # Add multiple facts
+    facts = [
+        "User's name is Alice",
+        "User prefers Python",
+        "User works at NASA",
+        "User likes coffee"
+    ]
+    for fact in facts:
+        registry.execute(f"memory.remember {fact}")
+    
+    # Search for "Python"
+    result = registry.execute("memory.search Python")
+    assert result.success
+    assert "Python" in result.message
+    assert "prefers Python" in result.message
+    
+    # Search for "name"
+    result = registry.execute("memory.search name")
+    assert result.success
+    assert "Alice" in result.message
+
+
+def test_memory_search_no_matches():
+    '''Test memory.search when no facts match.'''
+    from enigma_engine.core.builtin_commands import register_builtin_commands
+    from enigma_engine.core.commands import CommandRegistry
+    registry = CommandRegistry()
+    register_builtin_commands(registry)
+    
+    registry.execute("memory.remember User's name is Bob")
+    
+    # Search for something that doesn't exist
+    result = registry.execute("memory.search JavaScript")
+    assert result.success
+    assert "No memories found" in result.message
+
+
+def test_memory_search_case_insensitive():
+    '''Test memory.search is case-insensitive.'''
+    from enigma_engine.core.builtin_commands import register_builtin_commands
+    from enigma_engine.core.commands import CommandRegistry
+    registry = CommandRegistry()
+    register_builtin_commands(registry)
+    
+    registry.execute("memory.remember User prefers PYTHON language")
+    
+    # Search with different case
+    result = registry.execute("memory.search python")
+    assert result.success
+    assert "PYTHON" in result.message

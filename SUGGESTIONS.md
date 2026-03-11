@@ -1,147 +1,204 @@
-﻿# Deep Code Review — Brutal Honesty Edition (2026-03-08)
+# Suggestions (Active Only)
 
-**Status:** All checks pass (`1561 passed, 3 skipped`, Ruff clean). Voice/AudioGen merge complete. Shutdown logging fixed. Window resize lag fixed. Undo/redo enabled on all text inputs. Avatar mod restored. CPU usage optimized.
+**Date:** March 10, 2026
+**Status:** FORGE supplement/stage/perplexity wiring complete, plus tool-path 3-mode wiring cleanup. Next: remove remaining legacy FORGE drift, then add tool metrics + discovery MVP.
 
-**Recent Completions:**
-- ✅ Voice and AudioGen mods merged into single unified service with multi-provider TTS
-- ✅ Mod info card updated to support and render `rules` field for constraint documentation
-- ✅ Shutdown exception logging implemented across all exception handlers in desktop.py
-- ✅ Plugin loader comment mismatch corrected
-- ✅ Window resize lag fixed with Configure event debouncing (150ms timer)
-- ✅ Chat input undo/redo enabled (Ctrl+Z/Ctrl+Y) via `_textbox.configure(undo=True)`
-- ✅ Avatar mod.json created — mod now visible in GUI
-- ✅ Undo/redo enabled on ALL text inputs: chat, prompt editor, training brief, mod text areas
-- ✅ CMD status strip CPU usage fixed — only updates when CMD page is visible (was polling torch.cuda APIs every 5s even when hidden)
-- ✅ Mod page output logs now have CLEAR buttons (consistent with CMD page)
-- ✅ Dialogue training improved — trainer now required to provide corrections for low scores (fixes "No corrections generated" error)
+## Current Reality
+- FORGE user contract is 3 modes: `Basic`, `AI-Guided`, `Image`.
+- Backend still contains advanced methods, but they are not part of the main FORGE UI contract.
+- CORE processing indicator no longer shifts layout.
+- The CONFIG gaming preset now activates a real low-overhead runtime profile: chat-learning off, router trainer off, slower UI/status timers, exact param counting skipped, and minimize unload enabled.
+- Chat RAM history is capped and trimmed; full sessions still save to disk.
+- AI-Guided supplement selection is now wired to `ai_supplement_var` (was incorrectly reading Basic trainer's data picker).
+- Stage selection now controls pipeline start stage ("start here, then continue forward").
+- Perplexity before/after is now persisted to `training_history.json` and model context; displayed in history log.
+- Generate Data / Web Learn auto-train now routes output to the active mode selector (AI-Guided supplement vs Basic data).
+- Adaptive start path no longer has the undefined `focus_field` runtime risk.
 
-**Known Non-Issues:**
-- ⚠️ Pylance warnings in `multi_gpu.py` about "possibly unbound" torch/nn — false positives from type checker not understanding early-return control flow. Code is correct, all tests pass.
+## What Still Needs Fixing
+1. Remove remaining legacy FORGE constants and compatibility baggage in `gui_forge.py` so the code shape matches the real 3-mode UI contract.
+2. Add tool success-rate tracking to evaluation/history so command-learning quality is measurable alongside perplexity.
+3. Tighten FORGE copy and reference docs so they describe the current runtime behavior exactly, especially AI-Guided auto-chaining.
+4. Decide whether backend-only training modes should stay as hidden implementation detail or move to a separate advanced workflow instead of lingering in the main FORGE code path.
 
-**Reality Check:** Most "issues" found were theoretical edge cases or intentional design choices.
+## Confirmed Fixes (In Use)
+- Replaced legacy multi-mode FORGE UI with 3 clear modes.
+- Added auto-LoRA routing for larger models (> 7B params).
+- Added before/after evaluation logging (perplexity improvement).
+- Fixed duplicate FORGE section rendering bugs.
+- Gaming preset now disables live background learning/trainer overhead instead of only changing next-launch defaults.
+- Fixed CORE processing label movement at two levels:
+  - Grid control column fixed width (`minsize=140`).
+  - Fixed-size `SelectableLabel` no longer resizes on text updates.
+- Added active memory retrieval command: `memory.search <query>`.
+- **AI-Guided supplement picker now reads from `ai_supplement_var` not Basic data picker.**
+- **Stage selection now slices `ALL_STAGES` from selected stage onward.**
+- **Perplexity (before/after) persisted to training history and model context.**
+
+## Memory Strategy (Chosen)
+- **Now:** Option A (current hybrid)
+  - RAM: capped recent chat history
+  - Disk: full session archive
+  - Facts: explicit `remember/search`
+- **Next:** Option D
+  - Add summarized long-term session memory + recent raw turns.
+- **Later (optional):** Option E
+  - User-selectable memory behavior modes.
+
+## Next Priority
+1. Remove remaining legacy FORGE drift in `gui_forge.py` so the code matches the visible 3-mode contract instead of carrying old 9-mode config baggage.
+2. Persist tool success-rate metrics in training/evaluation history so command-learning progress can be measured, not guessed.
+3. Build Discovery mode MVP for autonomous mod exploration only after the FORGE contract is fully clean.
+
+## What I Would Do Next
+1. Prune or isolate old FORGE-only legacy constants and dead compatibility paths that are no longer part of the visible `Basic` / `AI-Guided` / `Image` workflow.
+2. Add a real tool-usage evaluation pass that records success-rate alongside perplexity in history and model context.
+3. Tighten the FORGE page copy so every visible label describes exactly what happens at runtime, especially around AI-Guided auto-chaining.
+4. Leave backend-only modes (`DPO`, `RLHF`, `SelfPlay`, `Evolutionary`) implemented but clearly out of the main FORGE contract unless they get their own intentional UI again.
 
 ---
 
-## The One Thing That Actually Matters
+## Training Strategy — Teaching a Native Model to Use the GUI
 
-### ✅ Silent Exception Swallowing During Shutdown — FIXED
-**File:** `enigma_engine/gui/desktop.py` (lines 232-261)
+**The real problem:** A native (custom) model trained on plain Q&A has no idea what
+`[CMD]file.write[/CMD]` means, when to use it, or when NOT to use it. It can
+accidentally output `[CMD]stop[/CMD]` just because the word "stop" appeared in
+conversation. That needs to be fixed by training, not just by runtime guards.
 
-**Status:** All `except Exception` blocks in shutdown code now log via `logger.debug()`:
+**The good news:** The infrastructure to do this already exists. You do not need a new school system.
+The 4 FORGE stages (BASICS → CONVERSATION → COMMANDS → WEB) are exactly the school regimen.
+The issue is the training *data* and *format*, not the training *machine*.
 
-```python
-except Exception as exc:
-    logger.debug("Process termination failed: %s", exc)
+---
 
-except Exception as exc:
-    logger.debug("Router stop failed: %s", exc)
+### What to do and why it will work
 
-except Exception as exc:
-    logger.debug("Voice shutdown failed: %s", exc)
+#### 1. Use the 4-stage curriculum as the actual regimen (works now, no code changes)
+
+The stages are already ordered from simplest to hardest:
+- **BASICS** — normal language, greetings, short answers. No commands yet.
+- **CONVERSATION** — multi-turn natural dialogue. Still no commands.
+- **COMMANDS** — teaches `[CMD]command[/CMD]` syntax with the right situations.
+- **WEB** — adds search.web + web.fetch on top of everything learned.
+
+Do NOT skip to COMMANDS first. The model needs BASICS + CONVERSATION behind it
+or it will learn command syntax without knowing how to hold a conversation around it.
+Each stage can be repeated with a different "Focus" topic as many times as needed.
+Training has no hard cap — you run FORGE as many times as needed.
+
+**Reality note (March 10, 2026):** Stage buttons now control the adaptive start stage
+("start here, then continue forward"). The pipeline still intentionally auto-chains
+remaining stages after the selected start point.
+
+**How to use today:**
+1. Load the native model as STUDENT, HF model (e.g. Qwen3-30b) as TRAINER.
+2. Run AI-Guided mode with a clear topic/goal and review the generated data in DOCS.
+3. Do not assume the selected stage button limits the run yet — verify what curriculum was actually generated.
+4. For command behavior, use generated COMMANDS-style data and DPO files explicitly.
+5. Use GENERATE DATA to let the HF trainer read the commands reference and produce examples.
+
+#### 2. Use DPO mode to fix accidental command firing (works now)
+
+DPO (Direct Preference Optimization) is already in FORGE (Preference Tuning mode).
+It directly teaches: "prefer this output over that one."
+
+Create a `.jsonl` file where:
+- `prompt` = a user message where the model might accidentally fire a command
+- `chosen` = the correct plain-text response
+- `rejected` = the bad response that contained an accidental `[CMD]` block
+
+Example entries:
+```json
+{"prompt": "Can you stop for a second?", "chosen": "Of course, I'll pause.", "rejected": "[CMD]stop[/CMD] Pausing now."}
+{"prompt": "The answer is 7.", "chosen": "Yes, that's correct.", "rejected": "[CMD]7[/CMD]"}
+{"prompt": "Write that down.", "chosen": "What would you like me to write?", "rejected": "[CMD]file.write note.txt Write that down.[/CMD]"}
 ```
 
-**Impact:** ✅ Shutdown issues are now observable and debuggable.
+50–200 of these entries will meaningfully reduce accidental command output.
+This file can be generated by the HF trainer using GENERATE DATA with Focus =
+"Examples of when NOT to use commands, with bad and good responses."
+Then run DPO training on that file.
+
+**This is the realistic fix for the random-command problem. Training alone tells it when to stop.**
+
+#### 3. Auto-generate command training data from the docs (works now)
+
+The HF trainer already generates data when you use AI-Guided mode + GENERATE DATA.
+To make it generate *command-aware* examples, set the Focus field to something like:
+
+> "The AI knows these commands: [list the 5-6 most important ones]. Generate training
+> examples showing correct use of these commands when the user asks for them, and
+> examples showing the AI NOT using commands when not asked."
+
+The `information/commands_reference.md` file documents all 47 commands.
+You can have the AI read it with `[CMD]file.read information/commands_reference.md[/CMD]`
+in a chat session, then ask it to generate training pairs. Save those to a `.jsonl` file
+and use it in FORGE. This needs no code changes, just an intentional workflow.
+
+**Current limitation:** The dedicated old focus-field widget is intentionally removed.
+Use Training Topic + Training Brief fields for domain and style control.
+
+#### 4. Two-tier context: HF Trainer gets mechanics, Student gets persona (needs ~1 day of code)
+
+**The problem:** When a native model is running as STUDENT, it still gets the full system
+prompt including internal evaluation logic meant for the TRAINER. That's unnecessary noise.
+
+**The solution:** When FORGE detects that the STUDENT is a native model (lives in `models/`
+not in `data/model_contexts/`) and the TRAINER is an HF model (lives in `data/model_contexts/`),
+load different system prompts:
+- TRAINER: current full mechanics prompt (it needs to understand evaluation, scoring, etc.)
+- STUDENT: a lean persona prompt only ("You are a helpful assistant..." — no internal mechanics)
+
+**Implementation approach:**
+- Check the model path at FORGE start: `if "model_contexts" in trainer_path` → full prompt
+- Add a `profiles/student_default.json` with a minimal persona prompt
+- Load it automatically when STUDENT is a native model
+
+**This is not urgent.** The real learning quality comes from good training data (points 1–3 above).
+The two-tier context is a polish step once training is regularly producing results.
 
 ---
 
-## Things That Look Bad But Aren't
+### What is NOT realistic to expect
 
-### Plugin Trust Default — Intentional Design
-**File:** `enigma_engine/core/plugin_loader.py`
-
-**Claim:** Empty `trusted_plugins` list allows all plugins — security risk!
-
-**Reality:** This is explicitly tested (`test_trusted_plugins_empty_allows_all`) and documented as "legacy / convenience behavior." You're building a local desktop AI tool, not a web service. Users who drop random Python files into `plugins/` already have local code execution. The threat model is weak.
-
-**Verdict:** Not a bug. If you want to be pedantic, add a warning on first launch. Otherwise, ignore.
-
----
-
-### Plugin AST Scanner Alias Bypass — Security Theater
-**File:** `enigma_engine/core/plugin_loader.py`
-
-**Claim:** Scanner can be bypassed with `from os import system as evil; evil("...")`
-
-**Reality:** Yes, this is a real gap. But let's be honest about the threat model:
-- This is a **local desktop application**
-- Plugin directory is in the user's workspace
-- Anyone with write access to `plugins/` already has full system access
-- The "attacker" would be... the user attacking themselves?
-
-The 3-layer plugin security is already more paranoid than necessary for this use case. The AST scanner catches common patterns. Adding alias resolution makes it more thorough, but doesn't materially improve security in the actual threat model.
-
-**Verdict:** Real gap, but low practical impact. Fix if you have 30 minutes and want perfect coverage. Skip if you're being pragmatic.
+- **A native model will not "become human."** Fine-tuning shapes behavior but the model's
+  core capability is fixed by its architecture and pretraining. A small native model fine-tuned
+  on great data will be *consistent and useful*, not indistinguishable from a person.
+- **One training run is not enough.** Budget for 3–5 cycles of generate → review → train → evaluate.
+  Each cycle improves it. FORGE's before/after perplexity logging will show if it's improving.
+- **Training cannot fully prevent all command accidents.** DPO reduces them,
+  but the confirmation dialog (`file.write`, `file.append`) is the real safety net.
+  Keep both.
 
 ---
 
-### ✅ Comment/Code Mismatch — FIXED
-**File:** `enigma_engine/core/plugin_loader.py` (line ~119)
+### Recommended Order of Work
 
-**Status:** Comment updated from "Import of subprocess" to "Import of subprocess or os" to accurately reflect the flagged dangerous attributes set.
+1. **(Now, no code)** — Run BASICS → CONVERSATION in AI-Guided mode. Get the native model
+   conversational first.
+2. **(Now, ~1 hour)** — Create a 50-entry DPO file for command accidents using the HF
+   trainer. Run Preference Tuning.
+3. **(Now, ~2 hours)** — Run COMMANDS stage with focus on the 10 most important commands
+   (file, search, memory, model). Review/approve data in DOCS. Train.
+4. **(Later, ~1 day)** — Build two-tier context loading so the STUDENT gets a clean persona
+   prompt instead of the full TRAINER context.
+5. **(Later, ~2 days)** — Add a "Command Policy Generator" button to FORGE that auto-reads
+   `commands_reference.md` and generates DPO pairs for all registered commands in bulk.
 
-**Impact:** ✅ Code and comments now aligned. No behavior change, just accuracy.
+### Recommended Order of Fixes
 
----
+1. **(Now, code)** — Remove remaining legacy FORGE drift from `gui_forge.py` and related references so there is one truthful contract.
+2. **(Now, code/docs)** — Persist tool success-rate metrics in training/evaluation history.
+3. **(Now, docs)** — Keep docs aligned with the 3-mode FORGE contract and remove stale legacy references.
+4. **(Soon, code)** — Build Discovery mode MVP for autonomous mod exploration.
+5. **(After Discovery MVP)** — Evaluate whether adaptive progression needs true score-gating vs explicit observational wording.
 
-### Router Thread Exhaustion — Localhost Only
-**File:** `enigma_engine/router.py`
+## Implementation Guardrails
+- Verify current code/tests before each behavior change.
+- Keep docs aligned with actual code behavior.
+- Pass lint + tests for every merge.
 
-**Claim:** Burst of connections could spawn many threads before registration timeout.
-
-**Reality:** 
-- Router binds to `127.0.0.1` by default (localhost only)
-- Max 50 connections default
-- Attacker needs network access + the port number
-- This is a mod communication channel, not a public API
-
-**Verdict:** Document as known limitation. Implement gating if you ever expose this to untrusted networks. Current use case doesn't warrant the complexity.
-
----
-
-### CWD Marker Spoofing — Won't Happen
-**File:** `enigma_engine/gui/gui_cmd_page.py`
-
-**Claim:** Command output could spoof `---ENIGMA_CWD_MARKER---` and confuse cwd parsing.
-
-**Reality:** User would have to intentionally craft command output containing that exact string. Even if they did, the worst-case impact is... the terminal shows the wrong working directory prompt until the next command fixes it.
-
-**Verdict:** Skip. Edge case with no meaningful impact.
-
----
-
-### Restart Loop Guard — Pure Speculation
-**File:** `enigma_engine/gui/desktop.py`
-
-**Claim:** Restart logic could cause infinite loop.
-
-**Reality:** No code path currently triggers this. Pure defensive programming against a problem that doesn't exist.
-
-**Verdict:** Skip. Don't solve problems you don't have.
-
----
-
-## What You Should Actually Do
-
-**Completed:**
-1. ✅ Fixed shutdown exception logging (high value)
-2. ✅ Fixed the comment mismatch in plugin_loader.py
-3. ✅ Merged voice and audiogen mods with multi-provider TTS support
-4. ✅ Implemented rules field rendering in mod info card
-
-**Never:**
-- Everything else unless the threat model changes
-
----
-
-## Test Coverage Reality
-
-- Plugin security: 12 tests, good coverage for the use case
-- Router: Basic tests, no stress tests (don't need them for localhost)
-- GUI shutdown: Not tested (expected for UI code)
-- **Real gap:** No alias import tests, but see threat model notes above
-
----
-
-## Bottom Line
-
-Your code is solid. The deep scan found mostly theoretical issues that don't matter for your actual use case. Focus on observability (shutdown logging) and keep building features.
+## Notes
+- Removed stale planning sections and speculative alternatives that are not currently used.
+- This file is now intentionally short and only tracks active decisions and near-term execution.
+- Docs synced on March 10, 2026: `SUGGESTIONS.md`, `AA code maker.md`, and `GUI_REFERENCE.md` now reflect the same processing-indicator root fix and memory direction.

@@ -276,6 +276,9 @@ class LogicChatMixin:
                 self.history.append(
                     {"role": "assistant", "content": clean_text})
 
+                # Trim history to prevent unbounded RAM growth
+                self._trim_chat_history()
+
                 # Track message stats in identity card
                 ctx = getattr(self, "model_context", None)
                 if ctx is not None:
@@ -306,10 +309,14 @@ class LogicChatMixin:
                 cmd_images = list(
                     getattr(self, "_cmd_image_paths", []))
                 self._cmd_image_paths = []
+                cmd_files = list(
+                    getattr(self, "_cmd_file_paths", []))
+                self._cmd_file_paths = []
                 ts = time.strftime("%H:%M")
                 def _show(r=clean_text, t=ts, co=cmd_output,
                           think=thinking_text,
-                          imgs=cmd_images):
+                          imgs=cmd_images,
+                          files=cmd_files):
                     self._hide_thinking()
                     ai = self._active_ai_name()
                     self._chat_append(
@@ -322,21 +329,16 @@ class LogicChatMixin:
                             "\n  \U0001f9e0 Reasoning:\n",
                             "reasoning",
                             think + "\n")
+                    # Store deferred output to show after typewriter finishes
+                    self._deferred_cmd_output = co
+                    self._deferred_cmd_images = imgs
+                    self._deferred_cmd_files = files
+                    self._deferred_ai_name = ai
                     self._typewriter("assistant", r + "\n")
                     # Speak only the answer (not the reasoning)
                     self._tts_speak(r)
-                    # Show command results inline as SYSTEM
-                    if co:
-                        self._chat_system(co)
-                    # Render generated images inline in chat
-                    for img_path in imgs:
-                        self._insert_media(img_path, "file")
-                    self._cmd_activity(
-                        "info",
-                        f"[{ai}] Response delivered "
-                        f"({len(r)} chars)\n")
-                    self._cmd_activity("divider", "\n")
-                    self._update_token_counter()
+                    # Command output and images are now deferred until
+                    # after typewriter finishes
                 self.after(0, _show)
             except Exception as exc:
                 def _err(e=str(exc)):
@@ -464,6 +466,7 @@ class LogicChatMixin:
         self._chat_gif_animations = []
         self._chat_images = []
         self._chat_media_refs = {}
+        self._chat_file_refs = {}
         self._link_urls = {}
         self.chat_display.clear()
         self._auto_resize_chat()
@@ -490,6 +493,23 @@ class LogicChatMixin:
             self.chat_display._textbox.see("end")
         except Exception:
             pass
+
+    def _trim_chat_history(self):
+        """Drop oldest messages when history exceeds the cap.
+
+        Prevents unbounded RAM growth during long conversations.
+        Full history is still saved to disk in session files.
+        Only the in-memory list is capped.
+        """
+        from enigma_engine.gui.media import MAX_CHAT_HISTORY
+        if len(self.history) > MAX_CHAT_HISTORY:
+            # Drop oldest messages, keeping the most recent
+            trim_count = len(self.history) - MAX_CHAT_HISTORY
+            del self.history[:trim_count]
+            logger.info(
+                f"Trimmed {trim_count} old messages from RAM "
+                f"(kept {MAX_CHAT_HISTORY} most recent)"
+            )
 
     def _trim_chat_images(self):
         """Drop oldest PhotoImage refs when the list exceeds the cap.
@@ -649,13 +669,20 @@ class LogicChatMixin:
         if not self._thinking_active:
             return
         self._think_n += 1
-        dots = "." * (self._think_n % 4)
+        # Fixed-width animation: always 3 chars (dots + spaces)
+        n = self._think_n % 4
+        if n == 0:
+            dots = "   "  # All spaces
+        else:
+            dots = "." * n + " " * (3 - n)  # Dots + trailing spaces
         try:
             self.thinking_label.configure(
                 text=f"  PROCESSING{dots}")
         except Exception:
             return
-        self.after(350, self._do_think)
+        self.after(
+            getattr(self, "_thinking_tick_ms", 350),
+            self._do_think)
 
     def _hide_thinking(self):
         self._thinking_active = False
@@ -688,6 +715,33 @@ class LogicChatMixin:
             self._process_media_in_text(text, tag)
             self._auto_resize_chat()
             self._scroll_chat_to_bottom()
+            
+            # Now show deferred command output and images
+            # (so they appear AFTER the AI response, not during typing)
+            co = getattr(self, "_deferred_cmd_output", "")
+            imgs = getattr(self, "_deferred_cmd_images", [])
+            files = getattr(self, "_deferred_cmd_files", [])
+            ai = getattr(self, "_deferred_ai_name", "ENIGMA")
+            
+            if co:
+                self._chat_system(co)
+            for img_path in imgs:
+                self._insert_media(img_path, "file")
+            for file_path in files:
+                self._insert_file_link(file_path)
+            
+            self._cmd_activity(
+                "info",
+                f"[{ai}] Response delivered "
+                f"({len(text)} chars)\n")
+            self._cmd_activity("divider", "\n")
+            self._update_token_counter()
+            
+            # Clear deferred output for next response
+            self._deferred_cmd_output = ""
+            self._deferred_cmd_images = []
+            self._deferred_cmd_files = []
+            self._deferred_ai_name = ""
             return
         end = min(idx + 3, len(text))
         self.chat_display._textbox.insert(
@@ -699,7 +753,9 @@ class LogicChatMixin:
             self._auto_resize_chat()
         # Always scroll to bottom for smooth, constant scrolling
         self._scroll_chat_to_bottom()
-        self.after(8, lambda: self._typewriter(tag, text, end))
+        self.after(
+            getattr(self, "_typewriter_tick_ms", 8),
+            lambda: self._typewriter(tag, text, end))
     # ================================================================
     # Logic - File attachment
     # ================================================================
@@ -1067,12 +1123,15 @@ class LogicChatMixin:
         prompt/response pair as a training example.
         """
         try:
-            settings_path = DATA_DIR / "gui_settings.json"
-            if not settings_path.exists():
-                return
-            settings = json.loads(
-                settings_path.read_text(encoding="utf-8"))
-            if not settings.get("learn_while_chatting", False):
+            enabled = getattr(self, "_chat_learning_enabled", None)
+            if enabled is None:
+                settings_path = DATA_DIR / "gui_settings.json"
+                if not settings_path.exists():
+                    return
+                settings = json.loads(
+                    settings_path.read_text(encoding="utf-8"))
+                enabled = settings.get("learn_while_chatting", False)
+            if not enabled:
                 return
             router = getattr(self, "_router", None)
             if router is None:

@@ -383,7 +383,7 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
         if len(args) < 2:
             return CommandResult(False, "[ERROR] Usage: file.write <path> <content>")
 
-        path = Path(args[0])
+        path = Path(args[0]).resolve()  # Resolve to absolute path
         # Join remaining args as content (handles spaces)
         content = " ".join(args[1:])
 
@@ -391,7 +391,9 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
             # Create parent directories if needed
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8")
-            return CommandResult(True, f"[OK] Wrote {len(content)} chars to {path.name}")
+            msg = f"[OK] Wrote {len(content)} chars to {path}"
+            # Include path in data so GUI can provide file access options
+            return CommandResult(True, msg, data={"path": str(path), "exists": True})
         except Exception as e:
             return CommandResult(False, f"[ERROR] Failed to write: {e}")
 
@@ -402,7 +404,7 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
         if len(args) < 2:
             return CommandResult(False, "[ERROR] Usage: file.append <path> <content>")
 
-        path = Path(args[0])
+        path = Path(args[0]).resolve()  # Resolve to absolute path
         # Join remaining args as content (handles spaces)
         content = " ".join(args[1:])
 
@@ -419,7 +421,9 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
             with open(path, "a", encoding="utf-8") as f:
                 f.write(content)
 
-            return CommandResult(True, f"[OK] Appended {len(content)} chars to {path.name}")
+            msg = f"[OK] Appended {len(content)} chars to {path}"
+            # Include path in data so GUI can provide file access options
+            return CommandResult(True, msg, data={"path": str(path), "exists": True})
         except Exception as e:
             return CommandResult(False, f"[ERROR] Failed to append: {e}")
 
@@ -584,6 +588,36 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
         mem.clear()
         return CommandResult(True, "[OK] All persistent memories cleared.")
 
+    def memory_search(args: list[str], ctx: Dict) -> CommandResult:
+        """Search for specific facts in persistent memory.
+
+        This makes memory retrieval active instead of passive.
+        The AI can search its memory when something is relevant,
+        instead of seeing all facts upfront.
+        """
+        if not args:
+            return CommandResult(
+                False,
+                "[ERROR] Usage: memory.search <query>")
+        from .memory import get_memory
+        query = " ".join(args).lower()
+        mem = get_memory()
+        if not mem.facts:
+            return CommandResult(
+                True, "[OK] No memories to search.")
+        
+        # Find facts containing the query (case-insensitive substring match)
+        matches = [f for f in mem.facts if query in f.lower()]
+        
+        if not matches:
+            return CommandResult(
+                True, f"[OK] No memories found matching '{query}'.")
+        
+        lines = [f"[OK] Found {len(matches)} matching memor{'y' if len(matches) == 1 else 'ies'}:"]
+        for i, fact in enumerate(matches):
+            lines.append(f"  {i + 1}. {fact}")
+        return CommandResult(True, "\n".join(lines), matches)
+
     registry.register(
         "memory.remember", memory_remember,
         "Remember a fact about the user",
@@ -600,6 +634,10 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
         "memory.clear_notes", memory_clear_notes,
         "Clear all persistent memories",
         "memory.clear_notes")
+    registry.register(
+        "memory.search", memory_search,
+        "Search for specific facts in memory",
+        "memory.search <query>")
 
     # ========== Training Commands ==========
 

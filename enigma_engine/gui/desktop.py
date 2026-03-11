@@ -106,6 +106,12 @@ class EnigmaGUI(
         self._pinned = False
         self._is_generating = False
         self._stop_requested = False
+        # Deferred output: show command results AFTER response finishes typing
+        self._deferred_cmd_output = ""
+        self._deferred_cmd_images: list = []
+        self._deferred_cmd_files: list = []
+        self._deferred_ai_name = ""
+        self._chat_file_refs: dict[str, str] = {}
         self._chat_images: list = []
         self._chat_gif_animations: list = []
         self._tts_engine_ref = None
@@ -151,6 +157,9 @@ class EnigmaGUI(
             "auto_start_mods", True)
         self._auto_unload_on_minimize = self._read_gui_bool_setting(
             "auto_unload_on_minimize", False)
+        self._chat_learning_enabled = self._read_gui_bool_setting(
+            "learn_while_chatting", False)
+        self._refresh_performance_mode()
 
         # Build UI
         self._pages: dict[str, ctk.CTkFrame] = {}
@@ -177,7 +186,8 @@ class EnigmaGUI(
         self._router = None
         try:
             from enigma_engine.router import ModRouter
-            self._router = ModRouter()
+            self._router = ModRouter(
+                enable_training=self._chat_learning_enabled)
             self._router.start()
         except Exception as e:
             import logging
@@ -234,6 +244,32 @@ class EnigmaGUI(
         except Exception as exc:
             logger.debug("Could not read setting %s: %s", key, exc)
         return default
+
+    def _refresh_performance_mode(self):
+        """Derive live UI throttles from the low-memory gaming preset."""
+        self._gaming_mode_active = (
+            not self._auto_load_chat_model
+            and not self._auto_start_mods
+            and self._auto_unload_on_minimize
+            and not self._chat_learning_enabled)
+        if self._gaming_mode_active:
+            self._status_tick_ms = 5000
+            self._thinking_tick_ms = 700
+            self._typewriter_tick_ms = 16
+        else:
+            self._status_tick_ms = 1000
+            self._thinking_tick_ms = 350
+            self._typewriter_tick_ms = 8
+
+    def _sync_router_training_state(self):
+        """Keep router background training aligned with the current setting."""
+        router = getattr(self, "_router", None)
+        if router is None:
+            return
+        try:
+            router.set_training_enabled(self._chat_learning_enabled)
+        except Exception as exc:
+            logger.debug("Could not sync router training state: %s", exc)
 
     # ================================================================
     # Window lifecycle
@@ -887,6 +923,8 @@ class EnigmaGUI(
         Deferred from scan_models() to avoid loading multi-GB
         models synchronously during boot.
         """
+        if getattr(self, "_gaming_mode_active", False):
+            return
         from enigma_engine.gui.scanners import _count_params_native
         native = [m for m in self.models_data
                   if m["format"] in ("pth", "pt") and not m["params"]]
@@ -925,6 +963,7 @@ class EnigmaGUI(
             platform.processor()
             or platform.machine()
             or "CPU")
+        tick_ms = getattr(self, "_status_tick_ms", 1000)
 
         def _detect_hw():
             cpu_name = self._hw_device_label
@@ -946,7 +985,8 @@ class EnigmaGUI(
                 pass
             self._hw_device_label = device
 
-        threading.Thread(target=_detect_hw, daemon=True).start()
+        if not getattr(self, "_gaming_mode_active", False):
+            threading.Thread(target=_detect_hw, daemon=True).start()
 
         def _tick():
             elapsed = int(time.time() - self._boot_time)
@@ -956,7 +996,7 @@ class EnigmaGUI(
             self.status_bar.set_right(
                 f"UPTIME {h:02d}:{m:02d}:{s:02d}")
             self.status_bar.set_center(self._hw_device_label)
-            self.after(1000, _tick)
+            self.after(tick_ms, _tick)
         self.after(100, _tick)
 
 

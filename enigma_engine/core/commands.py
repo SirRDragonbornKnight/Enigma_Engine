@@ -101,12 +101,19 @@ class CommandRegistry:
         Returns:
             CommandResult with success/failure and message
         """
-        parts = command_str.strip().split()
-        if not parts:
+        command_str = command_str.strip()
+        if not command_str:
             return CommandResult(False, "[ERROR] Empty command")
 
-        cmd_name = parts[0]
-        args = sanitize_args(parts[1:]) if len(parts) > 1 else []
+        # Preserve raw payload for code.run so fenced/multiline Python
+        # is not destroyed by whitespace splitting or arg sanitization.
+        if command_str.startswith("code.run"):
+            cmd_name, _, raw_code = command_str.partition(" ")
+            args = [raw_code] if raw_code.strip() else []
+        else:
+            parts = command_str.split()
+            cmd_name = parts[0]
+            args = sanitize_args(parts[1:]) if len(parts) > 1 else []
 
         if cmd_name not in self._commands:
             return CommandResult(False, f"[ERROR] Unknown command: {cmd_name}")

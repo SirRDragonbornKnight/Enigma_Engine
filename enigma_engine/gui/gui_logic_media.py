@@ -283,6 +283,48 @@ class LogicMediaMixin:
         except Exception:
             pass
 
+    def _insert_file_link(self, path_str: str):
+        """Insert a clickable OPEN FILE line in the chat display."""
+        p = Path(path_str)
+        name = p.name or path_str
+        if not hasattr(self, "_chat_file_refs"):
+            self._chat_file_refs = {}
+        self._chat_file_refs[name] = str(p)
+        self.chat_display._textbox.insert(
+            "end", f"  OPEN FILE: {name}\n", "file_link")
+        self._auto_resize_chat()
+        self._scroll_chat_to_bottom()
+
+    def _on_file_click(self, event=None):
+        """Handle click on a file link tag in chat."""
+        tb = self.chat_display._textbox
+        try:
+            idx = tb.index(f"@{event.x},{event.y}")
+            line_start = tb.index(f"{idx} linestart")
+            line_end = tb.index(f"{idx} lineend")
+            line_text = tb.get(line_start, line_end).strip()
+            prefix = "OPEN FILE:"
+            if prefix in line_text:
+                name = line_text.split(prefix, 1)[1].strip()
+                path = getattr(self, "_chat_file_refs", {}).get(name)
+                if path:
+                    self._open_file(path)
+        except Exception as exc:
+            logger.debug("File click handler failed: %s", exc)
+
+    def _open_file(self, path_str: str):
+        """Open a local file in the default app."""
+        from enigma_engine.gui.media import _resolve_path
+        resolved = _resolve_path(path_str)
+        if resolved is None:
+            self._chat_error(f"File not found: {path_str}")
+            return
+        try:
+            os.startfile(str(resolved))
+            self._chat_system(f"Opened file: {resolved}")
+        except Exception as exc:
+            self._chat_error(f"Failed to open file: {exc}")
+
     def _open_link(self, url: str):
         """Open a URL in the default browser."""
         import webbrowser

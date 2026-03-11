@@ -86,6 +86,10 @@ class TrainingConfig:
     max_loss: float = 100.0  # abort if loss exceeds this
     max_training_seconds: float = 0  # 0 = unlimited
 
+    # Before/after evaluation (EV-C)
+    run_evaluation: bool = False  # Evaluate before and after training
+    eval_test_prompts: list[str] = None  # Custom test prompts (None = use defaults)
+
     def validate(self) -> None:
         """Raise *ValueError* if any field is nonsensical."""
         if self.epochs < 1:
@@ -667,6 +671,28 @@ class Trainer:
                 f"Removed {pre_dedup - len(sequences)} duplicate "
                 f"sequences ({len(sequences)} unique remain)")
 
+        # Run before-training evaluation (EV-C)
+        before_eval = None
+        if self.config.run_evaluation:
+            self._emit_progress(3, "Evaluating model (before training)...")
+            try:
+                from enigma_engine.core.training_evaluation import (
+                    evaluate_model, DEFAULT_TEST_PROMPTS,
+                )
+                test_prompts = (
+                    self.config.eval_test_prompts or DEFAULT_TEST_PROMPTS
+                )
+                device = next(self.model.parameters()).device
+                before_eval = evaluate_model(
+                    self.model, self.tokenizer, test_prompts, str(device)
+                )
+                logger.info(
+                    f"Before training: perplexity={before_eval['perplexity']:.2f}, "
+                    f"loss={before_eval['loss']:.4f}"
+                )
+            except Exception as exc:
+                logger.warning(f"Before-training evaluation failed: {exc}")
+
         self._emit_progress(5, f"Creating batches from {len(sequences)} sequences...")
 
         # Use model's max_seq_len for batch creation
@@ -816,6 +842,40 @@ class Trainer:
         # Final save
         self._emit_progress(95, "Saving final model...")
         self._save_checkpoint(checkpoint_dir / "final_model.pt")
+
+        # Run after-training evaluation (EV-C)
+        after_eval = None
+        if self.config.run_evaluation:
+            self._emit_progress(97, "Evaluating model (after training)...")
+            try:
+                from enigma_engine.core.training_evaluation import (
+                    evaluate_model, DEFAULT_TEST_PROMPTS,
+                )
+                test_prompts = (
+                    self.config.eval_test_prompts or DEFAULT_TEST_PROMPTS
+                )
+                device = next(self.model.parameters()).device
+                after_eval = evaluate_model(
+                    self.model, self.tokenizer, test_prompts, str(device)
+                )
+                logger.info(
+                    f"After training: perplexity={after_eval['perplexity']:.2f}, "
+                    f"loss={after_eval['loss']:.4f}"
+                )
+                if before_eval:
+                    ppl_improvement = before_eval["perplexity"] - after_eval["perplexity"]
+                    logger.info(
+                        f"Perplexity improvement: {ppl_improvement:.2f} "
+                        f"({ppl_improvement / before_eval['perplexity'] * 100:.1f}%)"
+                    )
+            except Exception as exc:
+                logger.warning(f"After-training evaluation failed: {exc}")
+
+        # Store evaluation results in state for later retrieval
+        if before_eval:
+            self.state.before_eval = before_eval  # type: ignore
+        if after_eval:
+            self.state.after_eval = after_eval  # type: ignore
 
         # Restore model to eval mode for inference
         self.model.eval()

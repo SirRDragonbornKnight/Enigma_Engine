@@ -25,6 +25,17 @@ class ForgeToolsMixin:
     Expects the host class to have ForgeMixin setup attributes.
     """
 
+    def _select_generated_data_for_current_mode(self, path: str) -> None:
+        """Route generated data path to the active mode's data selector."""
+        mode_var = getattr(self, "training_mode_var", None)
+        mode_name = mode_var.get() if mode_var is not None else "Basic"
+        if mode_name == "AI-Guided":
+            sup_var = getattr(self, "ai_supplement_var", None)
+            if sup_var is not None:
+                sup_var.set(path)
+                return
+        self.train_data_var.set(path)
+
     # ================================================================
     # Generate training data (TRAINER produces synthetic data)
     # ================================================================
@@ -55,8 +66,15 @@ class ForgeToolsMixin:
             num_pairs = 20
 
         # Data file is optional — supplements TRAINER output
-        data_path = self.train_data_var.get()
-        has_data = data_path and Path(data_path).exists()
+        mode_var = getattr(self, "training_mode_var", None)
+        mode_name = mode_var.get() if mode_var is not None else "Basic"
+        if mode_name == "AI-Guided":
+            sup_var = getattr(self, "ai_supplement_var", None)
+            sup_value = sup_var.get() if sup_var is not None else "(none)"
+            data_path = "" if sup_value == "(none)" else sup_value
+        else:
+            data_path = self.train_data_var.get()
+        has_data = bool(data_path) and Path(data_path).exists()
 
         trainer_name = Path(trainer_path).stem
         self.generate_data_btn.configure(state="disabled")
@@ -83,19 +101,12 @@ class ForgeToolsMixin:
                 training_brief = self._build_training_brief()
                 self._save_training_brief()
 
-                # Read focus field from UI
-                focus_field = ""
-                ff_widget = getattr(self, "forge_focus_field", None)
-                if ff_widget is not None:
-                    focus_field = ff_widget.get().strip()
-
                 # Build system prompt
                 gen_sys = self._build_trainer_system_prompt(
                     student_params=0,
                     task="generate",
                     stage=stage,
-                    training_brief=training_brief,
-                    focus_field=focus_field)
+                    training_brief=training_brief)
 
                 self._log(f"Stage   : {stage.upper()}")
                 if training_brief:
@@ -197,7 +208,7 @@ class ForgeToolsMixin:
                     self._log(
                         "Auto-train: starting training...")
                     self.after(0, lambda p=str(out_path): (
-                        self.train_data_var.set(p),
+                        self._select_generated_data_for_current_mode(p),
                         self._start_training_by_mode()))
 
             except Exception as exc:
@@ -267,24 +278,15 @@ class ForgeToolsMixin:
                 training_brief = self._build_training_brief()
                 self._save_training_brief()
 
-                # Read focus field from UI
-                focus_field = ""
-                ff_widget = getattr(self, "forge_focus_field", None)
-                if ff_widget is not None:
-                    focus_field = ff_widget.get().strip()
-
                 # System prompt for TRAINER
                 eval_sys = self._build_trainer_system_prompt(
                     student_params=0,
                     task="evaluate",
                     stage=stage,
-                    training_brief=training_brief,
-                    focus_field=focus_field)
+                    training_brief=training_brief)
 
                 num_tests = 15
                 self._log(f"Stage   : {stage.upper()}")
-                if focus_field:
-                    self._log(f"Focus   : {focus_field}")
                 self._log(
                     f"\nTRAINER is testing STUDENT with "
                     f"{num_tests} questions...\n")
@@ -507,21 +509,15 @@ class ForgeToolsMixin:
                     30, "Loading trainer")
                 engine = self._load_engine_for_path(trainer_path)
 
-                # Read training brief and focus from UI
+                # Read training brief from UI
                 training_brief = self._build_training_brief()
-                focus_field = ""
-                ff_widget = getattr(
-                    self, "forge_focus_field", None)
-                if ff_widget is not None:
-                    focus_field = ff_widget.get().strip()
 
                 # Use shared trainer system prompt
                 sys_prompt = self._build_trainer_system_prompt(
                     student_params=0,
                     task="generate",
                     stage=stage,
-                    training_brief=training_brief,
-                    focus_field=focus_field)
+                    training_brief=training_brief)
 
                 self._log(
                     "Generating Q&A pairs from content...\n")
@@ -630,7 +626,7 @@ class ForgeToolsMixin:
                     self._log(
                         "Auto-train: starting training...")
                     self.after(0, lambda p=str(out_path): (
-                        self.train_data_var.set(p),
+                        self._select_generated_data_for_current_mode(p),
                         self._start_training_by_mode()))
                 else:
                     self._log(
@@ -935,10 +931,15 @@ class ForgeToolsMixin:
                 epochs = run.get("epochs", "?")
                 best_loss = run.get("best_loss", "?")
                 timestamp = run.get("timestamp", "?")
+                ppl_before = run.get("before_perplexity")
+                ppl_after = run.get("after_perplexity")
+                ppl_info = ""
+                if ppl_before is not None and ppl_after is not None:
+                    ppl_info = f"  ppl {ppl_before:.1f}→{ppl_after:.1f}"
                 self._log(
                     f"  {timestamp}  {mode:>10}  "
                     f"{model}  epochs={epochs}  "
-                    f"loss={best_loss}")
+                    f"loss={best_loss}{ppl_info}")
             self._log("--- End of history ---")
         except Exception as exc:
             self._log(f"[!] Could not read history: {exc}")
@@ -946,6 +947,8 @@ class ForgeToolsMixin:
     def _save_training_run(
         self, mode: str, model_name: str,
         epochs: int, best_loss: float,
+        before_perplexity: float | None = None,
+        after_perplexity: float | None = None,
     ):
         """Append a completed training run to training_history.json
         and the model's identity card."""
@@ -958,6 +961,10 @@ class ForgeToolsMixin:
             "epochs": epochs,
             "best_loss": round(best_loss, 6),
         }
+        if before_perplexity is not None:
+            entry["before_perplexity"] = round(before_perplexity, 4)
+        if after_perplexity is not None:
+            entry["after_perplexity"] = round(after_perplexity, 4)
         try:
             runs: list = []
             if self._HISTORY_FILE.exists():
@@ -977,7 +984,9 @@ class ForgeToolsMixin:
         ctx = getattr(self, "model_context", None)
         if ctx is not None:
             ctx.record_training_run(
-                mode=mode, epochs=epochs, best_loss=best_loss)
+                mode=mode, epochs=epochs, best_loss=best_loss,
+                before_perplexity=before_perplexity,
+                after_perplexity=after_perplexity)
             self._save_model_context()
 
     # ================================================================
@@ -1004,6 +1013,22 @@ class ForgeToolsMixin:
                 bar.set(0)
             if label is not None:
                 label.configure(text="")
+        self.after(0, _do)
+
+    def _clear_loss_chart(self):
+        """Clear any previously rendered loss chart (thread-safe)."""
+        def _do():
+            canvas = getattr(self, "_loss_canvas", None)
+            info_label = getattr(self, "_loss_chart_info", None)
+            panel = getattr(self, "_loss_chart_panel", None)
+
+            if canvas is not None:
+                canvas.delete("all")
+            if info_label is not None:
+                info_label.configure(text="No data yet")
+            if panel is not None and hasattr(panel, "collapse"):
+                panel.collapse()
+
         self.after(0, _do)
 
     # ================================================================

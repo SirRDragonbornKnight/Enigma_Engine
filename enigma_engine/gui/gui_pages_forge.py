@@ -135,116 +135,196 @@ class ForgePageMixin:
         # --- Training section ---
         self._forge_heading(ctrl_scroll, "TRAIN")
 
-        self._forge_label(ctrl_scroll, "Training mode")
-        self.training_mode_var = ctk.StringVar(
-            value="Self Study")
-        self.training_mode_menu = themed_dropdown(
-            ctrl_scroll,
-            values=["Self Study", "Conversation",
-                    "Preference Tuning", "Image Training",
-                    "Quick Tune (LoRA)", "Trial & Error",
-                    "Adaptive Pipeline", "RLHF", "Self-Play"],
-            variable=self.training_mode_var,
-            width=200,
-            command=self._on_training_mode_changed)
-        self.training_mode_menu.pack(
-            anchor="w", padx=10, pady=(0, 6))
-
-        # Mode description (updates when mode changes)
-        self._training_mode_desc = ctk.CTkLabel(
-            ctrl_scroll,
-            text="Train your AI directly on a text file.\n"
-                 "Needs: STUDENT model + data file.\n"
-                 "Best for: Teaching from existing content.",
-            font=FONT_TINY, text_color=C_TEXT_DIM,
-            justify="left")
-        self._training_mode_desc.pack(
-            anchor="w", padx=10, pady=(0, 6))
-
-        # Train with AI toggle — use TRAINER model to generate
-        # curriculum, train the student, then test what it learned
-        ai_row = ctk.CTkFrame(
+        # ===== NEW SIMPLIFIED TRAINING MODE SELECTOR =====
+        # Instead of dropdown, use card-based selection
+        self._forge_label(ctrl_scroll, "Choose training method")
+        
+        # Card container
+        modes_frame = ctk.CTkFrame(
             ctrl_scroll, fg_color="transparent")
-        ai_row.pack(fill="x", padx=10, pady=(0, 6))
-        self.train_with_ai_var = ctk.BooleanVar(value=False)
-        self.train_with_ai_cb = ctk.CTkCheckBox(
-            ai_row, text="Train with AI",
-            variable=self.train_with_ai_var,
-            font=FONT_SMALL, text_color=C_TEXT,
-            fg_color=C_GREEN_DIM, hover_color=C_ACCENT_DIM,
-            border_color=C_ACCENT_DIM, corner_radius=2,
-            command=self._on_train_ai_toggled)
-        self.train_with_ai_cb.pack(anchor="w")
-        Tooltip(self.train_with_ai_cb,
-                "Enable AI-assisted training.\n"
-                "A TRAINER model generates curriculum,\n"
-                "trains your model, then tests what it learned.\n"
-                "Requires: TRAINER route assigned.")
+        modes_frame.pack(fill="x", padx=10, pady=(0, 8))
+        
+        self.training_mode_var = ctk.StringVar(value="Basic")
+        
+        # Define the 3 main modes with descriptions
+        training_modes = [
+            ("Basic", "Train on your own data\n(text files, JSONL)\nAuto-selects LoRA for large models"),
+            ("AI-Guided", "AI teacher creates curriculum\nand trains your model\nCan work with or without data"),
+            ("Image", "Train on images or video\nTeach visual understanding\nRequires image folder"),
+        ]
+        
+        # Create radio button cards
+        for mode_name, mode_desc in training_modes:
+            mode_card = HUDFrame(
+                modes_frame, glow_color=C_BORDER)
+            mode_card.pack(fill="x", pady=(0, 4))
+            
+            card_inner = ctk.CTkFrame(
+                mode_card, fg_color="transparent")
+            card_inner.pack(fill="x", padx=8, pady=8)
+            card_inner.grid_columnconfigure(1, weight=1)
+            
+            # Radio button
+            radio = ctk.CTkRadioButton(
+                card_inner, text="", variable=self.training_mode_var,
+                value=mode_name, font=FONT_SMALL,
+                fg_color=C_GREEN_DIM, hover_color=C_ACCENT_DIM,
+                border_color=C_ACCENT_DIM,
+                command=self._on_training_mode_selected)
+            radio.grid(row=0, column=0, rowspan=2, sticky="nw", padx=(0, 8))
+            
+            # Mode title
+            SelectableLabel(
+                card_inner, text=mode_name.upper(),
+                font=FONT_SMALL, text_color=C_TEXT_BRIGHT,
+                anchor="w"
+            ).grid(row=0, column=1, sticky="w")
+            
+            # Mode description
+            SelectableLabel(
+                card_inner, text=mode_desc,
+                font=FONT_TINY, text_color=C_TEXT_DIM,
+                anchor="w", justify="left"
+            ).grid(row=1, column=1, sticky="w", pady=(2, 0))
 
         # Include reasoning (CoT-B) — generates <think> chains in data
+        reasoning_row = ctk.CTkFrame(
+            ctrl_scroll, fg_color="transparent")
+        reasoning_row.pack(fill="x", padx=10, pady=(0, 6))
         self.forge_reasoning_var = ctk.BooleanVar(value=False)
         self._forge_reasoning_cb = ctk.CTkCheckBox(
-            ai_row, text="Include reasoning",
+            reasoning_row, text="Include reasoning chains",
             variable=self.forge_reasoning_var,
             font=FONT_SMALL, text_color=C_TEXT,
             fg_color=C_GREEN_DIM, hover_color=C_ACCENT_DIM,
             border_color=C_ACCENT_DIM, corner_radius=2)
-        self._forge_reasoning_cb.pack(anchor="w", pady=(2, 0))
+        self._forge_reasoning_cb.pack(anchor="w")
         Tooltip(self._forge_reasoning_cb,
                 "Generate training data with <think> reasoning\n"
                 "chains. Teaches the model to reason step-by-step\n"
-                "before answering, not just memorize answers.")
+                "before answering, not just memorize answers.\n"
+                "Applies to AI-Guided mode.")
 
-        # --- Data source (shown/hidden per mode) ---
-        self._forge_data_section = ctk.CTkFrame(
+        # === BASIC TRAINING OPTIONS ===
+        self._forge_basic_section = ctk.CTkFrame(
             ctrl_scroll, fg_color="transparent")
-        self._forge_data_section.pack(
-            fill="x", padx=0, pady=0)
-        self._forge_data_label = SelectableLabel(
-            self._forge_data_section, text="Data source (optional)",
-            font=FONT_TINY, text_color=C_TEXT_DIM)
-        self._forge_data_label.pack(
-            anchor="w", padx=10, pady=(2, 0))
+        self._forge_basic_section.pack(fill="x", padx=0, pady=(8, 0))
+        
+        self._forge_label(self._forge_basic_section, "Training data (required)")
         self.train_data_var = ctk.StringVar(
             value=self.training_files[0]["path"]
             if self.training_files else "")
         data_opts = [
             f"{f['name']} ({f['size_kb']} KB)"
             for f in self.training_files]
-        # Always show dropdown — add (none) so data can be deselected
         data_row = ctk.CTkFrame(
-            self._forge_data_section, fg_color="transparent")
+            self._forge_basic_section, fg_color="transparent")
         data_row.pack(fill="x", padx=10, pady=(0, 6))
-        all_opts = ["(none)"] + data_opts
+        all_opts = ["(none)"] + data_opts if data_opts else ["(none)"]
         self.train_data_menu = themed_dropdown(
-            data_row, all_opts if all_opts else ["(none)"],
+            data_row, all_opts,
             width=220,
             command=self._on_data_selected)
         self.train_data_menu.pack(side="left")
-        # Pre-select first data file if available
         if data_opts:
             self.train_data_menu.set(data_opts[0])
         else:
             self.train_data_menu.set("(none)")
+        Tooltip(self.train_data_menu,
+                "Select a training data file.\n"
+                "Supports .txt, .json, .jsonl formats.\n"
+                "LoRA auto-selected if model > 7B params.")
 
-        # --- Training stage (shown for Guided/Dialogue) ---
+        # === AI-GUIDED TRAINING OPTIONS ===
+        self._forge_ai_section = ctk.CTkFrame(
+            ctrl_scroll, fg_color="transparent")
+        self._forge_ai_section.pack(fill="x", padx=0, pady=(8, 0))
+        
+        self._forge_label(self._forge_ai_section, 
+            "Training topic/goal (required)")
+        self.forge_training_topic = themed_entry(
+            self._forge_ai_section, width=280,
+            placeholder_text="e.g., 'coding assistant' or 'creative writer'")
+        self.forge_training_topic.pack(anchor="w", padx=10, pady=(0, 4))
+        Tooltip(self.forge_training_topic,
+                "What should the AI learn?\n"
+                "The TRAINER will generate curriculum based on this.\n"
+                "Examples: 'medical Q&A', 'code generation', 'storytelling'")
+        
+        self._forge_label(self._forge_ai_section, 
+            "Supplement data (optional)")
+        self.ai_supplement_var = ctk.StringVar(value="(none)")
+        ai_data_opts = ["(none)"] + data_opts if data_opts else ["(none)"]
+        self.ai_supplement_menu = themed_dropdown(
+            self._forge_ai_section, ai_data_opts,
+            variable=self.ai_supplement_var,
+            width=220)
+        self.ai_supplement_menu.pack(anchor="w", padx=10, pady=(0, 6))
+        Tooltip(self.ai_supplement_menu,
+                "Optional: Add your own data to mix with AI-generated curriculum.\n"
+                "The trainer will use this as seed material.")
+
+        # === IMAGE TRAINING OPTIONS ===
+        self._forge_image_section = ctk.CTkFrame(
+            ctrl_scroll, fg_color="transparent")
+        self._forge_image_section.pack(fill="x", padx=0, pady=(8, 0))
+        
+        self._forge_label(self._forge_image_section, 
+            "Image folder (required)")
+        self.forge_vision_dir_var = ctk.StringVar(
+            value=str(DATA_DIR / "images"))
+        vision_dir_row = ctk.CTkFrame(
+            self._forge_image_section, fg_color="transparent")
+        vision_dir_row.pack(fill="x", padx=10, pady=(0, 6))
+        vision_dir_row.grid_columnconfigure(0, weight=1)
+        self._forge_vision_dir_entry = themed_entry(
+            vision_dir_row, textvariable=self.forge_vision_dir_var)
+        self._forge_vision_dir_entry.grid(
+            row=0, column=0, sticky="ew", padx=(0, 4))
+        self._forge_vision_browse_btn = ctk.CTkButton(
+            vision_dir_row, text="Browse", width=70,
+            fg_color=C_SURFACE, hover_color=C_PANEL,
+            text_color=C_TEXT, font=FONT_SMALL,
+            command=self._browse_vision_dir)
+        self._forge_vision_browse_btn.grid(row=0, column=1, sticky="e")
+        Tooltip(self._forge_vision_browse_btn,
+            "Pick the folder containing image training data.")
+        Tooltip(self._forge_vision_dir_entry,
+                "Folder with image+text pairs.\n"
+                "Format 1: image.png + image.txt (same name)\n"
+                "Format 2: captions.jsonl with image+text fields\n"
+                "Video files: Will auto-extract frames")
+        
+        self._forge_label(self._forge_image_section, "Vision encoder size")
+        self.forge_vision_preset_var = ctk.StringVar(value="small")
+        vision_preset_dd = themed_dropdown(
+            self._forge_image_section,
+            values=["tiny", "small", "medium"],
+            variable=self.forge_vision_preset_var,
+            width=120)
+        vision_preset_dd.pack(anchor="w", padx=10, pady=(0, 6))
+        Tooltip(vision_preset_dd,
+                "Vision encoder size:\n"
+                "  tiny — ~500K params (fast, lower quality)\n"
+                "  small — ~4M params (good balance) [default]\n"
+                "  medium — ~25M params (best quality, more VRAM)")
+
+        # === AI-GUIDED: TRAINING STAGES ===
         self._forge_stages_section = ctk.CTkFrame(
             ctrl_scroll, fg_color="transparent")
-        self._forge_stages_section.pack(
-            fill="x", padx=0, pady=0)
-        self._forge_label(
-            self._forge_stages_section, "Training stage")
+        self._forge_stages_section.pack(fill="x", padx=0, pady=(8, 0))
+        
+        self._forge_label(self._forge_stages_section, "Training stages")
         self.training_stage_var = ctk.StringVar(value="basics")
-
         stage_frame = ctk.CTkFrame(
             self._forge_stages_section, fg_color="transparent")
         stage_frame.pack(fill="x", padx=10, pady=(0, 6))
-
+        
         stage_descriptions = {
-            "basics": "Teach fundamental language patterns,\ngrammar, and basic responses",
-            "conversation": "Teach natural dialogue flow\nand contextual responses",
-            "commands": "Teach command recognition\nand structured outputs",
-            "web": "Teach web content understanding\nand information extraction",
+            "basics": "Fundamental language patterns\nand basic responses",
+            "conversation": "Natural dialogue flow\nand contextual responses",
+            "commands": "Command recognition\nand structured outputs",
+            "web": "Web content understanding\nand information extraction",
         }
         self._stage_buttons = {}
         for stage_name, stage_tip in stage_descriptions.items():
@@ -262,23 +342,34 @@ class ForgePageMixin:
             btn.pack(side="left", padx=(0, 4))
             Tooltip(btn, stage_tip)
             self._stage_buttons[stage_name] = btn
-
-        # --- Training Brief (shown for Guided/Dialogue) ---
+        
+        SelectableLabel(
+            self._forge_stages_section,
+            text="Auto-advances to next stage after completion",
+            font=FONT_TINY, text_color=C_TEXT_DIM
+        ).pack(anchor="w", padx=10, pady=(0, 4))
+        
+        # === AI-GUIDED: TRAINING BRIEF ===
         self._forge_brief_section = ctk.CTkFrame(
             ctrl_scroll, fg_color="transparent")
-        self._forge_brief_section.pack(
-            fill="x", padx=0, pady=0)
+        self._forge_brief_section.pack(fill="x", padx=0, pady=(8, 0))
+        
         brief_panel = CollapsiblePanel(
-            self._forge_brief_section, title="TRAINING BRIEF",
+            self._forge_brief_section, title="TRAINING BRIEF (OPTIONAL)",
             start_expanded=False)
-        brief_panel.pack(fill="x", padx=6, pady=(8, 2))
+        brief_panel.pack(fill="x", padx=6, pady=(0, 6))
         brief_inner = brief_panel.content
-
+        
+        SelectableLabel(
+            brief_inner,
+            text="Fine-tune the curriculum with these fields",
+            font=FONT_TINY, text_color=C_TEXT_DIM
+        ).pack(anchor="w", padx=6, pady=(2, 4))
+        
         # Quick profile fields — structured mad-libs style
         self._brief_field_entries = {}
         for label, placeholder, tip in self._QUICK_PROFILE_FIELDS:
-            row = ctk.CTkFrame(
-                brief_inner, fg_color="transparent")
+            row = ctk.CTkFrame(brief_inner, fg_color="transparent")
             row.pack(fill="x", padx=6, pady=(3, 0))
             row.grid_columnconfigure(1, weight=1)
             lbl = SelectableLabel(
@@ -286,88 +377,109 @@ class ForgePageMixin:
                 text_color=C_TEXT_DIM, width=100, anchor="w")
             lbl.grid(row=0, column=0, sticky="w")
             entry = themed_entry(
-                row, width=180,
-                placeholder_text=placeholder)
+                row, width=180, placeholder_text=placeholder)
             entry.grid(row=0, column=1, sticky="ew", padx=(4, 0))
             Tooltip(entry, tip)
             self._brief_field_entries[label] = entry
-
-        # Custom brief text area — freeform instructions
+        
+        # Custom brief text area
         SelectableLabel(
             brief_inner, text="Custom instructions",
             font=FONT_TINY, text_color=C_TEXT_DIM
         ).pack(anchor="w", padx=6, pady=(8, 2))
-
         self._brief_custom_text = ctk.CTkTextbox(
             brief_inner, height=80, font=FONT_SMALL,
             fg_color=C_INPUT, text_color=C_TEXT_BRIGHT,
             border_width=1, border_color=C_ACCENT_DIM,
             corner_radius=2, wrap="word")
-        self._brief_custom_text.pack(
-            fill="x", padx=6, pady=(0, 4))
-        # Enable undo/redo
+        self._brief_custom_text.pack(fill="x", padx=6, pady=(0, 4))
         self._brief_custom_text._textbox.configure(undo=True, maxundo=-1)
         Tooltip(self._brief_custom_text,
                 "Freeform instructions for the trainer AI.\n"
-                "Describe exactly what you want the student\n"
-                "AI to be — anything not covered by the\n"
-                "quick fields above.")
-
-        # Save/load brief on change — load persisted values
+                "Describe exactly what you want the student AI to learn.")
+        
+        # Load persisted brief values
         self.after(200, self._load_training_brief)
-
-        # Hyperparameter presets — quick / balanced / thorough
-        self._forge_label(ctrl_scroll, "Training preset")
+        
+        # === AI-GUIDED: PAIRS/ROUNDS ===
+        self._forge_pairs_section = ctk.CTkFrame(
+            ctrl_scroll, fg_color="transparent")
+        self._forge_pairs_section.pack(fill="x", padx=0, pady=(8, 0))
+        
+        self._forge_label(self._forge_pairs_section, 
+            "Training examples per stage")
+        self.guided_pairs_entry = self._forge_entry(
+            self._forge_pairs_section, "20")
+        Tooltip(self.guided_pairs_entry,
+                "Number of Q&A pairs to generate per stage.\n"
+                "More pairs = better coverage, longer training.")
+        # Aliases
+        self.dialogue_rounds_entry = self.guided_pairs_entry
+        
+        # === HYPERPARAMETERS (all modes) ===
+        self._forge_heading(ctrl_scroll, "HYPERPARAMETERS")
+        
+        # Preset dropdown for quick configuration
+        self._forge_label(ctrl_scroll, "Preset")
+        self._forge_preset_var = ctk.StringVar(value="Balanced")
         self._forge_preset_menu = themed_dropdown(
             ctrl_scroll,
-            ["Custom", "Quick", "Balanced", "Thorough"],
+            ["Quick", "Balanced", "Thorough", "Custom"],
+            variable=self._forge_preset_var,
             width=280,
             command=self._on_preset_changed)
-        self._forge_preset_menu.pack(
-            anchor="w", padx=10, pady=(0, 6))
+        self._forge_preset_menu.pack(anchor="w", padx=10, pady=(0, 6))
         Tooltip(self._forge_preset_menu,
                 "Quick: 3 epochs, fast results\n"
-                "Balanced: 10 epochs, good quality\n"
+                "Balanced: 10 epochs, good quality [default]\n"
                 "Thorough: 30 epochs, best quality\n"
                 "Custom: set your own values below")
-
+        
         self._forge_label(ctrl_scroll, "Epochs")
-        self.ft_epochs_entry = self._forge_entry(ctrl_scroll, "5")
+        self.ft_epochs_entry = self._forge_entry(ctrl_scroll, "10")
         Tooltip(self.ft_epochs_entry,
                 "Number of passes through the training data.\n"
-                "More epochs = better learning, longer training.")
-        # Aliases so all training modes use the same fields
+                "More epochs = better learning, longer training.\n"
+                "Default: 10")
+        # Aliases for backward compatibility
         self.guided_epochs_entry = self.ft_epochs_entry
         self.epochs_entry = self.ft_epochs_entry
-
+        
         self._forge_label(ctrl_scroll, "Learning rate")
-        self.ft_lr_entry = self._forge_entry(
-            ctrl_scroll, "0.00005")
+        self.ft_lr_entry = self._forge_entry(ctrl_scroll, "0.00005")
         Tooltip(self.ft_lr_entry,
                 "How fast the model adapts to training data.\n"
-                "Too high = unstable, too low = slow learning.")
+                "Too high = unstable, too low = slow learning.\n"
+                "Default: 5e-5 (0.00005)")
         # Aliases
         self.guided_lr_entry = self.ft_lr_entry
         self.lr_entry = self.ft_lr_entry
-
-        # Batch size — lower values use less VRAM
-        self._forge_label(ctrl_scroll, "Batch size")
-        self.forge_batch_entry = self._forge_entry(
-            ctrl_scroll, "4")
+        
+        # Advanced settings (collapsible)
+        advanced_panel = CollapsiblePanel(
+            ctrl_scroll, title="ADVANCED SETTINGS",
+            start_expanded=False)
+        advanced_panel.pack(fill="x", padx=6, pady=(8, 2))
+        advanced_inner = advanced_panel.content
+        
+        # Batch size
+        self._forge_label(advanced_inner, "Batch size")
+        self.forge_batch_entry = self._forge_entry(advanced_inner, "4")
         Tooltip(self.forge_batch_entry,
-                "Training batch size. Lower = less VRAM.")
-
-        # Gradient accumulation — simulate larger batches
-        self._forge_label(ctrl_scroll, "Grad accumulation")
-        self.forge_accum_entry = self._forge_entry(
-            ctrl_scroll, "1")
+                "Training batch size. Lower = less VRAM.\n"
+                "Default: 4")
+        
+        # Gradient accumulation
+        self._forge_label(advanced_inner, "Gradient accumulation")
+        self.forge_accum_entry = self._forge_entry(advanced_inner, "1")
         Tooltip(self.forge_accum_entry,
                 "Accumulate gradients over N steps.\n"
-                "Effective batch = batch_size × this value.")
-
-        # Gradient checkpointing — trade compute for VRAM
+                "Effective batch = batch_size × this value.\n"
+                "Default: 1 (no accumulation)")
+        
+        # Gradient checkpointing
         ckpt_row = ctk.CTkFrame(
-            ctrl_scroll, fg_color="transparent")
+            advanced_inner, fg_color="transparent")
         ckpt_row.pack(fill="x", padx=10, pady=(0, 6))
         self.forge_grad_ckpt_var = ctk.BooleanVar(value=False)
         self.forge_grad_ckpt_cb = ctk.CTkCheckBox(
@@ -380,151 +492,64 @@ class ForgePageMixin:
         Tooltip(self.forge_grad_ckpt_cb,
                 "Saves VRAM by recomputing activations.\n"
                 "Slower training but fits larger models.")
-
-        # Rolling best checkpoints (CK-C) — keep only K best
+        
+        # Rolling best checkpoints
         rolling_row = ctk.CTkFrame(
-            ctrl_scroll, fg_color="transparent")
+            advanced_inner, fg_color="transparent")
         rolling_row.pack(fill="x", padx=10, pady=(0, 6))
         SelectableLabel(
             rolling_row, text="Rolling best K", font=FONT_TINY,
             text_color=C_TEXT_DIM
         ).pack(side="left", padx=(0, 6))
-        self.forge_rolling_k_entry = themed_entry(
-            rolling_row, width=50)
+        self.forge_rolling_k_entry = themed_entry(rolling_row, width=50)
         self.forge_rolling_k_entry.insert(0, "0")
         self.forge_rolling_k_entry.pack(side="left")
         Tooltip(self.forge_rolling_k_entry,
                 "Keep only the K best checkpoints by loss.\n"
                 "0 = disabled (keep all). 3 = keep 3 best.\n"
                 "Prevents disk bloat during long training.")
-
-        # --- Pairs/rounds (shown for Guided/Dialogue) ---
-        self._forge_pairs_section = ctk.CTkFrame(
-            ctrl_scroll, fg_color="transparent")
-        self._forge_pairs_section.pack(
-            fill="x", padx=0, pady=0)
-        self._pairs_rounds_label = SelectableLabel(
-            self._forge_pairs_section, text="Pairs to generate",
-            font=FONT_TINY, text_color=C_TEXT_DIM)
-        self._pairs_rounds_label.pack(
-            anchor="w", padx=10, pady=(2, 0))
-        self.guided_pairs_entry = self._forge_entry(
-            self._forge_pairs_section, "20")
-        # Aliases
-        self.dialogue_rounds_entry = self.guided_pairs_entry
-
-        # --- Vision config (shown for Vision mode) ---
-        self._forge_vision_section = ctk.CTkFrame(
-            ctrl_scroll, fg_color="transparent")
-        self._forge_vision_section.pack(
-            fill="x", padx=0, pady=0)
-
-        self._forge_label(
-            self._forge_vision_section, "Image data directory")
-        self.forge_vision_dir_var = ctk.StringVar(
-            value=str(DATA_DIR / "images"))
-        vision_dir_row = ctk.CTkFrame(
-            self._forge_vision_section, fg_color="transparent")
-        vision_dir_row.pack(fill="x", padx=10, pady=(0, 6))
-        vision_dir_row.grid_columnconfigure(0, weight=1)
-        self._forge_vision_dir_entry = themed_entry(
-            vision_dir_row, textvariable=self.forge_vision_dir_var)
-        self._forge_vision_dir_entry.grid(
-            row=0, column=0, sticky="ew", padx=(0, 4))
-        Tooltip(self._forge_vision_dir_entry,
-                "Folder with image+text pairs.\n"
-                "Format 1: image.png + image.txt (same name)\n"
-                "Format 2: captions.jsonl with image+text fields")
-        self._forge_vision_browse_btn = ctk.CTkButton(
-            vision_dir_row, text="Browse", width=70,
-            fg_color=C_SURFACE, hover_color=C_PANEL,
-            text_color=C_TEXT, font=FONT_SMALL,
-            command=self._browse_vision_dir)
-        self._forge_vision_browse_btn.grid(
-            row=0, column=1, sticky="e")
-
-        self._forge_label(
-            self._forge_vision_section, "Encoder size")
-        self.forge_vision_preset_var = ctk.StringVar(value="small")
-        vision_preset_dd = themed_dropdown(
-            self._forge_vision_section,
-            values=["tiny", "small", "medium"],
-            variable=self.forge_vision_preset_var,
-            width=120)
-        vision_preset_dd.pack(anchor="w", padx=10, pady=(0, 6))
-        Tooltip(vision_preset_dd,
-                "Vision encoder size:\n"
-                "  tiny — ~500K params (fast, lower quality)\n"
-                "  small — ~4M params (default, good balance)\n"
-                "  medium — ~25M params (best quality, more VRAM)")
-
-        # --- LoRA config (shown for LoRA mode) ---
-        self._forge_lora_section = ctk.CTkFrame(
-            ctrl_scroll, fg_color="transparent")
-        self._forge_lora_section.pack(
-            fill="x", padx=0, pady=0)
-
-        self._forge_label(self._forge_lora_section, "LoRA rank")
+        
+        # LoRA settings (show when relevant)
+        self._forge_lora_subsection = ctk.CTkFrame(
+            advanced_inner, fg_color="transparent")
+        self._forge_lora_subsection.pack(fill="x", padx=0, pady=(6, 0))
+        
+        SelectableLabel(
+            self._forge_lora_subsection,
+            text="LoRA settings (auto-enabled for large models)",
+            font=FONT_TINY, text_color=C_TEXT_DIM
+        ).pack(anchor="w", padx=10, pady=(0, 4))
+        
+        lora_row = ctk.CTkFrame(
+            self._forge_lora_subsection, fg_color="transparent")
+        lora_row.pack(fill="x", padx=10, pady=(0, 6))
+        
+        SelectableLabel(
+            lora_row, text="Rank", font=FONT_TINY,
+            text_color=C_TEXT_DIM, width=60, anchor="w"
+        ).pack(side="left", padx=(0, 4))
         self.forge_lora_rank_var = ctk.StringVar(value="8")
         lora_rank_entry = themed_entry(
-            self._forge_lora_section,
-            textvariable=self.forge_lora_rank_var, width=80)
-        lora_rank_entry.pack(anchor="w", padx=10, pady=(0, 4))
+            lora_row, textvariable=self.forge_lora_rank_var, width=60)
+        lora_rank_entry.pack(side="left", padx=(0, 12))
         Tooltip(lora_rank_entry,
-                "LoRA rank (1-128). Lower = fewer trainable params.\n"
-                "4-8 for small models, 16-32 for large models.")
-
-        self._forge_label(self._forge_lora_section, "LoRA alpha")
+                "LoRA rank (1-128). Lower = fewer params.\n"
+                "4-8 for small models, 16-32 for large.\n"
+                "Default: 8")
+        
+        SelectableLabel(
+            lora_row, text="Alpha", font=FONT_TINY,
+            text_color=C_TEXT_DIM, width=60, anchor="w"
+        ).pack(side="left", padx=(0, 4))
         self.forge_lora_alpha_var = ctk.StringVar(value="16")
         lora_alpha_entry = themed_entry(
-            self._forge_lora_section,
-            textvariable=self.forge_lora_alpha_var, width=80)
-        lora_alpha_entry.pack(anchor="w", padx=10, pady=(0, 6))
+            lora_row, textvariable=self.forge_lora_alpha_var, width=60)
+        lora_alpha_entry.pack(side="left")
         Tooltip(lora_alpha_entry,
                 "LoRA alpha scaling (1-256).\n"
                 "Higher = stronger adapter effect.\n"
-                "Common: alpha = 2x rank.")
-
-        # --- Evolutionary config (shown for Evolutionary mode) ---
-        self._forge_evo_section = ctk.CTkFrame(
-            ctrl_scroll, fg_color="transparent")
-        self._forge_evo_section.pack(
-            fill="x", padx=0, pady=0)
-
-        self._forge_label(self._forge_evo_section, "Generations")
-        self.forge_evo_gens_var = ctk.StringVar(value="5")
-        evo_gens_entry = themed_entry(
-            self._forge_evo_section,
-            textvariable=self.forge_evo_gens_var, width=80)
-        evo_gens_entry.pack(anchor="w", padx=10, pady=(0, 4))
-        Tooltip(evo_gens_entry,
-                "Number of evolutionary generations (1-100).\n"
-                "Each generation: generate, score, keep best, train.")
-
-        self._forge_label(
-            self._forge_evo_section, "Candidates per task")
-        self.forge_evo_npn_var = ctk.StringVar(value="3")
-        evo_npn_entry = themed_entry(
-            self._forge_evo_section,
-            textvariable=self.forge_evo_npn_var, width=80)
-        evo_npn_entry.pack(anchor="w", padx=10, pady=(0, 6))
-        Tooltip(evo_npn_entry,
-                "Responses generated per task (2-20).\n"
-                "Higher = better selection, slower.")
-
-        # --- Focus field (optional, all modes) ---
-        self._forge_label(ctrl_scroll, "Focus field (optional)")
-        self.forge_focus_field = themed_entry(
-            ctrl_scroll, width=280,
-            placeholder_text="e.g. medical, coding, cooking...")
-        self.forge_focus_field.pack(
-            anchor="w", padx=10, pady=(0, 6))
-        Tooltip(self.forge_focus_field,
-                "Optionally focus training on a specific field.\n"
-                "When set, the system prompt tells the trainer AI\n"
-                "to prioritize this topic in generated data.\n"
-                "Leave empty for general-purpose training.")
-
+                "Common: alpha = 2x rank. Default: 16")
+        
         # Main train button row
         btn_row = ctk.CTkFrame(
             ctrl_scroll, fg_color="transparent")
@@ -823,8 +848,8 @@ class ForgePageMixin:
                 "Approve all pending entries in the\n"
                 "curated dataset for training use.")
 
-        # Set initial section visibility for default mode
-        self._on_training_mode_changed("Self Study")
+        # Set initial section visibility for default mode (Basic mode)
+        self._on_training_mode_changed("Basic")
 
         # Add controls panel to pane
         self._forge_pane.add(controls, stretch="always",
