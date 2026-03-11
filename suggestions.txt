@@ -1,0 +1,13 @@
+# Recommended Changes and Additions for Model Quality and Training
+
+1. **RMSNorm fp32 upcast**: Consider incorporating RMSNorm with fp32 upcasting to enhance training stability and performance.
+2. **AdamW betas**: Review and adjust the beta parameters for AdamW to fine-tune optimization and convergence rates.
+3. **Cosine eta_min**: Implement cosine annealing for learning rates with a targeted minimum value (eta_min) to maintain effective training dynamics.
+4. **Sequence packing**: Explore the use of sequence packing to reduce padding and improve computational efficiency during training.
+5. **Tokenizer improvements**:
+    - **Byte-level BPE**: Shift to byte-level BPE for better handling of diverse inputs.
+    - **Larger vocab**: Expand the vocabulary size to capture a broader range of expressions and reduce out-of-vocabulary issues.
+6. **Validation loop**: Develop a robust validation loop to monitor model performance effectively during training iterations.
+7. **Weight decay adjustments**: Experiment with different weight decay values to find the optimal balance for regularization.
+8. **Consistent special token IDs**: Ensure that special token IDs are consistent throughout the tokenizer and training process to avoid discrepancies.
+9. **Robustness improvements**: Incorporate various robustness improvements discovered during training to enhance model resilience in real-world applications.
