@@ -75,10 +75,14 @@ class RMSNorm(nn.Module):
         
         x: [batch, sequence, dim] → normalized: [batch, sequence, dim]
         """
+        # Upcast to float32 for numerically stable norm computation
+        # (avoids overflow/underflow in bf16/fp16 training)
+        orig_dtype = x.dtype
+        x = x.float()
         # Calculate Root Mean Square: sqrt(mean(x²) + eps)
         rms = torch.sqrt(torch.mean(x ** 2, dim=-1, keepdim=True) + self.eps)
-        # Normalize and apply learned scale
-        return x / rms * self.weight
+        # Normalize, cast back to original dtype, and apply learned scale
+        return (x / rms).to(orig_dtype) * self.weight
 
 
 # =============================================================================

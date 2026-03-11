@@ -1,0 +1,34 @@
+Enigma AI Engine — Applied Fixes
+=================================
+
+## Phase 1: Critical Training Quality Fixes
+   (Identified by comparison against nanoGPT, litgpt, OLMo, LLaMA, and other
+    established training codebases.)
+
+1. RMSNorm float32 upcast (model_components.py + vision_encoder.py)
+   - `RMSNorm.forward()` now upcasts input to float32 before computing the RMS
+     norm, then casts back to the original dtype before returning.
+   - Same fix applied to `_RMSNorm` in vision_encoder.py.
+   - Prevents precision loss / overflow when training in bf16 or fp16.
+   - Matches the pattern used by LLaMA, litgpt, and nanoGPT.
+
+2. AdamW betas configurable + correct defaults (training.py)
+   - Added `adam_beta1: float = 0.9` and `adam_beta2: float = 0.95` fields to
+     `TrainingConfig` (was previously using PyTorch's default β₂ = 0.999).
+   - β₂ = 0.95 is the standard for LM pretraining (nanoGPT / litgpt / OLMo /
+     Chinchilla).
+   - `_setup_optimizer()` now passes `betas=(config.adam_beta1, config.adam_beta2)`
+     to AdamW.
+   - `to_dict()` and `validate()` updated accordingly.
+
+3. Default weight_decay raised from 0.01 to 0.1 (training.py)
+   - `TrainingConfig.weight_decay` default changed from 0.01 → 0.1.
+   - All major pretraining recipes (nanoGPT, litgpt, OLMo, Chinchilla) use 0.1.
+
+4. CosineAnnealingLR eta_min already correct (training.py)
+   - Both scheduler sites in `Trainer.train()` and the DPO trainer already set
+     `eta_min=config.learning_rate * 0.1`.  No change needed.
+
+5. LoRA trainer AdamW betas (lora_utils.py)
+   - Added `adam_betas: tuple = (0.9, 0.95)` parameter to `LoraTrainer.__init__()`.
+   - `_get_optimizer()` now passes `betas=self.adam_betas` to AdamW.
