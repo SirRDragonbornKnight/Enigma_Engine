@@ -62,7 +62,9 @@ class TrainingConfig:
     epochs: int = 10
     batch_size: int = 4
     learning_rate: float = 1e-4
-    weight_decay: float = 0.01
+    weight_decay: float = 0.1
+    adam_beta1: float = 0.9
+    adam_beta2: float = 0.95
     warmup_steps: int = 100
     gradient_clip: float = 1.0
     save_every: int = 0
@@ -96,6 +98,10 @@ class TrainingConfig:
             raise ValueError(f"learning_rate must be > 0, got {self.learning_rate}")
         if self.gradient_clip < 0:
             raise ValueError(f"gradient_clip must be >= 0, got {self.gradient_clip}")
+        if not (0.0 < self.adam_beta1 < 1.0):
+            raise ValueError(f"adam_beta1 must be in (0, 1), got {self.adam_beta1}")
+        if not (0.0 < self.adam_beta2 < 1.0):
+            raise ValueError(f"adam_beta2 must be in (0, 1), got {self.adam_beta2}")
         if self.max_grad_accumulation < 1:
             raise ValueError(
                 f"max_grad_accumulation must be >= 1, got {self.max_grad_accumulation}"
@@ -108,6 +114,8 @@ class TrainingConfig:
             "batch_size": self.batch_size,
             "learning_rate": self.learning_rate,
             "weight_decay": self.weight_decay,
+            "adam_beta1": self.adam_beta1,
+            "adam_beta2": self.adam_beta2,
             "warmup_steps": self.warmup_steps,
             "gradient_clip": self.gradient_clip,
             "save_every": self.save_every,
@@ -378,7 +386,8 @@ class Trainer:
         self.optimizer = AdamW([
             {'params': decay_params, 'weight_decay': self.config.weight_decay},
             {'params': no_decay_params, 'weight_decay': 0.0}
-        ], lr=self.config.learning_rate)
+        ], lr=self.config.learning_rate,
+           betas=(self.config.adam_beta1, self.config.adam_beta2))
 
         # Cosine annealing scheduler
         self.scheduler = None  # Will be set when we know total steps

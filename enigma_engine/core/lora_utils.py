@@ -566,6 +566,7 @@ class LoraTrainer:
         batch_size: int = 4,
         epochs: int = 3,
         gradient_accumulation_steps: int = 4,
+        adam_betas: tuple[float, float] = (0.9, 0.95),
     ):
         """
         Initialize LoRA trainer.
@@ -580,6 +581,7 @@ class LoraTrainer:
             batch_size: Training batch size
             epochs: Number of epochs
             gradient_accumulation_steps: Accumulate gradients
+            adam_betas: AdamW beta coefficients (beta1, beta2)
         """
         self.tokenizer = tokenizer
         self.lora_config = lora_config or LoraConfig()
@@ -591,6 +593,7 @@ class LoraTrainer:
         self.batch_size = batch_size
         self.epochs = epochs
         self.gradient_accumulation_steps = gradient_accumulation_steps
+        self.adam_betas = adam_betas
 
         # Apply LoRA to model
         if isinstance(self.lora_config, QLoraConfig):
@@ -772,6 +775,7 @@ class LoraTrainer:
             trainable_params,
             lr=self.learning_rate,
             weight_decay=0.01,
+            betas=self.adam_betas,
         )
 
     def _create_batches(
