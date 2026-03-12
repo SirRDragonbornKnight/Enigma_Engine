@@ -5908,6 +5908,97 @@ class TestDataValidation:
         assert r.stats["total_chars"] == 100
 
 
+class TestRMSNormFp32Upcast:
+    """RMSNorm must compute in fp32 then cast back to input dtype."""
+
+    def test_output_dtype_matches_input(self):
+        """RMSNorm output dtype == input dtype for float32."""
+        import torch
+        from enigma_engine.core.model_components import RMSNorm
+        norm = RMSNorm(16)
+        x = torch.randn(2, 16)
+        out = norm(x)
+        assert out.dtype == x.dtype
+
+    def test_fp16_no_nan(self):
+        """fp16 input should not produce NaN thanks to fp32 upcast."""
+        import torch
+        from enigma_engine.core.model_components import RMSNorm
+        norm = RMSNorm(32)
+        # Large values that would overflow in fp16 norm without upcast
+        x = torch.randn(4, 32).half() * 100
+        norm = norm.half()
+        out = norm(x)
+        assert out.dtype == torch.float16
+        assert not torch.isnan(out).any(), "fp16 RMSNorm produced NaN"
+
+    def test_vision_rmsnorm_fp32_upcast(self):
+        """Vision encoder _RMSNorm also upcasts to fp32."""
+        import torch
+        from enigma_engine.core.vision_encoder import _RMSNorm
+        norm = _RMSNorm(32)
+        x = torch.randn(4, 32).half() * 100
+        norm = norm.half()
+        out = norm(x)
+        assert out.dtype == torch.float16
+        assert not torch.isnan(out).any()
+
+
+class TestTrainingConfigAdamFields:
+    """TrainingConfig must expose Adam optimizer fields."""
+
+    def test_default_betas(self):
+        """adam_beta1/beta2 default to LM-friendly values."""
+        from enigma_engine.core.training import TrainingConfig
+        cfg = TrainingConfig()
+        assert cfg.adam_beta1 == 0.9
+        assert cfg.adam_beta2 == 0.95
+        assert cfg.adam_eps == 1e-8
+
+    def test_custom_betas(self):
+        """adam_beta1/beta2 can be overridden."""
+        from enigma_engine.core.training import TrainingConfig
+        cfg = TrainingConfig(adam_beta1=0.85, adam_beta2=0.999, adam_eps=1e-6)
+        assert cfg.adam_beta1 == 0.85
+        assert cfg.adam_beta2 == 0.999
+        assert cfg.adam_eps == 1e-6
+
+    def test_to_dict_includes_adam_fields(self):
+        """to_dict() must include all three Adam fields."""
+        from enigma_engine.core.training import TrainingConfig
+        d = TrainingConfig().to_dict()
+        assert "adam_beta1" in d
+        assert "adam_beta2" in d
+        assert "adam_eps" in d
+        assert d["adam_beta1"] == 0.9
+        assert d["adam_beta2"] == 0.95
+
+
+class TestLoraTrainerWeightDecay:
+    """LoRA trainer weight_decay must be configurable."""
+
+    def test_default_weight_decay(self):
+        """Default weight_decay is 0.01."""
+        from enigma_engine.core.lora_utils import LoraTrainer
+        import inspect
+        sig = inspect.signature(LoraTrainer.__init__)
+        assert sig.parameters["weight_decay"].default == 0.01
+
+    def test_custom_weight_decay_stored(self):
+        """Custom weight_decay is stored on the instance."""
+        import torch.nn as nn
+        from unittest.mock import MagicMock, patch
+
+        # Patch create_lora_model to avoid actual LoRA application
+        with patch("enigma_engine.core.lora_utils.create_lora_model",
+                   side_effect=lambda m, c: m):
+            from enigma_engine.core.lora_utils import LoraTrainer
+            model = nn.Linear(4, 4)
+            tok = MagicMock()
+            trainer = LoraTrainer(model, tok, weight_decay=0.05)
+            assert trainer.weight_decay == 0.05
+
+
 # ================================================================
 # V-G: HYBRID CNN+ViT
 # ================================================================

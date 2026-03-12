@@ -73,6 +73,11 @@ class TrainingConfig:
     max_grad_accumulation: int = 1
     use_gradient_checkpointing: bool = False
 
+    # Optimizer betas (LM-friendly defaults)
+    adam_beta1: float = 0.9
+    adam_beta2: float = 0.95
+    adam_eps: float = 1e-8
+
     # Reasoning-weighted loss (CoT-E)
     # Weight multiplier for tokens inside <think>...</think> blocks.
     # 1.0 = normal (no extra weight), 2.0 = double weight on reasoning tokens.
@@ -121,6 +126,9 @@ class TrainingConfig:
             "use_amp": self.use_amp,
             "max_grad_accumulation": self.max_grad_accumulation,
             "use_gradient_checkpointing": self.use_gradient_checkpointing,
+            "adam_beta1": self.adam_beta1,
+            "adam_beta2": self.adam_beta2,
+            "adam_eps": self.adam_eps,
             "rolling_best_k": self.rolling_best_k,
             "early_stopping_patience": self.early_stopping_patience,
             "max_loss": self.max_loss,
@@ -382,7 +390,9 @@ class Trainer:
         self.optimizer = AdamW([
             {'params': decay_params, 'weight_decay': self.config.weight_decay},
             {'params': no_decay_params, 'weight_decay': 0.0}
-        ], lr=self.config.learning_rate)
+        ], lr=self.config.learning_rate,
+           betas=(self.config.adam_beta1, self.config.adam_beta2),
+           eps=self.config.adam_eps)
 
         # Cosine annealing scheduler
         self.scheduler = None  # Will be set when we know total steps
@@ -1447,6 +1457,8 @@ class Trainer:
             trainable_params,
             lr=self.config.learning_rate,
             weight_decay=self.config.weight_decay,
+            betas=(self.config.adam_beta1, self.config.adam_beta2),
+            eps=self.config.adam_eps,
         )
 
         scaler = torch.amp.GradScaler("cuda", enabled=(

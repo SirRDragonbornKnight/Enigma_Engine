@@ -1,7 +1,7 @@
 # Suggestions (Active Only)
 
-**Date:** March 10, 2026
-**Status:** FORGE supplement/stage/perplexity wiring complete, plus tool-path 3-mode wiring cleanup. Next: remove remaining legacy FORGE drift, then add tool metrics + discovery MVP.
+**Date:** March 11, 2026
+**Status:** FORGE supplement/stage/perplexity wiring complete and suggestions audited against current code. Next: remove remaining legacy FORGE drift, then wire tool metrics into history/model context.
 
 ## Current Reality
 - FORGE user contract is 3 modes: `Basic`, `AI-Guided`, `Image`.
@@ -202,3 +202,137 @@ The two-tier context is a polish step once training is regularly producing resul
 - Removed stale planning sections and speculative alternatives that are not currently used.
 - This file is now intentionally short and only tracks active decisions and near-term execution.
 - Docs synced on March 10, 2026: `SUGGESTIONS.md`, `AA code maker.md`, and `GUI_REFERENCE.md` now reflect the same processing-indicator root fix and memory direction.
+
+## Checked Against Code
+
+### Already True
+- Main trainer cosine scheduling already uses a non-zero floor (`eta_min = learning_rate * 0.1`).
+- Main trainer weight decay is already configurable and bias/norm parameters are excluded from decay.
+- Before/after perplexity is already persisted to `training_history.json` and model context.
+
+### Partially Done
+- Tool-usage evaluation helper exists in core, but it is not yet wired into FORGE history, model context, or the history viewer.
+- Weight decay is configurable in the main trainer paths, but LoRA still hardcodes `weight_decay=0.01`.
+
+### Real Open Backlog
+1. RMSNorm fp32 upcast in both text and vision paths.
+2. AdamW betas and eps configurable across trainer, LoRA, and related optimizer creation paths.
+3. Special token ID unification across tokenizer implementations.
+4. Sequence packing to reduce padding waste.
+5. Validation loop with val loss and checkpoint selection by validation.
+6. Byte-level BPE and tokenizer metrics/tooling.
+
+### Parked Until Current FORGE Cleanup Lands
+1. Discovery mode MVP.
+2. Broader training roadmap items that are not part of the current 3-mode FORGE contract.
+3. Whether backend-only modes (`DPO`, `RLHF`, `SelfPlay`, `Evolutionary`) stay hidden or move to a separate advanced workflow.
+
+## Audit Result
+- The duplicate roadmap dumps that followed this section were removed because they were overlapping, partially stale, and contradicted the “active only” purpose of this file.
+- If a larger long-range training roadmap is still useful, keep it in a separate dedicated file instead of mixing it into the active FORGE status document.
+
+# suggestions.txt
+# Purpose: Single source of truth for what should be changed, fixed, added, and verified.
+# Scope: Consolidated everything we discussed (training, optimizer, scheduler, batching, tokenizer, eval, DX).
+# Updated: 2026-03-11
+
+Legend:
+- Priority: P0 (must), P1 (should), P2 (nice), P3 (later)
+- Risk: low/med/high
+
+================================================================================
+0) BASELINES (DO THIS BEFORE BIG CHANGES)
+================================================================================
+[ ] (P0, low) Create a reproducible baseline run
+    - Record seed, model preset + full config dump, tokenizer type/vocab/special IDs,
+      dataset snapshot (hash/count), hyperparams (lr/betas/wd/schedule/steps).
+    - Done when: rerunning twice gives similar loss curve.
+
+[ ] (P0, low) Add a tiny fixed regression eval set
+    - 200–2000 samples, never changes.
+    - Track: eval_loss, perplexity, and a few golden prompts.
+
+================================================================================
+PHASE 1 — TRAINING STABILITY (NUMERICAL + OPTIMIZER + LR)
+================================================================================
+[ ] (P0, low) RMSNorm fp32 upcast
+    Files:
+      - enigma_engine/core/model_components.py (RMSNorm)
+      - enigma_engine/core/vision_encoder.py (_RMSNorm)
+    Change:
+      - compute RMS in float32; cast back to original dtype.
+
+[ ] (P0, low) AdamW betas configurable (LM defaults)
+    Files:
+      - enigma_engine/core/training.py
+      - enigma_engine/core/lora_utils.py
+    Add config:
+      - adam_beta1=0.9, adam_beta2=0.95, adam_eps=1e-8
+
+[ ] (P0, low) Cosine schedule eta_min != 0
+    Files:
+      - enigma_engine/core/training.py
+    Change:
+      - eta_min = lr * 0.1 (or min_lr_ratio)
+
+[ ] (P0, low) Weight decay consistency
+    - Ensure bias and norm params are excluded from weight decay everywhere.
+
+================================================================================
+PHASE 2 — DATA PIPELINE + BATCHING (QUALITY + SPEED)
+================================================================================
+[ ] (P0, med) Sequence packing
+    Files:
+      - enigma_engine/core/training.py
+    Change:
+      - pack multiple short sequences into max_seq_len chunks separated by EOS.
+
+[ ] (P0, med) Pad masking correctness
+    - Loss ignore_index uses pad_token_id.
+    - Consider attention masking to avoid attending to pads.
+
+[ ] (P1, low) Standardize chat template / formatting
+    - Define canonical prompt format with BOS/EOS rules.
+
+[ ] (P1, low) Improved filtering + stats
+    - Report kept/removed, min/max/avg lengths, duplicates removed.
+
+================================================================================
+PHASE 3 — TOKENIZER (CAPACITY + CORRECTNESS)
+================================================================================
+[ ] (P0, low) Unify special token IDs across tokenizers
+
+[ ] (P0, high) True byte-level BPE
+    Files:
+      - enigma_engine/core/bpe_tokenizer.py
+
+[ ] (P1, med) Increase vocab size default (32k+ recommended)
+
+[ ] (P1, low) Tokenizer training tooling + metrics
+
+================================================================================
+PHASE 4 — EVALUATION + CHECKPOINTING
+================================================================================
+[ ] (P0, low) Validation loop
+    - Track val_loss + perplexity; save best by val_loss when available.
+
+[ ] (P1, low) Golden prompt regression suite
+
+[ ] (P1, med) Proper resume-from-checkpoint
+    - Restore optimizer, scheduler, scaler, step counters.
+
+================================================================================
+PHASE 5 — PERFORMANCE / DX
+================================================================================
+[ ] (P1, low) Throughput telemetry
+    - tokens/sec, step time, VRAM usage.
+
+[ ] (P1, low) One canonical training CLI entrypoint
+
+[ ] (P2, low) Fix encoding/mojibake artifacts (e.g., â€”)
+
+================================================================================
+REFERENCES / INSPIRATION
+================================================================================
+- Lightning-AI/litgpt, karpathy/nanoGPT: optimizer/schedule/packing best practices
+- HF transformers/trl/OpenRLHF: preference training patterns

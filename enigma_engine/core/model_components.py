@@ -75,10 +75,11 @@ class RMSNorm(nn.Module):
         
         x: [batch, sequence, dim] → normalized: [batch, sequence, dim]
         """
-        # Calculate Root Mean Square: sqrt(mean(x²) + eps)
-        rms = torch.sqrt(torch.mean(x ** 2, dim=-1, keepdim=True) + self.eps)
-        # Normalize and apply learned scale
-        return x / rms * self.weight
+        # Compute in float32 for numerical stability in fp16/bf16 training
+        orig_dtype = x.dtype
+        x_f32 = x.float()
+        rms = torch.sqrt(torch.mean(x_f32 ** 2, dim=-1, keepdim=True) + self.eps)
+        return (x_f32 / rms * self.weight.float()).to(orig_dtype)
 
 
 # =============================================================================

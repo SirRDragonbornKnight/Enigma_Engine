@@ -135,8 +135,11 @@ class _RMSNorm(nn.Module):
         self.weight = nn.Parameter(torch.ones(dim))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        rms = torch.sqrt(torch.mean(x ** 2, dim=-1, keepdim=True) + self.eps)
-        return x / rms * self.weight
+        # Compute in float32 for numerical stability in fp16/bf16 training
+        orig_dtype = x.dtype
+        x_f32 = x.float()
+        rms = torch.sqrt(torch.mean(x_f32 ** 2, dim=-1, keepdim=True) + self.eps)
+        return (x_f32 / rms * self.weight.float()).to(orig_dtype)
 
 
 class CNNStem(nn.Module):
