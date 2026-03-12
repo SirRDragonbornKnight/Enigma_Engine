@@ -95,6 +95,9 @@ class TrainingConfig:
     run_evaluation: bool = False  # Evaluate before and after training
     eval_test_prompts: list[str] = None  # Custom test prompts (None = use defaults)
 
+    # Validation split
+    val_split: float = 0.0  # Fraction held out for validation (0.0 = disabled)
+
     def validate(self) -> None:
         """Raise *ValueError* if any field is nonsensical."""
         if self.epochs < 1:
@@ -108,6 +111,10 @@ class TrainingConfig:
         if self.max_grad_accumulation < 1:
             raise ValueError(
                 f"max_grad_accumulation must be >= 1, got {self.max_grad_accumulation}"
+            )
+        if not 0.0 <= self.val_split < 1.0:
+            raise ValueError(
+                f"val_split must be in [0.0, 1.0), got {self.val_split}"
             )
 
     def to_dict(self) -> dict[str, Any]:
@@ -133,6 +140,7 @@ class TrainingConfig:
             "early_stopping_patience": self.early_stopping_patience,
             "max_loss": self.max_loss,
             "max_training_seconds": self.max_training_seconds,
+            "val_split": self.val_split,
         }
 
 
@@ -681,6 +689,18 @@ class Trainer:
                 f"Removed {pre_dedup - len(sequences)} duplicate "
                 f"sequences ({len(sequences)} unique remain)")
 
+        # Split train/validation when val_split > 0
+        val_sequences: list[str] = []
+        if self.config.val_split > 0 and len(sequences) > 1:
+            n_val = max(1, int(len(sequences) * self.config.val_split))
+            # Deterministic split: take last n_val sequences
+            val_sequences = sequences[-n_val:]
+            sequences = sequences[:-n_val]
+            logger.info(
+                f"Validation split: {len(sequences)} train, "
+                f"{len(val_sequences)} val "
+                f"({self.config.val_split:.0%})")
+
         # Run before-training evaluation (EV-C)
         before_eval = None
         if self.config.run_evaluation:
@@ -713,10 +733,20 @@ class Trainer:
         try:
             batches = self._create_batches(
                 sequences, max_length=max_seq_len)
-            logger.info(f"Created {len(batches)} batches")
+            logger.info(f"Created {len(batches)} training batches")
         except Exception as e:
             logger.error(f"Failed to create batches: {e}")
             raise
+
+        # Create validation batches (if split is active)
+        val_batches: list[torch.Tensor] = []
+        if val_sequences:
+            try:
+                val_batches = self._create_batches(
+                    val_sequences, max_length=max_seq_len)
+                logger.info(f"Created {len(val_batches)} validation batches")
+            except Exception as exc:
+                logger.warning(f"Failed to create val batches: {exc}")
 
         # Setup scheduler
         total_steps = len(batches) * self.config.epochs
@@ -817,6 +847,14 @@ class Trainer:
 
             logger.info(f"Epoch {epoch + 1} complete: loss={avg_epoch_loss:.4f}")
 
+            # Run validation pass (if we have val data)
+            val_loss = None
+            if val_batches:
+                val_loss = self._validate(val_batches)
+                self.state.validation_losses.append(val_loss)
+                logger.info(
+                    f"Epoch {epoch + 1} val_loss={val_loss:.4f}")
+
             if self.on_epoch_complete:
                 self.on_epoch_complete(epoch + 1, avg_epoch_loss)
 
@@ -828,14 +866,16 @@ class Trainer:
                     checkpoint_dir, "checkpoint_epoch_", keep=3)
 
             # Track best loss + early stopping
-            if avg_epoch_loss < self.state.best_loss:
-                self.state.best_loss = avg_epoch_loss
+            # Prefer val_loss when available, fall back to train loss
+            tracked_loss = val_loss if val_loss is not None else avg_epoch_loss
+            if tracked_loss < self.state.best_loss:
+                self.state.best_loss = tracked_loss
                 self._epochs_without_improvement = 0
                 self._save_checkpoint(checkpoint_dir / "best_model.pt")
                 # Rolling best checkpoints (CK-C)
                 if self.config.rolling_best_k > 0:
                     self._save_rolling_checkpoint(
-                        checkpoint_dir, avg_epoch_loss, epoch + 1)
+                        checkpoint_dir, tracked_loss, epoch + 1)
             else:
                 self._epochs_without_improvement += 1
                 if (
@@ -965,6 +1005,35 @@ class Trainer:
                 self.scheduler.step()
 
         return loss.item() * self.config.max_grad_accumulation
+
+    @torch.no_grad()
+    def _validate(self, val_batches: list[torch.Tensor]) -> float:
+        """Run a forward-only pass on validation batches.
+
+        Returns the average validation loss (float).
+        """
+        self.model.eval()
+        total_loss = 0.0
+        total_tokens = 0
+
+        for batch in val_batches:
+            with torch.amp.autocast(
+                'cuda',
+                enabled=self.config.use_amp and torch.cuda.is_available(),
+            ):
+                input_ids = batch[:, :-1]
+                targets = batch[:, 1:]
+                _logits, loss = self.model(
+                    input_ids, targets=targets,
+                    pad_token_id=self.pad_token_id)
+
+            if loss is not None:
+                n_tokens = batch.numel()
+                total_loss += loss.item() * n_tokens
+                total_tokens += n_tokens
+
+        self.model.train()
+        return total_loss / max(1, total_tokens)
 
     def _handle_oom(self, exc: RuntimeError) -> None:
         """Handle CUDA OOM: clear cache, enable gradient checkpointing.

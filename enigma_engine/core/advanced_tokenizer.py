@@ -48,6 +48,8 @@ class AdvancedBPETokenizer:
         self.eos_token_id = 2
         self.bos_token_id = 1
         self.unk_token_id = 3
+        self.think_start_id = self.special_tokens["<think>"]
+        self.think_end_id = self.special_tokens["</think>"]
 
         # Vocabulary mappings
         self.token_to_id: dict[str, int] = {}

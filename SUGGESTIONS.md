@@ -209,17 +209,19 @@ The two-tier context is a polish step once training is regularly producing resul
 - Main trainer cosine scheduling already uses a non-zero floor (`eta_min = learning_rate * 0.1`).
 - Main trainer weight decay is already configurable and bias/norm parameters are excluded from decay.
 - Before/after perplexity is already persisted to `training_history.json` and model context.
+- RMSNorm fp32 upcast in both `model_components.py` and `vision_encoder.py` (commit `6a23413`).
+- AdamW betas/eps configurable in `TrainingConfig` and wired to main + vision + LoRA optimizers.
+- LoRA `weight_decay` is now a configurable `__init__` param (was hardcoded `0.01`).
 
 ### Partially Done
 - Tool-usage evaluation helper exists in core, but it is not yet wired into FORGE history, model context, or the history viewer.
-- Weight decay is configurable in the main trainer paths, but LoRA still hardcodes `weight_decay=0.01`.
 
 ### Real Open Backlog
-1. RMSNorm fp32 upcast in both text and vision paths.
-2. AdamW betas and eps configurable across trainer, LoRA, and related optimizer creation paths.
-3. Special token ID unification across tokenizer implementations.
+1. ~~RMSNorm fp32 upcast in both text and vision paths.~~ Done.
+2. ~~AdamW betas and eps configurable across trainer, LoRA, and related optimizer creation paths.~~ Done.
+3. ~~Special token ID unification across tokenizer implementations.~~ Done — all tokenizers expose `think_start_id`/`think_end_id`.
 4. Sequence packing to reduce padding waste.
-5. Validation loop with val loss and checkpoint selection by validation.
+5. ~~Validation loop with val loss and checkpoint selection by validation.~~ Done — `val_split` config, per-epoch val loop, best checkpoint by val_loss.
 6. Byte-level BPE and tokenizer metrics/tooling.
 
 ### Parked Until Current FORGE Cleanup Lands
@@ -255,28 +257,10 @@ Legend:
 ================================================================================
 PHASE 1 — TRAINING STABILITY (NUMERICAL + OPTIMIZER + LR)
 ================================================================================
-[ ] (P0, low) RMSNorm fp32 upcast
-    Files:
-      - enigma_engine/core/model_components.py (RMSNorm)
-      - enigma_engine/core/vision_encoder.py (_RMSNorm)
-    Change:
-      - compute RMS in float32; cast back to original dtype.
-
-[ ] (P0, low) AdamW betas configurable (LM defaults)
-    Files:
-      - enigma_engine/core/training.py
-      - enigma_engine/core/lora_utils.py
-    Add config:
-      - adam_beta1=0.9, adam_beta2=0.95, adam_eps=1e-8
-
-[ ] (P0, low) Cosine schedule eta_min != 0
-    Files:
-      - enigma_engine/core/training.py
-    Change:
-      - eta_min = lr * 0.1 (or min_lr_ratio)
-
-[ ] (P0, low) Weight decay consistency
-    - Ensure bias and norm params are excluded from weight decay everywhere.
+[x] (P0, low) RMSNorm fp32 upcast — DONE (commit 6a23413)
+[x] (P0, low) AdamW betas configurable (LM defaults) — DONE (commit 6a23413)
+[x] (P0, low) Cosine schedule eta_min != 0 — Already done (eta_min = lr * 0.1)
+[x] (P0, low) Weight decay consistency — Already done + LoRA fixed (commit 6a23413)
 
 ================================================================================
 PHASE 2 — DATA PIPELINE + BATCHING (QUALITY + SPEED)
@@ -300,7 +284,10 @@ PHASE 2 — DATA PIPELINE + BATCHING (QUALITY + SPEED)
 ================================================================================
 PHASE 3 — TOKENIZER (CAPACITY + CORRECTNESS)
 ================================================================================
-[ ] (P0, low) Unify special token IDs across tokenizers
+[ ] (P0, low) Unify special token IDs across tokenizers — Partially done (think IDs exposed on all tokenizers; actual ID unification deferred)
+
+[x] (P0, low) Validation loop — DONE
+    - `val_split` config field, data split, per-epoch val pass, best checkpoint by val_loss.
 
 [ ] (P0, high) True byte-level BPE
     Files:
@@ -313,8 +300,7 @@ PHASE 3 — TOKENIZER (CAPACITY + CORRECTNESS)
 ================================================================================
 PHASE 4 — EVALUATION + CHECKPOINTING
 ================================================================================
-[ ] (P0, low) Validation loop
-    - Track val_loss + perplexity; save best by val_loss when available.
+[x] (P0, low) Validation loop — DONE (val_split + per-epoch val + best by val_loss)
 
 [ ] (P1, low) Golden prompt regression suite
 

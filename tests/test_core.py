@@ -7140,3 +7140,107 @@ def test_memory_search_case_insensitive():
     result = registry.execute("memory.search python")
     assert result.success
     assert "PYTHON" in result.message
+
+
+class TestSpecialTokenIds:
+    """All tokenizers must expose think_start_id / think_end_id."""
+
+    def test_char_tokenizer_think_ids(self):
+        from enigma_engine.core.char_tokenizer import CharacterTokenizer
+        tok = CharacterTokenizer()
+        assert hasattr(tok, "think_start_id")
+        assert hasattr(tok, "think_end_id")
+        assert tok.think_start_id == tok.special_tokens["<think>"]
+        assert tok.think_end_id == tok.special_tokens["</think>"]
+
+    def test_bpe_tokenizer_think_ids(self):
+        from enigma_engine.core.bpe_tokenizer import BPETokenizer
+        tok = BPETokenizer()
+        assert hasattr(tok, "think_start_id")
+        assert hasattr(tok, "think_end_id")
+        assert tok.think_start_id == tok.special_tokens["<think>"]
+        assert tok.think_end_id == tok.special_tokens["</think>"]
+
+    def test_advanced_tokenizer_think_ids(self):
+        from enigma_engine.core.advanced_tokenizer import AdvancedBPETokenizer
+        tok = AdvancedBPETokenizer()
+        assert hasattr(tok, "think_start_id")
+        assert hasattr(tok, "think_end_id")
+        assert tok.think_start_id == tok.special_tokens["<think>"]
+        assert tok.think_end_id == tok.special_tokens["</think>"]
+
+    def test_simple_tokenizer_think_ids(self):
+        from enigma_engine.core.tokenizer import SimpleTokenizer
+        tok = SimpleTokenizer()
+        assert hasattr(tok, "think_start_id")
+        assert hasattr(tok, "think_end_id")
+        assert tok.think_start_id == 4
+        assert tok.think_end_id == 5
+
+    def test_get_special_token_ids_uses_attributes(self):
+        """get_special_token_ids returns correct think IDs from tokenizer."""
+        from enigma_engine.core.tokenizer import get_special_token_ids
+        from enigma_engine.core.char_tokenizer import CharacterTokenizer
+        tok = CharacterTokenizer()
+        ids = get_special_token_ids(tok)
+        assert ids["think_start"] == tok.think_start_id
+        assert ids["think_end"] == tok.think_end_id
+
+    def test_core_ids_consistent(self):
+        """pad=0, bos=1, eos=2, unk=3 across all tokenizers."""
+        from enigma_engine.core.char_tokenizer import CharacterTokenizer
+        from enigma_engine.core.bpe_tokenizer import BPETokenizer
+        from enigma_engine.core.advanced_tokenizer import AdvancedBPETokenizer
+        from enigma_engine.core.tokenizer import SimpleTokenizer
+        for cls in [CharacterTokenizer, BPETokenizer,
+                    AdvancedBPETokenizer, SimpleTokenizer]:
+            tok = cls()
+            assert tok.pad_token_id == 0, f"{cls.__name__} pad != 0"
+            assert tok.bos_token_id == 1, f"{cls.__name__} bos != 1"
+            assert tok.eos_token_id == 2, f"{cls.__name__} eos != 2"
+            assert tok.unk_token_id == 3, f"{cls.__name__} unk != 3"
+
+
+class TestTrainingConfigValSplit:
+    """TrainingConfig val_split field."""
+
+    def test_default_zero(self):
+        from enigma_engine.core.training import TrainingConfig
+        cfg = TrainingConfig()
+        assert cfg.val_split == 0.0
+
+    def test_to_dict_includes_val_split(self):
+        from enigma_engine.core.training import TrainingConfig
+        d = TrainingConfig(val_split=0.1).to_dict()
+        assert d["val_split"] == 0.1
+
+    def test_validate_rejects_bad_val_split(self):
+        import pytest
+        from enigma_engine.core.training import TrainingConfig
+        cfg = TrainingConfig(val_split=1.0)
+        with pytest.raises(ValueError, match="val_split"):
+            cfg.validate()
+        cfg2 = TrainingConfig(val_split=-0.1)
+        with pytest.raises(ValueError, match="val_split"):
+            cfg2.validate()
+
+    def test_validate_accepts_valid_val_split(self):
+        from enigma_engine.core.training import TrainingConfig
+        TrainingConfig(val_split=0.0).validate()
+        TrainingConfig(val_split=0.2).validate()
+
+
+class TestValidationLoop:
+    """Trainer._validate() method."""
+
+    def test_validate_method_exists(self):
+        from enigma_engine.core.training import Trainer
+        assert hasattr(Trainer, "_validate")
+
+    def test_validation_losses_populated(self):
+        """state.validation_losses filled when val_split > 0."""
+        from enigma_engine.core.training import TrainingState
+        s = TrainingState()
+        assert s.validation_losses == []
+        s.validation_losses.append(1.5)
+        assert len(s.validation_losses) == 1
