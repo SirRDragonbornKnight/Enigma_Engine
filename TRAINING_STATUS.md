@@ -1,6 +1,6 @@
 # Training & Model Status
 
-**Updated:** February 28, 2026
+**Updated:** March 25, 2026
 
 ---
 
@@ -8,200 +8,91 @@
 
 | Model | Size | Type | Status |
 |-------|------|------|--------|
-| `base.pth` | Native | PyTorch (Llama-style) | ✅ Loads |
-| `base_14.pth` | Native | PyTorch (Llama-style) | ✅ Loads |
-| `qwen3-30b-a3b/` | ~30.5B (3.3B active, MoE) | GGUF Q4_K_M (17.28 GB) | ✅ Works with llama-server backend |
-| `qwen3-8b/` | ~8.2B | HuggingFace safetensors (15.27 GB) | ✅ Fine-tunable with FORGE QLoRA |
+| `base.pth` | Native | PyTorch (LLaMA-style) | Loads |
+| `qwen3-30b-a3b/` | ~30.5B (3.3B active, MoE) | GGUF Q4_K_M (17.28 GB) | Works with llama-server backend |
+| `qwen3-8b/` | ~8.2B | HuggingFace safetensors (15.27 GB) | Fine-tunable with FORGE QLoRA |
 
 ---
 
 ## Training Methods
 
-| Method | Code | GUI | Works? |
-|--------|------|-----|--------|
-| **SFT (Supervised Fine-tuning)** | ✅ `Trainer` class | ✅ Solo Training | ✅ Working |
-| **Guided Training (3-phase)** | ✅ `_start_guided_training()` | ✅ Wired | ✅ Working — TRAINER creates curriculum, trains STUDENT, tests readiness |
-| **Best-of-N** | ✅ `best_of_n()` | ✅ Shows info | N/A (inference, not training) |
-| **Evolutionary** | ✅ `evolutionary_training()` | ✅ Wired | ✅ Working |
-| **LoRA/QLoRA** | ✅ `lora_utils.py` | ✅ Wired | ✅ Working (requires PEFT) |
-| **Generate Data** | ✅ `_generate_training_data()` | ✅ Wired | ✅ Autonomous — TRAINER generates Q/A pairs |
-| **Evaluate** | ✅ `_evaluate_student()` | ✅ Wired | ✅ Interactive — TRAINER judges STUDENT answers 1-10 |
-| **Web Learn** | ✅ `_web_learn()` | ✅ Wired | ✅ DuckDuckGo search + page fetch + Q/A generation |
-| **DPO** | ❌ Not built | ❌ Not in GUI | Needs preference data |
+All methods are fully implemented and wired to the GUI.
+
+### Core Training (`training.py`)
+
+| Method | Description | GUI Mode |
+|--------|-------------|----------|
+| SFT | Supervised fine-tuning on text/Q&A/JSONL data | Solo Training |
+| DPO | Direct Preference Optimization from chosen/rejected pairs | DPO Training |
+| Vision | Vision encoder + projection on image-text pairs | Vision Training |
+| Audio | Audio encoder + projection on audio-text pairs | (via code) |
+
+### RL Training (`rl_training.py`)
+
+| Method | Description | GUI Mode |
+|--------|-------------|----------|
+| Reward Model | Train reward model from preference rankings | RLHF (phase 1) |
+| RLHF/PPO | Policy gradient with KL penalty + reward model | RLHF (phase 2) |
+| Self-Play | TRAINER scores STUDENT as reward signal | Self-Play |
+
+### Adapter Training (`lora_utils.py`)
+
+| Method | Description | GUI Mode |
+|--------|-------------|----------|
+| LoRA/QLoRA | Low-rank adapter fine-tuning (~75% VRAM savings) | LoRA Training |
+
+### GUI Advanced Modes
+
+| Method | Description | File |
+|--------|-------------|------|
+| Guided Training | AI curriculum: generate lessons, train, evaluate | `gui_forge_advanced.py` |
+| Dialogue Training | TRAINER-STUDENT conversation with corrections | `gui_forge_advanced.py` |
+| Adaptive Training | Autonomous pipeline (TC-C3, SA-B, SA-C), resumable | `gui_forge_adaptive.py` |
+| Pre-Train | Train from scratch on large corpus | `gui_forge_new_modes.py` |
+| Distillation | TRAINER generates targeted data for STUDENT | `gui_forge_new_modes.py` |
+
+### GUI Tools
+
+| Tool | Description | File |
+|------|-------------|------|
+| Generate Data | TRAINER creates Q/A pairs autonomously | `gui_forge_tools.py` |
+| Evaluate | TRAINER judges STUDENT answers | `gui_forge_tools.py` |
+| Web Learn | DuckDuckGo search → page fetch → Q/A generation | `gui_forge_tools.py` |
+| Benchmark | Coherence scoring against test prompts | `gui_forge_tools.py` |
+| Tokenizer Training | BPE tokenizer training from text data | `gui_forge_tools.py` |
+
+### CLI Training (`run.py`)
+
+| Command | Description |
+|---------|-------------|
+| `python run.py --train data/training.txt --epochs 10` | Train model on data |
+| `python run.py --train-tokenizer data/training.txt` | Train BPE tokenizer |
+| `python run.py --benchmark` | Run coherence benchmark |
 
 ---
 
 ## Training Code Location
 
 ```
-enigma_engine/core/training.py (~1181 lines)
-├── TrainingConfig      - Configuration dataclass
-├── TrainingState       - Tracks epoch, step, loss
-├── Trainer            - Main training class
-│   ├── train()        - Main training loop
-│   ├── _train_epoch() - Single epoch
-│   └── save/load      - Checkpoint management
-├── best_of_n()        - Generate N, pick random non-empty
-├── best_of_n()        - Generate N, pick best
-├── collect_training_data() - Gather winners
-└── evolutionary_training() - Self-play loop
+enigma_engine/core/
+├── training.py           # Trainer (SFT, DPO, vision, audio, evolutionary)
+├── rl_training.py        # RewardTrainer, RLHFTrainer, SelfPlayTrainer
+├── lora_utils.py         # LoraTrainer (LoRA/QLoRA via PEFT)
+├── adaptive_trainer.py   # Adaptive training pipeline (TC-C3, SA-B, SA-C)
+├── training_evaluation.py# Evaluation utilities
+├── training_monitor.py   # Thread-safe training monitor
+├── training_queue.py     # Training queue with crash recovery
+├── curated_dataset.py    # Thread-safe curated dataset management
+├── dataset.py            # Dataset loading and Unicode handling
+└── progressive_growing.py# Net2Net model expansion (width + depth)
 
-enigma_engine/gui/gui_forge.py (~2776 lines)
-├── _build_trainer_system_prompt() - System prompt w/ student context, stages, personality
-├── _load_engine_for_path()        - Load any model format via EnigmaEngine
-├── _extract_prompts()             - Parse Q/A, JSONL, User/AI, raw text
-├── _start_solo_training()         - Train STUDENT directly on data (SFT)
-├── _start_guided_training()       - 3-phase: generate curriculum → train → test readiness
-├── _generate_training_data()      - Autonomous: TRAINER generates N Q/A pairs
-├── _evaluate_student()            - Interactive: TRAINER judges STUDENT answers 1-10
-├── _web_learn()                   - Search web + generate training pairs from content
-├── _save_forge_checkpoint()       - Save STUDENT to named checkpoint
-├── _load_forge_checkpoint()       - Restore from checkpoint file
-└── _display_loss_curve()          - Text-based bar chart of per-epoch losses
+enigma_engine/gui/
+├── gui_forge.py          # FORGE hub: shared utilities, dispatch
+├── gui_forge_training.py # Solo, DPO, Vision, LoRA modes
+├── gui_forge_advanced.py # Guided (3-phase), Dialogue modes
+├── gui_forge_adaptive.py # Adaptive pipeline (continuous loop)
+├── gui_forge_new_modes.py# Pre-Train, Distill, RLHF, Self-Play
+├── gui_forge_tools.py    # Data gen, evaluate, web learn, benchmark
+├── gui_forge_models.py   # Model import, create, copy, rename, delete
+└── gui_forge_queue.py    # Training queue, overnight plan, curated dataset
 ```
-
----
-
-## Your Idea: Router-based Training
-
-**Concept:** Put training in the router so AI trains while bricks work
-
-```
-┌─────────────────────────────────────────────┐
-│  ROUTER (port 9900)                         │
-│  ┌──────────────┐  ┌──────────────────────┐ │
-│  │ Brick Manager│  │ Background Trainer   │ │
-│  │ - Accept     │  │ - Train on idle      │ │
-│  │ - Route cmds │  │ - Collect responses  │ │
-│  │ - Monitor    │  │ - Score & learn      │ │
-│  └──────────────┘  └──────────────────────┘ │
-└─────────────────────────────────────────────┘
-         ↕                    ↕
-    Bricks connect     Continuous training
-    and generate       in background thread
-```
-
-**Advantages:**
-- AI trains while you use it
-- Learns from actual conversations
-- No separate training session needed
-
-**How it could work:**
-1. Router has training thread running in background
-2. Every conversation goes to training queue
-3. Good responses (rated, or AI-judged) become training data
-4. Model fine-tunes incrementally
-
----
-
-## To Test Training Now
-
-### Option 1: GUI
-```bash
-python run.py --gui
-# Training Tab → Load data → Start Training
-```
-
-### Option 2: Python Script
-```python
-from enigma_engine.core.training import Trainer, TrainingConfig
-from enigma_engine.core.model import load_model
-
-# Load model
-model, tokenizer = load_model("models/enigma_tiny.pth")
-
-# Configure training
-config = TrainingConfig(
-    epochs=5,
-    batch_size=2,
-    learning_rate=1e-4
-)
-
-# Create trainer
-trainer = Trainer(model, tokenizer, config)
-
-# Train on data
-data = [
-    {"input": "Hello", "output": "Hi there!"},
-    {"input": "What is AI?", "output": "AI is artificial intelligence."},
-]
-trainer.train(data)
-
-# Save
-torch.save(model.state_dict(), "models/tiny_forge_trained.pth")
-```
-
----
-
-## Questions to Answer
-
-1. **Does SFT training work?** 
-   - [ ] Test with enigma_tiny.pth on small dataset
-   - [ ] Check if loss decreases
-   - [ ] Verify model improves
-
-2. **Does evolutionary training work?**
-   - [ ] Test `evolutionary_training()` function
-   - [ ] See if it generates, scores, trains
-
-3. **Can router do background training?**
-   - [x] Build router (`enigma_engine/router.py`)
-   - [x] Add training queue 
-   - [x] Wire into main_window buttons
-   - [x] Add Prompts tab for configuring system prompts
-   - [ ] Test incremental learning with real model
-
----
-
-## Router Implementation (DONE)
-
-**File:** [enigma_engine/router.py](enigma_engine/router.py)
-
-**Components:**
-- `BrickRouter` - TCP server on port 9900
-- `BackgroundTrainer` - Training thread with example queue  
-- Auto-collects chat conversations for training
-- Feedback (good/bad) adjusts training scores
-
-**How to use:**
-1. Go to Bricks tab
-2. Click "Start Router"
-3. Chat with the AI
-4. Conversations auto-queue for training
-5. Rate responses to boost/lower scores
-6. Training runs in background when model is connected
-
-**Wiring:**
-- Router starts when you click "Start Router"
-- Chat responses auto-added to training queue
-- Good feedback = score 1.5, Bad feedback = score 0.2
-- Training stats shown in Bricks tab (updated every 2s)
-
----
-
-## Prompts Tab (NEW)
-
-**File:** [enigma_engine/gui/tabs/prompt_tab.py](enigma_engine/gui/tabs/prompt_tab.py)
-
-**Purpose:** Configure system prompts that guide AI behavior
-
-**Prompt Categories:**
-1. **System** - Base personality and capabilities
-2. **External Models** - Instructions for API models (GPT, Claude) on using GUI/bricks
-3. **Internal Models** - Instructions for local models
-4. **Brick-specific** - Per-brick instructions (how to use each brick)
-
-**Features:**
-- Edit prompts with syntax highlighting
-- Variables: `{brick_list}`, `{model_name}`, `{date}`
-- Auto-saves to `data/prompts.json`
-- Updates router training context in real-time
-- Reset to defaults button
-
----
-
-## Next Steps
-
-1. [ ] Test router with actual model connected
-2. [ ] Verify training loss decreases
-3. [ ] Build sample brick that connects

@@ -329,6 +329,11 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
         from pathlib import Path
 
         path = Path(args[0]) if args else Path(".")
+
+        blocked = _check_blocked_path(str(path), ctx)
+        if blocked:
+            return CommandResult(False, blocked)
+
         if not path.exists():
             return CommandResult(False, f"[ERROR] Path not found: {path}")
 
@@ -348,12 +353,33 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
         return CommandResult(True, f"[OK] {', '.join(items[:LIST_DISPLAY_LIMIT])}" +
                            (" ..." if len(items) > LIST_DISPLAY_LIMIT else ""), items)
 
+    def _check_blocked_path(path_str: str, ctx: Dict) -> str | None:
+        """Check if a path is blocked by config patterns. Returns error msg or None."""
+        from pathlib import Path
+        from fnmatch import fnmatch
+        config = ctx.get("config", {})
+        blocked_paths = config.get("blocked_paths", [])
+        blocked_patterns = config.get("blocked_patterns", [])
+        resolved = str(Path(path_str).resolve())
+        name = Path(path_str).name
+        for bp in blocked_paths:
+            if resolved == str(Path(bp).resolve()):
+                return f"[ERROR] Access denied: {path_str} is a blocked path"
+        for pat in blocked_patterns:
+            if fnmatch(name, pat) or fnmatch(name.lower(), pat.lower()):
+                return f"[ERROR] Access denied: {path_str} matches blocked pattern '{pat}'"
+        return None
+
     def file_read(args: list[str], ctx: Dict) -> CommandResult:
         """Read file contents."""
         from pathlib import Path
 
         if not args:
             return CommandResult(False, "[ERROR] Usage: file.read <path>")
+
+        blocked = _check_blocked_path(args[0], ctx)
+        if blocked:
+            return CommandResult(False, blocked)
 
         path = Path(args[0])
         if not path.exists():
@@ -383,6 +409,10 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
         if len(args) < 2:
             return CommandResult(False, "[ERROR] Usage: file.write <path> <content>")
 
+        blocked = _check_blocked_path(args[0], ctx)
+        if blocked:
+            return CommandResult(False, blocked)
+
         path = Path(args[0]).resolve()  # Resolve to absolute path
         # Join remaining args as content (handles spaces)
         content = " ".join(args[1:])
@@ -390,7 +420,8 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
         try:
             # Create parent directories if needed
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(content, encoding="utf-8")
+            from enigma_engine.core.safe_save import atomic_write_text
+            atomic_write_text(path, content)
             msg = f"[OK] Wrote {len(content)} chars to {path}"
             # Include path in data so GUI can provide file access options
             return CommandResult(True, msg, data={"path": str(path), "exists": True})
@@ -403,6 +434,10 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
 
         if len(args) < 2:
             return CommandResult(False, "[ERROR] Usage: file.append <path> <content>")
+
+        blocked = _check_blocked_path(args[0], ctx)
+        if blocked:
+            return CommandResult(False, blocked)
 
         path = Path(args[0]).resolve()  # Resolve to absolute path
         # Join remaining args as content (handles spaces)
@@ -467,7 +502,8 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
         }
 
         try:
-            memory_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            from enigma_engine.core.safe_save import atomic_write_json
+            atomic_write_json(memory_file, data)
             return CommandResult(True, f"[OK] Saved conversation as '{name}' ({len(messages)} messages)")
         except Exception as e:
             return CommandResult(False, f"[ERROR] Failed to save: {e}")
@@ -602,17 +638,20 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
         from .memory import get_memory
         query = " ".join(args).lower()
         mem = get_memory()
+        if mem.disabled:
+            return CommandResult(
+                True, "[OK] Memory is disabled.")
         if not mem.facts:
             return CommandResult(
                 True, "[OK] No memories to search.")
-        
+
         # Find facts containing the query (case-insensitive substring match)
         matches = [f for f in mem.facts if query in f.lower()]
-        
+
         if not matches:
             return CommandResult(
                 True, f"[OK] No memories found matching '{query}'.")
-        
+
         lines = [f"[OK] Found {len(matches)} matching memor{'y' if len(matches) == 1 else 'ies'}:"]
         for i, fact in enumerate(matches):
             lines.append(f"  {i + 1}. {fact}")
@@ -638,6 +677,56 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
         "memory.search", memory_search,
         "Search for specific facts in memory",
         "memory.search <query>")
+
+    # ========== Emotional State Commands ==========
+
+    def emotions_show(args: list[str], ctx: Dict) -> CommandResult:
+        """Show the AI's current emotional state."""
+        model_context = ctx.get("model_context")
+        if model_context is None:
+            return CommandResult(False, "[ERROR] No model context loaded")
+        state = getattr(model_context, "emotional_state", None)
+        if state is None:
+            return CommandResult(False, "[ERROR] Emotional state not available")
+        lines = ["[OK] Current emotional state:"]
+        labels = {
+            "valence": ("Valence", "-1.0 neg .. +1.0 pos"),
+            "arousal": ("Arousal", "0.0 calm .. 1.0 energized"),
+            "engagement": ("Engagement", "0.0 bored .. 1.0 interested"),
+            "trust": ("Trust", "0.0 guarded .. 1.0 open"),
+            "frustration": ("Frustration", "0.0 patient .. 1.0 frustrated"),
+        }
+        for key, (label, desc) in labels.items():
+            val = state.get(key, 0.0)
+            bar_len = 20
+            if key == "valence":
+                # Valence is -1 to 1, map to 0-20
+                fill = int((val + 1.0) / 2.0 * bar_len)
+            else:
+                fill = int(val * bar_len)
+            fill = max(0, min(bar_len, fill))
+            bar = "#" * fill + "-" * (bar_len - fill)
+            lines.append(f"  {label:12s} [{bar}] {val:+.2f}  ({desc})")
+        return CommandResult(True, "\n".join(lines))
+
+    def emotions_reset(args: list[str], ctx: Dict) -> CommandResult:
+        """Reset the AI's emotional state to neutral baseline."""
+        model_context = ctx.get("model_context")
+        if model_context is None:
+            return CommandResult(False, "[ERROR] No model context loaded")
+        if hasattr(model_context, "reset_emotional_state"):
+            model_context.reset_emotional_state()
+            return CommandResult(True, "[OK] Emotional state reset to baseline")
+        return CommandResult(False, "[ERROR] Emotional state not available")
+
+    registry.register(
+        "emotions.show", emotions_show,
+        "Show the AI's current emotional state",
+        "emotions.show")
+    registry.register(
+        "emotions.reset", emotions_reset,
+        "Reset emotional state to neutral baseline",
+        "emotions.reset")
 
     # ========== Training Commands ==========
 
@@ -904,10 +993,11 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
         try:
             import requests
             from enigma_engine.core.web_utils import (
-                fetch_page_text)
+                fetch_page_text, _validate_url)
 
             content_type = ""
             try:
+                _validate_url(url)
                 resp = requests.head(
                     url, headers={"User-Agent": (
                         "Mozilla/5.0 (Windows NT 10.0; Win64; "
@@ -928,7 +1018,8 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
                     f"[OK] Fetched {url}:\n\n{content}",
                     content)
             else:
-                # Non-HTML — fetch raw text
+                # Non-HTML — fetch raw text (validate to prevent SSRF)
+                _validate_url(url)
                 resp = requests.get(url, headers={
                     "User-Agent": (
                         "Mozilla/5.0 (Windows NT 10.0; "
@@ -973,7 +1064,8 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
         note_file = notes_dir / f"note_{timestamp}.txt"
 
         try:
-            note_file.write_text(text, encoding="utf-8")
+            from enigma_engine.core.safe_save import atomic_write_text
+            atomic_write_text(note_file, text)
             return CommandResult(True, f"[OK] Note saved: {note_file.name}")
         except Exception as e:
             return CommandResult(False, f"[ERROR] Failed to save note: {e}")
@@ -1150,10 +1242,6 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
             if pattern in command_lower:
                 return CommandResult(False, f"[ERROR] Blocked dangerous pattern: {pattern}")
 
-        # Block shell metacharacters to prevent injection
-        if any(ch in command for ch in ("|", "&", ";", "`", "$", ">", "<")):
-            return CommandResult(False, "[ERROR] Shell metacharacters are not allowed")
-
         try:
             # shell=False — args list prevents shell injection
             cmd_list = shlex.split(command)
@@ -1221,9 +1309,11 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
         # Safety: disallow dangerous operations
         forbidden = [
             "shutil.rmtree", "os.remove", "os.rmdir", "os.unlink",
-            "__import__('os').system", "subprocess.call",
+            "__import__(", "subprocess.call",
             "subprocess.Popen", "subprocess.run",
             "exec(", "eval(",
+            "importlib", "compile(",
+            "ctypes", "sys.modules",
         ]
         for pattern in forbidden:
             if pattern in code:
@@ -1537,8 +1627,12 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
 
                 device = ("cuda" if torch.cuda.is_available()
                           else "cpu")
-                dtype = (torch.float16 if device == "cuda"
-                         else torch.float32)
+                if device == "cuda" and torch.cuda.is_bf16_supported():
+                    dtype = torch.bfloat16
+                elif device == "cuda":
+                    dtype = torch.float16
+                else:
+                    dtype = torch.float32
                 pipe = StableDiffusionPipeline.from_pretrained(
                     "runwayml/stable-diffusion-v1-5",
                     torch_dtype=dtype)

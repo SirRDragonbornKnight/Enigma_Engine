@@ -66,10 +66,10 @@ class TrainingExample:
 class BackgroundTrainer(threading.Thread):
     """
     Background training thread that learns from collected examples.
-    
+
     Runs continuously while the router is active, processing training
     examples in a queue without blocking the main application.
-    
+
     Smart features (BT-B + BT-D):
     - Replay buffer: rolling collection of recent examples.
       Periodic retraining on the full buffer prevents catastrophic
@@ -87,6 +87,8 @@ class BackgroundTrainer(threading.Thread):
         checkpoint_dir: str = "models/checkpoints/router_training",
         replay_buffer_size: int = 1000,
         retrain_interval: int = 200,
+        adam_betas: tuple[float, float] = (0.9, 0.95),
+        adam_eps: float = 1e-8,
     ):
         super().__init__(daemon=True)
         self.model = model
@@ -95,6 +97,8 @@ class BackgroundTrainer(threading.Thread):
         self.batch_size = batch_size
         self.save_interval = save_interval
         self.checkpoint_dir = Path(checkpoint_dir)
+        self.adam_betas = adam_betas
+        self.adam_eps = adam_eps
 
         # System prompt for context (set from PromptTab)
         self.system_prompt: str = ""
@@ -143,7 +147,9 @@ class BackgroundTrainer(threading.Thread):
             self.optimizer = torch.optim.AdamW(
                 model.parameters(),
                 lr=self.learning_rate,
-                weight_decay=0.01
+                weight_decay=0.01,
+                betas=self.adam_betas,
+                eps=self.adam_eps,
             )
             # Keep model in eval mode — _train_batch switches to
             # train mode only inside the lock and restores eval after.
@@ -320,9 +326,11 @@ class BackgroundTrainer(threading.Thread):
             return
 
         with self._replay_lock:
-            # Take the top half of replay buffer (already sorted by score desc)
-            top_k = min(len(self.replay_buffer), self.replay_buffer_size // 2)
-            replay_batch = list(self.replay_buffer[:top_k])
+            # Sort by score (descending) so we retrain on the best examples
+            sorted_buf = sorted(
+                self.replay_buffer, key=lambda x: x.score, reverse=True)
+            top_k = min(len(sorted_buf), self.replay_buffer_size // 2)
+            replay_batch = list(sorted_buf[:top_k])
 
         if not replay_batch:
             return
@@ -334,6 +342,12 @@ class BackgroundTrainer(threading.Thread):
         try:
             with self._train_lock:
                 self.model.train()
+                # Halve LR for replay to avoid over-fitting on
+                # the same examples, then restore after the loop.
+                orig_lrs = []
+                for pg in self.optimizer.param_groups:
+                    orig_lrs.append(pg["lr"])
+                    pg["lr"] = pg["lr"] * 0.5
                 try:
                     for example in replay_batch:
                         if self.system_prompt:
@@ -371,14 +385,15 @@ class BackgroundTrainer(threading.Thread):
                         loss = torch.nn.functional.cross_entropy(
                             logits.reshape(-1, logits.size(-1)),
                             target_ids.reshape(-1))
-                        # Lower learning rate for replay to avoid
-                        # over-fitting on the same examples
-                        loss = loss * 0.5
                         loss.backward()
                         torch.nn.utils.clip_grad_norm_(
                             self.model.parameters(), 1.0)
                         self.optimizer.step()
                 finally:
+                    # Restore original LR and eval mode
+                    for pg, lr in zip(self.optimizer.param_groups,
+                                      orig_lrs):
+                        pg["lr"] = lr
                     self.model.eval()
 
             logger.info("BackgroundTrainer: replay retrain complete")
@@ -461,7 +476,7 @@ class BackgroundTrainer(threading.Thread):
 class ModRouter:
     """
     Central router for mod connections.
-    
+
     Handles:
     - TCP server on port 9900
     - Mod connection management
@@ -499,7 +514,6 @@ class ModRouter:
             "gui_usage": "You can control the application using [CMD]command[/CMD] blocks.",
             "training_scorer": "Score this response from 1-100 based on helpfulness, accuracy, and clarity.",
             "mod_router": "Route tasks to the appropriate mod based on the request type.",
-            "safety": "Be helpful, harmless, and honest. Refuse harmful requests politely.",
         }
 
         # Training
@@ -921,11 +935,11 @@ class ModRouter:
     def get_prompt(self, purpose: str) -> str:
         """
         Get a prompt by purpose.
-        
+
         Args:
-            purpose: One of 'chat', 'gui_usage', 'training_scorer', 
+            purpose: One of 'chat', 'gui_usage', 'training_scorer',
                      'mod_router', 'safety', or a mod name
-        
+
         Returns:
             The prompt text, or empty string if not found
         """
@@ -934,7 +948,7 @@ class ModRouter:
     def set_prompt(self, purpose: str, prompt: str) -> None:
         """
         Set or update a prompt for a specific purpose.
-        
+
         Args:
             purpose: The prompt identifier (e.g., 'chat', 'safety', mod name)
             prompt: The prompt text
@@ -953,10 +967,10 @@ class ModRouter:
     def get_combined_prompt(self, *purposes: str) -> str:
         """
         Combine multiple prompts into one.
-        
+
         Args:
             *purposes: Prompt purposes to combine (e.g., 'chat', 'safety')
-        
+
         Returns:
             Combined prompt text with each section on new lines
         """

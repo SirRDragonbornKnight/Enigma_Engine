@@ -170,7 +170,8 @@ def export_html(
     html_content = history_to_html(
         history, title=title, ai_name=ai_name, user_name=user_name
     )
-    out.write_text(html_content, encoding="utf-8")
+    from enigma_engine.core.safe_save import atomic_write_text
+    atomic_write_text(out, html_content)
     return out
 
 

@@ -10,8 +10,75 @@ Commands:
 """
 
 import argparse
+import os
+import subprocess
 import sys
 from pathlib import Path
+
+
+def _ensure_venv() -> None:
+    """Create the project venv if missing, install deps, and re-launch.
+
+    On a fresh PC:
+      1. Creates ``venv/`` via ``python -m venv venv``
+      2. Installs ``requirements.txt`` into it
+      3. Re-executes under the venv Python
+
+    On a configured PC:
+      Re-executes under the existing venv Python if the current
+      interpreter is the system Python (no venv activated).
+    """
+    # Already inside a venv / virtualenv — nothing to do.
+    if sys.prefix != sys.base_prefix:
+        return
+
+    script_dir = Path(__file__).resolve().parent
+    # Windows: venv\Scripts\python.exe   Posix: venv/bin/python
+    candidates = [
+        script_dir / "venv" / "Scripts" / "python.exe",
+        script_dir / "venv" / "bin" / "python",
+    ]
+    venv_python = next((p for p in candidates if p.is_file()), None)
+
+    if venv_python is None:
+        # No venv exists — create one and install dependencies
+        print("=" * 60)
+        print("  First-time setup: creating virtual environment...")
+        print("=" * 60)
+        venv_dir = script_dir / "venv"
+        rc = subprocess.run([sys.executable, "-m", "venv", str(venv_dir)]).returncode
+        if rc != 0:
+            print(f"ERROR: Failed to create venv (exit code {rc})")
+            print("Make sure Python 3.9+ is installed correctly.")
+            raise SystemExit(1)
+
+        venv_python = next((p for p in candidates if p.is_file()), None)
+        if venv_python is None:
+            print("ERROR: venv was created but Python executable not found in it.")
+            raise SystemExit(1)
+
+        # Install requirements
+        req_file = script_dir / "requirements.txt"
+        if req_file.is_file():
+            print("  Installing dependencies (this may take a few minutes)...")
+            rc = subprocess.run(
+                [str(venv_python), "-m", "pip", "install", "-r", str(req_file)],
+            ).returncode
+            if rc != 0:
+                print(f"WARNING: pip install exited with code {rc}")
+                print("Some optional dependencies may have failed.")
+                print("Core features should still work. You can re-run:")
+                print(f"  {venv_python} -m pip install -r requirements.txt")
+        print("=" * 60)
+        print("  Setup complete! Launching Enigma Engine...")
+        print("=" * 60)
+
+    # Re-execute under the venv Python with the same arguments.
+    result = subprocess.run(
+        [str(venv_python)] + sys.argv,
+        cwd=os.getcwd(),
+    )
+    raise SystemExit(result.returncode)
 
 
 def main():
@@ -61,6 +128,8 @@ Examples:
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate (default: 0.0001)")
     parser.add_argument("--vocab-size", type=int, default=8000,
                         help="Vocabulary size for tokenizer training (default: 8000)")
+    parser.add_argument("--benchmark", action="store_true",
+                        help="Run coherence benchmark on a loaded model")
     
     args = parser.parse_args()
 
@@ -85,6 +154,8 @@ Examples:
         run_gui_app(args.model)
     elif args.chat:
         run_chat(args.model, args.profile, args.temperature)
+    elif args.benchmark:
+        run_benchmark(args.model)
     else:
         show_info()
 
@@ -432,6 +503,54 @@ def run_train(data_path: str, model_path: str, model_size: str,
         sys.exit(1)
 
 
+def run_benchmark(model_path: str = None):
+    """Run coherence benchmark on a loaded model (CLI)."""
+    print("\n" + "=" * 50)
+    print("  Enigma AI Engine - Coherence Benchmark")
+    print("=" * 50 + "\n")
+
+    if not model_path:
+        print("  [ERROR] --model is required for --benchmark")
+        print("  Usage: python run.py --benchmark --model models/my.pth")
+        sys.exit(1)
+
+    try:
+        from enigma_engine.core import EnigmaEngine
+        from enigma_engine.core.monologue import run_coherence_benchmark
+
+        print(f"  Loading {model_path}...")
+        engine = EnigmaEngine(model_path=model_path)
+        print("  Model loaded. Running 20 reflection prompts...\n")
+
+        def _progress(idx, total, score):
+            status = "PASS" if score >= 0.7 else "--"
+            print(f"  [{idx:>2d}/{total}]  coherence = {score:.3f}  {status}")
+
+        result = run_coherence_benchmark(
+            engine, num_prompts=20, on_progress=_progress)
+
+        print(f"\n{'=' * 50}")
+        print(f"  Prompts : {result['total']}")
+        print(f"  Passed  : {result['passed']} / {result['total']}")
+        print(f"  Mean    : {result['mean']:.3f}")
+        print(f"  Pass %  : {result['pass_rate'] * 100:.0f}%")
+
+        rec = result["recommendation"]
+        if rec == "ready":
+            print("  Result  : READY — safe for automatic monologue mode")
+        elif rec == "marginal":
+            print("  Result  : MARGINAL — journal_only mode recommended")
+        else:
+            print("  Result  : NOT READY — keep monologue disabled")
+        print("=" * 50)
+
+    except Exception as e:
+        print(f"\n  [ERROR] Benchmark failed: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+
 def run_chat(model_path: str = None, profile: str = None,
              temperature: float = None):
     """Simple CLI chat interface with streaming output."""
@@ -525,4 +644,5 @@ def run_chat(model_path: str = None, profile: str = None,
 
 
 if __name__ == "__main__":
+    _ensure_venv()
     main()

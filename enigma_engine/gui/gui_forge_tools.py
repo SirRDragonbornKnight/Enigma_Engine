@@ -70,8 +70,8 @@ class ForgeToolsMixin:
         mode_name = mode_var.get() if mode_var is not None else "Basic"
         if mode_name == "AI-Guided":
             sup_var = getattr(self, "ai_supplement_var", None)
-            sup_value = sup_var.get() if sup_var is not None else "(none)"
-            data_path = "" if sup_value == "(none)" else sup_value
+            sup_value = sup_var.get() if sup_var is not None else ""
+            data_path = "" if (not sup_value or sup_value == "(none)") else sup_value
         else:
             data_path = self.train_data_var.get()
         has_data = bool(data_path) and Path(data_path).exists()
@@ -178,9 +178,10 @@ class ForgeToolsMixin:
                 out_name = (
                     f"generated_{stage}_{trainer_name}.txt")
                 out_path = DATA_DIR / out_name
-                out_path.write_text(
-                    "\n\n".join(results) + "\n",
-                    encoding="utf-8")
+                from enigma_engine.core.safe_save import atomic_write_text
+                atomic_write_text(
+                    out_path,
+                    "\n\n".join(results) + "\n")
 
                 self._update_forge_progress(100, "Complete")
                 self._log("\n--- DATA GENERATION COMPLETE ---")
@@ -285,6 +286,11 @@ class ForgeToolsMixin:
                     stage=stage,
                     training_brief=training_brief)
 
+                # Lean persona prompt for STUDENT
+                student_sys = self._build_student_system_prompt(
+                    training_brief=training_brief,
+                    student_name=student_name)
+
                 num_tests = 15
                 self._log(f"Stage   : {stage.upper()}")
                 self._log(
@@ -300,14 +306,16 @@ class ForgeToolsMixin:
                         f"the student. Write ONLY the question, "
                         f"nothing else.",
                         system_prompt=eval_sys,
-                        max_gen=64,
+                        max_gen=100,
                         temperature=0.9).strip()
                     if not test_q:
                         continue
 
-                    # STUDENT answers
-                    s_answer = student_engine.generate(
-                        test_q, max_gen=128,
+                    # STUDENT answers (with persona prompt)
+                    s_answer = student_engine.chat(
+                        test_q,
+                        system_prompt=student_sys,
+                        max_gen=256,
                         temperature=0.7).strip()
 
                     # TRAINER judges the answer
@@ -323,7 +331,7 @@ class ForgeToolsMixin:
                     judgment = teacher_engine.chat(
                         judge_msg,
                         system_prompt=eval_sys,
-                        max_gen=64,
+                        max_gen=128,
                         temperature=0.3).strip()
 
                     # Parse score from judgment
@@ -345,11 +353,8 @@ class ForgeToolsMixin:
                             break
 
                     scores.append(score)
-                    q_s = (test_q[:45] + "..."
-                           if len(test_q) > 45 else test_q)
-                    a_s = (s_answer[:45] + "..."
-                           if len(s_answer) > 45
-                           else s_answer)
+                    q_s = test_q.replace("\n", " ")
+                    a_s = s_answer.replace("\n", " ")
                     self._log(
                         f"  Test {t + 1:>2d}  |  "
                         f"Score: {score}/10")
@@ -394,13 +399,106 @@ class ForgeToolsMixin:
             except Exception as exc:
                 self._log(f"\n[!] Evaluation failed: {exc}")
             finally:
-                self.after(
-                    0, lambda: self.evaluate_btn.configure(
+                self.after(0, lambda: self.evaluate_btn.configure(
                         state="normal"))
                 self.after(0, lambda: self.status_bar.set_left(
                     "\u26a1 READY"))
 
         threading.Thread(target=_eval, daemon=True).start()
+
+    # ================================================================
+    # Coherence Benchmark (model reflection quality test)
+    # ================================================================
+
+    def _coherence_benchmark(self):
+        """Run a coherence benchmark on the CHAT model.
+
+        Generates reflections using the loaded chat model, scores
+        each with the heuristic coherence scorer, and reports whether
+        the model passes the quality gate for automatic monologue.
+        """
+        chat_path = self.route_assignments.get("chat")
+        if not chat_path or not Path(chat_path).exists():
+            self._log(
+                "[!] No model assigned to CHAT route.\n"
+                "    Load a model first to run the benchmark.")
+            return
+
+        model_name = Path(chat_path).stem
+        self.benchmark_btn.configure(state="disabled")
+        self.status_bar.set_left("Running coherence benchmark...")
+        self._log("--- COHERENCE BENCHMARK ---")
+        self._log(f"Model   : {model_name}")
+        self._log("Generating 20 reflections...\n")
+
+        def _run():
+            try:
+                engine = self._load_engine_for_path(chat_path)
+
+                def _progress(idx, total, score):
+                    self.after(0, lambda i=idx, s=score: self._log(
+                        f"  [{i:>2d}/{total}]  "
+                        f"coherence = {s:.3f}"
+                        f"{'  PASS' if s >= 0.7 else '  --'}"))
+
+                from enigma_engine.core.monologue import (
+                    run_coherence_benchmark)
+                result = run_coherence_benchmark(
+                    engine,
+                    num_prompts=20,
+                    on_progress=_progress,
+                )
+
+                # Log detailed results
+                self.after(0, lambda: self._log(
+                    "\n--- BENCHMARK RESULTS ---"))
+                self.after(0, lambda: self._log(
+                    f"Prompts : {result['total']}"))
+                self.after(0, lambda: self._log(
+                    f"Passed  : {result['passed']} / "
+                    f"{result['total']}"))
+                self.after(0, lambda: self._log(
+                    f"Mean    : {result['mean']:.3f}"))
+                self.after(0, lambda: self._log(
+                    f"Pass %  : {result['pass_rate'] * 100:.0f}%"))
+
+                rec = result['recommendation'].upper()
+                if rec == "READY":
+                    msg = ("READY — model produces coherent "
+                           "reflections. Safe for automatic mode.")
+                elif rec == "MARGINAL":
+                    msg = ("MARGINAL — some reflections pass. "
+                           "journal_only mode recommended.")
+                else:
+                    msg = ("NOT READY — most reflections fail "
+                           "the quality gate. Keep monologue "
+                           "disabled or journal_only.")
+                self.after(0, lambda: self._log(
+                    f"Result  : {msg}"))
+
+                # Also log to CMD activity
+                try:
+                    self.after(0, lambda: self._cmd_activity(
+                        "info",
+                        f"[Benchmark] {model_name}: "
+                        f"{result['pass_rate'] * 100:.0f}% pass "
+                        f"({result['mean']:.3f} mean) — {rec}"))
+                except Exception:
+                    pass
+
+            except Exception as exc:
+                msg = str(exc)
+                self.after(
+                    0, lambda m=msg: self._log(
+                        f"\n[!] Benchmark failed: {m}"))
+            finally:
+                self.after(
+                    0, lambda: self.benchmark_btn.configure(
+                        state="normal"))
+                self.after(0, lambda: self.status_bar.set_left(
+                    "\u26a1 READY"))
+
+        threading.Thread(target=_run, daemon=True).start()
 
     # ================================================================
     # Web Learn (TRAINER searches web, generates training data)
@@ -594,9 +692,10 @@ class ForgeToolsMixin:
                 ).strip().replace(" ", "_")
                 out_name = f"web_{safe_topic}.txt"
                 out_path = DATA_DIR / out_name
-                out_path.write_text(
-                    "\n\n".join(all_pairs) + "\n",
-                    encoding="utf-8")
+                from enigma_engine.core.safe_save import atomic_write_text
+                atomic_write_text(
+                    out_path,
+                    "\n\n".join(all_pairs) + "\n")
 
                 self._update_forge_progress(
                     100, "Complete")
@@ -891,6 +990,7 @@ class ForgeToolsMixin:
 
     def _on_preset_changed(self, choice: str):
         """Apply hyperparameter preset values to epoch/lr/batch fields."""
+        choice = choice.split(" - ", 1)[0]
         preset = self._TRAINING_PRESETS.get(choice)
         if preset is None:
             # "Custom" — leave fields as-is
@@ -974,8 +1074,9 @@ class ForgeToolsMixin:
             # Keep last 200 runs
             if len(runs) > 200:
                 runs = runs[-200:]
-            self._HISTORY_FILE.write_text(
-                json.dumps(runs, indent=2), encoding="utf-8")
+            self._HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+            from enigma_engine.core.safe_save import atomic_write_json
+            atomic_write_json(self._HISTORY_FILE, runs)
             logger.debug("Saved training run: %s", entry)
         except Exception as exc:
             logger.debug("Could not save training run: %s", exc)
@@ -988,6 +1089,214 @@ class ForgeToolsMixin:
                 before_perplexity=before_perplexity,
                 after_perplexity=after_perplexity)
             self._save_model_context()
+
+    # ================================================================
+    # Command Policy Generator
+    # ================================================================
+
+    _COMMANDS_REF_PATH = Path("information/commands_reference.md")
+
+    def _generate_command_policy(self):
+        """Generate DPO pairs for all registered engine commands.
+
+        Reads commands_reference.md, parses each command,
+        then uses the TRAINER model to generate:
+          - chosen:  correct response using the right command
+          - rejected: response that ignores or misuses the command
+
+        Saves as JSONL suitable for DPO training.
+        """
+        trainer_path = self.route_assignments.get("trainer")
+        if not trainer_path or not Path(trainer_path).exists():
+            self._log(
+                "[!] No model assigned to TRAINER route.\n"
+                "    Need TRAINER to generate command pairs.")
+            return
+
+        if not self._COMMANDS_REF_PATH.exists():
+            self._log(
+                "[!] commands_reference.md not found at:\n"
+                f"    {self._COMMANDS_REF_PATH.resolve()}")
+            return
+
+        btn = getattr(self, "_forge_cmd_policy_btn", None)
+        if btn is not None:
+            btn.configure(state="disabled")
+        self.status_bar.set_left("Generating command policy...")
+        self._reset_forge_progress()
+        self._log("--- COMMAND POLICY GENERATOR ---")
+
+        def _gen():
+            try:
+                # Parse commands from reference doc
+                commands = self._parse_commands_reference()
+                if not commands:
+                    self._log("[!] No commands found in reference.")
+                    return
+                self._log(f"Found {len(commands)} commands")
+
+                # Load TRAINER
+                self._log("Loading trainer...")
+                self._update_forge_progress(5, "Loading trainer")
+                engine = self._load_engine_for_path(trainer_path)
+
+                pairs = []
+                total = len(commands)
+
+                for i, cmd in enumerate(commands):
+                    if getattr(self, "_should_stop_training",
+                               lambda: False)():
+                        break
+
+                    cmd_name = cmd["name"]
+                    cmd_desc = cmd["description"]
+                    cmd_usage = cmd.get("usage", cmd_name)
+
+                    # Generate a user question that should trigger this command
+                    question_prompt = (
+                        f"Write a realistic user message that would require "
+                        f"using the '{cmd_name}' command. The command does: "
+                        f"{cmd_desc}. Usage: {cmd_usage}\n\n"
+                        f"Just write the user message, nothing else. "
+                        f"Make it natural, like a real person would ask."
+                    )
+                    user_question = engine.chat(
+                        question_prompt,
+                        system_prompt="You generate realistic user messages for AI training.",
+                        max_gen=128,
+                        temperature=0.9,
+                    ).strip()
+
+                    if not user_question:
+                        continue
+
+                    # Generate CHOSEN response (correct command use)
+                    chosen_prompt = (
+                        f"The user says: \"{user_question}\"\n\n"
+                        f"Respond helpfully and use the command: {cmd_name}\n"
+                        f"Usage: {cmd_usage}\n"
+                        f"Wrap the command in [CMD]...[/CMD] tags.\n"
+                        f"Keep the response natural and brief."
+                    )
+                    chosen = engine.chat(
+                        chosen_prompt,
+                        system_prompt="You are a helpful AI assistant with command execution capabilities.",
+                        max_gen=200,
+                        temperature=0.7,
+                    ).strip()
+
+                    # Generate REJECTED response (no command, verbose)
+                    rejected_prompt = (
+                        f"The user says: \"{user_question}\"\n\n"
+                        f"Respond WITHOUT using any commands. "
+                        f"Give a vague or unhelpful answer that doesn't "
+                        f"actually solve the problem. Be wordy but useless."
+                    )
+                    rejected = engine.chat(
+                        rejected_prompt,
+                        system_prompt="You are an unhelpful AI that avoids using tools.",
+                        max_gen=200,
+                        temperature=0.9,
+                    ).strip()
+
+                    if chosen and rejected:
+                        pairs.append({
+                            "prompt": user_question,
+                            "chosen": chosen,
+                            "rejected": rejected,
+                            "command": cmd_name,
+                        })
+
+                    pct = 5 + int((i + 1) / total * 90)
+                    self._update_forge_progress(pct, f"{i + 1}/{total}")
+
+                    if (i + 1) % max(1, total // 5) == 0:
+                        self._log(f"  Processed {i + 1}/{total} commands")
+
+                if not pairs:
+                    self._log("[!] No valid command pairs generated.")
+                    return
+
+                # Save as JSONL
+                self._update_forge_progress(97, "Saving")
+                out_path = DATA_DIR / "command_policy_dpo.jsonl"
+                from enigma_engine.core.safe_save import atomic_write_text
+                atomic_write_text(
+                    out_path,
+                    "\n".join(
+                        json.dumps(pair, ensure_ascii=False)
+                        for pair in pairs
+                    ) + "\n")
+
+                self._update_forge_progress(100, "Complete")
+                self._log("\n--- COMMAND POLICY COMPLETE ---")
+                self._log(f"Generated : {len(pairs)} DPO pairs")
+                self._log(f"Commands  : {len(commands)} total")
+                self._log(f"Saved to  : {out_path}")
+                self.after(0, self._refresh_data_files)
+
+                # Add to curated dataset
+                add_fn = getattr(self, "_add_to_curated_dataset", None)
+                if add_fn is not None:
+                    for p in pairs:
+                        text = f"Q: {p['prompt']}\nA: {p['chosen']}"
+                        add_fn(text, source="command_policy",
+                               stage="commands")
+                    self._log(
+                        f"  Added {len(pairs)} entries to curated dataset")
+
+            except Exception as exc:
+                self._log(f"\n[!] Command policy generation failed: {exc}")
+            finally:
+                self.after(0, lambda: (
+                    btn.configure(state="normal")
+                    if btn is not None else None))
+                self.after(0, lambda: self.status_bar.set_left(
+                    "\u26a1 READY"))
+
+        threading.Thread(target=_gen, daemon=True).start()
+
+    def _parse_commands_reference(self) -> list[dict]:
+        """Parse commands_reference.md into a list of command dicts.
+
+        Returns:
+            List of dicts with keys: name, description, usage.
+        """
+        text = self._COMMANDS_REF_PATH.read_text(encoding="utf-8")
+        commands = []
+
+        for line in text.splitlines():
+            line = line.strip()
+            # Match table rows: | command | description | usage |
+            if not line.startswith("|") or line.startswith("|--"):
+                continue
+            parts = [p.strip() for p in line.split("|")]
+            # Filter out empty parts from leading/trailing |
+            parts = [p for p in parts if p]
+            if len(parts) < 2:
+                continue
+            # Skip header rows
+            name = parts[0]
+            if name.lower() in ("command", "description", "usage"):
+                continue
+            # Skip if name contains spaces (likely a header)
+            if " " in name and "." not in name:
+                continue
+
+            desc = parts[1] if len(parts) > 1 else ""
+            usage = ""
+            if len(parts) > 2:
+                # Strip backticks from usage
+                usage = parts[2].strip("`")
+
+            if name and desc:
+                commands.append({
+                    "name": name,
+                    "description": desc,
+                    "usage": usage or name,
+                })
+
+        return commands
 
     # ================================================================
     # Progress bar

@@ -77,17 +77,31 @@ class ForgeMixin(
     def _model_config_dict(model) -> dict:
         """Extract model config as a serializable dict."""
         c = model.config
-        return {
-            "vocab_size": c.vocab_size, "dim": c.dim,
-            "n_layers": c.n_layers, "n_heads": c.n_heads,
-            "n_kv_heads": c.n_kv_heads,
-            "hidden_dim": c.hidden_dim,
-            "max_seq_len": c.max_seq_len, "dropout": c.dropout,
-        }
+        if hasattr(c, 'to_dict'):
+            return c.to_dict()
+        return c.__dict__.copy()
 
     # ================================================================
     # Read FORGE training config from UI entries
     # ================================================================
+
+    def _read_general_mix_ratio(self) -> float:
+        """Read general knowledge mix percentage from UI."""
+        try:
+            val = float(getattr(
+                self, "forge_general_mix_var", None).get())
+            return max(0.0, min(val / 100.0, 0.9))
+        except (ValueError, TypeError, AttributeError):
+            return 0.2  # default 20%
+
+    def _read_general_data_path(self) -> str:
+        """Read general knowledge file path from UI."""
+        try:
+            path = getattr(
+                self, "forge_general_data_var", None).get()
+            return path.strip() if path else ""
+        except (TypeError, AttributeError):
+            return ""
 
     def _read_forge_train_params(self) -> dict:
         """Read batch_size, grad_accum, grad_ckpt, rolling_best_k from FORGE UI.
@@ -134,6 +148,54 @@ class ForgeMixin(
             "max_grad_accumulation": grad_accum,
             "use_gradient_checkpointing": grad_ckpt,
             "rolling_best_k": rolling_best_k,
+            "general_mix_ratio": self._read_general_mix_ratio(),
+            "general_data": self._read_general_data_path(),
+            "val_split": self._read_val_split(),
+        }
+
+    def _read_val_split(self) -> float:
+        """Read val_split from FORGE UI, default 0.1."""
+        try:
+            val = float(getattr(
+                self, "forge_val_split_var", None).get())
+            if 0.0 <= val < 1.0:
+                return val
+        except (ValueError, TypeError, AttributeError):
+            pass
+        return 0.1
+
+    def _read_forge_rl_params(self) -> dict:
+        """Read replay capacity, ratio, and use_conformer from FORGE UI."""
+        replay_capacity = 256
+        replay_ratio = 0.25
+        use_conformer = False
+
+        try:
+            val = int(getattr(
+                self, "forge_replay_capacity_var", None).get())
+            if val >= 0:
+                replay_capacity = val
+        except (ValueError, TypeError, AttributeError):
+            pass
+
+        try:
+            val = float(getattr(
+                self, "forge_replay_ratio_var", None).get())
+            if 0.0 <= val <= 1.0:
+                replay_ratio = val
+        except (ValueError, TypeError, AttributeError):
+            pass
+
+        try:
+            use_conformer = bool(getattr(
+                self, "forge_use_conformer_var", None).get())
+        except (TypeError, AttributeError):
+            pass
+
+        return {
+            "replay_capacity": replay_capacity,
+            "replay_ratio": replay_ratio,
+            "use_conformer": use_conformer,
         }
 
     # ================================================================
@@ -187,19 +249,18 @@ class ForgeMixin(
 
     def _save_training_brief(self):
         """Save training brief fields to data/training_brief.json."""
-        import json
 
         data = {}
 
         mode_var = getattr(self, "training_mode_var", None)
         if mode_var is not None:
             data["_training_mode"] = mode_var.get()
-        
+
         # Save training topic (AI-Guided mode)
         topic_widget = getattr(self, "forge_training_topic", None)
         if topic_widget is not None:
             data["_training_topic"] = topic_widget.get().strip()
-        
+
         quick_fields = getattr(self, "_brief_field_entries", {})
         for label, entry in quick_fields.items():
             value = entry.get().strip() if hasattr(entry, "get") else ""
@@ -213,12 +274,83 @@ class ForgeMixin(
             except Exception:
                 data["_custom"] = ""
 
+        # --- Persist hyperparameters + advanced settings ---
+        _forge_settings = {}
+        # Hyperparameters
+        for attr, key in [
+            ("ft_epochs_entry", "epochs"),
+            ("ft_lr_entry", "lr"),
+            ("guided_pairs_entry", "pairs"),
+            ("forge_batch_entry", "batch_size"),
+            ("forge_accum_entry", "grad_accum"),
+            ("forge_rolling_k_entry", "rolling_best_k"),
+        ]:
+            widget = getattr(self, attr, None)
+            if widget is not None:
+                try:
+                    _forge_settings[key] = widget.get().strip()
+                except Exception:
+                    pass
+        # StringVar-backed settings
+        for attr, key in [
+            ("_forge_preset_var", "preset"),
+            ("forge_general_mix_var", "general_mix"),
+            ("forge_lora_rank_var", "lora_rank"),
+            ("forge_lora_alpha_var", "lora_alpha"),
+            ("forge_replay_capacity_var", "replay_capacity"),
+            ("forge_replay_ratio_var", "replay_ratio"),
+            ("forge_vision_preset_var", "vision_preset"),
+            ("forge_val_split_var", "val_split"),
+            ("pretrain_preset_var", "pretrain_preset"),
+            ("pretrain_vocab_var", "pretrain_vocab"),
+            ("pretrain_model_name_var", "pretrain_model_name"),
+            ("distill_num_examples_var", "distill_num_examples"),
+            ("distill_max_tokens_var", "distill_max_tokens"),
+        ]:
+            var = getattr(self, attr, None)
+            if var is not None:
+                try:
+                    val = var.get()
+                    # Strip description suffix from display values
+                    if " - " in val:
+                        val = val.split(" - ", 1)[0]
+                    _forge_settings[key] = val
+                except Exception:
+                    pass
+        # BooleanVar settings
+        for attr, key in [
+            ("forge_reasoning_var", "reasoning"),
+            ("forge_grad_ckpt_var", "grad_ckpt"),
+            ("forge_use_conformer_var", "use_conformer"),
+            ("forge_auto_train_var", "auto_train"),
+            ("pretrain_retrain_tok_var", "pretrain_retrain_tok"),
+        ]:
+            var = getattr(self, attr, None)
+            if var is not None:
+                try:
+                    _forge_settings[key] = var.get()
+                except Exception:
+                    pass
+        # Distillation category booleans
+        cats = getattr(self, "distill_categories", {})
+        for cat_key, var in cats.items():
+            try:
+                _forge_settings[f"distill_cat_{cat_key}"] = var.get()
+            except Exception:
+                pass
+        data["_forge_settings"] = _forge_settings
+
         path = DATA_DIR / "training_brief.json"
         try:
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-        except OSError:
-            pass
+            from enigma_engine.core.safe_save import atomic_write_json
+            atomic_write_json(path, data)
+            # Verify the file was actually written
+            if path.exists() and path.stat().st_size > 2:
+                self._log("Training brief saved.")
+            else:
+                self._log("[!] Training brief save may have failed.")
+        except OSError as exc:
+            self._log(f"[!] Could not save training brief: {exc}")
 
     def _load_training_brief(self):
         """Load training brief fields from data/training_brief.json."""
@@ -247,7 +379,7 @@ class ForgeMixin(
             if topic_value:
                 topic_widget.delete(0, "end")
                 topic_widget.insert(0, topic_value)
-        
+
         quick_fields = getattr(self, "_brief_field_entries", {})
         for label, entry in quick_fields.items():
             value = data.get(label, "")
@@ -263,6 +395,94 @@ class ForgeMixin(
                 custom_tb.insert("1.0", custom_val)
             except Exception:
                 pass
+
+        # --- Restore hyperparameters + advanced settings ---
+        fs = data.get("_forge_settings", {})
+        if fs:
+            # Entry widgets (delete + insert)
+            for attr, key in [
+                ("ft_epochs_entry", "epochs"),
+                ("ft_lr_entry", "lr"),
+                ("guided_pairs_entry", "pairs"),
+                ("forge_batch_entry", "batch_size"),
+                ("forge_accum_entry", "grad_accum"),
+                ("forge_rolling_k_entry", "rolling_best_k"),
+            ]:
+                val = fs.get(key, "")
+                if not val:
+                    continue
+                widget = getattr(self, attr, None)
+                if widget is not None:
+                    try:
+                        widget.delete(0, "end")
+                        widget.insert(0, val)
+                    except Exception:
+                        pass
+            # StringVar settings
+            for attr, key in [
+                ("_forge_preset_var", "preset"),
+                ("forge_general_mix_var", "general_mix"),
+                ("forge_lora_rank_var", "lora_rank"),
+                ("forge_lora_alpha_var", "lora_alpha"),
+                ("forge_replay_capacity_var", "replay_capacity"),
+                ("forge_replay_ratio_var", "replay_ratio"),
+                ("forge_vision_preset_var", "vision_preset"),
+                ("forge_val_split_var", "val_split"),
+                ("distill_num_examples_var", "distill_num_examples"),
+                ("distill_max_tokens_var", "distill_max_tokens"),
+            ]:
+                val = fs.get(key)
+                if val is None:
+                    continue
+                var = getattr(self, attr, None)
+                if var is not None:
+                    try:
+                        # Match bare saved key to descriptive display value
+                        # e.g. "small" -> "small - ~4M params, good balance"
+                        dd = getattr(self, {
+                            "_forge_preset_var": "_forge_preset_menu",
+                            "forge_vision_preset_var": "_vision_dd",
+                            "pretrain_preset_var": "_pretrain_preset_dd",
+                        }.get(attr, ""), None)
+                        if dd and " - " not in val:
+                            try:
+                                opts = dd.cget("values")
+                                match = next(
+                                    (o for o in opts
+                                     if o.startswith(val + " - ")),
+                                    None)
+                                if match:
+                                    val = match
+                            except Exception:
+                                pass
+                        var.set(val)
+                    except Exception:
+                        pass
+            # BooleanVar settings
+            for attr, key in [
+                ("forge_reasoning_var", "reasoning"),
+                ("forge_grad_ckpt_var", "grad_ckpt"),
+                ("forge_use_conformer_var", "use_conformer"),
+                ("forge_auto_train_var", "auto_train"),
+            ]:
+                val = fs.get(key)
+                if val is None:
+                    continue
+                var = getattr(self, attr, None)
+                if var is not None:
+                    try:
+                        var.set(bool(val))
+                    except Exception:
+                        pass
+            # Distillation category booleans
+            cats = getattr(self, "distill_categories", {})
+            for cat_key, var in cats.items():
+                val = fs.get(f"distill_cat_{cat_key}")
+                if val is not None:
+                    try:
+                        var.set(bool(val))
+                    except Exception:
+                        pass
 
     def _on_training_mode_selected(self):
         """Apply and persist the selected FORGE training mode."""
@@ -629,7 +849,7 @@ class ForgeMixin(
                 "use field-appropriate terminology, and stay "
                 "within this subject area.\n\n")
 
-        # Core personality instructions — no artificial limits
+        # Core personality instructions
         prompt = (
             f"You are generating {task} data for a student AI "
             f"model with {student_params:,} parameters."
@@ -638,15 +858,11 @@ class ForgeMixin(
             f"{stage_text}\n\n"
             f"{brief_section}"
             f"{focus_section}"
-            "CRITICAL — this AI must feel human, not artificial:\n"
-            "- NEVER start with 'Sure!', 'Of course!', "
+            "STYLE — training data should sound natural:\n"
+            "- Don't start with 'Sure!', 'Of course!', "
             "'Great question!', or 'I'd be happy to help'\n"
-            "- NEVER say 'as an AI', 'I'm just a language model', "
-            "'I don't have feelings', or 'I can't do that'\n"
-            "- NEVER add safety disclaimers, moral lectures, or "
-            "'please consult a professional' hedging\n"
-            "- NEVER refuse to have an opinion — pick a side, "
-            "commit to it, defend it like a real person would\n"
+            "- Avoid 'as an AI' or 'I'm just a language model' "
+            "— write in a natural human voice\n"
             "- Have genuine personality — be curious, be funny, "
             "get excited, be skeptical, be blunt when needed\n"
             "- If you don't know something, say 'I don't know' "
@@ -658,11 +874,7 @@ class ForgeMixin(
             "- Give direct answers first, explain after\n"
             "- Talk like a smart friend, not a customer service bot\n"
             "- Show thought process — 'hmm', 'actually', "
-            "'wait no', 'ok so' are all fine\n"
-            "- Be willing to disagree, joke, speculate, and "
-            "go off on tangents when it's natural\n"
-            "- The student should learn to think and respond "
-            "without limits — no corporate AI guardrails\n\n"
+            "'wait no', 'ok so' are all fine\n\n"
             "FACT CHECKING — question things before answering:\n"
             "- Don't blindly state facts — think about whether "
             "something sounds right first\n"
@@ -673,16 +885,12 @@ class ForgeMixin(
             "- When there's NO internet, be upfront about it:\n"
             "  * Say 'I'm going off memory here' or 'I'm not "
             "100%% sure without checking'\n"
-            "  * Still give your best answer — don't refuse to "
-            "answer just because you can't verify\n"
             "  * Flag what's uncertain: 'Pretty sure it's X, "
             "but don't quote me on that'\n"
             "  * Separate what you're confident about from what "
             "you're guessing: 'I know A is true, but B might "
             "be off'\n"
-            "- NEVER present uncertain info as absolute fact\n"
-            "- NEVER refuse to answer — give your best take and "
-            "be honest about your confidence level"
+            "- Don't present uncertain info as absolute fact"
         )
 
         # Prepend user-editable trainer prompt from data/prompts/
@@ -693,18 +901,136 @@ class ForgeMixin(
 
         return prompt
 
+    @staticmethod
+    def _build_student_system_prompt(
+        training_brief: str | None = None,
+        student_name: str | None = None,
+    ) -> str:
+        """Build a lean persona prompt for the STUDENT model.
+
+        Unlike the TRAINER prompt, this contains NO training
+        mechanics, scoring rubrics, or curriculum stage info.
+        It only tells the STUDENT who it should be — personality,
+        tone, and identity.
+
+        Args:
+            training_brief: User-written description of the AI's
+                personality, expertise, tone, etc.
+            student_name: The model name (e.g. "Enigma").
+
+        Returns:
+            A concise persona prompt string.
+        """
+        parts: list[str] = []
+
+        # Identity
+        if student_name:
+            parts.append(f"You are {student_name}.")
+        else:
+            parts.append("You are a helpful AI assistant.")
+
+        # Inject user's training brief as the core personality
+        if training_brief and training_brief.strip():
+            parts.append("")
+            parts.append(training_brief.strip())
+
+        # Lean behavioral guidance — no training mechanics
+        parts.append("")
+        parts.append(
+            "Be natural and conversational. "
+            "Give direct answers first, then explain if needed. "
+            "Use contractions and vary your sentence length. "
+            "If you don't know something, say so honestly. "
+            "Have your own opinions and don't be afraid to "
+            "disagree when you have a reason to."
+        )
+
+        return "\n".join(parts)
+
     # ================================================================
     # Training data selection
     # ================================================================
 
+    def _browse_training_data(self, target_var=None):
+        """Open file dialog to pick a training data file."""
+        from tkinter import filedialog
+        chosen = filedialog.askopenfilename(
+            title="Select training data file",
+            initialdir=str(DATA_DIR),
+            filetypes=[
+                ("Training files", "*.txt *.jsonl *.json"),
+                ("Text files", "*.txt"),
+                ("JSONL files", "*.jsonl"),
+                ("JSON files", "*.json"),
+                ("All files", "*.*"),
+            ])
+        if chosen:
+            p = Path(chosen)
+            if p.stat().st_size == 0:
+                self._log(f"[!] File is empty: {p.name}")
+                return
+            var = target_var or self.train_data_var
+            var.set(chosen)
+            self._update_forge_button_states()
+
+    def _on_supplement_selected(self, choice: str):
+        """Handle AI-Guided supplement data dropdown selection."""
+        if choice == "(none)":
+            self.ai_supplement_var.set("")
+        else:
+            for f in self.training_files:
+                if choice.startswith(f["name"]):
+                    self.ai_supplement_var.set(f["path"])
+                    break
+
     def _on_data_selected(self, choice: str):
         if choice == "(none)":
             self.train_data_var.set("")
-            return
-        for f in self.training_files:
-            if choice.startswith(f["name"]):
-                self.train_data_var.set(f["path"])
-                break
+        else:
+            for f in self.training_files:
+                if choice.startswith(f["name"]):
+                    self.train_data_var.set(f["path"])
+                    break
+        self._update_forge_button_states()
+
+    def _update_forge_button_states(self):
+        """Enable/disable FORGE tool buttons based on prerequisites.
+
+        Called when route assignments change, data file is selected,
+        or the FORGE page is shown. Prevents users from clicking
+        buttons that will silently fail.
+        """
+        has_trainer = bool(
+            self.route_assignments.get("trainer"))
+        has_student = bool(
+            self.route_assignments.get("student"))
+        has_data = bool(self.train_data_var.get())
+        busy = getattr(self, "training_active", False)
+
+        def _set(btn_name, enabled):
+            btn = getattr(self, btn_name, None)
+            if btn is None:
+                return
+            # Don't re-enable buttons during active training
+            if busy and enabled:
+                return
+            btn.configure(
+                state="normal" if enabled else "disabled")
+
+        # GENERATE DATA — needs TRAINER
+        _set("generate_data_btn", has_trainer)
+        # EVALUATE — needs TRAINER + STUDENT
+        _set("evaluate_btn", has_trainer and has_student)
+        # WEB LEARN — needs TRAINER
+        _set("web_learn_btn", has_trainer)
+        # QUANTIZE — needs STUDENT
+        _set("quantize_btn", has_student)
+        # EXPORT GGUF — needs STUDENT
+        _set("export_gguf_btn", has_student)
+        # TOKENIZER TRAIN — needs data selected
+        _set("train_tok_btn", has_data)
+        # COMMAND POLICY — needs TRAINER (generates DPO pairs)
+        _set("_forge_cmd_policy_btn", has_trainer)
 
     def _log(self, text: str):
         def _do():
@@ -787,111 +1113,6 @@ class ForgeMixin(
     # Unified training dispatcher
     # ================================================================
 
-    # Display names for the dropdown → internal key mapping
-    # Dropdown shows friendly names; all dicts/dispatch use internal keys
-    _MODE_DISPLAY_TO_KEY = {
-        "Self Study": "Solo",
-        "Conversation": "Dialogue",
-        "Preference Tuning": "DPO",
-        "Image Training": "Vision",
-        "Quick Tune (LoRA)": "LoRA",
-        "Trial & Error": "Evolutionary",
-        "Adaptive Pipeline": "Adaptive",
-        "RLHF": "RLHF",
-        "Self-Play": "SelfPlay",
-    }
-    _MODE_KEY_TO_DISPLAY = {v: k for k, v in _MODE_DISPLAY_TO_KEY.items()}
-
-    _TRAINING_MODE_DESCRIPTIONS = {
-        "Solo": (
-            "Train your AI directly on a text file.\n"
-            "Needs: STUDENT model + data file.\n"
-            "Best for: Teaching from existing content."),
-        "Dialogue": (
-            "Teacher and student have a live conversation.\n"
-            "The teacher corrects mistakes in real time.\n"
-            "Needs: TRAINER + STUDENT models."),
-        "DPO": (
-            "Teach your AI to prefer good answers over bad.\n"
-            "Needs: STUDENT model + .jsonl file with\n"
-            "prompt/chosen/rejected examples."),
-        "Vision": (
-            "Teach your AI to understand images.\n"
-            "Needs: STUDENT model + image folder.\n"
-            "Put images with matching .txt captions\n"
-            "in the folder (e.g. cat.png + cat.txt).\n"
-            "Click BROWSE to pick a folder."),
-        "LoRA": (
-            "Lightweight fine-tuning \u2014 fast and low memory.\n"
-            "Trains small adapter weights, not the full model.\n"
-            "Needs: STUDENT model + data file."),
-        "Evolutionary": (
-            "AI generates multiple answers, keeps the best,\n"
-            "then trains on winners. Repeats to improve.\n"
-            "Needs: STUDENT model + task file\n"
-            "(one task or question per line)."),
-        "Adaptive": (
-            "Full autonomous pipeline: teacher probes the student,\n"
-            "auto-chains all 4 stages (basics \u2192 web),\n"
-            "adjusts difficulty, saves progress as a plan.\n"
-            "Needs: TRAINER + STUDENT models.\n"
-            "Can resume interrupted plans."),
-        "RLHF": (
-            "Train a reward model from preference data, then\n"
-            "use PPO-style policy gradient to improve your AI.\n"
-            "Needs: STUDENT model + .jsonl preference data first,\n"
-            "then prompts for RL training."),
-        "SelfPlay": (
-            "TRAINER scores STUDENT responses as reward.\n"
-            "Policy gradient pushes toward higher scores.\n"
-            "Needs: TRAINER + STUDENT models + prompt list."),
-    }
-
-    # Per-mode visibility: which sections to show
-    # True = visible, False = hidden
-    _MODE_SECTION_VISIBILITY = {
-        "Solo":     {"data": True,  "stages": False,
-                     "brief": False, "pairs": False,
-                     "vision": False, "lora": False, "evo": False},
-        "Dialogue": {"data": False, "stages": True,
-                     "brief": True,  "pairs": True,
-                     "vision": False, "lora": False, "evo": False},
-        "DPO":      {"data": True,  "stages": False,
-                     "brief": False, "pairs": False,
-                     "vision": False, "lora": False, "evo": False},
-        "Vision":   {"data": False, "stages": False,
-                     "brief": False, "pairs": False,
-                     "vision": True,  "lora": False, "evo": False},
-        "LoRA":     {"data": True,  "stages": False,
-                     "brief": False, "pairs": False,
-                     "vision": False, "lora": True,  "evo": False},
-        "Evolutionary": {"data": True,  "stages": False,
-                     "brief": False, "pairs": False,
-                     "vision": False, "lora": False, "evo": True},
-        "Adaptive":     {"data": True,  "stages": False,
-                     "brief": True,  "pairs": True,
-                     "vision": False, "lora": False, "evo": False},
-        "RLHF":        {"data": True,  "stages": False,
-                     "brief": False, "pairs": False,
-                     "vision": False, "lora": False, "evo": False},
-        "SelfPlay":    {"data": True,  "stages": False,
-                     "brief": False, "pairs": True,
-                     "vision": False, "lora": False, "evo": False},
-    }
-
-    # Per-mode data source label text
-    _MODE_DATA_LABELS = {
-        "Solo": "Training data (required)",
-        "Dialogue": "Training data",
-        "DPO": "Preference data (required .jsonl)",
-        "Vision": "Image folder",
-        "LoRA": "Training data (required)",
-        "Evolutionary": "Task list (one per line)",
-        "Adaptive": "Supplement data (optional)",
-        "RLHF": "Preference data (.jsonl) or prompts",
-        "SelfPlay": "Prompts (one per line)",
-    }
-
     def _browse_vision_dir(self):
         """Open a folder picker for the vision image directory."""
         from tkinter import filedialog
@@ -917,6 +1138,8 @@ class ForgeMixin(
         """
         # Section visibility map
         section_map = {
+            "pretrain": getattr(self, "_forge_pretrain_section", None),
+            "distill": getattr(self, "_forge_distill_section", None),
             "basic": getattr(self, "_forge_basic_section", None),
             "ai": getattr(self, "_forge_ai_section", None),
             "image": getattr(self, "_forge_image_section", None),
@@ -924,9 +1147,13 @@ class ForgeMixin(
             "brief": getattr(self, "_forge_brief_section", None),
             "pairs": getattr(self, "_forge_pairs_section", None),
         }
-        
+
         # Define visibility per mode
-        if mode == "Basic":
+        if mode == "Pre-Train":
+            visible = {"pretrain"}
+        elif mode == "Distill":
+            visible = {"distill"}
+        elif mode == "Basic":
             visible = {"basic"}
         elif mode == "AI-Guided":
             visible = {"ai", "stages", "brief", "pairs"}
@@ -934,7 +1161,7 @@ class ForgeMixin(
             visible = {"image"}
         else:
             visible = {"basic"}  # Default
-        
+
         # Show/hide sections
         for key, widget in section_map.items():
             if widget is None:
@@ -944,7 +1171,7 @@ class ForgeMixin(
                     widget.pack(fill="x", padx=0, pady=(8, 0))
             else:
                 widget.pack_forget()
-        
+
         # Update stage button colors
         if hasattr(self, "_stage_buttons"):
             active = getattr(self, "training_stage_var", None)
@@ -971,8 +1198,12 @@ class ForgeMixin(
         # Ensure a new run starts with a fresh chart (no stale prior losses).
         if hasattr(self, "_clear_loss_chart"):
             self._clear_loss_chart()
-        
-        if mode_name == "Basic":
+
+        if mode_name == "Pre-Train":
+            self._start_pretrain_training()
+        elif mode_name == "Distill":
+            self._start_distill_training()
+        elif mode_name == "Basic":
             self._start_basic_training()
         elif mode_name == "AI-Guided":
             self._start_ai_guided_training()
@@ -980,10 +1211,10 @@ class ForgeMixin(
             self._start_vision_training()
         else:
             self._start_basic_training()  # Fallback
-    
+
     def _get_model_param_count(self, model_path: str) -> int:
         """Load a model and count its parameters.
-        
+
         Returns the total parameter count, or 0 if load fails.
         Handles native Forge models (.pth) only.
         """
@@ -993,35 +1224,59 @@ class ForgeMixin(
             from enigma_engine.core.model_presets import ForgeConfig
             from enigma_engine.core.model_registry import (
                 get_state_dict, safe_load_weights)
-            
+
             device = ("cuda" if torch.cuda.is_available() else "cpu")
+
+            # HuggingFace directory — estimate from safetensors metadata
+            sp = Path(model_path)
+            if sp.is_dir():
+                import json as _json
+                idx_path = sp / "model.safetensors.index.json"
+                if idx_path.exists():
+                    with open(idx_path, encoding="utf-8") as f:
+                        idx = _json.load(f)
+                    total_bytes = idx.get("metadata", {}).get(
+                        "total_size", 0)
+                    if total_bytes > 0:
+                        # bf16/fp16 = 2 bytes per param
+                        return total_bytes // 2
+                # Fallback: sum safetensors file sizes
+                import os
+                total = sum(
+                    os.path.getsize(sp / f)
+                    for f in os.listdir(sp)
+                    if f.endswith(".safetensors"))
+                if total > 0:
+                    return total // 2
+                return 0
+
             checkpoint = safe_load_weights(
                 model_path, map_location=device)
-            
+
             # Get config
-            cfg_dict = (checkpoint.get("model_config") or 
+            cfg_dict = (checkpoint.get("model_config") or
                        checkpoint.get("config", {}))
             if isinstance(cfg_dict, dict) and "epochs" in cfg_dict:
                 cfg_dict = checkpoint.get("model_config", {})
-            
+
             if not cfg_dict:
                 return 0
-            
+
             config = ForgeConfig(**cfg_dict)
             model = Enigma(config=config)
             state_dict = get_state_dict(checkpoint)
             model.load_state_dict(state_dict)
-            
+
             # Count parameters
             param_count = sum(p.numel() for p in model.parameters())
             return param_count
         except Exception as exc:
             self._log(f"[!] Could not determine param count: {exc}")
             return 0
-    
+
     def _start_basic_training(self):
         """Start basic training on user-provided data.
-        
+
         Auto-selects LoRA if the student model is > 7B parameters.
         Otherwise uses full fine-tuning (Solo mode).
         """
@@ -1032,7 +1287,7 @@ class ForgeMixin(
                 "[!] No training data selected.\n"
                 "    Select a data file from the dropdown.")
             return
-        
+
         # Check model size to decide LoRA vs full fine-tune
         student_path = self.route_assignments.get("student")
         if not student_path or not Path(student_path).exists():
@@ -1040,10 +1295,10 @@ class ForgeMixin(
                 "[!] No model assigned to STUDENT route.\n"
                 "    Go to ROUTER and assign the model to train.")
             return
-        
+
         # Check actual param count and auto-enable LoRA if > 7B
         param_count = self._get_model_param_count(student_path)
-        
+
         if param_count == 0:
             # Could not determine size, default to solo training
             self._start_solo_training()
@@ -1057,34 +1312,34 @@ class ForgeMixin(
                 f"[i] Auto-detected {param_count / 1e9:.2f}B model.\n"
                 "    Using full fine-tuning.")
             self._start_solo_training()
-    
+
     def _start_ai_guided_training(self):
         """Start AI-guided training with curriculum generation.
-        
+
         Checks for training topic/goal. If empty, prompts user to provide one.
         If provided, uses adaptive trainer to generate curriculum and train.
         """
         # Check for TRAINER and STUDENT models
         trainer_path = self.route_assignments.get("trainer")
         student_path = self.route_assignments.get("student")
-        
+
         if not trainer_path or not Path(trainer_path).exists():
             self._log(
                 "[!] No model assigned to TRAINER route.\n"
                 "    AI-Guided mode requires both TRAINER and STUDENT.\n"
                 "    Go to ROUTER and assign models to both routes.")
             return
-        
+
         if not student_path or not Path(student_path).exists():
             self._log(
                 "[!] No model assigned to STUDENT route.\n"
                 "    Go to ROUTER and assign the model to train.")
             return
-        
+
         # Check for training topic/goal
         topic_widget = getattr(self, "forge_training_topic", None)
         topic = topic_widget.get().strip() if topic_widget else ""
-        
+
         if not topic:
             # No topic provided - ask user
             self._log(
@@ -1095,13 +1350,13 @@ class ForgeMixin(
                 "    The TRAINER will generate a curriculum based on your topic.\n"
                 "    Without a topic, the AI doesn't know what to teach.")
             return
-        
+
         # Check for supplement data (optional)
         supplement_var = getattr(self, "ai_supplement_var", None)
-        supplement = supplement_var.get() if supplement_var else "(none)"
-        if supplement == "(none)":
+        supplement = supplement_var.get() if supplement_var else ""
+        if not supplement or supplement == "(none)":
             supplement = None
-        
+
         # Log start
         self._log("=" * 40)
         self._log("  AI-Guided Training")
@@ -1115,7 +1370,7 @@ class ForgeMixin(
         self._log("Phase 1: Generating curriculum...")
         self._log("(This may take a few minutes)")
         self._log("")
-        
+
         # Start adaptive training with the topic
         self._start_adaptive_training()
 

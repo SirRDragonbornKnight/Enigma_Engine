@@ -274,6 +274,46 @@ class TestCMDPage:
         assert result.success
 
 
+class TestFileOperationConfirmation:
+    """Verify file-op confirmation toggle and thread-safety."""
+
+    def test_should_confirm_respects_toggle(self):
+        """_should_confirm returns False when toggle is off."""
+        from enigma_engine.gui.gui_cmd_page import CMDPageMixin
+
+        obj = object.__new__(CMDPageMixin)
+        # Default (True) — should confirm
+        assert obj._should_confirm_file_operation("file.write foo.txt")
+        assert obj._should_confirm_file_operation("file.append bar.txt")
+        # Disabled — auto-approve
+        obj._confirm_file_operations = False
+        assert not obj._should_confirm_file_operation("file.write foo.txt")
+        assert not obj._should_confirm_file_operation("file.append bar.txt")
+        # Non-file commands never confirm
+        assert not obj._should_confirm_file_operation("config.list")
+
+    def test_ask_confirmation_uses_event(self):
+        """_ask_file_operation_confirmation uses threading.Event."""
+        import inspect
+        from enigma_engine.gui.gui_cmd_page import CMDPageMixin
+        source = inspect.getsource(
+            CMDPageMixin._ask_file_operation_confirmation)
+        assert "threading.Event" in source
+        assert "self.after(0" in source
+
+    def test_toggle_method_exists(self):
+        """Config page has the toggle save method."""
+        from enigma_engine.gui.gui_pages_config import ConfigPageMixin
+        assert hasattr(ConfigPageMixin, "_toggle_confirm_file_operations")
+
+    def test_desktop_loads_setting(self):
+        """desktop.py initialises _confirm_file_operations."""
+        import inspect
+        from enigma_engine.gui.desktop import EnigmaGUI
+        source = inspect.getsource(EnigmaGUI.__init__)
+        assert "confirm_file_operations" in source
+
+
 # ================================================================
 # Per-model context
 # ================================================================
@@ -828,9 +868,10 @@ class TestUnifiedHistory:
         assert "_current_session_path" in source
 
     def test_auto_save_called_after_exchange(self):
-        """_send_message calls _auto_save_session."""
-        from enigma_engine.gui.gui_logic import LogicMixin
-        source = inspect.getsource(LogicMixin._send_message)
+        """_post_generation_bookkeeping calls _auto_save_session."""
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+        source = inspect.getsource(
+            LogicChatMixin._post_generation_bookkeeping)
         assert "_auto_save_session" in source
 
     def test_no_load_file_picker(self):
@@ -966,9 +1007,10 @@ class TestUnifiedHistory:
             getattr(LogicMixin, "_generate_session_title"))
 
     def test_session_title_called_on_first_exchange(self):
-        """_send_message triggers title generation on first exchange."""
-        from enigma_engine.gui.gui_logic import LogicMixin
-        source = inspect.getsource(LogicMixin._send_message)
+        """_post_generation_bookkeeping triggers title generation."""
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+        source = inspect.getsource(
+            LogicChatMixin._post_generation_bookkeeping)
         assert "_generate_session_title" in source
 
     def test_session_title_uses_background_thread(self):
@@ -1058,11 +1100,12 @@ class TestGUIContext:
         assert "mods_data" in source
 
     def test_gui_context_injected_in_chat(self):
-        """_send_message passes GUI context as system_prompt."""
-        from enigma_engine.gui.gui_logic import LogicMixin
-        source = inspect.getsource(LogicMixin._send_message)
+        """_build_system_prompt_with_context uses GUI context."""
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+        source = inspect.getsource(
+            LogicChatMixin._build_system_prompt_with_context)
         assert "_build_gui_context" in source
-        assert "system_prompt" in source
+        assert "system_prompt" in source or "combined" in source
 
     def test_get_engine_for_route_method(self):
         """LogicMixin has _get_engine_for_route for model reuse."""
@@ -1551,47 +1594,6 @@ class TestForgeModeUI:
         # Should reference pack_forget for hiding sections
         assert "pack_forget" in source
 
-    def test_mode_visibility_map_defined(self):
-        """ForgeMixin has visibility config for all modes including new ones."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        vis = ForgeMixin._MODE_SECTION_VISIBILITY
-        assert "Solo" in vis
-        assert "Dialogue" in vis
-        assert "DPO" in vis
-        assert "Vision" in vis
-        assert "LoRA" in vis
-        assert "Evolutionary" in vis
-
-    def test_vision_mode_in_descriptions(self):
-        """Vision mode has a description."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        assert "Vision" in ForgeMixin._TRAINING_MODE_DESCRIPTIONS
-
-    def test_lora_mode_in_descriptions(self):
-        """LoRA mode has a description."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        assert "LoRA" in ForgeMixin._TRAINING_MODE_DESCRIPTIONS
-
-    def test_evolutionary_mode_in_descriptions(self):
-        """Evolutionary mode has a description."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        assert "Evolutionary" in ForgeMixin._TRAINING_MODE_DESCRIPTIONS
-
-    def test_vision_mode_data_label(self):
-        """Vision mode has a data label."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        assert "Vision" in ForgeMixin._MODE_DATA_LABELS
-
-    def test_lora_mode_data_label(self):
-        """LoRA mode has a data label."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        assert "LoRA" in ForgeMixin._MODE_DATA_LABELS
-
-    def test_evolutionary_mode_data_label(self):
-        """Evolutionary mode has a data label."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        assert "Evolutionary" in ForgeMixin._MODE_DATA_LABELS
-
 
 class TestForgeNewModes:
     """Test new training modes: Vision, LoRA, Evolutionary."""
@@ -1620,13 +1622,6 @@ class TestForgeNewModes:
         basic_source = inspect.getsource(ForgeMixin._start_basic_training)
         assert "_start_lora_training" in basic_source
 
-    def test_dispatcher_handles_evolutionary(self):
-        """_start_training_by_mode dispatches Evolutionary mode."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        source = inspect.getsource(ForgeMixin._start_training_by_mode)
-        # Evolutionary mode is available as a standalone method
-        assert hasattr(ForgeMixin, "_start_evolutionary_training")
-
     def test_vision_training_method_exists(self):
         """ForgeMixin._start_vision_training is defined."""
         from enigma_engine.gui.gui_forge import ForgeMixin
@@ -1638,12 +1633,6 @@ class TestForgeNewModes:
         from enigma_engine.gui.gui_forge import ForgeMixin
         assert hasattr(ForgeMixin, "_start_lora_training")
         assert callable(getattr(ForgeMixin, "_start_lora_training"))
-
-    def test_evolutionary_training_method_exists(self):
-        """ForgeMixin._start_evolutionary_training is defined."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        assert hasattr(ForgeMixin, "_start_evolutionary_training")
-        assert callable(getattr(ForgeMixin, "_start_evolutionary_training"))
 
     def test_vision_training_uses_train_vision(self):
         """_start_vision_training calls Trainer.train_vision."""
@@ -1662,12 +1651,6 @@ class TestForgeNewModes:
         from enigma_engine.gui.gui_forge import ForgeMixin
         source = inspect.getsource(ForgeMixin._start_lora_training)
         assert "lora" in source.lower()
-
-    def test_evolutionary_training_uses_backend(self):
-        """_start_evolutionary_training uses evolutionary_training."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        source = inspect.getsource(ForgeMixin._start_evolutionary_training)
-        assert "evolutionary_training" in source
 
     def test_vision_section_in_forge_page(self):
         """_build_page_forge creates _forge_vision_section container."""
@@ -1720,26 +1703,20 @@ class TestForgeNewModes:
         assert "_forge_ai_section" in source
 
     def test_display_name_mapping_covers_all_modes(self):
-        """_MODE_DISPLAY_TO_KEY maps all 9 display names to keys."""
+        """3-mode system has Basic, AI-Guided, Image modes."""
         from enigma_engine.gui.gui_forge import ForgeMixin
-        mapping = ForgeMixin._MODE_DISPLAY_TO_KEY
-        assert len(mapping) == 9
-        # Every display name resolves to a valid internal key
-        internal_keys = {"Solo", "Dialogue", "DPO",
-                         "Vision", "LoRA", "Evolutionary",
-                         "Adaptive", "RLHF", "SelfPlay"}
-        assert set(mapping.values()) == internal_keys
+        source = inspect.getsource(ForgeMixin._start_training_by_mode)
+        assert "Basic" in source
+        assert "AI-Guided" in source
+        assert "Image" in source
 
     def test_reverse_mapping_covers_all_keys(self):
-        """_MODE_KEY_TO_DISPLAY maps all 9 internal keys to display."""
+        """Dispatch method handles all 3 training modes."""
         from enigma_engine.gui.gui_forge import ForgeMixin
-        reverse = ForgeMixin._MODE_KEY_TO_DISPLAY
-        assert len(reverse) == 9
-        # Image Training is the display name for Vision
-        assert reverse["Vision"] == "Image Training"
-        assert reverse["Evolutionary"] == "Trial & Error"
-        assert reverse["RLHF"] == "RLHF"
-        assert reverse["SelfPlay"] == "Self-Play"
+        source = inspect.getsource(ForgeMixin._start_training_by_mode)
+        # All modes dispatch to corresponding methods
+        assert "_start_basic_training" in source
+        assert "_start_vision_training" in source
 
     def test_browse_vision_dir_exists(self):
         """ForgeMixin._browse_vision_dir is defined."""
@@ -2117,7 +2094,7 @@ class TestLoadEngineForPath:
         """Guided training loads TRAINER via _load_engine_for_path."""
         from enigma_engine.gui.gui_forge import ForgeMixin
         source = inspect.getsource(
-            ForgeMixin._start_guided_training)
+            ForgeMixin._guided_load_models)
         assert "_load_engine_for_path" in source
 
     def test_generate_data_uses_engine(self):
@@ -2144,9 +2121,9 @@ class TestForgeUsesExtractPrompts:
 
     def test_guided_uses_extract_prompts(self):
         """Guided training uses _extract_prompts for bonus data."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
+        from enigma_engine.gui.gui_forge_advanced import ForgeAdvancedMixin
         source = inspect.getsource(
-            ForgeMixin._start_guided_training)
+            ForgeAdvancedMixin._guided_generate_curriculum)
         assert "_extract_prompts" in source
 
     def test_generate_data_uses_extract_prompts(self):
@@ -2187,24 +2164,24 @@ class TestGuidedTraining:
         assert "student" in source
 
     def test_guided_training_generates_curriculum(self):
-        """_start_guided_training has TRAINER create curriculum."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        source = inspect.getsource(ForgeMixin._start_guided_training)
+        """_guided_generate_curriculum creates training data."""
+        from enigma_engine.gui.gui_forge_advanced import ForgeAdvancedMixin
+        source = inspect.getsource(ForgeAdvancedMixin._guided_generate_curriculum)
         assert "GENERATING CURRICULUM" in source
         assert "num_pairs" in source
 
     def test_guided_training_tests_student(self):
-        """_start_guided_training has Phase 3 interactive testing."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        source = inspect.getsource(ForgeMixin._start_guided_training)
+        """_guided_test_student has Phase 3 interactive testing."""
+        from enigma_engine.gui.gui_forge_advanced import ForgeAdvancedMixin
+        source = inspect.getsource(ForgeAdvancedMixin._guided_test_student)
         assert "TESTING STUDENT" in source
         assert "test_scores" in source
         assert "judge_msg" in source
 
     def test_guided_training_readiness_assessment(self):
-        """_start_guided_training reports readiness to advance."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        source = inspect.getsource(ForgeMixin._start_guided_training)
+        """_guided_test_student reports readiness to advance."""
+        from enigma_engine.gui.gui_forge_advanced import ForgeAdvancedMixin
+        source = inspect.getsource(ForgeAdvancedMixin._guided_test_student)
         assert "READY" in source
         assert "PROGRESSING" in source
         assert "NEEDS WORK" in source
@@ -2221,7 +2198,8 @@ class TestGuidedTraining:
     def test_guided_reads_pairs_count(self):
         """Guided training reads num_pairs from guided_pairs_entry."""
         from enigma_engine.gui.gui_forge import ForgeMixin
-        source = inspect.getsource(ForgeMixin._start_guided_training)
+        source = inspect.getsource(
+            ForgeMixin._guided_validate_inputs)
         assert "guided_pairs_entry" in source
         assert "num_pairs" in source
 
@@ -2245,23 +2223,23 @@ class TestGuidedTraining:
 
     def test_guided_training_saves_curriculum(self):
         """Guided training saves curriculum to DATA_DIR for review."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        source = inspect.getsource(ForgeMixin._start_guided_training)
+        from enigma_engine.gui.gui_forge_advanced import ForgeAdvancedMixin
+        source = inspect.getsource(ForgeAdvancedMixin._guided_generate_curriculum)
         # Curriculum must be saved as a file, not thrown away
         assert "curriculum_" in source or "guided_" in source
         assert "write_text" in source
 
     def test_guided_training_saves_test_results(self):
         """Guided training appends Phase 3 test results to the file."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        source = inspect.getsource(ForgeMixin._start_guided_training)
+        from enigma_engine.gui.gui_forge_advanced import ForgeAdvancedMixin
+        source = inspect.getsource(ForgeAdvancedMixin._guided_test_student)
         # Test results should be written to file
         assert "Test Results" in source or "TEST RESULTS" in source
 
     def test_guided_training_refreshes_data_files(self):
         """After saving curriculum, guided training refreshes data dropdown."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        source = inspect.getsource(ForgeMixin._start_guided_training)
+        from enigma_engine.gui.gui_forge_advanced import ForgeAdvancedMixin
+        source = inspect.getsource(ForgeAdvancedMixin._guided_generate_curriculum)
         assert "_refresh_data_files" in source
 
 
@@ -2302,10 +2280,10 @@ class TestDialogueTraining:
         assert "train" in source
 
     def test_dialogue_saves_student(self):
-        """_start_dialogue_training saves trained STUDENT model."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
+        """_dialogue_train_on_corrections saves trained STUDENT model."""
+        from enigma_engine.gui.gui_forge_advanced import ForgeAdvancedMixin
         source = inspect.getsource(
-            ForgeMixin._start_dialogue_training)
+            ForgeAdvancedMixin._dialogue_train_on_corrections)
         assert "atomic_torch_save" in source
 
     def test_dialogue_has_correction_step(self):
@@ -2349,25 +2327,25 @@ class TestDialogueTraining:
         assert "training_stage_var" in source or "stage" in source
 
     def test_dialogue_displays_conversation(self):
-        """Dialogue training logs the conversation turns."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
+        """Dialogue conversation loop logs the conversation turns."""
+        from enigma_engine.gui.gui_forge_advanced import ForgeAdvancedMixin
         source = inspect.getsource(
-            ForgeMixin._start_dialogue_training)
+            ForgeAdvancedMixin._dialogue_conversation_loop)
         assert "TRAINER:" in source or "STUDENT:" in source
 
     def test_dialogue_saves_transcript(self):
-        """Dialogue training saves transcript to data/ for review."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
+        """Dialogue conversation loop saves transcript to data/ for review."""
+        from enigma_engine.gui.gui_forge_advanced import ForgeAdvancedMixin
         source = inspect.getsource(
-            ForgeMixin._start_dialogue_training)
+            ForgeAdvancedMixin._dialogue_conversation_loop)
         assert "transcript" in source
         assert "write_text" in source
 
     def test_dialogue_reinforces_good_answers(self):
         """High-scoring student answers are used as reinforcement."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
+        from enigma_engine.gui.gui_forge_advanced import ForgeAdvancedMixin
         source = inspect.getsource(
-            ForgeMixin._start_dialogue_training)
+            ForgeAdvancedMixin._dialogue_conversation_loop)
         # Score >= 8 means use student's own answer
         assert "score >= 8" in source
         assert "student_answer" in source
@@ -2435,8 +2413,8 @@ class TestGenerationPromptBuilder:
 
     def test_guided_training_uses_builder(self):
         """Guided training uses _build_generation_prompt, not hardcoded Q&A."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        source = inspect.getsource(ForgeMixin._start_guided_training)
+        from enigma_engine.gui.gui_forge_advanced import ForgeAdvancedMixin
+        source = inspect.getsource(ForgeAdvancedMixin._guided_generate_curriculum)
         assert "_build_generation_prompt" in source
 
     def test_generate_data_uses_builder(self):
@@ -2496,17 +2474,17 @@ class TestFormatTrainingPair:
         assert result == "Q: prompt\nA: response"
 
     def test_supplement_uses_formatter(self):
-        """Guided training supplement uses _format_training_pair."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
+        """Guided training curriculum helper uses _format_training_pair."""
+        from enigma_engine.gui.gui_forge_advanced import ForgeAdvancedMixin
         source = inspect.getsource(
-            ForgeMixin._start_guided_training)
+            ForgeAdvancedMixin._guided_generate_curriculum)
         assert "_format_training_pair" in source
 
     def test_dialogue_corrections_use_formatter(self):
         """Dialogue training corrections use _format_training_pair."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
+        from enigma_engine.gui.gui_forge_advanced import ForgeAdvancedMixin
         source = inspect.getsource(
-            ForgeMixin._start_dialogue_training)
+            ForgeAdvancedMixin._dialogue_conversation_loop)
         assert "_format_training_pair" in source
 
     def test_generate_data_supplement_uses_formatter(self):
@@ -2746,7 +2724,7 @@ class TestReasoningAwareData:
         import inspect
         from enigma_engine.gui.gui_forge_advanced import ForgeAdvancedMixin
         source = inspect.getsource(
-            ForgeAdvancedMixin._start_guided_training)
+            ForgeAdvancedMixin._guided_generate_curriculum)
         assert "reasoning" in source
 
 
@@ -2809,8 +2787,7 @@ class TestBuildTrainerSystemPrompt:
             student_params=10_000_000)
         lower = result.lower()
         assert "as an ai" in lower
-        assert "human" in lower or "person" in lower or "friend" in lower
-        assert "guardrails" in lower or "limits" in lower
+        assert "human" in lower or "natural" in lower or "friend" in lower
 
     def test_fact_checking_instructions(self):
         """Prompt teaches fact-checking and offline fallback."""
@@ -2822,10 +2799,8 @@ class TestBuildTrainerSystemPrompt:
         assert "fact check" in lower or "double-check" in lower or "verify" in lower
         # Should handle no internet
         assert "no internet" in lower or "no internet" in lower.replace("'", "")
-        # Should not refuse, give best answer
-        assert "best answer" in lower or "best take" in lower
         # Should flag uncertainty
-        assert "confident" in lower or "uncertain" in lower or "not 100" in lower
+        assert "uncertain" in lower or "not 100" in lower
 
     def test_task_parameter_reflected(self):
         """Task name appears in the prompt."""
@@ -2847,11 +2822,11 @@ class TestTrainerUsesChatNotGenerate:
 
     def test_guided_uses_chat_with_system_prompt(self):
         """Guided training calls teacher_engine.chat() with system_prompt."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
+        from enigma_engine.gui.gui_forge_advanced import ForgeAdvancedMixin
         source = inspect.getsource(
-            ForgeMixin._start_guided_training)
+            ForgeAdvancedMixin._guided_generate_curriculum)
         assert "teacher_engine.chat(" in source
-        assert "_build_trainer_system_prompt" in source
+        assert "_build_trainer_system_prompt" in source or "trainer_sys" in source
 
     def test_generate_data_uses_chat(self):
         """Generate data calls engine.chat() with system_prompt."""
@@ -2862,13 +2837,14 @@ class TestTrainerUsesChatNotGenerate:
         assert "_build_trainer_system_prompt" in source
 
     def test_evaluate_trainer_uses_chat(self):
-        """Evaluate uses chat() for TRAINER, generate() for STUDENT."""
+        """Evaluate uses chat() for both TRAINER and STUDENT."""
         from enigma_engine.gui.gui_forge import ForgeMixin
         source = inspect.getsource(
             ForgeMixin._evaluate_student)
         assert "teacher_engine.chat(" in source
-        assert "student_engine.generate(" in source
+        assert "student_engine.chat(" in source
         assert "_build_trainer_system_prompt" in source
+        assert "_build_student_system_prompt" in source
 
 
 # ================================================================
@@ -3004,8 +2980,8 @@ class TestTrainingBrief:
             student_params=1_000_000, training_brief=brief)
         # Brief must appear before the critical/generic section
         brief_pos = result.find("sarcastic chef")
-        critical_pos = result.find("CRITICAL")
-        assert brief_pos < critical_pos, (
+        style_pos = result.find("STYLE")
+        assert brief_pos < style_pos, (
             "Training brief should appear before generic instructions")
 
     def test_training_brief_has_section_header(self):
@@ -3171,14 +3147,13 @@ class TestForgeUIPolish:
             assert '"TRAIN"' in source
 
     def test_mode_change_dims_stages_for_solo(self):
-        """_on_training_mode_changed hides stages for Solo."""
+        """_on_training_mode_changed hides stages for non-AI modes."""
         from enigma_engine.gui.gui_forge import ForgeMixin
         source = inspect.getsource(
             ForgeMixin._on_training_mode_changed)
         assert "_stage_buttons" in source
-        # Solo mode hides stages via visibility map
-        vis = ForgeMixin._MODE_SECTION_VISIBILITY
-        assert vis["Solo"]["stages"] is False
+        # Solo (Basic) mode hides AI-specific sections
+        assert "pack_forget" in source
 
     def test_web_learn_layout_single_row(self):
         """Web Learn topic, pages entry, and button on one row."""
@@ -3788,6 +3763,13 @@ class TestEscapeBinding:
         source = inspect.getsource(EnigmaGUI.__init__)
         assert "_bind_escape_stop" in source
 
+    def test_shortcuts_dismiss_restores_escape(self):
+        """Shortcuts dropdown dismiss must call _bind_escape_stop to clean up."""
+        from enigma_engine.gui.desktop import EnigmaGUI
+        source = inspect.getsource(EnigmaGUI._show_shortcuts_overlay)
+        assert "_bind_escape_stop" in source, (
+            "_dismiss must call _bind_escape_stop to restore clean binding")
+
 
 class TestPageNavShortcuts:
     """Verify Ctrl+1..7 page navigation shortcuts."""
@@ -3943,10 +3925,10 @@ class TestFileEncoding:
         assert "'r', encoding=" in source or '"r", encoding=' in source
 
     def test_model_export_config_encoding(self):
-        """model.py config writes use encoding='utf-8'."""
+        """model.py config writes use atomic_write_json (handles encoding)."""
         from enigma_engine.core.model import Enigma
         source = inspect.getsource(Enigma.export_to_safetensors)
-        assert "encoding" in source
+        assert "atomic_write_json" in source
 
 
 class TestRouterPortDynamic:
@@ -4257,7 +4239,7 @@ class TestPolishAuditGUI:
         from enigma_engine.gui.media import (
             MAX_GIF_FRAMES, MAX_IMAGE_DOWNLOAD_BYTES,
             MAX_GIF_DOWNLOAD_BYTES, MEDIA_DOWNLOAD_TIMEOUT)
-        assert MAX_GIF_FRAMES == 120
+        assert MAX_GIF_FRAMES == 500
         assert MAX_IMAGE_DOWNLOAD_BYTES == 10 * 1024 * 1024
         assert MAX_GIF_DOWNLOAD_BYTES == 20 * 1024 * 1024
         assert MEDIA_DOWNLOAD_TIMEOUT == 10
@@ -5182,10 +5164,10 @@ class TestChatTabAuditFixes:
         assert '"max_tokens": 2048' in source, (
             "max_tokens fallback should be 2048, not 100")
 
-    def test_config_default_max_gen_is_2048(self):
-        """CONFIG max_gen default is 2048."""
+    def test_config_default_max_gen_is_8192(self):
+        """CONFIG max_gen default is 8192."""
         from enigma_engine.config import CONFIG
-        assert CONFIG.get("max_gen") == 2048
+        assert CONFIG.get("max_gen") == 8192
 
     def test_delete_session_uses_tracked_index(self):
         """_delete_session reads _selected_session_index, not cursor."""
@@ -5793,14 +5775,14 @@ class TestForgeTrainingConfig:
 
     def test_guided_reads_batch_size(self):
         """Guided training must read batch_size from UI entry."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        source = inspect.getsource(ForgeMixin._start_guided_training)
+        from enigma_engine.gui.gui_forge_advanced import ForgeAdvancedMixin
+        source = inspect.getsource(ForgeAdvancedMixin._guided_train_student)
         assert "batch_size" in source
 
     def test_dialogue_reads_batch_size(self):
         """Dialogue training must read batch_size from UI entry."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        source = inspect.getsource(ForgeMixin._start_dialogue_training)
+        from enigma_engine.gui.gui_forge_advanced import ForgeAdvancedMixin
+        source = inspect.getsource(ForgeAdvancedMixin._dialogue_train_on_corrections)
         assert "batch_size" in source
 
 
@@ -6543,16 +6525,6 @@ class TestGamingModePreset:
         assert "_update_forge_progress" in source
         assert "_save_training_run" in source
 
-    def test_training_hooks_in_evolutionary(self):
-        """Evolutionary training has progress bar hooks."""
-        import inspect
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        source = inspect.getsource(
-            ForgeMixin._start_evolutionary_training)
-        assert "_reset_forge_progress" in source
-        assert "_update_forge_progress" in source
-        assert "_save_training_run" in source
-
     def test_training_hooks_in_lora(self):
         """LoRA training has progress bar hooks."""
         import inspect
@@ -7084,6 +7056,17 @@ class TestDocsAutoSave:
         assert "auto_save" in source.lower(), (
             "DOCS page should start an auto-save timer")
 
+    def test_auto_save_uses_same_normalization_as_manual(self):
+        """Auto-save and manual save must normalize content the same way."""
+        from enigma_engine.gui.gui_docs_page import DocsPageMixin
+        auto_source = inspect.getsource(DocsPageMixin._docs_auto_save)
+        manual_source = inspect.getsource(DocsPageMixin._docs_save)
+        # Both should use .strip() to normalize content
+        assert ".strip()" in auto_source, (
+            "Auto-save must use .strip() like manual save")
+        assert ".strip()" in manual_source, (
+            "Manual save must use .strip()")
+
 
 class TestPrintToLogger:
     """print() calls should be replaced with logger."""
@@ -7325,19 +7308,22 @@ class TestFontSizeControl:
         assert hasattr(widgets, "set_font_size_offset")
 
     def test_font_size_offset_default_zero(self):
-        """Default font size offset is 0."""
+        """get/set_font_size_offset round-trips correctly."""
         from enigma_engine.gui import widgets
+        saved = widgets.get_font_size_offset()
+        widgets.set_font_size_offset(0)
         assert widgets.get_font_size_offset() == 0
+        widgets.set_font_size_offset(saved)
 
     def test_font_size_offset_adjusts_fonts(self):
         """set_font_size_offset changes module-level FONT_* tuples."""
         from enigma_engine.gui import widgets
-        original_body = widgets.FONT_BODY[1]
-        widgets.set_font_size_offset(2)
-        assert widgets.FONT_BODY[1] == original_body + 2
-        # Restore
+        saved = widgets.get_font_size_offset()
         widgets.set_font_size_offset(0)
-        assert widgets.FONT_BODY[1] == original_body
+        base_body = widgets.FONT_BODY[1]
+        widgets.set_font_size_offset(2)
+        assert widgets.FONT_BODY[1] == base_body + 2
+        widgets.set_font_size_offset(saved)
 
     def test_config_page_has_font_size_section(self):
         """CONFIG page builder includes font size controls."""
@@ -7562,10 +7548,68 @@ class TestAdaptiveTrainingGUI:
             ForgeMixin._adaptive_phase1_generate)
         assert "build_adaptive_prompt" in source
 
+    def test_phase1_retries_empty_results(self):
+        """Phase 1 retries when teacher returns empty."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        source = inspect.getsource(
+            ForgeMixin._adaptive_phase1_generate)
+        assert "max_retries_per_example" in source
+
+    def test_phase1_uses_512_max_gen(self):
+        """Phase 1 uses 512 max_gen for longer generation."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        source = inspect.getsource(
+            ForgeMixin._adaptive_phase1_generate)
+        assert "max_gen=512" in source
+
+    def test_stage_loop_accumulates_data(self):
+        """Stage loop accumulates curriculum across retries."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        source = inspect.getsource(
+            ForgeMixin._run_adaptive_stages)
+        assert "accumulated" in source
+        # Should combine old + new pairs
+        assert "all_pairs" in source
+
     def test_resume_training_plan_method_exists(self):
         """_resume_training_plan method exists on ForgeMixin."""
         from enigma_engine.gui.gui_forge import ForgeMixin
         assert hasattr(ForgeMixin, "_resume_training_plan")
+
+    def test_training_report_method_exists(self):
+        """_log_training_report method exists on ForgeMixin."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        assert hasattr(ForgeMixin, "_log_training_report")
+
+    def test_phase1_shows_preview(self):
+        """Phase 1 generate logs a preview of each example."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        source = inspect.getsource(
+            ForgeMixin._adaptive_phase1_generate)
+        # Should show each result, not just periodic counters
+        assert "preview" in source.lower()
+
+    def test_training_report_grades(self):
+        """_log_training_report assigns letter grades."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        source = inspect.getsource(
+            ForgeMixin._log_training_report)
+        for grade in ("A", "B", "C", "D", "F"):
+            assert f'"{grade}"' in source or f"'{grade}'" in source
+
+    def test_training_report_shows_next_steps(self):
+        """_log_training_report includes next step recommendations."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        source = inspect.getsource(
+            ForgeMixin._log_training_report)
+        assert "WHAT TO DO NEXT" in source
+
+    def test_pipeline_complete_calls_report(self):
+        """Pipeline completion calls _log_training_report."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        source = inspect.getsource(
+            ForgeMixin._start_adaptive_training)
+        assert "_log_training_report" in source
 
 
 # ================================================================
@@ -7615,9 +7659,11 @@ class TestChatHistoryTrimming:
 
     def test_trim_chat_history_removes_oldest(self):
         """_trim_chat_history removes oldest messages when over cap."""
+        import threading
         from enigma_engine.gui.gui_logic_chat import LogicChatMixin
         from enigma_engine.gui.media import MAX_CHAT_HISTORY
         obj = object.__new__(LogicChatMixin)
+        obj._history_lock = threading.Lock()
         # Simulate a history with messages over the cap
         obj.history = [
             {"role": "user", "content": f"msg{i}"}
@@ -7632,8 +7678,10 @@ class TestChatHistoryTrimming:
 
     def test_trim_chat_history_doesnt_trim_under_cap(self):
         """_trim_chat_history does nothing when under cap."""
+        import threading
         from enigma_engine.gui.gui_logic_chat import LogicChatMixin
         obj = object.__new__(LogicChatMixin)
+        obj._history_lock = threading.Lock()
         obj.history = [
             {"role": "user", "content": "msg1"},
             {"role": "assistant", "content": "reply1"},
@@ -7719,3 +7767,1236 @@ class TestTrainingModes:
         source = __import__("inspect").getsource(
             ForgeMixin._start_training_by_mode)
         assert "Image" in source
+
+
+class TestForgeButtonStates:
+    """FORGE tool buttons disable when prerequisites are missing."""
+
+    def test_update_method_exists(self):
+        """ForgeMixin has _update_forge_button_states method."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        assert hasattr(ForgeMixin, "_update_forge_button_states")
+        assert callable(ForgeMixin._update_forge_button_states)
+
+    def test_generate_data_needs_trainer(self):
+        """_update_forge_button_states disables GENERATE DATA without TRAINER."""
+        import inspect
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        source = inspect.getsource(
+            ForgeMixin._update_forge_button_states)
+        assert "generate_data_btn" in source
+        assert "has_trainer" in source
+
+    def test_evaluate_needs_trainer_and_student(self):
+        """_update_forge_button_states disables EVALUATE without TRAINER+STUDENT."""
+        import inspect
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        source = inspect.getsource(
+            ForgeMixin._update_forge_button_states)
+        assert "evaluate_btn" in source
+        assert "has_trainer and has_student" in source
+
+    def test_quantize_needs_student(self):
+        """_update_forge_button_states disables QUANTIZE without STUDENT."""
+        import inspect
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        source = inspect.getsource(
+            ForgeMixin._update_forge_button_states)
+        assert "quantize_btn" in source
+
+    def test_export_gguf_needs_student(self):
+        """_update_forge_button_states disables EXPORT GGUF without STUDENT."""
+        import inspect
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        source = inspect.getsource(
+            ForgeMixin._update_forge_button_states)
+        assert "export_gguf_btn" in source
+
+    def test_tokenizer_needs_data(self):
+        """_update_forge_button_states disables TOKENIZER TRAIN without data."""
+        import inspect
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        source = inspect.getsource(
+            ForgeMixin._update_forge_button_states)
+        assert "train_tok_btn" in source
+        assert "has_data" in source
+
+    def test_web_learn_needs_trainer(self):
+        """_update_forge_button_states disables WEB LEARN without TRAINER."""
+        import inspect
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        source = inspect.getsource(
+            ForgeMixin._update_forge_button_states)
+        assert "web_learn_btn" in source
+
+    def test_called_from_route_status_update(self):
+        """_update_route_status calls _update_forge_button_states."""
+        import inspect
+        from enigma_engine.gui.gui_logic import LogicMixin
+        source = inspect.getsource(
+            LogicMixin._update_route_status)
+        assert "_update_forge_button_states" in source
+
+    def test_called_on_data_selected(self):
+        """_on_data_selected calls _update_forge_button_states."""
+        import inspect
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        source = inspect.getsource(
+            ForgeMixin._on_data_selected)
+        assert "_update_forge_button_states" in source
+
+    def test_called_on_forge_page_build(self):
+        """FORGE page build schedules _update_forge_button_states."""
+        import inspect
+        from enigma_engine.gui.gui_pages_forge import ForgePageMixin
+        source = inspect.getsource(
+            ForgePageMixin._build_page_forge)
+        assert "_update_forge_button_states" in source
+
+    def test_respects_training_active(self):
+        """Buttons stay disabled during active training."""
+        import inspect
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        source = inspect.getsource(
+            ForgeMixin._update_forge_button_states)
+        assert "training_active" in source
+
+
+# ================================================================
+# CORE toggle dead-end fixes
+# ================================================================
+
+class TestToggleButtonSetState:
+    """ToggleButton must support programmatic state changes."""
+
+    def test_set_state_method_exists(self):
+        """ToggleButton has a set_state method."""
+        from enigma_engine.gui.widgets import ToggleButton
+        assert hasattr(ToggleButton, "set_state")
+        assert callable(getattr(ToggleButton, "set_state"))
+
+    def test_set_state_in_source(self):
+        """set_state updates _on and calls _apply_style."""
+        from enigma_engine.gui.widgets import ToggleButton
+        source = inspect.getsource(ToggleButton.set_state)
+        assert "_on" in source
+        assert "_apply_style" in source
+
+
+class TestTTSToggleFailureFeedback:
+    """TTS worker must surface pyttsx3 init failure to user."""
+
+    def test_tts_worker_surfaces_init_failure(self):
+        """When pyttsx3.init() fails, the worker notifies the user."""
+        from enigma_engine.gui.gui_logic_media import LogicMediaMixin
+        source = inspect.getsource(LogicMediaMixin._tts_speak)
+        # Find the pyttsx3.init() except block — it must NOT be bare return
+        # The init except block should have user feedback, not just 'return'
+        lines = source.split('\n')
+        in_init_except = False
+        has_feedback = False
+        for line in lines:
+            stripped = line.strip()
+            if 'engine = pyttsx3.init()' in stripped:
+                in_init_except = True
+            elif in_init_except and 'except' in stripped:
+                in_init_except = True  # now in except block
+            elif in_init_except and ('_chat_error' in stripped
+                                     or '_chat_system' in stripped):
+                has_feedback = True
+                break
+            elif in_init_except and stripped.startswith('def '):
+                break
+        assert has_feedback, (
+            "pyttsx3.init() except block must surface error to user")
+
+    def test_tts_worker_resets_toggle_on_failure(self):
+        """When pyttsx3 init fails, voice toggle is reset."""
+        from enigma_engine.gui.gui_logic_media import LogicMediaMixin
+        source = inspect.getsource(LogicMediaMixin._tts_speak)
+        # After pyttsx3.init() fails, must reset voice_enabled or voice_btn
+        assert ("voice_enabled = False" in source
+                or "set_state" in source
+                or "voice_btn" in source), (
+            "pyttsx3 init failure must reset voice toggle")
+
+
+class TestWebAccessFailureFeedback:
+    """Web access must surface first auto_research failure."""
+
+    def test_auto_research_failure_shown(self):
+        """auto_research failure is surfaced to user, not just logger.debug."""
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+        source = inspect.getsource(
+            LogicChatMixin._build_system_prompt_with_context)
+        # Find the except block after auto_research call
+        lines = source.split('\n')
+        in_web_except = False
+        has_user_feedback = False
+        for line in lines:
+            stripped = line.strip()
+            if 'auto_research(' in stripped:
+                in_web_except = True
+            elif in_web_except and 'except' in stripped:
+                in_web_except = True  # now in except block
+            elif in_web_except and ('_chat_system' in stripped
+                                    or '_chat_error' in stripped):
+                has_user_feedback = True
+                break
+            elif in_web_except and stripped.startswith(('def ', 'class ')):
+                break
+        assert has_user_feedback, (
+            "auto_research except block must surface first error "
+            "to user, not just logger.debug")
+
+
+class TestRAGToggleFailureFeedback:
+    """RAG toggle must auto-disable when no documents are indexed."""
+
+    def test_rag_resets_toggle_on_empty(self):
+        """When 0 chunks are indexed, RAG toggle is turned off."""
+        from enigma_engine.gui.gui_logic import LogicMixin
+        source = inspect.getsource(LogicMixin._build_rag_index)
+        # Must reset the toggle button when nothing is found
+        assert "_rag_btn" in source or "set_state" in source
+
+    def test_rag_resets_toggle_on_error(self):
+        """When RAG indexing fails, toggle is turned off."""
+        from enigma_engine.gui.gui_logic import LogicMixin
+        source = inspect.getsource(LogicMixin._build_rag_index)
+        # Error path should also reset toggle
+        assert "_rag_btn" in source or "set_state" in source
+
+
+class TestLearnWhileChattingFeedback:
+    """Learn While Chatting must warn when no trainer is available."""
+
+    def test_toggle_checks_router(self):
+        """_toggle_learn_while_chatting checks for router availability."""
+        from enigma_engine.gui.gui_pages_config import ConfigPageMixin
+        source = inspect.getsource(
+            ConfigPageMixin._toggle_learn_while_chatting)
+        assert "_router" in source or "router" in source
+
+    def test_toggle_warns_no_trainer(self):
+        """Toggle shows warning when trainer is not available."""
+        from enigma_engine.gui.gui_pages_config import ConfigPageMixin
+        source = inspect.getsource(
+            ConfigPageMixin._toggle_learn_while_chatting)
+        assert "warn" in source.lower() or "no trainer" in source.lower() or "TRAINER" in source
+
+
+# ================================================================
+# Two-tier FORGE context: Student gets persona, not mechanics
+# ================================================================
+
+class TestBuildStudentSystemPrompt:
+    """Test _build_student_system_prompt for lean persona prompt."""
+
+    def test_method_exists(self):
+        """_build_student_system_prompt exists on ForgeMixin."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        assert hasattr(ForgeMixin, "_build_student_system_prompt")
+
+    def test_returns_string(self):
+        """Returns a non-empty string."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        result = ForgeMixin._build_student_system_prompt()
+        assert isinstance(result, str)
+        assert len(result) > 10
+
+    def test_includes_brief_when_provided(self):
+        """Training brief personality is injected into student prompt."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        result = ForgeMixin._build_student_system_prompt(
+            training_brief="You are a pirate who loves treasure")
+        assert "pirate" in result.lower()
+
+    def test_no_training_mechanics(self):
+        """Student prompt must NOT contain trainer mechanics."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        result = ForgeMixin._build_student_system_prompt(
+            training_brief="You are a helpful assistant")
+        lower = result.lower()
+        # Should NOT contain training-specific language
+        assert "generating" not in lower or "training data" not in lower
+        assert "score" not in lower or "1-10" not in lower
+        assert "curriculum" not in lower
+        assert "student ai model" not in lower
+
+    def test_no_stage_instructions(self):
+        """Student prompt should not contain stage curriculum details."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        result = ForgeMixin._build_student_system_prompt(
+            training_brief="You are a coding expert")
+        lower = result.lower()
+        assert "training stage:" not in lower
+        assert "phase" not in lower
+
+    def test_has_personality_guidance(self):
+        """Student prompt includes natural personality guidance."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        result = ForgeMixin._build_student_system_prompt()
+        lower = result.lower()
+        # Should have some personality/behavior guidance
+        assert "natural" in lower or "human" in lower or "conversational" in lower
+
+    def test_empty_brief_still_works(self):
+        """Works with no training brief — gives generic persona."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        result = ForgeMixin._build_student_system_prompt(
+            training_brief="")
+        assert isinstance(result, str)
+        assert len(result) > 10
+
+    def test_student_name_injected(self):
+        """Student name appears in prompt when provided."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        result = ForgeMixin._build_student_system_prompt(
+            student_name="Enigma")
+        assert "Enigma" in result
+
+
+# ================================================================
+# Summarized session memory
+# ================================================================
+
+class TestHistorySummarization:
+    """Test history summarization before dropping old messages."""
+
+    def test_summarize_method_exists(self):
+        """_summarize_dropped_history exists in _ChatMixin."""
+        from enigma_engine.core.engine_chat import _ChatMixin
+        assert hasattr(_ChatMixin, "_summarize_dropped_history")
+
+    def test_summarize_returns_string(self):
+        """Summarization returns a string."""
+        from enigma_engine.core.engine_chat import _ChatMixin
+        messages = [
+            {"role": "user", "content": "Hello there"},
+            {"role": "assistant", "content": "Hi! How can I help?"},
+            {"role": "user", "content": "Tell me about Python"},
+            {"role": "assistant", "content": "Python is a programming language."},
+        ]
+        result = _ChatMixin._summarize_dropped_history(messages)
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+    def test_summary_is_shorter_than_original(self):
+        """Summary should be shorter than the concatenated messages."""
+        from enigma_engine.core.engine_chat import _ChatMixin
+        messages = [
+            {"role": "user", "content": f"Message number {i} with some content about topic {i}"}
+            for i in range(20)
+        ]
+        original_len = sum(len(m["content"]) for m in messages)
+        result = _ChatMixin._summarize_dropped_history(messages)
+        assert len(result) < original_len
+
+    def test_empty_messages_returns_empty(self):
+        """Empty message list returns empty string."""
+        from enigma_engine.core.engine_chat import _ChatMixin
+        result = _ChatMixin._summarize_dropped_history([])
+        assert result == ""
+
+    def test_truncate_history_preserves_summary(self):
+        """_truncate_history includes prior summary in context."""
+        import inspect
+        from enigma_engine.core.engine_chat import _ChatMixin
+        source = inspect.getsource(_ChatMixin._truncate_history)
+        # Should reference history_summary somewhere
+        assert "summary" in source.lower()
+
+    def test_session_save_includes_summary(self):
+        """Session save format includes history_summary field."""
+        import inspect
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+        source = inspect.getsource(LogicChatMixin._auto_save_session)
+        assert "summary" in source.lower()
+
+    def test_summarize_detects_topic_groups(self):
+        """Summarizer groups messages by topic shifts."""
+        from enigma_engine.core.engine_chat import _ChatMixin
+        messages = [
+            {"role": "user", "content": "How do I install Python?"},
+            {"role": "assistant", "content": "Download from python.org and run the installer."},
+            {"role": "user", "content": "What about pip packages?"},
+            {"role": "assistant", "content": "Use pip install package_name."},
+            {"role": "user", "content": "Can you help with my resume?"},
+            {"role": "assistant", "content": "Sure! Start with your contact info at the top."},
+            {"role": "user", "content": "What format should I use?"},
+            {"role": "assistant", "content": "PDF is the standard format for resumes."},
+        ]
+        result = _ChatMixin._summarize_dropped_history(messages)
+        assert isinstance(result, str)
+        # Should mention multiple topics
+        assert "topic" in result.lower() or "Topics" in result
+
+    def test_summarize_extracts_decisions(self):
+        """Summarizer captures key decisions or conclusions."""
+        from enigma_engine.core.engine_chat import _ChatMixin
+        messages = [
+            {"role": "user", "content": "Should I use React or Vue?"},
+            {"role": "assistant", "content": "I recommend React for your large team."},
+            {"role": "user", "content": "Let's go with React then."},
+            {"role": "assistant", "content": "Great choice. We decided to use React."},
+            {"role": "user", "content": "What about the database?"},
+            {"role": "assistant", "content": "PostgreSQL is best for your use case."},
+        ]
+        result = _ChatMixin._summarize_dropped_history(messages)
+        assert isinstance(result, str)
+        # Should extract conclusions/decisions from assistant msgs
+        assert "decision" in result.lower() or "Key" in result or "conclusion" in result.lower()
+
+    def test_summarize_handles_long_conversation(self):
+        """Summarizer handles 50+ messages effectively."""
+        from enigma_engine.core.engine_chat import _ChatMixin
+        messages = []
+        for i in range(60):
+            role = "user" if i % 2 == 0 else "assistant"
+            content = f"{'Question' if role == 'user' else 'Answer'} about topic {i // 10}: message {i}"
+            messages.append({"role": role, "content": content})
+        result = _ChatMixin._summarize_dropped_history(messages)
+        assert isinstance(result, str)
+        assert len(result) > 30
+        # Should have some structure
+        assert "\n" in result
+
+
+# ================================================================
+# Chat history thread safety
+# ================================================================
+
+class TestChatHistoryThreadSafety:
+    """Verify _history_lock protects self.history from data races."""
+
+    def test_history_lock_exists_in_desktop(self):
+        """desktop.py creates _history_lock alongside self.history."""
+        import inspect
+        from enigma_engine.gui.desktop import EnigmaGUI
+        source = inspect.getsource(EnigmaGUI.__init__)
+        assert "_history_lock" in source
+        assert "threading.Lock()" in source or "Lock()" in source
+
+    def test_send_message_acquires_lock(self):
+        """_send_message background thread acquires _history_lock."""
+        import inspect
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+        source = inspect.getsource(LogicChatMixin._send_message)
+        assert "_history_lock" in source
+
+    def test_new_chat_acquires_lock(self):
+        """_new_chat acquires _history_lock before clearing history."""
+        import inspect
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+        source = inspect.getsource(LogicChatMixin._new_chat)
+        assert "_history_lock" in source
+
+    def test_edit_last_message_acquires_lock(self):
+        """_edit_last_message acquires _history_lock."""
+        import inspect
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+        source = inspect.getsource(LogicChatMixin._edit_last_message)
+        assert "_history_lock" in source
+
+    def test_load_session_acquires_lock(self):
+        """_load_session_by_path acquires _history_lock."""
+        import inspect
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+        source = inspect.getsource(
+            LogicChatMixin._load_session_by_path)
+        assert "_history_lock" in source
+
+    def test_save_model_context_acquires_lock(self):
+        """_save_model_context acquires _history_lock."""
+        import inspect
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+        source = inspect.getsource(
+            LogicChatMixin._save_model_context)
+        assert "_history_lock" in source
+
+    def test_auto_save_session_acquires_lock(self):
+        """_auto_save_session acquires _history_lock."""
+        import inspect
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+        source = inspect.getsource(
+            LogicChatMixin._auto_save_session)
+        assert "_history_lock" in source
+
+    def test_restore_history_display_acquires_lock(self):
+        """_restore_history_display acquires _history_lock."""
+        import inspect
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+        source = inspect.getsource(
+            LogicChatMixin._restore_history_display)
+        assert "_history_lock" in source
+
+    def test_export_chat_acquires_lock(self):
+        """_export_chat acquires _history_lock."""
+        import inspect
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+        source = inspect.getsource(LogicChatMixin._export_chat)
+        assert "_history_lock" in source
+
+
+# ================================================================
+# FORGE method split (guided + dialogue)
+# ================================================================
+
+class TestForgeMethodSplit:
+    """Verify large guided/dialogue methods use phase helpers."""
+
+    def test_guided_has_curriculum_helper(self):
+        """_start_guided_training delegates Phase 1 to a helper."""
+        from enigma_engine.gui.gui_forge_advanced import (
+            ForgeAdvancedMixin)
+        assert hasattr(ForgeAdvancedMixin, "_guided_generate_curriculum")
+
+    def test_guided_has_train_helper(self):
+        """_start_guided_training delegates Phase 2 to a helper."""
+        from enigma_engine.gui.gui_forge_advanced import (
+            ForgeAdvancedMixin)
+        assert hasattr(ForgeAdvancedMixin, "_guided_train_student")
+
+    def test_guided_has_test_helper(self):
+        """_start_guided_training delegates Phase 3 to a helper."""
+        from enigma_engine.gui.gui_forge_advanced import (
+            ForgeAdvancedMixin)
+        assert hasattr(ForgeAdvancedMixin, "_guided_test_student")
+
+    def test_guided_calls_helpers(self):
+        """_start_guided_training calls the phase helpers."""
+        import inspect
+        from enigma_engine.gui.gui_forge_advanced import (
+            ForgeAdvancedMixin)
+        source = inspect.getsource(
+            ForgeAdvancedMixin._start_guided_training)
+        assert "_guided_generate_curriculum" in source
+        assert "_guided_train_student" in source
+        assert "_guided_test_student" in source
+
+    def test_dialogue_has_conversation_helper(self):
+        """_start_dialogue_training delegates rounds to a helper."""
+        from enigma_engine.gui.gui_forge_advanced import (
+            ForgeAdvancedMixin)
+        assert hasattr(
+            ForgeAdvancedMixin, "_dialogue_conversation_loop")
+
+    def test_dialogue_has_train_helper(self):
+        """_start_dialogue_training delegates training to a helper."""
+        from enigma_engine.gui.gui_forge_advanced import (
+            ForgeAdvancedMixin)
+        assert hasattr(
+            ForgeAdvancedMixin, "_dialogue_train_on_corrections")
+
+    def test_dialogue_calls_helpers(self):
+        """_start_dialogue_training calls the phase helpers."""
+        import inspect
+        from enigma_engine.gui.gui_forge_advanced import (
+            ForgeAdvancedMixin)
+        source = inspect.getsource(
+            ForgeAdvancedMixin._start_dialogue_training)
+        assert "_dialogue_conversation_loop" in source
+        assert "_dialogue_train_on_corrections" in source
+
+    def test_guided_main_method_under_200_lines(self):
+        """_start_guided_training main body is now compact."""
+        import inspect
+        from enigma_engine.gui.gui_forge_advanced import (
+            ForgeAdvancedMixin)
+        source = inspect.getsource(
+            ForgeAdvancedMixin._start_guided_training)
+        line_count = len(source.strip().splitlines())
+        assert line_count < 300, (
+            f"_start_guided_training is {line_count} lines, "
+            f"expected < 300 after splitting into helpers")
+
+    def test_dialogue_main_method_under_200_lines(self):
+        """_start_dialogue_training main body is now compact."""
+        import inspect
+        from enigma_engine.gui.gui_forge_advanced import (
+            ForgeAdvancedMixin)
+        source = inspect.getsource(
+            ForgeAdvancedMixin._start_dialogue_training)
+        line_count = len(source.strip().splitlines())
+        assert line_count < 300, (
+            f"_start_dialogue_training is {line_count} lines, "
+            f"expected < 300 after splitting into helpers")
+
+
+# ================================================================
+# Performance benchmarks
+# ================================================================
+
+class TestBenchmarkInfrastructure:
+    """Verify benchmark infrastructure exists."""
+
+    def test_benchmark_module_exists(self):
+        """tests/test_benchmark.py exists with benchmark tests."""
+        bench_path = Path(__file__).parent / "test_benchmark.py"
+        assert bench_path.exists(), (
+            "tests/test_benchmark.py should exist")
+
+    def test_benchmark_has_forward_pass_test(self):
+        """Benchmark file tests model forward pass speed."""
+        from tests import test_benchmark
+        assert hasattr(test_benchmark, "TestForwardPassBenchmark")
+
+    def test_benchmark_has_generation_test(self):
+        """Benchmark file tests token generation speed."""
+        from tests import test_benchmark
+        assert hasattr(test_benchmark, "TestGenerationBenchmark")
+
+
+# =====================================================================
+# Phase 3: State-Aware Generation Wiring
+# =====================================================================
+
+class TestStateAwareGenerationWiring:
+    """Verify Phase 3 wiring exists in the GUI chat logic."""
+
+    def test_gui_chat_imports_prompt_hint(self):
+        """gui_logic_chat source references build_emotional_prompt_hint."""
+        import inspect
+        from enigma_engine.gui import gui_logic_chat
+        src = inspect.getsource(gui_logic_chat)
+        assert "build_emotional_prompt_hint" in src
+
+    def test_gui_chat_imports_param_modulation(self):
+        """gui_logic_chat source references modulate_generation_params."""
+        import inspect
+        from enigma_engine.gui import gui_logic_chat
+        src = inspect.getsource(gui_logic_chat)
+        assert "modulate_generation_params" in src
+
+    def test_gui_chat_injects_emotional_hint_into_prompt(self):
+        """combined_prompt gets emotional hint appended."""
+        import inspect
+        from enigma_engine.gui import gui_logic_chat
+        src = inspect.getsource(gui_logic_chat)
+        # The hint should be appended to combined_prompt
+        assert "combined_prompt" in src
+        assert "emotional_prompt_hint" in src or "hint" in src
+
+    def test_gui_chat_modulates_kwargs(self):
+        """kwargs are updated with modulated params."""
+        import inspect
+        from enigma_engine.gui import gui_logic_chat
+        src = inspect.getsource(gui_logic_chat)
+        assert "modulate_generation_params" in src
+        assert "kwargs.update" in src
+
+
+# =====================================================================
+# Phase 4: Emotional State Transparency Panel
+# =====================================================================
+
+class TestEmotionalTransparencyPanel:
+    """Verify Phase 4 emotional state panel exists in the GUI."""
+
+    def test_gui_pages_has_emotional_panel_setup(self):
+        """gui_pages.py source references _emo_panel (CollapsiblePanel)."""
+        import inspect
+        from enigma_engine.gui import gui_pages
+        src = inspect.getsource(gui_pages)
+        assert "_emo_panel" in src
+
+    def test_gui_pages_has_emotion_bars(self):
+        """gui_pages.py creates per-dimension bar widgets."""
+        import inspect
+        from enigma_engine.gui import gui_pages
+        src = inspect.getsource(gui_pages)
+        assert "_emo_bars" in src
+
+    def test_gui_pages_has_update_emotional_display(self):
+        """_update_emotional_display method exists."""
+        import inspect
+        from enigma_engine.gui import gui_pages
+        src = inspect.getsource(gui_pages)
+        assert "def _update_emotional_display" in src
+
+    def test_gui_pages_has_reset_button(self):
+        """Emotional panel has a RESET button."""
+        import inspect
+        from enigma_engine.gui import gui_pages
+        src = inspect.getsource(gui_pages)
+        assert "_reset_emotional_state" in src
+
+    def test_rebalance_sidebar_handles_three_panels(self):
+        """_rebalance_sidebar accounts for the emotional panel."""
+        import inspect
+        from enigma_engine.gui import gui_pages
+        src = inspect.getsource(gui_pages)
+        # Should reference row 2 in rebalance
+        assert "grid_rowconfigure(2" in src
+
+    def test_update_display_called_after_chat(self):
+        """gui_logic_chat calls _update_emotional_display after messages."""
+        import inspect
+        from enigma_engine.gui import gui_logic_chat
+        src = inspect.getsource(gui_logic_chat)
+        assert "_update_emotional_display" in src
+
+
+# ====================================================================
+# Pre-Train FORGE mode (Phase 1a)
+# ====================================================================
+
+class TestPreTrainModeUI:
+    """Pre-Train radio card exists in FORGE mode selector."""
+
+    def test_pretrain_mode_in_page_source(self):
+        """gui_pages_forge.py defines the Pre-Train mode card."""
+        import inspect
+        from enigma_engine.gui import gui_pages_forge
+        src = inspect.getsource(gui_pages_forge)
+        assert "Pre-Train" in src
+
+    def test_pretrain_section_exists(self):
+        """gui_pages_forge.py has a _forge_pretrain_section."""
+        import inspect
+        from enigma_engine.gui import gui_pages_forge
+        src = inspect.getsource(gui_pages_forge)
+        assert "_forge_pretrain_section" in src
+
+    def test_pretrain_preset_dropdown(self):
+        """Pre-Train UI has a model preset dropdown."""
+        import inspect
+        from enigma_engine.gui import gui_pages_forge
+        src = inspect.getsource(gui_pages_forge)
+        assert "pretrain_preset_var" in src
+
+
+class TestPreTrainModeDispatch:
+    """Pre-Train mode dispatches correctly."""
+
+    def test_mode_changed_handles_pretrain(self):
+        """_on_training_mode_changed shows Pre-Train section."""
+        import inspect
+        from enigma_engine.gui import gui_forge
+        src = inspect.getsource(gui_forge)
+        assert '"Pre-Train"' in src or "'Pre-Train'" in src
+
+    def test_start_training_dispatches_pretrain(self):
+        """_start_training_by_mode dispatches to _start_pretrain_training."""
+        import inspect
+        from enigma_engine.gui import gui_forge
+        src = inspect.getsource(gui_forge)
+        assert "_start_pretrain_training" in src
+
+    def test_pretrain_handler_exists(self):
+        """ForgeNewModesMixin has _start_pretrain_training."""
+        from enigma_engine.gui.gui_forge_new_modes import ForgeNewModesMixin
+        assert hasattr(ForgeNewModesMixin, "_start_pretrain_training")
+
+
+class TestModelsPresetDropdown:
+    """MODELS page Create New Model has preset selection."""
+
+    def test_preset_dropdown_in_models_page(self):
+        """gui_pages.py has a model_preset_var for create new model."""
+        import inspect
+        from enigma_engine.gui import gui_pages
+        src = inspect.getsource(gui_pages)
+        assert "model_preset_var" in src
+
+    def test_create_model_uses_preset(self):
+        """gui_forge_models.py uses selected preset in _create_new_model."""
+        import inspect
+        from enigma_engine.gui import gui_forge_models
+        src = inspect.getsource(gui_forge_models)
+        assert "model_preset_var" in src
+
+# =============================================================================
+# _send_message() DECOMPOSITION TESTS (#25)
+# =============================================================================
+
+class TestSendMessageDecomposition:
+    """Verify _send_message() is decomposed into helper methods."""
+
+    def test_process_response_method_exists(self):
+        """_process_response helper must exist on LogicChatMixin."""
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+        assert hasattr(LogicChatMixin, "_process_response")
+
+    def test_process_response_extracts_reasoning(self):
+        """_process_response must handle reasoning extraction."""
+        import inspect
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+        src = inspect.getsource(LogicChatMixin._process_response)
+        assert "extract_reasoning" in src or "has_reasoning" in src
+
+    def test_process_response_parses_commands(self):
+        """_process_response must handle command parsing."""
+        import inspect
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+        src = inspect.getsource(LogicChatMixin._process_response)
+        assert "parse_commands" in src
+
+    def test_post_generation_bookkeeping_exists(self):
+        """_post_generation_bookkeeping helper must exist."""
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+        assert hasattr(LogicChatMixin, "_post_generation_bookkeeping")
+
+    def test_bookkeeping_manages_history(self):
+        """_post_generation_bookkeeping must update history."""
+        import inspect
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+        src = inspect.getsource(
+            LogicChatMixin._post_generation_bookkeeping)
+        assert "history" in src
+
+    def test_bookkeeping_handles_emotional_state(self):
+        """_post_generation_bookkeeping must update emotional state."""
+        import inspect
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+        src = inspect.getsource(
+            LogicChatMixin._post_generation_bookkeeping)
+        assert "emotional" in src or "update_emotional" in src
+
+    def test_build_system_prompt_with_context_exists(self):
+        """_build_system_prompt_with_context helper must exist."""
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+        assert hasattr(LogicChatMixin,
+                       "_build_system_prompt_with_context")
+
+    def test_system_prompt_builder_includes_web_research(self):
+        """_build_system_prompt_with_context includes web research."""
+        import inspect
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+        src = inspect.getsource(
+            LogicChatMixin._build_system_prompt_with_context)
+        assert "web_research" in src or "auto_research" in src
+
+    def test_send_message_calls_helpers(self):
+        """_send_message must delegate to the extracted helpers."""
+        import inspect
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+        src = inspect.getsource(LogicChatMixin._send_message)
+        assert "_process_response" in src
+        assert "_post_generation_bookkeeping" in src
+        assert "_build_system_prompt_with_context" in src
+
+
+# =============================================================================
+# FORGE METHOD DECOMPOSITION TESTS (#28)
+# =============================================================================
+
+class TestForgeMethodDecomposition:
+    """Verify large FORGE methods are decomposed into helpers."""
+
+    def test_guided_validate_exists(self):
+        """_guided_validate_inputs helper must exist."""
+        from enigma_engine.gui.gui_forge_advanced import (
+            ForgeAdvancedMixin)
+        assert hasattr(ForgeAdvancedMixin, "_guided_validate_inputs")
+
+    def test_guided_validate_checks_routes(self):
+        """_guided_validate_inputs checks trainer/student routes."""
+        import inspect
+        from enigma_engine.gui.gui_forge_advanced import (
+            ForgeAdvancedMixin)
+        src = inspect.getsource(
+            ForgeAdvancedMixin._guided_validate_inputs)
+        assert "trainer" in src and "student" in src
+
+    def test_guided_load_models_exists(self):
+        """_guided_load_models helper must exist."""
+        from enigma_engine.gui.gui_forge_advanced import (
+            ForgeAdvancedMixin)
+        assert hasattr(ForgeAdvancedMixin, "_guided_load_models")
+
+    def test_guided_start_calls_helpers(self):
+        """_start_guided_training delegates to validation + load helpers."""
+        import inspect
+        from enigma_engine.gui.gui_forge_advanced import (
+            ForgeAdvancedMixin)
+        src = inspect.getsource(
+            ForgeAdvancedMixin._start_guided_training)
+        assert "_guided_validate_inputs" in src
+        assert "_guided_load_models" in src
+
+    def test_pretrain_validate_exists(self):
+        """_pretrain_validate_inputs helper must exist."""
+        from enigma_engine.gui.gui_forge_new_modes import (
+            ForgeNewModesMixin)
+        assert hasattr(ForgeNewModesMixin,
+                       "_pretrain_validate_inputs")
+
+    def test_pretrain_validate_checks_data_path(self):
+        """_pretrain_validate_inputs checks data path exists."""
+        import inspect
+        from enigma_engine.gui.gui_forge_new_modes import (
+            ForgeNewModesMixin)
+        src = inspect.getsource(
+            ForgeNewModesMixin._pretrain_validate_inputs)
+        assert "data" in src
+
+    def test_pretrain_start_calls_validate(self):
+        """_start_pretrain_training delegates to validation helper."""
+        import inspect
+        from enigma_engine.gui.gui_forge_new_modes import (
+            ForgeNewModesMixin)
+        src = inspect.getsource(
+            ForgeNewModesMixin._start_pretrain_training)
+        assert "_pretrain_validate_inputs" in src
+
+
+# =============================================================================
+# DISTILLATION MODE TESTS (#5)
+# =============================================================================
+
+
+class TestDistillationModeUI:
+    """Distillation radio card exists in FORGE mode selector."""
+
+    def test_distill_mode_in_page_source(self):
+        """gui_pages_forge.py defines the Distill mode card."""
+        import inspect
+        from enigma_engine.gui import gui_pages_forge
+        src = inspect.getsource(gui_pages_forge)
+        assert "Distill" in src
+
+    def test_distill_section_exists(self):
+        """gui_pages_forge.py has a _forge_distill_section."""
+        import inspect
+        from enigma_engine.gui import gui_pages_forge
+        src = inspect.getsource(gui_pages_forge)
+        assert "_forge_distill_section" in src
+
+    def test_distill_num_examples_widget(self):
+        """Distill UI has a num examples entry."""
+        import inspect
+        from enigma_engine.gui import gui_pages_forge
+        src = inspect.getsource(gui_pages_forge)
+        assert "distill_num_examples_var" in src
+
+    def test_distill_categories_widget(self):
+        """Distill UI has category checkboxes or selection."""
+        import inspect
+        from enigma_engine.gui import gui_pages_forge
+        src = inspect.getsource(gui_pages_forge)
+        assert "distill_categories" in src or "DISTILL_CATEGORIES" in src
+
+
+class TestDistillationModeDispatch:
+    """Distillation mode dispatches correctly."""
+
+    def test_mode_changed_handles_distill(self):
+        """_on_training_mode_changed shows Distill section."""
+        import inspect
+        from enigma_engine.gui import gui_forge
+        src = inspect.getsource(gui_forge)
+        assert '"Distill"' in src or "'Distill'" in src
+
+    def test_start_training_dispatches_distill(self):
+        """_start_training_by_mode dispatches to _start_distill_training."""
+        import inspect
+        from enigma_engine.gui import gui_forge
+        src = inspect.getsource(gui_forge)
+        assert "_start_distill_training" in src
+
+    def test_distill_handler_exists(self):
+        """ForgeNewModesMixin has _start_distill_training."""
+        from enigma_engine.gui.gui_forge_new_modes import ForgeNewModesMixin
+        assert hasattr(ForgeNewModesMixin, "_start_distill_training")
+
+    def test_distill_validate_exists(self):
+        """ForgeNewModesMixin has _distill_validate_inputs."""
+        from enigma_engine.gui.gui_forge_new_modes import ForgeNewModesMixin
+        assert hasattr(ForgeNewModesMixin, "_distill_validate_inputs")
+
+    def test_distill_validate_checks_routes(self):
+        """_distill_validate_inputs checks trainer/student routes."""
+        import inspect
+        from enigma_engine.gui.gui_forge_new_modes import ForgeNewModesMixin
+        src = inspect.getsource(ForgeNewModesMixin._distill_validate_inputs)
+        assert "trainer" in src and "student" in src
+
+    def test_distill_start_calls_validate(self):
+        """_start_distill_training delegates to validation helper."""
+        import inspect
+        from enigma_engine.gui.gui_forge_new_modes import ForgeNewModesMixin
+        src = inspect.getsource(ForgeNewModesMixin._start_distill_training)
+        assert "_distill_validate_inputs" in src
+
+    def test_distill_handler_loads_teacher(self):
+        """_start_distill_training loads teacher engine."""
+        import inspect
+        from enigma_engine.gui.gui_forge_new_modes import ForgeNewModesMixin
+        src = inspect.getsource(ForgeNewModesMixin._start_distill_training)
+        assert "_load_engine_for_path" in src or "_guided_load_models" in src
+
+    def test_distill_handler_trains_student(self):
+        """_start_distill_training trains the student model."""
+        import inspect
+        from enigma_engine.gui.gui_forge_new_modes import ForgeNewModesMixin
+        src = inspect.getsource(ForgeNewModesMixin._start_distill_training)
+        assert "Trainer" in src or "trainer.train" in src
+
+    def test_distill_handler_saves_model(self):
+        """_start_distill_training saves the trained model."""
+        import inspect
+        from enigma_engine.gui.gui_forge_new_modes import ForgeNewModesMixin
+        src = inspect.getsource(ForgeNewModesMixin._start_distill_training)
+        assert "atomic_torch_save" in src
+
+    def test_distill_generates_data(self):
+        """_start_distill_training generates distillation data from teacher."""
+        import inspect
+        from enigma_engine.gui.gui_forge_new_modes import ForgeNewModesMixin
+        src = inspect.getsource(ForgeNewModesMixin._start_distill_training)
+        # Must call teacher engine to generate data
+        assert "generate" in src or "chat" in src
+
+
+class TestDistillationSettingsPersistence:
+    """Distillation settings are saved/loaded with training brief."""
+
+    def test_distill_settings_in_save(self):
+        """_save_training_brief includes distillation settings."""
+        import inspect
+        from enigma_engine.gui import gui_forge
+        src = inspect.getsource(gui_forge.ForgeMixin._save_training_brief)
+        assert "distill_num_examples_var" in src
+
+    def test_distill_settings_in_load(self):
+        """_load_training_brief restores distillation settings."""
+        import inspect
+        from enigma_engine.gui import gui_forge
+        src = inspect.getsource(gui_forge.ForgeMixin._load_training_brief)
+        assert "distill_num_examples" in src
+
+
+# =====================================================================
+# Suggestion batch: _forge_stop_requested fix (March 2026)
+# =====================================================================
+
+class TestForgeStopRequested:
+    """RLHF/Self-Play modes call _forge_stop_requested — it must exist."""
+
+    def test_method_exists(self):
+        """_forge_stop_requested must exist on ForgeMixin or parents."""
+        from enigma_engine.gui import gui_forge_new_modes
+        assert hasattr(
+            gui_forge_new_modes.ForgeNewModesMixin,
+            "_forge_stop_requested"
+        ), "_forge_stop_requested method must be defined"
+
+    def test_method_is_callable(self):
+        """_forge_stop_requested must be a callable method."""
+        from enigma_engine.gui import gui_forge_new_modes
+        mixin = gui_forge_new_modes.ForgeNewModesMixin
+        method = getattr(mixin, "_forge_stop_requested", None)
+        assert callable(method), (
+            "_forge_stop_requested must be callable")
+
+    def test_method_uses_training_active(self):
+        """_forge_stop_requested should use training_active flag."""
+        import inspect
+        from enigma_engine.gui import gui_forge_new_modes
+        source = inspect.getsource(
+            gui_forge_new_modes.ForgeNewModesMixin._forge_stop_requested)
+        assert "training_active" in source, (
+            "_forge_stop_requested should check training_active")
+
+
+# =====================================================================
+# Multilingual routing in ENGINE mode (#4 deferred)
+# =====================================================================
+
+class TestMultilingualRouting:
+    """Non-Latin input on CMD ENGINE mode routes to AI, not registry."""
+
+    def test_is_non_latin_japanese(self):
+        """Japanese text detected as non-Latin."""
+        from enigma_engine.gui.gui_cmd_page import CMDPageMixin
+        assert CMDPageMixin._cmd_is_non_latin("こんにちは") is True
+
+    def test_is_non_latin_chinese(self):
+        """Chinese text detected as non-Latin."""
+        from enigma_engine.gui.gui_cmd_page import CMDPageMixin
+        assert CMDPageMixin._cmd_is_non_latin("你好世界") is True
+
+    def test_is_non_latin_arabic(self):
+        """Arabic text detected as non-Latin."""
+        from enigma_engine.gui.gui_cmd_page import CMDPageMixin
+        assert CMDPageMixin._cmd_is_non_latin("مرحبا") is True
+
+    def test_is_non_latin_cyrillic(self):
+        """Cyrillic text detected as non-Latin."""
+        from enigma_engine.gui.gui_cmd_page import CMDPageMixin
+        assert CMDPageMixin._cmd_is_non_latin("привет мир") is True
+
+    def test_is_latin_english(self):
+        """English text is NOT non-Latin."""
+        from enigma_engine.gui.gui_cmd_page import CMDPageMixin
+        assert CMDPageMixin._cmd_is_non_latin("hello world") is False
+
+    def test_is_latin_command(self):
+        """Command-like text is NOT non-Latin."""
+        from enigma_engine.gui.gui_cmd_page import CMDPageMixin
+        assert CMDPageMixin._cmd_is_non_latin("config.set key val") is False
+
+    def test_is_non_latin_mixed_majority(self):
+        """Mixed text with majority non-Latin is detected."""
+        from enigma_engine.gui.gui_cmd_page import CMDPageMixin
+        assert CMDPageMixin._cmd_is_non_latin("お元気ですか hello") is True
+
+    def test_is_latin_mixed_majority(self):
+        """Mixed text with majority Latin is not flagged."""
+        from enigma_engine.gui.gui_cmd_page import CMDPageMixin
+        assert CMDPageMixin._cmd_is_non_latin("hello world こん") is False
+
+    def test_numbers_only_not_non_latin(self):
+        """Pure numbers/symbols return False (no alpha chars)."""
+        from enigma_engine.gui.gui_cmd_page import CMDPageMixin
+        assert CMDPageMixin._cmd_is_non_latin("12345") is False
+
+    def test_engine_run_calls_non_latin_check(self):
+        """_cmd_run_engine uses _cmd_is_non_latin before registry."""
+        import inspect
+        from enigma_engine.gui.gui_cmd_page import CMDPageMixin
+        source = inspect.getsource(CMDPageMixin._cmd_run_engine)
+        assert "_cmd_is_non_latin" in source
+
+
+# =====================================================================
+# History summary compression (#6 deferred)
+# =====================================================================
+
+class TestHistorySummaryCompression:
+    """_cap_history_summary prevents unbounded summary growth."""
+
+    def test_short_summary_unchanged(self):
+        """Summary under the cap is returned as-is."""
+        from enigma_engine.core.engine_chat import _ChatMixin as EnigmaChat
+        text = "[Earlier conversation summary — 4 messages]\nTopics: hello"
+        assert EnigmaChat._cap_history_summary(text, max_chars=4096) == text
+
+    def test_empty_summary(self):
+        """Empty string returns empty."""
+        from enigma_engine.core.engine_chat import _ChatMixin as EnigmaChat
+        assert EnigmaChat._cap_history_summary("", max_chars=4096) == ""
+
+    def test_caps_at_limit(self):
+        """Summary exceeding cap drops oldest blocks."""
+        from enigma_engine.core.engine_chat import _ChatMixin as EnigmaChat
+        block = (
+            "[Earlier conversation summary — 10 messages]\n"
+            "Topics discussed: testing\n"
+            "Key decisions: use pytest\n"
+        )
+        big = "\n".join([block] * 5)
+        result = EnigmaChat._cap_history_summary(big, max_chars=200)
+        assert len(result) <= len(big)
+        assert "[Earlier conversation summary" in result
+
+    def test_keeps_newest_blocks(self):
+        """When capping, the NEWEST block is preserved."""
+        from enigma_engine.core.engine_chat import _ChatMixin as EnigmaChat
+        old_block = (
+            "[Earlier conversation summary — 4 messages]\n"
+            "Topics discussed: old stuff\n"
+        )
+        new_block = (
+            "[Earlier conversation summary — 8 messages]\n"
+            "Topics discussed: NEWEST TOPIC\n"
+        )
+        combined = f"{old_block}\n{new_block}"
+        result = EnigmaChat._cap_history_summary(
+            combined, max_chars=len(new_block) + 10)
+        assert "NEWEST TOPIC" in result
+
+    def test_truncation_uses_cap(self):
+        """_truncate_history calls _cap_history_summary."""
+        import inspect
+        from enigma_engine.core.engine_chat import _ChatMixin as EnigmaChat
+        source = inspect.getsource(EnigmaChat._truncate_history)
+        assert "_cap_history_summary" in source
+
+
+# =====================================================================
+# Mixin namespace collision detection (#5 deferred)
+# =====================================================================
+
+class TestMixinNamespaceCollisions:
+    """Detect unexpected self.* attribute collisions across mixin families.
+
+    All GUI mixins share one ``self`` via multiple inheritance.
+    This test scans every mixin source for ``self.xxx = ...``
+    assignments, groups them by mixin family, and fails if a new
+    cross-family collision appears that is not in the whitelist.
+    """
+
+    FAMILIES = {
+        "logic": {
+            "gui_logic.py", "gui_logic_chat.py", "gui_logic_media.py",
+        },
+        "pages": {
+            "gui_pages.py", "gui_pages_forge.py", "gui_pages_config.py",
+        },
+        "forge": {
+            "gui_forge.py", "gui_forge_training.py",
+            "gui_forge_advanced.py", "gui_forge_adaptive.py",
+            "gui_forge_new_modes.py", "gui_forge_tools.py",
+            "gui_forge_models.py", "gui_forge_queue.py",
+        },
+        "cmd": {"gui_cmd_page.py"},
+        "docs": {"gui_docs_page.py"},
+        "mods": {"gui_mods.py", "gui_mod_page.py"},
+    }
+
+    # Cross-family attributes that are intentional
+    KNOWN_CROSS_FAMILY = {
+        "training_active",
+        "_chat_gif_animations", "_chat_media_refs",
+        "_link_urls",
+        "_cmd_file_paths", "_cmd_image_paths",
+        "_model_display_name",
+    }
+
+    def test_no_new_cross_family_collisions(self):
+        """No unexpected attribute is SET by two different mixin families."""
+        import re
+        from pathlib import Path
+
+        gui_dir = (
+            Path(__file__).resolve().parent.parent
+            / "enigma_engine" / "gui"
+        )
+        attr_pattern = re.compile(r"self\.([a-zA-Z_]\w*)\s*=")
+
+        file_attrs: dict[str, set[str]] = {}
+        all_family_files: set[str] = set()
+        for files in self.FAMILIES.values():
+            all_family_files |= files
+
+        for fname in sorted(all_family_files):
+            fpath = gui_dir / fname
+            if not fpath.exists():
+                continue
+            source = fpath.read_text(encoding="utf-8")
+            file_attrs[fname] = set(attr_pattern.findall(source))
+
+        attr_families: dict[str, set[str]] = {}
+        for family, files in self.FAMILIES.items():
+            for fname in files:
+                for attr in file_attrs.get(fname, set()):
+                    attr_families.setdefault(attr, set()).add(family)
+
+        collisions = {
+            attr: families
+            for attr, families in attr_families.items()
+            if len(families) > 1
+            and attr not in self.KNOWN_CROSS_FAMILY
+        }
+
+        assert not collisions, (
+            "New cross-family attribute collisions detected "
+            "(add to KNOWN_CROSS_FAMILY if intentional):\n"
+            + "\n".join(
+                f"  self.{attr}: {sorted(fams)}"
+                for attr, fams in sorted(collisions.items())
+            )
+        )

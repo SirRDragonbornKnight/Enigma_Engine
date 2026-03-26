@@ -123,6 +123,8 @@ class TrainingMonitor:
         self._lock = threading.Lock()
 
         # Live state (TM-B)
+        # Cap at 100k entries to prevent unbounded memory growth on long runs
+        self._max_losses = 100_000
         self._losses: list[float] = []
         self._steps: list[int] = []
         self._epoch_losses: list[float] = []
@@ -164,6 +166,13 @@ class TrainingMonitor:
 
             self._losses.append(loss)
             self._steps.append(self._global_step)
+
+            # Cap to prevent unbounded memory growth
+            if len(self._losses) > self._max_losses:
+                # Keep the most recent half
+                half = self._max_losses // 2
+                self._losses = self._losses[-half:]
+                self._steps = self._steps[-half:]
 
             if loss < self._best_loss:
                 self._best_loss = loss
@@ -239,10 +248,13 @@ class TrainingMonitor:
         with self._lock:
             losses_copy = list(self._losses)
         result: list[float] = []
+        running_sum = 0.0
         for i in range(len(losses_copy)):
-            start = max(0, i - w + 1)
-            chunk = losses_copy[start:i + 1]
-            result.append(sum(chunk) / len(chunk))
+            running_sum += losses_copy[i]
+            if i >= w:
+                running_sum -= losses_copy[i - w]
+            count = min(i + 1, w)
+            result.append(running_sum / count)
         return result
 
     def get_chart_data(self) -> dict[str, Any]:
@@ -262,10 +274,13 @@ class TrainingMonitor:
         # Compute moving average from snapshot (no lock needed)
         w = self.moving_avg_window
         ma: list[float] = []
+        running_sum = 0.0
         for i in range(len(losses_snap)):
-            start = max(0, i - w + 1)
-            chunk = losses_snap[start:i + 1]
-            ma.append(sum(chunk) / len(chunk))
+            running_sum += losses_snap[i]
+            if i >= w:
+                running_sum -= losses_snap[i - w]
+            count = min(i + 1, w)
+            ma.append(running_sum / count)
 
         return {
             "steps": steps_snap,

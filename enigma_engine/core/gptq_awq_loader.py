@@ -10,13 +10,13 @@ AWQ: Activation-aware weight quantization (preserves salient weights)
 
 Usage:
     from enigma_engine.core.gptq_awq_loader import GPTQModel, AWQModel
-    
+
     # Load GPTQ model
     model = GPTQModel("path/to/model-gptq")
     model.load()
     response = model.generate("Hello!")
-    
-    # Load AWQ model  
+
+    # Load AWQ model
     model = AWQModel("path/to/model-awq")
     model.load()
     response = model.generate("Hello!")
@@ -135,7 +135,7 @@ class BaseQuantizedModel:
     ):
         """
         Initialize quantized model.
-        
+
         Args:
             model_path: Path to model directory or HuggingFace model ID
             device: Device to load on ("auto", "cuda", "cpu")
@@ -232,7 +232,7 @@ class BaseQuantizedModel:
     ) -> str:
         """
         Generate text completion.
-        
+
         Args:
             prompt: Input prompt
             max_new_tokens: Maximum tokens to generate
@@ -242,7 +242,7 @@ class BaseQuantizedModel:
             repetition_penalty: Penalty for repetition
             do_sample: Use sampling vs greedy
             **kwargs: Additional generation arguments
-        
+
         Returns:
             Generated text
         """
@@ -292,7 +292,7 @@ class BaseQuantizedModel:
     ):
         """
         Generate text with streaming output.
-        
+
         Yields tokens as they're generated.
         """
         if not self._loaded or self.model is None:
@@ -342,13 +342,13 @@ class BaseQuantizedModel:
     ) -> str:
         """
         Chat completion with message history.
-        
+
         Args:
             messages: List of {"role": "user/assistant", "content": "..."}
             max_new_tokens: Maximum tokens to generate
             system_prompt: Optional system prompt
             **kwargs: Generation arguments
-        
+
         Returns:
             Assistant response
         """
@@ -407,11 +407,11 @@ class BaseQuantizedModel:
 class GPTQModel(BaseQuantizedModel):
     """
     GPTQ quantized model loader.
-    
-    GPTQ (Generalized Post-Training Quantization) uses optimal brain 
+
+    GPTQ (Generalized Post-Training Quantization) uses optimal brain
     compression techniques for efficient quantization with minimal
     accuracy loss.
-    
+
     Requires: pip install auto-gptq
     """
 
@@ -428,7 +428,7 @@ class GPTQModel(BaseQuantizedModel):
     ):
         """
         Initialize GPTQ model.
-        
+
         Args:
             model_path: Path to GPTQ model
             device: Device to load on
@@ -541,7 +541,7 @@ class GPTQModel(BaseQuantizedModel):
     ) -> str:
         """
         Quantize a model to GPTQ format.
-        
+
         Args:
             model_path: Path to original model
             output_path: Where to save quantized model
@@ -551,7 +551,7 @@ class GPTQModel(BaseQuantizedModel):
             desc_act: Descending activation order
             sym: Symmetric quantization
             batch_size: Calibration batch size
-        
+
         Returns:
             Path to quantized model
         """
@@ -615,10 +615,10 @@ class GPTQModel(BaseQuantizedModel):
 class AWQModel(BaseQuantizedModel):
     """
     AWQ (Activation-aware Weight Quantization) model loader.
-    
+
     AWQ preserves salient weights by analyzing activation patterns,
     providing better quality than uniform quantization.
-    
+
     Requires: pip install autoawq
     """
 
@@ -632,7 +632,7 @@ class AWQModel(BaseQuantizedModel):
     ):
         """
         Initialize AWQ model.
-        
+
         Args:
             model_path: Path to AWQ model
             device: Device to load on
@@ -737,7 +737,7 @@ class AWQModel(BaseQuantizedModel):
     ) -> str:
         """
         Quantize a model to AWQ format.
-        
+
         Args:
             model_path: Path to original model
             output_path: Where to save quantized model
@@ -746,7 +746,7 @@ class AWQModel(BaseQuantizedModel):
             group_size: Weight grouping size
             zero_point: Use zero point quantization
             version: AWQ version ("gemm" or "gemv")
-        
+
         Returns:
             Path to quantized model
         """
@@ -789,10 +789,10 @@ class AWQModel(BaseQuantizedModel):
 def detect_quantization_type(model_path: str) -> Optional[QuantizationType]:
     """
     Auto-detect quantization type from model files.
-    
+
     Args:
         model_path: Path to model directory
-    
+
     Returns:
         Detected quantization type or None
     """
@@ -842,15 +842,15 @@ def load_quantized_model(
 ) -> Union[GPTQModel, AWQModel]:
     """
     Load a quantized model, auto-detecting format if needed.
-    
+
     Args:
         model_path: Path to quantized model
         quant_type: Force specific quantization type (auto-detect if None)
         **kwargs: Additional arguments for model loader
-    
+
     Returns:
         Loaded quantized model (GPTQModel or AWQModel)
-    
+
     Example:
         model = load_quantized_model("./models/llama-7b-awq")
         response = model.generate("Hello!")
@@ -880,14 +880,14 @@ def load_quantized_model(
 class QuantizedModelRegistry:
     """
     Registry for managing multiple quantized models.
-    
+
     Supports lazy loading and caching for efficient memory use.
     """
 
     def __init__(self, max_loaded: int = 2):
         """
         Initialize registry.
-        
+
         Args:
             max_loaded: Maximum models to keep loaded simultaneously
         """
@@ -919,7 +919,7 @@ class QuantizedModelRegistry:
     def get(self, name: str) -> Union[GPTQModel, AWQModel]:
         """
         Get a model by name, loading if necessary.
-        
+
         Uses LRU eviction when max_loaded exceeded.
         """
         if name not in self._models:

@@ -5,6 +5,7 @@ Run with: python -m pytest tests/ -v
 """
 
 import inspect
+import textwrap
 import pytest
 import sys
 import tempfile
@@ -262,6 +263,67 @@ class TestStreamChatTruncation:
         )
 
 
+class TestStreamChatStopStringHoldback:
+    """stream_chat must hold back tokens that could be stop-string prefixes."""
+
+    def test_stream_chat_has_pending_buffer(self):
+        """stream_chat uses a pending buffer to hold back stop-string prefixes."""
+        from enigma_engine.core.engine_chat import _ChatMixin
+        source = inspect.getsource(_ChatMixin.stream_chat)
+        assert "pending" in source, (
+            "stream_chat must use a pending/holdback buffer for stop strings")
+
+    def test_stream_chat_checks_stop_prefix(self):
+        """stream_chat checks if pending tail matches a stop-string prefix."""
+        from enigma_engine.core.engine_chat import _ChatMixin
+        source = inspect.getsource(_ChatMixin.stream_chat)
+        # Must check if tail of pending could be start of a stop string
+        assert "stop[:k]" in source or "startswith" in source or "tail" in source, (
+            "stream_chat must check if pending text could be a stop-string prefix")
+
+    def test_stream_chat_no_immediate_yield_in_native(self):
+        """stream_chat native path must NOT yield tokens immediately before stop check."""
+        from enigma_engine.core.engine_chat import _ChatMixin
+        source = inspect.getsource(_ChatMixin.stream_chat)
+        # The old bug: `yield token` appeared right after the for-loop
+        # before any hold-back logic. Now it should yield from pending.
+        native_section = source[source.index("Native model streaming"):]
+        lines = native_section.split("\n")
+        # Should not have a bare "yield token" line (the old pattern)
+        bare_yield_token = [l.strip() for l in lines if l.strip() == "yield token"]
+        assert len(bare_yield_token) == 0, (
+            "stream_chat must not yield raw tokens — should yield from pending buffer")
+
+    def test_stream_chat_flushes_pending_at_eof(self):
+        """stream_chat must flush remaining pending text when generation ends naturally."""
+        from enigma_engine.core.engine_chat import _ChatMixin
+        source = inspect.getsource(_ChatMixin.stream_chat)
+        # After the for loop, there must be a final yield of pending
+        native_section = source[source.index("Native model streaming"):]
+        # The for loop ends, then pending should be flushed
+        assert "if pending" in native_section, (
+            "stream_chat must flush remaining pending buffer after stream ends")
+
+
+class TestPrepareChatMaxTokens:
+    """_prepare_chat extracts max_tokens from kwargs."""
+
+    def test_prepare_chat_extracts_max_tokens_from_kwargs(self):
+        """_prepare_chat respects max_tokens kwarg to override max_gen."""
+        from enigma_engine.core.engine_chat import _ChatMixin
+        source = inspect.getsource(_ChatMixin._prepare_chat)
+        assert "max_tokens" in source, (
+            "_prepare_chat must extract max_tokens from kwargs")
+
+    def test_prepare_chat_pops_max_tokens(self):
+        """_prepare_chat pops max_tokens (not just gets) to avoid double-passing."""
+        from enigma_engine.core.engine_chat import _ChatMixin
+        source = inspect.getsource(_ChatMixin._prepare_chat)
+        assert 'pop("max_tokens"' in source or "pop('max_tokens'" in source, (
+            "_prepare_chat should pop max_tokens so it's not also "
+            "forwarded as a separate kwarg")
+
+
 @pytest.mark.structural
 class TestChatFnKwargs:
     """Verify chat_fn in chat_with_tools merges kwargs."""
@@ -485,6 +547,37 @@ class TestCodeSandbox:
         from enigma_engine.core.commands import get_registry
         reg = get_registry()
         result = reg.execute("code.run os.remove('important.txt')")
+        assert not result.success
+        assert "Forbidden" in result.message
+
+    def test_code_run_blocks_dunder_import(self):
+        """code.run should block __import__ bypass attempts."""
+        from enigma_engine.core.commands import get_registry
+        reg = get_registry()
+        result = reg.execute("code.run __import__('os').system('whoami')")
+        assert not result.success
+        assert "Forbidden" in result.message
+
+    def test_code_run_blocks_importlib(self):
+        """code.run should block importlib-based imports."""
+        from enigma_engine.core.commands import get_registry
+        reg = get_registry()
+        result = reg.execute("code.run importlib.import_module('os').system('ls')")
+        assert not result.success
+        assert "Forbidden" in result.message
+
+    def test_code_run_blocks_open_write_outside_outputs(self):
+        """code.run should block open() for writing outside outputs/."""
+        from enigma_engine.core.commands import get_registry
+        reg = get_registry()
+        result = reg.execute("code.run open('/etc/passwd', 'w').write('bad')")
+        assert not result.success or "restricted" in result.message.lower() or "PermissionError" in result.message
+
+    def test_code_run_blocks_compile_exec(self):
+        """code.run should block compile() bypass."""
+        from enigma_engine.core.commands import get_registry
+        reg = get_registry()
+        result = reg.execute("code.run x = compile('1+1', '', 'eval')")
         assert not result.success
         assert "Forbidden" in result.message
 
@@ -721,14 +814,6 @@ class TestDownloadProgressClearCache:
         assert 'from huggingface_hub import delete_revisions' not in source
         # Should use the strategy pattern
         assert 'execute' in source or 'delete_revisions' in source
-
-    def test_format_size_not_duplicate(self):
-        """format_size should be an alias or merged with format_bytes."""
-        from enigma_engine.core.download_progress import (
-            format_bytes, format_size)
-        # Both should return the same result
-        assert format_bytes(1024) == format_size(1024)
-        assert format_bytes(1048576) == format_size(1048576)
 
 
 class TestModelPresetsValidate:
@@ -1400,6 +1485,96 @@ class TestPersistentMemory:
         assert mem.count == 2
         assert "Hand-written fact" in mem.facts[0]
 
+    # --- Expanded fact extraction patterns ---
+
+    def test_extract_facts_hobby(self, tmp_path):
+        """extract_facts catches 'I enjoy X' / 'I love X'."""
+        from enigma_engine.core.memory import PersistentMemory
+        mem = PersistentMemory(memory_path=tmp_path / "mem.md")
+        added = mem.extract_facts("I enjoy hiking on weekends")
+        assert len(added) >= 1
+        assert any("hiking" in f.lower() for f in added)
+
+    def test_extract_facts_love(self, tmp_path):
+        """extract_facts catches 'I love X'."""
+        from enigma_engine.core.memory import PersistentMemory
+        mem = PersistentMemory(memory_path=tmp_path / "mem.md")
+        added = mem.extract_facts("I really love cooking Italian food")
+        assert len(added) >= 1
+        assert any("cooking" in f.lower() for f in added)
+
+    def test_extract_facts_age(self, tmp_path):
+        """extract_facts catches 'I'm X years old'."""
+        from enigma_engine.core.memory import PersistentMemory
+        mem = PersistentMemory(memory_path=tmp_path / "mem.md")
+        added = mem.extract_facts("I'm 28 years old by the way")
+        assert len(added) >= 1
+        assert any("28" in f for f in added)
+
+    def test_extract_facts_birthday(self, tmp_path):
+        """extract_facts catches 'my birthday is X'."""
+        from enigma_engine.core.memory import PersistentMemory
+        mem = PersistentMemory(memory_path=tmp_path / "mem.md")
+        added = mem.extract_facts("My birthday is March 15th")
+        assert len(added) >= 1
+        assert any("March" in f for f in added)
+
+    def test_extract_facts_pet(self, tmp_path):
+        """extract_facts catches 'I have a dog/cat named X'."""
+        from enigma_engine.core.memory import PersistentMemory
+        mem = PersistentMemory(memory_path=tmp_path / "mem.md")
+        added = mem.extract_facts("I have a dog named Buddy")
+        assert len(added) >= 1
+        assert any("Buddy" in f for f in added)
+
+    def test_extract_facts_family(self, tmp_path):
+        """extract_facts catches family members."""
+        from enigma_engine.core.memory import PersistentMemory
+        mem = PersistentMemory(memory_path=tmp_path / "mem.md")
+        added = mem.extract_facts("My wife's name is Sarah")
+        assert len(added) >= 1
+        assert any("Sarah" in f for f in added)
+
+    def test_extract_facts_education(self, tmp_path):
+        """extract_facts catches 'I studied at X'."""
+        from enigma_engine.core.memory import PersistentMemory
+        mem = PersistentMemory(memory_path=tmp_path / "mem.md")
+        added = mem.extract_facts("I studied at MIT")
+        assert len(added) >= 1
+        assert any("MIT" in f for f in added)
+
+    def test_extract_facts_dislike(self, tmp_path):
+        """extract_facts catches 'I hate X' / 'I don't like X'."""
+        from enigma_engine.core.memory import PersistentMemory
+        mem = PersistentMemory(memory_path=tmp_path / "mem.md")
+        added = mem.extract_facts("I hate spiders honestly")
+        assert len(added) >= 1
+        assert any("spiders" in f.lower() for f in added)
+
+    def test_extract_facts_language(self, tmp_path):
+        """extract_facts catches 'I speak X'."""
+        from enigma_engine.core.memory import PersistentMemory
+        mem = PersistentMemory(memory_path=tmp_path / "mem.md")
+        added = mem.extract_facts("I speak Spanish and French fluently")
+        assert len(added) >= 1
+        assert any("Spanish" in f for f in added)
+
+    def test_extract_facts_timezone(self, tmp_path):
+        """extract_facts catches timezone info."""
+        from enigma_engine.core.memory import PersistentMemory
+        mem = PersistentMemory(memory_path=tmp_path / "mem.md")
+        added = mem.extract_facts("I'm in the EST timezone")
+        assert len(added) >= 1
+        assert any("EST" in f for f in added)
+
+    def test_extract_facts_degree(self, tmp_path):
+        """extract_facts catches 'I have a degree in X'."""
+        from enigma_engine.core.memory import PersistentMemory
+        mem = PersistentMemory(memory_path=tmp_path / "mem.md")
+        added = mem.extract_facts("I have a degree in computer science")
+        assert len(added) >= 1
+        assert any("computer science" in f.lower() for f in added)
+
 
 class TestMemoryBuiltinCommands:
     """Tests for memory.remember/forget/notes builtin commands."""
@@ -1603,6 +1778,7 @@ class TestModClientSync:
         from pathlib import Path
         mod_base = Path(__file__).resolve().parent.parent / "mods" / "_template" / "mod_base.py"
         spec = importlib.util.spec_from_file_location("mod_base", mod_base)
+        assert spec is not None and spec.loader is not None
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         cls = mod.ModClient
@@ -1663,6 +1839,7 @@ class TestModClientSync:
         from pathlib import Path
         mod_base = Path(__file__).resolve().parent.parent / "mods" / "_template" / "mod_base.py"
         spec = importlib.util.spec_from_file_location("mod_base", mod_base)
+        assert spec is not None and spec.loader is not None
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
 
@@ -1691,6 +1868,7 @@ class TestModClientSync:
         from pathlib import Path
         mod_base = Path(__file__).resolve().parent.parent / "mods" / "_template" / "mod_base.py"
         spec = importlib.util.spec_from_file_location("mod_base", mod_base)
+        assert spec is not None and spec.loader is not None
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
 
@@ -1783,6 +1961,7 @@ class TestBatchSamplingVectorized:
         from enigma_engine.core.engine_generation import _GenerationMixin
 
         class FakeGen:
+            REPETITION_WINDOW = _GenerationMixin.REPETITION_WINDOW
             _sample_token_batch = _GenerationMixin._sample_token_batch
 
         gen = FakeGen()
@@ -1797,7 +1976,7 @@ class TestBatchSamplingVectorized:
             tok = gen._sample_token_batch(
                 logits.clone(), generated,
                 temperature=1.0, top_k=0, top_p=1.0, repetition_penalty=2.0)
-            counts[tok.item()] += 1
+            counts[int(tok.item())] += 1
         # Token 3 should appear less than average (20 out of 200)
         assert counts[3] < 40, f"Token 3 appeared {counts[3]} times, expected < 40"
 
@@ -2133,6 +2312,115 @@ class TestCommandSanitization:
         result = sanitize_args(original)
         assert original == ["a;b", "c|d"]  # unchanged
         assert result == ["ab", "cd"]
+
+
+class TestBlockedPathEnforcement:
+    """Verify file commands enforce blocked_paths/blocked_patterns from config."""
+
+    def test_check_blocked_path_exists(self):
+        """_check_blocked_path helper is defined in builtin_commands."""
+        import inspect
+        from enigma_engine.core.builtin_commands import register_builtin_commands
+        source = inspect.getsource(register_builtin_commands)
+        assert "_check_blocked_path" in source
+
+    def test_file_list_checks_blocked(self):
+        """file.list checks _check_blocked_path before listing."""
+        import inspect
+        from enigma_engine.core.builtin_commands import register_builtin_commands
+        source = inspect.getsource(register_builtin_commands)
+        list_idx = source.index("def file_list(")
+        list_body = source[list_idx:list_idx + 500]
+        assert "_check_blocked_path" in list_body
+
+    def test_file_read_checks_blocked(self):
+        """file.read checks _check_blocked_path before reading."""
+        import inspect
+        from enigma_engine.core.builtin_commands import register_builtin_commands
+        source = inspect.getsource(register_builtin_commands)
+        # Find file_read function and verify it calls _check_blocked_path
+        read_idx = source.index("def file_read(")
+        read_body = source[read_idx:read_idx + 500]
+        assert "_check_blocked_path" in read_body
+
+    def test_file_write_checks_blocked(self):
+        """file.write checks _check_blocked_path before writing."""
+        import inspect
+        from enigma_engine.core.builtin_commands import register_builtin_commands
+        source = inspect.getsource(register_builtin_commands)
+        write_idx = source.index("def file_write(")
+        write_body = source[write_idx:write_idx + 500]
+        assert "_check_blocked_path" in write_body
+
+    def test_file_append_checks_blocked(self):
+        """file.append checks _check_blocked_path before appending."""
+        import inspect
+        from enigma_engine.core.builtin_commands import register_builtin_commands
+        source = inspect.getsource(register_builtin_commands)
+        append_idx = source.index("def file_append(")
+        append_body = source[append_idx:append_idx + 500]
+        assert "_check_blocked_path" in append_body
+
+    def test_blocked_pattern_matches(self):
+        """_check_blocked_path blocks files matching config patterns."""
+        from enigma_engine.core.builtin_commands import register_builtin_commands
+        from enigma_engine.core.commands import CommandRegistry
+        reg = CommandRegistry()
+        register_builtin_commands(reg)
+        reg.set_context("config", {"blocked_patterns": ["*.pem", "*secret*"]})
+        result = reg.execute("file.read server.pem")
+        assert not result.success
+        assert "blocked pattern" in result.message.lower()
+
+    def test_unblocked_path_passes(self):
+        """_check_blocked_path allows files not matching any pattern."""
+        import inspect
+        from enigma_engine.core.builtin_commands import register_builtin_commands
+        source = inspect.getsource(register_builtin_commands)
+        # _check_blocked_path returns None for clean paths
+        assert "return None" in source
+
+    def test_default_blocked_paths_has_system_dirs(self):
+        """Default blocked_paths config should include system directories."""
+        import ast
+        from pathlib import Path
+        # Read the raw source defaults, not the runtime CONFIG
+        # (which may be overridden by forge_config.json)
+        source_path = (
+            Path(__file__).resolve().parent.parent
+            / "enigma_engine" / "config" / "defaults.py"
+        )
+        source = source_path.read_text(encoding="utf-8")
+        # blocked_paths list must contain entries in the source defaults
+        assert '"blocked_paths": [' in source
+        # Must not be empty in the source defaults
+        idx = source.index('"blocked_paths": [')
+        # The line after should NOT be just "],"
+        block = source[idx:idx + 500]
+        assert '"/etc"' in block or '"C:/Windows"' in block or '"/usr"' in block
+
+    def test_default_blocked_patterns_has_sensitive_extensions(self):
+        """Default blocked_patterns should block sensitive file types."""
+        from enigma_engine.config.defaults import CONFIG
+        patterns = CONFIG.get("blocked_patterns", [])
+        # Should block executables, keys, and sensitive files
+        assert "*.exe" in patterns
+        assert "*.pem" in patterns
+        assert "*.key" in patterns
+
+
+class TestShellMetacharNotBlocked:
+    """Verify shell command no longer blocks metacharacters (shell=False is sufficient)."""
+
+    def test_no_metacharacter_error_in_shell_handler(self):
+        """shell command handler does not contain metacharacter blocking."""
+        import inspect
+        from enigma_engine.core.builtin_commands import register_builtin_commands
+        source = inspect.getsource(register_builtin_commands)
+        # Find the shell command handler
+        shell_idx = source.index("ALLOWED_COMMANDS")
+        shell_body = source[shell_idx:shell_idx + 1000]
+        assert "Shell metacharacters are not allowed" not in shell_body
 
 
 class TestRunCommandRemovedFromDefaults:
@@ -2649,6 +2937,7 @@ class TestVisionEncoder:
         cfg = VisionEncoderConfig(image_size=32, patch_size=8, dim=32, n_layers=1, n_heads=2)
         encoder = VisionEncoder(cfg)
         assert hasattr(encoder, "pos_embed")
+        assert encoder.pos_embed is not None
         # Position embeddings should match [1, num_patches, dim]
         num_patches = (32 // 8) ** 2
         assert encoder.pos_embed.shape == (1, num_patches, 32)
@@ -2825,6 +3114,211 @@ class TestVisionEncoderSaveLoad:
         assert torch.allclose(out1, out2)
 
 
+class TestPretrainedVisionConfig:
+    """VisionEncoderConfig pretrained fields."""
+
+    def test_pretrained_defaults(self):
+        """use_pretrained should default to False, preserving existing behavior."""
+        from enigma_engine.core.vision_encoder import VisionEncoderConfig
+        cfg = VisionEncoderConfig()
+        assert cfg.use_pretrained is False
+        assert cfg.pretrained_model == "vit_small_patch16_224"
+        assert cfg.freeze_backbone is True
+
+    def test_pretrained_to_dict_roundtrip(self):
+        """Pretrained fields should survive dict serialization."""
+        from enigma_engine.core.vision_encoder import VisionEncoderConfig
+        cfg = VisionEncoderConfig(
+            use_pretrained=True,
+            pretrained_model="vit_base_patch16_224",
+            freeze_backbone=False,
+        )
+        d = cfg.to_dict()
+        assert d["use_pretrained"] is True
+        assert d["pretrained_model"] == "vit_base_patch16_224"
+        assert d["freeze_backbone"] is False
+        cfg2 = VisionEncoderConfig(**d)
+        assert cfg2.use_pretrained is True
+        assert cfg2.pretrained_model == "vit_base_patch16_224"
+        assert cfg2.freeze_backbone is False
+
+    def test_pretrained_presets_exist(self):
+        """Pretrained presets should be in VISION_PRESETS."""
+        from enigma_engine.core.vision_encoder import VISION_PRESETS
+        assert "pretrained_tiny" in VISION_PRESETS
+        assert "pretrained_small" in VISION_PRESETS
+        assert "pretrained_base" in VISION_PRESETS
+        ps = VISION_PRESETS["pretrained_small"]
+        assert ps.use_pretrained is True
+
+    def test_pretrained_presets_have_correct_dims(self):
+        """Pretrained presets should match standard ViT dimensions."""
+        from enigma_engine.core.vision_encoder import VISION_PRESETS
+        assert VISION_PRESETS["pretrained_tiny"].dim == 192
+        assert VISION_PRESETS["pretrained_small"].dim == 384
+        assert VISION_PRESETS["pretrained_base"].dim == 768
+
+
+class TestImageNetNormalization:
+    """ImageNet normalization constants and preprocessing."""
+
+    def test_imagenet_constants_exist(self):
+        """IMAGENET_MEAN and IMAGENET_STD should be defined."""
+        from enigma_engine.core.vision_encoder import IMAGENET_MEAN, IMAGENET_STD
+        assert len(IMAGENET_MEAN) == 3
+        assert len(IMAGENET_STD) == 3
+        # Standard ImageNet values
+        assert abs(IMAGENET_MEAN[0] - 0.485) < 0.01
+        assert abs(IMAGENET_STD[0] - 0.229) < 0.01
+
+    def test_preprocess_imagenet_normalize(self):
+        """Preprocessing with imagenet_normalize should differ from default."""
+        import torch
+        try:
+            from PIL import Image
+        except ImportError:
+            pytest.skip("Pillow not installed")
+        from enigma_engine.core.vision_encoder import preprocess_image
+        img = Image.new("RGB", (32, 32), (128, 128, 128))
+        t_default = preprocess_image(img, image_size=32)
+        t_imagenet = preprocess_image(img, image_size=32, imagenet_normalize=True)
+        assert not torch.allclose(t_default, t_imagenet)
+
+    def test_preprocess_imagenet_range(self):
+        """ImageNet-normalized mid-gray should be near zero."""
+        try:
+            from PIL import Image
+        except ImportError:
+            pytest.skip("Pillow not installed")
+        from enigma_engine.core.vision_encoder import preprocess_image
+        img = Image.new("RGB", (32, 32), (128, 128, 128))
+        t = preprocess_image(img, image_size=32, imagenet_normalize=True)
+        # Mid-gray (128/255 ≈ 0.502) is close to ImageNet means (~0.45–0.485)
+        # So normalized values should be small
+        assert t.min() > -5.0
+        assert t.max() < 5.0
+
+
+class TestPretrainedVisionEncoder:
+    """VisionEncoder with pretrained timm backbone."""
+
+    def test_ensure_timm_callable(self):
+        """_ensure_timm helper should exist and be callable."""
+        from enigma_engine.core.vision_encoder import _ensure_timm
+        assert callable(_ensure_timm)
+
+    def test_pretrained_encoder_creates_backbone(self):
+        """Pretrained encoder should have a backbone attribute."""
+        pytest.importorskip("timm")
+        from enigma_engine.core.vision_encoder import VisionEncoder, VisionEncoderConfig
+        cfg = VisionEncoderConfig(
+            use_pretrained=True,
+            pretrained_model="vit_tiny_patch16_224",
+            dim=192,
+        )
+        encoder = VisionEncoder(cfg)
+        assert hasattr(encoder, "backbone")
+        assert encoder.backbone is not None
+
+    def test_pretrained_encoder_forward_shape(self):
+        """Pretrained encoder output shape should be [B, num_patches, dim]."""
+        pytest.importorskip("timm")
+        import torch
+        from enigma_engine.core.vision_encoder import VisionEncoder, VisionEncoderConfig
+        cfg = VisionEncoderConfig(
+            use_pretrained=True,
+            pretrained_model="vit_tiny_patch16_224",
+            dim=192,
+        )
+        encoder = VisionEncoder(cfg)
+        x = torch.randn(1, 3, 224, 224)
+        out = encoder(x)
+        # 224/16 = 14, 14*14 = 196 patches
+        assert out.shape == (1, 196, 192)
+
+    def test_pretrained_freeze_backbone(self):
+        """freeze_backbone=True should freeze all backbone parameters."""
+        pytest.importorskip("timm")
+        from enigma_engine.core.vision_encoder import VisionEncoder, VisionEncoderConfig
+        cfg = VisionEncoderConfig(
+            use_pretrained=True,
+            pretrained_model="vit_tiny_patch16_224",
+            dim=192,
+            freeze_backbone=True,
+        )
+        encoder = VisionEncoder(cfg)
+        assert encoder.backbone is not None
+        backbone_frozen = all(
+            not p.requires_grad for p in encoder.backbone.parameters()
+        )
+        assert backbone_frozen
+
+    def test_pretrained_unfreeze_backbone(self):
+        """freeze_backbone=False should leave backbone weights trainable."""
+        pytest.importorskip("timm")
+        from enigma_engine.core.vision_encoder import VisionEncoder, VisionEncoderConfig
+        cfg = VisionEncoderConfig(
+            use_pretrained=True,
+            pretrained_model="vit_tiny_patch16_224",
+            dim=192,
+            freeze_backbone=False,
+        )
+        encoder = VisionEncoder(cfg)
+        assert encoder.backbone is not None
+        has_trainable = any(
+            p.requires_grad for p in encoder.backbone.parameters()
+        )
+        assert has_trainable
+
+    def test_pretrained_with_dim_projection(self):
+        """When config.dim != backbone dim, a projection layer should exist."""
+        pytest.importorskip("timm")
+        import torch
+        from enigma_engine.core.vision_encoder import VisionEncoder, VisionEncoderConfig
+        # vit_tiny_patch16_224 has embed_dim=192, set config.dim to 64
+        cfg = VisionEncoderConfig(
+            use_pretrained=True,
+            pretrained_model="vit_tiny_patch16_224",
+            dim=64,
+        )
+        encoder = VisionEncoder(cfg)
+        assert encoder.backbone_proj is not None
+        x = torch.randn(1, 3, 224, 224)
+        out = encoder(x)
+        assert out.shape == (1, 196, 64)
+
+    def test_pretrained_no_projection_when_dims_match(self):
+        """When config.dim matches backbone dim, no projection is needed."""
+        pytest.importorskip("timm")
+        from enigma_engine.core.vision_encoder import VisionEncoder, VisionEncoderConfig
+        cfg = VisionEncoderConfig(
+            use_pretrained=True,
+            pretrained_model="vit_tiny_patch16_224",
+            dim=192,  # matches vit_tiny embed_dim
+        )
+        encoder = VisionEncoder(cfg)
+        assert encoder.backbone_proj is None
+
+    def test_pretrained_gradients_flow_through_projection(self):
+        """Gradients should flow through the pretrained encoder."""
+        pytest.importorskip("timm")
+        import torch
+        from enigma_engine.core.vision_encoder import VisionEncoder, VisionEncoderConfig
+        cfg = VisionEncoderConfig(
+            use_pretrained=True,
+            pretrained_model="vit_tiny_patch16_224",
+            dim=64,
+            freeze_backbone=False,
+        )
+        encoder = VisionEncoder(cfg)
+        x = torch.randn(1, 3, 224, 224)
+        out = encoder(x)
+        loss = out.sum()
+        loss.backward()
+        has_grad = any(p.grad is not None for p in encoder.parameters())
+        assert has_grad
+
+
 class TestVisionWithTextModel:
     """Integration: vision encoder + text model via forward_multimodal."""
 
@@ -2856,7 +3350,9 @@ class TestVisionWithTextModel:
         )
         # Output should cover vision patches + text tokens
         expected_seq = vcfg.num_patches + 5
-        assert logits.shape == (1, expected_seq, 100)
+        # vocab_size=100 padded to next multiple of 64 = 128
+        padded_vocab = (100 + 63) & ~63
+        assert logits.shape == (1, expected_seq, padded_vocab)
 
     def test_vision_only_forward(self):
         """forward_multimodal should work with only vision features (no text)."""
@@ -2880,7 +3376,8 @@ class TestVisionWithTextModel:
             input_ids=None,
             vision_features=vision_features,
         )
-        assert logits.shape == (1, vcfg.num_patches, 100)
+        padded_vocab = (100 + 63) & ~63
+        assert logits.shape == (1, vcfg.num_patches, padded_vocab)
 
 
 # =============================================================================
@@ -2924,6 +3421,8 @@ class TestVisionTraining:
         model = Enigma(config=tcfg)
 
         # Snapshot initial weights
+        assert v_enc.patch_embed is not None and v_enc.patch_embed.proj is not None
+        assert model.vision_projection is not None
         enc_before = v_enc.patch_embed.proj.weight.clone()
         proj_before = model.vision_projection.weight.clone()
 
@@ -2940,6 +3439,8 @@ class TestVisionTraining:
         trainer.train_vision(vision_encoder=v_enc, data=data)
 
         # Both encoder and projection should have changed
+        assert v_enc.patch_embed is not None and v_enc.patch_embed.proj is not None
+        assert model.vision_projection is not None
         assert not torch.equal(enc_before, v_enc.patch_embed.proj.weight)
         assert not torch.equal(proj_before, model.vision_projection.weight)
 
@@ -3185,6 +3686,56 @@ class TestScanVisionData:
             assert len(result) == 2
 
 
+class TestScanVisionDataVideo:
+    """Scanner detection of video files for vision training."""
+
+    def test_video_extensions_defined(self):
+        """_VIDEO_EXTENSIONS set must exist in scanners module."""
+        from enigma_engine.gui.scanners import _VIDEO_EXTENSIONS
+        assert isinstance(_VIDEO_EXTENSIONS, (set, frozenset))
+        assert ".mp4" in _VIDEO_EXTENSIONS
+        assert ".avi" in _VIDEO_EXTENSIONS
+
+    def test_scan_vision_data_source_handles_video(self):
+        """scan_vision_data must contain video handling logic."""
+        import inspect
+        from enigma_engine.gui.scanners import scan_vision_data
+        source = inspect.getsource(scan_vision_data)
+        assert "_VIDEO_EXTENSIONS" in source, (
+            "scan_vision_data must check video file extensions"
+        )
+
+    def test_extract_video_frames_function_exists(self):
+        """_extract_video_frames helper must exist in scanners."""
+        from enigma_engine.gui.scanners import _extract_video_frames
+        assert callable(_extract_video_frames)
+
+    def test_extract_video_frames_signature(self):
+        """_extract_video_frames must accept video_path and max_frames."""
+        import inspect
+        from enigma_engine.gui.scanners import _extract_video_frames
+        sig = inspect.signature(_extract_video_frames)
+        params = list(sig.parameters.keys())
+        assert "video_path" in params
+        assert "max_frames" in params
+
+    def test_scan_video_paired_with_txt(self):
+        """scan_vision_data should detect video.mp4 + video.txt pairs."""
+        import inspect
+        from enigma_engine.gui.scanners import scan_vision_data
+        source = inspect.getsource(scan_vision_data)
+        # Must check for video files in the paired-file strategy
+        assert "video" in source.lower() or "_VIDEO_EXTENSIONS" in source
+
+    def test_video_frame_returns_pil_images(self):
+        """Extracted video frames must be PIL Image objects."""
+        import inspect
+        from enigma_engine.gui.scanners import _extract_video_frames
+        source = inspect.getsource(_extract_video_frames)
+        # Must convert frames to PIL Images (for preprocess_image compatibility)
+        assert "Image" in source or "PIL" in source or "fromarray" in source
+
+
 # ============================================================
 # Vision Chat Integration
 # ============================================================
@@ -3233,8 +3784,8 @@ class TestVisionChatIntegration:
         mixin = _ChatMixin()
         cfg = VisionEncoderConfig(image_size=32, patch_size=8, dim=64,
                                   n_layers=1, n_heads=2)
-        mixin.vision_encoder = VisionEncoder(cfg)
-        mixin.device = torch.device("cpu")
+        mixin.vision_encoder = VisionEncoder(cfg)  # type: ignore[attr-defined]
+        mixin.device = torch.device("cpu")  # type: ignore[attr-defined]
 
         with tempfile.TemporaryDirectory() as d:
             img_path = Path(d) / "test.png"
@@ -3257,8 +3808,8 @@ class TestVisionChatIntegration:
         mixin = _ChatMixin()
         cfg = VisionEncoderConfig(image_size=32, patch_size=8, dim=64,
                                   n_layers=1, n_heads=2)
-        mixin.vision_encoder = VisionEncoder(cfg)
-        mixin.device = torch.device("cpu")
+        mixin.vision_encoder = VisionEncoder(cfg)  # type: ignore[attr-defined]
+        mixin.device = torch.device("cpu")  # type: ignore[attr-defined]
 
         with tempfile.TemporaryDirectory() as d:
             paths = []
@@ -3269,6 +3820,7 @@ class TestVisionChatIntegration:
 
             features = mixin._encode_images_for_chat(paths)
             # Should concatenate along sequence dimension
+            assert features is not None
             assert features.dim() == 3
             num_patches = cfg.num_patches
             assert features.shape[1] == num_patches * 3
@@ -3278,8 +3830,8 @@ class TestVisionChatIntegration:
         from enigma_engine.core.engine_chat import _ChatMixin
 
         mixin = _ChatMixin()
-        mixin.vision_encoder = None
-        mixin.device = None
+        mixin.vision_encoder = None  # type: ignore[attr-defined]
+        mixin.device = None  # type: ignore[attr-defined]
 
         result = mixin._encode_images_for_chat(["/fake/path.png"])
         assert result is None
@@ -3310,7 +3862,7 @@ class TestVisionChatIntegration:
         model.eval()
 
         engine = EnigmaEngine.from_model(model, tok, device="cpu")
-        engine.vision_encoder = VisionEncoder(vcfg)
+        engine.vision_encoder = VisionEncoder(vcfg)  # type: ignore[assignment]
 
         # Create fake vision features: [1, 16, 64]
         vision_features = torch.randn(1, vcfg.num_patches, vcfg.dim)
@@ -3368,6 +3920,43 @@ class TestWebUtilsCore:
 
 
 # ---------------------------------------------------------------------------
+# Model class annotations
+# ---------------------------------------------------------------------------
+
+class TestModelAnnotations:
+    """model.py classmethods should reference Enigma, not Forge alias."""
+
+    def test_from_classmethods_return_enigma(self):
+        """from_safetensors/from_gguf/from_onnx annotations say Enigma."""
+        import inspect
+        from enigma_engine.core.model import Enigma
+        for method_name in ("from_safetensors", "from_gguf", "from_onnx"):
+            method = getattr(Enigma, method_name)
+            hints = method.__annotations__
+            assert hints.get("return") == "Enigma", (
+                f"{method_name} return annotation should be 'Enigma', "
+                f"got {hints.get('return')!r}")
+
+    def test_export_uses_module_level_safe_save(self):
+        """Export methods should use module-level safe_save imports."""
+        source_path = (
+            Path(__file__).parent.parent
+            / "enigma_engine" / "core" / "model.py")
+        source = source_path.read_text(encoding="utf-8")
+        # Module-level import should exist
+        assert "from .safe_save import" in source, (
+            "model.py should import safe_save at module level")
+        # Inline imports should NOT exist (except gguf which is optional)
+        import inspect
+        from enigma_engine.core.model import Enigma
+        for method_name in ("export_to_safetensors", "export_to_onnx",
+                            "export_to_pytorch"):
+            method_source = inspect.getsource(getattr(Enigma, method_name))
+            assert "from enigma_engine.core.safe_save" not in method_source, (
+                f"{method_name} should not have inline safe_save import")
+
+
+# ---------------------------------------------------------------------------
 # GGUF Export
 # ---------------------------------------------------------------------------
 
@@ -3396,7 +3985,7 @@ class TestGGUFExport:
         """_infer_metadata should handle ForgeConfig attributes (dim, n_layers, etc.)."""
         import inspect
         from enigma_engine.core.gguf import GGUFExporter
-        source = inspect.getsource(GGUFExporter._infer_metadata)
+        source = inspect.getsource(GGUFExporter._infer_metadata)  # type: ignore[attr-defined]
         # Must handle ForgeConfig's attribute names (not just HuggingFace's)
         assert "config.n_layers" in source or "'n_layers'" in source or '"n_layers"' in source
 
@@ -3653,6 +4242,171 @@ class TestModelComponents:
             use_moe=True, num_experts=4, num_experts_per_token=2)
         moe = MoEFeedForward(config)
         assert len(moe.experts) == 4
+
+    # ── QK Normalization ─────────────────────────────────────────
+
+    def test_qk_norm_config_default_off(self):
+        """use_qk_norm defaults to False."""
+        from enigma_engine.core.model_presets import ForgeConfig
+        config = ForgeConfig()
+        assert config.use_qk_norm is False
+
+    def test_qk_norm_in_attention_source(self):
+        """Attention uses RMSNorm layers for QK normalization when enabled."""
+        from enigma_engine.core.model_components import Attention
+        from enigma_engine.core.model_presets import ForgeConfig
+        config = ForgeConfig(dim=64, n_heads=4, n_kv_heads=4, use_qk_norm=True)
+        attn = Attention(config)
+        assert hasattr(attn, "q_norm"), "Attention should have q_norm layer"
+        assert hasattr(attn, "k_norm"), "Attention should have k_norm layer"
+
+    def test_qk_norm_preserves_shape(self):
+        """Attention output shape unchanged with qk_norm enabled."""
+        torch = pytest.importorskip("torch")
+        from enigma_engine.core.model_components import Attention
+        from enigma_engine.core.model_presets import ForgeConfig
+        config = ForgeConfig(dim=64, n_heads=4, n_kv_heads=4, use_qk_norm=True)
+        attn = Attention(config)
+        x = torch.randn(1, 8, 64)
+        out = attn(x)
+        assert out.shape == (1, 8, 64)
+
+    # ── LayerScale ───────────────────────────────────────────────
+
+    def test_layer_scale_config_default_off(self):
+        """use_layer_scale defaults to False."""
+        from enigma_engine.core.model_presets import ForgeConfig
+        config = ForgeConfig()
+        assert config.use_layer_scale is False
+
+    def test_layer_scale_creates_parameters(self):
+        """TransformerBlock has ls_attn and ls_ffn when layer_scale enabled."""
+        torch = pytest.importorskip("torch")
+        from enigma_engine.core.model_components import TransformerBlock
+        from enigma_engine.core.model_presets import ForgeConfig
+        config = ForgeConfig(dim=64, hidden_dim=128, use_layer_scale=True)
+        block = TransformerBlock(config, layer_id=0)
+        assert hasattr(block, 'ls_attn')
+        assert hasattr(block, 'ls_ffn')
+        assert block.ls_attn.shape == (64,)
+        assert block.ls_ffn.shape == (64,)
+
+    def test_layer_scale_init_small(self):
+        """LayerScale parameters are initialized to a small value (1e-5)."""
+        torch = pytest.importorskip("torch")
+        from enigma_engine.core.model_components import TransformerBlock
+        from enigma_engine.core.model_presets import ForgeConfig
+        config = ForgeConfig(dim=64, hidden_dim=128, use_layer_scale=True)
+        block = TransformerBlock(config, layer_id=0)
+        assert block.ls_attn.mean().item() == pytest.approx(1e-5, abs=1e-7)
+
+    def test_layer_scale_preserves_shape(self):
+        """TransformerBlock output shape unchanged with layer_scale."""
+        torch = pytest.importorskip("torch")
+        from enigma_engine.core.model_components import TransformerBlock
+        from enigma_engine.core.model_presets import ForgeConfig
+        config = ForgeConfig(dim=64, hidden_dim=128, use_layer_scale=True)
+        block = TransformerBlock(config, layer_id=0)
+        x = torch.randn(1, 8, 64)
+        out = block(x)
+        assert out.shape == (1, 8, 64)
+
+    # ── Drop Path (Stochastic Depth) ────────────────────────────
+
+    def test_drop_path_config_default_zero(self):
+        """drop_path_rate defaults to 0.0 (disabled)."""
+        from enigma_engine.core.model_presets import ForgeConfig
+        config = ForgeConfig()
+        assert config.drop_path_rate == 0.0
+
+    def test_drop_path_class_exists(self):
+        """DropPath helper class exists in model_components."""
+        from enigma_engine.core.model_components import DropPath
+        assert DropPath is not None
+
+    def test_drop_path_noop_at_zero(self):
+        """DropPath with rate=0 is identity."""
+        torch = pytest.importorskip("torch")
+        from enigma_engine.core.model_components import DropPath
+        dp = DropPath(0.0)
+        x = torch.randn(2, 4, 64)
+        dp.train()
+        out = dp(x)
+        assert torch.equal(out, x)
+
+    def test_drop_path_noop_at_eval(self):
+        """DropPath is identity during eval regardless of rate."""
+        torch = pytest.importorskip("torch")
+        from enigma_engine.core.model_components import DropPath
+        dp = DropPath(0.5)
+        dp.eval()
+        x = torch.randn(2, 4, 64)
+        out = dp(x)
+        assert torch.equal(out, x)
+
+    def test_drop_path_linearly_increasing(self):
+        """Deeper layers get higher drop rates."""
+        torch = pytest.importorskip("torch")
+        from enigma_engine.core.model_components import TransformerBlock
+        from enigma_engine.core.model_presets import ForgeConfig
+        config = ForgeConfig(dim=64, hidden_dim=128, n_layers=4, drop_path_rate=0.2)
+        block0 = TransformerBlock(config, layer_id=0)
+        block3 = TransformerBlock(config, layer_id=3)
+        assert block0.drop_path_attn.drop_prob < block3.drop_path_attn.drop_prob
+
+    # ── EMA Weight Averaging ─────────────────────────────────────
+
+    def test_ema_config_default_off(self):
+        """ema_decay defaults to 0.0 (disabled) in TrainingConfig."""
+        from enigma_engine.core.training import TrainingConfig
+        config = TrainingConfig()
+        assert config.ema_decay == 0.0
+
+    def test_ema_in_to_dict(self):
+        """ema_decay is serialized in TrainingConfig.to_dict()."""
+        from enigma_engine.core.training import TrainingConfig
+        config = TrainingConfig(ema_decay=0.999)
+        d = config.to_dict()
+        assert "ema_decay" in d
+        assert d["ema_decay"] == 0.999
+
+    def test_ema_class_exists(self):
+        """EMAWeightAverager class exists in training module."""
+        from enigma_engine.core.training import EMAWeightAverager
+        assert EMAWeightAverager is not None
+
+    def test_ema_tracks_weights(self):
+        """EMAWeightAverager maintains shadow copies of parameters."""
+        torch = pytest.importorskip("torch")
+        from enigma_engine.core.training import EMAWeightAverager
+        model = torch.nn.Linear(4, 4)
+        ema = EMAWeightAverager(model, decay=0.99)
+        # Shadow should exist for each parameter
+        assert len(ema.shadow) == len(list(model.parameters()))
+
+    def test_ema_update_moves_shadow(self):
+        """EMAWeightAverager.update() moves shadow toward current weights."""
+        torch = pytest.importorskip("torch")
+        from enigma_engine.core.training import EMAWeightAverager
+        model = torch.nn.Linear(4, 4, bias=False)
+        ema = EMAWeightAverager(model, decay=0.99)
+        old_shadow = ema.shadow[0].clone()
+        # Change the model weights
+        with torch.no_grad():
+            model.weight.fill_(99.0)
+        ema.update(model)
+        # Shadow should have moved toward 99 but not all the way
+        new_shadow = ema.shadow[0]
+        assert not torch.equal(old_shadow, new_shadow)
+        assert new_shadow.mean().item() > old_shadow.mean().item()
+
+    # ── torch.compile ────────────────────────────────────────────
+
+    def test_compile_config_default_off(self):
+        """use_compile defaults to False in TrainingConfig."""
+        from enigma_engine.core.training import TrainingConfig
+        config = TrainingConfig()
+        assert config.use_compile is False
 
 
 # ================================================================
@@ -3919,7 +4673,8 @@ class TestGUICommandRegistration:
     def test_chat_has_auto_research_integration(self):
         """Chat flow must integrate auto_research."""
         from enigma_engine.gui.gui_logic_chat import LogicChatMixin
-        source = inspect.getsource(LogicChatMixin._send_message)
+        source = inspect.getsource(
+            LogicChatMixin._build_system_prompt_with_context)
         assert "auto_research" in source
         assert "should_auto_research" in source
 
@@ -4085,6 +4840,13 @@ class TestAdaptiveTrainerImports:
         assert TrainingPlan is not None
         assert StageResult is not None
 
+    def test_new_helpers_importable(self):
+        """loss_to_proxy_score and build_test_prompt are importable."""
+        from enigma_engine.core.adaptive_trainer import (
+            loss_to_proxy_score, build_test_prompt)
+        assert callable(loss_to_proxy_score)
+        assert callable(build_test_prompt)
+
     def test_all_stages_defined(self):
         """ALL_STAGES has the 4 expected stages."""
         from enigma_engine.core.adaptive_trainer import ALL_STAGES
@@ -4128,12 +4890,35 @@ class TestTrainingPlan:
         assert plan.status == "completed"
 
     def test_decide_action_advance(self):
-        """decide_action always advances."""
+        """decide_action advances on high scores, retries on low."""
         from enigma_engine.core.adaptive_trainer import TrainingPlan
         plan = TrainingPlan()
         assert plan.decide_action(8.0) == "advance"
+        assert plan.decide_action(3.0) == "retry"
+
+    def test_decide_action_retries_exhaust(self):
+        """decide_action advances after max retries even with low scores."""
+        from enigma_engine.core.adaptive_trainer import (
+            TrainingPlan, StageResult)
+        plan = TrainingPlan(max_retries=2)
+        # Record 2 attempts on the current stage
+        for i in range(2):
+            plan.record_result(StageResult(
+                stage="basics", attempt=i + 1,
+                scores=[3.0], avg_score=3.0,
+                status="retry"))
+        # Now retries exhausted — should advance anyway
         assert plan.decide_action(3.0) == "advance"
-        assert plan.decide_action(0.0) == "advance"
+
+    def test_decide_action_escalates_difficulty(self):
+        """decide_action escalates difficulty on retry."""
+        from enigma_engine.core.adaptive_trainer import TrainingPlan
+        plan = TrainingPlan()
+        assert plan.current_difficulty == "simple"
+        plan.decide_action(4.0)  # triggers retry
+        assert plan.current_difficulty == "medium"
+        plan.decide_action(4.0)  # triggers another retry
+        assert plan.current_difficulty == "advanced"
 
     def test_no_dead_difficulty_methods(self):
         """Dead difficulty methods were removed."""
@@ -4271,6 +5056,351 @@ class TestStageResult:
         assert r.stage == "basics"
 
 
+class TestLossToProxyScore:
+    """Test loss_to_proxy_score fallback scoring."""
+
+    def test_low_loss_gives_high_score(self):
+        """Very low loss → high proxy score (capped at 8)."""
+        from enigma_engine.core.adaptive_trainer import loss_to_proxy_score
+        score = loss_to_proxy_score(0.1)
+        assert score >= 7
+        assert score <= 8  # capped — proxy should never give 9+
+
+    def test_medium_loss_gives_medium_score(self):
+        """Medium loss → score around 5-7."""
+        from enigma_engine.core.adaptive_trainer import loss_to_proxy_score
+        score = loss_to_proxy_score(1.0)
+        assert 4 <= score <= 6
+
+    def test_high_loss_gives_low_score(self):
+        """High loss → low score."""
+        from enigma_engine.core.adaptive_trainer import loss_to_proxy_score
+        score = loss_to_proxy_score(3.0)
+        assert score <= 2
+
+    def test_zero_loss_capped_at_8(self):
+        """Perfect loss=0 still capped at 8 (proxy, not real test)."""
+        from enigma_engine.core.adaptive_trainer import loss_to_proxy_score
+        assert loss_to_proxy_score(0.0) == 8
+
+    def test_infinite_loss_floors_at_1(self):
+        """Extreme loss floors at 1."""
+        from enigma_engine.core.adaptive_trainer import loss_to_proxy_score
+        assert loss_to_proxy_score(100.0) == 1
+        assert loss_to_proxy_score(float("inf")) == 1
+
+    def test_returns_int(self):
+        """Proxy score is always an integer."""
+        from enigma_engine.core.adaptive_trainer import loss_to_proxy_score
+        for loss in [0.0, 0.3, 0.7, 1.5, 5.0]:
+            assert isinstance(loss_to_proxy_score(loss), int)
+
+
+class TestBuildTestPrompt:
+    """Test build_test_prompt for stage-specific Phase 3 prompts."""
+
+    def test_commands_stage_mentions_cmd_syntax(self):
+        """COMMANDS stage test prompt includes [CMD] context."""
+        from enigma_engine.core.adaptive_trainer import build_test_prompt
+        prompt = build_test_prompt(1, "commands", "simple")
+        assert "[CMD]" in prompt
+
+    def test_basics_stage_has_no_cmd_context(self):
+        """BASICS stage prompt doesn't mention commands."""
+        from enigma_engine.core.adaptive_trainer import build_test_prompt
+        prompt = build_test_prompt(1, "basics", "simple")
+        assert "[CMD]" not in prompt
+
+    def test_all_stages_produce_prompts(self):
+        """All stages produce non-empty test prompts."""
+        from enigma_engine.core.adaptive_trainer import (
+            build_test_prompt, ALL_STAGES, DIFFICULTY_LEVELS)
+        for stage in ALL_STAGES:
+            for diff in DIFFICULTY_LEVELS:
+                prompt = build_test_prompt(1, stage, diff)
+                assert len(prompt) > 20
+                assert "question" in prompt.lower()
+
+    def test_includes_test_number(self):
+        """Test prompt includes the test number."""
+        from enigma_engine.core.adaptive_trainer import build_test_prompt
+        prompt = build_test_prompt(5, "basics", "medium")
+        assert "#5" in prompt
+
+
+class TestCleanExample:
+    """Test clean_example strips garbage wrappers from teacher output."""
+
+    def test_strips_the_answer_is_prefix(self):
+        """Removes 'The answer is...' prefix."""
+        from enigma_engine.core.adaptive_trainer import clean_example
+        raw = "The answer is... Dogs are loyal animals. They make great companions."
+        cleaned = clean_example(raw)
+        assert cleaned == "Dogs are loyal animals. They make great companions."
+
+    def test_strips_think_tags(self):
+        """Removes leaked <think> / </think> XML tags."""
+        from enigma_engine.core.adaptive_trainer import clean_example
+        raw = "</think>\n</think>\nThe user needs a training example."
+        cleaned = clean_example(raw)
+        assert "<think>" not in cleaned
+        assert "</think>" not in cleaned
+        assert cleaned == "The user needs a training example."
+
+    def test_strips_here_is_wrapper(self):
+        """Removes 'Here is a training example:' wrappers."""
+        from enigma_engine.core.adaptive_trainer import clean_example
+        raw = "Here is a training example: Q: What is AI?\nA: Artificial intelligence."
+        cleaned = clean_example(raw)
+        assert cleaned.startswith("Q:")
+
+    def test_returns_empty_for_empty(self):
+        """Returns empty string for empty input."""
+        from enigma_engine.core.adaptive_trainer import clean_example
+        assert clean_example("") == ""
+        assert clean_example("   ") == ""
+
+    def test_preserves_valid_content(self):
+        """Does not mangle valid Q&A content."""
+        from enigma_engine.core.adaptive_trainer import clean_example
+        valid = "Q: What is the capital of France?\nA: Paris is the capital of France."
+        assert clean_example(valid) == valid
+
+    def test_handles_answer_is_no_dots(self):
+        """Strips 'The answer is' without trailing dots."""
+        from enigma_engine.core.adaptive_trainer import clean_example
+        raw = "The answer is ambition: the strong desire to achieve something."
+        cleaned = clean_example(raw)
+        assert cleaned == "ambition: the strong desire to achieve something."
+
+
+class TestValidateExample:
+    """Test validate_example for stage-specific format checks."""
+
+    def test_rejects_short_text(self):
+        """Examples under 30 chars are rejected."""
+        from enigma_engine.core.adaptive_trainer import validate_example
+        assert validate_example("Hi", "basics") is False
+        assert validate_example("Too short.", "basics") is False
+
+    def test_accepts_valid_basics(self):
+        """A coherent paragraph passes basics validation."""
+        from enigma_engine.core.adaptive_trainer import validate_example
+        text = ("Dogs are loyal animals that have been domesticated "
+                "for thousands of years. They make great companions "
+                "and come in many different breeds.")
+        assert validate_example(text, "basics") is True
+
+    def test_rejects_leaked_reasoning(self):
+        """Leaked teacher reasoning is rejected."""
+        from enigma_engine.core.adaptive_trainer import validate_example
+        assert validate_example(
+            "I should pick a type that works well for training.",
+            "basics") is False
+        assert validate_example(
+            "I need to generate a training example now.",
+            "basics") is False
+
+    def test_commands_requires_cmd_block(self):
+        """Commands stage requires [CMD]...[/CMD] blocks."""
+        from enigma_engine.core.adaptive_trainer import validate_example
+        no_cmd = "Q: How do I list files?\nA: Just type the list command."
+        assert validate_example(no_cmd, "commands") is False
+        with_cmd = "Q: How do I list files?\nA: Use [CMD]file.list[/CMD] to see all files."
+        assert validate_example(with_cmd, "commands") is True
+
+    def test_web_requires_search_web(self):
+        """Web stage requires search.web command."""
+        from enigma_engine.core.adaptive_trainer import validate_example
+        no_web = "Q: What is the weather?\nA: Use [CMD]weather.check[/CMD]."
+        assert validate_example(no_web, "web") is False
+        with_web = "Q: What is the weather?\nA: Let me check [CMD]search.web weather today[/CMD]."
+        assert validate_example(with_web, "web") is True
+
+    def test_conversation_requires_turns(self):
+        """Conversation stage needs dialogue structure."""
+        from enigma_engine.core.adaptive_trainer import validate_example
+        single = "This is just a paragraph about cats being nice animals and very fluffy."
+        assert validate_example(single, "conversation") is False
+        dialogue = "User: What is Python?\nAI: Python is a popular programming language used for many tasks."
+        assert validate_example(dialogue, "conversation") is True
+
+    def test_conversation_accepts_assistant_format(self):
+        """Conversation stage accepts User/Assistant dialogue."""
+        from enigma_engine.core.adaptive_trainer import validate_example
+        dialogue = "User: What is Python?\nAssistant: Python is a popular programming language used for many tasks."
+        assert validate_example(dialogue, "conversation") is True
+
+    def test_rejects_empty(self):
+        """Empty string is rejected."""
+        from enigma_engine.core.adaptive_trainer import validate_example
+        assert validate_example("", "basics") is False
+
+
+class TestDeduplicateExamples:
+    """Test deduplicate_examples for near-duplicate removal."""
+
+    def test_removes_exact_duplicates(self):
+        """Exact duplicates are removed."""
+        from enigma_engine.core.adaptive_trainer import deduplicate_examples
+        examples = ["Hello world!", "Hello world!", "Something else here now."]
+        result = deduplicate_examples(examples)
+        assert len(result) == 2
+
+    def test_removes_near_duplicates(self):
+        """Near-duplicates differing only in whitespace/punctuation."""
+        from enigma_engine.core.adaptive_trainer import deduplicate_examples
+        examples = [
+            "Q: How do I save this?\nA: Just type file.write.",
+            "Q: How do I save this?  \n A: Just type file.write",
+        ]
+        result = deduplicate_examples(examples)
+        assert len(result) == 1
+
+    def test_checks_against_existing(self):
+        """Deduplicates against already-accumulated data."""
+        from enigma_engine.core.adaptive_trainer import deduplicate_examples
+        existing = ["Q: What is the capital of France?\nA: Paris."]
+        new_data = [
+            "Q: What is the capital of France?\nA: Paris.",
+            "Q: What is the meaning of life?\nA: 42.",
+        ]
+        result = deduplicate_examples(new_data, existing)
+        assert len(result) == 1
+        assert "meaning" in result[0]
+
+    def test_preserves_order(self):
+        """First occurrence is kept, not the duplicate."""
+        from enigma_engine.core.adaptive_trainer import deduplicate_examples
+        examples = ["First unique example here.", "Second unique example here.", "First unique example here."]
+        result = deduplicate_examples(examples)
+        assert result[0] == "First unique example here."
+        assert result[1] == "Second unique example here."
+
+    def test_empty_input(self):
+        """Empty list returns empty list."""
+        from enigma_engine.core.adaptive_trainer import deduplicate_examples
+        assert deduplicate_examples([]) == []
+
+    def test_cmd_blocks_not_collapsed(self):
+        """Different CMD blocks must not be treated as duplicates (#18)."""
+        from enigma_engine.core.adaptive_trainer import deduplicate_examples
+        examples = [
+            "User: Save the file\nAssistant: [CMD]file.write data.txt[/CMD]",
+            "User: Read the file\nAssistant: [CMD]file.read data.txt[/CMD]",
+        ]
+        result = deduplicate_examples(examples)
+        assert len(result) == 2, "Different CMD blocks collapsed as dupes"
+
+    def test_brackets_preserved_in_normalization(self):
+        """Square brackets and dots are semantically significant (#18)."""
+        from enigma_engine.core.adaptive_trainer import _normalize_for_dedup
+        # Dots must be preserved so file.write != filewrite
+        assert _normalize_for_dedup("file.write") != _normalize_for_dedup("filewrite")
+        # Brackets preserved so [CMD] structure is visible
+        assert "[" in _normalize_for_dedup("[CMD]test[/CMD]")
+
+
+class TestParseScore:
+    """Test parse_score for robust score extraction from LLM judgments."""
+
+    def test_score_colon_format(self):
+        """Parses 'SCORE: 7 | Good answer'."""
+        from enigma_engine.core.adaptive_trainer import parse_score
+        assert parse_score("SCORE: 7 | Good answer") == 7
+
+    def test_score_colon_lowercase(self):
+        """Parses 'score: 8'."""
+        from enigma_engine.core.adaptive_trainer import parse_score
+        assert parse_score("score: 8") == 8
+
+    def test_n_slash_10_format(self):
+        """Parses '7/10'."""
+        from enigma_engine.core.adaptive_trainer import parse_score
+        assert parse_score("I'd rate this 7/10") == 7
+
+    def test_score_of_n(self):
+        """Parses 'score of 6'."""
+        from enigma_engine.core.adaptive_trainer import parse_score
+        assert parse_score("I give a score of 6") == 6
+
+    def test_give_it_a_n(self):
+        """Parses 'give this a 8'."""
+        from enigma_engine.core.adaptive_trainer import parse_score
+        assert parse_score("I'd give this a 8") == 8
+
+    def test_bare_number_on_line(self):
+        """Parses bare number on its own line."""
+        from enigma_engine.core.adaptive_trainer import parse_score
+        assert parse_score("7") == 7
+
+    def test_clamps_high(self):
+        """Scores above 10 are clamped to 10."""
+        from enigma_engine.core.adaptive_trainer import parse_score
+        assert parse_score("SCORE: 15") == 10
+
+    def test_clamps_low(self):
+        """Scores below 1 are clamped to 1."""
+        from enigma_engine.core.adaptive_trainer import parse_score
+        assert parse_score("SCORE: 0") == 1
+
+    def test_returns_5_on_empty(self):
+        """Empty text returns default 5."""
+        from enigma_engine.core.adaptive_trainer import parse_score
+        assert parse_score("") == 5
+        assert parse_score("   ") == 5
+
+    def test_returns_5_on_no_score(self):
+        """Text with no numeric score returns default 5."""
+        from enigma_engine.core.adaptive_trainer import parse_score
+        assert parse_score("This was a good answer overall.") == 5
+
+    def test_multiline_with_score_in_middle(self):
+        """Finds SCORE: pattern even in middle of multiline text."""
+        from enigma_engine.core.adaptive_trainer import parse_score
+        judgment = (
+            "The student answered well.\n"
+            "SCORE: 8 | Good vocabulary\n"
+            "Could improve on specifics.")
+        assert parse_score(judgment) == 8
+
+    def test_rating_format(self):
+        """Parses 'rating: 6'."""
+        from enigma_engine.core.adaptive_trainer import parse_score
+        assert parse_score("My rating: 6 for this response.") == 6
+
+    def test_does_not_match_digits_in_unrelated_text(self):
+        """Digits embedded in non-score contexts should not match (#19)."""
+        from enigma_engine.core.adaptive_trainer import parse_score
+        # "200 lines of code" — the 200 should NOT be parsed as a score
+        result = parse_score("The answer had about 200 lines of code.")
+        # Should either return 5 (default) or 10 (clamped)
+        # but NOT treat 200 as a raw score
+        assert result in (5, 10)
+
+    def test_bare_number_rejects_large_values(self):
+        """Bare number pattern only matches 1-10 range."""
+        from enigma_engine.core.adaptive_trainer import parse_score
+        assert parse_score("42") == 5  # Out of range, defaults
+
+    def test_n_slash_10_with_word_boundary(self):
+        """N/10 should match '7/10' but not '23/100'."""
+        from enigma_engine.core.adaptive_trainer import parse_score
+        assert parse_score("I'd say 7/10") == 7
+        # 23/100 should not match as 23/10
+        assert parse_score("Got 23/100 on the test") == 5
+
+    def test_score_word_boundary_prefix(self):
+        """'score12' should not match - 'score' needs word boundary."""
+        from enigma_engine.core.adaptive_trainer import parse_score
+        assert parse_score("This is score12 quality") == 5
+
+    def test_give_this_a_boundary(self):
+        """'give this a 107' should not match '10' from '107'."""
+        from enigma_engine.core.adaptive_trainer import parse_score
+        assert parse_score("I give this a 107") == 5
+
+
 # =============================================================================
 # SMART BACKGROUND TRAINER TESTS
 # =============================================================================
@@ -4352,6 +5482,24 @@ class TestSmartBackgroundTrainer:
         assert "try:" in source
         assert "finally:" in source
         assert ".eval()" in source
+
+    def test_background_trainer_accepts_adam_params(self):
+        """BackgroundTrainer constructor accepts adam_betas and adam_eps."""
+        from enigma_engine.router import BackgroundTrainer
+        sig = inspect.signature(BackgroundTrainer.__init__)
+        assert "adam_betas" in sig.parameters, (
+            "BackgroundTrainer must accept adam_betas parameter")
+        assert "adam_eps" in sig.parameters, (
+            "BackgroundTrainer must accept adam_eps parameter")
+
+    def test_background_trainer_adamw_uses_params(self):
+        """BackgroundTrainer.set_model uses stored adam_betas and adam_eps."""
+        from enigma_engine.router import BackgroundTrainer
+        source = inspect.getsource(BackgroundTrainer.set_model)
+        assert "adam_betas" in source or "self.adam_betas" in source, (
+            "set_model must use adam_betas from constructor")
+        assert "adam_eps" in source or "self.adam_eps" in source, (
+            "set_model must use adam_eps from constructor")
 
 
 class TestCurriculumSeparators:
@@ -4881,6 +6029,68 @@ class TestTrainingQueue:
         q.resume()
         assert q.is_paused is False
 
+    def test_reorder_job_with_running_job(self):
+        """reorder_job must not break when a running job is in the list."""
+        from enigma_engine.core.training_queue import (
+            TrainingQueue, TrainingJob)
+        q = TrainingQueue()
+        j1 = q.add_job(TrainingJob(mode="Solo"))
+        j2 = q.add_job(TrainingJob(mode="DPO"))
+        j3 = q.add_job(TrainingJob(mode="LoRA"))
+
+        # Simulate j1 running
+        j1.status = "running"
+        q._current_job = j1
+
+        # Move j3 to position 0 among pending jobs
+        moved = q.reorder_job(j3.job_id, 0)
+        assert moved is True
+
+        # j3 should now be before j2 in pending order
+        pending = [j for j in q.jobs if j.status == "pending"]
+        assert len(pending) == 2
+        assert pending[0].job_id == j3.job_id
+        assert pending[1].job_id == j2.job_id
+
+        # Running job should still be in the list
+        all_ids = [j.job_id for j in q.jobs]
+        assert j1.job_id in all_ids
+
+    def test_reorder_preserves_non_pending_jobs(self):
+        """reorder_job must not affect completed/failed/running jobs."""
+        from enigma_engine.core.training_queue import (
+            TrainingQueue, TrainingJob)
+        q = TrainingQueue()
+        j1 = q.add_job(TrainingJob(mode="Solo"))
+        j2 = q.add_job(TrainingJob(mode="DPO"))
+        j3 = q.add_job(TrainingJob(mode="LoRA"))
+        j4 = q.add_job(TrainingJob(mode="Vision"))
+
+        # Mark j1 as completed, j2 as running
+        j1.status = "completed"
+        j2.status = "running"
+
+        # Move j4 to position 0 among pending
+        moved = q.reorder_job(j4.job_id, 0)
+        assert moved is True
+
+        jobs = q.jobs
+        # completed and running must still be in order
+        assert jobs[0].status == "completed"
+        assert jobs[1].status == "running"
+        # j4 should be before j3 in the pending slots
+        pending = [j for j in jobs if j.status == "pending"]
+        assert pending[0].job_id == j4.job_id
+        assert pending[1].job_id == j3.job_id
+
+    def test_pause_flag_under_lock(self):
+        """_run_loop pause check should be under lock."""
+        import inspect
+        from enigma_engine.core.training_queue import TrainingQueue
+        source = inspect.getsource(TrainingQueue._run_loop)
+        # The pause check should acquire the lock
+        assert "self._lock" in source or "_lock" in source
+
 
 # ================================================================
 # TS-C: Overnight Plan
@@ -5077,7 +6287,7 @@ class TestRewardModel:
         assert rm.reward_head.out_features == 1
 
         # Base weights should be frozen
-        for p in rm.tok_embeddings.parameters():
+        for p in rm.tok_embeddings.parameters():  # type: ignore[union-attr]
             assert not p.requires_grad
 
     def test_reward_model_forward_shape(self):
@@ -5478,6 +6688,26 @@ class TestTrainingMonitor:
         m.clear_history()
         assert not hist_path.exists()
 
+    def test_losses_list_capped(self):
+        """_losses list must not grow unbounded — capped at MAX_LOSSES."""
+        from enigma_engine.core.training_monitor import TrainingMonitor
+        m = TrainingMonitor()
+        m.start_run()
+        # Record more losses than the cap
+        for i in range(120_000):
+            m.record_loss(float(i))
+        # Should be capped, not 120k
+        assert len(m.losses) <= 100_001
+
+    def test_steps_list_stays_in_sync_with_losses(self):
+        """steps and losses must have the same length after cap."""
+        from enigma_engine.core.training_monitor import TrainingMonitor
+        m = TrainingMonitor()
+        m.start_run()
+        for i in range(110_000):
+            m.record_loss(float(i))
+        assert len(m.losses) == len(m.steps)
+
 
 # ================================================================
 # THREAD SAFETY — Suggestion #8A+D
@@ -5594,10 +6824,10 @@ class TestChatContextExtraction:
         from enigma_engine.core.engine_chat import _ChatMixin, ChatContext
 
         obj = object.__new__(_ChatMixin)
-        obj._is_gguf = False
-        obj.model = MagicMock()
-        obj.get_max_context_length = MagicMock(return_value=4096)
-        obj.count_tokens = MagicMock(return_value=5)
+        obj._is_gguf = False  # type: ignore[attr-defined]
+        obj.model = MagicMock()  # type: ignore[attr-defined]
+        obj.get_max_context_length = MagicMock(return_value=4096)  # type: ignore[attr-defined]
+        obj.count_tokens = MagicMock(return_value=5)  # type: ignore[attr-defined]
 
         ctx = obj._prepare_chat("hello")
         assert isinstance(ctx, ChatContext)
@@ -5608,10 +6838,10 @@ class TestChatContextExtraction:
         from enigma_engine.core.engine_chat import _ChatMixin
 
         obj = object.__new__(_ChatMixin)
-        obj._is_gguf = False
-        obj.model = MagicMock()
-        obj.get_max_context_length = MagicMock(return_value=4096)
-        obj.count_tokens = MagicMock(return_value=5)
+        obj._is_gguf = False  # type: ignore[attr-defined]
+        obj.model = MagicMock()  # type: ignore[attr-defined]
+        obj.get_max_context_length = MagicMock(return_value=4096)  # type: ignore[attr-defined]
+        obj.count_tokens = MagicMock(return_value=5)  # type: ignore[attr-defined]
 
         history = [
             {"role": "user", "content": "Hi"},
@@ -5636,10 +6866,10 @@ class TestChatContextExtraction:
         from enigma_engine.core.engine_chat import _ChatMixin
 
         obj = object.__new__(_ChatMixin)
-        obj._is_gguf = False
-        obj.model = MagicMock()
-        obj.get_max_context_length = MagicMock(return_value=4096)
-        obj.count_tokens = MagicMock(return_value=5)
+        obj._is_gguf = False  # type: ignore[attr-defined]
+        obj.model = MagicMock()  # type: ignore[attr-defined]
+        obj.get_max_context_length = MagicMock(return_value=4096)  # type: ignore[attr-defined]
+        obj.count_tokens = MagicMock(return_value=5)  # type: ignore[attr-defined]
 
         ctx = obj._prepare_chat("test", max_gen=2000, reasoning=True)
         assert ctx.max_gen == 3000  # 2000 * 1.5
@@ -5650,10 +6880,10 @@ class TestChatContextExtraction:
         from enigma_engine.core.engine_chat import _ChatMixin
 
         obj = object.__new__(_ChatMixin)
-        obj._is_gguf = False
-        obj.model = MagicMock()
-        obj.get_max_context_length = MagicMock(return_value=4096)
-        obj.count_tokens = MagicMock(return_value=5)
+        obj._is_gguf = False  # type: ignore[attr-defined]
+        obj.model = MagicMock()  # type: ignore[attr-defined]
+        obj.get_max_context_length = MagicMock(return_value=4096)  # type: ignore[attr-defined]
+        obj.count_tokens = MagicMock(return_value=5)  # type: ignore[attr-defined]
 
         ctx = obj._prepare_chat("test", reasoning=True)
         # Reasoning instruction should be in system message
@@ -5687,19 +6917,19 @@ class TestStreamChatReasoning:
         from enigma_engine.core.engine_chat import _ChatMixin
 
         obj = object.__new__(_ChatMixin)
-        obj._is_gguf = False
-        obj.model = MagicMock()
-        obj.get_max_context_length = MagicMock(return_value=4096)
-        obj.count_tokens = MagicMock(return_value=5)
+        obj._is_gguf = False  # type: ignore[attr-defined]
+        obj.model = MagicMock()  # type: ignore[attr-defined]
+        obj.get_max_context_length = MagicMock(return_value=4096)  # type: ignore[attr-defined]
+        obj.count_tokens = MagicMock(return_value=5)  # type: ignore[attr-defined]
 
         # stream_generate yields tokens — mock it to yield nothing
-        obj.stream_generate = MagicMock(return_value=iter([]))
+        obj.stream_generate = MagicMock(return_value=iter([]))  # type: ignore[attr-defined]
         gen = obj.stream_chat("test", reasoning=True)
         # Consume the generator
         list(gen)
 
         # Check that stream_generate was called with a prompt containing <think>
-        call_args = obj.stream_generate.call_args
+        call_args = obj.stream_generate.call_args  # type: ignore[attr-defined]
         prompt = call_args[0][0] if call_args[0] else call_args[1].get("prompt", "")
         assert "<think>" in prompt
 
@@ -5814,14 +7044,16 @@ class TestGGUFNoSilentFallback:
         from enigma_engine.core.engine_chat import _ChatMixin
 
         obj = object.__new__(_ChatMixin)
-        obj._is_gguf = True
+        obj._is_gguf = True  # type: ignore[attr-defined]
         mock_model = MagicMock()
         mock_model.chat = MagicMock(
             side_effect=RuntimeError("GGUF model crashed"))
-        obj.model = mock_model
+        obj.model = mock_model  # type: ignore[attr-defined]
         # Stub methods needed by chat()
-        obj.get_max_context_length = MagicMock(return_value=4096)
-        obj.count_tokens = MagicMock(return_value=10)
+        import threading
+        obj._generation_lock = threading.Lock()  # type: ignore[attr-defined]
+        obj.get_max_context_length = MagicMock(return_value=4096)  # type: ignore[attr-defined]
+        obj.count_tokens = MagicMock(return_value=10)  # type: ignore[attr-defined]
 
         with pytest.raises(RuntimeError, match="GGUF model crashed"):
             obj.chat("hello")
@@ -5933,10 +7165,10 @@ class TestRMSNormFp32Upcast:
         assert not torch.isnan(out).any(), "fp16 RMSNorm produced NaN"
 
     def test_vision_rmsnorm_fp32_upcast(self):
-        """Vision encoder _RMSNorm also upcasts to fp32."""
+        """Vision encoder RMSNorm also upcasts to fp32."""
         import torch
-        from enigma_engine.core.vision_encoder import _RMSNorm
-        norm = _RMSNorm(32)
+        from enigma_engine.core.model_components import RMSNorm
+        norm = RMSNorm(32)
         x = torch.randn(4, 32).half() * 100
         norm = norm.half()
         out = norm(x)
@@ -5997,6 +7229,71 @@ class TestLoraTrainerWeightDecay:
             tok = MagicMock()
             trainer = LoraTrainer(model, tok, weight_decay=0.05)
             assert trainer.weight_decay == 0.05
+
+
+class TestOptimizerBetasConsistency:
+    """All optimizer creation sites must use LM-friendly betas."""
+
+    def test_reward_trainer_config_has_betas(self):
+        from enigma_engine.core.rl_training import RewardTrainerConfig
+        cfg = RewardTrainerConfig()
+        assert cfg.adam_beta1 == 0.9
+        assert cfg.adam_beta2 == 0.95
+        assert cfg.adam_eps == 1e-8
+
+    def test_rlhf_config_has_betas(self):
+        from enigma_engine.core.rl_training import RLHFConfig
+        cfg = RLHFConfig()
+        assert cfg.adam_beta1 == 0.9
+        assert cfg.adam_beta2 == 0.95
+        assert cfg.adam_eps == 1e-8
+
+    def test_selfplay_config_has_betas(self):
+        from enigma_engine.core.rl_training import SelfPlayConfig
+        cfg = SelfPlayConfig()
+        assert cfg.adam_beta1 == 0.9
+        assert cfg.adam_beta2 == 0.95
+        assert cfg.adam_eps == 1e-8
+
+    def test_lora_trainer_has_betas(self):
+        import inspect
+        from enigma_engine.core.lora_utils import LoraTrainer
+        sig = inspect.signature(LoraTrainer.__init__)
+        assert sig.parameters["adam_beta1"].default == 0.9
+        assert sig.parameters["adam_beta2"].default == 0.95
+        assert sig.parameters["adam_eps"].default == 1e-8
+
+    def test_lora_trainer_stores_betas(self):
+        import torch.nn as nn
+        from unittest.mock import MagicMock, patch
+        with patch("enigma_engine.core.lora_utils.create_lora_model",
+                   side_effect=lambda m, c: m):
+            from enigma_engine.core.lora_utils import LoraTrainer
+            model = nn.Linear(4, 4)
+            tok = MagicMock()
+            trainer = LoraTrainer(model, tok, adam_beta2=0.999)
+            assert trainer.adam_beta2 == 0.999
+
+
+class TestReasoningLossTokenIds:
+    """Verify _apply_reasoning_loss_weight uses named token IDs, not encode()."""
+
+    def test_uses_think_start_id_attribute(self):
+        """Must use tokenizer.think_start_id, not encode('<think>')."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer._apply_reasoning_weight)
+        assert "think_start_id" in source, (
+            "Should use think_start_id attribute directly")
+        assert "_get_token_ids" not in source, (
+            "Should NOT use _get_token_ids (includes BOS/EOS)")
+
+    def test_uses_think_end_id_attribute(self):
+        """Must use tokenizer.think_end_id, not encode('</think>')."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer._apply_reasoning_weight)
+        assert "think_end_id" in source
 
 
 # ================================================================
@@ -6117,36 +7414,6 @@ class TestHybridVisionEncoder:
 
 class TestForgeNewModes:
     """Verify new training modes are wired into FORGE."""
-
-    def test_mode_display_keys(self):
-        """New modes exist in _MODE_DISPLAY_TO_KEY."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        keys = ForgeMixin._MODE_DISPLAY_TO_KEY
-        assert "RLHF" in keys
-        assert "Self-Play" in keys
-
-    def test_mode_descriptions(self):
-        """New modes have descriptions."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        descs = ForgeMixin._TRAINING_MODE_DESCRIPTIONS
-        for mode in ("RLHF", "SelfPlay"):
-            assert mode in descs, f"Missing description for {mode}"
-            assert len(descs[mode]) > 10
-
-    def test_mode_section_visibility(self):
-        """New modes have section visibility configs."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        vis = ForgeMixin._MODE_SECTION_VISIBILITY
-        for mode in ("RLHF", "SelfPlay"):
-            assert mode in vis, f"Missing visibility for {mode}"
-            assert "data" in vis[mode]
-
-    def test_mode_data_labels(self):
-        """New modes have data source labels."""
-        from enigma_engine.gui.gui_forge import ForgeMixin
-        labels = ForgeMixin._MODE_DATA_LABELS
-        for mode in ("RLHF", "SelfPlay"):
-            assert mode in labels, f"Missing label for {mode}"
 
     def test_dispatch_has_new_modes(self):
         """_start_training_by_mode handles 3 simplified modes."""
@@ -6296,6 +7563,71 @@ class TestTrainingOOMRecovery:
 
 
 # ================================================================
+# Training: random import fix + weight sanity check
+# ================================================================
+
+
+class TestTrainingRandomImportFix:
+    """Verify train() doesn't crash from shadowed random import."""
+
+    def test_no_local_random_import_in_train(self):
+        """train() must not have a local 'import random' that shadows module-level."""
+        import ast
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer.train)
+        tree = ast.parse(textwrap.dedent(source))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    assert alias.name != "random", (
+                        f"Local 'import random' at line ~{node.lineno} in "
+                        f"train() shadows module-level import — use it directly")
+
+    def test_random_shuffle_reachable_without_general_data(self):
+        """random.shuffle(batches) must work when general_data is not set."""
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer.train)
+        assert "random.shuffle(batches)" in source, (
+            "train() must shuffle batches each epoch")
+
+
+class TestTrainingWeightSanityCheck:
+    """Verify train() includes a weight-change verification after first step."""
+
+    def test_weight_check_in_train(self):
+        """train() should verify weights changed after first optimizer step."""
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer.train)
+        assert "weight_check_done" in source or "Weight update verified" in source, (
+            "train() should verify weights actually changed after first step")
+
+    def test_weight_check_skips_embeddings(self):
+        """Weight sanity check should skip embedding/output layers (sparse gradients)."""
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer.train)
+        assert '"embed"' in source or "'embed'" in source, (
+            "Weight check should filter out embedding layers")
+
+
+class TestModelConfigDict:
+    """Verify _model_config_dict saves full config, not a subset."""
+
+    def test_config_dict_includes_architecture_flags(self):
+        """_model_config_dict must include use_rope, use_rms_norm, etc."""
+        from enigma_engine.core.model_presets import ForgeConfig
+        cfg = ForgeConfig(use_moe=True, use_qk_norm=True)
+
+        class FakeModel:
+            config = cfg
+
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        result = ForgeMixin._model_config_dict(FakeModel())
+        assert "use_rope" in result, "Config dict missing use_rope"
+        assert "use_moe" in result, "Config dict missing use_moe"
+        assert result["use_moe"] is True, "Config dict should reflect actual values"
+
+
+# ================================================================
 # 13: LoRA-Based RLHF (no deep copy on GPU)
 # ================================================================
 
@@ -6430,6 +7762,365 @@ class TestAdaptiveTrainerCleanup:
 
 
 # ================================================================
+# PPO Rewrite — True PPO with value head, GAE, clipped surrogate
+# ================================================================
+
+
+class TestValueHead:
+    """ValueHead: MLP critic that predicts state values from hidden states."""
+
+    def test_value_head_exists(self):
+        """ValueHead class exists in rl_training module."""
+        from enigma_engine.core.rl_training import ValueHead
+        assert ValueHead is not None
+
+    def test_value_head_forward_shape(self):
+        """ValueHead(dim) produces (B, T) values from (B, T, dim) hidden states."""
+        import torch
+        from enigma_engine.core.rl_training import ValueHead
+        vh = ValueHead(dim=64)
+        h = torch.randn(2, 10, 64)
+        values = vh(h)
+        assert values.shape == (2, 10)
+
+    def test_value_head_single_token(self):
+        """ValueHead works with single-token inputs."""
+        import torch
+        from enigma_engine.core.rl_training import ValueHead
+        vh = ValueHead(dim=32)
+        h = torch.randn(1, 1, 32)
+        values = vh(h)
+        assert values.shape == (1, 1)
+
+
+class TestRolloutBuffer:
+    """RolloutBuffer stores (logprobs, values, rewards, masks) for PPO updates."""
+
+    def test_rollout_buffer_exists(self):
+        """RolloutBuffer class exists."""
+        from enigma_engine.core.rl_training import RolloutBuffer
+        assert RolloutBuffer is not None
+
+    def test_store_and_get(self):
+        """Can store experience and retrieve it."""
+        import torch
+        from enigma_engine.core.rl_training import RolloutBuffer
+        buf = RolloutBuffer()
+        buf.store(
+            log_probs=torch.randn(5),
+            values=torch.randn(5),
+            rewards=torch.tensor([0.0, 0.0, 0.0, 0.0, 1.0]),
+            response_mask=torch.ones(5),
+        )
+        assert len(buf) == 1
+
+    def test_compute_advantages_gae(self):
+        """compute_advantages uses GAE (gamma, lam)."""
+        import torch
+        from enigma_engine.core.rl_training import RolloutBuffer
+        buf = RolloutBuffer()
+        buf.store(
+            log_probs=torch.zeros(3),
+            values=torch.tensor([0.5, 0.5, 0.5]),
+            rewards=torch.tensor([0.0, 0.0, 1.0]),
+            response_mask=torch.ones(3),
+        )
+        advantages, returns = buf.compute_advantages(gamma=1.0, lam=0.95)
+        assert advantages.shape[0] > 0
+        assert returns.shape[0] > 0
+        # Last token has reward=1, value=0.5, so advantage > 0
+        assert advantages[-1] > 0
+
+    def test_clear(self):
+        """clear resets the buffer."""
+        import torch
+        from enigma_engine.core.rl_training import RolloutBuffer
+        buf = RolloutBuffer()
+        buf.store(
+            log_probs=torch.zeros(3),
+            values=torch.zeros(3),
+            rewards=torch.zeros(3),
+            response_mask=torch.ones(3),
+        )
+        assert len(buf) == 1
+        buf.clear()
+        assert len(buf) == 0
+
+
+class TestPPOConfig:
+    """RLHFConfig gains PPO-specific fields."""
+
+    def test_config_has_value_coeff(self):
+        """RLHFConfig has value_coeff field."""
+        from enigma_engine.core.rl_training import RLHFConfig
+        cfg = RLHFConfig()
+        assert hasattr(cfg, "value_coeff")
+        assert cfg.value_coeff == 0.5
+
+    def test_config_has_entropy_coeff(self):
+        """RLHFConfig has entropy_coeff field."""
+        from enigma_engine.core.rl_training import RLHFConfig
+        cfg = RLHFConfig()
+        assert hasattr(cfg, "entropy_coeff")
+        assert cfg.entropy_coeff == 0.01
+
+    def test_config_has_gae_lambda(self):
+        """RLHFConfig has gae_lambda field."""
+        from enigma_engine.core.rl_training import RLHFConfig
+        cfg = RLHFConfig()
+        assert hasattr(cfg, "gae_lambda")
+        assert cfg.gae_lambda == 0.95
+
+    def test_config_has_ppo_epochs(self):
+        """RLHFConfig has ppo_epochs for minibatch updates."""
+        from enigma_engine.core.rl_training import RLHFConfig
+        cfg = RLHFConfig()
+        assert hasattr(cfg, "ppo_epochs")
+        assert cfg.ppo_epochs == 4
+
+    def test_config_has_minibatch_size(self):
+        """RLHFConfig has minibatch_size."""
+        from enigma_engine.core.rl_training import RLHFConfig
+        cfg = RLHFConfig()
+        assert hasattr(cfg, "minibatch_size")
+        assert cfg.minibatch_size == 4
+
+    def test_backward_compat_existing_defaults(self):
+        """Old defaults remain unchanged."""
+        from enigma_engine.core.rl_training import RLHFConfig
+        cfg = RLHFConfig()
+        assert cfg.epochs == 3
+        assert cfg.kl_coeff == 0.1
+        assert cfg.clip_range == 0.2
+        assert cfg.n_responses == 4
+
+
+class TestPPOTrainerStructure:
+    """RLHFTrainer.train() implements true PPO."""
+
+    def test_train_uses_clip_range(self):
+        """train() actually uses clip_range for clipped surrogate."""
+        from enigma_engine.core.rl_training import RLHFTrainer
+        source = inspect.getsource(RLHFTrainer.train)
+        assert "clip_range" in source
+        # Must do ratio clamping, not just mention it
+        assert "clamp" in source or "clip" in source
+
+    def test_train_uses_value_head(self):
+        """train() creates and uses a ValueHead."""
+        from enigma_engine.core.rl_training import RLHFTrainer
+        source = inspect.getsource(RLHFTrainer.train)
+        assert "ValueHead" in source or "value_head" in source
+
+    def test_train_uses_rollout_buffer(self):
+        """train() uses RolloutBuffer for experience collection."""
+        from enigma_engine.core.rl_training import RLHFTrainer
+        source = inspect.getsource(RLHFTrainer.train)
+        assert "RolloutBuffer" in source or "rollout" in source
+
+    def test_train_computes_advantages(self):
+        """train() computes GAE advantages."""
+        from enigma_engine.core.rl_training import RLHFTrainer
+        source = inspect.getsource(RLHFTrainer.train)
+        assert "advantage" in source.lower()
+
+    def test_train_has_entropy_bonus(self):
+        """train() includes entropy bonus in loss."""
+        from enigma_engine.core.rl_training import RLHFTrainer
+        source = inspect.getsource(RLHFTrainer.train)
+        assert "entropy" in source.lower()
+
+    def test_train_has_value_loss(self):
+        """train() computes value function loss."""
+        from enigma_engine.core.rl_training import RLHFTrainer
+        source = inspect.getsource(RLHFTrainer.train)
+        assert "value_loss" in source or "v_loss" in source
+
+    def test_train_has_ppo_epochs(self):
+        """train() does multiple epochs of minibatch updates per rollout."""
+        from enigma_engine.core.rl_training import RLHFTrainer
+        source = inspect.getsource(RLHFTrainer.train)
+        assert "ppo_epoch" in source
+
+    def test_train_uses_amp(self):
+        """train() uses AMP autocast (not unused as before)."""
+        from enigma_engine.core.rl_training import RLHFTrainer
+        source = inspect.getsource(RLHFTrainer.train)
+        assert "autocast" in source
+
+    def test_get_response_logps_returns_per_token(self):
+        """Module-level _get_response_logps returns per-token log-probs (1D)."""
+        from enigma_engine.core.rl_training import _get_response_logps
+        source = inspect.getsource(_get_response_logps)
+        assert "log_softmax" in source or "log_probs" in source
+
+    def test_n_responses_used_in_train(self):
+        """n_responses config is actually used for multi-response generation."""
+        from enigma_engine.core.rl_training import RLHFTrainer
+        source = inspect.getsource(RLHFTrainer.train)
+        assert "n_responses" in source
+
+    def test_reward_history_bounded(self):
+        """Reward history list doesn't grow unbounded."""
+        from enigma_engine.core.rl_training import RLHFTrainer
+        source = inspect.getsource(RLHFTrainer.train)
+        # Should cap reward_history or use deque
+        assert "max" in source or "deque" in source or "[-" in source
+
+
+class TestSelfPlayPPOUpgrade:
+    """SelfPlayTrainer gets the same PPO treatment."""
+
+    def test_selfplay_uses_value_head(self):
+        """SelfPlayTrainer.train() uses ValueHead."""
+        from enigma_engine.core.rl_training import SelfPlayTrainer
+        source = inspect.getsource(SelfPlayTrainer.train)
+        assert "ValueHead" in source or "value_head" in source
+
+    def test_selfplay_uses_clipping(self):
+        """SelfPlayTrainer applies PPO clipping."""
+        from enigma_engine.core.rl_training import SelfPlayTrainer
+        source = inspect.getsource(SelfPlayTrainer.train)
+        assert "clamp" in source or "clip" in source
+
+    def test_selfplay_has_entropy(self):
+        """SelfPlayTrainer includes entropy bonus."""
+        from enigma_engine.core.rl_training import SelfPlayTrainer
+        source = inspect.getsource(SelfPlayTrainer.train)
+        assert "entropy" in source.lower()
+
+    def test_selfplay_config_has_ppo_fields(self):
+        """SelfPlayConfig gains PPO fields matching RLHFConfig."""
+        from enigma_engine.core.rl_training import SelfPlayConfig
+        cfg = SelfPlayConfig()
+        assert hasattr(cfg, "clip_range")
+        assert hasattr(cfg, "value_coeff")
+        assert hasattr(cfg, "entropy_coeff")
+        assert hasattr(cfg, "ppo_epochs")
+
+
+class TestSharedHelpers:
+    """_get_response_logps extracted as shared, not duplicated."""
+
+    def test_single_logps_function(self):
+        """There is one _get_response_logps implementation, class methods are delegates."""
+        import enigma_engine.core.rl_training as rl_mod
+        source = inspect.getsource(rl_mod)
+        # Count definitions of _get_response_logps
+        count = source.count("def _get_response_logps(")
+        # 1 module-level + up to 2 class delegates (staticmethod wrappers)
+        assert count <= 3, (
+            f"_get_response_logps defined {count} times — deduplicate")
+        # The module-level function should contain the actual logic
+        mod_source = inspect.getsource(rl_mod._get_response_logps)
+        assert "log_softmax" in mod_source
+
+
+class TestPPORatioComputation:
+    """PPO must compute real importance sampling ratio, not hardcode 1.0."""
+
+    def test_rlhf_ppo_uses_torch_exp_for_ratio(self):
+        """RLHFTrainer.train() computes ratio via torch.exp(new - old)."""
+        from enigma_engine.core.rl_training import RLHFTrainer
+        source = inspect.getsource(RLHFTrainer.train)
+        assert "torch.exp(" in source, (
+            "PPO ratio must use torch.exp(new_logps - old_logps)")
+
+    def test_rlhf_ppo_no_hardcoded_ones_ratio(self):
+        """RLHFTrainer PPO loop must not use ones_like as the ratio."""
+        from enigma_engine.core.rl_training import RLHFTrainer
+        source = inspect.getsource(RLHFTrainer.train)
+        # torch.ones_like should only appear in the replay fallback,
+        # not as the primary ratio computation
+        lines = source.split("\n")
+        for line in lines:
+            if "ones_like" in line and "ratio" in line:
+                # Must be inside a replay/fallback branch
+                assert "else" in source[:source.index(line)].split("\n")[-5:] or \
+                    "replay" in line.lower() or "fallback" in line.lower() or \
+                    "else:" in "\n".join(lines[max(0, lines.index(line)-3):lines.index(line)]), \
+                    "ratio = torch.ones_like should only be in replay fallback"
+
+    def test_selfplay_ppo_uses_torch_exp_for_ratio(self):
+        """SelfPlayTrainer.train() computes ratio via torch.exp(new - old)."""
+        from enigma_engine.core.rl_training import SelfPlayTrainer
+        source = inspect.getsource(SelfPlayTrainer.train)
+        assert "torch.exp(" in source, (
+            "PPO ratio must use torch.exp(new_logps - old_logps)")
+
+    def test_rlhf_recomputes_logps_in_ppo_loop(self):
+        """RLHF PPO loop calls _get_response_logps for fresh log-probs."""
+        from enigma_engine.core.rl_training import RLHFTrainer
+        source = inspect.getsource(RLHFTrainer.train)
+        # Should call _get_response_logps inside the ppo_epoch loop
+        ppo_section = source[source.index("ppo_epoch"):]
+        assert "_get_response_logps" in ppo_section
+
+    def test_selfplay_recomputes_logps_in_ppo_loop(self):
+        """SelfPlay PPO loop calls _get_response_logps for fresh log-probs."""
+        from enigma_engine.core.rl_training import SelfPlayTrainer
+        source = inspect.getsource(SelfPlayTrainer.train)
+        ppo_section = source[source.index("ppo_epoch"):]
+        assert "_get_response_logps" in ppo_section
+
+    def test_rlhf_recomputes_entropy_in_ppo_loop(self):
+        """RLHF PPO loop uses real entropy, not -logps.mean()."""
+        from enigma_engine.core.rl_training import RLHFTrainer
+        source = inspect.getsource(RLHFTrainer.train)
+        ppo_section = source[source.index("ppo_epoch"):]
+        assert "_get_response_entropy" in ppo_section
+
+    def test_rollout_buffer_stores_full_ids(self):
+        """RolloutBuffer accepts and stores full_ids and prompt_len."""
+        import torch
+        from enigma_engine.core.rl_training import RolloutBuffer
+        buf = RolloutBuffer()
+        full_ids = torch.tensor([[1, 2, 3, 4, 5]])
+        buf.store(
+            log_probs=torch.randn(3),
+            values=torch.randn(3),
+            rewards=torch.tensor([0.0, 0.0, 1.0]),
+            response_mask=torch.ones(3),
+            full_ids=full_ids,
+            prompt_len=2,
+        )
+        assert buf._full_ids[0] is not None
+        assert buf._prompt_lens[0] == 2
+        assert torch.equal(buf._full_ids[0], full_ids)
+
+    def test_rollout_buffer_clear_clears_ids(self):
+        """clear() also clears full_ids and prompt_lens."""
+        import torch
+        from enigma_engine.core.rl_training import RolloutBuffer
+        buf = RolloutBuffer()
+        buf.store(
+            log_probs=torch.randn(3),
+            values=torch.randn(3),
+            rewards=torch.zeros(3),
+            response_mask=torch.ones(3),
+            full_ids=torch.tensor([[1, 2, 3]]),
+            prompt_len=1,
+        )
+        buf.clear()
+        assert len(buf._full_ids) == 0
+        assert len(buf._prompt_lens) == 0
+
+    def test_rollout_buffer_backward_compat(self):
+        """RolloutBuffer.store() works without full_ids (backward compat)."""
+        import torch
+        from enigma_engine.core.rl_training import RolloutBuffer
+        buf = RolloutBuffer()
+        buf.store(
+            log_probs=torch.randn(3),
+            values=torch.randn(3),
+            rewards=torch.zeros(3),
+            response_mask=torch.ones(3),
+        )
+        assert buf._full_ids[0] is None
+        assert buf._prompt_lens[0] is None
+
+
+# ================================================================
 # 15: CuratedDataset Thread Lock
 # ================================================================
 
@@ -6451,7 +8142,7 @@ class TestCuratedDatasetThreadSafety:
         ds = CuratedDataset(tmp_path / "test.jsonl")
         ds.add("a", source="test")
         snap = ds.entries
-        snap.append(None)  # mutate snapshot
+        snap.append(None)  # type: ignore[arg-type]  # mutate snapshot
         assert ds.count == 1  # internal unchanged
 
     def test_concurrent_adds(self, tmp_path):
@@ -6521,6 +8212,7 @@ class TestRAGBM25:
         # BM25 IDF = log((N - df + 0.5) / (df + 0.5) + 1)
         assert "cat" in vec.vocab
         idx_cat = vec.vocab["cat"]
+        assert vec.idf is not None
         assert vec.idf[idx_cat] > 0
         # "fast" appears in 1 doc → higher IDF
         idx_fast = vec.vocab["fast"]
@@ -6547,6 +8239,7 @@ class TestRAGBM25:
         assert vec2.k1 == 1.2
         assert vec2.b == 0.8
         assert vec2.avg_dl == vec.avg_dl
+        assert vec2.doc_lens is not None and vec.doc_lens is not None
         assert list(vec2.doc_lens) == list(vec.doc_lens)
 
     def test_bm25_backward_compat_from_dict(self):
@@ -6916,7 +8609,7 @@ class TestKVCacheClone:
 
         cache = KVCache(
             batch_size=1, max_seq_len=16, n_kv_heads=2,
-            head_dim=4, device="cpu", dtype=torch.float32,
+            head_dim=4, device=torch.device("cpu"), dtype=torch.float32,
         )
         # Write something identifiable into the cache
         data = torch.ones(1, 2, 4)
@@ -6939,6 +8632,116 @@ class TestKVCacheClone:
         source = inspect.getsource(KVCache.get)
         # Should contain .clone() for the non-quantized branch
         assert ".clone()" in source
+
+
+# ================================================================
+# On-demand causal mask + KVCache wiring (#quality-audit)
+# ================================================================
+
+class TestOnDemandCausalMask:
+    """Model builds causal mask lazily instead of pre-allocating max_seq_len²."""
+
+    def test_causal_mask_starts_none(self):
+        """_causal_mask should be None after __init__ (not pre-allocated)."""
+        from enigma_engine.core.model import Enigma
+        from enigma_engine.core.model_presets import ForgeConfig
+
+        config = ForgeConfig(dim=64, n_layers=1, n_heads=2, n_kv_heads=1,
+                             vocab_size=100, max_seq_len=4096)
+        model = Enigma(config=config)
+        assert model._causal_mask is None, "Mask should start None (on-demand)"
+        assert model._causal_mask_size == 0
+
+    def test_get_causal_mask_builds_on_demand(self):
+        """_get_causal_mask creates and caches at the requested size."""
+        import torch
+        from enigma_engine.core.model import Enigma
+        from enigma_engine.core.model_presets import ForgeConfig
+
+        config = ForgeConfig(dim=64, n_layers=1, n_heads=2, n_kv_heads=1,
+                             vocab_size=100, max_seq_len=4096)
+        model = Enigma(config=config)
+
+        mask = model._get_causal_mask(8)
+        assert mask.shape == (8, 8)
+        # Upper triangle should be -inf, diagonal + below should be 0
+        assert mask[0, 1] == float('-inf')
+        assert mask[1, 0] == 0.0
+        assert model._causal_mask_size == 8
+
+    def test_causal_mask_grows_not_shrinks(self):
+        """Requesting a larger mask grows the cache; smaller reuses it."""
+        from enigma_engine.core.model import Enigma
+        from enigma_engine.core.model_presets import ForgeConfig
+
+        config = ForgeConfig(dim=64, n_layers=1, n_heads=2, n_kv_heads=1,
+                             vocab_size=100, max_seq_len=4096)
+        model = Enigma(config=config)
+
+        model._get_causal_mask(4)
+        assert model._causal_mask_size == 4
+
+        model._get_causal_mask(16)
+        assert model._causal_mask_size == 16
+
+        # Smaller request shouldn't shrink
+        mask = model._get_causal_mask(8)
+        assert mask.shape == (8, 8)
+        assert model._causal_mask_size == 16  # Still 16
+
+
+class TestAttentionUsesPreAllocKVCache:
+    """Attention class uses kv_cache.KVCache instead of torch.cat()."""
+
+    def test_attention_has_no_cache_k_attribute(self):
+        """Old cache_k/cache_v attrs should be gone."""
+        from enigma_engine.core.model_components import Attention
+        source = inspect.getsource(Attention.__init__)
+        assert "self.cache_k" not in source
+        assert "self.cache_v" not in source
+
+    def test_attention_uses_kvcache_module(self):
+        """Attention.forward should import and use KVCache, not torch.cat for caching."""
+        from enigma_engine.core.model_components import Attention
+        source = inspect.getsource(Attention.forward)
+        assert "KVCache" in source
+        # torch.cat should only appear in comments, not as actual code
+        import re
+        code_lines = [ln for ln in source.splitlines() if not ln.strip().startswith("#")]
+        code_only = "\n".join(code_lines)
+        assert "torch.cat(" not in code_only, "torch.cat() should not be used for KV-cache append"
+
+    def test_clear_cache_resets_kv_cache(self):
+        """clear_cache should set _kv_cache to None."""
+        from enigma_engine.core.model_components import Attention
+        source = inspect.getsource(Attention.clear_cache)
+        assert "_kv_cache" in source
+
+
+class TestWeightLoadFailsLoud:
+    """Weight loading failure should raise, not silently continue."""
+
+    def test_load_weights_source_raises(self):
+        """_load_pytorch should raise RuntimeError, not log and continue."""
+        from enigma_engine.core.inference import EnigmaEngine
+        source = inspect.getsource(EnigmaEngine._load_pytorch)
+        # Should raise RuntimeError, not just log.error
+        assert "raise RuntimeError" in source
+        # Old silent pattern should be gone
+        assert "initialized with random weights" not in source
+
+
+class TestValSplitRandom:
+    """Validation split should use random sampling, not tail-slicing."""
+
+    def test_val_split_uses_random_shuffle(self):
+        """train() should use Random(42).shuffle for deterministic random split."""
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer.train)
+        # Should use random shuffle, not just take last N
+        assert "shuffle(indices)" in source
+        # Should be deterministic
+        assert "Random(42)" in source
 
 
 # ================================================================
@@ -7204,10 +9007,10 @@ class TestSpecialTokenIds:
 class TestTrainingConfigValSplit:
     """TrainingConfig val_split field."""
 
-    def test_default_zero(self):
+    def test_default_val_split(self):
         from enigma_engine.core.training import TrainingConfig
         cfg = TrainingConfig()
-        assert cfg.val_split == 0.0
+        assert cfg.val_split == 0.1  # 10% held out by default
 
     def test_to_dict_includes_val_split(self):
         from enigma_engine.core.training import TrainingConfig
@@ -7229,6 +9032,178 @@ class TestTrainingConfigValSplit:
         TrainingConfig(val_split=0.0).validate()
         TrainingConfig(val_split=0.2).validate()
 
+    def test_val_split_in_forge_train_params(self):
+        """_read_forge_train_params includes val_split."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        source = inspect.getsource(ForgeMixin._read_forge_train_params)
+        assert "val_split" in source, (
+            "_read_forge_train_params must return val_split")
+
+    def test_val_split_in_forge_settings_persistence(self):
+        """val_split var is persisted in _forge_settings."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        source = inspect.getsource(ForgeMixin._save_training_brief)
+        assert "val_split" in source, (
+            "val_split must be saved in _forge_settings")
+
+
+class TestGeneralDataMixing:
+    """TrainingConfig general_mix_ratio and general_data fields."""
+
+    def test_default_ratio(self):
+        from enigma_engine.core.training import TrainingConfig
+        cfg = TrainingConfig()
+        assert cfg.general_mix_ratio == 0.2
+
+    def test_default_general_data_empty(self):
+        from enigma_engine.core.training import TrainingConfig
+        cfg = TrainingConfig()
+        assert cfg.general_data == ""
+
+    def test_custom_ratio_and_path(self):
+        from enigma_engine.core.training import TrainingConfig
+        cfg = TrainingConfig(
+            general_mix_ratio=0.3, general_data="/some/file.txt")
+        assert cfg.general_mix_ratio == 0.3
+
+
+# =============================================================================
+# AMP + GRADIENT ACCUMULATION VERIFICATION (#11)
+# =============================================================================
+
+class TestAmpGradAccumInteraction:
+    """Verify AMP (GradScaler) and gradient accumulation interact correctly.
+
+    Structural tests that inspect _train_one_batch source to ensure:
+    - Loss is scaled for accumulation BEFORE scaler.scale().backward()
+    - scaler.unscale_() is called BEFORE gradient clipping
+    - scaler.step() and scaler.update() happen at accumulation boundaries
+    - Returned loss restores the unscaled value
+    """
+
+    def test_loss_divided_before_backward(self):
+        """Loss must be divided by max_grad_accumulation before backward."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        src = inspect.getsource(Trainer._train_one_batch)
+        lines = src.splitlines()
+        div_line = None
+        backward_line = None
+        for i, line in enumerate(lines):
+            if "max_grad_accumulation" in line and "/" in line and "loss" in line:
+                div_line = i
+            if ".backward()" in line and backward_line is None:
+                backward_line = i
+        assert div_line is not None, "Loss / max_grad_accumulation not found"
+        assert backward_line is not None, "backward() not found"
+        assert div_line < backward_line, (
+            "Loss must be divided BEFORE backward()")
+
+    def test_unscale_before_clip(self):
+        """scaler.unscale_() must happen before clip_grad_norm_."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        src = inspect.getsource(Trainer._train_one_batch)
+        lines = src.splitlines()
+        unscale_line = None
+        clip_line = None
+        for i, line in enumerate(lines):
+            if "unscale_" in line:
+                unscale_line = i
+            if "clip_grad_norm_" in line:
+                clip_line = i
+        assert unscale_line is not None, "unscale_ not found"
+        assert clip_line is not None, "clip_grad_norm_ not found"
+        assert unscale_line < clip_line, (
+            "unscale_ must happen BEFORE clip_grad_norm_")
+
+    def test_scaler_step_and_update_together(self):
+        """scaler.step() must be followed by scaler.update()."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        src = inspect.getsource(Trainer._train_one_batch)
+        lines = src.splitlines()
+        step_line = None
+        update_line = None
+        for i, line in enumerate(lines):
+            if "scaler.step(" in line:
+                step_line = i
+            if "scaler.update()" in line:
+                update_line = i
+        assert step_line is not None, "scaler.step() not found"
+        assert update_line is not None, "scaler.update() not found"
+        assert step_line < update_line, (
+            "scaler.step() must come before scaler.update()")
+
+    def test_return_restores_unscaled_loss(self):
+        """Return value must multiply back by max_grad_accumulation."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        src = inspect.getsource(Trainer._train_one_batch)
+        assert "* self.config.max_grad_accumulation" in src, (
+            "Return must restore true loss via * max_grad_accumulation")
+
+    def test_accum_gate_uses_modulo(self):
+        """Optimizer step only happens at accumulation boundaries."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        src = inspect.getsource(Trainer._train_one_batch)
+        assert "% self.config.max_grad_accumulation == 0" in src, (
+            "Accumulation gate must use modulo check")
+
+    def test_dpo_accum_divides_loss(self):
+        """DPO train_dpo() also divides loss by accum_steps."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        src = inspect.getsource(Trainer.train_dpo)
+        assert "loss / accum_steps" in src or "loss = loss / accum" in src, (
+            "DPO must divide loss by accum_steps")
+
+    def test_dpo_accum_flushes_tail(self):
+        """DPO flushes remaining gradients when pairs not divisible by accum."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        src = inspect.getsource(Trainer.train_dpo)
+        assert "% accum_steps != 0" in src, (
+            "DPO must flush tail gradients when pairs % accum_steps != 0")
+
+
+class TestGeneralDataMixing:
+    """TrainingConfig general_mix_ratio and general_data fields."""
+
+    def test_default_ratio(self):
+        from enigma_engine.core.training import TrainingConfig
+        cfg = TrainingConfig()
+        assert cfg.general_mix_ratio == 0.2
+
+    def test_default_general_data_empty(self):
+        from enigma_engine.core.training import TrainingConfig
+        cfg = TrainingConfig()
+        assert cfg.general_data == ""
+
+    def test_custom_ratio_and_path(self):
+        from enigma_engine.core.training import TrainingConfig
+        cfg = TrainingConfig(
+            general_mix_ratio=0.3, general_data="/some/file.txt")
+        assert cfg.general_mix_ratio == 0.3
+        assert cfg.general_data == "/some/file.txt"
+
+    def test_zero_ratio_disables_mixing(self):
+        from enigma_engine.core.training import TrainingConfig
+        cfg = TrainingConfig(
+            general_mix_ratio=0.0, general_data="some data")
+        assert cfg.general_mix_ratio == 0.0
+
+    def test_default_label_smoothing(self):
+        from enigma_engine.core.training import TrainingConfig
+        cfg = TrainingConfig()
+        assert cfg.label_smoothing == 0.05
+
+    def test_default_early_stopping(self):
+        from enigma_engine.core.training import TrainingConfig
+        cfg = TrainingConfig()
+        assert cfg.early_stopping_patience == 5
+
 
 class TestValidationLoop:
     """Trainer._validate() method."""
@@ -7244,3 +9219,2298 @@ class TestValidationLoop:
         assert s.validation_losses == []
         s.validation_losses.append(1.5)
         assert len(s.validation_losses) == 1
+
+
+# ================================================================
+# Pad masking — Bug #1
+# ================================================================
+
+@pytest.mark.structural
+class TestPadMasking:
+    """Verify attention_mask support in model.forward() and training pipeline."""
+
+    def test_forward_accepts_attention_mask(self):
+        """model.forward() must accept attention_mask parameter."""
+        import inspect
+        from enigma_engine.core.model import Enigma
+        sig = inspect.signature(Enigma.forward)
+        assert "attention_mask" in sig.parameters, (
+            "model.forward() missing attention_mask parameter — "
+            "model attends to garbage pad tokens during training")
+
+    def test_forward_multimodal_accepts_attention_mask(self):
+        """forward_multimodal() must accept attention_mask via kwargs."""
+        import inspect
+        from enigma_engine.core.model import Enigma
+        source = inspect.getsource(Enigma.forward_multimodal)
+        assert "attention_mask" in source, (
+            "forward_multimodal must handle attention_mask")
+
+    def test_create_batches_returns_masks(self):
+        """_create_batches must return attention masks alongside tensors."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer._create_batches)
+        assert "attention_mask" in source, (
+            "_create_batches must generate attention_mask for pad tokens")
+
+    def test_train_one_batch_passes_mask(self):
+        """_train_one_batch must pass attention_mask to model forward."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer._train_one_batch)
+        assert "attention_mask" in source, (
+            "_train_one_batch must forward attention_mask to model")
+
+    def test_validate_passes_mask(self):
+        """_validate must pass attention_mask to model forward."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer._validate)
+        assert "attention_mask" in source, (
+            "_validate must forward attention_mask to model")
+
+    def test_dpo_passes_mask(self):
+        """train_dpo must generate and pass attention_mask."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer.train_dpo)
+        assert "attention_mask" in source, (
+            "train_dpo must use attention_mask for pad tokens")
+
+    def test_pad_mask_combines_with_causal(self):
+        """forward() must combine attention_mask with causal mask."""
+        import inspect
+        from enigma_engine.core.model import Enigma
+        source = inspect.getsource(Enigma.forward)
+        # Should combine attention_mask with causal mask
+        assert "attention_mask" in source
+        # The mask should be applied additively (float -inf for pads)
+        assert "float" in source or "finfo" in source or "-inf" in source
+
+
+# ================================================================
+# DPO LoRA-disable reference model — Quick Win #1
+# ================================================================
+
+@pytest.mark.structural
+class TestDPOLoraDisable:
+    """Verify DPO uses LoRA-disable pattern instead of deepcopy."""
+
+    def test_dpo_tries_lora_first(self):
+        """train_dpo should try LoRA disable before deepcopy."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer.train_dpo)
+        assert "disable_adapter_layers" in source or "lora" in source.lower(), (
+            "DPO should try LoRA disable pattern to avoid doubling VRAM")
+
+    def test_dpo_has_cpu_fallback(self):
+        """train_dpo must still have fallback for non-LoRA models."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer.train_dpo)
+        # Should still have deepcopy as fallback
+        assert "deepcopy" in source, (
+            "DPO must keep deepcopy as fallback for non-LoRA models")
+
+
+# ================================================================
+# Vocab padding to 64 — Quick Win #2
+# ================================================================
+
+@pytest.mark.structural
+class TestVocabPadding:
+    """Verify vocab is padded to multiple of 64 for GPU matmul alignment."""
+
+    def test_embedding_size_padded(self):
+        """tok_embeddings should use padded vocab_size."""
+        import inspect
+        from enigma_engine.core.model import Enigma
+        source = inspect.getsource(Enigma.__init__)
+        # Should have vocab padding logic
+        assert "64" in source, (
+            "Model __init__ should pad vocab_size to multiple of 64")
+
+    def test_vocab_padding_math(self):
+        """Verify padding math: next multiple of 64."""
+        # Test the formula inline
+        def pad_to_64(n):
+            return (n + 63) & ~63
+        assert pad_to_64(8000) == 8000  # 8000 is already 64*125
+        assert pad_to_64(8001) == 8064
+        assert pad_to_64(128) == 128
+        assert pad_to_64(129) == 192
+        assert pad_to_64(32000) == 32000
+        assert pad_to_64(32001) == 32064
+
+
+# ================================================================
+# freqs_cis non-persistent buffer
+# ================================================================
+
+@pytest.mark.structural
+class TestFreqsCisNonPersistent:
+    """freqs_cis must be a non-persistent buffer so it's excluded from state_dict."""
+
+    def test_freqs_cis_not_in_state_dict(self):
+        """register_buffer('freqs_cis', ..., persistent=False) keeps it out of state_dict."""
+        import inspect
+        from enigma_engine.core.model import Enigma
+        source = inspect.getsource(Enigma.__init__)
+        assert "persistent=False" in source, (
+            "freqs_cis must use persistent=False to avoid strict load_state_dict errors")
+
+    def test_load_state_dict_pops_freqs_cis(self):
+        """load_state_dict still pops freqs_cis for backward compat with old checkpoints."""
+        import inspect
+        from enigma_engine.core.model import Enigma
+        source = inspect.getsource(Enigma.load_state_dict)
+        assert "freqs_cis" in source, (
+            "load_state_dict should still pop freqs_cis for old checkpoint compat")
+
+
+# ================================================================
+# LoRA scheduler — Quick Win #3
+# ================================================================
+
+@pytest.mark.structural
+class TestLoraScheduler:
+    """Verify LoRA training uses a learning rate scheduler."""
+
+    def test_lora_train_has_scheduler(self):
+        """LoraTrainer.train() must include a learning rate scheduler."""
+        import inspect
+        from enigma_engine.core.lora_utils import LoraTrainer
+        source = inspect.getsource(LoraTrainer.train)
+        assert "scheduler" in source.lower(), (
+            "LoRA training uses flat LR — add CosineAnnealingLR")
+
+    def test_lora_scheduler_steps(self):
+        """Scheduler must step inside the training loop."""
+        import inspect
+        from enigma_engine.core.lora_utils import LoraTrainer
+        source = inspect.getsource(LoraTrainer.train)
+        assert "scheduler.step()" in source, (
+            "LoRA scheduler must step per optimizer step")
+
+
+# ================================================================
+# DPO gradient accumulation — Batch DPO
+# ================================================================
+
+@pytest.mark.structural
+class TestDPOBatchAccumulation:
+    """Verify DPO uses gradient accumulation across preference pairs."""
+
+    def test_dpo_has_accum_steps(self):
+        """train_dpo should compute accum_steps from config."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer.train_dpo)
+        assert "accum_steps" in source, (
+            "DPO must compute accum_steps for gradient accumulation")
+
+    def test_dpo_scales_loss(self):
+        """DPO loss must be divided by accum_steps before backward."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer.train_dpo)
+        assert "loss / accum_steps" in source or "loss /= accum_steps" in source, (
+            "DPO loss must be scaled by 1/accum_steps for accumulation")
+
+    def test_dpo_conditional_step(self):
+        """Optimizer steps only every accum_steps pairs."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer.train_dpo)
+        assert "% accum_steps" in source, (
+            "DPO should step optimizer every accum_steps pairs")
+
+    def test_dpo_flush_tail(self):
+        """DPO must flush remaining gradients after loop ends."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer.train_dpo)
+        assert "len(pairs) % accum_steps" in source, (
+            "DPO must flush accumulated gradients for tail pairs")
+
+    def test_dpo_uses_max_grad_accumulation(self):
+        """accum_steps reads from config.max_grad_accumulation."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer.train_dpo)
+        assert "max_grad_accumulation" in source, (
+            "DPO accum_steps must come from config.max_grad_accumulation")
+
+    def test_dpo_zero_grad_before_loop(self):
+        """Gradients should be zeroed before the pair loop starts."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer.train_dpo)
+        # zero_grad must appear before the main pair iteration
+        zg_idx = source.find("zero_grad()")
+        loop_idx = source.find("for i,")
+        assert zg_idx < loop_idx, (
+            "optimizer.zero_grad() must appear before the pair loop")
+
+
+# ================================================================
+# LoRA proper batching
+# ================================================================
+
+@pytest.mark.structural
+class TestLoraBatching:
+    """Verify LoRA _create_batches produces real multi-sample batches."""
+
+    def test_create_batches_returns_tuples(self):
+        """_create_batches must return (tensor, mask) tuples."""
+        import inspect
+        from enigma_engine.core.lora_utils import LoraTrainer
+        source = inspect.getsource(LoraTrainer._create_batches)
+        assert "attention_mask" in source or "masks" in source, (
+            "LoRA _create_batches must produce attention masks for padding")
+
+    def test_create_batches_sorts_by_length(self):
+        """Samples should be sorted by length for efficient padding."""
+        import inspect
+        from enigma_engine.core.lora_utils import LoraTrainer
+        source = inspect.getsource(LoraTrainer._create_batches)
+        assert "sort" in source, (
+            "LoRA _create_batches should sort sequences by length")
+
+
+# ================================================================
+# Code Review Pass 2 — Fixes #41-#49
+# ================================================================
+
+
+class TestCharTokenizerSpecialTokenReload:
+    """#41: char_tokenizer _load_vocab must reload special_tokens."""
+
+    def test_load_vocab_reloads_special_tokens(self):
+        """_load_vocab should update self.special_tokens from file data."""
+        import inspect
+        from enigma_engine.core.char_tokenizer import CharacterTokenizer
+        source = inspect.getsource(CharacterTokenizer._load_vocab)
+        assert "special_tokens" in source, (
+            "_load_vocab must reload special_tokens from saved data")
+
+    def test_save_vocab_includes_special_tokens(self):
+        """save_vocab should persist special_tokens to file."""
+        import inspect
+        from enigma_engine.core.char_tokenizer import CharacterTokenizer
+        source = inspect.getsource(CharacterTokenizer.save_vocab)
+        assert "'special_tokens'" in source, (
+            "save_vocab must include special_tokens in saved data")
+
+
+class TestCharTokenizerThreadSafety:
+    """#42: char_tokenizer add_word must be thread-safe."""
+
+    def test_add_word_uses_lock(self):
+        """add_word should acquire _vocab_lock."""
+        import inspect
+        from enigma_engine.core.char_tokenizer import CharacterTokenizer
+        source = inspect.getsource(CharacterTokenizer.add_word)
+        assert "_vocab_lock" in source, (
+            "add_word must acquire _vocab_lock for thread safety")
+
+    def test_has_vocab_lock(self):
+        """CharacterTokenizer should have a _vocab_lock attribute."""
+        import inspect
+        from enigma_engine.core.char_tokenizer import CharacterTokenizer
+        source = inspect.getsource(CharacterTokenizer.__init__)
+        assert "_vocab_lock" in source, (
+            "CharacterTokenizer.__init__ must create _vocab_lock")
+
+
+class TestCharTokenizerVocabCap:
+    """char_tokenizer add_word must respect max_vocab_size cap."""
+
+    def test_add_word_checks_max_vocab_size(self):
+        """add_word should return unk_token_id when vocab is full."""
+        import inspect
+        from enigma_engine.core.char_tokenizer import CharacterTokenizer
+        source = inspect.getsource(CharacterTokenizer.add_word)
+        assert "_max_vocab_size" in source, (
+            "add_word must check _max_vocab_size before growing vocab")
+        assert "unk_token_id" in source, (
+            "add_word must return unk_token_id when cap is exceeded")
+
+    def test_max_vocab_size_enforced(self):
+        """Adding words past max_vocab_size returns unk instead of growing."""
+        from enigma_engine.core.char_tokenizer import CharacterTokenizer
+        tok = CharacterTokenizer(use_dictionary=False)
+        initial_size = tok.vocab_size
+        # Set cap to current size — no room for new words
+        tok._max_vocab_size = initial_size
+        result = tok.add_word("ZZZZZ_test_word_that_wont_exist")
+        assert result == tok.unk_token_id
+        assert tok.vocab_size == initial_size
+
+    def test_no_cap_allows_growth(self):
+        """Without max_vocab_size, vocab grows normally (default behavior)."""
+        from enigma_engine.core.char_tokenizer import CharacterTokenizer
+        tok = CharacterTokenizer(use_dictionary=False)
+        initial_size = tok.vocab_size
+        result = tok.add_word("ZZZZZ_unique_test_token_12345")
+        assert result >= initial_size
+        assert tok.vocab_size == initial_size + 1
+
+    def test_init_accepts_max_vocab_size(self):
+        """CharacterTokenizer constructor accepts max_vocab_size param."""
+        from enigma_engine.core.char_tokenizer import CharacterTokenizer
+        tok = CharacterTokenizer(use_dictionary=False, max_vocab_size=50000)
+        assert tok._max_vocab_size == 50000
+
+
+class TestTrainingQueueFlagLocking:
+    """#43: TrainingQueue start/pause/resume/stop must use _lock."""
+
+    def test_start_uses_lock(self):
+        """start() must acquire _lock before modifying flags."""
+        import inspect
+        from enigma_engine.core.training_queue import TrainingQueue
+        source = inspect.getsource(TrainingQueue.start)
+        assert "self._lock" in source, (
+            "start() must use _lock to protect flag assignments")
+
+    def test_pause_uses_lock(self):
+        """pause() must acquire _lock."""
+        import inspect
+        from enigma_engine.core.training_queue import TrainingQueue
+        source = inspect.getsource(TrainingQueue.pause)
+        assert "self._lock" in source, (
+            "pause() must use _lock to protect _paused assignment")
+
+    def test_resume_uses_lock(self):
+        """resume() must acquire _lock."""
+        import inspect
+        from enigma_engine.core.training_queue import TrainingQueue
+        source = inspect.getsource(TrainingQueue.resume)
+        assert "self._lock" in source, (
+            "resume() must use _lock to protect _paused assignment")
+
+    def test_stop_uses_lock(self):
+        """stop() must acquire _lock."""
+        import inspect
+        from enigma_engine.core.training_queue import TrainingQueue
+        source = inspect.getsource(TrainingQueue.stop)
+        assert "self._lock" in source, (
+            "stop() must use _lock to protect flag assignments")
+
+    def test_run_loop_reads_flags_under_lock(self):
+        """_run_loop must read _running/_stop_requested under _lock."""
+        import inspect
+        from enigma_engine.core.training_queue import TrainingQueue
+        source = inspect.getsource(TrainingQueue._run_loop)
+        assert "self._lock" in source, (
+            "_run_loop must read control flags under _lock")
+
+
+@pytest.mark.structural
+class TestModelPosEmbeddingBoundsCheck:
+    """#44/#45: model.py forward/forward_multimodal must validate position bounds."""
+
+    def test_forward_checks_pos_bounds(self):
+        """forward() must raise on position overflow (non-RoPE path)."""
+        import inspect
+        from enigma_engine.core.model import Enigma
+        source = inspect.getsource(Enigma.forward)
+        assert "max_seq_len" in source and ("ValueError" in source or "raise" in source), (
+            "forward() must validate position against max_seq_len")
+
+    def test_forward_multimodal_checks_pos_bounds(self):
+        """forward_multimodal() must raise on T > max_seq_len (non-RoPE path)."""
+        import inspect
+        from enigma_engine.core.model import Enigma
+        source = inspect.getsource(Enigma.forward_multimodal)
+        assert "max_seq_len" in source and ("ValueError" in source or "raise" in source), (
+            "forward_multimodal() must validate T against max_seq_len")
+
+
+@pytest.mark.structural
+class TestModelGenerateSqueezeItem:
+    """#47: model.py generate/generate_stream must use squeeze().item()."""
+
+    def test_generate_uses_squeeze_item(self):
+        """generate() stop-token check must handle batch>1."""
+        import inspect
+        from enigma_engine.core.model import Enigma
+        source = inspect.getsource(Enigma.generate)
+        assert "squeeze().item()" in source or "squeeze(-1).item()" in source, (
+            "generate() must use .squeeze().item() not bare .item()")
+
+    def test_generate_stream_uses_squeeze_item(self):
+        """generate_stream() stop-token check must handle batch>1."""
+        import inspect
+        from enigma_engine.core.model import Enigma
+        source = inspect.getsource(Enigma.generate_stream)
+        assert "squeeze().item()" in source or "squeeze(-1).item()" in source, (
+            "generate_stream() must use .squeeze().item() not bare .item()")
+
+
+@pytest.mark.structural
+class TestStreamingPutNowait:
+    """#48: streaming.py __aiter__ must use put_nowait, not await put."""
+
+    def test_aiter_uses_put_nowait(self):
+        """__aiter__ should use put_nowait() inside threading.Lock context."""
+        import inspect
+        from enigma_engine.core.streaming import StreamingResponse
+        source = inspect.getsource(StreamingResponse.__aiter__)
+        assert "put_nowait" in source, (
+            "__aiter__ must use put_nowait() not await put() inside threading.Lock")
+        assert "await self._async_queue.put(" not in source, (
+            "__aiter__ must not await inside threading.Lock")
+
+
+@pytest.mark.structural
+class TestHuggingfaceLoaderNoDeadProperty:
+    """#49: huggingface_loader must not have dead @property at module level."""
+
+    def test_no_module_level_property(self):
+        """Module should not have a @property decorated function at top level."""
+        source_path = (
+            Path(__file__).parent.parent
+            / "enigma_engine" / "core" / "huggingface_loader.py"
+        )
+        source = source_path.read_text(encoding="utf-8")
+        # @property followed by def at module level (not inside a class) is dead code
+        import re
+        # Check there's no @property\ndef pattern outside of class bodies
+        lines = source.split("\n")
+        for i, line in enumerate(lines):
+            if line.strip() == "@property" and i + 1 < len(lines):
+                next_line = lines[i + 1]
+                # Module-level function would not be indented more than @property
+                if next_line.startswith("def "):
+                    pytest.fail(
+                        f"Dead @property at module level (line {i+1}): "
+                        "only works inside classes")
+
+    def test_create_batches_pads(self):
+        """Batches must be padded to max length within the batch."""
+        import inspect
+        from enigma_engine.core.lora_utils import LoraTrainer
+        source = inspect.getsource(LoraTrainer._create_batches)
+        assert "pad" in source.lower(), (
+            "LoRA _create_batches must pad sequences within each batch")
+
+    def test_create_batches_uses_batch_size(self):
+        """Batch grouping should use self.batch_size."""
+        import inspect
+        from enigma_engine.core.lora_utils import LoraTrainer
+        source = inspect.getsource(LoraTrainer._create_batches)
+        assert "self.batch_size" in source, (
+            "LoRA _create_batches must group by self.batch_size")
+
+    def test_train_unpacks_batch_mask(self):
+        """train() must unpack (input_ids, attention_mask) from batches."""
+        import inspect
+        from enigma_engine.core.lora_utils import LoraTrainer
+        source = inspect.getsource(LoraTrainer.train)
+        assert "input_ids, attention_mask" in source, (
+            "LoRA train() must unpack (input_ids, attention_mask) tuples")
+
+    def test_train_uses_cross_entropy(self):
+        """train() should compute loss manually with cross_entropy."""
+        import inspect
+        from enigma_engine.core.lora_utils import LoraTrainer
+        source = inspect.getsource(LoraTrainer.train)
+        assert "cross_entropy" in source, (
+            "LoRA train() should use F.cross_entropy for loss computation")
+
+    def test_train_no_labels_kwarg(self):
+        """train() must not use HuggingFace-style labels= kwarg."""
+        import inspect
+        from enigma_engine.core.lora_utils import LoraTrainer
+        source = inspect.getsource(LoraTrainer.train)
+        assert "labels=" not in source, (
+            "LoRA train() should not use labels= (Enigma uses targets=)")
+
+    def test_train_flushes_tail_gradients(self):
+        """train() must flush remaining accumulated gradients at epoch end."""
+        import inspect
+        from enigma_engine.core.lora_utils import LoraTrainer
+        source = inspect.getsource(LoraTrainer.train)
+        assert "gradient_accumulation_steps" in source, (
+            "LoRA train() must handle tail gradient flush")
+
+
+# ================================================================
+# Imagegen scheduler choice — Quick Win #4
+# ================================================================
+
+@pytest.mark.structural
+class TestImagegenSchedulerChoice:
+    """Verify imagegen exposes scheduler choice."""
+
+    def test_generate_accepts_scheduler(self):
+        """StableDiffusionLocal.generate() should accept scheduler param."""
+        import inspect
+        from mods.imagegen.imagegen import StableDiffusionLocal
+        sig = inspect.signature(StableDiffusionLocal.generate)
+        assert "scheduler" in sig.parameters, (
+            "imagegen.generate should accept scheduler param "
+            "(DPMSolverMultistep vs EulerDiscrete)")
+
+
+# ================================================================
+# Audio Encoder — Whisper-style Conv1d + Transformer encoder
+# ================================================================
+
+@pytest.mark.structural
+class TestAudioEncoderConfig:
+    """AudioEncoderConfig must define all required fields."""
+
+    def test_config_exists(self):
+        """AudioEncoderConfig must be importable."""
+        from enigma_engine.core.audio_encoder import AudioEncoderConfig
+        config = AudioEncoderConfig()
+        assert config is not None
+
+    def test_default_fields(self):
+        """Config must have standard Whisper-like defaults."""
+        from enigma_engine.core.audio_encoder import AudioEncoderConfig
+        config = AudioEncoderConfig()
+        assert config.n_mels == 80
+        assert config.dim > 0
+        assert config.n_layers > 0
+        assert config.n_heads > 0
+        assert config.sample_rate == 16000
+        assert config.n_fft > 0
+        assert config.hop_length > 0
+
+    def test_to_dict(self):
+        """Config must serialize to dict."""
+        from enigma_engine.core.audio_encoder import AudioEncoderConfig
+        config = AudioEncoderConfig()
+        d = config.to_dict()
+        assert isinstance(d, dict)
+        assert "n_mels" in d
+        assert "dim" in d
+        assert "n_layers" in d
+
+    def test_max_audio_len_field(self):
+        """Config must have max_audio_len for positional embeddings."""
+        from enigma_engine.core.audio_encoder import AudioEncoderConfig
+        config = AudioEncoderConfig()
+        assert hasattr(config, "max_audio_len")
+        assert config.max_audio_len > 0
+
+
+@pytest.mark.structural
+class TestAudioPresets:
+    """AUDIO_PRESETS must provide standard size presets."""
+
+    def test_presets_exist(self):
+        """AUDIO_PRESETS dict must be importable."""
+        from enigma_engine.core.audio_encoder import AUDIO_PRESETS
+        assert isinstance(AUDIO_PRESETS, dict)
+        assert len(AUDIO_PRESETS) >= 3  # tiny, base, small at minimum
+
+    def test_preset_names(self):
+        """Must include standard Whisper-like presets."""
+        from enigma_engine.core.audio_encoder import AUDIO_PRESETS
+        for name in ("tiny", "base", "small"):
+            assert name in AUDIO_PRESETS, f"Missing preset: {name}"
+
+    def test_presets_are_configs(self):
+        """Each preset must be an AudioEncoderConfig."""
+        from enigma_engine.core.audio_encoder import AudioEncoderConfig, AUDIO_PRESETS
+        for name, config in AUDIO_PRESETS.items():
+            assert isinstance(config, AudioEncoderConfig), f"{name} not AudioEncoderConfig"
+
+    def test_presets_dims_increase(self):
+        """Larger presets should have larger dimensions."""
+        from enigma_engine.core.audio_encoder import AUDIO_PRESETS
+        assert AUDIO_PRESETS["tiny"].dim < AUDIO_PRESETS["base"].dim
+        assert AUDIO_PRESETS["base"].dim < AUDIO_PRESETS["small"].dim
+
+
+@pytest.mark.structural
+class TestAudioEncoderStructure:
+    """AudioEncoder must follow Whisper Conv1d + Transformer pattern."""
+
+    def test_encoder_class_exists(self):
+        """AudioEncoder must be importable as nn.Module."""
+        import torch.nn as nn
+        from enigma_engine.core.audio_encoder import AudioEncoder
+        assert issubclass(AudioEncoder, nn.Module)
+
+    def test_has_conv_layers(self):
+        """Encoder must have two Conv1d layers (Whisper pattern)."""
+        import inspect
+        source = inspect.getsource(
+            __import__("enigma_engine.core.audio_encoder", fromlist=["AudioEncoder"]).AudioEncoder.__init__
+        )
+        assert "Conv1d" in source, "AudioEncoder must use Conv1d layers"
+
+    def test_has_transformer_blocks(self):
+        """Encoder must have a ModuleList of transformer blocks."""
+        from enigma_engine.core.audio_encoder import AudioEncoder, AudioEncoderConfig
+        config = AudioEncoderConfig(dim=64, n_layers=2, n_heads=2)
+        encoder = AudioEncoder(config)
+        assert hasattr(encoder, "blocks")
+        assert len(encoder.blocks) == 2
+
+    def test_has_positional_embeddings(self):
+        """Encoder must have positional embeddings (sinusoidal or learned)."""
+        import inspect
+        source = inspect.getsource(
+            __import__("enigma_engine.core.audio_encoder", fromlist=["AudioEncoder"]).AudioEncoder
+        )
+        assert "pos_embed" in source or "positional" in source.lower()
+
+    def test_has_final_norm(self):
+        """Encoder must have final normalization layer."""
+        from enigma_engine.core.audio_encoder import AudioEncoder, AudioEncoderConfig
+        config = AudioEncoderConfig(dim=64, n_layers=2, n_heads=2)
+        encoder = AudioEncoder(config)
+        assert hasattr(encoder, "norm")
+
+    def test_forward_output_shape(self):
+        """forward() output must be [B, T/2, dim] (stride-2 halves time)."""
+        import torch
+        from enigma_engine.core.audio_encoder import AudioEncoder, AudioEncoderConfig
+        config = AudioEncoderConfig(dim=64, n_layers=2, n_heads=2, n_mels=80, max_audio_len=1500)
+        encoder = AudioEncoder(config)
+        encoder.eval()
+        # Input: [B, n_mels, n_frames]
+        x = torch.randn(1, 80, 100)
+        with torch.no_grad():
+            out = encoder(x)
+        assert out.shape[0] == 1  # batch
+        assert out.shape[1] == 50  # 100 / 2 = 50 (stride-2 conv)
+        assert out.shape[2] == 64  # dim
+
+    def test_forward_different_lengths(self):
+        """Encoder must handle variable-length audio inputs."""
+        import torch
+        from enigma_engine.core.audio_encoder import AudioEncoder, AudioEncoderConfig
+        config = AudioEncoderConfig(dim=64, n_layers=2, n_heads=2, n_mels=80, max_audio_len=1500)
+        encoder = AudioEncoder(config)
+        encoder.eval()
+        for n_frames in [50, 100, 200]:
+            x = torch.randn(1, 80, n_frames)
+            with torch.no_grad():
+                out = encoder(x)
+            assert out.shape == (1, n_frames // 2, 64)
+
+    def test_param_count(self):
+        """param_count() must return trainable param count."""
+        from enigma_engine.core.audio_encoder import AudioEncoder, AudioEncoderConfig
+        config = AudioEncoderConfig(dim=64, n_layers=2, n_heads=2)
+        encoder = AudioEncoder(config)
+        count = encoder.param_count()
+        assert isinstance(count, int)
+        assert count > 0
+
+
+@pytest.mark.structural
+class TestMelSpectrogram:
+    """Mel spectrogram computation must work with torch only."""
+
+    def test_mel_filterbank_function_exists(self):
+        """mel_filterbank must be importable."""
+        from enigma_engine.core.audio_encoder import mel_filterbank
+        assert callable(mel_filterbank)
+
+    def test_mel_filterbank_shape(self):
+        """mel_filterbank output must be [n_mels, n_fft//2+1]."""
+        import torch
+        from enigma_engine.core.audio_encoder import mel_filterbank
+        fb = mel_filterbank(sr=16000, n_fft=400, n_mels=80)
+        assert isinstance(fb, torch.Tensor)
+        assert fb.shape == (80, 201)  # n_mels x (n_fft//2 + 1)
+
+    def test_log_mel_spectrogram_exists(self):
+        """log_mel_spectrogram must be importable."""
+        from enigma_engine.core.audio_encoder import log_mel_spectrogram
+        assert callable(log_mel_spectrogram)
+
+    def test_log_mel_spectrogram_output_shape(self):
+        """log_mel_spectrogram must produce [1, n_mels, n_frames]."""
+        import torch
+        from enigma_engine.core.audio_encoder import log_mel_spectrogram
+        # Simulate 1 second of 16kHz audio
+        waveform = torch.randn(16000)
+        mel = log_mel_spectrogram(waveform, n_fft=400, hop_length=160, n_mels=80)
+        assert mel.ndim == 3  # [1, n_mels, n_frames]
+        assert mel.shape[0] == 1
+        assert mel.shape[1] == 80
+
+
+@pytest.mark.structural
+class TestAudioPreprocessing:
+    """Audio file loading and preprocessing."""
+
+    def test_load_audio_function_exists(self):
+        """load_audio must be importable."""
+        from enigma_engine.core.audio_encoder import load_audio
+        assert callable(load_audio)
+
+    def test_preprocess_audio_function_exists(self):
+        """preprocess_audio must be importable."""
+        from enigma_engine.core.audio_encoder import preprocess_audio
+        assert callable(preprocess_audio)
+
+    def test_preprocess_audio_accepts_path_or_waveform(self):
+        """preprocess_audio signature must accept path or tensor."""
+        import inspect
+        from enigma_engine.core.audio_encoder import preprocess_audio
+        sig = inspect.signature(preprocess_audio)
+        params = list(sig.parameters.keys())
+        assert "audio" in params
+
+
+@pytest.mark.structural
+class TestTrainAudio:
+    """Trainer.train_audio() must exist and follow train_vision() pattern."""
+
+    def test_train_audio_method_exists(self):
+        """Trainer must have train_audio() method."""
+        from enigma_engine.core.training import Trainer
+        assert hasattr(Trainer, "train_audio")
+        assert callable(getattr(Trainer, "train_audio"))
+
+    def test_train_audio_signature(self):
+        """train_audio must accept audio_encoder and data params."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        sig = inspect.signature(Trainer.train_audio)
+        params = list(sig.parameters.keys())
+        assert "audio_encoder" in params
+        assert "data" in params
+
+    def test_train_audio_accepts_unfreeze_text_layers(self):
+        """train_audio must support unfreeze_text_layers like train_vision."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        sig = inspect.signature(Trainer.train_audio)
+        assert "unfreeze_text_layers" in sig.parameters
+
+    def test_train_audio_validates_projection(self):
+        """train_audio must check that audio_projection exists on model."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer.train_audio)
+        assert "audio_projection" in source, (
+            "train_audio must validate that model has audio_projection"
+        )
+
+    def test_train_audio_uses_forward_multimodal(self):
+        """train_audio must call forward_multimodal with audio_features."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer.train_audio)
+        assert "forward_multimodal" in source
+        assert "audio_features" in source
+
+    def test_train_audio_returns_training_state(self):
+        """train_audio return type must be TrainingState."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        sig = inspect.signature(Trainer.train_audio)
+        # Check return annotation if present, or inspect source for return self.state
+        source = inspect.getsource(Trainer.train_audio)
+        assert "self.state" in source, "train_audio must return self.state"
+
+
+@pytest.mark.structural
+class TestAudioEncoderLazyImport:
+    """AudioEncoder must be accessible via core __init__ lazy loading."""
+
+    def test_lazy_import_audio_encoder(self):
+        """AudioEncoder must be in _LAZY_LOADER_MAP."""
+        import enigma_engine.core as core_mod
+        lazy_map = getattr(core_mod, "_LAZY_LOADER_MAP", {})
+        assert "AudioEncoder" in lazy_map
+
+    def test_lazy_import_audio_config(self):
+        """AudioEncoderConfig must be in _LAZY_LOADER_MAP."""
+        import enigma_engine.core as core_mod
+        lazy_map = getattr(core_mod, "_LAZY_LOADER_MAP", {})
+        assert "AudioEncoderConfig" in lazy_map
+
+    def test_lazy_import_audio_presets(self):
+        """AUDIO_PRESETS must be in _LAZY_LOADER_MAP."""
+        import enigma_engine.core as core_mod
+        lazy_map = getattr(core_mod, "_LAZY_LOADER_MAP", {})
+        assert "AUDIO_PRESETS" in lazy_map
+
+
+# ================================================================
+# Vision training augmentation
+# ================================================================
+
+@pytest.mark.structural
+class TestVisionAugmentation:
+    """Verify vision training applies image augmentation."""
+
+    def test_augment_function_exists(self):
+        """augment_vision_tensor must be importable."""
+        from enigma_engine.core.vision_encoder import augment_vision_tensor
+        assert callable(augment_vision_tensor)
+
+    def test_augment_preserves_shape(self):
+        """Augmentation must return same shape as input."""
+        import torch
+        from enigma_engine.core.vision_encoder import augment_vision_tensor
+        img = torch.randn(1, 3, 224, 224).clamp(-1, 1)
+        result = augment_vision_tensor(img)
+        assert result.shape == img.shape
+
+    def test_augment_preserves_range(self):
+        """Augmented tensor must stay in [-1, 1]."""
+        import torch
+        from enigma_engine.core.vision_encoder import augment_vision_tensor
+        img = torch.randn(1, 3, 224, 224).clamp(-1, 1)
+        for _ in range(20):
+            result = augment_vision_tensor(img)
+            assert result.min() >= -1.0 and result.max() <= 1.0, (
+                f"Augmented tensor out of [-1, 1]: min={result.min()}, max={result.max()}")
+
+    def test_augment_is_stochastic(self):
+        """Multiple augmentations of same input should differ."""
+        import torch
+        from enigma_engine.core.vision_encoder import augment_vision_tensor
+        img = torch.ones(1, 3, 32, 32) * 0.5
+        results = [augment_vision_tensor(img) for _ in range(10)]
+        # At least some should differ (brightness/contrast jitter)
+        all_same = all(torch.allclose(results[0], r) for r in results[1:])
+        assert not all_same, "Augmentation should produce varied outputs"
+
+    def test_train_vision_calls_augment(self):
+        """train_vision must apply augmentation during training."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer.train_vision)
+        assert "augment_vision_tensor" in source, (
+            "train_vision must call augment_vision_tensor during training")
+
+    def test_augment_has_horizontal_flip(self):
+        """Augmentation should include random horizontal flip."""
+        import inspect
+        from enigma_engine.core.vision_encoder import augment_vision_tensor
+        source = inspect.getsource(augment_vision_tensor)
+        assert "flip" in source, "Augmentation should include horizontal flip"
+
+    def test_augment_has_color_jitter(self):
+        """Augmentation should include brightness/contrast jitter."""
+        import inspect
+        from enigma_engine.core.vision_encoder import augment_vision_tensor
+        source = inspect.getsource(augment_vision_tensor)
+        assert "brightness" in source or "contrast" in source, (
+            "Augmentation should include color jitter")
+
+
+# ================================================================
+# Full checkpoint resume
+# ================================================================
+
+@pytest.mark.structural
+class TestCheckpointResume:
+    """Verify checkpoints save and restore scheduler/scaler state."""
+
+    def test_save_checkpoint_includes_scheduler(self):
+        """_save_checkpoint must save scheduler_state_dict."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer._save_checkpoint)
+        assert "scheduler_state_dict" in source, (
+            "Checkpoint must save scheduler state for resume")
+
+    def test_save_checkpoint_includes_scaler(self):
+        """_save_checkpoint must save scaler_state_dict."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer._save_checkpoint)
+        assert "scaler_state_dict" in source, (
+            "Checkpoint must save AMP scaler state for resume")
+
+    def test_load_checkpoint_stashes_scheduler(self):
+        """load_checkpoint must store scheduler state for deferred restore."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer.load_checkpoint)
+        assert "_pending_scheduler_state" in source, (
+            "load_checkpoint must stash scheduler state for later restore")
+
+    def test_load_checkpoint_stashes_scaler(self):
+        """load_checkpoint must store scaler state for deferred restore."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer.load_checkpoint)
+        assert "_pending_scaler_state" in source, (
+            "load_checkpoint must stash scaler state for later restore")
+
+    def test_restore_pending_state_exists(self):
+        """Trainer must have a _restore_pending_state method."""
+        from enigma_engine.core.training import Trainer
+        assert hasattr(Trainer, '_restore_pending_state'), (
+            "Trainer must have _restore_pending_state for deferred checkpoint restore")
+
+    def test_train_calls_restore(self):
+        """train() must call _restore_pending_state after scheduler creation."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer.train)
+        assert "_restore_pending_state" in source, (
+            "train() must restore scheduler/scaler from checkpoint")
+
+    def test_train_dpo_calls_restore(self):
+        """train_dpo() must call _restore_pending_state after scheduler creation."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer.train_dpo)
+        assert "_restore_pending_state" in source, (
+            "train_dpo() must restore scheduler/scaler from checkpoint")
+
+    def test_save_checkpoint_includes_training_losses(self):
+        """_save_checkpoint must persist training_losses."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer._save_checkpoint)
+        assert "training_losses" in source, (
+            "Checkpoint must save training_losses for resume")
+
+    def test_load_checkpoint_restores_training_losses(self):
+        """load_checkpoint must restore training_losses from state."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer.load_checkpoint)
+        assert "training_losses" in source, (
+            "load_checkpoint must restore training_losses")
+
+    def test_save_checkpoint_includes_ema(self):
+        """_save_checkpoint must persist EMA state when available."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer._save_checkpoint)
+        assert "ema" in source, (
+            "Checkpoint must save EMA state for resume")
+
+    def test_load_checkpoint_restores_ema(self):
+        """load_checkpoint must restore EMA state when available."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer.load_checkpoint)
+        assert "ema" in source, (
+            "load_checkpoint must restore EMA state")
+
+
+# ================================================================
+# Sequence Packing
+# ================================================================
+
+
+class TestSequencePacking:
+    """Tests for sequence packing in training."""
+
+    def test_packing_config_default_off(self):
+        """use_sequence_packing defaults to False."""
+        from enigma_engine.core.training import TrainingConfig
+        config = TrainingConfig()
+        assert config.use_sequence_packing is False
+
+    def test_packing_config_in_to_dict(self):
+        """use_sequence_packing appears in to_dict()."""
+        from enigma_engine.core.training import TrainingConfig
+        config = TrainingConfig(use_sequence_packing=True)
+        d = config.to_dict()
+        assert "use_sequence_packing" in d
+        assert d["use_sequence_packing"] is True
+
+    def test_pack_sequences_function_exists(self):
+        """Trainer has _pack_sequences method."""
+        from enigma_engine.core.training import Trainer
+        assert hasattr(Trainer, "_pack_sequences")
+
+    def test_pack_sequences_packs_short_seqs(self):
+        """Short sequences get combined into one row."""
+        torch = pytest.importorskip("torch")
+        from enigma_engine.core.training import pack_sequences
+        # Three short sequences, max_len=20
+        seqs = [[1, 2, 3], [4, 5], [6, 7, 8, 9]]
+        packed, masks = pack_sequences(seqs, max_length=20, eos_id=2, pad_id=0)
+        # All should fit in one row (3+1+2+1+4+1 = 12 <= 20)
+        assert packed.shape[0] == 1
+        assert packed.shape[1] == 20
+
+    def test_pack_sequences_mask_is_4d(self):
+        """Packing produces a 4D attention mask (B, 1, T, T)."""
+        torch = pytest.importorskip("torch")
+        from enigma_engine.core.training import pack_sequences
+        seqs = [[1, 2, 3], [4, 5]]
+        packed, masks = pack_sequences(seqs, max_length=16, eos_id=2, pad_id=0)
+        assert masks.ndim == 4
+        assert masks.shape[1] == 1  # head dim
+        assert masks.shape[2] == masks.shape[3]  # T x T
+
+    def test_pack_sequences_cross_boundary_blocked(self):
+        """Tokens in different documents cannot attend to each other."""
+        torch = pytest.importorskip("torch")
+        from enigma_engine.core.training import pack_sequences
+        # Two sequences: [10, 11] and [20, 21]
+        seqs = [[10, 11], [20, 21]]
+        packed, masks = pack_sequences(seqs, max_length=16, eos_id=2, pad_id=0)
+        # Row 0 contains both seqs packed: [10, 11, EOS, 20, 21, EOS, pad...]
+        # Position 0 (token 10) should NOT attend to position 3 (token 20)
+        # masks has -inf for blocked positions, 0 for allowed
+        assert masks[0, 0, 0, 3].item() < -1e4  # blocked (cross-boundary)
+        # Position 1 can attend to position 0 (same doc, causal ok)
+        assert masks[0, 0, 1, 0].item() == 0.0   # allowed (same doc, past)
+
+    def test_pack_sequences_causal_within_doc(self):
+        """Within a document, future tokens are still masked (causal)."""
+        torch = pytest.importorskip("torch")
+        from enigma_engine.core.training import pack_sequences
+        seqs = [[10, 11, 12]]
+        packed, masks = pack_sequences(seqs, max_length=16, eos_id=2, pad_id=0)
+        # Position 0 should NOT attend to position 1 (future within same doc)
+        assert masks[0, 0, 0, 1].item() < -1e4
+
+    def test_pack_sequences_long_seq_gets_own_row(self):
+        """A sequence that fills max_length goes into its own row."""
+        torch = pytest.importorskip("torch")
+        from enigma_engine.core.training import pack_sequences
+        long_seq = list(range(1, 16))  # 15 tokens
+        short_seq = [100, 101]
+        packed, masks = pack_sequences(
+            [long_seq, short_seq], max_length=16, eos_id=2, pad_id=0)
+        # long_seq (15) + EOS = 16 → fills a row alone
+        # short_seq (2) + EOS = 3 → separate row
+        assert packed.shape[0] == 2
+
+    def test_pack_sequences_pad_positions_masked(self):
+        """Padding positions at the end of packed rows are masked out."""
+        torch = pytest.importorskip("torch")
+        from enigma_engine.core.training import pack_sequences
+        seqs = [[10, 11]]
+        packed, masks = pack_sequences(seqs, max_length=8, eos_id=2, pad_id=0)
+        # Row: [10, 11, EOS, 0, 0, 0, 0, 0]
+        # Position 0 should NOT attend to position 3 (padding)
+        assert masks[0, 0, 0, 3].item() < -1e4
+
+    def test_model_forward_accepts_attention_mask_2d(self):
+        """model.forward() accepts attention_mask_2d parameter."""
+        import inspect
+        from enigma_engine.core.model import Enigma
+        sig = inspect.signature(Enigma.forward)
+        assert "attention_mask_2d" in sig.parameters
+
+
+# ================================================================
+# True byte-level BPE (UTF-8 byte sequences)
+# ================================================================
+
+@pytest.mark.structural
+class TestByteLevelBPE:
+    """Test UTF-8 byte-level BPE encoding."""
+
+    def test_bpe_has_utf8_flag(self):
+        """BPETokenizer has use_utf8_bytes attribute."""
+        from enigma_engine.core.bpe_tokenizer import BPETokenizer
+        tok = BPETokenizer()
+        assert hasattr(tok, "use_utf8_bytes")
+
+    def test_utf8_mode_encodes_ascii(self):
+        """ASCII text encodes correctly in UTF-8 mode."""
+        from enigma_engine.core.bpe_tokenizer import BPETokenizer
+        tok = BPETokenizer()
+        tok.use_utf8_bytes = True
+        ids = tok.encode("hello")
+        assert len(ids) > 0
+        decoded = tok.decode(ids)
+        assert "hello" in decoded
+
+    def test_utf8_mode_encodes_unicode(self):
+        """Unicode text round-trips through UTF-8 byte BPE."""
+        from enigma_engine.core.bpe_tokenizer import BPETokenizer
+        tok = BPETokenizer()
+        tok.use_utf8_bytes = True
+        text = "café"
+        ids = tok.encode(text)
+        decoded = tok.decode(ids)
+        assert "caf" in decoded
+        # The é should survive round-trip (as UTF-8 bytes)
+        assert "é" in decoded or "caf" in decoded
+
+    def test_utf8_mode_encodes_emoji(self):
+        """Emoji text doesn't produce <unk> tokens in UTF-8 mode."""
+        from enigma_engine.core.bpe_tokenizer import BPETokenizer
+        tok = BPETokenizer()
+        tok.use_utf8_bytes = True
+        ids = tok.encode("hello 🌍")
+        # Should not contain unk_token_id (all bytes are in 0-255)
+        assert tok.unk_token_id not in ids
+
+    def test_utf8_mode_off_by_default(self):
+        """UTF-8 byte mode is off by default for backward compat."""
+        from enigma_engine.core.bpe_tokenizer import BPETokenizer
+        tok = BPETokenizer()
+        assert tok.use_utf8_bytes is False
+
+    def test_utf8_flag_saved_and_loaded(self, tmp_path):
+        """use_utf8_bytes persists through save/load cycle."""
+        from enigma_engine.core.bpe_tokenizer import BPETokenizer
+        tok = BPETokenizer()
+        tok.use_utf8_bytes = True
+        path = tmp_path / "vocab.json"
+        tok.save(path)
+        tok2 = BPETokenizer(vocab_file=path)
+        assert tok2.use_utf8_bytes is True
+
+    def test_utf8_decode_reconstructs_multibyte(self):
+        """Decoding UTF-8 byte tokens reconstructs multi-byte chars."""
+        from enigma_engine.core.bpe_tokenizer import BPETokenizer
+        tok = BPETokenizer()
+        tok.use_utf8_bytes = True
+        # "ñ" is 2 bytes in UTF-8: 0xc3 0xb1
+        ids = tok.encode("ñ")
+        decoded = tok.decode(ids)
+        assert "ñ" in decoded
+
+    def test_legacy_mode_unchanged(self):
+        """With use_utf8_bytes=False, behavior is identical to old code."""
+        from enigma_engine.core.bpe_tokenizer import BPETokenizer
+        tok = BPETokenizer()
+        tok.use_utf8_bytes = False
+        ids = tok.encode("hello world")
+        decoded = tok.decode(ids)
+        assert "hello" in decoded
+        assert "world" in decoded
+
+    def test_utf8_train_produces_valid_merges(self, tmp_path):
+        """Training in UTF-8 mode produces valid merges."""
+        from enigma_engine.core.bpe_tokenizer import BPETokenizer
+        tok = BPETokenizer()
+        tok.use_utf8_bytes = True
+        tok.train(["hello world café résumé"] * 10,
+                   vocab_size=300, verbose=False)
+        assert len(tok.merges) > 0
+        # Should still encode cleanly
+        ids = tok.encode("café")
+        decoded = tok.decode(ids)
+        assert "caf" in decoded
+
+
+@pytest.mark.structural
+class TestSamplingRepPenaltySign:
+    """Verify apply_repetition_penalty handles negative logits correctly."""
+
+    def test_rep_penalty_handles_negative_logits(self):
+        """Dividing negative logits by penalty > 1 INCREASES probability.
+
+        Correct behavior: divide positive logits, multiply negative.
+        apply_repetition_penalty must not just divide everything.
+        """
+        import inspect
+        from enigma_engine.core.model_utils import apply_repetition_penalty
+        source = inspect.getsource(apply_repetition_penalty)
+        # Must use torch.where for sign-aware penalty (divide pos, multiply neg)
+        assert 'torch.where' in source, (
+            "apply_repetition_penalty must use torch.where for sign-aware "
+            "penalty — dividing negative logits by penalty > 1 makes them "
+            "less negative (higher prob), which is the opposite of penalizing. "
+            "Correct: torch.where(scores > 0, scores / p, scores * p)")
+
+
+@pytest.mark.structural
+class TestSamplingRepPenaltyOrder:
+    """Verify sample_next_token applies rep penalty before temperature."""
+
+    def test_penalty_before_temperature(self):
+        """Rep penalty on temperature-scaled logits couples penalty to temp.
+
+        Correct order: penalty on raw logits first, then temperature.
+        """
+        import inspect
+        from enigma_engine.core.model_utils import sample_next_token
+        source = inspect.getsource(sample_next_token)
+        lines = source.split('\n')
+        temp_line = None
+        penalty_line = None
+        for i, line in enumerate(lines):
+            if 'temperature' in line and '/' in line and 'penalty' not in line:
+                temp_line = i
+            if 'repetition_penalty' in line and 'apply_repetition_penalty' in line:
+                penalty_line = i
+        assert temp_line is not None, "Could not find temperature scaling line"
+        assert penalty_line is not None, "Could not find rep penalty line"
+        assert penalty_line < temp_line, (
+            "sample_next_token must apply repetition penalty BEFORE "
+            "temperature scaling — applying penalty on temp-scaled logits "
+            "couples the penalty strength to temperature")
+
+
+@pytest.mark.structural
+class TestChatCleansIncompleteTags:
+    """Verify engine chat() cleans up truncated <think> tags."""
+
+    def test_chat_calls_strip_incomplete_think(self):
+        """chat() must strip unclosed <think> tags for API callers.
+
+        The GUI handles this already, but API + CLI callers receive
+        the raw chat() return value.
+        """
+        import inspect
+        from enigma_engine.core.engine_chat import _ChatMixin
+        source = inspect.getsource(_ChatMixin.chat)
+        assert 'strip_incomplete_think' in source, (
+            "chat() must call strip_incomplete_think on the response "
+            "so API callers don't receive broken <think> tags")
+
+
+# ================================================================
+# Windowed Repetition Penalty
+# ================================================================
+
+class TestWindowedRepetitionPenalty:
+    """Repetition penalty should only look at recent tokens, not the full history."""
+
+    def test_engine_sampler_has_window_constant(self):
+        """_GenerationMixin defines REPETITION_WINDOW."""
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        assert hasattr(_GenerationMixin, 'REPETITION_WINDOW')
+        assert _GenerationMixin.REPETITION_WINDOW > 0
+
+    def test_engine_sampler_windows_tokens(self):
+        """_sample_token only considers a recent window of tokens."""
+        import inspect
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        source = inspect.getsource(_GenerationMixin._sample_token)
+        assert 'REPETITION_WINDOW' in source, (
+            "_sample_token must slice generated to a recent window")
+
+    def test_batch_sampler_windows_tokens(self):
+        """_sample_token_batch only considers a recent window of tokens."""
+        import inspect
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        source = inspect.getsource(_GenerationMixin._sample_token_batch)
+        assert 'REPETITION_WINDOW' in source, (
+            "_sample_token_batch must slice generated to a recent window")
+
+    def test_model_level_penalty_has_window_param(self):
+        """apply_repetition_penalty accepts a window parameter."""
+        import inspect
+        from enigma_engine.core.model_utils import apply_repetition_penalty
+        sig = inspect.signature(apply_repetition_penalty)
+        assert 'window' in sig.parameters, (
+            "apply_repetition_penalty must accept a window parameter")
+
+    def test_model_level_penalty_windows_tokens(self):
+        """apply_repetition_penalty only penalises tokens in the window."""
+        import torch
+        from enigma_engine.core.model_utils import apply_repetition_penalty
+
+        vocab = 32
+        logits = torch.ones(1, vocab)
+        # Token 5 appears far in the past (position 0), outside a window of 3
+        # Token 10 appears recently (position 9), inside the window
+        generated = torch.zeros(1, 10, dtype=torch.long)
+        generated[0, 0] = 5   # old
+        generated[0, 9] = 10  # recent
+
+        result = apply_repetition_penalty(logits, generated, penalty=2.0, window=3)
+        # Token 10 (recent) should be penalised
+        assert result[0, 10] < 1.0, "Recent token should be penalised"
+        # Token 5 (old, outside window) should NOT be penalised
+        assert result[0, 5] == 1.0, "Old token outside window should be untouched"
+
+
+# ================================================================
+# KV-Cache in Manual / Streaming Generation
+# ================================================================
+
+class TestManualGenerationUsesKVCache:
+    """_generate_manual and stream_generate should use the KV cache."""
+
+    def test_generate_manual_calls_clear_cache(self):
+        """_generate_manual must clear the KV cache before starting."""
+        import inspect
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        source = inspect.getsource(_GenerationMixin._generate_manual)
+        assert 'clear_cache' in source, (
+            "_generate_manual must clear KV cache at the start")
+
+    def test_generate_manual_uses_start_pos(self):
+        """_generate_manual must pass start_pos for incremental decoding."""
+        import inspect
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        source = inspect.getsource(_GenerationMixin._generate_manual)
+        assert 'start_pos' in source, (
+            "_generate_manual must use start_pos for O(1) per-token decoding")
+
+    def test_generate_manual_uses_cache_flag(self):
+        """_generate_manual must pass use_cache=True to model."""
+        import inspect
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        source = inspect.getsource(_GenerationMixin._generate_manual)
+        assert 'use_cache' in source, (
+            "_generate_manual must enable KV cache via use_cache flag")
+
+    def test_stream_generate_uses_kv_cache(self):
+        """stream_generate must use KV cache for incremental decoding."""
+        import inspect
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        source = inspect.getsource(_GenerationMixin.stream_generate)
+        assert 'clear_cache' in source, "stream_generate must clear KV cache"
+        assert 'start_pos' in source, "stream_generate must use start_pos"
+        assert 'use_cache' in source, "stream_generate must use use_cache"
+
+
+# ================================================================
+# Data Quality Minimums
+# ================================================================
+
+class TestDataQualityMinimums:
+    """Training data parsing should filter out noise."""
+
+    def test_paragraph_min_length_above_40(self):
+        """Paragraph fallback must reject short text (>40 chars minimum)."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer._parse_training_data)
+        # Find the paragraph length threshold — it should be > 40
+        import re
+        match = re.search(r'len\(para\)\s*>\s*(\d+)', source)
+        assert match, "Paragraph filter must check len(para) > N"
+        threshold = int(match.group(1))
+        assert threshold >= 40, (
+            f"Paragraph min length is {threshold}, should be >= 40 to filter noise")
+
+    def test_token_sequence_min_length(self):
+        """Encoded sequences must have at least 5 tokens."""
+        import inspect
+        from enigma_engine.core.training import Trainer
+        source = inspect.getsource(Trainer._create_batches)
+        # Should require >= 5 tokens, not just > 1
+        import re
+        match = re.search(r'len\(tokens\)\s*>=?\s*(\d+)', source)
+        assert match, "Token filter must check len(tokens) >= N"
+        threshold = int(match.group(1))
+        assert threshold >= 5, (
+            f"Token sequence min is {threshold}, should be >= 5 for meaningful training")
+
+
+# ================================================================
+# Consolidated Generation Paths
+# ================================================================
+
+class TestSingleGenerationPath:
+    """All native generation goes through one code path (no split dispatch)."""
+
+    def test_generate_text_uses_generate_manual_only(self):
+        """_generate_text must NOT dispatch to model.generate() for native models.
+
+        All native generation should go through _generate_manual which
+        has KV-cache, windowed repetition penalty, and min-p.
+        The GGUF path (which also calls model.generate) is separate and OK.
+        """
+        import inspect
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        source = inspect.getsource(_GenerationMixin._generate_text)
+        # After the GGUF early-return, native path should only use _generate_manual
+        # Find everything after the GGUF block (after "INPUT VALIDATION")
+        native_section = source.split("INPUT VALIDATION", 1)[-1]
+        assert 'model.generate(' not in native_section, (
+            "_generate_text native path should not dispatch to model.generate() — "
+            "all native generation goes through _generate_manual()")
+        assert '_generate_manual' in native_section
+
+    def test_vision_generation_uses_shared_sampler(self):
+        """_generate_with_vision must use _sample_token, not inline sampling."""
+        import inspect
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        source = inspect.getsource(_GenerationMixin._generate_with_vision)
+        assert '_sample_token(' in source, (
+            "_generate_with_vision must call _sample_token "
+            "for consistent sampling across all paths")
+
+    def test_vision_generation_uses_kv_cache(self):
+        """_generate_with_vision must use KV cache for incremental decoding."""
+        import inspect
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        source = inspect.getsource(_GenerationMixin._generate_with_vision)
+        assert 'clear_cache' in source, "vision gen must clear KV cache"
+        assert 'start_pos' in source, "vision gen must use start_pos"
+        assert 'use_cache' in source, "vision gen must use use_cache flag"
+
+    def test_vision_generation_supports_min_p(self):
+        """_generate_with_vision must accept min_p parameter."""
+        import inspect
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        sig = inspect.signature(_GenerationMixin._generate_with_vision)
+        assert 'min_p' in sig.parameters, (
+            "_generate_with_vision must support min_p for consistent behavior")
+
+    def test_no_inline_repetition_penalty_in_vision(self):
+        """_generate_with_vision must NOT have its own penalty loop."""
+        import inspect
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        source = inspect.getsource(_GenerationMixin._generate_with_vision)
+        # Should NOT have a manual for-loop applying penalty
+        assert 'for tok_id in' not in source, (
+            "vision gen should use _sample_token, not inline penalty loop")
+
+
+# ================================================================
+# Sentiment Heuristics
+# ================================================================
+
+class TestSentimentHeuristics:
+    """Test the heuristic sentiment analysis module."""
+
+    def test_module_imports(self):
+        """sentiment module exists and imports cleanly."""
+        from enigma_engine.core import sentiment
+        assert hasattr(sentiment, "analyze_sentiment")
+
+    def test_analyze_positive(self):
+        """Positive messages return positive valence."""
+        from enigma_engine.core.sentiment import analyze_sentiment
+        result = analyze_sentiment("I love this! Thank you so much, amazing work!")
+        assert result["valence"] > 0.0
+
+    def test_analyze_negative(self):
+        """Negative messages return negative valence."""
+        from enigma_engine.core.sentiment import analyze_sentiment
+        result = analyze_sentiment("This is terrible, I hate it. Awful experience.")
+        assert result["valence"] < 0.0
+
+    def test_analyze_neutral(self):
+        """Neutral messages return near-zero valence."""
+        from enigma_engine.core.sentiment import analyze_sentiment
+        result = analyze_sentiment("What time is it?")
+        assert -0.3 <= result["valence"] <= 0.3
+
+    def test_arousal_exclamation(self):
+        """Messages with exclamation marks score higher arousal."""
+        from enigma_engine.core.sentiment import analyze_sentiment
+        calm = analyze_sentiment("That is nice.")
+        excited = analyze_sentiment("That is nice!!!")
+        assert excited["arousal"] > calm["arousal"]
+
+    def test_arousal_caps(self):
+        """ALL CAPS messages score higher arousal."""
+        from enigma_engine.core.sentiment import analyze_sentiment
+        normal = analyze_sentiment("this is great")
+        caps = analyze_sentiment("THIS IS GREAT")
+        assert caps["arousal"] > normal["arousal"]
+
+    def test_engagement_question(self):
+        """Questions indicate higher engagement."""
+        from enigma_engine.core.sentiment import analyze_sentiment
+        statement = analyze_sentiment("okay")
+        question = analyze_sentiment("Can you tell me more about that?")
+        assert question["engagement"] > statement["engagement"]
+
+    def test_engagement_long_message(self):
+        """Longer messages indicate higher engagement."""
+        from enigma_engine.core.sentiment import analyze_sentiment
+        short = analyze_sentiment("ok")
+        long = analyze_sentiment(
+            "I've been thinking about this for a while and I have several "
+            "ideas I'd like to discuss with you in detail.")
+        assert long["engagement"] > short["engagement"]
+
+    def test_frustration_signals(self):
+        """Frustration keywords boost frustration score."""
+        from enigma_engine.core.sentiment import analyze_sentiment
+        calm = analyze_sentiment("How do I do this?")
+        frustrated = analyze_sentiment(
+            "This doesn't work again! I already tried that!")
+        assert frustrated["frustration"] > calm["frustration"]
+
+    def test_return_keys(self):
+        """analyze_sentiment returns all 5 state keys."""
+        from enigma_engine.core.sentiment import analyze_sentiment
+        result = analyze_sentiment("Hello there")
+        expected_keys = {"valence", "arousal", "engagement", "trust", "frustration"}
+        assert set(result.keys()) == expected_keys
+
+    def test_values_in_range(self):
+        """All returned values are within expected ranges."""
+        from enigma_engine.core.sentiment import analyze_sentiment
+        for text in ["I love you!", "I hate this", "ok", "AAAARGH!!!"]:
+            result = analyze_sentiment(text)
+            assert -1.0 <= result["valence"] <= 1.0
+            assert 0.0 <= result["arousal"] <= 1.0
+            assert 0.0 <= result["engagement"] <= 1.0
+            assert 0.0 <= result["trust"] <= 1.0
+            assert 0.0 <= result["frustration"] <= 1.0
+
+    def test_empty_input(self):
+        """Empty string returns neutral baseline."""
+        from enigma_engine.core.sentiment import analyze_sentiment
+        result = analyze_sentiment("")
+        assert result["valence"] == 0.0
+        assert result["arousal"] == 0.0
+
+    def test_trust_polite_language(self):
+        """Polite language indicates higher trust."""
+        from enigma_engine.core.sentiment import analyze_sentiment
+        rude = analyze_sentiment("just do it")
+        polite = analyze_sentiment("Please help me with this, thank you!")
+        assert polite["trust"] >= rude["trust"]
+
+
+# ================================================================
+# Emotional State in ModelContext
+# ================================================================
+
+class TestEmotionalState:
+    """Test emotional state integration in ModelContext."""
+
+    def test_emotional_state_exists(self):
+        """ModelContext has emotional_state attribute."""
+        from enigma_engine.core.model_context import ModelContext
+        ctx = ModelContext("test_model")
+        assert hasattr(ctx, "emotional_state")
+
+    def test_emotional_state_defaults(self):
+        """Emotional state starts at neutral baseline."""
+        from enigma_engine.core.model_context import ModelContext
+        ctx = ModelContext("test_model")
+        state = ctx.emotional_state
+        assert state["valence"] == 0.0
+        assert state["arousal"] == 0.2
+        assert state["engagement"] == 0.5
+        assert state["trust"] == 0.5
+        assert state["frustration"] == 0.0
+
+    def test_update_emotional_state(self):
+        """update_emotional_state changes values based on sentiment."""
+        from enigma_engine.core.model_context import ModelContext
+        ctx = ModelContext("test_model")
+        initial_valence = ctx.emotional_state["valence"]
+        ctx.update_emotional_state("I love this! You are amazing!")
+        assert ctx.emotional_state["valence"] > initial_valence
+
+    def test_emotional_state_clamped(self):
+        """Values stay within their defined ranges after many updates."""
+        from enigma_engine.core.model_context import ModelContext
+        ctx = ModelContext("test_model")
+        # Extreme positive
+        for _ in range(50):
+            ctx.update_emotional_state("AMAZING! WONDERFUL! BEST THING EVER!!!")
+        assert ctx.emotional_state["valence"] <= 1.0
+        assert ctx.emotional_state["arousal"] <= 1.0
+
+    def test_decay_toward_baseline(self):
+        """decay_emotional_state moves values toward baseline."""
+        from enigma_engine.core.model_context import ModelContext
+        ctx = ModelContext("test_model")
+        # Push state to extreme
+        ctx.emotional_state["valence"] = 0.9
+        ctx.emotional_state["frustration"] = 0.8
+        ctx.decay_emotional_state()
+        assert ctx.emotional_state["valence"] < 0.9
+        assert ctx.emotional_state["frustration"] < 0.8
+
+    def test_emotional_state_persists(self, tmp_path):
+        """Emotional state survives save/load cycle."""
+        import json
+        from enigma_engine.core.model_context import ModelContext
+        # Save
+        ctx = ModelContext("test_emo")
+        # Override the context_dir
+        ctx_dir = tmp_path / "test_emo"
+        ctx_dir.mkdir()
+        ctx.emotional_state["valence"] = 0.7
+        ctx.emotional_state["frustration"] = 0.3
+        # Write manually to test persistence
+        data = {
+            "model_key": "test_emo",
+            "system_prompt": "test",
+            "config": {},
+            "last_used": 0.0,
+            "emotional_state": ctx.emotional_state,
+        }
+        (ctx_dir / "context.json").write_text(
+            json.dumps(data), encoding="utf-8")
+        # Load into new context
+        ctx2 = ModelContext("test_emo")
+        # Patch path to read from tmp
+        import enigma_engine.core.model_context as mc_mod
+        orig_dir = mc_mod._CONTEXTS_DIR
+        mc_mod._CONTEXTS_DIR = tmp_path
+        try:
+            ctx2.load()
+        finally:
+            mc_mod._CONTEXTS_DIR = orig_dir
+        assert abs(ctx2.emotional_state["valence"] - 0.7) < 0.01
+        assert abs(ctx2.emotional_state["frustration"] - 0.3) < 0.01
+
+    def test_reset_emotional_state(self):
+        """reset_emotional_state returns to baseline."""
+        from enigma_engine.core.model_context import ModelContext
+        ctx = ModelContext("test_model")
+        ctx.emotional_state["valence"] = 0.9
+        ctx.emotional_state["frustration"] = 0.8
+        ctx.reset_emotional_state()
+        assert ctx.emotional_state["valence"] == 0.0
+        assert ctx.emotional_state["frustration"] == 0.0
+
+    def test_export_includes_emotional_state(self):
+        """export_identity includes emotional_state."""
+        from enigma_engine.core.model_context import ModelContext
+        ctx = ModelContext("test_model")
+        ctx.emotional_state["valence"] = 0.5
+        export = ctx.export_identity()
+        assert "emotional_state" in export
+        assert export["emotional_state"]["valence"] == 0.5
+
+
+# =====================================================================
+# Phase 3: State-Aware Generation
+# =====================================================================
+
+class TestBuildEmotionalPromptHint:
+    """Tests for build_emotional_prompt_hint()."""
+
+    def test_neutral_state_returns_empty(self):
+        """Neutral/baseline state produces no hint (no injection)."""
+        from enigma_engine.core.sentiment import build_emotional_prompt_hint
+        from enigma_engine.core.model_context import _EMOTIONAL_BASELINE
+        hint = build_emotional_prompt_hint(dict(_EMOTIONAL_BASELINE))
+        assert hint == ""
+
+    def test_high_frustration_produces_hint(self):
+        """High frustration should mention directness/bluntness."""
+        from enigma_engine.core.sentiment import build_emotional_prompt_hint
+        from enigma_engine.core.model_context import _EMOTIONAL_BASELINE
+        state = dict(_EMOTIONAL_BASELINE)
+        state["frustration"] = 0.8
+        hint = build_emotional_prompt_hint(state)
+        assert hint  # Non-empty
+        assert "direct" in hint.lower() or "blunt" in hint.lower()
+
+    def test_low_valence_low_trust_guarded(self):
+        """Low valence + low trust should suggest guarded/cautious tone."""
+        from enigma_engine.core.sentiment import build_emotional_prompt_hint
+        from enigma_engine.core.model_context import _EMOTIONAL_BASELINE
+        state = dict(_EMOTIONAL_BASELINE)
+        state["valence"] = -0.6
+        state["trust"] = 0.1
+        hint = build_emotional_prompt_hint(state)
+        assert hint
+        assert "cautious" in hint.lower() or "guarded" in hint.lower()
+
+    def test_high_engagement_high_arousal_exploratory(self):
+        """High engagement + arousal should suggest exploratory tone."""
+        from enigma_engine.core.sentiment import build_emotional_prompt_hint
+        from enigma_engine.core.model_context import _EMOTIONAL_BASELINE
+        state = dict(_EMOTIONAL_BASELINE)
+        state["engagement"] = 0.9
+        state["arousal"] = 0.8
+        hint = build_emotional_prompt_hint(state)
+        assert hint
+        assert "expan" in hint.lower() or "explor" in hint.lower() or "elaborate" in hint.lower()
+
+    def test_positive_valence_high_trust_warm(self):
+        """High positive valence + trust should suggest warmth."""
+        from enigma_engine.core.sentiment import build_emotional_prompt_hint
+        from enigma_engine.core.model_context import _EMOTIONAL_BASELINE
+        state = dict(_EMOTIONAL_BASELINE)
+        state["valence"] = 0.7
+        state["trust"] = 0.9
+        hint = build_emotional_prompt_hint(state)
+        assert hint
+        assert "warm" in hint.lower() or "open" in hint.lower() or "friendly" in hint.lower()
+
+    def test_returns_string(self):
+        """Result is always a string."""
+        from enigma_engine.core.sentiment import build_emotional_prompt_hint
+        result = build_emotional_prompt_hint({"valence": 0.5, "arousal": 0.5,
+                                              "engagement": 0.5, "trust": 0.5,
+                                              "frustration": 0.5})
+        assert isinstance(result, str)
+
+
+class TestModulateGenerationParams:
+    """Tests for modulate_generation_params()."""
+
+    def test_neutral_state_no_change(self):
+        """Neutral/baseline state should not modify defaults."""
+        from enigma_engine.core.sentiment import modulate_generation_params
+        from enigma_engine.core.model_context import _EMOTIONAL_BASELINE
+        params = modulate_generation_params(dict(_EMOTIONAL_BASELINE),
+                                            temperature=0.8,
+                                            repetition_penalty=1.1,
+                                            top_p=0.9)
+        assert abs(params["temperature"] - 0.8) < 0.05
+        assert abs(params["repetition_penalty"] - 1.1) < 0.05
+        assert abs(params["top_p"] - 0.9) < 0.05
+
+    def test_high_arousal_raises_temperature(self):
+        """High arousal should increase temperature."""
+        from enigma_engine.core.sentiment import modulate_generation_params
+        from enigma_engine.core.model_context import _EMOTIONAL_BASELINE
+        state = dict(_EMOTIONAL_BASELINE)
+        state["arousal"] = 0.9
+        params = modulate_generation_params(state, temperature=0.8,
+                                            repetition_penalty=1.1, top_p=0.9)
+        assert params["temperature"] > 0.8
+
+    def test_low_engagement_raises_repetition_penalty(self):
+        """Low engagement should increase repetition penalty."""
+        from enigma_engine.core.sentiment import modulate_generation_params
+        from enigma_engine.core.model_context import _EMOTIONAL_BASELINE
+        state = dict(_EMOTIONAL_BASELINE)
+        state["engagement"] = 0.1
+        params = modulate_generation_params(state, temperature=0.8,
+                                            repetition_penalty=1.1, top_p=0.9)
+        assert params["repetition_penalty"] > 1.1
+
+    def test_high_frustration_lowers_top_p(self):
+        """High frustration should tighten sampling (lower top_p)."""
+        from enigma_engine.core.sentiment import modulate_generation_params
+        from enigma_engine.core.model_context import _EMOTIONAL_BASELINE
+        state = dict(_EMOTIONAL_BASELINE)
+        state["frustration"] = 0.8
+        params = modulate_generation_params(state, temperature=0.8,
+                                            repetition_penalty=1.1, top_p=0.9)
+        assert params["top_p"] < 0.9
+
+    def test_params_stay_in_safe_range(self):
+        """Even extreme states should produce safe parameter values."""
+        from enigma_engine.core.sentiment import modulate_generation_params
+        extreme = {"valence": -1.0, "arousal": 1.0, "engagement": 0.0,
+                   "trust": 0.0, "frustration": 1.0}
+        params = modulate_generation_params(extreme, temperature=0.8,
+                                            repetition_penalty=1.1, top_p=0.9)
+        assert 0.3 <= params["temperature"] <= 1.5
+        assert 1.0 <= params["repetition_penalty"] <= 1.5
+        assert 0.5 <= params["top_p"] <= 1.0
+
+    def test_returns_all_three_keys(self):
+        """Result always contains temperature, repetition_penalty, top_p."""
+        from enigma_engine.core.sentiment import modulate_generation_params
+        from enigma_engine.core.model_context import _EMOTIONAL_BASELINE
+        params = modulate_generation_params(dict(_EMOTIONAL_BASELINE),
+                                            temperature=0.8,
+                                            repetition_penalty=1.1,
+                                            top_p=0.9)
+        assert "temperature" in params
+        assert "repetition_penalty" in params
+        assert "top_p" in params
+
+
+# ====================================================================
+# Dataset utility — process_text_corpus, clean_text, etc.
+# ====================================================================
+
+class TestProcessTextCorpus:
+    """Tests for enigma_engine.core.dataset text processing."""
+
+    def test_module_exists(self):
+        """dataset.py module is importable."""
+        from enigma_engine.core import dataset
+        assert hasattr(dataset, "process_text_corpus")
+
+    def test_plain_text_passthrough(self, tmp_path):
+        """Plain .txt files are returned cleaned."""
+        from enigma_engine.core.dataset import process_text_corpus
+        f = tmp_path / "data.txt"
+        f.write_text("Hello world.\nThis is a test.\n", encoding="utf-8")
+        result = process_text_corpus(f)
+        assert "Hello world" in result
+        assert "This is a test" in result
+
+    def test_jsonl_text_key(self, tmp_path):
+        """JSONL files with 'text' key are extracted."""
+        import json
+        from enigma_engine.core.dataset import process_text_corpus
+        f = tmp_path / "data.jsonl"
+        lines = [
+            json.dumps({"text": "Story one."}),
+            json.dumps({"text": "Story two."}),
+        ]
+        f.write_text("\n".join(lines), encoding="utf-8")
+        result = process_text_corpus(f)
+        assert "Story one" in result
+        assert "Story two" in result
+
+    def test_jsonl_custom_key(self, tmp_path):
+        """JSONL extraction respects custom text_key."""
+        import json
+        from enigma_engine.core.dataset import process_text_corpus
+        f = tmp_path / "stories.jsonl"
+        lines = [json.dumps({"story": "Once upon a time."})]
+        f.write_text("\n".join(lines), encoding="utf-8")
+        result = process_text_corpus(f, text_key="story")
+        assert "Once upon a time" in result
+
+    def test_directory_of_txt(self, tmp_path):
+        """Processes all .txt files in a directory."""
+        from enigma_engine.core.dataset import process_text_corpus
+        (tmp_path / "a.txt").write_text("File A content.", encoding="utf-8")
+        (tmp_path / "b.txt").write_text("File B content.", encoding="utf-8")
+        (tmp_path / "c.json").write_text("{}", encoding="utf-8")  # ignored
+        result = process_text_corpus(tmp_path)
+        assert "File A content" in result
+        assert "File B content" in result
+
+    def test_empty_file_returns_empty(self, tmp_path):
+        """Empty file returns empty string."""
+        from enigma_engine.core.dataset import process_text_corpus
+        f = tmp_path / "empty.txt"
+        f.write_text("", encoding="utf-8")
+        result = process_text_corpus(f)
+        assert result == ""
+
+    def test_strips_null_bytes(self, tmp_path):
+        """Null bytes are removed from text."""
+        from enigma_engine.core.dataset import process_text_corpus
+        f = tmp_path / "dirty.txt"
+        f.write_bytes(b"Hello\x00World\x00Test")
+        result = process_text_corpus(f)
+        assert "\x00" not in result
+        assert "Hello" in result
+
+    def test_normalizes_whitespace(self, tmp_path):
+        """Excessive whitespace is normalized."""
+        from enigma_engine.core.dataset import process_text_corpus
+        f = tmp_path / "spacey.txt"
+        f.write_text("Too   many    spaces.\n\n\n\nToo many newlines.",
+                      encoding="utf-8")
+        result = process_text_corpus(f)
+        # Should not have 4+ consecutive newlines
+        assert "\n\n\n\n" not in result
+
+
+class TestCleanText:
+    """Tests for clean_text helper in dataset module."""
+
+    def test_function_exists(self):
+        from enigma_engine.core.dataset import clean_text
+        assert callable(clean_text)
+
+    def test_removes_null_bytes(self):
+        from enigma_engine.core.dataset import clean_text
+        assert "\x00" not in clean_text("hello\x00world")
+
+    def test_normalizes_runs_of_newlines(self):
+        from enigma_engine.core.dataset import clean_text
+        result = clean_text("a\n\n\n\n\nb")
+        assert result.count("\n") <= 3  # at most 2 blank lines
+
+    def test_strips_trailing_whitespace(self):
+        from enigma_engine.core.dataset import clean_text
+        result = clean_text("line one   \nline two  \n")
+        for line in result.split("\n"):
+            assert line == line.rstrip()
+
+
+class TestEstimateTokenCount:
+    """Tests for estimate_token_count."""
+
+    def test_function_exists(self):
+        from enigma_engine.core.dataset import estimate_token_count
+        assert callable(estimate_token_count)
+
+    def test_roughly_correct(self):
+        """4 chars per token is a reasonable estimate."""
+        from enigma_engine.core.dataset import estimate_token_count
+        text = "Hello world this is a test of the token counter."
+        count = estimate_token_count(text)
+        # ~48 chars / 4 = ~12 tokens
+        assert 8 <= count <= 20
+
+    def test_empty_returns_zero(self):
+        from enigma_engine.core.dataset import estimate_token_count
+        assert estimate_token_count("") == 0
+
+
+class TestKnownDatasets:
+    """KNOWN_DATASETS registry."""
+
+    def test_registry_exists(self):
+        from enigma_engine.core.dataset import KNOWN_DATASETS
+        assert isinstance(KNOWN_DATASETS, dict)
+
+    def test_tinystories_registered(self):
+        from enigma_engine.core.dataset import KNOWN_DATASETS
+        assert "tinystories" in KNOWN_DATASETS
+
+    def test_entries_have_required_fields(self):
+        from enigma_engine.core.dataset import KNOWN_DATASETS
+        for name, info in KNOWN_DATASETS.items():
+            assert "name" in info, f"{name} missing 'name'"
+            assert "description" in info, f"{name} missing 'description'"
+
+
+# =====================================================================
+# Suggestion batch: 5 fixes (March 2026)
+# =====================================================================
+
+class TestRouterReplayBufferSorting:
+    """Replay buffer retraining should use top-scoring examples."""
+
+    def test_retrain_sorts_by_score(self):
+        """_retrain_on_replay must sort replay buffer by score (desc)
+        before slicing, not just take insertion-ordered head."""
+        source = inspect.getsource(
+            __import__("enigma_engine.router", fromlist=["BackgroundTrainer"])
+            .BackgroundTrainer._retrain_on_replay
+        )
+        # Must contain a sort/sorted call on score
+        assert "sort" in source, (
+            "_retrain_on_replay must sort replay buffer by score")
+
+    def test_retrain_sorts_descending(self):
+        """Sort must be descending so highest scores come first."""
+        source = inspect.getsource(
+            __import__("enigma_engine.router", fromlist=["BackgroundTrainer"])
+            .BackgroundTrainer._retrain_on_replay
+        )
+        assert "reverse=True" in source, (
+            "Sort must be descending (reverse=True) for top scores")
+
+    def test_retrain_uses_param_group_lr_scaling(self):
+        """Replay retrain must use optimizer param_groups LR scaling,
+        not loss multiplication, to reduce effective learning rate."""
+        source = inspect.getsource(
+            __import__("enigma_engine.router", fromlist=["BackgroundTrainer"])
+            .BackgroundTrainer._retrain_on_replay
+        )
+        assert "param_groups" in source, (
+            "_retrain_on_replay must scale LR via param_groups")
+        assert 'loss * 0.5' not in source and 'loss *0.5' not in source, (
+            "_retrain_on_replay should not use loss scaling")
+
+
+class TestDatasetFileSizeGuard:
+    """process_text_corpus must not OOM on oversized files."""
+
+    def test_max_file_size_constant_exists(self):
+        """dataset module defines a MAX_FILE_SIZE constant."""
+        import enigma_engine.core.dataset as ds
+        assert hasattr(ds, "MAX_FILE_SIZE"), (
+            "dataset.py must define MAX_FILE_SIZE")
+        assert isinstance(ds.MAX_FILE_SIZE, int)
+        assert ds.MAX_FILE_SIZE > 0
+
+    def test_process_file_checks_size(self):
+        """_process_file source must check file size before reading."""
+        import enigma_engine.core.dataset as ds
+        source = inspect.getsource(ds._process_file)
+        assert "MAX_FILE_SIZE" in source or "stat" in source, (
+            "_process_file must check file size")
+
+    def test_oversized_file_returns_empty(self, tmp_path):
+        """A file exceeding MAX_FILE_SIZE is skipped gracefully."""
+        import enigma_engine.core.dataset as ds
+        f = tmp_path / "huge.txt"
+        f.write_text("x" * 100, encoding="utf-8")
+        # Temporarily set a tiny limit
+        orig = ds.MAX_FILE_SIZE
+        try:
+            ds.MAX_FILE_SIZE = 10  # 10 bytes
+            result = ds.process_text_corpus(f)
+            assert result == "", (
+                "Oversized files should return empty string")
+        finally:
+            ds.MAX_FILE_SIZE = orig
+
+    def test_normal_file_still_works(self, tmp_path):
+        """Files under the limit are processed normally."""
+        import enigma_engine.core.dataset as ds
+        f = tmp_path / "small.txt"
+        f.write_text("Hello world", encoding="utf-8")
+        result = ds.process_text_corpus(f)
+        assert "Hello world" in result
+
+
+class TestGenerateManualStopStrings:
+    """_generate_manual should support early stopping on stop strings."""
+
+    def test_generate_manual_accepts_stop_strings(self):
+        """_generate_manual signature includes stop_strings parameter."""
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        sig = inspect.signature(_GenerationMixin._generate_manual)
+        assert "stop_strings" in sig.parameters, (
+            "_generate_manual must accept stop_strings parameter")
+
+    def test_generate_text_passes_stop_strings(self):
+        """_generate_text must pass stop_strings to _generate_manual."""
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        source = inspect.getsource(_GenerationMixin._generate_text)
+        # Find the actual _generate_manual() call (not the comment)
+        # The call line should pass stop_strings as an argument
+        call_idx = source.rfind("_generate_manual(")
+        assert call_idx != -1, "_generate_text must call _generate_manual"
+        call_region = source[call_idx:call_idx + 300]
+        assert "stop_strings" in call_region, (
+            "_generate_text must pass stop_strings to _generate_manual")
+
+    def test_generate_manual_checks_stop_strings_in_loop(self):
+        """_generate_manual must check stop strings during generation."""
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        source = inspect.getsource(_GenerationMixin._generate_manual)
+        assert "stop_string" in source or "stop_str" in source, (
+            "_generate_manual must check stop strings in the gen loop")
+
+    def test_vision_generation_checks_stop_strings_in_loop(self):
+        """_generate_with_vision must also check stop strings in loop."""
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        source = inspect.getsource(_GenerationMixin._generate_with_vision)
+        # Should have stop string check inside the for loop, not just after
+        loop_body = source.split("for _")[1] if "for _" in source else source
+        assert "stop_str" in loop_body, (
+            "_generate_with_vision must check stop strings during generation")
+
+
+class TestStreamingDocstring:
+    """Streaming module docstring accuracy."""
+
+    def test_no_websocket_claim(self):
+        """Module docstring must not claim WebSocket support if unimplemented."""
+        import enigma_engine.core.streaming as sm
+        doc = sm.__doc__ or ""
+        # Either WebSocket is implemented OR not claimed
+        has_websocket_methods = any(
+            "websocket" in name.lower()
+            for name in dir(sm.StreamingResponse)
+        )
+        if not has_websocket_methods:
+            assert "WebSocket" not in doc, (
+                "Module docstring claims WebSocket but no methods exist")
+
+
+# ================================================================
+# Phase 6: Emotional Learning
+# ================================================================
+
+class TestComputeEngagementScore:
+    """compute_engagement_score maps emotional state to training weight."""
+
+    def test_function_exists(self):
+        """sentiment.py exports compute_engagement_score."""
+        from enigma_engine.core.sentiment import compute_engagement_score
+        assert callable(compute_engagement_score)
+
+    def test_neutral_state_returns_one(self):
+        """Neutral/baseline emotional state returns weight ~1.0."""
+        from enigma_engine.core.sentiment import compute_engagement_score
+        from enigma_engine.core.model_context import _EMOTIONAL_BASELINE
+        score = compute_engagement_score(dict(_EMOTIONAL_BASELINE))
+        assert 0.9 <= score <= 1.1
+
+    def test_high_engagement_boosts_score(self):
+        """High engagement + trust → weight > 1.0."""
+        from enigma_engine.core.sentiment import compute_engagement_score
+        state = {
+            "valence": 0.6, "arousal": 0.5,
+            "engagement": 0.9, "trust": 0.8, "frustration": 0.0,
+        }
+        score = compute_engagement_score(state)
+        assert score > 1.0
+
+    def test_high_frustration_lowers_score(self):
+        """High frustration → weight < 1.0."""
+        from enigma_engine.core.sentiment import compute_engagement_score
+        state = {
+            "valence": -0.3, "arousal": 0.6,
+            "engagement": 0.3, "trust": 0.2, "frustration": 0.8,
+        }
+        score = compute_engagement_score(state)
+        assert score < 1.0
+
+    def test_clamped_range(self):
+        """Output is always in [0.5, 2.0] regardless of input extremes."""
+        from enigma_engine.core.sentiment import compute_engagement_score
+        # Extreme positive
+        high = compute_engagement_score({
+            "valence": 1.0, "arousal": 1.0,
+            "engagement": 1.0, "trust": 1.0, "frustration": 0.0,
+        })
+        assert 0.5 <= high <= 2.0
+        # Extreme negative
+        low = compute_engagement_score({
+            "valence": -1.0, "arousal": 0.0,
+            "engagement": 0.0, "trust": 0.0, "frustration": 1.0,
+        })
+        assert 0.5 <= low <= 2.0
+
+    def test_empty_state_returns_one(self):
+        """Empty dict returns neutral weight."""
+        from enigma_engine.core.sentiment import compute_engagement_score
+        score = compute_engagement_score({})
+        assert 0.9 <= score <= 1.1
+
+
+class TestEmotionalReplayScoring:
+    """BackgroundTrainer.add_example accepts engagement_weight."""
+
+    def test_add_example_accepts_score(self):
+        """add_example score parameter is used by the replay buffer."""
+        source = inspect.getsource(
+            __import__("enigma_engine.router", fromlist=["BackgroundTrainer"])
+            .BackgroundTrainer.add_example
+        )
+        assert "score" in source
+
+    def test_add_training_example_passes_score(self):
+        """ModRouter.add_training_example passes score to trainer."""
+        source = inspect.getsource(
+            __import__("enigma_engine.router", fromlist=["ModRouter"])
+            .ModRouter.add_training_example
+        )
+        assert "score" in source
+
+
+class TestEmotionalSelfPlayBonus:
+    """Self-play rewards include emotional evaluation."""
+
+    def test_evaluate_response_sentiment_exists(self):
+        """sentiment.py exports evaluate_response_quality."""
+        from enigma_engine.core.sentiment import evaluate_response_quality
+        assert callable(evaluate_response_quality)
+
+    def test_positive_response_gets_bonus(self):
+        """Helpful, engaging response gets positive bonus."""
+        from enigma_engine.core.sentiment import evaluate_response_quality
+        bonus = evaluate_response_quality(
+            "Tell me about Python",
+            "Python is a versatile programming language that's great "
+            "for beginners and experts alike. Would you like to learn "
+            "about specific features?"
+        )
+        assert bonus >= 0.0
+
+    def test_bonus_clamped(self):
+        """Emotional bonus is clamped to [-0.5, 0.5]."""
+        from enigma_engine.core.sentiment import evaluate_response_quality
+        bonus = evaluate_response_quality(
+            "Hello!",
+            "Hello! " * 100
+        )
+        assert -0.5 <= bonus <= 0.5
+
+    def test_dismissive_response_gets_penalty(self):
+        """Short dismissive response gets zero or negative bonus."""
+        from enigma_engine.core.sentiment import evaluate_response_quality
+        bonus = evaluate_response_quality(
+            "Can you help me understand quantum physics?",
+            "No."
+        )
+        assert bonus <= 0.0
+
+
+class TestFeedTrainerWithEngagement:
+    """_feed_background_trainer passes engagement score."""
+
+    def test_feed_captures_emotional_state(self):
+        """_feed_background_trainer uses compute_engagement_score."""
+        source = inspect.getsource(
+            __import__(
+                "enigma_engine.gui.gui_logic_chat",
+                fromlist=["LogicChatMixin"])
+            .LogicChatMixin._feed_background_trainer
+        )
+        assert "engagement" in source.lower() or "compute_engagement" in source
+
+
+# ================================================================
+# VRAM-based preset recommendation
+# ================================================================
+
+
+class TestEstimateTrainingVram:
+    """estimate_training_vram returns reasonable VRAM estimates."""
+
+    def test_small_preset_low_vram(self):
+        """Small preset should need <2 GB."""
+        from enigma_engine.core.model_presets import (
+            MODEL_PRESETS, estimate_training_vram)
+        import copy
+        cfg = copy.deepcopy(MODEL_PRESETS["small"])
+        cfg.vocab_size = 32000
+        vram = estimate_training_vram(cfg)
+        assert 0.5 <= vram <= 2.0, f"small needs {vram} GB, expected <2"
+
+    def test_large_preset_moderate_vram(self):
+        """Large preset (~200M) should need 2-8 GB."""
+        from enigma_engine.core.model_presets import (
+            MODEL_PRESETS, estimate_training_vram)
+        import copy
+        cfg = copy.deepcopy(MODEL_PRESETS["large"])
+        cfg.vocab_size = 32000
+        vram = estimate_training_vram(cfg)
+        assert 2.0 <= vram <= 8.0, f"large needs {vram} GB, expected 2-8"
+
+    def test_xl_preset_high_vram(self):
+        """XL preset (~600M) should need 8-20 GB."""
+        from enigma_engine.core.model_presets import (
+            MODEL_PRESETS, estimate_training_vram)
+        import copy
+        cfg = copy.deepcopy(MODEL_PRESETS["xl"])
+        cfg.vocab_size = 32000
+        vram = estimate_training_vram(cfg)
+        assert 8.0 <= vram <= 20.0, f"xl needs {vram} GB, expected 8-20"
+
+    def test_minimum_is_half_gb(self):
+        """Even tiny models should return at least 0.5 GB."""
+        from enigma_engine.core.model_presets import (
+            MODEL_PRESETS, estimate_training_vram)
+        import copy
+        cfg = copy.deepcopy(MODEL_PRESETS["pi_zero"])
+        cfg.vocab_size = 32000
+        vram = estimate_training_vram(cfg)
+        assert vram >= 0.5
+
+
+class TestRecommendPresetForVram:
+    """recommend_preset_for_vram picks the largest fitting preset."""
+
+    def test_32gb_picks_xl_or_larger(self):
+        """32 GB VRAM should pick xl or xxl (not small)."""
+        from enigma_engine.core.model_presets import recommend_preset_for_vram
+        result = recommend_preset_for_vram(32.0)
+        assert result in ("xl", "xxl"), f"32 GB got {result}, expected xl or xxl"
+
+    def test_8gb_picks_medium_or_larger(self):
+        """8 GB should pick at least medium."""
+        from enigma_engine.core.model_presets import recommend_preset_for_vram
+        result = recommend_preset_for_vram(8.0)
+        big_presets = {"medium", "base", "large", "xl"}
+        assert result in big_presets, f"8 GB got {result}"
+
+    def test_2gb_picks_small_preset(self):
+        """2 GB should pick small-ish preset."""
+        from enigma_engine.core.model_presets import recommend_preset_for_vram
+        result = recommend_preset_for_vram(2.0)
+        small_presets = {"small", "medium", "base", "mini", "tiny",
+                         "micro", "nano", "pi_5", "pi_4", "pi_zero"}
+        assert result in small_presets, f"2 GB got {result}"
+
+    def test_0_5gb_picks_tiny_preset(self):
+        """0.5 GB should pick one of the smallest presets."""
+        from enigma_engine.core.model_presets import recommend_preset_for_vram
+        result = recommend_preset_for_vram(0.5)
+        tiny_presets = {"pi_zero", "pi_4", "pi_5", "nano", "micro",
+                        "tiny", "mini", "small"}
+        assert result in tiny_presets, f"0.5 GB got {result}"
+
+    def test_monotonic_bigger_vram_bigger_preset(self):
+        """More VRAM should never pick a smaller preset."""
+        from enigma_engine.core.model_presets import (
+            MODEL_PRESETS, recommend_preset_for_vram,
+            estimate_training_vram)
+        import copy
+        prev_vram_needed = 0
+        for gb in [1, 4, 8, 16, 32, 64]:
+            name = recommend_preset_for_vram(gb)
+            cfg = copy.deepcopy(MODEL_PRESETS[name])
+            cfg.vocab_size = 32000
+            needed = estimate_training_vram(cfg)
+            assert needed >= prev_vram_needed, (
+                f"VRAM {gb}GB picked {name} (needs {needed}GB) "
+                f"but previous needed {prev_vram_needed}GB")
+            prev_vram_needed = needed

@@ -126,6 +126,14 @@ class TestHasReasoning:
         from enigma_engine.core.reasoning import has_reasoning
         assert not has_reasoning("no open tag</think>")
 
+    def test_has_reasoning_only_inside_complete_block(self):
+        """Unclosed <think> with </think> that doesn't match is not valid."""
+        from enigma_engine.core.reasoning import has_reasoning
+        # Valid: matching pair
+        assert has_reasoning("<think>x</think>")
+        # Invalid: no closing tag
+        assert not has_reasoning("<think>just thinking")
+
 
 class TestStripIncompleteThink:
     """Test stripping truncated <think> blocks from token-limited output."""

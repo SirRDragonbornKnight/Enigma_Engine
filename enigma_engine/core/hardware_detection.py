@@ -145,7 +145,7 @@ def clear_cached_profile() -> None:
 def recommend_model_size(profile: Optional[HardwareProfile] = None) -> str:
     """
     Recommend optimal model size based on hardware.
-    
+
     Returns:
         Model size string: 'pi_zero', 'nano', 'tiny', 'small', 'medium', 'large'
     """
@@ -185,7 +185,7 @@ def recommend_model_size(profile: Optional[HardwareProfile] = None) -> str:
 def get_optimal_config(profile: Optional[HardwareProfile] = None) -> dict[str, Any]:
     """
     Get optimal configuration based on hardware.
-    
+
     Returns:
         Dict with recommended settings: model_size, use_half, batch_size, etc.
     """
@@ -198,9 +198,23 @@ def get_optimal_config(profile: Optional[HardwareProfile] = None) -> dict[str, A
         "model_size": model_size,
         "device": profile.device,
         "use_half": profile.gpu_available and profile.device == "cuda",
+        "precision": "auto",
         "batch_size": 1,
         "max_seq_len": 512,
     }
+
+    # BF16 detection for Blackwell / Ampere+ GPUs
+    if profile.gpu_available and profile.device == "cuda":
+        try:
+            import torch
+            if torch.cuda.is_bf16_supported():
+                config["precision"] = "bfloat16"
+            else:
+                config["precision"] = "float16"
+        except Exception:
+            config["precision"] = "float16"
+    elif not profile.gpu_available:
+        config["precision"] = "float32"
 
     # Adjust based on VRAM/RAM
     if profile.gpu_available and profile.gpu_vram_gb >= 8:
@@ -224,7 +238,7 @@ def estimate_memory_usage(
 ) -> dict[str, float]:
     """
     Estimate memory usage for a given configuration.
-    
+
     Returns:
         Dict with estimated memory in GB: model_memory, kv_cache, total
     """

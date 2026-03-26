@@ -13,16 +13,16 @@ TYPE: Configuration Management
 MAIN EXPORT: CONFIG dictionary
 
     THE HIERARCHY OF TRUTH:
-    
+
     When Enigma AI Engine awakens, it reads configuration from three sources,
     each layer overriding the last:
-    
+
         1. DEFAULT VALUES (this file) - The ancient foundation
         2. USER CONFIG FILE (forge_config.json) - Custom modifications
         3. ENVIRONMENT VARIABLES (FORGE_*) - Runtime overrides
 
     THE SACRED SECTIONS:
-    
+
     PATHS           - Where treasures are stored (data, models, memory)
     ARCHITECTURE    - The shape of the AI's mind (layers, dimensions)
     TRAINING        - How the AI learns (learning rate, epochs)
@@ -32,15 +32,15 @@ MAIN EXPORT: CONFIG dictionary
 
 USAGE:
     from enigma_engine.config import CONFIG, get_config, update_config
-    
+
     # Read a value
     data_dir = CONFIG["data_dir"]
     # OR
     data_dir = get_config("data_dir", default="data")
-    
+
     # Update values (in memory only)
     update_config({"temperature": 0.9})
-    
+
     # Persist changes to file
     save_config()
 
@@ -168,8 +168,9 @@ CONFIG = _LazyConfig({
     "temperature": 0.8,
     "top_k": 50,
     "top_p": 0.9,
+    "min_p": 0.0,
     "repetition_penalty": 1.1,
-    "max_gen": 2048,
+    "max_gen": 8192,
 
     # =========================================================================
     # THE MESSENGER'S GATE - Server Defaults
@@ -190,7 +191,7 @@ CONFIG = _LazyConfig({
     # The precision of calculations affects both speed and quality.
 
     "device": "auto",       # "auto", "cpu", "cuda", "mps"
-    "precision": "float32", # "float32", "float16", "bfloat16"
+    "precision": "auto",    # "auto", "float32", "float16", "bfloat16"
 
     # Backend selection for neural network operations
     # "auto" - Auto-detect (PyTorch if available, CPU fallback)
@@ -216,7 +217,15 @@ CONFIG = _LazyConfig({
     # =========================================================================
     # Security Settings
     # =========================================================================
-    "blocked_paths": [],
+    "blocked_paths": [
+        "C:/Windows",
+        "C:/Program Files",
+        "C:/Program Files (x86)",
+        "/etc",
+        "/usr",
+        "/bin",
+        "/sbin",
+    ],
     "blocked_patterns": [
         "*.exe", "*.dll", "*.sys", "*.pem", "*.key",
         "*password*", "*secret*", "*.env", ".git/config",
@@ -225,6 +234,14 @@ CONFIG = _LazyConfig({
     # Empty list means ALL discovered plugins are loaded (legacy behavior).
     # Example: ["hello.py", "my_tools.py"]
     "trusted_plugins": [],
+
+    # =========================================================================
+    # Monologue / Self-Initiated Behavior
+    # =========================================================================
+    # "disabled"     — no background reflection
+    # "journal_only" — AI reflects, stores journal, never initiates
+    # "automatic"    — AI reflects, stores journal, and can initiate
+    "monologue_mode": "disabled",
 
     # =========================================================================
     # Logging
@@ -241,11 +258,11 @@ CONFIG = _LazyConfig({
 def _load_user_config() -> None:
     """
     The Ritual of Reading User Configuration.
-    
+
     Searches the realm for custom configuration scrolls (forge_config.json)
     in several sacred locations. The first scroll found is read, and its
     contents override the default settings.
-    
+
     Search Order:
         1. Current working directory
         2. User's home directory (~/.enigma_engine/)
@@ -285,16 +302,16 @@ def _load_user_config() -> None:
 def _load_env_config() -> None:
     """
     The Ritual of Environment Variable Reading.
-    
+
     Scans the environment for FORGE_* variables that override configuration.
     This allows runtime customization without modifying files - useful for
     containers, CI/CD, and temporary adjustments.
-    
+
     Supported Variables:
         FORGE_DATA_DIR, FORGE_MODELS_DIR, FORGE_MEMORY_DIR,
         FORGE_DEVICE, FORGE_API_HOST, FORGE_API_PORT,
         FORGE_LOG_LEVEL, ENIGMA_API_KEY
-        
+
     Legacy ENIGMA_* variables are still honored for backwards compatibility.
     """
     env_mappings = {
@@ -340,11 +357,11 @@ def _load_env_config() -> None:
 def get_config(key: str, default: Any = None) -> Any:
     """
     Retrieve a value from the configuration.
-    
+
     Args:
         key: The configuration key to retrieve
         default: Value to return if key is not found
-        
+
     Returns:
         The configuration value, or default if not found
     """
@@ -354,12 +371,12 @@ def get_config(key: str, default: Any = None) -> Any:
 def update_config(updates: dict[str, Any]) -> None:
     """
     Update configuration with new values (in memory only).
-    
+
     Use save_config() to persist changes to disk.
-    
+
     Args:
         updates: Dictionary of configuration updates
-        
+
     Raises:
         TypeError: If updates is not a dictionary
     """
@@ -371,10 +388,10 @@ def update_config(updates: dict[str, Any]) -> None:
 def save_config(path: Optional[str] = None) -> None:
     """
     Persist current configuration to a JSON file.
-    
+
     Args:
         path: Destination path (default: forge_config.json in base directory)
-        
+
     Raises:
         IOError: If the file cannot be written
     """
@@ -385,8 +402,8 @@ def save_config(path: Optional[str] = None) -> None:
         config_path = Path(path)
         config_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(config_path, "w", encoding="utf-8") as f:
-            json.dump(CONFIG, f, indent=2)
+        from enigma_engine.core.safe_save import atomic_write_json
+        atomic_write_json(config_path, CONFIG)
     except Exception as e:
         raise OSError(f"Failed to save config to {path}: {e}") from e
 

@@ -1,7 +1,7 @@
 """
 Neural network components for the Enigma transformer.
 
-Contains RMSNorm, RoPE functions, Attention, FeedForward,
+Contains RMSNorm, RoPE functions, DropPath, Attention, FeedForward,
 MoEFeedForward, and TransformerBlock modules.
 """
 import logging
@@ -39,21 +39,21 @@ except ImportError:
 class RMSNorm(nn.Module):
     """
     Root Mean Square Layer Normalization - faster than LayerNorm!
-    
+
     📖 WHAT THIS DOES:
     Normalizes the input to have consistent scale. Like adjusting volume
     on speakers so nothing is too loud or too quiet.
-    
+
     📐 THE MATH (simplified):
     1. Calculate RMS: sqrt(mean(x²))
     2. Divide x by RMS (now values are normalized)
     3. Multiply by learned weight (model learns optimal scale)
-    
+
     💡 WHY RMSNorm INSTEAD OF LAYERNORM?
     LayerNorm: Subtracts mean, divides by std (2 stats to compute)
     RMSNorm: Just divides by RMS (1 stat to compute)
     Result: Same quality, ~10% faster!
-    
+
     🔗 USED BY:
       ← TransformerBlock uses this before attention and FFN
     """
@@ -72,7 +72,7 @@ class RMSNorm(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Normalize input tensor.
-        
+
         x: [batch, sequence, dim] → normalized: [batch, sequence, dim]
         """
         # Compute in float32 for numerical stability in fp16/bf16 training
@@ -80,6 +80,28 @@ class RMSNorm(nn.Module):
         x_f32 = x.float()
         rms = torch.sqrt(torch.mean(x_f32 ** 2, dim=-1, keepdim=True) + self.eps)
         return (x_f32 / rms * self.weight.float()).to(orig_dtype)
+
+
+class DropPath(nn.Module):
+    """Stochastic depth — drops entire residual branches during training.
+
+    Each sample in the batch is independently kept (scaled up) or zeroed.
+    At eval time this is a no-op.  ``drop_prob`` should increase linearly
+    with layer depth (deeper layers → higher drop rate).
+    """
+
+    def __init__(self, drop_prob: float = 0.0) -> None:
+        super().__init__()
+        self.drop_prob = drop_prob
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if self.drop_prob == 0.0 or not self.training:
+            return x
+        keep = 1.0 - self.drop_prob
+        # Random tensor per sample: shape (B, 1, 1) so it blankets the whole sample
+        shape = (x.shape[0],) + (1,) * (x.ndim - 1)
+        mask = torch.bernoulli(torch.full(shape, keep, device=x.device, dtype=x.dtype))
+        return x * mask / keep
 
 
 # =============================================================================
@@ -97,34 +119,34 @@ def precompute_rope_frequencies(
 ) -> torch.Tensor:
     """
     Precompute RoPE frequencies for all positions with optional scaling.
-    
+
     📖 WHAT THIS DOES:
     Creates a table of rotation angles for each position and dimension.
     These rotations encode "position 0", "position 1", etc.
     With scaling, extends context length beyond training length.
-    
+
     📐 THE MATH:
     For dimension pair i, frequency = 1 / (theta^(2i/dim))
     For position p, angle = p * frequency
-    
+
     🎯 ROPE SCALING:
     - linear: freqs = freqs / scaling_factor (simple compression)
     - dynamic: Adaptive NTK-aware scaling (better quality)
     - yarn: Yet another RoPE extension (best for very long contexts)
-    
+
     💡 WHY THIS WORKS:
     - Different dimensions get different rotation speeds
     - Position 5 at dim 0 rotates differently than position 5 at dim 10
     - Model can learn to "read" these rotations to understand order
     - Scaling lets model handle longer contexts than it was trained on
-    
+
     Args:
         dim: Dimension per head (must be even)
         max_seq_len: Maximum sequence length
         theta: Base frequency (higher = better long context)
         scaling_type: Type of scaling ("linear", "dynamic", "yarn", None)
         scaling_factor: Scaling multiplier (>1.0 extends context)
-    
+
     Returns:
         Complex tensor of shape [max_seq_len, dim/2] with rotation values
     """
@@ -141,6 +163,10 @@ def precompute_rope_frequencies(
     elif scaling_type == "dynamic":
         # Dynamic NTK-aware scaling: adjust theta based on extension
         # Better quality than linear for moderate extensions
+        if dim < 4:
+            raise ValueError(
+                f"RoPE dynamic scaling requires dim >= 4, got {dim}"
+            )
         alpha = scaling_factor
         # Adjust base frequency with NTK-aware interpolation
         adjusted_theta = theta * (alpha ** (dim / (dim - 2)))
@@ -182,21 +208,21 @@ def apply_rotary_embedding(
         start_pos: int = 0) -> torch.Tensor:
     """
     Apply rotary embeddings to Q and K tensors.
-    
+
     📖 WHAT THIS DOES:
     Rotates the query/key vectors based on their position.
     This lets the model know "this word is at position 5" vs "position 10".
-    
+
     📐 HOW IT WORKS:
     1. Treat pairs of dimensions as complex numbers
     2. Multiply by rotation (complex multiplication = rotation!)
     3. Convert back to real numbers
-    
+
     Args:
         x: Input tensor [batch, seq, heads, dim]
         freqs_cis: Precomputed rotation frequencies
         start_pos: Starting position (for KV-cache continuation)
-    
+
     Returns:
         Rotated tensor, same shape as input
     """
@@ -220,29 +246,29 @@ def apply_rotary_embedding(
 class Attention(nn.Module):
     """
     Multi-Head Attention with Grouped Query Attention (GQA).
-    
+
     📖 WHAT THIS DOES:
     Attention is how the model "looks at" different parts of the input.
     "The cat sat on the mat" - when processing "sat", attention lets
     the model look back at "cat" to know WHO sat.
-    
+
     📐 THE MATH (simplified):
     1. Create Query (Q), Key (K), Value (V) from input
     2. Attention scores = Q @ K.T / sqrt(dim)  (which words to look at?)
     3. Softmax → probabilities (normalize scores)
     4. Output = scores @ V  (weighted combination of values)
-    
+
     ⚡ GROUPED QUERY ATTENTION (GQA):
     Normal: Each head has its own K and V (memory hungry!)
     GQA: Multiple Q heads share the same K,V (saves 2-4x memory!)
-    
+
     Example: 8 Q heads, 2 KV heads → 4 Q heads share each KV head
-    
+
     💾 KV-CACHE:
     During generation, we only add ONE new token at a time.
     Instead of recomputing K,V for all previous tokens, we cache them!
     This makes generation O(n) instead of O(n²) - HUGE speedup!
-    
+
     🔗 CONNECTS TO:
       → Uses RoPE (apply_rotary_embedding) for position encoding
       ← Used by TransformerBlock
@@ -254,7 +280,7 @@ class Attention(nn.Module):
     def __init__(self, config: ForgeConfig) -> None:
         """
         Initialize attention layer.
-        
+
         Args:
             config: Model configuration with n_heads, n_kv_heads, dim, etc.
         """
@@ -284,12 +310,19 @@ class Attention(nn.Module):
 
         self.dropout = nn.Dropout(config.dropout)
         self.use_rope = config.use_rope
+        self.use_qk_norm = getattr(config, 'use_qk_norm', False)
+
+        # Learned QK norms (Qwen3-style RMSNorm per head)
+        if self.use_qk_norm:
+            self.q_norm = RMSNorm(self.head_dim)
+            self.k_norm = RMSNorm(self.head_dim)
 
         # ─────────────────────────────────────────────────────────────────────
-        # KV-CACHE: Stores past keys and values for fast generation
+        # KV-CACHE: Pre-allocated for O(1) per-token writes during generation
+        # Uses the optimized KVCache from kv_cache.py instead of torch.cat()
+        # which caused O(n) reallocation every token.
         # ─────────────────────────────────────────────────────────────────────
-        self.cache_k: Optional[torch.Tensor] = None
-        self.cache_v: Optional[torch.Tensor] = None
+        self._kv_cache: Optional[object] = None
 
     def forward(
         self, x: torch.Tensor, freqs_cis: Optional[torch.Tensor] = None,
@@ -297,14 +330,14 @@ class Attention(nn.Module):
     ) -> torch.Tensor:
         """
         Forward pass through attention.
-        
+
         Args:
             x: Input tensor [batch, seq_len, dim]
             freqs_cis: RoPE frequencies for position encoding
             mask: Attention mask (prevents looking at future tokens)
             use_cache: Whether to use/update KV-cache
             start_pos: Starting position (for cache continuation)
-        
+
         Returns:
             Output tensor [batch, seq_len, dim]
         """
@@ -324,6 +357,11 @@ class Attention(nn.Module):
             q = apply_rotary_embedding(q, freqs_cis, start_pos)
             k = apply_rotary_embedding(k, freqs_cis, start_pos)
 
+        # QK normalization: prevents fp16 attention overflow on long sequences
+        if self.use_qk_norm:
+            q = self.q_norm(q)
+            k = self.k_norm(k)
+
         # ─────────────────────────────────────────────────────────────────────
         # STEP 3: Handle KV-cache (for efficient generation)
         # ─────────────────────────────────────────────────────────────────────
@@ -333,21 +371,21 @@ class Attention(nn.Module):
             k = k.detach()
             v = v.detach()
 
-            if self.cache_k is None:
-                # First token - just store K, V
-                self.cache_k, self.cache_v = k, v
-            else:
-                # Append new K, V to cache
-                self.cache_k = torch.cat([self.cache_k, k], dim=1)
-                self.cache_v = torch.cat([self.cache_v, v], dim=1)
+            # Lazy-init pre-allocated cache on first use
+            if self._kv_cache is None:
+                from enigma_engine.core.kv_cache import KVCache
+                self._kv_cache = KVCache(
+                    batch_size=B,
+                    max_seq_len=self.max_cache_len,
+                    n_kv_heads=self.n_kv_heads,
+                    head_dim=self.head_dim,
+                    device=k.device,
+                    dtype=k.dtype,
+                )
 
-                # Sliding window: trim if cache gets too big
-                if self.cache_k.shape[1] > self.max_cache_len:
-                    trim_amount = self.cache_k.shape[1] - self.max_cache_len
-                    self.cache_k = self.cache_k[:, trim_amount:, :, :]
-                    self.cache_v = self.cache_v[:, trim_amount:, :, :]
-
-            k, v = self.cache_k, self.cache_v
+            # O(1) index write instead of O(n) torch.cat() + realloc
+            self._kv_cache.update(k, v)
+            k, v = self._kv_cache.get()
 
         # ─────────────────────────────────────────────────────────────────────
         # STEP 4: Repeat K, V for GQA (if using fewer KV heads)
@@ -426,26 +464,28 @@ class Attention(nn.Module):
 
     def clear_cache(self) -> None:
         """Clear the KV-cache (call between different sequences)."""
-        self.cache_k = self.cache_v = None
+        if self._kv_cache is not None:
+            self._kv_cache.clear()
+        self._kv_cache = None
 
 
 class FeedForward(nn.Module):
     """
     SwiGLU Feed-Forward Network.
-    
+
     📖 WHAT THIS DOES:
     After attention decides WHAT to look at, the FFN decides
     WHAT TO DO with that information. It's the "thinking" part!
-    
+
     📐 SWIGLU FORMULA:
     Standard FFN: output = W2(ReLU(W1(x)))
     SwiGLU:       output = W2(Swish(W1(x)) * W3(x))
-    
+
     💡 WHY SWIGLU IS BETTER:
     - Swish activation is smoother than ReLU (no hard corners)
     - Gating mechanism (the W3 multiplication) helps information flow
     - Empirically shown to train faster and achieve lower loss
-    
+
     🔗 CONNECTS TO:
       ← Used by TransformerBlock after attention
     """
@@ -480,13 +520,13 @@ class FeedForward(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Forward pass through feed-forward network.
-        
+
         📐 SwiGLU computation:
         1. gate = swish(W1 @ x)  ← Smooth activation
-        2. value = W3 @ x        ← Unactivated projection  
+        2. value = W3 @ x        ← Unactivated projection
         3. hidden = gate * value ← Gated combination
         4. output = W2 @ hidden  ← Project back
-        
+
         The "gating" (multiplication) is what makes SwiGLU special!
         """
         if self.use_swiglu:
@@ -500,12 +540,12 @@ class FeedForward(nn.Module):
 class MoEFeedForward(nn.Module):
     """
     Mixture of Experts Feed-Forward layer.
-    
+
     📖 WHAT THIS DOES:
     Routes each token to top-k experts for specialized processing.
     Different experts can specialize in different types of content
     (e.g., one for code, one for math, one for creative writing).
-    
+
     📐 MOE ARCHITECTURE:
     ┌────────────────────────────────────────────────────────────────────────┐
     │  Input x                                                               │
@@ -518,12 +558,12 @@ class MoEFeedForward(nn.Module):
     │      ↓                                                                 │
     │  [Weighted Sum] → Combined output                                      │
     └────────────────────────────────────────────────────────────────────────┘
-    
+
     💡 WHY MOE?
     - More parameters without proportional compute increase
     - Experts can specialize in different domains
     - Scales to very large models efficiently (GPT-4, Mixtral)
-    
+
     ⚠️ TRAINING CONSIDERATIONS:
     - Load balancing loss prevents all tokens going to same expert
     - Auxiliary loss weight (moe_load_balancing) controls this
@@ -553,13 +593,13 @@ class MoEFeedForward(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Forward pass through MoE layer with vectorized routing.
-        
+
         This implementation groups tokens by expert and processes them in batches,
         avoiding the O(tokens × experts) nested loop that would kill performance.
-        
+
         Args:
             x: Input tensor [batch, seq_len, dim]
-        
+
         Returns:
             Output tensor [batch, seq_len, dim]
         """
@@ -652,25 +692,25 @@ class MoEFeedForward(nn.Module):
 class TransformerBlock(nn.Module):
     """
     Single Transformer block with pre-norm architecture.
-    
+
     📖 WHAT THIS DOES:
     One "layer" of the transformer - stack N of these for the full model.
-    
+
     📐 PRE-NORM ARCHITECTURE (better than original post-norm!):
     x → [Norm] → [Attention] → + → [Norm] → [FFN] → + → output
          │                     ↑         │           ↑
          └─────────────────────┘         └───────────┘
               (residual skip)           (residual skip)
-    
+
     💡 WHY PRE-NORM?
     Original transformers: Attention → Norm (post-norm)
     Modern transformers: Norm → Attention (pre-norm)
     Pre-norm is more stable during training, especially for deep models!
-    
+
     ⚡ RESIDUAL CONNECTIONS (the + signs):
     Skip connections let gradients flow directly through the network.
     Without them, deep networks are nearly impossible to train.
-    
+
     ⚡ GRADIENT CHECKPOINTING:
     When enabled, recomputes activations during backward pass instead of
     storing them. Trades ~30% compute for ~50% memory savings - essential
@@ -703,15 +743,35 @@ class TransformerBlock(nn.Module):
         else:
             self.feed_forward = FeedForward(config)
 
+        # LayerScale: learnable per-channel scaling of residual outputs
+        # Initialized to a tiny value so early training is stable
+        self.use_layer_scale = getattr(config, 'use_layer_scale', False)
+        if self.use_layer_scale:
+            self.ls_attn = nn.Parameter(torch.full((config.dim,), 1e-5))
+            self.ls_ffn = nn.Parameter(torch.full((config.dim,), 1e-5))
+
+        # Drop path (stochastic depth): linearly increasing per layer
+        drop_rate = getattr(config, 'drop_path_rate', 0.0)
+        n_layers = getattr(config, 'n_layers', 1)
+        layer_drop = drop_rate * layer_id / max(n_layers - 1, 1) if drop_rate > 0 else 0.0
+        self.drop_path_attn = DropPath(layer_drop)
+        self.drop_path_ffn = DropPath(layer_drop)
+
     def _forward_impl(
         self, x: torch.Tensor, freqs_cis: Optional[torch.Tensor] = None,
         mask: Optional[torch.Tensor] = None, use_cache: bool = False, start_pos: int = 0
     ) -> torch.Tensor:
         """Internal forward implementation (used by checkpointing)."""
         # Attention sub-layer with residual connection
-        h = x + self.attention(self.attention_norm(x), freqs_cis, mask, use_cache, start_pos)
+        attn_out = self.attention(self.attention_norm(x), freqs_cis, mask, use_cache, start_pos)
+        if self.use_layer_scale:
+            attn_out = attn_out * self.ls_attn
+        h = x + self.drop_path_attn(attn_out)
         # FFN sub-layer with residual connection
-        return h + self.feed_forward(self.ffn_norm(h))
+        ffn_out = self.feed_forward(self.ffn_norm(h))
+        if self.use_layer_scale:
+            ffn_out = ffn_out * self.ls_ffn
+        return h + self.drop_path_ffn(ffn_out)
 
     def forward(
         self, x: torch.Tensor, freqs_cis: Optional[torch.Tensor] = None,
@@ -719,17 +779,17 @@ class TransformerBlock(nn.Module):
     ) -> torch.Tensor:
         """
         Forward pass: Norm → Attention → Add → Norm → FFN → Add
-        
+
         Uses gradient checkpointing during training if enabled, which
         recomputes activations during backward pass to save memory.
-        
+
         Args:
             x: Input [batch, seq_len, dim]
             freqs_cis: RoPE frequencies
             mask: Causal attention mask
             use_cache: Whether to use KV-cache
             start_pos: Position for KV-cache
-        
+
         Returns:
             Output tensor, same shape as input
         """

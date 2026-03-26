@@ -237,9 +237,27 @@ class StableDiffusionLocal:
                 pass
         self.is_loaded = False
     
+    def _set_scheduler(self, name: str) -> None:
+        """Swap the pipeline scheduler by name."""
+        name_lower = name.lower().replace("-", "").replace("_", "")
+        try:
+            if "dpmsolver" in name_lower or "dpm" in name_lower:
+                from diffusers import DPMSolverMultistepScheduler
+                self.pipe.scheduler = DPMSolverMultistepScheduler.from_config(
+                    self.pipe.scheduler.config)
+            elif "euler" in name_lower:
+                from diffusers import EulerDiscreteScheduler
+                self.pipe.scheduler = EulerDiscreteScheduler.from_config(
+                    self.pipe.scheduler.config)
+            else:
+                logger.warning(f"Unknown scheduler '{name}', keeping default")
+        except Exception as exc:
+            logger.warning(f"Failed to set scheduler '{name}': {exc}")
+    
     def generate(self, prompt: str, width: int = 512, height: int = 512,
                  steps: int = 30, guidance: float = 7.5,
-                 negative_prompt: str = "", **kwargs) -> Dict[str, Any]:
+                 negative_prompt: str = "", scheduler: str = "",
+                 **kwargs) -> Dict[str, Any]:
         if not self.is_loaded:
             return {"success": False, "error": "Model not loaded"}
         
@@ -248,6 +266,10 @@ class StableDiffusionLocal:
             prompt = str(prompt).strip() if prompt else ""
             if not prompt:
                 return {"success": False, "error": "Prompt cannot be empty"}
+            
+            # Swap scheduler if requested
+            if scheduler:
+                self._set_scheduler(scheduler)
             
             neg_prompt = str(negative_prompt).strip() if negative_prompt else None
             if neg_prompt == "":

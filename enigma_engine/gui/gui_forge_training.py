@@ -16,6 +16,98 @@ from enigma_engine.gui.scanners import DATA_DIR, MODELS_DIR
 logger = logging.getLogger(__name__)
 
 
+def _load_hf_directory(model_dir: Path, device: str, log_fn):
+    """Load a HuggingFace model directory into ForgeConfig + state_dict.
+
+    Reads config.json, loads safetensors shards, maps weights to Forge format.
+    Returns (ForgeConfig, forge_state_dict).
+    """
+    import json
+    import torch
+    from safetensors.torch import load_file
+    from enigma_engine.core.model_presets import ForgeConfig
+
+    # --- Config ---
+    config_path = model_dir / "config.json"
+    if not config_path.exists():
+        raise FileNotFoundError(
+            f"No config.json in {model_dir}")
+    with open(config_path, encoding="utf-8") as f:
+        hf_cfg = json.load(f)
+
+    # Build a simple namespace so convert_hf_config_to_forge works
+    class _Ns:
+        pass
+    ns = _Ns()
+    for k, v in hf_cfg.items():
+        setattr(ns, k, v)
+
+    from enigma_engine.core.huggingface_loader import (
+        convert_hf_config_to_forge)
+    forge_dict = convert_hf_config_to_forge(ns)
+    config = ForgeConfig(**forge_dict)
+    log_fn(f"  Config: dim={config.dim}, layers={config.n_layers}, "
+           f"heads={config.n_heads}, kv_heads={config.n_kv_heads}, "
+           f"vocab={config.vocab_size}")
+
+    # --- Weights ---
+    index_path = model_dir / "model.safetensors.index.json"
+    if index_path.exists():
+        # Sharded safetensors
+        with open(index_path, encoding="utf-8") as f:
+            index = json.load(f)
+        shard_files = sorted(set(index.get("weight_map", {}).values()))
+        log_fn(f"  Loading {len(shard_files)} safetensor shards...")
+        raw_weights: dict[str, torch.Tensor] = {}
+        for shard_name in shard_files:
+            shard_path = model_dir / shard_name
+            raw_weights.update(load_file(str(shard_path), device=device))
+    else:
+        single = model_dir / "model.safetensors"
+        if single.exists():
+            log_fn("  Loading model.safetensors...")
+            raw_weights = load_file(str(single), device=device)
+        else:
+            raise FileNotFoundError(
+                f"No safetensors files found in {model_dir}")
+
+    log_fn(f"  Loaded {len(raw_weights)} raw weight tensors")
+
+    # Map HF weight names → Forge names
+    from enigma_engine.core.weight_mapping import WeightMapper
+    model_type = hf_cfg.get("model_type", "llama")
+    mapper = WeightMapper()
+    forge_weights = mapper.map_huggingface_to_forge(
+        raw_weights, model_type=model_type)
+    log_fn(f"  Mapped {len(forge_weights)} weights to Forge format")
+
+    return config, forge_weights
+
+
+def _load_hf_tokenizer(model_dir: Path, log_fn):
+    """Try to load the HuggingFace tokenizer from a model directory.
+
+    Returns an AutoTokenizer if transformers is available and the directory
+    contains tokenizer files, otherwise returns None.
+    """
+    tok_file = model_dir / "tokenizer.json"
+    tok_config = model_dir / "tokenizer_config.json"
+    if not (tok_file.exists() or tok_config.exists()):
+        return None
+    try:
+        from transformers import AutoTokenizer
+        tokenizer = AutoTokenizer.from_pretrained(
+            str(model_dir), trust_remote_code=False)
+        log_fn(f"  HF tokenizer loaded (vocab {tokenizer.vocab_size})")
+        # Ensure pad_token_id is set (some HF tokenizers leave it None)
+        if tokenizer.pad_token_id is None:
+            tokenizer.pad_token_id = tokenizer.eos_token_id or 0
+        return tokenizer
+    except Exception as exc:
+        log_fn(f"  [!] Could not load HF tokenizer: {exc}")
+        return None
+
+
 class ForgeTrainingMixin:
     """Training mode implementations: Solo, DPO, Vision, LoRA.
 
@@ -45,8 +137,8 @@ class ForgeTrainingMixin:
             return
 
         data_path = self.train_data_var.get()
-        if not data_path or not Path(data_path).exists():
-            # Try to find any data file as fallback
+        if not data_path:
+            # Nothing selected — try a sensible default
             fallback = DATA_DIR / "instructions.txt"
             if fallback.exists():
                 data_path = str(fallback)
@@ -65,6 +157,12 @@ class ForgeTrainingMixin:
                         "    Add a .txt file to data/ or use "
                         "Guided mode instead.")
                     return
+        elif not Path(data_path).exists():
+            self._log(
+                f"[!] Training file not found:\n"
+                f"    {data_path}\n"
+                f"    Browse for a valid file or pick from Quick select.")
+            return
 
         try:
             epochs = int(self.ft_epochs_entry.get())
@@ -112,21 +210,39 @@ class ForgeTrainingMixin:
                 # Load existing model
                 self._log(f"Loading {model_name}...")
                 from enigma_engine.core.model_presets import ForgeConfig
-                from enigma_engine.core.model_registry import (
-                    get_state_dict, safe_load_weights)
-                checkpoint = safe_load_weights(
-                    student_path, map_location=device)
-                # Prefer model_config, fall back to config, skip TrainingConfig
-                cfg_dict = checkpoint.get("model_config") or checkpoint.get("config", {})
-                if isinstance(cfg_dict, dict) and "epochs" in cfg_dict:
-                    cfg_dict = checkpoint.get("model_config", {})
-                config = ForgeConfig(**cfg_dict)
+
+                sp = Path(student_path)
+                if sp.is_dir():
+                    # HuggingFace model directory — convert on-the-fly
+                    config, state_dict = _load_hf_directory(
+                        sp, device, self._log)
+                else:
+                    from enigma_engine.core.model_registry import (
+                        get_state_dict, safe_load_weights)
+                    checkpoint = safe_load_weights(
+                        student_path, map_location=device)
+                    # Prefer model_config, fall back to config, skip TrainingConfig
+                    cfg_dict = checkpoint.get("model_config") or checkpoint.get("config", {})
+                    if isinstance(cfg_dict, dict) and "epochs" in cfg_dict:
+                        cfg_dict = checkpoint.get("model_config", {})
+                    config = ForgeConfig(**cfg_dict)
+                    state_dict = get_state_dict(checkpoint)
+
                 model = Enigma(config=config)
-                state_dict = get_state_dict(checkpoint)
-                model.load_state_dict(state_dict)
+                model.load_state_dict(state_dict, strict=False)
                 model = model.to(device)
 
-                tokenizer = get_tokenizer("auto")
+                # Try HF tokenizer first for HuggingFace models
+                sp = Path(student_path)
+                tokenizer = None
+                if sp.is_dir():
+                    tokenizer = _load_hf_tokenizer(sp, self._log)
+                if tokenizer is None:
+                    tokenizer = get_tokenizer("auto")
+                    if sp.is_dir() and tokenizer.vocab_size != config.vocab_size:
+                        self._log(
+                            f"  [!] Tokenizer vocab ({tokenizer.vocab_size}) "
+                            f"!= model vocab ({config.vocab_size})")
                 self._log(
                     f"Tokenizer: {type(tokenizer).__name__} "
                     f"(vocab {tokenizer.vocab_size})")
@@ -144,10 +260,17 @@ class ForgeTrainingMixin:
                     learning_rate=lr,
                     max_grad_accumulation=forge_params["max_grad_accumulation"],
                     use_gradient_checkpointing=forge_params["use_gradient_checkpointing"],
+                    general_mix_ratio=forge_params["general_mix_ratio"],
+                    general_data=forge_params["general_data"],
+                    val_split=forge_params["val_split"],
                     save_every=max(1, epochs // 5),
                     checkpoint_dir=str(MODELS_DIR / "checkpoints"),
                     use_amp=torch.cuda.is_available(),
                     run_evaluation=True)  # Enable before/after evaluation
+
+                if forge_params["general_data"]:
+                    self._log(
+                        f"General : {forge_params['general_mix_ratio']:.0%} mix")
 
                 trainer = Trainer(
                     model, tokenizer, train_config)
@@ -167,6 +290,17 @@ class ForgeTrainingMixin:
                 self._log("Training...\n")
                 state = trainer.train(text)
 
+                # Check for early termination (OOM / NaN / Inf)
+                import math
+                if math.isinf(state.best_loss) and not losses:
+                    self._log(
+                        "\n[!] Training aborted on first batch "
+                        "(likely OOM or NaN loss).")
+                    self._log(
+                        "    Try LoRA training instead for large "
+                        "models, or reduce batch size.")
+                    return
+
                 # Log evaluation results if available
                 ppl_before = None
                 ppl_after = None
@@ -184,6 +318,9 @@ class ForgeTrainingMixin:
 
                 # Save back to the student model file
                 out = Path(student_path)
+                if out.is_dir():
+                    # HF directory — save as a Forge .pth beside it
+                    out = out.with_suffix(".pth")
                 from enigma_engine.core.safe_save import atomic_torch_save
                 atomic_torch_save({
                     "model_state_dict": model.state_dict(),
@@ -248,12 +385,18 @@ class ForgeTrainingMixin:
 
         # DPO requires a JSONL file with preference pairs
         data_path = self.train_data_var.get()
-        if not data_path or not Path(data_path).exists():
+        if not data_path:
             self._log(
                 "[!] No data file selected.\n"
                 "    DPO requires a JSONL file with:\n"
                 '    {"prompt": "...", "chosen": "...", '
                 '"rejected": "..."}')
+            return
+        if not Path(data_path).exists():
+            self._log(
+                f"[!] Training file not found:\n"
+                f"    {data_path}\n"
+                f"    Browse for a valid file or pick from Quick select.")
             return
 
         if not data_path.endswith(".jsonl"):
@@ -361,9 +504,12 @@ class ForgeTrainingMixin:
                 train_config = TrainingConfig(
                     epochs=epochs,
                     learning_rate=lr,
-                    batch_size=1,  # DPO uses single preference pairs
+                    batch_size=forge_params["batch_size"],
                     max_grad_accumulation=forge_params["max_grad_accumulation"],
                     use_gradient_checkpointing=forge_params["use_gradient_checkpointing"],
+                    general_mix_ratio=forge_params["general_mix_ratio"],
+                    general_data=forge_params["general_data"],
+                    val_split=forge_params["val_split"],
                 )
                 trainer = Trainer(model, tokenizer, train_config)
 
@@ -484,6 +630,7 @@ class ForgeTrainingMixin:
         # Get encoder preset from UI
         preset_var = getattr(self, "forge_vision_preset_var", None)
         preset = preset_var.get() if preset_var else "small"
+        preset = preset.split(" - ", 1)[0]
 
         self.training_active = True
         self.solo_train_btn.configure(state="disabled",
@@ -574,6 +721,9 @@ class ForgeTrainingMixin:
                     learning_rate=lr,
                     max_grad_accumulation=forge_params["max_grad_accumulation"],
                     use_gradient_checkpointing=forge_params["use_gradient_checkpointing"],
+                    general_mix_ratio=forge_params["general_mix_ratio"],
+                    general_data=forge_params["general_data"],
+                    val_split=forge_params["val_split"],
                     save_every=max(1, epochs // 5),
                     checkpoint_dir=str(MODELS_DIR / "checkpoints"),
                     use_amp=torch.cuda.is_available())
@@ -671,10 +821,16 @@ class ForgeTrainingMixin:
             return
 
         data_path = self.train_data_var.get()
-        if not data_path or not Path(data_path).exists():
+        if not data_path:
             self._log(
                 "[!] No training data selected.\n"
                 "    LoRA needs a data file to train on.")
+            return
+        if not Path(data_path).exists():
+            self._log(
+                f"[!] Training file not found:\n"
+                f"    {data_path}\n"
+                f"    Browse for a valid file or pick from Quick select.")
             return
 
         try:
@@ -747,23 +903,35 @@ class ForgeTrainingMixin:
                           if torch.cuda.is_available() else "cpu")
                 self._log(f"Device  : {device.upper()}")
 
-                from enigma_engine.core.model_registry import (
-                    get_state_dict, safe_load_weights)
-                checkpoint = safe_load_weights(
-                    student_path, map_location=device)
+                sp = Path(student_path)
+                if sp.is_dir():
+                    # HuggingFace model directory
+                    config, state_dict = _load_hf_directory(
+                        sp, device, self._log)
+                else:
+                    from enigma_engine.core.model_registry import (
+                        get_state_dict, safe_load_weights)
+                    checkpoint = safe_load_weights(
+                        student_path, map_location=device)
 
-                cfg_dict = (checkpoint.get("model_config")
-                            or checkpoint.get("config", {}))
-                if isinstance(cfg_dict, dict) and "epochs" in cfg_dict:
-                    cfg_dict = checkpoint.get("model_config", {})
+                    cfg_dict = (checkpoint.get("model_config")
+                                or checkpoint.get("config", {}))
+                    if isinstance(cfg_dict, dict) and "epochs" in cfg_dict:
+                        cfg_dict = checkpoint.get("model_config", {})
 
-                config = ForgeConfig(**cfg_dict)
+                    config = ForgeConfig(**cfg_dict)
+                    state_dict = get_state_dict(checkpoint)
+
                 model = Enigma(config=config)
-                state_dict = get_state_dict(checkpoint)
-                model.load_state_dict(state_dict)
+                model.load_state_dict(state_dict, strict=False)
                 model = model.to(device)
 
-                tokenizer = get_tokenizer("auto")
+                # Try HF tokenizer for HuggingFace models
+                tokenizer = None
+                if sp.is_dir():
+                    tokenizer = _load_hf_tokenizer(sp, self._log)
+                if tokenizer is None:
+                    tokenizer = get_tokenizer("auto")
                 pc = sum(p.numel() for p in model.parameters())
                 self._log(f"Params  : {pc:,}")
 
@@ -844,6 +1012,9 @@ class ForgeTrainingMixin:
                         learning_rate=lr,
                         max_grad_accumulation=forge_params["max_grad_accumulation"],
                         use_gradient_checkpointing=forge_params["use_gradient_checkpointing"],
+                        general_mix_ratio=forge_params["general_mix_ratio"],
+                        general_data=forge_params["general_data"],
+                        val_split=forge_params["val_split"],
                         save_every=max(1, epochs // 5),
                         checkpoint_dir=str(MODELS_DIR / "checkpoints"),
                         use_amp=torch.cuda.is_available(),
@@ -882,6 +1053,9 @@ class ForgeTrainingMixin:
 
                 # Save updated model
                 from enigma_engine.core.safe_save import atomic_torch_save
+                save_path = Path(student_path)
+                if save_path.is_dir():
+                    save_path = save_path.with_suffix(".pth")
                 atomic_torch_save({
                     "model_state_dict": model.state_dict(),
                     "config": self._model_config_dict(model),
@@ -889,9 +1063,9 @@ class ForgeTrainingMixin:
                         "epochs": epochs,
                         "best_loss": min(losses) if losses else 0.0,
                     },
-                }, student_path)
+                }, save_path)
 
-                self._log(f"\nModel saved to {Path(student_path).name}")
+                self._log(f"\nModel saved to {save_path.name}")
                 best_loss = min(losses) if losses else 0.0
                 if losses:
                     self._log(f"Best loss : {best_loss:.4f}")

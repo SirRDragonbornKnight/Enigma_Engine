@@ -84,19 +84,10 @@ class OllamaModelInfo:
     vocab_size: int = 32000
 
 
-@dataclass
-class OllamaBlob:
-    """Ollama blob (layer) information."""
-    digest: str
-    size: int
-    media_type: str
-    data: bytes = None
-
-
 class OllamaModelLoader:
     """
     Load models from Ollama format.
-    
+
     Ollama stores models in ~/.ollama/models/ with:
     - manifests/: Model manifests (JSON)
     - blobs/: Model weights (GGUF format)
@@ -289,11 +280,11 @@ class OllamaModelLoader:
     ) -> Optional[dict[str, Any]]:
         """
         Load Ollama model into Enigma AI Engine format.
-        
+
         Args:
             model_name: Ollama model name (e.g., "llama2:7b")
             device: Target device
-            
+
         Returns:
             Model state dict or None
         """
@@ -318,14 +309,7 @@ class OllamaModelLoader:
         device: str
     ) -> Optional[dict[str, Any]]:
         """Load GGUF format model."""
-        # Import GGUF loader
-        try:
-            from .gguf_loader import load_gguf_file
-            return load_gguf_file(str(path), device)
-        except ImportError:
-            logger.warning("GGUF loader not available, attempting direct load")
-
-        # Fallback: shared GGUF parsing from gguf.py
+        # Shared GGUF parsing from gguf.py
         from .gguf import parse_gguf_header, parse_gguf_metadata
 
         with open(path, "rb") as f:
@@ -382,12 +366,12 @@ class OllamaModelLoader:
     ) -> bool:
         """
         Convert Ollama model to Enigma AI Engine format.
-        
+
         Args:
             model_name: Ollama model name
             output_path: Output path for Enigma AI Engine model
             device: Device for conversion
-            
+
         Returns:
             Success status
         """
@@ -418,16 +402,15 @@ class OllamaModelLoader:
         output.mkdir(parents=True, exist_ok=True)
 
         # Save config
-        with open(output / "config.json", "w", encoding='utf-8') as f:
-            json.dump(config, f, indent=2)
+        from enigma_engine.core.safe_save import atomic_write_json
+        atomic_write_json(output / "config.json", config)
 
         # Save model reference (actual weights are in GGUF)
-        with open(output / "model_ref.json", "w", encoding='utf-8') as f:
-            json.dump({
-                "format": "gguf",
-                "source_path": str(self.get_model_path(model_name)),
-                "metadata": model_data.get("metadata", {})
-            }, f, indent=2)
+        atomic_write_json(output / "model_ref.json", {
+            "format": "gguf",
+            "source_path": str(self.get_model_path(model_name)),
+            "metadata": model_data.get("metadata", {})
+        })
 
         logger.info(f"Model converted and saved to {output_path}")
         return True

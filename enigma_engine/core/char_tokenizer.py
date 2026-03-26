@@ -10,6 +10,7 @@ This is a proper character-level tokenizer that:
 import json
 import logging
 import re
+import threading
 from pathlib import Path
 from typing import Any, Optional
 
@@ -32,7 +33,8 @@ class CharacterTokenizer:
       - Fast and memory-efficient
     """
 
-    def __init__(self, vocab_file: Optional[Path] = None, use_dictionary: bool = True):
+    def __init__(self, vocab_file: Optional[Path] = None, use_dictionary: bool = True,
+                 max_vocab_size: Optional[int] = None):
         # Special tokens - includes Q&A format tokens for training
         self.special_tokens = {
             "<pad>": 0,
@@ -63,6 +65,11 @@ class CharacterTokenizer:
         self.unk_token_id = 3
         self.think_start_id = self.special_tokens["<think>"]
         self.think_end_id = self.special_tokens["</think>"]
+
+        # Lock for thread-safe vocabulary mutation
+        self._vocab_lock = threading.Lock()
+        # Optional cap to prevent vocab from exceeding model embedding size
+        self._max_vocab_size = max_vocab_size
 
         # Initialize vocabulary
         self.token_to_id: dict[str, int] = {}
@@ -220,14 +227,19 @@ class CharacterTokenizer:
 
     def add_word(self, word: str) -> int:
         """Add a new word to vocabulary. Returns its ID."""
-        if word in self.token_to_id:
-            return self.token_to_id[word]
+        with self._vocab_lock:
+            if word in self.token_to_id:
+                return self.token_to_id[word]
 
-        new_id = len(self.token_to_id)
-        self.token_to_id[word] = new_id
-        self.id_to_token[new_id] = word
-        self.vocab_size = len(self.token_to_id)
-        return new_id
+            new_id = len(self.token_to_id)
+            # Prevent vocab from exceeding model embedding table size
+            if (self._max_vocab_size is not None
+                    and new_id >= self._max_vocab_size):
+                return self.unk_token_id
+            self.token_to_id[word] = new_id
+            self.id_to_token[new_id] = word
+            self.vocab_size = len(self.token_to_id)
+            return new_id
 
     def add_words(self, words: list[str]) -> list[int]:
         """Add multiple words. Returns their IDs."""
@@ -371,14 +383,19 @@ class CharacterTokenizer:
         else:
             self.id_to_token = {v: k for k, v in self.token_to_id.items()}
 
+        # Reload special tokens from file so encode() uses saved IDs
+        if 'special_tokens' in data:
+            self.special_tokens = data['special_tokens']
+
     def save_vocab(self, vocab_file: Path):
         """Save vocabulary to file."""
         vocab_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(vocab_file, 'w', encoding='utf-8') as f:
-            json.dump({
-                'token_to_id': self.token_to_id,
-                'id_to_token': {str(k): v for k, v in self.id_to_token.items()}
-            }, f, ensure_ascii=False, indent=2)
+        from enigma_engine.core.safe_save import atomic_write_json
+        atomic_write_json(vocab_file, {
+            'token_to_id': self.token_to_id,
+            'id_to_token': {str(k): v for k, v in self.id_to_token.items()},
+            'special_tokens': self.special_tokens,
+        })
 
     def __call__(self, text: str, return_tensors: str = None,
                  padding: bool = None, truncation: bool = None,

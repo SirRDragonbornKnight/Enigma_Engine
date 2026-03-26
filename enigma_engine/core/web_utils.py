@@ -208,13 +208,18 @@ class _TextExtractor(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
         self.text: list[str] = []
-        self._tag = ""
+        self._skip_depth = 0
 
     def handle_starttag(self, tag: str, attrs: list) -> None:
-        self._tag = tag
+        if tag in self._SKIP_TAGS:
+            self._skip_depth += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in self._SKIP_TAGS and self._skip_depth > 0:
+            self._skip_depth -= 1
 
     def handle_data(self, data: str) -> None:
-        if self._tag not in self._SKIP_TAGS:
+        if self._skip_depth == 0:
             t = data.strip()
             if t and len(t) > 2:
                 self.text.append(t)

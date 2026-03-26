@@ -28,6 +28,7 @@ from enigma_engine.gui.widgets import (
     HUDFrame, SectionLabel, SelectableLabel, SelectableTextbox,
     StatusDot, ToggleButton, Tooltip,
     themed_entry, themed_dropdown, themed_scroll,
+    wire_hotkeys,
 )
 # Re-export so existing imports keep working
 from enigma_engine.gui.gui_mod_page import ModPageMixin  # noqa: F401
@@ -225,8 +226,7 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
             border_width=1, text_color=C_TEXT_BRIGHT, corner_radius=2)
         self.chat_input.grid(row=1, column=0, sticky="nsew",
                              padx=(0, 4))
-        # Enable undo/redo in the underlying tk.Text widget
-        self.chat_input._textbox.configure(undo=True, maxundo=-1)
+        wire_hotkeys(self.chat_input)
         self.chat_input.bind("<Return>", self._on_input_enter)
         self.chat_input.bind("<Shift-Return>", lambda e: None)
         self.chat_input.bind("<KeyRelease>", self._auto_resize_input)
@@ -347,11 +347,12 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
         self._core_pane.add(chat_col, stretch="always",
                             minsize=300)
 
-        # Right sidebar: history + system prompt
+        # Right sidebar: history + system prompt + emotional state
         sidebar = ctk.CTkFrame(self._core_pane, fg_color="transparent")
         sidebar.grid_columnconfigure(0, weight=1)
         sidebar.grid_rowconfigure(0, weight=1)
         sidebar.grid_rowconfigure(1, weight=1)
+        sidebar.grid_rowconfigure(2, weight=0)
         self._core_pane.add(sidebar, stretch="never",
                             minsize=180, width=320)
 
@@ -409,6 +410,7 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
             fg_color=C_INPUT, border_color=C_ACCENT_DIM,
             border_width=1, text_color=C_TEXT_BRIGHT,
             corner_radius=2, placeholder_text="New name")
+        wire_hotkeys(self._rename_entry)
         self._rename_entry.pack(
             side="left", fill="x", expand=True, padx=(0, 4))
         _ok_rename = ctk.CTkButton(
@@ -469,8 +471,7 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
             wrap="word")
         self.prompt_editor.grid(
             row=0, column=0, sticky="nsew", padx=4, pady=4)
-        # Enable undo/redo
-        self.prompt_editor._textbox.configure(undo=True, maxundo=-1)
+        wire_hotkeys(self.prompt_editor)
 
         default_prompt = self._load_system_prompt()
         self.prompt_editor.insert("1.0", default_prompt)
@@ -496,11 +497,105 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
         reset_btn.pack(side="left")
         Tooltip(reset_btn, "Reset prompt to default")
 
+        # --- Collapsible EMOTIONAL STATE panel ---
+        self._emo_panel = CollapsiblePanel(
+            sidebar, "Emotional State", color=C_ORANGE,
+            start_expanded=False,
+            on_toggle=lambda _: self._rebalance_sidebar())
+        self._emo_panel.grid(row=2, column=0, sticky="nsew",
+                             pady=(2, 0))
+
+        emo_frame = HUDFrame(
+            self._emo_panel.content, glow_color=C_BORDER)
+        emo_frame.pack(fill="x")
+        emo_frame.grid_columnconfigure(0, weight=1)
+
+        # Build one bar per emotional dimension
+        self._emo_bars: dict[str, tuple[ctk.CTkLabel, ctk.CTkProgressBar]] = {}
+        _emo_labels = {
+            "valence": ("Valence", "Negative \u2190\u2192 Positive"),
+            "arousal": ("Energy", "Calm \u2190\u2192 Energized"),
+            "engagement": ("Engagement", "Detached \u2190\u2192 Engaged"),
+            "trust": ("Trust", "Guarded \u2190\u2192 Open"),
+            "frustration": ("Frustration", "Patient \u2190\u2192 Frustrated"),
+        }
+        for idx, (key, (label, tooltip_text)) in enumerate(
+                _emo_labels.items()):
+            row_frame = ctk.CTkFrame(emo_frame, fg_color="transparent")
+            row_frame.grid(row=idx, column=0, sticky="ew",
+                           padx=6, pady=(3, 0))
+            row_frame.grid_columnconfigure(0, minsize=110)
+            row_frame.grid_columnconfigure(1, weight=1)
+
+            name_lbl = SelectableLabel(
+                row_frame, text=label, font=FONT_TINY,
+                text_color=C_TEXT_DIM, anchor="w")
+            name_lbl.grid(row=0, column=0, sticky="w")
+
+            bar = ctk.CTkProgressBar(
+                row_frame, height=10, corner_radius=2,
+                fg_color=C_SURFACE,
+                progress_color=C_ORANGE,
+                border_width=0)
+            bar.grid(row=0, column=1, sticky="ew", padx=(4, 0))
+            bar.set(0.0)
+
+            val_lbl = ctk.CTkLabel(
+                row_frame, text="0.0", font=("Consolas", 11),
+                text_color=C_TEXT_DIM, width=36, anchor="e")
+            val_lbl.grid(row=0, column=2, sticky="e", padx=(4, 0))
+            Tooltip(row_frame, tooltip_text)
+
+            self._emo_bars[key] = (val_lbl, bar)
+
+        emo_btns = ctk.CTkFrame(emo_frame, fg_color="transparent")
+        emo_btns.grid(row=len(_emo_labels), column=0,
+                      sticky="ew", padx=6, pady=(4, 4))
+
+        emo_reset_btn = ctk.CTkButton(
+            emo_btns, text="RESET", width=60, height=28,
+            font=FONT_TINY, corner_radius=2,
+            fg_color=C_SURFACE, hover_color=C_BORDER,
+            text_color=C_TEXT_DIM, command=self._reset_emotional_state)
+        emo_reset_btn.pack(side="left")
+        Tooltip(emo_reset_btn, "Reset emotional state to baseline")
+
+        # Hide panel if user toggled it off in CONFIG
+        if not self._read_gui_bool_setting(
+                "show_emotional_state", True):
+            self._emo_panel.grid_remove()
+
+        # --- Collapsible JOURNAL panel ---
+        self._journal_panel = CollapsiblePanel(
+            sidebar, "Journal", color=C_PURPLE,
+            start_expanded=False,
+            on_toggle=lambda _: self._rebalance_sidebar())
+        self._journal_panel.grid(row=3, column=0, sticky="nsew",
+                                 pady=(2, 0))
+
+        journal_frame = HUDFrame(
+            self._journal_panel.content, glow_color=C_BORDER)
+        journal_frame.pack(fill="both", expand=True)
+
+        self._journal_display = SelectableTextbox(
+            journal_frame, height=120, font=FONT_TINY,
+            fg_color=C_SURFACE, text_color=C_TEXT_DIM,
+            wrap="word")
+        self._journal_display.pack(fill="both", expand=True,
+                                   padx=4, pady=4)
+        self._journal_display.configure(state="disabled")
+        Tooltip(self._journal_panel.content,
+                "AI reflections from idle periods.\n"
+                "Enable in CONFIG > Monologue Mode.")
+
         # Store sidebar ref for rebalancing
         self._sidebar = sidebar
         self._sidebar_visible = True
         self._core_page = page
         self._rebalance_sidebar()
+
+        # Populate journal display if model already loaded
+        self._refresh_journal_display()
 
         self._refresh_history_list()
         self._chat_system(
@@ -535,8 +630,79 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
         """
         hist_open = self._hist_panel.is_expanded
         prompt_open = self._prompt_panel.is_expanded
+        journal_open = getattr(self, "_journal_panel", None) and self._journal_panel.is_expanded
         self._sidebar.grid_rowconfigure(0, weight=1 if hist_open else 0)
         self._sidebar.grid_rowconfigure(1, weight=1 if prompt_open else 0)
+        self._sidebar.grid_rowconfigure(2, weight=0)
+        self._sidebar.grid_rowconfigure(3, weight=1 if journal_open else 0)
+
+    def _update_emotional_display(self):
+        """Refresh the emotional state bars from model_context."""
+        bars = getattr(self, "_emo_bars", None)
+        if not bars:
+            return
+        ctx = getattr(self, "model_context", None)
+        if ctx is None:
+            return
+        from enigma_engine.core.model_context import _EMOTIONAL_RANGES
+        state = ctx.emotional_state
+        for key, (val_lbl, bar) in bars.items():
+            raw = state.get(key, 0.0)
+            lo, hi = _EMOTIONAL_RANGES.get(key, (0.0, 1.0))
+            # Normalize to 0-1 for the progress bar
+            span = hi - lo
+            normalized = (raw - lo) / span if span > 0 else 0.0
+            normalized = max(0.0, min(1.0, normalized))
+            bar.set(normalized)
+            val_lbl.configure(text=f"{raw:+.2f}" if lo < 0 else f"{raw:.2f}")
+
+    def _reset_emotional_state(self):
+        """Reset the model's emotional state and refresh the display."""
+        ctx = getattr(self, "model_context", None)
+        if ctx is None:
+            return
+        ctx.reset_emotional_state()
+        self._update_emotional_display()
+
+    def _set_emo_panel_visible(self, visible: bool):
+        """Show or hide the emotional state sidebar panel."""
+        panel = getattr(self, "_emo_panel", None)
+        if panel is None:
+            return
+        if visible:
+            panel.grid()
+        else:
+            panel.grid_remove()
+        self._rebalance_sidebar()
+
+    def _refresh_journal_display(self):
+        """Populate the journal panel with recent entries."""
+        display = getattr(self, "_journal_display", None)
+        if display is None:
+            return
+        ctx = getattr(self, "model_context", None)
+        if ctx is None:
+            text = "(no model loaded)"
+        else:
+            try:
+                journal = ctx.journal
+                if journal.count == 0:
+                    text = "(no journal entries yet)"
+                else:
+                    lines = []
+                    for entry in journal.entries[-5:]:
+                        ts = entry.get("timestamp", "")
+                        # Show just the date portion
+                        short_ts = ts[:10] if len(ts) >= 10 else ts
+                        lines.append(
+                            f"[{short_ts}] {entry.get('text', '')}")
+                    text = "\n\n".join(lines)
+            except Exception:
+                text = "(journal unavailable)"
+        display.configure(state="normal")
+        display.delete("1.0", "end")
+        display.insert("1.0", text)
+        display.configure(state="disabled")
 
     def _toggle_chat_fullscreen(self):
         """Enter fullscreen chat mode — hides header, nav, status bar.
@@ -714,6 +880,23 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
         self.new_model_name = themed_entry(
             form_row, width=200, height=30, font=FONT_SMALL)
         self.new_model_name.pack(side="left", padx=(0, 8))
+
+        SelectableLabel(
+            form_row, text="Size:", font=FONT_TINY,
+            text_color=C_TEXT_DIM
+        ).pack(side="left", padx=(0, 4))
+        from enigma_engine.core.model_presets import (
+            MODEL_PRESETS, MODEL_DESCRIPTIONS)
+        _preset_display = [
+            f"{k} - {MODEL_DESCRIPTIONS.get(k, '')}"
+            for k in MODEL_PRESETS]
+        self.model_preset_var = ctk.StringVar(
+            value=_preset_display[
+                list(MODEL_PRESETS.keys()).index("small")])
+        _preset_dd = themed_dropdown(
+            form_row, _preset_display,
+            variable=self.model_preset_var, width=280)
+        _preset_dd.pack(side="left", padx=(0, 8))
 
         _create_btn = ctk.CTkButton(
             form_row, text="CREATE", width=90, height=30,
@@ -1021,6 +1204,18 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
             _copy.pack(side="left", padx=(0, 4))
             Tooltip(_copy, "Duplicate this model")
 
+            if is_native:
+                _grow = ctk.CTkButton(
+                    btn_frame, text="GROW", width=70, height=28,
+                    font=FONT_TINY, corner_radius=2,
+                    fg_color=C_GREEN_DIM, hover_color="#1a5a2a",
+                    text_color=C_GREEN,
+                    command=lambda m=model: self._grow_model(m))
+                _grow.pack(side="left", padx=(0, 4))
+                Tooltip(_grow,
+                        "Expand this model to a larger size "
+                        "(progressive growing)")
+
             _delete = ctk.CTkButton(
                 btn_frame, text="DELETE", width=75, height=28,
                 font=FONT_TINY, corner_radius=2,
@@ -1086,13 +1281,6 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
                 info_frame, text=tag, font=FONT_TINY,
                 text_color=tag_color, anchor="w"
             ).pack(side="left", padx=(0, 6))
-
-            # TRAINABLE badge for native models that support training
-            if is_native:
-                SelectableLabel(
-                    info_frame, text="TRAINABLE", font=FONT_TINY,
-                    text_color=C_CYAN, anchor="w"
-                ).pack(side="left", padx=(0, 6))
 
             SelectableLabel(
                 info_frame, text=info, font=FONT_TINY,
@@ -1201,7 +1389,7 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
             # Return to read-only appearance first
             entry.configure(
                 state="disabled",
-                fg_color="transparent",
+                fg_color=C_PANEL,
                 border_width=0,
                 border_color=C_BORDER)
             edit_row.grid_forget()
@@ -1229,7 +1417,7 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
         # Return to read-only appearance
         entry.configure(
             state="disabled",
-            fg_color="transparent",
+            fg_color=C_PANEL,
             border_width=0)
         edit_row.grid_forget()
         self.status_bar.set_left(
@@ -1252,7 +1440,7 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
         entry.insert(0, original)
         entry.configure(
             state="disabled",
-            fg_color="transparent",
+            fg_color=C_PANEL,
             border_width=0,
             border_color=C_BORDER)
         edit_row.grid_forget()

@@ -176,7 +176,7 @@ class LlamaServerBackend:
                 try:
                     stderr_out = self._process.stderr.read().decode(
                         errors='replace'
-                    )[-2000:]
+                    )[-8000:]
                 except Exception:
                     pass
                 logger.error(
@@ -190,6 +190,9 @@ class LlamaServerBackend:
                 body = json.loads(resp.read())
                 if body.get("status") == "ok":
                     logger.info("llama-server is ready")
+                    # Close stderr pipe so server doesn't block on writes
+                    if self._process.stderr:
+                        self._process.stderr.close()
                     return True
             except Exception:
                 pass
@@ -202,6 +205,11 @@ class LlamaServerBackend:
     def stop(self):
         """Terminate the llama-server subprocess."""
         if self._process:
+            try:
+                if self._process.stderr:
+                    self._process.stderr.close()
+            except Exception:
+                pass
             try:
                 self._process.terminate()
                 self._process.wait(timeout=5)
@@ -352,7 +360,7 @@ GGUF_QUANT_TYPES = {
 class GGUFConfig:
     """
     Config-like object for GGUF models.
-    
+
     Provides compatibility with GUI code that expects engine.model.config.
     """
     def __init__(
@@ -381,7 +389,7 @@ class GGUFConfig:
 class GGUFModel:
     """
     GGUF model loader using llama.cpp bindings.
-    
+
     Supports efficient inference with quantized models on CPU and GPU.
     When the installed llama-cpp-python binary lacks CUDA support for the
     current GPU (e.g. Blackwell / RTX 50-series), automatically falls back
@@ -399,7 +407,7 @@ class GGUFModel:
     ):
         """
         Initialize GGUF model.
-        
+
         Args:
             model_path: Path to .gguf model file
             n_ctx: Context window size (max tokens, default 8192)
@@ -447,10 +455,10 @@ class GGUFModel:
     def load(self) -> bool:
         """
         Load the GGUF model into memory.
-        
+
         Auto-selects server backend for Blackwell GPUs (compute >= 12.0)
         when the installed llama-cpp-python lacks sm_120 support.
-        
+
         Returns:
             True if loaded successfully
         """
@@ -607,7 +615,7 @@ class GGUFModel:
     ) -> str:
         """
         Generate text from prompt.
-        
+
         Args:
             prompt: Input text prompt
             max_tokens: Maximum tokens to generate
@@ -618,7 +626,7 @@ class GGUFModel:
             stop: Stop sequences
             stream: Enable streaming output
             **kwargs: Additional llama.cpp parameters
-            
+
         Returns:
             Generated text
         """
@@ -684,14 +692,14 @@ class GGUFModel:
     ) -> str:
         """
         Chat completion (if model supports it).
-        
+
         Args:
             messages: List of message dicts with 'role' and 'content'
             max_tokens: Maximum tokens to generate
             temperature: Sampling temperature
             stream: Enable streaming
             **kwargs: Additional parameters
-            
+
         Returns:
             Generated response
         """
@@ -746,10 +754,10 @@ class GGUFModel:
     ) -> dict:
         """
         Chat completion with native function/tool calling support.
-        
+
         This gives the AI structured control over tools - much more reliable
         than parsing <tool_call> tags from text output.
-        
+
         Args:
             messages: List of message dicts with 'role' and 'content'
             tools: List of tool definitions in OpenAI format:
@@ -758,7 +766,7 @@ class GGUFModel:
             max_tokens: Maximum tokens to generate
             temperature: Sampling temperature
             **kwargs: Additional parameters
-            
+
         Returns:
             Dict with 'content' (text response) and 'tool_calls' (list of tool invocations)
         """
@@ -948,10 +956,10 @@ class GGUFModel:
 def list_gguf_models(models_dir: str = None) -> list[Path]:
     """
     List all GGUF model files in a directory.
-    
+
     Args:
         models_dir: Directory to search (default: models/)
-        
+
     Returns:
         List of Path objects for .gguf files
     """
@@ -971,11 +979,11 @@ def list_gguf_models(models_dir: str = None) -> list[Path]:
 def recommend_gpu_layers(model_size_gb: float, vram_gb: float) -> int:
     """
     Recommend number of GPU layers based on model size and available VRAM.
-    
+
     Args:
         model_size_gb: Model file size in GB
         vram_gb: Available VRAM in GB
-        
+
     Returns:
         Recommended number of layers to offload
     """
@@ -1020,21 +1028,21 @@ def load_gguf_model(
 ) -> 'Forge':
     """
     Load a GGUF model and convert it to Forge format.
-    
+
     This function loads a quantized GGUF model (llama.cpp format), extracts
     its weights, dequantizes them if needed, and creates a Forge model.
-    
+
     ⚠️ NOTE: GGUF models are often quantized. Loading converts them to full
     precision PyTorch, which may use MORE memory than the original file.
-    
+
     Args:
         gguf_model_path: Path to .gguf file
         config: Optional ForgeConfig. If None, will try to infer from GGUF
         **kwargs: Additional arguments (n_ctx, n_gpu_layers, etc.)
-        
+
     Returns:
         Forge model with loaded weights
-        
+
     Raises:
         RuntimeError: If required dependencies not installed
         FileNotFoundError: If model file not found

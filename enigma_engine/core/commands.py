@@ -64,7 +64,7 @@ class Command:
 class CommandRegistry:
     """
     Central registry for all commands.
-    
+
     Commands are registered by category (gui, config, model, etc.)
     and can be executed by name.
     """
@@ -94,10 +94,10 @@ class CommandRegistry:
     def execute(self, command_str: str) -> CommandResult:
         """
         Execute a command string.
-        
+
         Args:
             command_str: Full command like "config.set temperature 0.7"
-            
+
         Returns:
             CommandResult with success/failure and message
         """
@@ -173,10 +173,10 @@ class CommandRegistry:
 def parse_commands(text: str) -> tuple:
     """
     Extract [CMD]...[/CMD] blocks from AI response.
-    
+
     Args:
         text: Full AI response text
-        
+
     Returns:
         (clean_text, commands_list) - text without command blocks, list of commands
     """
@@ -188,16 +188,19 @@ def parse_commands(text: str) -> tuple:
 
 # Global registry instance
 _registry: Optional[CommandRegistry] = None
+_registry_lock = __import__("threading").Lock()
 
 
 def get_registry() -> CommandRegistry:
     """Get the global command registry."""
     global _registry
     if _registry is None:
-        _registry = CommandRegistry()
-        from .builtin_commands import register_builtin_commands
-        register_builtin_commands(_registry)
-        # Load user plugins from plugins/ directory
-        from .plugin_loader import load_all_plugins
-        load_all_plugins(_registry)
+        with _registry_lock:
+            if _registry is None:
+                _registry = CommandRegistry()
+                from .builtin_commands import register_builtin_commands
+                register_builtin_commands(_registry)
+                # Load user plugins from plugins/ directory
+                from .plugin_loader import load_all_plugins
+                load_all_plugins(_registry)
     return _registry

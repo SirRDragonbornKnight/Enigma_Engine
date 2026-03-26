@@ -12,7 +12,7 @@ actually TALK to it.
 WHY THIS FILE MATTERS:
     The Enigma model (model.py) is just a brain in a jar - powerful but silent.
     EnigmaEngine is the VOICE. It takes your questions, feeds them to the
-    brain, and brings back answers. Every conversation you have with 
+    brain, and brings back answers. Every conversation you have with
     Enigma AI Engine passes through this file.
 
 THE MAGIC PROCESS:
@@ -90,10 +90,10 @@ LEGACY_MODEL = MODELS_DIR / "tiny_enigma_engine.pth"
 class EnigmaEngine(_GenerationMixin, _ChatMixin):
     """
     High-performance inference engine for Enigma models.
-    
+
     ðŸ“– WHAT THIS DOES:
     Takes your text prompt and generates a response using the AI model.
-    
+
     ðŸ“ GENERATION LOOP:
     â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
     â”‚  "Hello, how are" â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€    â”‚
@@ -119,14 +119,14 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
     â”‚         â–¼                                                              â”‚
     â”‚  "Hello, how are you doing today?"                                    â”‚
     â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-    
+
     âš¡ KEY FEATURES:
     - KV-cache: Don't recompute past tokens (10x faster!)
     - Multiple samplers: greedy, top-k, top-p, temperature
     - Streaming: Get tokens as they're generated
     - Tools: Route to specialized models/APIs
     - Chat: Maintains conversation history
-    
+
     ðŸŽ›ï¸ SAMPLING STRATEGIES:
     â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
     â”‚ GREEDY (temperature=0):                                                â”‚
@@ -147,13 +147,13 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
     â”‚   Only consider tokens covering P% of probability mass                â”‚
     â”‚   Dynamic cutoff based on confidence                                  â”‚
     â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-    
+
     Attributes:
         model: The loaded ``Forge`` transformer model instance.
         tokenizer: Tokenizer used to encode/decode text.
         device: ``torch.device`` the model runs on (``cpu``, ``cuda``,
             ``mps``).
-        use_half: Whether FP16 precision is enabled.
+        use_half: Whether reduced precision is enabled (FP16 or BF16).
         enable_tools: Whether the AI tool execution system is active.
         use_routing: Whether specialised model routing is enabled.
         model_metadata: Dict of metadata loaded from alongside the
@@ -178,7 +178,8 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
     def _init_common(
         self,
         device: str | None = None,
-        use_half: bool = False
+        use_half: bool = False,
+        precision: str | None = None
     ) -> None:
         """Initialize attributes shared by ``__init__`` and ``from_model``.
 
@@ -187,8 +188,12 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
         attribute here guarantees it exists on *all* engine instances.
         """
         self._generation_lock = threading.Lock()
+        self._train_lock: threading.Lock | None = None
         self.device = self._select_device(device)
-        self.use_half = use_half and self.device.type == "cuda"
+        self.dtype = self._select_dtype(
+            self.device, use_half=use_half, precision=precision)
+        # Backward-compat flag: True when dtype is a half-precision type
+        self.use_half = self.dtype in (torch.float16, torch.bfloat16)
 
         # Feature flags (overridden by __init__ from constructor args)
         self.enable_tools = False
@@ -217,13 +222,25 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
         self._chat_history: list = []
         self._token_count_cache: dict[str, int] = {}
 
+    def set_train_lock(self, lock: threading.Lock | None) -> None:
+        """Set the training lock for inference/training coordination.
+
+        When background training and inference share the same model,
+        this lock prevents inference from running while the model is
+        in ``train()`` mode (dropout active).  The lock is acquired
+        non-blocking in ``generate()`` — if training holds it,
+        inference proceeds anyway with graceful degradation.
+        """
+        self._train_lock = lock
+
     @classmethod
     def from_model(
         cls,
         model: Any,
         tokenizer: Any,
         device: str | None = None,
-        use_half: bool = False
+        use_half: bool = False,
+        precision: str | None = None
     ) -> EnigmaEngine:
         """
         Create engine directly from model and tokenizer objects.
@@ -236,20 +253,19 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
             tokenizer: A tokenizer instance
             device: Device to use ("cuda", "cpu", or auto-detected)
             use_half: Use FP16 for faster inference (GPU only)
+            precision: Explicit dtype ("float16", "bfloat16", "float32", "auto")
 
         Returns:
             EnigmaEngine instance ready for generation
         """
         engine = object.__new__(cls)
-        engine._init_common(device, use_half)
+        engine._init_common(device, use_half, precision)
 
         engine.tokenizer = tokenizer
         engine.model = model
 
         # Move model to device and set precision
-        engine.model.to(engine.device)
-        if engine.use_half:
-            engine.model.half()
+        engine.model.to(device=engine.device, dtype=engine.dtype)
         engine.model.eval()
 
         return engine
@@ -260,6 +276,7 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
         tokenizer_path: str | Path | None = None,
         device: str | None = None,
         use_half: bool = False,
+        precision: str | None = None,
         model_size: str = "auto",
         enable_tools: bool = False,
         module_manager: Any | None = None,
@@ -267,7 +284,7 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
     ) -> None:
         """
         Initialize the inference engine.
-        
+
         ðŸ“– THIS IS THE MAIN CONSTRUCTOR!
         It loads the model and tokenizer, sets up the device,
         and prepares everything for text generation.
@@ -288,7 +305,7 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
             use_routing: Enable specialized model routing
         """
         # Set all shared defaults first
-        self._init_common(device, use_half)
+        self._init_common(device, use_half, precision)
 
         # Override from constructor args
         self.enable_tools = enable_tools
@@ -321,9 +338,7 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
                 self._apply_offloading()
             else:
                 # Standard: Move whole model to device
-                self.model.to(self.device)
-                if self.use_half:
-                    self.model.half()
+                self.model.to(device=self.device, dtype=self.dtype)
 
             # Set to evaluation mode (disables dropout, etc.)
             self.model.eval()
@@ -362,6 +377,56 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
 
         return torch.device("cpu")
 
+    @staticmethod
+    def _select_dtype(
+        device: torch.device,
+        *,
+        use_half: bool = False,
+        precision: str | None = None,
+    ) -> torch.dtype:
+        """Choose the optimal dtype for *device*.
+
+        Priority order:
+        1. Explicit *precision* string (``"float16"``, ``"bfloat16"``, etc.)
+        2. Legacy *use_half* flag (True → ``float16``)
+        3. ``CONFIG["precision"]`` — when set to ``"auto"`` (the default),
+           auto-detects BF16 on capable CUDA GPUs (Ampere+), falls back to
+           FP16 on older CUDA devices, or FP32 on CPU/MPS.
+        """
+        # 1. Explicit precision string wins
+        prec = precision or CONFIG.get("precision", "auto")
+        dtype_map = {
+            "float16": torch.float16,
+            "fp16": torch.float16,
+            "bfloat16": torch.bfloat16,
+            "bf16": torch.bfloat16,
+            "float32": torch.float32,
+            "fp32": torch.float32,
+        }
+        if prec in dtype_map:
+            chosen = dtype_map[prec]
+            if chosen != torch.float32 and device.type not in ("cuda",):
+                logger.warning(
+                    "Half-precision requested but device is %s — "
+                    "falling back to float32", device.type)
+                return torch.float32
+            return chosen
+
+        # 2. Legacy use_half flag
+        if use_half:
+            if device.type == "cuda":
+                return torch.float16
+            return torch.float32
+
+        # 3. Auto-detect (prec == "auto" or anything else unrecognised)
+        if device.type == "cuda":
+            if torch.cuda.is_bf16_supported():
+                logger.info("Auto-detected BF16 support — using bfloat16")
+                return torch.bfloat16
+            return torch.float16
+
+        return torch.float32
+
     def _apply_offloading(self) -> None:
         """Apply CPU+GPU offloading to the model."""
         try:
@@ -389,14 +454,10 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
 
         except ImportError:
             logger.warning("[Forge:Offload] Could not import offloading module, using standard device")
-            self.model.to(self.device)
-            if self.use_half:
-                self.model.half()
+            self.model.to(device=self.device, dtype=self.dtype)
         except Exception as e:
             logger.warning(f"[Forge:Offload] Offloading failed: {e}, using standard device")
-            self.model.to(self.device)
-            if self.use_half:
-                self.model.half()
+            self.model.to(device=self.device, dtype=self.dtype)
 
     def _load_tokenizer(
         self,
@@ -455,13 +516,13 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
     ) -> Forge:
         """
         Load or create the model.
-        
+
         ðŸ“– AUTO-DETECTION:
         If model_size="auto", this method will:
         1. Detect hardware capabilities (RAM, GPU, Pi)
         2. Choose the best model size for this device
         3. Apply quantization if memory is tight
-        
+
         This enables seamless deployment from Raspberry Pi to datacenter!
         """
         # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -605,21 +666,6 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
         vocab_size = getattr(self.tokenizer, "vocab_size", 8000)
 
         if model_file and model_file.exists():
-            # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-            # TRY MEMORY-MAPPED LOADING FOR LARGE MODELS / LOW MEMORY
-            # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-            use_mmap = False
-            if auto_quantize or model_size in ("pi_zero", "pi_4"):
-                # Use memory-efficient loading for constrained devices
-                try:
-                    from .hardware_detection import detect_hardware
-                    profile = detect_hardware()
-                    if profile.total_ram_gb < 4 or profile.is_raspberry_pi:
-                        use_mmap = True  # noqa: F841 — reserved for future mmap loading
-                        logger.info("[Memory] Using memory-mapped loading for low-memory device")
-                except ImportError:
-                    logger.debug("Hardware detection not available for memory-mapped loading check")
-
             # Load state dict to infer model architecture
             try:
                 from .model_registry import safe_load_weights, get_state_dict
@@ -677,17 +723,21 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
                     f"Try creating a model with a standard size: 'tiny', 'small', 'medium', or 'large'"
                 ) from e
 
-            # Load weights
+            # Remove freqs_cis and pad vocab weights — handled by
+            # Enigma.load_state_dict() override, but also strip here
+            # so the state_dict is clean before the call.
+            state_dict.pop('freqs_cis', None)
+
+            # Load weights — fail loudly instead of silently using random weights
             try:
                 model.load_state_dict(state_dict, strict=False)
                 logger.info(f"Loaded model from {model_file}")
             except Exception as e:
-                logger.error(
+                raise RuntimeError(
                     f"Failed to load model weights from {model_file}: {e}\n"
                     f"Model architecture mismatch or corrupted weights.\n"
-                    f"The model will be initialized with random weights."
-                )
-                logger.warning(f"Could not load weights: {e}")
+                    f"Train a new model or verify checkpoint integrity."
+                ) from e
 
             # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             # APPLY AUTO-QUANTIZATION IF NEEDED
@@ -794,7 +844,7 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
     def _load_model_metadata(self, model_path: Optional[str] = None) -> None:
         """
         Load model metadata including content rating capabilities.
-        
+
         Looks for metadata in:
         1. model_metadata.json alongside the model file
         2. 'metadata' key inside the checkpoint dict
@@ -849,7 +899,7 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
     def generate(
         self,
         prompt: str,
-        max_gen: int = 100,
+        max_gen: int = 2048,
         temperature: float = 0.8,
         top_k: int = 50,
         top_p: float = 0.9,
@@ -858,16 +908,17 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
         use_cache: bool = True,
         execute_tools: bool = None,
         max_tool_iterations: int = 5,
+        min_p: float = 0.0,
         max_tokens: int | None = None,  # Alias for max_gen (backward compatibility)
         max_new_tokens: int | None = None,  # Alias for max_gen (Forge model compatibility)
         max_length: int | None = None  # Alias for max_gen (common parameter name)
     ) -> str:
         """
         Generate text from a prompt.
-        
+
         ðŸ“– WHAT THIS DOES:
         This is the main generation function. Give it text, get more text back!
-        
+
         ðŸ“ HOW IT WORKS:
         1. Check if prompt needs special routing (image/code/web)
         2. Acquire thread lock (only one generation at a time)
@@ -876,7 +927,7 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
         5. Sample next token using temperature/top-k/top-p
         6. Repeat until max_gen tokens or stop_string found
         7. If AI tried to use tools, execute them and continue
-        
+
         ðŸ“ PARAMETER GUIDE:
         â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
         â”‚ temperature:  Controls randomness                              â”‚
@@ -959,20 +1010,31 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
         # STEP 3: Thread-safe generation (protects KV-cache state)
         # Only one generation can happen at a time!
         # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        with self._generation_lock:
-            text = self._generate_text(
-                prompt, max_gen, temperature, top_k, top_p,
-                repetition_penalty, stop_strings, use_cache
-            )
+        # Try to coordinate with background training.  Non-blocking:
+        # if training holds the lock, proceed anyway (graceful degradation).
+        train_lock = self._train_lock
+        train_locked = False
+        if train_lock is not None:
+            train_locked = train_lock.acquire(blocking=False)
 
-            if execute_tools and self._tool_executor:
-                text = self._execute_tools_in_text(
-                    text, max_iterations=max_tool_iterations,
-                    max_gen=max_gen, temperature=temperature,
-                    top_k=top_k, top_p=top_p,
-                    repetition_penalty=repetition_penalty,
-                    stop_strings=stop_strings, use_cache=use_cache
+        try:
+            with self._generation_lock:
+                text = self._generate_text(
+                    prompt, max_gen, temperature, top_k, top_p,
+                    repetition_penalty, stop_strings, use_cache, min_p
                 )
+
+                if execute_tools and self._tool_executor:
+                    text = self._execute_tools_in_text(
+                        text, max_iterations=max_tool_iterations,
+                        max_gen=max_gen, temperature=temperature,
+                        top_k=top_k, top_p=top_p,
+                        repetition_penalty=repetition_penalty,
+                        stop_strings=stop_strings, use_cache=use_cache
+                    )
+        finally:
+            if train_locked:
+                train_lock.release()
 
         return text
 
@@ -1057,7 +1119,7 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
     def clear_kv_cache(self) -> None:
         """
         Clear the KV-cache to prevent hallucinations from stale context.
-        
+
         Call this when:
         - Starting a new conversation
         - After many messages (context gets confused)
@@ -1082,10 +1144,10 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
 
         Results are cached so repeated calls with the same text
         (e.g. history messages during truncation) are free.
-        
+
         Args:
             text: Text to count tokens in
-            
+
         Returns:
             Number of tokens
 

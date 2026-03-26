@@ -46,6 +46,17 @@ class ConfigPageMixin:
         page.grid_columnconfigure(0, weight=1)
         page.grid_rowconfigure(1, weight=1)
 
+        # Load gui_settings.json once — all widgets read from this dict
+        _cached_settings: dict = {}
+        try:
+            import json as _json
+            _settings_path = DATA_DIR / "gui_settings.json"
+            if _settings_path.exists():
+                _cached_settings = _json.loads(
+                    _settings_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+
         top = ctk.CTkFrame(page, fg_color="transparent", height=48)
         top.grid(row=0, column=0, sticky="ew", padx=10, pady=(8, 2))
         SectionLabel(top, "Settings").pack(
@@ -258,6 +269,154 @@ class ConfigPageMixin:
                 "negative values decrease it.\n"
                 "0 = default size.")
 
+        # --- Memory section ---
+        mem_card = HUDFrame(scroll, glow_color=C_ACCENT_DIM)
+        mem_card.pack(fill="x", padx=4, pady=(10, 4))
+        mem_inner = ctk.CTkFrame(
+            mem_card, fg_color="transparent")
+        mem_inner.pack(fill="x", padx=10, pady=8)
+
+        SelectableLabel(
+            mem_inner, text="MEMORY",
+            font=FONT_SECTION, text_color=C_TEXT_BRIGHT
+        ).pack(anchor="w")
+        ctk.CTkLabel(
+            mem_inner,
+            text="Controls how the AI remembers facts about you "
+                 "across conversations.",
+            font=FONT_TINY, text_color=C_TEXT_DIM, wraplength=500
+        ).pack(anchor="w", pady=(2, 6))
+
+        mem_mode_row = ctk.CTkFrame(
+            mem_inner, fg_color="transparent")
+        mem_mode_row.pack(fill="x", pady=2)
+        mem_mode_row.grid_columnconfigure(1, weight=1)
+
+        SelectableLabel(
+            mem_mode_row, text="Memory Mode",
+            font=FONT_SMALL, text_color=C_TEXT,
+            width=140, anchor="w"
+        ).grid(row=0, column=0, sticky="w", padx=(0, 4))
+
+        # Load current memory mode from cached settings
+        _mem_mode = _cached_settings.get("memory_mode", "automatic")
+
+        _mem_options = [
+            "automatic - AI extracts facts from chat",
+            "manual - only remembers when told",
+            "disabled - no memory storage",
+        ]
+        _mem_display = next(
+            (v for v in _mem_options if v.startswith(_mem_mode)),
+            _mem_options[0])
+        self._memory_mode_var = ctk.StringVar(value=_mem_display)
+        self._memory_mode_dd = themed_dropdown(
+            mem_mode_row, width=280,
+            values=_mem_options,
+            variable=self._memory_mode_var,
+            command=self._change_memory_mode)
+        self._memory_mode_dd.grid(
+            row=0, column=1, sticky="w", padx=(0, 4))
+        Tooltip(self._memory_mode_dd,
+                "automatic — AI auto-extracts facts from chat + "
+                "remembers via commands\n"
+                "manual — AI only remembers when you say "
+                "'remember that ...' or via commands\n"
+                "disabled — no memory storage at all")
+
+        # Chat history cap
+        hist_row = ctk.CTkFrame(
+            mem_inner, fg_color="transparent")
+        hist_row.pack(fill="x", pady=2)
+        hist_row.grid_columnconfigure(1, weight=1)
+
+        SelectableLabel(
+            hist_row, text="History cap",
+            font=FONT_SMALL, text_color=C_TEXT,
+            width=140, anchor="w"
+        ).grid(row=0, column=0, sticky="w", padx=(0, 4))
+
+        # Load current history cap from cached settings
+        _hist_cap = int(_cached_settings.get("history_cap", 500))
+
+        self._history_cap_var = ctk.StringVar(value=str(_hist_cap))
+        hist_entry = themed_entry(
+            hist_row, textvariable=self._history_cap_var, width=80)
+        hist_entry.grid(row=0, column=1, sticky="w", padx=(0, 4))
+        hist_entry.bind(
+            "<FocusOut>",
+            lambda e: self._change_history_cap())
+        hist_entry.bind(
+            "<Return>",
+            lambda e: self._change_history_cap())
+        Tooltip(hist_entry,
+                "Max messages saved to disk per session.\n"
+                "In-memory history is unlimited.\n"
+                "Range: 10–10000. Default: 500")
+
+        # Apply saved history cap on startup
+        try:
+            from enigma_engine.core.model_context import set_max_context_history
+            set_max_context_history(_hist_cap)
+        except Exception:
+            pass
+
+        # Monologue mode
+        mono_row = ctk.CTkFrame(
+            mem_inner, fg_color="transparent")
+        mono_row.pack(fill="x", pady=2)
+        mono_row.grid_columnconfigure(1, weight=1)
+
+        SelectableLabel(
+            mono_row, text="Monologue Mode",
+            font=FONT_SMALL, text_color=C_TEXT,
+            width=160, anchor="w"
+        ).grid(row=0, column=0, sticky="w", padx=(0, 4))
+
+        # Load current monologue mode from cached settings
+        _mono_mode = _cached_settings.get("monologue_mode", "disabled")
+
+        _mono_options = [
+            "disabled - no background reflection",
+            "journal_only - reflects but never shows it",
+            "automatic - reflects and greets with insights",
+        ]
+        _mono_display = next(
+            (v for v in _mono_options if v.startswith(_mono_mode)),
+            _mono_options[0])
+        self._monologue_mode_var = ctk.StringVar(value=_mono_display)
+        self._monologue_mode_dd = themed_dropdown(
+            mono_row, width=280,
+            values=_mono_options,
+            variable=self._monologue_mode_var,
+            command=self._change_monologue_mode)
+        self._monologue_mode_dd.grid(
+            row=0, column=1, sticky="w", padx=(0, 4))
+        Tooltip(self._monologue_mode_dd,
+                "disabled — no background reflection\n"
+                "journal_only — AI reflects during idle, "
+                "stores journal, but never shows it\n"
+                "automatic — AI reflects and can greet you "
+                "with insights if quality is high enough")
+
+        # Show emotional state panel toggle
+        _show_emo = bool(
+            _cached_settings.get("show_emotional_state", True))
+        self._show_emo_var = ctk.BooleanVar(value=_show_emo)
+        self._show_emo_cb = ctk.CTkCheckBox(
+            mem_inner,
+            text="Show emotional state panel",
+            variable=self._show_emo_var,
+            font=FONT_SMALL, text_color=C_TEXT,
+            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
+            border_color=C_ACCENT_DIM, corner_radius=2,
+            command=self._toggle_show_emotional_state)
+        self._show_emo_cb.pack(anchor="w", pady=(6, 0))
+        Tooltip(self._show_emo_cb,
+                "Show or hide the emotional state bars on\n"
+                "the CORE page sidebar. The AI still uses\n"
+                "emotional awareness internally either way.")
+
         # --- Training section ---
         train_card = HUDFrame(scroll, glow_color=C_ACCENT_DIM)
         train_card.pack(fill="x", padx=4, pady=(10, 4))
@@ -280,18 +439,8 @@ class ConfigPageMixin:
         lwc_row.pack(fill="x", pady=2)
         lwc_row.grid_columnconfigure(1, weight=1)
 
-        # Load current setting
-        _lwc_val = False
-        try:
-            _lwc_path = DATA_DIR / "gui_settings.json"
-            if _lwc_path.exists():
-                import json as _json
-                _lwc_settings = _json.loads(
-                    _lwc_path.read_text(encoding="utf-8"))
-                _lwc_val = _lwc_settings.get(
-                    "learn_while_chatting", False)
-        except Exception:
-            pass
+        # Load current setting from cached settings
+        _lwc_val = _cached_settings.get("learn_while_chatting", False)
 
         self._learn_while_chatting_var = ctk.BooleanVar(
             value=_lwc_val)
@@ -328,23 +477,12 @@ class ConfigPageMixin:
             font=FONT_TINY, text_color=C_TEXT_DIM, wraplength=500
         ).pack(anchor="w", pady=(2, 6))
 
-        _auto_load_chat = True
-        _auto_start_mods = True
-        _auto_unload_on_minimize = False
-        try:
-            _perf_path = DATA_DIR / "gui_settings.json"
-            if _perf_path.exists():
-                import json as _json
-                _perf_settings = _json.loads(
-                    _perf_path.read_text(encoding="utf-8"))
-                _auto_load_chat = bool(
-                    _perf_settings.get("auto_load_chat_model", True))
-                _auto_start_mods = bool(
-                    _perf_settings.get("auto_start_mods", True))
-                _auto_unload_on_minimize = bool(
-                    _perf_settings.get("auto_unload_on_minimize", False))
-        except Exception:
-            pass
+        _auto_load_chat = bool(
+            _cached_settings.get("auto_load_chat_model", True))
+        _auto_start_mods = bool(
+            _cached_settings.get("auto_start_mods", True))
+        _auto_unload_on_minimize = bool(
+            _cached_settings.get("auto_unload_on_minimize", False))
 
         self._auto_load_chat_model_var = ctk.BooleanVar(
             value=_auto_load_chat)
@@ -385,6 +523,24 @@ class ConfigPageMixin:
         Tooltip(self._auto_unload_on_minimize_cb,
                 "When enabled, minimizing the window releases model memory\n"
                 "and reloads the model when you restore the window.")
+
+        _confirm_file_ops = bool(
+            _cached_settings.get("confirm_file_operations", True))
+        self._confirm_file_operations_var = ctk.BooleanVar(
+            value=_confirm_file_ops)
+        self._confirm_file_operations_cb = ctk.CTkCheckBox(
+            perf_inner,
+            text="Confirm AI file operations",
+            variable=self._confirm_file_operations_var,
+            font=FONT_SMALL, text_color=C_TEXT,
+            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
+            border_color=C_ACCENT_DIM, corner_radius=2,
+            command=self._toggle_confirm_file_operations)
+        self._confirm_file_operations_cb.pack(anchor="w", pady=(4, 0))
+        Tooltip(self._confirm_file_operations_cb,
+                "When enabled, you must approve each file write/append\n"
+                "the AI requests. When disabled, file operations are\n"
+                "auto-approved.")
 
         ctk.CTkButton(
             perf_inner, text="APPLY GAMING MODE", width=180, height=30,
@@ -568,6 +724,119 @@ class ConfigPageMixin:
         self._apply_theme_live(name)
 
     # ------------------------------------------------------------------
+    # Memory mode
+    # ------------------------------------------------------------------
+
+    def _change_memory_mode(self, mode: str):
+        """Save memory_mode setting to gui_settings.json."""
+        mode = mode.split(" - ", 1)[0]
+        import json
+        settings_path = DATA_DIR / "gui_settings.json"
+        try:
+            settings: dict = {}
+            if settings_path.exists():
+                settings = json.loads(
+                    settings_path.read_text(encoding="utf-8"))
+            settings["memory_mode"] = mode
+            from enigma_engine.core.safe_save import atomic_write_json
+            atomic_write_json(settings_path, settings)
+            # Apply live: set disabled flag on memory singleton
+            try:
+                from enigma_engine.core.memory import get_memory
+                mem = get_memory()
+                mem.disabled = (mode == "disabled")
+            except Exception:
+                pass
+            self.status_bar.set_left(
+                f"\u26a1 Memory mode set to: {mode}")
+        except Exception as exc:
+            logger.debug("Could not save memory_mode: %s", exc)
+
+    # ------------------------------------------------------------------
+    # Monologue mode
+    # ------------------------------------------------------------------
+
+    def _change_monologue_mode(self, mode: str):
+        """Save monologue_mode setting to gui_settings.json and forge_config."""
+        mode = mode.split(" - ", 1)[0]
+        import json
+        settings_path = DATA_DIR / "gui_settings.json"
+        try:
+            settings: dict = {}
+            if settings_path.exists():
+                settings = json.loads(
+                    settings_path.read_text(encoding="utf-8"))
+            settings["monologue_mode"] = mode
+            from enigma_engine.core.safe_save import atomic_write_json
+            atomic_write_json(settings_path, settings)
+            self.status_bar.set_left(
+                f"\u26a1 Monologue mode set to: {mode}")
+        except Exception as exc:
+            logger.debug("Could not save monologue_mode: %s", exc)
+        # Also persist to forge_config.json for non-GUI users
+        try:
+            from enigma_engine.config import update_config, save_config
+            update_config({"monologue_mode": mode})
+            save_config()
+        except Exception as exc:
+            logger.debug("Could not save monologue_mode to config: %s", exc)
+
+    # ------------------------------------------------------------------
+    # Emotional state panel visibility
+    # ------------------------------------------------------------------
+
+    def _toggle_show_emotional_state(self):
+        """Save show_emotional_state setting and update panel visibility."""
+        import json
+        visible = self._show_emo_var.get()
+        settings_path = DATA_DIR / "gui_settings.json"
+        try:
+            settings: dict = {}
+            if settings_path.exists():
+                settings = json.loads(
+                    settings_path.read_text(encoding="utf-8"))
+            settings["show_emotional_state"] = visible
+            from enigma_engine.core.safe_save import atomic_write_json
+            atomic_write_json(settings_path, settings)
+        except Exception as exc:
+            logger.debug("Could not save show_emotional_state: %s", exc)
+        # Toggle panel on the CORE page sidebar
+        if hasattr(self, "_set_emo_panel_visible"):
+            self._set_emo_panel_visible(visible)
+        state = "visible" if visible else "hidden"
+        self.status_bar.set_left(
+            f"\u26a1 Emotional state panel {state}")
+
+    # ------------------------------------------------------------------
+    # History cap
+    # ------------------------------------------------------------------
+
+    def _change_history_cap(self):
+        """Save and apply history_cap setting."""
+        import json
+        try:
+            val = int(self._history_cap_var.get())
+        except (ValueError, TypeError):
+            return
+        val = max(10, min(val, 10000))
+        self._history_cap_var.set(str(val))
+        settings_path = DATA_DIR / "gui_settings.json"
+        try:
+            settings: dict = {}
+            if settings_path.exists():
+                settings = json.loads(
+                    settings_path.read_text(encoding="utf-8"))
+            settings["history_cap"] = val
+            from enigma_engine.core.safe_save import atomic_write_json
+            atomic_write_json(settings_path, settings)
+            from enigma_engine.core.model_context import set_max_context_history
+            set_max_context_history(val)
+            self.status_bar.set_left(
+                f"\u26a1 History cap set to: {val}")
+        except Exception as exc:
+            logger.debug("Could not save history_cap: %s", exc)
+
+    # ------------------------------------------------------------------
     # Learn while chatting toggle
     # ------------------------------------------------------------------
 
@@ -575,6 +844,14 @@ class ConfigPageMixin:
         """Save learn_while_chatting setting to gui_settings.json."""
         import json
         enabled = self._learn_while_chatting_var.get()
+        # Warn if enabling but no router/trainer is available
+        if enabled:
+            router = getattr(self, "_router", None)
+            has_trainer = router is not None and getattr(router, "trainer", None) is not None
+            if not has_trainer:
+                self.status_bar.set_left(
+                    "\u26a0 No TRAINER route assigned — "
+                    "chat exchanges will not be used for learning")
         settings_path = DATA_DIR / "gui_settings.json"
         try:
             settings: dict = {}
@@ -582,9 +859,8 @@ class ConfigPageMixin:
                 settings = json.loads(
                     settings_path.read_text(encoding="utf-8"))
             settings["learn_while_chatting"] = enabled
-            settings_path.write_text(
-                json.dumps(settings, indent=2),
-                encoding="utf-8")
+            from enigma_engine.core.safe_save import atomic_write_json
+            atomic_write_json(settings_path, settings)
             self._chat_learning_enabled = enabled
             if hasattr(self, "_refresh_performance_mode"):
                 self._refresh_performance_mode()
@@ -608,9 +884,8 @@ class ConfigPageMixin:
                 settings = json.loads(
                     settings_path.read_text(encoding="utf-8"))
             settings["auto_load_chat_model"] = enabled
-            settings_path.write_text(
-                json.dumps(settings, indent=2),
-                encoding="utf-8")
+            from enigma_engine.core.safe_save import atomic_write_json
+            atomic_write_json(settings_path, settings)
             self._auto_load_chat_model = enabled
             if hasattr(self, "_refresh_performance_mode"):
                 self._refresh_performance_mode()
@@ -632,9 +907,8 @@ class ConfigPageMixin:
                 settings = json.loads(
                     settings_path.read_text(encoding="utf-8"))
             settings["auto_start_mods"] = enabled
-            settings_path.write_text(
-                json.dumps(settings, indent=2),
-                encoding="utf-8")
+            from enigma_engine.core.safe_save import atomic_write_json
+            atomic_write_json(settings_path, settings)
             self._auto_start_mods = enabled
             if hasattr(self, "_refresh_performance_mode"):
                 self._refresh_performance_mode()
@@ -656,9 +930,8 @@ class ConfigPageMixin:
                 settings = json.loads(
                     settings_path.read_text(encoding="utf-8"))
             settings["auto_unload_on_minimize"] = enabled
-            settings_path.write_text(
-                json.dumps(settings, indent=2),
-                encoding="utf-8")
+            from enigma_engine.core.safe_save import atomic_write_json
+            atomic_write_json(settings_path, settings)
             self._auto_unload_on_minimize = enabled
             if hasattr(self, "_refresh_performance_mode"):
                 self._refresh_performance_mode()
@@ -667,6 +940,28 @@ class ConfigPageMixin:
                 f"{'enabled' if enabled else 'disabled'}")
         except Exception as exc:
             logger.debug("Could not save auto_unload_on_minimize: %s", exc)
+
+    def _toggle_confirm_file_operations(self):
+        """Save confirm_file_operations setting to gui_settings.json."""
+        import json
+
+        enabled = self._confirm_file_operations_var.get()
+        settings_path = DATA_DIR / "gui_settings.json"
+        try:
+            settings: dict = {}
+            if settings_path.exists():
+                settings = json.loads(
+                    settings_path.read_text(encoding="utf-8"))
+            settings["confirm_file_operations"] = enabled
+            from enigma_engine.core.safe_save import atomic_write_json
+            atomic_write_json(settings_path, settings)
+            self._confirm_file_operations = enabled
+            state = "enabled" if enabled else "disabled (auto-approve)"
+            self.status_bar.set_left(
+                f"\u26a1 File operation confirmation {state}")
+        except Exception as exc:
+            logger.debug(
+                "Could not save confirm_file_operations: %s", exc)
 
     def _apply_gaming_mode_preset(self):
         """Apply practical low-memory defaults for gaming sessions."""
@@ -683,9 +978,8 @@ class ConfigPageMixin:
             settings["auto_start_mods"] = False
             settings["auto_unload_on_minimize"] = True
             settings["learn_while_chatting"] = False
-            settings_path.write_text(
-                json.dumps(settings, indent=2),
-                encoding="utf-8")
+            from enigma_engine.core.safe_save import atomic_write_json
+            atomic_write_json(settings_path, settings)
 
             self._auto_load_chat_model = False
             self._auto_start_mods = False
@@ -734,9 +1028,8 @@ class ConfigPageMixin:
                 settings = json.loads(
                     settings_path.read_text(encoding="utf-8"))
             settings["font_size_offset"] = offset
-            settings_path.write_text(
-                json.dumps(settings, indent=2),
-                encoding="utf-8")
+            from enigma_engine.core.safe_save import atomic_write_json
+            atomic_write_json(settings_path, settings)
             self.status_bar.set_left(
                 f"\u2728 Font size offset {offset} saved — restarting...")
             self.after(800, self._restart_gui)

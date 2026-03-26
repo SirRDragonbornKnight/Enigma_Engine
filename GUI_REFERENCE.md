@@ -5,7 +5,53 @@ what it is, where it lives in code, and what it does.
 
 Use this to decide what to change, move, remove, or redesign.
 
+**Last synced:** March 26, 2026.
+
+**Known dead ends:** FORGE tool buttons auto-disable when prerequisites are missing. CORE toggles (TTS, Web, RAG) now surface errors and auto-reset. Mic per-phrase recognition failures are intentionally silent (keeps listening). Only remaining dead end: individual `recognize_google()` failures during continuous listening (by design).
+
 **Text selectability:** Almost all display text uses `SelectableLabel` (tk.Entry in readonly state) — supports click-drag selection, Ctrl+C copy, and right-click copy menu with no blinking cursor. Multi-line labels that use `wraplength` remain as `CTkLabel` with right-click copy via `_enable_label_copy`.
+
+**Universal hotkeys:** All text input widgets (CTkEntry and CTkTextbox) support Ctrl+Z (undo), Ctrl+Y (redo), and Ctrl+A (select all) via `wire_hotkeys()` in `widgets.py`. CTkTextbox widgets use the native tk.Text undo stack. CTkEntry widgets use a lightweight `_EntryUndoStack` (since tk.Entry has no native undo). All entries created via `themed_entry()` get hotkeys automatically. Other inputs are wired explicitly at creation time.
+
+---
+
+## FILE MAP
+
+| File | Lines | What It Controls |
+|------|-------|-----------------|
+| widgets.py | 1121 | Theme-driven C_* color constants, fonts, font size offset system (get/set/load_font_size_offset), reload_theme() for live switching, wire_hotkeys() (unified Ctrl+Z/Y/A for all text inputs), _EntryUndoStack, widget classes (HUDFrame, GlowFrame, StatusDot, NavButton, SectionLabel, SelectableLabel, ToggleButton, StatusBar (3-zone left/center/right), CollapsiblePanel (chevron expand/collapse with on_toggle callback), SelectableTextbox, Tooltip (hover popup with boundary-aware dismiss)), factory functions (themed_entry, themed_dropdown, themed_scroll), _resolve_parent_bg() |
+| desktop.py | 1553 | Window shell: header (pin toggle, shortcuts overlay dropdown (Ctrl+1-7/Ctrl+N/Escape/etc)), nav rail (collapsible via grid_columnconfigure), page nav shortcuts (Ctrl+1-7, Ctrl+N), status bar, label copy, auto-start mods, status ticker (with hardware detection — CPU/GPU/RAM), display name loading, Escape-to-stop binding, TTS lifecycle (init/shutdown), deferred boot scanning, window geometry persistence (save/restore), window state handlers (minimize/map for model suspension), live theme switching (_apply_theme_live, _retheme_tree), parent watchdog, reflection/monologue system (idle detection → _run_reflection → coherence scoring → journal storage), recent topics extraction, memory facts retrieval, coherence-gated journal greeting, performance/gaming mode (auto-derived UI throttles), auto-unload on minimize (suspend/resume model), GUI restart for font changes, resize debounce + completion tracking, router training sync, background model param counting, register GUI commands. Inherits 7 mixins. |
+| gui_pages.py | 2146 | Page builders: CORE (fullscreen toggle + voice I/O (mic + TTS toggle) + web toggle + RAG toggle + reasoning toggle + token counter + resizable sidebar + clickable history + media tags + STOP/EDIT buttons + auto-expanding input + file indicator + thinking indicator + chat input context menu + emotional state panel (5 dimensions: valence/energy/engagement/trust/frustration with progress bars + tooltips) + journal panel + collapsible sidebar panels), MODELS (identity cards with display name/personality/stats/tags + param count + tooltips + EDIT/EXPORT/COPY/GROW/DELETE + IMPORT/DOWNLOAD + NATIVE/EXTERNAL tags + inline delete confirmation + right-click context menu + HF repo inline entry), ROUTER (SUSPEND/UNLOAD buttons + route cards). Inherits ForgePageMixin + ConfigPageMixin |
+| gui_pages_forge.py | 1602 | FORGE page layout: paned resizable layout (controls left + log right with draggable sash) + trainer/student status cards + 5-mode radio-card selector (`Pre-Train`, `Distill`, `Basic`, `AI-Guided`, `Image`) + reasoning checkbox + knowledge preservation (general mix + data file) + Pre-Train section (preset, data browse, vocab, retrain-tokenizer, model name) + Distill section (6 category checkboxes, examples count, max tokens) + training brief editor (quick profile fields + custom instructions) + training stages section (BASICS/CONVERSATION/COMMANDS/WEB) + mode-specific sections + Auto-train checkbox + stage buttons with tooltips + CollapsiblePanel tools (generate data, evaluate, benchmark, history, web learn, tokenizer, quantize, export GGUF, command policy, queue/plan/dataset) + vision browse + vision encoder preset dropdown (tiny/small/medium) + LoRA advanced subsection + student param count label + hyperparameter presets + progress bar + loss chart canvas panel + loss chart info label + rolling best K + validation split + ADVANCED SETTINGS panel (conformer toggle, replay capacity/ratio) (ForgePageMixin) |
+| gui_pages_config.py | 1367 | CONFIG page layout: generation parameters, paths, display names, live theme picker (no restart), font size control, learn-while-chatting toggle, history cap, memory mode, monologue mode, emotional state visibility toggle, file operation confirmation toggle, performance section (auto-load chat model, auto-start mods, auto-unload on minimize), gaming mode preset button, backup/restore with inline import confirmation, tooltips (ConfigPageMixin) |
+| gui_docs_page.py | 1042 | DOCS page: documentation browser with search filter, path tooltips, file editor with path label and stats footer (live lines/words/chars), inline file rename, blank doc creation, unsaved change detection with inline bar (save/discard/cancel), Ctrl+S shortcut, Ctrl+F find bar with prev/next navigation + match counter, Ctrl+Z/Y undo/redo, inline delete confirmation, right-click context menu, auto-save (30s timer), notes category, CRUD operations |
+| gui_logic.py | 1003 | Logic hub: config, model loading, routes, display names, toggles, path settings, web access toggle, GUI context, CMD activity pipeline, GGUF param estimation. Inherits LogicChatMixin + LogicMediaMixin |
+| gui_logic_chat.py | 1385 | Chat messaging, session management, AI session naming, session rename/delete (inline confirmation), duplicate save prevention, typewriter, file attachment, chat input history (Up/Down recall), history, send guard, stop generation, message editing, auto fact extraction, reasoning display, token counter, background trainer feeding (learn-while-chatting with engagement scoring), emotional state injection/decay, proactive web research (auto_research), chat export (5 formats: MD/HTML/PDF/JSON/TXT), history restoration display, deferred output rendering, router training state sync (LogicChatMixin) |
+| gui_logic_media.py | 763 | Media rendering, voice I/O (TTS queue worker with persistent thread + STT continuous listening), TTS via pyttsx3 (chunk-based, non-blocking, safe stop via word callback), text cleaning for TTS (markdown/code stripping), inline media rendering with image cap, GIF animation (frame cycling with duration tracking), video thumbnails (play button overlay), clickable URLs (unique tag IDs), markdown image syntax support, chat input auto-resize (LogicMediaMixin) |
+| gui_forge.py | 1259 | Forge hub: training setup, 5-mode dispatch (Pre-Train/Distill/Basic/AI-Guided/Image), quick profile fields, training brief persistence (build/save/load with auto-save), knowledge preservation (general mix), validation split, RL params, trainer/student system prompt builders (size-aware, stage-specific curriculum, training brief injection), mode-based section visibility, stage button dynamic coloring, format training pair helper (stage-appropriate formats), build generation prompt with CoT reasoning support, extract prompts from multiple formats (PDF/DOCX/JSONL/Q&A/User-AI), tokenizer training, model param counting (multi-format), button state management, unified training dispatcher. Inherits ForgeTrainingMixin + ForgeAdvancedMixin + ForgeAdaptiveMixin + ForgeNewModesMixin + ForgeToolsMixin + ForgeModelsMixin + ForgeQueueMixin |
+| gui_forge_training.py | 1030 | Basic training modes: solo, DPO (JSONL preference pairs), vision (encoder presets small/medium/large with state saving), LoRA (adapter saving, partial layer freezing fallback, auto-detect large models for LoRA), CPU-first student loading, HuggingFace model/tokenizer loading with weight mapping, before/after perplexity evaluation, general knowledge mix, loss curves (ForgeTrainingMixin) |
+| gui_forge_advanced.py | 1350 | Advanced training: 3-phase guided training (curriculum generation → student training → readiness assessment with 1-10 scoring + stage advancement recommendations), curriculum file saving to data/ for DOCS review, dialogue training (TRAINER↔STUDENT multi-turn conversation with history tracking + conversation improvement tracking (first/second half comparison) + AI reinforcement on high scores ≥8/10 + corrections + transcript saving), engagement scoring for background trainer (ForgeAdvancedMixin) |
+| gui_forge_adaptive.py | 1399 | Adaptive pipeline: TrainingPlan JSON persistence (save/load with resume-on-crash), 3-phase adaptive loop (generate → train → test), accumulated curriculum per stage, adaptive difficulty adjustment, test score parsing (robust multi-format), difficulty probing with thresholds, stage advancement (retry/advance/complete), deduplication across retries, quality filtering (validate + clean examples), training report card (letter grades A-F with verdict + loss trend analysis + per-stage breakdown + next-step recommendations), plan status tracking (running/paused/completed/failed), loss trend detection (ForgeAdaptiveMixin) |
+| gui_forge_new_modes.py | 1751 | Training modes: Pre-Train (from-scratch model creation with preset selection, BPE tokenizer retraining on 500K chunks with vocab validation 256-100000, corpus processing, perplexity tracking), Distill (6-category teacher→student knowledge distillation with category-specific seed prompts + prompt variation for diversity + multi-retry generation + configurable examples/tokens + reasoning chain support), RLHF (2-phase: reward model → PPO), Self-Play (TRAINER as reward with SelfPlayConfig), teacher system prompt builder, data accumulation to curated dataset, stage-aware training, data validation (min 100 chars) (ForgeNewModesMixin) |
+| gui_forge_tools.py | 1699 | Forge tools: data gen (mode-aware routing + curated dataset auto-accumulate + reasoning flag), evaluate, coherence benchmark (0.7 threshold for monologue quality gate), web learn (DuckDuckGo search → fetch → 800-char chunking → TRAINER generates Q/A pairs + topic sanitization + curated dataset auto-accumulate), checkpoints (organized models/checkpoints/ structure), tokenizer training, cards (model identity card with training history), auto-train (data selection + start), forge param count display, loss chart (ASCII bar chart + canvas line chart with grid lines + moving average overlay + step labels), command policy DPO generator (parse commands_reference.md → chosen/rejected JSONL pairs), training history JSON (persist/display past runs with perplexity), hyperparameter presets (Quick/Balanced/Thorough), HuggingFace download progress, progress percentage label (ForgeToolsMixin) |
+| gui_forge_models.py | 1498 | Model ops: import (file dialog + directory detection), create, copy (directory-based for sharded models), rename (with model context dir rename + route assignment update + case-only handling on Windows), delete, progressive model growing (Net2Net-style zero-init with compatible preset estimation + grow dialog + weight transfer by min dimensions), quantize (dynamic/int8/int4 modes), GGUF export (F16/Q8_0/Q4_0 types), HuggingFace download (progress callback + directory vs file detection), operation busy guard (_model_op_busy), background thread safety (ForgeModelsMixin) |
+| gui_forge_queue.py | 599 | Queue with pause/resume + job progress callbacks, overnight plan save/load with resume capability + plan-to-queue conversion, curated dataset GUI (review with pending entry summaries + approve all pending + dataset source tagging), dataset auto-accumulate helper (ForgeQueueMixin) |
+| gui_mods.py | 251 | Mod subprocess lifecycle (start/stop/auto-start, _launch_mod), crash detection (1s timeout), stderr capture (UTF-8 safe), auto-launch on command send (lazy start), UI widget value gathering for command args, router mod command sending with args marshalling, mod page status updates (running/ready indicators) |
+| gui_mod_page.py | 809 | Per-mod page builder from mod.json: dynamic UI rendering (text_input, text_area, number, dropdown, checkbox, button widgets with state persistence), rules rendering (up to 6 from mod.json), AI prompt display, dependencies list, settings summary, status indicators (StatusDot + RUNNING/READY labels), command arguments with type hints + required markers, clear output log button |
+| gui_cmd_page.py | 2298 | Dual-mode terminal: SYSTEM shell + ENGINE commands + AI ACCESS + activity monitor (_cmd_activity for thread-safe logging) + live status strip (5 labels: device/RAM%/VRAM%/model/uptime, 5s refresh) + 15 info commands (status/sysinfo/gpu/memory/models/routes/sessions/mods/data/uptime/profiles/emotions.show/emotions.reset + config/file/memory commands) + AI command execution ([CMD] block parsing with file operation confirmation) + command history (up/down) + command cancellation + CWD tracking in prompt + input context menu (cut/copy/paste/select-all) + tooltips + welcome screen (OS/CPU/RAM/GPU/CUDA/routes/counts) + multilingual routing (non-Latin input auto-routes to AI) |
+| media.py | 830 | Chat media support: image/GIF/video detection, Pillow loading, URL image download (10MB cap), GIF download + frame extraction (20MB cap), GIF animation (frame cycling with duration), video thumbnails (OpenCV + play button overlay), URL detection, clickable links (unique tag IDs), markdown image syntax parsing, media segmentation (split_text_and_media), URL sanitization, path resolution with PROJECT_ROOT fallback, MAX_CHAT_IMAGES cap, MAX_CHAT_HISTORY cap (500), active GIF cap (5) |
+| scanners.py | 1449 | Filesystem scanning, config limits, ROUTE_KEYS, PATH_SETTINGS, editable path overrides (save/load path_settings.json), route assignment persistence (save/load route_assignments.json), path persistence, scan_docs, trainer docs, param counting (_peek_target_size fast path + SafeUnpickler for security + zipfile peek + _estimate_params_from_size file-size heuristic for >2GB models + sharded safetensors merging), target_size display, _format_param_count, vision data scanning (paired images+text, JSONL, video frame extraction via OpenCV) |
+| themes.py | 161 | Color theme system: Theme frozen dataclass (21 fields), 4 presets (dark/midnight/carbon/solarized), load/save preference, theme API |
+
+### Mixin Inheritance Order
+```
+EnigmaGUI(DocsPageMixin, ForgeMixin, ModMixin, ModPageMixin, CMDPageMixin, LogicMixin, PagesMixin, ctk.CTk)
+```
+
+ForgeMixin inheritance:
+```
+ForgeMixin(ForgeTrainingMixin, ForgeAdvancedMixin, ForgeAdaptiveMixin, ForgeNewModesMixin, ForgeToolsMixin, ForgeModelsMixin, ForgeQueueMixin)
+```
 
 ---
 
@@ -62,8 +108,9 @@ Use this to decide what to change, move, remove, or redesign.
 | Ctrl + N | New chat session |
 | Escape | Stop generation |
 | Shift + Return | Newline in chat input |
-| Ctrl + Z | Undo (docs editor) |
-| Ctrl + Y | Redo (docs editor) |
+| Ctrl + Z | Undo (all text inputs) |
+| Ctrl + Y | Redo (all text inputs) |
+| Ctrl + A | Select all (all text inputs) |
 | Ctrl + S | Save (docs editor) |
 | Ctrl + F | Find (docs editor) |
 | Up / Down | Command history (CMD page) |
@@ -78,7 +125,7 @@ Use this to decide what to change, move, remove, or redesign.
 
 Dual-mode terminal with SYSTEM (real PowerShell) and ENGINE (AI command registry) modes.
 AI ACCESS toggle lets the AI execute real system commands when enabled.
-Also serves as an activity monitor — all AI operations (chat [CMD] blocks, command execution) are logged here via `_cmd_activity()`.
+Also serves as an activity monitor — all AI operations (chat [CMD] blocks, command execution) are logged here via `_cmd_activity()`. When the AI uses chain-of-thought reasoning, the full `<think>` content is logged here (with `🧠 Reasoning:` header) followed by the answer, so users can monitor the AI's thought process without cluttering the chat page.
 Rich welcome screen shows system info, loaded model, routes, and asset counts on open.
 Live status strip auto-refreshes every 5 seconds with device, RAM, VRAM, model, and uptime.
 
@@ -160,6 +207,8 @@ Live status strip auto-refreshes every 5 seconds with device, RAM, VRAM, model, 
 | memory.notes | Show all remembered facts |
 | memory.clear_notes | Clear all persistent memories |
 | memory.search \<query\> | Search remembered facts by keyword/topic |
+| emotions.show | Show the AI's current emotional state (valence, energy, engagement, trust, frustration) with visual bars |
+| emotions.reset | Reset emotional state to neutral baseline |
 | system.info | System information |
 | (all engine commands) | Full command registry available |
 
@@ -169,7 +218,7 @@ Live status strip auto-refreshes every 5 seconds with device, RAM, VRAM, model, 
 3. If unknown and AI ACCESS is ON, the command runs as a real system command
 4. If unknown and AI ACCESS is OFF, an error is shown
 
-**Keyboard:** Up/Down arrows navigate command history. Enter executes.
+**Keyboard:** Up/Down arrows navigate command history. Enter executes. Ctrl+Z/Y undo/redo, Ctrl+A select all in command input.
 
 ---
 
@@ -231,25 +280,28 @@ Each mod gets its own page, dynamically built from the mod's `mod.json` config.
 ### Chat Area (left column)
 | Element | What It Is | What It Does | File |
 |---------|-----------|-------------|------|
-| Chat display | SelectableTextbox (CTkTextbox subclass) with native scrollbar, word wrap, 12px left/right margins | Shows conversation: purple for YOU, silver for ENIGMA, orange for SYSTEM (with timestamps), red for errors. When AI uses chain-of-thought reasoning, a `🧠 Reasoning:` section appears before the answer showing the `<think>` content in dim text. Native scrollbar handles all scrolling — no wrapper frame needed. Fills available space via sticky="nsew" | gui_pages.py |
+| Chat display | SelectableTextbox (CTkTextbox subclass) with native scrollbar, word wrap, 12px left/right margins | Shows conversation: purple for YOU, silver for ENIGMA, orange for SYSTEM (with timestamps), red for errors. Chain-of-thought reasoning is not shown here — it is logged to the CMD page instead. Native scrollbar handles all scrolling — no wrapper frame needed. Fills available space via sticky="nsew" | gui_pages.py |
 | File indicator | Tiny cyan text above input | Shows attached filename when a file is attached | gui_pages.py |
 | Thinking indicator | Tiny dim text, right side, fixed 140px width | Shows "PROCESSING..." with animated dots while AI generates response. Layout stability is enforced at two layers: `input_area.grid_columnconfigure(1, minsize=140)` locks the control column width, and fixed-size `SelectableLabel` instances do not resize on text updates. This prevents residual jitter during animation | gui_pages.py, widgets.py |
-| Chat input | Multi-line text box, 56px default | Type messages here. Enter sends. Shift+Enter for newline. Blocked during generation. Auto-expands from 56px to 200px as content grows, resets to 56px after sending | gui_pages.py |
+| Chat input | Multi-line text box, 56px default | Type messages here. Enter sends. Shift+Enter for newline. Ctrl+Z/Y undo/redo, Ctrl+A select all. Blocked during generation. Auto-expands from 56px to 200px as content grows, resets to 56px after sending | gui_pages.py |
 | SEND button | Green button, right of input | Sends the message (or Enter key). Hidden during generation. Tooltip: "Send message (Enter)" | gui_pages.py |
 | STOP button | Red button, same slot as SEND | Shown during generation. Stops AI mid-response. Also Escape key. Tooltip: "Stop AI generation" | gui_pages.py |
 | Token counter | SelectableLabel on right side of toolbar | Shows current conversation token count (e.g. "128 tokens"). Updates on page show and new chat | gui_pages.py |
 | In-memory history cap | Logic behavior (not a direct widget) | Caps `self.history` at `MAX_CHAT_HISTORY = 500` via `_trim_chat_history()` to prevent RAM growth. Full session still auto-saves to disk in `memory/session_*.json` | gui_logic_chat.py |
-| Utility toolbar | Row below input | Left side: attach, new, web toggle, edit. Right side: voice, mic — separated from SEND to prevent misclicks | gui_pages.py |
+| History summary | Logic behavior (not a direct widget) | When chat history is truncated to fit context, dropped messages are summarized by `_summarize_dropped_history()` into a compact topic list. The summary is injected into the system prompt by `_prepare_chat()` so the AI retains awareness of earlier conversation. Persisted as `history_summary` field in session JSON — restored on load, cleared on new chat | engine_chat.py, gui_logic_chat.py |
+| Utility toolbar | Row below input | Left side: attach, new, web toggle, reasoning toggle, RAG toggle, edit. Right side: voice, mic — separated from SEND to prevent misclicks | gui_pages.py |
 | Attach button | Square button in toolbar (left) | Opens file picker to attach a text file to next message. Tooltip: "Attach file" | gui_pages.py |
 | NEW button | Dark button in toolbar (left) | Starts a new conversation: clears chat, history, and KV cache. No confirmation needed — current chat auto-saves | gui_pages.py |
 | Web access toggle | ToggleButton (🌐 icon) in toolbar (left) | Toggles AI web access on/off. When ON (cyan), AI can search the web via DuckDuckGo. Flag injected into _build_gui_context() system prompt. Tooltip: "Web access" | gui_pages.py |
+| Reasoning toggle | ToggleButton (🧠 icon) in toolbar (left) | Toggles chain-of-thought reasoning on/off. When ON, AI uses step-by-step reasoning (`<think>` blocks) before answering. Sets `self.reasoning_enabled` flag. Tooltip: "Reasoning" | gui_pages.py |
+| RAG toggle | ToggleButton (📚 icon) in toolbar (left) | Toggles document Q&A on/off. When ON, indexes `data/` and `information/` directories in a background thread via `RAGIndex`, then uses retrieved context to answer questions. Tooltip: "Document Q&A" | gui_pages.py |
 | Edit button | Square button (✎ icon) in toolbar (left) | Edits last sent message: removes last exchange, puts user text back in input. Blocked during generation. Tooltip: "Edit last message" | gui_pages.py |
 | Voice toggle | Square toggle button in toolbar (right) | Turns voice output (TTS) on/off. When ON (green), AI responses are spoken aloud via pyttsx3 persistent worker thread. Toggling OFF stops any in-progress speech. Tooltip: "Voice output on/off" | gui_pages.py |
 | Mic button | Square button (🎤 icon) in toolbar (right) | Voice input: click to start continuous listening, each recognized phrase auto-sends as a chat message. Click again to stop. Uses listen_in_background() with stopper. Turns red while recording. Tooltip: "Voice input (mic)" | gui_pages.py |
 
 ### Sidebar (right column, resizable via PanedWindow)
 
-The sidebar contains two **collapsible panels** (CollapsiblePanel widget). Click the header to expand/collapse. When one is collapsed, the other takes all available space. When both are collapsed, only the header rows are visible. The chat/sidebar boundary is a **draggable sash** (tk.PanedWindow) — users can resize by dragging.
+The sidebar contains four **collapsible panels** (CollapsiblePanel widget). Click the header to expand/collapse. When panels are collapsed, expanded ones take the available space. When all are collapsed, only the header rows are visible. The chat/sidebar boundary is a **draggable sash** (tk.PanedWindow) — users can resize by dragging.
 
 | Element | What It Is | What It Does | File |
 |---------|-----------|-------------|------|
@@ -263,15 +315,20 @@ The sidebar contains two **collapsible panels** (CollapsiblePanel widget). Click
 | Prompt editor | Text box (inside panel) | Edit the system prompt that shapes AI behavior | gui_pages.py |
 | APPLY button | Small silver accent button | Applies the edited system prompt to current engine | gui_pages.py |
 | RESET button | Small dark button | Resets prompt to default from prompts.json | gui_pages.py |
+| EMOTIONAL STATE panel header | CollapsiblePanel, dim chevron + title | Click to expand/collapse the emotional state display | gui_pages.py |
+| Emotional state bars | Visual bars inside panel | Shows 5 dimensions: valence, energy, engagement, trust, frustration (0.0–1.0 each). Each row has a label (auto-width, aligned via `minsize=110`), an orange progress bar, and a numeric value. Hover any row to see a description tooltip (e.g. "Negative ↔ Positive", "Calm ↔ Energized"). Hidden when "Show emotional state panel" is unchecked on CONFIG. AI still uses emotional data internally | gui_pages.py |
+| JOURNAL panel header | CollapsiblePanel, purple chevron + title | Click to expand/collapse the journal section | gui_pages.py |
+| Journal display | SelectableTextbox (inside panel) | Shows the last 5 journal entries (timestamp + text). Populated by `_refresh_journal_display()` which reads from the model's `Journal` instance. Empty until monologue mode is enabled and reflections pass the coherence gate | gui_pages.py |
 
-**Sidebar toggle:** Click the \u25e8 button in the top bar to hide the entire sidebar (history + system prompt). The chat area expands to full width. Click again to restore the sidebar. Both collapsible panels retain their state when the sidebar is toggled.
+**Sidebar toggle:** Click the ◨ button in the top bar to hide the entire sidebar (history + system prompt + emotional state + journal). The chat area expands to full width. Click again to restore the sidebar. All collapsible panels retain their state when the sidebar is toggled.
 
 **Collapsible behavior:**
-- Both start expanded by default, sharing the sidebar space equally
-- Click a panel header (chevron + title) to collapse it — the other panel expands to fill the space
-- Click again to re-expand — both panels share space equally again
+- History and System Prompt start expanded by default; Emotional State and Journal start collapsed
+- Emotional State panel has fixed height (no vertical stretching). Can be hidden entirely via CONFIG toggle.
+- Click a panel header (chevron + title) to collapse it — remaining expanded panels share the space
+- Click again to re-expand — all expanded panels share space equally
 - Chevron indicator: ▼ = expanded, ▶ = collapsed
-- When both are collapsed, only the two thin header rows are visible
+- When all are collapsed, only the thin header rows are visible
 
 **STOP button behavior:**
 - SEND button is hidden during generation, replaced by red STOP button in the same grid slot
@@ -318,7 +375,8 @@ The sidebar contains two **collapsible panels** (CollapsiblePanel widget). Click
 | Element | What It Is | What It Does | File |
 |---------|-----------|-------------|------|
 | Name entry | Text input | Name for the new model | gui_pages.py |
-| CREATE button | Silver accent button | Creates a blank untrained model with a default small architecture. Feedback shown inline and in status bar. Tooltip: "Create a new empty model" | gui_pages.py |
+| Size dropdown | CTkOptionMenu from MODEL_PRESETS | Selects architecture preset for new model (pi_zero to omega). Default: "small". All 16 presets available | gui_pages.py |
+| CREATE button | Silver accent button | Creates a blank untrained model with the selected preset architecture. Feedback shown inline and in status bar. Tooltip: "Create a new empty model" | gui_pages.py, gui_forge_models.py |
 | IMPORT button | Silver accent button | Opens file picker to import an external model (.gguf, .bin, .safetensors, .pth, .pt). Copies to models/ directory. Tooltip: "Import a model file from disk" | gui_pages.py |
 | DOWNLOAD button | Silver accent button | Downloads a model from HuggingFace. Reads the repo ID from the inline HF entry field. Tooltip: "Download a model from HuggingFace" | gui_pages.py, gui_forge_models.py |
 | HF repo entry | Text input (width 260) with placeholder "e.g. gpt2 or username/model-name" | Inline entry for HuggingFace repo IDs. Press Enter or click DOWNLOAD to start download. Replaces the old dialog prompt | gui_pages.py |
@@ -334,10 +392,10 @@ Each model gets a card with identity info, format details, and action buttons. I
 | EDIT button | Silver accent button (row 0, right) | Makes the name entry editable inline with orange border. Shows SAVE/CANCEL buttons (row 3). Enter saves, Escape cancels. Saves as display name in model context. Tooltip: "Edit identity card" | gui_pages.py |
 | EXPORT button | Dark button (row 0, right) | Exports identity card as a standalone JSON file. Tooltip: "Export identity card to JSON" | gui_pages.py |
 | COPY button | Dark button (row 0, right) | Creates a copy of the model file with "_copy" suffix. Shows → arrow feedback. Tooltip: "Duplicate this model" | gui_pages.py |
+| GROW button | Green accent button (row 0, right, native only) | Progressive growing — expand model to a larger size preset. Shows inline preset picker (dropdown + GROW/CANCEL). Creates new model file with expanded weights. Only shown for native .pth/.pt models. Tooltip: "Expand this model to a larger size (progressive growing)" | gui_pages.py, gui_forge_models.py |
 | DELETE button | Dark button, hover red (row 0, right) | Shows inline red delete bar (row 4): "Delete model_name? [YES] [NO]". YES confirms deletion, NO cancels. Tooltip: "Permanently delete this model" | gui_pages.py |
 | NATIVE/EXTERNAL tag | Colored label (row 1, left) | Green "NATIVE" for .pth/.pt models, orange "EXTERNAL" for .gguf/.bin/.safetensors | gui_pages.py |
-| TRAINABLE badge | Cyan text label (row 1, after NATIVE tag) | Shown only on native models (.pth/.pt) that support training. Not shown on external formats | gui_pages.py |
-| Format info | Tiny dim text (row 1, after tags) | Shows "PTH // 42 MB" format and file size | gui_pages.py |
+| Format info | Tiny dim text (row 1, after tag) | Shows "PTH // 42 MB" format and file size | gui_pages.py |
 | File name subtitle | Tiny dim text (row 1, after format) | Shows original file name in parens when identity display_name differs | gui_pages.py |
 | Personality | Normal dim text (row 2) | Short personality description from identity card | gui_pages.py |
 | Stats line | Tiny dim text (row 2) | Message count, session count, training run count | gui_pages.py |
@@ -347,7 +405,7 @@ Each model gets a card with identity info, format details, and action buttons. I
 
 **Model card layout:**
 - **Row 0:** Model name entry (identity name or file name + param count) on left, EDIT / EXPORT / COPY / DELETE buttons on right
-- **Row 1:** NATIVE or EXTERNAL tag (color-coded) + TRAINABLE badge (cyan, native only) + format and file size + file name subtitle
+- **Row 1:** NATIVE or EXTERNAL tag (color-coded) + format and file size + file name subtitle
 - **Row 2 (if identity exists):** Personality, stats (messages/sessions/training runs), tags
 - **Row 3 (hidden):** SAVE / CANCEL buttons for inline name editing (shown when EDIT or Rename is active)
 - **Row 4 (hidden):** Red delete confirmation bar (shown when DELETE is clicked)
@@ -385,6 +443,7 @@ Bound to `<Button-3>` on the card frame, inner frame, and name entry.
 | Element | What It Is | What It Does | File |
 |---------|-----------|-------------|------|
 | "ROUTER" header | Section label | Page title | gui_pages.py |
+| SUSPEND button | Button on right, disabled until model loaded | Suspends model memory while preserving chat route. Saves context, releases engine, sets header to "SUSPENDED" (orange). Button text changes to "RESUME" to reload the model. Blocked during generation or training | gui_pages.py |
 | UNLOAD button | Small button on right, disabled until model loaded | Unloads current model, frees memory | gui_pages.py |
 
 ### Route Connection Cards
@@ -398,7 +457,7 @@ Bound to `<Button-3>` on the card frame, inner frame, and name entry.
 | Route status dot | Colored circle on left of card | Green = model assigned or running, orange = model assigned but mod stopped, gray = nothing | gui_pages.py |
 | Model dropdown | CTkOptionMenu per route card | Select which model to assign to this route (None clears it) | gui_pages.py |
 
-**Route behavior:** Each route (CHAT, TRAINER, STUDENT, and each mod) has its own model dropdown. Selecting a model from the CHAT dropdown loads it into the engine. Selecting "None" unloads it. Non-chat routes share the chat engine if assigned the same model (`_get_engine_for_route()`). The STUDENT route is the model being trained — fine-tune in FORGE trains the STUDENT model while TRAINER can evaluate it. Mod routes also show running/stopped state. All route statuses update live via `_update_route_status()` in gui_logic.py. Assignments are stored in `self.route_assignments` dict. Route changes also update the status bar for cross-page visibility.
+**Route behavior:** Each route (CHAT, TRAINER, STUDENT, and each mod) has its own model dropdown. Selecting a model from the CHAT dropdown loads it into the engine. Selecting "None" unloads it. Non-chat routes share the chat engine if assigned the same model (`_get_engine_for_route()`). The STUDENT route is the model being trained — fine-tune in FORGE trains the STUDENT model while TRAINER can evaluate it. During FORGE operations (Evaluate, Adaptive Phase 3, AI-Assisted Phase 3, Dialogue training), STUDENT receives a lean persona prompt via `_build_student_system_prompt()` (identity + behavioral guidance only — no training mechanics or scoring rubrics), while TRAINER gets the full mechanics prompt via `_build_trainer_system_prompt()`. Mod routes also show running/stopped state. All route statuses update live via `_update_route_status()` in gui_logic.py. Assignments are stored in `self.route_assignments` dict. Route changes also update the status bar for cross-page visibility.
 
 ---
 
@@ -426,14 +485,14 @@ Cards update live via `_update_forge_cards()` whenever route assignments change.
 #### Train (unified section)
 | Element | What It Is | What It Does | File |
 |---------|-----------|-------------|------|
-| Training mode cards | 3 radio-card options (`BASIC`, `AI-GUIDED`, `IMAGE`) | Replaces old multi-mode dropdown. User chooses one clear path, then only relevant sections are shown | gui_pages_forge.py |
+| Training mode cards | 5 radio-card options (`PRE-TRAIN`, `DISTILL`, `BASIC`, `AI-GUIDED`, `IMAGE`) | User chooses one clear path, then only relevant sections are shown | gui_pages_forge.py |
 | Include reasoning checkbox | CTkCheckBox | When ON, AI-generated training data can include `<think>` reasoning chains | gui_pages_forge.py |
 | Basic data source dropdown | Option menu | For Basic mode training data. Supports `(none)` and file selection from `data/` | gui_pages_forge.py |
 | **Auto-LoRA trigger** | Automatic detection | When training in Basic mode, detects STUDENT model param count. Auto-selects LoRA if > 7B params, full fine-tuning if ≤ 7B params. No user toggle needed — happens automatically at training start. Shows info log message about detected size and selected method | gui_forge.py |
 | AI-guided topic/goal entry | Text input (required for AI-Guided) | Defines what the trainer should teach the student. If empty, training logs guidance and does not start | gui_pages_forge.py |
 | AI-guided supplement data dropdown | Option menu (optional) | Optional seed data for AI-guided curriculum generation. Wired to `ai_supplement_var` and used by the adaptive backend/tool flows | gui_pages_forge.py |
 | Training stage buttons | 4 CTkButtons (`BASICS/CONVERSATION/COMMANDS/WEB`) | Select the adaptive pipeline start stage. Runtime contract is “start here, then continue forward” | gui_pages_forge.py |
-| Training brief panel | CollapsiblePanel with quick profile fields + custom text | Refines trainer instructions for AI-guided runs | gui_pages_forge.py |
+| Training brief panel | CollapsiblePanel with quick profile fields + custom text | Refines trainer instructions for AI-guided runs. Profile labels (Personality, Tone, etc.) auto-size to content | gui_pages_forge.py |
 | Image data directory | Text input + Browse button | Folder with image-text pairs used by Image mode | gui_pages_forge.py |
 | Encoder size dropdown | Option menu (`tiny/small/medium`) | Vision encoder size for Image mode | gui_pages_forge.py |
 | Training preset dropdown | Option menu (`Quick/Balanced/Thorough/Custom`) | Pre-fills epochs, learning rate, and batch size | gui_pages_forge.py |
@@ -449,25 +508,45 @@ Cards update live via `_update_forge_cards()` whenever route assignments change.
 | STOP button | Dark button, disabled until training starts | Stops training after current epoch | gui_pages.py |
 | Auto-train checkbox | CTkCheckBox, tiny dim text | When checked, GENERATE DATA and WEB LEARN automatically select the new file and start training after completion | gui_pages.py |
 
-**Mode-adaptive UI:** Switching between `BASIC`, `AI-GUIDED`, and `IMAGE` shows only the relevant controls.
+**Mode-adaptive UI:** Switching between `PRE-TRAIN`, `DISTILL`, `BASIC`, `AI-GUIDED`, and `IMAGE` shows only the relevant controls.
 
-| Section | Basic | AI-Guided | Image |
-|---------|-------|-----------|-------|
-| Data source picker | Shown | Optional supplement | Hidden |
-| Topic/goal | Hidden | Required | Hidden |
-| Stage buttons | Hidden | Shown | Hidden |
-| Training brief | Hidden | Shown | Hidden |
-| Pairs per stage | Hidden | Shown | Hidden |
-| Image folder + encoder | Hidden | Hidden | Shown |
+| Section | Pre-Train | Distill | Basic | AI-Guided | Image |
+|---------|-----------|---------|-------|-----------|-------|
+| Pre-Train section | Shown | Hidden | Hidden | Hidden | Hidden |
+| Distill section | Hidden | Shown | Hidden | Hidden | Hidden |
+| Data source picker | Hidden | Hidden | Shown | Optional supplement | Hidden |
+| Topic/goal | Hidden | Hidden | Hidden | Required | Hidden |
+| Stage buttons | Hidden | Hidden | Hidden | Shown | Hidden |
+| Training brief | Hidden | Hidden | Hidden | Shown | Hidden |
+| Pairs per stage | Hidden | Hidden | Hidden | Shown | Hidden |
+| Image folder + encoder | Hidden | Hidden | Hidden | Hidden | Shown |
 
 **Training modes:**
 | Display Name | Internal Key | Description | Requirements |
 |-------------|-------------|-------------|-------------|
+| Pre-Train | Pre-Train | Language pre-training from scratch on large text data. Creates a new model from a selected preset, optionally retrains tokenizer, trains with general_mix_ratio=0.0 | Data file or directory (no model route needed) |
+| Distill | Distill | Teacher (GGUF) generates targeted training data across 6 categories (personality, reasoning, knowledge, conversation, commands, creativity), student fine-tunes on it. Saves model + generated data to `data/distilled_{name}.txt` | TRAINER + STUDENT routes + at least 1 category selected |
 | Basic | Basic | User trains on selected data file. Backend can route to full fine-tune or LoRA path | STUDENT route + data file |
 | AI-Guided | AI-Guided | TRAINER generates/teaches curriculum for STUDENT from user topic and optional supplement data | TRAINER + STUDENT routes + topic/goal |
 | Image | Vision | Vision training on image-text pairs from selected folder | STUDENT route + image folder |
 
-**Contract note (intentional):** The FORGE page contract is now these 3 modes. Legacy mode names (Self Study, Dialogue, DPO, LoRA, Evolutionary, RLHF, Self-Play) are not part of the primary FORGE UI contract.
+#### Pre-Train Section
+| Element | What It Is | What It Does | File |
+|---------|-----------|-------------|------|
+| Model size dropdown | CTkOptionMenu from MODEL_PRESETS | Selects architecture preset (pi_zero to omega). Inline "name - description" format (e.g. "small - Entry GPU, ~1 GB VRAM"). Default: "small". | gui_pages_forge.py |
+| Data path entry + Browse | CTkEntry + browse button | Path to .txt, .jsonl, .json file or directory of text files for pre-training corpus | gui_pages_forge.py |
+| Vocab size entry | CTkEntry, default "32000" | Target vocab size for BPE tokenizer retraining (256–100000) | gui_pages_forge.py |
+| Retrain tokenizer checkbox | CTkCheckBox, default ON | When checked, trains a new BPE tokenizer on the data before model creation | gui_pages_forge.py |
+| Model name entry | CTkEntry, default "pretrained_model" | Output model filename (saved to models/) | gui_pages_forge.py |
+
+#### Distill Section
+| Element | What It Is | What It Does | File |
+|---------|-----------|-------------|------|
+| Category checkboxes | 6 CTkCheckBox (personality, reasoning, knowledge, conversation, commands, creativity) | Select which categories of training data the teacher generates. At least 1 required | gui_pages_forge.py |
+| Examples per category | CTkEntry, default "50" | Number of examples teacher generates per selected category (1–500) | gui_pages_forge.py |
+| Max tokens | CTkEntry, default "512" | Maximum token length per generated example (32–8192) | gui_pages_forge.py |
+
+**Contract note (intentional):** The FORGE page contract is now these 5 modes. Legacy mode names (Self Study, Dialogue, DPO, LoRA, RLHF, Self-Play) are not part of the primary FORGE UI contract. Evolutionary has been fully removed from the codebase.
 
 **Backend-only modes (fully implemented but not in dropdown):**
 | Display Name | Internal Key | Description | Requirements |
@@ -479,15 +558,21 @@ Cards update live via `_update_forge_cards()` whenever route assignments change.
 
 **AI-Guided execution note:** The current backend path goes through the adaptive pipeline. Supplement selection and start-stage selection are now wired. The pipeline still intentionally auto-chains remaining stages after the selected start point.
 
-**Migration note (Completed March 9, 2026):** All GUI tests have been updated to validate the 3-mode contract. Test class renamed from `TestRLHFSelfPlayDropdown` to `TestTrainingModes` with 9 tests covering Basic, AI-Guided, and Image modes. Legacy mode references in tests removed. Code passes linting and tests pass.
+**Migration note (Completed March 9, 2026):** All GUI tests have been updated to validate the 5-mode contract. Test class renamed from `TestRLHFSelfPlayDropdown` to `TestTrainingModes` with 9 tests covering Basic, AI-Guided, and Image modes. Legacy mode references in tests removed. Code passes linting and tests pass.
 
-**Forge status (March 9, 2026):** Core FORGE work is complete for day-to-day training: 3-mode UX, automatic LoRA routing for large models, and automatic before/after perplexity logging are all active. Remaining roadmap items are tool success-rate persistence and Discovery mode orchestration.
+**Forge status (March 12, 2026):** Core FORGE work is complete for day-to-day training: 5-mode UX, automatic LoRA routing for large models, automatic before/after perplexity logging, curriculum preview in log, and training report card (letter grades + next-step recommendations) are all active. Training Brief save now verifies writes. Profile labels auto-size (truncation fixed). Remaining roadmap items are tool success-rate persistence and Discovery mode orchestration.
+
+**Backend training improvements (March 11, 2026, no GUI changes):** `TrainingConfig` now includes `adam_beta1`/`adam_beta2`/`adam_eps` (LM-friendly defaults), `val_split` (hold-out fraction for per-epoch validation), and LoRA `weight_decay` is configurable. RMSNorm computes in fp32 for numerical stability. All tokenizers expose `think_start_id`/`think_end_id`. These are backend-only — no new FORGE widgets.
 
 **Reality check (March 10, 2026):** The visible FORGE UI is mostly aligned with the backend now:
 - The AI-Guided supplement dropdown is wired through the adaptive/tool paths.
 - Stage buttons define the adaptive start stage, then the pipeline intentionally continues forward through later stages.
 - The adaptive plan records test scores, but progression still auto-advances rather than using score thresholds.
 - The old focus-field widget is gone; Training Topic + Training Brief are the active control surfaces.
+
+**Adaptive pipeline output (March 12, 2026):** During Phase 1 (data generation), the log shows each generated example with a truncated preview (`[1/20] User: ... AI: ...`, up to 150 chars). After the full pipeline completes, a training report card is logged: overall letter grade (A-F with verdict), per-stage score breakdown, and tailored next-step recommendations based on performance (score 8+: refine/test/backup; 5-7: more reps/data/epochs; <5: check trainer/lower LR/try basic mode).
+
+**Training generation limits (March 15, 2026):** All Phase 3 testing and Dialogue training generation limits have been raised for better training quality. Test questions: max_gen=100, student answers: max_gen=256, judgments: max_gen=128. Dialogue-specific: questions max_gen=128, answers max_gen=256, corrections max_gen=300. All log truncation has been removed — training output now shows full untruncated text (newlines replaced with spaces for single-line display). Affects gui_forge_advanced.py, gui_forge_adaptive.py, gui_forge_tools.py, and gui_forge_queue.py.
 
 **Training stage buttons:**
 | Stage | Tooltip | What TRAINER teaches |
@@ -510,6 +595,7 @@ Cards update live via `_update_forge_cards()` whenever route assignments change.
 |---------|-----------|-------------|------|
 | GENERATE DATA button | Dark button | TRAINER autonomously generates training data in stage-appropriate format (basics=varied text, conversation=User/AI dialogue, commands=Q&A+CMD, web=Q&A+search) via `_build_generation_prompt()`. When "Include reasoning" is checked, generated data includes `<think>` reasoning chains. Saves to data/. Updates progress bar. If Auto-train is checked, starts training on completion | gui_pages.py |
 | EVALUATE button | Dark button | TRAINER tests STUDENT: generates questions, judges answers 1-10, determines readiness | gui_pages.py |
+| BENCHMARK button | Dark button | Runs 20-prompt coherence benchmark on CHAT model, scores reflections via `score_coherence()`, reports readiness for automatic monologue mode (ready/marginal/not_ready) | gui_pages_forge.py |
 | HISTORY button | Dark button | Displays past training runs from data/training_history.json in the log. Shows model name, mode, epochs, final loss, and timestamp for each run | gui_pages.py |
 | SAVE CHECKPOINT button | Dark button | Saves STUDENT model to models/checkpoints/ | gui_pages.py |
 | LOAD CHECKPOINT button | Dark button | Loads a checkpoint back into the STUDENT model slot | gui_pages.py |
@@ -531,6 +617,15 @@ Cards update live via `_update_forge_cards()` whenever route assignments change.
 | APPROVE ALL button | Dark button | Approves all pending entries in the curated dataset for training use. Saves to JSONL | gui_pages_forge.py |
 
 **Web Learn behavior:** Uses shared `web_utils.py` (ddg_search + fetch_page_text) to search DuckDuckGo for the topic and fetch top N pages. Extracts text content (limited to 3000 chars per page), breaks into chunks. TRAINER generates one training pair per chunk in stage-appropriate format using `_build_trainer_system_prompt()` (respects training brief and stage) and `_format_training_pair()`. Updates progress bar throughout (search → fetch → generate → save). Saves all pairs as `web_<topic>.txt` in data/. When Auto-train is checked, routes the new file to the active mode selector and starts training.
+
+#### Advanced Settings (CollapsiblePanel, collapsed by default)
+| Element | What It Is | What It Does | File |
+|---------|-----------|-------------|------|
+| Use Conformer convolution (audio) | CTkCheckBox | Enables `_ConformerConv` (depthwise conv + GLU gating + batch norm) between attention and FFN in `_AudioBlock`. Stored in `forge_use_conformer_var`. Tooltip: adds depthwise conv between attention and FFN | gui_pages_forge.py |
+| Replay Capacity entry | themed_entry, default "256" | Maximum stored experiences in the prioritized `ReplayBuffer` for RLHF/SelfPlay training. Wired into `RLHFConfig` and `SelfPlayConfig` via `gui_forge_new_modes.py` | gui_pages_forge.py |
+| Replay Ratio entry | themed_entry, default "0.25" | Fraction (0.0–1.0) of minibatch drawn from replay buffer vs fresh rollouts. Wired into `RLHFConfig` and `SelfPlayConfig` | gui_pages_forge.py |
+
+**Advanced Settings behavior:** These controls are read by `_read_forge_rl_params()` which returns a dict consumed by RLHF and SelfPlay training launchers in `gui_forge_new_modes.py`. Conformer is a boolean flag; replay capacity and ratio are numeric. All three settings affect backend-only training modes (not the 5-mode primary FORGE UI).
 
 ### Right Column: Log
 | Element | What It Is | What It Does | File |
@@ -638,6 +733,11 @@ Uses friendly display names so users understand what each parameter does.
 | max_tokens | Response Length | Maximum length of each AI response |
 | repetition_penalty | Repetition Control | How strongly the AI avoids repeating itself |
 
+**Backend-only parameters** (in defaults.py, usable via API/CLI, not yet in CONFIG GUI):
+| Internal Name | Default | Description |
+|--------------|---------|-------------|
+| min_p | 0.0 | Minimum probability filter (relative to top token). 0.0 = disabled |
+
 ### Theme Card
 | Element | What It Is | What It Does | File |
 |---------|-----------|-------------|------|
@@ -660,6 +760,42 @@ Uses friendly display names so users understand what each parameter does.
 
 **Font size behavior:** The offset is added to every FONT_* tuple's base size at import time via `set_font_size_offset()` in widgets.py. For example, offset=2 makes FONT_BODY go from 16 to 18. The value is persisted in `gui_settings.json["font_size_offset"]` and loaded automatically when the GUI starts. Clamped to [-4, 8] for safety. Requires restart — fonts are module-level constants.
 
+### Memory Card
+| Element | What It Is | What It Does | File |
+|---------|-----------|-------------|------|
+| Memory card | HUDFrame with accent border | Contains memory mode selector | gui_pages_config.py |
+| "MEMORY" | Bold header | Labels the card | gui_pages_config.py |
+| "Memory Mode" label | Bold text in row | Labels the dropdown | gui_pages_config.py |
+| Memory mode dropdown | themed_dropdown | Values: "automatic - AI extracts facts from chat", "manual - ...", "disabled - ...". Inline description format. Controls how the AI stores facts from chat | gui_pages_config.py |
+| Tooltip | Hover text on dropdown | Explains modes: automatic = facts extracted from every message, manual = only explicit memory.remember commands, disabled = no memory storage at all | gui_pages_config.py |
+
+**Memory mode behavior:** Selecting a mode saves to `gui_settings.json["memory_mode"]` and applies live via `_change_memory_mode()`. In "automatic" mode (default), `extract_facts()` runs on every chat message. In "manual" mode, only explicit `memory.remember` commands store facts. In "disabled" mode, `PersistentMemory.add()` is a no-op (returns False). The mode is read from settings by `_get_memory_mode()` in `gui_logic_chat.py` before each auto-extraction call.
+
+### Monologue Card
+| Element | What It Is | What It Does | File |
+|---------|-----------|-------------|------|
+| Monologue card | HUDFrame with accent border | Contains monologue mode selector | gui_pages_config.py |
+| "MONOLOGUE" | Bold header | Labels the card | gui_pages_config.py |
+| "Monologue Mode" label | Bold text in row | Labels the dropdown | gui_pages_config.py |
+| Monologue mode dropdown | themed_dropdown | Values: "disabled - no background reflection", "journal_only - ...", "automatic - ...". Inline description format. Controls AI self-reflection behavior during idle periods | gui_pages_config.py |
+| Tooltip | Hover text on dropdown | Explains modes: disabled = no monologue, journal_only = reflections stored but not shown, automatic = reflections stored and shown in CMD | gui_pages_config.py |
+
+**Monologue mode behavior:** Selecting a mode saves to `gui_settings.json["monologue_mode"]` and applies live via `_change_monologue_mode()`. In "disabled" mode (default), no reflections are generated. In "journal_only" and "automatic" modes, the idle tracker in `desktop.py` polls every 30 seconds — when the user has been idle for 5 minutes and a model is loaded, a reflection is generated in a background thread via `_run_reflection()`. The reflection is scored by `score_coherence()` — only entries above the threshold (0.7) are stored in the model's `Journal`. In "automatic" mode, reflections that pass the gate are also displayed in the CMD activity log. Journal entries are visible in the CORE sidebar Journal panel.
+
+### Emotional State Visibility
+| Element | What It Is | What It Does | File |
+|---------|-----------|-------------|------|
+| Show emotional state panel | CTkCheckBox | When checked (default), the emotional state panel is visible on the CORE sidebar. When unchecked, the panel is hidden but the AI still uses emotional awareness internally. Persisted to `gui_settings.json["show_emotional_state"]` | gui_pages_config.py |
+
+### History Cap Card
+| Element | What It Is | What It Does | File |
+|---------|-----------|-------------|------|
+| History cap card | HUDFrame with accent border | Contains chat history disk persistence cap | gui_pages_config.py |
+| "History cap" label | Bold text in row | Labels the entry | gui_pages_config.py |
+| History cap entry | themed_entry, default "500" | Integer value (10–10000). Controls `MAX_CONTEXT_HISTORY` — how many messages are persisted to disk in `memory/session_*.json`. In-memory history is unchanged. Saved to `gui_settings.json["history_cap"]`, applied on startup via `set_max_context_history()` | gui_pages_config.py |
+
+**History cap behavior:** Changing the value calls `_change_history_cap()` which validates the range (10–10000), updates `MAX_CONTEXT_HISTORY` at runtime via `set_max_context_history()`, and persists to `gui_settings.json`. The cap only affects disk writes in `ModelContext._save_history()` — in-memory history and token-based context truncation are separate.
+
 ### Training Card
 | Element | What It Is | What It Does | File |
 |---------|-----------|-------------|------|
@@ -670,12 +806,26 @@ Uses friendly display names so users understand what each parameter does.
 
 **Learn while chatting behavior:** Each user↔AI exchange during normal chat is captured and fed to the `BackgroundTrainer` via `_feed_background_trainer()` in LogicMixin. The background trainer accumulates exchanges and periodically runs a short SFT step on the STUDENT model. This causes the AI to gradually learn from its own conversations. Toggling the checkbox immediately saves the preference to `data/gui_settings.json["learn_while_chatting"]`.
 
+### Performance Card
+| Element | What It Is | What It Does | File |
+|---------|-----------|-------------|------|
+| Performance card | HUDFrame with accent border | Contains launch and memory settings | gui_pages_config.py |
+| "PERFORMANCE" | Bold section header | Labels the card | gui_pages_config.py |
+| Description | Tiny dim text | "Reduce background memory usage while keeping the app open. Launch settings apply on next start." | gui_pages_config.py |
+| Auto-load chat model on launch | CTkCheckBox | When enabled, the CHAT route model loads automatically on launch. Persisted to gui_settings.json | gui_pages_config.py |
+| Auto-start mods on launch | CTkCheckBox | When enabled, all mods start automatically on launch. Persisted to gui_settings.json | gui_pages_config.py |
+| Unload chat model when minimized | CTkCheckBox | When enabled, minimizing the window releases model memory and reloads when restored. Persisted to gui_settings.json | gui_pages_config.py |
+| Confirm AI file operations | CTkCheckBox | When enabled (default), a confirmation dialog appears when the AI wants to write/append a file. When disabled, file operations are auto-approved. Thread-safe (`after(0)` + `threading.Event`). Persisted to `gui_settings.json["confirm_file_operations"]` | gui_pages_config.py |
+| APPLY GAMING MODE | Button (silver accent) | Sets all three to low-memory mode: no model autoload, no mod autostart, unload on minimize | gui_pages_config.py |
+
+**Gaming mode behavior:** Clicking APPLY GAMING MODE sets all three checkboxes to their low-overhead state and also enforces a live runtime profile: chat-learning off, router trainer off, slower UI/status timers, exact param counting skipped, and minimize-unload enabled. Described in more detail under Confirmed Fixes in `SUGGESTIONS.md`.
+
 ### Mod Info Card
 | Element | What It Is | What It Does | File |
 |---------|-----------|-------------|------|
 | Mod card | HUDFrame with border | Shows installed mod modules | gui_pages.py |
 | "MOD MODULES" | Bold header | Labels the card | gui_pages.py |
-| Description | Tiny text | "Mods are plugin programs that connect to the engine. They auto-start when the app launches." | gui_pages.py |
+| Description | Tiny text | "Mods are plugin programs that connect to the engine. Auto-start can be changed in PERFORMANCE." | gui_pages_config.py |
 | Mod rows | One row per mod | Shows "name vX.X" and description snippet | gui_pages.py |
 mod rules. modes need to be added without haveing to code the GUI, be able to have there own working page, these are sopposed to be add ons like it is a something entirely seperate do not add it to the main code it just needs to show up here so the user can acess it maybe the AI can acess it too
 
@@ -776,41 +926,3 @@ All fonts are Consolas monospace. Defined at lines 63-71.
 | FONT_CMD | Consolas 15 | Command terminal output |
 
 ---
-
-## FILE MAP
-
-| File | Lines | What It Controls |
-|------|-------|-----------------|
-| widgets.py | 666 | Theme-driven C_* color constants, fonts, reload_theme() for live switching, widget classes (HUDFrame, StatusDot, NavButton, SectionLabel, SelectableLabel, ToggleButton, StatusBar, CollapsiblePanel, SelectableTextbox, Tooltip), factory functions (themed_entry, themed_dropdown, themed_scroll) |
-| desktop.py | 772 | Window shell: header (pin toggle, shortcuts inline dropdown), nav rail (collapsible via grid_columnconfigure), status bar, label copy (right-click on CTkLabels that still use wraplength), auto-start mods, status ticker, display name loading, Escape-to-stop binding, TTS lifecycle (init/shutdown), deferred boot scanning, window geometry persistence (save/restore), live theme switching (_apply_theme_live, _retheme_tree), parent watchdog. Inherits 7 mixins. |
-| gui_pages.py | 1102 | Page builders: CORE (fullscreen + web toggle + token counter + resizable sidebar + clickable history + media tags + STOP/EDIT buttons + auto-expanding input + reasoning display), MODELS (cards with param count + tooltips + COPY/RENAME/DELETE + IMPORT/DOWNLOAD + NATIVE/EXTERNAL tags), ROUTER. Inherits ForgePageMixin + ConfigPageMixin |
-| gui_pages_forge.py | 815 | FORGE page layout: 3-mode radio-card selector (`Basic`, `AI-Guided`, `Image`) + reasoning checkbox + mode-specific sections + Auto-train checkbox + stage buttons with tooltips + CollapsiblePanel tools + vision browse + LoRA advanced subsection + student param count label + hyperparameter presets + progress bar + loss chart canvas panel + rolling best K + queue/plan/dataset buttons (ForgePageMixin) |
-| gui_pages_config.py | 585 | CONFIG page layout: generation parameters, paths, display names, live theme picker (no restart), font size control, learn-while-chatting toggle, backup/restore (ConfigPageMixin) |
-| gui_docs_page.py | 798 | DOCS page: documentation browser with search filter, path tooltips, file editor with path label and stats footer, inline file rename, blank doc creation, unsaved change detection, Ctrl+S shortcut, Ctrl+F find bar with match navigation, right-click context menu, auto-save (30s timer), notes category, CRUD operations |
-| gui_logic.py | 881 | Logic hub: config, model loading, routes, display names, toggles, path settings, web access toggle, GUI context, CMD activity pipeline, GGUF param estimation. Inherits LogicChatMixin + LogicMediaMixin |
-| gui_logic_chat.py | 1107 | Chat messaging, session management, AI session naming, duplicate save prevention, typewriter, file attachment, history, send guard, stop generation, message editing, auto fact extraction, reasoning display, token counter (LogicChatMixin) |
-| gui_logic_media.py | 571 | Media rendering, voice I/O, TTS via pyttsx3, inline media rendering with image cap, chat input auto-resize (LogicMediaMixin) |
-| gui_forge.py | 894 | Forge hub: training setup, shared utils, dispatch. Inherits ForgeTrainingMixin + ForgeAdvancedMixin + ForgeAdaptiveMixin + ForgeNewModesMixin + ForgeToolsMixin + ForgeModelsMixin + ForgeQueueMixin |
-| gui_forge_training.py | 764 | Basic training modes: solo, DPO, vision, LoRA, CPU-first student loading, loss curves (ForgeTrainingMixin) |
-| gui_forge_advanced.py | 1083 | Advanced training: evolutionary, guided (with curated dataset auto-accumulate), dialogue (TRAINER↔STUDENT conversation with corrections + reinforcement + transcript saving) (ForgeAdvancedMixin) |
-| gui_forge_adaptive.py | 617 | Adaptive pipeline: TC-C3 continuous adaptive loop, SA-B auto-chain stages, SA-C saveable/resumable JSON plan (ForgeAdaptiveMixin) |
-| gui_forge_new_modes.py | 313 | New training modes: RLHF (2-phase: reward model → PPO), Self-Play (TRAINER as reward) (ForgeNewModesMixin) |
-| gui_forge_tools.py | 980 | Forge tools: data gen (with curated dataset auto-accumulate + reasoning flag), evaluate, web learn (with curated dataset auto-accumulate), checkpoints, tokenizer training, cards, auto-train, forge param count display, loss chart canvas drawing (ForgeToolsMixin) |
-| gui_forge_models.py | 584 | Model ops: import, create, copy, rename, delete, quantize, GGUF export, HuggingFace download, model context rename (ForgeModelsMixin) |
-| gui_forge_queue.py | 390 | Queue, overnight plan, curated dataset GUI callbacks: add/show/run queue, save/load plan, review/approve dataset, dataset auto-accumulate helper (ForgeQueueMixin) |
-| gui_mods.py | 178 | Mod subprocess lifecycle (start/stop/auto-start, _launch_mod) |
-| gui_mod_page.py | 279 | Per-mod page builder from mod.json (dynamic UI rendering incl. dropdown and checkbox widgets) |
-| gui_cmd_page.py | 1205 | Dual-mode terminal: SYSTEM shell + ENGINE commands + AI ACCESS + activity monitor + live status strip + 11 info commands (incl. profiles) |
-| media.py | 445 | Chat media support: image/GIF/video detection, Pillow loading, GIF animation, video thumbnails (OpenCV), URL detection, clickable links, MAX_CHAT_IMAGES cap |
-| scanners.py | 557 | Filesystem scanning, config limits, ROUTE_KEYS, PATH_SETTINGS, path persistence, scan_docs, trainer docs, param counting (zipfile peek + file-size heuristic), target_size display, _format_param_count |
-| themes.py | 143 | Color theme system: Theme frozen dataclass (20 fields), 4 presets (dark/midnight/carbon/solarized), load/save preference, theme API |
-
-### Mixin Inheritance Order
-```
-EnigmaGUI(DocsPageMixin, ForgeMixin, ModMixin, ModPageMixin, CMDPageMixin, LogicMixin, PagesMixin, ctk.CTk)
-```
-
-ForgeMixin inheritance:
-```
-ForgeMixin(ForgeTrainingMixin, ForgeAdvancedMixin, ForgeAdaptiveMixin, ForgeNewModesMixin, ForgeToolsMixin, ForgeModelsMixin, ForgeQueueMixin)
-```

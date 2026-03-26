@@ -333,8 +333,15 @@ class ForgeModelsMixin:
 
                 tokenizer = get_tokenizer("auto")
 
-                # Always use the small preset for blank models
-                preset = MP["small"]
+                # Use the user-selected preset
+                preset_var = getattr(self, "model_preset_var", None)
+                preset_name = (preset_var.get()
+                               if preset_var else "small")
+                # Strip description suffix from display value
+                preset_name = preset_name.split(" - ", 1)[0]
+                if preset_name not in MP:
+                    preset_name = "small"
+                preset = MP[preset_name]
                 preset.vocab_size = tokenizer.vocab_size
 
                 model = Enigma(config=preset)
@@ -544,6 +551,7 @@ class ForgeModelsMixin:
 
         mode = getattr(self, "quantize_mode_var", None)
         mode = mode.get() if mode else "int8"
+        mode = mode.split(" - ", 1)[0]
 
         def _run():
             try:
@@ -551,7 +559,7 @@ class ForgeModelsMixin:
                 self._log(f"Loading: {Path(student_path).name}")
 
                 from enigma_engine.core.model import (
-                    Enigma, ModelConfig as ForgeConfig)
+                    Enigma, ForgeConfig)
                 from enigma_engine.core.model_registry import (
                     get_state_dict, safe_load_weights)
                 checkpoint = safe_load_weights(
@@ -607,6 +615,7 @@ class ForgeModelsMixin:
 
         qtype = getattr(self, "export_gguf_mode_var", None)
         qtype = qtype.get() if qtype else "Q8_0"
+        qtype = qtype.split(" - ", 1)[0]
 
         def _run():
             try:
@@ -614,7 +623,7 @@ class ForgeModelsMixin:
                 self._log(f"Loading: {Path(student_path).name}")
 
                 from enigma_engine.core.model import (
-                    Enigma, ModelConfig as ForgeConfig)
+                    Enigma, ForgeConfig)
                 from enigma_engine.core.model_registry import (
                     get_state_dict, safe_load_weights)
                 checkpoint = safe_load_weights(
@@ -659,6 +668,217 @@ class ForgeModelsMixin:
         threading.Thread(
             target=_run, daemon=True,
             name="export-gguf").start()
+
+    # ================================================================
+    # Grow model (progressive growing)
+    # ================================================================
+
+    def _grow_model(self, model: dict):
+        """Expand a native model to a larger size preset.
+
+        Shows an inline preset picker on the model card, then runs the
+        expansion in a background thread using Net2Net-style zero-init.
+        """
+        if self._model_op_busy():
+            return
+
+        src_path = Path(model["path"])
+        if not src_path.exists():
+            self._models_msg("Model file not found.", "#ef4444")
+            return
+
+        # Build preset list filtered to sizes larger than current
+        from enigma_engine.core.model_presets import (
+            MODEL_PRESETS, MODEL_DESCRIPTIONS, estimate_parameters,
+            ForgeConfig,
+        )
+        from enigma_engine.core.model_registry import safe_load_weights
+
+        # Load current model config to determine its size
+        try:
+            checkpoint = safe_load_weights(str(src_path), map_location="cpu")
+            cfg_dict = (
+                checkpoint.get("model_config")
+                or checkpoint.get("config", {}))
+            if isinstance(cfg_dict, dict) and "epochs" in cfg_dict:
+                cfg_dict = checkpoint.get("model_config", {})
+            src_config = ForgeConfig(**{
+                k: v for k, v in cfg_dict.items()
+                if hasattr(ForgeConfig, k)})
+        except Exception as exc:
+            self._models_msg(f"Cannot read model config: {exc}", "#ef4444")
+            return
+
+        src_params = estimate_parameters(src_config)
+
+        # Filter to presets that are strictly larger
+        larger_presets = []
+        for name, preset in MODEL_PRESETS.items():
+            p = ForgeConfig(
+                vocab_size=src_config.vocab_size,
+                dim=preset.dim, n_layers=preset.n_layers,
+                n_heads=preset.n_heads,
+                n_kv_heads=preset.n_kv_heads or preset.n_heads,
+                use_swiglu=preset.use_swiglu,
+                use_rope=preset.use_rope,
+                use_rms_norm=preset.use_rms_norm,
+                use_bias=preset.use_bias,
+                use_moe=preset.use_moe,
+            )
+            # Must match architecture flags and be larger in all dims
+            if (p.dim >= src_config.dim
+                    and p.n_layers >= src_config.n_layers
+                    and p.n_heads >= src_config.n_heads
+                    and p.n_kv_heads >= src_config.n_kv_heads
+                    and p.hidden_dim >= src_config.hidden_dim
+                    and p.use_swiglu == src_config.use_swiglu
+                    and p.use_rope == src_config.use_rope
+                    and p.use_rms_norm == src_config.use_rms_norm
+                    and p.use_bias == src_config.use_bias
+                    and p.use_moe == src_config.use_moe
+                    and estimate_parameters(p) > src_params):
+                desc = MODEL_DESCRIPTIONS.get(name, "")
+                larger_presets.append(f"{name} - {desc}" if desc else name)
+
+        if not larger_presets:
+            self._models_msg(
+                "No compatible larger presets found.", "#f97316")
+            return
+
+        # Show inline grow dialog
+        self._show_grow_dialog(model, src_config, larger_presets)
+
+    def _show_grow_dialog(self, model: dict, src_config,
+                          preset_options: list[str]):
+        """Show an inline grow size picker on the MODELS page."""
+        import customtkinter as ctk
+        from enigma_engine.gui.widgets import (
+            C_ACCENT_MUTED,
+            C_GREEN, C_GREEN_DIM, C_SURFACE, C_TEXT_DIM,
+            FONT_TINY, SelectableLabel,
+            Tooltip, themed_dropdown,
+        )
+
+        # Create inline row under the models status area
+        grow_frame = ctk.CTkFrame(
+            getattr(self, "_models_status", self).master,
+            fg_color="transparent")
+        grow_frame.pack(fill="x", padx=8, pady=(4, 4))
+
+        SelectableLabel(
+            grow_frame, text=f"Grow {model['name']} to:",
+            font=FONT_TINY, text_color=C_TEXT_DIM,
+        ).pack(side="left", padx=(0, 4))
+
+        grow_var = ctk.StringVar(value=preset_options[0])
+        _dd = themed_dropdown(
+            grow_frame, preset_options,
+            variable=grow_var, width=260)
+        _dd.pack(side="left", padx=(0, 8))
+
+        def _do_grow():
+            grow_frame.pack_forget()
+            grow_frame.destroy()
+            preset_name = grow_var.get().split(" - ", 1)[0]
+            self._execute_grow(model, src_config, preset_name)
+
+        def _cancel():
+            grow_frame.pack_forget()
+            grow_frame.destroy()
+
+        _go = ctk.CTkButton(
+            grow_frame, text="GROW", width=60, height=28,
+            font=FONT_TINY, corner_radius=2,
+            fg_color=C_GREEN_DIM, hover_color="#1a5a2a",
+            text_color=C_GREEN, command=_do_grow)
+        _go.pack(side="left", padx=(0, 4))
+        Tooltip(_go, "Create expanded model")
+
+        _cancel_btn = ctk.CTkButton(
+            grow_frame, text="CANCEL", width=65, height=28,
+            font=FONT_TINY, corner_radius=2,
+            fg_color=C_SURFACE, hover_color=C_ACCENT_MUTED,
+            text_color=C_TEXT_DIM, command=_cancel)
+        _cancel_btn.pack(side="left")
+
+    def _execute_grow(self, model: dict, src_config, preset_name: str):
+        """Run progressive growing in a background thread."""
+        if self._model_op_busy():
+            return
+
+        self._model_op_in_progress = True
+        self._models_msg(
+            f"Growing {model['name']} to {preset_name}...", "#e8e8e8")
+
+        src_path = Path(model["path"])
+
+        def _run():
+            try:
+                from enigma_engine.core.model import (
+                    Enigma, ForgeConfig)
+                from enigma_engine.core.model_presets import (
+                    MODEL_PRESETS)
+                from enigma_engine.core.model_registry import (
+                    get_state_dict, safe_load_weights)
+                from enigma_engine.core.progressive_growing import (
+                    expand_model_weights)
+                from enigma_engine.core.safe_save import atomic_torch_save
+
+                # Load source checkpoint
+                checkpoint = safe_load_weights(
+                    str(src_path), map_location="cpu")
+                source_sd = get_state_dict(checkpoint)
+
+                # Build target config from preset
+                preset = MODEL_PRESETS[preset_name]
+                target_config = ForgeConfig(
+                    vocab_size=src_config.vocab_size,
+                    dim=preset.dim,
+                    n_layers=preset.n_layers,
+                    n_heads=preset.n_heads,
+                    n_kv_heads=preset.n_kv_heads or preset.n_heads,
+                    max_seq_len=preset.max_seq_len,
+                    dropout=preset.dropout,
+                    use_swiglu=src_config.use_swiglu,
+                    use_rope=src_config.use_rope,
+                    use_rms_norm=src_config.use_rms_norm,
+                    use_bias=src_config.use_bias,
+                    use_moe=src_config.use_moe,
+                )
+
+                # Expand weights
+                new_sd = expand_model_weights(
+                    source_sd, src_config, target_config)
+
+                # Build target model and load expanded weights
+                model_obj = Enigma(config=target_config)
+                model_obj.load_state_dict(new_sd, strict=False)
+
+                new_params = sum(
+                    p.numel() for p in model_obj.parameters())
+
+                # Save alongside original
+                stem = src_path.stem
+                out_path = src_path.parent / f"{stem}_{preset_name}.pth"
+                atomic_torch_save({
+                    "model_state_dict": model_obj.state_dict(),
+                    "config": target_config.to_dict(),
+                }, out_path)
+
+                msg = (f"Grown: {stem} -> {stem}_{preset_name} "
+                       f"({new_params:,} params)")
+                self.after(0, lambda: self._models_msg(msg, "#22c55e"))
+                self.after(0, self._refresh_models)
+            except Exception as exc:
+                err_msg = str(exc)
+                self.after(0, lambda m=err_msg: self._models_msg(
+                    f"Grow failed: {m}", "#ef4444"))
+            finally:
+                self._model_op_in_progress = False
+
+        threading.Thread(
+            target=_run, daemon=True,
+            name="grow-model").start()
 
     # ================================================================
     # Resize model

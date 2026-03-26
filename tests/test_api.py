@@ -727,3 +727,36 @@ class TestPathTraversal:
         # Should be 404 (not found) — the path separator stripping
         # prevents directory traversal
         assert resp.status_code in (404, 422)
+
+
+class TestChatRequestSamplingParams:
+    """ChatRequest accepts top_p, top_k, repetition_penalty."""
+
+    def test_chat_request_has_sampling_fields(self):
+        """ChatRequest model has all common sampling parameters."""
+        from enigma_engine.api.server import ChatRequest
+        fields = ChatRequest.model_fields
+        assert "top_p" in fields
+        assert "top_k" in fields
+        assert "repetition_penalty" in fields
+
+    def test_chat_request_sampling_defaults_none(self):
+        """Sampling params default to None (use engine defaults)."""
+        from enigma_engine.api.server import ChatRequest
+        req = ChatRequest(message="test")
+        assert req.top_p is None
+        assert req.top_k is None
+        assert req.repetition_penalty is None
+
+    def test_chat_request_accepts_sampling_values(self):
+        """ChatRequest accepts explicit sampling values."""
+        from enigma_engine.api.server import ChatRequest
+        req = ChatRequest(
+            message="test",
+            top_p=0.95,
+            top_k=40,
+            repetition_penalty=1.2,
+        )
+        assert req.top_p == 0.95
+        assert req.top_k == 40
+        assert req.repetition_penalty == 1.2

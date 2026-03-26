@@ -256,12 +256,13 @@ class TrainingQueue:
 
     def start(self) -> None:
         """Start processing the queue in a background thread."""
-        if self._running:
-            logger.warning("Queue already running")
-            return
-        self._running = True
-        self._paused = False
-        self._stop_requested = False
+        with self._lock:
+            if self._running:
+                logger.warning("Queue already running")
+                return
+            self._running = True
+            self._paused = False
+            self._stop_requested = False
         self._thread = threading.Thread(
             target=self._run_loop, name="TrainingQueue",
             daemon=True)
@@ -270,13 +271,17 @@ class TrainingQueue:
 
     def pause(self) -> None:
         """Pause the queue after the current job finishes."""
-        self._paused = True
+        with self._lock:
+            self._paused = True
         logger.info("Training queue paused")
 
     def resume(self) -> None:
         """Resume a paused queue."""
-        if self._paused:
-            self._paused = False
+        with self._lock:
+            was_paused = self._paused
+            if was_paused:
+                self._paused = False
+        if was_paused:
             logger.info("Training queue resumed")
             # If thread died, restart
             if self._thread is None or not self._thread.is_alive():
@@ -284,15 +289,20 @@ class TrainingQueue:
 
     def stop(self) -> None:
         """Stop the queue after the current job finishes."""
-        self._stop_requested = True
-        self._running = False
+        with self._lock:
+            self._stop_requested = True
+            self._running = False
         logger.info("Training queue stop requested")
 
     def _run_loop(self) -> None:
         """Main queue processing loop (runs in background thread)."""
         try:
-            while self._running and not self._stop_requested:
-                if self._paused:
+            while True:
+                with self._lock:
+                    if not self._running or self._stop_requested:
+                        break
+                    paused = self._paused
+                if paused:
                     time.sleep(0.5)
                     continue
 
@@ -304,7 +314,8 @@ class TrainingQueue:
 
                 self._execute_job(job)
 
-            self._running = False
+            with self._lock:
+                self._running = False
             self._current_job = None
 
             if self.on_queue_complete:
@@ -384,15 +395,16 @@ class TrainingQueue:
         if self.save_path is None:
             return
         try:
-            data = {
-                "next_id": self._next_id,
-                "jobs": [j.to_dict() for j in self._jobs],
-                "saved_at": datetime.now().isoformat(),
-            }
+            with self._lock:
+                data = {
+                    "next_id": self._next_id,
+                    "jobs": [j.to_dict() for j in self._jobs],
+                    "saved_at": datetime.now().isoformat(),
+                }
             from enigma_engine.core.safe_save import atomic_write_json
             atomic_write_json(self.save_path, data, default=str)
         except Exception as exc:
-            logger.debug("Queue save error: %s", exc)
+            logger.warning("Queue save error: %s", exc)
 
     def load_state(self) -> bool:
         """Load queue state from disk. Returns True if loaded.
@@ -405,7 +417,7 @@ class TrainingQueue:
         try:
             data = json.loads(
                 self.save_path.read_text(encoding="utf-8"))
-            self._next_id = data.get("next_id", 1)
+            self._next_id = int(data.get("next_id", 1))
             self._jobs = []
             for jd in data.get("jobs", []):
                 job = TrainingJob.from_dict(jd)

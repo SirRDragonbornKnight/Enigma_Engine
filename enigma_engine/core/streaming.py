@@ -2,7 +2,7 @@
 Response Streaming System
 
 Stream LLM responses token-by-token with support for
-async generation, SSE, WebSocket, and callback-based streaming.
+async generation, SSE, and callback-based streaming.
 
 FILE: enigma_engine/core/streaming.py
 TYPE: Core/Inference
@@ -98,10 +98,17 @@ class TokenBuffer:
         self._last_flush = time.time()
         self._lock = threading.Lock()
 
+    def _flush_unlocked(self) -> str:
+        """Flush buffer without acquiring lock (caller must hold it)."""
+        content = "".join(self._buffer)
+        self._buffer.clear()
+        self._last_flush = time.time()
+        return content
+
     def add(self, token: str) -> Optional[str]:
         """
         Add token to buffer.
-        
+
         Returns:
             Flushed content if buffer full, else None
         """
@@ -114,17 +121,14 @@ class TokenBuffer:
             )
 
             if should_flush or self.size == 0:
-                return self.flush()
+                return self._flush_unlocked()
 
         return None
 
     def flush(self) -> str:
         """Flush buffer and return content."""
         with self._lock:
-            content = "".join(self._buffer)
-            self._buffer.clear()
-            self._last_flush = time.time()
-            return content
+            return self._flush_unlocked()
 
     def has_content(self) -> bool:
         """Check if buffer has content."""
@@ -134,9 +138,9 @@ class TokenBuffer:
 class StreamingResponse:
     """
     Streaming response handler.
-    
+
     Collects tokens and provides various output formats
-    including iterator, async iterator, SSE, and WebSocket.
+    including iterator, async iterator, and SSE.
     """
 
     def __init__(self, config: StreamingConfig = None) -> None:
@@ -144,6 +148,7 @@ class StreamingResponse:
 
         self._queue: queue.Queue[StreamChunk] = queue.Queue()
         self._async_queue: asyncio.Queue = None
+        self._async_lock = threading.Lock()
         self._buffer = TokenBuffer(
             size=self.config.buffer_size,
             interval=self.config.flush_interval
@@ -194,7 +199,7 @@ class StreamingResponse:
     ):
         """
         Push a token to the stream.
-        
+
         Args:
             token: Token string
             token_id: Token ID
@@ -297,11 +302,12 @@ class StreamingResponse:
         self._chunks.append(chunk)
         self._queue.put_nowait(chunk)
 
-        if self._async_queue is not None:
-            try:
-                self._async_queue.put_nowait(chunk)
-            except Exception:
-                logger.debug("Async queue full or closed, chunk dropped")
+        with self._async_lock:
+            if self._async_queue is not None:
+                try:
+                    self._async_queue.put_nowait(chunk)
+                except Exception:
+                    logger.debug("Async queue full or closed, chunk dropped")
 
     def __iter__(self) -> Iterator[StreamChunk]:
         """Iterate over chunks."""
@@ -317,12 +323,14 @@ class StreamingResponse:
 
     async def __aiter__(self) -> AsyncIterator[StreamChunk]:
         """Async iterate over chunks."""
-        if self._async_queue is None:
-            self._async_queue = asyncio.Queue()
+        with self._async_lock:
+            if self._async_queue is None:
+                self._async_queue = asyncio.Queue()
 
-            # Copy existing chunks
-            for chunk in self._chunks:
-                await self._async_queue.put(chunk)
+                # Copy existing chunks while lock is held so _emit
+                # cannot push duplicates between queue creation and copy.
+                for chunk in self._chunks:
+                    self._async_queue.put_nowait(chunk)
 
         while True:
             try:
@@ -403,7 +411,7 @@ class StreamingResponse:
 class TokenStreamer:
     """
     Wrapper for streaming token generation.
-    
+
     Integrates with model inference to provide streaming output.
     """
 
@@ -417,11 +425,11 @@ class TokenStreamer:
     ) -> StreamingResponse:
         """
         Create streaming response from generator.
-        
+
         Args:
             generator: Token generator
             metadata: Stream metadata
-        
+
         Returns:
             StreamingResponse
         """
@@ -449,11 +457,11 @@ class TokenStreamer:
     ) -> StreamingResponse:
         """
         Create streaming response from async generator.
-        
+
         Args:
             generator: Async token generator
             metadata: Stream metadata
-        
+
         Returns:
             StreamingResponse
         """
@@ -476,11 +484,11 @@ class TokenStreamer:
     ) -> 'CallbackStreamer':
         """
         Create callback-based streamer.
-        
+
         Args:
             callback: Token callback function
             metadata: Stream metadata
-        
+
         Returns:
             CallbackStreamer
         """
@@ -538,12 +546,12 @@ def stream_print(
 ) -> str:
     """
     Stream tokens to print.
-    
+
     Args:
         generator: Token generator
         end: End string
         flush: Whether to flush after each token
-    
+
     Returns:
         Full text
     """
@@ -565,12 +573,12 @@ async def astream_print(
 ) -> str:
     """
     Async stream tokens to print.
-    
+
     Args:
         generator: Async token generator
         end: End string
         flush: Whether to flush after each token
-    
+
     Returns:
         Full text
     """
@@ -583,15 +591,3 @@ async def astream_print(
         print()
 
     return "".join(tokens)
-
-
-# Global streamer instance
-_streamer: Optional[TokenStreamer] = None
-
-
-def get_token_streamer(config: StreamingConfig = None) -> TokenStreamer:
-    """Get or create global token streamer."""
-    global _streamer
-    if _streamer is None:
-        _streamer = TokenStreamer(config)
-    return _streamer

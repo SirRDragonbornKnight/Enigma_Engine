@@ -503,7 +503,14 @@ class LogicMediaMixin:
                 try:
                     engine = pyttsx3.init()
                     self._tts_engine_ref = engine
-                except Exception:
+                except Exception as exc:
+                    self.voice_enabled = False
+                    err = str(exc)
+                    self.after(0, lambda e=err: self._chat_system(
+                        f"Voice engine failed to start: {e}"))
+                    btn = getattr(self, 'voice_btn', None)
+                    if btn and hasattr(btn, 'set_state'):
+                        self.after(0, lambda: btn.set_state(False))
                     return
 
                 # NOTE: We intentionally do NOT use the

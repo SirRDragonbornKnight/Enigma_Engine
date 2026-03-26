@@ -45,7 +45,6 @@ _THINK_PATTERN = re.compile(
     re.DOTALL,
 )
 
-
 # =============================================================================
 # 🔍 EXTRACTION & DETECTION
 # =============================================================================
@@ -227,13 +226,9 @@ def extract_all_reasoning(text: str) -> list[tuple[str, str]]:
     last_end = 0
 
     for match in _THINK_PATTERN.finditer(text):
-        # Text before this <think> block (if any)
+        # Text before the first <think> block (if any)
         pre_text = text[last_end:match.start()].strip()
-        if pre_text and blocks:
-            # Append pre-text to the previous block's answer
-            prev_think, prev_ans = blocks[-1]
-            blocks[-1] = (prev_think, (prev_ans + " " + pre_text).strip())
-        elif pre_text and not blocks:
+        if pre_text and not blocks:
             blocks.append(("", pre_text))
 
         thinking = match.group(1).strip()
@@ -247,7 +242,6 @@ def extract_all_reasoning(text: str) -> list[tuple[str, str]]:
             answer = text[last_end:].strip()
 
         blocks.append((thinking, answer))
-        last_end = match.end()
 
     # No think blocks at all
     if not blocks:

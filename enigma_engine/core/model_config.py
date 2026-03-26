@@ -6,7 +6,7 @@ USAGE:
     from enigma_engine.core.model_config import get_model_config
 
     config = get_model_config("medium")  # or "tiny", "small", "large", "xl"
-    
+
 NOTE: This module re-exports from enigma_engine.core.model for backward compatibility.
 The canonical MODEL_PRESETS are defined in enigma_engine.core.model.
 """

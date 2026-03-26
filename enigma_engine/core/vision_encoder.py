@@ -1,20 +1,28 @@
 """
-Vision Encoder — A small Vision Transformer (ViT) built from scratch.
+Vision Encoder — ViT with from-scratch or pretrained (timm) backends.
 
-No pretrained weights, no external downloads. Trains from scratch on user data
-alongside the text model's projection layer. Uses the same components as the
-text transformer (RMSNorm, Attention, FeedForward, TransformerBlock pattern).
+Three modes:
+    1. From scratch (default): trains on user data, no external downloads.
+    2. Hybrid CNN+ViT: CNN stem for spatial features + transformer.
+    3. Pretrained (via timm): ImageNet-trained ViT weights for massive quality
+       jump. Requires ``pip install timm``.
 
-Architecture:
+Architecture (from scratch):
     Image → PatchEmbedding → + Position Embeddings → N TransformerBlocks → RMSNorm → features
+
+Architecture (pretrained):
+    Image → timm backbone → optional dim projection → features
 
 Input:  [batch, 3, image_size, image_size] image tensor
 Output: [batch, num_patches, dim] feature tensor
 
 Size presets:
-    tiny   — 2 layers, 128-dim (~500K params)
-    small  — 4 layers, 256-dim (~4M params)  [default]
-    medium — 6 layers, 512-dim (~25M params)
+    tiny            — 2 layers, 128-dim (~500K params, from scratch)
+    small           — 4 layers, 256-dim (~4M params, from scratch)  [default]
+    medium          — 6 layers, 512-dim (~25M params, from scratch)
+    pretrained_tiny — ViT-Ti/16, 192-dim (~5.7M params, ImageNet pretrained)
+    pretrained_small— ViT-S/16, 384-dim (~22M params, ImageNet pretrained)
+    pretrained_base — ViT-B/16, 768-dim (~86M params, ImageNet pretrained)
 
 Usage:
     from enigma_engine.core.vision_encoder import (
@@ -22,7 +30,12 @@ Usage:
         preprocess_image, encode_image,
     )
 
+    # From scratch
     encoder = VisionEncoder(VISION_PRESETS["small"])
+    features = encode_image(encoder, "photo.png")
+
+    # Pretrained (requires timm)
+    encoder = VisionEncoder(VISION_PRESETS["pretrained_small"])
     features = encode_image(encoder, "photo.png")
 """
 from __future__ import annotations
@@ -36,10 +49,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from enigma_engine.core.model_components import RMSNorm
+
 if TYPE_CHECKING:
     from PIL import Image as _PILImage
 
 logger = logging.getLogger(__name__)
+
+# ImageNet normalization used by all standard pretrained vision models
+IMAGENET_MEAN = (0.485, 0.456, 0.406)
+IMAGENET_STD = (0.229, 0.224, 0.225)
 
 
 # =============================================================================
@@ -75,6 +94,9 @@ class VisionEncoderConfig:
     dropout: float = 0.1
     use_rms_norm: bool = True
     use_cnn_stem: bool = False
+    use_pretrained: bool = False
+    pretrained_model: str = "vit_small_patch16_224"
+    freeze_backbone: bool = True
 
     @property
     def num_patches(self) -> int:
@@ -93,6 +115,9 @@ class VisionEncoderConfig:
             "dropout": self.dropout,
             "use_rms_norm": self.use_rms_norm,
             "use_cnn_stem": self.use_cnn_stem,
+            "use_pretrained": self.use_pretrained,
+            "pretrained_model": self.pretrained_model,
+            "freeze_backbone": self.freeze_backbone,
         }
 
 
@@ -119,28 +144,25 @@ VISION_PRESETS: dict[str, VisionEncoderConfig] = {
         image_size=224, patch_size=16, dim=512, n_layers=6, n_heads=8,
         use_cnn_stem=True,
     ),
+    # Pretrained ViT presets — require timm. Massive quality jump over from-scratch.
+    "pretrained_tiny": VisionEncoderConfig(
+        image_size=224, patch_size=16, dim=192, n_layers=12, n_heads=3,
+        use_pretrained=True, pretrained_model="vit_tiny_patch16_224",
+    ),
+    "pretrained_small": VisionEncoderConfig(
+        image_size=224, patch_size=16, dim=384, n_layers=12, n_heads=6,
+        use_pretrained=True, pretrained_model="vit_small_patch16_224",
+    ),
+    "pretrained_base": VisionEncoderConfig(
+        image_size=224, patch_size=16, dim=768, n_layers=12, n_heads=12,
+        use_pretrained=True, pretrained_model="vit_base_patch16_224",
+    ),
 }
 
 
 # =============================================================================
 # COMPONENTS
 # =============================================================================
-
-class _RMSNorm(nn.Module):
-    """RMSNorm — same as model_components.RMSNorm but standalone to avoid circular imports."""
-
-    def __init__(self, dim: int, eps: float = 1e-6) -> None:
-        super().__init__()
-        self.eps = eps
-        self.weight = nn.Parameter(torch.ones(dim))
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # Compute in float32 for numerical stability in fp16/bf16 training
-        orig_dtype = x.dtype
-        x_f32 = x.float()
-        rms = torch.sqrt(torch.mean(x_f32 ** 2, dim=-1, keepdim=True) + self.eps)
-        return (x_f32 / rms * self.weight.float()).to(orig_dtype)
-
 
 class CNNStem(nn.Module):
     """CNN stem for hybrid CNN+ViT architecture (V-G).
@@ -303,7 +325,7 @@ class _VisionBlock(nn.Module):
     def __init__(self, dim: int, n_heads: int, dropout: float = 0.1,
                  use_rms_norm: bool = True) -> None:
         super().__init__()
-        Norm = _RMSNorm if use_rms_norm else nn.LayerNorm
+        Norm = RMSNorm if use_rms_norm else nn.LayerNorm
         self.norm1 = Norm(dim)
         self.attn = _VisionAttention(dim, n_heads, dropout)
         self.norm2 = Norm(dim)
@@ -322,21 +344,19 @@ class _VisionBlock(nn.Module):
 
 class VisionEncoder(nn.Module):
     """
-    Vision Transformer (ViT) encoder built from scratch.
+    Vision Transformer (ViT) encoder.
 
-    Architecture (pure ViT):
-        Image → PatchEmbedding → + pos_embed → VisionBlocks × N → RMSNorm → features
+    Three modes:
+        1. Pure ViT (default): PatchEmbedding → Transformer → features
+        2. Hybrid CNN+ViT (use_cnn_stem=True): CNNStem → Transformer → features
+        3. Pretrained (use_pretrained=True): timm backbone → optional projection
 
-    Architecture (hybrid CNN+ViT, when use_cnn_stem=True):
-        Image → CNNStem → + pos_embed → VisionBlocks × N → RMSNorm → features
+    Pretrained mode loads ImageNet-trained ViT weights via timm for a massive
+    quality jump over training from scratch. The backbone can be frozen
+    (freeze_backbone=True) to train only the projection layer, or unfrozen
+    for full fine-tuning.
 
-    The hybrid architecture (V-G) adds CNN layers before the transformer.
-    CNN learns spatial hierarchy (edges → textures → shapes) that pure ViT
-    needs far more training data to learn.  The transformer then handles
-    global reasoning across the CNN-extracted features.
-
-    Trains from scratch alongside the text model's vision_projection layer.
-    Quality depends entirely on user's training data and compute.
+    Output is always [batch, num_patches, dim] regardless of mode.
 
     Args:
         config: VisionEncoderConfig with architecture settings.
@@ -346,37 +366,95 @@ class VisionEncoder(nn.Module):
         super().__init__()
         self.config = config
 
-        # V-G: Hybrid CNN+ViT uses CNN stem instead of patch embedding
-        if config.use_cnn_stem:
-            self.cnn_stem = CNNStem(
-                channels=config.channels,
-                dim=config.dim,
-            )
-            self.patch_embed = None
-            # CNN stem output spatial size: image_size / 8
-            # (2× from stride-2 conv × 2× from pool1 × 2× from pool2)
-            cnn_patches = (config.image_size // 8) ** 2
-            self.pos_embed = nn.Parameter(
-                torch.randn(1, cnn_patches, config.dim) * 0.02
-            )
-            logger.info(
-                "VisionEncoder: hybrid CNN+ViT mode "
-                "(CNN stem → %d patches → %d transformer blocks)",
-                cnn_patches, config.n_layers)
+        if config.use_pretrained:
+            self._init_pretrained(config)
+        elif config.use_cnn_stem:
+            self._init_hybrid(config)
         else:
-            self.cnn_stem = None
-            # Patch embedding: image → patch tokens
-            self.patch_embed = PatchEmbedding(
-                patch_size=config.patch_size,
-                channels=config.channels,
-                dim=config.dim,
-            )
-            # Learnable position embeddings for each patch
-            self.pos_embed = nn.Parameter(
-                torch.randn(1, config.num_patches, config.dim) * 0.02
-            )
+            self._init_from_scratch(config)
 
-        # Transformer blocks
+    def _init_pretrained(self, config: VisionEncoderConfig) -> None:
+        """Initialize with a pretrained timm backbone."""
+        _ensure_timm()
+        import timm
+
+        self.backbone = timm.create_model(
+            config.pretrained_model,
+            pretrained=True,
+            num_classes=0,  # Remove classification head
+        )
+        backbone_dim = self.backbone.embed_dim
+
+        # Projection to config.dim if backbone output dim differs
+        if backbone_dim != config.dim:
+            self.backbone_proj = nn.Linear(backbone_dim, config.dim, bias=False)
+            nn.init.trunc_normal_(self.backbone_proj.weight, std=0.02)
+        else:
+            self.backbone_proj = None
+
+        # Null out from-scratch components (not used in pretrained mode)
+        self.cnn_stem = None
+        self.patch_embed = None
+        self.pos_embed = None
+        self.blocks = nn.ModuleList()
+        self.norm = nn.Identity()
+
+        if config.freeze_backbone:
+            for p in self.backbone.parameters():
+                p.requires_grad = False
+
+        logger.info(
+            "VisionEncoder: pretrained %s (dim=%d%s, %s)",
+            config.pretrained_model,
+            backbone_dim,
+            f" → {config.dim}" if backbone_dim != config.dim else "",
+            "frozen" if config.freeze_backbone else "trainable",
+        )
+
+    def _init_hybrid(self, config: VisionEncoderConfig) -> None:
+        """Initialize hybrid CNN+ViT from scratch."""
+        self.backbone = None
+        self.backbone_proj = None
+
+        self.cnn_stem = CNNStem(
+            channels=config.channels,
+            dim=config.dim,
+        )
+        self.patch_embed = None
+        # CNN stem output spatial size: image_size / 8
+        # (2× from stride-2 conv × 2× from pool1 × 2× from pool2)
+        cnn_patches = (config.image_size // 8) ** 2
+        self.pos_embed = nn.Parameter(
+            torch.randn(1, cnn_patches, config.dim) * 0.02
+        )
+        logger.info(
+            "VisionEncoder: hybrid CNN+ViT mode "
+            "(CNN stem → %d patches → %d transformer blocks)",
+            cnn_patches, config.n_layers)
+
+        self._init_blocks_and_norm(config)
+        self._init_weights()
+
+    def _init_from_scratch(self, config: VisionEncoderConfig) -> None:
+        """Initialize pure ViT from scratch."""
+        self.backbone = None
+        self.backbone_proj = None
+        self.cnn_stem = None
+
+        self.patch_embed = PatchEmbedding(
+            patch_size=config.patch_size,
+            channels=config.channels,
+            dim=config.dim,
+        )
+        self.pos_embed = nn.Parameter(
+            torch.randn(1, config.num_patches, config.dim) * 0.02
+        )
+
+        self._init_blocks_and_norm(config)
+        self._init_weights()
+
+    def _init_blocks_and_norm(self, config: VisionEncoderConfig) -> None:
+        """Shared init for transformer blocks and final norm."""
         self.blocks = nn.ModuleList([
             _VisionBlock(
                 dim=config.dim,
@@ -386,13 +464,8 @@ class VisionEncoder(nn.Module):
             )
             for _ in range(config.n_layers)
         ])
-
-        # Final normalization
-        Norm = _RMSNorm if config.use_rms_norm else nn.LayerNorm
+        Norm = RMSNorm if config.use_rms_norm else nn.LayerNorm
         self.norm = Norm(config.dim)
-
-        # Initialize weights
-        self._init_weights()
 
     def _init_weights(self) -> None:
         """Initialize weights with small values for stable training."""
@@ -409,12 +482,25 @@ class VisionEncoder(nn.Module):
         Encode an image tensor into patch features.
 
         Args:
-            x: Image tensor [batch, channels, image_size, image_size]
+            x: Image tensor [batch, channels, image_size, image_size].
+               Use [-1, 1] normalization for from-scratch models,
+               ImageNet normalization for pretrained models.
 
         Returns:
             Feature tensor [batch, num_patches, dim]
         """
-        # V-G: Hybrid CNN+ViT uses CNN stem for spatial features
+        # Pretrained: use timm backbone
+        if self.backbone is not None:
+            features = self.backbone.forward_features(x)
+            # Strip prefix tokens (CLS, registers) to get patch tokens only
+            n_prefix = getattr(self.backbone, "num_prefix_tokens", 0)
+            if n_prefix > 0:
+                features = features[:, n_prefix:]
+            if self.backbone_proj is not None:
+                features = self.backbone_proj(features)
+            return features
+
+        # From-scratch: CNN stem or patch embedding
         if self.cnn_stem is not None:
             x = self.cnn_stem(x)         # [B, cnn_patches, dim]
         else:
@@ -438,6 +524,64 @@ class VisionEncoder(nn.Module):
 
 
 # =============================================================================
+# TEMPORAL MODELING (VIDEO)
+# =============================================================================
+
+class TemporalConv1d(nn.Module):
+    """Lightweight 1D temporal convolution for video frame features.
+
+    Applies convolution across the time (frame) dimension so that
+    adjacent frame features can exchange information. This enables
+    the model to capture motion and temporal context that per-frame
+    encoding misses entirely.
+
+    Input:  list of N frame features [1, num_patches, dim]
+    Output: list of N frame features [1, num_patches, dim] (same shape)
+
+    Inspired by openpilot's temporal conv approach — much lighter
+    than full temporal attention (TimeSformer) while still providing
+    cross-frame information flow.
+    """
+
+    def __init__(self, dim: int, kernel_size: int = 3) -> None:
+        super().__init__()
+        padding = kernel_size // 2  # same-padding
+        self.conv = nn.Conv1d(dim, dim, kernel_size=kernel_size, padding=padding)
+        self.norm = RMSNorm(dim)
+
+    def forward(self, frame_features: list[torch.Tensor]) -> list[torch.Tensor]:
+        """Apply temporal convolution across frames.
+
+        Args:
+            frame_features: List of N tensors, each [1, num_patches, dim].
+
+        Returns:
+            List of N tensors with temporal context mixed in.
+        """
+        if len(frame_features) < 2:
+            return frame_features
+
+        # Average-pool each frame to get one vector per frame: [N, dim]
+        frame_summaries = torch.stack(
+            [f.squeeze(0).mean(dim=0) for f in frame_features], dim=0
+        )  # [N, dim]
+
+        # Conv1d expects [batch, channels, seq_len]
+        x = frame_summaries.unsqueeze(0).permute(0, 2, 1)  # [1, dim, N]
+        x = self.conv(x)  # [1, dim, N]
+        x = x.permute(0, 2, 1).squeeze(0)  # [N, dim]
+        x = self.norm(x)
+
+        # Add temporal context back to each frame's features via broadcast
+        result = []
+        for i, feat in enumerate(frame_features):
+            # feat: [1, num_patches, dim], x[i]: [dim]
+            result.append(feat + x[i].unsqueeze(0).unsqueeze(0))
+
+        return result
+
+
+# =============================================================================
 # IMAGE PREPROCESSING
 # =============================================================================
 
@@ -452,9 +596,21 @@ def _ensure_pil() -> None:
         ) from None
 
 
+def _ensure_timm() -> None:
+    """Ensure timm is available for pretrained vision models."""
+    try:
+        import timm  # noqa: F401
+    except ImportError:
+        raise ImportError(
+            "timm is required for pretrained vision models. "
+            "Install with: pip install timm"
+        ) from None
+
+
 def preprocess_image(
     image: Union[str, Path, "_PILImage"],
     image_size: int = 224,
+    imagenet_normalize: bool = False,
 ) -> torch.Tensor:
     """
     Preprocess an image for the vision encoder.
@@ -464,14 +620,16 @@ def preprocess_image(
     - PIL Image objects → converts directly
     - Grayscale/RGBA → converts to RGB
     - Any size → resizes to image_size × image_size
-    - Normalizes pixel values to [-1, 1]
+    - Normalizes pixel values to [-1, 1] (default) or ImageNet stats
 
     Args:
         image: PIL Image, file path string, or Path object.
         image_size: Target square size (default 224).
+        imagenet_normalize: If True, normalize with ImageNet mean/std
+            (required for pretrained models). If False, normalize to [-1, 1].
 
     Returns:
-        Tensor of shape [1, 3, image_size, image_size] normalized to [-1, 1].
+        Tensor of shape [1, 3, image_size, image_size].
     """
     _ensure_pil()
     from PIL import Image
@@ -487,13 +645,64 @@ def preprocess_image(
     # Resize to target size
     image = image.resize((image_size, image_size), Image.BILINEAR)
 
-    # Convert to tensor: HWC uint8 → CHW float [-1, 1]
+    # Convert to tensor: HWC uint8 → CHW float
     import numpy as np
     arr = np.array(image, dtype=np.float32)      # [H, W, 3] in [0, 255]
-    arr = arr / 127.5 - 1.0                        # normalize to [-1, 1]
+
+    if imagenet_normalize:
+        # ImageNet normalization: (pixel/255 - mean) / std
+        arr = arr / 255.0
+        mean = np.array(IMAGENET_MEAN, dtype=np.float32)
+        std = np.array(IMAGENET_STD, dtype=np.float32)
+        arr = (arr - mean) / std
+    else:
+        arr = arr / 127.5 - 1.0                    # normalize to [-1, 1]
+
     tensor = torch.from_numpy(arr).permute(2, 0, 1)  # [3, H, W]
 
     return tensor.unsqueeze(0)  # [1, 3, H, W]
+
+
+def augment_vision_tensor(img: torch.Tensor) -> torch.Tensor:
+    """Apply random augmentation to a pre-processed image tensor.
+
+    Designed for training-time data augmentation.  All transforms operate
+    directly on tensors in [-1, 1] range, no extra dependencies needed.
+
+    Augmentations applied (each with independent probability):
+    - Random horizontal flip (50%)
+    - Brightness jitter (±0.1)
+    - Contrast jitter (0.8× – 1.2×)
+    - Saturation jitter (50% chance, 0.6× – 1.4×)
+
+    Args:
+        img: Tensor [1, 3, H, W] in [-1, 1] range.
+
+    Returns:
+        Augmented tensor, same shape and range.
+    """
+    import random as _rand
+
+    # Random horizontal flip
+    if _rand.random() < 0.5:
+        img = torch.flip(img, dims=[-1])
+
+    # Brightness jitter
+    brightness = (_rand.random() - 0.5) * 0.2
+    img = (img + brightness).clamp(-1, 1)
+
+    # Contrast jitter
+    contrast = 0.8 + _rand.random() * 0.4
+    mean = img.mean()
+    img = ((img - mean) * contrast + mean).clamp(-1, 1)
+
+    # Saturation jitter
+    if _rand.random() < 0.5:
+        gray = img.mean(dim=-3, keepdim=True)
+        saturation = 0.6 + _rand.random() * 0.8
+        img = (saturation * img + (1 - saturation) * gray).clamp(-1, 1)
+
+    return img
 
 
 # =============================================================================
@@ -515,7 +724,11 @@ def encode_image(
     Returns:
         Feature tensor [1, num_patches, dim].
     """
-    tensor = preprocess_image(image, image_size=encoder.config.image_size)
+    tensor = preprocess_image(
+        image,
+        image_size=encoder.config.image_size,
+        imagenet_normalize=getattr(encoder.config, "use_pretrained", False),
+    )
     tensor = tensor.to(next(encoder.parameters()).device)
     encoder.eval()
     return encoder(tensor)
@@ -528,13 +741,15 @@ def encode_video_frames(
     max_frames: int = 8,
     max_visual_tokens: int = 0,
     dedup_threshold: float = 0.95,
+    temporal_conv: TemporalConv1d | None = None,
 ) -> torch.Tensor:
     """
     Sample frames from a video and encode each one.
 
     Requires OpenCV (cv2). Samples evenly-spaced frames, drops
     near-duplicate frames (cosine similarity > dedup_threshold),
-    and optionally truncates to max_visual_tokens.
+    optionally applies temporal convolution for cross-frame context,
+    and truncates to max_visual_tokens.
 
     Args:
         encoder: Trained VisionEncoder instance.
@@ -544,6 +759,9 @@ def encode_video_frames(
             0 means no limit.
         dedup_threshold: Cosine similarity threshold for dropping
             duplicate frames. Set to 1.0 to disable dedup.
+        temporal_conv: Optional TemporalConv1d module. When provided,
+            applies 1D convolution across frames so each frame can
+            see temporal context from its neighbors.
 
     Returns:
         Feature tensor [1, N*num_patches, dim] (concatenated frames).
@@ -576,20 +794,25 @@ def encode_video_frames(
     encoder.eval()
     all_features = []
 
-    for idx in indices:
-        cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
-        ret, frame = cap.read()
-        if not ret:
-            continue
-        # OpenCV BGR → RGB → PIL
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        pil_img = Image.fromarray(frame_rgb)
-        tensor = preprocess_image(pil_img, image_size=encoder.config.image_size)
-        tensor = tensor.to(device)
-        features = encoder(tensor)  # [1, num_patches, dim]
-        all_features.append(features)
-
-    cap.release()
+    try:
+        for idx in indices:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+            ret, frame = cap.read()
+            if not ret:
+                continue
+            # OpenCV BGR → RGB → PIL
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            pil_img = Image.fromarray(frame_rgb)
+            tensor = preprocess_image(
+                pil_img,
+                image_size=encoder.config.image_size,
+                imagenet_normalize=getattr(encoder.config, "use_pretrained", False),
+            )
+            tensor = tensor.to(device)
+            features = encoder(tensor)  # [1, num_patches, dim]
+            all_features.append(features)
+    finally:
+        cap.release()
 
     if not all_features:
         raise ValueError(f"Could not read any frames from: {video_path}")
@@ -605,6 +828,10 @@ def encode_video_frames(
             if cos_sim < dedup_threshold:
                 unique.append(feat)
         all_features = unique
+
+    # Apply temporal convolution if provided
+    if temporal_conv is not None and len(all_features) > 1:
+        all_features = temporal_conv(all_features)
 
     # Concatenate all frame features along the sequence dimension
     combined = torch.cat(all_features, dim=1)  # [1, N*num_patches, dim]

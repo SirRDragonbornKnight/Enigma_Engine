@@ -41,7 +41,7 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 # -------------------------------------------------------------------
 # Limits and defaults
 # -------------------------------------------------------------------
-MAX_GIF_FRAMES = 120
+MAX_GIF_FRAMES = 500
 MAX_IMAGE_DOWNLOAD_BYTES = 10 * 1024 * 1024   # 10 MB
 MAX_GIF_DOWNLOAD_BYTES = 20 * 1024 * 1024     # 20 MB
 MAX_CHAT_IMAGES = 200  # Cap retained PhotoImage refs per conversation

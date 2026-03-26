@@ -51,7 +51,7 @@ _NOTES_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "notes"
 _MEMORY_FILE = _NOTES_DIR / "memory.md"
 
 # Maximum number of facts to keep (oldest trimmed first)
-MAX_FACTS = 50
+MAX_FACTS = 200
 
 # Patterns that indicate memorable facts in user messages.
 # Each tuple: (compiled regex, format string with group references)
@@ -111,6 +111,84 @@ _FACT_PATTERNS: list[tuple[re.Pattern[str], str]] = [
         r"\bi\s+(?:use|program\s+in|code\s+in)\s+(.+?)(?:\.|,|$)",
         re.IGNORECASE),
      "User uses {1}"),
+
+    # Hobbies / interests
+    (re.compile(
+        r"\bi\s+(?:really\s+)?(?:enjoy|love)\s+(.+?)(?:\.|,|$)",
+        re.IGNORECASE),
+     "User enjoys {1}"),
+    (re.compile(
+        r"\bi(?:'m|\s+am)\s+(?:really\s+)?interested\s+in\s+(.+?)(?:\.|,|$)",
+        re.IGNORECASE),
+     "User is interested in {1}"),
+    (re.compile(
+        r"\bmy\s+hobbi(?:es|y)\s+(?:is|are|include)\s+(.+?)(?:\.|,|$)",
+        re.IGNORECASE),
+     "User's hobbies include {1}"),
+
+    # Age / birthday
+    (re.compile(
+        r"\bi(?:'m|\s+am)\s+(\d{1,3})\s+years?\s+old\b",
+        re.IGNORECASE),
+     "User is {1} years old"),
+    (re.compile(
+        r"\bmy\s+birthday\s+is\s+(.+?)(?:\.|,|$)",
+        re.IGNORECASE),
+     "User's birthday is {1}"),
+
+    # Pets
+    (re.compile(
+        r"\bi\s+have\s+a\s+(dog|cat|bird|fish|hamster|rabbit|snake|parrot|turtle)"
+        r"\s+(?:named|called)\s+(\w+)",
+        re.IGNORECASE),
+     "User has a {1} named {2}"),
+
+    # Family
+    (re.compile(
+        r"\bmy\s+(wife|husband|partner|brother|sister|mom|dad|mother|father|son|daughter)"
+        r"(?:'s)?\s+(?:name\s+is|is\s+named|is\s+called)\s+(\w+)",
+        re.IGNORECASE),
+     "User's {1}'s name is {2}"),
+
+    # Education
+    (re.compile(
+        r"\bi\s+(?:studied|went\s+to\s+school)\s+at\s+(.+?)(?:\.|,|$)",
+        re.IGNORECASE),
+     "User studied at {1}"),
+    (re.compile(
+        r"\bi\s+have\s+a\s+(?:degree|phd|masters?|bachelors?)\s+in\s+(.+?)(?:\.|,|$)",
+        re.IGNORECASE),
+     "User has a degree in {1}"),
+
+    # Dislikes
+    (re.compile(
+        r"\bi\s+(?:really\s+)?(?:hate|dislike|can'?t\s+stand)\s+(.+?)(?:\.|,|$)",
+        re.IGNORECASE),
+     "User dislikes {1}"),
+    (re.compile(
+        r"\bi\s+don'?t\s+(?:really\s+)?like\s+(.+?)(?:\.|,|$)",
+        re.IGNORECASE),
+     "User doesn't like {1}"),
+
+    # Languages spoken
+    (re.compile(
+        r"\bi\s+speak\s+(.+?)(?:\s+fluently)?(?:\.|,|$)",
+        re.IGNORECASE),
+     "User speaks {1}"),
+    (re.compile(
+        r"\bi(?:'m|\s+am)\s+fluent\s+in\s+(.+?)(?:\.|,|$)",
+        re.IGNORECASE),
+     "User is fluent in {1}"),
+
+    # Timezone
+    (re.compile(
+        r"\bi(?:'m|\s+am)\s+in\s+(?:the\s+)?([A-Z]{2,5})\s+timezone",
+        re.IGNORECASE),
+     "User is in the {1} timezone"),
+    (re.compile(
+        r"\bmy\s+timezone\s+is\s+([A-Z]{2,5})",
+        re.IGNORECASE),
+     "User's timezone is {1}"),
 ]
 
 
@@ -125,6 +203,7 @@ class PersistentMemory:
         self.path = memory_path or _MEMORY_FILE
         self._facts: list[str] = []
         self._lock = threading.Lock()
+        self.disabled = False
         self._load()
 
     # ------------------------------------------------------------------ load
@@ -178,7 +257,10 @@ class PersistentMemory:
 
         Deduplicates against existing facts (case-insensitive).
         Trims oldest facts if over MAX_FACTS.
+        Returns False immediately if memory is disabled.
         """
+        if self.disabled:
+            return False
         fact = fact.strip()
         if not fact:
             return False
@@ -277,7 +359,8 @@ class PersistentMemory:
 
     def reload(self) -> None:
         """Re-read facts from disk (in case user hand-edited the file)."""
-        self._load()
+        with self._lock:
+            self._load()
 
     # -------------------------------------------------------- build_context
     def build_context(self, max_tokens: int = 400) -> str:
@@ -358,6 +441,19 @@ _instance: PersistentMemory | None = None
 _instance_lock = threading.Lock()
 
 
+def _load_saved_memory_mode() -> str:
+    """Read memory_mode from gui_settings.json, default 'automatic'."""
+    try:
+        settings_path = Path(__file__).parent.parent.parent / "data" / "gui_settings.json"
+        if settings_path.exists():
+            import json
+            data = json.loads(settings_path.read_text(encoding="utf-8"))
+            return data.get("memory_mode", "automatic")
+    except Exception:
+        pass
+    return "automatic"
+
+
 def get_memory(memory_path: Path | None = None) -> PersistentMemory:
     """Get or create the global PersistentMemory instance."""
     global _instance
@@ -365,4 +461,6 @@ def get_memory(memory_path: Path | None = None) -> PersistentMemory:
         with _instance_lock:
             if _instance is None:
                 _instance = PersistentMemory(memory_path)
+                mode = _load_saved_memory_mode()
+                _instance.disabled = (mode == "disabled")
     return _instance

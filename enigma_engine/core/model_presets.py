@@ -27,9 +27,9 @@ logger = logging.getLogger(__name__)
 class ForgeConfig:
     """
     Model configuration with sensible defaults.
-    
+
     📖 WHAT EACH SETTING DOES:
-    
+
     CORE ARCHITECTURE:
     ┌────────────────────────────────────────────────────────────────────────┐
     │ vocab_size  │ How many unique tokens the model knows (like vocabulary)│
@@ -39,13 +39,13 @@ class ForgeConfig:
     │ n_kv_heads  │ Key/Value heads for GQA (memory optimization)          │
     │ hidden_dim  │ FFN hidden size (typically 4x dim for expansion)       │
     └────────────────────────────────────────────────────────────────────────┘
-    
+
     LIMITS & REGULARIZATION:
     ┌────────────────────────────────────────────────────────────────────────┐
     │ max_seq_len │ Maximum tokens in one sequence (context window)         │
     │ dropout     │ Randomly zero neurons during training (prevents overfit)│
     └────────────────────────────────────────────────────────────────────────┘
-    
+
     ARCHITECTURE FLAGS (modern transformer tricks):
     ┌────────────────────────────────────────────────────────────────────────┐
     │ use_rope    │ Rotary Position Embeddings (better position awareness)  │
@@ -53,7 +53,7 @@ class ForgeConfig:
     │ use_swiglu  │ SwiGLU activation (better than ReLU/GELU)              │
     │ use_bias    │ Add bias terms (usually False in modern models)        │
     └────────────────────────────────────────────────────────────────────────┘
-    
+
     UNIVERSAL MODEL ENHANCEMENTS:
     ┌────────────────────────────────────────────────────────────────────────┐
     │ rope_scaling_type   │ RoPE scaling for extended context              │
@@ -117,6 +117,13 @@ class ForgeConfig:
     # ─────────────────────────────────────────────────────────────────────────
     vision_hidden_size: Optional[int] = None  # Vision encoder dimension
     audio_hidden_size: Optional[int] = None   # Audio encoder dimension
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # TRAINING STABILITY & REGULARIZATION
+    # ─────────────────────────────────────────────────────────────────────────
+    use_qk_norm: bool = False         # Normalize Q and K in attention (fp16 overflow guard)
+    use_layer_scale: bool = False     # Learnable residual scaling (stabilizes deep training)
+    drop_path_rate: float = 0.0       # Stochastic depth (0.0 = disabled, 0.1-0.3 typical)
 
     # ─────────────────────────────────────────────────────────────────────────
     # LEGACY ALIASES - For backwards compatibility
@@ -237,13 +244,13 @@ class ForgeConfig:
     def validate(self) -> bool:
         """
         Run read-only validation on the config.
-        
+
         This does not auto-calculate fields or assign attributes,
         so it is safe to call on frozen configs.
-        
+
         Returns:
             True if valid
-            
+
         Raises:
             ValueError: If any validation fails
         """
@@ -301,10 +308,10 @@ class ForgeConfig:
     def freeze(self) -> ForgeConfig:
         """
         Freeze the config to prevent further modifications.
-        
+
         Once frozen, any attempt to modify attributes will raise an error.
         This is useful for ensuring config immutability after model creation.
-        
+
         Returns:
             self (for chaining)
         """
@@ -374,10 +381,10 @@ class ForgeConfig:
 class QuantizationConfig:
     """
     Configuration for model quantization.
-    
+
     📖 WHAT THIS DOES:
     Quantization reduces model precision to save memory and speed up inference.
-    
+
     📐 QUANTIZATION TYPES:
     ┌────────────┬────────────────────────────────────────────────────────────┐
     │ Type       │ Description                                                │
@@ -387,13 +394,13 @@ class QuantizationConfig:
     │ int8       │ Static INT8 quantization (requires calibration)           │
     │ int4       │ 4-bit quantization (smallest, some quality loss)          │
     └────────────┴────────────────────────────────────────────────────────────┘
-    
+
     ⚡ MEMORY SAVINGS:
     - FP32: 4 bytes/param (baseline)
     - FP16: 2 bytes/param (50% savings)
     - INT8: 1 byte/param (75% savings)
     - INT4: 0.5 bytes/param (87.5% savings)
-    
+
     🍓 PI RECOMMENDATIONS:
     - Pi Zero: int4 quantization (fits in 512MB RAM)
     - Pi 4 (4GB): int8 quantization
@@ -497,26 +504,67 @@ MODEL_PRESETS = {
 # Human-readable descriptions
 MODEL_DESCRIPTIONS = {
     # Pi-optimized presets
-    'pi_zero': "Pi Zero (~500K) - Raspberry Pi Zero 2W, minimal responses",
-    'pi_4': "Pi 4 (~3M) - Raspberry Pi 4 (4GB), balanced performance",
-    'pi_5': "Pi 5 (~8M) - Raspberry Pi 5 (8GB), best Pi experience",
-    # Standard presets
-    'nano': "Minimal (~1M) - Microcontrollers, basic responses",
-    'micro': "Tiny (~2M) - IoT devices, simple tasks",
-    'tiny': "Small (~5M) - Raspberry Pi, edge devices",
-    'mini': "Compact (~10M) - Mobile, low-power devices",
-    'small': "Standard (~27M) - Entry GPU, good learning",
-    'medium': "Capable (~85M) - Mid-range GPU, solid results",
-    'base': "Balanced (~125M) - Good GPU, versatile",
-    'large': "Powerful (~200M) - RTX 3080+, high quality",
-    'xl': "Advanced (~600M) - RTX 4090, excellent results",
-    'xxl': "Massive (~1.5B) - Multi-GPU, near-production",
-    'huge': "Enterprise (~3B) - Server GPU, production ready",
-    'giant': "Datacenter (~7B) - Multi-node, commercial grade",
-    'colossal': "Cloud (~13B) - Distributed, competitive",
-    'titan': "Maximum (~30B) - Full datacenter, state-of-art",
-    'omega': "Ultimate (~70B+) - Cluster, research frontier",
+    'pi_zero': "Raspberry Pi Zero 2W - needs <1 GB RAM",
+    'pi_4': "Raspberry Pi 4 - needs ~4 GB RAM",
+    'pi_5': "Raspberry Pi 5 - needs ~8 GB RAM",
+    # Standard presets (VRAM = training estimate)
+    'nano': "Microcontrollers - needs <1 GB",
+    'micro': "IoT devices - needs <1 GB",
+    'tiny': "Edge devices - needs <1 GB",
+    'mini': "Mobile, low-power - needs <1 GB",
+    'small': "Entry GPU - needs ~1 GB VRAM",
+    'medium': "Mid-range GPU - needs ~2 GB VRAM",
+    'base': "Good GPU - needs ~3 GB VRAM",
+    'large': "RTX 3080+ - needs ~4 GB VRAM",
+    'xl': "RTX 4090 - needs ~11 GB VRAM",
+    'xxl': "Multi-GPU - needs ~27 GB VRAM",
+    'huge': "Server GPU - needs ~54 GB VRAM",
+    'giant': "Multi-node - needs ~130 GB VRAM",
+    'colossal': "Distributed - needs ~200 GB VRAM",
+    'titan': "Full datacenter - needs ~550 GB VRAM",
+    'omega': "Cluster - needs ~1.3 TB VRAM",
 }
+
+
+def estimate_training_vram(config: ForgeConfig) -> float:
+    """
+    Estimate VRAM needed for training a model config, in GB.
+
+    Accounts for weights (fp16), optimizer states (Adam fp32),
+    gradients (fp16), activations, and CUDA overhead.
+    Returns a conservative estimate with safety margin.
+    """
+    params = estimate_parameters(config)
+    # 2 (weights fp16) + 8 (adam fp32 states) + 2 (gradients fp16) = 12 bytes/param
+    # + ~4 bytes/param for activations/buffers (varies with batch/seq)
+    # + 20% safety margin for CUDA overhead and fragmentation
+    bytes_needed = params * 16 * 1.2
+    vram_gb = bytes_needed / (1024 ** 3)
+    # Minimum ~0.5 GB for PyTorch CUDA overhead
+    return round(max(0.5, vram_gb), 1)
+
+
+def recommend_preset_for_vram(vram_gb: float) -> str:
+    """
+    Return the largest preset that fits within the given VRAM budget.
+
+    Args:
+        vram_gb: Available GPU VRAM in gigabytes.
+
+    Returns:
+        Preset name (e.g. 'large', 'xl').
+    """
+    best_name = "pi_zero"
+    best_vram = 0.0
+
+    for name, config in MODEL_PRESETS.items():
+        config_copy = copy.deepcopy(config)
+        config_copy.vocab_size = 32000  # Standard for estimation
+        needed = estimate_training_vram(config_copy)
+        if needed <= vram_gb and needed >= best_vram:
+            best_vram = needed
+            best_name = name
+    return best_name
 
 
 def get_preset(name: str, vocab_size: int = 8000) -> ForgeConfig:

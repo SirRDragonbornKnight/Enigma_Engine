@@ -1,16 +1,13 @@
-"""
+﻿"""
 Training Module for Enigma AI Engine
 
 Provides:
 - TrainingConfig: Configuration for training
 - Trainer: Basic fine-tuning with progress callbacks
-- best_of_n: Generate N responses, return best one
-- collect_training_data: Run best-of-N on tasks, collect winners
-- evolutionary_training: Self-play training loop
 
 Usage:
     from enigma_engine.core.training import Trainer, TrainingConfig
-    
+
     config = TrainingConfig(epochs=10, batch_size=4, learning_rate=1e-4)
     trainer = Trainer(model, tokenizer, config)
     trainer.train(data)
@@ -32,7 +29,7 @@ from typing import Any, Callable
 import torch
 import torch.nn as nn
 from torch.optim import AdamW
-from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.optim.lr_scheduler import CosineAnnealingLR, LambdaLR, SequentialLR
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +41,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class TrainingConfig:
     """Configuration for model training.
-    
+
     Attributes:
         epochs: Number of training epochs
         batch_size: Training batch size
@@ -70,6 +67,7 @@ class TrainingConfig:
     eval_every: int = 0
     log_every: int = 10
     use_amp: bool = True
+    amp_dtype: str = "auto"  # "auto", "float16", "bfloat16"
     max_grad_accumulation: int = 1
     use_gradient_checkpointing: bool = False
 
@@ -87,7 +85,7 @@ class TrainingConfig:
     rolling_best_k: int = 0  # 0 = disabled, N = keep N best by loss
 
     # Early-stopping / safety guardrails
-    early_stopping_patience: int = 0  # 0 = disabled
+    early_stopping_patience: int = 5  # Stop if no improvement for 5 epochs
     max_loss: float = 100.0  # abort if loss exceeds this
     max_training_seconds: float = 0  # 0 = unlimited
 
@@ -95,8 +93,30 @@ class TrainingConfig:
     run_evaluation: bool = False  # Evaluate before and after training
     eval_test_prompts: list[str] = None  # Custom test prompts (None = use defaults)
 
+    # Label smoothing (fairseq pattern â€” reduces overconfidence)
+    label_smoothing: float = 0.05  # Reduces overconfidence, preserves generality
+
     # Validation split
-    val_split: float = 0.0  # Fraction held out for validation (0.0 = disabled)
+    val_split: float = 0.1  # 10% held out to detect overfitting early
+
+    # EMA weight averaging (smooths training noise, use EMA for eval)
+    ema_decay: float = 0.0  # 0.0 = disabled, 0.999 or 0.9999 typical
+
+    # torch.compile (10-20% throughput gain on supported hardware)
+    use_compile: bool = False
+
+    # Sequence packing: pack short sequences into max_seq_len rows
+    # separated by EOS tokens with block-diagonal attention masks.
+    # 30-50% throughput gain by eliminating padding waste.
+    use_sequence_packing: bool = False
+
+    # General data mixing — prevents catastrophic forgetting.
+    # When focused training data is provided alongside general data,
+    # this ratio controls how much general data is mixed into each epoch.
+    # 0.0 = no mixing (only focused), 1.0 = only general.
+    # 0.2 = 20% general + 80% focused (good default).
+    general_mix_ratio: float = 0.2
+    general_data: str = ""  # Path or text of general knowledge data
 
     def validate(self) -> None:
         """Raise *ValueError* if any field is nonsensical."""
@@ -140,7 +160,14 @@ class TrainingConfig:
             "early_stopping_patience": self.early_stopping_patience,
             "max_loss": self.max_loss,
             "max_training_seconds": self.max_training_seconds,
+            "label_smoothing": self.label_smoothing,
             "val_split": self.val_split,
+            "ema_decay": self.ema_decay,
+            "use_compile": self.use_compile,
+            "use_sequence_packing": self.use_sequence_packing,
+            "reasoning_loss_weight": self.reasoning_loss_weight,
+            "general_mix_ratio": self.general_mix_ratio,
+            "general_data": self.general_data,
         }
 
 
@@ -153,6 +180,140 @@ class TrainingState:
     total_tokens: int = 0
     training_losses: list[float] = field(default_factory=list)
     validation_losses: list[float] = field(default_factory=list)
+
+
+class EMAWeightAverager:
+    """Exponential Moving Average of model weights.
+
+    Maintains shadow copies of every parameter, updated each step:
+        shadow = decay * shadow + (1 - decay) * current_param
+
+    Use ``apply()`` before eval/save, ``restore()`` after to swap
+    EMA weights in and live weights back.
+    """
+
+    def __init__(self, model: nn.Module, decay: float = 0.999) -> None:
+        self.decay = decay
+        self.shadow: list[torch.Tensor] = [
+            p.clone().detach() for p in model.parameters()
+        ]
+        self._backup: list[torch.Tensor] = []
+
+    @torch.no_grad()
+    def update(self, model: nn.Module) -> None:
+        """Update shadow weights toward current model parameters."""
+        for shadow, param in zip(self.shadow, model.parameters()):
+            shadow.lerp_(param.detach(), 1.0 - self.decay)
+
+    def apply(self, model: nn.Module) -> None:
+        """Swap EMA weights into the model (back up live weights)."""
+        self._backup = [p.clone() for p in model.parameters()]
+        for param, shadow in zip(model.parameters(), self.shadow):
+            param.data.copy_(shadow)
+
+    def restore(self, model: nn.Module) -> None:
+        """Restore live weights from backup (undo ``apply()``)."""
+        for param, backup in zip(model.parameters(), self._backup):
+            param.data.copy_(backup)
+        self._backup = []
+
+    def state_dict(self) -> dict[str, list[torch.Tensor]]:
+        """Serialize EMA state for checkpointing."""
+        return {"shadow": self.shadow}
+
+    def load_state_dict(self, state: dict[str, list[torch.Tensor]]) -> None:
+        """Restore EMA state from checkpoint."""
+        self.shadow = [s.clone() for s in state["shadow"]]
+
+
+# =============================================================================
+# SEQUENCE PACKING
+# =============================================================================
+
+def pack_sequences(
+    encoded_seqs: list[list[int]],
+    max_length: int,
+    eos_id: int,
+    pad_id: int = 0,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Pack multiple short sequences into max_length rows with EOS separators.
+
+    Each row is filled greedily: sequences are appended with an EOS token
+    after each until the row is full.  A 4D block-diagonal causal mask
+    prevents tokens in different documents from attending to each other.
+
+    Args:
+        encoded_seqs: List of token-id lists (already encoded).
+        max_length: Target row length (model's max_seq_len).
+        eos_id: End-of-sequence token used as a separator.
+        pad_id: Padding token for remaining space.
+
+    Returns:
+        (packed_tensor, attention_mask_2d):
+        - packed_tensor: ``(num_rows, max_length)`` long tensor.
+        - attention_mask_2d: ``(num_rows, 1, max_length, max_length)``
+          float tensor. 0 = attend, -inf = block.
+    """
+    rows: list[list[int]] = []
+    # boundaries[i] is a list of (start, end) spans for each document in row i
+    boundaries: list[list[tuple[int, int]]] = []
+
+    current_row: list[int] = []
+    current_bounds: list[tuple[int, int]] = []
+
+    for seq in encoded_seqs:
+        # Each packed document = seq tokens + 1 EOS separator
+        needed = len(seq) + 1
+        if needed > max_length:
+            # Truncate long sequences to fit a full row
+            seq = seq[:max_length - 1]
+            needed = max_length
+
+        if len(current_row) + needed > max_length:
+            # Current row is full — flush it
+            if current_row:
+                rows.append(current_row)
+                boundaries.append(current_bounds)
+            current_row = []
+            current_bounds = []
+
+        start = len(current_row)
+        current_row.extend(seq)
+        current_row.append(eos_id)
+        end = len(current_row)
+        current_bounds.append((start, end))
+
+    # Flush the last row
+    if current_row:
+        rows.append(current_row)
+        boundaries.append(current_bounds)
+
+    # Pad each row to max_length and build 4D masks
+    neg_inf = float('-inf')
+    packed = []
+    masks = []
+
+    for row, bounds in zip(rows, boundaries):
+        pad_len = max_length - len(row)
+        padded_row = row + [pad_id] * pad_len
+        packed.append(padded_row)
+
+        # Build the 2D mask for this row
+        # Start with everything blocked
+        mask = [[neg_inf] * max_length for _ in range(max_length)]
+
+        # For each document span, allow causal attention within that span
+        for start, end in bounds:
+            for i in range(start, end):
+                for j in range(start, i + 1):  # causal: attend to self and past within doc
+                    mask[i][j] = 0.0
+
+        masks.append(mask)
+
+    packed_tensor = torch.tensor(packed, dtype=torch.long)
+    mask_tensor = torch.tensor(masks, dtype=torch.float32).unsqueeze(1)  # (B, 1, T, T)
+
+    return packed_tensor, mask_tensor
 
 
 # =============================================================================
@@ -214,7 +375,7 @@ def validate_training_data(
     null_count = data.count("\x00")
     if null_count > 0:
         result.warnings.append(
-            f"Data contains {null_count} null bytes — "
+            f"Data contains {null_count} null bytes â€” "
             f"may indicate encoding corruption.")
 
     # Count non-printable control characters (exclude newline, tab, CR)
@@ -254,16 +415,16 @@ def validate_training_data(
         pct = short_count / len(lines) * 100
         result.warnings.append(
             f"{short_count} sequences ({pct:.0f}%) shorter than "
-            f"{min_length} chars — may not provide useful signal.")
+            f"{min_length} chars â€” may not provide useful signal.")
 
     if long_count > 0:
         result.warnings.append(
-            f"{long_count} sequences exceed {max_length:,} chars — "
+            f"{long_count} sequences exceed {max_length:,} chars â€” "
             f"will be truncated to model max_seq_len.")
 
     if empty_count > 5:
         result.warnings.append(
-            f"{empty_count} runs of 3+ empty lines — "
+            f"{empty_count} runs of 3+ empty lines â€” "
             f"consider cleaning whitespace.")
 
     # Check for duplicates
@@ -305,7 +466,7 @@ def validate_training_data(
 class Trainer:
     """
     Trainer for fine-tuning Enigma models.
-    
+
     Supports:
     - Basic fine-tuning on text data
     - Q&A pair training
@@ -314,7 +475,7 @@ class Trainer:
     - Checkpoint saving/loading
     - Gradient accumulation
     - Mixed precision training
-    
+
     Usage:
         trainer = Trainer(model, tokenizer, config)
         trainer.on_progress = lambda pct, msg: print(f"{pct}% - {msg}")
@@ -329,7 +490,7 @@ class Trainer:
     ):
         """
         Initialize trainer.
-        
+
         Args:
             model: The Enigma model to train
             tokenizer: Tokenizer for encoding text
@@ -356,10 +517,16 @@ class Trainer:
         # Setup optimizer and scheduler
         self._setup_optimizer()
 
-        # Mixed precision scaler
-        self.scaler = torch.amp.GradScaler('cuda') if self.config.use_amp and torch.cuda.is_available() else None
+        # Resolve AMP dtype (BF16 on Blackwell / Ampere+, FP16 otherwise)
+        self._amp_dtype = self._resolve_amp_dtype()
 
-        # Gradient checkpointing — trades compute for VRAM savings
+        # Mixed precision scaler — disabled for BF16 (no loss scaling needed)
+        self.scaler = None
+        if self.config.use_amp and torch.cuda.is_available():
+            if self._amp_dtype != torch.bfloat16:
+                self.scaler = torch.amp.GradScaler('cuda')
+
+        # Gradient checkpointing â€” trades compute for VRAM savings
         if self.config.use_gradient_checkpointing:
             if hasattr(self.model, "gradient_checkpointing_enable"):
                 self.model.gradient_checkpointing_enable()
@@ -369,7 +536,7 @@ class Trainer:
                     if hasattr(layer, "gradient_checkpointing"):
                         layer.gradient_checkpointing = True
 
-        # Resolve pad token ID from the tokenizer — used for
+        # Resolve pad token ID from the tokenizer â€” used for
         # padding batches and as ignore_index in cross-entropy loss.
         # Built-in tokenizer uses 0, tiktoken uses base+0.
         self.pad_token_id: int = getattr(
@@ -378,6 +545,22 @@ class Trainer:
         # Rolling best checkpoint tracking (CK-C)
         # List of (loss, path) tuples sorted by loss ascending
         self._rolling_checkpoints: list[tuple[float, Path]] = []
+
+        # EMA weight averaging
+        self.ema: EMAWeightAverager | None = None
+        if self.config.ema_decay > 0:
+            self.ema = EMAWeightAverager(self.model, decay=self.config.ema_decay)
+            logger.info(f"EMA enabled with decay={self.config.ema_decay}")
+
+        # torch.compile for throughput gains (PyTorch 2.0+)
+        self._compiled = False
+        if self.config.use_compile:
+            try:
+                self.model = torch.compile(self.model)
+                self._compiled = True
+                logger.info("torch.compile enabled")
+            except Exception as e:
+                logger.warning(f"torch.compile not available: {e}")
 
         logger.info(f"Trainer initialized: device={self.device}, config={self.config.to_dict()}")
 
@@ -395,15 +578,33 @@ class Trainer:
             else:
                 decay_params.append(param)
 
+        # Use fused AdamW on CUDA when available (5-10% faster optimizer step)
+        adamw_kwargs: dict[str, Any] = {}
+        if torch.cuda.is_available():
+            import inspect
+            if 'fused' in inspect.signature(AdamW).parameters:
+                adamw_kwargs['fused'] = True
+
         self.optimizer = AdamW([
             {'params': decay_params, 'weight_decay': self.config.weight_decay},
             {'params': no_decay_params, 'weight_decay': 0.0}
         ], lr=self.config.learning_rate,
            betas=(self.config.adam_beta1, self.config.adam_beta2),
-           eps=self.config.adam_eps)
+           eps=self.config.adam_eps,
+           **adamw_kwargs)
 
-        # Cosine annealing scheduler
-        self.scheduler = None  # Will be set when we know total steps
+        # Scheduler set when we know total steps (see _create_scheduler)
+        self.scheduler = None
+
+    def _resolve_amp_dtype(self) -> torch.dtype:
+        """Resolve the AMP autocast dtype from config.
+
+        ``"auto"`` picks BF16 when the GPU supports it (Ampere+, Blackwell)
+        and falls back to FP16 otherwise.  BF16 has better numeric range
+        which avoids many loss-scaling headaches.
+        """
+        from .rl_training import _resolve_amp_dtype
+        return _resolve_amp_dtype(self.config.amp_dtype)
 
     def _emit_progress(self, percent: int, message: str) -> None:
         """Emit progress update via callback."""
@@ -435,15 +636,15 @@ class Trainer:
     def _parse_training_data(self, data: str | list[dict]) -> list[str]:
         """
         Parse training data into sequences.
-        
+
         Supports:
         - Raw text (split by newlines or double newlines)
         - Q&A format: "Q: question\\nA: answer"
         - JSONL format: {"prompt": "...", "completion": "..."}
-        
+
         Args:
             data: Raw text or list of dicts
-            
+
         Returns:
             List of training sequences
         """
@@ -461,7 +662,8 @@ class Trainer:
                         if thinking:
                             from .reasoning import wrap_reasoning
                             completion = wrap_reasoning(thinking, completion)
-                        sequences.append(f"Q: {prompt}\nA: {completion}")
+                        sequences.append(
+                            f"User: {prompt}\nAssistant: {completion}")
                 elif isinstance(item, str):
                     sequences.append(item)
             return sequences
@@ -484,21 +686,24 @@ class Trainer:
                         if thinking:
                             from .reasoning import wrap_reasoning
                             completion = wrap_reasoning(thinking, completion)
-                        sequences.append(f"Q: {prompt}\nA: {completion}")
+                        sequences.append(
+                            f"User: {prompt}\nAssistant: {completion}")
                 except json.JSONDecodeError:
                     continue
             if sequences:
                 return sequences
 
-        # Try Q&A format
+        # Try Q&A format — normalise to User/Assistant to match
+        # the chat inference prompt format.
         qa_pattern = re.compile(r'Q:\s*(.+?)\s*A:\s*(.+?)(?=Q:|$)', re.DOTALL)
         matches = qa_pattern.findall(data)
         if matches:
             for q, a in matches:
-                sequences.append(f"Q: {q.strip()}\nA: {a.strip()}")
+                sequences.append(
+                    f"User: {q.strip()}\nAssistant: {a.strip()}")
             return sequences
 
-        # Try User/AI dialogue format
+        # Try User/AI dialogue format — normalise role labels
         dialogue_pattern = re.compile(
             r'(?:User|Human):\s*(.+?)\s*(?:AI|Assistant):\s*(.+?)(?=(?:User|Human):|$)',
             re.DOTALL | re.IGNORECASE)
@@ -506,14 +711,14 @@ class Trainer:
         if d_matches:
             for user_msg, ai_msg in d_matches:
                 sequences.append(
-                    f"User: {user_msg.strip()}\nAI: {ai_msg.strip()}")
+                    f"User: {user_msg.strip()}\nAssistant: {ai_msg.strip()}")
             return sequences
 
         # Fall back to paragraph splitting
         paragraphs = data.split('\n\n')
         for para in paragraphs:
             para = para.strip()
-            if len(para) > 20:  # Skip very short paragraphs
+            if len(para) > 50:  # Skip short/noisy paragraphs
                 sequences.append(para)
 
         if not sequences:
@@ -539,11 +744,11 @@ class Trainer:
         resolved or no think tokens exist in the batch.
         """
         try:
-            # Resolve token IDs for <think> and </think>
-            think_start_ids = self._get_token_ids("<think>")
-            think_end_ids = self._get_token_ids("</think>")
+            # Use named attributes (available on all 4 tokenizer classes)
+            start_id = getattr(self.tokenizer, 'think_start_id', None)
+            end_id = getattr(self.tokenizer, 'think_end_id', None)
 
-            if not think_start_ids or not think_end_ids:
+            if start_id is None or end_id is None:
                 return base_loss
 
             # Per-token cross-entropy (not reduced)
@@ -563,11 +768,11 @@ class Trainer:
                 in_think = False
                 for t in range(targets.size(1)):
                     tok = targets[b, t].item()
-                    if tok in think_start_ids:
+                    if tok == start_id:
                         in_think = True
                     if in_think:
                         weight[b, t] = w
-                    if tok in think_end_ids:
+                    if tok == end_id:
                         in_think = False
 
             # Weighted mean (ignoring padding)
@@ -583,22 +788,46 @@ class Trainer:
                          exc_info=True)
             return base_loss
 
-    def _get_token_ids(self, text: str) -> set[int]:
-        """Encode *text* and return the set of resulting token IDs."""
-        try:
-            if hasattr(self.tokenizer, "encode"):
-                ids = self.tokenizer.encode(text)
-                if isinstance(ids, list):
-                    return set(ids)
-            return set()
-        except Exception:
-            return set()
+    def _pack_sequences(
+        self,
+        encoded_seqs: list[list[int]],
+        max_length: int,
+    ) -> list[tuple[torch.Tensor, torch.Tensor]]:
+        """Pack encoded sequences into dense rows with 4D masks.
+
+        Wrapper around the standalone ``pack_sequences()`` that uses
+        the trainer's tokenizer EOS/PAD IDs and moves tensors to the
+        correct device.
+
+        Returns:
+            List of (packed_tensor, mask_4d) tuples.  ``mask_4d`` has
+            shape ``(B, 1, T, T)`` with 0 = attend and -inf = block.
+        """
+        eos_id = getattr(self.tokenizer, "eos_token_id", 2)
+        packed, masks = pack_sequences(
+            encoded_seqs,
+            max_length=max_length,
+            eos_id=eos_id,
+            pad_id=self.pad_token_id,
+        )
+        packed = packed.to(self.device)
+        masks = masks.to(self.device)
+
+        # Split into batch-sized chunks
+        batches = []
+        batch_size = self.config.batch_size
+        for i in range(0, packed.shape[0], batch_size):
+            batches.append((
+                packed[i:i + batch_size],
+                masks[i:i + batch_size],
+            ))
+        return batches
 
     def _create_batches(
         self,
         sequences: list[str],
         max_length: int | None = None,
-    ) -> list[torch.Tensor]:
+    ) -> list[tuple[torch.Tensor, torch.Tensor]]:
         """
         Create batches from sequences.
 
@@ -608,7 +837,10 @@ class Trainer:
                 model's ``max_seq_len`` if available, otherwise 512.
 
         Returns:
-            List of batched tensors
+            List of (batch_tensor, attention_mask) tuples.
+            attention_mask has 1 for real tokens, 0 for padding.
+            When sequence packing is enabled, attention_mask is a 4D
+            tensor ``(B, 1, T, T)`` instead of 2D ``(B, T)``.
         """
         # Use model's configured context length when available
         if max_length is None:
@@ -623,12 +855,17 @@ class Trainer:
             tokens = self.tokenizer.encode(seq)
             if len(tokens) > max_length:
                 tokens = tokens[:max_length]
-            if len(tokens) > 1:  # Need at least 2 tokens for next-token prediction
+            if len(tokens) >= 5:  # Need enough tokens for meaningful training
                 encoded.append(tokens)
 
         if not encoded:
             raise ValueError("No valid sequences after encoding")
 
+        # ---- Sequence packing path ----
+        if self.config.use_sequence_packing:
+            return self._pack_sequences(encoded, max_length)
+
+        # ---- Standard padding path ----
         # Sort by length for efficient batching
         encoded.sort(key=len, reverse=True)
 
@@ -642,22 +879,25 @@ class Trainer:
             # Pad to max length in batch
             max_len = max(len(t) for t in batch_tokens)
             padded = []
+            masks = []
             for tokens in batch_tokens:
-                padding = [pad_token_id] * (max_len - len(tokens))
-                padded.append(tokens + padding)
+                pad_len = max_len - len(tokens)
+                masks.append([1] * len(tokens) + [0] * pad_len)
+                padded.append(tokens + [pad_token_id] * pad_len)
 
             batch_tensor = torch.tensor(padded, dtype=torch.long, device=self.device)
-            batches.append(batch_tensor)
+            attention_mask = torch.tensor(masks, dtype=torch.long, device=self.device)
+            batches.append((batch_tensor, attention_mask))
 
         return batches
 
     def train(self, data: str | list[dict]) -> TrainingState:
         """
         Train the model on data.
-        
+
         Args:
             data: Training data (text, Q&A pairs, or JSONL)
-            
+
         Returns:
             Final training state
         """
@@ -680,7 +920,41 @@ class Trainer:
         if not sequences:
             raise ValueError("No training sequences found in data")
 
-        # Deduplicate while preserving order — prevents the model
+
+        # Mix general knowledge data to prevent catastrophic forgetting.
+        # When focused data is provided, keep the model general by mixing
+        # a portion of general/diverse examples into each training batch.
+        if (self.config.general_data
+                and self.config.general_mix_ratio > 0):
+            try:
+                general_text = self.config.general_data
+                # If it looks like a file path, load it
+                gp = Path(general_text)
+                if gp.exists() and gp.is_file():
+                    general_text = gp.read_text(encoding="utf-8")
+                general_seqs = self._parse_training_data(general_text)
+                if general_seqs:
+                    ratio = min(self.config.general_mix_ratio, 0.9)
+                    n_focused = len(sequences)
+                    n_general = max(1, int(
+                        n_focused * ratio / max(0.01, 1.0 - ratio)))
+                    if len(general_seqs) >= n_general:
+                        mixed = random.sample(general_seqs, n_general)
+                    else:
+                        mixed = (general_seqs
+                                 * (n_general // len(general_seqs) + 1)
+                                 )[:n_general]
+                    sequences.extend(mixed)
+                    random.shuffle(sequences)
+                    logger.info(
+                        f"Mixed {n_general} general sequences "
+                        f"with {n_focused} focused sequences "
+                        f"(ratio {ratio:.0%} general)")
+            except Exception as exc:
+                logger.warning(
+                    f"Could not mix general data: {exc}")
+
+        # Deduplicate while preserving order â€” prevents the model
         # from over-fitting on repeated examples.
         pre_dedup = len(sequences)
         sequences = list(dict.fromkeys(sequences))
@@ -693,9 +967,12 @@ class Trainer:
         val_sequences: list[str] = []
         if self.config.val_split > 0 and len(sequences) > 1:
             n_val = max(1, int(len(sequences) * self.config.val_split))
-            # Deterministic split: take last n_val sequences
-            val_sequences = sequences[-n_val:]
-            sequences = sequences[:-n_val]
+            # Random stratified split — avoids bias from data ordering
+            indices = list(range(len(sequences)))
+            random.Random(42).shuffle(indices)  # deterministic seed for reproducibility
+            val_indices = set(indices[:n_val])
+            val_sequences = [sequences[i] for i in sorted(val_indices)]
+            sequences = [sequences[i] for i in range(len(sequences)) if i not in val_indices]
             logger.info(
                 f"Validation split: {len(sequences)} train, "
                 f"{len(val_sequences)} val "
@@ -739,7 +1016,7 @@ class Trainer:
             raise
 
         # Create validation batches (if split is active)
-        val_batches: list[torch.Tensor] = []
+        val_batches: list[tuple[torch.Tensor, torch.Tensor]] = []
         if val_sequences:
             try:
                 val_batches = self._create_batches(
@@ -748,17 +1025,45 @@ class Trainer:
             except Exception as exc:
                 logger.warning(f"Failed to create val batches: {exc}")
 
-        # Setup scheduler
+        # Setup scheduler: SequentialLR(warmup â†’ cosine decay)
         total_steps = len(batches) * self.config.epochs
-        self.scheduler = CosineAnnealingLR(
+        warmup = max(1, self.config.warmup_steps)
+        decay_steps = max(1, total_steps - warmup)
+
+        warmup_scheduler = LambdaLR(
             self.optimizer,
-            T_max=total_steps,
-            eta_min=self.config.learning_rate * 0.1
-        )
+            lr_lambda=lambda step: min(1.0, (step + 1) / warmup))
+        cosine_scheduler = CosineAnnealingLR(
+            self.optimizer,
+            T_max=decay_steps,
+            eta_min=self.config.learning_rate * 0.1)
+        self.scheduler = SequentialLR(
+            self.optimizer,
+            schedulers=[warmup_scheduler, cosine_scheduler],
+            milestones=[warmup])
+
+        # Restore scheduler/scaler state from checkpoint if available
+        self._restore_pending_state()
 
         # Training loop
         checkpoint_dir = Path(self.config.checkpoint_dir)
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
+        # Snapshot one weight tensor for sanity checking after warmup.
+        # Pick a dense weight (not embeddings, which are sparse).
+        # We delay the check until after warmup steps so the learning
+        # rate is fully ramped and weight updates are meaningful.
+        _weight_check_done = False
+        _weight_check_step = min(warmup, len(batches))  # check after warmup
+        _weight_snapshot: torch.Tensor | None = None
+        _weight_ref_name = ""
+        for _name, _p in self.model.named_parameters():
+            if (_p.requires_grad and _p.ndim >= 2
+                    and "embed" not in _name and "output" not in _name
+                    and "head" not in _name):
+                _weight_snapshot = _p.data.clone()
+                _weight_ref_name = _name
+                break
 
         for epoch in range(self.config.epochs):
             if self._should_stop():
@@ -824,11 +1129,38 @@ class Trainer:
                     self.model.eval()
                     return self.state
 
-                batch_tokens = batch.numel()
+                batch_tokens = batch[0].numel()
                 epoch_loss += batch_loss * batch_tokens
                 epoch_tokens += batch_tokens
                 self.state.step += 1
                 self.state.total_tokens += batch_tokens
+
+                # One-time sanity check: verify weights actually changed
+                # after warmup completes (LR is near-zero during early
+                # warmup, so checking sooner would produce false alarms).
+                if (
+                    not _weight_check_done
+                    and _weight_snapshot is not None
+                    and self.state.step >= _weight_check_step
+                    and (batch_idx + 1) % self.config.max_grad_accumulation == 0
+                ):
+                    _weight_check_done = True
+                    for _name, _p in self.model.named_parameters():
+                        if _name == _weight_ref_name:
+                            delta = (_weight_snapshot - _p.data).abs().max().item()
+                            if delta == 0:
+                                logger.error(
+                                    "WARNING: Model weights unchanged after "
+                                    "%d optimizer steps (%s). Training may "
+                                    "not be effective.",
+                                    self.state.step, _name)
+                            else:
+                                logger.info(
+                                    "Weight update verified: %s "
+                                    "max_delta=%.2e", _name, delta)
+                            break
+                    del _weight_snapshot
+                    _weight_snapshot = None
 
                 # Log periodically
                 if self.state.step % self.config.log_every == 0:
@@ -935,23 +1267,44 @@ class Trainer:
 
         return self.state
 
-    def _train_one_batch(self, batch: torch.Tensor, batch_idx: int) -> float:
+    def _train_one_batch(self, batch: tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> float:
         """Run forward + backward on a single batch.
+
+        Args:
+            batch: Tuple of (token_ids, attention_mask).
+            batch_idx: Index within the epoch (for grad accumulation gating).
 
         Returns the unscaled batch loss (float).  Raises RuntimeError
         on CUDA OOM so the caller can handle recovery.
         """
+        batch_tensor, attention_mask = batch
+        is_packed = attention_mask.ndim == 4  # 4D = sequence packing
+
         # Forward pass
         with torch.amp.autocast(
             'cuda',
+            dtype=self._amp_dtype,
             enabled=self.config.use_amp and torch.cuda.is_available(),
         ):
-            input_ids = batch[:, :-1]
-            targets = batch[:, 1:]
+            input_ids = batch_tensor[:, :-1]
+            targets = batch_tensor[:, 1:]
 
-            logits, loss = self.model(
-                input_ids, targets=targets,
-                pad_token_id=self.pad_token_id)
+            if is_packed:
+                # 4D block-diagonal mask: slice both spatial dims
+                attn_mask_2d = attention_mask[:, :, :-1, :-1]
+                logits, loss = self.model(
+                    input_ids, targets=targets,
+                    pad_token_id=self.pad_token_id,
+                    label_smoothing=self.config.label_smoothing,
+                    attention_mask_2d=attn_mask_2d)
+            else:
+                # Standard 2D pad mask: slice last position
+                attn_mask = attention_mask[:, :-1]
+                logits, loss = self.model(
+                    input_ids, targets=targets,
+                    pad_token_id=self.pad_token_id,
+                    label_smoothing=self.config.label_smoothing,
+                    attention_mask=attn_mask)
 
             # Reasoning-weighted loss (CoT-E)
             if (
@@ -992,47 +1345,64 @@ class Trainer:
 
             self.optimizer.zero_grad()
 
-            # Warmup + scheduler step
-            warmup_factor = (
-                self.state.step / max(1, self.config.warmup_steps)
-                if self.state.step < self.config.warmup_steps
-                else 1.0
-            )
-            for param_group in self.optimizer.param_groups:
-                param_group['lr'] = (
-                    self.config.learning_rate * warmup_factor)
-            if self.state.step >= self.config.warmup_steps:
+            # Scheduler step (SequentialLR handles warmup â†’ cosine internally)
+            if self.scheduler is not None:
                 self.scheduler.step()
+
+            # EMA: update shadow weights after each optimizer step
+            if self.ema is not None:
+                self.ema.update(self.model)
 
         return loss.item() * self.config.max_grad_accumulation
 
     @torch.no_grad()
-    def _validate(self, val_batches: list[torch.Tensor]) -> float:
+    def _validate(self, val_batches: list[tuple[torch.Tensor, torch.Tensor]]) -> float:
         """Run a forward-only pass on validation batches.
 
         Returns the average validation loss (float).
+        Uses EMA weights when available for more stable evaluation.
         """
+        # Swap in EMA weights for evaluation if available
+        if self.ema is not None:
+            self.ema.apply(self.model)
+
         self.model.eval()
         total_loss = 0.0
         total_tokens = 0
 
-        for batch in val_batches:
+        for batch_tensor, attention_mask in val_batches:
+            is_packed = attention_mask.ndim == 4
             with torch.amp.autocast(
                 'cuda',
+                dtype=self._amp_dtype,
                 enabled=self.config.use_amp and torch.cuda.is_available(),
             ):
-                input_ids = batch[:, :-1]
-                targets = batch[:, 1:]
-                _logits, loss = self.model(
-                    input_ids, targets=targets,
-                    pad_token_id=self.pad_token_id)
+                input_ids = batch_tensor[:, :-1]
+                targets = batch_tensor[:, 1:]
+                if is_packed:
+                    attn_mask_2d = attention_mask[:, :, :-1, :-1]
+                    _logits, loss = self.model(
+                        input_ids, targets=targets,
+                        pad_token_id=self.pad_token_id,
+                        attention_mask_2d=attn_mask_2d)
+                else:
+                    attn_mask = attention_mask[:, :-1]
+                    _logits, loss = self.model(
+                        input_ids, targets=targets,
+                        pad_token_id=self.pad_token_id,
+                        attention_mask=attn_mask)
 
             if loss is not None:
-                n_tokens = batch.numel()
+                n_tokens = batch_tensor.numel()
                 total_loss += loss.item() * n_tokens
                 total_tokens += n_tokens
 
         self.model.train()
+
+        # Restore live training weights
+        if self.ema is not None:
+            self.ema.restore(self.model)
+
         return total_loss / max(1, total_tokens)
 
     def _handle_oom(self, exc: RuntimeError) -> None:
@@ -1043,7 +1413,7 @@ class Trainer:
         cache so the retry has the best chance of succeeding.
         """
         logger.warning(
-            "CUDA out of memory — clearing cache and enabling "
+            "CUDA out of memory â€” clearing cache and enabling "
             "gradient checkpointing for retry: %s", exc)
         self.optimizer.zero_grad(set_to_none=True)
         if torch.cuda.is_available():
@@ -1060,8 +1430,32 @@ class Trainer:
             logger.info(
                 "Gradient checkpointing enabled to reduce VRAM usage")
 
+    def _restore_pending_state(self) -> None:
+        """Restore scheduler and scaler state stashed by load_checkpoint."""
+        sched_state = getattr(self, '_pending_scheduler_state', None)
+        if sched_state is not None and self.scheduler is not None:
+            try:
+                self.scheduler.load_state_dict(sched_state)
+                logger.info("Restored scheduler state from checkpoint")
+            except Exception as exc:
+                logger.warning("Could not restore scheduler state: %s", exc)
+            self._pending_scheduler_state = None
+
+        scaler_state = getattr(self, '_pending_scaler_state', None)
+        if scaler_state is not None and self.scaler is not None:
+            try:
+                self.scaler.load_state_dict(scaler_state)
+                logger.info("Restored scaler state from checkpoint")
+            except Exception as exc:
+                logger.warning("Could not restore scaler state: %s", exc)
+            self._pending_scaler_state = None
+
     def _save_checkpoint(self, path: Path) -> None:
-        """Save model checkpoint."""
+        """Save model checkpoint with full training state.
+
+        Saves model weights, optimizer, scheduler, scaler, and step
+        counters so training can resume exactly where it left off.
+        """
         try:
             checkpoint = {
                 'model_state_dict': self.model.state_dict(),
@@ -1071,9 +1465,22 @@ class Trainer:
                     'step': self.state.step,
                     'best_loss': self.state.best_loss,
                     'total_tokens': self.state.total_tokens,
+                    'training_losses': self.state.training_losses,
+                    'validation_losses': self.state.validation_losses,
                 },
                 'training_config': self.config.to_dict(),
             }
+            # Save scheduler state for exact resume
+            if self.scheduler is not None:
+                checkpoint['scheduler_state_dict'] = self.scheduler.state_dict()
+            # Save AMP scaler state
+            if self.scaler is not None:
+                checkpoint['scaler_state_dict'] = self.scaler.state_dict()
+
+            # Save EMA state for resume
+            if self.ema is not None:
+                checkpoint['ema_state_dict'] = self.ema.state_dict()
+
             if hasattr(self.model, 'config'):
                 checkpoint['model_config'] = self.model.config.__dict__
                 # Also save as 'config' for compatibility with gui_forge loader
@@ -1163,7 +1570,7 @@ class Trainer:
         if len(found) <= keep:
             return
 
-        # Sort by epoch number descending — keep the newest
+        # Sort by epoch number descending â€” keep the newest
         found.sort(key=lambda x: x[0], reverse=True)
         for _epoch_num, old_path in found[keep:]:
             try:
@@ -1178,7 +1585,7 @@ class Trainer:
             from enigma_engine.core.model_registry import safe_load_weights
             checkpoint = safe_load_weights(path, map_location=self.device)
 
-            # Unwrap state dict — handles both flat and wrapped formats
+            # Unwrap state dict â€” handles both flat and wrapped formats
             state_dict = checkpoint.get('model_state_dict') or checkpoint.get('state_dict') or checkpoint.get('model')
             if state_dict is None:
                 # Assume the whole checkpoint is a bare state dict
@@ -1194,6 +1601,17 @@ class Trainer:
             self.state.step = state.get('step', 0)
             self.state.best_loss = state.get('best_loss', float('inf'))
             self.state.total_tokens = state.get('total_tokens', 0)
+            self.state.training_losses = state.get('training_losses', [])
+            self.state.validation_losses = state.get('validation_losses', [])
+
+            # Stash scheduler/scaler state for deferred restore
+            self._pending_scheduler_state = checkpoint.get('scheduler_state_dict')
+            self._pending_scaler_state = checkpoint.get('scaler_state_dict')
+
+            # Restore EMA state if saved and EMA is active
+            ema_state = checkpoint.get('ema_state_dict')
+            if ema_state is not None and self.ema is not None:
+                self.ema.load_state_dict(ema_state)
 
             logger.info(f"Loaded checkpoint: {path}")
         except Exception as e:
@@ -1201,7 +1619,7 @@ class Trainer:
             raise
 
     # -----------------------------------------------------------------
-    # DPO — Direct Preference Optimization
+    # DPO â€” Direct Preference Optimization
     # -----------------------------------------------------------------
 
     @staticmethod
@@ -1226,6 +1644,7 @@ class Trainer:
     def _get_sequence_logps(
         self, model: "nn.Module", input_ids: "torch.Tensor",
         labels: "torch.Tensor",
+        attention_mask: "torch.Tensor | None" = None,
     ) -> "torch.Tensor":
         """Compute per-sample average log-probability of *labels*.
 
@@ -1233,13 +1652,15 @@ class Trainer:
             model: The model to evaluate.
             input_ids: (B, L) token ids.
             labels: (B, L) target token ids (-100 for ignored positions).
+            attention_mask: (B, L) mask where 1=real, 0=pad.
 
         Returns:
             (B,) tensor of average log-probabilities.
         """
         import torch.nn.functional as F  # noqa: N812
 
-        logits, _ = model(input_ids[:, :-1], targets=None)
+        attn_mask = attention_mask[:, :-1] if attention_mask is not None else None
+        logits, _ = model(input_ids[:, :-1], targets=None, attention_mask=attn_mask)
         # logits: (B, L-1, V)
         log_probs = F.log_softmax(logits, dim=-1)
         targets = labels[:, 1:]  # shift right
@@ -1248,7 +1669,7 @@ class Trainer:
         per_token = log_probs.gather(
             2, targets.unsqueeze(-1)).squeeze(-1)
 
-        # Mask out padding — labels use -100 for ignored positions,
+        # Mask out padding â€” labels use -100 for ignored positions,
         # 0 is a valid token ID (pad_token) that should still be masked.
         mask = (targets != -100).float()
         return (per_token * mask).sum(dim=-1) / mask.sum(dim=-1).clamp(min=1)
@@ -1286,14 +1707,25 @@ class Trainer:
 
         self._emit_progress(0, "Preparing DPO training...")
 
-        # Build a frozen reference model (same architecture, same weights)
-        ref_model = copy.deepcopy(self.model)
-        ref_model.eval()
-        for p in ref_model.parameters():
-            p.requires_grad = False
+        # Build a frozen reference model.
+        # Preferred: if the model has LoRA adapters, disable them to get
+        # reference logps from the frozen base (zero extra VRAM).
+        # Fallback: deepcopy for non-LoRA models.
+        use_lora_ref = False
+        ref_model = None
+        if hasattr(self.model, 'disable_adapter_layers'):
+            use_lora_ref = True
+            logger.info("DPO: using LoRA disable — frozen base weights "
+                        "serve as reference policy (no extra VRAM)")
+        else:
+            ref_model = copy.deepcopy(self.model)
+            ref_model.eval()
+            for p in ref_model.parameters():
+                p.requires_grad = False
+            logger.info("DPO: using deepcopy reference model")
 
         # Encode preference pairs
-        pairs: list[tuple[torch.Tensor, torch.Tensor, torch.Tensor]] = []
+        pairs: list[tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]] = []
         for item in preference_data:
             prompt = item.get("prompt", "")
             chosen = item.get("chosen", "")
@@ -1301,13 +1733,15 @@ class Trainer:
             if not (prompt and chosen and rejected):
                 continue
 
-            prompt_ids = self.tokenizer.encode(prompt)
-            chosen_ids = self.tokenizer.encode(f"Q: {prompt}\nA: {chosen}")
-            rejected_ids = self.tokenizer.encode(f"Q: {prompt}\nA: {rejected}")
+            prompt_ids = self.tokenizer.encode(f"User: {prompt}\nAssistant: ")
+            chosen_ids = self.tokenizer.encode(f"User: {prompt}\nAssistant: {chosen}")
+            rejected_ids = self.tokenizer.encode(f"User: {prompt}\nAssistant: {rejected}")
 
-            # Truncate to max 512
-            chosen_ids = chosen_ids[:512]
-            rejected_ids = rejected_ids[:512]
+            # Truncate to model's max sequence length
+            max_len_dpo = getattr(self.model, 'config', None)
+            max_len_dpo = getattr(max_len_dpo, 'max_seq_len', 512) if max_len_dpo else 512
+            chosen_ids = chosen_ids[:max_len_dpo]
+            rejected_ids = rejected_ids[:max_len_dpo]
 
             # Create label tensors (-100 for prompt tokens)
             prompt_len = len(prompt_ids)
@@ -1320,8 +1754,14 @@ class Trainer:
                 + rejected_ids[prompt_len:]
             )
 
+            # Build attention masks before padding (1=real, 0=pad)
+            chosen_mask = [1] * len(chosen_ids)
+            rejected_mask = [1] * len(rejected_ids)
+
             # Pad to same length
             max_len = max(len(chosen_ids), len(rejected_ids))
+            chosen_mask += [0] * (max_len - len(chosen_mask))
+            rejected_mask += [0] * (max_len - len(rejected_mask))
             chosen_ids += [0] * (max_len - len(chosen_ids))
             rejected_ids += [0] * (max_len - len(rejected_ids))
             chosen_labels += [-100] * (max_len - len(chosen_labels))
@@ -1334,6 +1774,8 @@ class Trainer:
                              dtype=torch.long, device=self.device),
                 torch.tensor([rejected_labels],
                              dtype=torch.long, device=self.device),
+                torch.tensor([chosen_mask, rejected_mask],
+                             dtype=torch.long, device=self.device),
             ))
 
         if not pairs:
@@ -1343,11 +1785,29 @@ class Trainer:
         logger.info(f"DPO training: {len(pairs)} preference pairs, "
                     f"beta={beta}")
 
-        # Setup scheduler
-        total_steps = len(pairs) * self.config.epochs
-        self.scheduler = CosineAnnealingLR(
-            self.optimizer, T_max=max(total_steps, 1),
+        # Gradient accumulation: batch N pairs before optimizer step
+        accum_steps = max(1, self.config.max_grad_accumulation)
+
+        # Setup scheduler: SequentialLR(warmup â†’ cosine decay)
+        steps_per_epoch = max(1, len(pairs) // accum_steps)
+        total_steps = steps_per_epoch * self.config.epochs
+        warmup = max(1, self.config.warmup_steps)
+        decay_steps = max(1, total_steps - warmup)
+
+        warmup_sched = LambdaLR(
+            self.optimizer,
+            lr_lambda=lambda step: min(1.0, (step + 1) / warmup))
+        cosine_sched = CosineAnnealingLR(
+            self.optimizer,
+            T_max=decay_steps,
             eta_min=self.config.learning_rate * 0.1)
+        self.scheduler = SequentialLR(
+            self.optimizer,
+            schedulers=[warmup_sched, cosine_sched],
+            milestones=[warmup])
+
+        # Restore scheduler/scaler state from checkpoint if available
+        self._restore_pending_state()
 
         checkpoint_dir = Path(self.config.checkpoint_dir)
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
@@ -1362,53 +1822,88 @@ class Trainer:
 
             epoch_loss = 0.0
             random.shuffle(pairs)
+            self.optimizer.zero_grad()
 
             progress_base = int(5 + (epoch / self.config.epochs) * 90)
             self._emit_progress(
                 progress_base, f"DPO Epoch {epoch + 1}/{self.config.epochs}")
 
-            for i, (input_ids, chosen_labels, rejected_labels) in enumerate(
+            for i, (input_ids, chosen_labels, rejected_labels, attention_mask) in enumerate(
                     pairs):
                 if self._should_stop():
                     break
 
-                self.optimizer.zero_grad()
-
                 # Policy log-probs
                 policy_chosen = self._get_sequence_logps(
-                    self.model, input_ids[:1], chosen_labels)
+                    self.model, input_ids[:1], chosen_labels,
+                    attention_mask=attention_mask[:1])
                 policy_rejected = self._get_sequence_logps(
-                    self.model, input_ids[1:], rejected_labels)
+                    self.model, input_ids[1:], rejected_labels,
+                    attention_mask=attention_mask[1:])
 
                 # Reference log-probs (no grad)
                 with torch.no_grad():
-                    ref_chosen = self._get_sequence_logps(
-                        ref_model, input_ids[:1], chosen_labels)
-                    ref_rejected = self._get_sequence_logps(
-                        ref_model, input_ids[1:], rejected_labels)
+                    if use_lora_ref:
+                        self.model.eval()
+                        self.model.disable_adapter_layers()
+                        try:
+                            ref_chosen = self._get_sequence_logps(
+                                self.model, input_ids[:1], chosen_labels,
+                                attention_mask=attention_mask[:1])
+                            ref_rejected = self._get_sequence_logps(
+                                self.model, input_ids[1:], rejected_labels,
+                                attention_mask=attention_mask[1:])
+                        finally:
+                            self.model.enable_adapter_layers()
+                        self.model.train()
+                    else:
+                        ref_chosen = self._get_sequence_logps(
+                            ref_model, input_ids[:1], chosen_labels,
+                            attention_mask=attention_mask[:1])
+                        ref_rejected = self._get_sequence_logps(
+                            ref_model, input_ids[1:], rejected_labels,
+                            attention_mask=attention_mask[1:])
 
                 loss = self._dpo_loss(
                     policy_chosen, policy_rejected,
                     ref_chosen, ref_rejected, beta=beta)
 
+                # Scale loss for gradient accumulation
+                loss = loss / accum_steps
                 loss.backward()
 
-                if self.config.gradient_clip > 0:
-                    torch.nn.utils.clip_grad_norm_(
-                        self.model.parameters(), self.config.gradient_clip)
-
-                self.optimizer.step()
-                if self.scheduler:
-                    self.scheduler.step()
-
-                batch_loss = loss.item()
+                batch_loss = loss.item() * accum_steps
                 if math.isnan(batch_loss) or math.isinf(batch_loss):
                     logger.error("DPO aborted: NaN/Inf loss")
                     self.model.eval()
-                    del ref_model
+                    if ref_model is not None:
+                        del ref_model
                     return self.state
 
                 epoch_loss += batch_loss
+
+                # Step optimizer every accum_steps pairs
+                if (i + 1) % accum_steps == 0:
+                    if self.config.gradient_clip > 0:
+                        torch.nn.utils.clip_grad_norm_(
+                            self.model.parameters(),
+                            self.config.gradient_clip)
+                    self.optimizer.step()
+                    self.optimizer.zero_grad()
+                    if self.scheduler:
+                        self.scheduler.step()
+                    self.state.step += 1
+
+            # Flush remaining accumulated gradients at epoch end
+            if len(pairs) % accum_steps != 0:
+                if self.config.gradient_clip > 0:
+                    torch.nn.utils.clip_grad_norm_(
+                        self.model.parameters(),
+                        self.config.gradient_clip)
+                self.optimizer.step()
+                self.optimizer.zero_grad()
+                if self.scheduler:
+                    self.scheduler.step()
                 self.state.step += 1
 
             avg_loss = epoch_loss / max(len(pairs), 1)
@@ -1434,12 +1929,13 @@ class Trainer:
 
         self._emit_progress(100, "DPO training complete")
         self.model.eval()
-        del ref_model
+        if ref_model is not None:
+            del ref_model
         return self.state
 
-    # ─────────────────────────────────────────────────────────────────────
-    # VISION TRAINING — image-text pair training
-    # ─────────────────────────────────────────────────────────────────────
+    # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # VISION TRAINING â€” image-text pair training
+    # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     def train_vision(
         self,
@@ -1471,9 +1967,9 @@ class Trainer:
         Raises:
             ValueError: If model lacks vision_projection or data is empty.
         """
-        from .vision_encoder import preprocess_image
+        from .vision_encoder import augment_vision_tensor, preprocess_image
 
-        # ── Validation ──────────────────────────────────────────────────
+        # â”€â”€ Validation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         if not hasattr(self.model, "vision_projection") or self.model.vision_projection is None:
             raise ValueError(
                 "Model does not have a vision projection layer. "
@@ -1489,7 +1985,7 @@ class Trainer:
 
         self._emit_progress(0, "Preparing vision training data...")
 
-        # ── Freeze / unfreeze layers ────────────────────────────────────
+        # â”€â”€ Freeze / unfreeze layers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         # Freeze all text model parameters
         for param in self.model.parameters():
             param.requires_grad = False
@@ -1517,10 +2013,18 @@ class Trainer:
         for param in vision_encoder.parameters():
             param.requires_grad = True
 
-        # ── Build optimizer over all trainable parameters ───────────────
+
+        # Re-freeze pretrained backbone if configured (the blanket unfreeze
+        # above would otherwise override freeze_backbone from __init__)
+        if getattr(vision_encoder.config, "freeze_backbone", False):
+            backbone = getattr(vision_encoder, "backbone", None)
+            if backbone is not None:
+                for param in backbone.parameters():
+                    param.requires_grad = False
+
         trainable_params = (
             list(filter(lambda p: p.requires_grad, self.model.parameters()))
-            + list(vision_encoder.parameters())
+            + list(filter(lambda p: p.requires_grad, vision_encoder.parameters()))
         )
         optimizer = AdamW(
             trainable_params,
@@ -1532,10 +2036,26 @@ class Trainer:
 
         scaler = torch.amp.GradScaler("cuda", enabled=(
             self.config.use_amp and self.device.type == "cuda"
+            and self._amp_dtype != torch.bfloat16
         ))
 
-        # ── Preprocess data ─────────────────────────────────────────────
+        # Setup scheduler: SequentialLR(warmup + cosine decay)
+        total_steps = len(data) * self.config.epochs  # 1 step per pair
+        warmup = max(1, self.config.warmup_steps)
+        decay_steps = max(1, total_steps - warmup)
+        warmup_scheduler = LambdaLR(
+            optimizer,
+            lr_lambda=lambda step: min(1.0, (step + 1) / warmup))
+        cosine_scheduler = CosineAnnealingLR(
+            optimizer, T_max=decay_steps,
+            eta_min=self.config.learning_rate * 0.1)
+        scheduler = SequentialLR(
+            optimizer,
+            schedulers=[warmup_scheduler, cosine_scheduler],
+            milestones=[warmup])
+
         image_size = vision_encoder.config.image_size
+        use_imagenet = getattr(vision_encoder.config, "use_pretrained", False)
         pairs: list[tuple[torch.Tensor, list[int]]] = []
 
         for i, item in enumerate(data):
@@ -1547,7 +2067,11 @@ class Trainer:
 
             # Preprocess image to tensor
             try:
-                img_tensor = preprocess_image(image, image_size=image_size)
+                img_tensor = preprocess_image(
+                    image,
+                    image_size=image_size,
+                    imagenet_normalize=use_imagenet,
+                )
                 img_tensor = img_tensor.to(self.device)
             except Exception as exc:
                 logger.warning(f"Skipping vision data item {i}: {exc}")
@@ -1565,7 +2089,7 @@ class Trainer:
         self._emit_progress(5, f"Prepared {len(pairs)} image-text pairs")
         logger.info(f"Vision training: {len(pairs)} pairs, {self.config.epochs} epochs")
 
-        # ── Training loop ───────────────────────────────────────────────
+        # â”€â”€ Training loop â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         vision_encoder.train()
         self.model.train()
 
@@ -1593,12 +2117,17 @@ class Trainer:
                 if self._should_stop():
                     break
 
+                # Training-time augmentation (random flip, color jitter)
+                img_tensor = augment_vision_tensor(img_tensor)
+
                 optimizer.zero_grad()
 
                 # Encode image through vision encoder
-                with torch.amp.autocast("cuda", enabled=(
-                    self.config.use_amp and self.device.type == "cuda"
-                )):
+                with torch.amp.autocast(
+                    "cuda",
+                    dtype=self._amp_dtype,
+                    enabled=self.config.use_amp and self.device.type == "cuda",
+                ):
                     vision_features = vision_encoder(img_tensor)  # [1, patches, v_dim]
 
                     # Build text input: token IDs as target
@@ -1651,6 +2180,8 @@ class Trainer:
                         )
                     optimizer.step()
 
+                scheduler.step()
+
                 loss_val = loss.item()
 
                 # NaN guard
@@ -1679,7 +2210,7 @@ class Trainer:
                 total_steps = len(pairs) * self.config.epochs
                 done_steps = epoch * len(pairs) + step + 1
                 pct = min(int(done_steps / max(total_steps, 1) * 95) + 5, 99)
-                self._emit_progress(pct, f"Epoch {epoch + 1}/{self.config.epochs} — loss: {loss_val:.4f}")
+                self._emit_progress(pct, f"Epoch {epoch + 1}/{self.config.epochs} â€” loss: {loss_val:.4f}")
 
             # Epoch summary
             avg_loss = epoch_loss / max(epoch_steps, 1)
@@ -1713,7 +2244,7 @@ class Trainer:
                 self._cleanup_periodic_checkpoints(
                     checkpoint_dir, "vision_epoch_", keep=3)
 
-        # ── Cleanup ─────────────────────────────────────────────────────
+        # â”€â”€ Cleanup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         self._emit_progress(100, "Vision training complete!")
         self.model.eval()
         vision_encoder.eval()
@@ -1724,455 +2255,291 @@ class Trainer:
 
         return self.state
 
+    # -----------------------------------------------------------------------
+    # AUDIO MULTIMODAL TRAINING
+    # -----------------------------------------------------------------------
 
-# =============================================================================
-# EVOLUTIONARY TRAINING (BEST-OF-N SAMPLING)
-# =============================================================================
+    def train_audio(
+        self,
+        audio_encoder: nn.Module,
+        data: list[dict[str, Any]],
+        unfreeze_text_layers: int = 0,
+    ) -> "TrainingState":
+        """
+        Train the audio encoder and projection layer on audio-text pairs.
 
-def best_of_n(
-    model: nn.Module,
-    tokenizer: Any,
-    prompt: str,
-    n: int = 5,
-    temperature_range: tuple[float, float] = (0.5, 1.0),
-    max_tokens: int = 256,
-) -> tuple[str, float]:
-    """
-    Generate N responses and return one at random.
+        Both the audio encoder and the model's audio_projection layer are
+        trained together. The text transformer is frozen by default (set
+        unfreeze_text_layers > 0 to fine-tune the last N text layers too).
 
-    Generates multiple responses with varied temperatures for
-    diversity, then picks a random non-empty result.
+        Data format: list of dicts with:
+            - "audio": file path string, Path, or 1D waveform tensor
+            - "text": transcript/description string
 
-    Args:
-        model: The model to generate from
-        tokenizer: Tokenizer for encoding/decoding
-        prompt: Input prompt
-        n: Number of responses to generate
-        temperature_range: Range for random temperature
-        max_tokens: Maximum tokens to generate
+        Args:
+            audio_encoder: AudioEncoder instance to train.
+            data: List of audio-text pair dicts.
+            unfreeze_text_layers: Number of last text transformer layers to
+                unfreeze (0 = freeze all text layers, only train encoder +
+                projection).
 
-    Returns:
-        Tuple of (response, 1.0)
-    """
-    model.eval()
-    device = next(model.parameters()).device
+        Returns:
+            TrainingState with loss history.
 
-    responses: list[str] = []
+        Raises:
+            ValueError: If model lacks audio_projection or data is empty.
+        """
+        from .audio_encoder import preprocess_audio, spec_augment
 
-    for i in range(n):
-        temperature = random.uniform(*temperature_range)
-
-        input_ids = tokenizer.encode(prompt)
-        input_tensor = torch.tensor([input_ids], dtype=torch.long, device=device)
-
-        with torch.no_grad():
-            output_ids = model.generate(
-                input_tensor,
-                max_new_tokens=max_tokens,
-                temperature=temperature,
-                do_sample=True,
-                top_p=0.9
+        # -- Validation --
+        if not hasattr(self.model, "audio_projection") or self.model.audio_projection is None:
+            raise ValueError(
+                "Model does not have an audio projection layer. "
+                "Set audio_hidden_size in ForgeConfig to enable audio."
             )
+        if not data:
+            raise ValueError("No training data provided for audio training.")
 
-        if hasattr(output_ids, 'squeeze'):
-            output_ids = output_ids.squeeze(0)
-        new_tokens = output_ids[len(input_ids):].tolist()
-        response = tokenizer.decode(new_tokens)
+        self._stop_requested = False
+        self.state = TrainingState()
+        self._epochs_without_improvement = 0
+        start_time = time.time()
 
-        if response.strip():
-            responses.append(response)
+        self._emit_progress(0, "Preparing audio training data...")
 
-        logger.debug(f"Response {i+1}/{n}: len={len(response)}, temp={temperature:.2f}")
+        # -- Freeze / unfreeze layers --
+        for param in self.model.parameters():
+            param.requires_grad = False
 
-    if not responses:
-        return "", 1.0
+        # Unfreeze audio projection (always trainable)
+        for param in self.model.audio_projection.parameters():
+            param.requires_grad = True
 
-    chosen = random.choice(responses)
-    logger.info(f"Best of {n}: picked 1 of {len(responses)} non-empty responses")
-    return chosen, 1.0
+        # Unfreeze output/embedding (needed for text loss)
+        for param in self.model.tok_embeddings.parameters():
+            param.requires_grad = True
+        for param in self.model.output.parameters():
+            param.requires_grad = True
+        for param in self.model.norm.parameters():
+            param.requires_grad = True
 
+        # Optionally unfreeze last N text transformer layers
+        if unfreeze_text_layers > 0:
+            n_layers = len(self.model.layers)
+            for layer in self.model.layers[max(0, n_layers - unfreeze_text_layers):]:
+                for param in layer.parameters():
+                    param.requires_grad = True
 
-# =============================================================================
-# MULTI-INSTANCE (PARALLEL GENERATION)
-# =============================================================================
+        # Audio encoder is fully trainable
+        for param in audio_encoder.parameters():
+            param.requires_grad = True
 
-def _generate_single_response(
-    model: nn.Module,
-    tokenizer: Any,
-    prompt: str,
-    temperature: float,
-    max_tokens: int,
-    device: torch.device,
-) -> tuple[str, float]:
-    """
-    Generate a single response (for use in parallel execution).
-
-    Args:
-        model: Model to generate from
-        tokenizer: Tokenizer
-        prompt: Input prompt
-        temperature: Generation temperature
-        max_tokens: Max tokens to generate
-        device: Device to run on
-
-    Returns:
-        Tuple of (response, temperature)
-    """
-    try:
-        input_ids = tokenizer.encode(prompt)
-        input_tensor = torch.tensor([input_ids], dtype=torch.long, device=device)
-
-        with torch.no_grad():
-            output_ids = model.generate(
-                input_tensor,
-                max_new_tokens=max_tokens,
-                temperature=temperature,
-                do_sample=True,
-                top_p=0.9
-            )
-
-        if hasattr(output_ids, 'squeeze'):
-            output_ids = output_ids.squeeze(0)
-        new_tokens = output_ids[len(input_ids):].tolist()
-        response = tokenizer.decode(new_tokens)
-
-        return (response, temperature)
-    except Exception as e:
-        logger.error(f"Generation failed: {e}")
-        return ("", temperature)
-
-
-def parallel_best_of_n(
-    model: nn.Module,
-    tokenizer: Any,
-    prompt: str,
-    n: int = 5,
-    max_workers: int = 4,
-    temperature_range: tuple[float, float] = (0.5, 1.0),
-    max_tokens: int = 256,
-) -> tuple[str, float]:
-    """
-    Generate N responses in parallel and return one at random.
-
-    Uses ThreadPoolExecutor for parallel generation with varied
-    temperatures. Picks a random non-empty response.
-
-    Args:
-        model: Model to generate from
-        tokenizer: Tokenizer
-        prompt: Input prompt
-        n: Number of responses to generate
-        max_workers: Maximum parallel workers
-        temperature_range: Range for random temperature
-        max_tokens: Max tokens to generate
-
-    Returns:
-        Tuple of (response, 1.0)
-    """
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-
-    model.eval()
-    device = next(model.parameters()).device
-
-    temperatures = [random.uniform(*temperature_range) for _ in range(n)]
-
-    responses: list[str] = []
-
-    with ThreadPoolExecutor(max_workers=min(max_workers, n)) as executor:
-        futures = {}
-        for i, temp in enumerate(temperatures):
-            future = executor.submit(
-                _generate_single_response,
-                model, tokenizer, prompt, temp, max_tokens, device
-            )
-            futures[future] = i
-
-        for future in as_completed(futures):
-            idx = futures[future]
-            try:
-                resp, temp = future.result()
-                if resp.strip():
-                    responses.append(resp)
-                logger.debug(f"Instance {idx+1}/{n}: len={len(resp)}, temp={temp:.2f}")
-            except Exception as e:
-                logger.error(f"Instance {idx+1} failed: {e}")
-
-    if not responses:
-        return "", 1.0
-
-    chosen = random.choice(responses)
-    logger.info(f"Parallel best of {n}: picked 1 of {len(responses)} non-empty responses")
-    return chosen, 1.0
-
-
-def multi_instance_collect(
-    model: nn.Module,
-    tokenizer: Any,
-    tasks: list[str],
-    n_per_task: int = 5,
-    max_workers: int = 4,
-    on_progress: Callable[[int, str], None] | None = None
-) -> list[dict]:
-    """
-    Collect training data using parallel generation.
-
-    Args:
-        model: Model to generate from
-        tokenizer: Tokenizer
-        tasks: List of prompts/tasks
-        n_per_task: Responses per task
-        max_workers: Parallel workers
-        on_progress: Progress callback
-
-    Returns:
-        List of training examples
-    """
-    training_data = []
-
-    for i, task in enumerate(tasks):
-        if on_progress:
-            on_progress(int(i / len(tasks) * 100), f"Task {i+1}/{len(tasks)}")
-
-        try:
-            best_response, _ = parallel_best_of_n(
-                model, tokenizer, task,
-                n=n_per_task,
-                max_workers=max_workers
-            )
-
-            if best_response.strip():
-                training_data.append({
-                    "prompt": task,
-                    "completion": best_response,
-                })
-                logger.info(f"Task {i+1}: KEPT")
-
-        except Exception as e:
-            logger.error(f"Task {i+1} failed: {e}")
-
-    logger.info(f"Collected {len(training_data)} examples from {len(tasks)} tasks (parallel)")
-    return training_data
-
-
-def collect_training_data(
-    model: nn.Module,
-    tokenizer: Any,
-    tasks: list[str],
-    n_per_task: int = 5,
-    on_progress: Callable[[int, str], None] | None = None
-) -> list[dict]:
-    """
-    Generate training data by running best-of-N on tasks.
-
-    Args:
-        model: Model to generate from
-        tokenizer: Tokenizer
-        tasks: List of prompts/tasks
-        n_per_task: Number of generations per task
-        on_progress: Progress callback
-
-    Returns:
-        List of training examples: [{"prompt": str, "completion": str}]
-    """
-    training_data = []
-
-    for i, task in enumerate(tasks):
-        if on_progress:
-            on_progress(int(i / len(tasks) * 100), f"Task {i+1}/{len(tasks)}")
-
-        try:
-            best_response, _ = best_of_n(
-                model, tokenizer, task,
-                n=n_per_task
-            )
-
-            if best_response.strip():
-                training_data.append({
-                    "prompt": task,
-                    "completion": best_response,
-                })
-                logger.info(f"Task {i+1}: KEPT")
-
-        except Exception as e:
-            logger.error(f"Task {i+1} failed: {e}")
-
-    logger.info(f"Collected {len(training_data)} training examples from {len(tasks)} tasks")
-    return training_data
-
-
-def evolutionary_training(
-    model: nn.Module,
-    tokenizer: Any,
-    tasks: list[str],
-    generations: int = 10,
-    n_per_task: int = 5,
-    training_config: TrainingConfig | None = None,
-    checkpoint_dir: str = "models/evolutionary",
-    on_progress: Callable[[int, str], None] | None = None
-) -> nn.Module:
-    """
-    Train model through evolutionary selection (self-play).
-
-    The loop:
-    1. Generate N responses per task
-    2. Pick a response for each task
-    3. Fine-tune model on the outputs
-    4. Repeat with improved model
-
-    Args:
-        model: Initial model
-        tokenizer: Tokenizer
-        tasks: Training tasks/prompts
-        generations: Number of evolutionary generations
-        n_per_task: Responses to generate per task
-        training_config: Config for fine-tuning step
-        checkpoint_dir: Where to save generation checkpoints
-        on_progress: Progress callback
-
-    Returns:
-        Trained model
-    """
-    config = training_config or TrainingConfig(epochs=1, save_every=1)
-    checkpoint_path = Path(checkpoint_dir)
-    checkpoint_path.mkdir(parents=True, exist_ok=True)
-
-    logger.info(f"Starting evolutionary training: {generations} generations, {len(tasks)} tasks")
-
-    for gen in range(generations):
-        gen_progress = int(gen / generations * 100)
-        if on_progress:
-            on_progress(gen_progress, f"Generation {gen + 1}/{generations}")
-
-        logger.info(f"=== Generation {gen + 1} ===")
-
-        # Collect training data from best-of-N
-        training_data = collect_training_data(
-            model, tokenizer, tasks,
-            n_per_task=n_per_task,
-            on_progress=lambda p, m, _gp=gen_progress: on_progress(_gp + int(p * 0.5 / generations), m) if on_progress else None
+        trainable_params = (
+            list(filter(lambda p: p.requires_grad, self.model.parameters()))
+            + list(filter(lambda p: p.requires_grad, audio_encoder.parameters()))
+        )
+        optimizer = AdamW(
+            trainable_params,
+            lr=self.config.learning_rate,
+            weight_decay=self.config.weight_decay,
+            betas=(self.config.adam_beta1, self.config.adam_beta2),
+            eps=self.config.adam_eps,
         )
 
-        if not training_data:
-            logger.warning(f"Generation {gen + 1}: No training data collected, skipping")
-            continue
+        scaler = torch.amp.GradScaler("cuda", enabled=(
+            self.config.use_amp and self.device.type == "cuda"
+            and self._amp_dtype != torch.bfloat16
+        ))
 
-        # Prepare training text
-        train_text = "\n\n".join([
-            f"Q: {ex['prompt']}\nA: {ex['completion']}"
-            for ex in training_data
-        ])
+        # Setup scheduler: SequentialLR(warmup + cosine decay)
+        total_steps = len(data) * self.config.epochs  # 1 step per pair
+        warmup = max(1, self.config.warmup_steps)
+        decay_steps = max(1, total_steps - warmup)
+        warmup_scheduler = LambdaLR(
+            optimizer,
+            lr_lambda=lambda step: min(1.0, (step + 1) / warmup))
+        cosine_scheduler = CosineAnnealingLR(
+            optimizer, T_max=decay_steps,
+            eta_min=self.config.learning_rate * 0.1)
+        scheduler = SequentialLR(
+            optimizer,
+            schedulers=[warmup_scheduler, cosine_scheduler],
+            milestones=[warmup])
 
-        # Fine-tune on winning outputs
-        trainer = Trainer(model, tokenizer, config)
-        trainer.config.checkpoint_dir = str(checkpoint_path / f"gen_{gen + 1}")
+        # -- Preprocess data --
+        audio_config = getattr(audio_encoder, "config", None)
+        pairs: list[tuple[torch.Tensor, list[int]]] = []
 
-        if on_progress:
-            trainer.on_progress = lambda p, m, _gp=gen_progress, _gen=gen: on_progress(
-                _gp + 50 + int(p * 0.5 / generations),
-                f"Gen {_gen + 1}: {m}"
-            )
+        for i, item in enumerate(data):
+            audio = item.get("audio")
+            text = item.get("text", "")
+            if audio is None or not text:
+                logger.warning(f"Skipping audio data item {i}: missing audio or text")
+                continue
 
-        trainer.train(train_text)
+            try:
+                mel_tensor = preprocess_audio(audio, config=audio_config)
+                mel_tensor = mel_tensor.to(self.device)
+            except Exception as exc:
+                logger.warning(f"Skipping audio data item {i}: {exc}")
+                continue
 
-        # Save generation checkpoint
-        gen_checkpoint = checkpoint_path / f"generation_{gen + 1}.pt"
-        gen_save = {
-            'model_state_dict': model.state_dict(),
-            'generation': gen + 1,
-            'training_data_count': len(training_data),
-            'avg_score': sum(ex['score'] for ex in training_data) / len(training_data)
-        }
-        if hasattr(model, 'config'):
-            gen_save['model_config'] = model.config.__dict__
-            gen_save['config'] = model.config.__dict__
-        from enigma_engine.core.safe_save import atomic_torch_save
-        atomic_torch_save(gen_save, gen_checkpoint)
+            token_ids = self.tokenizer.encode(text)
+            if len(token_ids) < 1:
+                continue
+            pairs.append((mel_tensor, token_ids))
 
-        logger.info(f"Generation {gen + 1} complete: {len(training_data)} examples, saved to {gen_checkpoint}")
+        if not pairs:
+            raise ValueError("No valid audio-text pairs found in training data.")
 
-    # Save final model
-    final_path = checkpoint_path / "final_evolved_model.pt"
-    final_save = {
-        'model_state_dict': model.state_dict(),
-        'total_generations': generations,
-    }
-    if hasattr(model, 'config'):
-        final_save['model_config'] = model.config.__dict__
-        final_save['config'] = model.config.__dict__
-    atomic_torch_save(final_save, final_path)
+        self._emit_progress(5, f"Prepared {len(pairs)} audio-text pairs")
+        logger.info(f"Audio training: {len(pairs)} pairs, {self.config.epochs} epochs")
 
-    logger.info(f"Evolutionary training complete: {generations} generations")
-    if on_progress:
-        on_progress(100, "Evolutionary training complete!")
+        # -- Training loop --
+        audio_encoder.train()
+        self.model.train()
 
-    return model
+        checkpoint_dir = Path(self.config.checkpoint_dir)
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
+        for epoch in range(self.config.epochs):
+            if self._should_stop():
+                logger.info("Audio training stopped by user request")
+                break
 
-def save_training_data(
-    data: list[dict],
-    path: str | Path,
-    format: str = "jsonl"
-) -> None:
-    """
-    Save collected training data to file.
-    
-    Args:
-        data: List of training examples
-        path: Output file path
-        format: "jsonl" or "txt"
-    """
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
+            if (self.config.max_training_seconds > 0
+                    and (time.time() - start_time) > self.config.max_training_seconds):
+                logger.info("Audio training: time limit reached")
+                break
 
-    if format == "jsonl":
-        with open(path, 'w', encoding='utf-8') as f:
-            for item in data:
-                f.write(json.dumps(item, ensure_ascii=False) + '\n')
-    else:
-        with open(path, 'w', encoding='utf-8') as f:
-            for item in data:
-                f.write(f"Q: {item['prompt']}\n")
-                f.write(f"A: {item['completion']}\n\n")
+            epoch_loss = 0.0
+            epoch_steps = 0
 
-    logger.info(f"Saved {len(data)} training examples to {path}")
+            random.shuffle(pairs)
 
+            for step, (mel_tensor, token_ids) in enumerate(pairs):
+                if self._should_stop():
+                    break
 
-def load_training_data(path: str | Path) -> list[dict]:
-    """
-    Load training data from file.
-    
-    Args:
-        path: Input file path (jsonl or txt)
-        
-    Returns:
-        List of training examples
-    """
-    path = Path(path)
-    data = []
+                optimizer.zero_grad()
 
-    with open(path, 'r', encoding='utf-8') as f:
-        content = f.read()
+                with torch.amp.autocast(
+                    "cuda",
+                    dtype=self._amp_dtype,
+                    enabled=self.config.use_amp and self.device.type == "cuda",
+                ):
+                    # SpecAugment: mask random frequency/time bands for regularization
+                    augmented_mel = spec_augment(mel_tensor)
 
-    # Try JSONL
-    if path.suffix == '.jsonl' or content.strip().startswith('{'):
-        for line in content.split('\n'):
-            line = line.strip()
-            if line:
+                    # Encode audio through audio encoder
+                    audio_features = audio_encoder(augmented_mel)  # [1, T/2, a_dim]
+
+                    text_tensor = torch.tensor(
+                        [token_ids], dtype=torch.long, device=self.device
+                    )
+
+                    logits = self.model.forward_multimodal(
+                        input_ids=text_tensor,
+                        audio_features=audio_features,
+                    )
+
+                    # Text loss only (skip audio tokens)
+                    n_audio_tokens = audio_features.shape[1]
+                    text_logits = logits[:, n_audio_tokens:-1, :]
+                    text_targets = text_tensor[:, 1:]
+
+                    min_len = min(text_logits.shape[1], text_targets.shape[1])
+                    if min_len < 1:
+                        continue
+
+                    text_logits = text_logits[:, :min_len, :]
+                    text_targets = text_targets[:, :min_len]
+
+                    loss = nn.functional.cross_entropy(
+                        text_logits.reshape(-1, text_logits.size(-1)),
+                        text_targets.reshape(-1),
+                    )
+
+                if self.config.use_amp and self.device.type == "cuda":
+                    scaler.scale(loss).backward()
+                    if self.config.gradient_clip > 0:
+                        scaler.unscale_(optimizer)
+                        torch.nn.utils.clip_grad_norm_(
+                            trainable_params, self.config.gradient_clip
+                        )
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    loss.backward()
+                    if self.config.gradient_clip > 0:
+                        torch.nn.utils.clip_grad_norm_(
+                            trainable_params, self.config.gradient_clip
+                        )
+                    optimizer.step()
+
+                scheduler.step()
+
+                loss_val = loss.item()
+
+                if math.isnan(loss_val) or math.isinf(loss_val):
+                    logger.error(f"Audio training: NaN/Inf loss at epoch {epoch + 1}, step {step}")
+                    self._emit_progress(100, "Training aborted: NaN loss")
+                    self.model.eval()
+                    return self.state
+
+                if loss_val > self.config.max_loss:
+                    logger.error(f"Audio training: loss {loss_val:.2f} exceeds max {self.config.max_loss}")
+                    self._emit_progress(100, "Training aborted: loss too high")
+                    self.model.eval()
+                    return self.state
+
+                epoch_loss += loss_val
+                epoch_steps += 1
+                self.state.step += 1
+
+                if self.config.log_every > 0 and self.state.step % self.config.log_every == 0:
+                    self._emit_loss(loss_val)
+
+                total_steps = len(pairs) * self.config.epochs
+                done_steps = epoch * len(pairs) + step + 1
+                pct = min(int(done_steps / max(total_steps, 1) * 95) + 5, 99)
+                self._emit_progress(pct, f"Epoch {epoch + 1}/{self.config.epochs} - loss: {loss_val:.4f}")
+
+            avg_loss = epoch_loss / max(epoch_steps, 1)
+            self.state.training_losses.append(avg_loss)
+            self.state.epoch = epoch + 1
+            self._emit_loss(avg_loss)
+            logger.info(f"Audio Epoch {epoch + 1}: avg_loss={avg_loss:.4f}")
+
+            if self.on_epoch_complete:
                 try:
-                    data.append(json.loads(line))
-                except json.JSONDecodeError:
-                    continue
-        if data:
-            return data
+                    self.on_epoch_complete(epoch + 1, avg_loss)
+                except Exception:
+                    logger.debug("on_epoch_complete callback error", exc_info=True)
 
-    # Try Q&A format
-    qa_pattern = re.compile(r'Q:\s*(.+?)\s*A:\s*(.+?)(?=Q:|$)', re.DOTALL)
-    matches = qa_pattern.findall(content)
-    for q, a in matches:
-        data.append({
-            "prompt": q.strip(),
-            "completion": a.strip()
-        })
+            if avg_loss < self.state.best_loss:
+                self.state.best_loss = avg_loss
+                self._epochs_without_improvement = 0
+                self._save_checkpoint(checkpoint_dir / "best_audio_model.pt")
+            else:
+                self._epochs_without_improvement += 1
+                if (self.config.early_stopping_patience > 0
+                        and self._epochs_without_improvement
+                        >= self.config.early_stopping_patience):
+                    logger.info("Audio training: early stopping triggered")
+                    break
 
-    logger.info(f"Loaded {len(data)} training examples from {path}")
-    return data
+            if self.config.save_every > 0 and (epoch + 1) % self.config.save_every == 0:
+                self._save_checkpoint(checkpoint_dir / f"audio_epoch_{epoch + 1}.pt")
+                self._cleanup_periodic_checkpoints(
+                    checkpoint_dir, "audio_epoch_", keep=3)
+
+        # -- Cleanup --
+        self._emit_progress(100, "Audio training complete!")
+        self.model.eval()
+        audio_encoder.eval()
+
+        for param in self.model.parameters():
+            param.requires_grad = True
+
+        return self.state

@@ -90,15 +90,16 @@ class _ChatMixin:
             return None
 
         features_list = []
+        device = getattr(self, "device", None)
+        if device is not None:
+            encoder = encoder.to(device)
         for path in image_paths:
             try:
                 img_tensor = preprocess_image(
                     path, image_size=encoder.config.image_size,
                 )
-                device = getattr(self, "device", None)
                 if device is not None:
                     img_tensor = img_tensor.to(device)
-                    encoder = encoder.to(device)
                 with torch.no_grad():
                     feat = encoder(img_tensor)  # [1, patches, dim]
                 features_list.append(feat)
@@ -114,6 +115,129 @@ class _ChatMixin:
     # =========================================================================
     # �💬 Chat Interface
     # =========================================================================
+    @staticmethod
+    def _summarize_dropped_history(
+        messages: list[dict[str, str]],
+    ) -> str:
+        """Summarize messages that are about to be dropped from context.
+
+        Produces a compact text summary of the conversation that was
+        trimmed, preserving key topics and context without requiring
+        model inference.  Groups by topic shifts and extracts
+        decisions/conclusions from assistant responses.
+
+        Args:
+            messages: The messages being dropped from history.
+
+        Returns:
+            A compact summary string, or "" if messages is empty.
+        """
+        if not messages:
+            return ""
+
+        # Extract key info from dropped messages
+        user_msgs = [m["content"] for m in messages
+                     if m.get("role") == "user" and m.get("content")]
+        asst_msgs = [m["content"] for m in messages
+                     if m.get("role") == "assistant" and m.get("content")]
+
+        if not user_msgs and not asst_msgs:
+            return ""
+
+        parts: list[str] = []
+        parts.append(
+            f"[Earlier conversation summary — {len(messages)} "
+            f"messages were trimmed from context]")
+
+        # --- Topic grouping ---
+        # Detect topic shifts by comparing consecutive user messages.
+        # A "topic" is the first ~40 chars of each user message.
+        # When consecutive messages share few words, it's a new topic.
+        topic_groups: list[list[str]] = []
+        current_group: list[str] = []
+        prev_words: set[str] = set()
+
+        for msg in user_msgs:
+            words = set(msg.lower().split()[:8])
+            # If less than 20% word overlap with previous, new topic
+            if prev_words and len(words & prev_words) < max(1, len(words) * 0.2):
+                if current_group:
+                    topic_groups.append(current_group)
+                current_group = [msg]
+            else:
+                current_group.append(msg)
+            prev_words = words
+
+        if current_group:
+            topic_groups.append(current_group)
+
+        # Summarize topic groups
+        if len(topic_groups) > 1:
+            topic_labels = []
+            for group in topic_groups[:6]:  # cap at 6 topics
+                label = group[0][:60]
+                if len(group) > 1:
+                    label += f" ({len(group)} messages)"
+                topic_labels.append(label)
+            parts.append("Topics discussed: " + " | ".join(topic_labels))
+        elif user_msgs:
+            parts.append(f"Started with: {user_msgs[0][:120]}")
+
+        # --- Extract decisions/conclusions from assistant messages ---
+        # Look for decisive language patterns in assistant responses.
+        decision_markers = (
+            "recommend", "decided", "go with", "choose", "best",
+            "should use", "let's use", "agreed", "conclusion",
+            "the answer is", "in summary", "to summarize",
+        )
+        decisions: list[str] = []
+        for msg in asst_msgs:
+            lower = msg.lower()
+            if any(marker in lower for marker in decision_markers):
+                # Take the sentence containing the marker
+                for sentence in msg.replace("!", ".").replace("?", ".").split("."):
+                    sentence = sentence.strip()
+                    if sentence and any(m in sentence.lower() for m in decision_markers):
+                        if len(sentence) > 10:
+                            decisions.append(sentence[:100])
+                            break
+        if decisions:
+            parts.append("Key decisions: " + " | ".join(decisions[:4]))
+
+        # --- Last exchange ---
+        if user_msgs:
+            parts.append(f"Last user message: {user_msgs[-1][:100]}")
+        if asst_msgs:
+            parts.append(f"Last AI response: {asst_msgs[-1][:100]}")
+
+        return "\n".join(parts)
+
+    @staticmethod
+    def _cap_history_summary(summary: str, max_chars: int = 4096) -> str:
+        """Keep only the most recent summary blocks within *max_chars*.
+
+        Each truncation event produces a block starting with
+        ``[Earlier conversation summary``.  When the combined summary
+        grows past the budget, the oldest blocks are dropped.
+        """
+        if not summary or len(summary) <= max_chars:
+            return summary
+
+        marker = "[Earlier conversation summary"
+        blocks = summary.split(marker)
+        # blocks[0] is text before the first marker (usually "")
+        # Rebuild from newest to oldest, keeping what fits
+        kept: list[str] = []
+        total = 0
+        for block in reversed(blocks):
+            piece = marker + block if kept or block != blocks[0] else block
+            if total + len(piece) > max_chars and kept:
+                break
+            kept.append(piece)
+            total += len(piece)
+        kept.reverse()
+        result = "".join(kept).strip()
+        return result if result else summary[-max_chars:]
 
     def _truncate_history(
         self,
@@ -125,16 +249,16 @@ class _ChatMixin:
     ) -> list[dict[str, str]]:
         """
         Truncate conversation history to fit within context window.
-        
+
         This prevents hallucinations caused by context overflow!
-        
+
         Args:
             history: Full conversation history
             current_message: Current user message
             system_prompt: Optional system prompt
             max_history_tokens: Max tokens for history (auto-calculated if None)
             reserve_for_response: Tokens to reserve for AI response
-            
+
         Returns:
             Truncated history that fits in context window
         """
@@ -175,7 +299,22 @@ class _ChatMixin:
             total_tokens += msg_tokens
 
         if len(truncated) < len(history):
-            logger.info(f"Truncated history: {len(history)} -> {len(truncated)} messages ({total_tokens} tokens)")
+            # Summarize the dropped messages so context isn't fully lost
+            dropped = history[:len(history) - len(truncated)]
+            new_summary = self._summarize_dropped_history(dropped)
+            # Append to any existing summary
+            old_summary = getattr(self, "_history_summary", "")
+            if old_summary and new_summary:
+                combined = f"{old_summary}\n{new_summary}"
+            elif new_summary:
+                combined = new_summary
+            else:
+                combined = old_summary
+            self._history_summary = self._cap_history_summary(
+                combined, max_chars=4096)
+            logger.info(
+                f"Truncated history: {len(history)} -> "
+                f"{len(truncated)} messages ({total_tokens} tokens)")
 
         return truncated
 
@@ -197,6 +336,9 @@ class _ChatMixin:
         Returns:
             A :class:`ChatContext` with everything both callers need.
         """
+        # ── Override max_gen from kwargs if caller passed max_tokens ──────
+        max_gen = kwargs.pop("max_tokens", kwargs.pop("max_new_tokens", max_gen))
+
         # ── Truncate history to prevent context overflow ─────────────────
         if auto_truncate and history:
             history = self._truncate_history(
@@ -205,6 +347,18 @@ class _ChatMixin:
                 system_prompt=system_prompt,
                 reserve_for_response=max_gen,
             )
+        elif not history:
+            # Clear stale summary when history is empty/reset
+            self._history_summary = ""
+
+        # ── Inject history summary if earlier messages were trimmed ────
+        history_summary = getattr(self, "_history_summary", "")
+        if history_summary:
+            if system_prompt:
+                system_prompt = (
+                    f"{system_prompt}\n\n{history_summary}")
+            else:
+                system_prompt = history_summary
 
         # ── Reasoning: inject chain-of-thought instruction ───────────────
         if reasoning:
@@ -369,14 +523,15 @@ class _ChatMixin:
         if ctx.is_gguf and hasattr(self.model, "chat"):
             try:
                 effective_max = kwargs.get("max_tokens", ctx.max_gen)
-                response = self.model.chat(
-                    messages=ctx.messages,
-                    max_tokens=effective_max,
-                    temperature=ctx.temperature,
-                    top_p=ctx.top_p,
-                    top_k=ctx.top_k,
-                    repeat_penalty=ctx.repeat_penalty,
-                )
+                with self._generation_lock:
+                    response = self.model.chat(
+                        messages=ctx.messages,
+                        max_tokens=effective_max,
+                        temperature=ctx.temperature,
+                        top_p=ctx.top_p,
+                        top_k=ctx.top_k,
+                        repeat_penalty=ctx.repeat_penalty,
+                    )
                 return response
             except Exception:
                 # Let the error propagate — no silent fallback (Suggestion #9A)
@@ -412,6 +567,11 @@ class _ChatMixin:
         if "Assistant:" in response:
             response = response.split("Assistant:")[-1].strip()
 
+        # Clean up truncated <think> tags so API callers get clean output
+        # (the GUI also does this, but programmatic callers shouldn't need to)
+        from .reasoning import strip_incomplete_think
+        response = strip_incomplete_think(response)
+
         return response
 
     def chat_with_tools(
@@ -425,11 +585,11 @@ class _ChatMixin:
     ) -> str:
         """
         Chat with automatic tool routing based on user intent.
-        
+
         Uses the UniversalToolRouter which detects tool intent from
         keywords in the user message. Works regardless of whether the
         model was trained to use tools.
-        
+
         Args:
             message: User's message
             history: Conversation history
@@ -437,7 +597,7 @@ class _ChatMixin:
             max_gen: Maximum tokens to generate
             fallback_to_chat: If tool fails, use chat instead
             **kwargs: Additional generation parameters
-            
+
         Returns:
             Response (either from tool execution or chat)
         """
@@ -512,56 +672,84 @@ class _ChatMixin:
         if ctx.is_gguf and hasattr(self.model, "chat"):
             # Server backend — no streaming helper yet, yield in one piece
             if ctx.has_server_backend:
-                response = self.model.chat(
-                    ctx.messages,
-                    max_tokens=ctx.max_gen,
-                    temperature=ctx.temperature,
-                    repeat_penalty=ctx.repeat_penalty,
-                    top_p=ctx.top_p,
-                    top_k=ctx.top_k,
-                )
+                with self._generation_lock:
+                    response = self.model.chat(
+                        ctx.messages,
+                        max_tokens=ctx.max_gen,
+                        temperature=ctx.temperature,
+                        repeat_penalty=ctx.repeat_penalty,
+                        top_p=ctx.top_p,
+                        top_k=ctx.top_k,
+                    )
                 yield response
                 return
 
             # In-process llama-cpp-python — true streaming
             try:
-                stream_resp = self.model.model.create_chat_completion(
-                    messages=ctx.messages,
-                    max_tokens=ctx.max_gen,
-                    temperature=ctx.temperature,
-                    repeat_penalty=ctx.repeat_penalty,
-                    top_p=ctx.top_p,
-                    top_k=ctx.top_k,
-                    stream=True,
-                )
-                for chunk in stream_resp:
-                    choices = chunk.get("choices", [])
-                    if choices:
-                        delta = choices[0].get("delta", {})
-                        text = delta.get("content", "")
-                        if text:
-                            yield text
+                with self._generation_lock:
+                    stream_resp = self.model.model.create_chat_completion(
+                        messages=ctx.messages,
+                        max_tokens=ctx.max_gen,
+                        temperature=ctx.temperature,
+                        repeat_penalty=ctx.repeat_penalty,
+                        top_p=ctx.top_p,
+                        top_k=ctx.top_k,
+                        stream=True,
+                    )
+                    for chunk in stream_resp:
+                        choices = chunk.get("choices", [])
+                        if choices:
+                            delta = choices[0].get("delta", {})
+                            text = delta.get("content", "")
+                            if text:
+                                yield text
                 return
             except Exception:
                 # Let the error propagate — no silent fallback (Suggestion #9A)
                 raise
 
         # ── Native model streaming path ──────────────────────────────────
-        buffer = ""
-        for token in self.stream_generate(ctx.prompt, max_gen=ctx.max_gen, **kwargs):
-            buffer += token
+        # Hold back tokens that could be a prefix of a stop string so we
+        # don't leak partial stop sequences to consumers.
+        pending = ""
+        max_stop_len = max((len(s) for s in ctx.stop_strings), default=0)
 
-            # Check for stop conditions
+        for token in self.stream_generate(ctx.prompt, max_gen=ctx.max_gen, **kwargs):
+            pending += token
+
+            # Check if a full stop string has appeared
             stopped = False
             for stop in ctx.stop_strings:
-                if stop in buffer:
-                    buffer = buffer[:buffer.find(stop)]
+                pos = pending.find(stop)
+                if pos != -1:
+                    # Yield everything before the stop string
+                    safe = pending[:pos]
+                    if safe:
+                        yield safe
                     stopped = True
                     break
 
             if stopped:
                 break
 
-            yield token
+            # Check if the tail of pending could be the start of a stop
+            # string — if so, hold those characters back
+            hold = 0
+            if max_stop_len > 0:
+                for k in range(1, min(len(pending), max_stop_len) + 1):
+                    tail = pending[-k:]
+                    for stop in ctx.stop_strings:
+                        if stop[:k] == tail:
+                            hold = max(hold, k)
+                            break
+
+            safe_end = len(pending) - hold
+            if safe_end > 0:
+                yield pending[:safe_end]
+                pending = pending[safe_end:]
+
+        # Flush remaining pending at EOF (generation ended, no stop string hit)
+        if pending:
+            yield pending
 
 

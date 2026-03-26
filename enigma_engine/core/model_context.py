@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -37,6 +38,45 @@ logger = logging.getLogger(__name__)
 # Base directory for all model contexts
 _CONTEXTS_DIR = Path(__file__).parent.parent.parent / "data" / "model_contexts"
 _PROMPTS_DIR = Path(__file__).parent.parent.parent / "data" / "prompts"
+
+# Maximum number of messages to persist in history.json.
+# Older messages beyond this cap are dropped on save.
+# This prevents unbounded history growth on disk while keeping
+# full history available in-memory for the current session.
+MAX_CONTEXT_HISTORY = 500
+
+# Emotional state baseline — neutral starting point.
+# Valence: 0.0 (neutral), Arousal: 0.2 (calm), Engagement: 0.5 (moderate),
+# Trust: 0.5 (neutral), Frustration: 0.0 (patient).
+_EMOTIONAL_BASELINE: dict[str, float] = {
+    "valence": 0.0,
+    "arousal": 0.2,
+    "engagement": 0.5,
+    "trust": 0.5,
+    "frustration": 0.0,
+}
+
+# How much each sentiment update shifts the state (0-1 blend factor).
+# Low value = slow, gradual change. High = reactive.
+_EMOTIONAL_LERP = 0.3
+
+# How much state decays toward baseline per call (idle drift).
+_EMOTIONAL_DECAY = 0.1
+
+# Hard ranges per dimension.
+_EMOTIONAL_RANGES: dict[str, tuple[float, float]] = {
+    "valence": (-1.0, 1.0),
+    "arousal": (0.0, 1.0),
+    "engagement": (0.0, 1.0),
+    "trust": (0.0, 1.0),
+    "frustration": (0.0, 1.0),
+}
+
+
+def set_max_context_history(value: int) -> None:
+    """Update the history persistence cap at runtime."""
+    global MAX_CONTEXT_HISTORY
+    MAX_CONTEXT_HISTORY = max(1, int(value))
 
 
 def get_contexts_dir() -> Path:
@@ -89,6 +129,13 @@ class ModelContext:
         self.tags: list[str] = []
         self.notes: str = ""
 
+        # Emotional state — persistent per-model internal state
+        self.emotional_state: dict[str, float] = dict(_EMOTIONAL_BASELINE)
+        self._emotional_lock = threading.Lock()
+
+        # Journal — lazily loaded on first access
+        self._journal = None
+
     @staticmethod
     def _default_prompt() -> str:
         """Load default prompt from data/prompts/chat.md, fallback to builtin."""
@@ -119,6 +166,15 @@ class ModelContext:
     def history_path(self) -> Path:
         """Path to history.json (chat messages)."""
         return self.context_dir / "history.json"
+
+    @property
+    def journal(self):
+        """Per-model journal (lazy-loaded on first access)."""
+        if self._journal is None:
+            from enigma_engine.core.monologue import Journal
+            self.context_dir.mkdir(parents=True, exist_ok=True)
+            self._journal = Journal(journal_dir=self.context_dir)
+        return self._journal
 
     # ----------------------------------------------------------------
     # Load
@@ -154,6 +210,15 @@ class ModelContext:
                 "training_history", [])
             self.tags = data.get("tags", [])
             self.notes = data.get("notes", "")
+
+            # Emotional state — load saved or keep baseline
+            saved_emo = data.get("emotional_state")
+            if isinstance(saved_emo, dict):
+                for key in _EMOTIONAL_BASELINE:
+                    if key in saved_emo:
+                        lo, hi = _EMOTIONAL_RANGES[key]
+                        self.emotional_state[key] = max(
+                            lo, min(hi, float(saved_emo[key])))
 
             logger.info(
                 "Loaded context for model: %s", self.model_key)
@@ -217,6 +282,7 @@ class ModelContext:
             "training_history": self.training_history,
             "tags": self.tags,
             "notes": self.notes,
+            "emotional_state": dict(self.emotional_state),
         }
         try:
             from enigma_engine.core.safe_save import atomic_write_json
@@ -227,12 +293,20 @@ class ModelContext:
                 self.model_key, exc)
 
     def _save_history(self) -> None:
-        """Write history.json from self.history."""
+        """Write history.json from self.history.
+
+        Caps saved messages at MAX_CONTEXT_HISTORY — keeps the most
+        recent messages and drops oldest.  In-memory history is not
+        modified so the current session retains full context.
+        """
+        messages = self.history
+        if len(messages) > MAX_CONTEXT_HISTORY:
+            messages = messages[-MAX_CONTEXT_HISTORY:]
         data = {
             "model_key": self.model_key,
-            "message_count": len(self.history),
+            "message_count": len(messages),
             "saved_at": self.last_used,
-            "messages": self.history,
+            "messages": messages,
         }
         try:
             from enigma_engine.core.safe_save import atomic_write_json
@@ -300,7 +374,54 @@ class ModelContext:
             "tags": list(self.tags),
             "notes": self.notes,
             "memory_facts": self.memory_fact_count,
+            "emotional_state": dict(self.emotional_state),
         }
+
+    # ----------------------------------------------------------------
+    # Emotional state
+    # ----------------------------------------------------------------
+
+    def update_emotional_state(self, user_message: str) -> None:
+        """Update emotional state based on user message sentiment.
+
+        Blends current state toward the detected sentiment using
+        a lerp factor.  Values are clamped to their defined ranges.
+
+        Args:
+            user_message: The raw text the user sent.
+        """
+        from enigma_engine.core.sentiment import analyze_sentiment
+        signals = analyze_sentiment(user_message)
+        with self._emotional_lock:
+            for key, signal in signals.items():
+                current = self.emotional_state.get(key, _EMOTIONAL_BASELINE[key])
+                # Lerp toward signal
+                new_val = current + _EMOTIONAL_LERP * (signal - current)
+                lo, hi = _EMOTIONAL_RANGES[key]
+                self.emotional_state[key] = round(
+                    max(lo, min(hi, new_val)), 3)
+
+    def decay_emotional_state(self) -> None:
+        """Drift emotional state toward baseline.
+
+        Called when idle or between sessions to prevent
+        permanent extremes.
+        """
+        with self._emotional_lock:
+            for key, baseline in _EMOTIONAL_BASELINE.items():
+                current = self.emotional_state.get(key, baseline)
+                new_val = current + _EMOTIONAL_DECAY * (baseline - current)
+                lo, hi = _EMOTIONAL_RANGES[key]
+                self.emotional_state[key] = round(
+                    max(lo, min(hi, new_val)), 3)
+
+    def reset_emotional_state(self) -> None:
+        """Reset emotional state to neutral baseline.
+
+        Called on major retraining or by user request.
+        """
+        with self._emotional_lock:
+            self.emotional_state = dict(_EMOTIONAL_BASELINE)
 
     # ----------------------------------------------------------------
     # Utility

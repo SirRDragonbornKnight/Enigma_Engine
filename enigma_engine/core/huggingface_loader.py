@@ -7,22 +7,22 @@ Enables using pre-trained models like GPT-2, Llama, Mistral, etc.
 
 Usage:
     from enigma_engine.core.huggingface_loader import HuggingFaceModel
-    
+
     # Load a model
     model = HuggingFaceModel("gpt2")
     model.load()
-    
+
     # Generate text
     response = model.generate("Once upon a time")
     print(response)
-    
+
     # Stream generation
     for token in model.stream_generate("Tell me a story"):
         print(token, end="", flush=True)
-    
+
     # Chat interface
     response = model.chat("What is the capital of France?")
-    
+
     # Get model info without loading
     info = get_huggingface_model_info("microsoft/DialoGPT-small")
     print(f"Size: {info['size_str']}, Params: {info['num_parameters']:,}")
@@ -79,11 +79,6 @@ def _ensure_imports() -> bool:
     return _HAVE_TRANSFORMERS
 
 
-# Backward-compatible property for code that checks HAVE_TRANSFORMERS
-@property
-def _hf_check(self):
-    return _ensure_imports()
-
 # Keep a simple module-level alias that lazily resolves
 class _LazyFlag:
     """Descriptor that calls _ensure_imports() when evaluated as bool."""
@@ -112,13 +107,13 @@ def format_param_count(num_params: int) -> str:
 def get_huggingface_model_info(model_id: str, timeout: float = 10.0) -> dict[str, Any]:
     """
     Get model information from HuggingFace without downloading the full model.
-    
+
     This fetches just the config file to estimate parameter count and architecture.
-    
+
     Args:
         model_id: HuggingFace model ID (e.g., "microsoft/DialoGPT-small")
         timeout: Request timeout in seconds
-        
+
     Returns:
         Dict with:
             - num_parameters: Estimated parameter count
@@ -188,7 +183,7 @@ def get_huggingface_model_info(model_id: str, timeout: float = 10.0) -> dict[str
 class HuggingFaceModel:
     """
     HuggingFace Transformers model loader.
-    
+
     Supports:
     - Any causal LM from HuggingFace Hub
     - Local model directories
@@ -221,7 +216,7 @@ class HuggingFaceModel:
     ):
         """
         Initialize HuggingFace model.
-        
+
         Args:
             model_id: HuggingFace model ID or local path
             device: Device to use ("cuda", "cpu", "auto")
@@ -254,7 +249,7 @@ class HuggingFaceModel:
     def load(self) -> bool:
         """
         Load the model and tokenizer.
-        
+
         Returns:
             True if loaded successfully
         """
@@ -274,7 +269,11 @@ class HuggingFaceModel:
             elif self.torch_dtype == "float32":
                 dtype = torch.float32
             elif self.device == "cuda":
-                dtype = torch.float16  # Default to fp16 on GPU
+                # Prefer BF16 on capable GPUs (Ampere+, Blackwell)
+                if torch.cuda.is_bf16_supported():
+                    dtype = torch.bfloat16
+                else:
+                    dtype = torch.float16
 
             # Quantization config
             quantization_config = None
@@ -362,7 +361,7 @@ class HuggingFaceModel:
     ) -> str:
         """
         Generate text from a prompt.
-        
+
         Args:
             prompt: Input text
             max_new_tokens: Maximum tokens to generate
@@ -471,7 +470,7 @@ class HuggingFaceModel:
     ) -> Generator[str, None, None]:
         """
         Stream generate text token by token.
-        
+
         Args:
             prompt: Input text
             max_new_tokens: Maximum tokens to generate
@@ -479,7 +478,7 @@ class HuggingFaceModel:
             top_p: Nucleus sampling threshold
             top_k: Top-k sampling
             repetition_penalty: Penalty for repeated tokens
-            
+
         Yields:
             Generated tokens one at a time
         """
@@ -538,14 +537,14 @@ class HuggingFaceModel:
     ) -> str:
         """
         Chat-style generation with conversation history.
-        
+
         Args:
             message: User message
             history: List of {"role": "user/assistant", "content": "..."} dicts
             system_prompt: System prompt to prepend
             max_new_tokens: Maximum tokens to generate
             temperature: Sampling temperature
-            
+
         Returns:
             Assistant response
         """
@@ -721,7 +720,7 @@ class HuggingFaceModel:
 class HuggingFaceEngine:
     """
     High-level inference engine compatible with EnigmaEngine interface.
-    
+
     Drop-in replacement for EnigmaEngine using HuggingFace models.
     """
 
@@ -734,7 +733,7 @@ class HuggingFaceEngine:
     ):
         """
         Initialize HuggingFace engine.
-        
+
         Args:
             model_id: HuggingFace model ID or path
             device: Device to use
@@ -824,16 +823,16 @@ class HuggingFaceEngine:
     ) -> str:
         """
         Chat with automatic tool routing based on user intent.
-        
+
         Uses the UniversalToolRouter which works with ANY model.
         Tools are triggered by keywords in the user message.
-        
+
         Args:
             message: User message
             max_gen: Max tokens for response
             temperature: Sampling temperature
             reset_history: Clear chat history
-            
+
         Returns:
             Response (either from tool or from model)
         """
@@ -872,11 +871,11 @@ def load_huggingface_model(
 ) -> HuggingFaceModel:
     """
     Load a HuggingFace model.
-    
+
     Args:
         model_id: Model ID or path
         **kwargs: Additional arguments for HuggingFaceModel
-        
+
     Returns:
         Loaded HuggingFaceModel instance
     """
@@ -888,7 +887,7 @@ def load_huggingface_model(
 def convert_hf_config_to_forge(hf_config) -> dict:
     """
     Convert HuggingFace config to Forge config dictionary.
-    
+
     Supports various HuggingFace model architectures:
     - GPT-2 family (gpt2, gpt2-medium, gpt2-large, gpt2-xl)
     - GPT-Neo/GPT-J (EleutherAI models)
@@ -896,13 +895,13 @@ def convert_hf_config_to_forge(hf_config) -> dict:
     - LLaMA family (Meta LLaMA, LLaMA-2)
     - Mistral (Mistral-7B, Mixtral)
     - Phi models (Microsoft Phi-1, Phi-2)
-    
+
     Args:
         hf_config: HuggingFace model config object
-        
+
     Returns:
         Dictionary with Forge config parameters
-        
+
     Raises:
         ValueError: If model type not supported
     """
@@ -986,11 +985,25 @@ def convert_hf_config_to_forge(hf_config) -> dict:
         if hasattr(hf_config, 'partial_rotary_factor'):
             config['partial_rotary_factor'] = hf_config.partial_rotary_factor
 
+    elif model_type in ['qwen2', 'qwen3']:
+        # Qwen family - GQA + RoPE like Llama
+        if hasattr(hf_config, 'num_key_value_heads'):
+            config['n_kv_heads'] = hf_config.num_key_value_heads
+        if hasattr(hf_config, 'rope_theta'):
+            config['rope_theta'] = hf_config.rope_theta
+        # Qwen3 uses learned RMSNorm for QK normalization
+        if model_type == 'qwen3':
+            config['use_qk_norm'] = True
+
     else:
         logger.warning(
             f"Model type '{model_type}' not explicitly supported. "
             f"Using generic config mapping - conversion may not be perfect."
         )
+
+    # FFN hidden dimension (many HF models store this as intermediate_size)
+    if hasattr(hf_config, 'intermediate_size'):
+        config['hidden_dim'] = hf_config.intermediate_size
 
     logger.info(f"Converted config: {config}")
     return config
@@ -999,17 +1012,17 @@ def convert_hf_config_to_forge(hf_config) -> dict:
 def convert_hf_weights_to_forge(hf_state_dict: dict, model_type: str) -> dict:
     """
     Convert HuggingFace weights to Forge format using the weight mapper.
-    
+
     This is a convenience wrapper around WeightMapper.map_huggingface_to_forge()
     that provides a cleaner API for standalone use.
-    
+
     Args:
         hf_state_dict: HuggingFace model state dict
         model_type: Model type (e.g., 'gpt2', 'llama', 'mistral')
-        
+
     Returns:
         Forge-compatible state dict
-        
+
     Example:
         >>> from transformers import AutoModelForCausalLM
         >>> hf_model = AutoModelForCausalLM.from_pretrained("gpt2")
@@ -1046,17 +1059,17 @@ def convert_huggingface_to_forge(
 ) -> 'Forge':
     """
     Load a HuggingFace model and convert it to Forge format.
-    
+
     This function downloads a HuggingFace model, extracts its weights,
     and maps them to Forge architecture.
-    
+
     Args:
         model_id: HuggingFace model ID (e.g., "gpt2") or local path
         **kwargs: Additional arguments
-        
+
     Returns:
         Forge model with HuggingFace weights loaded
-        
+
     Raises:
         RuntimeError: If transformers not installed
         ValueError: If model incompatible with Forge

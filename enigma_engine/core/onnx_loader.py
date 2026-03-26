@@ -7,7 +7,7 @@ Enables cross-platform deployment and inference optimization.
 
 Usage:
     from enigma_engine.core.onnx_loader import load_onnx_model
-    
+
     model = load_onnx_model("model.onnx")
     # Returns a Forge model with loaded weights
 """
@@ -57,10 +57,10 @@ def _ensure_onnx_imports() -> None:
 def extract_onnx_weights(onnx_model_path: Union[str, Path]) -> dict[str, torch.Tensor]:
     """
     Extract weights from ONNX model file.
-    
+
     Args:
         onnx_model_path: Path to .onnx file
-        
+
     Returns:
         Dictionary mapping parameter names to PyTorch tensors
     """
@@ -111,10 +111,10 @@ def extract_onnx_weights(onnx_model_path: Union[str, Path]) -> dict[str, torch.T
 def infer_config_from_onnx(onnx_weights: dict[str, torch.Tensor]) -> dict[str, Any]:
     """
     Infer model configuration from ONNX weights.
-    
+
     Args:
         onnx_weights: Dictionary of ONNX weight tensors
-        
+
     Returns:
         Dictionary with inferred config parameters
     """
@@ -172,22 +172,22 @@ def load_onnx_model(
 ) -> 'Forge':
     """
     Load an ONNX model and convert it to Forge format.
-    
+
     Steps:
     1. Load ONNX model file
     2. Extract weights from ONNX graph
     3. Infer or use provided Forge config
     4. Map ONNX weights to Forge layers
     5. Create Forge model and load weights
-    
+
     Args:
         onnx_model_path: Path to .onnx file
         config: Optional ForgeConfig. If None, will try to infer from ONNX model
         **kwargs: Additional arguments
-        
+
     Returns:
         Forge model with loaded weights
-        
+
     Raises:
         RuntimeError: If required dependencies not installed
         FileNotFoundError: If model file not found
@@ -284,12 +284,12 @@ def load_onnx_model(
 def validate_loaded_model(model: 'Forge') -> None:
     """
     Validate that a Forge model works correctly after loading weights.
-    
+
     Runs a test forward pass to ensure the model can perform inference.
-    
+
     Args:
         model: Loaded Forge model to validate
-        
+
     Raises:
         RuntimeError: If model validation fails
         ValueError: If output shape is incorrect
@@ -332,10 +332,10 @@ def validate_loaded_model(model: 'Forge') -> None:
 def validate_onnx_model(onnx_model_path: Union[str, Path]) -> dict[str, Any]:
     """
     Validate an ONNX model and return information about it.
-    
+
     Args:
         onnx_model_path: Path to .onnx file
-        
+
     Returns:
         Dictionary with model information:
         - valid: Whether model is valid

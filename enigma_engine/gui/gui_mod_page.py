@@ -11,7 +11,7 @@ import customtkinter as ctk
 
 from enigma_engine.gui.widgets import (
     C_ACCENT, C_ACCENT_DIM, C_ACCENT_MUTED, C_BORDER, C_BORDER_ACCENT,
-    C_GREEN, C_INPUT, C_PANEL, C_RED,
+    C_GREEN, C_INPUT, C_PANEL,
     C_SURFACE, C_TEXT, C_TEXT_BRIGHT, C_TEXT_DIM,
     FONT_MONO, FONT_SECTION, FONT_SMALL, FONT_TINY,
     HUDFrame, SectionLabel, SelectableLabel, SelectableTextbox,
@@ -53,31 +53,16 @@ class ModPageMixin:
         SectionLabel(top, mod["name"]).pack(
             side="left", fill="x", expand=True)
 
-        # Status dot + label
+        # Status dot (shows green when mod is running)
         mod["_page_dot"] = StatusDot(top, color=C_TEXT_DIM)
         mod["_page_dot"].pack(side="right", padx=(4, 0))
 
         mod["_page_status"] = SelectableLabel(
-            top, text="STOPPED", font=FONT_TINY,
+            top, text="READY", font=FONT_TINY,
             text_color=C_TEXT_DIM)
         mod["_page_status"].pack(side="right", padx=(0, 4))
 
-        mod["_stop_btn"] = ctk.CTkButton(
-            top, text="STOP", width=80, height=34,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_RED,
-            text_color=C_TEXT_DIM,
-            command=lambda m=mod: self._stop_mod(m),
-            state="disabled")
-        mod["_stop_btn"].pack(side="right", padx=(4, 8))
-
-        mod["_start_btn"] = ctk.CTkButton(
-            top, text="START", width=80, height=34,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_ACCENT_DIM, hover_color=C_ACCENT_MUTED,
-            text_color=C_ACCENT,
-            command=lambda m=mod: self._start_mod(m))
-        mod["_start_btn"].pack(side="right")
+        # No START/STOP buttons — mods auto-launch when commands sent
 
         # --- Left column: info + commands + widgets ---
         left_col = ctk.CTkFrame(page, fg_color="transparent")
@@ -339,10 +324,10 @@ class ModPageMixin:
 
         log_header = ctk.CTkFrame(log_panel, fg_color="transparent")
         log_header.pack(fill="x", padx=8, pady=(8, 4))
-        
+
         SectionLabel(log_header, "Output", color=C_GREEN).pack(
             side="left")
-        
+
         clear_log_btn = ctk.CTkButton(
             log_header, text="CLEAR", width=60, height=24,
             font=FONT_TINY, corner_radius=2,

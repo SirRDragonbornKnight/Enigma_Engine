@@ -108,6 +108,9 @@ HF_QWEN_MAP = [
     (r"model\.layers\.(\d+)\.mlp\.up_proj\.(weight|bias)", r"layers.\1.feed_forward.w3.\2"),
     # Final norm
     (r"model\.norm\.weight", "norm.weight"),
+    # QK normalization (Qwen3)
+    (r"model\.layers\.(\d+)\.self_attn\.q_norm\.weight", r"layers.\1.attention.q_norm.weight"),
+    (r"model\.layers\.(\d+)\.self_attn\.k_norm\.weight", r"layers.\1.attention.k_norm.weight"),
 ]
 
 # Map model_type → mapping rules
@@ -118,6 +121,7 @@ HF_MODEL_MAPS = {
     "phi": HF_PHI_MAP,
     "phi3": HF_PHI_MAP,
     "qwen2": HF_QWEN_MAP,
+    "qwen3": HF_QWEN_MAP,
     "gemma": HF_LLAMA_MAP,  # Gemma uses same layout as Llama
     "gemma2": HF_LLAMA_MAP,
 }
@@ -150,12 +154,12 @@ GGUF_WEIGHT_MAP = [
 class WeightMapper:
     """
     Maps weight names between external formats and Forge/Enigma format.
-    
+
     Supports:
     - HuggingFace transformers (Llama, Mistral, GPT-2, Phi, Qwen, Gemma)
     - GGUF (llama.cpp format)
     - ONNX (Open Neural Network Exchange)
-    
+
     Usage:
         mapper = WeightMapper()
         forge_weights = mapper.map_huggingface_to_forge(hf_state_dict)
@@ -173,11 +177,11 @@ class WeightMapper:
     def _apply_mapping(self, source_dict: dict, mapping_rules: list) -> dict:
         """
         Apply regex mapping rules to convert weight names.
-        
+
         Args:
             source_dict: Source weight dictionary {name: tensor}
             mapping_rules: List of (pattern, replacement) regex rules
-            
+
         Returns:
             Dictionary with Forge-compatible weight names
         """
@@ -200,7 +204,7 @@ class WeightMapper:
             if not mapped:
                 # Keep unmapped weights with a warning
                 self._stats["skipped"] += 1
-                logger.debug(f"Skipped unmapped weight: {source_name}")
+                logger.warning(f"Skipped unmapped weight: {source_name}")
 
         logger.info(
             f"Weight mapping: {self._stats['mapped']} mapped, "
@@ -211,7 +215,7 @@ class WeightMapper:
     def _detect_hf_model_type(self, state_dict: dict) -> str:
         """
         Auto-detect HuggingFace model type from weight names.
-        
+
         Returns:
             Model type string (e.g., 'llama', 'gpt2', 'phi')
         """
@@ -238,12 +242,12 @@ class WeightMapper:
     ) -> dict:
         """
         Convert HuggingFace state dict to Forge format.
-        
+
         Args:
             hf_state_dict: HuggingFace model state dict
             model_type: Model type ('llama', 'gpt2', 'phi', etc.)
                        Auto-detected if None.
-                       
+
         Returns:
             Forge-compatible state dict
         """
@@ -261,11 +265,11 @@ class WeightMapper:
     def map_gguf_to_forge(self, gguf_tensors: dict, config: Any = None) -> dict:
         """
         Convert GGUF tensors to Forge format.
-        
+
         Args:
             gguf_tensors: Dictionary of {tensor_name: tensor_data}
             config: Optional ForgeConfig for validation
-            
+
         Returns:
             Forge-compatible state dict
         """
@@ -275,18 +279,18 @@ class WeightMapper:
     def map_onnx_to_forge(self, onnx_weights: dict, config: Any = None) -> dict:
         """
         Convert ONNX weights to Forge format.
-        
+
         ONNX models don't have a standard naming convention, so we try
         multiple strategies:
         1. Match against known HuggingFace patterns (many ONNX models
            are exported from HuggingFace)
         2. Match against GGUF patterns
         3. Heuristic matching based on tensor shapes
-        
+
         Args:
             onnx_weights: Dictionary of {weight_name: tensor_data}
             config: Optional ForgeConfig for shape-based matching
-            
+
         Returns:
             Forge-compatible state dict
         """
@@ -311,7 +315,7 @@ class WeightMapper:
     def _shape_based_mapping(self, weights: dict, config: Any) -> dict:
         """
         Map weights based on tensor shapes when name-based mapping fails.
-        
+
         This is a last resort for ONNX models with non-standard naming.
         """
         result = {}

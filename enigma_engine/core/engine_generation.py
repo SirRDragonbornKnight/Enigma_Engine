@@ -31,12 +31,23 @@ class _GenerationMixin:
     def _needs_ai_creativity(self, prompt: str) -> bool:
         """
         Check if the prompt requires AI creativity/context rather than direct execution.
-        
+
         Returns True for ambiguous or creative requests that need AI interpretation.
+        Also returns True for non-Latin script prompts (CJK, Arabic, Cyrillic, etc.)
+        where English keyword matching cannot work — routing to the AI is the safe
+        default since the AI can still handle direct commands.
         """
         prompt_lower = prompt.lower()
 
-        # Phrases that indicate need for AI creativity
+        # --- Non-Latin script heuristic ---
+        # If the prompt is predominantly non-Latin characters, we can't
+        # pattern-match creativity indicators.  Safe default: let the AI handle it.
+        non_latin = sum(1 for ch in prompt if ch.isalpha() and ord(ch) > 0x024F)
+        latin = sum(1 for ch in prompt if ch.isalpha() and ord(ch) <= 0x024F)
+        if non_latin > latin:
+            return True
+
+        # --- English creativity indicators ---
         creativity_indicators = [
             "what do you think",
             "surprise me",
@@ -78,7 +89,7 @@ class _GenerationMixin:
     def _try_direct_routing(self, intent: str, prompt: str) -> str | None:
         """
         Try to handle the request directly without main AI.
-        
+
         Returns the response string if handled, None if should fall through to AI.
         """
         if intent == "image":
@@ -120,7 +131,7 @@ class _GenerationMixin:
     def _direct_generation(self, prompt: str, content_type: str, tool_name: str) -> str:
         """
         Generic direct generation handler for image/video/audio/3D/gif.
-        
+
         Extracts description and calls the appropriate tool directly.
         """
         import re
@@ -202,6 +213,18 @@ class _GenerationMixin:
     # 🔧 INTERNAL GENERATION - Where the magic happens!
     # =========================================================================
 
+    def _execute_tools_in_text(self, text: str, **kwargs) -> str:
+        """Scan generated text for tool-call markers and execute them.
+
+        Currently a no-op stub — the model does not yet emit structured
+        tool-call markers.  When agentic tool-use is implemented, this
+        method will parse markers, invoke ``_tool_executor``, splice
+        results back into the text, and optionally re-generate.
+
+        Called inside ``generate()`` while ``_generation_lock`` is held.
+        """
+        return text
+
     def _generate_text(
         self,
         prompt: str,
@@ -211,13 +234,14 @@ class _GenerationMixin:
         top_p: float,
         repetition_penalty: float,
         stop_strings: list[str] | None,
-        use_cache: bool
+        use_cache: bool,
+        min_p: float = 0.0,
     ) -> str:
         """
         Internal method for standard text generation.
-        
+
         📖 THIS IS THE CORE GENERATION LOOP!
-        
+
         📐 THE AUTOREGRESSIVE LOOP:
         ┌────────────────────────────────────────────────────────────────────┐
         │  tokens = [15496, 11, 703, 389]  # "Hello, how are"               │
@@ -236,21 +260,21 @@ class _GenerationMixin:
         │  tokens = [15496, 11, 703, 389, 499, 1804, 2651]                  │
         │                                    └─ newly generated             │
         └────────────────────────────────────────────────────────────────────┘
-        
+
         📐 REPETITION PENALTY:
         Discourages the model from repeating the same tokens.
         For each token that already appeared in the sequence,
         divide its probability by repetition_penalty.
-        
+
         📐 TEMPERATURE SCALING:
         logits = logits / temperature
         - Low temp (0.3): Makes high-prob tokens even more likely → focused
         - High temp (1.5): Flattens distribution → more random
-        
+
         📐 TOP-K FILTERING:
         Keep only the K highest probability tokens, zero out the rest.
         Prevents sampling very unlikely tokens.
-        
+
         📐 TOP-P (NUCLEUS) FILTERING:
         Sort tokens by probability, keep tokens until cumulative prob >= p.
         Dynamic cutoff - keeps more tokens when uncertain, fewer when confident.
@@ -309,23 +333,14 @@ class _GenerationMixin:
 
         # ─────────────────────────────────────────────────────────────────────
         # GENERATE: Run the autoregressive loop
+        # All native generation goes through _generate_manual() which has
+        # KV-cache, windowed repetition penalty, and min-p — one path.
         # ─────────────────────────────────────────────────────────────────────
         with torch.no_grad():  # Disable gradient computation (inference only)
-            if use_cache and hasattr(self.model, 'generate'):
-                # Use model's built-in generate (has KV-cache optimization)
-                output_ids = self.model.generate(
-                    input_ids,
-                    max_new_tokens=max_gen,
-                    temperature=temperature,
-                    top_k=top_k,
-                    top_p=top_p,
-                    repetition_penalty=repetition_penalty
-                )
-            else:
-                # Manual generation
-                output_ids = self._generate_manual(
-                    input_ids, max_gen, temperature, top_k, top_p, repetition_penalty
-                )
+            output_ids = self._generate_manual(
+                input_ids, max_gen, temperature, top_k, top_p,
+                repetition_penalty, min_p, stop_strings=stop_strings
+            )
 
         # Decode
         text = self._decode_output(output_ids)
@@ -343,6 +358,10 @@ class _GenerationMixin:
 
         return text
 
+    # How often (in tokens) to check for stop strings during generation.
+    # Lower = catches sooner, higher = less decode overhead.
+    _STOP_CHECK_INTERVAL: int = 16
+
     def _generate_manual(
         self,
         input_ids: torch.Tensor,
@@ -350,21 +369,28 @@ class _GenerationMixin:
         temperature: float,
         top_k: int,
         top_p: float,
-        repetition_penalty: float
+        repetition_penalty: float,
+        min_p: float = 0.0,
+        stop_strings: list[str] | None = None,
     ) -> torch.Tensor:
-        """Manual autoregressive generation."""
+        """Manual autoregressive generation with KV-cache acceleration."""
         generated = input_ids
+        prompt_len = input_ids.shape[1]
+        max_len = self.model.config.max_seq_len
 
-        for _ in range(max_gen):
-            # Truncate if needed
-            curr_input = generated
-            max_len = self.model.config.max_seq_len
-            if curr_input.shape[1] > max_len:
-                curr_input = curr_input[:, -max_len:]
+        # Check if model supports KV cache
+        has_cache = hasattr(self.model, 'clear_cache')
+        if has_cache:
+            self.model.clear_cache()
 
-            # Forward pass
-            logits = self.model(curr_input)
+        # Prefill: process entire prompt at once
+        curr_input = input_ids
+        if curr_input.shape[1] > max_len:
+            curr_input = curr_input[:, -max_len:]
 
+        logits = self.model(curr_input, use_cache=has_cache)
+
+        for step in range(max_gen):
             # Sample next token
             next_token = self._sample_token(
                 logits[:, -1, :],
@@ -372,10 +398,10 @@ class _GenerationMixin:
                 temperature,
                 top_k,
                 top_p,
-                repetition_penalty
+                repetition_penalty,
+                min_p,
             )
 
-            # Append
             generated = torch.cat([generated, next_token], dim=1)
 
             # Check for EOS
@@ -383,7 +409,35 @@ class _GenerationMixin:
             if next_token[0, 0].item() == eos_id:
                 break
 
+            # Periodic stop-string check (amortised decode cost)
+            if (stop_strings
+                    and (step + 1) % self._STOP_CHECK_INTERVAL == 0):
+                recent_ids = generated[0, prompt_len:].tolist()
+                recent_text = self.tokenizer.decode(
+                    recent_ids, skip_special_tokens=True)
+                if any(ss in recent_text for ss in stop_strings):
+                    break
+
+            # Decode step: only feed new token with start_pos
+            if has_cache:
+                logits = self.model(
+                    next_token,
+                    use_cache=True,
+                    start_pos=generated.shape[1] - 1,
+                )
+            else:
+                # Fallback: full recompute (no cache support)
+                curr_input = generated
+                if curr_input.shape[1] > max_len:
+                    curr_input = curr_input[:, -max_len:]
+                logits = self.model(curr_input)
+
         return generated
+
+    # How many recent tokens to consider for repetition penalty.
+    # Global penalty suppresses the entire vocab over long outputs.
+    # A window of 128 matches llama.cpp / vLLM defaults.
+    REPETITION_WINDOW: int = 128
 
     def _sample_token(
         self,
@@ -392,19 +446,19 @@ class _GenerationMixin:
         temperature: float,
         top_k: int,
         top_p: float,
-        repetition_penalty: float
+        repetition_penalty: float,
+        min_p: float = 0.0,
     ) -> torch.Tensor:
         """Sample next token with various strategies."""
-        # Apply repetition penalty - O(vocabulary) vectorized operation
+        # Apply repetition penalty over a recent window only
         if repetition_penalty != 1.0:
             vocab_size = logits.shape[-1]
-            # Clamp token IDs to valid vocab range and count occurrences
-            token_ids = generated[0].clamp(0, vocab_size - 1)
+            # Only look at the last REPETITION_WINDOW tokens
+            window = generated[0, -self.REPETITION_WINDOW:]
+            token_ids = window.clamp(0, vocab_size - 1)
             token_counts = torch.bincount(token_ids, minlength=vocab_size)
-            # Create mask for tokens that have appeared
             appeared_mask = token_counts > 0
             # Apply penalty: divide positive logits, multiply negative logits
-            # (dividing a negative logit makes it less negative = higher prob = wrong)
             scores = logits[0, appeared_mask]
             logits[0, appeared_mask] = torch.where(
                 scores > 0, scores / repetition_penalty,
@@ -412,6 +466,13 @@ class _GenerationMixin:
 
         # Temperature scaling
         logits = logits / max(temperature, 1e-8)
+
+        # Min-p filtering: remove tokens below min_p * max_probability
+        if min_p > 0.0:
+            probs_for_filter = F.softmax(logits, dim=-1)
+            max_prob = probs_for_filter.max(dim=-1, keepdim=True).values
+            logits = logits.masked_fill(
+                probs_for_filter < min_p * max_prob, float('-inf'))
 
         # Top-k filtering
         if top_k > 0:
@@ -446,6 +507,7 @@ class _GenerationMixin:
         top_k: int,
         top_p: float,
         repetition_penalty: float,
+        min_p: float = 0.0,
     ) -> torch.Tensor:
         """Sample next tokens for an entire batch in one vectorized pass.
 
@@ -462,15 +524,15 @@ class _GenerationMixin:
         """
         batch_size, vocab_size = logits.shape
 
-        # Repetition penalty — vectorised via scatter_add
+        # Repetition penalty — windowed, vectorised via scatter_add
         if repetition_penalty != 1.0:
-            gen_clamped = generated.clamp(0, vocab_size - 1)
+            window = generated[:, -self.REPETITION_WINDOW:]
+            gen_clamped = window.clamp(0, vocab_size - 1)
             presence = torch.zeros_like(logits)
             presence.scatter_add_(
                 1, gen_clamped,
                 torch.ones_like(gen_clamped, dtype=logits.dtype))
             appeared = presence > 0
-            # Divide positive logits, multiply negative logits
             scores = logits[appeared]
             logits[appeared] = torch.where(
                 scores > 0, scores / repetition_penalty,
@@ -478,6 +540,13 @@ class _GenerationMixin:
 
         # Temperature
         logits = logits / max(temperature, 1e-8)
+
+        # Min-p filtering
+        if min_p > 0.0:
+            probs_for_filter = F.softmax(logits, dim=-1)
+            max_prob = probs_for_filter.max(dim=-1, keepdim=True).values
+            logits = logits.masked_fill(
+                probs_for_filter < min_p * max_prob, float('-inf'))
 
         # Top-k
         if top_k > 0:
@@ -519,6 +588,7 @@ class _GenerationMixin:
         top_k: int = 50,
         top_p: float = 0.9,
         repetition_penalty: float = 1.1,
+        min_p: float = 0.0,
         max_tokens: int | None = None,  # Alias for max_gen (backward compatibility)
         max_new_tokens: int | None = None,  # Alias for max_gen (Forge model compatibility)
         max_length: int | None = None  # Alias for max_gen (common parameter name)
@@ -550,19 +620,21 @@ class _GenerationMixin:
 
         input_ids = self._encode_prompt(prompt)
         generated = input_ids
+        max_len = self.model.config.max_seq_len
 
         # Acquire generation lock to protect KV-cache state
         with self._generation_lock, torch.no_grad():
+            has_cache = hasattr(self.model, 'clear_cache')
+            if has_cache:
+                self.model.clear_cache()
+
+            # Prefill: process entire prompt at once
+            curr_input = input_ids
+            if curr_input.shape[1] > max_len:
+                curr_input = curr_input[:, -max_len:]
+            logits = self.model(curr_input, use_cache=has_cache)
+
             for _ in range(max_gen):
-                # Truncate if needed
-                curr_input = generated
-                max_len = self.model.config.max_seq_len
-                if curr_input.shape[1] > max_len:
-                    curr_input = curr_input[:, -max_len:]
-
-                # Forward pass
-                logits = self.model(curr_input)
-
                 # Sample
                 next_token = self._sample_token(
                     logits[:, -1, :],
@@ -570,7 +642,8 @@ class _GenerationMixin:
                     temperature,
                     top_k,
                     top_p,
-                    repetition_penalty
+                    repetition_penalty,
+                    min_p,
                 )
 
                 generated = torch.cat([generated, next_token], dim=1)
@@ -589,6 +662,19 @@ class _GenerationMixin:
                 eos_id = getattr(self.tokenizer, 'eos_token_id', 2)
                 if token_id == eos_id:
                     break
+
+                # Decode step: only feed new token with start_pos
+                if has_cache:
+                    logits = self.model(
+                        next_token,
+                        use_cache=True,
+                        start_pos=generated.shape[1] - 1,
+                    )
+                else:
+                    curr_input = generated
+                    if curr_input.shape[1] > max_len:
+                        curr_input = curr_input[:, -max_len:]
+                    logits = self.model(curr_input)
 
     # =========================================================================
     # Batch Generation
@@ -623,6 +709,7 @@ class _GenerationMixin:
         top_k = kwargs.get('top_k', 50)
         top_p = kwargs.get('top_p', 0.9)
         repetition_penalty = kwargs.get('repetition_penalty', 1.1)
+        min_p = kwargs.get('min_p', 0.0)
 
         # Encode all prompts
         if hasattr(self.tokenizer, 'encode'):
@@ -651,44 +738,45 @@ class _GenerationMixin:
         eos_id = getattr(self.tokenizer, 'eos_token_id', 2)
         finished = torch.zeros(batch_size, dtype=torch.bool, device=self.device)
 
-        # Generate tokens autoregressively
+        # Generate tokens autoregressively — hold lock to protect model state
         generated = input_ids
         all_finished = False
-        for step in range(max_gen):
-            # Early exit if all sequences finished (check every 5 steps starting from step 5 to reduce overhead)
-            if all_finished or (step >= 5 and step % 5 == 0 and finished.all()):
-                all_finished = True
-                break
+        with self._generation_lock:
+            for step in range(max_gen):
+                # Early exit if all sequences finished (check every 5 steps starting from step 5 to reduce overhead)
+                if all_finished or (step >= 5 and step % 5 == 0 and finished.all()):
+                    all_finished = True
+                    break
 
-            # Truncate if needed
-            curr_input = generated
-            max_len = self.model.config.max_seq_len
-            if curr_input.shape[1] > max_len:
-                curr_input = curr_input[:, -max_len:]
+                # Truncate if needed
+                curr_input = generated
+                max_len = self.model.config.max_seq_len
+                if curr_input.shape[1] > max_len:
+                    curr_input = curr_input[:, -max_len:]
 
-            # Forward pass for entire batch
-            with torch.no_grad():
-                logits = self.model(curr_input)
+                # Forward pass for entire batch
+                with torch.no_grad():
+                    logits = self.model(curr_input)
 
-            # Extract last-position logits: [batch_size, vocab_size]
-            last_logits = logits[:, -1, :].clone()
+                # Extract last-position logits: [batch_size, vocab_size]
+                last_logits = logits[:, -1, :].clone()
 
-            # Force pad distribution for finished sequences
-            last_logits[finished] = float('-inf')
-            last_logits[finished, pad_id] = 0.0
+                # Force pad distribution for finished sequences
+                last_logits[finished] = float('-inf')
+                last_logits[finished, pad_id] = 0.0
 
-            # Sample entire batch at once (vectorized)
-            next_tokens_tensor = self._sample_token_batch(
-                last_logits, generated,
-                temperature, top_k, top_p, repetition_penalty,
-            )  # [batch_size, 1]
+                # Sample entire batch at once (vectorized)
+                next_tokens_tensor = self._sample_token_batch(
+                    last_logits, generated,
+                    temperature, top_k, top_p, repetition_penalty, min_p,
+                )  # [batch_size, 1]
 
-            # Check EOS for unfinished sequences
-            newly_done = (next_tokens_tensor.squeeze(-1) == eos_id) & ~finished
-            finished = finished | newly_done
+                # Check EOS for unfinished sequences
+                newly_done = (next_tokens_tensor.squeeze(-1) == eos_id) & ~finished
+                finished = finished | newly_done
 
-            # Append next tokens
-            generated = torch.cat([generated, next_tokens_tensor], dim=1)
+                # Append next tokens
+                generated = torch.cat([generated, next_tokens_tensor], dim=1)
 
         # Decode all outputs
         results = []
@@ -729,13 +817,14 @@ class _GenerationMixin:
         top_p: float = 0.9,
         repetition_penalty: float = 1.1,
         stop_strings: list[str] | None = None,
+        min_p: float = 0.0,
         **kwargs,
     ) -> str:
         """Generate text conditioned on both a text prompt and vision features.
 
-        Tokenises the prompt, obtains text embeddings, calls
-        ``model.forward_multimodal`` with the vision features prepended,
-        then runs a standard autoregressive loop for ``max_gen`` tokens.
+        Uses the shared ``_sample_token`` helper (same windowed repetition
+        penalty, min-p filtering, and sampling logic as every other path)
+        and the KV cache for O(1)-per-token decoding after the prefill.
 
         Args:
             prompt: Text prompt (already formatted by the chat builder).
@@ -747,6 +836,7 @@ class _GenerationMixin:
             top_p: Nucleus (top-p) sampling threshold.
             repetition_penalty: Penalty for repeated tokens.
             stop_strings: Strings that terminate generation.
+            min_p: Min-p filtering threshold.
             **kwargs: Ignored (absorbs extra chat kwargs).
 
         Returns:
@@ -761,71 +851,68 @@ class _GenerationMixin:
         input_ids = input_ids.to(device)
         vision_features = vision_features.to(device)
 
-        generated_ids: list[int] = input_ids.squeeze(0).tolist()
+        generated = input_ids  # [1, seq_len] — running token buffer
+        prompt_len = input_ids.shape[1]
 
         # Determine EOS token
         eos_id: int | None = getattr(self.tokenizer, "eos_token_id", None)
         if eos_id is None:
             eos_id = getattr(self.tokenizer, "eos_id", None)
 
-        with torch.no_grad():
-            # First forward pass: vision + full text prompt
+        has_cache = hasattr(self.model, 'clear_cache')
+
+        with self._generation_lock, torch.no_grad():
+            if has_cache:
+                self.model.clear_cache()
+            # Prefill: vision + full text prompt (populates KV cache)
             logits = self.model.forward_multimodal(
                 input_ids=input_ids,
                 vision_features=vision_features,
+                use_cache=has_cache,
             )
-            # logits: [1, total_seq, vocab]
-            next_logits = logits[:, -1, :]  # [1, vocab]
 
-            for _ in range(max_gen):
-                # Apply repetition penalty
-                if repetition_penalty > 1.0:
-                    for tok_id in set(generated_ids):
-                        if tok_id < next_logits.shape[-1]:
-                            if next_logits[0, tok_id] > 0:
-                                next_logits[0, tok_id] /= repetition_penalty
-                            else:
-                                next_logits[0, tok_id] *= repetition_penalty
+            for step in range(max_gen):
+                # Shared sampling (windowed penalty, min_p, top-k/p)
+                next_token = self._sample_token(
+                    logits[:, -1, :],
+                    generated,
+                    temperature,
+                    top_k,
+                    top_p,
+                    repetition_penalty,
+                    min_p,
+                )
 
-                # Sample
-                if temperature == 0:
-                    next_token = next_logits.argmax(dim=-1).item()
-                else:
-                    scaled = next_logits / max(temperature, 1e-8)
-                    if top_k > 0:
-                        vals, _ = torch.topk(scaled, min(top_k, scaled.size(-1)))
-                        scaled[scaled < vals[:, -1:]] = float("-inf")
-                    if 0 < top_p < 1.0:
-                        sorted_logits, sorted_idx = torch.sort(
-                            scaled, descending=True
-                        )
-                        cum_probs = torch.cumsum(
-                            F.softmax(sorted_logits, dim=-1), dim=-1
-                        )
-                        remove = cum_probs > top_p
-                        remove[:, 1:] = remove[:, :-1].clone()
-                        remove[:, 0] = False
-                        sorted_logits[remove] = float("-inf")
-                        scaled = sorted_logits.scatter(
-                            1, sorted_idx, sorted_logits
-                        )
-                    probs = F.softmax(scaled, dim=-1)
-                    next_token = torch.multinomial(probs, 1).item()
-
-                generated_ids.append(next_token)
+                generated = torch.cat([generated, next_token], dim=1)
+                token_id = next_token[0, 0].item()
 
                 # EOS check
-                if eos_id is not None and next_token == eos_id:
+                if eos_id is not None and token_id == eos_id:
                     break
 
-                # Next forward pass (text only, no vision)
-                next_input = torch.tensor(
-                    [[next_token]], dtype=torch.long, device=device
-                )
-                logits = self.model(next_input)
-                next_logits = logits[:, -1, :]
+                # Periodic stop-string check
+                if (stop_strings
+                        and (step + 1) % self._STOP_CHECK_INTERVAL == 0):
+                    recent_ids = generated[0, prompt_len:].tolist()
+                    recent_text = self.tokenizer.decode(
+                        recent_ids, skip_special_tokens=True)
+                    if any(ss in recent_text for ss in stop_strings):
+                        break
+
+                # Decode step: only new token with start_pos
+                if has_cache:
+                    logits = self.model(
+                        next_token,
+                        use_cache=True,
+                        start_pos=generated.shape[1] - 1,
+                    )
+                else:
+                    logits = self.model(
+                        torch.tensor([[token_id]], dtype=torch.long, device=device)
+                    )
 
         # Decode
+        generated_ids = generated.squeeze(0).tolist()
         if hasattr(self.tokenizer, "decode"):
             text = self.tokenizer.decode(generated_ids, skip_special_tokens=True)
         else:

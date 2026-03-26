@@ -94,8 +94,8 @@ class ForgeAdaptiveMixin:
         _current_mode = _mode_var.get() if _mode_var else "Basic"
         if _current_mode == "AI-Guided":
             _suppl_var = getattr(self, "ai_supplement_var", None)
-            _suppl = _suppl_var.get() if _suppl_var else "(none)"
-            data_path = "" if _suppl == "(none)" else _suppl
+            _suppl = _suppl_var.get() if _suppl_var else ""
+            data_path = "" if (not _suppl or _suppl == "(none)") else _suppl
         else:
             data_path = self.train_data_var.get()
         has_data = bool(data_path) and Path(data_path).exists()
@@ -216,8 +216,8 @@ class ForgeAdaptiveMixin:
 
                 tokenizer = get_tokenizer("auto")
 
-                # Start at simple difficulty (default)
-                plan.current_difficulty = "simple"
+                # Only reset difficulty for a brand-new plan;
+                # resumed plans keep their saved difficulty.
                 self._log(
                     f"Difficulty: {plan.current_difficulty}")
 
@@ -257,6 +257,10 @@ class ForgeAdaptiveMixin:
                     self._update_forge_param_count(sp))
                 self.after(0, self._refresh_models)
 
+                # Training report card + next steps
+                self._log_training_report(
+                    plan, all_losses, student_name)
+
             except KeyboardInterrupt:
                 self._log(
                     "\n--- ADAPTIVE PIPELINE STOPPED ---")
@@ -276,6 +280,7 @@ class ForgeAdaptiveMixin:
                     f"\n[!] Adaptive pipeline failed: {exc}")
                 if plan is not None:
                     plan.status = "failed"
+                    plan.reset_difficulty()
                     pp = (
                         DATA_DIR
                         / f"plan_{student_name}.json")
@@ -314,6 +319,11 @@ class ForgeAdaptiveMixin:
             StageResult)
 
         total_stages = len(plan.stages)
+        # Accumulate curriculum per stage across retry
+        # attempts so the student trains on all prior data
+        # plus new data each time.
+        accumulated: dict[str, list[str]] = {}
+
         while (plan.current_stage is not None
                and self.training_active):
             stage = plan.current_stage
@@ -351,14 +361,22 @@ class ForgeAdaptiveMixin:
                 num_pairs, stage, difficulty,
                 has_data, data_path)
 
-            if not pairs:
+            if not pairs and stage not in accumulated:
                 self._log(
                     "[!] No training material generated.")
                 break
 
-            combined = "\n\n".join(pairs)
+            # Accumulate: add new pairs to prior data
+            # for this stage (resets when stage advances)
+            if stage not in accumulated:
+                accumulated[stage] = []
+            accumulated[stage].extend(pairs)
+            all_pairs = accumulated[stage]
+
+            combined = "\n\n".join(all_pairs)
             self._log(
-                f"Curriculum: {len(pairs)} examples")
+                f"Curriculum: {len(pairs)} new, "
+                f"{len(all_pairs)} total examples")
 
             # Save curriculum to data/
             from datetime import datetime
@@ -392,13 +410,32 @@ class ForgeAdaptiveMixin:
 
             teacher_engine = self._load_engine_for_path(
                 trainer_path)
+            # Build lean persona prompt for STUDENT
+            student_sys = self._build_student_system_prompt(
+                training_brief=training_brief,
+                student_name=student_name)
             test_scores = self._adaptive_phase3_test(
                 teacher_engine, student_path,
-                trainer_sys, stage, difficulty)
+                trainer_sys, stage, difficulty,
+                student_sys=student_sys)
 
             # Record result and decide action
-            avg_score = (sum(test_scores)
-                         / max(1, len(test_scores)))
+            best_loss = (min(stage_losses)
+                         if stage_losses
+                         else float("inf"))
+            if test_scores:
+                avg_score = (sum(test_scores)
+                             / len(test_scores))
+            else:
+                # Fallback: use training loss as proxy
+                # when testing produced no valid scores
+                from enigma_engine.core.adaptive_trainer import (
+                    loss_to_proxy_score)
+                avg_score = float(
+                    loss_to_proxy_score(best_loss))
+                self._log(
+                    "  (No test scores — using loss-based "
+                    f"proxy: {avg_score:.0f}/10)")
             self._log(f"\nAverage : {avg_score:.1f}/10")
 
             result = StageResult(
@@ -409,10 +446,8 @@ class ForgeAdaptiveMixin:
                 avg_score=avg_score,
                 status="pending",
                 epochs_trained=epochs,
-                pairs_generated=len(pairs),
-                best_loss=(min(stage_losses)
-                           if stage_losses
-                           else float("inf")),
+                pairs_generated=len(all_pairs),
+                best_loss=best_loss,
                 started_at=timestamp,
                 completed_at=datetime.now().isoformat())
 
@@ -447,28 +482,57 @@ class ForgeAdaptiveMixin:
             self, teacher_engine, trainer_sys,
             num_pairs, stage, difficulty,
             has_data, data_path):
-        """Phase 1: Generate curriculum using adaptive prompts."""
+        """Phase 1: Generate curriculum using adaptive prompts.
+
+        Retries up to 2 times per example when the teacher returns
+        an empty response, so the final count stays close to the
+        requested ``num_pairs``.
+        """
         from enigma_engine.core.adaptive_trainer import (
-            build_adaptive_prompt)
+            build_adaptive_prompt, clean_example,
+            validate_example, deduplicate_examples)
 
         self._log(
             "\n--- Phase 1: GENERATING CURRICULUM ---")
         pairs = []
+        rejected = 0
+        max_retries_per_example = 2
         for i in range(num_pairs):
             if not self.training_active:
                 raise KeyboardInterrupt("Stopped")
             msg = build_adaptive_prompt(
                 i + 1, num_pairs, stage, difficulty)
-            result = teacher_engine.chat(
-                msg,
-                system_prompt=trainer_sys,
-                max_gen=256,
-                temperature=0.8).strip()
+            result = ""
+            for attempt in range(1 + max_retries_per_example):
+                raw = teacher_engine.chat(
+                    msg,
+                    system_prompt=trainer_sys,
+                    max_gen=512,
+                    temperature=0.8).strip()
+                if not raw:
+                    continue
+                cleaned = clean_example(raw)
+                if validate_example(cleaned, stage):
+                    result = cleaned
+                    break
+                # Invalid format — retry with a fresh generation
             if result:
                 pairs.append(result)
-            if (i + 1) % max(1, num_pairs // 5) == 0:
+                # Preview: show full example
+                preview = result.replace("\n", " ")
                 self._log(
-                    f"  Generated {i + 1}/{num_pairs}")
+                    f"  [{i + 1}/{num_pairs}] {preview}")
+            else:
+                rejected += 1
+                self._log(
+                    f"  [{i + 1}/{num_pairs}] (rejected, bad format)")
+        if rejected:
+            self._log(
+                f"  Quality filter: {rejected} rejected, "
+                f"{len(pairs)} accepted")
+
+        # Deduplicate against already-accumulated examples
+        pairs = deduplicate_examples(pairs)
 
         # Supplement with data file if available
         if has_data:
@@ -478,15 +542,16 @@ class ForgeAdaptiveMixin:
             for prompt in extras:
                 if not self.training_active:
                     raise KeyboardInterrupt("Stopped")
-                response = teacher_engine.chat(
+                raw = teacher_engine.chat(
                     prompt,
                     system_prompt=trainer_sys,
-                    max_gen=128,
+                    max_gen=256,
                     temperature=0.7).strip()
-                if response:
-                    pairs.append(
-                        self._format_training_pair(
-                            stage, prompt, response))
+                if raw:
+                    cleaned = clean_example(raw)
+                    pair = self._format_training_pair(
+                        stage, prompt, cleaned or raw)
+                    pairs.append(pair)
         return pairs
 
     def _adaptive_phase2_train(
@@ -514,6 +579,9 @@ class ForgeAdaptiveMixin:
                 "max_grad_accumulation"],
             use_gradient_checkpointing=forge_params[
                 "use_gradient_checkpointing"],
+            general_mix_ratio=forge_params["general_mix_ratio"],
+            general_data=forge_params["general_data"],
+            val_split=forge_params["val_split"],
             save_every=max(1, epochs // 5),
             checkpoint_dir=str(
                 MODELS_DIR / "checkpoints"),
@@ -559,9 +627,22 @@ class ForgeAdaptiveMixin:
 
     def _adaptive_phase3_test(
             self, teacher_engine, student_path,
-            trainer_sys, stage, difficulty):
-        """Phase 3: Test student with TRAINER-generated questions."""
+            trainer_sys, stage, difficulty,
+            student_sys=None):
+        """Phase 3: Test student with TRAINER-generated questions.
+
+        Retries empty test questions and empty judgments up to 2
+        times each, matching the Phase 1 retry pattern.  Uses
+        stage-specific test prompts so the teacher generates
+        relevant questions (especially for COMMANDS stage).
+
+        Args:
+            student_sys: Optional lean persona prompt for the
+                STUDENT model during inference (two-tier context).
+        """
         import torch
+        from enigma_engine.core.adaptive_trainer import (
+            build_test_prompt)
 
         self._log(
             "\n--- Phase 3: TESTING STUDENT ---")
@@ -570,37 +651,54 @@ class ForgeAdaptiveMixin:
 
         test_scores = []
         num_tests = 10
+        max_retries = 2
         for t in range(num_tests):
             if not self.training_active:
                 raise KeyboardInterrupt("Stopped")
-            test_q = teacher_engine.chat(
-                f"Test #{t + 1}: Generate a "
-                f"{stage}-level ({difficulty} difficulty) "
-                f"question. Write ONLY the question.",
-                system_prompt=trainer_sys,
-                max_gen=64,
-                temperature=0.9).strip()
+
+            # Generate test question with retries
+            test_q = ""
+            prompt = build_test_prompt(
+                t + 1, stage, difficulty)
+            for _attempt in range(1 + max_retries):
+                test_q = teacher_engine.chat(
+                    prompt,
+                    system_prompt=trainer_sys,
+                    max_gen=100,
+                    temperature=0.9).strip()
+                if test_q:
+                    break
             if not test_q:
+                self._log(
+                    f"  Test {t + 1:>2d}  |  "
+                    f"(no question generated, skipped)")
                 continue
-            s_answer = student_engine.generate(
-                test_q, max_gen=128,
+
+            s_answer = student_engine.chat(
+                test_q,
+                system_prompt=student_sys,
+                max_gen=256,
                 temperature=0.7).strip()
             judge_msg = (
                 f'Question: "{test_q}"\n'
                 f'Answer: "{s_answer}"\n\n'
                 "Score 1-10:\n"
                 "Reply: SCORE: <n> | <feedback>")
-            judgment = teacher_engine.chat(
-                judge_msg,
-                system_prompt=trainer_sys,
-                max_gen=64,
-                temperature=0.3).strip()
+
+            # Judge with retries for empty responses
+            judgment = ""
+            for _attempt in range(1 + max_retries):
+                judgment = teacher_engine.chat(
+                    judge_msg,
+                    system_prompt=trainer_sys,
+                    max_gen=128,
+                    temperature=0.3).strip()
+                if judgment:
+                    break
 
             score = self._parse_test_score(judgment)
             test_scores.append(score)
-            q_short = (test_q[:40] + "..."
-                       if len(test_q) > 40
-                       else test_q)
+            q_short = test_q.replace("\n", " ")
             self._log(
                 f"  Test {t + 1:>2d}  |  "
                 f"Score: {score}/10  Q: {q_short}")
@@ -613,21 +711,15 @@ class ForgeAdaptiveMixin:
 
     @staticmethod
     def _parse_test_score(judgment: str) -> int:
-        """Extract numeric score from TRAINER judgment text."""
-        score = 5
-        for line in judgment.splitlines():
-            ln = line.strip()
-            if ln.upper().startswith("SCORE:"):
-                rest = ln.split(":", 1)[1]
-                parts = rest.strip().split("|", 1)
-                try:
-                    score = int(
-                        parts[0].strip().split()[0])
-                    score = max(1, min(10, score))
-                except (ValueError, IndexError):
-                    pass
-                break
-        return score
+        """Extract numeric score from TRAINER judgment text.
+
+        Delegates to the robust ``parse_score()`` in
+        ``adaptive_trainer`` which handles multiple LLM
+        output formats (SCORE: N, N/10, bare number, etc.).
+        """
+        from enigma_engine.core.adaptive_trainer import (
+            parse_score)
+        return parse_score(judgment)
 
     def _adaptive_decide_action(
             self, plan, result, avg_score,
@@ -636,7 +728,13 @@ class ForgeAdaptiveMixin:
         action = plan.decide_action(avg_score)
         self._log(f"Action  : {action.upper()}")
 
-        if action in ("advance", "complete"):
+        if action == "retry":
+            result.status = "retry"
+            plan.record_result(result)
+            self._log(
+                f"Retrying {stage.upper()} at "
+                f"{plan.current_difficulty} difficulty")
+        elif action in ("advance", "complete"):
             result.status = "passed"
             plan.record_result(result)
             has_next = plan.advance_stage()
@@ -646,6 +744,115 @@ class ForgeAdaptiveMixin:
                     f"{plan.current_stage.upper()}")
             else:
                 self._log("All stages complete!")
+
+    def _log_training_report(
+            self, plan, all_losses, student_name):
+        """Log a training report card with score and next steps."""
+        # Gather scores from all stage results
+        all_scores = []
+        for r in plan.stage_results:
+            avg = r.get("avg_score", 0)
+            if avg > 0:
+                all_scores.append(avg)
+
+        overall = (sum(all_scores) / len(all_scores)
+                   if all_scores else 0.0)
+        best_loss = (min(all_losses)
+                     if all_losses else float("inf"))
+        worst_loss = (max(all_losses)
+                      if all_losses else float("inf"))
+        loss_improved = (
+            all_losses[-1] < all_losses[0]
+            if len(all_losses) >= 2 else False)
+
+        # Grade
+        if overall >= 8.0:
+            grade = "A"
+            verdict = "Excellent — model learned well"
+        elif overall >= 7.0:
+            grade = "B"
+            verdict = "Good — solid foundation"
+        elif overall >= 5.0:
+            grade = "C"
+            verdict = "Fair — some learning, needs more"
+        elif overall >= 3.0:
+            grade = "D"
+            verdict = "Poor — struggling to learn"
+        else:
+            grade = "F"
+            verdict = "Failed — not retaining material"
+
+        self._log("\n" + "=" * 50)
+        self._log("  TRAINING REPORT CARD")
+        self._log("=" * 50)
+        self._log(f"Student  : {student_name}")
+        self._log(f"Score    : {overall:.1f}/10  ({grade})")
+        self._log(f"Verdict  : {verdict}")
+        self._log(f"Loss     : {best_loss:.4f} best"
+                  f" / {worst_loss:.4f} worst")
+        if len(all_losses) >= 2:
+            self._log(
+                f"Trend    : {'Improving' if loss_improved else 'Not improving'}")
+
+        # Per-stage breakdown
+        self._log("\nStage Breakdown:")
+        for r in plan.stage_results:
+            stage = r.get("stage", "?")
+            avg = r.get("avg_score", 0)
+            status = r.get("status", "?")
+            bl = r.get("best_loss", 0)
+            self._log(
+                f"  {stage:<14s} {avg:.1f}/10  "
+                f"loss={bl:.4f}  [{status}]")
+
+        # Next step recommendations
+        self._log("\n" + "-" * 50)
+        self._log("  WHAT TO DO NEXT")
+        self._log("-" * 50)
+
+        if overall >= 8.0:
+            self._log(
+                "  [1] Train again with more epochs "
+                "to refine further")
+            self._log(
+                "  [2] Try the next stage if you "
+                "skipped any")
+            self._log(
+                "  [3] Test it in CORE — start chatting")
+            self._log(
+                "  [4] Create a checkpoint backup "
+                "(MODELS page)")
+        elif overall >= 5.0:
+            self._log(
+                "  [1] Run training again — it's "
+                "learning, needs more reps")
+            self._log(
+                "  [2] Increase epochs (try 20-30) "
+                "for deeper learning")
+            self._log(
+                "  [3] Add supplement data to give "
+                "it more examples")
+            self._log(
+                "  [4] Use GENERATE DATA to create "
+                "more training material")
+        else:
+            self._log(
+                "  [1] Check that TRAINER model is "
+                "capable (try it in CORE)")
+            self._log(
+                "  [2] Start with fewer, higher "
+                "quality training examples")
+            self._log(
+                "  [3] Lower the learning rate "
+                "(try 0.00001)")
+            self._log(
+                "  [4] Increase epochs significantly "
+                "(30-50+)")
+            self._log(
+                "  [5] Try Basic mode with a curated "
+                "data file instead")
+
+        self._log("")
 
     def _save_adaptive_curriculum(
             self, combined, stage, difficulty,
@@ -666,10 +873,11 @@ class ForgeAdaptiveMixin:
             f"# Attempt: {attempt}",
             f"# Date: {datetime.now().isoformat()}",
             ""]
-        curr_path.write_text(
+        from enigma_engine.core.safe_save import atomic_write_text
+        atomic_write_text(
+            curr_path,
             "\n".join(header_lines)
-            + combined + "\n",
-            encoding="utf-8")
+            + combined + "\n")
         self._log(f"Saved     : {curr_name}")
         self.after(0, self._refresh_data_files)
 

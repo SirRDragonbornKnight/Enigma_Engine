@@ -26,6 +26,7 @@ from enigma_engine.gui.widgets import (
     C_SURFACE, C_TEXT, C_TEXT_BRIGHT, C_TEXT_DIM,
     FONT_BODY, FONT_SMALL, FONT_TINY,
     HUDFrame, SectionLabel, SelectableLabel, Tooltip,
+    wire_hotkeys,
 )
 from enigma_engine.gui.scanners import (
     INFO_DIR, scan_docs,
@@ -82,6 +83,7 @@ class DocsPageMixin:
             corner_radius=2)
         self._docs_search_entry.grid(
             row=0, column=0, sticky="ew", pady=(0, 4))
+        wire_hotkeys(self._docs_search_entry)
         self._docs_search_entry.bind(
             "<KeyRelease>", lambda e: self._docs_filter_browser())
 
@@ -122,6 +124,7 @@ class DocsPageMixin:
             editor_top, font=FONT_SMALL, height=28,
             fg_color=C_INPUT, text_color=C_TEXT_BRIGHT,
             border_color=C_ACCENT, border_width=1)
+        wire_hotkeys(self._docs_rename_entry)
         self._docs_rename_entry.bind(
             "<Return>", lambda e: self._docs_finish_rename())
         self._docs_rename_entry.bind(
@@ -544,7 +547,8 @@ class DocsPageMixin:
         path = Path(self._docs_current_path)
 
         try:
-            path.write_text(content + "\n", encoding="utf-8")
+            from enigma_engine.core.safe_save import atomic_write_text
+            atomic_write_text(path, content + "\n")
         except OSError as e:
             self.status_bar.set_left(f"Save failed: {e}")
             return
@@ -764,6 +768,7 @@ class DocsPageMixin:
                 placeholder_text_color=C_TEXT_DIM)
             self._docs_find_entry.pack(
                 side="left", padx=(6, 4), pady=3)
+            wire_hotkeys(self._docs_find_entry)
             self._docs_find_entry.bind(
                 "<Return>", lambda e: self._docs_find_next())
             self._docs_find_entry.bind(
@@ -889,9 +894,10 @@ class DocsPageMixin:
         if getattr(self, "_docs_modified", False) and \
                 self._docs_current_path:
             try:
-                content = self._docs_editor.get("1.0", "end-1c")
-                Path(self._docs_current_path).write_text(
-                    content, encoding="utf-8")
+                content = self._docs_editor.get("1.0", "end").strip()
+                from enigma_engine.core.safe_save import atomic_write_text
+                atomic_write_text(Path(self._docs_current_path),
+                                  content + "\n")
                 self._docs_saved_content = content
                 self._docs_modified = False
                 # Update filename indicator

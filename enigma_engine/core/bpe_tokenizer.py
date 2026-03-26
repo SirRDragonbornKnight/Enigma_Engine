@@ -15,7 +15,7 @@ This creates subword tokens that capture common patterns in YOUR specific data.
 import json
 import logging
 import re
-from collections import Counter
+from collections import Counter, OrderedDict
 from pathlib import Path
 from typing import Any, Optional
 
@@ -67,11 +67,17 @@ class BPETokenizer:
         self.merges: list[tuple[str, str]] = []
         self.merge_ranks: dict[tuple[str, str], int] = {}
 
-        # Cache for encoding
-        self.cache: dict[str, list[str]] = {}
+        # Cache for encoding (LRU via OrderedDict)
+        self.cache: OrderedDict[str, list[str]] = OrderedDict()
+
+        # UTF-8 byte-level mode: encode text as UTF-8 bytes
+        # before BPE, so any Unicode character can be represented
+        # as a sequence of byte tokens.  Off by default for
+        # backward compatibility with existing vocab files.
+        self.use_utf8_bytes: bool = False
 
         if vocab_file and vocab_file.exists():
-            self.load(vocab_file)
+            self.load(vocab_file)  # may overwrite use_utf8_bytes
         else:
             self._init_base_vocab()
 
@@ -92,10 +98,32 @@ class BPETokenizer:
                 self.id_to_token[next_id] = char
                 next_id += 1
 
+    @staticmethod
+    def _text_to_bytes(text: str) -> str:
+        """Convert text to a UTF-8 byte string using latin-1 mapping.
+
+        Each byte of the UTF-8 encoding maps 1:1 to a latin-1 char
+        (since the base vocab covers all 256 byte values).  This
+        lets the existing BPE operate on byte-level tokens.
+        """
+        return text.encode('utf-8').decode('latin-1')
+
+    @staticmethod
+    def _bytes_to_text(byte_string: str) -> str:
+        """Convert a latin-1 byte string back to UTF-8 text.
+
+        Reverses ``_text_to_bytes``.  Invalid byte sequences
+        are replaced rather than raising.
+        """
+        return byte_string.encode('latin-1').decode('utf-8', errors='replace')
+
     def train(self, texts: list[str], vocab_size: int = 8000, min_frequency: int = 2,
               verbose: bool = True):
         """
         Train BPE on a list of texts.
+
+        When ``use_utf8_bytes`` is True, texts are converted to UTF-8
+        byte sequences before training so that merges operate on bytes.
 
         Args:
             texts: List of training texts
@@ -112,7 +140,7 @@ class BPETokenizer:
         self._init_base_vocab()
         self.merges = []
         self.merge_ranks = {}
-        self.cache = {}
+        self.cache: OrderedDict[str, list[str]] = OrderedDict()
 
         # Pre-tokenize: split into words, keep track of frequencies
         word_freqs: Counter = Counter()
@@ -122,6 +150,9 @@ class BPETokenizer:
             words = self._pre_tokenize(text)
             for word in words:
                 if word.strip():
+                    # In UTF-8 mode, convert each word to bytes
+                    if self.use_utf8_bytes:
+                        word = self._text_to_bytes(word)
                     # Convert word to tuple of characters (with word boundary marker)
                     word_tuple = tuple(word) + ('</w>',)  # End of word marker
                     word_freqs[word_tuple] += 1
@@ -191,7 +222,7 @@ class BPETokenizer:
         # Handle special markers first - extract them before regex processing
         # Pattern to match Q:, A:, User:, Bot:, Human:, Assistant:,
         # and reasoning tags <think>, </think>
-        special_pattern = r'(<think>|</think>|Q:|A:|User:|Bot:|Human:|Assistant:)'
+        special_pattern = r'(<think>|</think>|(?<![A-Za-z])Q:|(?<![A-Za-z])A:|(?<![A-Za-z])User:|(?<![A-Za-z])Bot:|(?<![A-Za-z])Human:|(?<![A-Za-z])Assistant:)'
 
         parts = re.split(special_pattern, text)
 
@@ -260,6 +291,7 @@ class BPETokenizer:
     def _tokenize_word(self, word: str) -> list[str]:
         """Tokenize a single word using learned BPE merges."""
         if word in self.cache:
+            self.cache.move_to_end(word)
             return list(self.cache[word])
 
         # Check if it's a special token
@@ -305,28 +337,34 @@ class BPETokenizer:
                     i += 1
             tokens = new_tokens
 
-        # Cache result (with size limit to prevent memory growth)
+        # Cache result (with LRU eviction to prevent memory growth)
         if len(self.cache) > 10000:
-            # Clear oldest half of cache
-            keys_to_remove = list(self.cache.keys())[:5000]
-            for k in keys_to_remove:
-                del self.cache[k]
+            for _ in range(5000):
+                self.cache.popitem(last=False)
         self.cache[word] = tokens
         return tokens
 
     def encode(self, text: str, add_special_tokens: bool = True) -> list[int]:
-        """Encode text to token IDs."""
+        """Encode text to token IDs.
+
+        In UTF-8 byte mode, text is first converted to UTF-8 bytes
+        mapped as latin-1 characters, so any Unicode can be encoded.
+        """
         ids = []
 
         if add_special_tokens:
             ids.append(self.bos_token_id)
 
-        # Pre-tokenize
+        # Pre-tokenize on original text, then convert per word
         words = self._pre_tokenize(text)
 
         for word in words:
             if not word:
                 continue
+
+            # Convert each word to byte-level representation
+            if self.use_utf8_bytes:
+                word = self._text_to_bytes(word)
 
             # Handle special tokens directly
             if word in self.special_tokens:
@@ -353,7 +391,11 @@ class BPETokenizer:
         return ids
 
     def decode(self, ids: list[int], skip_special_tokens: bool = True) -> str:
-        """Decode token IDs back to text."""
+        """Decode token IDs back to text.
+
+        In UTF-8 byte mode, the latin-1 byte string is converted
+        back to proper UTF-8 text after de-tokenization.
+        """
         tokens = []
 
         for idx in ids:
@@ -383,6 +425,10 @@ class BPETokenizer:
         # Clean up multiple spaces
         text = re.sub(r' +', ' ', text)
 
+        # Convert byte-level representation back to UTF-8 text
+        if self.use_utf8_bytes:
+            text = self._bytes_to_text(text)
+
         return text.strip()
 
     def save(self, path: Path):
@@ -393,10 +439,11 @@ class BPETokenizer:
             'token_to_id': self.token_to_id,
             'merges': self.merges,
             'special_tokens': self.special_tokens,
+            'use_utf8_bytes': self.use_utf8_bytes,
         }
 
-        with open(path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        from enigma_engine.core.safe_save import atomic_write_json
+        atomic_write_json(path, data)
 
         logger.info(f"Saved tokenizer to {path}")
 
@@ -415,8 +462,10 @@ class BPETokenizer:
         if 'special_tokens' in data:
             self.special_tokens = data['special_tokens']
 
+        self.use_utf8_bytes = data.get('use_utf8_bytes', False)
+
         self.vocab_size = len(self.token_to_id)
-        self.cache = {}
+        self.cache: OrderedDict[str, list[str]] = OrderedDict()
 
         logger.info(
             f"Loaded tokenizer from {path} (vocab: {self.vocab_size}, merges: {len(self.merges)})")

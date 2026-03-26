@@ -330,9 +330,9 @@ class TestRouterFunctional:
         from enigma_engine.router import ModRouter
 
         router = ModRouter(enable_training=False)
-        combined = router.get_combined_prompt("chat", "safety")
+        combined = router.get_combined_prompt("chat", "gui_usage")
         assert "helpful" in combined.lower()
-        assert "harmless" in combined.lower()
+        assert "command" in combined.lower()
 
     def test_status_without_start(self):
         """get_status should work even before start()."""

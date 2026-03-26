@@ -29,7 +29,7 @@ from enigma_engine.gui.widgets import (
     C_PANEL, C_RED, C_SURFACE, C_TEXT_BRIGHT, C_TEXT_DIM,
     FONT_CMD, FONT_MONO, FONT_SECTION, FONT_SMALL, FONT_TINY,
     HUDFrame, SectionLabel, SelectableLabel, SelectableTextbox,
-    Tooltip,
+    Tooltip, wire_hotkeys,
 )
 
 # Mode constants
@@ -184,6 +184,7 @@ class CMDPageMixin:
             placeholder_text="Type a system command...",
             placeholder_text_color=C_TEXT_DIM)
         self.cmd_input.grid(row=0, column=1, sticky="ew")
+        wire_hotkeys(self.cmd_input)
         self.cmd_input.bind("<Return>", self._cmd_on_enter)
         self.cmd_input.bind("<Up>", self._cmd_history_up)
         self.cmd_input.bind("<Down>", self._cmd_history_down)
@@ -460,6 +461,11 @@ class CMDPageMixin:
             _info_cmds[cmd_lower]()
             return
 
+        # Non-Latin text can't be a command — route to AI
+        if self._cmd_is_non_latin(text):
+            self._cmd_ask_ai(text)
+            return
+
         # Execute via command registry
         try:
             from enigma_engine.core.commands import get_registry
@@ -470,6 +476,10 @@ class CMDPageMixin:
                     registry.set_context(
                         "config", self.config_overrides)
             registry.set_context("registry", registry)
+            # Expose model context for emotional state commands
+            mc = getattr(self, "model_context", None)
+            if mc is not None:
+                registry.set_context("model_context", mc)
 
             result = registry.execute(text)
             tag = "output" if result.success else "error"
@@ -481,6 +491,15 @@ class CMDPageMixin:
             self._cmd_write("error", f"[!] {exc}\n")
 
         self._cmd_write("divider", "\n")
+
+    @staticmethod
+    def _cmd_is_non_latin(text: str) -> bool:
+        """Return True if text is predominantly non-Latin alphabetic."""
+        alpha = [c for c in text if c.isalpha()]
+        if not alpha:
+            return False
+        latin = sum(1 for c in alpha if c < "\u0250")
+        return latin / len(alpha) < 0.5
 
     def _cmd_ask_ai(self, question: str):
         """Send a question to the AI and handle its response.
@@ -820,7 +839,7 @@ class CMDPageMixin:
         Returns any output text to append to the chat response.
         Also stores generated image paths in self._cmd_image_paths
         for inline rendering by the chat display.
-        
+
         File operations (file.write, file.append) require user confirmation
         to prevent unwanted file creation.
         """
@@ -853,7 +872,7 @@ class CMDPageMixin:
             if self._should_confirm_file_operation(cmd_str):
                 if not self._ask_file_operation_confirmation(cmd_str):
                     self._cmd_activity(
-                        "info", 
+                        "info",
                         "[User skipped file operation]\n")
                     continue
 
@@ -890,41 +909,64 @@ class CMDPageMixin:
         return "\n".join(results)
 
     def _should_confirm_file_operation(self, cmd_str: str) -> bool:
-        """Check if a command is a file operation needing confirmation."""
+        """Check if a command is a file operation needing confirmation.
+
+        Returns False (skip confirmation) if the user has disabled the
+        ``confirm_file_operations`` setting.
+        """
         cmd_str = cmd_str.strip().lower()
-        return cmd_str.startswith("file.write") or \
-               cmd_str.startswith("file.append")
+        is_file_op = (cmd_str.startswith("file.write") or
+                      cmd_str.startswith("file.append"))
+        if not is_file_op:
+            return False
+        # Respect the user toggle (default: confirm)
+        return getattr(self, "_confirm_file_operations", True)
 
     def _ask_file_operation_confirmation(self, cmd_str: str) -> bool:
-        """Show confirmation dialog for file operations.
-        
+        """Show confirmation dialog for file operations (thread-safe).
+
+        Uses ``self.after()`` to schedule the dialog on the main thread
+        and a ``threading.Event`` so the background thread blocks safely
+        until the user responds.
+
         Returns True if user approves, False if user declines.
         """
+        import threading
         from tkinter import messagebox
-        
+
         # Parse command to extract file path if possible
         parts = cmd_str.split(None, 2)
         cmd_name = parts[0] if parts else ""
         file_path = parts[1] if len(parts) > 1 else "unknown"
-        
+
         # Clean up path for display (resolve to absolute)
         from pathlib import Path
         try:
             file_path_abs = str(Path(file_path).resolve())
         except Exception:
             file_path_abs = file_path
-        
+
         action = "write to" if "write" in cmd_name else "append to"
         msg = (f"The AI wants to {action} a file:\n\n"
                f"{file_path_abs}\n\n"
                f"Allow this operation?")
-        
-        result = messagebox.askyesno(
-            "File Operation Confirmation",
-            msg,
-            icon=messagebox.QUESTION)
-        
-        return result
+
+        result_holder: list[bool] = []
+        done = threading.Event()
+
+        def _show_dialog():
+            res = messagebox.askyesno(
+                "File Operation Confirmation",
+                msg,
+                icon=messagebox.QUESTION)
+            result_holder.append(res)
+            done.set()
+
+        # Schedule on the main thread; block here until the user answers
+        self.after(0, _show_dialog)
+        done.wait()
+
+        return result_holder[0] if result_holder else False
 
     # ================================================================
     # CMD - Info commands

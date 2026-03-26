@@ -6,6 +6,7 @@ This provides the AdvancedBPETokenizer class expected by inference.py
 """
 import json
 import logging
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Optional, Union
 
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 class AdvancedBPETokenizer:
     """
     Advanced BPE Tokenizer with additional features.
-    
+
     Handles multiple tokenizer formats:
     - Standard BPE format (token_to_id, id_to_token, merges)
     - Enigma format (encoder, special_tokens)
@@ -24,7 +25,7 @@ class AdvancedBPETokenizer:
     def __init__(self, vocab_file: Optional[Path] = None, **kwargs):
         """
         Initialize the Advanced BPE Tokenizer.
-        
+
         Args:
             vocab_file: Path to vocabulary JSON file
             **kwargs: Additional arguments
@@ -59,8 +60,8 @@ class AdvancedBPETokenizer:
         self.merges: list[tuple[str, str]] = []
         self.merge_ranks: dict[tuple[str, str], int] = {}
 
-        # Cache for encoding
-        self.cache: dict[str, list[str]] = {}
+        # Cache for encoding (LRU via OrderedDict)
+        self.cache: OrderedDict[str, list[str]] = OrderedDict()
 
         if vocab_file and Path(vocab_file).exists():
             self.load(vocab_file)
@@ -144,13 +145,14 @@ class AdvancedBPETokenizer:
             'special_tokens': self.special_tokens,
         }
 
-        with open(vocab_file, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        from enigma_engine.core.safe_save import atomic_write_json
+        atomic_write_json(vocab_file, data)
 
     def _tokenize_word(self, word: str) -> list[str]:
         """Tokenize a single word using learned BPE merges."""
-        # Check cache
+        # Check cache (LRU: move to end on hit)
         if word in self.cache:
+            self.cache.move_to_end(word)
             return list(self.cache[word])
 
         # Check if whole word is in vocabulary
@@ -190,15 +192,14 @@ class AdvancedBPETokenizer:
                     i += 1
             tokens = new_tokens
 
-        # Cache result (limit cache size)
+        # Cache result (LRU eviction)
         if len(self.cache) > 10000:
-            keys = list(self.cache.keys())[:5000]
-            for k in keys:
-                del self.cache[k]
+            for _ in range(5000):
+                self.cache.popitem(last=False)
         self.cache[word] = tokens
         return tokens
 
-    def encode(self, text: str, add_special_tokens: bool = False) -> list[int]:
+    def encode(self, text: str, add_special_tokens: bool = True) -> list[int]:
         """Encode text to token IDs using BPE merges."""
         if not text:
             return []

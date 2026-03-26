@@ -160,7 +160,10 @@ class AppState:
                 pass
 
     def chat(self, message: str, temperature: float | None = None,
-             max_tokens: int | None = None) -> str:
+             max_tokens: int | None = None,
+             top_p: float | None = None,
+             top_k: int | None = None,
+             repetition_penalty: float | None = None) -> str:
         """Send a message to the engine and get a response."""
         if self.engine is None:
             raise RuntimeError("No model loaded")
@@ -173,6 +176,12 @@ class AppState:
             kwargs["temperature"] = temperature
         if max_tokens is not None:
             kwargs["max_tokens"] = max_tokens
+        if top_p is not None:
+            kwargs["top_p"] = top_p
+        if top_k is not None:
+            kwargs["top_k"] = top_k
+        if repetition_penalty is not None:
+            kwargs["repetition_penalty"] = repetition_penalty
 
         # Try passing kwargs to engine.chat; fall back to no-kwargs if unsupported
         try:
@@ -244,6 +253,9 @@ class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=MAX_MESSAGE_LENGTH)
     temperature: float | None = None
     max_tokens: int | None = None
+    top_p: float | None = None
+    top_k: int | None = None
+    repetition_penalty: float | None = None
 
 class ChatResponse(BaseModel):
     message: str
@@ -418,10 +430,20 @@ async def chat(req: ChatRequest):
             content={"error": "Engine busy — another request is in progress."},
         )
     try:
+        kw: dict[str, Any] = {}
+        if req.temperature is not None:
+            kw["temperature"] = req.temperature
+        if req.max_tokens is not None:
+            kw["max_tokens"] = req.max_tokens
+        if req.top_p is not None:
+            kw["top_p"] = req.top_p
+        if req.top_k is not None:
+            kw["top_k"] = req.top_k
+        if req.repetition_penalty is not None:
+            kw["repetition_penalty"] = req.repetition_penalty
         response = state.chat(
             req.message,
-            temperature=req.temperature,
-            max_tokens=req.max_tokens,
+            **kw,
         )
         return {"message": response}
     except Exception as exc:
@@ -464,6 +486,12 @@ async def chat_stream(req: ChatRequest):
         kwargs["temperature"] = req.temperature
     if req.max_tokens is not None:
         kwargs["max_tokens"] = req.max_tokens
+    if req.top_p is not None:
+        kwargs["top_p"] = req.top_p
+    if req.top_k is not None:
+        kwargs["top_k"] = req.top_k
+    if req.repetition_penalty is not None:
+        kwargs["repetition_penalty"] = req.repetition_penalty
 
     def _sse_generator():
         """Yield SSE-formatted events from engine.stream_chat."""
@@ -649,7 +677,7 @@ def _safe_profile_path(profile_id: str) -> Path:
     # Strip path separators to prevent directory traversal
     safe_id = Path(profile_id).name
     path = (PROFILES_DIR / f"{safe_id}.json").resolve()
-    if not str(path).startswith(str(PROFILES_DIR.resolve())):
+    if not str(path).startswith(str(PROFILES_DIR.resolve()) + os.sep):
         raise HTTPException(403, "Invalid profile ID")
     return path
 
@@ -763,7 +791,7 @@ async def start_training(req: TrainRequest):
     # Resolve data file path safely
     data_dir = PROJECT_ROOT / "data"
     data_path = (data_dir / req.data_file).resolve()
-    if not str(data_path).startswith(str(data_dir.resolve())):
+    if not str(data_path).startswith(str(data_dir.resolve()) + os.sep):
         raise HTTPException(403, "Data file must be inside the data directory")
     if not data_path.exists():
         raise HTTPException(404, f"Data file not found: {req.data_file}")

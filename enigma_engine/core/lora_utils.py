@@ -14,7 +14,7 @@ CPU Offload = Stores optimizer states and some weights in system RAM
 
 Usage:
     from enigma_engine.core.lora_utils import LoraConfig, LoraTrainer
-    
+
     config = LoraConfig(rank=8, alpha=16)
     trainer = LoraTrainer(model, tokenizer, lora_config=config)
     trainer.train(data)
@@ -30,6 +30,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 logger = logging.getLogger(__name__)
 
@@ -70,10 +71,10 @@ except ImportError:
 def clear_vram() -> None:
     """
     Clear GPU VRAM by emptying PyTorch cache.
-    
+
     Call this when VRAM is full to free cached memory.
     Does NOT unload models - just releases cached tensors.
-    
+
     Example:
         clear_vram()  # Free up VRAM
     """
@@ -89,7 +90,7 @@ def clear_vram() -> None:
 def get_memory_info() -> Dict[str, float]:
     """
     Get current memory usage info for both RAM and VRAM.
-    
+
     Returns:
         Dict with memory stats in GB:
         - ram_total_gb: Total system RAM
@@ -98,7 +99,7 @@ def get_memory_info() -> Dict[str, float]:
         - vram_total_gb: Total GPU VRAM (0 if no GPU)
         - vram_used_gb: Used GPU VRAM
         - vram_available_gb: Available VRAM
-    
+
     Example:
         info = get_memory_info()
         print(f"RAM: {info['ram_available_gb']:.1f}GB free")
@@ -144,7 +145,7 @@ def estimate_training_memory(
 ) -> Dict[str, float]:
     """
     Estimate memory requirements for training.
-    
+
     Args:
         model_params: Number of parameters in model
         batch_size: Training batch size
@@ -153,7 +154,7 @@ def estimate_training_memory(
         lora_rank: LoRA rank (higher = more memory)
         use_qlora: Whether using 4-bit quantization
         gradient_checkpointing: Whether using gradient checkpointing
-    
+
     Returns:
         Dict with estimated memory in GB:
         - model_memory_gb: Memory for model weights
@@ -162,7 +163,7 @@ def estimate_training_memory(
         - activation_memory_gb: Memory for activations
         - total_vram_gb: Total VRAM needed
         - recommended_ram_gb: Recommended system RAM for offloading
-    
+
     Example:
         mem = estimate_training_memory(7_000_000_000, use_qlora=True)
         print(f"Need ~{mem['total_vram_gb']:.1f}GB VRAM")
@@ -222,11 +223,11 @@ def estimate_training_memory(
 class LoraConfig:
     """
     Configuration for LoRA (Low-Rank Adaptation) training.
-    
+
     LoRA adds small trainable matrices to attention layers instead of
     fine-tuning the entire model. This drastically reduces memory usage
     and training time.
-    
+
     Attributes:
         rank: Rank of the low-rank matrices (4-64, default 8)
               Lower = faster + less memory, Higher = more capacity
@@ -237,7 +238,7 @@ class LoraConfig:
                        Default targets attention projections
         bias: How to handle bias ("none", "all", "lora_only")
         task_type: Type of task ("CAUSAL_LM", "SEQ_CLS", etc.)
-    
+
     Example:
         config = LoraConfig(rank=16, alpha=32)  # Higher capacity
         config = LoraConfig(rank=4, alpha=8)    # Faster, less memory
@@ -268,18 +269,18 @@ class LoraConfig:
 class QLoraConfig(LoraConfig):
     """
     Configuration for QLoRA (Quantized LoRA) training.
-    
+
     QLoRA uses 4-bit quantization for the base model, reducing VRAM
     usage by ~75% compared to full precision. Only LoRA weights are
     trained in full precision.
-    
+
     Attributes:
         All from LoraConfig, plus:
         load_in_4bit: Enable 4-bit quantization (default True)
         bnb_4bit_quant_type: Quantization type ("nf4" or "fp4")
         bnb_4bit_compute_dtype: Compute dtype (bfloat16 or float16)
         bnb_4bit_use_double_quant: Use double quantization (saves more memory)
-    
+
     Example:
         config = QLoraConfig(rank=16)  # 4-bit base + 16-rank LoRA
     """
@@ -307,11 +308,11 @@ class QLoraConfig(LoraConfig):
 class OffloadConfig:
     """
     Configuration for CPU offloading during training.
-    
+
     When VRAM is limited, offloading stores optimizer states and
     some model weights in system RAM. This is slower but allows
     training larger models than would fit in VRAM alone.
-    
+
     Attributes:
         cpu_offload: Offload some layers to CPU (default True)
         offload_optimizer: Offload optimizer states to CPU (default True)
@@ -319,7 +320,7 @@ class OffloadConfig:
         pin_memory: Pin CPU memory for faster GPU transfers
         max_memory_gpu: Max GB to use on GPU (None = auto)
         max_memory_cpu: Max GB to use on CPU (None = auto)
-    
+
     Example:
         # For 8GB VRAM GPU with 32GB RAM:
         config = OffloadConfig(max_memory_gpu=7, max_memory_cpu=24)
@@ -342,14 +343,14 @@ def create_lora_model(
 ) -> nn.Module:
     """
     Wrap a model with LoRA adapters.
-    
+
     Args:
         model: Base PyTorch model
         config: LoRA configuration (uses defaults if None)
-    
+
     Returns:
         Model with LoRA adapters added
-    
+
     Example:
         model = load_model("my_model.pth")
         lora_model = create_lora_model(model, LoraConfig(rank=16))
@@ -380,17 +381,17 @@ def create_qlora_model(
 ) -> nn.Module:
     """
     Wrap a model with QLoRA (4-bit quantized LoRA).
-    
+
     QLoRA quantizes the base model to 4-bit while keeping LoRA
     weights in full precision. This reduces VRAM by ~75%.
-    
+
     Args:
         model: Base PyTorch model
         config: QLoRA configuration (uses defaults if None)
-    
+
     Returns:
         Quantized model with LoRA adapters
-    
+
     Example:
         model = load_model("my_model.pth")
         qlora_model = create_qlora_model(model, QLoraConfig(rank=16))
@@ -427,13 +428,13 @@ def create_qlora_model(
 def load_lora_weights(path: Union[str, Path]) -> Dict[str, torch.Tensor]:
     """
     Load LoRA adapter weights from file.
-    
+
     Args:
         path: Path to LoRA weights file (.pth or .safetensors)
-    
+
     Returns:
         Dictionary of LoRA weight tensors
-    
+
     Example:
         weights = load_lora_weights("my_adapter.pth")
     """
@@ -463,13 +464,13 @@ def apply_lora(
 ) -> None:
     """
     Apply LoRA weights to a model.
-    
+
     Args:
         model: Target model
         lora_weights: Dictionary of LoRA weight tensors
         adapter_name: Name for the adapter
         merge: If True, merge into base weights permanently
-    
+
     Example:
         weights = load_lora_weights("coding_adapter.pth")
         apply_lora(model, weights, "coding")
@@ -500,14 +501,14 @@ def merge_lora_weights(
 ) -> None:
     """
     Permanently merge LoRA weights into base model.
-    
+
     After merging, LoRA weights become part of base weights
     and the adapter can be deleted to save memory.
-    
+
     Args:
         model: Target model with LoRA adapters
         lora_weights: LoRA weight dictionary
-    
+
     Example:
         merge_lora_weights(model, weights)  # Now permanent
     """
@@ -536,14 +537,14 @@ def merge_lora_weights(
 class LoraTrainer:
     """
     Trainer for LoRA/QLoRA fine-tuning.
-    
+
     Features:
     - Automatic VRAM management
     - CPU offloading when needed
     - Gradient checkpointing
     - Progress callbacks for GUI
     - Checkpoint saving
-    
+
     Example:
         trainer = LoraTrainer(
             model=my_model,
@@ -567,10 +568,13 @@ class LoraTrainer:
         epochs: int = 3,
         gradient_accumulation_steps: int = 4,
         weight_decay: float = 0.01,
+        adam_beta1: float = 0.9,
+        adam_beta2: float = 0.95,
+        adam_eps: float = 1e-8,
     ):
         """
         Initialize LoRA trainer.
-        
+
         Args:
             model: Model to fine-tune
             tokenizer: Tokenizer for encoding text
@@ -582,6 +586,9 @@ class LoraTrainer:
             epochs: Number of epochs
             gradient_accumulation_steps: Accumulate gradients
             weight_decay: AdamW weight decay
+            adam_beta1: AdamW beta1
+            adam_beta2: AdamW beta2 (0.95 = LM-friendly default)
+            adam_eps: AdamW epsilon
         """
         self.tokenizer = tokenizer
         self.lora_config = lora_config or LoraConfig()
@@ -594,6 +601,9 @@ class LoraTrainer:
         self.epochs = epochs
         self.gradient_accumulation_steps = gradient_accumulation_steps
         self.weight_decay = weight_decay
+        self.adam_beta1 = adam_beta1
+        self.adam_beta2 = adam_beta2
+        self.adam_eps = adam_eps
 
         # Apply LoRA to model
         if isinstance(self.lora_config, QLoraConfig):
@@ -646,14 +656,14 @@ class LoraTrainer:
     ) -> Dict[str, Any]:
         """
         Train LoRA adapter on data.
-        
+
         Args:
             data: Training data - text or list of {"prompt": "...", "completion": "..."}
             max_length: Maximum sequence length
-        
+
         Returns:
             Training results dictionary
-        
+
         Example:
             results = trainer.train([
                 {"prompt": "Hello", "completion": "Hi there!"},
@@ -695,10 +705,26 @@ class LoraTrainer:
 
         self.model.train()
 
+        # Learning rate scheduler (cosine decay)
+        from torch.optim.lr_scheduler import CosineAnnealingLR
+        n_batches = len(self._create_batches(data, max_length))
+        steps_per_epoch = max(1, n_batches // self.gradient_accumulation_steps)
+        total_steps = steps_per_epoch * self.epochs
+        scheduler = CosineAnnealingLR(
+            optimizer,
+            T_max=max(1, total_steps),
+            eta_min=self.learning_rate * 0.1)
+
         # Training loop
         total_loss = 0.0
         epoch_loss = 0.0
         step = 0
+        pad_id = getattr(self.tokenizer, 'pad_token_id', 0) or 0
+
+        # Get the forward-callable model (bypass PEFT outer wrapper)
+        fwd_model = self.model
+        if hasattr(self.model, 'get_base_model'):
+            fwd_model = self.model.get_base_model()
 
         self._emit_progress(5, f"Training for {self.epochs} epochs...")
 
@@ -707,47 +733,75 @@ class LoraTrainer:
                 break
 
             epoch_loss = 0.0
+            oom_retries = 0
+            optimizer.zero_grad()
 
-            for batch_idx, batch in enumerate(self._create_batches(data, max_length)):
+            for batch_idx, (input_ids, attention_mask) in enumerate(
+                    self._create_batches(data, max_length)):
                 if self._should_stop():
                     break
 
                 # Move batch to device
-                input_ids = batch.to(device)
+                input_ids = input_ids.to(device)
+                attention_mask = attention_mask.to(device)
+
+                # Next-token prediction: shift input/target
+                inputs = input_ids[:, :-1]
+                targets = input_ids[:, 1:]
+                attn = attention_mask[:, :-1]
 
                 # Forward pass
                 try:
-                    outputs = self.model(input_ids, labels=input_ids)
-                    loss = outputs.loss if hasattr(outputs, 'loss') else outputs[0]
+                    outputs = fwd_model(inputs, attention_mask=attn)
+                    logits = outputs[0] if isinstance(outputs, tuple) else outputs
+                    loss = F.cross_entropy(
+                        logits.reshape(-1, logits.size(-1)),
+                        targets.reshape(-1),
+                        ignore_index=pad_id)
+                    oom_retries = 0  # Reset on success
                 except Exception as e:
                     # Handle OOM
                     if "out of memory" in str(e).lower():
-                        logger.warning("OOM detected - clearing VRAM and retrying")
+                        oom_retries += 1
+                        if oom_retries > 2:
+                            logger.error("OOM persists after %d retries — aborting LoRA training", oom_retries)
+                            raise
+                        logger.warning("OOM detected - clearing VRAM and retrying (%d/2)", oom_retries)
                         clear_vram()
+                        optimizer.zero_grad()
                         continue
                     raise
 
-                # Backward pass
+                # Backward pass with gradient accumulation
                 loss = loss / self.gradient_accumulation_steps
                 loss.backward()
 
                 if (batch_idx + 1) % self.gradient_accumulation_steps == 0:
                     optimizer.step()
                     optimizer.zero_grad()
+                    scheduler.step()
 
                     # Clear cache periodically
                     if batch_idx % 10 == 0:
                         clear_vram()
 
-                epoch_loss += loss.item()
+                batch_loss = loss.item() * self.gradient_accumulation_steps
+                epoch_loss += batch_loss
                 step += 1
 
                 # Progress update
                 progress = int(5 + 90 * (epoch * len(data) + batch_idx) / (self.epochs * len(data)))
-                self._emit_progress(progress, f"Epoch {epoch+1}/{self.epochs}, Loss: {loss.item():.4f}")
+                self._emit_progress(progress, f"Epoch {epoch+1}/{self.epochs}, Loss: {batch_loss:.4f}")
 
                 if self.on_loss:
-                    self.on_loss(loss.item())
+                    self.on_loss(batch_loss)
+
+            # Flush remaining accumulated gradients
+            if n_batches % self.gradient_accumulation_steps != 0:
+                optimizer.step()
+                optimizer.zero_grad()
+                if scheduler:
+                    scheduler.step()
 
             total_loss += epoch_loss
             logger.info(f"Epoch {epoch+1}/{self.epochs} - Loss: {epoch_loss:.4f}")
@@ -775,28 +829,55 @@ class LoraTrainer:
             trainable_params,
             lr=self.learning_rate,
             weight_decay=self.weight_decay,
+            betas=(self.adam_beta1, self.adam_beta2),
+            eps=self.adam_eps,
         )
 
     def _create_batches(
         self,
         data: List[Dict[str, str]],
         max_length: int
-    ) -> List[torch.Tensor]:
-        """Create batches from training data."""
-        batches = []
+    ) -> List[tuple]:
+        """Create padded batches from training data.
 
+        Returns:
+            List of (batch_tensor, attention_mask) tuples.
+            batch_tensor shape: (batch_size, max_seq_in_batch)
+            attention_mask shape: (batch_size, max_seq_in_batch)
+        """
+        encoded = []
         for item in data:
             text = item.get("prompt", "") + item.get("completion", "")
             if not text:
                 continue
-
             tokens = self.tokenizer.encode(text)
             if len(tokens) > max_length:
                 tokens = tokens[:max_length]
             if len(tokens) < 2:
                 continue
+            encoded.append(tokens)
 
-            batches.append(torch.tensor([tokens], dtype=torch.long))
+        if not encoded:
+            return []
+
+        # Sort by length for efficient padding
+        encoded.sort(key=len, reverse=True)
+
+        pad_id = getattr(self.tokenizer, 'pad_token_id', 0) or 0
+        batches = []
+        for i in range(0, len(encoded), self.batch_size):
+            batch_tokens = encoded[i:i + self.batch_size]
+            max_len = max(len(t) for t in batch_tokens)
+            padded = []
+            masks = []
+            for tokens in batch_tokens:
+                pad_len = max_len - len(tokens)
+                padded.append(tokens + [pad_id] * pad_len)
+                masks.append([1] * len(tokens) + [0] * pad_len)
+            batches.append((
+                torch.tensor(padded, dtype=torch.long),
+                torch.tensor(masks, dtype=torch.long),
+            ))
 
         return batches
 
@@ -825,13 +906,13 @@ class LoraTrainer:
     def save_adapter(self, path: Optional[Union[str, Path]] = None) -> Path:
         """
         Save LoRA adapter weights.
-        
+
         Args:
             path: Output path (default: output_dir/adapter.pth)
-        
+
         Returns:
             Path where adapter was saved
-        
+
         Example:
             trainer.save_adapter("my_coding_lora.pth")
         """
@@ -937,15 +1018,14 @@ class LoRAAdapterManager:
         config = config or LoraConfig()
 
         # Save metadata
-        import json
         meta = {
             "task": task,
             "rank": config.rank,
             "alpha": config.alpha,
             "target_modules": config.target_modules,
         }
-        self._meta_path(task).write_text(
-            json.dumps(meta, indent=2), encoding="utf-8")
+        from enigma_engine.core.safe_save import atomic_write_json
+        atomic_write_json(self._meta_path(task), meta)
 
         # Save initial adapter (trainable params only)
         lora_weights: Dict[str, torch.Tensor] = {}

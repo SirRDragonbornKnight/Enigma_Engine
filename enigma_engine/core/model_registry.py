@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 class ModelRegistry:
     """
     Registry for managing AI models on disk.
-    
+
     Reads/writes to models/registry.json
     """
 
@@ -134,6 +134,10 @@ def safe_load_weights(
             from safetensors.torch import load_file
             checkpoint = load_file(str(path), device=map_location)
         else:
+            logger.warning(
+                "Loading %s — .pth/.pt/.bin files use pickle. "
+                "Prefer .safetensors format for models from "
+                "untrusted sources.", path.name)
             # Always weights_only=True — no fallback to insecure loading
             checkpoint = torch.load(
                 path,
@@ -155,17 +159,17 @@ def get_state_dict(
 ) -> dict[str, torch.Tensor]:
     """
     Extract state dict from a checkpoint.
-    
+
     Handles various checkpoint formats:
     - Direct state dict
     - {'model_state_dict': ...}
     - {'state_dict': ...}
     - {'model': ...}
-    
+
     Args:
         checkpoint: Loaded checkpoint
         prefix: Optional prefix to strip from keys
-        
+
     Returns:
         State dict
     """

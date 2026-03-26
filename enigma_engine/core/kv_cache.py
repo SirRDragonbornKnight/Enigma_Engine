@@ -9,7 +9,7 @@ index-based updates instead of torch.cat() which creates new tensors.
 
 Usage:
     from enigma_engine.core.kv_cache import KVCache, KVCacheConfig
-    
+
     # Pre-allocate cache
     cache = KVCache(
         batch_size=1,
@@ -18,7 +18,7 @@ Usage:
         head_dim=64,
         device=device
     )
-    
+
     # During generation
     cache.update(new_keys, new_values, position=current_pos)
     full_keys, full_values = cache.get(up_to_position=current_pos + 1)
@@ -46,11 +46,11 @@ class KVCacheConfig:
 class KVCache:
     """
     Optimized KV-Cache with pre-allocation and optional quantization.
-    
+
     Memory Comparison (batch=1, seq=2048, 8 heads, 64 dim):
     - torch.cat approach: ~2GB peak memory (due to fragmentation)
     - Pre-allocated: ~256MB constant memory (4x less!)
-    
+
     The improvement comes from:
     1. No tensor allocations during generation
     2. In-place updates via indexing
@@ -69,7 +69,7 @@ class KVCache:
     ):
         """
         Initialize pre-allocated KV cache.
-        
+
         Args:
             batch_size: Batch size (usually 1 for generation)
             max_seq_len: Maximum sequence length to cache
@@ -160,12 +160,12 @@ class KVCache:
     ) -> int:
         """
         Update cache with new keys and values.
-        
+
         Args:
             k: New keys [batch, seq_len, n_kv_heads, head_dim]
             v: New values [batch, seq_len, n_kv_heads, head_dim]
             position: Starting position to write (defaults to current_pos)
-            
+
         Returns:
             New current position after update
         """
@@ -214,10 +214,10 @@ class KVCache:
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Get cached keys and values up to a position.
-        
+
         Args:
             up_to_position: Get cache up to this position (default: all cached)
-            
+
         Returns:
             Tuple of (keys, values) tensors
         """
@@ -276,11 +276,11 @@ class KVCache:
 class KVCacheManager:
     """
     Manages KV caches for all layers in a model.
-    
+
     Usage:
         manager = KVCacheManager(model_config, device)
         manager.allocate(batch_size)
-        
+
         # During forward pass
         for i, layer in enumerate(model.layers):
             k, v = layer.get_kv(x)
@@ -300,7 +300,7 @@ class KVCacheManager:
     ):
         """
         Initialize the cache manager.
-        
+
         Args:
             n_layers: Number of transformer layers
             n_kv_heads: Number of KV heads per layer

@@ -34,20 +34,20 @@ def parse_gguf_tensors(
 ) -> dict[str, 'torch.Tensor']:
     """
     Parse and extract tensors from GGUF file.
-    
+
     ⚠️ NOTE: Full dequantization of all GGUF quantization types is not yet
     implemented. This function will work for F32 and F16 tensors, but will
     raise NotImplementedError for quantized types unless the gguf library
     is available.
-    
+
     Args:
         f: Open file handle (binary mode)
         header: Parsed header dictionary
         dequantize: If True, dequantize quantized tensors to float32
-        
+
     Returns:
         Dictionary mapping tensor names to PyTorch tensors
-        
+
     Raises:
         NotImplementedError: If quantized tensors are encountered without gguf library
     """
@@ -180,10 +180,10 @@ def parse_gguf_tensors(
 def extract_config_from_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
     """
     Extract Forge config parameters from GGUF metadata.
-    
+
     Args:
         metadata: Parsed GGUF metadata dictionary
-        
+
     Returns:
         Dictionary with config parameters
     """
@@ -220,16 +220,27 @@ def extract_config_from_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
                 config['vocab_size'] = int(match.group(1))
 
     # Set defaults for missing values
+    _used_fallback = False
     if 'vocab_size' not in config:
         config['vocab_size'] = 32000  # Common default
+        _used_fallback = True
     if 'dim' not in config:
         config['dim'] = 4096
+        _used_fallback = True
     if 'n_layers' not in config:
         config['n_layers'] = 32
+        _used_fallback = True
     if 'n_heads' not in config:
         config['n_heads'] = 32
+        _used_fallback = True
     if 'max_seq_len' not in config:
         config['max_seq_len'] = 2048
+        _used_fallback = True
+    if _used_fallback:
+        logger.warning(
+            "Using Llama-7B fallback defaults for missing GGUF metadata "
+            "— model architecture may not match"
+        )
 
     return config
 
@@ -240,16 +251,16 @@ def extract_config_from_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
 def dequantize_q4_0(data: bytes, shape: tuple) -> 'torch.Tensor':
     """
     Dequantize Q4_0 format (4-bit quantization, block size 32).
-    
+
     Q4_0 format:
     - Block size: 32 elements
     - Each block: 1 float16 scale + 16 bytes (32 x 4-bit values)
     - Total: 18 bytes per block
-    
+
     Args:
         data: Raw quantized bytes
         shape: Original tensor shape
-        
+
     Returns:
         Dequantized PyTorch tensor
     """
@@ -300,16 +311,16 @@ def dequantize_q4_0(data: bytes, shape: tuple) -> 'torch.Tensor':
 def dequantize_q8_0(data: bytes, shape: tuple) -> 'torch.Tensor':
     """
     Dequantize Q8_0 format (8-bit quantization, block size 32).
-    
+
     Q8_0 format:
     - Block size: 32 elements
     - Each block: 1 float16 scale + 32 bytes (32 x 8-bit values)
     - Total: 34 bytes per block
-    
+
     Args:
         data: Raw quantized bytes
         shape: Original tensor shape
-        
+
     Returns:
         Dequantized PyTorch tensor
     """

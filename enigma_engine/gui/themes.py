@@ -165,7 +165,7 @@ def save_theme_preference(name: str) -> None:
     data["theme"] = name
     try:
         _SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
-        _SETTINGS_PATH.write_text(
-            json.dumps(data, indent=2), encoding="utf-8")
+        from enigma_engine.core.safe_save import atomic_write_json
+        atomic_write_json(_SETTINGS_PATH, data)
     except OSError as exc:
         logger.warning("Could not save theme preference: %s", exc)

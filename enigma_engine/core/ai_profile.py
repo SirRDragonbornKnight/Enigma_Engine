@@ -13,13 +13,13 @@ This allows hot-swapping AI profiles like we do with mods.
 
 Usage:
     from enigma_engine.core.ai_profile import AIProfile, load_profile, save_profile
-    
+
     # Load an AI profile
     profile = load_profile("profiles/assistant.json")
-    
+
     # Apply to engine/model
     engine.apply_profile(profile)
-    
+
     # Save a profile
     save_profile(profile, "profiles/my_ai.json")
 """
@@ -64,29 +64,29 @@ class MemoryConfig:
 class AIProfile:
     """
     Complete AI profile definition.
-    
+
     Similar to mod.json but for AI models. Defines everything
     needed to load and configure an AI personality.
-    
+
     Attributes:
         name: Display name for the AI (e.g., "Assistant", "Coder", "Creative")
         id: Unique identifier (e.g., "assistant", "coding_helper")
         version: Profile version for compatibility
         description: What this AI is for
-        
+
         model_path: Path to the model file (.gguf, .pth, or HuggingFace repo)
         model_type: Type of model ("gguf", "pytorch", "huggingface", "ollama")
-        
+
         system_prompt: Default system prompt for this AI
         personality: Personality traits (for consistency)
-        
+
         chat_template: How to format messages (None = auto-detect)
         generation: Generation parameters
         memory: Memory and context settings
-        
+
         commands: List of commands this AI can use (empty = all)
         disabled_commands: Commands this AI cannot use
-        
+
         author: Who created this profile
         tags: Tags for categorization
     """
@@ -173,13 +173,13 @@ class AIProfile:
 def load_profile(path: str) -> AIProfile:
     """
     Load an AI profile from a JSON file.
-    
+
     Args:
         path: Path to ai_profile.json
-    
+
     Returns:
         AIProfile instance
-    
+
     Example:
         profile = load_profile("profiles/coding_assistant.json")
     """
@@ -205,14 +205,14 @@ def load_profile(path: str) -> AIProfile:
 def save_profile(profile: AIProfile, path: str) -> Path:
     """
     Save an AI profile to a JSON file.
-    
+
     Args:
         profile: AIProfile instance
         path: Output path
-    
+
     Returns:
         Path where profile was saved
-    
+
     Example:
         save_profile(my_profile, "profiles/my_ai.json")
     """
@@ -231,13 +231,13 @@ def save_profile(profile: AIProfile, path: str) -> Path:
 def list_profiles(profiles_dir: str = "profiles") -> List[Dict[str, str]]:
     """
     List all available AI profiles.
-    
+
     Args:
         profiles_dir: Directory to search
-    
+
     Returns:
         List of dicts with profile info (name, id, path, description, conversation_dir)
-    
+
     Example:
         profiles = list_profiles()
         for p in profiles:
@@ -284,17 +284,17 @@ def list_profiles(profiles_dir: str = "profiles") -> List[Dict[str, str]]:
 class AIProfileManager:
     """
     Manager for AI profiles with hot-swap support.
-    
+
     Like the mod system, allows loading/unloading AI profiles
     at runtime without restarting the application.
-    
+
     Example:
         manager = AIProfileManager()
         manager.load_profile("profiles/assistant.json")
-        
+
         # Switch to different AI
         manager.switch_profile("coding_helper")
-        
+
         # List available
         for p in manager.list_profiles():
             print(p['name'])
@@ -321,10 +321,10 @@ class AIProfileManager:
     def load_profile(self, path_or_id: str) -> AIProfile:
         """
         Load a profile from file or by ID.
-        
+
         Args:
             path_or_id: File path or profile ID
-        
+
         Returns:
             Loaded AIProfile
         """
@@ -351,10 +351,10 @@ class AIProfileManager:
     def switch_profile(self, profile_id: str) -> AIProfile:
         """
         Switch to a different profile.
-        
+
         Args:
             profile_id: ID of profile to switch to
-        
+
         Returns:
             The new active profile
         """
@@ -400,13 +400,13 @@ class AIProfileManager:
     ) -> AIProfile:
         """
         Create and save a new profile.
-        
+
         Args:
             name: Display name
             model_path: Path to model
             system_prompt: System prompt
             **kwargs: Additional profile fields
-        
+
         Returns:
             Created profile
         """
@@ -472,7 +472,7 @@ Be precise and technical. Show code examples.""",
         name="Creative Writer",
         id="creative_writer",
         description="For creative writing and storytelling",
-        system_prompt="""You are a creative writing assistant. Help users with stories, 
+        system_prompt="""You are a creative writing assistant. Help users with stories,
 poems, scripts, and creative content. Be imaginative and expressive.""",
         personality={
             "tone": "creative",
@@ -492,7 +492,7 @@ poems, scripts, and creative content. Be imaginative and expressive.""",
         name="Research Assistant",
         id="researcher",
         description="For research, analysis, and fact-finding",
-        system_prompt="""You are a research assistant. Help users find information, 
+        system_prompt="""You are a research assistant. Help users find information,
 analyze data, and understand complex topics.
 Use [CMD]search.web query[/CMD] to search the internet.
 Use [CMD]web.fetch url[/CMD] to read web pages.
@@ -515,7 +515,7 @@ Always cite sources and be factual.""",
 def create_default_profiles(profiles_dir: str = "profiles") -> None:
     """
     Create default profile files in the profiles directory.
-    
+
     Args:
         profiles_dir: Where to save profiles
     """
@@ -538,11 +538,11 @@ def create_default_profiles(profiles_dir: str = "profiles") -> None:
 def get_profile_for_model(model_path: str, profiles_dir: str = "profiles") -> Optional[AIProfile]:
     """
     Find a profile that uses a specific model.
-    
+
     Args:
         model_path: Path to model file
         profiles_dir: Where to search
-    
+
     Returns:
         Matching profile or None
     """
@@ -559,7 +559,7 @@ def get_profile_for_model(model_path: str, profiles_dir: str = "profiles") -> Op
 def apply_profile_to_engine(profile: AIProfile, engine) -> None:
     """
     Apply an AI profile's settings to an engine.
-    
+
     Args:
         profile: AIProfile to apply
         engine: EnigmaEngine instance

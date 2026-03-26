@@ -78,9 +78,6 @@ class ForgeQueueMixin:
         # Read current UI settings
         mode_var = getattr(self, "training_mode_var", None)
         mode = mode_var.get() if mode_var else "Self Study"
-        # Translate display name → internal key
-        mode_key_map = getattr(self, "_MODE_DISPLAY_TO_KEY", {})
-        mode = mode_key_map.get(mode, mode)
 
         stage_var = getattr(self, "training_stage_var", None)
         stage = stage_var.get() if stage_var else "basics"
@@ -115,6 +112,7 @@ class ForgeQueueMixin:
                     "use_gradient_checkpointing", False),
                 "max_grad_accumulation": params.get(
                     "max_grad_accumulation", 1),
+                "val_split": params.get("val_split", 0.1),
             },
         )
 
@@ -182,6 +180,12 @@ class ForgeQueueMixin:
 
         Returns the best loss achieved.
         """
+        import torch
+        from enigma_engine.core.model import Enigma
+        from enigma_engine.core.model_presets import ForgeConfig
+        from enigma_engine.core.model_registry import (
+            get_state_dict, safe_load_weights)
+        from enigma_engine.core.tokenizer import get_tokenizer
         from enigma_engine.core.training import Trainer, TrainingConfig
 
         # Load student model
@@ -199,6 +203,9 @@ class ForgeQueueMixin:
             data_text = Path(job.data_path).read_text(
                 encoding="utf-8")
 
+        if not data_text.strip():
+            raise ValueError("No training data provided")
+
         # Build config
         config = TrainingConfig(
             epochs=job.epochs,
@@ -210,50 +217,59 @@ class ForgeQueueMixin:
                 "use_gradient_checkpointing", False),
             max_grad_accumulation=job.extra_config.get(
                 "max_grad_accumulation", 1),
+            val_split=job.extra_config.get(
+                "val_split", 0.1),
+            checkpoint_dir=str(MODELS_DIR / "checkpoints"),
+            use_amp=torch.cuda.is_available(),
         )
 
-        # Load model + tokenizer
-        from enigma_engine.core.inference import load_engine
-        from enigma_engine.core.tokenizer import load_tokenizer
+        # Load model + tokenizer (same pattern as solo training)
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        checkpoint = safe_load_weights(
+            student_path, map_location=device)
+        cfg_dict = (checkpoint.get("model_config")
+                    or checkpoint.get("config", {}))
+        if isinstance(cfg_dict, dict) and "epochs" in cfg_dict:
+            cfg_dict = checkpoint.get("model_config", {})
+        model_cfg = ForgeConfig(**cfg_dict)
+        model = Enigma(config=model_cfg)
+        state_dict = get_state_dict(checkpoint)
+        model.load_state_dict(state_dict)
+        model = model.to(device)
 
-        engine = load_engine(student_path)
-        model = engine.model if hasattr(engine, "model") else engine
-        tokenizer = load_tokenizer(student_path)
+        tokenizer = get_tokenizer("auto")
 
-        # Parse data
-        trainer = Trainer(config)
-        sequences = trainer._parse_training_data(data_text, tokenizer)
-
-        if not sequences:
-            raise ValueError("No valid training data parsed")
+        # Create trainer with correct signature
+        trainer = Trainer(model, tokenizer, config)
 
         # Progress callback for the queue
-        def on_epoch(epoch, loss, total_epochs):
-            pct = int((epoch / total_epochs) * 100)
+        def on_epoch(epoch, loss):
+            pct = int((epoch / job.epochs) * 100)
             job.progress = pct
-            job.message = f"Epoch {epoch}/{total_epochs} loss={loss:.4f}"
+            job.message = (
+                f"Epoch {epoch}/{job.epochs} "
+                f"loss={loss:.4f}")
             if self._get_training_queue().on_progress:
-                self._get_training_queue().on_progress(job, pct, job.message)
+                self._get_training_queue().on_progress(
+                    job, pct, job.message)
 
-        # Train
-        self._log(f"  Training {len(sequences)} sequences...")
-        best_loss = trainer.train(
-            model, sequences, tokenizer,
-            checkpoint_dir=str(MODELS_DIR / "checkpoints"),
-            progress_callback=on_epoch,
-        )
+        trainer.on_epoch_complete = on_epoch
+
+        # Train — pass raw text, Trainer handles parsing
+        self._log(f"  Training on {len(data_text):,} chars...")
+        state = trainer.train(data_text)
 
         # Save model
         from enigma_engine.core.safe_save import atomic_torch_save
-        state = {
+        save_data = {
             "model_state_dict": model.state_dict(),
-            "config": model.config.__dict__
-            if hasattr(model.config, "__dict__") else {},
+            "model_config": model_cfg.__dict__,
         }
-        atomic_torch_save(state, student_path)
-        self._log(f"  Saved model (loss={best_loss:.4f})")
+        atomic_torch_save(save_data, student_path)
+        self._log(
+            f"  Saved model (loss={state.best_loss:.4f})")
 
-        return best_loss
+        return state.best_loss
 
     # Queue callbacks (called from background thread)
 
@@ -412,7 +428,7 @@ class ForgeQueueMixin:
         for i, entry in enumerate(pending):
             idx = ds.entries.index(entry)
             # Show first 120 chars of text
-            preview = entry.text[:120].replace("\n", " ")
+            preview = entry.text.replace("\n", " ")
             if len(entry.text) > 120:
                 preview += "..."
             source_tag = f" [{entry.source}]" if entry.source else ""

@@ -8,7 +8,7 @@
     "commands": [
         {
             "name": "generate",
-            "description": "Generate an image from a text prompt",
+            "description": "Generate an image from a text prompt. Supports txt2img, img2img, inpainting, and controlnet modes.",
             "args": {
                 "prompt": {"type": "string", "required": true, "description": "Text description of the image to generate"},
                 "negative_prompt": {"type": "string", "required": false, "description": "What to avoid in the image"},
@@ -16,7 +16,14 @@
                 "height": {"type": "integer", "required": false, "default": 512},
                 "steps": {"type": "integer", "required": false, "default": 20},
                 "cfg_scale": {"type": "float", "required": false, "default": 7.5},
-                "seed": {"type": "integer", "required": false, "default": -1}
+                "seed": {"type": "integer", "required": false, "default": -1},
+                "mode": {"type": "string", "required": false, "default": "txt2img", "description": "Generation mode: txt2img, img2img, inpainting, controlnet"},
+                "scheduler": {"type": "string", "required": false, "default": "default", "description": "Scheduler: default, dpm, euler, euler_a, pndm, ddim, lms"},
+                "init_image": {"type": "string", "required": false, "description": "Path to input image (img2img/inpainting)"},
+                "mask_image": {"type": "string", "required": false, "description": "Path to mask image (inpainting, white=paint)"},
+                "strength": {"type": "float", "required": false, "default": 0.75, "description": "Denoising strength for img2img (0.0=no change, 1.0=full)"},
+                "controlnet_image": {"type": "string", "required": false, "description": "Path to control image (edges, depth, pose)"},
+                "controlnet_model": {"type": "string", "required": false, "description": "HuggingFace ControlNet model ID"}
             }
         },
         {
@@ -37,6 +44,22 @@
             "args": {
                 "model": {"type": "string", "required": true}
             }
+        },
+        {
+            "name": "load_lora",
+            "description": "Load a LoRA adapter for style/subject fine-tuning (diffusers only)",
+            "args": {
+                "path": {"type": "string", "required": true, "description": "Path or HuggingFace ID for LoRA weights"},
+                "weight": {"type": "float", "required": false, "default": 1.0, "description": "LoRA weight scale (0.0-2.0)"}
+            }
+        },
+        {
+            "name": "unload_lora",
+            "description": "Unload all LoRA adapters from the active pipeline"
+        },
+        {
+            "name": "list_schedulers",
+            "description": "List available noise schedulers (samplers)"
         }
     ],
     "dependencies": [

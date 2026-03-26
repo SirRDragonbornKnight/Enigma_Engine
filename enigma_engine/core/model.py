@@ -36,8 +36,6 @@ from ..config import CONFIG
 
 logger = logging.getLogger(__name__)
 
-MAX_LEN = CONFIG.get("max_len", 1024)
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Re-export everything for backward compatibility
 # ─────────────────────────────────────────────────────────────────────────────
@@ -46,7 +44,7 @@ from .model_presets import (  # noqa: E402, F401
     get_preset, estimate_parameters, list_presets,
 )
 from .model_components import (  # noqa: E402, F401
-    RMSNorm, Attention, FeedForward, MoEFeedForward, TransformerBlock,
+    RMSNorm, DropPath, Attention, FeedForward, MoEFeedForward, TransformerBlock,
     precompute_rope_frequencies, apply_rotary_embedding,
     HAS_FLASH_ATTN, flash_attn_func,
 )
@@ -56,6 +54,7 @@ from .model_utils import (  # noqa: E402, F401
     get_running_models, is_model_loaded, register_model, unregister_model, get_model,
     _LOADED_MODELS, _MODELS_LOCK,
 )
+from .safe_save import atomic_torch_save, atomic_write_json  # noqa: E402
 
 
 # =============================================================================
@@ -65,10 +64,10 @@ from .model_utils import (  # noqa: E402, F401
 class Enigma(nn.Module):
     """
     Enigma - Modern Transformer Language Model
-    
+
     📖 THIS IS THE COMPLETE MODEL!
     Stacks together all the components: embeddings, transformer blocks, output.
-    
+
     📐 FULL ARCHITECTURE:
     ┌────────────────────────────────────────────────────────────────────────┐
     │  Input Token IDs [batch, seq_len]                                       │
@@ -97,14 +96,14 @@ class Enigma(nn.Module):
     │          ↓                                                              │
     │  Output Logits [batch, seq_len, vocab_size]                            │
     └────────────────────────────────────────────────────────────────────────┘
-    
+
     ⚡ FEATURES:
     - RoPE positional embeddings (knows word order)
     - RMSNorm (fast and stable)
     - SwiGLU activation (better learning)
     - GQA attention (memory efficient)
     - KV cache (fast generation)
-    
+
     🔗 CONNECTS TO:
       → Uses all the components defined above
       ← Used by EnigmaEngine for inference
@@ -118,11 +117,11 @@ class Enigma(nn.Module):
     ):
         """
         Initialize the Forge model.
-        
+
         Can be initialized two ways:
         1. With a ForgeConfig object
         2. With individual parameters (for backwards compatibility)
-        
+
         Args:
             vocab_size: Size of vocabulary
             dim: Model hidden dimension
@@ -158,8 +157,11 @@ class Enigma(nn.Module):
         self.heads = self.config.n_heads
         self.max_len = self.config.max_seq_len
 
-        # Token embeddings
-        self.tok_embeddings = nn.Embedding(self.config.vocab_size, self.config.dim)
+        # Pad vocab to multiple of 64 for GPU matmul alignment (free speedup)
+        padded_vocab = (self.config.vocab_size + 63) & ~63
+
+        # Token embeddings (padded for GPU alignment)
+        self.tok_embeddings = nn.Embedding(padded_vocab, self.config.dim)
 
         # Legacy alias
         self.token_embed = self.tok_embeddings
@@ -197,10 +199,10 @@ class Enigma(nn.Module):
             TransformerBlock(self.config, i) for i in range(self.config.n_layers)
         ])
 
-        # Output
+        # Output (padded for GPU alignment, weight-tied with embeddings)
         Norm = RMSNorm if self.config.use_rms_norm else nn.LayerNorm
         self.norm = Norm(self.config.dim)
-        self.output = nn.Linear(self.config.dim, self.config.vocab_size, bias=False)
+        self.output = nn.Linear(self.config.dim, padded_vocab, bias=False)
         self.head = self.output  # Legacy alias
 
         # Weight tying
@@ -224,22 +226,20 @@ class Enigma(nn.Module):
                     self.config.rope_theta,
                     scaling_type=self.config.rope_scaling_type,
                     scaling_factor=self.config.rope_scaling_factor
-                )
+                ),
+                persistent=False,
             )
         else:
             self.freqs_cis = None
 
         # ─────────────────────────────────────────────────────────────────────
-        # CAUSAL MASK CACHE: Pre-compute and cache the causal attention mask
+        # CAUSAL MASK: Computed on demand and cached at the size actually used.
         # ─────────────────────────────────────────────────────────────────────
-        # Instead of rebuilding the mask every forward pass, we cache a max-size
-        # mask and slice it as needed. This is especially beneficial for:
-        # - Training: Same mask reused if batch sizes are consistent
-        # - Inference: Even single-token generation reuses the cached mask
-        max_seq = self.config.max_seq_len
-        causal_mask = torch.full((max_seq, max_seq), float('-inf'))
-        causal_mask = torch.triu(causal_mask, diagonal=1)
-        self.register_buffer('_causal_mask', causal_mask, persistent=False)
+        # Previous approach pre-allocated max_seq_len² floats (e.g. 4096² =
+        # 64 MB for fp32).  Now we build on first use at the actual sequence
+        # length and grow only if a longer sequence appears.
+        self._causal_mask: Optional[torch.Tensor] = None
+        self._causal_mask_size: int = 0
 
         # Initialize
         self.apply(self._init_weights)
@@ -258,10 +258,49 @@ class Enigma(nn.Module):
             if name.endswith('wo.weight') or name.endswith('w2.weight'):
                 torch.nn.init.normal_(p, mean=0.0, std=0.02 / math.sqrt(2 * self.config.n_layers))
 
+    def _get_causal_mask(self, size: int) -> torch.Tensor:
+        """Return a (size, size) upper-triangle causal mask, cached and grown on demand."""
+        if self._causal_mask is None or self._causal_mask_size < size:
+            # Build at the requested size (never shrink)
+            new_size = max(size, self._causal_mask_size)
+            device = next(self.parameters()).device
+            mask = torch.full((new_size, new_size), float('-inf'), device=device)
+            self._causal_mask = torch.triu(mask, diagonal=1)
+            self._causal_mask_size = new_size
+        return self._causal_mask[:size, :size]
+
+    def load_state_dict(self, state_dict, strict=True, **kwargs):
+        """Load state dict with automatic vocab padding and buffer cleanup.
+
+        Handles two common mismatches:
+        1. freqs_cis — deterministic RoPE buffer recomputed in __init__,
+           stale checkpoint values cause size errors.
+        2. Vocab padding — model pads vocab to multiple of 64 for GPU
+           matmul alignment, but older checkpoints have unpadded weights.
+        """
+        state_dict.pop('freqs_cis', None)
+
+        padded_vocab = (self.config.vocab_size + 63) & ~63
+        if padded_vocab != self.config.vocab_size:
+            vocab_keys = [
+                'tok_embeddings.weight', 'token_embed.weight',
+                'output.weight', 'head.weight',
+            ]
+            for key in vocab_keys:
+                if key in state_dict and state_dict[key].shape[0] == self.config.vocab_size:
+                    old = state_dict[key]
+                    padded = torch.zeros(padded_vocab, *old.shape[1:], dtype=old.dtype)
+                    padded[:self.config.vocab_size] = old
+                    state_dict[key] = padded
+
+        return super().load_state_dict(state_dict, strict=strict, **kwargs)
+
     def forward(
         self, input_ids: torch.Tensor, targets: Optional[torch.Tensor] = None,
         use_cache: bool = False, start_pos: int = 0, return_loss: bool = False,
-        pad_token_id: int = 0,
+        pad_token_id: int = 0, label_smoothing: float = 0.0,
+        attention_mask: Optional[torch.Tensor] = None,
+        attention_mask_2d: Optional[torch.Tensor] = None,
     ) -> Union[torch.Tensor, tuple[torch.Tensor, Optional[torch.Tensor]]]:
         """
         Forward pass.
@@ -274,6 +313,12 @@ class Enigma(nn.Module):
             return_loss: If True, always return (logits, loss) tuple
             pad_token_id: Token ID used for padding — ignored in loss
                 computation via ``ignore_index``.
+            attention_mask: Optional mask (B, T) where 1 = real token,
+                0 = padding.  Combined with the causal mask so that
+                pad positions receive -inf attention scores.
+            attention_mask_2d: Optional pre-built mask (B, 1, T, T)
+                with 0 = attend and -inf = block.  Used by sequence
+                packing.  When provided, ``attention_mask`` is ignored.
 
         Returns:
             logits if no targets and return_loss=False, else (logits, loss)
@@ -283,15 +328,30 @@ class Enigma(nn.Module):
         h = self.tok_embeddings(input_ids)
 
         if not self.config.use_rope:
-            h = h + self.pos[:, start_pos:start_pos + T]
+            end_pos = start_pos + T
+            if end_pos > self.config.max_seq_len:
+                raise ValueError(
+                    f"Position {end_pos} exceeds max_seq_len {self.config.max_seq_len}. "
+                    f"Use RoPE or increase max_seq_len."
+                )
+            h = h + self.pos[:, start_pos:end_pos]
 
-        # Use cached causal mask (sliced to current sequence length)
-        # This avoids rebuilding the mask every forward pass
+        # Causal mask: built on demand at actual sequence length, cached for reuse
         mask = None
-        if T > 1:
-            # Slice the pre-computed mask to current sequence length
+        if attention_mask_2d is not None:
+            # Pre-built 4D mask from sequence packing — use directly
+            mask = attention_mask_2d.to(device=h.device, dtype=h.dtype)
+        elif T > 1:
             # Shape: (T, T) -> (1, 1, T, T) for broadcasting with attention
-            mask = self._causal_mask[:T, :T].unsqueeze(0).unsqueeze(0)
+            mask = self._get_causal_mask(T).to(device=h.device).unsqueeze(0).unsqueeze(0)
+
+            # Combine with attention_mask: pad positions get -inf
+            if attention_mask is not None:
+                # attention_mask shape: (B, T) → (B, 1, 1, T)
+                pad_mask = (1 - attention_mask.unsqueeze(1).unsqueeze(2).float()) * (
+                    torch.finfo(h.dtype).min
+                )
+                mask = mask + pad_mask
 
         for layer in self.layers:
             h = layer(h, self.freqs_cis, mask, use_cache, start_pos)
@@ -303,7 +363,8 @@ class Enigma(nn.Module):
         if targets is not None:
             loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)),
                                    targets.reshape(-1),
-                                   ignore_index=pad_token_id)
+                                   ignore_index=pad_token_id,
+                                   label_smoothing=label_smoothing)
 
         # Return format depends on whether loss was computed
         if targets is not None or return_loss:
@@ -318,15 +379,15 @@ class Enigma(nn.Module):
     def get_moe_aux_loss(self) -> torch.Tensor:
         """
         Get total MoE auxiliary loss from all layers.
-        
+
         📖 WHAT THIS DOES:
         Collects load balancing losses from all MoE layers to encourage
         even distribution of tokens across experts during training.
-        
+
         ⚠️ TRAINING ONLY:
         This loss should be added to the main training loss:
             total_loss = ce_loss + model.get_moe_aux_loss()
-        
+
         Returns:
             Scalar tensor with combined auxiliary loss from all MoE layers.
             Returns 0.0 if MoE is not enabled.
@@ -348,20 +409,20 @@ class Enigma(nn.Module):
     ) -> torch.Tensor:
         """
         Forward pass with multi-modal inputs.
-        
+
         📖 WHAT THIS DOES:
         Processes text, vision, and/or audio inputs together. Vision and audio
         features are projected to the text embedding space and concatenated.
-        
+
         Args:
             input_ids: Text token IDs [batch, text_seq_len]
             vision_features: Vision encoder output [batch, vision_seq_len, vision_dim]
             audio_features: Audio encoder output [batch, audio_seq_len, audio_dim]
             **kwargs: Additional forward pass arguments
-        
+
         Returns:
             Model output logits
-        
+
         Example:
             # Text + vision
             logits = model.forward_multimodal(
@@ -406,13 +467,25 @@ class Enigma(nn.Module):
 
         # Add positional embeddings if not using RoPE
         if not self.config.use_rope and hasattr(self, 'pos'):
-            if T <= self.config.max_seq_len:
-                h = h + self.pos[:, :T]
+            if T > self.config.max_seq_len:
+                raise ValueError(
+                    f"Sequence length {T} exceeds max_seq_len {self.config.max_seq_len} "
+                    f"in forward_multimodal. Use RoPE or increase max_seq_len."
+                )
+            h = h + self.pos[:, :T]
 
-        # Build causal mask
+        # Build causal mask on demand
         mask = None
         if T > 1:
-            mask = self._causal_mask[:T, :T].unsqueeze(0).unsqueeze(0)
+            mask = self._get_causal_mask(T).to(device=h.device).unsqueeze(0).unsqueeze(0)
+
+            # Combine with attention_mask if provided via kwargs
+            attention_mask = kwargs.get('attention_mask')
+            if attention_mask is not None:
+                pad_mask = (1 - attention_mask.unsqueeze(1).unsqueeze(2).float()) * (
+                    torch.finfo(h.dtype).min
+                )
+                mask = mask + pad_mask
 
         # Transform through layers
         for layer in self.layers:
@@ -439,7 +512,7 @@ class Enigma(nn.Module):
     ) -> Union[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
         """
         Generate tokens autoregressively.
-        
+
         Args:
             input_ids: Input token IDs [batch, seq_len]
             max_new_tokens: Maximum number of tokens to generate
@@ -450,11 +523,11 @@ class Enigma(nn.Module):
             stop_tokens: Token IDs that stop generation
             return_logits: If True, also return the final logits
             stream: If True, use streaming generation (returns generator)
-        
+
         Returns:
             Generated token IDs, or (token_ids, logits) if return_logits=True,
             or generator if stream=True
-            
+
         Raises:
             ValueError: If temperature is not positive
         """
@@ -483,7 +556,7 @@ class Enigma(nn.Module):
             )
             generated = torch.cat([generated, next_token], dim=1)
 
-            if next_token.item() in stop_tokens:
+            if next_token.squeeze().item() in stop_tokens:
                 break
 
             logits = self.forward(next_token, use_cache=True, start_pos=generated.shape[1] - 1)
@@ -507,11 +580,11 @@ class Enigma(nn.Module):
     ) -> Generator[torch.Tensor, None, None]:
         """
         Streaming token generation - yields tokens as they're generated.
-        
+
         📖 WHAT THIS DOES:
         Instead of waiting for all tokens to be generated, this yields each
         token as soon as it's produced. Essential for real-time chat UX!
-        
+
         📐 STREAMING FLOW:
         ┌────────────────────────────────────────────────────────────────────┐
         │  User: "Tell me a story"                                           │
@@ -526,12 +599,12 @@ class Enigma(nn.Module):
         │       ↓                                                            │
         │  yield " time"   ← Progressive display!                            │
         └────────────────────────────────────────────────────────────────────┘
-        
+
         💡 ADVANTAGES:
         - Better user experience (see output immediately)
         - Can cancel generation early
         - Works great with chat interfaces
-        
+
         Args:
             input_ids: Input token IDs [batch, seq_len]
             max_new_tokens: Maximum tokens to generate
@@ -540,10 +613,10 @@ class Enigma(nn.Module):
             top_p: Nucleus sampling threshold
             repetition_penalty: Penalty for repeating tokens
             stop_tokens: Token IDs that stop generation
-        
+
         Yields:
             Individual tokens as they're generated [1] tensor
-        
+
         Example:
             for token in model.generate_stream(input_ids):
                 print(tokenizer.decode([token.item()]), end='', flush=True)
@@ -564,7 +637,7 @@ class Enigma(nn.Module):
             yield next_token.squeeze()
 
             # Check for stop tokens
-            if next_token.item() in stop_tokens:
+            if next_token.squeeze().item() in stop_tokens:
                 break
 
             # Update generated sequence and get next logits
@@ -604,11 +677,11 @@ class Enigma(nn.Module):
     def auto_configure(cls, vocab_size: int = 8000) -> 'Enigma':
         """
         Create an optimally-configured model for the current hardware.
-        
+
         📖 WHAT THIS DOES:
         Detects your hardware (GPU, RAM, Pi model) and automatically creates
         a model with the best configuration for your system.
-        
+
         📐 DETECTION FLOW:
         ┌─────────────────────────────────────────────────────────────────────┐
         │  1. Detect hardware (RAM, GPU, is_raspberry_pi)                     │
@@ -617,13 +690,13 @@ class Enigma(nn.Module):
         │  4. Create model with optimal config                                │
         │  5. Apply quantization if recommended                               │
         └─────────────────────────────────────────────────────────────────────┘
-        
+
         Args:
             vocab_size: Vocabulary size for the model
-        
+
         Returns:
             Optimally configured Forge model
-        
+
         Example:
             # Auto-detect and create best model for this device
             model = Forge.auto_configure()
@@ -654,11 +727,11 @@ class Enigma(nn.Module):
     def quantize(self, mode: str = "dynamic") -> 'Enigma':
         """
         Apply quantization to reduce model memory footprint.
-        
+
         📖 WHAT THIS DOES:
         Converts model weights to lower precision to save memory and
         potentially speed up inference on CPU.
-        
+
         📐 QUANTIZATION MODES:
         ┌────────────────────────────────────────────────────────────────────┐
         │ Mode     │ Memory │ Speed  │ Quality │ Best For                   │
@@ -668,18 +741,18 @@ class Enigma(nn.Module):
         │ int8     │ ~25%   │ Medium │ Good    │ Pi 4, limited RAM          │
         │ int4     │ ~12%   │ Slower │ Fair    │ Pi Zero, extreme limits    │
         └────────────────────────────────────────────────────────────────────┘
-        
+
         ⚠️ NOTES:
         - Quantization is irreversible (on the current model instance)
         - GPU acceleration may not work after quantization
         - Quality degradation is usually minor for dynamic/int8
-        
+
         Args:
             mode: Quantization mode ("none", "dynamic", "int8", "int4")
-        
+
         Returns:
             Self (for method chaining)
-        
+
         Example:
             model = create_model('small')
             model.quantize('dynamic')  # Now uses less memory
@@ -779,18 +852,18 @@ class Enigma(nn.Module):
     def from_huggingface(cls, model_id: str, **kwargs) -> 'Enigma':
         """
         Load a model from HuggingFace Hub or local HuggingFace format.
-        
+
         📖 WHAT THIS DOES:
         Downloads and converts a HuggingFace transformer model to Forge format.
         Supports most decoder-only models (GPT-2, GPT-Neo, LLaMA, etc.).
-        
+
         Args:
             model_id: HuggingFace model ID (e.g., "gpt2") or local path
             **kwargs: Additional arguments (cache_dir, revision, etc.)
-        
+
         Returns:
             Forge model with loaded weights
-        
+
         Example:
             model = Forge.from_huggingface("gpt2")
             model = Forge.from_huggingface("microsoft/phi-2")
@@ -810,23 +883,23 @@ class Enigma(nn.Module):
             raise
 
     @classmethod
-    def from_safetensors(cls, path: Union[str, Path], **kwargs) -> 'Forge':
+    def from_safetensors(cls, path: Union[str, Path], **kwargs) -> 'Enigma':
         """
         Load a model from Safetensors format.
-        
+
         📖 WHAT THIS DOES:
         Loads model weights from Safetensors format, which is faster and
         safer than pickle-based formats (no arbitrary code execution).
-        
+
         Args:
             path: Path to .safetensors file
             **kwargs: Additional arguments (map_location, etc.)
-        
+
         Returns:
-            Forge model with loaded weights
-        
+            Enigma model with loaded weights
+
         Example:
-            model = Forge.from_safetensors("model.safetensors")
+            model = Enigma.from_safetensors("model.safetensors")
         """
         try:
             from safetensors.torch import load_file
@@ -856,26 +929,26 @@ class Enigma(nn.Module):
         return model
 
     @classmethod
-    def from_gguf(cls, path: Union[str, Path], **kwargs) -> 'Forge':
+    def from_gguf(cls, path: Union[str, Path], **kwargs) -> 'Enigma':
         """
         Load a model from GGUF format (llama.cpp compatible).
-        
+
         📖 WHAT THIS DOES:
         Loads quantized models in GGUF format, commonly used by llama.cpp.
         Automatically dequantizes weights to PyTorch tensors.
-        
+
         ⚠️ NOTE:
         GGUF models are often quantized (Q4, Q8, etc.). Loading converts
         them to full precision PyTorch, which may use more memory than
         the original GGUF file.
-        
+
         Args:
             path: Path to .gguf file
             **kwargs: Additional arguments
-        
+
         Returns:
             Forge model with loaded weights
-        
+
         Example:
             model = Forge.from_gguf("llama-2-7b.Q4_K_M.gguf")
         """
@@ -894,25 +967,25 @@ class Enigma(nn.Module):
             raise
 
     @classmethod
-    def from_onnx(cls, path: Union[str, Path], **kwargs) -> 'Forge':
+    def from_onnx(cls, path: Union[str, Path], **kwargs) -> 'Enigma':
         """
         Load a model from ONNX format.
-        
+
         📖 WHAT THIS DOES:
-        Loads a model exported to ONNX format and converts it to Forge.
+        Loads a model exported to ONNX format and converts it to Enigma.
         Useful for cross-platform deployment and inference optimization.
-        
+
         ⚠️ NOTE:
         ONNX models may have optimizations that don't translate perfectly
         to PyTorch. Some features may not work after conversion.
-        
+
         Args:
             path: Path to .onnx file
             **kwargs: Additional arguments
-        
+
         Returns:
             Forge model with loaded weights
-        
+
         Example:
             model = Forge.from_onnx("model.onnx")
         """
@@ -943,20 +1016,20 @@ class Enigma(nn.Module):
     ) -> None:
         """
         Load LoRA (Low-Rank Adaptation) weights.
-        
+
         📖 WHAT THIS DOES:
         Loads LoRA adapter weights that modify the model's behavior without
         full fine-tuning. LoRA is memory-efficient and can be quickly swapped.
-        
+
         📐 HOW LORA WORKS:
         Instead of updating full weight matrix W, LoRA adds:
         W' = W + A × B  (where A, B are small low-rank matrices)
-        
+
         Args:
             path: Path to LoRA weights
             adapter_name: Name for this adapter (for multi-adapter support)
             merge: If True, immediately merge LoRA into base weights
-        
+
         Example:
             model.load_lora("lora_adapters/coding.pth")
             model.load_lora("lora_adapters/creative.pth", "creative")
@@ -988,14 +1061,14 @@ class Enigma(nn.Module):
     def merge_lora(self, adapter_name: Optional[str] = None) -> None:
         """
         Merge LoRA adapters into base model weights.
-        
+
         📖 WHAT THIS DOES:
         Permanently integrates LoRA adapter weights into the base model.
         After merging, the adapter can be removed to save memory.
-        
+
         Args:
             adapter_name: Specific adapter to merge (None = merge all)
-        
+
         Example:
             model.load_lora("adapter.pth", "my_adapter")
             model.merge_lora("my_adapter")  # Merge into base weights
@@ -1031,16 +1104,16 @@ class Enigma(nn.Module):
     def export_to_safetensors(self, path: Union[str, Path]) -> None:
         """
         Export model to Safetensors format.
-        
+
         📖 WHAT THIS DOES:
         Saves the model weights in Safetensors format, which is:
         - Faster to load than pickle-based formats
         - Safer (no arbitrary code execution)
         - Compatible with many frameworks (HuggingFace, etc.)
-        
+
         Args:
             path: Output path for .safetensors file
-        
+
         Example:
             model.export_to_safetensors("model.safetensors")
             # Also creates model.json with config
@@ -1061,8 +1134,7 @@ class Enigma(nn.Module):
 
         # Save config alongside
         config_path = path.with_suffix('.json')
-        with open(config_path, 'w', encoding='utf-8') as f:
-            json.dump(self.config.to_dict(), f, indent=2)
+        atomic_write_json(config_path, self.config.to_dict())
         logger.info(f"Exported config to: {config_path}")
 
     def export_to_onnx(
@@ -1075,25 +1147,25 @@ class Enigma(nn.Module):
     ) -> None:
         """
         Export model to ONNX format for deployment.
-        
+
         📖 WHAT THIS DOES:
         Exports the model to ONNX format, enabling:
         - Cross-platform deployment (C++, mobile, web)
         - Hardware-specific optimizations (TensorRT, OpenVINO)
         - Framework-agnostic inference
-        
+
         ⚠️ NOTES:
         - KV-cache based generation is not directly supported in ONNX
         - Export captures the model at a fixed sequence length
         - Dynamic axes allow variable batch/sequence sizes
-        
+
         Args:
             path: Output path for .onnx file
             opset_version: ONNX opset version (14 is widely supported)
             input_names: Names for input tensors
             output_names: Names for output tensors
             dynamic_axes: Dict specifying variable dimensions
-        
+
         Example:
             model.export_to_onnx("model.onnx")
             # Use with ONNX Runtime for fast inference
@@ -1131,28 +1203,26 @@ class Enigma(nn.Module):
 
         # Save config alongside
         config_path = path.with_suffix('.json')
-        with open(config_path, 'w', encoding='utf-8') as f:
-            json.dump(self.config.to_dict(), f, indent=2)
+        atomic_write_json(config_path, self.config.to_dict())
         logger.info(f"Exported config to: {config_path}")
 
     def export_to_pytorch(self, path: Union[str, Path]) -> None:
         """
         Export model to standard PyTorch format (.pth).
-        
+
         📖 WHAT THIS DOES:
         Saves model weights and config in native PyTorch format.
         This is the default format used by Enigma AI Engine.
-        
+
         Args:
             path: Output path for .pth file
-        
+
         Example:
             model.export_to_pytorch("models/my_model.pth")
         """
         path = Path(path)
 
         # Save weights in checkpoint format (compatible with gui_forge loader)
-        from enigma_engine.core.safe_save import atomic_torch_save
         atomic_torch_save({
             'model_state_dict': self.state_dict(),
             'config': self.config.to_dict(),
@@ -1161,8 +1231,7 @@ class Enigma(nn.Module):
 
         # Save config alongside as JSON for external tools
         config_path = path.with_suffix('.json')
-        with open(config_path, 'w', encoding='utf-8') as f:
-            json.dump(self.config.to_dict(), f, indent=2)
+        atomic_write_json(config_path, self.config.to_dict())
         logger.info(f"Exported config to: {config_path}")
 
 
@@ -1210,20 +1279,20 @@ class Enigma(nn.Module):
     ) -> None:
         """
         Enable speculative decoding for faster generation.
-        
+
         📖 WHAT THIS DOES:
         Uses a smaller "draft" model to predict multiple tokens quickly,
         then verifies them with the main model in parallel. Can be 2-4x faster!
-        
+
         📐 HOW IT WORKS:
         1. Draft model generates K tokens quickly (small model = fast)
         2. Main model verifies all K tokens in one forward pass (parallel!)
         3. Accept correct tokens, reject and regenerate incorrect ones
-        
+
         Args:
             draft_model: Smaller, faster model for speculation
             num_speculative_tokens: How many tokens to speculate (2-8 typical)
-        
+
         Example:
             small_model = create_model('tiny')
             large_model = create_model('large')
@@ -1251,16 +1320,16 @@ class Enigma(nn.Module):
     ) -> torch.Tensor:
         """
         Generate tokens using speculative decoding.
-        
+
         📖 WHAT THIS DOES:
         Faster generation using a draft model for speculation.
         Falls back to standard generation if no draft model is set.
-        
+
         Args:
             input_ids: Input token IDs [batch, seq_len]
             max_new_tokens: Maximum tokens to generate
             **kwargs: Generation parameters (temperature, top_k, etc.)
-        
+
         Returns:
             Generated token IDs [batch, seq_len + new_tokens]
         """

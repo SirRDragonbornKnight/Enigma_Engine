@@ -61,8 +61,8 @@ def load_path_settings() -> dict[str, str]:
 def save_path_settings(paths: dict[str, str]) -> None:
     """Save custom path overrides to path_settings.json."""
     _PATHS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    _PATHS_FILE.write_text(
-        json.dumps(paths, indent=2), encoding="utf-8")
+    from enigma_engine.core.safe_save import atomic_write_json
+    atomic_write_json(_PATHS_FILE, paths)
 
 
 def get_path(key: str) -> Path:
@@ -92,8 +92,8 @@ def save_route_assignments(assignments: dict[str, str | None]) -> None:
     # Only save non-None assignments
     clean = {k: v for k, v in assignments.items() if v}
     _ROUTES_FILE.parent.mkdir(parents=True, exist_ok=True)
-    _ROUTES_FILE.write_text(
-        json.dumps(clean, indent=2), encoding="utf-8")
+    from enigma_engine.core.safe_save import atomic_write_json
+    atomic_write_json(_ROUTES_FILE, clean)
 
 
 # -------------------------------------------------------------------
@@ -474,7 +474,7 @@ def scan_sessions() -> list[dict[str, Any]]:
     return sessions
 
 
-_DOC_EXTS = (".md", ".txt", ".pdf", ".docx")
+_DOC_EXTS = (".md", ".txt", ".pdf", ".docx", ".json")
 
 def scan_docs() -> list[dict[str, Any]]:
     """Discover documentation files from information/ and mod docs.
@@ -587,29 +587,89 @@ def load_route_prompt(route: str) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 _IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp", ".tiff"}
+_VIDEO_EXTENSIONS = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".flv", ".wmv"}
 
 
-def scan_vision_data(directory: str | Path) -> list[dict[str, str]]:
+def _extract_video_frames(
+    video_path: Path,
+    max_frames: int = 8,
+) -> list:
     """
-    Discover image-text training pairs in a directory.
+    Extract evenly-spaced frames from a video file as PIL Images.
 
-    Supports two formats:
+    Requires OpenCV (``pip install opencv-python``). Returns an empty
+    list if cv2 is not available or the video cannot be opened.
+
+    Args:
+        video_path: Path to the video file.
+        max_frames: Maximum number of frames to extract.
+
+    Returns:
+        List of PIL Image objects (RGB).
+    """
+    try:
+        import cv2
+    except ImportError:
+        logger.debug("opencv-python not installed — skipping video: %s", video_path)
+        return []
+
+    try:
+        from PIL import Image
+    except ImportError:
+        logger.debug("Pillow not installed — skipping video: %s", video_path)
+        return []
+
+    cap = cv2.VideoCapture(str(video_path))
+    if not cap.isOpened():
+        logger.warning("Cannot open video: %s", video_path)
+        return []
+
+    try:
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        if total_frames < 1:
+            return []
+
+        n_sample = min(max_frames, total_frames)
+        indices = [int(i * total_frames / n_sample) for i in range(n_sample)]
+
+        frames: list = []
+        for idx in indices:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+            ret, frame = cap.read()
+            if not ret:
+                continue
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            pil_img = Image.fromarray(frame_rgb)
+            frames.append(pil_img)
+
+        return frames
+    finally:
+        cap.release()
+
+
+def scan_vision_data(directory: str | Path) -> list[dict]:
+    """
+    Discover image-text and video-text training pairs in a directory.
+
+    Supports three formats:
     1. Paired files: image.png + image.txt in the same folder
     2. JSONL: each line has {"image": "path", "text": "caption"}
+    3. Video files: video.mp4 + video.txt — auto-extracts frames,
+       each frame paired with the caption text.
 
     Args:
         directory: Path to scan for vision training data.
 
     Returns:
-        List of dicts with "image" (path str) and "text" (caption str) keys.
+        List of dicts with "image" (path str or PIL Image) and "text" keys.
     """
     directory = Path(directory)
     if not directory.exists():
         return []
 
-    pairs: list[dict[str, str]] = []
+    pairs: list[dict] = []
 
-    # ── Strategy 1: JSONL files with image+text fields ──────────────────
+    # -- Strategy 1: JSONL files with image+text fields --
     for jsonl_path in directory.glob("*.jsonl"):
         try:
             with open(jsonl_path, encoding="utf-8") as f:
@@ -629,7 +689,7 @@ def scan_vision_data(directory: str | Path) -> list[dict[str, str]]:
         except OSError:
             logger.debug(f"Could not read JSONL: {jsonl_path}")
 
-    # ── Strategy 2: Paired files (image + same-name .txt) ──────────────
+    # -- Strategy 2: Paired files (image + same-name .txt) --
     for img_path in directory.iterdir():
         if img_path.suffix.lower() not in _IMAGE_EXTENSIONS:
             continue
@@ -644,5 +704,31 @@ def scan_vision_data(directory: str | Path) -> list[dict[str, str]]:
                     "image": str(img_path),
                     "text": caption,
                 })
+
+    # -- Strategy 3: Video files (video + same-name .txt) --
+    for vid_path in directory.iterdir():
+        if vid_path.suffix.lower() not in _VIDEO_EXTENSIONS:
+            continue
+        txt_path = vid_path.with_suffix(".txt")
+        if not txt_path.exists():
+            continue
+        try:
+            caption = txt_path.read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        if not caption:
+            continue
+
+        frames = _extract_video_frames(vid_path)
+        if not frames:
+            logger.debug("No frames extracted from video: %s", vid_path)
+            continue
+
+        logger.info("Extracted %d frames from video: %s", len(frames), vid_path.name)
+        for frame in frames:
+            pairs.append({
+                "image": frame,  # PIL Image object
+                "text": caption,
+            })
 
     return pairs

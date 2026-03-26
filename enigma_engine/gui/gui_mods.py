@@ -115,20 +115,12 @@ class ModMixin:
         running = mod.get("_running", False)
         dot = mod.get("_page_dot")
         lbl = mod.get("_page_status")
-        start_btn = mod.get("_start_btn")
-        stop_btn = mod.get("_stop_btn")
         if dot:
             dot.set_color(C_GREEN if running else C_TEXT_DIM)
         if lbl:
             lbl.configure(
-                text="RUNNING" if running else "STOPPED",
+                text="RUNNING" if running else "READY",
                 text_color=C_GREEN if running else C_TEXT_DIM)
-        if start_btn:
-            start_btn.configure(
-                state="disabled" if running else "normal")
-        if stop_btn:
-            stop_btn.configure(
-                state="normal" if running else "disabled")
 
     def _mod_log(self, mod: dict, text: str):
         """Append text to a mod's output log."""
@@ -138,11 +130,15 @@ class ModMixin:
         log_widget.write(f"{text}\n")
 
     def _send_mod_command(self, mod: dict, command: str):
-        """Gather UI widget values and log the command."""
+        """Gather UI widget values, auto-start mod if needed, and send."""
+        # Auto-launch the mod if it's not running
         if not mod.get("_running", False):
-            self._mod_log(
-                mod, f"Cannot send '{command}': mod not running")
-            return
+            self._mod_log(mod, f"Starting {mod['name']}...")
+            proc = self._launch_mod(mod)
+            if proc is None:
+                self._mod_log(
+                    mod, f"Cannot start {mod['name']}: no main.py")
+                return
 
         # Collect args from UI widgets
         ui_widgets = mod.get("_ui_widgets", {})

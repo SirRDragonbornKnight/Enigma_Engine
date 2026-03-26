@@ -93,6 +93,7 @@ class EnigmaGUI(
         self.model_path = model_path
         self.config_overrides: dict[str, Any] = {}
         self.history: list[dict[str, str]] = []
+        self._history_lock = threading.Lock()
         self.mod_processes: dict[str, subprocess.Popen] = {}
         self.training_active = False
         self.voice_enabled = False
@@ -142,6 +143,10 @@ class EnigmaGUI(
         # Per-model context (history + prompt persistence)
         self.model_context = None
 
+        # Monologue idle tracker
+        self._idle_tracker = None
+        self._monologue_running = False
+
         # Per-route model assignments: route_key -> model path
         self.route_assignments: dict[str, str | None] = {}
 
@@ -159,6 +164,8 @@ class EnigmaGUI(
             "auto_unload_on_minimize", False)
         self._chat_learning_enabled = self._read_gui_bool_setting(
             "learn_while_chatting", False)
+        self._confirm_file_operations = self._read_gui_bool_setting(
+            "confirm_file_operations", True)
         self._refresh_performance_mode()
 
         # Build UI
@@ -181,6 +188,9 @@ class EnigmaGUI(
         self._load_display_names()
         self._load_route_assignments()
         self._start_status_ticker()
+
+        # Start monologue idle check timer (30s interval)
+        self._start_monologue_timer()
 
         # Start mod router for mod communication
         self._router = None
@@ -295,15 +305,15 @@ class EnigmaGUI(
         # Only process resize events for the main window, not child widgets
         if event.widget != self:
             return
-        
+
         # Cancel any pending resize completion
         if self._resize_timer:
             self.after_cancel(self._resize_timer)
-        
+
         # Mark as resizing and schedule completion check
         self._resizing = True
         self._resize_timer = self.after(150, self._on_resize_complete)
-    
+
     def _on_resize_complete(self):
         """Called after resize has stopped for 150ms."""
         self._resizing = False
@@ -381,6 +391,10 @@ class EnigmaGUI(
 
         self._save_window_geometry()
         self._save_config_overrides()
+        try:
+            self._save_training_brief()
+        except Exception:
+            pass
         self.destroy()
 
     def _start_parent_watchdog(self):
@@ -584,8 +598,8 @@ class EnigmaGUI(
             data["window_height"] = self.winfo_height()
             data["window_x"] = self.winfo_x()
             data["window_y"] = self.winfo_y()
-            settings_path.write_text(
-                json.dumps(data, indent=2), encoding="utf-8")
+            from enigma_engine.core.safe_save import atomic_write_json
+            atomic_write_json(settings_path, data)
         except (OSError, RuntimeError):
             pass
 
@@ -842,8 +856,9 @@ class EnigmaGUI(
             ("Ctrl + N", "New chat session"),
             ("Escape", "Stop generation"),
             ("Shift + Return", "Newline in chat input"),
-            ("Ctrl + Z", "Undo (docs editor)"),
-            ("Ctrl + Y", "Redo (docs editor)"),
+            ("Ctrl + Z", "Undo (all text inputs)"),
+            ("Ctrl + Y", "Redo (all text inputs)"),
+            ("Ctrl + A", "Select all (all text inputs)"),
             ("Ctrl + S", "Save (docs editor)"),
             ("Ctrl + F", "Find (docs editor)"),
             ("Up / Down", "Command history (CMD page)"),
@@ -887,12 +902,20 @@ class EnigmaGUI(
                 except Exception:
                     pass
                 self._shortcuts_dropdown = None
+            # Restore clean Escape binding (remove accumulated handlers)
+            self._bind_escape_stop()
 
         self.bind("<Escape>", lambda e: _dismiss(), add="+")
 
     def _switch_page(self, name: str):
         if name == self._current_page:
             return
+        # Persist FORGE settings when leaving the page
+        if self._current_page == "FORGE":
+            try:
+                self._save_training_brief()
+            except Exception:
+                pass
         for key, btn in self._nav_buttons.items():
             btn.set_active(key == name)
         for key, page in self._pages.items():
@@ -998,6 +1021,208 @@ class EnigmaGUI(
             self.status_bar.set_center(self._hw_device_label)
             self.after(tick_ms, _tick)
         self.after(100, _tick)
+
+    def _start_monologue_timer(self):
+        """Start a periodic check for idle-triggered reflection."""
+        from enigma_engine.core.monologue import IdleTracker
+        self._idle_tracker = IdleTracker()
+
+        def _check():
+            self._check_monologue()
+            self.after(30_000, _check)  # check every 30 seconds
+        self.after(30_000, _check)
+
+    def _get_monologue_mode(self) -> str:
+        """Read current monologue_mode from gui_settings or forge_config.
+
+        Checks gui_settings.json first (GUI users). Falls back to
+        forge_config.json / CONFIG['monologue_mode'] so that CLI and
+        API users can also configure the setting.
+        """
+        try:
+            import json as _mj
+            from pathlib import Path
+            settings_path = Path(__file__).parent.parent.parent / "data" / "gui_settings.json"
+            if settings_path.exists():
+                settings = _mj.loads(
+                    settings_path.read_text(encoding="utf-8"))
+                mode = settings.get("monologue_mode")
+                if mode is not None:
+                    return mode
+        except Exception:
+            pass
+        # Fallback: forge_config.json via CONFIG
+        try:
+            from enigma_engine.config import get_config
+            mode = get_config("monologue_mode", "disabled")
+            if mode in ("disabled", "journal_only", "automatic"):
+                return mode
+        except Exception:
+            pass
+        return "disabled"
+
+    def _check_monologue(self):
+        """Check if conditions are met for a background reflection."""
+        mode = self._get_monologue_mode()
+        if mode == "disabled":
+            return
+        tracker = getattr(self, "_idle_tracker", None)
+        if tracker is None or not tracker.is_idle():
+            return
+        # Need a loaded model + context
+        if self.engine is None or self.model_context is None:
+            return
+        # Don't run if already generating or training
+        if getattr(self, "_is_generating", False):
+            return
+        if getattr(self, "training_active", False):
+            return
+        if self._monologue_running:
+            return
+        # Trigger reflection in background
+        self._monologue_running = True
+        tracker.mark_reflected()
+        threading.Thread(
+            target=self._run_reflection,
+            args=(mode,),
+            daemon=True,
+        ).start()
+
+    def _run_reflection(self, mode: str):
+        """Generate a reflection and store it in the journal.
+
+        Runs in a background thread. If mode is 'automatic' and the
+        coherence score passes the quality gate, the reflection is
+        also displayed as a greeting in the CMD activity log.
+        """
+        try:
+            from enigma_engine.core.monologue import (
+                build_reflection_prompt, score_coherence,
+                DEFAULT_COHERENCE_THRESHOLD,
+            )
+            ctx = self.model_context
+            if ctx is None or self.engine is None:
+                return
+
+            # Gather context for reflection
+            emo_state = dict(ctx.emotional_state)
+            recent_topics = self._extract_recent_topics()
+            memory_facts = self._get_memory_facts()
+
+            prompt = build_reflection_prompt(
+                emotional_state=emo_state,
+                recent_topics=recent_topics,
+                memory_facts=memory_facts,
+            )
+
+            # Generate using the loaded model
+            reflection = self.engine.chat(
+                prompt,
+                max_tokens=256,
+                temperature=0.7,
+            )
+            if not reflection or not reflection.strip():
+                return
+
+            # Strip any reasoning tags
+            from enigma_engine.core.reasoning import strip_reasoning
+            reflection = strip_reasoning(reflection).strip()
+            if not reflection:
+                return
+
+            # Score coherence
+            coherence = score_coherence(reflection)
+
+            # Always store in journal
+            ctx.journal.add(reflection, coherence=coherence)
+
+            # If automatic + passes quality gate, show to user
+            if (mode == "automatic"
+                    and coherence >= DEFAULT_COHERENCE_THRESHOLD):
+                self.after(0, lambda r=reflection: self._show_reflection(r))
+
+            logger.info(
+                "Monologue: stored reflection (coherence=%.2f, mode=%s)",
+                coherence, mode)
+        except Exception as exc:
+            logger.debug("Monologue reflection failed: %s", exc)
+        finally:
+            self._monologue_running = False
+
+    def _show_reflection(self, text: str):
+        """Display a reflection in the CMD activity log and refresh journal."""
+        try:
+            self._cmd_activity(f"[Reflection] {text}", tag="info")
+        except Exception:
+            pass
+        try:
+            self._refresh_journal_display()
+        except Exception:
+            pass
+
+    def _show_journal_greeting(self):
+        """Display the latest journal entry as a greeting after model load.
+
+        Called once at model load time. Reads the most recent journal
+        entry from the model context and displays it if:
+          - monologue_mode is 'journal_only' or 'automatic'
+          - the entry's coherence score meets the quality gate
+        """
+        mode = self._get_monologue_mode()
+        if mode == "disabled":
+            return
+        ctx = getattr(self, "model_context", None)
+        if ctx is None:
+            return
+        journal = getattr(ctx, "journal", None)
+        if journal is None:
+            return
+        entry = journal.latest()
+        if entry is None:
+            return
+        coherence = entry.get("coherence", 0.0)
+        from enigma_engine.core.monologue import DEFAULT_COHERENCE_THRESHOLD
+        if coherence < DEFAULT_COHERENCE_THRESHOLD:
+            return
+        text = entry.get("text", "").strip()
+        if not text:
+            return
+        ai = self._active_ai_name()
+        self._chat_append(
+            "assistant_prefix",
+            f"\n  {ai}  ",
+            "assistant",
+            f"[Journal] {text}\n")
+        self._cmd_activity(f"[Greeting] {text}", tag="info")
+
+    def _extract_recent_topics(self) -> list[str]:
+        """Extract keywords from recent chat history for reflection context."""
+        with self._history_lock:
+            recent = self.history[-10:]
+        if not recent:
+            return []
+        # Simple keyword extraction: long words from recent messages
+        import re
+        words: dict[str, int] = {}
+        stop = {"the", "and", "for", "that", "this", "with", "are",
+                "was", "you", "your", "have", "from", "they"}
+        for msg in recent:
+            content = msg.get("content", "")
+            for w in re.findall(r"[a-z]{4,}", content.lower()):
+                if w not in stop:
+                    words[w] = words.get(w, 0) + 1
+        # Return top-5 most frequent
+        sorted_words = sorted(words.items(), key=lambda x: -x[1])
+        return [w for w, _ in sorted_words[:5]]
+
+    def _get_memory_facts(self) -> list[str]:
+        """Get a few memory facts for reflection context."""
+        try:
+            from enigma_engine.core.memory import PersistentMemory
+            mem = PersistentMemory()
+            return mem.facts[:5]
+        except Exception:
+            return []
 
 
 # -------------------------------------------------------------------

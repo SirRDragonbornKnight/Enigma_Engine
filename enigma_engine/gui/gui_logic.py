@@ -429,8 +429,8 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
                 pass
         data["config_overrides"] = dict(self.config_overrides)
         try:
-            settings_path.write_text(
-                json.dumps(data, indent=2), encoding="utf-8")
+            from enigma_engine.core.safe_save import atomic_write_json
+            atomic_write_json(settings_path, data)
         except OSError:
             pass
 
@@ -573,6 +573,9 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
             chat_menu.set(display)
 
         self._update_route_status()
+
+        # Show journal greeting if a high-quality entry exists
+        self._show_journal_greeting()
 
     def _on_model_error(self, error: str):
         """Handle model load failure — show error and re-enable controls."""
@@ -847,6 +850,12 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
         if updater:
             updater()
 
+        # Update FORGE tool button enabled/disabled states
+        btn_updater = getattr(
+            self, "_update_forge_button_states", None)
+        if btn_updater:
+            btn_updater()
+
     # ================================================================
     # Helpers
     # ================================================================
@@ -972,8 +981,8 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
         data["user_display_name"] = self.user_name
         data["ai_display_name"] = self.ai_name
         try:
-            settings_path.write_text(
-                json.dumps(data, indent=2), encoding="utf-8")
+            from enigma_engine.core.safe_save import atomic_write_json
+            atomic_write_json(settings_path, data)
         except OSError:
             pass
         self._chat_system(
@@ -1075,12 +1084,20 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
                     f"Document Q&A ENABLED — indexed {indexed} chunks "
                     f"from {len(set(index.sources))} files"))
             else:
+                self._rag_index = None
+                btn = getattr(self, '_rag_btn', None)
+                if btn and hasattr(btn, 'set_state'):
+                    self.after(0, lambda: btn.set_state(False))
                 self.after(0, lambda: self._chat_system(
-                    "No documents found to index."))
+                    "No documents found to index — Document Q&A disabled."))
 
         except Exception as e:
             err_msg = str(e)
             logger.warning("RAG index build failed: %s", err_msg)
+            self._rag_index = None
+            btn = getattr(self, '_rag_btn', None)
+            if btn and hasattr(btn, 'set_state'):
+                self.after(0, lambda: btn.set_state(False))
             self.after(0, lambda: self._chat_system(
                 f"Document index failed: {err_msg}"))
 

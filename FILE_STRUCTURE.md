@@ -1,6 +1,6 @@
 # Enigma Engine - File Structure
 
-AI engine with CLI, API server, and desktop GUI. Last updated 2026-03-04.
+AI engine with CLI, API server, and desktop GUI. Last updated 2026-03-25.
 
 ```
 enigma-engine/
@@ -11,6 +11,7 @@ enigma-engine/
 ├── LICENSE                       # MIT license
 ├── SUGGESTIONS.md                # Development plan & session log
 ├── FILE_STRUCTURE.md             # This file
+├── CODE_REVIEW.md                # File-by-file code review tracker
 ├── AA code maker.md              # Project rules & conventions
 ├── GUI_REFERENCE.md              # Every GUI element documented
 ├── TRAINING_STATUS.md            # Training progress notes
@@ -30,7 +31,7 @@ enigma-engine/
 │   │
 │   ├── core/                     # Core engine modules
 │   │   ├── __init__.py           # Lazy imports for all core symbols
-│   │   ├── model.py              # Enigma transformer (RoPE, RMSNorm, SwiGLU, GQA, MoE)
+│   │   ├── model.py              # Enigma transformer (RoPE, RMSNorm, SwiGLU, GQA, MoE, attention_mask, vocab pad 64)
 │   │   ├── model_presets.py      # ForgeConfig, MODEL_PRESETS, QuantizationConfig
 │   │   ├── model_components.py   # RMSNorm, Attention, FeedForward, MoE, TransformerBlock
 │   │   ├── model_utils.py        # apply_repetition_penalty, sample_next_token, detect_hardware
@@ -44,17 +45,31 @@ enigma-engine/
 │   │   ├── memory.py             # PersistentMemory (fact storage, extraction, context injection)
 │   │   ├── commands.py           # CommandRegistry, [CMD] block parsing
 │   │   ├── builtin_commands.py   # All registered command implementations
+│   │   ├── sentiment.py          # Emotional state heuristic, clamped outputs
+│   │   ├── monologue.py          # Inner monologue engine, journal, coherence scorer
 │   │   ├── ai_profile.py         # AIProfile, AIProfileManager (hot-swap personalities)
-│   │   ├── training.py           # Trainer (SFT, best-of-N, evolutionary)
-│   │   ├── lora_utils.py         # LoRA/QLoRA training with PEFT
+│   │   ├── training.py           # Trainer (SFT, best-of-N, evolutionary, DPO, vision, audio)
+│   │   ├── rl_training.py        # RL training (PPO, reward model, format alignment)
+│   │   ├── lora_utils.py         # LoRA/QLoRA training with PEFT + CosineAnnealingLR scheduler
+│   │   ├── adaptive_trainer.py   # Adaptive training pipeline (TC-C3, SA-B, SA-C)
+│   │   ├── training_evaluation.py# Training evaluation utilities
+│   │   ├── training_monitor.py   # Thread-safe training monitor, atomic saves
+│   │   ├── training_queue.py     # Training queue, crash recovery
+│   │   ├── curated_dataset.py    # Thread-safe curated dataset management
+│   │   ├── dataset.py            # Dataset loading, size limits, Unicode handling
 │   │   ├── weight_mapping.py     # WeightMapper (HF/GGUF/ONNX → Forge format)
+│   │   ├── progressive_growing.py# Net2Net model expansion (width + depth)
+│   │   ├── chat_export.py        # Chat export to HTML
 │   │   ├── document_readers.py   # PDF/DOCX/text file parsing
-│   │   ├── model_compare.py      # Model comparison utilities
+│   │   ├── mod_tools.py          # Mod tool registration (closure factory)
 │   │   │
 │   │   ├── tokenizer.py          # SimpleTokenizer, TiktokenWrapper, get_tokenizer()
 │   │   ├── bpe_tokenizer.py      # BPETokenizer (byte-pair encoding)
 │   │   ├── char_tokenizer.py     # CharacterTokenizer (character-level + dictionary)
 │   │   ├── advanced_tokenizer.py # AdvancedBPETokenizer (byte-level BPE with merges)
+│   │   ├── auto_research.py      # LRU-cached web research, rate limiting
+│   │   ├── multi_gpu.py          # Multi-GPU distribution utilities
+│   │   ├── audio_encoder.py      # Audio encoder (zero-dep mel spectrogram)
 │   │   ├── plugin_loader.py      # Plugin discovery: scan plugins/, import, call register(registry)
 │   │   ├── rag.py                # RAG/Document Q&A support
 │   │   ├── reasoning.py          # Chain-of-thought engine, <think> tags, strip_incomplete_think
@@ -78,9 +93,20 @@ enigma-engine/
 │   │   ├── __init__.py           # Package init
 │   │   ├── widgets.py            # Colors, fonts, widget classes, factory functions
 │   │   ├── desktop.py            # Window shell, header, nav rail, status bar, entry point
-│   │   ├── gui_pages.py          # Page builders: CORE, MODELS, ROUTER, FORGE, CONFIG
-│   │   ├── gui_logic.py          # Chat, sessions, routes, model loading, voice I/O (TTS)
-│   │   ├── gui_forge.py          # Autonomous training (solo/guided 3-phase), model management, web learn, tools
+│   │   ├── gui_pages.py          # Page builders: CORE, MODELS, ROUTER, DOCS
+│   │   ├── gui_pages_config.py   # CONFIG page builder (settings, properties)
+│   │   ├── gui_pages_forge.py    # FORGE page builder (training interface, model ops)
+│   │   ├── gui_logic.py          # Core logic: model loading, routes, voice I/O
+│   │   ├── gui_logic_chat.py     # Chat messaging, session management, history, typewriter
+│   │   ├── gui_logic_media.py    # Media rendering (images, GIFs, videos, URLs)
+│   │   ├── gui_forge.py          # FORGE base mixin: shared training utilities, formatters
+│   │   ├── gui_forge_training.py # Training modes: Solo, DPO, Vision, LoRA, HF directory
+│   │   ├── gui_forge_advanced.py # Advanced modes: Guided (3-phase), Dialogue (conversation)
+│   │   ├── gui_forge_adaptive.py # Adaptive pipeline: continuous TC-C3, SA-B, SA-C loop
+│   │   ├── gui_forge_new_modes.py# Training modes: RLHF, Self-Play
+│   │   ├── gui_forge_models.py   # Model management: import, create, copy, rename, delete
+│   │   ├── gui_forge_tools.py    # Tools: data generation, evaluation, web learning, presets
+│   │   ├── gui_forge_queue.py    # Training queue, overnight plan, curated dataset review
 │   │   ├── gui_docs_page.py      # DOCS page: documentation browser, file editor
 │   │   ├── gui_cmd_page.py       # CMD page: dual-mode terminal (SYSTEM + ENGINE)
 │   │   ├── gui_mods.py           # Mod subprocess lifecycle (start/stop/auto-start)
@@ -165,13 +191,18 @@ enigma-engine/
 │   │   └── trainer.md            # Trainer context for FORGE
 │   └── avatar/
 │
-├── tests/                        # Test suite (1019 tests)
+├── tests/                        # Test suite (2399 tests, ~16s)
 │   ├── __init__.py
 │   ├── test_api.py               # API endpoint tests
+│   ├── test_benchmark.py         # CPU performance benchmarks (forward pass, generation)
 │   ├── test_core.py              # Import/existence tests
+│   ├── test_evaluation.py        # Evaluation and scoring tests
 │   ├── test_functional.py        # Functional tests (model, tokenizer, KV-cache, commands)
 │   ├── test_gui.py               # GUI mixin/method tests
-│   └── test_reasoning.py         # Reasoning engine and <think> tag tests
+│   ├── test_monologue.py         # Monologue, journal, coherence scorer tests
+│   ├── test_new_features.py      # New feature integration tests
+│   ├── test_reasoning.py         # Reasoning engine and <think> tag tests
+│   └── test_progressive_growing.py # Net2Net model expansion tests
 │
 ├── information/                  # Documentation files
 │   ├── commands_reference.md     # Engine command documentation

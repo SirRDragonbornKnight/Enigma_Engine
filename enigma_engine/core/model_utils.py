@@ -71,33 +71,23 @@ def get_model(name: str) -> Optional[Enigma]:
 def apply_repetition_penalty(
     logits: torch.Tensor,
     generated_tokens: torch.Tensor,
-    penalty: float
+    penalty: float,
+    window: int = 128,
 ) -> torch.Tensor:
     """
-    Apply repetition penalty to logits based on previously generated tokens.
-    
-    📖 WHAT THIS DOES:
-    Reduces the probability of tokens that have already been generated,
-    encouraging the model to produce more diverse output.
-    
-    📐 HYBRID APPROACH:
-    - For short sequences (<1000 tokens): Uses set-based lookup (lower overhead)
-    - For longer sequences: Uses bincount (better vectorization)
-    
+    Apply repetition penalty to logits based on recently generated tokens.
+
+    Only the last *window* tokens are considered to avoid over-suppressing
+    the vocabulary during long-form generation.
+
     Args:
         logits: Logits tensor [batch, vocab_size] or [vocab_size]
         generated_tokens: Previously generated token IDs
         penalty: Penalty factor (>1.0 reduces repetition, 1.0 = no penalty)
-    
+        window: Number of recent tokens to consider (default 128)
+
     Returns:
         Modified logits with repetition penalty applied (new tensor, not in-place)
-    
-    Example:
-        logits = apply_repetition_penalty(logits, generated_ids, penalty=1.2)
-    
-    Note:
-        Returns a cloned tensor to avoid in-place mutation issues with
-        beam search, speculative decoding, or autograd.
     """
     if penalty == 1.0:
         return logits
@@ -106,26 +96,40 @@ def apply_repetition_penalty(
     logits = logits.clone()
 
     vocab_size = logits.shape[-1]
-    seq_len = generated_tokens.numel()
+
+    # Window the tokens — only consider recent history
+    if generated_tokens.dim() >= 2:
+        tokens = generated_tokens[:, -window:]
+    else:
+        tokens = generated_tokens[-window:]
+
+    seq_len = tokens.numel()
 
     if seq_len < 1000:
         # Set-based for short sequences (lower overhead)
-        unique_tokens = set(generated_tokens.view(-1).tolist())
+        unique_tokens = set(tokens.view(-1).tolist())
         for token_id in unique_tokens:
             if 0 <= token_id < vocab_size:
                 if logits.dim() == 1:
-                    logits[token_id] /= penalty
+                    score = logits[token_id]
+                    logits[token_id] = score / penalty if score > 0 else score * penalty
                 else:
-                    logits[..., token_id] /= penalty
+                    scores = logits[..., token_id]
+                    logits[..., token_id] = torch.where(
+                        scores > 0, scores / penalty, scores * penalty)
     else:
         # Bincount for longer sequences (better vectorization)
-        flat_tokens = generated_tokens.view(-1).clamp(0, vocab_size - 1)
+        flat_tokens = tokens.view(-1).clamp(0, vocab_size - 1)
         token_counts = torch.bincount(flat_tokens, minlength=vocab_size)
         appeared_mask = token_counts > 0
         if logits.dim() == 1:
-            logits[appeared_mask] /= penalty
+            scores = logits[appeared_mask]
+            logits[appeared_mask] = torch.where(
+                scores > 0, scores / penalty, scores * penalty)
         else:
-            logits[..., appeared_mask] /= penalty
+            scores = logits[..., appeared_mask]
+            logits[..., appeared_mask] = torch.where(
+                scores > 0, scores / penalty, scores * penalty)
 
     return logits
 
@@ -155,13 +159,13 @@ def sample_next_token(
     Returns:
         Sampled token IDs [batch, 1].
     """
-    next_logits = logits / temperature
-
-    # --- Repetition penalty (reuses standalone function) ---
+    # --- Repetition penalty on raw logits first (order matters) ---
     if repetition_penalty != 1.0:
-        next_logits = apply_repetition_penalty(
-            next_logits, generated_tokens, repetition_penalty
+        logits = apply_repetition_penalty(
+            logits, generated_tokens, repetition_penalty
         )
+
+    next_logits = logits / temperature
 
     # --- Top-k filtering ---
     if top_k > 0:
@@ -190,7 +194,7 @@ def sample_next_token(
 def detect_hardware() -> dict[str, Any]:
     """
     Detect hardware capabilities for model configuration.
-    
+
     Returns dict with: total_ram_gb, gpu_vram_gb, is_raspberry_pi, is_arm, etc.
     """
     try:
@@ -212,10 +216,10 @@ def detect_hardware() -> dict[str, Any]:
 def recommend_model_size(hardware: Optional[dict[str, Any]] = None) -> str:
     """
     Recommend optimal model size based on hardware.
-    
+
     Args:
         hardware: Hardware profile dict (from detect_hardware). If None, auto-detects.
-    
+
     Returns:
         Recommended preset name (e.g., "pi_5", "small", "medium")
     """
@@ -228,11 +232,11 @@ def recommend_model_size(hardware: Optional[dict[str, Any]] = None) -> str:
 def estimate_memory_usage(size: str, quantization: str = "none") -> dict[str, float]:
     """
     Estimate RAM/VRAM requirements for a model configuration.
-    
+
     Args:
         size: Model size preset name
         quantization: Quantization type
-    
+
     Returns:
         Dict with model_size_mb, inference_ram_mb, training_ram_mb
     """

@@ -194,6 +194,140 @@ def reload_theme(name: str) -> dict[str, str]:
 
 
 # -------------------------------------------------------------------
+# Hotkey helpers — Ctrl+Z / Ctrl+Y / Ctrl+A for all input widgets
+# -------------------------------------------------------------------
+
+class _EntryUndoStack:
+    """Lightweight undo/redo stack for tk.Entry (which has no native undo)."""
+
+    __slots__ = ("_stack", "_redo", "_lock")
+
+    def __init__(self) -> None:
+        self._stack: list[str] = []
+        self._redo: list[str] = []
+        self._lock = False
+
+    def push(self, text: str) -> None:
+        if self._lock:
+            return
+        if self._stack and self._stack[-1] == text:
+            return
+        self._stack.append(text)
+        self._redo.clear()
+
+    def undo(self, current: str) -> str | None:
+        if not self._stack:
+            return None
+        # Save current for redo
+        self._redo.append(current)
+        return self._stack.pop()
+
+    def redo(self) -> str | None:
+        if not self._redo:
+            return None
+        return self._redo.pop()
+
+    @property
+    def lock(self) -> bool:
+        return self._lock
+
+    @lock.setter
+    def lock(self, value: bool) -> None:
+        self._lock = value
+
+
+def wire_hotkeys(widget) -> None:
+    """Bind Ctrl+Z (undo), Ctrl+Y (redo), and Ctrl+A (select all).
+
+    Works for both ``CTkTextbox`` (tk.Text-backed) and ``CTkEntry``
+    (tk.Entry-backed) widgets.
+    """
+    if isinstance(widget, ctk.CTkTextbox):
+        _wire_textbox_hotkeys(widget)
+    elif isinstance(widget, ctk.CTkEntry):
+        _wire_entry_hotkeys(widget)
+
+
+def _wire_textbox_hotkeys(widget: ctk.CTkTextbox) -> None:
+    inner = widget._textbox
+    inner.configure(undo=True, maxundo=-1, autoseparators=True)
+
+    def _undo(event=None):
+        try:
+            inner.edit_undo()
+        except tk.TclError:
+            pass
+        return "break"
+
+    def _redo(event=None):
+        try:
+            inner.edit_redo()
+        except tk.TclError:
+            pass
+        return "break"
+
+    def _select_all(event=None):
+        inner.tag_add("sel", "1.0", "end-1c")
+        return "break"
+
+    widget.bind("<Control-z>", _undo)
+    widget.bind("<Control-Z>", _undo)
+    widget.bind("<Control-y>", _redo)
+    widget.bind("<Control-Y>", _redo)
+    widget.bind("<Control-a>", _select_all)
+    widget.bind("<Control-A>", _select_all)
+
+
+def _wire_entry_hotkeys(widget: ctk.CTkEntry) -> None:
+    inner = widget._entry
+    stack = _EntryUndoStack()
+
+    # Seed with initial content
+    stack.push(inner.get())
+
+    # Record every keystroke change
+    def _on_change(*_args):
+        stack.push(inner.get())
+
+    sv = widget._textvariable if hasattr(widget, "_textvariable") else None
+    if sv is not None:
+        sv.trace_add("write", _on_change)
+    else:
+        inner.bind("<KeyRelease>", _on_change, add=True)
+
+    def _undo(event=None):
+        current = inner.get()
+        prev = stack.undo(current)
+        if prev is not None:
+            stack.lock = True
+            inner.delete(0, "end")
+            inner.insert(0, prev)
+            stack.lock = False
+        return "break"
+
+    def _redo(event=None):
+        val = stack.redo()
+        if val is not None:
+            stack.lock = True
+            inner.delete(0, "end")
+            inner.insert(0, val)
+            stack.lock = False
+        return "break"
+
+    def _select_all(event=None):
+        inner.select_range(0, "end")
+        inner.icursor("end")
+        return "break"
+
+    widget.bind("<Control-z>", _undo)
+    widget.bind("<Control-Z>", _undo)
+    widget.bind("<Control-y>", _redo)
+    widget.bind("<Control-Y>", _redo)
+    widget.bind("<Control-a>", _select_all)
+    widget.bind("<Control-A>", _select_all)
+
+
+# -------------------------------------------------------------------
 # Widget factories - reduce per-call boilerplate
 # -------------------------------------------------------------------
 
@@ -205,7 +339,9 @@ def themed_entry(parent, width=140, height=34, **kw):
     kw.setdefault("border_width", 1)
     kw.setdefault("text_color", C_TEXT_BRIGHT)
     kw.setdefault("corner_radius", 2)
-    return ctk.CTkEntry(parent, width=width, height=height, **kw)
+    entry = ctk.CTkEntry(parent, width=width, height=height, **kw)
+    wire_hotkeys(entry)
+    return entry
 
 
 def themed_dropdown(parent, values, width=180, height=32, **kw):
@@ -300,6 +436,16 @@ class SelectableLabel(ctk.CTkFrame):
             frame_kw["height"] = height
         if width:
             frame_kw["width"] = width
+        # When width is pinned but height is not, compute height from
+        # the font to avoid CTkFrame's 200px default leaking through
+        # when pack/grid propagation is disabled below.
+        if width and not height:
+            try:
+                import tkinter.font as tkfont
+                f = tkfont.Font(font=font)
+                frame_kw["height"] = f.metrics("linespace") + 6
+            except Exception:
+                frame_kw["height"] = 26
         # Pop CTkLabel-specific kwargs that don't apply to CTkFrame
         kwargs.pop("wraplength", None)
         kwargs.pop("justify", None)
@@ -524,6 +670,11 @@ class ToggleButton(ctk.CTkButton):
         self._apply_style()
         if self._on_toggle:
             self._on_toggle(self._on)
+
+    def set_state(self, on: bool):
+        """Programmatically set toggle state without triggering callback."""
+        self._on = on
+        self._apply_style()
 
     def _apply_style(self):
         if self._on:
@@ -787,6 +938,23 @@ class Tooltip:
             self._delay, self._show)
 
     def _cancel(self, event=None):
+        # On Leave events, ignore child-boundary transitions:
+        # tkinter fires <Leave> on the parent when the cursor enters
+        # a child widget.  Check if the pointer is still within this
+        # widget's bounds before actually cancelling.
+        if event:
+            try:
+                ex = str(event.type)
+                if ex in ('8', 'Leave'):
+                    mx = self._widget.winfo_pointerx()
+                    my = self._widget.winfo_pointery()
+                    wx = self._widget.winfo_rootx()
+                    wy = self._widget.winfo_rooty()
+                    if (wx <= mx < wx + self._widget.winfo_width()
+                            and wy <= my < wy + self._widget.winfo_height()):
+                        return  # pointer still inside — child transition
+            except Exception:
+                pass
         if self._after_id:
             self._widget.after_cancel(self._after_id)
             self._after_id = None

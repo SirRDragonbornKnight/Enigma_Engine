@@ -14,6 +14,7 @@ Critical reminder:
 - Always inspect current code paths and related tests before editing.
 - Never assume old behavior/contracts are still active.
 - If uncertain, stop and verify with source reads before writing changes.
+- Show the reasoning *before* writing code — explain why something is broken and what the fix approach is. Don't just jump to edits.
 
 ---
 
@@ -29,6 +30,11 @@ Critical reminder:
 8. Finish with zero issues, warnings, or broken code
 9. Keep it simple — do not over-engineer
 10. Make it realistic and practical — working code over perfect code
+11. Trade study before coding — evaluate multiple approaches against cost, complexity, value, and risk, then pick or combine the best
+12. Future-proof where cheap — design for tomorrow's scale when it costs nothing extra today, but don't build for problems that don't exist yet
+13. Devil's advocate every proposal — actively look for reasons an approach will fail before committing to it
+14. Decision support — when there are real choices, present options with tradeoffs and let the user pick
+15. Fit the code — check if changes need adapting to match existing patterns, naming, and structure
 
 ---
 
@@ -58,6 +64,7 @@ Critical reminder:
 - Do not create theoretical problems you're not experiencing
 - Do not audit for issues you didn't ask about
 - Do not assume complexity equals bad
+- Do not worry about time or complexity
 
 ---
 
@@ -76,45 +83,91 @@ These are proven and should remain:
 
 ---
 
-## 4. Recent Learnings (Add New Discoveries Here)
+## 4. Learned Principles (Distilled from ~70 implementations)
 
-When something fails or succeeds, record it here. Prune to keep focused.
+Reusable patterns extracted from project history. Grouped by theme. (~96 implementations)
 
-### Things That Failed
-- ❌ Mixing old and new FORGE contracts during GUI migration created test confusion
-- ❌ Not updating all related tests when changing core UI led to cascade failures
-- ❌ Leaving legacy dispatch assertions in older tests caused false regressions after the 3-mode FORGE contract landed
-- ❌ Applying generic command arg sanitization to `code.run` payloads broke fenced/multiline Python (` ```python ... ``` ` became malformed), causing syntax errors in CMD-page AI execution.
-- ❌ Made a change before fully checking current implementation state. Result: stale assumptions and avoidable rework. Fix: read code + tests first, every time.
-- ❌ **FORGE contract drift** (March 10, 2026): The simplified AI-Guided UI implied supplement selection, stage control, and adaptive gating that the backend did not actually honor. Fix: verify the visible UI contract against the executing path before calling the feature done.
-- ❌ **Partial UI migration side effect** (March 10, 2026): Removed `forge_focus_field` from UI but left a `focus_field` pass-through in `_start_adaptive_training`, causing runtime `NameError` when adaptive pipeline starts. Fix: define/normalize optional legacy vars explicitly during transition or remove all call-site references together.
+### Verification First
+- **Read before editing.** Always inspect current code + related tests before making changes. Never assume old contracts still hold.
+- **Verify before fixing.** Audit findings can be false positives. Read actual source code to confirm the issue is real before writing a fix.
+- **Read reference implementations.** External repos reveal the real gap (e.g. 7 missing PPO components, not 1).
+- **Always verify "can't do X because Y" comments** — the constraint may no longer apply (e.g. RMSNorm "circular import" comment was stale).
 
-### Things That Worked
-- ✅ **Gaming preset needed live enforcement, not just next-launch defaults** (March 10, 2026): The existing CONFIG "Apply Gaming Mode" button only flipped saved settings, so runtime overhead stayed high while the app was open. Fix: derive a live low-overhead mode from the saved preset (`no autoload`, `no mod autostart`, `unload on minimize`, `learn while chatting off`), slow nonessential UI timers, skip exact param counting, and stop router background training when chat-learning is disabled.
-- ✅ **FORGE realism audit** (March 10, 2026): Checking the actual adaptive path against the new 3-mode UI exposed the real gaps quickly: supplement still read `train_data_var`, stage buttons were not authoritative, and progression still auto-advanced. This was more valuable than assuming the UI contract was already true.
-- ✅ **FORGE tool-path wiring cleanup** (March 10, 2026): Updated `Generate Data`/`Web Learn` to route generated files to the active mode selector (AI-Guided supplement vs Basic data), removed dead `forge_focus_field` reads in active tool flows, and fixed adaptive start to avoid undefined `focus_field`. Added regression tests for these three-mode connections.
-- ✅ **Next FORGE cleanup target is structural, not cosmetic** (March 10, 2026): After the runtime wiring fixes, the main remaining work is removing legacy 9-mode config baggage from `gui_forge.py` and adding measurable tool-success evaluation. This is better value than adding more visible FORGE controls right now.
-- ✅ **Chat file-link QoL fix** (March 10, 2026): Deferred command side effects until typewriter completion, then rendered explicit clickable `OPEN FILE:` entries in chat. This removed response interruption and made file outputs discoverable/openable immediately without guessing paths.
-- ✅ **Lean suggestions doc policy** (March 10, 2026): Keeping `SUGGESTIONS.md` active-only (current state, chosen memory strategy, immediate priorities) reduced drift and made implementation decisions faster.
-- ✅ **Suggestions audit cleanup** (March 11, 2026): Collapsing duplicated roadmap dumps into one verified-against-code section kept `SUGGESTIONS.md` truthful. Active status docs work better when they distinguish implemented, partial, and genuinely open work instead of mixing backlog drafts into the same file.
-- ✅ **Processing indicator hard-lock fix** (March 10, 2026): Fixed remaining CORE input-bar movement by locking fixed-size `SelectableLabel` geometry (`pack_propagate(False)` / `grid_propagate(False)`) and preventing width recalculation on text updates when explicit width is set. Root cause was widget-level resize requests, not dot animation length.
-- ✅ **Chat history memory leak fix** (March 10, 2026): Capped `self.history` at 500 messages to prevent unbounded RAM growth during long sessions. Pattern matches existing caps: images (200), input history (50), GIFs (5). Added `_trim_chat_history()` method called after each exchange. After overnight sessions, RAM was hitting 100% — now capped and stable. Full conversation still saved to disk in session files.
-- ✅ **CMD code-run reliability fix** (March 10, 2026): `CommandRegistry.execute()` now preserves raw payload for `code.run` (no generic split/sanitize on code body), so fenced or multiline code executes correctly. Added regression tests for raw payload preservation and fenced code execution. CMD ask-mode now injects a stricter system policy to avoid speculative `[CMD]` calls and require valid arguments.
-- ✅ **FORGE test contract cleanup** (March 10, 2026): Replaced obsolete `Train with AI` toggle tests with current 3-mode FORGE contract tests (`Basic`, `AI-Guided`, `Image`) and removed legacy `_training_mode_desc` assertion. This kept intent coverage while aligning tests to the actual UI architecture in `gui_pages_forge.py`.
-- ✅ Auto-LoRA trigger: Detect model param count at training start, auto-select LoRA if > 7B. Cleaner than manual dropdown. Implemented `_get_model_param_count()` helper that loads model briefly to count params, then dispatches to `_start_lora_training()` or `_start_solo_training()`. Tests all pass.
-- ✅ **Before/after evaluation**: Added `run_evaluation=True` to TrainingConfig. Trainer now evaluates model on test prompts before and after training, logs perplexity improvement. Created `training_evaluation.py` module with `evaluate_model()` and `evaluate_tool_usage()` functions. GUI logs evaluation results showing perplexity drop and improvement percentage. Tests confirm integration works.
-- ✅ **Duplicate widget bug**: Removed accidental duplicate frame construction in gui_pages_forge.py (lines 209, 268, 421) that created orphan UI blocks bypassing mode-switching logic. Caused duplicate sections to appear and wrong sections visible in IMAGE mode.
-- ✅ **Layout shift prevention**: Locking grid column dimensions with `grid_columnconfigure(1, minsize=140)` prevented "Processing..." text from resizing input bar horizontally. Widget dimensions alone aren't enough — grid must be locked.
-- ✅ **Natural memory system**: Removed passive bulk memory injection from system prompt. Added `memory.search <query>` command for active retrieval. AI now searches memory contextually when needed instead of seeing all facts upfront. Fixed "scripted" feeling. Removes lines 158-166 in gui_logic.py (auto-injection), adds memory_search() handler in builtin_commands.py.
-- ✅ **File access for AI**: Added file.read/file.write/file.append instructions to system prompt. AI can now create and edit documentation, notes, and guides in `information/` and `data/notes/` folders when asked. Always confirms before modifying existing files. Enables natural documentation writing in DOCS page.
-- ✅ **Processing animation fix**: Changed animated dots from variable width (".", "..", "...") to fixed width ("   ", ".  ", ".. ", "...") by padding with spaces. Prevents layout shifts when animation cycles. Line 670 in gui_logic_chat.py now uses `"." * n + " " * (3 - n)` pattern.
-- ✅ FORGE is now stable at the core level: 3-mode contract + Auto-LoRA + before/after perplexity evaluation all wired and tested; UI bugs fixed; remaining work is tool success metric persistence and Discovery mode
-- ✅ Converging FORGE to 3 user-facing modes (Basic, AI-Guided, Image) reduced complexity significantly
-- ✅ Keeping advanced options hidden in collapsible sections removed UI clutter without removing capability
-- ✅ Reusing existing backend methods for new modes avoided duplication
-- ✅ Defining one clear UI contract first, then migrating tests to match, is more maintainable than legacy compatibility
-- ✅ Test-driven approach to migration: changed tests first to validate new contract, code followed naturally
-- ✅ Linting after changes caught all issues early (ruff security checks pass)
+### Testing
+- **Tests define the contract.** Change tests first to match the new behavior, then implement. Code follows naturally.
+- **Structural tests work without GPU.** `inspect.getsource()` checks let you verify code paths without running GPU code.
+- **After method decomposition,** grep tests for `getsource(ClassName.old_method)` and redirect to the new helper.
+- **Embedding/output dimension changes ripple** to tests that check output shapes — expect to update assertions.
+
+### Wiring & Config
+- **Grep ALL call sites.** When adding a config field (e.g. AdamW betas), grep the entire codebase for all constructor calls, not just the file you're editing.
+- **Save AND load.** When adding a field to a state object (dataclass, checkpoint, context), verify it appears in both the save path and the load path.
+- **Search ALL consumers** when changing a core pattern (e.g. buffer → on-demand). Not just the primary class — also RewardModel, test helpers, etc.
+- **`getattr(config, 'field', default)`** makes new config fields backward-compatible with old checkpoints.
+- **UI controls must persist.** When adding widgets, verify they round-trip to disk. FORGE once had 17 widgets with no persistence.
+- **When removing a widget,** remove all call-site references together or define a fallback. Orphaned references cause `NameError`.
+
+### Training & Numerics
+- **PyTorch `LambdaLR.__init__` calls `step()` internally** — which evaluates `lambda(0)`. Use `(step + 1) / warmup` to avoid zero LR on the first optimizer step.
+- **Never call `encode()` to get a known special token's ID.** `encode(add_special_tokens=True)` wraps input in BOS/EOS. Use the named attribute directly.
+- **RMSNorm needs fp32 upcast** in fp16/bf16 to prevent overflow/NaN.
+- **AdamW `beta2=0.95`** for LM training (not PyTorch's default 0.999). Matches GPT/LLaMA convention.
+- **Training data format must match inference format.** "User:/Assistant:" everywhere — not "Q:/A:" or "User:/AI:".
+- **Data quality gates:** clean → validate → deduplicate. Never accept teacher output without checking.
+- **Two-tier truncation:** message-count cap for disk, token-count for inference context window.
+
+### GUI & Threading
+- **`after(0, callback)` guarantees main-thread execution.** Don't add locks for state that's only accessed via tkinter scheduling.
+- **Only lock mutable state that crosses thread boundaries.** Background → GUI reads need locks; main-thread-only state does not.
+- **Thread-safe GUI updates:** `self.after(0, self._update_method)` from background threads.
+- **Centralize widget setup in factory functions** (e.g. `themed_entry()`) so new instances get standard behavior for free.
+- **Late-binding lambda in threaded error handlers:** `lambda: f(exc)` inside a try/except captures the variable name, not the value. Ruff flags this as F821. Fix: `msg = str(exc)` then `lambda m=msg: f(m)`.
+- **CTkFrame defaults to 200×200px** when propagation is disabled. If you set `width=N` on a Frame subclass, also compute `height` from font metrics or you get a 200px tall label.
+- **`CTkEntry.configure(fg_color="transparent")` crashes** even though the constructor accepts it. Use the parent's actual background color instead.
+- **Tkinter `<Leave>` fires when entering child widgets.** Tooltip on a container frame cancels immediately when the cursor moves to any child. Fix: check `winfo_pointerx/y` against `winfo_rootx/y + winfo_width/height` to detect true leaves vs child transitions.
+- **Fixed-width labels clip text at larger font offsets.** Use `grid_columnconfigure(col, minsize=N)` for column alignment instead of pinning `width=` on the label itself.
+
+### Security & Boundaries
+- **`core/` never imports `gui/`.** Wire cross-boundary features (like emotional hints) in the GUI layer.
+- **Forbidden lists must block the primitive** (`__import__(`), not specific examples (`__import__('os')`).
+- **Audit config values** to verify they're actually consumed by code, not just decorative defaults.
+- **Path traversal `startswith` checks need `+ os.sep`.** Without it, `profiles/../evil` passes if there's a sibling dir like `profiles_evil/`. Found in 3 separate checks — always grep for all `startswith` path guards when fixing one.
+
+### Multilingual & i18n
+- **When English keyword lists gate behavior, add a non-Latin heuristic.** Count Latin vs non-Latin alphabetic chars — if non-Latin dominates, use the safe default (e.g. route to AI). English patterns still work for English; non-English gets the conservative path. No language detection dependency needed.
+
+### Feature Gating
+- **Default to disabled when model capability is uncertain.** Phase 5 monologue defaults to "disabled" because 125M model can't produce coherent reflections. Infrastructure is ready for when the model grows — no wasted work, no broken UX.
+- **Quality gate AI-generated content before surfacing to users.** Heuristic scorer (coherence, length, variety) prevents garbage from reaching the UI. Threshold-based: below = store silently, above = show to user.
+- **Idle detection reuses existing polling patterns.** `after(N, callback)` with monotonic timer + activity reset + double-trigger flag. Same approach as status ticker and background trainer.
+
+### Research & Trade Studies
+- **Audit existing implementations before searching for research.** Get exact algorithms, parameters, and line numbers for what EXISTS first. Then research becomes targeted ("what upgrades BM25 with k1=1.5?") instead of speculative ("what RAG improvements exist?").
+- **Upgrades ≠ gaps.** Two different research categories: "things you don't have" (gap-fill) vs "things you have that could be better" (upgrade). A gap-fill adds new capability. An upgrade replaces an existing algorithm with its next-generation version. Both matter, but upgrades are lower risk because the integration path is known.
+- **Cross-reference subagent findings.** Automated review agents report false positives — e.g. claiming DPO is "missing" when it exists in gui_forge_training.py. Always verify claims against actual source before acting on them.
+- **Don't brainstorm research from memory.** Systematically enumerate every subsystem (attention, RoPE, optimizer, scheduler, loss, cache, sampling, etc.), audit what's implemented, THEN search for upgrades. Memory-based listing misses entire categories.
+
+### Process
+- **Implement first, audit second.** Build the feature, then systematically trace GUI → config → core → training → checkpoint to find wiring gaps.
+- **Batch related fixes.** Group related stability/compatibility changes, test each independently.
+- **Triage before implementing.** When facing a list of issues, verify each is real first. Saves wasting effort on non-issues.
+- **When duplicated logic exists,** trace ALL callers before consolidating — including test helpers and edge-case paths.
+- **Run lint with project config, not overridden flags.** `ruff check dir/` uses pyproject.toml ignores. `ruff check --select E,F,W` overrides them and reports intentionally suppressed rules. Always use the project config.
+
+### Concurrency
+- **`threading.Lock` is non-reentrant.** If `add()` holds the lock and calls `flush()` which also acquires it — deadlock. Split into public (locks) and private `_unlocked()` (caller holds lock). Or use `RLock`, but split is cleaner.
+- **Guard all model forward-pass entry points** with `_generation_lock`. Adding `batch_generate` without the lock meant concurrent calls could corrupt the KV cache.
+- **Never `await` inside a `threading.Lock`.** Even when the await "can't" suspend (unbounded queue), it's fragile. Use `put_nowait()` or switch to `asyncio.Lock` for async code.
+- **If a loop reads flags under lock, writers must also use the lock.** `training_queue` had `_run_loop()` reading `_running`/`_paused` under `_lock` but `start()`/`stop()` writing them without it — classic stale-value race.
+- **Lock scope: read under lock, write to disk outside.** `_save_state()` was reading `_next_id`/`_jobs` without `_lock` because callers released it first. Fix: acquire lock for the snapshot, then do I/O outside it — avoids holding the lock during slow disk writes.
+- **`subprocess.PIPE` that is never drained will hang the child.** OS pipe buffer is ~64KB. If the child writes to stderr and no one reads, it blocks. Either close the pipe after startup, use `DEVNULL`, or spawn a drain thread.
+
+### DPO / Preference Training
+- **Prompt mask length must match the actual encoded prefix.** If `chosen_ids = encode(f"User: {prompt}\nAssistant: {response}")`, then `prompt_len` must come from `encode(f"User: {prompt}\nAssistant: ")` — not bare `encode(prompt)`. Off-by even a few tokens leaks prompt into the DPO loss.
+
+### Context & Accumulation
+- **Cap unbounded string accumulation.** `_history_summary` grew by concatenation every truncation event — never trimmed. Split on structural markers (e.g. `[Earlier conversation summary`), rebuild from newest to oldest within a char budget, drop oldest blocks. Same pattern applies to any accumulator that appends but never shrinks.
+- **Structural tests catch mixin namespace collisions.** With 7+ mixins sharing `self`, scan all source files for `self.attr = `, group by mixin family, whitelist known cross-family attrs, fail on any new collision. The test IS the deliverable — zero existing bugs, but prevents future ones automatically.
 
 ---
 
@@ -131,7 +184,7 @@ Command: `python -m pytest tests/ -v`
 - One test file per module (e.g., `test_training.py` for `training.py`)
 - Merge related small test files — no single-test files
 - Tests must be independent — no shared mutable state between tests
-- Mock heavy dependencies (torch, file I/O) — tests should run in ~11s total
+- Mock heavy dependencies (torch, file I/O) — tests should run in ~17s total
 - Delete test files that test removed features
 
 ---
@@ -155,10 +208,11 @@ Command: `python -m pytest tests/ -v`
 4. Write test first
 
 ### After Coding
-1. Run `python check.py` (lint + tests in one command)
+1. Run `ruff check enigma_engine/` then `python -m pytest tests/ -v`
 2. Run `python run.py` to verify
-3. **Update "Recent Learnings"** in this file when something significant failed or worked
-4. Update `SUGGESTIONS.md` only when active status, decisions, or near-term priorities change
+3. **Update "Learned Principles"** in this file when a reusable pattern or anti-pattern emerges
+4. Update `SUGGESTIONS.md` when confirmed fixes, backlog items, or priorities change
+5. Update `GUI_REFERENCE.md` only when visible GUI behavior has changed
 
 ### Priority Order (when rules conflict)
 **Correctness > Simplicity > Performance > Style**
@@ -189,17 +243,17 @@ Command: `python -m pytest tests/ -v`
 - Trust your existing code until proven otherwise
 - Work on what was actually requested, not theoretical improvements
 - Ignore the installed mods and base model state — not relevant to most GUI work
+- Change the code in any way needed to improve functionality
 
 ---
 
 ## 9. QUICK COMMANDS
 
 ```bash
-python check.py                                     # Lint + tests (run before every commit)
-python check.py --fix                                # Auto-fix safe lint issues, then test
-python check.py --lint                               # Lint only (fast)
-python check.py --test                               # Tests only
+ruff check enigma_engine/                            # Lint (run before every commit)
 python -m pytest tests/ -v                           # Run all tests verbose
+python -m pytest tests/ --tb=short -q                # Run all tests (compact output)
+ruff check --fix enigma_engine/                      # Auto-fix safe lint issues
 ruff check enigma_engine/                            # Run linter standalone
 python run.py                                        # Show system info
 python run.py --gui                                  # Launch desktop GUI
@@ -207,5 +261,7 @@ python run.py --serve                                # Start API server (port fr
 python run.py --serve --port 8080                     # Start API server on specific port
 python run.py --train data/training.txt --epochs 10  # Train model
 python run.py --train-tokenizer data/training.txt    # Train BPE tokenizer
+python run.py --benchmark                            # Run coherence benchmark on default model
+python run.py --benchmark --model models/my.pth      # Benchmark a specific model
 python run.py --help                                 # Show all CLI options
 ```

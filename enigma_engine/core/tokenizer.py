@@ -40,15 +40,15 @@ Converts sentences into sequences of integers for the neural network.
 
 📖 USAGE:
     from enigma_engine.core.tokenizer import get_tokenizer
-    
+
     # Auto-select best available
     tokenizer = get_tokenizer()
-    
+
     # Or specify type
     tokenizer = get_tokenizer("bpe")      # Advanced BPE
     tokenizer = get_tokenizer("char")     # Character-level
     tokenizer = get_tokenizer("simple")   # Simple fallback
-    
+
     # Encode/Decode
     ids = tokenizer.encode("Hello world")
     text = tokenizer.decode(ids)
@@ -82,12 +82,12 @@ VOCAB_DIR = Path(__file__).resolve().parent.parent / "vocab_model"
 class TokenizerProtocol(Protocol):
     """
     Protocol defining the interface all tokenizers must implement.
-    
+
     📖 WHY THIS EXISTS:
     - Enables type checking across the codebase
     - Allows any tokenizer (custom, HuggingFace, tiktoken) to be used
     - runtime_checkable allows isinstance() checks at runtime
-    
+
     📐 USAGE:
         def process_text(tokenizer: TokenizerProtocol, text: str) -> List[int]:
             return tokenizer.encode(text)
@@ -121,19 +121,19 @@ def encode_text(
 ) -> list[int]:
     """
     Encode text using any tokenizer with a unified interface.
-    
+
     📖 HANDLES:
     - Enigma AI Engine tokenizers (SimpleTokenizer, AdvancedBPETokenizer)
     - HuggingFace tokenizers (transformers AutoTokenizer)
     - tiktoken tokenizers
-    
+
     Args:
         tokenizer: Any tokenizer instance
         text: Text to encode
         add_special_tokens: Whether to add BOS/EOS tokens
         max_length: Optional maximum length (truncates if exceeded)
         truncate: Whether to truncate to max_length
-    
+
     Returns:
         List of token IDs
     """
@@ -173,12 +173,12 @@ def decode_tokens(
 ) -> str:
     """
     Decode token IDs using any tokenizer with a unified interface.
-    
+
     Args:
         tokenizer: Any tokenizer instance
         ids: List of token IDs to decode
         skip_special_tokens: Whether to skip special tokens in output
-    
+
     Returns:
         Decoded text string
     """
@@ -195,10 +195,10 @@ def decode_tokens(
 def get_vocab_size(tokenizer: Any) -> int:
     """
     Get vocabulary size from any tokenizer.
-    
+
     Args:
         tokenizer: Any tokenizer instance
-    
+
     Returns:
         Vocabulary size as integer
     """
@@ -217,7 +217,7 @@ def get_vocab_size(tokenizer: Any) -> int:
 def get_special_token_ids(tokenizer: Any) -> dict[str, int]:
     """
     Get special token IDs from any tokenizer.
-    
+
     Returns dict with keys: 'pad', 'bos', 'eos', 'unk',
     'think_start', 'think_end'
     """
@@ -258,26 +258,26 @@ def get_special_token_ids(tokenizer: Any) -> dict[str, int]:
 class SimpleTokenizer:
     """
     Lightweight character-level tokenizer.
-    
+
     📖 WHAT THIS DOES:
     Converts text to numbers and back. Simple and reliable!
-    
+
     📐 HOW IT WORKS:
     1. Has a vocabulary: {"a": 0, "b": 1, "the": 50, ...}
     2. encode(): Split text into tokens, look up their IDs
     3. decode(): Look up IDs to get tokens, join them together
-    
+
     💡 TOKENIZATION STRATEGY:
     - First tries to match whole WORDS (like "the", "hello")
     - Falls back to individual CHARACTERS if word not in vocab
     - This is a hybrid word+char approach
-    
+
     📐 EXAMPLE:
         >>> tok = SimpleTokenizer()
         >>> tok.encode("hello world")
         [1, 145, 32, 119, 111, 114, 108, 100, 2]
         #  ↑ <s>  "hello"  space + characters   ↑ </s>
-    
+
     🔗 CONNECTS TO:
       ← Used by get_tokenizer() as fallback
       ← Used when no trained tokenizer is available
@@ -286,7 +286,7 @@ class SimpleTokenizer:
     def __init__(self, vocab_file: Optional[Path] = None):
         """
         Initialize tokenizer.
-        
+
         Args:
             vocab_file: Optional path to saved vocabulary JSON
         """
@@ -329,7 +329,7 @@ class SimpleTokenizer:
     def _create_default_vocab(self):
         """
         Create a basic character + common word vocabulary.
-        
+
         📖 VOCABULARY STRUCTURE:
         IDs 0-3: Special tokens (<pad>, <s>, </s>, <unk>)
         IDs 4-98: Printable ASCII characters (space, a-z, A-Z, 0-9, etc.)
@@ -387,13 +387,13 @@ class SimpleTokenizer:
     def save_vocab(self, vocab_file: Path) -> None:
         """Save vocabulary to JSON file."""
         Path(vocab_file).parent.mkdir(parents=True, exist_ok=True)
-        with open(vocab_file, 'w', encoding='utf-8') as f:
-            json.dump(self.token_to_id, f, ensure_ascii=False, indent=2)
+        from enigma_engine.core.safe_save import atomic_write_json
+        atomic_write_json(vocab_file, self.token_to_id)
 
     def encode(self, text: str, add_special_tokens: bool = True) -> list[int]:
         """
         Encode text to token IDs.
-        
+
         📖 ENCODING PROCESS:
         1. Add <s> (start token) if requested
         2. Split text into words
@@ -402,11 +402,11 @@ class SimpleTokenizer:
            - Else → use character tokens
         4. Add spaces between words
         5. Add </s> (end token) if requested
-        
+
         Args:
             text: Input string to encode
             add_special_tokens: Whether to add <s> and </s>
-        
+
         Returns:
             List of token IDs
         """
@@ -454,16 +454,16 @@ class SimpleTokenizer:
     def decode(self, ids: list[int], skip_special_tokens: bool = True) -> str:
         """
         Decode token IDs to text.
-        
+
         📖 DECODING PROCESS:
         1. Look up each ID in id_to_token dictionary
         2. Skip special tokens if requested
         3. Join tokens intelligently (handle spaces)
-        
+
         Args:
             ids: List of token IDs
             skip_special_tokens: Whether to skip <s>, </s>, <pad>, <unk>
-        
+
         Returns:
             Decoded text string
         """
@@ -507,12 +507,12 @@ class SimpleTokenizer:
     ) -> dict[str, Any]:
         """
         Tokenize text (HuggingFace-compatible interface).
-        
+
         📖 WHAT THIS DOES:
         Same as encode(), but returns a dictionary and optionally
         handles padding, truncation, and tensor conversion.
         This makes the tokenizer work like HuggingFace tokenizers!
-        
+
         Args:
             text: Input text to tokenize
             return_tensors: "pt" for PyTorch tensors, None for lists
@@ -520,7 +520,7 @@ class SimpleTokenizer:
             truncation: Truncate to max_length
             max_length: Maximum sequence length
             add_special_tokens: Add <s> and </s>
-        
+
         Returns:
             Dictionary with 'input_ids' key
         """

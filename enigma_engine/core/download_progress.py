@@ -11,14 +11,14 @@ Provides progress tracking for model downloads:
 
 USAGE:
     from enigma_engine.core.download_progress import DownloadTracker, download_with_progress
-    
+
     # Simple download with progress
     path = download_with_progress("microsoft/DialoGPT-small")
-    
+
     # With custom callback
     def on_progress(progress):
         print(f"Downloading: {progress.percentage:.1f}%")
-    
+
     tracker = DownloadTracker(callback=on_progress)
     path = tracker.download_model("gpt2")
 """
@@ -93,7 +93,7 @@ class DownloadProgress:
     @property
     def speed_str(self) -> str:
         """Human-readable download speed."""
-        return format_size(self.speed) + "/s"
+        return format_bytes(self.speed) + "/s"
 
     @property
     def eta_str(self) -> str:
@@ -110,12 +110,12 @@ class DownloadProgress:
     @property
     def size_str(self) -> str:
         """Human-readable size progress."""
-        return f"{format_size(self.downloaded)} / {format_size(self.file_size)}"
+        return f"{format_bytes(self.downloaded)} / {format_bytes(self.file_size)}"
 
     def to_progress_state(self) -> ProgressState:
         """
         Convert to common ProgressState for GUI integration.
-        
+
         This allows download progress to be displayed using the same
         GUI components as other progress operations.
         """
@@ -129,15 +129,10 @@ class DownloadProgress:
         )
 
 
-def format_size(size_bytes: int) -> str:
-    """Format bytes as human-readable string."""
-    return format_bytes(size_bytes)
-
-
 class ProgressCallback:
     """
     Callback interface for HuggingFace Hub downloads.
-    
+
     This hooks into huggingface_hub's download system to track progress.
     """
 
@@ -148,7 +143,7 @@ class ProgressCallback:
     ):
         """
         Initialize progress callback.
-        
+
         Args:
             callback: Optional function to call with progress updates
             show_cli: Show CLI progress bar
@@ -185,7 +180,7 @@ class ProgressCallback:
     ) -> None:
         """
         Called by huggingface_hub during download.
-        
+
         Args:
             chunk_size: Size of chunk just downloaded
             total_size: Total file size
@@ -268,7 +263,7 @@ class ProgressCallback:
 class DownloadTracker:
     """
     High-level download tracker for models.
-    
+
     Integrates with HuggingFace Hub to track download progress.
     """
 
@@ -280,7 +275,7 @@ class DownloadTracker:
     ):
         """
         Initialize download tracker.
-        
+
         Args:
             callback: Function to call with progress updates
             show_cli: Show CLI progress bars
@@ -307,13 +302,13 @@ class DownloadTracker:
     ) -> Path | None:
         """
         Download a HuggingFace model with progress tracking.
-        
+
         Args:
             model_id: HuggingFace model ID (e.g., "gpt2")
             revision: Model revision/branch
             token: HuggingFace token for private models
             resume: Resume interrupted downloads
-            
+
         Returns:
             Path to downloaded model, or None if failed
         """
@@ -380,13 +375,13 @@ class DownloadTracker:
     ) -> Path | None:
         """
         Download a specific file from HuggingFace.
-        
+
         Args:
             repo_id: Repository ID
             filename: File path within repo
             revision: Revision/branch
             token: Auth token
-            
+
         Returns:
             Path to downloaded file, or None if failed
         """
@@ -457,10 +452,10 @@ class DownloadTracker:
     def clear_cache(self, model_id: str | None = None) -> bool:
         """
         Clear download cache.
-        
+
         Args:
             model_id: Specific model to clear, or None for all
-            
+
         Returns:
             True if successful
         """
@@ -493,12 +488,12 @@ def download_with_progress(
 ) -> Path | None:
     """
     Convenience function to download a model with progress.
-    
+
     Args:
         model_id: HuggingFace model ID
         show_progress: Show CLI progress bar
         callback: Optional progress callback
-        
+
     Returns:
         Path to downloaded model
     """
@@ -512,10 +507,10 @@ def download_with_progress(
 def get_download_size(model_id: str) -> int:
     """
     Get the estimated download size for a model.
-    
+
     Args:
         model_id: HuggingFace model ID
-        
+
     Returns:
         Estimated size in bytes, or 0 if unknown
     """
@@ -542,10 +537,10 @@ def get_download_size(model_id: str) -> int:
 def list_model_files(model_id: str) -> list[dict[str, Any]]:
     """
     List files in a model repository.
-    
+
     Args:
         model_id: HuggingFace model ID
-        
+
     Returns:
         List of file info dicts with 'name', 'size', 'type'
     """

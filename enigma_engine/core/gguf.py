@@ -6,10 +6,10 @@ Supports multiple quantization types and metadata embedding.
 
 Usage:
     from enigma_engine.core.gguf import export_to_gguf, GGUFExporter
-    
+
     # Simple export
     export_to_gguf(model, tokenizer, "model.gguf", quant_type="Q4_K_M")
-    
+
     # Advanced export
     exporter = GGUFExporter(quantization="q4_0")
     exporter.export(model, "model.gguf", metadata, tokenizer)
@@ -281,10 +281,14 @@ def read_gguf_value(f: BinaryIO, value_type: int) -> Any:
         return struct.unpack('<B', f.read(1))[0] != 0
     if value_type == vt.STRING:
         str_len = struct.unpack('<Q', f.read(8))[0]
+        if str_len > 100_000_000:
+            raise ValueError(f"GGUF string length {str_len} exceeds 100 MB limit")
         return f.read(str_len).decode('utf-8', errors='replace')
     if value_type == vt.ARRAY:
         array_type = struct.unpack('<I', f.read(4))[0]
         array_len = struct.unpack('<Q', f.read(8))[0]
+        if array_len > 1_000_000:
+            raise ValueError(f"GGUF array length {array_len} exceeds 1M element limit")
         return [read_gguf_value(f, array_type) for _ in range(array_len)]
     if value_type == vt.UINT64:
         return struct.unpack('<Q', f.read(8))[0]
@@ -657,7 +661,7 @@ if HAS_NUMPY:
         def __init__(self, quantization: str = "f16") -> None:
             """
             Initialize exporter.
-            
+
             Args:
                 quantization: Quantization type (f32, f16, q8_0, q4_0, q4_k)
             """
@@ -672,7 +676,7 @@ if HAS_NUMPY:
         ) -> str:
             """
             Export model to GGUF format.
-            
+
             Returns:
                 Path to exported file
             """
@@ -811,7 +815,7 @@ if HAS_NUMPY:
     ) -> str:
         """
         Export a model to GGUF format.
-        
+
         Args:
             model: PyTorch model or state dict
             output_path: Output GGUF file path
@@ -820,7 +824,7 @@ if HAS_NUMPY:
             metadata: Model metadata
             model_name: Model name for metadata
             description: Model description
-        
+
         Returns:
             Path to exported file
         """
