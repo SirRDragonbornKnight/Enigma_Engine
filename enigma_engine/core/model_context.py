@@ -104,6 +104,7 @@ class ModelContext:
         training_history: List of training run records.
         tags:             User-defined tags for organization.
         notes:            Freeform notes about this model.
+        preset_name:      Architecture preset used at creation (e.g. 'xl').
     """
 
     def __init__(self, model_key: str) -> None:
@@ -128,6 +129,7 @@ class ModelContext:
         self.training_history: list[dict[str, Any]] = []
         self.tags: list[str] = []
         self.notes: str = ""
+        self.preset_name: str = ""
 
         # Emotional state — persistent per-model internal state
         self.emotional_state: dict[str, float] = dict(_EMOTIONAL_BASELINE)
@@ -210,6 +212,7 @@ class ModelContext:
                 "training_history", [])
             self.tags = data.get("tags", [])
             self.notes = data.get("notes", "")
+            self.preset_name = data.get("preset_name", "")
 
             # Emotional state — load saved or keep baseline
             saved_emo = data.get("emotional_state")
@@ -217,8 +220,13 @@ class ModelContext:
                 for key in _EMOTIONAL_BASELINE:
                     if key in saved_emo:
                         lo, hi = _EMOTIONAL_RANGES[key]
-                        self.emotional_state[key] = max(
-                            lo, min(hi, float(saved_emo[key])))
+                        raw = float(saved_emo[key])
+                        clamped = max(lo, min(hi, raw))
+                        if clamped != raw:
+                            logger.warning(
+                                "Emotional state '%s' clamped: %.3f -> %.3f",
+                                key, raw, clamped)
+                        self.emotional_state[key] = clamped
 
             logger.info(
                 "Loaded context for model: %s", self.model_key)
@@ -282,7 +290,8 @@ class ModelContext:
             "training_history": self.training_history,
             "tags": self.tags,
             "notes": self.notes,
-            "emotional_state": dict(self.emotional_state),
+            "preset_name": self.preset_name,
+            "emotional_state": self._snapshot_emotional_state(),
         }
         try:
             from enigma_engine.core.safe_save import atomic_write_json
@@ -301,6 +310,11 @@ class ModelContext:
         """
         messages = self.history
         if len(messages) > MAX_CONTEXT_HISTORY:
+            logger.debug(
+                "History for %s exceeds cap (%d > %d) — "
+                "saving most recent %d messages.",
+                self.model_key, len(messages),
+                MAX_CONTEXT_HISTORY, MAX_CONTEXT_HISTORY)
             messages = messages[-MAX_CONTEXT_HISTORY:]
         data = {
             "model_key": self.model_key,
@@ -353,7 +367,8 @@ class ModelContext:
             from enigma_engine.core.memory import PersistentMemory
             mem = PersistentMemory()
             return len(mem.facts)
-        except Exception:
+        except Exception as exc:
+            logger.debug("memory_fact_count unavailable: %s", exc)
             return 0
 
     def export_identity(self) -> dict[str, Any]:
@@ -374,7 +389,7 @@ class ModelContext:
             "tags": list(self.tags),
             "notes": self.notes,
             "memory_facts": self.memory_fact_count,
-            "emotional_state": dict(self.emotional_state),
+            "emotional_state": self._snapshot_emotional_state(),
         }
 
     # ----------------------------------------------------------------
@@ -394,6 +409,8 @@ class ModelContext:
         signals = analyze_sentiment(user_message)
         with self._emotional_lock:
             for key, signal in signals.items():
+                if key not in _EMOTIONAL_RANGES:
+                    continue
                 current = self.emotional_state.get(key, _EMOTIONAL_BASELINE[key])
                 # Lerp toward signal
                 new_val = current + _EMOTIONAL_LERP * (signal - current)
@@ -422,6 +439,11 @@ class ModelContext:
         """
         with self._emotional_lock:
             self.emotional_state = dict(_EMOTIONAL_BASELINE)
+
+    def _snapshot_emotional_state(self) -> dict:
+        """Return a copy of emotional_state under the lock."""
+        with self._emotional_lock:
+            return dict(self.emotional_state)
 
     # ----------------------------------------------------------------
     # Utility

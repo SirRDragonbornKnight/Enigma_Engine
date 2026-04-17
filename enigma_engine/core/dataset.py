@@ -14,13 +14,20 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Iterator, Optional
 
 logger = logging.getLogger(__name__)
 
 # Maximum file size (bytes) for individual files during corpus processing.
 # Files exceeding this limit are skipped to prevent OOM crashes.
-MAX_FILE_SIZE: int = 512_000_000  # 512 MB
+# 20 GB accommodates large pre-training corpora (e.g. Wikipedia dumps).
+MAX_FILE_SIZE: int = 100_000_000_000  # 100 GB
+
+# Files above this threshold are read in chunks instead of all at once.
+# This limits peak memory (avoids 2x file-size during clean_text) and
+# yields the GIL between chunks so the GUI event loop stays responsive.
+_STREAM_THRESHOLD: int = 500_000_000  # 500 MB
+_CHUNK_READ_CHARS: int = 200_000_000  # ~200 MB per read
 
 # =========================================================================
 # Known datasets — registry of downloadable pre-training corpora
@@ -162,6 +169,10 @@ def _process_file(path: Path, *, text_key: str = "text") -> str:
     elif suffix == ".json":
         return _process_json(path, text_key=text_key)
     else:
+        # For large text files, stream-read in chunks to keep
+        # the GUI responsive and limit peak memory.
+        if file_size > _STREAM_THRESHOLD:
+            return "\n\n".join(_chunked_read_text(path))
         # Default: treat as plain text
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
@@ -171,9 +182,286 @@ def _process_file(path: Path, *, text_key: str = "text") -> str:
         return clean_text(text)
 
 
+def _chunked_read_text(
+    path: Path,
+    *,
+    on_progress: "Callable[[int, str], None] | None" = None,
+) -> list[str]:
+    """Read and clean a large text file in chunks.
+
+    Reads the file in ~200 MB pieces to avoid holding the GIL
+    for minutes on a multi-GB string operation.  Each chunk is
+    cleaned individually, and ``time.sleep(0)`` yields the GIL
+    between chunks so the GUI event loop remains responsive.
+
+    Args:
+        on_progress: Optional callback(pct, message) for loading progress.
+
+    Returns:
+        List of cleaned text chunks (~200 MB each).
+    """
+    import time
+    parts: list[str] = []
+    file_size = path.stat().st_size
+
+    with open(path, encoding="utf-8", errors="replace") as f:
+        remainder = ""
+        bytes_read = 0
+        while True:
+            raw = f.read(_CHUNK_READ_CHARS)
+            if not raw:
+                # Process any leftover text
+                if remainder:
+                    cleaned = clean_text(remainder)
+                    if cleaned:
+                        parts.append(cleaned)
+                break
+
+            raw = remainder + raw
+            bytes_read = f.buffer.tell()
+
+            # Split at last newline to avoid cutting mid-line
+            last_nl = raw.rfind('\n')
+            if last_nl == -1:
+                remainder = raw
+                continue
+
+            chunk = raw[:last_nl + 1]
+            remainder = raw[last_nl + 1:]
+
+            cleaned = clean_text(chunk)
+            if cleaned:
+                parts.append(cleaned)
+
+            pct = min(100, int(bytes_read / max(1, file_size) * 100))
+            logger.info(
+                "Reading %s: %d%% (%d MB / %d MB)",
+                path.name, pct,
+                bytes_read // 1_000_000,
+                file_size // 1_000_000)
+            if on_progress is not None:
+                on_progress(
+                    pct,
+                    f"Reading {path.name}: {pct}% "
+                    f"({bytes_read // 1_000_000} / "
+                    f"{file_size // 1_000_000} MB)")
+
+            # Yield GIL so GUI thread can process events
+            time.sleep(0)
+
+    return parts
+
+
+def load_text_chunks(
+    source: Path | str,
+    *,
+    text_key: str = "text",
+    on_progress: "Callable[[int, str], None] | None" = None,
+) -> list[str]:
+    """Load text from a file as a list of cleaned chunks.
+
+    For large text files (>500 MB), returns multiple ~200 MB chunks
+    instead of one massive string.  This prevents MemoryError on
+    multi-GB corpora (e.g. 16 GB combined.txt).
+
+    For small files, directories, and JSONL, falls back to
+    :func:`process_text_corpus` and wraps the result in a list.
+
+    Args:
+        source: Path to a text file, JSONL file, or directory.
+        text_key: JSON key for JSONL files.
+
+    Returns:
+        List of cleaned text chunks.  Empty list on failure.
+    """
+    source = Path(source)
+    if source.is_file():
+        try:
+            file_size = source.stat().st_size
+        except OSError:
+            file_size = 0
+        if file_size > MAX_FILE_SIZE:
+            logger.warning(
+                "Skipping %s (%d MB) — exceeds MAX_FILE_SIZE",
+                source, file_size // 1_000_000)
+            return []
+        suffix = source.suffix.lower()
+        if suffix not in (".jsonl", ".json") and file_size > _STREAM_THRESHOLD:
+            return _chunked_read_text(source, on_progress=on_progress)
+    # Small files, directories, JSONL — use existing function
+    result = process_text_corpus(source, text_key=text_key)
+    return [result] if result else []
+
+
+def iter_text_chunks(
+    source: Path | str,
+    *,
+    text_key: str = "text",
+    on_progress: "Callable[[int, str], None] | None" = None,
+) -> "Iterator[str]":
+    """Yield cleaned text chunks from a file or directory one at a time.
+
+    Unlike :func:`load_text_chunks`, this never holds more than one chunk
+    (~200 MB) in RAM.  For multi-GB corpora this prevents MemoryError.
+
+    For large text files (>500 MB), yields ~200 MB chunks via
+    :func:`_chunked_read_text`.  For directories, recursively iterates
+    files and yields cleaned text from each.  For small files and JSONL,
+    yields the single cleaned result.
+
+    Args:
+        source: Path to a text file, JSONL file, or directory.
+        text_key: JSON key for JSONL files.
+        on_progress: Optional callback(pct, message) for loading progress.
+
+    Yields:
+        Cleaned text chunks.  Empty generator on failure.
+    """
+    source = Path(source)
+
+    if source.is_dir():
+        yield from _iter_directory(source, text_key=text_key,
+                                   on_progress=on_progress)
+        return
+
+    if not source.is_file():
+        logger.warning("Source path does not exist: %s", source)
+        return
+
+    try:
+        file_size = source.stat().st_size
+    except OSError:
+        file_size = 0
+
+    if file_size > MAX_FILE_SIZE:
+        logger.warning(
+            "Skipping %s (%d MB) — exceeds MAX_FILE_SIZE",
+            source, file_size // 1_000_000)
+        return
+
+    suffix = source.suffix.lower()
+    if suffix not in (".jsonl", ".json") and file_size > _STREAM_THRESHOLD:
+        yield from _iter_chunked_read_text(source, on_progress=on_progress)
+        return
+
+    # Small files, JSONL — process and yield single result
+    result = _process_file(source, text_key=text_key)
+    if result:
+        yield result
+
+
+def _iter_directory(
+    dir_path: Path,
+    *,
+    text_key: str = "text",
+    on_progress: "Callable[[int, str], None] | None" = None,
+) -> "Iterator[str]":
+    """Recursively yield cleaned text from all text files in a directory.
+
+    Walks subdirectories so ``data/pretrain/`` with sub-folders like
+    ``fineweb_edu/``, ``gutenberg/``, etc. are handled without needing
+    to merge into a single ``combined.txt`` first.
+    """
+    _TEXT_SUFFIXES = {".txt", ".jsonl", ".json"}
+    files: list[Path] = sorted(
+        f for f in dir_path.rglob("*")
+        if f.is_file() and f.suffix.lower() in _TEXT_SUFFIXES
+    )
+    if not files:
+        return
+
+    total = len(files)
+    for i, f in enumerate(files):
+        try:
+            file_size = f.stat().st_size
+        except OSError:
+            continue
+        if file_size > MAX_FILE_SIZE:
+            logger.warning(
+                "Skipping %s (%d MB) — exceeds MAX_FILE_SIZE",
+                f, file_size // 1_000_000)
+            continue
+
+        suffix = f.suffix.lower()
+        if suffix not in (".jsonl", ".json") and file_size > _STREAM_THRESHOLD:
+            yield from _iter_chunked_read_text(f)
+        else:
+            chunk = _process_file(f, text_key=text_key)
+            if chunk:
+                yield chunk
+
+        if on_progress is not None:
+            pct = int((i + 1) / total * 100)
+            on_progress(
+                pct,
+                f"Loading files: {i + 1}/{total} "
+                f"({pct}%)")
+
+
+def _iter_chunked_read_text(
+    path: Path,
+    *,
+    on_progress: "Callable[[int, str], None] | None" = None,
+) -> "Iterator[str]":
+    """Yield cleaned ~200 MB text chunks from a large file.
+
+    Generator version of :func:`_chunked_read_text` — yields instead
+    of accumulating, so peak RAM stays at one chunk.
+    """
+    import time
+    file_size = path.stat().st_size
+
+    with open(path, encoding="utf-8", errors="replace") as f:
+        remainder = ""
+        bytes_read = 0
+        while True:
+            raw = f.read(_CHUNK_READ_CHARS)
+            if not raw:
+                if remainder:
+                    cleaned = clean_text(remainder)
+                    if cleaned:
+                        yield cleaned
+                break
+
+            raw = remainder + raw
+            bytes_read = f.buffer.tell()
+
+            last_nl = raw.rfind('\n')
+            if last_nl == -1:
+                remainder = raw
+                continue
+
+            chunk = raw[:last_nl + 1]
+            remainder = raw[last_nl + 1:]
+
+            cleaned = clean_text(chunk)
+            if cleaned:
+                yield cleaned
+
+            pct = min(100, int(bytes_read / max(1, file_size) * 100))
+            logger.info(
+                "Reading %s: %d%% (%d MB / %d MB)",
+                path.name, pct,
+                bytes_read // 1_000_000,
+                file_size // 1_000_000)
+            if on_progress is not None:
+                on_progress(
+                    pct,
+                    f"Reading {path.name}: {pct}% "
+                    f"({bytes_read // 1_000_000} / "
+                    f"{file_size // 1_000_000} MB)")
+
+            time.sleep(0)
+
+
+# Maximum number of JSONL entries to accumulate in memory
+_MAX_JSONL_ENTRIES = 1_000_000
+
+
 def _process_jsonl(path: Path, *, text_key: str = "text") -> str:
     """Extract text from a JSONL file."""
     texts: list[str] = []
+    skipped = 0
     try:
         with open(path, encoding="utf-8", errors="replace") as f:
             for line_num, line in enumerate(f, 1):
@@ -183,14 +471,28 @@ def _process_jsonl(path: Path, *, text_key: str = "text") -> str:
                 try:
                     obj = json.loads(line)
                 except json.JSONDecodeError:
+                    skipped += 1
                     continue
                 if isinstance(obj, dict):
                     val = obj.get(text_key, "")
                     if isinstance(val, str) and val.strip():
                         texts.append(val.strip())
+                        if len(texts) >= _MAX_JSONL_ENTRIES:
+                            logger.warning(
+                                "%s: hit %d entry cap at line %d — "
+                                "remaining lines skipped",
+                                path.name, _MAX_JSONL_ENTRIES, line_num,
+                            )
+                            break
     except OSError as exc:
         logger.warning("Cannot read %s: %s", path, exc)
         return ""
+
+    if skipped:
+        logger.warning(
+            "%s: skipped %d malformed JSONL line(s) out of %d total",
+            path.name, skipped, skipped + len(texts),
+        )
 
     return clean_text("\n\n".join(texts))
 
@@ -224,13 +526,15 @@ def _process_directory(
     """Process all text/JSONL files in a directory."""
     parts: list[str] = []
 
-    # Collect and sort for deterministic order
-    files = sorted(dir_path.iterdir())
+    # Collect and sort for deterministic order (recursive like _iter_directory)
+    _TEXT_SUFFIXES = {".txt", ".jsonl", ".json"}
+    files = sorted(
+        f for f in dir_path.rglob("*")
+        if f.is_file() and f.suffix.lower() in _TEXT_SUFFIXES
+    )
     for f in files:
-        if not f.is_file():
-            continue
         suffix = f.suffix.lower()
-        if suffix in (".txt", ".jsonl", ".json"):
+        if suffix in _TEXT_SUFFIXES:
             chunk = _process_file(f, text_key=text_key)
             if chunk:
                 parts.append(chunk)

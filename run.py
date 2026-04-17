@@ -6,10 +6,12 @@ Commands:
     python run.py               Show info and test imports
     python run.py --chat        Simple CLI chat (requires model)
     python run.py --train       Train a model on data
+    python run.py --train --resume <checkpoint>  Resume training from checkpoint
     python run.py --train-tokenizer  Train BPE tokenizer on data
 """
 
 import argparse
+import copy
 import os
 import subprocess
 import sys
@@ -97,6 +99,8 @@ Examples:
   python run.py --train data/training.txt         Train model on text data
   python run.py --train data/qa.jsonl --epochs 20 Train with custom epochs
   python run.py --train-tokenizer data/training.txt  Train BPE tokenizer first
+  python run.py --train-tokenizer data/ --utf8-bytes Train byte-level BPE
+  python run.py --analyze-tokenizer                  Analyze trained tokenizer
         """
     )
     parser.add_argument("--gui", action="store_true", help="Launch desktop GUI")
@@ -128,15 +132,30 @@ Examples:
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate (default: 0.0001)")
     parser.add_argument("--vocab-size", type=int, default=8000,
                         help="Vocabulary size for tokenizer training (default: 8000)")
+    parser.add_argument("--utf8-bytes", action="store_true",
+                        help="Enable byte-level BPE encoding (handles any Unicode)")
+    parser.add_argument("--analyze-tokenizer", type=str, nargs="?", const="auto", default=None,
+                        metavar="VOCAB_PATH",
+                        help="Analyze a trained tokenizer on data (default: auto-discover)")
     parser.add_argument("--benchmark", action="store_true",
                         help="Run coherence benchmark on a loaded model")
+    parser.add_argument("--resume", type=str, default=None, metavar="CHECKPOINT_PATH",
+                        help="Resume training from a checkpoint file (e.g. models/checkpoints/best_model.pt)")
+    parser.add_argument("--golden-eval", type=str, default=None, metavar="JSON_PATH",
+                        help="Golden prompt regression eval file (JSON with prompt+expected pairs)")
+    parser.add_argument("--seed", type=int, default=None,
+                        help="Random seed for reproducible training")
     
     args = parser.parse_args()
 
     if args.train_tokenizer is not None:
-        run_train_tokenizer(args.train_tokenizer, args.vocab_size)
+        run_train_tokenizer(args.train_tokenizer, args.vocab_size,
+                            args.utf8_bytes)
+    elif args.analyze_tokenizer is not None:
+        run_analyze_tokenizer(args.analyze_tokenizer)
     elif args.train is not None:
-        run_train(args.train, args.model, args.model_size, args.epochs, args.batch_size, args.lr)
+        run_train(args.train, args.model, args.model_size, args.epochs, args.batch_size, args.lr,
+                  golden_eval=args.golden_eval, seed=args.seed, resume=args.resume)
     elif args.serve:
         cors = None
         if args.cors_origins:
@@ -256,6 +275,7 @@ def show_info():
     print("    python run.py --chat               Start CLI chat")
     print("    python run.py --train <data>        Train a model")
     print("    python run.py --train-tokenizer <data>  Train tokenizer")
+    print("    python run.py --analyze-tokenizer       Analyze tokenizer")
     print("=" * 50 + "\n")
 
 
@@ -264,8 +284,7 @@ def _find_training_data(data_path: str) -> list:
     if data_path != "auto":
         p = Path(data_path)
         if not p.exists():
-            print(f"  [ERROR] File not found: {data_path}")
-            sys.exit(1)
+            raise FileNotFoundError(f"Training data not found: {data_path}")
         return [p]
     
     # Auto-discover data files
@@ -281,15 +300,16 @@ def _find_training_data(data_path: str) -> list:
             candidates.append(p)
     
     if not candidates:
-        print("  [ERROR] No training data found.")
-        print("  Put a .txt or .jsonl file in data/ or specify a path:")
-        print("    python run.py --train path/to/data.txt")
-        sys.exit(1)
-    
+        raise FileNotFoundError(
+            "No training data found. "
+            "Put a .txt or .jsonl file in data/ or specify a path: "
+            "python run.py --train path/to/data.txt")
+
     return candidates
 
 
-def run_train_tokenizer(data_path: str, vocab_size: int):
+def run_train_tokenizer(data_path: str, vocab_size: int,
+                        utf8_bytes: bool = False):
     """Train a BPE tokenizer on data files."""
     print("\n" + "=" * 50)
     print("  Enigma AI Engine - Train Tokenizer")
@@ -297,7 +317,10 @@ def run_train_tokenizer(data_path: str, vocab_size: int):
     
     data_files = _find_training_data(data_path)
     print(f"Training data: {[str(f) for f in data_files]}")
-    print(f"Target vocab size: {vocab_size}\n")
+    print(f"Target vocab size: {vocab_size}")
+    if utf8_bytes:
+        print(f"Byte-level BPE: enabled")
+    print()
     
     try:
         from enigma_engine.core.bpe_tokenizer import BPETokenizer
@@ -315,6 +338,8 @@ def run_train_tokenizer(data_path: str, vocab_size: int):
         print(f"  Training BPE tokenizer...\n")
         
         tokenizer = BPETokenizer()
+        if utf8_bytes:
+            tokenizer.use_utf8_bytes = True
         tokenizer.train(texts, vocab_size=vocab_size, verbose=True)
         
         # Save next to model files
@@ -349,8 +374,67 @@ def run_train_tokenizer(data_path: str, vocab_size: int):
         sys.exit(1)
 
 
+def run_analyze_tokenizer(vocab_path: str):
+    """Analyze a trained tokenizer on data."""
+    print("\n" + "=" * 50)
+    print("  Enigma AI Engine - Analyze Tokenizer")
+    print("=" * 50 + "\n")
+
+    try:
+        from enigma_engine.core.bpe_tokenizer import BPETokenizer
+        from enigma_engine.core.tokenizer_metrics import format_report
+
+        # Find tokenizer file
+        if vocab_path == "auto":
+            candidates = [
+                Path("models") / "tokenizer.json",
+                Path("enigma_engine") / "vocab_model" / "bpe_vocab.json",
+                Path("enigma_engine") / "vocab_model" / "tokenizer.json",
+            ]
+            tok_file = next((p for p in candidates if p.exists()), None)
+            if tok_file is None:
+                print("  [ERROR] No tokenizer found. Train one first with:")
+                print("    python run.py --train-tokenizer data/training.txt")
+                sys.exit(1)
+        else:
+            tok_file = Path(vocab_path)
+            if not tok_file.exists():
+                print(f"  [ERROR] Tokenizer file not found: {vocab_path}")
+                sys.exit(1)
+
+        print(f"  Loading tokenizer: {tok_file}")
+        tokenizer = BPETokenizer(tok_file)
+
+        # Load analysis data
+        data_dir = Path("data")
+        texts = []
+        for pattern in ["*.txt", "*.jsonl"]:
+            for f in sorted(data_dir.glob(pattern)):
+                text = f.read_text(encoding="utf-8", errors="replace")
+                if text.strip():
+                    texts.append(text)
+        if not texts:
+            print("  [!] No data files in data/ — using built-in test strings")
+            texts = [
+                "Hello, how are you today?",
+                "The quick brown fox jumps over the lazy dog.",
+                "User: What is quantum computing?\nAssistant: Quantum computing uses qubits.",
+            ]
+
+        print(format_report(tokenizer, texts))
+
+    except Exception as e:
+        print(f"\n  [ERROR] Analysis failed: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+
 def run_train(data_path: str, model_path: str, model_size: str,
-              epochs: int, batch_size: int, lr: float):
+              epochs: int, batch_size: int, lr: float,
+              golden_eval: str | None = None,
+              seed: int | None = None,
+              resume: str | None = None):
     """Train a model on data."""
     print("\n" + "=" * 50)
     print("  Enigma AI Engine - Train Model")
@@ -360,7 +444,7 @@ def run_train(data_path: str, model_path: str, model_size: str,
     
     try:
         import torch
-        from enigma_engine.core.model import create_model, MODEL_PRESETS
+        from enigma_engine.core.model import MODEL_PRESETS
         from enigma_engine.core.training import Trainer, TrainingConfig
         from enigma_engine.core.tokenizer import get_tokenizer
         
@@ -395,7 +479,10 @@ def run_train(data_path: str, model_path: str, model_size: str,
             from enigma_engine.core.model import Enigma
             model = Enigma(config=config)
             
-            state_dict = checkpoint.get("model_state_dict", checkpoint.get("state_dict", checkpoint))
+            state_dict = checkpoint.get("model_state_dict") or checkpoint.get("state_dict")
+            if state_dict is None:
+                raise ValueError(
+                    "Checkpoint missing 'model_state_dict' or 'state_dict' key")
             model.load_state_dict(state_dict, strict=False)
             print(f"  Loaded model: {sum(p.numel() for p in model.parameters()):,} params")
         else:
@@ -403,7 +490,13 @@ def run_train(data_path: str, model_path: str, model_size: str,
             print(f"\n  Creating new '{model_size}' model...")
             
             # Override vocab_size to match tokenizer
-            preset = MODEL_PRESETS.get(model_size, MODEL_PRESETS["small"])
+            preset = copy.deepcopy(
+                MODEL_PRESETS.get(model_size, MODEL_PRESETS["small"]))
+            if not tokenizer.vocab_size or tokenizer.vocab_size < 1:
+                raise ValueError(
+                    f"Tokenizer returned invalid vocab_size: "
+                    f"{tokenizer.vocab_size}"
+                )
             preset.vocab_size = tokenizer.vocab_size
             
             from enigma_engine.core.model import Enigma
@@ -412,7 +505,14 @@ def run_train(data_path: str, model_path: str, model_size: str,
             print(f"  Model: {model_size} ({param_count:,} params)")
             print(f"  Config: dim={preset.dim}, layers={preset.n_layers}, heads={preset.n_heads}")
         
-        model = model.to(device)
+        try:
+            model = model.to(device)
+        except RuntimeError as e:
+            if "out of memory" in str(e).lower():
+                print(f"\n  ERROR: Not enough GPU memory to load model.")
+                print(f"  Try using --device cpu or a smaller model.")
+                return
+            raise
         
         # Load training data
         print(f"\n  Loading training data...")
@@ -432,6 +532,8 @@ def run_train(data_path: str, model_path: str, model_size: str,
             save_every=max(1, epochs // 5),  # Save ~5 checkpoints
             checkpoint_dir="models/checkpoints",
             use_amp=torch.cuda.is_available(),
+            seed=seed,
+            golden_eval_path=golden_eval or "",
         )
         
         print(f"\n  Training config:")
@@ -444,14 +546,17 @@ def run_train(data_path: str, model_path: str, model_size: str,
         # Train
         print(f"\n  Starting training...\n")
         
-        trainer = Trainer(model, tokenizer, config, device=device)
+        trainer = Trainer(model, tokenizer, config)
         
         # Progress callback for CLI
         def on_epoch(epoch, loss):
             print(f"  Epoch {epoch}: loss = {loss:.4f}")
         
         trainer.on_epoch_complete = on_epoch
-        state = trainer.train(training_data)
+
+        if resume:
+            print(f"\n  Resuming from checkpoint: {resume}")
+        state = trainer.train(training_data, resume_from=resume)
         
         # Save final model
         output_path = Path("models") / f"enigma_{model_size}.pth"

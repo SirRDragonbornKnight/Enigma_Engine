@@ -92,6 +92,9 @@ class DropPath(nn.Module):
 
     def __init__(self, drop_prob: float = 0.0) -> None:
         super().__init__()
+        if drop_prob < 0.0 or drop_prob >= 1.0:
+            raise ValueError(
+                f"DropPath drop_prob must be in [0, 1), got {drop_prob}")
         self.drop_prob = drop_prob
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -150,6 +153,17 @@ def precompute_rope_frequencies(
     Returns:
         Complex tensor of shape [max_seq_len, dim/2] with rotation values
     """
+    if dim % 2 != 0:
+        raise ValueError(
+            f"RoPE dimension must be even, got {dim}"
+        )
+    if theta <= 0:
+        raise ValueError(f"RoPE theta must be positive, got {theta}")
+    if max_seq_len <= 0:
+        raise ValueError(
+            f"RoPE max_seq_len must be positive, got {max_seq_len}"
+        )
+
     # Calculate base frequencies: lower dimensions rotate faster
     # freqs[i] = 1 / (theta^(2i/dim))
     freqs = 1.0 / (theta ** (torch.arange(0, dim, 2).float() / dim))
@@ -184,7 +198,13 @@ def precompute_rope_frequencies(
         # Compute frequency-dependent scaling
         dim_indices = torch.arange(0, dim, 2).float()
         # Ramp function: smoothly transition between fast and slow scaling
-        ramp = (dim_indices / dim - beta_slow) / (beta_fast / dim - beta_slow)
+        denom = beta_fast / dim - beta_slow
+        if abs(denom) < 1e-9:
+            # When dim == beta_fast (e.g. 32), ramp is undefined —
+            # fall back to uniform scaling (ramp = 0.5).
+            ramp = torch.full_like(dim_indices, 0.5)
+        else:
+            ramp = (dim_indices / dim - beta_slow) / denom
         ramp = torch.clamp(ramp, 0, 1)
 
         # Apply scaled freqs with ramp
@@ -227,8 +247,14 @@ def apply_rotary_embedding(
         Rotated tensor, same shape as input
     """
     seq_len = x.shape[1]
+    end_pos = start_pos + seq_len
+    if end_pos > freqs_cis.shape[0]:
+        raise ValueError(
+            f"freqs_cis length {freqs_cis.shape[0]} too short for "
+            f"start_pos={start_pos} + seq_len={seq_len} = {end_pos}"
+        )
     # Get the right slice of frequencies for our positions
-    freqs = freqs_cis[start_pos:start_pos + seq_len]
+    freqs = freqs_cis[start_pos:end_pos]
 
     # Reshape x to treat pairs of dims as complex: [batch, seq, heads, dim/2, 2]
     x_complex = torch.view_as_complex(x.float().reshape(*x.shape[:-1], -1, 2))
@@ -287,6 +313,14 @@ class Attention(nn.Module):
         super().__init__()
         self.n_heads = config.n_heads          # Number of query heads
         self.n_kv_heads = config.n_kv_heads    # Number of key/value heads (for GQA)
+        if self.n_kv_heads > self.n_heads:
+            raise ValueError(
+                f"n_kv_heads ({self.n_kv_heads}) must be <= n_heads "
+                f"({self.n_heads})")
+        if self.n_heads % self.n_kv_heads != 0:
+            raise ValueError(
+                f"n_heads ({self.n_heads}) must be divisible by "
+                f"n_kv_heads ({self.n_kv_heads})")
         self.head_dim = config.dim // config.n_heads  # Dimension per head
         self.n_rep = self.n_heads // self.n_kv_heads  # How many Q heads per KV head
 
@@ -310,12 +344,27 @@ class Attention(nn.Module):
 
         self.dropout = nn.Dropout(config.dropout)
         self.use_rope = config.use_rope
-        self.use_qk_norm = getattr(config, 'use_qk_norm', False)
+        self.use_qk_norm = config.use_qk_norm
+
+        # Pre-computed attention scale — avoids math.sqrt() per forward pass
+        self._scale = 1.0 / math.sqrt(self.head_dim)
 
         # Learned QK norms (Qwen3-style RMSNorm per head)
         if self.use_qk_norm:
             self.q_norm = RMSNorm(self.head_dim)
             self.k_norm = RMSNorm(self.head_dim)
+
+        # R22: Differential attention — split heads into two groups and
+        # subtract: attn = softmax(Q1@K1^T) - λ * softmax(Q2@K2^T).
+        # Cancels noise / uninformative attention mass.
+        self.use_differential_attn = config.use_differential_attn
+        if self.use_differential_attn and self.n_heads >= 2 and self.n_heads % 2 == 0:
+            # Per-head learnable lambda (initialized near zero so early
+            # training behaves close to standard attention).
+            self._diff_lambda = nn.Parameter(
+                torch.full((self.n_heads // 2,), 0.05))
+        else:
+            self.use_differential_attn = False
 
         # ─────────────────────────────────────────────────────────────────────
         # KV-CACHE: Pre-allocated for O(1) per-token writes during generation
@@ -323,6 +372,26 @@ class Attention(nn.Module):
         # which caused O(n) reallocation every token.
         # ─────────────────────────────────────────────────────────────────────
         self._kv_cache: Optional[object] = None
+
+        # T3-1: Cross-layer KV sharing (YOCO-style)
+        # Set by Enigma.__init__() to point followers at the leader's Attention.
+        self._kv_share_source: Optional['Attention'] = None
+        self._shared_kv: Optional[tuple[torch.Tensor, torch.Tensor]] = None
+
+        # T5-6: Multi-Head Latent Attention (MLA) — low-rank KV compression
+        # Instead of projecting dim → n_kv_heads*head_dim directly,
+        # factor through a smaller latent: dim → latent → K, V.
+        # Reduces parameter count and acts as regularization bottleneck.
+        self._use_mla = config.mla_latent_dim > 0
+        if self._use_mla:
+            ld = config.mla_latent_dim
+            self.wkv_down = nn.Linear(config.dim, ld, bias=False)
+            self.wk_up = nn.Linear(ld, self.n_kv_heads * self.head_dim, bias=False)
+            self.wv_up = nn.Linear(ld, self.n_kv_heads * self.head_dim, bias=False)
+
+        # T3-8: LongLoRA shifted sparse attention
+        self.use_shifted_attention = config.use_shifted_attention
+        self._shifted_group_size = config.shifted_group_size
 
     def forward(
         self, x: torch.Tensor, freqs_cis: Optional[torch.Tensor] = None,
@@ -344,48 +413,72 @@ class Attention(nn.Module):
         B, T, _ = x.shape  # Batch, Time (seq_len), _ (dim)
 
         # ─────────────────────────────────────────────────────────────────────
-        # STEP 1: Project input to Q, K, V
+        # T3-1: Cross-layer KV sharing — follower layers skip K, V
+        # projection and reuse the leader layer's K, V.
         # ─────────────────────────────────────────────────────────────────────
-        q = self.wq(x).reshape(B, T, self.n_heads, self.head_dim)
-        k = self.wk(x).reshape(B, T, self.n_kv_heads, self.head_dim)
-        v = self.wv(x).reshape(B, T, self.n_kv_heads, self.head_dim)
+        if self._kv_share_source is not None:
+            q = self.wq(x).reshape(B, T, self.n_heads, self.head_dim)
+            if self.use_rope and freqs_cis is not None:
+                q = apply_rotary_embedding(q, freqs_cis, start_pos)
+            if self.use_qk_norm:
+                q = self.q_norm(q)
+            if use_cache:
+                k, v = self._kv_share_source._kv_cache.get()
+            else:
+                k, v = self._kv_share_source._shared_kv
+        else:
+            # ─────────────────────────────────────────────────────────────────
+            # STEP 1: Project input to Q, K, V
+            # ─────────────────────────────────────────────────────────────────
+            q = self.wq(x).reshape(B, T, self.n_heads, self.head_dim)
+            if self._use_mla:
+                # T5-6: MLA — factored KV through latent bottleneck
+                kv_latent = self.wkv_down(x)
+                k = self.wk_up(kv_latent).reshape(B, T, self.n_kv_heads, self.head_dim)
+                v = self.wv_up(kv_latent).reshape(B, T, self.n_kv_heads, self.head_dim)
+            else:
+                k = self.wk(x).reshape(B, T, self.n_kv_heads, self.head_dim)
+                v = self.wv(x).reshape(B, T, self.n_kv_heads, self.head_dim)
 
-        # ─────────────────────────────────────────────────────────────────────
-        # STEP 2: Apply RoPE position embeddings to Q and K
-        # ─────────────────────────────────────────────────────────────────────
-        if self.use_rope and freqs_cis is not None:
-            q = apply_rotary_embedding(q, freqs_cis, start_pos)
-            k = apply_rotary_embedding(k, freqs_cis, start_pos)
+            # ─────────────────────────────────────────────────────────────────
+            # STEP 2: Apply RoPE position embeddings to Q and K
+            # ─────────────────────────────────────────────────────────────────
+            if self.use_rope and freqs_cis is not None:
+                q = apply_rotary_embedding(q, freqs_cis, start_pos)
+                k = apply_rotary_embedding(k, freqs_cis, start_pos)
 
-        # QK normalization: prevents fp16 attention overflow on long sequences
-        if self.use_qk_norm:
-            q = self.q_norm(q)
-            k = self.k_norm(k)
+            # QK normalization: prevents fp16 attention overflow on long sequences
+            if self.use_qk_norm:
+                q = self.q_norm(q)
+                k = self.k_norm(k)
 
-        # ─────────────────────────────────────────────────────────────────────
-        # STEP 3: Handle KV-cache (for efficient generation)
-        # ─────────────────────────────────────────────────────────────────────
-        if use_cache:
-            # Detach K, V from computation graph to prevent memory explosion
-            # if someone accidentally backprops with use_cache=True
-            k = k.detach()
-            v = v.detach()
+            # ─────────────────────────────────────────────────────────────────
+            # STEP 3: Handle KV-cache (for efficient generation)
+            # ─────────────────────────────────────────────────────────────────
+            if use_cache:
+                # Detach K, V from computation graph to prevent memory explosion
+                # if someone accidentally backprops with use_cache=True
+                k = k.detach()
+                v = v.detach()
 
-            # Lazy-init pre-allocated cache on first use
-            if self._kv_cache is None:
-                from enigma_engine.core.kv_cache import KVCache
-                self._kv_cache = KVCache(
-                    batch_size=B,
-                    max_seq_len=self.max_cache_len,
-                    n_kv_heads=self.n_kv_heads,
-                    head_dim=self.head_dim,
-                    device=k.device,
-                    dtype=k.dtype,
-                )
+                # Lazy-init pre-allocated cache on first use
+                if self._kv_cache is None:
+                    from enigma_engine.core.kv_cache import KVCache
+                    self._kv_cache = KVCache(
+                        batch_size=B,
+                        max_seq_len=self.max_cache_len,
+                        n_kv_heads=self.n_kv_heads,
+                        head_dim=self.head_dim,
+                        device=k.device,
+                        dtype=k.dtype,
+                    )
 
-            # O(1) index write instead of O(n) torch.cat() + realloc
-            self._kv_cache.update(k, v)
-            k, v = self._kv_cache.get()
+                # O(1) index write instead of O(n) torch.cat() + realloc
+                self._kv_cache.update(k, v)
+                k, v = self._kv_cache.get()
+            else:
+                # T3-1: Store K, V for follower layers (training mode)
+                self._shared_kv = (k, v)
 
         # ─────────────────────────────────────────────────────────────────────
         # STEP 4: Repeat K, V for GQA (if using fewer KV heads)
@@ -394,6 +487,14 @@ class Attention(nn.Module):
             # Each KV head serves multiple Q heads
             k = k.repeat_interleave(self.n_rep, dim=2)
             v = v.repeat_interleave(self.n_rep, dim=2)
+
+        # ─────────────────────────────────────────────────────────────────────
+        # T3-8: LongLoRA shifted sparse attention (training only)
+        # ─────────────────────────────────────────────────────────────────────
+        if (self.use_shifted_attention and T > 1 and not use_cache
+                and T > self._shifted_group_size):
+            output = self._shifted_sparse_attention(q, k, v, B, T)
+            return self.wo(output)
 
         # ─────────────────────────────────────────────────────────────────────
         # STEP 5: Compute attention (Flash or Standard)
@@ -434,10 +535,33 @@ class Attention(nn.Module):
                 q, k, v,
                 dropout_p=self.dropout.p if self.training else 0.0,
                 causal=True,  # Autoregressive masking
-                softmax_scale=1.0 / math.sqrt(self.head_dim)
+                softmax_scale=self._scale
             )
             # output is [batch, seq, heads, dim], need [batch, seq, dim]
             output = output.reshape(B, T, -1)
+        elif (
+            not self.use_differential_attn
+            and hasattr(F, "scaled_dot_product_attention")
+            and x.is_cuda
+        ):
+            # ─────────────────────────────────────────────────────────────────
+            # SDPA PATH: PyTorch 2.0+ built-in, auto-dispatches to
+            # Flash/xFormers/math backend.  Free 2-4x speedup when
+            # flash-attn package is not installed.
+            # ─────────────────────────────────────────────────────────────────
+            q_s = q.transpose(1, 2)  # [B, heads, T, dim]
+            k_s = k.transpose(1, 2)
+            v_s = v.transpose(1, 2)
+            drop_p = self.dropout.p if self.training else 0.0
+            if mask is not None:
+                output = F.scaled_dot_product_attention(
+                    q_s, k_s, v_s, attn_mask=mask,
+                    dropout_p=drop_p, scale=self._scale)
+            else:
+                output = F.scaled_dot_product_attention(
+                    q_s, k_s, v_s, is_causal=True,
+                    dropout_p=drop_p, scale=self._scale)
+            output = output.transpose(1, 2).reshape(B, T, -1)
         else:
             # ─────────────────────────────────────────────────────────────────
             # STANDARD ATTENTION PATH: Works everywhere (CPU, MPS, any dtype)
@@ -446,13 +570,33 @@ class Attention(nn.Module):
             q, k, v = q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2)
 
             # scores = Q @ K.T / sqrt(head_dim) - scaled dot-product attention
-            scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.head_dim)
+            scores = torch.matmul(q, k.transpose(-2, -1)) * self._scale
             if mask is not None:
                 scores = scores + mask  # Mask is -inf for blocked positions
 
-            # Softmax and dropout, then weighted sum of values
-            attn = self.dropout(F.softmax(scores, dim=-1))
-            output = torch.matmul(attn, v)
+            # R22: Differential attention — noise cancellation.
+            if self.use_differential_attn:
+                # Group 1 (even heads) and Group 2 (odd heads)
+                s1 = scores[:, 0::2, :, :]    # (B, half_h, T, Tk)
+                s2 = scores[:, 1::2, :, :]    # (B, half_h, T, Tk)
+                a1 = F.softmax(s1, dim=-1)
+                a2 = F.softmax(s2, dim=-1)
+                lam = torch.sigmoid(self._diff_lambda)  # (half_h,)
+                lam = lam[None, :, None, None]           # broadcast
+                diff_attn = self.dropout(a1 - lam * a2)  # (B, half_h, T, Tk)
+                # Apply to V: average even/odd V heads
+                v1 = v[:, 0::2, :, :]
+                v2 = v[:, 1::2, :, :]
+                diff_attn = diff_attn.to(v1.dtype)
+                out1 = torch.matmul(diff_attn, v1)
+                out2 = torch.matmul(diff_attn, v2)
+                # Interleave back to full head count
+                output = torch.stack([out1, out2], dim=2).reshape(
+                    B, self.n_heads, T, self.head_dim)
+            else:
+                # Softmax and dropout, then weighted sum of values
+                attn = self.dropout(F.softmax(scores, dim=-1))
+                output = torch.matmul(attn, v)
 
             # Reshape back: [batch, heads, seq, dim] -> [batch, seq, heads*dim]
             output = output.transpose(1, 2).reshape(B, T, -1)
@@ -462,11 +606,113 @@ class Attention(nn.Module):
         # ─────────────────────────────────────────────────────────────────────
         return self.wo(output)
 
+    def _shifted_sparse_attention(
+        self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor,
+        B: int, T: int,
+    ) -> torch.Tensor:
+        """LongLoRA shifted sparse attention (T3-8).
+
+        Both head groups use local chunked attention (O(T * group_size)
+        instead of O(T^2)). Group B shifts by half the group size so
+        overlapping windows provide cross-boundary information flow.
+
+        Note: the circular shift creates a minor causality edge case in
+        Group B's first chunk. This is standard LongLoRA behavior — the
+        unshifted Group A heads maintain strict causality.
+
+        Args:
+            q, k, v: [B, T, n_heads, head_dim] after GQA expansion.
+            B: Batch size.
+            T: Sequence length (must be > group_size).
+
+        Returns:
+            [B, T, dim] attention output.
+        """
+        gs = self._shifted_group_size
+        shift = gs // 2
+        half = self.n_heads // 2
+        n_hb = self.n_heads - half
+
+        # Pad T to multiple of group_size
+        pad = (gs - T % gs) % gs
+        if pad > 0:
+            q = F.pad(q, (0, 0, 0, 0, 0, pad))
+            k = F.pad(k, (0, 0, 0, 0, 0, pad))
+            v = F.pad(v, (0, 0, 0, 0, 0, pad))
+        T_padded = q.shape[1]
+        n_chunks = T_padded // gs
+
+        # Split heads: Group A (normal), Group B (shifted)
+        q_a, q_b = q[:, :, :half], q[:, :, half:]
+        k_a, k_b = k[:, :, :half], k[:, :, half:]
+        v_a, v_b = v[:, :, :half], v[:, :, half:]
+
+        # Shift Group B by half the group size
+        q_b = torch.roll(q_b, shifts=shift, dims=1)
+        k_b = torch.roll(k_b, shifts=shift, dims=1)
+        v_b = torch.roll(v_b, shifts=shift, dims=1)
+
+        # Reshape to chunks: [B, T_p, n_h, D] -> [B*n_chunks, gs, n_h, D]
+        def to_chunks(t: torch.Tensor) -> torch.Tensor:
+            return t.reshape(B, n_chunks, gs, -1, self.head_dim).reshape(
+                B * n_chunks, gs, -1, self.head_dim)
+
+        q_a, k_a, v_a = to_chunks(q_a), to_chunks(k_a), to_chunks(v_a)
+        q_b, k_b, v_b = to_chunks(q_b), to_chunks(k_b), to_chunks(v_b)
+
+        # Causal mask for each local chunk
+        chunk_mask = torch.triu(
+            torch.full((gs, gs), float('-inf'), device=q.device, dtype=q.dtype),
+            diagonal=1,
+        )
+        scale = self._scale
+
+        # Local attention per group
+        def local_attn(qg: torch.Tensor, kg: torch.Tensor,
+                       vg: torch.Tensor) -> torch.Tensor:
+            qg = qg.transpose(1, 2)   # [B*C, n_h, gs, D]
+            kg = kg.transpose(1, 2)
+            vg = vg.transpose(1, 2)
+            scores = torch.matmul(qg, kg.transpose(-2, -1)) * scale
+            scores = scores + chunk_mask
+            attn = self.dropout(F.softmax(scores, dim=-1))
+            out = torch.matmul(attn, vg)
+            return out.transpose(1, 2)  # [B*C, gs, n_h, D]
+
+        out_a = local_attn(q_a, k_a, v_a)
+        out_b = local_attn(q_b, k_b, v_b)
+
+        # Un-chunk: [B*n_chunks, gs, n_h, D] -> [B, T_padded, n_h, D]
+        def from_chunks(t: torch.Tensor, n_h: int) -> torch.Tensor:
+            return t.reshape(B, n_chunks, gs, n_h, self.head_dim).reshape(
+                B, T_padded, n_h, self.head_dim)
+
+        out_a = from_chunks(out_a, half)
+        out_b = from_chunks(out_b, n_hb)
+
+        # Unshift Group B
+        out_b = torch.roll(out_b, shifts=-shift, dims=1)
+
+        # Remove padding and combine
+        if pad > 0:
+            out_a = out_a[:, :T]
+            out_b = out_b[:, :T]
+
+        output = torch.cat([out_a, out_b], dim=2)  # [B, T, n_heads, D]
+        return output.reshape(B, T, -1)
+
     def clear_cache(self) -> None:
         """Clear the KV-cache (call between different sequences)."""
         if self._kv_cache is not None:
             self._kv_cache.clear()
         self._kv_cache = None
+        self._shared_kv = None
+
+    def rewind_cache(self, position: int) -> None:
+        """Truncate KV-cache back to *position* (keep cache alive)."""
+        if self._kv_cache is not None:
+            self._kv_cache.rewind_to(position)
+            self._shared_kv = None  # invalidate expanded view
 
 
 class FeedForward(nn.Module):
@@ -621,19 +867,21 @@ class MoEFeedForward(nn.Module):
         # Normalize selected expert weights
         top_k_probs = top_k_probs / top_k_probs.sum(dim=-1, keepdim=True)
 
-        # Compute load balancing loss for training (vectorized)
+        # Compute load balancing loss for training (Switch Transformer formulation)
+        # Must be differentiable through router_probs so the router learns.
         if self.training:
-            # Use one_hot + sum for vectorized counting (no loop)
-            # Flatten top_k_indices and create one-hot encoding
+            # f_i: fraction of tokens dispatched to each expert (non-diff)
             flat_indices = top_k_indices.reshape(-1)  # [num_tokens * k]
             expert_counts = torch.bincount(
                 flat_indices, minlength=self.num_experts
             ).float()
+            f = expert_counts / (num_tokens * self.num_experts_per_token)
 
-            # Ideal distribution is uniform
-            ideal_count = (num_tokens * self.num_experts_per_token) / self.num_experts
-            # Loss is variance from ideal (encourages balance)
-            self.load_balancing_loss = ((expert_counts - ideal_count) ** 2).mean()
+            # P_i: mean router probability per expert (differentiable!)
+            P = router_probs.mean(dim=0)  # [num_experts]
+
+            # aux = N * sum(f_i * P_i) — gradient flows through P_i
+            self.load_balancing_loss = self.num_experts * (f * P).sum()
 
         # ─────────────────────────────────────────────────────────────────────
         # VECTORIZED EXPERT ROUTING: Process each expert once with batched tokens
@@ -689,6 +937,124 @@ class MoEFeedForward(nn.Module):
         return self.load_balancing_loss * self.aux_loss_weight
 
 
+# =============================================================================
+# T5-4: Token Merging (ToMe) — merge similar tokens mid-forward-pass
+# =============================================================================
+
+def _bipartite_soft_matching(
+    metric: torch.Tensor,
+    r: int,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Bipartite soft matching for Token Merging (Bolya et al. 2023).
+
+    Splits tokens into two sets (even/odd indices), finds the most
+    similar pairs, and merges the top-r pairs.
+
+    Args:
+        metric: (B, T, D) normalized token features for similarity.
+        r: Number of tokens to merge (remove).
+
+    Returns:
+        merge_dst: (B, T) indices mapping merged tokens to destinations.
+        merge_dst: Duplicate of first value (unmerge uses merge_dst directly).
+        merged_mask: (B, T) boolean mask — True for tokens that were merged.
+    """
+    B, T, D = metric.shape
+    if r <= 0 or T <= 2:
+        idx = torch.arange(T, device=metric.device).unsqueeze(0).expand(B, -1)
+        return idx, idx, torch.zeros(B, T, dtype=torch.bool, device=metric.device)
+
+    r = min(r, T // 2)
+
+    # Split into two alternating sets: A (even) and B (odd)
+    a_idx = torch.arange(0, T, 2, device=metric.device)  # [T//2]
+    b_idx = torch.arange(1, T, 2, device=metric.device)  # [T//2]
+
+    a_tokens = metric[:, a_idx]  # (B, |A|, D)
+    b_tokens = metric[:, b_idx]  # (B, |B|, D)
+
+    # Similarity: dot product of L2-normalized features
+    scores = torch.bmm(a_tokens, b_tokens.transpose(1, 2))  # (B, |A|, |B|)
+
+    # For each A token, find its most similar B token
+    max_scores, most_similar = scores.max(dim=-1)  # (B, |A|)
+
+    # Pick the top-r A tokens by max similarity
+    _, top_r_idx = max_scores.topk(r, dim=-1)  # (B, r)
+
+    # Build merge mapping: merged A-tokens map to their most-similar B-token
+    merge_dst = torch.arange(T, device=metric.device).unsqueeze(0).expand(B, -1).clone()
+
+    merged_mask = torch.zeros(B, T, dtype=torch.bool, device=metric.device)
+    for b in range(B):
+        for i in range(r):
+            a_pos = a_idx[top_r_idx[b, i]]
+            b_pos = b_idx[most_similar[b, top_r_idx[b, i]]]
+            merge_dst[b, a_pos] = b_pos
+            merged_mask[b, a_pos] = True
+
+    return merge_dst, merge_dst, merged_mask
+
+
+def _tome_merge(
+    x: torch.Tensor,
+    merged_mask: torch.Tensor,
+) -> torch.Tensor:
+    """Merge tokens: average merged source into destination, remove sources.
+
+    Args:
+        x: (B, T, D) input tensor.
+        merged_mask: (B, T) boolean — True for tokens to remove (sources).
+
+    Returns:
+        (B, T', D) tensor with merged tokens removed.
+    """
+    B, T, D = x.shape
+    # For simplicity, just remove the merged tokens (source tokens)
+    # The destination tokens already contain similar information
+    keep_mask = ~merged_mask
+    # Collect kept tokens per batch
+    max_kept = keep_mask.sum(dim=1).max().item()
+    result = x.new_zeros(B, max_kept, D)
+    for b in range(B):
+        kept = x[b, keep_mask[b]]
+        result[b, :kept.shape[0]] = kept
+    return result
+
+
+def _tome_unmerge(
+    x: torch.Tensor,
+    original_len: int,
+    merged_mask: torch.Tensor,
+    merge_dst: torch.Tensor,
+) -> torch.Tensor:
+    """Restore merged tokens by copying from their destinations.
+
+    Args:
+        x: (B, T', D) tensor after processing.
+        original_len: Original sequence length T.
+        merged_mask: (B, T) — True for merged (removed) tokens.
+        merge_dst: (B, T) — destination index for each merged token.
+
+    Returns:
+        (B, T, D) tensor with original sequence length restored.
+    """
+    B, _, D = x.shape
+    result = x.new_zeros(B, original_len, D)
+    for b in range(B):
+        keep_positions = (~merged_mask[b]).nonzero(as_tuple=True)[0]
+        # Place kept tokens back
+        for i, pos in enumerate(keep_positions):
+            if i < x.shape[1]:
+                result[b, pos] = x[b, i]
+        # Copy merged tokens from their destinations
+        merge_positions = merged_mask[b].nonzero(as_tuple=True)[0]
+        for pos in merge_positions:
+            dst = merge_dst[b, pos].item()
+            result[b, pos] = result[b, dst]
+    return result
+
+
 class TransformerBlock(nn.Module):
     """
     Single Transformer block with pre-norm architecture.
@@ -725,8 +1091,8 @@ class TransformerBlock(nn.Module):
         """
         super().__init__()
         self.layer_id = layer_id
-        self.use_checkpoint = getattr(config, 'use_gradient_checkpointing', False)
-        self.use_moe = getattr(config, 'use_moe', False)
+        self.use_checkpoint = config.use_gradient_checkpointing
+        self.use_moe = config.use_moe
 
         # Choose normalization type based on config
         Norm = RMSNorm if config.use_rms_norm else nn.LayerNorm
@@ -745,29 +1111,90 @@ class TransformerBlock(nn.Module):
 
         # LayerScale: learnable per-channel scaling of residual outputs
         # Initialized to a tiny value so early training is stable
-        self.use_layer_scale = getattr(config, 'use_layer_scale', False)
+        self.use_layer_scale = config.use_layer_scale
         if self.use_layer_scale:
             self.ls_attn = nn.Parameter(torch.full((config.dim,), 1e-5))
             self.ls_ffn = nn.Parameter(torch.full((config.dim,), 1e-5))
 
         # Drop path (stochastic depth): linearly increasing per layer
-        drop_rate = getattr(config, 'drop_path_rate', 0.0)
-        n_layers = getattr(config, 'n_layers', 1)
+        drop_rate = config.drop_path_rate
+        n_layers = config.n_layers
         layer_drop = drop_rate * layer_id / max(n_layers - 1, 1) if drop_rate > 0 else 0.0
         self.drop_path_attn = DropPath(layer_drop)
         self.drop_path_ffn = DropPath(layer_drop)
+
+        # T3-4: Mixture of Depths — per-token routing for FFN
+        self.use_mod = config.use_mixture_of_depths
+        self._mod_capacity = config.mod_capacity_factor
+        if self.use_mod:
+            self.depth_router = nn.Linear(config.dim, 1, bias=False)
+            self._mod_aux_loss = torch.tensor(0.0)
+
+        # T5-4: Token Merging (ToMe)
+        self._tome_ratio = config.tome_ratio
 
     def _forward_impl(
         self, x: torch.Tensor, freqs_cis: Optional[torch.Tensor] = None,
         mask: Optional[torch.Tensor] = None, use_cache: bool = False, start_pos: int = 0
     ) -> torch.Tensor:
         """Internal forward implementation (used by checkpointing)."""
+        B, T, D = x.shape
+
+        # T5-4: Token Merging — reduce seq length before attention
+        tome_active = (
+            self._tome_ratio > 0.0 and T > 4
+            and not use_cache and self.training
+        )
+        tome_merged_mask = None
+        tome_merge_dst = None
+        original_T = T
+
+        if tome_active:
+            r = max(1, int(T * self._tome_ratio))
+            normed = F.normalize(x, dim=-1)
+            tome_merge_dst, _, tome_merged_mask = _bipartite_soft_matching(normed, r)
+            x = _tome_merge(x, tome_merged_mask)
+            T = x.shape[1]
+            # Rebuild mask for shorter sequence
+            if mask is not None and mask.shape[-1] >= original_T:
+                mask = None  # Let attention rebuild causal mask
+
         # Attention sub-layer with residual connection
         attn_out = self.attention(self.attention_norm(x), freqs_cis, mask, use_cache, start_pos)
         if self.use_layer_scale:
             attn_out = attn_out * self.ls_attn
         h = x + self.drop_path_attn(attn_out)
-        # FFN sub-layer with residual connection
+
+        # T5-4: Unmerge tokens back to original length after attention
+        if tome_active and tome_merged_mask is not None:
+            h = _tome_unmerge(h, original_T, tome_merged_mask, tome_merge_dst)
+            T = original_T
+
+        # T3-4: Mixture of Depths — route tokens for FFN
+        if self.use_mod and T > 1 and not use_cache:
+            scores = self.depth_router(h).squeeze(-1)       # [B, T]
+            k = max(1, int(T * self._mod_capacity))
+            topk_vals, topk_idx = torch.topk(scores, k, dim=1)
+            weights = torch.sigmoid(topk_vals).unsqueeze(-1)  # [B, k, 1]
+
+            # Gather → FFN → weight → scatter back
+            idx_expand = topk_idx.unsqueeze(-1).expand(-1, -1, D)
+            selected = torch.gather(h, 1, idx_expand)
+            ffn_out = self.feed_forward(self.ffn_norm(selected))
+            if self.use_layer_scale:
+                ffn_out = ffn_out * self.ls_ffn
+            ffn_out = self.drop_path_ffn(ffn_out) * weights
+            result = h.clone()
+            result.scatter_add_(1, idx_expand, ffn_out)
+
+            # Load-balancing auxiliary loss
+            probs = torch.sigmoid(scores)
+            self._mod_aux_loss = (
+                (probs.mean(dim=1) - self._mod_capacity).pow(2).mean()
+            )
+            return result
+
+        # Standard FFN sub-layer with residual connection
         ffn_out = self.feed_forward(self.ffn_norm(h))
         if self.use_layer_scale:
             ffn_out = ffn_out * self.ls_ffn
@@ -807,8 +1234,18 @@ class TransformerBlock(nn.Module):
         """Clear KV-cache in the attention layer."""
         self.attention.clear_cache()
 
+    def rewind_cache(self, position: int) -> None:
+        """Truncate KV-cache back to *position*."""
+        self.attention.rewind_cache(position)
+
     def get_moe_aux_loss(self) -> torch.Tensor:
         """Get MoE auxiliary loss for load balancing during training."""
         if self.use_moe and hasattr(self.feed_forward, 'get_aux_loss'):
             return self.feed_forward.get_aux_loss()
+        return torch.tensor(0.0)
+
+    def get_mod_aux_loss(self) -> torch.Tensor:
+        """Get Mixture-of-Depths auxiliary loss (T3-4)."""
+        if self.use_mod:
+            return self._mod_aux_loss
         return torch.tensor(0.0)

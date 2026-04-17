@@ -19,8 +19,8 @@ from enigma_engine.gui.widgets import (
     FONT_MONO, FONT_SECTION, FONT_SMALL, FONT_TINY,
     CollapsiblePanel, HUDFrame, SectionLabel, SelectableLabel,
     SelectableTextbox, StatusDot, Tooltip,
-    themed_dropdown, themed_entry, themed_scroll,
-    wire_hotkeys,
+    themed_button, themed_dropdown, themed_entry, themed_numeric_entry,
+    themed_scroll, wire_hotkeys,
 )
 from enigma_engine.gui.scanners import DATA_DIR
 
@@ -34,6 +34,39 @@ class ForgePageMixin:
     - _make_page, training_files, _QUICK_PROFILE_FIELDS
     - Various forge callback methods from ForgeMixin
     """
+
+    def _build_mode_card(self, parent, mode_name, mode_desc):
+        """Create a single radio-button mode card."""
+        mode_card = HUDFrame(parent, glow_color=C_BORDER)
+        mode_card.pack(fill="x", pady=(0, 4))
+
+        card_inner = ctk.CTkFrame(
+            mode_card, fg_color="transparent")
+        card_inner.pack(fill="x", padx=8, pady=8)
+        card_inner.grid_columnconfigure(1, weight=1)
+
+        radio = ctk.CTkRadioButton(
+            card_inner, text="", variable=self.training_mode_var,
+            value=mode_name, font=FONT_SMALL,
+            fg_color=C_GREEN_DIM, hover_color=C_ACCENT_DIM,
+            border_color=C_ACCENT_DIM,
+            command=self._on_training_mode_selected)
+        radio.grid(row=0, column=0, rowspan=2, sticky="nw",
+                   padx=(0, 8))
+
+        SelectableLabel(
+            card_inner, text=mode_name.upper(),
+            font=FONT_SMALL, text_color=C_TEXT_BRIGHT,
+            anchor="w"
+        ).grid(row=0, column=1, sticky="w")
+
+        desc_lbl = ctk.CTkLabel(
+            card_inner, text=mode_desc,
+            font=FONT_TINY, text_color=C_TEXT_DIM,
+            anchor="w", justify="left",
+            wraplength=300)
+        desc_lbl.grid(row=1, column=1, sticky="ew", pady=(2, 0))
+        self._forge_mode_desc_labels.append(desc_lbl)
 
     # ================================================================
     # PAGE: FORGE - Training
@@ -80,7 +113,7 @@ class ForgePageMixin:
         self._forge_trainer_dot = StatusDot(
             tr_inner, color=C_TEXT_DIM)
         self._forge_trainer_dot.grid(
-            row=0, column=0, rowspan=2, padx=(0, 6))
+            row=0, column=0, rowspan=3, padx=(0, 6))
         SelectableLabel(
             tr_inner, text="TRAINER", font=FONT_SMALL,
             text_color=C_TEXT_BRIGHT, anchor="w"
@@ -91,9 +124,9 @@ class ForgePageMixin:
         self._forge_trainer_name.grid(row=1, column=1, sticky="w")
         self._forge_trainer_info = SelectableLabel(
             tr_inner, text="", font=FONT_TINY,
-            text_color=C_TEXT_DIM, anchor="e")
+            text_color=C_TEXT_DIM, anchor="w")
         self._forge_trainer_info.grid(
-            row=0, column=2, rowspan=2, padx=(4, 0))
+            row=2, column=1, sticky="w", pady=(1, 0))
 
         # Student status card
         self._forge_student_card = HUDFrame(
@@ -107,7 +140,7 @@ class ForgePageMixin:
         self._forge_student_dot = StatusDot(
             st_inner, color=C_TEXT_DIM)
         self._forge_student_dot.grid(
-            row=0, column=0, rowspan=2, padx=(0, 6))
+            row=0, column=0, rowspan=4, padx=(0, 6))
         SelectableLabel(
             st_inner, text="STUDENT", font=FONT_SMALL,
             text_color=C_TEXT_BRIGHT, anchor="w"
@@ -118,16 +151,16 @@ class ForgePageMixin:
         self._forge_student_name.grid(row=1, column=1, sticky="w")
         self._forge_student_info = SelectableLabel(
             st_inner, text="", font=FONT_TINY,
-            text_color=C_TEXT_DIM, anchor="e")
+            text_color=C_TEXT_DIM, anchor="w")
         self._forge_student_info.grid(
-            row=0, column=2, rowspan=2, padx=(4, 0))
+            row=2, column=1, sticky="w", pady=(1, 0))
 
         # Param count label — updated after each training session
         self._forge_student_params = SelectableLabel(
             st_inner, text="", font=FONT_TINY,
             text_color=C_TEXT_DIM, anchor="w")
         self._forge_student_params.grid(
-            row=2, column=1, columnspan=2, sticky="w", pady=(2, 0))
+            row=3, column=1, sticky="w", pady=(2, 0))
 
         # Kept for backward compatibility
         self._trainer_route_label = self._forge_trainer_name
@@ -138,66 +171,76 @@ class ForgePageMixin:
 
         # ===== NEW SIMPLIFIED TRAINING MODE SELECTOR =====
         # Instead of dropdown, use card-based selection
-        self._forge_label(ctrl_scroll, "Choose training method")
+        self._forge_label(ctrl_scroll, "Training method")
 
         # Card container
         modes_frame = ctk.CTkFrame(
             ctrl_scroll, fg_color="transparent")
-        modes_frame.pack(fill="x", padx=10, pady=(0, 8))
+        modes_frame.pack(fill="x", padx=10, pady=(0, 4))
 
         self.training_mode_var = ctk.StringVar(value="Basic")
 
-        # Define the 4 main modes with descriptions
-        training_modes = [
-            ("Pre-Train", "Language pre-training from scratch on large text data. Builds foundational capabilities"),
-            ("Distill", "Teacher generates personality, reasoning, and knowledge data. Student fine-tunes on it"),
-            ("Basic", "Train on your own data (text files, JSONL). Auto-selects LoRA for large models"),
-            ("AI-Guided", "AI teacher creates curriculum and trains your model. Can work with or without data"),
-            ("Image", "Train on images or video. Teach visual understanding. Requires image folder"),
+        # Foundation modes — build the model
+        foundation_modes = [
+            ("Pre-Train", "Language pre-training from scratch on large text data"),
+            ("Distill", "Teacher generates personality, reasoning, and knowledge data"),
+            ("Basic", "Train on your own data (text files, JSONL). Auto-LoRA for large models"),
+            ("Image", "Train on images or video. Teach visual understanding"),
         ]
 
-        # Create radio button cards
-        for mode_name, mode_desc in training_modes:
-            mode_card = HUDFrame(
-                modes_frame, glow_color=C_BORDER)
-            mode_card.pack(fill="x", pady=(0, 4))
+        # Advanced modes — refine the model
+        advanced_modes = [
+            ("AI-Guided", "AI teacher creates curriculum and trains your model adaptively"),
+            ("Dialogue", "Teacher and student converse. Teacher scores and corrects responses"),
+            ("RLHF", "Reinforcement learning from human feedback using preference data"),
+            ("Self-Play", "Teacher judges student responses. Student improves via RL"),
+        ]
 
-            card_inner = ctk.CTkFrame(
-                mode_card, fg_color="transparent")
-            card_inner.pack(fill="x", padx=8, pady=8)
-            card_inner.grid_columnconfigure(1, weight=1)
+        # Alignment modes — preference & RL alternatives
+        alignment_modes = [
+            ("GRPO", "Group Relative Policy Optimization. RL without a critic network"),
+            ("ReMax", "REINFORCE with mean-reward baseline. Simpler than PPO"),
+            ("SimPO", "Simple Preference Optimization. No reference model needed"),
+            ("ORPO", "Odds Ratio Preference Optimization. SFT + alignment in one step"),
+        ]
 
-            # Radio button
-            radio = ctk.CTkRadioButton(
-                card_inner, text="", variable=self.training_mode_var,
-                value=mode_name, font=FONT_SMALL,
-                fg_color=C_GREEN_DIM, hover_color=C_ACCENT_DIM,
-                border_color=C_ACCENT_DIM,
-                command=self._on_training_mode_selected)
-            radio.grid(row=0, column=0, rowspan=2, sticky="nw", padx=(0, 8))
+        # Collect description labels for dynamic wraplength
+        self._forge_mode_desc_labels: list[ctk.CTkLabel] = []
 
-            # Mode title
-            SelectableLabel(
-                card_inner, text=mode_name.upper(),
-                font=FONT_SMALL, text_color=C_TEXT_BRIGHT,
-                anchor="w"
-            ).grid(row=0, column=1, sticky="w")
+        # --- Foundation row ---
+        SectionLabel(modes_frame, text="Foundation").pack(
+            anchor="w", padx=4, pady=(0, 2))
+        for mode_name, mode_desc in foundation_modes:
+            self._build_mode_card(modes_frame, mode_name, mode_desc)
 
-            # Mode description (CTkLabel for text wrapping)
-            ctk.CTkLabel(
-                card_inner, text=mode_desc,
-                font=FONT_TINY, text_color=C_TEXT_DIM,
-                anchor="w", justify="left",
-                wraplength=400
-            ).grid(row=1, column=1, sticky="w", pady=(2, 0))
+        # --- Advanced row ---
+        SectionLabel(modes_frame, text="Advanced").pack(
+            anchor="w", padx=4, pady=(8, 2))
+        for mode_name, mode_desc in advanced_modes:
+            self._build_mode_card(modes_frame, mode_name, mode_desc)
+
+        # --- Alignment row ---
+        SectionLabel(modes_frame, text="Alignment").pack(
+            anchor="w", padx=4, pady=(8, 2))
+        for mode_name, mode_desc in alignment_modes:
+            self._build_mode_card(modes_frame, mode_name, mode_desc)
+
+        # Dynamic wraplength: adjust desc labels when panel resizes
+        def _on_modes_resize(event):
+            w = event.width - 60  # account for radio + padding
+            if w < 100:
+                return
+            for lbl in self._forge_mode_desc_labels:
+                lbl.configure(wraplength=w)
+        modes_frame.bind("<Configure>", _on_modes_resize)
 
         # Include reasoning (CoT-B) — generates <think> chains in data
-        reasoning_row = ctk.CTkFrame(
+        self._forge_reasoning_section = ctk.CTkFrame(
             ctrl_scroll, fg_color="transparent")
-        reasoning_row.pack(fill="x", padx=10, pady=(0, 6))
+        self._forge_reasoning_section.pack(fill="x", padx=10, pady=(0, 6))
         self.forge_reasoning_var = ctk.BooleanVar(value=False)
         self._forge_reasoning_cb = ctk.CTkCheckBox(
-            reasoning_row, text="Include reasoning chains",
+            self._forge_reasoning_section, text="Include reasoning chains",
             variable=self.forge_reasoning_var,
             font=FONT_SMALL, text_color=C_TEXT,
             fg_color=C_GREEN_DIM, hover_color=C_ACCENT_DIM,
@@ -209,26 +252,48 @@ class ForgePageMixin:
                 "before answering, not just memorize answers.\n"
                 "Applies to AI-Guided mode.")
 
+        # Evolutionary selection — generate multiple answers, keep best
+        self._forge_evolutionary_section = ctk.CTkFrame(
+            ctrl_scroll, fg_color="transparent")
+        self._forge_evolutionary_section.pack(
+            fill="x", padx=10, pady=(0, 6))
+        self.forge_evolutionary_var = ctk.BooleanVar(value=False)
+        self._forge_evolutionary_cb = ctk.CTkCheckBox(
+            self._forge_evolutionary_section,
+            text="Evolutionary selection",
+            variable=self.forge_evolutionary_var,
+            font=FONT_SMALL, text_color=C_TEXT,
+            fg_color=C_GREEN_DIM, hover_color=C_ACCENT_DIM,
+            border_color=C_ACCENT_DIM, corner_radius=2)
+        self._forge_evolutionary_cb.pack(anchor="w")
+        Tooltip(self._forge_evolutionary_cb,
+                "For each task, generate multiple candidate answers,\n"
+                "score them, keep the best, and train on winners.\n"
+                "Repeats over generations to improve quality.\n"
+                "Needs a task file (one task per line).\n"
+                "Works with Basic, AI-Guided, RLHF, and Self-Play.")
+
         # === KNOWLEDGE PRESERVATION ===
         # The AI should be general-purpose. Training focuses it on a
         # topic without forgetting everything else.
-        preserve_section = ctk.CTkFrame(
+        self._forge_preserve_section = ctk.CTkFrame(
             ctrl_scroll, fg_color="transparent")
-        preserve_section.pack(fill="x", padx=0, pady=(8, 0))
+        self._forge_preserve_section.pack(fill="x", padx=0, pady=(8, 0))
 
-        self._forge_label(preserve_section, "Knowledge preservation")
+        self._forge_label(self._forge_preserve_section, "Knowledge preservation")
 
         # Focus balance — how much to focus vs stay general
         focus_row = ctk.CTkFrame(
-            preserve_section, fg_color="transparent")
+            self._forge_preserve_section, fg_color="transparent")
         focus_row.pack(fill="x", padx=10, pady=(0, 4))
         SelectableLabel(
             focus_row, text="General mix:", font=FONT_TINY,
             text_color=C_TEXT_DIM
         ).pack(side="left", padx=(0, 6))
         self.forge_general_mix_var = ctk.StringVar(value="20")
-        general_mix_entry = themed_entry(
-            focus_row, textvariable=self.forge_general_mix_var,
+        general_mix_entry = themed_numeric_entry(
+            focus_row, mode="int",
+            textvariable=self.forge_general_mix_var,
             width=50)
         general_mix_entry.pack(side="left", padx=(0, 4))
         SelectableLabel(
@@ -236,15 +301,15 @@ class ForgePageMixin:
             text_color=C_TEXT_DIM
         ).pack(side="left")
         Tooltip(general_mix_entry,
-                "How much general knowledge to mix in during\n"
-                "focused training. Prevents the AI from\n"
-                "forgetting everything except what you trained.\n"
-                "0% = only your data, 20% = recommended.\n"
-                "Higher = more general, lower = more focused.")
+                "Prevents the model from forgetting what it already knows.\n"
+                "Mixes in general knowledge alongside your training data.\n"
+                "0% = only your data (risky — can cause forgetting).\n"
+                "10-20% = recommended for existing models.\n"
+                "Only matters when training an existing model, not from scratch.")
 
         # General knowledge file
         gen_data_row = ctk.CTkFrame(
-            preserve_section, fg_color="transparent")
+            self._forge_preserve_section, fg_color="transparent")
         gen_data_row.pack(fill="x", padx=10, pady=(0, 6))
         gen_data_row.grid_columnconfigure(0, weight=1)
         self.forge_general_data_var = ctk.StringVar(value="")
@@ -254,10 +319,10 @@ class ForgePageMixin:
             placeholder_text="General knowledge file (optional)")
         self._forge_general_data_entry.grid(
             row=0, column=0, sticky="ew", padx=(0, 4))
-        self._forge_general_browse_btn = ctk.CTkButton(
-            gen_data_row, text="Browse", width=70,
-            fg_color=C_SURFACE, hover_color=C_PANEL,
-            text_color=C_TEXT, font=FONT_SMALL,
+        self._forge_general_browse_btn = themed_button(
+            gen_data_row, "Browse", style="secondary",
+            width=70,
+            font=FONT_SMALL,
             command=lambda: self._browse_training_data(
                 target_var=self.forge_general_data_var))
         self._forge_general_browse_btn.grid(
@@ -274,28 +339,6 @@ class ForgePageMixin:
             ctrl_scroll, fg_color="transparent")
         self._forge_pretrain_section.pack(fill="x", padx=0, pady=(8, 0))
 
-        self._forge_label(self._forge_pretrain_section, "Model architecture")
-        preset_row = ctk.CTkFrame(
-            self._forge_pretrain_section, fg_color="transparent")
-        preset_row.pack(fill="x", padx=10, pady=(0, 4))
-        SelectableLabel(
-            preset_row, text="Preset:", font=FONT_TINY,
-            text_color=C_TEXT_DIM
-        ).pack(side="left", padx=(0, 6))
-        self.pretrain_preset_var = ctk.StringVar()
-        from enigma_engine.core.model_presets import (
-            MODEL_PRESETS, MODEL_DESCRIPTIONS)
-        _preset_display = [
-            f"{k} - {MODEL_DESCRIPTIONS.get(k, '')}"
-            for k in MODEL_PRESETS]
-        self.pretrain_preset_var.set(
-            _preset_display[list(MODEL_PRESETS.keys()).index("large")])
-        self._pretrain_preset_dd = themed_dropdown(
-            preset_row, _preset_display,
-            variable=self.pretrain_preset_var,
-            width=340)
-        self._pretrain_preset_dd.pack(side="left", padx=(0, 6))
-
         self._forge_label(self._forge_pretrain_section,
             "Pre-training data (required)")
         self.pretrain_data_var = ctk.StringVar(value="")
@@ -308,17 +351,17 @@ class ForgePageMixin:
             placeholder_text="Path to text file or directory...")
         self._pretrain_data_entry.grid(
             row=0, column=0, sticky="ew", padx=(0, 4))
-        self._pretrain_browse_btn = ctk.CTkButton(
-            pt_data_row, text="Browse", width=70,
-            fg_color=C_SURFACE, hover_color=C_PANEL,
-            text_color=C_TEXT, font=FONT_SMALL,
+        self._pretrain_browse_btn = themed_button(
+            pt_data_row, "Browse", style="secondary",
+            width=70,
+            font=FONT_SMALL,
             command=lambda: self._browse_training_data(
                 target_var=self.pretrain_data_var))
         self._pretrain_browse_btn.grid(row=0, column=1, sticky="e")
         Tooltip(self._pretrain_data_entry,
                 "Path to a large text file or directory of text files\n"
                 "for pre-training. Supports .txt, .jsonl formats.\n"
-                "Recommended starting data: TinyStories (~500M tokens).")
+                "Use collect_pretraining_data.py to build a dataset.")
 
         # Tokenizer vocab size
         tok_row = ctk.CTkFrame(
@@ -340,32 +383,26 @@ class ForgePageMixin:
             fg_color=C_GREEN_DIM, hover_color=C_ACCENT_DIM,
             border_color=C_ACCENT_DIM, corner_radius=2)
         retrain_tok_cb.pack(side="left")
+        self.pretrain_utf8_bytes_var = ctk.BooleanVar(value=False)
+        utf8_cb = ctk.CTkCheckBox(
+            tok_row, text="Byte-level BPE",
+            variable=self.pretrain_utf8_bytes_var,
+            font=FONT_TINY, text_color=C_TEXT_DIM,
+            fg_color=C_GREEN_DIM, hover_color=C_ACCENT_DIM,
+            border_color=C_ACCENT_DIM, corner_radius=2)
+        utf8_cb.pack(side="left", padx=(10, 0))
         Tooltip(pretrain_vocab_entry,
                 "Tokenizer vocabulary size for the new model.\n"
                 "32K-50K is standard for pre-training.\n"
                 "Larger vocab = better coverage, more params.")
         Tooltip(retrain_tok_cb,
-                "Train a new BPE tokenizer on your pre-training data.\n"
-                "Recommended for pre-training from scratch.\n"
-                "The tokenizer learns which words/subwords appear most.")
-
-        # Model name
-        name_row = ctk.CTkFrame(
-            self._forge_pretrain_section, fg_color="transparent")
-        name_row.pack(fill="x", padx=10, pady=(0, 6))
-        SelectableLabel(
-            name_row, text="Model name:", font=FONT_TINY,
-            text_color=C_TEXT_DIM
-        ).pack(side="left", padx=(0, 6))
-        self.pretrain_model_name_var = ctk.StringVar(
-            value="pretrained_model")
-        pretrain_name_entry = themed_entry(
-            name_row, textvariable=self.pretrain_model_name_var,
-            width=200)
-        pretrain_name_entry.pack(side="left")
-        Tooltip(pretrain_name_entry,
-                "Name for the new pre-trained model.\n"
-                "Will be saved as models/<name>.pth")
+                "Train a new BPE tokenizer as part of pre-training.\n"
+                "Runs automatically before training starts.\n"
+                "For standalone tokenizer training, use FORGE Tools.")
+        Tooltip(utf8_cb,
+                "Use byte-level BPE encoding.\n"
+                "Handles any Unicode character (emoji, CJK, etc.)\n"
+                "by encoding text as UTF-8 bytes before BPE merges.")
 
         # === DISTILLATION OPTIONS ===
         self._forge_distill_section = ctk.CTkFrame(
@@ -408,8 +445,8 @@ class ForgePageMixin:
             font=FONT_TINY, text_color=C_TEXT_DIM
         ).pack(side="left", padx=(0, 6))
         self.distill_num_examples_var = ctk.StringVar(value="50")
-        distill_examples_entry = themed_entry(
-            examples_row,
+        distill_examples_entry = themed_numeric_entry(
+            examples_row, mode="int",
             textvariable=self.distill_num_examples_var,
             width=60)
         distill_examples_entry.pack(side="left")
@@ -427,8 +464,8 @@ class ForgePageMixin:
             font=FONT_TINY, text_color=C_TEXT_DIM
         ).pack(side="left", padx=(0, 6))
         self.distill_max_tokens_var = ctk.StringVar(value="512")
-        distill_len_entry = themed_entry(
-            distill_len_row,
+        distill_len_entry = themed_numeric_entry(
+            distill_len_row, mode="int",
             textvariable=self.distill_max_tokens_var,
             width=60)
         distill_len_entry.pack(side="left")
@@ -446,7 +483,9 @@ class ForgePageMixin:
             value=self.training_files[0]["path"]
             if self.training_files else "")
         data_opts = [
-            f"{f['name']} ({f['size_kb']} KB)"
+            f"{f['name']} ({f['size_kb'] / 1024:.1f} MB)"
+            if f["size_kb"] >= 1024
+            else f"{f['name']} ({f['size_kb']} KB)"
             for f in self.training_files]
 
         # File path entry + Browse button
@@ -460,10 +499,10 @@ class ForgePageMixin:
             placeholder_text="Path to training file...")
         self._forge_data_entry.grid(
             row=0, column=0, sticky="ew", padx=(0, 4))
-        self._forge_data_browse_btn = ctk.CTkButton(
-            data_path_row, text="Browse", width=70,
-            fg_color=C_SURFACE, hover_color=C_PANEL,
-            text_color=C_TEXT, font=FONT_SMALL,
+        self._forge_data_browse_btn = themed_button(
+            data_path_row, "Browse", style="secondary",
+            width=70,
+            font=FONT_SMALL,
             command=self._browse_training_data)
         self._forge_data_browse_btn.grid(row=0, column=1, sticky="e")
         Tooltip(self._forge_data_browse_btn,
@@ -523,10 +562,10 @@ class ForgePageMixin:
             placeholder_text="Optional data file...")
         self._forge_ai_data_entry.grid(
             row=0, column=0, sticky="ew", padx=(0, 4))
-        self._forge_ai_data_browse_btn = ctk.CTkButton(
-            ai_data_path_row, text="Browse", width=70,
-            fg_color=C_SURFACE, hover_color=C_PANEL,
-            text_color=C_TEXT, font=FONT_SMALL,
+        self._forge_ai_data_browse_btn = themed_button(
+            ai_data_path_row, "Browse", style="secondary",
+            width=70,
+            font=FONT_SMALL,
             command=lambda: self._browse_training_data(
                 target_var=self.ai_supplement_var))
         self._forge_ai_data_browse_btn.grid(
@@ -568,10 +607,10 @@ class ForgePageMixin:
             vision_dir_row, textvariable=self.forge_vision_dir_var)
         self._forge_vision_dir_entry.grid(
             row=0, column=0, sticky="ew", padx=(0, 4))
-        self._forge_vision_browse_btn = ctk.CTkButton(
-            vision_dir_row, text="Browse", width=70,
-            fg_color=C_SURFACE, hover_color=C_PANEL,
-            text_color=C_TEXT, font=FONT_SMALL,
+        self._forge_vision_browse_btn = themed_button(
+            vision_dir_row, "Browse", style="secondary",
+            width=70,
+            font=FONT_SMALL,
             command=self._browse_vision_dir)
         self._forge_vision_browse_btn.grid(row=0, column=1, sticky="e")
         Tooltip(self._forge_vision_browse_btn,
@@ -615,13 +654,13 @@ class ForgePageMixin:
         }
         self._stage_buttons = {}
         for stage_name, stage_tip in stage_descriptions.items():
-            btn = ctk.CTkButton(
+            btn = themed_button(
                 stage_frame,
-                text=stage_name.upper(),
+                stage_name.upper(),
+                style="primary" if stage_name == "basics"
+                    else "secondary",
                 width=90, height=30,
-                font=FONT_SMALL, corner_radius=2,
-                fg_color=C_GREEN_DIM if stage_name == "basics"
-                    else C_SURFACE,
+                font=FONT_SMALL,
                 hover_color=C_ACCENT_DIM,
                 text_color=C_GREEN if stage_name == "basics"
                     else C_TEXT,
@@ -695,7 +734,7 @@ class ForgePageMixin:
 
         self._forge_label(self._forge_pairs_section,
             "Training examples per stage")
-        self.guided_pairs_entry = self._forge_entry(
+        self.guided_pairs_entry = self._forge_numeric_entry(
             self._forge_pairs_section, "20")
         Tooltip(self.guided_pairs_entry,
                 "Number of Q&A pairs to generate per stage.\n"
@@ -706,8 +745,8 @@ class ForgePageMixin:
         # === HYPERPARAMETERS (all modes) ===
         self._forge_heading(ctrl_scroll, "HYPERPARAMETERS")
 
-        # Preset dropdown for quick configuration
-        self._forge_label(ctrl_scroll, "Preset")
+        # Training recipe dropdown for quick configuration
+        self._forge_label(ctrl_scroll, "Training recipe")
         self._forge_preset_var = ctk.StringVar(value="Balanced - 10 epochs, good quality")
         self._forge_preset_menu = themed_dropdown(
             ctrl_scroll,
@@ -721,35 +760,43 @@ class ForgePageMixin:
         self._forge_preset_menu.pack(anchor="w", padx=10, pady=(0, 6))
 
         self._forge_label(ctrl_scroll, "Epochs")
-        self.ft_epochs_entry = self._forge_entry(ctrl_scroll, "10")
+        self.ft_epochs_entry = self._forge_numeric_entry(ctrl_scroll, "10")
         Tooltip(self.ft_epochs_entry,
-                "Number of passes through the training data.\n"
-                "More epochs = better learning, longer training.\n"
-                "Default: 10")
+                "How many times the model reads through ALL your data.\n"
+                "1 epoch = one full pass. 10 = ten full passes.\n"
+                "More = learns deeper, but takes longer.\n"
+                "Fine-tuning: 3-30. Pre-training: 1-3.")
         # Aliases for backward compatibility
         self.guided_epochs_entry = self.ft_epochs_entry
         self.epochs_entry = self.ft_epochs_entry
 
         self._forge_label(ctrl_scroll, "Learning rate")
-        self.ft_lr_entry = self._forge_entry(ctrl_scroll, "0.00005")
+        self.ft_lr_entry = self._forge_numeric_entry(
+            ctrl_scroll, "0.00005", mode="float")
         Tooltip(self.ft_lr_entry,
-                "How fast the model adapts to training data.\n"
-                "Too high = unstable, too low = slow learning.\n"
-                "Default: 5e-5 (0.00005)")
+                "How big each learning step is.\n"
+                "Too high = model forgets old knowledge.\n"
+                "Too low = barely learns anything.\n"
+                "5e-5 = safe default. 1e-5 = gentle. 3e-4 = aggressive.")
         # Aliases
         self.guided_lr_entry = self.ft_lr_entry
         self.lr_entry = self.ft_lr_entry
+
+        # Switch preset to "Custom" when user manually edits fields
+        self._preset_programmatic = False
+        for entry in (self.ft_epochs_entry, self.ft_lr_entry):
+            entry.bind("<KeyRelease>",
+                       lambda _e: self._mark_preset_custom())
 
         # Main train button row
         btn_row = ctk.CTkFrame(
             ctrl_scroll, fg_color="transparent")
         btn_row.pack(fill="x", padx=10, pady=(8, 4))
 
-        self.solo_train_btn = ctk.CTkButton(
-            btn_row, text="TRAIN", width=170, height=38,
-            font=FONT_SECTION, corner_radius=2,
-            fg_color=C_GREEN_DIM, hover_color="#1a4a2e",
-            text_color=C_GREEN,
+        self.solo_train_btn = themed_button(
+            btn_row, "TRAIN", style="primary",
+            width=170, height=38,
+            font=FONT_SECTION,
             command=self._start_training_by_mode)
         self.solo_train_btn.pack(side="left")
         # Aliases for all mode buttons
@@ -759,11 +806,12 @@ class ForgePageMixin:
         Tooltip(self.solo_train_btn,
                 "Start training with the selected mode")
 
-        self.stop_train_btn = ctk.CTkButton(
-            btn_row, text="STOP", width=80, height=38,
-            font=FONT_SECTION, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_RED,
-            text_color=C_TEXT_DIM, command=self._stop_training,
+        self.stop_train_btn = themed_button(
+            btn_row, "STOP", style="secondary",
+            width=80, height=38,
+            font=FONT_SECTION,
+            hover_color=C_RED,
+            command=self._stop_training,
             state="disabled")
         self.stop_train_btn.pack(side="left", padx=(6, 0))
 
@@ -782,26 +830,39 @@ class ForgePageMixin:
                 "GENERATE DATA or WEB LEARN finishes.\n"
                 "Uses the newly created data file.")
 
+        # Resume from checkpoint — when enabled, training
+        # resumes from the latest checkpoint if one exists.
+        self.forge_resume_var = ctk.BooleanVar(value=True)
+        resume_cb = ctk.CTkCheckBox(
+            btn_row, text="Resume",
+            variable=self.forge_resume_var,
+            font=FONT_TINY, text_color=C_TEXT_DIM,
+            fg_color=C_GREEN_DIM, hover_color=C_ACCENT_DIM,
+            border_color=C_ACCENT_DIM, corner_radius=2)
+        resume_cb.pack(side="left", padx=(10, 0))
+        Tooltip(resume_cb,
+                "When enabled, training resumes from the\n"
+                "latest checkpoint if one exists.\n"
+                "Uncheck to start training from scratch.")
+
         # Save button row (below train)
         save_row = ctk.CTkFrame(
             ctrl_scroll, fg_color="transparent")
         save_row.pack(fill="x", padx=10, pady=(0, 4))
 
-        self.save_ckpt_btn = ctk.CTkButton(
-            save_row, text="SAVE CHECKPOINT", width=170,
-            height=34, font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
-            text_color=C_TEXT,
+        self.save_ckpt_btn = themed_button(
+            save_row, "SAVE CHECKPOINT", style="action",
+            width=170, height=34,
+            font=FONT_SMALL,
             command=self._save_forge_checkpoint)
         self.save_ckpt_btn.pack(side="left")
         Tooltip(self.save_ckpt_btn,
                 "Save STUDENT to a named checkpoint")
 
-        self.load_ckpt_btn = ctk.CTkButton(
-            save_row, text="LOAD CHECKPOINT", width=170,
-            height=34, font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
-            text_color=C_TEXT,
+        self.load_ckpt_btn = themed_button(
+            save_row, "LOAD CHECKPOINT", style="action",
+            width=170, height=34,
+            font=FONT_SMALL,
             command=self._load_forge_checkpoint)
         self.load_ckpt_btn.pack(side="left", padx=(6, 0))
         Tooltip(self.load_ckpt_btn,
@@ -816,24 +877,35 @@ class ForgePageMixin:
 
         # Batch size
         self._forge_label(advanced_inner, "Batch size")
-        self.forge_batch_entry = self._forge_entry(advanced_inner, "4")
+        self.forge_batch_entry = self._forge_numeric_entry(
+            advanced_inner, "auto", allow_auto=True)
+        self.forge_batch_entry.bind(
+            "<KeyRelease>",
+            lambda _e: self._mark_preset_custom())
+        self.forge_batch_entry.bind(
+            "<FocusOut>",
+            lambda _e: self._validate_batch_entry())
         Tooltip(self.forge_batch_entry,
-                "Training batch size. Lower = less VRAM.\n"
-                "Default: 4")
+                "How many examples the model learns from at once.\n"
+                "'auto' = fill available GPU memory.\n"
+                "Set to 1 if you get out-of-memory errors.\n"
+                "Bigger = faster training, more VRAM needed.")
 
         # Gradient accumulation
         self._forge_label(advanced_inner, "Gradient accumulation")
-        self.forge_accum_entry = self._forge_entry(advanced_inner, "1")
+        self.forge_accum_entry = self._forge_numeric_entry(
+            advanced_inner, "1")
         Tooltip(self.forge_accum_entry,
-                "Accumulate gradients over N steps.\n"
-                "Effective batch = batch_size × this value.\n"
-                "Default: 1 (no accumulation)")
+                "Simulates a bigger batch without using more VRAM.\n"
+                "batch_size=1 + accumulation=4 acts like batch_size=4\n"
+                "but only uses VRAM for 1 example at a time.\n"
+                "Set higher if batch_size is forced to 1 by OOM.")
 
         # Gradient checkpointing
         ckpt_row = ctk.CTkFrame(
             advanced_inner, fg_color="transparent")
         ckpt_row.pack(fill="x", padx=10, pady=(0, 6))
-        self.forge_grad_ckpt_var = ctk.BooleanVar(value=False)
+        self.forge_grad_ckpt_var = ctk.BooleanVar(value=True)
         self.forge_grad_ckpt_cb = ctk.CTkCheckBox(
             ckpt_row, text="Gradient checkpointing",
             variable=self.forge_grad_ckpt_var,
@@ -842,8 +914,9 @@ class ForgePageMixin:
             border_color=C_ACCENT_DIM, corner_radius=2)
         self.forge_grad_ckpt_cb.pack(anchor="w")
         Tooltip(self.forge_grad_ckpt_cb,
-                "Saves VRAM by recomputing activations.\n"
-                "Slower training but fits larger models.")
+                "Trades speed for VRAM savings (~40% less VRAM).\n"
+                "ON by default. Disable only if you have VRAM to spare.\n"
+                "Training will be ~20% slower but larger models fit.")
 
         # Rolling best checkpoints
         rolling_row = ctk.CTkFrame(
@@ -853,7 +926,8 @@ class ForgePageMixin:
             rolling_row, text="Rolling best K", font=FONT_TINY,
             text_color=C_TEXT_DIM
         ).pack(side="left", padx=(0, 6))
-        self.forge_rolling_k_entry = themed_entry(rolling_row, width=50)
+        self.forge_rolling_k_entry = themed_numeric_entry(
+            rolling_row, mode="int", width=50)
         self.forge_rolling_k_entry.insert(0, "0")
         self.forge_rolling_k_entry.pack(side="left")
         Tooltip(self.forge_rolling_k_entry,
@@ -881,8 +955,9 @@ class ForgePageMixin:
             text_color=C_TEXT_DIM, width=80, anchor="w"
         ).pack(side="left", padx=(0, 4))
         self.forge_lora_rank_var = ctk.StringVar(value="8")
-        lora_rank_entry = themed_entry(
-            lora_row, textvariable=self.forge_lora_rank_var, width=60)
+        lora_rank_entry = themed_numeric_entry(
+            lora_row, mode="int",
+            textvariable=self.forge_lora_rank_var, width=60)
         lora_rank_entry.pack(side="left", padx=(0, 12))
         Tooltip(lora_rank_entry,
                 "LoRA rank (1-128). Lower = fewer params.\n"
@@ -894,27 +969,14 @@ class ForgePageMixin:
             text_color=C_TEXT_DIM, width=80, anchor="w"
         ).pack(side="left", padx=(0, 4))
         self.forge_lora_alpha_var = ctk.StringVar(value="16")
-        lora_alpha_entry = themed_entry(
-            lora_row, textvariable=self.forge_lora_alpha_var, width=60)
+        lora_alpha_entry = themed_numeric_entry(
+            lora_row, mode="int",
+            textvariable=self.forge_lora_alpha_var, width=60)
         lora_alpha_entry.pack(side="left")
         Tooltip(lora_alpha_entry,
                 "LoRA alpha scaling (1-256).\n"
                 "Higher = stronger adapter effect.\n"
                 "Common: alpha = 2x rank. Default: 16")
-
-        # Audio encoder settings
-        self.forge_use_conformer_var = ctk.BooleanVar(value=False)
-        self.forge_use_conformer_cb = ctk.CTkCheckBox(
-            advanced_inner, text="Use Conformer convolution (audio)",
-            variable=self.forge_use_conformer_var,
-            font=FONT_TINY, text_color=C_TEXT_DIM,
-            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
-            border_color=C_ACCENT_DIM, corner_radius=2)
-        self.forge_use_conformer_cb.pack(anchor="w", padx=10, pady=(2, 2))
-        Tooltip(self.forge_use_conformer_cb,
-                "Enable Conformer convolution in audio encoder.\n"
-                "Adds depthwise conv between attention and FFN.\n"
-                "Improves audio quality at slight speed cost.")
 
         # Replay buffer settings (RLHF / Self-play)
         SelectableLabel(
@@ -932,8 +994,9 @@ class ForgePageMixin:
             text_color=C_TEXT_DIM, width=80, anchor="w"
         ).pack(side="left", padx=(0, 4))
         self.forge_replay_capacity_var = ctk.StringVar(value="256")
-        replay_cap_entry = themed_entry(
-            replay_row, textvariable=self.forge_replay_capacity_var,
+        replay_cap_entry = themed_numeric_entry(
+            replay_row, mode="int",
+            textvariable=self.forge_replay_capacity_var,
             width=60)
         replay_cap_entry.pack(side="left", padx=(0, 12))
         Tooltip(replay_cap_entry,
@@ -945,8 +1008,9 @@ class ForgePageMixin:
             text_color=C_TEXT_DIM, width=80, anchor="w"
         ).pack(side="left", padx=(0, 4))
         self.forge_replay_ratio_var = ctk.StringVar(value="0.25")
-        replay_ratio_entry = themed_entry(
-            replay_row, textvariable=self.forge_replay_ratio_var,
+        replay_ratio_entry = themed_numeric_entry(
+            replay_row, mode="float",
+            textvariable=self.forge_replay_ratio_var,
             width=60)
         replay_ratio_entry.pack(side="left")
         Tooltip(replay_ratio_entry,
@@ -963,11 +1027,12 @@ class ForgePageMixin:
             text_color=C_TEXT_DIM, width=90, anchor="w"
         ).pack(side="left", padx=(0, 4))
         self.forge_val_split_var = ctk.StringVar(value="0.1")
-        val_split_entry = themed_entry(
-            val_row, textvariable=self.forge_val_split_var,
+        self.forge_val_split_entry = themed_numeric_entry(
+            val_row, mode="float",
+            textvariable=self.forge_val_split_var,
             width=60)
-        val_split_entry.pack(side="left", padx=(0, 4))
-        Tooltip(val_split_entry,
+        self.forge_val_split_entry.pack(side="left", padx=(0, 4))
+        Tooltip(self.forge_val_split_entry,
                 "Fraction of training data held out for validation.\n"
                 "0.0 = no validation, 0.1 = 10%. Default: 0.1")
 
@@ -977,102 +1042,147 @@ class ForgePageMixin:
         tools_panel.pack(fill="x", padx=6, pady=(10, 2))
         tools_inner = tools_panel.content
 
+        # -- Training tools --
+        SelectableLabel(
+            tools_inner, text="TRAINING",
+            font=FONT_TINY, text_color=C_ACCENT_DIM
+        ).pack(anchor="w", padx=8, pady=(6, 0))
+
         tools_row1 = ctk.CTkFrame(
             tools_inner, fg_color="transparent")
-        tools_row1.pack(fill="x", padx=6, pady=(6, 3))
+        tools_row1.pack(fill="x", padx=6, pady=(2, 3))
 
-        self.generate_data_btn = ctk.CTkButton(
-            tools_row1, text="GENERATE DATA", width=140,
-            height=34, font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
-            text_color=C_TEXT,
+        self.generate_data_btn = themed_button(
+            tools_row1, "GENERATE DATA", style="tool",
+            width=140, height=34,
+            font=FONT_SMALL,
             command=self._generate_training_data)
         self.generate_data_btn.pack(side="left")
         Tooltip(self.generate_data_btn,
                 "TRAINER generates training Q/A pairs")
 
-        self.evaluate_btn = ctk.CTkButton(
-            tools_row1, text="EVALUATE", width=120, height=34,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
-            text_color=C_TEXT,
+        self.evaluate_btn = themed_button(
+            tools_row1, "EVALUATE", style="tool",
+            width=120, height=34,
+            font=FONT_SMALL,
             command=self._evaluate_student)
         self.evaluate_btn.pack(side="left", padx=(6, 0))
         Tooltip(self.evaluate_btn,
                 "TRAINER tests STUDENT and scores answers")
 
-        self.benchmark_btn = ctk.CTkButton(
-            tools_row1, text="BENCHMARK", width=120, height=34,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
-            text_color=C_TEXT,
+        self.benchmark_btn = themed_button(
+            tools_row1, "BENCHMARK", style="tool",
+            width=120, height=34,
+            font=FONT_SMALL,
             command=self._coherence_benchmark)
         self.benchmark_btn.pack(side="left", padx=(6, 0))
         Tooltip(self.benchmark_btn,
                 "Test model reflection quality (coherence benchmark)")
 
         # History button
-        self._forge_history_btn = ctk.CTkButton(
-            tools_row1, text="HISTORY", width=90, height=34,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
-            text_color=C_TEXT,
+        self._forge_history_btn = themed_button(
+            tools_row1, "HISTORY", style="secondary",
+            width=90, height=34,
+            font=FONT_SMALL,
             command=self._show_training_history)
         self._forge_history_btn.pack(side="left", padx=(6, 0))
         Tooltip(self._forge_history_btn,
                 "Show past training runs with loss values")
 
+        # -- Web learning --
+        SelectableLabel(
+            tools_inner, text="WEB",
+            font=FONT_TINY, text_color=C_ACCENT_DIM
+        ).pack(anchor="w", padx=8, pady=(6, 0))
+
         # Web Learn
         web_row = ctk.CTkFrame(
             tools_inner, fg_color="transparent")
-        web_row.pack(fill="x", padx=6, pady=(6, 3))
+        web_row.pack(fill="x", padx=6, pady=(2, 3))
 
         self.web_learn_topic = themed_entry(
             web_row, width=180, placeholder_text="Topic...")
         self.web_learn_topic.pack(side="left")
 
-        self.web_learn_pages_entry = themed_entry(
-            web_row, width=50,
+        self.web_learn_pages_entry = themed_numeric_entry(
+            web_row, mode="int", width=50,
             placeholder_text="3")
         self.web_learn_pages_entry.insert(0, "3")
         self.web_learn_pages_entry.pack(side="left", padx=(6, 0))
         Tooltip(self.web_learn_pages_entry,
                 "Max web pages to fetch (1-10)")
 
-        self.web_learn_btn = ctk.CTkButton(
-            web_row, text="WEB LEARN", width=110, height=34,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
-            text_color=C_TEXT,
+        self.web_learn_btn = themed_button(
+            web_row, "WEB LEARN", style="tool",
+            width=110, height=34,
+            font=FONT_SMALL,
             command=self._web_learn)
         self.web_learn_btn.pack(side="left", padx=(6, 0))
         Tooltip(self.web_learn_btn,
                 "Search web and generate training data")
 
+        # -- Tokenizer --
+        SelectableLabel(
+            tools_inner, text="TOKENIZER",
+            font=FONT_TINY, text_color=C_ACCENT_DIM
+        ).pack(anchor="w", padx=8, pady=(6, 0))
+
         # Tokenizer training
         tok_row = ctk.CTkFrame(
             tools_inner, fg_color="transparent")
-        tok_row.pack(fill="x", padx=6, pady=(6, 3))
+        tok_row.pack(fill="x", padx=6, pady=(2, 3))
 
-        self.vocab_entry = themed_entry(
-            tok_row, width=100, placeholder_text="Vocab: 8000")
-        self.vocab_entry.insert(0, "8000")
+        self.vocab_entry = themed_numeric_entry(
+            tok_row, mode="int", width=100,
+            placeholder_text="Vocab: 32000")
+        self.vocab_entry.insert(0, "32000")
         self.vocab_entry.pack(side="left")
 
-        self.train_tok_btn = ctk.CTkButton(
-            tok_row, text="TRAIN TOKENIZER", width=140,
-            height=34, font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
-            text_color=C_TEXT,
+        self.train_tok_btn = themed_button(
+            tok_row, "TRAIN TOKENIZER", style="tool",
+            width=140, height=34,
+            font=FONT_SMALL,
             command=self._start_tokenizer_training)
         self.train_tok_btn.pack(side="left", padx=(6, 0))
+        utf8_tool_cb = ctk.CTkCheckBox(
+            tok_row, text="Byte-level",
+            variable=self.pretrain_utf8_bytes_var,
+            font=FONT_TINY, text_color=C_TEXT_DIM,
+            fg_color=C_GREEN_DIM, hover_color=C_ACCENT_DIM,
+            border_color=C_ACCENT_DIM, corner_radius=2)
+        utf8_tool_cb.pack(side="left", padx=(6, 0))
+        Tooltip(utf8_tool_cb,
+                "Use byte-level BPE encoding.\n"
+                "Handles any Unicode (emoji, CJK, etc.)")
         Tooltip(self.train_tok_btn,
-                "Train a BPE tokenizer on selected data")
+                "Train a standalone BPE tokenizer on any data file.\n"
+                "Saves to models/tokenizer.json.\n"
+                "For pre-training, use the checkbox in Pre-Train mode.")
+
+        # Tokenizer analyze row
+        tok_analyze_row = ctk.CTkFrame(
+            tools_inner, fg_color="transparent")
+        tok_analyze_row.pack(fill="x", padx=6, pady=(0, 3))
+        self.analyze_tok_btn = themed_button(
+            tok_analyze_row, "ANALYZE TOKENIZER", style="tool",
+            width=140, height=34,
+            font=FONT_SMALL,
+            command=self._analyze_tokenizer)
+        self.analyze_tok_btn.pack(side="left")
+        Tooltip(self.analyze_tok_btn,
+                "Analyze the current tokenizer.\n"
+                "Shows vocab stats, coverage, and compression.")
+
+        # -- Model export --
+        SelectableLabel(
+            tools_inner, text="MODEL EXPORT",
+            font=FONT_TINY, text_color=C_ACCENT_DIM
+        ).pack(anchor="w", padx=8, pady=(6, 0))
 
         # Quantize model
         quant_row = ctk.CTkFrame(
             tools_inner, fg_color="transparent")
-        quant_row.pack(fill="x", padx=6, pady=(6, 3))
+        quant_row.pack(fill="x", padx=6, pady=(2, 3))
 
         self.quantize_mode_var = ctk.StringVar(
             value="int8 - 8-bit weights")
@@ -1086,11 +1196,10 @@ class ForgePageMixin:
             variable=self.quantize_mode_var)
         self.quantize_mode_dd.pack(side="left")
 
-        self.quantize_btn = ctk.CTkButton(
-            quant_row, text="QUANTIZE", width=120,
-            height=34, font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
-            text_color=C_TEXT,
+        self.quantize_btn = themed_button(
+            quant_row, "QUANTIZE", style="tool",
+            width=120, height=34,
+            font=FONT_SMALL,
             command=self._quantize_student)
         self.quantize_btn.pack(side="left", padx=(6, 0))
         Tooltip(self.quantize_btn,
@@ -1113,47 +1222,49 @@ class ForgePageMixin:
             variable=self.export_gguf_mode_var)
         self.export_gguf_mode_dd.pack(side="left")
 
-        self.export_gguf_btn = ctk.CTkButton(
-            export_row, text="EXPORT GGUF", width=140,
-            height=34, font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
-            text_color=C_TEXT,
+        self.export_gguf_btn = themed_button(
+            export_row, "EXPORT GGUF", style="tool",
+            width=140, height=34,
+            font=FONT_SMALL,
             command=self._export_student_gguf)
         self.export_gguf_btn.pack(side="left", padx=(6, 0))
         Tooltip(self.export_gguf_btn,
                 "Export STUDENT as a GGUF file for llama.cpp")
 
+        # -- Queue & schedule --
+        SelectableLabel(
+            tools_inner, text="QUEUE",
+            font=FONT_TINY, text_color=C_ACCENT_DIM
+        ).pack(anchor="w", padx=8, pady=(6, 0))
+
         # --- Queue & Schedule (TS-B, TS-C) ---
         queue_row = ctk.CTkFrame(
             tools_inner, fg_color="transparent")
-        queue_row.pack(fill="x", padx=6, pady=(6, 3))
+        queue_row.pack(fill="x", padx=6, pady=(2, 3))
 
-        self._forge_add_queue_btn = ctk.CTkButton(
-            queue_row, text="ADD TO QUEUE", width=130,
-            height=34, font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
-            text_color=C_TEXT,
+        self._forge_add_queue_btn = themed_button(
+            queue_row, "ADD TO QUEUE", style="action",
+            width=130, height=34,
+            font=FONT_SMALL,
             command=self._add_to_training_queue)
         self._forge_add_queue_btn.pack(side="left")
         Tooltip(self._forge_add_queue_btn,
                 "Add current settings as a job to the queue.\n"
                 "Queue runs jobs sequentially in background.")
 
-        self._forge_show_queue_btn = ctk.CTkButton(
-            queue_row, text="QUEUE", width=80,
-            height=34, font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
-            text_color=C_TEXT,
+        self._forge_show_queue_btn = themed_button(
+            queue_row, "QUEUE", style="action",
+            width=80, height=34,
+            font=FONT_SMALL,
             command=self._show_training_queue)
         self._forge_show_queue_btn.pack(side="left", padx=(6, 0))
         Tooltip(self._forge_show_queue_btn,
                 "Show/manage the training queue")
 
-        self._forge_run_queue_btn = ctk.CTkButton(
-            queue_row, text="RUN", width=60,
-            height=34, font=FONT_SMALL, corner_radius=2,
-            fg_color=C_GREEN_DIM, hover_color="#1a4a2e",
-            text_color=C_GREEN,
+        self._forge_run_queue_btn = themed_button(
+            queue_row, "RUN", style="primary",
+            width=60, height=34,
+            font=FONT_SMALL,
             command=self._run_training_queue)
         self._forge_run_queue_btn.pack(side="left", padx=(6, 0))
         Tooltip(self._forge_run_queue_btn,
@@ -1164,49 +1275,51 @@ class ForgePageMixin:
             tools_inner, fg_color="transparent")
         plan_row.pack(fill="x", padx=6, pady=(3, 3))
 
-        self._forge_save_plan_btn = ctk.CTkButton(
-            plan_row, text="SAVE PLAN", width=110,
-            height=34, font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
-            text_color=C_TEXT,
+        self._forge_save_plan_btn = themed_button(
+            plan_row, "SAVE PLAN", style="action",
+            width=110, height=34,
+            font=FONT_SMALL,
             command=self._save_overnight_plan)
         self._forge_save_plan_btn.pack(side="left")
         Tooltip(self._forge_save_plan_btn,
                 "Save the current queue as an overnight plan.\n"
                 "Saves progress and resumes on crash.")
 
-        self._forge_load_plan_btn = ctk.CTkButton(
-            plan_row, text="LOAD PLAN", width=110,
-            height=34, font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
-            text_color=C_TEXT,
+        self._forge_load_plan_btn = themed_button(
+            plan_row, "LOAD PLAN", style="action",
+            width=110, height=34,
+            font=FONT_SMALL,
             command=self._load_overnight_plan)
         self._forge_load_plan_btn.pack(side="left", padx=(6, 0))
         Tooltip(self._forge_load_plan_btn,
                 "Load a saved overnight training plan.\n"
                 "Resumes where it left off.")
 
+        # -- Dataset --
+        SelectableLabel(
+            tools_inner, text="DATASET",
+            font=FONT_TINY, text_color=C_ACCENT_DIM
+        ).pack(anchor="w", padx=8, pady=(6, 0))
+
         # --- Curated Dataset (DA-C) ---
         dataset_row = ctk.CTkFrame(
             tools_inner, fg_color="transparent")
-        dataset_row.pack(fill="x", padx=6, pady=(6, 3))
+        dataset_row.pack(fill="x", padx=6, pady=(2, 3))
 
-        self._forge_review_dataset_btn = ctk.CTkButton(
-            dataset_row, text="REVIEW DATASET", width=140,
-            height=34, font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
-            text_color=C_TEXT,
+        self._forge_review_dataset_btn = themed_button(
+            dataset_row, "REVIEW DATASET", style="action",
+            width=140, height=34,
+            font=FONT_SMALL,
             command=self._review_curated_dataset)
         self._forge_review_dataset_btn.pack(side="left")
         Tooltip(self._forge_review_dataset_btn,
                 "Review/approve/reject entries in the\n"
                 "curated master dataset before training.")
 
-        self._forge_approve_all_btn = ctk.CTkButton(
-            dataset_row, text="APPROVE ALL", width=110,
-            height=34, font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
-            text_color=C_TEXT,
+        self._forge_approve_all_btn = themed_button(
+            dataset_row, "APPROVE ALL", style="action",
+            width=110, height=34,
+            font=FONT_SMALL,
             command=self._approve_all_dataset)
         self._forge_approve_all_btn.pack(side="left", padx=(6, 0))
         Tooltip(self._forge_approve_all_btn,
@@ -1218,11 +1331,10 @@ class ForgePageMixin:
             tools_inner, fg_color="transparent")
         cmd_policy_row.pack(fill="x", padx=6, pady=(6, 3))
 
-        self._forge_cmd_policy_btn = ctk.CTkButton(
-            cmd_policy_row, text="COMMAND POLICY", width=150,
-            height=34, font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
-            text_color=C_TEXT,
+        self._forge_cmd_policy_btn = themed_button(
+            cmd_policy_row, "COMMAND POLICY", style="action",
+            width=150, height=34,
+            font=FONT_SMALL,
             command=self._generate_command_policy)
         self._forge_cmd_policy_btn.pack(side="left")
         Tooltip(self._forge_cmd_policy_btn,
@@ -1245,6 +1357,24 @@ class ForgePageMixin:
         log_header_row.pack(fill="x", padx=8, pady=(8, 0))
         SectionLabel(log_header_row, "Output Log", color=C_GREEN).pack(
             side="left")
+
+        # Auto-scroll toggle
+        self._forge_autoscroll_var = ctk.BooleanVar(value=True)
+        ctk.CTkCheckBox(
+            log_header_row, text="Auto-scroll",
+            variable=self._forge_autoscroll_var,
+            font=FONT_TINY, text_color=C_TEXT_DIM,
+            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
+            border_color=C_ACCENT_DIM, checkmark_color=C_GREEN,
+            width=24, height=24, checkbox_width=16, checkbox_height=16,
+        ).pack(side="right", padx=(0, 4))
+
+        # Clear log button
+        themed_button(
+            log_header_row, text="CLEAR", style="secondary",
+            width=55, height=22,
+            command=self._clear_forge_log,
+        ).pack(side="right", padx=(0, 6))
 
         # Training progress bar
         progress_frame = ctk.CTkFrame(
@@ -1312,6 +1442,43 @@ class ForgePageMixin:
         entry.insert(0, default)
         entry.pack(anchor="w", padx=10, pady=(0, 6))
         return entry
+
+    def _forge_numeric_entry(
+        self, parent, default: str, *,
+        mode: str = "int", allow_auto: bool = False,
+    ) -> ctk.CTkEntry:
+        entry = themed_numeric_entry(
+            parent, mode=mode, allow_auto=allow_auto)
+        entry.insert(0, default)
+        entry.pack(anchor="w", padx=10, pady=(0, 6))
+        return entry
+
+    def _mark_preset_custom(self):
+        """Switch training recipe to 'Custom' when user manually edits."""
+        if getattr(self, "_preset_programmatic", False):
+            return
+        var = getattr(self, "_forge_preset_var", None)
+        if var is not None and not var.get().startswith("Custom"):
+            var.set("Custom - set your own values")
+
+    def _validate_batch_entry(self):
+        """Flash warning if batch entry has garbage input."""
+        widget = getattr(self, "forge_batch_entry", None)
+        if widget is None:
+            return
+        raw = widget.get().strip().lower()
+        if not raw or raw == "auto":
+            widget.configure(border_color=C_ACCENT_DIM)
+            return
+        try:
+            val = int(raw)
+            if val < 1:
+                raise ValueError
+            widget.configure(border_color=C_ACCENT_DIM)
+        except ValueError:
+            widget.configure(border_color="#e74c3c")
+            self._log(f"[!] Batch size '{raw}' — "
+                      f"use a number or 'auto'")
 
     def _select_training_stage(self, stage: str):
         """Update the selected training stage button highlight."""

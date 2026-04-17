@@ -3,7 +3,7 @@
 The AI can execute commands using `[CMD]command[/CMD]` blocks in its
 responses. You can also run commands from the CMD page in ENGINE mode.
 
-There are **47 registered engine commands** plus **10 info commands**
+There are **49 registered engine commands** plus **10 info commands**
 available in the CMD page.
 
 ---
@@ -49,6 +49,7 @@ available in the CMD page.
 | search.files | Find files by pattern | `search.files <pattern>` |
 | search.content | Search text in files | `search.content <dir> <query>` |
 | search.web | Search the web via DuckDuckGo | `search.web <query>` |
+| search.images | Search for images via DuckDuckGo | `search.images <query>` |
 | web.fetch | Fetch content from a URL | `web.fetch <url>` |
 
 ### System
@@ -72,12 +73,6 @@ available in the CMD page.
 |---------|-------------|-------|
 | imagegen.generate | Generate image from text prompt | `imagegen.generate <prompt> [--width N] [--height N] [--steps N] [--seed N] [--negative <text>]` |
 | imagegen.status | Check available image generation backends | `imagegen.status` |
-
-### Model Comparison
-| Command | Description | Usage |
-|---------|-------------|-------|
-| compare.run | Compare two models side-by-side | `compare.run <model_a> <model_b> <prompt1> [prompt2]` |
-| compare.report | Show a saved comparison report | `compare.report <path_to_json>` |
 
 ### Mods
 | Command | Description | Usage |

@@ -54,6 +54,7 @@ WARNING: The blocked_paths and blocked_patterns settings are sacred
 import json
 import logging
 import os
+import threading
 from pathlib import Path
 from typing import Any, Optional
 
@@ -106,6 +107,26 @@ class _LazyConfig(dict):
         _ensure_initialized()
         return super().keys()
 
+    def update(self, __m=(), **kwargs):
+        _ensure_initialized()
+        return super().update(__m, **kwargs)
+
+    def pop(self, key, *args):
+        _ensure_initialized()
+        return super().pop(key, *args)
+
+    def popitem(self):
+        _ensure_initialized()
+        return super().popitem()
+
+    def clear(self):
+        _ensure_initialized()
+        return super().clear()
+
+    def setdefault(self, key, default=None):
+        _ensure_initialized()
+        return super().setdefault(key, default)
+
 
 CONFIG = _LazyConfig({
     # =========================================================================
@@ -133,10 +154,10 @@ CONFIG = _LazyConfig({
 
     "default_model": "enigma_engine",
     "embed_dim": 256,
-    "depth": 6,            # Alias: num_layers (for compatibility)
-    "num_layers": 6,       # Alias: depth
-    "heads": 8,            # Alias: num_heads (for compatibility)
-    "num_heads": 8,        # Alias: heads
+    "depth": 6,
+    "num_layers": 6,
+    "heads": 8,
+    "num_heads": 8,
     "max_len": 2048,
     "ff_mult": 4.0,
     "dropout": 0.0,
@@ -252,6 +273,61 @@ CONFIG = _LazyConfig({
 
 
 # =============================================================================
+# CONFIG TYPE VALIDATION — reject wrong-typed user config values
+# =============================================================================
+
+# Map of config keys to their expected Python types.
+# Built once from the CONFIG defaults dict.  Keys whose default is None
+# are skipped (accept any type).
+_CONFIG_TYPES: dict[str, type] = {}
+
+
+def _build_type_map() -> None:
+    """Populate _CONFIG_TYPES from the current CONFIG defaults."""
+    for key, value in CONFIG.items():
+        if value is None:
+            continue
+        if isinstance(value, bool):
+            _CONFIG_TYPES[key] = bool
+        elif isinstance(value, int):
+            _CONFIG_TYPES[key] = int
+        elif isinstance(value, float):
+            _CONFIG_TYPES[key] = (int, float)  # type: ignore[assignment]
+        elif isinstance(value, str):
+            _CONFIG_TYPES[key] = str
+        elif isinstance(value, list):
+            _CONFIG_TYPES[key] = list
+        elif isinstance(value, dict):
+            _CONFIG_TYPES[key] = dict
+
+
+def _validate_config_types(user_config: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of *user_config* with wrong-typed values stripped.
+
+    Keys not present in CONFIG defaults are passed through unchanged
+    (user extensions).  Keys whose default is None also pass through.
+    """
+    if not _CONFIG_TYPES:
+        _build_type_map()
+
+    cleaned: dict[str, Any] = {}
+    for key, value in user_config.items():
+        expected = _CONFIG_TYPES.get(key)
+        if expected is None:
+            # Unknown key or None-default — accept as-is
+            cleaned[key] = value
+            continue
+        if not isinstance(value, expected):
+            logger.warning(
+                "Config key %r has wrong type: expected %s, got %s — skipped",
+                key, expected, type(value).__name__,
+            )
+            continue
+        cleaned[key] = value
+    return cleaned
+
+
+# =============================================================================
 # THE RITUAL OF READING - Loading User Configuration
 # =============================================================================
 
@@ -267,15 +343,11 @@ def _load_user_config() -> None:
         1. Current working directory
         2. User's home directory (~/.enigma_engine/)
         3. Enigma AI Engine installation directory
-        4. Legacy enigma_config.json locations (backwards compatibility)
     """
     config_paths = [
         Path.cwd() / "forge_config.json",
         Path.home() / ".enigma_engine" / "config.json",
         BASE_DIR / "forge_config.json",
-        # Legacy paths preserved for ancient installations
-        Path.cwd() / "enigma_config.json",
-        BASE_DIR / "enigma_config.json",
     ]
 
     for path in config_paths:
@@ -286,6 +358,7 @@ def _load_user_config() -> None:
                 if not isinstance(user_config, dict):
                     logger.warning(f"Config in {path} is not a dictionary, skipping")
                     continue
+                user_config = _validate_config_types(user_config)
                 CONFIG.update(user_config)
                 logger.info(f"Loaded config from {path}")
                 return
@@ -311,11 +384,8 @@ def _load_env_config() -> None:
         FORGE_DATA_DIR, FORGE_MODELS_DIR, FORGE_MEMORY_DIR,
         FORGE_DEVICE, FORGE_API_HOST, FORGE_API_PORT,
         FORGE_LOG_LEVEL, ENIGMA_API_KEY
-
-    Legacy ENIGMA_* variables are still honored for backwards compatibility.
     """
     env_mappings = {
-        # Modern FORGE_ prefix (preferred)
         "FORGE_DATA_DIR": "data_dir",
         "FORGE_MODELS_DIR": "models_dir",
         "FORGE_MEMORY_DIR": "memory_dir",
@@ -324,14 +394,6 @@ def _load_env_config() -> None:
         "FORGE_API_PORT": "api_port",
         "FORGE_LOG_LEVEL": "log_level",
         "ENIGMA_API_KEY": "enigma_api_key",
-        # Legacy ENIGMA_ prefix (still supported)
-        "ENIGMA_DATA_DIR": "data_dir",
-        "ENIGMA_MODELS_DIR": "models_dir",
-        "ENIGMA_MEMORY_DIR": "memory_dir",
-        "ENIGMA_DEVICE": "device",
-        "ENIGMA_API_HOST": "api_host",
-        "ENIGMA_API_PORT": "api_port",
-        "ENIGMA_LOG_LEVEL": "log_level",
     }
 
     for env_var, config_key in env_mappings.items():
@@ -416,6 +478,7 @@ def save_config(path: Optional[str] = None) -> None:
 # module safer to import in tests and scripts.
 
 _initialized = False
+_init_lock = threading.Lock()
 
 
 def _ensure_initialized() -> None:
@@ -423,7 +486,10 @@ def _ensure_initialized() -> None:
     global _initialized
     if _initialized:
         return
-    _initialized = True
+    with _init_lock:
+        if _initialized:
+            return
+        _initialized = True
 
     for dir_key in ["data_dir", "models_dir", "memory_dir", "logs_dir"]:
         try:

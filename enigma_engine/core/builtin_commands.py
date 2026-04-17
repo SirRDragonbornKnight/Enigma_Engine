@@ -1038,6 +1038,36 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
             return CommandResult(False, f"[ERROR] Failed to fetch: {e}")
 
     registry.register("search.web", search_web, "Search the web", "search.web <query>")
+
+    def search_images(args: list[str], ctx: Dict) -> CommandResult:
+        """Search the web for images and return URLs."""
+        if not args:
+            return CommandResult(False, "[ERROR] Usage: search.images <query>")
+
+        query = " ".join(args)
+
+        try:
+            from enigma_engine.core.web_utils import ddg_image_search
+
+            results = ddg_image_search(query, max_results=SEARCH_MAX_RESULTS)
+            if not results:
+                return CommandResult(True, f"[OK] No image results for: {query}")
+
+            lines = [f"[OK] Image search: {query}"]
+            for i, r in enumerate(results, 1):
+                title = r.get("title", "")[:SNIPPET_LIMIT]
+                url = r.get("url", "")
+                lines.append(f"\n{i}. {title}")
+                lines.append(f"   ![{title}]({url})")
+
+            return CommandResult(True, "\n".join(lines), results)
+
+        except ImportError:
+            return CommandResult(False, "[ERROR] requests library not installed. Run: pip install requests")
+        except Exception as e:
+            return CommandResult(False, f"[ERROR] {e}")
+
+    registry.register("search.images", search_images, "Search for images", "search.images <query>")
     registry.register("web.fetch", web_fetch, "Fetch URL content", "web.fetch <url>")
 
     # ========== Note Commands ==========
@@ -1309,8 +1339,12 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
         # Safety: disallow dangerous operations
         forbidden = [
             "shutil.rmtree", "os.remove", "os.rmdir", "os.unlink",
+            "os.system", "os.popen",
+            "os.open(", "os.fdopen(", "os.rename(", "os.replace(",
             "__import__(", "subprocess.call",
             "subprocess.Popen", "subprocess.run",
+            "subprocess.check_call", "subprocess.check_output",
+            "subprocess.getoutput", "subprocess.getstatusoutput",
             "exec(", "eval(",
             "importlib", "compile(",
             "ctypes", "sys.modules",
@@ -1338,7 +1372,9 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
                             from pathlib import Path
                             p = Path(path).resolve()
                             outputs = Path('outputs').resolve()
-                            if not str(p).startswith(str(outputs)):
+                            try:
+                                p.relative_to(outputs)
+                            except ValueError:
                                 raise PermissionError(
                                     f"Write access restricted to outputs/ only")
                         return _original_open(path, mode, *a, **kw)
@@ -1419,7 +1455,6 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
                 "[--negative <text>]")
 
         from pathlib import Path as _Path
-        import json as _json
         from datetime import datetime as _dt
 
         # Parse args: everything before -- flags is the prompt
@@ -1433,13 +1468,29 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
         while i < len(args):
             a = args[i]
             if a == "--width" and i + 1 < len(args):
-                width = int(args[i + 1]); i += 2; continue
+                try:
+                    width = int(args[i + 1])
+                except ValueError:
+                    return CommandResult(False, f"[ERROR] --width must be a number, got '{args[i + 1]}'")
+                i += 2; continue
             elif a == "--height" and i + 1 < len(args):
-                height = int(args[i + 1]); i += 2; continue
+                try:
+                    height = int(args[i + 1])
+                except ValueError:
+                    return CommandResult(False, f"[ERROR] --height must be a number, got '{args[i + 1]}'")
+                i += 2; continue
             elif a == "--steps" and i + 1 < len(args):
-                steps = int(args[i + 1]); i += 2; continue
+                try:
+                    steps = int(args[i + 1])
+                except ValueError:
+                    return CommandResult(False, f"[ERROR] --steps must be a number, got '{args[i + 1]}'")
+                i += 2; continue
             elif a == "--seed" and i + 1 < len(args):
-                seed = int(args[i + 1]); i += 2; continue
+                try:
+                    seed = int(args[i + 1])
+                except ValueError:
+                    return CommandResult(False, f"[ERROR] --seed must be a number, got '{args[i + 1]}'")
+                i += 2; continue
             elif a == "--negative" and i + 1 < len(args):
                 neg_parts: list[str] = []
                 i += 1
@@ -1492,8 +1543,6 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
                         saved = output_dir / filename
                         saved.write_bytes(img_bytes)
                         generated_path = str(saved)
-                        _json.loads(
-                            data.get("info", "{}"))
                         backend_used = "SD WebUI"
         except Exception:
             pass

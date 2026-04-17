@@ -343,6 +343,8 @@ class TestComputeLayerMapping(unittest.TestCase):
         from enigma_engine.core.progressive_growing import compute_layer_mapping
         mapping = compute_layer_mapping(2, 6)
         self.assertEqual(len(mapping), 6)
+        # Docstring example: [0, -1, -1, 1, -1, -1]
+        self.assertEqual(mapping, [0, -1, -1, 1, -1, -1])
         present = {m for m in mapping if m >= 0}
         self.assertEqual(present, {0, 1})
 
@@ -390,14 +392,173 @@ class TestProgressiveGrowingStructure(unittest.TestCase):
         from enigma_engine.core.progressive_growing import validate_growth
         self.assertTrue(callable(validate_growth))
 
-    def test_expand_function_signature(self):
-        """expand_model_weights takes source_sd, source_config, target_config."""
+
+class TestGrowIntegration(unittest.TestCase):
+    """Integration tests — grow a real Enigma model and verify it works.
+
+    These tests instantiate actual Enigma models (tiny configs, CPU only)
+    and verify the full pipeline: create → grow → load → forward pass.
+    No GPU required.
+    """
+
+    def _tiny_config(self, dim=64, n_layers=2, n_heads=4, n_kv_heads=2,
+                     vocab_size=256):
+        """Create a minimal config for fast CPU testing."""
+        return ForgeConfig(
+            dim=dim, n_layers=n_layers, n_heads=n_heads,
+            n_kv_heads=n_kv_heads, max_seq_len=64,
+            vocab_size=vocab_size, use_swiglu=True,
+            use_rope=True, use_rms_norm=True, use_bias=False,
+        )
+
+    def test_grow_width_forward_pass(self):
+        """Grow a model's width (dim/heads) and verify forward pass works."""
+        from enigma_engine.core.model import Enigma
         from enigma_engine.core.progressive_growing import expand_model_weights
-        sig = inspect.signature(expand_model_weights)
-        params = list(sig.parameters.keys())
-        self.assertIn('source_sd', params)
-        self.assertIn('source_config', params)
-        self.assertIn('target_config', params)
+
+        src_cfg = self._tiny_config(dim=64, n_layers=2, n_heads=4, n_kv_heads=2)
+        tgt_cfg = self._tiny_config(dim=128, n_layers=2, n_heads=8, n_kv_heads=4)
+
+        # Create source model and get its state dict
+        src_model = Enigma(config=src_cfg)
+        src_sd = src_model.state_dict()
+
+        # Expand weights
+        new_sd = expand_model_weights(src_sd, src_cfg, tgt_cfg)
+
+        # Create target model and load expanded weights
+        tgt_model = Enigma(config=tgt_cfg)
+        missing, unexpected = tgt_model.load_state_dict(new_sd, strict=False)
+
+        # Nothing critical should be missing or unexpected
+        # Filter out buffers (freqs_cis) which are recomputed, not stored
+        critical_missing = [k for k in missing if 'freqs_cis' not in k
+                           and '_causal_mask' not in k]
+        self.assertEqual(critical_missing, [],
+                         f"Missing keys after grow: {critical_missing}")
+        self.assertEqual(unexpected, [],
+                         f"Unexpected keys after grow: {unexpected}")
+
+        # Forward pass must produce valid logits
+        input_ids = torch.randint(0, src_cfg.vocab_size, (1, 8))
+        with torch.no_grad():
+            logits = tgt_model(input_ids)
+
+        self.assertEqual(logits.shape[0], 1)       # batch
+        self.assertEqual(logits.shape[1], 8)        # seq_len
+        padded_vocab = (tgt_cfg.vocab_size + 63) & ~63
+        self.assertEqual(logits.shape[2], padded_vocab)  # vocab
+
+        # No NaN or Inf in output
+        self.assertFalse(torch.isnan(logits).any(),
+                         "NaN in grown model output")
+        self.assertFalse(torch.isinf(logits).any(),
+                         "Inf in grown model output")
+
+    def test_grow_depth_forward_pass(self):
+        """Grow a model's depth (layers) and verify forward pass works."""
+        from enigma_engine.core.model import Enigma
+        from enigma_engine.core.progressive_growing import expand_model_weights
+
+        src_cfg = self._tiny_config(dim=64, n_layers=2, n_heads=4, n_kv_heads=2)
+        tgt_cfg = self._tiny_config(dim=64, n_layers=6, n_heads=4, n_kv_heads=2)
+
+        src_model = Enigma(config=src_cfg)
+        src_sd = src_model.state_dict()
+
+        new_sd = expand_model_weights(src_sd, src_cfg, tgt_cfg)
+
+        tgt_model = Enigma(config=tgt_cfg)
+        missing, unexpected = tgt_model.load_state_dict(new_sd, strict=False)
+
+        critical_missing = [k for k in missing if 'freqs_cis' not in k
+                           and '_causal_mask' not in k]
+        self.assertEqual(critical_missing, [],
+                         f"Missing keys after grow: {critical_missing}")
+        self.assertEqual(unexpected, [],
+                         f"Unexpected keys after grow: {unexpected}")
+
+        input_ids = torch.randint(0, src_cfg.vocab_size, (1, 8))
+        with torch.no_grad():
+            logits = tgt_model(input_ids)
+
+        self.assertEqual(logits.shape, (1, 8, (tgt_cfg.vocab_size + 63) & ~63))
+        self.assertFalse(torch.isnan(logits).any())
+        self.assertFalse(torch.isinf(logits).any())
+
+    def test_grow_width_and_depth_forward_pass(self):
+        """Grow both width and depth simultaneously — the full upgrade path."""
+        from enigma_engine.core.model import Enigma
+        from enigma_engine.core.progressive_growing import expand_model_weights
+
+        src_cfg = self._tiny_config(dim=64, n_layers=2, n_heads=4, n_kv_heads=2)
+        tgt_cfg = self._tiny_config(dim=128, n_layers=4, n_heads=8, n_kv_heads=4)
+
+        src_model = Enigma(config=src_cfg)
+        src_sd = src_model.state_dict()
+
+        new_sd = expand_model_weights(src_sd, src_cfg, tgt_cfg)
+
+        tgt_model = Enigma(config=tgt_cfg)
+        missing, unexpected = tgt_model.load_state_dict(new_sd, strict=False)
+
+        critical_missing = [k for k in missing if 'freqs_cis' not in k
+                           and '_causal_mask' not in k]
+        self.assertEqual(critical_missing, [],
+                         f"Missing keys after grow: {critical_missing}")
+        self.assertEqual(unexpected, [],
+                         f"Unexpected keys after grow: {unexpected}")
+
+        input_ids = torch.randint(0, src_cfg.vocab_size, (1, 8))
+        with torch.no_grad():
+            logits = tgt_model(input_ids)
+
+        self.assertEqual(logits.shape, (1, 8, (tgt_cfg.vocab_size + 63) & ~63))
+        self.assertFalse(torch.isnan(logits).any())
+        self.assertFalse(torch.isinf(logits).any())
+
+    def test_grown_model_save_reload_forward(self):
+        """Full cycle: create → grow → save → reload → forward pass."""
+        import tempfile
+        import os
+        from enigma_engine.core.model import Enigma
+        from enigma_engine.core.progressive_growing import expand_model_weights
+        from enigma_engine.core.safe_save import atomic_torch_save
+
+        src_cfg = self._tiny_config(dim=64, n_layers=2, n_heads=4, n_kv_heads=2)
+        tgt_cfg = self._tiny_config(dim=128, n_layers=4, n_heads=8, n_kv_heads=4)
+
+        # Create, grow
+        src_model = Enigma(config=src_cfg)
+        new_sd = expand_model_weights(src_model.state_dict(), src_cfg, tgt_cfg)
+        tgt_model = Enigma(config=tgt_cfg)
+        tgt_model.load_state_dict(new_sd, strict=False)
+
+        # Save to temp file (same format as GUI _execute_grow)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            save_path = os.path.join(tmpdir, "grown_model.pth")
+            checkpoint = {
+                "model_state_dict": tgt_model.state_dict(),
+                "config": tgt_cfg.to_dict(),
+            }
+            atomic_torch_save(checkpoint, save_path)
+
+            # Reload from scratch (simulates opening the model fresh)
+            loaded = torch.load(save_path, map_location="cpu", weights_only=False)
+            loaded_cfg = ForgeConfig.from_dict(loaded["config"])
+            reloaded_model = Enigma(config=loaded_cfg)
+            reloaded_model.load_state_dict(
+                loaded["model_state_dict"], strict=False)
+
+            # Forward pass on reloaded model
+            input_ids = torch.randint(0, src_cfg.vocab_size, (1, 8))
+            with torch.no_grad():
+                logits = reloaded_model(input_ids)
+
+            self.assertEqual(logits.shape,
+                             (1, 8, (tgt_cfg.vocab_size + 63) & ~63))
+            self.assertFalse(torch.isnan(logits).any())
+            self.assertFalse(torch.isinf(logits).any())
 
 
 if __name__ == '__main__':

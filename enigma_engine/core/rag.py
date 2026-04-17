@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 CHUNK_SIZE = 512          # characters per chunk (overlap = CHUNK_SIZE // 4)
 CHUNK_OVERLAP = 128       # character overlap between consecutive chunks
 TOP_K_DEFAULT = 5         # default number of chunks to retrieve
-MAX_VOCAB = 8000          # cap vocabulary for TF-IDF to keep memory low
+MAX_VOCAB = 16000         # cap vocabulary for BM25 to keep memory low
 INDEX_FILE = "rag_index.json"
 
 # BM25 parameters (Okapi BM25 defaults)
@@ -109,6 +109,114 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE,
 
 
 # ---------------------------------------------------------------------------
+# R21 — Adaptive / semantic-aware chunking
+# ---------------------------------------------------------------------------
+
+# Regex patterns that mark "hard" section boundaries where we should
+# always prefer to split — ordered from strongest to weakest signal.
+_SECTION_BREAKS: list[re.Pattern[str]] = [
+    re.compile(r"(\n#{1,6}\s)"),        # Markdown headers
+    re.compile(r"(\n```)"),             # Code fences
+    re.compile(r"(\n---+\n)"),          # Horizontal rules
+    re.compile(r"(\n\n)"),              # Double newline (paragraph break)
+]
+
+
+def adaptive_chunk_text(
+    text: str,
+    target_size: int = CHUNK_SIZE,
+    min_size: int = 0,
+    max_size: int = 0,
+    overlap: int = CHUNK_OVERLAP,
+) -> list[str]:
+    """Split *text* into semantically-aware chunks (R21).
+
+    Unlike :func:`chunk_text`, this function first splits at strong
+    structural boundaries (Markdown headers, code fences, paragraph
+    breaks) to produce "sections", then merges small sections up to
+    *target_size* and splits oversized sections like the original
+    chunker.
+
+    This keeps semantically coherent units together — a header and
+    its body won't be split across chunks unless the body alone
+    exceeds *max_size*.
+
+    Args:
+        text: Input text.
+        target_size: Preferred chunk size in chars.
+        min_size: Chunks smaller than this are merged with their
+            neighbour.  Defaults to ``target_size // 4``.
+        max_size: Chunks larger than this are split with the fixed-
+            window chunker.  Defaults to ``target_size * 2``.
+        overlap: Overlap in chars applied when splitting oversized
+            sections.
+
+    Returns:
+        List of chunk strings.
+    """
+    if not text or not text.strip():
+        return []
+
+    if min_size <= 0:
+        min_size = target_size // 4
+    if max_size <= 0:
+        max_size = target_size * 2
+
+    # --- Step 1: Split on the strongest boundary found. ----
+    sections: list[str] = [text]
+    for pattern in _SECTION_BREAKS:
+        new_sections: list[str] = []
+        for section in sections:
+            # Split with capturing group keeps delimiters in result
+            parts = pattern.split(section)
+            # Re-attach each delimiter to the text that follows it
+            i = 0
+            while i < len(parts):
+                piece = parts[i]
+                if i + 1 < len(parts) and pattern.fullmatch(parts[i + 1]):
+                    # parts[i+1] is a delimiter — attach to parts[i+2]
+                    delim = parts[i + 1]
+                    following = parts[i + 2] if i + 2 < len(parts) else ""
+                    if piece.strip():
+                        new_sections.append(piece)
+                    if (delim + following).strip():
+                        new_sections.append(delim + following)
+                    i += 3
+                else:
+                    if piece.strip():
+                        new_sections.append(piece)
+                    i += 1
+        if len(new_sections) > len(sections):
+            sections = new_sections
+
+    # --- Step 2: Merge small neighbouring sections. ----
+    merged: list[str] = []
+    buffer = ""
+    for section in sections:
+        section = section.strip()
+        if not section:
+            continue
+        if buffer and len(buffer) + len(section) + 1 > target_size:
+            merged.append(buffer)
+            buffer = section
+        else:
+            buffer = f"{buffer} {section}".strip() if buffer else section
+    if buffer:
+        merged.append(buffer)
+
+    # --- Step 3: Split oversized chunks with the fixed-window chunker. --
+    result: list[str] = []
+    for chunk in merged:
+        if len(chunk) > max_size:
+            result.extend(chunk_text(chunk, chunk_size=target_size,
+                                     overlap=overlap))
+        else:
+            result.append(chunk)
+
+    return result
+
+
+# ---------------------------------------------------------------------------
 # TF-IDF vectorizer (pure numpy)
 # ---------------------------------------------------------------------------
 
@@ -130,14 +238,19 @@ class TfidfVectorizer:
     """
 
     def __init__(self, max_vocab: int = MAX_VOCAB,
-                 k1: float = BM25_K1, b: float = BM25_B) -> None:
+                 k1: float = BM25_K1, b: float = BM25_B,
+                 delta: float = 1.0) -> None:
         self.max_vocab = max_vocab
         self.k1 = k1
         self.b = b
+        self.delta = delta  # BM25+ lower-bound (Lv & Zhai)
         self.vocab: dict[str, int] = {}
         self.idf: np.ndarray | None = None
         self.doc_lens: np.ndarray | None = None
         self.avg_dl: float = 0.0
+        # T2-2: Co-occurrence map for query expansion.
+        # Maps vocab index → top-1 co-occurring vocab index.
+        self._cooccurrence: dict[int, int] = {}
 
     def fit(self, documents: list[str]) -> None:
         """Build vocabulary and compute IDF from a list of documents."""
@@ -168,6 +281,29 @@ class TfidfVectorizer:
         self.doc_lens = np.array(doc_lengths, dtype=np.float32)
         self.avg_dl = float(np.mean(self.doc_lens)) if doc_lengths else 1.0
 
+        # T2-2: Build co-occurrence map for query expansion.
+        # For each vocab term, find its most frequent co-occurring term.
+        # Capped at 500 entries to bound memory.
+        cooc: dict[int, Counter[int]] = {}
+        for doc in documents:
+            doc_terms = {self.vocab[t] for t in set(_tokenize(doc))
+                         if t in self.vocab}
+            for idx in doc_terms:
+                if idx not in cooc:
+                    cooc[idx] = Counter()
+                for other in doc_terms:
+                    if other != idx:
+                        cooc[idx][other] += 1
+        # Pick top-1 co-occurring term per vocab term, keep 500 entries
+        ranked = sorted(
+            ((idx, ctr.most_common(1)[0]) for idx, ctr in cooc.items()
+             if ctr),
+            key=lambda x: x[1][1], reverse=True,
+        )
+        self._cooccurrence = {idx: best for idx, (best, _cnt)
+                              in ranked[:500]}
+        self._idx_to_term = None  # invalidate cache after vocab change
+
     def transform(self, documents: list[str]) -> Any:
         """Compute BM25-scored matrix (n_docs x vocab_size).
 
@@ -175,6 +311,8 @@ class TfidfVectorizer:
         otherwise a dense numpy array.
         """
         if not self.vocab or self.idf is None:
+            logger.warning("TfidfVectorizer.transform() called with no "
+                           "fitted IDF — returning empty matrix")
             return np.zeros((len(documents), 0), dtype=np.float32)
 
         n = len(documents)
@@ -199,7 +337,7 @@ class TfidfVectorizer:
                     denominator = count + self.k1 * (
                         1 - self.b + self.b * doc_len / max(self.avg_dl, 1.0)
                     )
-                    bm25_tf = numerator / denominator
+                    bm25_tf = numerator / denominator + self.delta
                     score = self.idf[idx] * bm25_tf
                     rows.append(i)
                     cols.append(idx)
@@ -222,6 +360,22 @@ class TfidfVectorizer:
         self.fit(documents)
         return self.transform(documents)
 
+    def expand_query(self, tokens: set[str]) -> set[str]:
+        """Expand query tokens with co-occurring terms (T2-2)."""
+        if not self._cooccurrence:
+            return tokens
+        expanded = set(tokens)
+        if not hasattr(self, "_idx_to_term") or self._idx_to_term is None:
+            self._idx_to_term = {i: t for t, i in self.vocab.items()}
+        idx_to_term = self._idx_to_term
+        for token in tokens:
+            idx = self.vocab.get(token)
+            if idx is not None and idx in self._cooccurrence:
+                co_idx = self._cooccurrence[idx]
+                if co_idx in idx_to_term:
+                    expanded.add(idx_to_term[co_idx])
+        return expanded
+
     def to_dict(self) -> dict[str, Any]:
         """Serialise to a JSON-safe dict."""
         return {
@@ -230,8 +384,10 @@ class TfidfVectorizer:
             "max_vocab": self.max_vocab,
             "k1": self.k1,
             "b": self.b,
+            "delta": self.delta,
             "doc_lens": self.doc_lens.tolist() if self.doc_lens is not None else [],
             "avg_dl": self.avg_dl,
+            "cooccurrence": {str(k): v for k, v in self._cooccurrence.items()},
         }
 
     @classmethod
@@ -241,6 +397,7 @@ class TfidfVectorizer:
             max_vocab=data.get("max_vocab", MAX_VOCAB),
             k1=data.get("k1", BM25_K1),
             b=data.get("b", BM25_B),
+            delta=data.get("delta", 1.0),
         )
         obj.vocab = data.get("vocab", {})
         idf_raw = data.get("idf", [])
@@ -255,6 +412,8 @@ class TfidfVectorizer:
         dl_list = data.get("doc_lens", [])
         obj.doc_lens = np.array(dl_list, dtype=np.float32) if dl_list else None
         obj.avg_dl = data.get("avg_dl", 0.0)
+        cooc_raw = data.get("cooccurrence", {})
+        obj._cooccurrence = {int(k): v for k, v in cooc_raw.items()}
         return obj
 
 
@@ -329,6 +488,8 @@ class RAGIndex:
 
         # Build binary query vector (1 where term present)
         tokens = set(_tokenize(text))
+        # T2-2: Expand query with co-occurring terms
+        tokens = self.vectorizer.expand_query(tokens)
         v = len(self.vectorizer.vocab)
         q_vec = np.zeros((1, v), dtype=np.float32)
         for token in tokens:
@@ -372,21 +533,25 @@ class RAGIndex:
         if not results:
             return ""
 
+        _SEP = "\n\n"
+        _SEP_LEN = len(_SEP)
         parts: list[str] = []
         total = 0
         for r in results:
             source = Path(r["source"]).name
             chunk = r["chunk"]
             entry = f"[From {source}] {chunk}"
-            if total + len(entry) > max_chars:
-                remaining = max_chars - total
-                if remaining > 50:
-                    parts.append(entry[:remaining] + "...")
+            sep_cost = _SEP_LEN if parts else 0
+            entry_cost = len(entry) + sep_cost
+            if total + entry_cost > max_chars:
+                remaining = max_chars - total - sep_cost
+                if remaining > 53:
+                    parts.append(entry[:remaining - 3] + "...")
                 break
             parts.append(entry)
-            total += len(entry) + 1  # +1 for newline
+            total += entry_cost
 
-        return "\n\n".join(parts)
+        return _SEP.join(parts)
 
     # -- Persistence -------------------------------------------------------
 

@@ -14,6 +14,7 @@ import logging
 import os
 import threading
 import time
+import traceback
 from pathlib import Path
 from tkinter import filedialog
 from typing import Any
@@ -95,128 +96,6 @@ class LogicChatMixin:
         self._auto_resize_input()
 
     # ================================================================
-    # Logic - Chat helpers (extracted from _send_message)
-    # ================================================================
-
-    def _build_system_prompt_with_context(
-        self, msg: str,
-    ) -> tuple[str, dict | None]:
-        """Assemble the full system prompt with all context layers.
-
-        Returns (combined_prompt, emotional_state_dict_or_None).
-        """
-        try:
-            user_prompt = self.prompt_editor.get("1.0", "end").strip()
-        except Exception:
-            user_prompt = ""
-        gui_ctx = self._build_gui_context()
-
-        # Proactive web research
-        web_research_ctx = ""
-        if getattr(self, "web_access", False):
-            try:
-                from enigma_engine.core.auto_research import (
-                    auto_research, should_auto_research)
-                if should_auto_research(msg):
-                    web_research_ctx = auto_research(
-                        msg, max_results=3)
-            except Exception as exc:
-                logger.debug("Auto-research failed: %s", exc)
-                self._chat_system(f"Web search failed: {exc}")
-
-        combined_prompt = (
-            f"{user_prompt}\n\n{gui_ctx}" if user_prompt
-            else gui_ctx)
-        if web_research_ctx:
-            combined_prompt += f"\n\n{web_research_ctx}"
-
-        # Inject emotional tone hint
-        emo_state = None
-        ctx = getattr(self, "model_context", None)
-        if ctx is not None:
-            try:
-                from enigma_engine.core.sentiment import (
-                    build_emotional_prompt_hint)
-                hint = build_emotional_prompt_hint(ctx.emotional_state)
-                if hint:
-                    combined_prompt += f"\n\n{hint}"
-                emo_state = dict(ctx.emotional_state)
-            except Exception as exc:
-                logger.debug("Emotional prompt hint failed: %s", exc)
-
-        return combined_prompt, emo_state
-
-    def _process_response(
-        self, resp: str,
-    ) -> tuple[str, str, str]:
-        """Extract reasoning, parse commands, execute them.
-
-        Returns (clean_text, thinking_text, cmd_output).
-        """
-        from enigma_engine.core.reasoning import (
-            extract_reasoning, has_reasoning,
-            strip_incomplete_think)
-        thinking_text = ""
-        if has_reasoning(resp):
-            thinking_text, resp = extract_reasoning(resp)
-        else:
-            resp = strip_incomplete_think(resp)
-
-        from enigma_engine.core.commands import parse_commands
-        clean_text, commands = parse_commands(resp)
-        cmd_output = ""
-        if commands:
-            cmd_output = self._cmd_execute_ai_commands(commands)
-
-        return clean_text, thinking_text, cmd_output
-
-    def _post_generation_bookkeeping(
-        self, msg: str, clean_text: str,
-    ) -> None:
-        """Handle all post-generation side effects.
-
-        Updates history, emotional state, memory, saves context/session,
-        generates session title, and feeds the background trainer.
-        """
-        with self._history_lock:
-            self.history.append({"role": "user", "content": msg})
-            self.history.append(
-                {"role": "assistant", "content": clean_text})
-        self._trim_chat_history()
-
-        # Track message stats + emotional state
-        ctx = getattr(self, "model_context", None)
-        if ctx is not None:
-            ctx.increment_messages(2)
-            try:
-                ctx.update_emotional_state(msg)
-                self.after(0, self._update_emotional_display)
-            except Exception as exc:
-                logger.debug("Emotional state update failed: %s", exc)
-
-        # Auto-remember facts
-        try:
-            mem_mode = self._get_memory_mode()
-            if mem_mode == "automatic":
-                from enigma_engine.core.memory import get_memory
-                mem = get_memory()
-                new_facts = mem.extract_facts(msg)
-                if new_facts:
-                    logger.info(
-                        "Auto-remembered: %s",
-                        ", ".join(new_facts))
-        except Exception as exc:
-            logger.debug("Auto-remember failed: %s", exc)
-
-        self._save_model_context()
-        self._auto_save_session()
-        with self._history_lock:
-            hist_len = len(self.history)
-        if hist_len == 2:
-            self._generate_session_title(msg, clean_text)
-        self._feed_background_trainer(msg, clean_text)
-
-    # ================================================================
     # Logic - Chat
     # ================================================================
 
@@ -249,10 +128,6 @@ class LogicChatMixin:
         msg = self.chat_input.get("1.0", "end").strip()
         if not msg:
             return
-        # Record user activity for monologue idle detection
-        tracker = getattr(self, "_idle_tracker", None)
-        if tracker is not None:
-            tracker.record_activity()
         # Record in input history for Up/Down recall
         hist = getattr(self, "_input_history", None)
         if hist is None:
@@ -282,10 +157,33 @@ class LogicChatMixin:
         file_context = ""
         if self.attached_file:
             try:
-                content = Path(self.attached_file).read_text(
-                    encoding="utf-8", errors="replace")
-                if len(content) > 4000:
-                    content = content[:4000] + "\n[...truncated]"
+                fpath = Path(self.attached_file)
+                fsize = fpath.stat().st_size
+                # Detect binary files by reading a sample
+                try:
+                    sample = fpath.read_bytes()[:8192]
+                    if b'\x00' in sample:
+                        content = (
+                            f"[Binary file: {fpath.name}, "
+                            f"{fsize:,} bytes]")
+                        logger.info(
+                            "Attachment %s is binary (%s bytes)",
+                            fpath.name, fsize)
+                    elif fsize > 1_000_000:  # 1MB safety cap
+                        with open(fpath, encoding="utf-8",
+                                  errors="replace") as f:
+                            content = f.read(4000)
+                        content += "\n[...truncated — file too large]"
+                        logger.warning(
+                            "Attachment %s truncated (%s bytes)",
+                            fpath.name, fsize)
+                    else:
+                        content = fpath.read_text(
+                            encoding="utf-8", errors="replace")
+                        if len(content) > 4000:
+                            content = content[:4000] + "\n[...truncated]"
+                except OSError:
+                    content = f"[Could not read: {fpath.name}]"
                 file_context = (
                     f"\n[Attached file: "
                     f"{Path(self.attached_file).name}]"
@@ -319,32 +217,40 @@ class LogicChatMixin:
 
         full_msg = msg + file_context
 
-        # Build system prompt with web research + emotional context
-        combined_prompt, emo_state = (
-            self._build_system_prompt_with_context(msg))
+        # Build base prompt on main thread (fast: reads GUI widgets)
+        # Auto-research (network I/O) is deferred to background thread
+        try:
+            user_prompt = self.prompt_editor.get("1.0", "end").strip()
+        except Exception:
+            user_prompt = ""
+        gui_ctx = self._build_gui_context()
+        _msg_for_research = msg
+        _web_access_on = getattr(self, "web_access", False)
 
         def _gen():
             try:
+                # Build combined prompt — auto-research runs here
+                # (off main thread) so network I/O doesn't freeze GUI
+                web_research_ctx = ""
+                if _web_access_on:
+                    try:
+                        from enigma_engine.core.auto_research import (
+                            auto_research, should_auto_research)
+                        if should_auto_research(_msg_for_research):
+                            web_research_ctx = auto_research(
+                                _msg_for_research, max_results=3)
+                    except Exception as exc:
+                        logger.debug("Auto-research failed: %s", exc)
+                combined_prompt = (
+                    f"{user_prompt}\n\n{gui_ctx}" if user_prompt
+                    else gui_ctx)
+                if web_research_ctx:
+                    combined_prompt += f"\n\n{web_research_ctx}"
+
                 kwargs: dict[str, Any] = {}
                 kwargs.update(self.config_overrides)
-                # Phase 3: modulate generation params from emotional state
-                if emo_state is not None:
-                    try:
-                        from enigma_engine.core.sentiment import (
-                            modulate_generation_params)
-                        adjusted = modulate_generation_params(
-                            emo_state,
-                            temperature=kwargs.get("temperature", 0.8),
-                            repetition_penalty=kwargs.get(
-                                "repetition_penalty", 1.1),
-                            top_p=kwargs.get("top_p", 0.9),
-                        )
-                        kwargs.update(adjusted)
-                    except Exception as exc:
-                        logger.debug("Param modulation failed: %s", exc)
                 kwargs["system_prompt"] = combined_prompt
-                with self._history_lock:
-                    kwargs["history"] = list(self.history)
+                kwargs["history"] = list(self.history)
 
                 # Enable reasoning if toggle is on
                 if getattr(self, 'reasoning_enabled', False):
@@ -370,11 +276,77 @@ class LogicChatMixin:
                     self.after(0, _stopped)
                     return
 
-                clean_text, thinking_text, cmd_output = (
-                    self._process_response(resp))
+                # Extract reasoning if present (Qwen3 outputs <think>
+                # blocks by default even without the reasoning toggle)
+                from enigma_engine.core.reasoning import (
+                    extract_reasoning, has_reasoning,
+                    strip_incomplete_think)
+                thinking_text = ""
+                if has_reasoning(resp):
+                    thinking_text, resp = extract_reasoning(resp)
+                else:
+                    # Strip truncated <think> from token-limited output
+                    resp = strip_incomplete_think(resp)
 
-                self._post_generation_bookkeeping(msg, clean_text)
+                # Parse and execute [CMD] blocks from response
+                from enigma_engine.core.commands import (
+                    parse_commands)
+                clean_text, commands = parse_commands(resp)
+                cmd_output = ""
+                if commands:
+                    cmd_output = self._cmd_execute_ai_commands(
+                        commands)
 
+                self.history.append(
+                    {"role": "user", "content": msg})
+                self.history.append(
+                    {"role": "assistant", "content": clean_text})
+
+                # Trim history to prevent unbounded RAM growth
+                self._trim_chat_history()
+
+                # Track message stats in identity card
+                ctx = getattr(self, "model_context", None)
+                if ctx is not None:
+                    ctx.increment_messages(2)
+
+                # Extract memorable facts from user message
+                # Only auto-extract in "automatic" mode;
+                # "manual" relies on explicit commands,
+                # "disabled" blocks add() at the core level.
+                try:
+                    mem_mode = self._get_memory_mode()
+                    if mem_mode == "automatic":
+                        from enigma_engine.core.memory import get_memory
+                        mem = get_memory()
+                        new_facts = mem.extract_facts(msg)
+                        if new_facts:
+                            logger.info(
+                                "Auto-remembered: %s",
+                                ", ".join(new_facts))
+                except Exception as exc:
+                    logger.debug("Auto-remember failed: %s", exc)
+
+                # Update emotional state from user message
+                try:
+                    ctx = getattr(self, "model_context", None)
+                    if ctx is not None:
+                        ctx.update_emotional_state(msg)
+                        self.after(
+                            0, self._update_emotional_display)
+                except Exception as exc:
+                    logger.debug(
+                        "Emotional state update failed: %s", exc)
+
+                # Auto-save per-model context after each exchange
+                self._save_model_context()
+                # Auto-save session to memory/
+                self._auto_save_session()
+                # Generate AI session title after the first exchange
+                if len(self.history) == 2:
+                    self._generate_session_title(msg, clean_text)
+                # Feed exchange to BackgroundTrainer if enabled
+                self._feed_background_trainer(msg, clean_text)
                 # Collect image paths generated by commands
                 cmd_images = list(
                     getattr(self, "_cmd_image_paths", []))
@@ -389,19 +361,16 @@ class LogicChatMixin:
                           files=cmd_files):
                     self._hide_thinking()
                     ai = self._active_ai_name()
-                    # Log full reasoning + answer to CMD page
-                    if think:
-                        self._cmd_activity(
-                            "info",
-                            f"[{ai}] \U0001f9e0 Reasoning:\n")
-                        self._cmd_activity(
-                            "ai_output", think + "\n")
-                    self._cmd_activity(
-                        "ai_output",
-                        f"[{ai}] {r}\n")
                     self._chat_append(
                         "timestamp", f"\n  {t} ",
                         "assistant_prefix", f"{ai}  ")
+                    # Show reasoning section if present
+                    if think:
+                        self._chat_append(
+                            "reasoning_label",
+                            "\n  \U0001f9e0 Reasoning:\n",
+                            "reasoning",
+                            think + "\n")
                     # Store deferred output to show after typewriter finishes
                     self._deferred_cmd_output = co
                     self._deferred_cmd_images = imgs
@@ -410,11 +379,21 @@ class LogicChatMixin:
                     self._typewriter("assistant", r + "\n")
                     # Speak only the answer (not the reasoning)
                     self._tts_speak(r)
+                    # Command output and images are now deferred until
+                    # after typewriter finishes
                 self.after(0, _show)
             except Exception as exc:
+                tb = traceback.format_exc()
+                logger.error("Chat generation failed:\n%s", tb)
                 def _err(e=str(exc)):
                     self._hide_thinking()
                     self._chat_error(e)
+                    # Clear deferred output so stale data doesn't
+                    # leak into the next successful response
+                    self._deferred_cmd_output = ""
+                    self._deferred_cmd_images = []
+                    self._deferred_cmd_files = []
+                    self._deferred_ai_name = ""
                 self.after(0, _err)
             finally:
                 def _restore_send():
@@ -454,8 +433,7 @@ class LogicChatMixin:
         counter = getattr(self, "_token_counter", None)
         if counter is None:
             return
-        with self._history_lock:
-            history = list(getattr(self, "history", []))
+        history = getattr(self, "history", [])
         # Estimate tokens: ~4 chars per token (simple, fast heuristic)
         total_chars = sum(
             len(m.get("content", "")) for m in history)
@@ -471,30 +449,32 @@ class LogicChatMixin:
 
         Guards against editing while generating or with empty history.
         """
-        # Cannot edit while AI is generating
-        if getattr(self, '_is_generating', False):
+        # Cannot edit while AI is generating (also check _stop_requested
+        # because _stop_generation() eagerly clears _is_generating while
+        # the daemon thread may still be appending to self.history)
+        if getattr(self, '_is_generating', False) \
+                or getattr(self, '_stop_requested', False):
             self._chat_system("Cannot edit while AI is generating.")
             return
-        with self._history_lock:
-            if not self.history:
-                self._chat_system("No messages to edit.")
-                return
-            # Find the last user message in history
-            last_user_msg = ""
-            # Remove last assistant + user pair (they come in pairs)
-            if (len(self.history) >= 2
-                    and self.history[-1].get("role") == "assistant"
-                    and self.history[-2].get("role") == "user"):
-                last_user_msg = self.history[-2].get("content", "")
-                self.history.pop()  # Remove assistant
-                self.history.pop()  # Remove user
-            elif self.history[-1].get("role") == "user":
-                # Only a user message (no response yet)
-                last_user_msg = self.history[-1].get("content", "")
-                self.history.pop()
-            else:
-                self._chat_system("No user message to edit.")
-                return
+        if not self.history:
+            self._chat_system("No messages to edit.")
+            return
+        # Find the last user message in history
+        last_user_msg = ""
+        # Remove last assistant + user pair (they come in pairs)
+        if (len(self.history) >= 2
+                and self.history[-1].get("role") == "assistant"
+                and self.history[-2].get("role") == "user"):
+            last_user_msg = self.history[-2].get("content", "")
+            self.history.pop()  # Remove assistant
+            self.history.pop()  # Remove user
+        elif self.history[-1].get("role") == "user":
+            # Only a user message (no response yet)
+            last_user_msg = self.history[-1].get("content", "")
+            self.history.pop()
+        else:
+            self._chat_system("No user message to edit.")
+            return
         # Redisplay remaining history
         self._restore_history_display()
         # Put the message back in the input
@@ -507,6 +487,12 @@ class LogicChatMixin:
 
     def _chat_append(self, *tag_text_pairs):
         """Append multiple (tag, text) pairs to chat display."""
+        if len(tag_text_pairs) % 2 != 0:
+            logger.error(
+                "_chat_append called with odd arg count (%d) "
+                "— last tag has no text, skipping it.",
+                len(tag_text_pairs))
+            tag_text_pairs = tag_text_pairs[:-1]
         tb = self.chat_display._textbox
         for i in range(0, len(tag_text_pairs), 2):
             tag = tag_text_pairs[i]
@@ -567,22 +553,6 @@ class LogicChatMixin:
         except Exception:
             pass
 
-    def _get_memory_mode(self) -> str:
-        """Read current memory_mode from gui_settings.json.
-
-        Returns one of: 'automatic', 'manual', 'disabled'.
-        """
-        try:
-            settings_path = DATA_DIR / "gui_settings.json"
-            if settings_path.exists():
-                import json
-                settings = json.loads(
-                    settings_path.read_text(encoding="utf-8"))
-                return settings.get("memory_mode", "automatic")
-        except Exception:
-            pass
-        return "automatic"
-
     def _trim_chat_history(self):
         """Drop oldest messages when history exceeds the cap.
 
@@ -591,15 +561,14 @@ class LogicChatMixin:
         Only the in-memory list is capped.
         """
         from enigma_engine.gui.media import MAX_CHAT_HISTORY
-        with self._history_lock:
-            if len(self.history) > MAX_CHAT_HISTORY:
-                # Drop oldest messages, keeping the most recent
-                trim_count = len(self.history) - MAX_CHAT_HISTORY
-                del self.history[:trim_count]
-                logger.info(
-                    f"Trimmed {trim_count} old messages from RAM "
-                    f"(kept {MAX_CHAT_HISTORY} most recent)"
-                )
+        if len(self.history) > MAX_CHAT_HISTORY:
+            # Drop oldest messages, keeping the most recent
+            trim_count = len(self.history) - MAX_CHAT_HISTORY
+            del self.history[:trim_count]
+            logger.info(
+                f"Trimmed {trim_count} old messages from RAM "
+                f"(kept {MAX_CHAT_HISTORY} most recent)"
+            )
 
     def _trim_chat_images(self):
         """Drop oldest PhotoImage refs when the list exceeds the cap.
@@ -633,9 +602,12 @@ class LogicChatMixin:
         in the sidebar history.  No confirmation needed — the
         current chat is auto-saved anyway.
         """
+        # S618: Stop generation before clearing history to prevent
+        # the daemon thread from appending to a cleared list.
+        if getattr(self, '_is_generating', False):
+            self._stop_generation()
         self._reset_display()
-        with self._history_lock:
-            self.history.clear()
+        self.history.clear()
         self._update_token_counter()
         # Create a new session path with counter for uniqueness
         MEMORY_DIR.mkdir(parents=True, exist_ok=True)
@@ -649,11 +621,6 @@ class LogicChatMixin:
         ctx = getattr(self, "model_context", None)
         if ctx is not None:
             ctx.increment_sessions()
-            # Decay emotional state between sessions
-            try:
-                ctx.decay_emotional_state()
-            except Exception as exc:
-                logger.debug("Emotional decay failed: %s", exc)
         # Save cleared history to model context
         self._save_model_context()
         if self.engine:
@@ -661,8 +628,6 @@ class LogicChatMixin:
                 self.engine.clear_history()
             if hasattr(self.engine, "clear_kv_cache"):
                 self.engine.clear_kv_cache()
-            # Clear history summary for the fresh conversation
-            self.engine._history_summary = ""
         self._chat_system("New conversation started.")
         self._refresh_history_list()
 
@@ -675,8 +640,7 @@ class LogicChatMixin:
         ctx = getattr(self, "model_context", None)
         if ctx is None:
             return
-        with self._history_lock:
-            ctx.history = list(self.history)
+        ctx.history = list(self.history)
         # Track which session file this history lives in
         ctx.session_path = getattr(
             self, "_current_session_path", "")
@@ -689,15 +653,17 @@ class LogicChatMixin:
             logger.debug("Save model context prompt failed: %s", exc)
         # Capture config overrides
         ctx.config = dict(self.config_overrides)
-        ctx.save()
+        try:
+            ctx.save()
+        except Exception as exc:
+            logger.error("Failed to save model context: %s", exc)
 
     def _load_model_context(self, model_path: str):
         """Load per-model context when a model is loaded."""
         ctx = load_model_context(model_path)
         self.model_context = ctx
         # Restore history
-        with self._history_lock:
-            self.history = list(ctx.history)
+        self.history = list(ctx.history)
         # Resume saved session file instead of creating a duplicate
         if ctx.session_path and Path(ctx.session_path).exists():
             self._current_session_path = ctx.session_path
@@ -731,12 +697,10 @@ class LogicChatMixin:
     def _restore_history_display(self):
         """Replay loaded history into the chat display widget."""
         self._reset_display()
-        with self._history_lock:
-            snapshot = list(self.history)
-        if not snapshot:
+        if not self.history:
             return
         ai = self._active_ai_name()
-        for msg in snapshot:
+        for msg in self.history:
             role = msg.get("role", "system")
             content = msg.get("content", "")
             if role == "user":
@@ -753,7 +717,7 @@ class LogicChatMixin:
                 self._process_media_in_text(content, "assistant")
             else:
                 self._chat_system(content)
-        count = len(snapshot)
+        count = len(self.history)
         self._chat_system(
             f"Restored {count} messages from model context.")
 
@@ -763,12 +727,21 @@ class LogicChatMixin:
 
     def _show_thinking(self):
         """Show animated processing indicator."""
+        # Cancel any pending animation callback to prevent stacking
+        pending = getattr(self, "_think_after_id", None)
+        if pending is not None:
+            try:
+                self.after_cancel(pending)
+            except (ValueError, Exception):
+                pass
         self._thinking_active = True
         self._think_n = 0
+        self._think_after_id = None
         self._do_think()
 
     def _do_think(self):
         if not self._thinking_active:
+            self._think_after_id = None
             return
         self._think_n += 1
         # Fixed-width animation: always 3 chars (dots + spaces)
@@ -781,13 +754,21 @@ class LogicChatMixin:
             self.thinking_label.configure(
                 text=f"  PROCESSING{dots}")
         except Exception:
+            self._think_after_id = None
             return
-        self.after(
+        self._think_after_id = self.after(
             getattr(self, "_thinking_tick_ms", 350),
             self._do_think)
 
     def _hide_thinking(self):
         self._thinking_active = False
+        pending = getattr(self, "_think_after_id", None)
+        if pending is not None:
+            try:
+                self.after_cancel(pending)
+            except (ValueError, Exception):
+                pass
+            self._think_after_id = None
         try:
             self.thinking_label.configure(text="")
         except Exception:
@@ -805,6 +786,9 @@ class LogicChatMixin:
         links that are found in the text.
         Stops early if _stop_requested is set.
         """
+        # Bail out if the window is being destroyed
+        if getattr(self, '_shutting_down', False):
+            return
         # Stop early if user cancelled
         if getattr(self, '_stop_requested', False):
             # Insert what we have so far, then stop
@@ -817,28 +801,28 @@ class LogicChatMixin:
             self._process_media_in_text(text, tag)
             self._auto_resize_chat()
             self._scroll_chat_to_bottom()
-
+            
             # Now show deferred command output and images
             # (so they appear AFTER the AI response, not during typing)
             co = getattr(self, "_deferred_cmd_output", "")
             imgs = getattr(self, "_deferred_cmd_images", [])
             files = getattr(self, "_deferred_cmd_files", [])
             ai = getattr(self, "_deferred_ai_name", "ENIGMA")
-
+            
             if co:
                 self._chat_system(co)
             for img_path in imgs:
                 self._insert_media(img_path, "file")
             for file_path in files:
                 self._insert_file_link(file_path)
-
+            
             self._cmd_activity(
                 "info",
                 f"[{ai}] Response delivered "
                 f"({len(text)} chars)\n")
             self._cmd_activity("divider", "\n")
             self._update_token_counter()
-
+            
             # Clear deferred output for next response
             self._deferred_cmd_output = ""
             self._deferred_cmd_images = []
@@ -846,15 +830,19 @@ class LogicChatMixin:
             self._deferred_ai_name = ""
             return
         end = min(idx + 3, len(text))
-        self.chat_display._textbox.insert(
-            "end", text[idx:end], tag)
+        try:
+            self.chat_display._textbox.insert(
+                "end", text[idx:end], tag)
+        except Exception:
+            # Widget destroyed before typewriter finished — stop silently
+            return
         # Throttle resize: only update every ~50 chars or on newlines
         # to avoid performance issues during rapid typewriter ticks
         chunk = text[idx:end]
         if '\n' in chunk or idx % 48 < 3:
             self._auto_resize_chat()
-        # Always scroll to bottom for smooth, constant scrolling
-        self._scroll_chat_to_bottom()
+            # Scroll to bottom only when we resize (amortises see() calls)
+            self._scroll_chat_to_bottom()
         self.after(
             getattr(self, "_typewriter_tick_ms", 8),
             lambda: self._typewriter(tag, text, end))
@@ -972,15 +960,7 @@ class LogicChatMixin:
             data = json.loads(
                 Path(path).read_text(encoding="utf-8"))
             messages = data.get("messages", [])
-            with self._history_lock:
-                self.history = messages
-            # Restore history summary to engine if available
-            summary = data.get("history_summary", "")
-            engine = getattr(self, "engine", None)
-            if engine is not None and summary:
-                engine._history_summary = summary
-            elif engine is not None:
-                engine._history_summary = ""
+            self.history = messages
             # Track this as the active session
             self._current_session_path = str(path)
             self._reset_display()
@@ -1116,10 +1096,10 @@ class LogicChatMixin:
             return
 
         try:
+            from enigma_engine.core.safe_save import atomic_write_json
             path = Path(self._current_session_path)
             data = json.loads(path.read_text(encoding="utf-8"))
             data["name"] = new_name
-            from enigma_engine.core.safe_save import atomic_write_json
             atomic_write_json(path, data)
             self._chat_system(f"Session renamed to: {new_name}")
             self._refresh_history_list()
@@ -1178,7 +1158,8 @@ class LogicChatMixin:
                 data = json.loads(
                     path.read_text(encoding="utf-8"))
                 data["name"] = title
-                from enigma_engine.core.safe_save import atomic_write_json
+                from enigma_engine.core.safe_save import (
+                    atomic_write_json)
                 atomic_write_json(path, data)
                 self.after(0, self._refresh_history_list)
             except Exception as exc:
@@ -1193,12 +1174,9 @@ class LogicChatMixin:
 
         Writes to _current_session_path so the same file is
         updated on every exchange — no duplicate files.
-        Includes history_summary from engine for continuity.
         """
-        with self._history_lock:
-            if not self.history:
-                return
-            history_snapshot = list(self.history)
+        if not self.history:
+            return
         current = getattr(self, "_current_session_path", "")
         if not current:
             return
@@ -1214,32 +1192,43 @@ class LogicChatMixin:
                     name = existing.get("name", name)
                 except (json.JSONDecodeError, OSError):
                     pass
-            # Capture history summary from engine if available
-            engine = getattr(self, "engine", None)
-            summary = ""
-            if engine is not None:
-                summary = getattr(engine, "_history_summary", "")
             data = {
                 "name": name,
                 "saved_at": time.time(),
-                "message_count": len(history_snapshot),
-                "messages": history_snapshot,
-                "history_summary": summary,
+                "message_count": len(self.history),
+                "messages": self.history,
             }
             from enigma_engine.core.safe_save import atomic_write_json
             atomic_write_json(path, data)
             # Refresh history sidebar so changes appear live
             self.after(0, self._refresh_history_list)
-        except OSError:
-            pass  # Silent failure — auto-save is best-effort
+        except OSError as exc:
+            logger.debug("Auto-save session failed: %s", exc)
+
+    def _get_memory_mode(self) -> str:
+        """Return the current memory mode from gui_settings.
+
+        Returns one of: "automatic", "manual", "disabled".
+        Defaults to "automatic" if not configured.
+        """
+        try:
+            settings_path = DATA_DIR / "gui_settings.json"
+            if settings_path.exists():
+                settings = json.loads(
+                    settings_path.read_text(encoding="utf-8"))
+                mode = settings.get("memory_mode", "automatic")
+                if mode in ("automatic", "manual", "disabled"):
+                    return mode
+        except (json.JSONDecodeError, OSError):
+            pass
+        return "automatic"
 
     def _feed_background_trainer(self, prompt: str, response: str):
         """Feed a chat exchange to the BackgroundTrainer if enabled.
 
         Checks the ``learn_while_chatting`` setting in gui_settings.json.
         If True and a ModRouter with a trainer is available, sends the
-        prompt/response pair as a training example.  The example score
-        is weighted by the current emotional engagement level (Phase 6).
+        prompt/response pair as a training example with engagement score.
         """
         try:
             enabled = getattr(self, "_chat_learning_enabled", None)
@@ -1255,33 +1244,36 @@ class LogicChatMixin:
             router = getattr(self, "_router", None)
             if router is None:
                 return
-            # Phase 6: weight example by emotional engagement
-            score = 1.0
-            ctx = getattr(self, "model_context", None)
-            if ctx is not None:
-                try:
-                    from enigma_engine.core.sentiment import (
-                        compute_engagement_score,
-                    )
-                    score = compute_engagement_score(ctx.emotional_state)
-                except Exception:
-                    pass
-            router.add_training_example(prompt, response, score=score)
+
+            # Compute engagement score from current emotional state
+            engagement = 1.0
+            try:
+                from enigma_engine.core.sentiment import (
+                    compute_engagement_score)
+                emotional_state = getattr(
+                    self, "_emotional_state", None)
+                if emotional_state:
+                    engagement = compute_engagement_score(
+                        emotional_state)
+            except Exception:
+                pass
+
+            router.add_training_example(
+                prompt, response, weight=engagement)
             logger.debug(
                 "Fed chat exchange to BackgroundTrainer "
-                "(%d chars prompt, %d chars response, score=%.2f)",
-                len(prompt), len(response), score)
+                "(%d chars prompt, %d chars response, "
+                "engagement=%.2f)",
+                len(prompt), len(response), engagement)
         except Exception as exc:
             logger.debug(
                 "Could not feed trainer: %s", exc)
 
     def _export_chat(self):
         """Export current chat history as Markdown, JSON, plain text, HTML, or PDF."""
-        with self._history_lock:
-            if not self.history:
-                self._chat_system("Nothing to export.")
-                return
-            history_snapshot = list(self.history)
+        if not self.history:
+            self._chat_system("Nothing to export.")
+            return
         path = filedialog.asksaveasfilename(
             title="Export Chat",
             defaultextension=".md",
@@ -1302,14 +1294,14 @@ class LogicChatMixin:
         if ext == ".html":
             from enigma_engine.core.chat_export import export_html
             export_html(
-                history_snapshot, path,
+                self.history, path,
                 title="Chat Export", ai_name=ai_name, user_name=user_name,
             )
         elif ext == ".pdf":
             from enigma_engine.core.chat_export import export_pdf
             try:
                 export_pdf(
-                    history_snapshot, path,
+                    self.history, path,
                     title="Chat Export", ai_name=ai_name, user_name=user_name,
                 )
             except ImportError as exc:
@@ -1317,19 +1309,21 @@ class LogicChatMixin:
                 return
         elif ext == ".json":
             # Structured JSON export
+            import json as _json
             data = {
                 "exported_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "message_count": len(history_snapshot),
-                "messages": history_snapshot,
+                "message_count": len(self.history),
+                "messages": self.history,
             }
-            from enigma_engine.core.safe_save import atomic_write_json
-            atomic_write_json(Path(path), data)
+            Path(path).write_text(
+                _json.dumps(data, indent=2, ensure_ascii=False),
+                encoding="utf-8")
         elif ext == ".md":
             # Markdown export with role headers
             lines: list[str] = []
             lines.append("# Chat Export")
             lines.append(f"*Exported {time.strftime('%Y-%m-%d %H:%M:%S')}*\n")
-            for msg in history_snapshot:
+            for msg in self.history:
                 role = msg.get("role", "user")
                 content = msg.get("content", "")
                 if role == "user":
@@ -1340,17 +1334,17 @@ class LogicChatMixin:
                     lines.append(f"### System\n*{content}*\n")
                 else:
                     lines.append(f"### {role.title()}\n{content}\n")
-            from enigma_engine.core.safe_save import atomic_write_text
-            atomic_write_text(Path(path), "\n".join(lines))
+            Path(path).write_text(
+                "\n".join(lines), encoding="utf-8")
         else:
             # Plain text fallback
             lines_txt: list[str] = []
-            for msg in history_snapshot:
+            for msg in self.history:
                 role = msg.get("role", "?").upper()
                 content = msg.get("content", "")
                 lines_txt.append(f"[{role}]\n{content}\n")
-            from enigma_engine.core.safe_save import atomic_write_text
-            atomic_write_text(Path(path), "\n".join(lines_txt))
+            Path(path).write_text(
+                "\n".join(lines_txt), encoding="utf-8")
 
         self._chat_system(f"Exported to {Path(path).name}")
 

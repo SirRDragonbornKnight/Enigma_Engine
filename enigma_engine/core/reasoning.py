@@ -30,7 +30,10 @@ Enables models to "think before answering" using <think>...</think> tags.
 """
 from __future__ import annotations
 
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 
 # =============================================================================
 # 🏷️ CONSTANTS
@@ -224,8 +227,14 @@ def extract_all_reasoning(text: str) -> list[tuple[str, str]]:
     """
     blocks: list[tuple[str, str]] = []
     last_end = 0
+    _max_blocks = 500
 
     for match in _THINK_PATTERN.finditer(text):
+        if len(blocks) >= _max_blocks:
+            logger.warning(
+                "Capping reasoning extraction at %d blocks",
+                _max_blocks)
+            break
         # Text before the first <think> block (if any)
         pre_text = text[last_end:match.start()].strip()
         if pre_text and not blocks:

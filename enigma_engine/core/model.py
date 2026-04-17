@@ -18,7 +18,7 @@ Usage:
     from enigma_engine.core.model import create_model, Enigma, ForgeConfig
 
     model = create_model('small')
-    config = ForgeConfig(vocab_size=8000, dim=512, n_layers=8)
+    config = ForgeConfig(vocab_size=32000, dim=512, n_layers=8)
     model = Enigma(config=config)
 """
 import json
@@ -32,12 +32,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..config import CONFIG
-
 logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Re-export everything for backward compatibility
+# Re-exports from sub-modules
 # ─────────────────────────────────────────────────────────────────────────────
 from .model_presets import (  # noqa: E402, F401
     ForgeConfig, QuantizationConfig, MODEL_PRESETS, MODEL_DESCRIPTIONS,
@@ -58,7 +56,54 @@ from .safe_save import atomic_torch_save, atomic_write_json  # noqa: E402
 
 
 # =============================================================================
-# 🧠 MAIN MODEL - THE FULL TRANSFORMER
+# T3-6: Chunked cross-entropy to avoid materializing [B*T, V] logits
+# =============================================================================
+
+
+def _chunked_cross_entropy(
+    output_proj: nn.Linear,
+    hidden: torch.Tensor,
+    targets: torch.Tensor,
+    chunk_size: int = 4096,
+    ignore_index: int = -100,
+    label_smoothing: float = 0.0,
+) -> torch.Tensor:
+    """Cross-entropy without materializing the full ``[B*T, V]`` logit tensor.
+
+    Chunks over the sequence dimension, computing the output projection
+    and CE per chunk.  Peak logit memory: ``O(chunk * V)`` instead of
+    ``O(B*T * V)``.  Biggest win at large vocab sizes (32K+).
+    """
+    hidden_flat = hidden.reshape(-1, hidden.size(-1))
+    targets_flat = targets.reshape(-1)
+    N = hidden_flat.size(0)
+
+    total_loss = hidden.new_zeros(())
+    total_tokens = hidden.new_zeros((), dtype=torch.long)
+
+    for start in range(0, N, chunk_size):
+        end = min(start + chunk_size, N)
+        chunk_logits = output_proj(hidden_flat[start:end])
+        chunk_targets = targets_flat[start:end]
+
+        valid_mask = chunk_targets != ignore_index
+        n_valid = valid_mask.sum()
+        if n_valid > 0:
+            total_loss = total_loss + F.cross_entropy(
+                chunk_logits, chunk_targets,
+                ignore_index=ignore_index,
+                label_smoothing=label_smoothing,
+                reduction='sum',
+            )
+            total_tokens = total_tokens + n_valid
+
+    if total_tokens == 0:
+        return total_loss
+    return total_loss / total_tokens.float()
+
+
+# =============================================================================
+# MAIN MODEL - THE FULL TRANSFORMER
 # =============================================================================
 
 class Enigma(nn.Module):
@@ -110,61 +155,28 @@ class Enigma(nn.Module):
       ← Used by Trainer for training
     """
 
-    def __init__(
-        self, vocab_size: int = 8000, dim: Optional[int] = None,
-        depth: Optional[int] = None, heads: Optional[int] = None,
-        max_len: Optional[int] = None, config: Optional[ForgeConfig] = None, **kwargs
-    ):
+    def __init__(self, config: ForgeConfig, **kwargs):
         """
-        Initialize the Forge model.
-
-        Can be initialized two ways:
-        1. With a ForgeConfig object
-        2. With individual parameters (for backwards compatibility)
+        Initialize the Enigma model.
 
         Args:
-            vocab_size: Size of vocabulary
-            dim: Model hidden dimension
-            depth: Number of transformer layers
-            heads: Number of attention heads
-            max_len: Maximum sequence length
-            config: ForgeConfig object (overrides other args)
-            **kwargs: Additional config parameters
+            config: ForgeConfig object defining model architecture
+            **kwargs: Additional config overrides
         """
         super().__init__()
 
-        # Build config
-        if config is not None:
-            self.config = config
-            # Only override vocab_size if caller explicitly passed one
-            # (i.e. not the default 8000) — otherwise trust the config
-            if vocab_size != 8000:
-                self.config.vocab_size = vocab_size
-        else:
-            self.config = ForgeConfig(
-                vocab_size=vocab_size,
-                dim=dim or CONFIG.get("embed_dim", 512),
-                n_layers=depth or CONFIG.get("num_layers", 8),
-                n_heads=heads or CONFIG.get("num_heads", 8),
-                max_seq_len=max_len or CONFIG.get("max_len", 1024),
-                **{k: v for k, v in kwargs.items() if hasattr(ForgeConfig, k)}
-            )
+        self.config = config
 
-        # Legacy attributes for compatibility
-        self.vocab_size = self.config.vocab_size
-        self.dim = self.config.dim
-        self.depth = self.config.n_layers
-        self.heads = self.config.n_heads
-        self.max_len = self.config.max_seq_len
+        # Apply any kwargs overrides
+        for k, v in kwargs.items():
+            if hasattr(self.config, k):
+                setattr(self.config, k, v)
 
         # Pad vocab to multiple of 64 for GPU matmul alignment (free speedup)
         padded_vocab = (self.config.vocab_size + 63) & ~63
 
         # Token embeddings (padded for GPU alignment)
         self.tok_embeddings = nn.Embedding(padded_vocab, self.config.dim)
-
-        # Legacy alias
-        self.token_embed = self.tok_embeddings
 
         # ─────────────────────────────────────────────────────────────────────
         # MULTI-MODAL PROJECTION LAYERS (Optional)
@@ -199,14 +211,41 @@ class Enigma(nn.Module):
             TransformerBlock(self.config, i) for i in range(self.config.n_layers)
         ])
 
+        # T3-1: Cross-layer KV sharing — group layers into bands that
+        # share K, V projections.  Only the first layer in each band
+        # computes K, V; followers reuse them.
+        n_groups = getattr(self.config, 'kv_share_groups', 0)
+        if n_groups > 0 and self.config.n_layers >= n_groups:
+            layers_per_group = self.config.n_layers // n_groups
+            for i, layer in enumerate(self.layers):
+                leader_idx = (i // layers_per_group) * layers_per_group
+                if i != leader_idx:
+                    layer.attention._kv_share_source = (
+                        self.layers[leader_idx].attention
+                    )
+
         # Output (padded for GPU alignment, weight-tied with embeddings)
         Norm = RMSNorm if self.config.use_rms_norm else nn.LayerNorm
         self.norm = Norm(self.config.dim)
         self.output = nn.Linear(self.config.dim, padded_vocab, bias=False)
-        self.head = self.output  # Legacy alias
 
         # Weight tying
         self.output.weight = self.tok_embeddings.weight
+
+        # Multi-token prediction heads (R25, Gloeckle et al. 2024)
+        # Extra heads predict 2nd, 3rd, ... next tokens. Train-only, dropped at inference.
+        self.predict_heads = nn.ModuleList()
+        if self.config.n_predict_heads > 0:
+            for _ in range(self.config.n_predict_heads):
+                self.predict_heads.append(
+                    nn.Linear(self.config.dim, padded_vocab, bias=False))
+
+        # T3-2: Self-speculative decoding — early-exit head
+        self.early_exit_layer = getattr(self.config, 'early_exit_layer', 0)
+        if self.early_exit_layer > 0:
+            self.early_exit_norm = RMSNorm(self.config.dim)
+            self.early_exit_head = nn.Linear(
+                self.config.dim, padded_vocab, bias=False)
 
         # RoPE frequencies with optional scaling
         if self.config.use_rope:
@@ -245,6 +284,11 @@ class Enigma(nn.Module):
         self.apply(self._init_weights)
         self._init_output_weights()
 
+        # nGPT: Apply weight normalization to all Linear layers
+        # (except weight-tied output head) for training stability.
+        if getattr(self.config, 'use_weight_norm', False):
+            self._apply_weight_norm()
+
     def _init_weights(self, module) -> None:
         if isinstance(module, nn.Linear):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
@@ -258,14 +302,61 @@ class Enigma(nn.Module):
             if name.endswith('wo.weight') or name.endswith('w2.weight'):
                 torch.nn.init.normal_(p, mean=0.0, std=0.02 / math.sqrt(2 * self.config.n_layers))
 
+    def gradient_checkpointing_enable(self) -> None:
+        """Enable gradient checkpointing on all transformer layers.
+
+        Trades ~30% extra compute for ~50% VRAM savings by recomputing
+        activations during the backward pass instead of storing them.
+        """
+        for layer in self.layers:
+            layer.use_checkpoint = True
+
+    def gradient_checkpointing_disable(self) -> None:
+        """Disable gradient checkpointing on all transformer layers."""
+        for layer in self.layers:
+            layer.use_checkpoint = False
+
+    def _apply_weight_norm(self) -> None:
+        """Apply parametric weight normalization to all Linear layers.
+
+        Decomposes W = g * (v / ||v||), separating direction from magnitude.
+        Skips the output head (weight-tied with tok_embeddings) and any
+        Linear inside norm layers.
+        """
+        from torch.nn.utils.parametrizations import weight_norm
+
+        # Collect modules to normalize (skip output head — weight-tied)
+        tied_id = id(self.output.weight)
+        count = 0
+        for module in self.modules():
+            if isinstance(module, nn.Linear) and id(module.weight) != tied_id:
+                weight_norm(module, name='weight')
+                count += 1
+        if count:
+            logger.info(f"nGPT: applied weight normalization to {count} Linear layers")
+
     def _get_causal_mask(self, size: int) -> torch.Tensor:
-        """Return a (size, size) upper-triangle causal mask, cached and grown on demand."""
+        """Return a (size, size) causal mask, cached and grown on demand.
+
+        When ``config.sliding_window`` is set, positions beyond the window
+        distance are also masked with ``-inf`` so each token only attends to
+        at most ``sliding_window`` previous positions.  This reduces
+        attention from O(n²) to O(n·w) for long sequences (e.g. Mistral).
+        """
+        sw = self.config.sliding_window
         if self._causal_mask is None or self._causal_mask_size < size:
             # Build at the requested size (never shrink)
             new_size = max(size, self._causal_mask_size)
             device = next(self.parameters()).device
             mask = torch.full((new_size, new_size), float('-inf'), device=device)
-            self._causal_mask = torch.triu(mask, diagonal=1)
+            mask = torch.triu(mask, diagonal=1)
+            # Sliding window: also mask positions beyond window distance
+            if sw is not None and sw > 0:
+                sw_mask = torch.tril(
+                    torch.ones(new_size, new_size, device=device), diagonal=-sw - 1
+                )
+                mask = mask.masked_fill(sw_mask.bool(), float('-inf'))
+            self._causal_mask = mask
             self._causal_mask_size = new_size
         return self._causal_mask[:size, :size]
 
@@ -278,13 +369,15 @@ class Enigma(nn.Module):
         2. Vocab padding — model pads vocab to multiple of 64 for GPU
            matmul alignment, but older checkpoints have unpadded weights.
         """
-        state_dict.pop('freqs_cis', None)
+        if 'freqs_cis' in state_dict:
+            state_dict.pop('freqs_cis')
+            logger.debug("Removed stale freqs_cis buffer from checkpoint")
 
         padded_vocab = (self.config.vocab_size + 63) & ~63
         if padded_vocab != self.config.vocab_size:
             vocab_keys = [
-                'tok_embeddings.weight', 'token_embed.weight',
-                'output.weight', 'head.weight',
+                'tok_embeddings.weight',
+                'output.weight',
             ]
             for key in vocab_keys:
                 if key in state_dict and state_dict[key].shape[0] == self.config.vocab_size:
@@ -301,6 +394,7 @@ class Enigma(nn.Module):
         pad_token_id: int = 0, label_smoothing: float = 0.0,
         attention_mask: Optional[torch.Tensor] = None,
         attention_mask_2d: Optional[torch.Tensor] = None,
+        chunked_ce: int = 0,
     ) -> Union[torch.Tensor, tuple[torch.Tensor, Optional[torch.Tensor]]]:
         """
         Forward pass.
@@ -319,13 +413,27 @@ class Enigma(nn.Module):
             attention_mask_2d: Optional pre-built mask (B, 1, T, T)
                 with 0 = attend and -inf = block.  Used by sequence
                 packing.  When provided, ``attention_mask`` is ignored.
+            chunked_ce: Vocab-chunk size for cross-entropy (T3-6).
+                When > 0, avoids materializing the full ``[B*T, V]``
+                logit tensor.  Returns ``logits=None`` in this mode.
+                0 = disabled (default, full logits computed).
 
         Returns:
             logits if no targets and return_loss=False, else (logits, loss)
         """
+        if not (0.0 <= label_smoothing <= 1.0):
+            raise ValueError(
+                f"label_smoothing must be in [0.0, 1.0], got {label_smoothing}")
+
         B, T = input_ids.shape
 
         h = self.tok_embeddings(input_ids)
+
+        # NEFTune: uniform noise on embeddings during training (R27, Jain et al. 2023)
+        if self.training and self.config.neftune_alpha > 0:
+            dims = T * h.shape[2]  # seq_len * hidden_dim
+            mag = self.config.neftune_alpha / math.sqrt(dims)
+            h = h + torch.empty_like(h).uniform_(-mag, mag)
 
         if not self.config.use_rope:
             end_pos = start_pos + T
@@ -353,18 +461,73 @@ class Enigma(nn.Module):
                 )
                 mask = mask + pad_mask
 
-        for layer in self.layers:
+        # T3-2: Capture hidden state at early-exit layer for draft head
+        _early_h = None
+        for i, layer in enumerate(self.layers):
             h = layer(h, self.freqs_cis, mask, use_cache, start_pos)
+            if self.early_exit_layer > 0 and i == self.early_exit_layer - 1:
+                _early_h = h
 
-        logits = self.output(self.norm(h))
+        h_normed = self.norm(h)
+
+        # T3-6: Chunked cross-entropy avoids full [B*T, V] logit tensor
+        use_chunked = chunked_ce > 0 and targets is not None
+
+        logits = None if use_chunked else self.output(h_normed)
 
         # Compute loss if targets provided
         loss = None
         if targets is not None:
-            loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)),
-                                   targets.reshape(-1),
-                                   ignore_index=pad_token_id,
-                                   label_smoothing=label_smoothing)
+            if use_chunked:
+                loss = _chunked_cross_entropy(
+                    self.output, h_normed, targets,
+                    chunk_size=chunked_ce,
+                    ignore_index=pad_token_id,
+                    label_smoothing=label_smoothing,
+                )
+            else:
+                loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)),
+                                       targets.reshape(-1),
+                                       ignore_index=pad_token_id,
+                                       label_smoothing=label_smoothing)
+
+            # Multi-token prediction auxiliary loss (R25, Gloeckle et al. 2024)
+            # Each extra head predicts the k-th next token (k=2,3,...).
+            if self.training and self.predict_heads:
+                mtp_loss = torch.tensor(
+                    0.0, device=h_normed.device, dtype=h_normed.dtype)
+                for i, head in enumerate(self.predict_heads):
+                    shift = i + 1
+                    if targets.size(1) > shift:
+                        shifted_targets = targets[:, shift:]
+                        if use_chunked:
+                            mtp_loss = mtp_loss + _chunked_cross_entropy(
+                                head, h_normed[:, :-shift], shifted_targets,
+                                chunk_size=chunked_ce,
+                                ignore_index=pad_token_id,
+                                label_smoothing=label_smoothing,
+                            )
+                        else:
+                            head_logits = head(h_normed[:, :-shift])
+                            mtp_loss = mtp_loss + F.cross_entropy(
+                                head_logits.reshape(-1, head_logits.size(-1)),
+                                shifted_targets.reshape(-1),
+                                ignore_index=pad_token_id,
+                                label_smoothing=label_smoothing,
+                            )
+                loss = loss + mtp_loss / max(1, len(self.predict_heads))
+
+            # T3-2: Early-exit auxiliary loss for self-speculative decoding
+            if self.training and _early_h is not None:
+                ee_normed = self.early_exit_norm(_early_h)
+                ee_logits = self.early_exit_head(ee_normed)
+                ee_loss = F.cross_entropy(
+                    ee_logits.reshape(-1, ee_logits.size(-1)),
+                    targets.reshape(-1),
+                    ignore_index=pad_token_id,
+                    label_smoothing=label_smoothing,
+                )
+                loss = loss + 0.1 * ee_loss
 
         # Return format depends on whether loss was computed
         if targets is not None or return_loss:
@@ -375,6 +538,107 @@ class Enigma(nn.Module):
     def clear_cache(self) -> None:
         for layer in self.layers:
             layer.clear_cache()
+
+    def rewind_cache(self, position: int) -> None:
+        """Truncate all layer KV-caches back to *position*."""
+        for layer in self.layers:
+            layer.rewind_cache(position)
+
+    def draft_forward(
+        self, input_ids: torch.Tensor,
+        use_cache: bool = False, start_pos: int = 0,
+    ) -> torch.Tensor:
+        """Forward through early-exit layers only (T3-2).
+
+        Used for self-speculative decoding: the early exit head
+        produces draft tokens that the full model can verify.
+
+        Returns:
+            Logits from the early-exit head ``[B, T, vocab]``.
+        """
+        if self.early_exit_layer <= 0:
+            raise RuntimeError("early_exit_layer not configured")
+
+        B, T = input_ids.shape
+        h = self.tok_embeddings(input_ids)
+
+        if not self.config.use_rope:
+            end_pos = start_pos + T
+            h = h + self.pos[:, start_pos:end_pos]
+
+        mask = None
+        if T > 1:
+            mask = self._get_causal_mask(T).to(
+                device=h.device).unsqueeze(0).unsqueeze(0)
+
+        for layer in self.layers[:self.early_exit_layer]:
+            h = layer(h, self.freqs_cis, mask, use_cache, start_pos)
+
+        return self.early_exit_head(self.early_exit_norm(h))
+
+    def medusa_forward(
+        self, input_ids: torch.Tensor,
+        use_cache: bool = False, start_pos: int = 0,
+    ) -> tuple[torch.Tensor, list[torch.Tensor]]:
+        """Forward pass returning main logits + MTP draft logits (T3-3).
+
+        Runs one full forward pass, then applies each ``predict_head``
+        to the shared hidden state.  The K extra logit tensors are
+        draft predictions for positions +2, +3, etc.
+
+        Returns:
+            ``(main_logits, [head_1_logits, ..., head_K_logits])``
+            Each tensor has shape ``[B, T, vocab]``.
+        """
+        if not self.predict_heads:
+            raise RuntimeError("n_predict_heads is 0 — no MTP heads for Medusa")
+
+        B, T = input_ids.shape
+        h = self.tok_embeddings(input_ids)
+
+        if not self.config.use_rope:
+            end_pos = start_pos + T
+            h = h + self.pos[:, start_pos:end_pos]
+
+        mask = None
+        if T > 1:
+            mask = self._get_causal_mask(T).to(
+                device=h.device).unsqueeze(0).unsqueeze(0)
+
+        for i, layer in enumerate(self.layers):
+            h = layer(h, self.freqs_cis, mask, use_cache, start_pos)
+
+        h_normed = self.norm(h)
+        main_logits = self.output(h_normed)
+        draft_logits = [head(h_normed) for head in self.predict_heads]
+        return main_logits, draft_logits
+
+    def restore_prefix_cache(self, prefix_cache) -> None:
+        """Restore prefix KV into each layer's attention cache.
+
+        After calling this, ``current_pos`` in each layer's
+        ``KVCache`` equals ``prefix_cache.prefix_len``, so the
+        next token-by-token decode starts at the right position.
+
+        Args:
+            prefix_cache: A :class:`PrefixKVCache` with one entry
+                per layer.
+        """
+        for i, layer in enumerate(self.layers):
+            pk, pv = prefix_cache.get(i)
+            attn = layer.attention
+            # Ensure the per-layer KVCache exists (lazy-init)
+            if attn._kv_cache is None:
+                from enigma_engine.core.kv_cache import KVCache
+                attn._kv_cache = KVCache(
+                    batch_size=pk.shape[0],
+                    max_seq_len=attn.max_cache_len,
+                    n_kv_heads=attn.n_kv_heads,
+                    head_dim=attn.head_dim,
+                    device=pk.device,
+                    dtype=pk.dtype,
+                )
+            attn._kv_cache.restore_prefix(pk, pv)
 
     def get_moe_aux_loss(self) -> torch.Tensor:
         """
@@ -535,6 +799,18 @@ class Enigma(nn.Module):
         if temperature <= 0:
             raise ValueError(f"temperature must be positive, got {temperature}")
 
+        # Validate input shape
+        if input_ids.dim() != 2:
+            raise ValueError(
+                f"input_ids must be 2D [batch, seq_len], got shape {list(input_ids.shape)}")
+
+        # Validate device match
+        model_device = next(self.parameters()).device
+        if input_ids.device != model_device:
+            raise ValueError(
+                f"input_ids on {input_ids.device} but model on {model_device}. "
+                f"Move input to model device first.")
+
         # Delegate to streaming generator if requested
         if stream:
             return self.generate_stream(
@@ -674,7 +950,7 @@ class Enigma(nn.Module):
         return model
 
     @classmethod
-    def auto_configure(cls, vocab_size: int = 8000) -> 'Enigma':
+    def auto_configure(cls, vocab_size: int = 32000) -> 'Enigma':
         """
         Create an optimally-configured model for the current hardware.
 
@@ -1134,7 +1410,11 @@ class Enigma(nn.Module):
 
         # Save config alongside
         config_path = path.with_suffix('.json')
-        atomic_write_json(config_path, self.config.to_dict())
+        import json as _json
+        config_path.write_text(
+            _json.dumps(self.config.to_dict(), indent=2,
+                        ensure_ascii=False),
+            encoding="utf-8")
         logger.info(f"Exported config to: {config_path}")
 
     def export_to_onnx(
@@ -1182,8 +1462,8 @@ class Enigma(nn.Module):
 
         # Create dummy input (representative of actual input)
         dummy_input = torch.randint(
-            0, self.vocab_size,
-            (1, min(128, self.max_len)),
+            0, self.config.vocab_size,
+            (1, min(128, self.config.max_seq_len)),
             device=next(self.parameters()).device
         )
 
@@ -1274,7 +1554,7 @@ class Enigma(nn.Module):
 
     def enable_speculative_decoding(
         self,
-        draft_model: 'Forge',
+        draft_model: 'Enigma',
         num_speculative_tokens: int = 4
     ) -> None:
         """
@@ -1428,7 +1708,7 @@ def create_model(size: str = 'small', vocab_size: Optional[int] = None, **kwargs
         RuntimeError: If model initialization fails
 
     Example:
-        >>> model = create_model('small', vocab_size=8000)
+        >>> model = create_model('small', vocab_size=32000)
         >>> model = create_model('medium', dropout=0.2)
     """
     # Validate inputs
@@ -1443,8 +1723,8 @@ def create_model(size: str = 'small', vocab_size: Optional[int] = None, **kwargs
             vocab_size = tok.vocab_size
             logger.info(f"Auto-detected vocab_size={vocab_size} from tokenizer")
         except Exception as e:
-            logger.warning(f"Could not auto-detect vocab_size: {e}, using default 8000")
-            vocab_size = 8000
+            logger.warning(f"Could not auto-detect vocab_size: {e}, using default 32000")
+            vocab_size = 32000
 
     if not isinstance(vocab_size, int) or vocab_size <= 0:
         raise ValueError(f"vocab_size must be a positive integer, got {vocab_size}")
@@ -1476,7 +1756,3 @@ def create_model(size: str = 'small', vocab_size: Optional[int] = None, **kwargs
     logger.info(f"Created Enigma ({size}): {model.num_parameters:,} params, "
           f"{config.dim}d, {config.n_layers}L")
     return model
-
-
-# Backward-compatible alias
-Forge = Enigma

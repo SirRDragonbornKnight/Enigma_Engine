@@ -26,6 +26,58 @@ class ForgeNewModesMixin:
         """Check if the user requested training to stop."""
         return not self.training_active
 
+    def _read_forge_rl_params(self) -> dict:
+        """Read RL-specific parameters from FORGE UI widgets.
+
+        Returns a dict with replay_capacity and replay_ratio,
+        falling back to defaults when widgets are missing or invalid.
+        """
+        replay_capacity = 256
+        replay_ratio = 0.25
+
+        try:
+            raw = getattr(
+                self, "forge_replay_capacity_var", None).get().strip()
+            val = int(raw)
+            if val >= 0:
+                replay_capacity = val
+            else:
+                self._log(f"[!] Replay capacity '{raw}' invalid "
+                          f"(must be >= 0), using 256")
+        except (ValueError, TypeError):
+            raw_w = getattr(
+                self, "forge_replay_capacity_var", None)
+            raw = raw_w.get().strip() if raw_w else ""
+            if raw:
+                self._log(f"[!] Replay capacity '{raw}' not a "
+                          f"number, using 256")
+        except AttributeError:
+            pass
+
+        try:
+            raw = getattr(
+                self, "forge_replay_ratio_var", None).get().strip()
+            val = float(raw)
+            if 0.0 <= val <= 1.0:
+                replay_ratio = val
+            else:
+                self._log(f"[!] Replay ratio '{raw}' out of range "
+                          f"(must be 0.0-1.0), using 0.25")
+        except (ValueError, TypeError):
+            raw_w = getattr(
+                self, "forge_replay_ratio_var", None)
+            raw = raw_w.get().strip() if raw_w else ""
+            if raw:
+                self._log(f"[!] Replay ratio '{raw}' not a "
+                          f"number, using 0.25")
+        except AttributeError:
+            pass
+
+        return {
+            "replay_capacity": replay_capacity,
+            "replay_ratio": replay_ratio,
+        }
+
     # ================================================================
     # PRE-TRAINING (Phase 1a)
     # ================================================================
@@ -33,24 +85,27 @@ class ForgeNewModesMixin:
     def _pretrain_validate_inputs(self) -> dict | None:
         """Validate inputs for pre-training.
 
+        Requires a STUDENT model assigned in the Router.
+        Create models in the Models tab first.
+
         Returns a dict of validated params, or None on failure
         (with error logged to the FORGE panel).
         """
         if self.training_active:
             return None
 
-        preset_name = getattr(self, "pretrain_preset_var", None)
-        preset_name = preset_name.get() if preset_name else "large"
-        # Strip description suffix from display value (e.g. "large - RTX 3080+...")
-        preset_name = preset_name.split(" - ", 1)[0]
+        # STUDENT model is required — create in Models tab first
+        student_path = self.route_assignments.get("student")
+        if not student_path or not Path(student_path).exists():
+            self._log(
+                "[!] No STUDENT model assigned.\n"
+                "    1. Go to MODELS and create a model\n"
+                "    2. Go to ROUTER and assign it to STUDENT\n"
+                "    3. Return here to pre-train it")
+            return None
 
         data_var = getattr(self, "pretrain_data_var", None)
         data_path = data_var.get().strip() if data_var else ""
-
-        model_name_var = getattr(
-            self, "pretrain_model_name_var", None)
-        model_name = (model_name_var.get().strip()
-                      if model_name_var else "")
 
         retrain_tok_var = getattr(
             self, "pretrain_retrain_tok_var", None)
@@ -79,34 +134,14 @@ class ForgeNewModesMixin:
                 "    Browse for a valid file or directory.")
             return None
 
-        if not model_name:
-            model_name = f"pretrained_{preset_name}"
-        safe_name = "".join(
-            c for c in model_name if c.isalnum() or c in "_-")
-        if not safe_name:
-            self._log("[!] Invalid model name.")
+        result = self._validate_epochs_lr()
+        if result is None:
             return None
-
-        try:
-            epochs = int(self.ft_epochs_entry.get())
-            if epochs < 1 or epochs > 1000:
-                raise ValueError
-        except (ValueError, AttributeError):
-            self._log("[!] Epochs must be 1-1000.")
-            return None
-
-        try:
-            lr = float(self.ft_lr_entry.get())
-            if lr <= 0 or lr > 1:
-                raise ValueError
-        except (ValueError, AttributeError):
-            self._log("[!] Learning rate must be 0 to 1.")
-            return None
+        epochs, lr = result
 
         return {
-            "preset_name": preset_name,
+            "student_path": student_path,
             "data_source": data_source,
-            "safe_name": safe_name,
             "retrain_tok": retrain_tok,
             "vocab_size": vocab_size,
             "epochs": epochs,
@@ -114,10 +149,13 @@ class ForgeNewModesMixin:
         }
 
     def _start_pretrain_training(self):
-        """Pre-train a new model from scratch on large text data.
+        """Pre-train a model on large text data.
+
+        Requires a STUDENT model assigned in the Router.
+        Create models in the Models tab first.
 
         Workflow:
-        1. Create a fresh model from selected preset (random init)
+        1. Load STUDENT model from Router
         2. Optionally retrain BPE tokenizer on the data
         3. Process and clean the pre-training corpus
         4. Run standard causal LM training with pre-training defaults
@@ -129,16 +167,15 @@ class ForgeNewModesMixin:
         if params is None:
             return
 
-        preset_name = params["preset_name"]
+        student_path = params["student_path"]
         data_source = params["data_source"]
-        safe_name = params["safe_name"]
         retrain_tok = params["retrain_tok"]
         vocab_size = params["vocab_size"]
         epochs = params["epochs"]
         lr = params["lr"]
 
-        from enigma_engine.gui.scanners import MODELS_DIR
-        out_path = MODELS_DIR / f"{safe_name}.pth"
+        out_path = Path(student_path)
+        safe_name = out_path.stem
 
         self.training_active = True
         self.solo_train_btn.configure(state="disabled",
@@ -146,10 +183,14 @@ class ForgeNewModesMixin:
         self.stop_train_btn.configure(state="normal")
         self.status_bar.set_left("\u2692 PRE-TRAINING...")
 
-        self._log("--- PRE-TRAINING INITIATED ---")
-        self._log(f"Preset  : {preset_name}")
-        self._log(f"Data    : {data_source}")
-        self._log(f"Output  : {out_path}")
+        self._log_training_summary(
+            "Pre-Training",
+            Model=safe_name,
+            Data=str(data_source),
+            Vocab=vocab_size,
+            Epochs=epochs,
+            LR=lr,
+        )
         self._log(f"Epochs  : {epochs}  |  LR: {lr}")
         self._log(f"Vocab   : {vocab_size}  |  Retrain tok: {retrain_tok}")
         self._clear_forge_param_count()
@@ -160,95 +201,557 @@ class ForgeNewModesMixin:
             try:
                 import torch
                 from enigma_engine.core.model import Enigma
-                from enigma_engine.core.model_presets import (
-                    get_preset)
                 from enigma_engine.core.training import (
                     Trainer, TrainingConfig)
                 from enigma_engine.core.tokenizer import get_tokenizer
                 from enigma_engine.core.dataset import (
-                    process_text_corpus, estimate_token_count)
+                    iter_text_chunks)
 
                 device = ("cuda"
                           if torch.cuda.is_available() else "cpu")
                 self._log(f"Device  : {device.upper()}")
 
-                # Step 1: Process pre-training data
-                self._log("Processing data...")
-                text = process_text_corpus(
-                    data_source, text_key="text")
-                if not text or len(text) < 100:
+                # I-12/I-14: Check for existing checkpoints to resume
+                ckpt_dir = (
+                    out_path.parent / "checkpoints"
+                    / out_path.stem)
+                resume_enabled = getattr(
+                    self, 'forge_resume_var', None)
+                try_resume = (resume_enabled is None
+                              or resume_enabled.get())
+                resume_path = (
+                    Trainer._find_latest_checkpoint(ckpt_dir)
+                    if try_resume else None)
+                do_retrain_tok = retrain_tok
+                if resume_path is not None:
+                    self._log(
+                        f"\n--- RESUMING from {resume_path.name} ---")
+                    self._log(
+                        "Skipping tokenizer retraining (using "
+                        "tokenizer from checkpoint)")
+                    do_retrain_tok = False
+                elif not try_resume:
+                    existing = Trainer._find_latest_checkpoint(
+                        ckpt_dir)
+                    if existing is not None:
+                        self._log(
+                            "[i] Checkpoint exists but Resume is "
+                            "unchecked — starting fresh.")
+
+                # Step 1: Process pre-training data (streaming)
+                #
+                # Instead of loading all data into RAM at once,
+                # stream through chunks one at a time.  Two passes:
+                #   Pass 1: Count chars + collect tokenizer samples
+                #   Pass 2: Split into sequences + write to JSONL
+                # Peak RAM: ~200 MB (one chunk) + ~2 GB (tok samples)
+                self._log("Scanning data...")
+                import time as _time
+                import json as _json
+
+                def _ram_str():
+                    try:
+                        import psutil
+                        m = psutil.virtual_memory()
+                        return (f"RAM: {m.used / 1073741824:.1f}/"
+                                f"{m.total / 1073741824:.0f} GB "
+                                f"({m.percent}%)")
+                    except Exception:
+                        return ""
+
+                _phase_t0 = _time.monotonic()
+
+                def _load_progress(pct, msg):
+                    self._log(f"  [{pct:>3d}%] {msg}")
+
+                # ── Pass 1: scan for total chars + tok samples ──
+                total_chars = 0
+                calibration_sample = None
+                tok_samples: list[str] = []
+                _tok_sample_chars = 0
+                _TOK_SAMPLE_CAP = 2_000_000_000  # 2 GB
+
+                for chunk_text in iter_text_chunks(
+                        data_source, text_key="text",
+                        on_progress=_load_progress):
+                    total_chars += len(chunk_text)
+                    if calibration_sample is None:
+                        calibration_sample = chunk_text[:10_000]
+                    # Collect tokenizer training samples
+                    if (do_retrain_tok
+                            and _tok_sample_chars < _TOK_SAMPLE_CAP):
+                        tok_samples.append(chunk_text)
+                        _tok_sample_chars += len(chunk_text)
+
+                if total_chars < 100:
                     self._log(
                         "[!] Not enough text data. Need at least "
                         "100 characters of clean text.")
                     return
 
-                est_tokens = estimate_token_count(text)
+                est_tokens = max(1, total_chars // 4)
+                _elapsed = _time.monotonic() - _phase_t0
                 self._log(
-                    f"Data    : {len(text):,} chars "
-                    f"(~{est_tokens:,} tokens)")
+                    f"Data    : {total_chars:,} chars "
+                    f"(~{est_tokens:,} tokens) "
+                    f"[{_elapsed:.1f}s]")
+                self._log(f"          {_ram_str()}")
+
+                # ── C-2: Warn before tokenizer retrain destroys
+                # existing weights (vocab size change makes all
+                # embedding/output weights incompatible).
+                if do_retrain_tok:
+                    self._log(
+                        "[i] Retraining tokenizer will change "
+                        "vocab size. All model weights will be "
+                        "randomly re-initialized (training from "
+                        "scratch).")
 
                 # Step 2: Optionally retrain tokenizer
 
-                if retrain_tok:
+                if do_retrain_tok:
+                    _phase_t0 = _time.monotonic()
                     self._log(
                         f"Training BPE tokenizer "
                         f"(vocab {vocab_size})...")
                     from enigma_engine.core.bpe_tokenizer import (
                         BPETokenizer)
                     tokenizer = BPETokenizer()
-                    # Split into chunks for training
+                    utf8_var = getattr(
+                        self, 'pretrain_utf8_bytes_var', None)
+                    if utf8_var and utf8_var.get():
+                        tokenizer.use_utf8_bytes = True
+                        self._log("Byte-level BPE enabled")
+
+                    # Split tok_samples into 500K-char pieces
+                    # for BPE training.
                     chunk_size = 500_000
-                    train_texts = [
-                        text[i:i + chunk_size]
-                        for i in range(0, len(text), chunk_size)
-                    ]
+                    train_texts = []
+                    self._log(
+                        f"  Tokenizer samples: "
+                        f"{_tok_sample_chars // 1_000_000:,} MB "
+                        f"from {len(tok_samples)} chunks")
+                    for tc in tok_samples:
+                        start = 0
+                        while start < len(tc):
+                            end = min(
+                                start + chunk_size, len(tc))
+                            if end < len(tc):
+                                ws = tc.rfind(
+                                    ' ', start, end)
+                                nl = tc.rfind(
+                                    '\n', start, end)
+                                boundary = max(ws, nl)
+                                if boundary > start:
+                                    end = boundary + 1
+                            train_texts.append(
+                                tc[start:end])
+                            start = end
+                    del tok_samples
+
+                    def _tok_progress(pct, msg):
+                        self._log(f"  Tokenizer [{pct:>3d}%] {msg}")
+
                     tokenizer.train(
                         train_texts,
                         vocab_size=vocab_size,
-                        verbose=False)
+                        verbose=False,
+                        on_progress=_tok_progress)
+                    del train_texts
                     # Save tokenizer
                     tok_dir = (Path(__file__).parent.parent
                                / "vocab_model")
                     tok_dir.mkdir(exist_ok=True)
-                    tokenizer.save(str(tok_dir / "tokenizer.json"))
+                    tokenizer.save(tok_dir / "tokenizer.json")
+                    # Also save to checkpoint dir so resume can
+                    # recover the tokenizer after a crash
+                    ckpt_dir.mkdir(parents=True, exist_ok=True)
+                    tokenizer.save(ckpt_dir / "tokenizer.json")
                     self._log(
                         f"Tokenizer trained: "
-                        f"{tokenizer.vocab_size} tokens")
+                        f"{tokenizer.vocab_size} tokens "
+                        f"[{_time.monotonic() - _phase_t0:.1f}s]")
                 else:
-                    tokenizer = get_tokenizer("auto")
-                    self._log(
-                        f"Tokenizer: {type(tokenizer).__name__} "
-                        f"(vocab {tokenizer.vocab_size})")
+                    # Not retraining — free the tok samples
+                    del tok_samples
+                    # Try to load tokenizer from checkpoint dir
+                    # first (resume), then bundled in student
+                    # checkpoint (C-5), then auto-detection.
+                    tok_loaded = False
+                    _ckpt_tok_path = ckpt_dir / "tokenizer.json"
+                    if _ckpt_tok_path.exists():
+                        try:
+                            from enigma_engine.core.bpe_tokenizer \
+                                import BPETokenizer as _BPE
+                            tokenizer = _BPE()
+                            tokenizer.load(_ckpt_tok_path)
+                            tok_loaded = True
+                            self._log(
+                                f"Tokenizer: BPETokenizer "
+                                f"(from checkpoint dir, vocab "
+                                f"{tokenizer.vocab_size})")
+                        except Exception:
+                            pass
+                    if not tok_loaded:
+                        try:
+                            from enigma_engine.core.model_registry \
+                                import safe_load_weights as _slw
+                            _ckpt = _slw(
+                                student_path, map_location="cpu")
+                            tok_data = _ckpt.get("tokenizer_data")
+                            if tok_data and isinstance(
+                                    tok_data, dict):
+                                from enigma_engine.core \
+                                    .bpe_tokenizer import (
+                                    BPETokenizer)
+                                tokenizer = BPETokenizer()
+                                tokenizer.token_to_id = (
+                                    tok_data["token_to_id"])
+                                tokenizer.id_to_token = {
+                                    v: k for k, v
+                                    in tokenizer.token_to_id
+                                    .items()}
+                                tokenizer.merges = [
+                                    tuple(m)
+                                    for m in tok_data["merges"]]
+                                tokenizer.merge_ranks = {
+                                    tuple(m): i for i, m
+                                    in enumerate(
+                                        tokenizer.merges)}
+                                tokenizer.special_tokens = (
+                                    tok_data.get(
+                                        "special_tokens",
+                                        tokenizer
+                                        .special_tokens))
+                                tokenizer._sync_special_ids()
+                                tokenizer.use_utf8_bytes = (
+                                    tok_data.get(
+                                        "use_utf8_bytes",
+                                        False))
+                                tokenizer.vocab_size = len(
+                                    tokenizer.token_to_id)
+                                tok_loaded = True
+                                self._log(
+                                    f"Tokenizer: BPETokenizer "
+                                    f"(from checkpoint, vocab "
+                                    f"{tokenizer.vocab_size})")
+                            del _ckpt
+                        except Exception:
+                            pass
+                    if not tok_loaded:
+                        tokenizer = get_tokenizer("auto")
+                        self._log(
+                            f"Tokenizer: "
+                            f"{type(tokenizer).__name__} "
+                            f"(vocab {tokenizer.vocab_size})")
 
-                # Step 3: Create fresh model from preset
+                # Step 3: Load STUDENT model
+                _phase_t0 = _time.monotonic()
                 self._log(
-                    f"Creating model from '{preset_name}' preset...")
-                config = get_preset(
-                    preset_name, vocab_size=tokenizer.vocab_size)
+                    f"Loading STUDENT model: "
+                    f"{Path(student_path).stem}")
+                from enigma_engine.core.model_registry import (
+                    get_state_dict, safe_load_weights)
+                from enigma_engine.core.model_presets import (
+                    ForgeConfig)
+                checkpoint = safe_load_weights(
+                    student_path, map_location=device)
+                cfg_dict = (checkpoint.get("model_config")
+                            or checkpoint.get("config", {}))
+                if isinstance(cfg_dict, dict) and "epochs" in cfg_dict:
+                    cfg_dict = checkpoint.get("model_config", {})
+                if isinstance(cfg_dict, dict) and "dim" in cfg_dict:
+                    cfg_dict["vocab_size"] = tokenizer.vocab_size
+                    config = ForgeConfig(**{
+                        k: v for k, v in cfg_dict.items()
+                        if k in ForgeConfig.__dataclass_fields__})
+                else:
+                    self._log(
+                        "[!] Could not read model config from "
+                        "checkpoint. Re-create the model in "
+                        "the MODELS tab.")
+                    return
                 model = Enigma(config=config)
+                state_dict = get_state_dict(checkpoint)
+                if state_dict:
+                    try:
+                        model.load_state_dict(
+                            state_dict, strict=False)
+                        self._log("Loaded existing weights")
+                    except Exception as e:
+                        self._log(
+                            f"Fresh init (weights incompatible:"
+                            f" {e})")
                 model = model.to(device)
 
                 pc = sum(p.numel() for p in model.parameters())
-                self._log(f"Params  : {pc:,}")
+                self._log(
+                    f"Params  : {pc:,} "
+                    f"[{_time.monotonic() - _phase_t0:.1f}s]")
+                self._log(
+                    f"Arch    : dim={config.dim}, "
+                    f"layers={config.n_layers}, "
+                    f"heads={config.n_heads}, "
+                    f"seq={config.max_seq_len}")
+                self._log(f"          {_ram_str()}")
+
+                # ── C-1: Data/model ratio guard.
+                # Chinchilla scaling: need ~20 tokens per param.
+                # Warn when data is insufficient and recommend a
+                # preset that fits the available data.
+                tokens_per_param = est_tokens / max(1, pc)
+                if tokens_per_param < 1.0:
+                    from enigma_engine.core.model_presets import (
+                        recommend_preset_for_tokens,
+                        MODEL_DESCRIPTIONS)
+                    rec_name, rec_params = (
+                        recommend_preset_for_tokens(
+                            est_tokens, tokenizer.vocab_size))
+                    rec_desc = MODEL_DESCRIPTIONS.get(
+                        rec_name, "")
+                    tpp = f"{tokens_per_param:.1f}"
+                    self._log(
+                        f"\n[!] WARNING: Only {tpp} tokens per "
+                        f"parameter "
+                        f"({est_tokens:,} tokens / {pc:,} "
+                        f"params).\n"
+                        f"    Chinchilla scaling recommends "
+                        f"~20 tokens per param.\n"
+                        f"    This model WILL memorize noise "
+                        f"rather than learn language.\n"
+                        f"    Recommended size for your data: "
+                        f"'{rec_name}' (~{rec_params:,} params"
+                        f") — {rec_desc}\n"
+                        f"    Create a smaller model in the "
+                        f"MODELS tab, or collect more data "
+                        f"with: python "
+                        f"collect_pretraining_data.py "
+                        f"--all-sources\n")
+                elif tokens_per_param < 5.0:
+                    tpp = f"{tokens_per_param:.1f}"
+                    self._log(
+                        f"[i] Data is thin: {tpp} tokens/param "
+                        f"(20 is optimal). "
+                        f"Multi-epoch + BPE-dropout will help.")
+
+                # Step 3b: Stream text into context-window-sized
+                # sequences and write directly to JSONL on disk.
+                # Peak RAM: one ~200 MB chunk at a time.
+                max_seq = config.max_seq_len
+
+                # ── C-4: Calibrate chars_per_token from the
+                # actual tokenizer instead of guessing.
+                if calibration_sample:
+                    sample_ids = tokenizer.encode(
+                        calibration_sample)
+                    if len(sample_ids) > 0:
+                        chars_per_token = (
+                            len(calibration_sample)
+                            / len(sample_ids))
+                    else:
+                        chars_per_token = 4.0
+                else:
+                    chars_per_token = 4.0
+                del calibration_sample
+                chars_per_chunk = max(
+                    1000, int(max_seq * chars_per_token))
+                self._log(
+                    f"Streaming pass 2: splitting into "
+                    f"~{max_seq}-token sequences "
+                    f"({chars_per_token:.1f} chars/token)...")
+                _phase_t0 = _time.monotonic()
+
+                # Write sequences to JSONL on disk as we go
+                _seq_path = (
+                    out_path.parent / "checkpoints"
+                    / out_path.stem
+                    / "_pretrain_sequences.jsonl")
+                _seq_path.parent.mkdir(
+                    parents=True, exist_ok=True)
+                _seq_offsets: list[int] = []
+                _n_seqs = 0
+
+                with open(_seq_path, "wb") as _sf:
+                    for chunk_text in iter_text_chunks(
+                            data_source, text_key="text",
+                            on_progress=_load_progress):
+                        pos = 0
+                        tc_len = len(chunk_text)
+                        while pos < tc_len:
+                            end = min(
+                                pos + chars_per_chunk, tc_len)
+                            if end < tc_len:
+                                boundary = chunk_text.rfind(
+                                    ' ', pos, end)
+                                nl = chunk_text.rfind(
+                                    '\n', pos, end)
+                                boundary = max(boundary, nl)
+                                if boundary > pos:
+                                    end = boundary + 1
+                            seq = chunk_text[pos:end].strip()
+                            if len(seq) > 50:
+                                _seq_offsets.append(_sf.tell())
+                                _sf.write(
+                                    (_json.dumps(seq) + "\n")
+                                    .encode("utf-8"))
+                                _n_seqs += 1
+                            pos = end
+
+                _time.sleep(0)
+                self._log(
+                    f"Sequences: {_n_seqs:,} written to disk "
+                    f"(~{chars_per_chunk} chars each) "
+                    f"[{_time.monotonic() - _phase_t0:.1f}s]")
+                self._log(f"          {_ram_str()}")
+
+                if _n_seqs == 0:
+                    self._log(
+                        "[!] No sequences produced. Data may "
+                        "be too short or empty.")
+                    return
 
                 # Step 4: Train with pre-training defaults
                 forge_params = self._read_forge_train_params()
+
+                # Use general mix to prevent catastrophic
+                # forgetting on existing model weights.
+                mix = forge_params["general_mix_ratio"]
+                if mix == 0.0:
+                    mix = 0.1  # Safe default for existing models
+                    # Update the widget so user can see the override
+                    mix_w = getattr(
+                        self, "forge_general_mix_var", None)
+                    if mix_w is not None:
+                        self.after(0, lambda: mix_w.set("10"))
+                    self._log(
+                        "[!] General mix was 0% — raised to 10% "
+                        "to prevent catastrophic forgetting")
+                self._log(
+                    f"General data mix: {mix:.0%} "
+                    f"(prevents forgetting)")
+                general_mix = mix
+                general_data = forge_params["general_data"]
+
+                # ── C-3: Auto-enable pre-training optimizations.
+                # These have no downsides for pre-training and
+                # significantly improve memory/throughput.
+
+                # Warmup steps: ~1% of total steps is standard
+                # for pre-training. Estimate from sequences.
+                _est_total = max(
+                    1,
+                    (_n_seqs
+                     // max(1, forge_params["batch_size"]))
+                    * epochs)
+                _warmup = max(10, _est_total // 100)
+
                 train_config = TrainingConfig(
                     epochs=epochs,
                     batch_size=forge_params["batch_size"],
                     learning_rate=lr,
                     max_grad_accumulation=forge_params[
                         "max_grad_accumulation"],
-                    use_gradient_checkpointing=forge_params[
-                        "use_gradient_checkpointing"],
-                    general_mix_ratio=0.0,  # No mix — this IS general
+                    # Always enable for pre-training (large data)
+                    use_gradient_checkpointing=True,
+                    # Pack short sequences to eliminate padding
+                    use_sequence_packing=True,
+                    # Chunk CE to avoid huge logit tensors
+                    ce_chunk_size=4096,
+                    use_compile=True,
+                    rolling_best_k=forge_params["rolling_best_k"],
+                    # WSD (warmup-stable-decay) is optimal for
+                    # pre-training — cosine wastes LR budget
+                    schedule_type="wsd",
+                    warmup_steps=_warmup,
+                    general_mix_ratio=general_mix,
+                    general_data=general_data,
                     val_split=forge_params["val_split"],
+                    eval_every=max(100, _est_total // 20),
                     save_every=max(1, epochs // 5),
-                    checkpoint_dir=str(MODELS_DIR / "checkpoints"),
+                    checkpoint_dir=str(
+                        out_path.parent / "checkpoints"
+                        / out_path.stem),
                     use_amp=torch.cuda.is_available(),
                     run_evaluation=True)
 
+                self._log("--- Auto-Optimizations ---")
+                self._log(
+                    "  GradCheckpoint: ON  |  SeqPacking: ON  "
+                    "|  Compile: ON")
+                self._log(
+                    f"  CEChunk: 4096  |  Schedule: wsd  "
+                    f"|  AMP: {'ON' if train_config.use_amp else 'OFF'}")
+                self._log(
+                    f"  Warmup: {_warmup} steps (~1% of "
+                    f"{_est_total})")
+                self._log(
+                    f"  SaveEvery: {train_config.save_every} epochs"
+                    f"  |  EvalEvery: "
+                    f"{train_config.eval_every} steps"
+                    f"  |  Eval: ON")
+
                 trainer = Trainer(model, tokenizer, train_config)
+                self._log(f"Batch   : {trainer.config.batch_size}")
+
+                # --- Live training callbacks ---
+                # Throttle: only log+update when percentage
+                # changes to avoid flooding the GUI event queue.
+                _last_pct = [-1]
+                _last_progress_t = [0.0]
+
+                def on_progress(pct, msg):
+                    if not self.training_active:
+                        raise KeyboardInterrupt("Stopped")
+                    now = _time.monotonic()
+                    # Update progress bar at most 1x/sec
+                    if now - _last_progress_t[0] >= 1.0:
+                        self._update_forge_progress(pct, msg)
+                        _last_progress_t[0] = now
+                trainer.on_progress = on_progress
+
+                # Throughput: accumulate tokens for speed calc
+                _throughput_tokens = [0]
+                _throughput_time = [0.0]
+
+                def on_throughput(tokens: int, step_time: float):
+                    _throughput_tokens[0] += tokens
+                    _throughput_time[0] += step_time
+                trainer.on_throughput = on_throughput
+
+                # Loss: compact step line with loss + tok/s + VRAM
+                # Throttled to 2 updates/sec to avoid flooding
+                # the GUI event queue (which freezes the window).
+                _last_loss_t = [0.0]
+
+                def on_loss(loss: float):
+                    now = _time.monotonic()
+                    if now - _last_loss_t[0] < 0.5:
+                        return
+                    _last_loss_t[0] = now
+                    tok_s = int(
+                        _throughput_tokens[0]
+                        / max(0.001, _throughput_time[0]))
+                    _throughput_tokens[0] = 0
+                    _throughput_time[0] = 0.0
+                    vram = ""
+                    if torch.cuda.is_available():
+                        used_gb = (torch.cuda.memory_allocated()
+                                   / 1e9)
+                        total_gb = (
+                            torch.cuda
+                            .get_device_properties(0)
+                            .total_memory / 1e9)
+                        vram = (f" | {used_gb:.1f}/"
+                                f"{total_gb:.0f} GB")
+                    step = trainer.state.step
+                    lr = trainer.optimizer.param_groups[0]['lr']
+                    self._log(
+                        f"  Step {step:>5d} | loss {loss:.4f}"
+                        f" | lr {lr:.2e}"
+                        f" | {tok_s:,} tok/s{vram}")
+                trainer.on_loss = on_loss
+
+                _train_start = [_time.monotonic()]
 
                 def on_epoch(epoch, loss):
                     if not self.training_active:
@@ -257,21 +760,67 @@ class ForgeNewModesMixin:
                     pct = int(epoch / epochs * 100)
                     self._update_forge_progress(
                         pct, f"Epoch {epoch}/{epochs}")
+                    elapsed = _time.monotonic() - _train_start[0]
+                    mins = int(elapsed // 60)
+                    secs = int(elapsed % 60)
+                    trend = ""
+                    if len(losses) >= 2:
+                        delta = losses[-1] - losses[-2]
+                        trend = f"  ({delta:+.4f})"
+                    # ETA based on average epoch time
+                    eta = ""
+                    if epoch > 0:
+                        remaining = (elapsed / epoch) * (
+                            epochs - epoch)
+                        r_m = int(remaining // 60)
+                        r_s = int(remaining % 60)
+                        eta = f"  |  ETA {r_m}m {r_s:02d}s"
+                    best = trainer.state.best_loss
+                    import math as _math
+                    best_str = (f"  |  best {best:.4f}"
+                                if not _math.isinf(best) else "")
                     self._log(
-                        f"  Epoch {epoch:>3d}  |  "
-                        f"loss {loss:.4f}")
+                        f"  Epoch {epoch:>3d}/{epochs}  |  "
+                        f"loss {loss:.4f}{trend}{best_str}  |  "
+                        f"{mins}m {secs:02d}s{eta}")
                 trainer.on_epoch_complete = on_epoch
 
+                def on_warning(msg: str):
+                    self._log(f"[!] WARNING: {msg}")
+                trainer.on_warning = on_warning
+
+                # ── Resource check: warn if system RAM is low
+                # (silent OS kills leave no traceback)
+                try:
+                    import psutil
+                    mem = psutil.virtual_memory()
+                    if mem.available < 4 * 1073741824:
+                        avail_gb = mem.available / 1073741824
+                        self._log(
+                            f"[!] WARNING: Only {avail_gb:.1f} "
+                            f"GB RAM free. Training may be "
+                            f"killed by the OS.\n"
+                            f"    Close other apps or create a "
+                            f"smaller model (lower Memory GB).")
+                except ImportError:
+                    pass
+
                 self._log("Pre-training...\n")
-                state = trainer.train(text)
+                state = trainer.train(
+                    data_path=str(_seq_path),
+                    data_offsets=_seq_offsets,
+                    resume_from=str(resume_path)
+                    if resume_path is not None else None)
 
                 # Check for early termination
                 import math
                 if math.isinf(state.best_loss) and not losses:
+                    reason = getattr(state, 'abort_reason', '') or (
+                        "likely OOM or NaN loss")
                     self._log(
-                        "\n[!] Pre-training aborted — likely OOM "
-                        "or NaN loss.\n"
-                        "    Try a smaller preset or reduce "
+                        f"\n[!] Pre-training aborted — {reason}.\n"
+                        "    Try a smaller model (lower Memory "
+                        "GB in MODELS tab) or reduce "
                         "batch size.")
                     return
 
@@ -292,18 +841,37 @@ class ForgeNewModesMixin:
                 # Save model
                 from enigma_engine.core.safe_save import (
                     atomic_torch_save)
-                atomic_torch_save({
+
+                # ── C-5: Bundle tokenizer data in the checkpoint
+                # so the model is self-contained. If the tokenizer
+                # file is moved or the vocab_model dir cleared,
+                # the checkpoint can reconstruct it.
+                save_dict = {
                     "model_state_dict": model.state_dict(),
                     "config": self._model_config_dict(model),
                     "training_state": {
                         "epochs": state.epoch,
                         "best_loss": state.best_loss,
                     },
-                }, out_path)
+                }
+                # Save BPE tokenizer data if available
+                from enigma_engine.core.bpe_tokenizer import (
+                    BPETokenizer)
+                if isinstance(tokenizer, BPETokenizer):
+                    save_dict["tokenizer_data"] = {
+                        "token_to_id": tokenizer.token_to_id,
+                        "merges": tokenizer.merges,
+                        "special_tokens": tokenizer.special_tokens,
+                        "use_utf8_bytes": tokenizer.use_utf8_bytes,
+                    }
+                atomic_torch_save(save_dict, out_path)
 
                 self._log("\n--- PRE-TRAINING COMPLETE ---")
                 self._log(f"Best loss : {state.best_loss:.4f}")
                 self._log(f"Saved to  : {out_path}")
+                total = _time.monotonic() - _train_start[0]
+                t_m, t_s = int(total // 60), int(total % 60)
+                self._log(f"Duration  : {t_m}m {t_s:02d}s")
                 self._update_forge_progress(100, "Complete")
                 self._save_training_run(
                     "Pre-Train", safe_name, epochs,
@@ -315,13 +883,31 @@ class ForgeNewModesMixin:
                 if losses:
                     self._display_loss_curve(losses)
                 self.after(0, self._refresh_models)
+                self._notify_training_complete()
 
             except KeyboardInterrupt:
                 self._log("\n--- PRE-TRAINING STOPPED ---")
                 if losses:
                     self._display_loss_curve(losses)
+            except RuntimeError as exc:
+                import traceback
+                tb = traceback.format_exc()
+                msg = str(exc).lower()
+                if "out of memory" in msg or "cuda" in msg:
+                    self._log(
+                        f"\n[!] GPU out of memory: {exc}\n"
+                        "    Try: smaller model (lower Memory "
+                        "GB in MODELS tab), reduce batch "
+                        "size, or reduce sequence length.")
+                else:
+                    self._log(
+                        f"\n[!] Pre-training failed: {exc}")
+                self._log(tb)
             except Exception as exc:
+                import traceback
+                tb = traceback.format_exc()
                 self._log(f"\n[!] Pre-training failed: {exc}")
+                self._log(tb)
             finally:
                 self.training_active = False
                 self._reset_forge_progress()
@@ -332,7 +918,29 @@ class ForgeNewModesMixin:
                 self.after(0, lambda: self.status_bar.set_left(
                     "\u26a1 READY"))
 
-        threading.Thread(target=_pretrain, daemon=True).start()
+        _pretrain_thread = threading.Thread(
+            target=_pretrain, daemon=True)
+        _pretrain_thread.start()
+
+        # Watchdog: detect silent thread death (OS OOM kill)
+        def _check_pretrain_alive():
+            if not _pretrain_thread.is_alive() \
+                    and self.training_active:
+                self._log(
+                    "\n[!] Training thread died unexpectedly "
+                    "(process may have been killed by the OS "
+                    "due to low memory).\n"
+                    "    Close other programs and try again "
+                    "with fewer resources in use.")
+                self.training_active = False
+                self._reset_forge_progress()
+                self.solo_train_btn.configure(
+                    state="normal", text="TRAIN")
+                self.stop_train_btn.configure(state="disabled")
+                self.status_bar.set_left("\u26a1 READY")
+            elif self.training_active:
+                self.after(5000, _check_pretrain_alive)
+        self.after(10000, _check_pretrain_alive)
 
     # ================================================================
     # DISTILLATION (Step 1b — Teacher → Student)
@@ -389,21 +997,10 @@ class ForgeNewModesMixin:
             self._log("[!] Max response length must be 32-8192.")
             return None
 
-        try:
-            epochs = int(self.ft_epochs_entry.get())
-            if epochs < 1 or epochs > 1000:
-                raise ValueError
-        except (ValueError, AttributeError):
-            self._log("[!] Epochs must be 1-1000.")
+        result = self._validate_epochs_lr()
+        if result is None:
             return None
-
-        try:
-            lr = float(self.ft_lr_entry.get())
-            if lr <= 0 or lr > 1:
-                raise ValueError
-        except (ValueError, AttributeError):
-            self._log("[!] Learning rate must be 0 to 1.")
-            return None
+        epochs, lr = result
 
         return {
             "trainer_path": trainer_path,
@@ -451,15 +1048,16 @@ class ForgeNewModesMixin:
         self.stop_train_btn.configure(state="normal")
         self.status_bar.set_left("\u2692 DISTILLING...")
 
-        self._log("=" * 40)
-        self._log("  Knowledge Distillation")
-        self._log("=" * 40)
-        self._log(f"Teacher : {trainer_name}")
-        self._log(f"Student : {student_name}")
-        self._log(f"Categories: {', '.join(categories)}")
-        self._log(f"Examples: {num_examples} per category "
-                  f"({num_examples * len(categories)} total)")
-        self._log(f"Epochs  : {epochs}  |  LR: {lr}")
+        self._log_training_summary(
+            "Knowledge Distillation",
+            Teacher=trainer_name,
+            Student=student_name,
+            Categories=", ".join(categories),
+            Examples=f"{num_examples} x {len(categories)} = "
+                     f"{num_examples * len(categories)}",
+            Epochs=epochs,
+            LR=lr,
+        )
         self._clear_forge_param_count()
         self._reset_forge_progress()
 
@@ -722,6 +1320,10 @@ class ForgeNewModesMixin:
                         "max_grad_accumulation"],
                     use_gradient_checkpointing=forge_params[
                         "use_gradient_checkpointing"],
+                    use_sequence_packing=True,
+                    ce_chunk_size=4096,
+                    use_compile=True,
+                    rolling_best_k=forge_params["rolling_best_k"],
                     general_mix_ratio=0.0,  # Only distilled data
                     val_split=forge_params["val_split"],
                     save_every=max(1, epochs // 5),
@@ -732,6 +1334,9 @@ class ForgeNewModesMixin:
 
                 trainer = Trainer(student, tokenizer, train_config)
 
+                import time as _time_d
+                _distill_start = [_time_d.monotonic()]
+
                 def on_epoch(epoch, loss):
                     if not self.training_active:
                         raise KeyboardInterrupt("Stopped")
@@ -739,10 +1344,25 @@ class ForgeNewModesMixin:
                     pct = 50 + int(epoch / epochs * 50)
                     self._update_forge_progress(
                         pct, f"Training {epoch}/{epochs}")
+                    elapsed = _time_d.monotonic() - _distill_start[0]
+                    mins = int(elapsed // 60)
+                    secs = int(elapsed % 60)
+                    eta = ""
+                    if epoch > 0:
+                        remaining = (elapsed / epoch) * (
+                            epochs - epoch)
+                        r_m = int(remaining // 60)
+                        r_s = int(remaining % 60)
+                        eta = f"  |  ETA {r_m}m {r_s:02d}s"
                     self._log(
-                        f"  Epoch {epoch:>3d}  |  "
-                        f"loss {loss:.4f}")
+                        f"  Epoch {epoch:>3d}/{epochs}  |  "
+                        f"loss {loss:.4f}  |  "
+                        f"{mins}m {secs:02d}s{eta}")
                 trainer.on_epoch_complete = on_epoch
+
+                def on_warning_solo(msg: str):
+                    self._log(f"[!] WARNING: {msg}")
+                trainer.on_warning = on_warning_solo
 
                 self._log(f"Training on {len(all_examples)} "
                           f"examples for {epochs} epochs...\n")
@@ -751,9 +1371,10 @@ class ForgeNewModesMixin:
                 # Check for failure
                 import math
                 if math.isinf(state.best_loss) and not losses:
+                    reason = getattr(state, 'abort_reason', '') or (
+                        "likely OOM or NaN loss")
                     self._log(
-                        "\n[!] Training aborted — likely OOM "
-                        "or NaN loss.\n"
+                        f"\n[!] Training aborted — {reason}.\n"
                         "    Try reducing batch size.")
                     return
 
@@ -762,8 +1383,7 @@ class ForgeNewModesMixin:
                     atomic_torch_save)
                 atomic_torch_save({
                     "model_state_dict": student.state_dict(),
-                    "model_config": s_cfg.__dict__,
-                    "config": s_cfg.__dict__,
+                    "config": self._model_config_dict(student),
                     "training_state": {
                         "epochs": state.epoch,
                         "best_loss": state.best_loss,
@@ -774,6 +1394,9 @@ class ForgeNewModesMixin:
                 self._log(f"Best loss : {state.best_loss:.4f}")
                 self._log(f"Examples  : {len(all_examples)}")
                 self._log(f"Saved to  : {Path(student_path).name}")
+                total = _time_d.monotonic() - _distill_start[0]
+                t_m, t_s = int(total // 60), int(total % 60)
+                self._log(f"Duration  : {t_m}m {t_s:02d}s")
                 self._update_forge_progress(100, "Complete")
                 self._save_training_run(
                     "Distill", student_name, epochs,
@@ -835,20 +1458,17 @@ class ForgeNewModesMixin:
                 "    (prompt/chosen/rejected per line).")
             return
 
-        try:
-            epochs = int(self.ft_epochs_entry.get())
-            if epochs < 1 or epochs > 1000:
-                raise ValueError
-        except ValueError:
-            self._log("[!] Epochs must be 1-1000.")
+        if not self._validate_jsonl_structure(
+            data_path, ("prompt", "chosen", "rejected"),
+        ):
             return
 
-        try:
-            lr = float(self.ft_lr_entry.get())
-            if lr <= 0 or lr > 1:
-                raise ValueError
-        except ValueError:
-            self._log("[!] Learning rate must be 0 to 1.")
+        result = self._validate_epochs_lr()
+        if result is None:
+            return
+        epochs, lr = result
+
+        if not self._validate_general_data_path():
             return
 
         model_name = Path(student_path).stem
@@ -858,12 +1478,13 @@ class ForgeNewModesMixin:
         self.stop_train_btn.configure(state="normal")
         self.status_bar.set_left("\u2692 RLHF TRAINING...")
 
-        self._log("=" * 40)
-        self._log("  RLHF Training (Reward + Policy)")
-        self._log("=" * 40)
-        self._log(f"Student : {model_name}")
-        self._log(f"Data    : {Path(data_path).name}")
-        self._log(f"Epochs  : {epochs}  |  LR: {lr}")
+        self._log_training_summary(
+            "RLHF Training (Reward + Policy)",
+            Student=model_name,
+            Data=Path(data_path).name,
+            Epochs=epochs,
+            LR=lr,
+        )
         self._clear_forge_param_count()
         self._reset_forge_progress()
 
@@ -893,8 +1514,8 @@ class ForgeNewModesMixin:
                 cfg_dict = checkpoint.get(
                     "model_config",
                     checkpoint.get("config", {}))
-                if "epochs" in cfg_dict:
-                    cfg_dict = {}
+                if isinstance(cfg_dict, dict) and "epochs" in cfg_dict:
+                    cfg_dict = checkpoint.get("model_config", {})
                 config = ForgeConfig(**{
                     k: v for k, v in cfg_dict.items()
                     if k in ForgeConfig.__dataclass_fields__
@@ -938,8 +1559,26 @@ class ForgeNewModesMixin:
                 )
                 reward_trainer = RewardTrainer(
                     reward_model, tokenizer, reward_cfg)
-                reward_trainer.on_progress = lambda p, m: self.after(
-                    0, lambda _m=m: self._log(f"  {_m}"))
+
+                import time as _time
+                _rlhf_start = [_time.monotonic()]
+                _reward_last_t = [0.0]
+                def _reward_progress(p, m):
+                    if not self.training_active:
+                        raise KeyboardInterrupt("Stopped")
+                    now = _time.monotonic()
+                    if now - _reward_last_t[0] >= 1.0:
+                        eta = ""
+                        if p > 0:
+                            elapsed = now - _rlhf_start[0]
+                            remaining = (elapsed / p) * (100 - p)
+                            r_m = int(remaining // 60)
+                            r_s = int(remaining % 60)
+                            eta = f" | ETA {r_m}m {r_s:02d}s"
+                        self._update_forge_progress(
+                            p, f"{m}{eta}")
+                        _reward_last_t[0] = now
+                reward_trainer.on_progress = _reward_progress
 
                 result = reward_trainer.train(pref_data)
                 self._log(f"Reward model trained: loss={result['final_loss']:.4f}")
@@ -961,12 +1600,23 @@ class ForgeNewModesMixin:
                 rlhf_trainer = RLHFTrainer(
                     model, tokenizer, reward_model, rlhf_cfg)
 
+                _rlhf_phase2_start = [_time.monotonic()]
+
                 def _rlhf_progress(p, m):
-                    self.after(
-                        0, lambda _m=m: self._log(f"  {_m}"))
-                    self.after(
-                        0, lambda _p=p: self._update_forge_progress(
-                            _p, f"RLHF {_p}%"))
+                    if not self.training_active:
+                        raise KeyboardInterrupt("Stopped")
+                    now = _time.monotonic()
+                    if now - _reward_last_t[0] >= 1.0:
+                        eta = ""
+                        if p > 0:
+                            elapsed = now - _rlhf_phase2_start[0]
+                            remaining = (elapsed / p) * (100 - p)
+                            r_m = int(remaining // 60)
+                            r_s = int(remaining % 60)
+                            eta = f" | ETA {r_m}m {r_s:02d}s"
+                        self._update_forge_progress(
+                            p, f"RLHF {p}%{eta}")
+                        _reward_last_t[0] = now
 
                 rlhf_trainer.on_progress = _rlhf_progress
                 rl_result = rlhf_trainer.train(prompts)
@@ -974,18 +1624,28 @@ class ForgeNewModesMixin:
                 self._log(f"\nFinal reward: {rl_result.get('final_reward', 0):.4f}")
 
                 # Save model
+                final_reward = rl_result.get('final_reward', 0)
                 from enigma_engine.core.safe_save import atomic_torch_save
                 atomic_torch_save({
                     "model_state_dict": model.state_dict(),
-                    "model_config": config.__dict__,
-                    "config": config.__dict__,
+                    "config": self._model_config_dict(model),
+                    "training_state": {
+                        "epochs": epochs,
+                        "best_loss": final_reward,
+                    },
                 }, student_path)
 
                 self._log(f"Model saved to {Path(student_path).name}")
                 self._log("--- RLHF TRAINING COMPLETE ---")
+                total = _time.monotonic() - _rlhf_start[0]
+                t_m, t_s = int(total // 60), int(total % 60)
+                self._log(f"Duration  : {t_m}m {t_s:02d}s")
                 self._update_forge_progress(100, "Complete")
+                self._save_training_run(
+                    "RLHF", model_name, epochs, final_reward)
                 self.after(0, lambda _pc=pc: self._update_forge_param_count(_pc))
                 self.after(0, self._refresh_models)
+                self._notify_training_complete()
 
             except KeyboardInterrupt:
                 self._log("\n--- RLHF TRAINING STOPPED ---")
@@ -1037,16 +1697,12 @@ class ForgeNewModesMixin:
                 "(one per line).")
             return
 
-        try:
-            epochs = int(self.ft_epochs_entry.get())
-        except ValueError:
-            self._log("[!] Epochs must be a number.")
+        result = self._validate_epochs_lr()
+        if result is None:
             return
+        epochs, lr = result
 
-        try:
-            lr = float(self.ft_lr_entry.get())
-        except ValueError:
-            self._log("[!] LR must be a number.")
+        if not self._validate_general_data_path():
             return
 
         model_name = Path(student_path).stem
@@ -1057,12 +1713,14 @@ class ForgeNewModesMixin:
         self.stop_train_btn.configure(state="normal")
         self.status_bar.set_left("\u2692 SELF-PLAY TRAINING...")
 
-        self._log("=" * 40)
-        self._log("  Self-Play Training")
-        self._log("=" * 40)
-        self._log(f"Student : {model_name}")
-        self._log(f"Trainer : {trainer_name}")
-        self._log(f"Epochs  : {epochs}  |  LR: {lr}")
+        self._log_training_summary(
+            "Self-Play Training",
+            Student=model_name,
+            Trainer=trainer_name,
+            Data=Path(data_path).name,
+            Epochs=epochs,
+            LR=lr,
+        )
         self._clear_forge_param_count()
         self._reset_forge_progress()
 
@@ -1087,8 +1745,8 @@ class ForgeNewModesMixin:
                 ckpt = safe_load_weights(
                     student_path, map_location=device)
                 cfg_dict = ckpt.get("model_config", ckpt.get("config", {}))
-                if "epochs" in cfg_dict:
-                    cfg_dict = {}
+                if isinstance(cfg_dict, dict) and "epochs" in cfg_dict:
+                    cfg_dict = ckpt.get("model_config", {})
                 config = ForgeConfig(**{
                     k: v for k, v in cfg_dict.items()
                     if k in ForgeConfig.__dataclass_fields__
@@ -1121,10 +1779,25 @@ class ForgeNewModesMixin:
                 sp_trainer = SelfPlayTrainer(
                     student, tokenizer, trainer_engine, sp_cfg)
 
+                import time as _time
+                _sp_last_t = [0.0]
+                _sp_start = [_time.monotonic()]
+
                 def _sp_progress(p, m):
-                    self.after(0, lambda _m=m: self._log(f"  {_m}"))
-                    self.after(0, lambda _p=p: self._update_forge_progress(
-                        _p, f"Self-play {_p}%"))
+                    if not self.training_active:
+                        raise KeyboardInterrupt("Stopped")
+                    now = _time.monotonic()
+                    if now - _sp_last_t[0] >= 1.0:
+                        eta = ""
+                        if p > 0:
+                            elapsed = now - _sp_start[0]
+                            remaining = (elapsed / p) * (100 - p)
+                            r_m = int(remaining // 60)
+                            r_s = int(remaining % 60)
+                            eta = f" | ETA {r_m}m {r_s:02d}s"
+                        self._update_forge_progress(
+                            p, f"Self-play {p}%{eta}")
+                        _sp_last_t[0] = now
 
                 sp_trainer.on_progress = _sp_progress
                 result = sp_trainer.train(prompts)
@@ -1134,17 +1807,31 @@ class ForgeNewModesMixin:
                     f"{result.get('final_score', 0):.2f}/10")
 
                 # Save
+                final_score = result.get('final_score', 0)
                 from enigma_engine.core.safe_save import atomic_torch_save
                 atomic_torch_save({
                     "model_state_dict": student.state_dict(),
-                    "model_config": config.__dict__,
-                    "config": config.__dict__,
+                    "config": self._model_config_dict(student),
+                    "training_state": {
+                        "epochs": epochs,
+                        "best_loss": final_score,
+                    },
                 }, student_path)
 
                 self._log(f"Model saved to {Path(student_path).name}")
                 self._log("--- SELF-PLAY COMPLETE ---")
+                total = _time.monotonic() - _sp_start[0]
+                t_m, t_s = int(total // 60), int(total % 60)
+                self._log(f"Duration  : {t_m}m {t_s:02d}s")
                 self._update_forge_progress(100, "Complete")
+                self._save_training_run(
+                    "Self-Play", model_name, epochs, final_score)
+                sp_params = sum(
+                    p.numel() for p in student.parameters())
+                self.after(0, lambda _pc=sp_params:
+                           self._update_forge_param_count(_pc))
                 self.after(0, self._refresh_models)
+                self._notify_training_complete()
 
             except Exception as exc:
                 self._log(f"\n[!] Self-play failed: {exc}")
@@ -1161,4 +1848,502 @@ class ForgeNewModesMixin:
                     "\u26a1 READY"))
 
         threading.Thread(target=_selfplay_train, daemon=True).start()
+
+    # ================================================================
+    # GRPO TRAINING (N-11)
+    # ================================================================
+
+    def _start_grpo_training(self):
+        """Train STUDENT with Group Relative Policy Optimization."""
+        self._start_rl_variant_training("GRPO")
+
+    # ================================================================
+    # REMAX TRAINING (N-11)
+    # ================================================================
+
+    def _start_remax_training(self):
+        """Train STUDENT with ReMax (REINFORCE + mean baseline)."""
+        self._start_rl_variant_training("ReMax")
+
+    def _start_rl_variant_training(self, algo: str):
+        """Shared handler for GRPO and ReMax RL training."""
+        if self.training_active:
+            return
+
+        student_path = self.route_assignments.get("student")
+        if not student_path or not Path(student_path).exists():
+            self._log(
+                "[!] No model assigned to STUDENT route.\n"
+                "    Go to ROUTER and assign the model to train.")
+            return
+
+        data_path = self.train_data_var.get()
+        if not data_path or not Path(data_path).exists():
+            self._log(
+                f"[!] No data file selected.\n"
+                f"    {algo} needs a .jsonl preference file\n"
+                f"    (prompt/chosen/rejected per line).")
+            return
+
+        if not self._validate_jsonl_structure(
+            data_path, ("prompt", "chosen", "rejected"),
+        ):
+            return
+
+        result = self._validate_epochs_lr()
+        if result is None:
+            return
+        epochs, lr = result
+
+        model_name = Path(student_path).stem
+        self.training_active = True
+        self.solo_train_btn.configure(state="disabled",
+                                      text="TRAINING...")
+        self.stop_train_btn.configure(state="normal")
+        self.status_bar.set_left(f"\u2692 {algo.upper()} TRAINING...")
+
+        self._log_training_summary(
+            f"{algo} Training (Reward + Policy)",
+            Student=model_name,
+            Data=Path(data_path).name,
+            Epochs=epochs,
+            LR=lr,
+        )
+        self._clear_forge_param_count()
+        self._reset_forge_progress()
+
+        def _rl_train():
+            try:
+                import json
+                import torch
+                from enigma_engine.core.model import Enigma
+                from enigma_engine.core.model_presets import ForgeConfig
+                from enigma_engine.core.model_registry import (
+                    get_state_dict, safe_load_weights)
+                from enigma_engine.core.tokenizer import get_tokenizer
+                from enigma_engine.core.rl_training import (
+                    RewardModel, RewardTrainer, RewardTrainerConfig,
+                )
+
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+                self._log(f"Device  : {device.upper()}")
+
+                # Load student model
+                self._log(f"Loading {model_name}...")
+                checkpoint = safe_load_weights(
+                    student_path, map_location=device)
+                cfg_dict = checkpoint.get(
+                    "model_config",
+                    checkpoint.get("config", {}))
+                if isinstance(cfg_dict, dict) and "epochs" in cfg_dict:
+                    cfg_dict = checkpoint.get("model_config", {})
+                config = ForgeConfig(**{
+                    k: v for k, v in cfg_dict.items()
+                    if k in ForgeConfig.__dataclass_fields__
+                })
+                model = Enigma(config=config).to(device)
+                state = get_state_dict(checkpoint)
+                model.load_state_dict(state, strict=False)
+
+                tokenizer = get_tokenizer()
+                pc = sum(p.numel() for p in model.parameters())
+                self._log(f"Params  : {pc:,}")
+
+                # Load preference data
+                self._log("Loading preference data...")
+                pref_data = []
+                with open(data_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            item = json.loads(line)
+                            if all(k in item
+                                   for k in ("prompt", "chosen",
+                                             "rejected")):
+                                pref_data.append(item)
+                        except json.JSONDecodeError:
+                            continue
+
+                if not pref_data:
+                    self._log(
+                        "[!] No valid preference pairs found.")
+                    return
+
+                self._log(f"Loaded {len(pref_data)} preference pairs")
+
+                # Phase 1: Train reward model
+                self._log(
+                    "\n--- Phase 1: Training Reward Model ---")
+                reward_model = RewardModel(
+                    model, freeze_base=True).to(device)
+                reward_cfg = RewardTrainerConfig(
+                    epochs=min(epochs, 5),
+                    learning_rate=lr * 10,
+                )
+                reward_trainer = RewardTrainer(
+                    reward_model, tokenizer, reward_cfg)
+
+                import time as _time
+                _start = [_time.monotonic()]
+                _last_t = [0.0]
+
+                def _reward_progress(p, m):
+                    if not self.training_active:
+                        raise KeyboardInterrupt("Stopped")
+                    now = _time.monotonic()
+                    if now - _last_t[0] >= 1.0:
+                        eta = ""
+                        if p > 0:
+                            elapsed = now - _start[0]
+                            remaining = (
+                                (elapsed / p) * (100 - p))
+                            r_m = int(remaining // 60)
+                            r_s = int(remaining % 60)
+                            eta = f" | ETA {r_m}m {r_s:02d}s"
+                        self._update_forge_progress(
+                            p, f"{m}{eta}")
+                        _last_t[0] = now
+
+                reward_trainer.on_progress = _reward_progress
+                result = reward_trainer.train(pref_data)
+                self._log(
+                    f"Reward model trained: "
+                    f"loss={result['final_loss']:.4f}")
+
+                if self._forge_stop_requested():
+                    return
+
+                # Phase 2: RL policy training
+                self._log(
+                    f"\n--- Phase 2: {algo} Policy Training ---")
+                prompts = [item["prompt"] for item in pref_data]
+
+                def reward_fn(prompt, response):
+                    return reward_model.score(
+                        prompt, response, tokenizer, device)
+
+                if algo == "GRPO":
+                    from enigma_engine.core.rl_training import (
+                        GRPOTrainer, GRPOConfig)
+                    rl_cfg = GRPOConfig(
+                        epochs=epochs,
+                        learning_rate=lr,
+                    )
+                    rl_trainer = GRPOTrainer(
+                        model, tokenizer, reward_fn, rl_cfg)
+                else:
+                    from enigma_engine.core.rl_training import (
+                        ReMaxTrainer, ReMaxConfig)
+                    rl_cfg = ReMaxConfig(
+                        epochs=epochs,
+                        learning_rate=lr,
+                    )
+                    rl_trainer = ReMaxTrainer(
+                        model, tokenizer, reward_fn, rl_cfg)
+
+                _phase2_start = [_time.monotonic()]
+
+                def _rl_progress(p, m):
+                    if not self.training_active:
+                        raise KeyboardInterrupt("Stopped")
+                    now = _time.monotonic()
+                    if now - _last_t[0] >= 1.0:
+                        eta = ""
+                        if p > 0:
+                            elapsed = now - _phase2_start[0]
+                            remaining = (
+                                (elapsed / p) * (100 - p))
+                            r_m = int(remaining // 60)
+                            r_s = int(remaining % 60)
+                            eta = f" | ETA {r_m}m {r_s:02d}s"
+                        self._update_forge_progress(
+                            p, f"{algo} {p}%{eta}")
+                        _last_t[0] = now
+
+                rl_trainer.on_progress = _rl_progress
+                rl_result = rl_trainer.train(prompts)
+
+                final_reward = rl_result.get('final_reward', 0)
+                self._log(
+                    f"\nFinal reward: {final_reward:.4f}")
+
+                # Save model
+                from enigma_engine.core.safe_save import (
+                    atomic_torch_save)
+                atomic_torch_save({
+                    "model_state_dict": model.state_dict(),
+                    "config": self._model_config_dict(model),
+                    "training_state": {
+                        "epochs": epochs,
+                        "best_loss": final_reward,
+                    },
+                }, student_path)
+
+                self._log(
+                    f"Model saved to {Path(student_path).name}")
+                self._log(f"--- {algo.upper()} TRAINING COMPLETE ---")
+                total = _time.monotonic() - _start[0]
+                t_m, t_s = int(total // 60), int(total % 60)
+                self._log(f"Duration  : {t_m}m {t_s:02d}s")
+                self._update_forge_progress(100, "Complete")
+                self._save_training_run(
+                    algo, model_name, epochs, final_reward)
+                self.after(
+                    0, lambda _pc=pc:
+                    self._update_forge_param_count(_pc))
+                self.after(0, self._refresh_models)
+                self._notify_training_complete()
+
+            except KeyboardInterrupt:
+                self._log(
+                    f"\n--- {algo.upper()} TRAINING STOPPED ---")
+            except Exception as exc:
+                self._log(
+                    f"\n[!] {algo} training failed: {exc}")
+                import traceback
+                self._log(traceback.format_exc())
+            finally:
+                self.training_active = False
+                self._reset_forge_progress()
+                self.after(0, lambda: self.solo_train_btn.configure(
+                    state="normal", text="TRAIN"))
+                self.after(0, lambda: self.stop_train_btn.configure(
+                    state="disabled"))
+                self.after(0, lambda: self.status_bar.set_left(
+                    "\u26a1 READY"))
+
+        threading.Thread(target=_rl_train, daemon=True).start()
+
+    # ================================================================
+    # SimPO TRAINING (N-11)
+    # ================================================================
+
+    def _start_simpo_training(self):
+        """Train with Simple Preference Optimization (no ref model)."""
+        self._start_preference_variant_training("SimPO")
+
+    # ================================================================
+    # ORPO TRAINING (N-11)
+    # ================================================================
+
+    def _start_orpo_training(self):
+        """Train with Odds Ratio Preference Optimization."""
+        self._start_preference_variant_training("ORPO")
+
+    def _start_preference_variant_training(self, algo: str):
+        """Shared handler for SimPO and ORPO preference training."""
+        if self.training_active:
+            return
+
+        student_path = self.route_assignments.get("student")
+        if not student_path or not Path(student_path).exists():
+            self._log(
+                "[!] No model assigned to STUDENT route.\n"
+                "    Go to ROUTER and assign the model to train.")
+            return
+
+        data_path = self.train_data_var.get()
+        if not self._validate_jsonl_structure(
+            data_path, ("prompt", "chosen", "rejected"),
+        ):
+            return
+
+        result = self._validate_epochs_lr()
+        if result is None:
+            return
+        epochs, lr = result
+
+        model_name = Path(student_path).stem
+        self.training_active = True
+        self.solo_train_btn.configure(state="disabled",
+                                      text="TRAINING...")
+        self.stop_train_btn.configure(state="normal")
+        self.status_bar.set_left(
+            f"\u2692 {algo.upper()} TRAINING...")
+
+        self._log_training_summary(
+            f"{algo} Preference Training",
+            Student=model_name,
+            Data=Path(data_path).name,
+            Epochs=epochs,
+            LR=lr,
+        )
+        self._clear_forge_param_count()
+        self._reset_forge_progress()
+
+        forge_params = self._read_forge_train_params()
+
+        def _pref_train():
+            try:
+                import json
+                import torch
+                from enigma_engine.core.model import Enigma
+                from enigma_engine.core.model_presets import ForgeConfig
+                from enigma_engine.core.model_registry import (
+                    get_state_dict, safe_load_weights)
+                from enigma_engine.core.tokenizer import get_tokenizer
+                from enigma_engine.core.training import (
+                    Trainer, TrainingConfig)
+
+                device = (
+                    "cuda" if torch.cuda.is_available()
+                    else "cpu")
+                self._log(f"Device  : {device.upper()}")
+
+                # Load student model
+                self._log(f"Loading {model_name}...")
+                checkpoint = safe_load_weights(
+                    student_path, map_location=device)
+                cfg_dict = checkpoint.get(
+                    "model_config",
+                    checkpoint.get("config", {}))
+                if isinstance(cfg_dict, dict) and "epochs" in cfg_dict:
+                    cfg_dict = checkpoint.get("model_config", {})
+                config = ForgeConfig(**{
+                    k: v for k, v in cfg_dict.items()
+                    if k in ForgeConfig.__dataclass_fields__
+                })
+                model = Enigma(config=config).to(device)
+                state = get_state_dict(checkpoint)
+                model.load_state_dict(state, strict=False)
+
+                tokenizer = get_tokenizer()
+                pc = sum(p.numel() for p in model.parameters())
+                self._log(f"Params  : {pc:,}")
+
+                # Load preference data
+                self._log("Loading preference data...")
+                pref_data = []
+                with open(data_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            item = json.loads(line)
+                            if all(k in item
+                                   for k in ("prompt", "chosen",
+                                             "rejected")):
+                                pref_data.append(item)
+                        except json.JSONDecodeError:
+                            continue
+
+                if not pref_data:
+                    self._log(
+                        "[!] No valid preference pairs found.")
+                    return
+
+                self._log(f"Loaded {len(pref_data)} preference pairs")
+
+                # Create trainer
+                train_config = TrainingConfig(
+                    epochs=epochs,
+                    batch_size=forge_params["batch_size"],
+                    learning_rate=lr,
+                    use_gradient_checkpointing=forge_params[
+                        "use_gradient_checkpointing"],
+                    ce_chunk_size=forge_params["ce_chunk_size"],
+                    use_compile=True,
+                    rolling_best_k=forge_params["rolling_best_k"],
+                    save_every=forge_params["save_every"],
+                    checkpoint_dir=forge_params["checkpoint_dir"],
+                    use_amp=forge_params["use_amp"],
+                    run_evaluation=forge_params["run_evaluation"],
+                )
+                trainer = Trainer(model, tokenizer, train_config)
+
+                # Progress callback
+                import time as _time
+                _start = [_time.monotonic()]
+                _last_t = [0.0]
+
+                def on_progress(p, m):
+                    if not self.training_active:
+                        raise KeyboardInterrupt("Stopped")
+                    now = _time.monotonic()
+                    if now - _last_t[0] >= 1.0:
+                        eta = ""
+                        if p > 0:
+                            elapsed = now - _start[0]
+                            remaining = (
+                                (elapsed / p) * (100 - p))
+                            r_m = int(remaining // 60)
+                            r_s = int(remaining % 60)
+                            eta = f" | ETA {r_m}m {r_s:02d}s"
+                        self._update_forge_progress(
+                            p, f"{m}{eta}")
+                        _last_t[0] = now
+
+                trainer.on_progress = on_progress
+
+                def on_loss(loss):
+                    now = _time.monotonic()
+                    if now - _last_t[0] < 0.5:
+                        return
+                    _last_t[0] = now
+                    step = trainer.state.step
+                    self._log(
+                        f"  Step {step:>5d} | loss {loss:.4f}")
+
+                trainer.on_loss = on_loss
+
+                # Train
+                if algo == "SimPO":
+                    state = trainer.train_simpo(pref_data)
+                else:
+                    state = trainer.train_orpo(pref_data)
+
+                final_loss = state.best_loss
+                self._log(
+                    f"\nFinal loss: {final_loss:.4f}")
+
+                # Save model
+                from enigma_engine.core.safe_save import (
+                    atomic_torch_save)
+                atomic_torch_save({
+                    "model_state_dict": model.state_dict(),
+                    "config": self._model_config_dict(model),
+                    "training_state": {
+                        "epochs": epochs,
+                        "best_loss": final_loss,
+                    },
+                }, student_path)
+
+                self._log(
+                    f"Model saved to {Path(student_path).name}")
+                self._log(
+                    f"--- {algo.upper()} TRAINING COMPLETE ---")
+                total = _time.monotonic() - _start[0]
+                t_m, t_s = int(total // 60), int(total % 60)
+                self._log(f"Duration  : {t_m}m {t_s:02d}s")
+                self._update_forge_progress(100, "Complete")
+                self._save_training_run(
+                    algo, model_name, epochs, final_loss)
+                self.after(
+                    0, lambda _pc=pc:
+                    self._update_forge_param_count(_pc))
+                self.after(0, self._refresh_models)
+                self._notify_training_complete()
+
+            except KeyboardInterrupt:
+                self._log(
+                    f"\n--- {algo.upper()} TRAINING STOPPED ---")
+            except Exception as exc:
+                self._log(
+                    f"\n[!] {algo} training failed: {exc}")
+                import traceback
+                self._log(traceback.format_exc())
+            finally:
+                self.training_active = False
+                self._reset_forge_progress()
+                self.after(0, lambda: self.solo_train_btn.configure(
+                    state="normal", text="TRAIN"))
+                self.after(0, lambda: self.stop_train_btn.configure(
+                    state="disabled"))
+                self.after(0, lambda: self.status_bar.set_left(
+                    "\u26a1 READY"))
+
+        threading.Thread(target=_pref_train, daemon=True).start()
 

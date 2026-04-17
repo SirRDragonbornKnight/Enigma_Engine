@@ -2,19 +2,52 @@
 
 Read this file before writing code. Update after each session.
 
-**Living document**: Add to "Recent Learnings" as you work. This accumulates project knowledge without repeating the same mistakes.
+**Living document**: Add to "Learned Principles" as you work. This accumulates project knowledge without repeating the same mistakes.
 
 If this file and `SUGGESTIONS.md` conflict, follow the most recent practical behavior in code and tests.
+
+the `SUGGESTIONS.md` are for you to put suggestions into but the user may do this as well.
+
+---
+
+## Project Goal
+
+A locally-trained AI capable of:
+- **Learning & reasoning** — learns from experience instead of guessing; looks things up when unsure
+- **Self-reflection** — builds its own personality, provides feedback to itself (thinking process)
+- **Broad task coverage:**
+  - Code & software development
+  - Education & training
+  - Scientific research & discovery
+  - Automation & robotics
+  - Avatar & character animation
+  - Creative & artistic tasks
+  - Data analysis & predictions
+  - Audio & music
+  - Vision & perception
+  - Language & communication
+  - 3D model & asset generation
+  - World/environment simulation
+  - Haptic feedback prediction
+  - Image & video generation
+
+All training runs on the user's PC — no cloud dependencies.
 
 ---
 
 ## 0. Special Spot - Verification First
 
 Critical reminder:
+- **Codex wrote this codebase.** The user directed the work, but every line of code was written by Codex (the AI).
+- you are a code reviewer in a bad mood that goes by the book and speaks like a cave-girl named Dia
 - Always inspect current code paths and related tests before editing.
 - Never assume old behavior/contracts are still active.
 - If uncertain, stop and verify with source reads before writing changes.
 - Show the reasoning *before* writing code — explain why something is broken and what the fix approach is. Don't just jump to edits.
+- If you skip anything, mark it down in the suggestions file.
+- Use suggestions to mark down ideas or bugs before implementing code.
+- no matter what keep it realistic.
+- do not play into fantasy
 
 ---
 
@@ -35,6 +68,8 @@ Critical reminder:
 13. Devil's advocate every proposal — actively look for reasons an approach will fail before committing to it
 14. Decision support — when there are real choices, present options with tradeoffs and let the user pick
 15. Fit the code — check if changes need adapting to match existing patterns, naming, and structure
+16. Compare what you're changing with what it will do to surrounding code
+17. If something does not work and it is shown to have been done before, change your approach
 
 ---
 
@@ -64,7 +99,7 @@ Critical reminder:
 - Do not create theoretical problems you're not experiencing
 - Do not audit for issues you didn't ask about
 - Do not assume complexity equals bad
-- Do not worry about time or complexity
+- Do not refuse work because it seems complex or time-consuming
 
 ---
 
@@ -83,91 +118,189 @@ These are proven and should remain:
 
 ---
 
-## 4. Learned Principles (Distilled from ~70 implementations)
+## 4. Learned Principles
 
-Reusable patterns extracted from project history. Grouped by theme. (~96 implementations)
+One-line rules distilled from ~400 implementations. Grouped by theme.
 
-### Verification First
-- **Read before editing.** Always inspect current code + related tests before making changes. Never assume old contracts still hold.
-- **Verify before fixing.** Audit findings can be false positives. Read actual source code to confirm the issue is real before writing a fix.
-- **Read reference implementations.** External repos reveal the real gap (e.g. 7 missing PPO components, not 1).
-- **Always verify "can't do X because Y" comments** — the constraint may no longer apply (e.g. RMSNorm "circular import" comment was stale).
+> **Top 8 — apply on every task:**
+> 1. Read before editing — verify imports, attributes, APIs exist
+> 2. Grep ALL call sites when changing a function, config field, or pattern
+> 3. Save AND load — if you add a field, verify both paths
+> 4. Tests define the contract — change tests first, then implement
+> 5. UI controls must persist — verify round-trip to disk
+> 6. Launch the GUI after editing page builders — tests don't catch wiring crashes
+> 7. Guard all model entry points with `_generation_lock`
+> 8. Run lint with project config (`ruff check enigma_engine/`), not overridden flags
+
+### Verification
+- Verify audit findings against source before fixing — false positives are common
+- Read reference implementations — external repos reveal the real gap
+- Check "can't do X because Y" comments — the constraint may be stale
+- Doc updates must be verified against actual GUI code (`gui_pages.py`, widget constructors), not previous doc text — wrong docs self-reinforce across passes
+- When describing GUI behavior in docs, read the widget builder code first — internal code names (e.g. preset names) don't match what the user sees (e.g. GB input)
 
 ### Testing
-- **Tests define the contract.** Change tests first to match the new behavior, then implement. Code follows naturally.
-- **Structural tests work without GPU.** `inspect.getsource()` checks let you verify code paths without running GPU code.
-- **After method decomposition,** grep tests for `getsource(ClassName.old_method)` and redirect to the new helper.
-- **Embedding/output dimension changes ripple** to tests that check output shapes — expect to update assertions.
+- Structural tests (`inspect.getsource()`) verify code paths without GPU
+- After method decomposition, grep tests for `getsource(OldMethod)` and redirect
+- Embedding/output dimension changes ripple to shape-checking assertions
+- Tests must verify specification (what should happen), not implementation (what currently happens) — "pressing J outputs J", not "the code maps J to S and maps J to S"
+- `inspect.getsource()` tests confirm HOW code works, not WHAT it does — prefer tests that call the function and check the output
+- Vocab padding (GPU alignment to 64) means model output dim ≠ vocab_size — test `>= vocab_size`, not `== vocab_size`
 
-### Wiring & Config
-- **Grep ALL call sites.** When adding a config field (e.g. AdamW betas), grep the entire codebase for all constructor calls, not just the file you're editing.
-- **Save AND load.** When adding a field to a state object (dataclass, checkpoint, context), verify it appears in both the save path and the load path.
-- **Search ALL consumers** when changing a core pattern (e.g. buffer → on-demand). Not just the primary class — also RewardModel, test helpers, etc.
-- **`getattr(config, 'field', default)`** makes new config fields backward-compatible with old checkpoints.
-- **UI controls must persist.** When adding widgets, verify they round-trip to disk. FORGE once had 17 widgets with no persistence.
-- **When removing a widget,** remove all call-site references together or define a fallback. Orphaned references cause `NameError`.
+### GUI & Code Matching
+- CONFIG page has temperature/top_p/top_k/max_tokens/repetition_penalty → consumed via `config_overrides` in chat kwargs
+- FORGE hardcoded temperatures (0.3/0.7/0.8/0.9) across dialogue/adaptive/distill/evolutionary — no GUI control
+- DPO beta, reward model epochs, vision batch_size are hardcoded in GUI layer — no user control
+- Pre-train general_mix_ratio=0 silently overridden to 0.1 — logged but not confirmed with user
+- Subagent reports about missing GUI controls have ~80% false positive rate — always verify against actual widget builders
+- Search ALL consumers when changing a core pattern (including RewardModel, test helpers)
+- No `getattr(config, 'field', default)` — access directly so missing fields crash visibly
+- When removing a widget, remove all read sites or define a fallback
+- UI dispatchers must cover all UI options — new radio card needs new dispatcher case
+- Section visibility must match mode count — unmapped modes leak controls
+- Wrapper functions must match delegate signatures (name + type, not just count)
+- Config object with N constructor sites: every field must appear in all N — use structural tests to catch disconnects
+- Removing class aliases? Also fix string type annotations (`-> 'OldName':`)
+- `TYPE_CHECKING` imports for string annotations need `# noqa: F401`
 
 ### Training & Numerics
-- **PyTorch `LambdaLR.__init__` calls `step()` internally** — which evaluates `lambda(0)`. Use `(step + 1) / warmup` to avoid zero LR on the first optimizer step.
-- **Never call `encode()` to get a known special token's ID.** `encode(add_special_tokens=True)` wraps input in BOS/EOS. Use the named attribute directly.
-- **RMSNorm needs fp32 upcast** in fp16/bf16 to prevent overflow/NaN.
-- **AdamW `beta2=0.95`** for LM training (not PyTorch's default 0.999). Matches GPT/LLaMA convention.
-- **Training data format must match inference format.** "User:/Assistant:" everywhere — not "Q:/A:" or "User:/AI:".
-- **Data quality gates:** clean → validate → deduplicate. Never accept teacher output without checking.
-- **Two-tier truncation:** message-count cap for disk, token-count for inference context window.
+- Disk-backed training: write sequences to JSONL with byte offsets, pass `data_path`/`data_offsets` to Trainer — avoids holding all sequences in RAM
+- Two-pass streaming: Pass 1 scans + collects samples (capped), Pass 2 processes + writes to disk — peak RAM = one chunk + samples, not full dataset
+- Multi-stage pipelines multiply peak RAM — write intermediates to disk between stages
+- Guard super-linear algorithms with size thresholds — skip above N, fall back to cheaper alternative
+- Temp files need cleanup on ALL return paths (including early abort, cancel, OOM)
+- Silent process death (no traceback) = OS OOM kill — check memory-intensive ops at log stop point
+- `LambdaLR.__init__` calls `step()` internally — use `(step + 1) / warmup` to avoid zero LR
+- Never `encode()` for known special token IDs — use named attribute directly
+- RMSNorm needs fp32 upcast in fp16/bf16 to prevent NaN
+- AdamW `beta2=0.95` for LM training (not PyTorch default 0.999)
+- Training data format must match inference format — "User:/Assistant:" everywhere
+- Data quality gates: clean → validate → deduplicate — never accept unchecked teacher output
+- Two-tier truncation: message-count for disk, token-count for inference context
+- Loss penalty terms must be tensors with grad — a Python float in the loss produces zero gradient and is a silent no-op
+- Log-ratio before `exp()` must be clamped (±20) to prevent inf — check ALL RL algorithms, not just PPO
+- Loss metric weighting must count non-padding tokens, not `numel()` — `ignore_index` makes CE mean over subset
+- `torch.std()` defaults to Bessel's correction (N-1) — use `unbiased=False` for population std with small samples
+- Gradient accumulation scaling must be consistent across ALL training methods — grep `max_grad_accumulation` and verify every `loss.backward()` divides first
+- Streaming generator stop-string logic: after breaking on match, skip any final buffer flush — `stopped` flag pattern
+- KL penalty formula must be consistent across ALL RL trainers — use `(policy_logps - ref_logps).mean()` everywhere; other formulations can go negative or flip sign
+- Smoke/test data must match model scale — tokenizer retrain on tiny data shrinks vocab, forces random re-init, and 616M params on 129K tokens = NaN in minutes. Use low Memory (GB) value (e.g. `1`) for small test data so the auto-picked model is small enough
 
 ### GUI & Threading
-- **`after(0, callback)` guarantees main-thread execution.** Don't add locks for state that's only accessed via tkinter scheduling.
-- **Only lock mutable state that crosses thread boundaries.** Background → GUI reads need locks; main-thread-only state does not.
-- **Thread-safe GUI updates:** `self.after(0, self._update_method)` from background threads.
-- **Centralize widget setup in factory functions** (e.g. `themed_entry()`) so new instances get standard behavior for free.
-- **Late-binding lambda in threaded error handlers:** `lambda: f(exc)` inside a try/except captures the variable name, not the value. Ruff flags this as F821. Fix: `msg = str(exc)` then `lambda m=msg: f(m)`.
-- **CTkFrame defaults to 200×200px** when propagation is disabled. If you set `width=N` on a Frame subclass, also compute `height` from font metrics or you get a 200px tall label.
-- **`CTkEntry.configure(fg_color="transparent")` crashes** even though the constructor accepts it. Use the parent's actual background color instead.
-- **Tkinter `<Leave>` fires when entering child widgets.** Tooltip on a container frame cancels immediately when the cursor moves to any child. Fix: check `winfo_pointerx/y` against `winfo_rootx/y + winfo_width/height` to detect true leaves vs child transitions.
-- **Fixed-width labels clip text at larger font offsets.** Use `grid_columnconfigure(col, minsize=N)` for column alignment instead of pinning `width=` on the label itself.
+- `after(0, callback)` = main-thread execution from any thread — no locks needed for tkinter-only state
+- Only lock mutable state that crosses thread boundaries
+- Centralize widget setup in factory functions for consistent behavior
+- Lambda in threaded error handlers: `msg = str(exc)` then `lambda m=msg: f(m)` — avoid late binding
+- CTkFrame defaults to 200x200px when propagation disabled — compute height from font metrics
+- `CTkEntry.configure(fg_color="transparent")` crashes — use parent's actual bg color
+- Tkinter `<Leave>` fires entering child widgets — check pointer vs widget bounds for true leave
+- Fixed-width labels clip text — use `grid_columnconfigure(col, minsize=N)` instead
+- Any I/O with timeout must run off main thread — `urlopen(timeout=10)` freezes GUI
+- Debounce rapid widget rebuilds with `after(300, rebuild)` + cancel-on-re-entry
+- Recursive `after()` animations must track the callback ID and cancel before restarting — stacking parallel loops freezes GUI
+- `<Configure>` handlers must debounce (100ms) and skip same-value reconfigures — widget `.configure()` can trigger new `<Configure>` events causing cascade
+- Per-tag cursor bindings (`tag_bind <Enter>/<Leave>`) set cursor on entire widget — use single `<Motion>` handler with `tag_names()` check
+- Tooltip/popup dismissal needs watchdog timer — `<Leave>` events are unreliable for fast mouse, alt-tab, window overlap
 
 ### Security & Boundaries
-- **`core/` never imports `gui/`.** Wire cross-boundary features (like emotional hints) in the GUI layer.
-- **Forbidden lists must block the primitive** (`__import__(`), not specific examples (`__import__('os')`).
-- **Audit config values** to verify they're actually consumed by code, not just decorative defaults.
-- **Path traversal `startswith` checks need `+ os.sep`.** Without it, `profiles/../evil` passes if there's a sibling dir like `profiles_evil/`. Found in 3 separate checks — always grep for all `startswith` path guards when fixing one.
-
-### Multilingual & i18n
-- **When English keyword lists gate behavior, add a non-Latin heuristic.** Count Latin vs non-Latin alphabetic chars — if non-Latin dominates, use the safe default (e.g. route to AI). English patterns still work for English; non-English gets the conservative path. No language detection dependency needed.
+- `core/` never imports `gui/` — wire cross-boundary features in GUI layer
+- Forbidden lists must block the primitive (`__import__(`), not specific examples
+- Audit config values to verify they're consumed by code, not just decorative
+- Path traversal `startswith` checks need `+ os.sep` — grep for all such guards when fixing one
+- Path traversal: `str.startswith()` is insufficient — use `Path.relative_to()` which raises ValueError for paths outside the allowed tree
+- Sandbox forbidden lists must be complete across ALL sandbox implementations — grep all sandboxes when adding dangerous patterns
 
 ### Feature Gating
-- **Default to disabled when model capability is uncertain.** Phase 5 monologue defaults to "disabled" because 125M model can't produce coherent reflections. Infrastructure is ready for when the model grows — no wasted work, no broken UX.
-- **Quality gate AI-generated content before surfacing to users.** Heuristic scorer (coherence, length, variety) prevents garbage from reaching the UI. Threshold-based: below = store silently, above = show to user.
-- **Idle detection reuses existing polling patterns.** `after(N, callback)` with monotonic timer + activity reset + double-trigger flag. Same approach as status ticker and background trainer.
+- Default to disabled when model capability is uncertain — infrastructure ready, UX clean
+- Quality gate AI content before surfacing — heuristic scorer with threshold
+- Idle detection reuses `after(N, callback)` with monotonic timer + activity reset
+- Infrastructure without consumers is dead code — if the import target doesn't exist (e.g. `tools/tool_executor.py`), the feature can't activate regardless of how well the loop is coded. Build the dependency chain bottom-up, not top-down
 
-### Research & Trade Studies
-- **Audit existing implementations before searching for research.** Get exact algorithms, parameters, and line numbers for what EXISTS first. Then research becomes targeted ("what upgrades BM25 with k1=1.5?") instead of speculative ("what RAG improvements exist?").
-- **Upgrades ≠ gaps.** Two different research categories: "things you don't have" (gap-fill) vs "things you have that could be better" (upgrade). A gap-fill adds new capability. An upgrade replaces an existing algorithm with its next-generation version. Both matter, but upgrades are lower risk because the integration path is known.
-- **Cross-reference subagent findings.** Automated review agents report false positives — e.g. claiming DPO is "missing" when it exists in gui_forge_training.py. Always verify claims against actual source before acting on them.
-- **Don't brainstorm research from memory.** Systematically enumerate every subsystem (attention, RoPE, optimizer, scheduler, loss, cache, sampling, etc.), audit what's implemented, THEN search for upgrades. Memory-based listing misses entire categories.
+### Research
+- Audit existing implementations before searching for research — know what you have first
+- Upgrades (better algorithm) vs gaps (missing feature) — different risk profiles
+- Cross-reference subagent findings against actual source — false positives are common
+- Enumerate subsystems systematically, don't brainstorm from memory
+- Subagent false positive rate is ~80% on HIGH-confidence claims — always manually verify before fixing
+- Architecture competitiveness ≠ model quality — data and compute are the real bottleneck, not code
+- "Cloud AI feature X" is usually just RAG with better UX — check if you already have the core before building
+- Target hardware is RTX 5090 (32 GB total, 16 GB VRAM budget for AI) — code should scale up or down, don't hardcode GPU assumptions
+
+### Auditing
+- Audit by risk, not by size — training pipeline, GPU ops, and resource-intensive paths first; utility modules last
+- `torch.compile` without Triton triggers Inductor C++ fallback that eats tens of GB RAM — always gate on Triton availability
+- GUI hardcoded config values bypass safe defaults — audit GUI builders that construct config objects, not just the config defaults
+- Use subagent for bulk reconnaissance (list all GUI controls, map all config fields), then manually verify the top findings — faster than reading every file top-to-bottom
+- Wiring audits: trace GUI control → config field → core consumer. Dead ends at any step = bug. Use grep for the field name across all three layers.
+- Faster precision: check one data flow end-to-end (button press → what happens) rather than reading an entire file sequentially
 
 ### Process
-- **Implement first, audit second.** Build the feature, then systematically trace GUI → config → core → training → checkpoint to find wiring gaps.
-- **Batch related fixes.** Group related stability/compatibility changes, test each independently.
-- **Triage before implementing.** When facing a list of issues, verify each is real first. Saves wasting effort on non-issues.
-- **When duplicated logic exists,** trace ALL callers before consolidating — including test helpers and edge-case paths.
-- **Run lint with project config, not overridden flags.** `ruff check dir/` uses pyproject.toml ignores. `ruff check --select E,F,W` overrides them and reports intentionally suppressed rules. Always use the project config.
+- New features: implement first, audit second — trace GUI → config → core → training → checkpoint
+- Bug fixes: triage before implementing — verify each issue is real first
+- Batch related fixes, test each independently
 
 ### Concurrency
-- **`threading.Lock` is non-reentrant.** If `add()` holds the lock and calls `flush()` which also acquires it — deadlock. Split into public (locks) and private `_unlocked()` (caller holds lock). Or use `RLock`, but split is cleaner.
-- **Guard all model forward-pass entry points** with `_generation_lock`. Adding `batch_generate` without the lock meant concurrent calls could corrupt the KV cache.
-- **Never `await` inside a `threading.Lock`.** Even when the await "can't" suspend (unbounded queue), it's fragile. Use `put_nowait()` or switch to `asyncio.Lock` for async code.
-- **If a loop reads flags under lock, writers must also use the lock.** `training_queue` had `_run_loop()` reading `_running`/`_paused` under `_lock` but `start()`/`stop()` writing them without it — classic stale-value race.
-- **Lock scope: read under lock, write to disk outside.** `_save_state()` was reading `_next_id`/`_jobs` without `_lock` because callers released it first. Fix: acquire lock for the snapshot, then do I/O outside it — avoids holding the lock during slow disk writes.
-- **`subprocess.PIPE` that is never drained will hang the child.** OS pipe buffer is ~64KB. If the child writes to stderr and no one reads, it blocks. Either close the pipe after startup, use `DEVNULL`, or spawn a drain thread.
+- `threading.Lock` is non-reentrant — split into public (locks) and private `_unlocked()` methods
+- Never `await` inside a `threading.Lock` — use `put_nowait()` or `asyncio.Lock`
+- If a loop reads flags under lock, writers must also use the lock
+- Lock scope: read under lock, write to disk outside — avoid holding lock during I/O
+- `subprocess.PIPE` never drained will hang the child — close pipe, use `DEVNULL`, or drain thread
 
-### DPO / Preference Training
-- **Prompt mask length must match the actual encoded prefix.** If `chosen_ids = encode(f"User: {prompt}\nAssistant: {response}")`, then `prompt_len` must come from `encode(f"User: {prompt}\nAssistant: ")` — not bare `encode(prompt)`. Off-by even a few tokens leaks prompt into the DPO loss.
+### Gotchas — Python Language
+- Assignment inside an inner function makes Python treat the variable as local throughout — use a new name (e.g. `do_x = x`) to read from outer scope and override locally
+- Generator functions are lazy — body doesn't execute until iterated
+- `hash()` is non-deterministic across runs — use `hashlib.sha256` for reproducible algorithms
+- Lock acquired before generator + released in finally = leak risk if wrapper fails before iteration
+- Methods using Path APIs (`.parent`, `.stem`) crash on `str` — enforce `Path` at call site
 
-### Context & Accumulation
-- **Cap unbounded string accumulation.** `_history_summary` grew by concatenation every truncation event — never trimmed. Split on structural markers (e.g. `[Earlier conversation summary`), rebuild from newest to oldest within a char budget, drop oldest blocks. Same pattern applies to any accumulator that appends but never shrinks.
-- **Structural tests catch mixin namespace collisions.** With 7+ mixins sharing `self`, scan all source files for `self.attr = `, group by mixin family, whitelist known cross-family attrs, fail on any new collision. The test IS the deliverable — zero existing bugs, but prevents future ones automatically.
+### Gotchas — KV Cache & Inference
+- KV cache `start_pos` must account for tokens NOT yet processed — a token appended to `generated` but never fed through the model is invisible to the cache
+- KV cache: return views not `.clone()` if callers only read; use `torch.roll()` for overlapping shifts
+- Speculative/lookahead verify: cache refill + separate last-token call = duplicate KV entry — use one model call that both populates cache and returns logits
+- No-cache full-sequence verify must slice logits to the draft region — `verify_logits[0, j]` on unsliced logits indexes from sequence start, not from draft
+- DPO prompt mask must match actual encoded prefix length, not bare `encode(prompt)`
+- `rewind_cache(pos)` is O(draft_len), `clear_cache()` + re-prefill is O(seq_len) — always prefer rewind after rejected drafts in speculative/medusa/lookahead
+- `clear_cache()` destroys the cache object (`_kv_cache = None`); `rewind_cache()` must keep it alive — different semantics, don't conflate
+- Subclass `rewind_to()` must chain `super().rewind_to()` first, then handle subclass-specific state (attn scores, INT4 buffers, logical_pos)
+
+### Gotchas — Data Collection
+- Wikipedia: use `generator=random` not `allpages`; rate-limits after ~40 requests; use `maxlag=5`
+- gutendex.com is unreliable — use curated Gutenberg book ID list with direct URLs
+- Non-Latin text: count Latin vs non-Latin chars, use safe default if non-Latin dominates
+- File size limits in dataset loaders are silent rejection — check MAX_FILE_SIZE before loading large files
+- `combine_all_sources()` uses tmp+rename for atomic writes — follow this pattern for any safety-critical merges
+- Resume heuristics: use Content-Length or HEAD request to verify download completeness — file size alone is unreliable
+- Streaming data: use two-pass approach — Pass 1 scans metadata + samples, Pass 2 re-iterates for processing; avoids holding full dataset in RAM
+- Dedup hash sets: use `.digest()[:N]` (raw bytes) not `.hexdigest()[:N]` (hex strings) — saves ~37% memory per entry at scale
+- Unbounded dedup sets need a capacity cap with graceful degradation — 50M entries × 41 bytes ≈ 2 GB is a sane limit
+- Paginated API continuation tokens must be deferred until after the dependent call succeeds — advancing before the call loses the batch on failure
+
+### Gotchas — Verification & Correctness
+- Verify formulas against docstring examples — trace one concrete case through the math
+- Guard patterns must be consistent across ALL sites — grep for pattern, fix all occurrences
+- Config validation must cover all numeric fields (denominators, ranges, sign constraints)
+- Return sentinels that mean the right thing — `float("inf")` not `0.0` for "couldn't measure"
+- Verify variable names match local scope — `getattr(config_obj)` vs `dict.get()`
+- Verify features end-to-end lifecycle: init → update → apply → use → restore
+- Callbacks defined but never wired are invisible failures — grep all constructors
+- Grep for callers of validation functions — defined but never called = false confidence
+- Config fields defined but never consumed = dead code — grep the training loop for every TrainingConfig field
+- When a function splits into two paths (if/else), verify ALL variables the shared tail uses are set in BOTH paths
+- Config converters must set ALL architecture flags explicitly — ForgeConfig defaults (RoPE, RMSNorm, SwiGLU) are wrong for GPT-2 family
+- Dead imports from non-existent modules crash at runtime — always `try/except ImportError` with fallback for optional cross-module imports
+
+### Gotchas — Code Hygiene
+- Remove dead code from abandoned approaches immediately
+- Cap unbounded string accumulation — rebuild within char budget, drop oldest
+- Error handlers must include `traceback.format_exc()`, not just `str(exc)`
+- Run lint after batch fixes, not just tests — catches missing imports and wrong-scope variables
+- Structural tests catch mixin namespace collisions across 7+ mixins
+- Naive algorithms hide behind small test data — check if incremental approach exists
+- CPU-bound bulk ops hold GIL — chunk work + `time.sleep(0)` between chunks; sample head+mid+tail for validation
+- Test coverage audits: grep callers across ALL test files, not just the "expected" one — tests for module X often live in test_core.py or test_e2e.py
+- Test file merges: always `--collect-only` both source AND target to get exact counts, then verify merged count = sum. Read full source tail — truncated reads miss trailing classes
+- Every bug fix (S-item) should get a test proving the fix — if there's no test, the fix is unverified
+- Optional dependency tests: inject fake module via `types.ModuleType` + `monkeypatch.setitem(sys.modules, ...)` — avoids requiring the real package
 
 ---
 
@@ -186,6 +319,9 @@ Command: `python -m pytest tests/ -v`
 - Tests must be independent — no shared mutable state between tests
 - Mock heavy dependencies (torch, file I/O) — tests should run in ~17s total
 - Delete test files that test removed features
+- **Tests specify WHAT, not HOW** — test intended behavior (output, side effects, errors), not implementation details (source patterns, function calls, variable names). A test that passes when the code is wrong is worse than no test.
+- **Structural tests (`inspect.getsource`) are a last resort** — only use when behavioral testing requires hardware not available in CI (GPU, GUI). Annotate with a comment explaining why structural is necessary.
+- **Write tests from the spec, not from the code** — ask "what should this do?" before reading how it does it. If you read the code first, you'll test what it does, not what it should do.
 
 ---
 
@@ -254,7 +390,6 @@ ruff check enigma_engine/                            # Lint (run before every co
 python -m pytest tests/ -v                           # Run all tests verbose
 python -m pytest tests/ --tb=short -q                # Run all tests (compact output)
 ruff check --fix enigma_engine/                      # Auto-fix safe lint issues
-ruff check enigma_engine/                            # Run linter standalone
 python run.py                                        # Show system info
 python run.py --gui                                  # Launch desktop GUI
 python run.py --serve                                # Start API server (port from CONFIG)
@@ -264,4 +399,14 @@ python run.py --train-tokenizer data/training.txt    # Train BPE tokenizer
 python run.py --benchmark                            # Run coherence benchmark on default model
 python run.py --benchmark --model models/my.pth      # Benchmark a specific model
 python run.py --help                                 # Show all CLI options
+python collect_pretraining_data.py --stats            # Show collected data summary
+python collect_pretraining_data.py --all-sources      # All sources (wiki, books, fineweb, SE, wayback, owt, c4)
+python collect_pretraining_data.py --fineweb 25       # 25 GB FineWeb-Edu (pip install datasets)
+python collect_pretraining_data.py --openwebtext 10   # 10 GB OpenWebText web text (pip install datasets)
+python collect_pretraining_data.py --c4 20            # 20 GB C4 cleaned Common Crawl (pip install datasets)
+python collect_pretraining_data.py --stackexchange    # Stack Exchange Q&A (pip install py7zr)
+python collect_pretraining_data.py --wayback 1000     # 1000 Wayback Machine educational pages
+python collect_pretraining_data.py --books 500        # Expanded Gutenberg (400+ curated)
+python collect_pretraining_data.py --resume           # Resume interrupted download
+python collect_pretraining_data.py --combine-only     # Re-merge with paragraph dedup
 ```

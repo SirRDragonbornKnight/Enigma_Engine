@@ -148,6 +148,9 @@ class AIProfile:
 
         # Filter out unknown fields
         valid_fields = {f.name for f in cls.__dataclass_fields__.values()}
+        unknown = set(data) - valid_fields - {'generation', 'memory'}
+        if unknown:
+            logger.debug("AIProfile.from_dict: ignoring unknown fields: %s", unknown)
         filtered_data = {k: v for k, v in data.items() if k in valid_fields}
 
         return cls(**filtered_data)

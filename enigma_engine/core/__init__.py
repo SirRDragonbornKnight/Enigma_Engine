@@ -107,8 +107,8 @@ def _lazy_load_model():
     return Enigma, ForgeConfig, create_model, MODEL_PRESETS
 
 def _lazy_load_inference():
-    from .inference import EnigmaEngine, ForgeEngine, generate, load_engine
-    return EnigmaEngine, ForgeEngine, generate, load_engine
+    from .inference import EnigmaEngine, generate, load_engine
+    return EnigmaEngine, generate, load_engine
 
 # Expose commonly accessed items through __getattr__ for lazy loading
 _lazy_cache = {}
@@ -170,12 +170,11 @@ def __getattr__(name):
             }
         return _lazy_cache['model'][name]
 
-    if name in ('EnigmaEngine', 'ForgeEngine', 'generate', 'load_engine'):
+    if name in ('EnigmaEngine', 'generate', 'load_engine'):
         if 'inference' not in _lazy_cache:
-            EnigmaEngine, ForgeEngine, generate, load_engine = _lazy_load_inference()
+            EnigmaEngine, generate, load_engine = _lazy_load_inference()
             _lazy_cache['inference'] = {
                 'EnigmaEngine': EnigmaEngine,
-                'ForgeEngine': ForgeEngine,
                 'generate': generate,
                 'load_engine': load_engine,
             }
@@ -268,7 +267,6 @@ __all__ = [
     'MODEL_PRESETS',
     # Inference (lazy)
     'EnigmaEngine',
-    'ForgeEngine',
     'generate',
     'load_engine',
     # Multi-GPU (lazy)

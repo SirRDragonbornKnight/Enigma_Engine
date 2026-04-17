@@ -37,6 +37,7 @@ def discover_mod_tools(mods_dir: Path) -> list[dict]:
             for cmd in data.get("commands", []):
                 cmd_name = cmd.get("name", "")
                 if not cmd_name:
+                    logger.debug("Skipping command with empty name in %s", mod_json)
                     continue
                 tools.append({
                     "mod_id": mod_id,
@@ -74,7 +75,8 @@ def register_mod_commands(registry: Any, mods_dir: Path,
             """Closure factory so each handler captures its own tool."""
             def handler(args: list[str], ctx: dict) -> CommandResult:
                 mod_id = tool_info["mod_id"]
-                cmd_name = tool_info["name"].split(".", 1)[1]
+                parts = tool_info["name"].split(".", 1)
+                cmd_name = parts[1] if len(parts) == 2 else parts[0]
                 r = ctx.get("router") or router
                 if r is None:
                     return CommandResult(

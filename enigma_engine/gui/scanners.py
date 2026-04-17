@@ -53,16 +53,31 @@ def load_path_settings() -> dict[str, str]:
                 _PATHS_FILE.read_text(encoding="utf-8"))
             return {k: v for k, v in data.items()
                     if isinstance(v, str)}
-        except (json.JSONDecodeError, OSError):
-            pass
+        except json.JSONDecodeError as e:
+            logger.error("Path settings corrupted: %s", e)
+        except OSError as e:
+            logger.warning("Cannot read path settings: %s", e)
     return {}
 
 
 def save_path_settings(paths: dict[str, str]) -> None:
     """Save custom path overrides to path_settings.json."""
+    # Validate paths before saving
+    validated = {}
+    for key, value in paths.items():
+        if not isinstance(key, str) or not isinstance(value, str):
+            logger.warning("Skipping invalid path setting: %s=%r", key, value)
+            continue
+        if not value.strip():
+            continue  # Skip empty values (use default)
+        p = Path(value)
+        if not p.is_absolute():
+            logger.warning("Skipping non-absolute path for %s: %s", key, value)
+            continue
+        validated[key] = value
     _PATHS_FILE.parent.mkdir(parents=True, exist_ok=True)
     from enigma_engine.core.safe_save import atomic_write_json
-    atomic_write_json(_PATHS_FILE, paths)
+    atomic_write_json(_PATHS_FILE, validated)
 
 
 def get_path(key: str) -> Path:
@@ -285,8 +300,9 @@ def _estimate_params_from_size(path: Path, file_size: int) -> str | None:
     """Estimate param count from total tensor data in a .pth zip.
 
     Sums the uncompressed sizes of all ``data/*`` entries (tensor
-    storage files) and divides by 4 (fp32) for a rough param count.
-    Falls back to raw file size / 4 for non-zip files.
+    storage files) and divides by 2 (fp16) for a rough param count.
+    Most modern models use fp16/bf16. Falls back to raw file size / 2
+    for non-zip files.
     """
     import zipfile
     try:
@@ -297,12 +313,12 @@ def _estimate_params_from_size(path: Path, file_size: int) -> str | None:
                     if "/data/" in info.filename:
                         tensor_bytes += info.file_size
             if tensor_bytes > 0:
-                total = tensor_bytes // 4  # fp32
+                total = tensor_bytes // 2  # fp16/bf16
                 return _format_param_count(total)
     except Exception as exc:
         logger.debug("Zip inspection failed for param count: %s", exc)
-    # Non-zip fallback: raw file size / 4
-    total = file_size // 4
+    # Non-zip fallback: raw file size / 2
+    total = file_size // 2
     if total > 0:
         return _format_param_count(total)
     return None
@@ -431,19 +447,32 @@ def scan_models() -> list[dict[str, Any]]:
 
 
 def scan_training_data() -> list[dict[str, Any]]:
-    """Discover training data files from data/ directory."""
+    """Discover training data files from data/ and one-level subdirectories."""
     files: list[dict[str, Any]] = []
     if not DATA_DIR.exists():
         return files
     skip = {"gui_settings.json", "prompts.json",
-            "route_assignments.json", "path_settings.json"}
+            "route_assignments.json", "path_settings.json",
+            "progress.json"}
     for pattern in ("*.txt", "*.jsonl", "*.json", "*.pdf", "*.docx"):
+        # Top-level data/ files
         for p in DATA_DIR.glob(pattern):
             if p.name in skip:
                 continue
             size_kb = p.stat().st_size / 1024
             files.append({
                 "name": p.name,
+                "path": str(p),
+                "size_kb": round(size_kb, 1),
+            })
+        # One-level-deep: data/<subdir>/file (e.g. pretrain/combined.txt)
+        for p in DATA_DIR.glob(f"*/{pattern}"):
+            if p.name in skip:
+                continue
+            rel = p.relative_to(DATA_DIR)
+            size_kb = p.stat().st_size / 1024
+            files.append({
+                "name": str(rel).replace("\\", "/"),
                 "path": str(p),
                 "size_kb": round(size_kb, 1),
             })

@@ -206,10 +206,21 @@ class WeightMapper:
                 self._stats["skipped"] += 1
                 logger.warning(f"Skipped unmapped weight: {source_name}")
 
+        total = self._stats["mapped"] + self._stats["skipped"]
         logger.info(
             f"Weight mapping: {self._stats['mapped']} mapped, "
             f"{self._stats['skipped']} skipped"
         )
+
+        # Raise if more than 10% of weights are unmapped — likely wrong
+        # model type or corrupted checkpoint.
+        if total > 0 and self._stats["skipped"] / total > 0.10:
+            raise ValueError(
+                f"{self._stats['skipped']}/{total} weights unmapped "
+                f"({100 * self._stats['skipped'] / total:.0f}%). "
+                f"Check model type or weight names."
+            )
+
         return result
 
     def _detect_hf_model_type(self, state_dict: dict) -> str:
@@ -226,7 +237,7 @@ class WeightMapper:
             return "gpt2"
         if "model.layers." in key_str and "self_attn.q_proj" in key_str:
             # Could be llama, mistral, qwen, gemma...
-            if any("mlp.gate_proj" in k for k in sample_keys):
+            if any("mlp.gate_proj" in k for k in state_dict.keys()):
                 return "llama"  # SwiGLU FFN → Llama-style
             if any("mlp.fc1" in k for k in state_dict.keys()):
                 return "phi"

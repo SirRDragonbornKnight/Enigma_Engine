@@ -15,13 +15,17 @@ AI ACCESS toggle: When enabled, the AI can send real system commands
 """
 from __future__ import annotations
 
+import logging
 import os
 import platform
 import subprocess
 import threading
 import time
+from datetime import datetime
 
 import customtkinter as ctk
+
+logger = logging.getLogger(__name__)
 
 from enigma_engine.gui.widgets import (
     C_ACCENT_DIM, C_BORDER, C_BORDER_ACCENT,
@@ -29,7 +33,7 @@ from enigma_engine.gui.widgets import (
     C_PANEL, C_RED, C_SURFACE, C_TEXT_BRIGHT, C_TEXT_DIM,
     FONT_CMD, FONT_MONO, FONT_SECTION, FONT_SMALL, FONT_TINY,
     HUDFrame, SectionLabel, SelectableLabel, SelectableTextbox,
-    Tooltip, wire_hotkeys,
+    Tooltip, themed_button, wire_hotkeys,
 )
 
 # Mode constants
@@ -78,11 +82,10 @@ class CMDPageMixin:
             text_color=C_TEXT_DIM)
         self._cmd_ai_label.pack(side="right", padx=(4, 0))
 
-        self._cmd_ai_btn = ctk.CTkButton(
-            top, text="OFF", width=50, height=28,
-            font=FONT_TINY, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
-            text_color=C_TEXT_DIM,
+        self._cmd_ai_btn = themed_button(
+            top, "OFF", style="secondary",
+            width=50, height=28,
+            font=FONT_TINY,
             command=self._cmd_toggle_ai_access)
         self._cmd_ai_btn.pack(side="right", padx=(0, 4))
 
@@ -102,11 +105,11 @@ class CMDPageMixin:
         self._cmd_mode_btn.pack(side="right", padx=(0, 12))
 
         # Clear button
-        clear_btn = ctk.CTkButton(
-            top, text="CLEAR", width=70, height=28,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
-            text_color=C_TEXT_DIM, command=self._cmd_clear)
+        clear_btn = themed_button(
+            top, "CLEAR", style="secondary",
+            width=70, height=28,
+            font=FONT_SMALL,
+            command=self._cmd_clear)
         clear_btn.pack(side="right", padx=(0, 6))
 
         # ------- Terminal output -------
@@ -189,11 +192,11 @@ class CMDPageMixin:
         self.cmd_input.bind("<Up>", self._cmd_history_up)
         self.cmd_input.bind("<Down>", self._cmd_history_down)
 
-        run_btn = ctk.CTkButton(
-            input_row, text="RUN", width=70, height=38,
-            font=FONT_SECTION, corner_radius=2,
-            fg_color=C_GREEN_DIM, hover_color="#1a5a2a",
-            text_color=C_GREEN, command=self._cmd_execute)
+        run_btn = themed_button(
+            input_row, "RUN", style="primary",
+            width=70, height=38,
+            font=FONT_SECTION,
+            command=self._cmd_execute)
         run_btn.grid(row=0, column=2, padx=(4, 0))
 
         # Tooltips for CMD page interactive elements
@@ -352,23 +355,32 @@ class CMDPageMixin:
                             "[busy] Wait for current command.\n")
             return
 
-        self._cmd_write("prompt", f"PS {self._cmd_cwd}> ")
+        self._cmd_write("prompt", f"{self._cmd_stamp()}PS {self._cmd_cwd}> ")
         self._cmd_write("command", text + "\n")
 
         self._cmd_busy = True
 
         def _run():
             try:
+                import base64
                 marker = "---ENIGMA_CWD_MARKER---"
-                full_cmd = (
-                    f"{text}; "
-                    f"Write-Host '{marker}'; "
+                # Build script as a single string, then encode as
+                # base64 UTF-16LE for -EncodedCommand.  This prevents
+                # command injection — the user text is embedded inside
+                # a script block, not concatenated into a parseable
+                # command line.
+                script = (
+                    f"{text}\n"
+                    f"Write-Host '{marker}'\n"
                     f"(Get-Location).Path"
                 )
+                encoded = base64.b64encode(
+                    script.encode("utf-16-le")).decode("ascii")
 
                 proc = subprocess.Popen(
                     ["powershell", "-NoProfile",
-                     "-NonInteractive", "-Command", full_cmd],
+                     "-NonInteractive",
+                     "-EncodedCommand", encoded],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     cwd=self._cmd_cwd,
@@ -381,7 +393,7 @@ class CMDPageMixin:
                 found_marker = False
 
                 for line in proc.stdout:
-                    if marker in line:
+                    if line.strip() == marker:
                         found_marker = True
                         continue
                     if found_marker:
@@ -391,7 +403,11 @@ class CMDPageMixin:
                         continue
                     output_lines.append(line)
 
-                proc.wait()
+                try:
+                    proc.wait(timeout=300)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    logger.warning("System command timed out after 300s")
                 self._cmd_proc = None
                 text_out = "".join(output_lines)
 
@@ -414,6 +430,8 @@ class CMDPageMixin:
 
             except Exception as exc:
                 err_msg = str(exc)
+                import traceback as _tb
+                logger.error("System command error:\n%s", _tb.format_exc())
                 def _err():
                     self._cmd_write("error", f"[!] {err_msg}\n")
                     self._cmd_write("divider", "\n")
@@ -430,7 +448,7 @@ class CMDPageMixin:
     def _cmd_run_engine(self, text: str):
         """Execute an engine command or ask the AI."""
         # Show the command
-        self._cmd_write("prompt", "ENG> ")
+        self._cmd_write("prompt", f"{self._cmd_stamp()}ENG> ")
         self._cmd_write("command", text + "\n")
 
         # Built-in engine terminal commands
@@ -488,6 +506,8 @@ class CMDPageMixin:
             self._cmd_write(
                 "error", "[!] Command system not available.\n")
         except Exception as exc:
+            import traceback as _tb
+            logger.error("Engine command error:\n%s", _tb.format_exc())
             self._cmd_write("error", f"[!] {exc}\n")
 
         self._cmd_write("divider", "\n")
@@ -578,6 +598,8 @@ class CMDPageMixin:
                 self.after(0, _show)
             except Exception as exc:
                 err_msg = str(exc)
+                import traceback as _tb
+                logger.error("AI command error:\n%s", _tb.format_exc())
                 self.after(0, lambda: self._cmd_write(
                     "error", f"[!] {err_msg}\n"))
 
@@ -590,7 +612,7 @@ class CMDPageMixin:
         the registry. If AI ACCESS is on and the command is not
         recognized by the registry, run it as a system command.
         """
-        self._cmd_write("prompt", "AI>> ")
+        self._cmd_write("prompt", f"{self._cmd_stamp()}AI>> ")
         self._cmd_write("command", cmd_str + "\n")
 
         # Try engine command first
@@ -612,6 +634,7 @@ class CMDPageMixin:
             # Otherwise show the engine error
             self._cmd_write("error", result.message + "\n")
         except Exception:
+            logger.debug("Command '%s' not in registry, falling back", cmd_str)
             if self._cmd_ai_access:
                 self._cmd_write(
                     "info",
@@ -710,6 +733,11 @@ class CMDPageMixin:
     # ================================================================
     # CMD - Output helpers
     # ================================================================
+
+    @staticmethod
+    def _cmd_stamp() -> str:
+        """Return a ``[HH:MM:SS]`` timestamp string."""
+        return datetime.now().strftime("[%H:%M:%S] ")
 
     def _cmd_write(self, tag: str, text: str):
         """Write tagged text to the terminal output."""
@@ -1414,6 +1442,8 @@ class CMDPageMixin:
 
     def _cmd_update_status_strip(self):
         """Periodically update the status strip with live info."""
+        if getattr(self, '_shutting_down', False):
+            return
         labels = getattr(self, "_cmd_stat_labels", None)
         if not labels:
             return

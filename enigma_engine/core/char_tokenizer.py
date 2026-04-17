@@ -235,6 +235,11 @@ class CharacterTokenizer:
             # Prevent vocab from exceeding model embedding table size
             if (self._max_vocab_size is not None
                     and new_id >= self._max_vocab_size):
+                logger.warning(
+                    "Vocab full (%d tokens) — mapping '%s' to <unk>",
+                    self._max_vocab_size,
+                    word[:30] if len(word) > 30 else word,
+                )
                 return self.unk_token_id
             self.token_to_id[word] = new_id
             self.id_to_token[new_id] = word
@@ -263,12 +268,14 @@ class CharacterTokenizer:
         # Separate reasoning tags so they are matched as whole tokens
         text = text.replace('<think>', ' <think> ').replace('</think>', ' </think> ')
         # Use word-boundary match so "FAQ:" doesn't become "FA <Q> "
-        text = re.sub(r'(?<![A-Za-z])Q:', ' <Q> ', text)
-        text = re.sub(r'(?<![A-Za-z])A:', ' <A> ', text)
-        text = re.sub(r'(?<![A-Za-z])User:', ' <USER> ', text)
-        text = re.sub(r'(?<![A-Za-z])Bot:', ' <BOT> ', text)
-        text = re.sub(r'(?<![A-Za-z])Human:', ' <USER> ', text)
-        text = re.sub(r'(?<![A-Za-z])Assistant:', ' <BOT> ', text)
+        # \w is Unicode-aware, so non-Latin chars (CJK, Arabic, etc.)
+        # preceding these markers correctly prevent false matches.
+        text = re.sub(r'(?<!\w)Q:', ' <Q> ', text)
+        text = re.sub(r'(?<!\w)A:', ' <A> ', text)
+        text = re.sub(r'(?<!\w)User:', ' <USER> ', text)
+        text = re.sub(r'(?<!\w)Bot:', ' <BOT> ', text)
+        text = re.sub(r'(?<!\w)Human:', ' <USER> ', text)
+        text = re.sub(r'(?<!\w)Assistant:', ' <BOT> ', text)
 
         # Tokenize
         i = 0

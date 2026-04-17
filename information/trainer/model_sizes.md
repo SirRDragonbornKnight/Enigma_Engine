@@ -4,22 +4,43 @@ How the model size system works in Enigma Engine.
 
 ---
 
-## Specifying Size
+## Creating a Model (GUI)
 
-When creating or training a model, type your target parameter count:
+In the **MODELS** tab, type a number in the **Memory (GB)** field
+and click CREATE. The engine auto-picks the largest architecture
+preset that fits your memory budget.
 
-| Input | Meaning |
-|-------|---------|
-| `8b` | 8 billion parameters |
-| `1.5b` | 1.5 billion parameters |
-| `500m` | 500 million parameters |
-| `27m` | 27 million parameters |
+| Memory (GB) | Auto-picks | ~Params | Train VRAM |
+|-------------|-----------|---------|-----------|
+| 0.5 | tiny | ~5M | ~0.5 GB |
+| 1 | small | ~27M | ~1 GB |
+| 4 | base | ~120M | ~3 GB |
+| 8 | large | ~200M | ~6 GB |
+| 12+ | xl | ~600M | ~12 GB |
 
-The engine matches your target to the closest architecture preset.
+The Memory field auto-detects your GPU VRAM (or system RAM).
+You can change the number before clicking CREATE.
 
 ---
 
-## Available Presets (auto-matched)
+## CLI Model Size
+
+From the command line, use `--model-size` with a preset name:
+
+```
+python run.py --train data/training.txt --model-size large
+```
+
+Available CLI presets: `pi_zero`, `nano`, `tiny`, `small`,
+`medium`, `large`.
+
+---
+
+## Available Presets (internal)
+
+These are the architecture presets the engine selects from
+automatically. You don't need to pick these — the Memory (GB)
+input handles it.
 
 | Preset | Parameters | Best For |
 |--------|-----------|----------|
@@ -29,7 +50,7 @@ The engine matches your target to the closest architecture preset.
 | small | ~27M | Entry GPU, learning |
 | medium | ~85M | Mid-range GPU |
 | large | ~200M | RTX 3080+ |
-| xl | ~600M | RTX 4090 |
+| xl | ~600M | RTX 4090/5090 |
 | xxl | ~1.5B | Multi-GPU |
 | huge | ~3B | Server GPU |
 | giant | ~7B | Multi-node datacenter |
@@ -39,14 +60,12 @@ The engine matches your target to the closest architecture preset.
 
 ---
 
-## How Matching Works
+## How It Works
 
-1. You type a target like `8b`
-2. The engine calculates estimated parameters for each preset
-3. It picks the preset closest to your target
-4. The matched preset name is shown in the training log
-
-You can also type preset names directly (e.g. `small`, `giant`).
+1. You type a Memory (GB) value (e.g. `16`)
+2. The engine estimates training VRAM for each preset
+3. It picks the largest preset that fits your budget
+4. The model is created and shown on the MODELS tab
 
 ---
 

@@ -98,9 +98,18 @@ class VisionEncoderConfig:
     pretrained_model: str = "vit_small_patch16_224"
     freeze_backbone: bool = True
 
+    def __post_init__(self):
+        if self.patch_size < 1:
+            raise ValueError(f"patch_size must be >= 1, got {self.patch_size}")
+
     @property
     def num_patches(self) -> int:
         """Number of patches the image gets split into."""
+        if self.image_size % self.patch_size != 0:
+            raise ValueError(
+                f"image_size ({self.image_size}) must be divisible by "
+                f"patch_size ({self.patch_size})"
+            )
         return (self.image_size // self.patch_size) ** 2
 
     def to_dict(self) -> dict:
@@ -251,6 +260,12 @@ class PatchEmbedding(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: [B, C, H, W] → conv: [B, dim, H/P, W/P] → flatten: [B, num_patches, dim]
+        h, w = x.shape[2], x.shape[3]
+        if h % self.patch_size != 0 or w % self.patch_size != 0:
+            logger.warning(
+                "Image dimensions (%d, %d) not evenly divisible "
+                "by patch_size %d — edge pixels will be discarded",
+                h, w, self.patch_size)
         x = self.proj(x)                        # [B, dim, H/P, W/P]
         x = x.flatten(2)                         # [B, dim, num_patches]
         x = x.transpose(1, 2)                    # [B, num_patches, dim]
@@ -375,7 +390,15 @@ class VisionEncoder(nn.Module):
 
     def _init_pretrained(self, config: VisionEncoderConfig) -> None:
         """Initialize with a pretrained timm backbone."""
-        _ensure_timm()
+        try:
+            _ensure_timm()
+        except ImportError:
+            logger.warning(
+                "timm not installed — falling back to from-scratch "
+                "vision encoder")
+            config.use_pretrained = False
+            self._init_from_scratch(config)
+            return
         import timm
 
         self.backbone = timm.create_model(
@@ -489,6 +512,10 @@ class VisionEncoder(nn.Module):
         Returns:
             Feature tensor [batch, num_patches, dim]
         """
+        if x.ndim != 4:
+            raise ValueError(
+                f"VisionEncoder expects 4D input [B, C, H, W], "
+                f"got {x.ndim}D shape {tuple(x.shape)}")
         # Pretrained: use timm backbone
         if self.backbone is not None:
             features = self.backbone.forward_features(x)
@@ -727,7 +754,7 @@ def encode_image(
     tensor = preprocess_image(
         image,
         image_size=encoder.config.image_size,
-        imagenet_normalize=getattr(encoder.config, "use_pretrained", False),
+        imagenet_normalize=encoder.config.use_pretrained,
     )
     tensor = tensor.to(next(encoder.parameters()).device)
     encoder.eval()
@@ -799,6 +826,7 @@ def encode_video_frames(
             cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
             ret, frame = cap.read()
             if not ret:
+                logger.warning("Failed to read video frame %d", idx)
                 continue
             # OpenCV BGR → RGB → PIL
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -806,7 +834,7 @@ def encode_video_frames(
             tensor = preprocess_image(
                 pil_img,
                 image_size=encoder.config.image_size,
-                imagenet_normalize=getattr(encoder.config, "use_pretrained", False),
+                imagenet_normalize=encoder.config.use_pretrained,
             )
             tensor = tensor.to(device)
             features = encoder(tensor)  # [1, num_patches, dim]

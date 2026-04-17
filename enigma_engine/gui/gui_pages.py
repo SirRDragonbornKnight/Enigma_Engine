@@ -17,17 +17,18 @@ from pathlib import Path
 import customtkinter as ctk
 
 from enigma_engine.gui.widgets import (
-    C_ACCENT, C_ACCENT_DIM, C_ACCENT_MUTED, C_BG, C_BORDER,
-    C_CYAN, C_GREEN, C_GREEN_DIM, C_INPUT,
+    C_ACCENT, C_ACCENT_DIM, C_BG, C_BORDER,
+    C_CYAN, C_GREEN, C_INPUT,
     C_ORANGE, C_PANEL, C_PURPLE,
-    C_RED, C_SURFACE, C_TEXT, C_TEXT_BRIGHT,
+    C_RED, C_RED_DIM, C_RED_HOVER, C_SURFACE, C_TEXT, C_TEXT_BRIGHT,
     C_TEXT_DIM,
     CollapsiblePanel,
     FONT_BODY, FONT_CHAT, FONT_INPUT,
     FONT_SECTION, FONT_SMALL, FONT_TINY,
     HUDFrame, SectionLabel, SelectableLabel, SelectableTextbox,
     StatusDot, ToggleButton, Tooltip,
-    themed_entry, themed_dropdown, themed_scroll,
+    themed_button, themed_entry, themed_numeric_entry, themed_dropdown,
+    themed_scroll,
     wire_hotkeys,
 )
 # Re-export so existing imports keep working
@@ -65,19 +66,18 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
             side="left", fill="x", expand=True)
 
         # Fullscreen toggle button
-        self._fullscreen_btn = ctk.CTkButton(
-            top, text="\u26f6", width=38, height=34,
-            font=FONT_SECTION, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
-            text_color=C_TEXT_DIM, command=self._toggle_chat_fullscreen)
+        self._fullscreen_btn = themed_button(
+            top, "\u26f6", style="icon",
+            width=38, height=34,
+            font=FONT_SECTION, command=self._toggle_chat_fullscreen)
         self._fullscreen_btn.pack(side="right", padx=(4, 0))
         Tooltip(self._fullscreen_btn, "Fullscreen chat")
 
         # Sidebar toggle button
-        self._sidebar_toggle_btn = ctk.CTkButton(
-            top, text="\u25e8", width=38, height=34,
-            font=FONT_SECTION, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
+        self._sidebar_toggle_btn = themed_button(
+            top, "\u25e8", style="icon",
+            width=38, height=34,
+            font=FONT_SECTION,
             text_color=C_ACCENT, command=self._toggle_sidebar)
         self._sidebar_toggle_btn.pack(side="right", padx=(4, 0))
 
@@ -148,10 +148,6 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
         tb.tag_configure("link", foreground=C_CYAN,
                          underline=True,
                          lmargin1=12, lmargin2=12, rmargin=12)
-        tb.tag_bind("link", "<Enter>",
-                    lambda e: tb.configure(cursor="hand2"))
-        tb.tag_bind("link", "<Leave>",
-                    lambda e: tb.configure(cursor=""))
         tb.tag_bind("link", "<Button-1>", self._on_link_click)
         # Media caption (dim, small, under images)
         tb.tag_configure("media_caption", foreground=C_TEXT_DIM,
@@ -162,10 +158,6 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
                          font=("Consolas", 14, "bold"),
                          underline=True,
                          lmargin1=12, lmargin2=12)
-        tb.tag_bind("video_link", "<Enter>",
-                    lambda e: tb.configure(cursor="hand2"))
-        tb.tag_bind("video_link", "<Leave>",
-                    lambda e: tb.configure(cursor=""))
         tb.tag_bind("video_link", "<Button-1>",
                     self._on_video_click)
         # File link tag (cyan, clickable)
@@ -173,12 +165,25 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
                  font=("Consolas", 13, "bold"),
                  underline=True,
                  lmargin1=12, lmargin2=12)
-        tb.tag_bind("file_link", "<Enter>",
-                lambda e: tb.configure(cursor="hand2"))
-        tb.tag_bind("file_link", "<Leave>",
-                lambda e: tb.configure(cursor=""))
         tb.tag_bind("file_link", "<Button-1>",
                 self._on_file_click)
+        # Single Motion/Leave handler for cursor — replaces per-tag
+        # Enter/Leave which could miss events and leave cursor stuck.
+        _CLICKABLE_TAGS = frozenset(("link", "video_link", "file_link"))
+
+        def _chat_cursor_motion(event):
+            try:
+                idx = tb.index(f"@{event.x},{event.y}")
+                tags = tb.tag_names(idx)
+            except Exception:
+                tags = ()
+            if _CLICKABLE_TAGS.intersection(tags):
+                tb.configure(cursor="hand2")
+            else:
+                tb.configure(cursor="")
+
+        tb.bind("<Motion>", _chat_cursor_motion)
+        tb.bind("<Leave>", lambda e: tb.configure(cursor=""))
         # Reasoning / chain-of-thought tag (dim italic)
         tb.tag_configure("reasoning", foreground=C_TEXT_DIM,
                          font=("Consolas", 13, "italic"),
@@ -237,19 +242,17 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
         self.chat_input.bind("<Down>", self._on_input_down)
 
         # SEND button to the right of the input
-        self.send_btn = ctk.CTkButton(
-            input_area, text="SEND", width=80, height=56,
-            font=FONT_SECTION, corner_radius=2,
-            fg_color=C_GREEN_DIM, hover_color="#1a5a2a",
-            text_color=C_GREEN, command=self._send_message)
+        self.send_btn = themed_button(
+            input_area, "SEND", style="primary",
+            width=80, height=56,
+            font=FONT_SECTION, command=self._send_message)
         self.send_btn.grid(row=1, column=1, sticky="s")
 
         # STOP button (same slot as SEND, shown during generation)
-        self.stop_btn = ctk.CTkButton(
-            input_area, text="STOP", width=80, height=56,
-            font=FONT_SECTION, corner_radius=2,
-            fg_color="#3b1111", hover_color="#5a1a1a",
-            text_color=C_RED, command=self._stop_generation)
+        self.stop_btn = themed_button(
+            input_area, "STOP", style="danger",
+            width=80, height=56,
+            font=FONT_SECTION, command=self._stop_generation)
         # Hidden until generation starts (SEND grid slot is reused)
 
         # Utility toolbar below the input
@@ -258,18 +261,16 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
                      pady=(4, 0))
 
         # Left side: attach, new, web access
-        self._attach_btn = ctk.CTkButton(
-            toolbar, text="\U0001f4ce", width=38, height=32,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
-            text_color=C_TEXT_DIM, command=self._attach_file)
+        self._attach_btn = themed_button(
+            toolbar, "\U0001f4ce", style="icon",
+            width=38, height=32,
+            font=FONT_SMALL, command=self._attach_file)
         self._attach_btn.pack(side="left", padx=(0, 4))
 
-        self._new_btn = ctk.CTkButton(
-            toolbar, text="NEW", width=60, height=32,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_BORDER,
-            text_color=C_TEXT_DIM, command=self._new_chat)
+        self._new_btn = themed_button(
+            toolbar, "NEW", style="secondary",
+            width=60, height=32,
+            font=FONT_SMALL, command=self._new_chat)
         self._new_btn.pack(side="left", padx=(0, 4))
 
         self._web_btn = ToggleButton(
@@ -293,20 +294,18 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
         self._rag_btn.pack(side="left", padx=(4, 0))
 
         # Edit last message button
-        self._edit_btn = ctk.CTkButton(
-            toolbar, text="\u270E", width=38, height=32,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
-            text_color=C_TEXT_DIM,
+        self._edit_btn = themed_button(
+            toolbar, "\u270E", style="icon",
+            width=38, height=32,
+            font=FONT_SMALL,
             command=self._edit_last_message)
         self._edit_btn.pack(side="left", padx=(4, 0))
 
         # Right side: voice output + mic input
-        self.mic_btn = ctk.CTkButton(
-            toolbar, text="\U0001f3a4", width=38, height=32,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
-            text_color=C_TEXT_DIM, command=self._toggle_voice_input)
+        self.mic_btn = themed_button(
+            toolbar, "\U0001f3a4", style="icon",
+            width=38, height=32,
+            font=FONT_SMALL, command=self._toggle_voice_input)
         self.mic_btn.pack(side="right", padx=(4, 0))
 
         self.voice_btn = ToggleButton(
@@ -335,11 +334,11 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
         Tooltip(self._sidebar_toggle_btn, "Toggle sidebar")
 
         # Exit fullscreen button (hidden by default)
-        self._exit_fullscreen_btn = ctk.CTkButton(
-            top, text="\u2716 EXIT", width=90, height=34,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_RED, hover_color="#b91c1c",
-            text_color=C_TEXT_BRIGHT,
+        self._exit_fullscreen_btn = themed_button(
+            top, "\u2716 EXIT", style="danger",
+            width=90, height=34,
+            font=FONT_SMALL,
+            fg_color=C_RED, text_color=C_TEXT_BRIGHT,
             command=self._exit_chat_fullscreen)
         # Not packed until fullscreen is entered
 
@@ -392,10 +391,10 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
                 ("RENAME", C_TEXT_BRIGHT, self._rename_session),
                 ("DELETE", C_RED, self._delete_session),
                 ("EXPORT", C_TEXT_DIM, self._export_chat)]:
-            btn = ctk.CTkButton(
-                hist_btns, text=text, width=60, height=30,
-                font=FONT_TINY, corner_radius=2,
-                fg_color=C_SURFACE, hover_color=C_BORDER,
+            btn = themed_button(
+                hist_btns, text, style="secondary",
+                width=60, height=30,
+                font=FONT_TINY,
                 text_color=color, command=cmd
             )
             btn.pack(side="left", padx=(0, 3))
@@ -413,17 +412,15 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
         wire_hotkeys(self._rename_entry)
         self._rename_entry.pack(
             side="left", fill="x", expand=True, padx=(0, 4))
-        _ok_rename = ctk.CTkButton(
-            self._rename_row, text="OK", width=40, height=28,
-            font=FONT_TINY, corner_radius=2,
-            fg_color=C_GREEN_DIM, hover_color="#1a5a2a",
-            text_color=C_GREEN, command=self._confirm_rename)
+        _ok_rename = themed_button(
+            self._rename_row, "OK", style="primary",
+            width=40, height=28,
+            font=FONT_TINY, command=self._confirm_rename)
         _ok_rename.pack(side="left", padx=(0, 2))
-        _cancel_rename = ctk.CTkButton(
-            self._rename_row, text="X", width=30, height=28,
-            font=FONT_TINY, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_BORDER,
-            text_color=C_TEXT_DIM, command=self._cancel_rename)
+        _cancel_rename = themed_button(
+            self._rename_row, "X", style="secondary",
+            width=30, height=28,
+            font=FONT_TINY, command=self._cancel_rename)
         _cancel_rename.pack(side="left")
         self._rename_entry.bind(
             "<Return>", lambda e: self._confirm_rename())
@@ -438,17 +435,15 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
             self._delete_confirm_row, text="Delete?",
             font=FONT_TINY, text_color=C_RED, anchor="w")
         _del_label.pack(side="left", padx=(4, 4))
-        _del_yes = ctk.CTkButton(
-            self._delete_confirm_row, text="YES", width=40, height=28,
-            font=FONT_TINY, corner_radius=2,
-            fg_color="#3a1111", hover_color="#5a1a1a",
-            text_color=C_RED, command=self._confirm_delete_session)
+        _del_yes = themed_button(
+            self._delete_confirm_row, "YES", style="danger",
+            width=40, height=28,
+            font=FONT_TINY, command=self._confirm_delete_session)
         _del_yes.pack(side="left", padx=(0, 2))
-        _del_no = ctk.CTkButton(
-            self._delete_confirm_row, text="NO", width=40, height=28,
-            font=FONT_TINY, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_BORDER,
-            text_color=C_TEXT_DIM, command=self._cancel_delete_session)
+        _del_no = themed_button(
+            self._delete_confirm_row, "NO", style="secondary",
+            width=40, height=28,
+            font=FONT_TINY, command=self._cancel_delete_session)
         _del_no.pack(side="left")
 
         # --- Collapsible SYSTEM PROMPT panel ---
@@ -479,20 +474,18 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
         prompt_btns = ctk.CTkFrame(prompt_frame, fg_color="transparent")
         prompt_btns.grid(row=1, column=0, sticky="ew", padx=4, pady=4)
 
-        apply_btn = ctk.CTkButton(
-            prompt_btns, text="APPLY", width=70, height=30,
-            font=FONT_TINY, corner_radius=2,
-            fg_color=C_ACCENT_DIM, hover_color=C_ACCENT_MUTED,
-            text_color=C_ACCENT, command=self._apply_system_prompt
+        apply_btn = themed_button(
+            prompt_btns, "APPLY", style="action",
+            width=70, height=30,
+            font=FONT_TINY, command=self._apply_system_prompt
         )
         apply_btn.pack(side="left", padx=(0, 4))
         Tooltip(apply_btn, "Apply prompt to current session")
 
-        reset_btn = ctk.CTkButton(
-            prompt_btns, text="RESET", width=70, height=30,
-            font=FONT_TINY, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_BORDER,
-            text_color=C_TEXT_DIM, command=self._reset_system_prompt
+        reset_btn = themed_button(
+            prompt_btns, "RESET", style="secondary",
+            width=70, height=30,
+            font=FONT_TINY, command=self._reset_system_prompt
         )
         reset_btn.pack(side="left")
         Tooltip(reset_btn, "Reset prompt to default")
@@ -552,11 +545,10 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
         emo_btns.grid(row=len(_emo_labels), column=0,
                       sticky="ew", padx=6, pady=(4, 4))
 
-        emo_reset_btn = ctk.CTkButton(
-            emo_btns, text="RESET", width=60, height=28,
-            font=FONT_TINY, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_BORDER,
-            text_color=C_TEXT_DIM, command=self._reset_emotional_state)
+        emo_reset_btn = themed_button(
+            emo_btns, "RESET", style="secondary",
+            width=60, height=28,
+            font=FONT_TINY, command=self._reset_emotional_state)
         emo_reset_btn.pack(side="left")
         Tooltip(emo_reset_btn, "Reset emotional state to baseline")
 
@@ -757,9 +749,11 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
         self._bind_escape_stop()
 
         # Hide exit button, restore fullscreen + sidebar toggle buttons
+        # Pack order must match initial setup: fullscreen first (rightmost),
+        # then sidebar toggle (to its left).
         self._exit_fullscreen_btn.pack_forget()
-        self._sidebar_toggle_btn.pack(side="right", padx=(4, 0))
         self._fullscreen_btn.pack(side="right", padx=(4, 0))
+        self._sidebar_toggle_btn.pack(side="right", padx=(4, 0))
         self._fullscreen_btn.configure(text_color=C_TEXT_DIM)
 
         # Restore header (must pack before body for correct order)
@@ -882,43 +876,50 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
         self.new_model_name.pack(side="left", padx=(0, 8))
 
         SelectableLabel(
-            form_row, text="Size:", font=FONT_TINY,
+            form_row, text="Memory (GB):", font=FONT_TINY,
             text_color=C_TEXT_DIM
         ).pack(side="left", padx=(0, 4))
-        from enigma_engine.core.model_presets import (
-            MODEL_PRESETS, MODEL_DESCRIPTIONS)
-        _preset_display = [
-            f"{k} - {MODEL_DESCRIPTIONS.get(k, '')}"
-            for k in MODEL_PRESETS]
-        self.model_preset_var = ctk.StringVar(
-            value=_preset_display[
-                list(MODEL_PRESETS.keys()).index("small")])
-        _preset_dd = themed_dropdown(
-            form_row, _preset_display,
-            variable=self.model_preset_var, width=280)
-        _preset_dd.pack(side="left", padx=(0, 8))
+        # Auto-detect available memory (GPU VRAM or system RAM)
+        _default_mem = "8"
+        try:
+            from enigma_engine.core.hardware_detection import (
+                detect_hardware)
+            _hw = detect_hardware()
+            if _hw.gpu_available and _hw.gpu_vram_gb > 0:
+                _default_mem = str(int(_hw.gpu_vram_gb))
+            elif _hw.ram_gb > 0:
+                _default_mem = str(int(_hw.ram_gb))
+        except Exception:
+            pass
+        self.model_vram_var = ctk.StringVar(value=_default_mem)
+        _mem_entry = themed_numeric_entry(
+            form_row, mode="int",
+            textvariable=self.model_vram_var,
+            width=60, height=30, font=FONT_SMALL)
+        _mem_entry.pack(side="left", padx=(0, 8))
+        Tooltip(_mem_entry,
+                "Available memory for training (GB).\n"
+                "GPU VRAM if available, otherwise system RAM.\n"
+                "The largest model that fits will be selected.")
 
-        _create_btn = ctk.CTkButton(
-            form_row, text="CREATE", width=90, height=30,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_ACCENT_DIM, hover_color=C_ACCENT_MUTED,
-            text_color=C_ACCENT, command=self._create_new_model)
+        _create_btn = themed_button(
+            form_row, "CREATE", style="action",
+            width=90, height=30,
+            font=FONT_SMALL, command=self._create_new_model)
         _create_btn.pack(side="left")
         Tooltip(_create_btn, "Create a new empty model")
 
-        _import_btn = ctk.CTkButton(
-            form_row, text="IMPORT", width=90, height=30,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_ACCENT_DIM, hover_color=C_ACCENT_MUTED,
-            text_color=C_ACCENT, command=self._import_model)
+        _import_btn = themed_button(
+            form_row, "IMPORT", style="action",
+            width=90, height=30,
+            font=FONT_SMALL, command=self._import_model)
         _import_btn.pack(side="left", padx=(8, 0))
         Tooltip(_import_btn, "Import a model file from disk")
 
-        _download_btn = ctk.CTkButton(
-            form_row, text="DOWNLOAD", width=100, height=30,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_ACCENT_DIM, hover_color=C_ACCENT_MUTED,
-            text_color=C_ACCENT, command=self._download_huggingface)
+        _download_btn = themed_button(
+            form_row, "DOWNLOAD", style="action",
+            width=100, height=30,
+            font=FONT_SMALL, command=self._download_huggingface)
         _download_btn.pack(side="left", padx=(8, 0))
         Tooltip(_download_btn, "Download a model from HuggingFace")
 
@@ -1136,33 +1137,25 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
             name_entry.insert(0, title_text)
             name_entry.configure(state="disabled")
 
-            # Param count shown separately so it never gets
-            # mixed into the editable name field
-            if param_str:
-                SelectableLabel(
-                    inner, text=f"({param_str})",
-                    font=FONT_TINY, text_color=C_TEXT_DIM,
-                    anchor="w"
-                ).grid(row=0, column=0, sticky="e", padx=(0, 8))
+            # Param count and RAM shown in the info row below,
+            # not next to the name
 
             btn_frame = ctk.CTkFrame(inner, fg_color="transparent")
             btn_frame.grid(row=0, column=1, padx=(8, 0), sticky="e")
 
             # Inline save/cancel row (hidden until EDIT clicked)
             edit_row = ctk.CTkFrame(inner, fg_color="transparent")
-            _save_btn = ctk.CTkButton(
-                edit_row, text="SAVE", width=50, height=24,
-                font=FONT_TINY, corner_radius=2,
-                fg_color=C_GREEN_DIM, hover_color="#1a5a2a",
-                text_color=C_GREEN,
+            _save_btn = themed_button(
+                edit_row, "SAVE", style="primary",
+                width=50, height=24,
+                font=FONT_TINY,
                 command=lambda e=name_entry, m=model,
                 er=edit_row: self._save_inline_name(e, m, er))
             _save_btn.pack(side="left", padx=(0, 4))
-            _cancel_btn = ctk.CTkButton(
-                edit_row, text="CANCEL", width=60, height=24,
-                font=FONT_TINY, corner_radius=2,
-                fg_color=C_SURFACE, hover_color=C_BORDER,
-                text_color=C_TEXT_DIM,
+            _cancel_btn = themed_button(
+                edit_row, "CANCEL", style="secondary",
+                width=60, height=24,
+                font=FONT_TINY,
                 command=lambda e=name_entry, m=model,
                 er=edit_row: self._cancel_inline_name(e, m, er))
             _cancel_btn.pack(side="left")
@@ -1176,51 +1169,47 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
                 lambda ev, e=name_entry, m=model,
                 er=edit_row: self._cancel_inline_name(e, m, er))
 
-            _edit = ctk.CTkButton(
-                btn_frame, text="EDIT", width=65, height=28,
-                font=FONT_TINY, corner_radius=2,
-                fg_color=C_ACCENT_DIM, hover_color=C_ACCENT_MUTED,
-                text_color=C_ACCENT,
+            _edit = themed_button(
+                btn_frame, "EDIT", style="action",
+                width=65, height=28,
+                font=FONT_TINY,
                 command=lambda e=name_entry,
                 er=edit_row: self._start_inline_edit(e, er))
             _edit.pack(side="left", padx=(0, 4))
             Tooltip(_edit, "Edit display name")
 
-            _export = ctk.CTkButton(
-                btn_frame, text="EXPORT", width=75, height=28,
-                font=FONT_TINY, corner_radius=2,
-                fg_color=C_SURFACE, hover_color=C_ACCENT_MUTED,
-                text_color=C_TEXT_DIM,
+            _export = themed_button(
+                btn_frame, "EXPORT CARD", style="secondary",
+                width=95, height=28,
+                font=FONT_TINY,
                 command=lambda m=model: self._export_identity(m))
             _export.pack(side="left", padx=(0, 4))
             Tooltip(_export, "Export identity card to JSON")
 
-            _copy = ctk.CTkButton(
-                btn_frame, text="COPY", width=70, height=28,
-                font=FONT_TINY, corner_radius=2,
-                fg_color=C_SURFACE, hover_color=C_ACCENT_MUTED,
-                text_color=C_TEXT_DIM,
+            _copy = themed_button(
+                btn_frame, "COPY", style="secondary",
+                width=70, height=28,
+                font=FONT_TINY,
                 command=lambda m=model: self._copy_model(m))
             _copy.pack(side="left", padx=(0, 4))
             Tooltip(_copy, "Duplicate this model")
 
             if is_native:
-                _grow = ctk.CTkButton(
-                    btn_frame, text="GROW", width=70, height=28,
-                    font=FONT_TINY, corner_radius=2,
-                    fg_color=C_GREEN_DIM, hover_color="#1a5a2a",
-                    text_color=C_GREEN,
+                _grow = themed_button(
+                    btn_frame, "GROW", style="primary",
+                    width=70, height=28,
+                    font=FONT_TINY,
                     command=lambda m=model: self._grow_model(m))
                 _grow.pack(side="left", padx=(0, 4))
                 Tooltip(_grow,
                         "Expand this model to a larger size "
                         "(progressive growing)")
 
-            _delete = ctk.CTkButton(
-                btn_frame, text="DELETE", width=75, height=28,
-                font=FONT_TINY, corner_radius=2,
-                fg_color=C_SURFACE, hover_color=C_RED,
-                text_color=C_TEXT_DIM,
+            _delete = themed_button(
+                btn_frame, "DELETE", style="secondary",
+                width=75, height=28,
+                font=FONT_TINY,
+                hover_color=C_RED,
                 command=lambda m=model: self._delete_model(m))
             _delete.pack(side="left")
             Tooltip(_delete, "Permanently delete this model")
@@ -1243,7 +1232,44 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
             name_entry.bind(
                 "<Button-3>", _show_card_menu)
 
-            # Inline delete confirmation row (hidden)
+            # Row 3 — Checkpoint info (count + clean button)
+            from enigma_engine.gui.scanners import MODELS_DIR
+            model_stem = Path(model["path"]).stem
+            ckpt_dir = MODELS_DIR / "checkpoints" / model_stem
+            ckpt_count = 0
+            protected_count = 0
+            if ckpt_dir.is_dir():
+                for cf in ckpt_dir.iterdir():
+                    if cf.suffix == ".pt":
+                        ckpt_count += 1
+                        keep_f = cf.parent / (cf.name + ".keep")
+                        if keep_f.exists():
+                            protected_count += 1
+
+            if ckpt_count > 0:
+                ckpt_frame = ctk.CTkFrame(
+                    inner, fg_color="transparent")
+                ckpt_frame.grid(
+                    row=3, column=0, columnspan=2,
+                    sticky="w", pady=(4, 0))
+
+                prot_info = (
+                    f"  ({protected_count} protected)"
+                    if protected_count else "")
+                SelectableLabel(
+                    ckpt_frame,
+                    text=f"Checkpoints: {ckpt_count}{prot_info}",
+                    font=FONT_TINY, text_color=C_TEXT_DIM,
+                    anchor="w"
+                ).pack(side="left", padx=(0, 8))
+
+                themed_button(
+                    ckpt_frame, "CLEAN", style="secondary",
+                    width=60, height=22, font=FONT_TINY,
+                    command=lambda d=ckpt_dir: self._clean_checkpoints(d)
+                ).pack(side="left", padx=(0, 4))
+
+            # Row 4 — Inline delete confirmation (hidden)
             delete_row = ctk.CTkFrame(inner, fg_color="transparent")
             _del_msg = SelectableLabel(
                 delete_row, text=f"Delete {model['name']}?",
@@ -1252,7 +1278,7 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
             _del_yes = ctk.CTkButton(
                 delete_row, text="YES", width=45, height=24,
                 font=FONT_TINY, corner_radius=2,
-                fg_color="#3a1111", hover_color="#5a1a1a",
+                fg_color=C_RED_DIM, hover_color=C_RED_HOVER,
                 text_color=C_RED,
                 command=lambda m=model,
                 dr=delete_row: self._confirm_delete_model(m, dr))
@@ -1271,7 +1297,24 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
             # Row 1 — Tag + format info + file name when identity name differs
             tag = "NATIVE" if is_native else "EXTERNAL"
             tag_color = C_GREEN if is_native else C_ORANGE
-            info = f"{fmt.upper()}  //  {model['size_mb']} MB"
+            # Estimate RAM usage from file size
+            size_mb = model['size_mb']
+            if size_mb >= 1024:
+                ram_str = f"~{size_mb / 1024:.1f} GB RAM"
+            else:
+                ram_str = f"~{size_mb:.0f} MB RAM"
+            if param_str:
+                from enigma_engine.gui.scanners import (
+                    _format_param_count)
+                formatted = _format_param_count(param_str)
+                info = (f"{fmt.upper()}  //  {formatted} params"
+                        f"  //  {ram_str}")
+            else:
+                info = f"{fmt.upper()}  //  {ram_str}"
+
+            # Append preset name if saved in context
+            if ctx.preset_name:
+                info += f"  //  {ctx.preset_name}"
 
             info_frame = ctk.CTkFrame(inner, fg_color="transparent")
             info_frame.grid(row=1, column=0, columnspan=2,

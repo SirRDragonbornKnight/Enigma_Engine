@@ -235,6 +235,7 @@ class ProgressCallback:
                 self._progress.state = DownloadState.COMPLETED
                 if self._pbar:
                     self._pbar.close()
+                    self._pbar = None
 
     def set_file_name(self, name: str) -> None:
         """Set current file name being downloaded."""
@@ -360,6 +361,9 @@ class DownloadTracker:
         except Exception as e:
             logger.error(f"Download failed: {e}")
             if self._progress_callback:
+                if self._progress_callback._pbar:
+                    self._progress_callback._pbar.close()
+                    self._progress_callback._pbar = None
                 progress = self._progress_callback.get_progress()
                 progress.state = DownloadState.FAILED
                 progress.error = str(e)

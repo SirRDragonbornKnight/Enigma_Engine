@@ -1,12 +1,8 @@
 ﻿# Code Review Tracker
 
 **Started:** March 24, 2026
-**Previous pass:** March 25, 2026 (Pass 9) — Cleanup + test fix
-
-**Current pass:** March 26, 2026 (Pass 10) — Full re-review
-**Status:** 7 findings (#70-#76), 6 fixed, 1 false positive (#76 — Dict used in annotations). Lint clean, 2396 passed, 0 failed, 3 skipped.
-
-**⚠ GUI growth since review:** All 23 GUI files grew +7,481 lines total since Pass 10. Largest: gui_pages.py (+850), gui_cmd_page.py (+811), scanners.py (+819), gui_forge_new_modes.py (+740), gui_forge_models.py (+725). Pass 11 should re-review all GUI files.
+**Last pass:** Pass 105 (April 17, 2026) — N-11 GRPO/ReMax/SimPO/ORPO GUI wiring (radio cards + dispatcher + 4 handlers). N-17 model_merging.py (SLERP/TIES/linear). N-18 ewc.py (Fisher + penalty). N-20 agentic tool loop in engine_generation.py. N-8 collect_finetuning_data.py. Batch-level ETA in gui_forge_training.py. 28 new tests.
+**Total:** 105 passes, 479 findings (S14-S797), 35 research upgrades (R1-R35), 9 research roadmap items (R36-R44), Tiers 0-5 complete.
 
 ---
 
@@ -16,6 +12,7 @@
 - Mark each file: DONE, SKIP (no logic), or the date reviewed
 - Actionable items get added to SUGGESTIONS.md with item numbers
 - Pick up where we left off next session
+- Choose the best option, not the cheapest — do not factor in implementation time or complexity when deciding what approach to take
 
 ---
 
@@ -23,148 +20,181 @@
 
 | File | Status | Notes |
 |------|--------|-------|
-| config/defaults.py | DONE 3/25p8 | Clean |
+| config/defaults.py | DONE 3/30p35 | P35: Removed "for compatibility" comments on depth/heads aliases, removed 2 legacy enigma_config.json paths, removed 7 ENIGMA_* env var mappings |
 | config/__init__.py | DONE 3/25p8 | Clean |
 
 ## core/ — Model & Architecture
 
 | File | Status | Notes |
 |------|--------|-------|
-| core/model_presets.py | DONE 3/25p8 | Clean |
-| core/model_config.py | DONE 3/25p8 | Clean — thin re-export |
-| core/model_components.py | DONE 3/25p8 | Clean |
-| core/model.py | DONE 3/26p10 | #73 FIXED: Causal mask now created on model device |
-| core/kv_cache.py | DONE 3/25p8 | Clean |
-| core/model_utils.py | DONE 3/25p8 | Clean |
-| core/model_registry.py | DONE 3/25p8 | Clean — `_load_registry` read outside lock is benign (only from __init__) |
-| core/model_context.py | DONE 3/25p8 | Clean — history lock is caller coordination (design choice) |
+| core/model_presets.py | DONE 4/9p57 | S126: discriminant guard before math.sqrt, fallback dim=64. R25: n_predict_heads field. R27: neftune_alpha field. S518: to_dict()/from_dict() now includes neftune_alpha + n_predict_heads. P35: Removed legacy alias fields (depth/heads/max_len/embed_dim), __post_init__ legacy mapping, legacy keys from from_dict() known set. P36: Added kv_share_groups, early_exit_layer, use_mixture_of_depths, mod_capacity_factor fields. P38: T5-4 tome_ratio, T5-6 mla_latent_dim fields. P39: S564 to_dict/from_dict added 6 missing T3 fields. R35: use_weight_norm field + to_dict/from_dict. P57: use_gradient_checkpointing default changed False→True |
+| core/model_config.py | DONE 4/15p75 | Clean — thin re-export. P75: Re-audited — still clean |
+| core/model_components.py | DONE 4/15p85b | S101: n_kv_heads validation. S10: dim%2 validation. S208: MoE flat_indices duplicate handling, S222: YaRN magic numbers. P36: T3-1 Attention KV sharing (_kv_share_source, _shared_kv, follower Q-only path). T3-4 MoD depth_router + top-K FFN routing in TransformerBlock, get_mod_aux_loss(). T3-8 Shifted sparse attention. P38: T5-4 ToMe (_bipartite_soft_matching, _tome_merge, _tome_unmerge + TransformerBlock wiring). T5-6 MLA low-rank KV (wkv_down/wk_up/wv_up in Attention). P39: S567 RoPE theta>0 and max_seq_len>0 validation. P41: S577 YaRN div-by-zero guard when dim==beta_fast (32). P56: Pre-computed self._scale = 1/sqrt(head_dim) in Attention.__init__(), replaced 3 runtime math.sqrt() calls with cached multiply. P85: SDPA fallback path in Attention.forward() — three-tier attention: flash-attn package → PyTorch F.scaled_dot_product_attention (is_causal=True or attn_mask) → manual matmul. Free 2-4x speedup even without flash-attn installed. P85b: S741 Attention.rewind_cache(pos) — calls _kv_cache.rewind_to(pos) + invalidates _shared_kv (keeps cache alive unlike clear_cache which destroys it). TransformerBlock.rewind_cache(pos) delegates to attention |
+| core/model.py | DONE 4/18p101 | #73 FIXED. S205: docstring wrong class name, S206: generate() no input_ids shape validation. R25: multi-token prediction heads + aux loss. R27: NEFTune noise injection in forward. P35: Simplified __init__ to config-only, removed 5 legacy self attrs, removed token_embed/head aliases, removed Forge=Enigma alias, removed CONFIG import, ONNX uses self.config.*, load_state_dict no legacy keys, 'Forge'→'Enigma' string type hints. P36: T3-1 KV share group setup in __init__(). T3-2 early_exit_norm/head + draft_forward() + 0.1× aux loss. T3-3 medusa_forward(). Layer loop enumerated for early-exit capture. R35: _apply_weight_norm() nGPT parametric weight normalization on all Linear layers (skips weight-tied output head). P57: Added gradient_checkpointing_enable()/gradient_checkpointing_disable() methods (sets layer.use_checkpoint on all TransformerBlocks). P85b: S741 rewind_cache(pos) — loops all layers calling layer.rewind_cache(pos). P101: S786 MTP loss divided by total head count instead of contributing head count — underweights aux loss when targets shorter than n_predict_heads (edge case) |
+| core/kv_cache.py | DONE 4/17p100 | S11: overflow warning added. S207: update() batch size validation added P19. S521: topk(k=0) guard when heavy_hitter_count=0. R29: TurboQuantKVCache. R31: StreamingLLMCache. P36: T3-5 per-channel-group quantization (asymmetric, 3-tuple API). P42: S585 PrefixKVCache.build() raises AttributeError instead of silent return. P56: get() returns views instead of clones (zero-copy, callers never mutate), overflow shift uses torch.roll() instead of clone (handles overlapping memory). P74: S726 negative position edge case logged (seq_len > max_seq_len in overflow path). P83: S726 fixed — truncates k/v to last max_seq_len positions when seq_len exceeds cache capacity. P85: S739 H2O evict_if_needed() compacts _zp_k/_zp_v alongside scales. P85b: S741 rewind_to(pos) on KVCache (zeros K/V/scales/zp for invalidated slots), H2OKVCache (+ attn scores), TurboQuantKVCache (+ INT4 caches, preserves importance), StreamingLLMCache (+ logical_pos delta), KVCacheManager (loops layers). P100: Re-audited — clean |
+| core/model_utils.py | DONE 4/15p84 | S103: logits.clone() when penalty==1.0. S62: penalty<1.0 warning. S68: OOB token filtering (was clamping). S558: estimate_memory_usage() passed string as batch_size to hardware_detection (TypeError). P59: S649 NaN guard added to sample_next_token — argmax fallback when all logits become -inf. P72: Logic audit clean — repetition penalty formula correct (penalty<1.0 is intentional boost, not a bug). P84: S720 fixed — NaN fallback uses pre-filter distribution instead of token 0 |
+| core/model_registry.py | DONE 3/31p42 | S108: raw checkpoint warning. S224: redundant JSON serialization. S33: split JSONDecodeError/OSError handlers. S542: dead cache_model/get_cached_model/clear_cache removed. P42: S583 _load_registry() validates 'models' key. P76: Re-audited — clean |
+| core/model_context.py | DONE 4/13p67 | S185: history debug log. S209: history entry type validation, S217: global MAX_CONTEXT_HISTORY. S528: _snapshot_emotional_state() for thread-safe reads. P42: S579 _save_context() emotional_state race — switched to _snapshot_emotional_state(). S582 emotional state clamp warning log. P67: I-9 preset_name field (init/load/save) for architecture preset tracking |
 
 ## core/ — Tokenizers
 
 | File | Status | Notes |
 |------|--------|-------|
-| core/tokenizer.py | DONE 3/25p8 | Clean |
-| core/bpe_tokenizer.py | DONE 3/25p8 | Clean |
-| core/char_tokenizer.py | DONE 3/25p8 | #64: add_word() now respects max_vocab_size cap |
-| core/advanced_tokenizer.py | DONE 3/25p8 | Clean |
+| core/tokenizer.py | DONE 3/31p42 | P42: S597 get_special_token_ids() warns on hardcoded fallback defaults |
+| core/bpe_tokenizer.py | DONE 4/17p100 | S150: threading.Lock on cache, S151: empty texts validation, S179: min_frequency validation. P42: S598 BPE dropout clamped to [0.0, 1.0]. P48: Incremental pair counting (naive O(merges×words)→O(affected_words), 25x+ speedup), on_progress callback in train(), save() accepts str|Path with Path(path) conversion. P72: Logic audit clean — encode/decode roundtrip, merge algorithm, special tokens, byte-level BPE, thread safety all verified correct. P73: S712 train() repushes decremented pairs onto heap (was losing visibility). S713 _tokenize_word() rebuilds heap after each merge (position shift orphaned stale entries). S714 removed dead _count_pairs/_apply_merge methods. P100: Re-audited — clean |
+| core/char_tokenizer.py | DONE 4/15p82 | #64: add_word() cap. S216: Unicode ranges capped at 200, emoji missing. S533: warns when vocab full and token maps to <unk>. P82: Re-audited — special token position-based matching correct, vocab locking, atomic save all clean |
+| core/advanced_tokenizer.py | DONE 4/15p82 | S75: bos/eos validated against vocab before prepending. P82: S752 encode() special token regex split broken — multi-char tokens like <think> split into individual chars by regex, never matched. Fixed: special tokens added as regex alternatives (longest-first) |
 
 ## core/ — Inference & Generation
 
 | File | Status | Notes |
 |------|--------|-------|
-| core/inference.py | DONE 3/25p8 | Clean — PATH env mutation in GGUF load (informational) |
-| core/engine_generation.py | DONE 3/25p8 | Clean |
-| core/engine_chat.py | DONE 3/25p8 | Added `_cap_history_summary()` — caps unbounded summary growth at 4096 chars (#68) |
-| core/streaming.py | DONE 3/25p8 | #48 fixed. #50 dead `get_token_streamer`/`_streamer` removed |
-| core/reasoning.py | DONE 3/25p8 | #60 fixed — extract_all_reasoning double-counting |
+| core/inference.py | DONE 4/16p88 | S138: gpu_fraction clamped, S139: freqs_cis/use_rope warning. S530: sorted glob for deterministic model selection. P35: ForgeEngine alias removed, __all__ cleaned, Forge→Enigma type hints in _load_model()/_load_pytorch(). P88: Re-audited — S760 _infer_model_config breaks on non-2D embedding tensor (should continue), S761 _load_model unsorted glob (inconsistent with _load_tokenizer), S762 load_state_dict(strict=False) discards missing/unexpected keys. Thread safety, dtype auto-detection, GGUF loading, token caching all correct |
+| core/engine_generation.py | DONE 4/17p105 | S102: NaN guard after softmax, S141: warning on prompt truncation. P36: T3-3 medusa_generate() — parallel draft from MTP heads, single-pass verification, cache rewind. T3-9 JSON schema constrained decoding. P38: T5-5 lookahead_generate() Jacobi iteration + _update_ngram_pool(). T5-9 self_consistent_generate() majority voting + _default_answer_extractor(). P39: S568 inline regex + import re moved to module-level pre-compiled constants. P41: S578 proper noun exempt set cached on tokenizer._proper_noun_ids. P44: S620 inline regex + import re moved to module-level pre-compiled constants. P52: proper noun scan bare except → logger.debug. P56: Confidence tracking gated by `if stop_strings:` (avoids GPU→CPU sync per token), proper noun 32K vocab scan moved to background thread via _start_proper_noun_scan(). P59: S649 NaN guard added to _sample_token_batch — argmax fallback when all logits become -inf from aggressive filtering. P72: S689 lookahead verify sent full draft_tensor (was skipping next_id), S690 no-cache path slices verify_logits to draft region, S691 cache reset simplified to single model call (was double-processing last token). P74: S719 medusa_generate() sampling/verification mismatch logged (dormant). S720 NaN softmax guard token-0 fallback logged. P84: S720 fixed — NaN fallback now uses pre-filter distribution instead of token 0. P85: S740 speculative bonus + medusa main sampling now use _sample_token() with full filtering; medusa signature gained top_k/top_p/repetition_penalty/min_p. P85b: S741 speculative/medusa/lookahead callers use rewind_cache(pos) + feed 1 token instead of clear_cache() + full O(n) re-prefill (with hasattr fallback). P100: S780 self_consistent_generate() missing _generation_lock — KV cache race condition (fixed: lock per sample). S781 stream_generate() missing exempt_tokens — streaming got unfair rep-penalty vs non-streaming (fixed: proper noun exempt wired into stream path). P101: S782 medusa_generate()+speculative_generate() missing _generation_lock (same class as S780). S783 _generate_with_vision() missing exempt_tokens in _sample_token call (same class as S781). S784 batch_generate()/_sample_token_batch() missing exempt_tokens support entirely. S785 medusa_generate fallback refill missing max_seq_len truncation. P105: N-20 _execute_tools_in_text() stub replaced with agentic tool loop — regex parse <tool_call>JSON</tool_call>, sanitize args (str/int/float/bool only), execute via _tool_executor, inject <tool_result>, re-generate continuation, loop up to max_iterations. _TOOL_CALL_RE class-level pattern. Dormant until ToolExecutor package created |
+| core/engine_chat.py | DONE 4/17p100 | S142: max_gen clamped to max_seq_len (isinstance check for MagicMock compat). P74: S718 stream_chat stop string double-yield — when stop string found, pending buffer was re-yielded at final flush. Added `stopped` flag to skip final flush. P100: Re-audited — clean |
+| core/streaming.py | DONE 3/31p42 | S172: max(size,0) prevents negative buffer. S531: asyncio.Queue maxsize=1000 for backpressure. P40: S572 finish() guards _start_time None for duration calc. P42: S596 timeout warning log for sync+async iterators. P52: _emit() uses call_soon_threadsafe() for async queue (was thread-unsafe put_nowait), _loop captured in __aiter__ |
+| core/reasoning.py | DONE 4/15p78 | S173: cap block extraction at 500, added logger import. P78: Re-audited — clean. Pure string processing, strip_incomplete_think() handles truncated generation |
 
 ## core/ — Training
 
 | File | Status | Notes |
 |------|--------|-------|
-| core/training.py | DONE 3/25p8 | Clean |
-| core/rl_training.py | DONE 3/26p10 | #70 FIXED: ref model GPU transfer wrapped in try/finally |
-| core/training_evaluation.py | DONE 3/25p8 | Clean |
-| core/training_monitor.py | DONE 3/25p8 | Clean |
-| core/training_queue.py | DONE 3/26p10 | #72 FIXED: Save error logged at WARNING |
-| core/dataset.py | DONE 3/25p8 | Clean |
-| core/adaptive_trainer.py | DONE 3/25p8 | Clean |
-| core/curated_dataset.py | DONE 3/25p8 | Clean |
-| core/lora_utils.py | DONE 3/25p8 | Clean |
-| core/progressive_growing.py | DONE 3/25p8 | Clean |
+| core/training.py | DONE 4/18p101 | S104: pack_sequences max_length>=1 validation, S109/S110: DPO/SimPO min length check, S13: on_epoch_complete try/except. R26: LISA config + wiring. R28: Z-Loss in _train_one_batch. S519: ref_model.to(device) in train_dpo(). P27: resume_from param + load_checkpoint on resume, set_training_seed(), dataset_fingerprint(), run_config.json dump, golden eval before/after, seed/golden_eval_path in TrainingConfig. P29: S553 validate_training_data wired into train(). S554 TrainingConfig.validate() expanded (15 fields). S555 SWA apply before eval+final save. S557 pack_sequences logs truncation. R30: AdEMAMix optimizer. R32: train_orpo(). R34: Muon optimizer. TrainingConfig.optimizer field. P35: 6 getattr(config, ...) guards → direct config.field access (optimizer, ademamix_beta3, ademamix_alpha, bpe_dropout, schedule_type, wsd_decay_fraction). P38: T5-7 llrd_decay field + _build_llrd_param_groups() + _setup_optimizer() LLRD branch. P39: S566 minhash_dedup hash()→hashlib.sha256 for deterministic dedup. P42: S589 EMA/SWA weight restoration moved inside finally block. P48: Auto-batch-size via _estimate_batch_size() trial forward/backward, batch_size=0 triggers auto mode, validate() allows 0. TrainingState.abort_reason field + set at all 7 abort paths (OOM, NaN/Inf, max_loss — train/DPO/vision/audio). P55: I-3 auto_lr field + _lr_find() Leslie Smith LR range test (exponential sweep, steepest descent, model/optimizer state restore). I-6 auto BPE-dropout in train() when epochs>3 and tokens_per_param<5. P57: 6 gradient checkpointing fixes — wrong fallback attribute name (use_checkpoint not gradient_checkpointing, 2 sites), init ordering (grad ckpt before _estimate_batch_size), gradient overhead ×4 not ×2, OOM-only exception filter, gradient double-counting fix. use_gradient_checkpointing default→True. P61: train() accepts str|list data. Large list inputs (>10K items) use sampled head+middle+tail validation. dataset_fingerprint() samples head+tail for strings >100 MB. validate_training_data() control char check uses regex on 5 MB sample instead of O(n) char loop. P62: Disk-backed streaming batches — _STREAMING_THRESHOLD (50K), _STREAMING_WINDOW (5K), _MINHASH_LIMIT (50K), _CURRICULUM_LIMIT (50K). _write_sequences_to_disk() JSONL with byte offsets, _read_sequences_from_disk() offset-based random access, _stream_batches() windowed generator (read→tokenize→pack→yield→free). train() branches streaming vs eager. Val/LR-finder use sample windows. Temp file cleanup on all 4 return paths. I-12: _find_latest_checkpoint() static method — scans checkpoint_dir for checkpoint_epoch_N.pt (highest epoch), falls back to best_model.pt then final_model.pt. Binary mode fix for JSONL disk I/O ("wb"/"rb" instead of "w"/"r" — Windows text mode breaks tell()/seek()). P72: S687 epoch_loss now weights by non-padding token count (was numel() including padding). S688 validation loss same fix. P74: S715 train_kto() missing loss / max_grad_accumulation before backward (DPO/SimPO both scale, KTO was inconsistent). S716 train_orpo() same fix. S717 _save_checkpoint() silent failure logged (design choice). P84: S717 fixed — on_warning callback added, _save_checkpoint emits warning on failure. P85: N-1 disk-backed training path — train() accepts data_path/data_offsets for pre-written JSONL sequences, skips in-memory parsing entirely. Val split from disk offsets (same file, different offset lists). checkpoint_dir set in disk-backed path (was UnboundLocalError). eval_every wired into inner batch loop — step-based validation for long single-epoch runs (was dead code in TrainingConfig). P98: S777 torch.compile Triton guard — use_compile=True without Triton triggers Inductor C++ fallback that consumed tens of GB system RAM, OOM-killed entire OS. Added `import triton` check before torch.compile(); skips with warning when unavailable. P101: S787 train_rest() reads _stop_requested directly instead of lock-guarded _should_stop() (minor thread safety). P104: S787 FIXED — 3 unlocked reads in train_orpo() (2) and train_rest() (1) now use _should_stop() |
+| core/rl_training.py | DONE 4/17p100 | S111: warning on all-zero attention mask, S144: PPO O(n²)→O(n) offset computation. S545: GRPO/PPO advantage normalization guards std≈0. R33: ReMaxConfig + ReMaxTrainer (mean-reward baseline REINFORCE). P35: 3 getattr(cfg, "amp_dtype", ...) guards → direct cfg.amp_dtype access (RewardTrainer, RLHFTrainer, SelfPlayTrainer). P38: T5-8 ProcessRewardModel + PRMTrainerConfig + PRMTrainer (per-step reward scoring, MSE loss). P39: S565 PPO/GRPO ratio .clamp(-20,20) before exp() (3 sites). P72: S683 PPO KL penalty was zero-gradient no-op (stale float) — RolloutBuffer now stores ref_logps, minibatch loop computes differentiable KL tensor. S684 Self-Play same fix. S685 GRPO log-ratio .clamp(-20,20) added (was unclamped). S686 GRPO std uses unbiased=False for population std. RL audit: S711 ReMaxTrainer stop()→request_stop() renamed (P73). 6 trainers (RLHF/SelfPlay/GRPO/ReMax/Reward/PRM), 2 models (RewardModel/ProcessRewardModel). GRPO/ReMax/PRM/SimPO/ORPO dormant (no GUI). P78: S748 GRPO KL used p_ref*log(p_ref/p) — not valid single-sample estimator, can go negative. Fixed to (token_logps - ref_token_logps).mean(). S749 ReMax KL sign flipped: (old-new) rewarded divergence. Fixed to (new-old).mean(). P100: Re-audited — GRPO/ReMax use deepcopy ref on GPU (no LoRA/CPU-offload like RLHF/SelfPlay), acceptable for dormant code |
+| core/training_evaluation.py | DONE 4/15p83 | P27: run_golden_eval() function, DEFAULT_TOOL_TEST_CASES (5 tool test cases). P29: S556 evaluate_model returns inf on zero-token eval. P44: S619 empty prompt list returns inf instead of 0.0 (0.0 falsely implied perfect prediction). P83: S732 evaluate_tool_usage() test_case["prompt"] KeyError — changed to .get() with skip on missing |
+| core/training_monitor.py | DONE 4/15p77 | P77: Re-audited — get_chart_data() inline MA lacks NaN/inf guard that moving_average() has (logged, low risk — NaN losses are capped at record time). Otherwise clean |
+| core/training_queue.py | DONE 4/16p93 | #72 FIXED: Save error logged at WARNING. S63: current_job property reads under lock. P42: S593 full traceback in job failure log. P93: Re-audited — S772 _run_loop error handler missing traceback (fixed). S773 _current_job=None outside lock (low). S774 remove_job/cancel_job/reorder_job missing _save_state() (fixed — restructured reorder_job control flow) |
+| core/dataset.py | DONE 4/18p101 | S61: _process_jsonl() capped at 1M entries. P61: MAX_FILE_SIZE raised 512 MB → 20 GB. Added _STREAM_THRESHOLD (500 MB) + _CHUNK_READ_CHARS (200 MB). New _chunked_read_text() reads large files in ~200 MB chunks with time.sleep(0) GIL yields. _process_file() routes files > 500 MB to chunked reader. P67: I-10 on_progress callback added to _chunked_read_text() and load_text_chunks(). P74: S721 MAX_FILE_SIZE raised 20→100 GB. S722 bytes vs chars mismatch logged. P83: S722 fixed — bytes_read now uses f.buffer.tell() for actual byte position instead of counting characters. P85: N-1 iter_text_chunks() streaming generator + _iter_directory() recursive walker + _iter_chunked_read_text() generator version. Yields one cleaned chunk at a time — peak RAM ~200 MB instead of full dataset. Handles .txt, .jsonl, and recursive subdirectories. P101: S788 inconsistent directory recursion — process_text_corpus→_process_directory uses iterdir() (non-recursive) while iter_text_chunks→_iter_directory uses rglob("*") (recursive) |
+| core/adaptive_trainer.py | DONE 4/17p100 | S146: isinstance check before math.isinf/isnan. S351: build_test_prompt() warns on unknown stage fallback. P79: Re-audited — clean. Prompt caching thread-safe, parse_score patterns solid, quality filters correct. P100: Re-audited — clean |
+| core/model_merging.py | NEW 4/17p105 | N-17: SLERP, TIES, and linear merge for Enigma checkpoints. slerp_merge()/ties_merge()/linear_merge() with architecture validation (_validate_compatible checks 7 fields), progress callbacks, atomic_torch_save output. Helpers: _slerp_tensor() degenerate case handling, _load_checkpoint(), _filter_keys() removes runtime keys (freqs_cis). 12 tests |
+| core/ewc.py | NEW 4/17p105 | N-18: Elastic Weight Consolidation (Kirkpatrick 2017). EWC class — __init__ computes diagonal Fisher from n_samples forward+backward passes, stores param snapshot. penalty(model) returns differentiable scalar (λ/2)·Σ F_i·(θ_i−θ*_i)². save()/load() classmethod for persistence. Data source: list[Tensor] or callable. 6 tests |
+| core/curated_dataset.py | DONE 4/14p69 | S9: `add_batch()` now deduplicates within the batch. P41: S576 load() parses into temp list before committing — no data loss on corrupt file. S669: add_batch() dedup race — lock released before loop |
+| core/lora_utils.py | DONE 4/15p83 | S8: hidden_size param. S199: gradient_accumulation_steps validation. S520: psutil import wrapped in try/except. P40: S575 removed dead data_loader from accelerator.prepare(). P83: S734 _task_dir path traversal — added Path.relative_to() validation. S735 train() returns early when n_batches==0 instead of running 0-batch epochs |
+| core/progressive_growing.py | DONE 4/15p83 | S147: _expand_2d raises ValueError if new dims < old dims. R26: LISAScheduler class. P39: S571 layer mapping formula fixed — was clustering layers at extremes, now distributes evenly. P58: 3 bugs in expand_model_weights() — missing _diff_lambda expansion, missing q_norm/k_norm init for new identity layers, predict_heads completely ignored. All hidden by strict=False. P74: S727 GradualUnfreezer short custom schedule logged. P83: S727 fixed — pads short schedules to n_layers using last interval with warning |
 
 ## core/ — External Loaders
 
 | File | Status | Notes |
 |------|--------|-------|
-| core/gguf.py | DONE 3/26p10 | #74-75 FIXED: Array/string allocation bounds added |
-| core/gguf_dequant.py | DONE 3/25p8 | Clean |
-| core/gguf_loader.py | DONE 3/25p8 | #52 stderr pipe closed after success + in stop() |
-| core/gptq_awq_loader.py | DONE 3/25p8 | Clean |
-| core/huggingface_loader.py | DONE 3/25p8 | Clean — #49 fixed |
-| core/ollama_loader.py | DONE 3/25p8 | #61 fixed — dead OllamaBlob dataclass removed |
-| core/onnx_loader.py | DONE 3/25p8 | Clean |
-| core/weight_mapping.py | DONE 3/25p8 | Clean |
+| core/gguf.py | DONE 3/31p42 | #74-75 FIXED: Array/string allocation bounds added. P42: S580 GGUF writer offset placeholder — tracks + fills in correct tensor data offsets |
+| core/gguf_dequant.py | DONE 4/15p82 | S197: offset validation vs file size. S198: tensor dim overflow guard. S522: read length validation. S523: name_len/n_dims bounds checking. P52: Q4_0 unpack casts packed[j] to int() before subtraction (was uint8 overflow). P82: Re-audited — tensor_count/name_len/n_dims bounds checking, offset vs file size validation, Q4_0/Q8_0 dequant all correct |
+| core/gguf_loader.py | DONE 3/31p42 | #52 stderr pipe closed after success + in stop(). S548: metadata extraction logged at WARNING (was DEBUG). P35: Forge→Enigma import + constructor + string type hints. P42: S600 stderr.read() bounded to 8192 bytes |
+| core/gptq_awq_loader.py | DONE 3/31p40 | S188: pad_token_id fallback to eos_token_id. P40: S573 GPTQ quantize passes model_path string not model object, removed unused AutoModelForCausalLM load. S574 AWQ API verified correct |
+| core/huggingface_loader.py | DONE 4/17p103 | P35: Forge→Enigma rename. P103: S794 FIXED chat_with_tools ImportError (missing universal_router) + double history append. S795 FIXED convert_hf_config arch flags (GPT-2 got wrong use_rope/use_rms_norm/use_swiglu/use_bias). S796-S797 LOW (stream thread exception, param estimation). 3 new tests. |
+| core/ollama_loader.py | DONE 4/15p81 | #61 fixed — dead OllamaBlob dataclass removed. S751: _read_blob() returns bytes but template/system checked isinstance(str) — always False, silently dropped. Fixed with decode at read site |
+| core/onnx_loader.py | DONE 3/30p35 | S186: logger.warning on validation failure. S549: warns on duplicate initializer names. P35: Forge→Enigma import + constructor + string type hints |
+| core/weight_mapping.py | DONE 4/15p82 | S213: shape-based tensor matching overwrites duplicates silently. S535: symmetric feature detection (full keys for both gate_proj and fc1). P82: Re-audited — Qwen3 QK norm mapping added since last audit, HF/GGUF/ONNX mapping rules correct, 10% unmapped threshold validation solid |
 
 ## core/ — Utilities
 
 | File | Status | Notes |
 |------|--------|-------|
-| core/safe_save.py | DONE 3/25p8 | Clean |
-| core/memory.py | DONE 3/25p8 | Clean |
-| core/commands.py | DONE 3/25p8 | Clean |
-| core/builtin_commands.py | DONE 3/26p10 | #76: False positive — Dict used in 20+ annotation strings |
-| core/sentiment.py | DONE 3/25p8 | Clean |
-| core/monologue.py | DONE 3/25p8 | Clean |
-| core/ai_profile.py | DONE 3/25p8 | Clean |
-| core/chat_export.py | DONE 3/25p8 | PDF write non-atomic (fpdf2 API limitation) |
-| core/document_readers.py | DONE 3/25p8 | Eager heavy lib imports (fitz, docx) — informational |
+| core/safe_save.py | DONE 4/15p75 | S201: backup failure log upgraded DEBUG→WARNING. P75: Re-audited — clean. Atomic pattern, fsync, backup rotation, deferred imports all correct |
+| core/memory.py | DONE 4/15p78 | S210: _load() in __init__ has no lock (safe by accident). S532: fact truncation logged at WARNING. P52: facts/count properties + build_context() now acquire _lock (were reading unprotected while writes locked). P78: Re-audited — clean. Thread-safe, atomic saves, dedup, 200-fact cap, 10K char per-fact cap, singleton double-checked locking |
+| core/commands.py | DONE 4/17p100 | S26: SHELL_METACHARACTERS expanded with `*?<>()[]`. P75: Re-audited — code.run raw payload bypass, shell whitelist + shell=False, sanitize_args all correct. P100: Re-audited — clean |
+| core/builtin_commands.py | DONE 4/16p95 | #76: False positive — Dict used in 20+ annotation strings. P75: S739 code.run _safe_open path traversal (startswith→relative_to). S740 os.system/os.popen added to forbidden list. P95: Re-audited — S775 sandbox missing 4 subprocess variants (fixed). S776 dead _json.loads() in imagegen (fixed + unused import removed) |
+| core/sentiment.py | DONE 3/30p25 | S524: double negation handled (even negator count cancels out) |
+| core/monologue.py | DONE 4/8p52 | P52: Journal class — added threading.Lock, locked add/entries/count/latest/build_context, _save() takes snapshot param (read under lock, I/O outside lock) |
+| core/ai_profile.py | DONE 4/15p82 | Clean. P82: Re-audited — dataclass serialization, atomic saves, unknown field filtering, nested config handling all correct |
+| core/chat_export.py | DONE 4/15p81 | PDF write non-atomic (fpdf2 API limitation). P81: re-audit clean — HTML escaping, code block regex, atomic text write all correct |
+| core/document_readers.py | DONE 4/15p81 | Eager heavy lib imports (fitz, docx) — informational. P81: re-audit clean |
 | core/download_progress.py | DONE 3/25p8 | Clean |
-| core/hardware_detection.py | DONE 3/25p8 | Clean (minor cache race, harmless) |
-| core/web_utils.py | DONE 3/25p8 | Clean |
-| core/rag.py | DONE 3/25p8 | Clean |
-| core/auto_research.py | DONE 3/25p8 | Clean |
-| core/multi_gpu.py | DONE 3/25p8 | Clean |
-| core/plugin_loader.py | DONE 3/25p8 | Clean |
-| core/mod_tools.py | DONE 3/25p8 | Clean |
-| core/vision_encoder.py | DONE 3/26p10 | #71 FIXED: VideoCapture wrapped in try/finally |
-| core/audio_encoder.py | DONE 3/25p8 | Clean |
+| core/hardware_detection.py | DONE 3/25p8 | Clean (minor cache race, harmless). P76: S747 estimate_memory_usage stale constants — now reads from MODEL_PRESETS |
+| core/web_utils.py | DONE 4/15p80 | S31: `len(t) > 2` → `t` to keep single-char words. S529: elif for class detection in DDGParser. P80: re-audit clean — SSRF protection, nested skip-tag depth, streaming cap all correct |
+| core/rag.py | DONE 4/15p80 | S214: all-stopword documents get zero TF-IDF score. P80: re-audit clean — BM25 scoring, query expansion, sparse/dense handling, adaptive chunking, serialization all correct |
+| core/auto_research.py | DONE 4/15p79 | S128: as_completed timeout=60, per-future try/except with timeout=30. P27: ddg_image_search import, appends 1-2 image URLs to context. P79: Re-audited — clean. Rate limiting, LRU cache eviction, parallel fetch, should_auto_research heuristics all correct |
+| core/multi_gpu.py | DONE 4/17p100 | Clean. P80: re-audit clean — DORMANT, DDP setup/cleanup correct, env var cleanup proper. P100: Re-audited — clean |
+| core/plugin_loader.py | DONE 3/25p8 | Clean. P76: Re-audited — still clean |
+| core/mod_tools.py | DONE 4/15p82 | Clean. P82: Re-audited — closure factory correct, structured tool descriptions, error handling all clean |
+| core/vision_encoder.py | DONE 4/15p82 | #71 FIXED. S204: missing image_size % patch_size == 0 validation. S543: config.use_pretrained set to False on timm fallback. P82: S754 encode_image()/encode_video_frames() used getattr(config, 'use_pretrained', False) — changed to config.use_pretrained (field exists). CNNStem, TemporalConv1d, video dedup, augmentation all correct |
+| core/audio_encoder.py | DONE 4/15p82 | S192: sr<=0 validation. S56: WAV struct data length validation. S544: 24-bit WAV support added. P82: S753 AudioEncoder.__init__() used getattr(config, 'use_conformer', False) — changed to config.use_conformer (field exists). Mel filterbank, SpecAugment, Conformer conv, resampling all correct |
 
-## gui/ — ⚠ All files grew significantly since review (re-review in Pass 11)
+## gui/
 
 | File | Status | Notes |
 |------|--------|-------|
-| gui/widgets.py | DONE 3/25p8 (814→1121) | #55 Tooltip child-boundary fix, #56 SelectableLabel height auto-compute |
-| gui/themes.py | DONE 3/25p8 (143→161) | Clean |
-| gui/desktop.py | DONE 3/25p8 (1080→1553) | #65: Escape binding leak fixed — _dismiss now calls _bind_escape_stop |
-| gui/gui_pages.py | DONE 3/25p8 (1296→2146) | #54 CTkEntry transparent fix, #57 emotional state label width fix |
-| gui/gui_pages_config.py | DONE 3/25p8 (1039→1367) | #58 "Monologue Mode" label widened 140→160px |
-| gui/gui_pages_forge.py | DONE 3/25p8 (1186→1602) | #59 "Val split" label widened 80→90px |
-| gui/gui_logic.py | DONE 3/25p8 (985→1003) | Clean |
-| gui/gui_logic_chat.py | DONE 3/25p8 (1277→1385) | Clean |
-| gui/gui_logic_media.py | DONE 3/25p8 (617→763) | Clean |
-| gui/gui_forge.py | DONE 3/25p8 (1224→1259) | Clean |
-| gui/gui_forge_training.py | DONE 3/25p8 (954→1030) | Clean |
-| gui/gui_forge_advanced.py | DONE 3/25p8 (1033→1350) | Clean |
-| gui/gui_forge_adaptive.py | DONE 3/25p8 (819→1399) | Clean |
-| gui/gui_forge_new_modes.py | DONE 3/25p8 (1011→1751) | Clean |
-| gui/gui_forge_tools.py | DONE 3/25p8 (1268→1699) | Clean |
-| gui/gui_forge_models.py | DONE 3/25p8 (773→1498) | #53 ModelConfig→ForgeConfig import fix (3 sites) |
-| gui/gui_forge_queue.py | DONE 3/25p8 (405→599) | Clean |
-| gui/gui_mods.py | DONE 3/25p8 (174→251) | Clean — stderr handled on both crash + success paths |
-| gui/gui_mod_page.py | DONE 3/25p8 (300→809) | Clean (private CTk — known) |
-| gui/gui_cmd_page.py | DONE 3/25p8 (1487→2298) | Added `_cmd_is_non_latin()` — routes non-Latin input to AI in ENGINE mode (#67) |
-| gui/gui_docs_page.py | DONE 3/25p8 (803→1042) | #66: Auto-save unified with manual save (both use .strip() + newline) |
-| gui/media.py | DONE 3/25p8 (446→830) | Clean |
-| gui/scanners.py | DONE 3/25p8 (630→1449) | Clean |
+| gui/widgets.py | DONE 4/15p75 | #55 Tooltip fix, #56 SelectableLabel. S65: Tooltip <Destroy> binding. S223: tooltip position not bounds-checked. S35: _EntryUndoStack capped at _MAX_DEPTH=200. S623: themed_button() factory, BUTTON_STYLES dict, _build_button_styles(), 7 new C_* hover/dim constants, reload_theme() propagates new constants. P75: S742 Tooltip watchdog timer — 1s periodic check auto-dismisses if mouse not over widget or tooltip (catches stuck tooltips from missed Leave events, alt-tab, window overlap) |
+| gui/themes.py | DONE 3/31p45 | S622: 7 new fields (green_hover, red_dim, red_hover, orange_dim, orange_hover, cyan_dim, cyan_hover) added to Theme dataclass + all 4 presets |
+| gui/desktop.py | DONE 4/9p56 | Added `_mod_lock` for thread-safe `mod_processes` access. S66: auto-save timer cancelled on close. P35: Comment updated from "Backward-compatible re-exports" to "Re-exports (tests import these)". P39: S563 atomic_write_json() arg order fixed in _save_window_geometry(). P42: S602 multi-monitor window geometry — allows negative coordinates with bounds clamping. S629: 3 header icon buttons use themed_button. P50: Shutdown freeze fix — _shutting_down guard on _tick() loop, re-entry guard on _on_close(), GIF animation kill, router stop 3s timeout thread, gc.collect() + CUDA cleanup, _release_instance_lock(), SetConsoleCtrlHandler for cmd window close, try/finally around mainloop(). _close_log_file() wired into _on_close() for session log cleanup. P56: Removed update_idletasks() from _on_resize_complete() (was forcing synchronous redraw), status ticker _tick() skips when minimized (self.state() != 'iconic') |
+| gui/gui_pages.py | DONE 4/15p75 | #54 CTkEntry transparent fix, #57 emotional state label width fix. S624-S625: ~25 CORE+MODELS buttons use themed_button. P67: S645 EXPORT→EXPORT CARD. I-9 preset name displayed on model card info row. P75: S741 Chat cursor stuck on hand2 — per-tag Enter/Leave cursor binds replaced with single Motion handler + widget Leave reset |
+| gui/gui_pages_config.py | DONE 3/31p45 | #58 label widened. S211: int() on user JSON without try/except. P42: S581 ZIP import path traversal — added resolve().is_relative_to() check. S628: 11 buttons use themed_button |
+| gui/gui_pages_forge.py | DONE 4/17p105 | #59 "Val split" label widened 80→90px. S626: ~27 buttons use themed_button (tool/action/primary/secondary styles). P47: `val_split_entry` local var → `self.forge_val_split_entry` so `_read_forge_train_params()` can access it. Removed dead `forge_use_conformer_var` checkbox (no backend consumer). P48: Batch entry default "auto", tooltip updated. P67: S646 6 section separator labels in Tools panel (TRAINING/WEB/TOKENIZER/MODEL EXPORT/QUEUE/DATASET). S647 tokenizer tooltip cross-references. S656 merged tool_utf8_bytes_var into pretrain_utf8_bytes_var. P75: S743 pre-train data tooltip updated (TinyStories→collect_pretraining_data.py). S744 epochs tooltip shows fine-tuning + pre-training ranges. S745 grad ckpt tooltip reflects ON-by-default. P105: N-11 Alignment section added — 4 new radio cards (GRPO, ReMax, SimPO, ORPO) with descriptions. Mode selector now 12 modes in 3 rows (Foundation/Advanced/Alignment) |
+| gui/gui_logic.py | DONE 4/16p92 | S212: _estimate_gguf_params nested attribute access unguarded. S527: _load_model() guards against _is_generating. P27: _build_gui_context() describes search.images command + ![desc](url) markdown. P50: gc.collect() before torch.cuda.empty_cache() in _release_loaded_engine(). P92: Re-audited — S771 _build_gui_context reads learn_while_chatting from disk per message (redundant I/O). Otherwise clean |
+| gui/gui_logic_chat.py | DONE 4/16p86 | S106: _typewriter catches TclError on destroyed widget. S397: large file attachment uses f.read(4000) instead of read_text()[:4000], warns on truncation. P44: S618 _new_chat() stops generation before clearing history (race condition fix). S621 _chat_append() validates even arg count. P47: Gated `extract_facts()` with `_get_memory_mode()` check (was always running). Added `ctx.update_emotional_state()` + `_update_emotional_display()` after each chat exchange (bars were stuck at 0.0). P50: _shutting_down guard in _typewriter(). P56: Typewriter _scroll_chat_to_bottom() throttled to every ~48 chars instead of every 8ms tick. P86: S755 removed dead _build_system_prompt_with_context() (logic duplicated inline in _gen()). S756 _gen() error handler now logs traceback.format_exc(). S757 _confirm_rename/auto_save_session/apply_system_prompt switched to atomic_write_json(). S758 auto_save_session logs OSError instead of silent pass |
+| gui/gui_logic_media.py | DONE 4/9p56 | S203: _voice_recording flag race, S225: phrase_time_limit hardcoded. P50: _shutting_down guard in _animate_gif(). P56: _insert_media() URL downloads offloaded to background thread (was 10s freeze), split into _insert_media_widget(). _insert_gif() URL downloads offloaded similarly, split into _insert_gif_widget() |
+| gui/gui_forge.py | DONE 4/17p105 | S7: dead `return 0` removed. Wiring gaps fixed. S538: _save/_load_training_brief persists batch_size, grad_accum, rolling_best_k, grad_ckpt. P42: S608 _extract_prompts() logs detected format. P47: Added missing `_build_student_system_prompt()` (called in 4 places, never defined — crash). Updated `_MODE_DISPLAY_TO_KEY` from 9 stale entries to 5 matching GUI radio buttons. Updated `_TRAINING_MODE_DESCRIPTIONS` to match. P48: _read_forge_train_params() handles "auto" → batch_size=0. P49: _LOG_MAX_LINES=5000 cap in _log() — trims oldest lines when exceeded. P50: _shutting_down guard in _flush_log(). Log file persistence: _init_log_file() creates logs/forge_YYYYMMDD_HHMMSS.log, _write_log_file() appends stamped text, _close_log_file() cleanup, auto-rotation keeps last 10 files. I-12: _save/_load_training_brief persists pretrain_data_var. P66: S658 — expanded 5→8 modes (Foundation: Pre-Train/Distill/Basic/Image + Advanced: AI-Guided/Dialogue/RLHF/Self-Play). Dispatcher 5→8 branches. Evolutionary checkbox override redirects Basic/AI-Guided/RLHF/Self-Play to `_start_evolutionary_training()`. Visibility 10→11 sections (added evolutionary). Dialogue gets pairs+preserve only (no data picker — generates own data via conversation). P67: S656 tool_utf8_bytes_var→pretrain_utf8_bytes_var in _train_tok(). P105: N-11 dispatcher expanded 8→12 modes — added GRPO→_start_grpo_training(), ReMax→_start_remax_training(), SimPO→_start_simpo_training(), ORPO→_start_orpo_training(). Evolutionary override NOT applied to alignment modes |
+| gui/gui_forge_training.py | DONE 4/17p105 | S114: DPO JSONL loads log warning per skipped line. S537: DPO skip logs via self._log() for GUI visibility. P48: Wired on_progress/on_loss/on_throughput callbacks for solo/basic training. P49: Progress throttling (4/sec max, pct-change gated) for solo/DPO/vision. Fixed DPO/vision double self.after() bug. Added traceback to solo error handler. Enhanced epoch output with timing + loss trend. Abort message shows state.abort_reason instead of generic guess. P105: Batch-level ETA — on_loss handler computes remaining steps from trainer._total_training_steps, formats "Step X/total | loss | lr | tok/s | VRAM | ETA Xh XXm" or "ETA Xm XXs". Epoch-level ETA in on_epoch handler |
+| gui/gui_forge_advanced.py | DONE 4/13p66 | Inlined 7 helpers into 2 main methods + added evolutionary training. P49: Added traceback.format_exc() to guided/dialogue/evolutionary error handlers (were swallowing stack traces). P66: Deleted `_start_guided_training()` (~550 lines, redundant with AI-Guided). Added button state management to `_start_evolutionary_training()` (solo_train_btn disable/enable + stop_train_btn wiring in init and finally block) |
+| gui/gui_forge_adaptive.py | DONE 4/16p87 | P49: Added traceback to adaptive pipeline error handler. P87: Re-audited — clean. Atomic saves (plan/curriculum/checkpoint), thread safety (after(0) for GUI, training_active flag at every phase boundary), VRAM memory dance (free teacher before train, free student before test), error handler with traceback, plan resume, accumulated curriculum, retry logic all correct. S759 logged for gui_forge.py (getattr on proper ForgeConfig fields) |
+| gui/gui_forge_new_modes.py | DONE 4/17p105 | S1: Added `_read_forge_rl_params()` — was undefined, RLHF/SelfPlay would crash. P39: S570 missing isinstance(cfg_dict, dict) guard + wrong fallback (empty dict instead of model_config), 2 sites. P48: Wired on_progress/on_loss/on_throughput callbacks for pre-training, _tok_progress for tokenizer training, tokenizer.save() str→Path fix, full traceback logging in except handler. P49: Progress throttling for pre-train/RLHF/self-play. Fixed RLHF/self-play double self.after() bug. Fixed self-play NameError (_time/_reward_last_t from wrong closure scope). Enhanced epoch output with timing + trends. P51: CF-1 training_state added to RLHF/Self-play saves. CF-2 _save_training_run calls added. CF-3 __dict__→_model_config_dict in Distill/RLHF/Self-play. CF-6 _update_forge_param_count added to Self-play. Abort messages show state.abort_reason instead of generic guess (2 sites). P61: _pretrain() passes chunks list directly to trainer.train() instead of rejoining 16.5 GB string. del text frees memory after chunking. GIL yields every 1000 chunks. I-12: Resume from checkpoint — auto-detects latest checkpoint via Trainer._find_latest_checkpoint(), forces retrain_tok=False on resume, passes resume_from to trainer.train(). P67: I-10 load progress callback wired to FORGE panel. I-11 elapsed time for 4 phases. I-13 RAM feedback after data/model load. I-15 expanded auto-optimization log (3-line block). I-16 general mix widget update + [!] warning. P68: I-17 retrain_tok UnboundLocalError — assignment inside _pretrain() closure made Python treat it as local; renamed to do_retrain_tok. P85: N-1/N-2 full streaming pipeline — replaced load_text_chunks() with iter_text_chunks() two-pass streaming. Pass 1: scans total_chars + collects 2 GB tokenizer samples. Pass 2: re-iterates, splits into context-window sequences, writes JSONL to disk. Trainer called with data_path/data_offsets (disk-backed). Tokenizer training uses pre-collected tok_samples. WSD schedule (was cosine). Warmup = 1% of total steps (was hardcoded 100). eval_every = ~5% of total steps (step-based validation for long runs). P105: N-11 added _start_grpo_training(), _start_remax_training() (delegate to _start_rl_variant_training(algo)), _start_simpo_training(), _start_orpo_training() (delegate to _start_preference_variant_training(algo)). Both shared helpers: validate STUDENT route, require prompt/chosen/rejected JSONL, validate epochs/LR, threaded execution with stop support |
+| gui/gui_forge_tools.py | DONE 4/15p82 | #78 FIXED: Loss chart retry capped at 10 attempts (was infinite). P27: _evaluate_student() calls evaluate_tool_usage() with DEFAULT_TOOL_TEST_CASES. P82: Re-audited — atomic writes for data/history saves, threading with daemon threads, error handlers restore button state in finally, loss chart canvas bounds handling all correct |
+| gui/gui_forge_models.py | DONE 4/13p67 | S124: progress callback wrapped in try/except. S69: delete model unloads engine before unassigning routes. S540: _refresh_models() sequence guard prevents stale overwrites. S628: grow dialog GROW/CANCEL use themed_button. P51: CF-4 traceback.format_exc() added to download + quantize error handlers. P56: _refresh_models() debounced with 300ms timer — rapid successive calls coalesce into single rebuild. P67: I-9 preset_name saved to ModelContext at create + grow |
+| gui/gui_forge_queue.py | DONE 4/7p51 | P51: CF-3 model_cfg.__dict__→self._model_config_dict(model) in queue save |
+| gui/gui_mods.py | DONE 4/15p81 | S105: stderr pipe close wrapped in try/except OSError. P81: re-audit clean — subprocess lifecycle correct, stderr closed on both paths, mod_lock thread-safe, terminate→wait→kill pattern solid |
+| gui/gui_mod_page.py | DONE 3/31p45 | S628: mod command + clear buttons use themed_button |
+| gui/gui_cmd_page.py | DONE 4/7p51 | #67 non-Latin routing. S202: false positive (_cmd_busy all main-thread via after). S628: RUN/CLEAR/AI ACCESS use themed_button. P50: _shutting_down guard in _cmd_update_status_strip(). P51: CF-4 traceback logging in 3 error handlers (system cmd, engine cmd, AI cmd). CF-5 silent L629 handler now logs via logger.debug |
+| gui/gui_docs_page.py | DONE 3/31p45 | S118/S162 fixed. S196: directory traversal fixed. S66: auto-save timer ID stored. S539: auto-save timer cancelled on page rebuild. S627: 12 buttons use themed_button |
+| gui/media.py | DONE 4/15p82 | S119 fixed. S219: URL image no data validation, S221: GIF frame extraction silent. S37: GIF truncation now logged. P82: Re-audited — path traversal uses Path.relative_to(), image/GIF size caps, video release in finally, URL download timeout+size cap all correct |
+| gui/scanners.py | DONE 4/15p80 | S218: pickle whitelist hardcoded, S220: shard regex. S67: param count uses fp16 (was fp32). S329: load_path_settings() errors now logged. P80: re-audit clean — restricted unpickler secure, sharded regex correct, video cap release in finally |
 
 ## api/
 
 | File | Status | Notes |
 |------|--------|-------|
-| api/server.py | DONE 3/25p8 | Clean — #46 fixed |
+| api/server.py | DONE 4/16p94 | S121: response capped 500K, S166: partial load cleanup. S57: activate_profile validates via ConfigUpdate. S536: except TypeError re-raises non-signature errors. P39: S569 SSE streaming lock leak — added outer try/except on FastAPIStreamingResponse construction. P42: S614 log original length on response truncation. P94: Re-audited — clean. SSE lock pattern correct (dual release path covers generator-not-iterated case) |
 | api/__init__.py | DONE 3/25p8 | Clean |
 
 ## Top-level
 
 | File | Status | Notes |
 |------|--------|-------|
-| router.py | DONE 3/25p8 | Clean |
-| run.py | DONE 3/25p8 | Clean |
-| __init__.py | DONE 3/25p8 | Clean |
+| router.py | DONE 4/16p91 | S125/S168-S170 fixed. S215: GPU tensor fix. S122: 30s aggregate timeout. S525: _ensure_torch() double-checked lock. S526: _accept_loop() checks under mod_lock. P51: CF-3 config.__dict__→inline 10-field dict comprehension in _save_checkpoint. P55: I-1 BackgroundTrainer gradient accumulation — _train_batch() and _retrain_on_replay() now do single zero_grad/step per batch with (loss/batch_len).backward() scaling. P91: S766 getattr→direct access, S767 traceback in 3 error handlers, S768 broadcast() snapshot outside lock. S769/S770 logged (low risk) |
+| run.py | DONE 4/2p47 | S195: sys.exit(1)→raise. S59: vocab_size validation. P47: `run_train()` fixed 3 crash bugs — `args` NameError (golden_eval/seed/resume not passed as params), `Trainer(device=device)` TypeError (Trainer doesn't accept device kwarg), removed unused `create_model` import |
+| collect_pretraining_data.py | DONE 4/17p102 | P79: S750 atomic write. P102: S789 FIXED dedup hash set memory (hexdigest→digest bytes, 50M cap). S790 FIXED fandom batch drop on extract failure (deferred ap_continue + 5-retry fallback). S791-S793 LOW (filename collision, XML entity, FineWeb resume O(n)). 7 new tests added (structural + smoke) |
+| collect_finetuning_data.py | NEW 4/17p105 | N-8: Fine-tuning data collectors. collect_oasst() (OASST1 English top-ranked), collect_dolly() (Databricks Dolly 15k with context), collect_slimorca(max_samples) (streaming). Output: JSONL prompt/completion to data/finetune/. _dedup_pairs() SHA256, combine_all() merges sources, show_stats(). CLI: --oasst/--dolly/--slimorca/--all/--combine-only/--stats. Requires pip install datasets |
+| __init__.py | DONE 3/30p35 | P35: ForgeEngine removed from _lazy_load_inference(), __getattr__() cache, __all__ |
 
 ## Tests
 
 | File | Status | Notes |
 |------|--------|-------|
-| tests/test_core.py | DONE 3/25p8 | Clean |
+| tests/test_core.py | DONE 4/17p105 | P59: Upgraded 5 weak test classes with value assertions (GetStateDictNested, KnownDatasets, TokenizerMetrics, ImageGenIntegration). P105: TestModelMerging (12 tests — slerp t=0/0.5/1, preserves config, saves output, bad t raises, mismatched arch raises, progress callback, linear average, TIES output, TIES too-few/density-zero). TestEWC (6 tests — penalty zero at anchor, increases after change, has gradient, higher lambda stronger, save/load roundtrip, callable data source). 289 total |
 | tests/test_gui.py | DONE 3/25p9 | Font offset tests fixed — now reset state before asserting |
 | tests/test_api.py | DONE 3/25p8 | Clean |
-| tests/test_functional.py | DONE 3/25p8 | Clean |
+| tests/test_functional.py | DONE 4/16p97 | P59: Upgraded model presets. P97: Absorbed test_benchmark.py + test_e2e.py (58 tests total) |
 | tests/test_new_features.py | DONE 3/25p8 | Added answer-content assertions for #60 |
 | tests/test_monologue.py | DONE 3/25p8 | Clean |
 | tests/test_reasoning.py | DONE 3/25p8 | Clean |
 | tests/test_evaluation.py | DONE 3/25p8 | Clean |
-| tests/test_benchmark.py | DONE 3/25p8 | Clean |
-| tests/test_progressive_growing.py | DONE 3/25p8 | Clean |
+| tests/test_benchmark.py | MERGED → test_functional.py | P97: 6 tests merged into test_functional.py (58 total) |
+| tests/test_progressive_growing.py | DONE 4/10p58 | P39: Added docstring-matching assertion for compute_layer_mapping(2, 6). P58: 4 integration tests — width-only grow, depth-only grow, combined grow, save→reload→forward cycle. All verify zero missing keys + valid output |
+| tests/test_research_upgrades.py | DONE 3/30p36 | P36: +60 tests for Tier 3 (NF4Linear 10, KV sharing 7, self-speculative 7, Medusa 5, MoD 8, shifted attn, JSON schema, etc.). ~2700+ lines total |
+| tests/test_chat.py | DONE 4/17p105 | P97: Absorbed test_engine_chat.py. P105: TestAgenticToolLoop (9 tests — no-tool passthrough, single tool executed, unknown tool error, malformed JSON, missing name, max_iterations respected, no-executor passthrough, args sanitized, regex pattern). 66 total |
+| tests/test_commands.py | DONE | Command system tests |
+| tests/test_curated_dataset.py | DONE P97 | P97: Absorbed test_dataset.py (72 tests total) |
+| tests/test_dataset.py | MERGED → test_curated_dataset.py | P97: 39 tests merged into test_curated_dataset.py (72 total) |
+| tests/test_download_progress.py | DONE | Download progress tests |
+| tests/test_e2e.py | MERGED → test_functional.py | P97: 5 tests merged into test_functional.py (58 total) |
+| tests/test_engine_chat.py | MERGED → test_chat.py | P97: 26 tests merged into test_chat.py (46 total) |
+| tests/test_gguf.py | DONE | GGUF format tests |
+| tests/test_kv_cache.py | DONE | KV cache tests |
+| tests/test_loaders.py | DONE | External loader tests |
+| tests/test_memory.py | DONE | Persistent memory tests |
+| tests/test_model_arch.py | DONE | Model architecture tests |
+| tests/test_mods.py | MERGED → test_plugins.py | P97: 13 tests merged into test_plugins.py (40 total) |
+| tests/test_nf4_linear.py | DONE | NF4 quantization tests |
+| tests/test_plugins.py | DONE P97 | P97: Absorbed test_mods.py (40 tests total) |
+| tests/test_sampling.py | DONE 4/10p59 | P59: S650 expanded 7→35 tests. Behavioral tests for rep penalty, top-p, min-p, top-k, frequency/presence penalty, greedy, temperature, adaptive window, batch values, NaN guard |
+| tests/test_security.py | DONE 4/10p59 | P59: Upgraded config type validation (empty input behavior) |
+| tests/test_themes.py | DONE | Theme system tests |
+| tests/test_tokenizer.py | DONE P97 | P97: Absorbed test_tokenizer_metrics.py (64 tests total) |
+| tests/test_training.py | DONE | Training pipeline tests |
+
+## core/ — Additional
+
+| File | Status | Notes |
+|------|--------|-------|
+| core/nf4_linear.py | DONE 3/30p36 | T3-7 NF4Linear class: 16-entry NF4 lookup table, per-block absmax quantization (block_size=64), 2 indices packed per uint8, on-the-fly dequantize forward. quantize_linear_nf4() replaces nn.Linear modules |
+| core/json_schema_mask.py | DONE 4/17p104 | S641: T3-9 Grammar-guided JSON decoding FSM. Masks logits to enforce structurally valid JSON output during generation. P104: S736-S738 FIXED — added _value_depth for nested object/array tracking (inner braces/brackets no longer corrupt outer FSM state), key-name type lookup via _key_type_map (out-of-order keys get correct type constraints), removed spurious _brace_depth inflation from nested values. 6 new tests |
+| core/tokenizer_metrics.py | DONE 4/9p55 | S641: Vocabulary analysis, coverage evaluation, and compression ratio computation for BPE and character tokenizers |
 

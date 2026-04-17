@@ -105,14 +105,22 @@ def get_memory_info() -> Dict[str, float]:
         print(f"RAM: {info['ram_available_gb']:.1f}GB free")
         print(f"VRAM: {info['vram_available_gb']:.1f}GB free")
     """
-    import psutil
+    try:
+        import psutil
+        ram = psutil.virtual_memory()
+        ram_total = ram.total / (1024 ** 3)
+        ram_available = ram.available / (1024 ** 3)
+        ram_used = ram.used / (1024 ** 3)
+    except ImportError:
+        logger.debug("psutil not installed — RAM stats unavailable")
+        ram_total = 0.0
+        ram_available = 0.0
+        ram_used = 0.0
 
-    # System RAM
-    ram = psutil.virtual_memory()
     info = {
-        'ram_total_gb': ram.total / (1024 ** 3),
-        'ram_available_gb': ram.available / (1024 ** 3),
-        'ram_used_gb': ram.used / (1024 ** 3),
+        'ram_total_gb': ram_total,
+        'ram_available_gb': ram_available,
+        'ram_used_gb': ram_used,
         'vram_total_gb': 0.0,
         'vram_used_gb': 0.0,
         'vram_available_gb': 0.0,
@@ -141,7 +149,8 @@ def estimate_training_memory(
     use_lora: bool = True,
     lora_rank: int = 8,
     use_qlora: bool = False,
-    gradient_checkpointing: bool = False
+    gradient_checkpointing: bool = False,
+    hidden_size: int = 768,
 ) -> Dict[str, float]:
     """
     Estimate memory requirements for training.
@@ -197,7 +206,7 @@ def estimate_training_memory(
         gradient_memory = model_params * 4
 
     # Activations (rough estimate based on batch size and seq length)
-    activation_memory = batch_size * seq_length * 768 * 4  # Assume hidden_size 768
+    activation_memory = batch_size * seq_length * hidden_size * 4
     if gradient_checkpointing:
         activation_memory *= 0.3  # Checkpointing reduces by ~70%
 
@@ -250,19 +259,37 @@ class LoraConfig:
     bias: str = "none"
     task_type: str = "CAUSAL_LM"
 
+    # LoRA+ (Hayou et al.): use a higher LR for B matrices than A matrices.
+    # lambda=1.0 means same LR for both (standard LoRA). lambda=16 is the
+    # paper's recommended ratio for small-to-mid models.
+    lora_plus_lambda: float = 1.0
+
+    # DoRA (R17): Weight-Decomposed Low-Rank Adaptation.
+    # Decomposes the weight update into magnitude + direction components.
+    # LoRA is applied only to the direction — better matches full fine-tuning
+    # behavior at the same rank.  Requires PEFT >= 0.8.0 when using PEFT path.
+    use_dora: bool = False
+
     def to_peft_config(self):
         """Convert to PEFT LoraConfig."""
         if not PEFT_AVAILABLE:
             raise ImportError("PEFT not installed. Run: pip install peft")
 
-        return PeftLoraConfig(
+        kwargs: dict[str, Any] = dict(
             r=self.rank,
             lora_alpha=self.alpha,
             lora_dropout=self.dropout,
             target_modules=self.target_modules,
             bias=self.bias,
-            task_type=TaskType.CAUSAL_LM if self.task_type == "CAUSAL_LM" else self.task_type,
+            task_type=(
+                TaskType.CAUSAL_LM
+                if self.task_type == "CAUSAL_LM"
+                else self.task_type
+            ),
         )
+        if self.use_dora:
+            kwargs["use_dora"] = True
+        return PeftLoraConfig(**kwargs)
 
 
 @dataclass
@@ -334,6 +361,127 @@ class OffloadConfig:
 
 
 # =============================================================================
+# DoRA LINEAR LAYER  (R17 — standalone, no PEFT required)
+# =============================================================================
+
+
+class DoRALinear(nn.Module):
+    """Weight-Decomposed Low-Rank Adaptation linear layer (R17).
+
+    Decomposes the pretrained weight ``W`` into a magnitude scalar ``m``
+    and a direction matrix ``V / ||V||``.  A standard LoRA update
+    ``B @ A`` is applied only to the direction component::
+
+        V' = W + B @ A
+        output = x @ (m * V' / ||V'||_col)^T
+
+    This matches the learning dynamics of full fine-tuning more
+    closely than standard LoRA at the same rank.
+
+    Args:
+        base_linear: The frozen ``nn.Linear`` to wrap.
+        rank: LoRA rank.
+        alpha: LoRA scaling factor.
+        dropout: Dropout probability on the LoRA path.
+    """
+
+    def __init__(
+        self,
+        base_linear: nn.Linear,
+        rank: int = 8,
+        alpha: int = 16,
+        dropout: float = 0.0,
+    ):
+        super().__init__()
+        in_features = base_linear.in_features
+        out_features = base_linear.out_features
+
+        # Freeze the original weight (keep a reference)
+        self.weight = base_linear.weight  # not a param — frozen
+        self.weight.requires_grad_(False)
+        self.bias = base_linear.bias
+        if self.bias is not None:
+            self.bias.requires_grad_(False)
+
+        # Magnitude vector m — one scalar per output neuron (column norm)
+        with torch.no_grad():
+            col_norms = self.weight.norm(p=2, dim=1)  # (out_features,)
+        self.m = nn.Parameter(col_norms)
+
+        # LoRA A and B
+        self.lora_a = nn.Parameter(torch.zeros(rank, in_features))
+        nn.init.kaiming_uniform_(self.lora_a, a=5 ** 0.5)
+        self.lora_b = nn.Parameter(torch.zeros(out_features, rank))
+        nn.init.zeros_(self.lora_b)
+
+        self.scaling = alpha / rank
+        self.dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Direction = W + scaling * B @ A
+        lora_update = (self.lora_b @ self.lora_a) * self.scaling
+        direction = self.weight + lora_update
+
+        # Column-wise L2 norm of direction
+        col_norms = direction.norm(p=2, dim=1, keepdim=True).clamp(min=1e-8)
+        normed = direction / col_norms
+
+        # Apply magnitude
+        weight_dora = self.m.unsqueeze(1) * normed
+
+        out = F.linear(self.dropout(x), weight_dora, self.bias)
+        return out
+
+
+def apply_dora(
+    model: nn.Module,
+    target_modules: list[str] | None = None,
+    rank: int = 8,
+    alpha: int = 16,
+    dropout: float = 0.0,
+) -> nn.Module:
+    """Replace matching ``nn.Linear`` layers with :class:`DoRALinear`.
+
+    This is a standalone DoRA injection that does NOT require PEFT.
+    Only layers whose name contains one of *target_modules* are replaced.
+
+    Args:
+        model: The model to modify in-place.
+        target_modules: Substrings to match layer names against.
+            Defaults to ``["q_proj", "v_proj", "k_proj", "o_proj"]``.
+        rank: LoRA rank.
+        alpha: LoRA scaling.
+        dropout: LoRA dropout.
+
+    Returns:
+        The same model (modified in-place).
+    """
+    if target_modules is None:
+        target_modules = ["q_proj", "v_proj", "k_proj", "o_proj"]
+
+    replaced = 0
+    for name, module in list(model.named_modules()):
+        if not isinstance(module, nn.Linear):
+            continue
+        if not any(t in name for t in target_modules):
+            continue
+
+        # Walk to parent
+        parts = name.split(".")
+        parent = model
+        for p in parts[:-1]:
+            parent = getattr(parent, p)
+
+        dora_layer = DoRALinear(
+            module, rank=rank, alpha=alpha, dropout=dropout)
+        setattr(parent, parts[-1], dora_layer)
+        replaced += 1
+
+    logger.info("DoRA: replaced %d linear layers (rank=%d)", replaced, rank)
+    return model
+
+
+# =============================================================================
 # LORA MODEL CREATION
 # =============================================================================
 
@@ -370,7 +518,8 @@ def create_lora_model(
     # Log trainable params
     trainable = sum(p.numel() for p in lora_model.parameters() if p.requires_grad)
     total = sum(p.numel() for p in lora_model.parameters())
-    logger.info(f"LoRA trainable params: {trainable:,} / {total:,} ({100*trainable/total:.2f}%)")
+    pct = 100 * trainable / total if total > 0 else 0.0
+    logger.info(f"LoRA trainable params: {trainable:,} / {total:,} ({pct:.2f}%)")
 
     return lora_model
 
@@ -416,7 +565,8 @@ def create_qlora_model(
     # Log memory savings
     trainable = sum(p.numel() for p in qlora_model.parameters() if p.requires_grad)
     total = sum(p.numel() for p in qlora_model.parameters())
-    logger.info(f"QLoRA trainable params: {trainable:,} / {total:,} ({100*trainable/total:.2f}%)")
+    pct = 100 * trainable / total if total > 0 else 0.0
+    logger.info(f"QLoRA trainable params: {trainable:,} / {total:,} ({pct:.2f}%)")
 
     return qlora_model
 
@@ -599,6 +749,11 @@ class LoraTrainer:
         self.learning_rate = learning_rate
         self.batch_size = batch_size
         self.epochs = epochs
+        if gradient_accumulation_steps < 1:
+            raise ValueError(
+                f"gradient_accumulation_steps must be >= 1, "
+                f"got {gradient_accumulation_steps}"
+            )
         self.gradient_accumulation_steps = gradient_accumulation_steps
         self.weight_decay = weight_decay
         self.adam_beta1 = adam_beta1
@@ -694,10 +849,9 @@ class LoraTrainer:
                 gradient_accumulation_steps=self.gradient_accumulation_steps,
                 cpu=self.offload_config.offload_optimizer,
             )
-            self.model, optimizer, data_loader = accelerator.prepare(
+            self.model, optimizer = accelerator.prepare(
                 self.model,
                 self._get_optimizer(),
-                self._create_dataloader(data, max_length)
             )
         else:
             self.model = self.model.to(device)
@@ -708,6 +862,18 @@ class LoraTrainer:
         # Learning rate scheduler (cosine decay)
         from torch.optim.lr_scheduler import CosineAnnealingLR
         n_batches = len(self._create_batches(data, max_length))
+        if n_batches == 0:
+            logger.warning(
+                "No valid training batches created — all items may be "
+                "too short (< 2 tokens) or empty."
+            )
+            self._emit_progress(100, "No valid batches — skipped.")
+            return {
+                "total_loss": 0.0,
+                "epochs": 0,
+                "steps": 0,
+                "final_loss": 0.0,
+            }
         steps_per_epoch = max(1, n_batches // self.gradient_accumulation_steps)
         total_steps = steps_per_epoch * self.epochs
         scheduler = CosineAnnealingLR(
@@ -819,10 +985,55 @@ class LoraTrainer:
         }
 
     def _get_optimizer(self):
-        """Create optimizer for training."""
+        """Create optimizer for training.
+
+        Supports LoRA+ differential learning rates: B matrices get
+        ``learning_rate * lora_plus_lambda``, A matrices get base LR.
+        When ``lora_plus_lambda == 1.0`` this degenerates to standard
+        single-group AdamW.
+        """
         from torch.optim import AdamW
 
-        # Only optimize LoRA parameters
+        lam = getattr(self.lora_config, 'lora_plus_lambda', 1.0)
+
+        if lam != 1.0:
+            # Split into A-matrix and B-matrix groups
+            group_a: list[torch.Tensor] = []
+            group_b: list[torch.Tensor] = []
+            group_other: list[torch.Tensor] = []
+
+            for name, param in self.model.named_parameters():
+                if not param.requires_grad:
+                    continue
+                lower = name.lower()
+                if "lora_a" in lower:
+                    group_a.append(param)
+                elif "lora_b" in lower:
+                    group_b.append(param)
+                else:
+                    group_other.append(param)
+
+            param_groups = []
+            if group_a:
+                param_groups.append({"params": group_a, "lr": self.learning_rate})
+            if group_b:
+                param_groups.append({"params": group_b, "lr": self.learning_rate * lam})
+            if group_other:
+                param_groups.append({"params": group_other, "lr": self.learning_rate})
+
+            if not param_groups:
+                raise ValueError(
+                    "No trainable LoRA parameters found. "
+                    "Check that LoRA layers are properly attached.")
+
+            return AdamW(
+                param_groups,
+                weight_decay=self.weight_decay,
+                betas=(self.adam_beta1, self.adam_beta2),
+                eps=self.adam_eps,
+            )
+
+        # Standard single-group path
         trainable_params = [p for p in self.model.parameters() if p.requires_grad]
 
         return AdamW(
@@ -976,7 +1187,9 @@ class LoRAAdapterManager:
     # -- directory helpers --
 
     def _task_dir(self, task: str) -> Path:
-        return self.base_dir / task
+        result = (self.base_dir / task).resolve()
+        result.relative_to(self.base_dir.resolve())
+        return result
 
     def _weights_path(self, task: str) -> Path:
         return self._task_dir(task) / "adapter.pth"

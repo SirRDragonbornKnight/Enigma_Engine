@@ -56,13 +56,13 @@ MAX_FACTS = 200
 # Patterns that indicate memorable facts in user messages.
 # Each tuple: (compiled regex, format string with group references)
 _FACT_PATTERNS: list[tuple[re.Pattern[str], str]] = [
-    # Name patterns
+    # Name patterns — support ASCII, hyphenated (Mary-Jane), apostrophe (O'Brien)
     (re.compile(
-        r"\bmy\s+name\s+is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)",
+        r"\bmy\s+name\s+is\s+([A-Za-z][A-Za-z'-]+(?:\s+[A-Za-z][A-Za-z'-]+)?)",
         re.IGNORECASE),
      "User's name is {1}"),
     (re.compile(
-        r"\bcall\s+me\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)",
+        r"\bcall\s+me\s+([A-Za-z][A-Za-z'-]+(?:\s+[A-Za-z][A-Za-z'-]+)?)",
         re.IGNORECASE),
      "User wants to be called {1}"),
 
@@ -264,6 +264,10 @@ class PersistentMemory:
         fact = fact.strip()
         if not fact:
             return False
+        # Cap individual fact length to prevent unbounded memory
+        if len(fact) > 10_000:
+            logger.warning("Memory: fact truncated from %d to 10000 chars", len(fact))
+            fact = fact[:10_000]
 
         with self._lock:
             # Check for duplicates (case-insensitive)
@@ -350,12 +354,14 @@ class PersistentMemory:
     @property
     def facts(self) -> list[str]:
         """Return a copy of all stored facts."""
-        return list(self._facts)
+        with self._lock:
+            return list(self._facts)
 
     @property
     def count(self) -> int:
         """Number of stored facts."""
-        return len(self._facts)
+        with self._lock:
+            return len(self._facts)
 
     def reload(self) -> None:
         """Re-read facts from disk (in case user hand-edited the file)."""
@@ -376,14 +382,16 @@ class PersistentMemory:
             Formatted string ready to prepend to a system prompt,
             or empty string if nothing to remember.
         """
-        if not self._facts:
-            return ""
+        with self._lock:
+            if not self._facts:
+                return ""
+            snapshot = list(self._facts)
 
         lines = ["[MEMORY — Things you remember about the user]"]
         char_budget = max_tokens * 4  # rough estimate
         used = len(lines[0])
 
-        for fact in self._facts:
+        for fact in snapshot:
             entry = f"- {fact}"
             if used + len(entry) + 1 > char_budget:
                 break

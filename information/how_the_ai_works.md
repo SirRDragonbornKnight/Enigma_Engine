@@ -143,7 +143,7 @@ Facts are added two ways:
    models voluntarily save things they judge important.
 
 The memory file is injected into the system prompt so the AI always
-has context about the user. Capped at 50 facts (MAX_FACTS) — oldest
+has context about the user. Capped at 200 facts (MAX_FACTS) — oldest
 are trimmed first. The user can hand-edit `data/notes/memory.md` at
 any time for full transparency.
 
@@ -168,7 +168,7 @@ Flow:
    so the model has relevant context
 
 The index is rebuilt on demand and cached. Vocabulary is capped at
-8000 terms to keep memory low.
+16000 terms to keep memory low.
 
 ---
 
@@ -200,7 +200,7 @@ The engine auto-detects your hardware (hardware_detection.py):
 - **GPU** — CUDA GPUs get automatic layer offloading
 - **VRAM** — determines how many layers fit on the GPU
 - **RAM** — fallback for CPU-only inference
-- **Context size** — 16K for 24GB+ VRAM, 8K for 12GB+, 4K otherwise
+- **Context size** — 1024 for models with max_seq_len ≥ 1024, 512 otherwise
 
 For GGUF models, GPU layers are set automatically with
 `n_gpu_layers=-1` (all layers on GPU). The engine also adds PyTorch

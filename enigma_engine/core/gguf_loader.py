@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
-    from enigma_engine.core.model import Forge
+    from enigma_engine.core.model import Enigma  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -174,9 +174,9 @@ class LlamaServerBackend:
                 # Server exited prematurely — read stderr for the reason
                 stderr_out = ""
                 try:
-                    stderr_out = self._process.stderr.read().decode(
+                    stderr_out = self._process.stderr.read(8192).decode(
                         errors='replace'
-                    )[-8000:]
+                    )
                 except Exception:
                     pass
                 logger.error(
@@ -195,7 +195,7 @@ class LlamaServerBackend:
                         self._process.stderr.close()
                     return True
             except Exception:
-                pass
+                logger.debug("llama-server health check failed, retrying...")
             time.sleep(self._HEALTH_INTERVAL)
 
         logger.error("llama-server did not become ready in time")
@@ -588,7 +588,7 @@ class GGUFModel:
                     )
                     break
         except Exception as e:
-            logger.debug(f"Could not extract GGUF file metadata: {e}")
+            logger.warning(f"Could not extract GGUF file metadata: {e}")
 
     def unload(self):
         """Unload the model from memory."""
@@ -1025,7 +1025,7 @@ def load_gguf_model(
     gguf_model_path: str,
     config: Any = None,
     **kwargs
-) -> 'Forge':
+) -> 'Enigma':
     """
     Load a GGUF model and convert it to Forge format.
 
@@ -1051,7 +1051,7 @@ def load_gguf_model(
     # Import here to avoid circular imports
     from pathlib import Path
 
-    from .model import Forge, ForgeConfig
+    from .model import Enigma, ForgeConfig
     from .weight_mapping import WeightMapper
 
     logger.info(f"Loading GGUF model from: {gguf_model_path}")
@@ -1138,7 +1138,7 @@ def load_gguf_model(
             forge_weights = mapper.map_gguf_to_forge(gguf_tensors, config)
 
             # Create Forge model and load weights
-            forge_model = Forge(config=config)
+            forge_model = Enigma(config=config)
             missing_keys, unexpected_keys = forge_model.load_state_dict(forge_weights, strict=False)
 
             if missing_keys:

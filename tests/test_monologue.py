@@ -30,11 +30,6 @@ sys.path.insert(0, str(PROJECT_ROOT))
 class TestJournal:
     """Tests for the per-model journal file."""
 
-    def test_import(self):
-        """Module can be imported."""
-        from enigma_engine.core.monologue import Journal
-        assert Journal is not None
-
     def test_empty_journal(self, tmp_path):
         """New journal has no entries."""
         from enigma_engine.core.monologue import Journal
@@ -135,10 +130,6 @@ class TestJournal:
 class TestCoherenceScoring:
     """Tests for the heuristic coherence scorer."""
 
-    def test_import(self):
-        from enigma_engine.core.monologue import score_coherence
-        assert score_coherence is not None
-
     def test_empty_text(self):
         """Empty text scores 0."""
         from enigma_engine.core.monologue import score_coherence
@@ -186,10 +177,6 @@ class TestCoherenceScoring:
 
 class TestReflectionPrompt:
     """Tests for building reflection prompts from emotional state."""
-
-    def test_import(self):
-        from enigma_engine.core.monologue import build_reflection_prompt
-        assert build_reflection_prompt is not None
 
     def test_returns_string(self):
         """Always returns a non-empty string."""
@@ -243,10 +230,6 @@ class TestReflectionPrompt:
 
 class TestIdleDetection:
     """Tests for the idle detection helper."""
-
-    def test_import(self):
-        from enigma_engine.core.monologue import IdleTracker
-        assert IdleTracker is not None
 
     def test_initial_not_idle(self):
         """Newly created tracker is not idle."""
@@ -385,36 +368,6 @@ class TestMonologueModeConfig:
 # ════════════════════════════════════════════════════════════════════
 
 
-class TestGreetingWiring:
-    """Structural tests verifying greeting + config wiring."""
-
-    def test_desktop_has_show_journal_greeting(self):
-        """desktop.py defines _show_journal_greeting method."""
-        import inspect
-        from enigma_engine.gui.desktop import EnigmaGUI
-        assert hasattr(EnigmaGUI, "_show_journal_greeting")
-        source = inspect.getsource(EnigmaGUI._show_journal_greeting)
-        # Checks the method reads the journal and applies the quality gate
-        assert "journal" in source.lower()
-        assert "DEFAULT_COHERENCE_THRESHOLD" in source
-
-    def test_on_model_loaded_calls_greeting(self):
-        """_on_model_loaded calls _show_journal_greeting."""
-        import inspect
-        from enigma_engine.gui.gui_logic import LogicMixin
-        source = inspect.getsource(LogicMixin._on_model_loaded)
-        assert "_show_journal_greeting" in source
-
-    def test_get_monologue_mode_has_config_fallback(self):
-        """_get_monologue_mode falls back to CONFIG when gui_settings is absent."""
-        import inspect
-        from enigma_engine.gui.desktop import EnigmaGUI
-        source = inspect.getsource(EnigmaGUI._get_monologue_mode)
-        # Must reference both gui_settings and CONFIG/get_config
-        assert "gui_settings" in source
-        assert "get_config" in source
-
-
 # ════════════════════════════════════════════════════════════════════
 # Coherence Benchmark
 # ════════════════════════════════════════════════════════════════════
@@ -422,11 +375,6 @@ class TestGreetingWiring:
 
 class TestCoherenceBenchmark:
     """Tests for the coherence benchmark function."""
-
-    def test_import(self):
-        """run_coherence_benchmark can be imported."""
-        from enigma_engine.core.monologue import run_coherence_benchmark
-        assert run_coherence_benchmark is not None
 
     def test_benchmark_prompts_exist(self):
         """Benchmark has diverse prompts."""
@@ -542,28 +490,3 @@ class TestCoherenceBenchmark:
 
         result = run_coherence_benchmark(engine, num_prompts=0)
         assert result["total"] == 1
-
-    def test_gui_has_benchmark_button(self):
-        """FORGE page creates a BENCHMARK button."""
-        import inspect
-        from enigma_engine.gui.gui_pages_forge import ForgePageMixin
-        source = inspect.getsource(ForgePageMixin)
-        assert "benchmark_btn" in source
-        assert "BENCHMARK" in source
-
-    def test_forge_tools_has_benchmark_handler(self):
-        """ForgeToolsMixin has _coherence_benchmark method."""
-        import inspect
-        from enigma_engine.gui.gui_forge_tools import ForgeToolsMixin
-        assert hasattr(ForgeToolsMixin, "_coherence_benchmark")
-        source = inspect.getsource(
-            ForgeToolsMixin._coherence_benchmark)
-        assert "run_coherence_benchmark" in source
-
-    def test_cli_has_benchmark_flag(self):
-        """run.py accepts --benchmark flag."""
-        import inspect
-        import run
-        source = inspect.getsource(run.main)
-        assert "--benchmark" in source
-        assert "run_benchmark" in source

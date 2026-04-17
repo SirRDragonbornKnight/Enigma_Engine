@@ -99,14 +99,21 @@ def atomic_write_text(path: str | Path, content: str) -> None:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Backup existing file before overwriting
+        # Preserve original permissions when the file already exists
+        original_mode: int | None = None
         if path.exists():
+            try:
+                original_mode = path.stat().st_mode
+            except OSError:
+                pass
+
+            # Backup existing file before overwriting
             bak_path = path.with_suffix(path.suffix + ".bak")
             try:
                 import shutil
                 shutil.copy2(str(path), str(bak_path))
             except OSError as exc:
-                logger.debug("Backup copy failed for %s: %s", path, exc)
+                logger.warning("Backup copy failed for %s: %s", path, exc)
 
         # Write to temp file with fsync for durability
         with open(tmp_path, "w", encoding="utf-8") as f:
@@ -116,6 +123,13 @@ def atomic_write_text(path: str | Path, content: str) -> None:
 
         # Atomic rename
         os.replace(tmp_path, path)
+
+        # Restore original permissions (S551)
+        if original_mode is not None:
+            try:
+                os.chmod(path, original_mode)
+            except OSError:
+                pass  # Best-effort on Windows
     except BaseException:
         try:
             tmp_path.unlink(missing_ok=True)

@@ -32,7 +32,7 @@ Welcome to Enigma Engine — a fully local AI system.
 ```bash
 python run.py                                         # Show system info
 python run.py --gui                                    # Launch desktop GUI
-python run.py --serve                                  # Start API server on port 8080
+python run.py --serve                                  # Start API server on port 5000
 python run.py --serve --port 9090                      # API server on custom port
 python run.py --chat --model PATH                      # CLI chat with a model
 python run.py --train data/training.txt --epochs 10    # Train model

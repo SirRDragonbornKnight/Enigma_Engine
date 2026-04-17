@@ -92,17 +92,17 @@ class TokenBuffer:
     """Buffer for accumulating tokens before flushing."""
 
     def __init__(self, size: int = 0, interval: float = 0.0) -> None:
-        self.size = size
+        self.size = max(size, 0)
         self.interval = interval
         self._buffer: list[str] = []
-        self._last_flush = time.time()
+        self._last_flush = time.monotonic()
         self._lock = threading.Lock()
 
     def _flush_unlocked(self) -> str:
         """Flush buffer without acquiring lock (caller must hold it)."""
         content = "".join(self._buffer)
         self._buffer.clear()
-        self._last_flush = time.time()
+        self._last_flush = time.monotonic()
         return content
 
     def add(self, token: str) -> Optional[str]:
@@ -117,7 +117,7 @@ class TokenBuffer:
 
             should_flush = (
                 (self.size > 0 and len(self._buffer) >= self.size) or
-                (self.interval > 0 and time.time() - self._last_flush >= self.interval)
+                (self.interval > 0 and time.monotonic() - self._last_flush >= self.interval)
             )
 
             if should_flush or self.size == 0:
@@ -149,6 +149,7 @@ class StreamingResponse:
         self._queue: queue.Queue[StreamChunk] = queue.Queue()
         self._async_queue: asyncio.Queue = None
         self._async_lock = threading.Lock()
+        self._loop: asyncio.AbstractEventLoop | None = None
         self._buffer = TokenBuffer(
             size=self.config.buffer_size,
             interval=self.config.flush_interval
@@ -260,6 +261,7 @@ class StreamingResponse:
 
         full_text = "".join(self._tokens)
 
+        start = self._start_time or self._end_time
         chunk = StreamChunk(
             content=full_text,
             event=StreamEvent.END,
@@ -267,7 +269,7 @@ class StreamingResponse:
             metadata={
                 **(metadata or {}),
                 "total_tokens": len(self._tokens),
-                "duration_ms": (self._end_time - self._start_time) * 1000
+                "duration_ms": (self._end_time - start) * 1000
             }
         )
         self._emit(chunk)
@@ -297,17 +299,26 @@ class StreamingResponse:
             except Exception as e:
                 logger.debug(f"Error callback error: {e}")
 
+    def _async_put_safe(self, chunk: StreamChunk) -> None:
+        """Put chunk into async queue on the event loop thread."""
+        try:
+            if self._async_queue is not None:
+                self._async_queue.put_nowait(chunk)
+        except Exception:
+            logger.warning("Async queue full or closed, chunk dropped: %s", chunk.event)
+
     def _emit(self, chunk: StreamChunk) -> None:
         """Emit a chunk to all outputs."""
         self._chunks.append(chunk)
         self._queue.put_nowait(chunk)
 
         with self._async_lock:
-            if self._async_queue is not None:
+            if self._async_queue is not None and self._loop is not None:
                 try:
-                    self._async_queue.put_nowait(chunk)
-                except Exception:
-                    logger.debug("Async queue full or closed, chunk dropped")
+                    self._loop.call_soon_threadsafe(
+                        self._async_put_safe, chunk)
+                except RuntimeError:
+                    pass  # Event loop closed
 
     def __iter__(self) -> Iterator[StreamChunk]:
         """Iterate over chunks."""
@@ -319,13 +330,15 @@ class StreamingResponse:
                 if chunk.event in (StreamEvent.END, StreamEvent.ERROR):
                     break
             except queue.Empty:
+                logger.warning("Stream timed out after %.1fs", self.config.timeout)
                 break
 
     async def __aiter__(self) -> AsyncIterator[StreamChunk]:
         """Async iterate over chunks."""
         with self._async_lock:
+            self._loop = asyncio.get_running_loop()
             if self._async_queue is None:
-                self._async_queue = asyncio.Queue()
+                self._async_queue = asyncio.Queue(maxsize=1000)
 
                 # Copy existing chunks while lock is held so _emit
                 # cannot push duplicates between queue creation and copy.
@@ -343,6 +356,7 @@ class StreamingResponse:
                 if chunk.event in (StreamEvent.END, StreamEvent.ERROR):
                     break
             except asyncio.TimeoutError:
+                logger.warning("Async stream timed out after %.1fs", self.config.timeout)
                 break
 
     def iter_tokens(self) -> Iterator[str]:

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import tkinter as tk
 import threading
 from pathlib import Path
 from typing import Any
@@ -39,12 +40,53 @@ from enigma_engine.gui.gui_logic_chat import LogicChatMixin  # noqa: F401
 from enigma_engine.gui.gui_logic_media import LogicMediaMixin  # noqa: F401
 
 
+# Bytes-per-parameter for common GGUF quantization types.
+# Used by _estimate_gguf_params to convert file size → param count.
+_GGUF_BYTES_PER_PARAM: dict[str, float] = {
+    "f32": 4.0,
+    "f16": 2.0,
+    "q8_0": 1.1,
+    "q8_1": 1.2,
+    "q8_k": 1.1,
+    "q6_k": 0.82,
+    "q5_0": 0.69,
+    "q5_1": 0.74,
+    "q5_k": 0.71,
+    "q5_k_m": 0.71,
+    "q5_k_s": 0.69,
+    "q4_0": 0.55,
+    "q4_1": 0.61,
+    "q4_k": 0.57,
+    "q4_k_m": 0.57,
+    "q4_k_s": 0.55,
+    "q3_k": 0.44,
+    "q3_k_m": 0.44,
+    "q3_k_s": 0.41,
+    "q3_k_l": 0.46,
+    "q2_k": 0.33,
+    "iq4_xs": 0.52,
+    "iq3_xxs": 0.38,
+}
+
+
+def _detect_gguf_quant_type(path: str) -> str | None:
+    """Try to detect GGUF quantization type from the filename.
+
+    Returns the lowercase quant tag (e.g. ``'q4_k_m'``) or *None*.
+    """
+    import re
+    stem = Path(path).stem.lower()
+    # Match patterns like q4_k_m, q8_0, f16, iq3_xxs, etc.
+    m = re.search(r'(?:^|[^a-z])((?:iq|q|f)\d+(?:_[a-z0-9]+)*)', stem)
+    return m.group(1) if m else None
+
+
 def _estimate_gguf_params(engine: Any, path: str) -> int:
     """Estimate parameter count for a GGUF model.
 
     Uses a 3-tier approach:
     1. Metadata formula: dim, n_layers, vocab_size → approximate params
-    2. File-size heuristic: file_bytes / bytes_per_param (Q4 ≈ 0.55)
+    2. File-size heuristic: file_bytes / bytes_per_param (quant-aware)
     3. Returns 0 if nothing works
     """
     # Tier 1: metadata-based estimation
@@ -62,12 +104,13 @@ def _estimate_gguf_params(engine: Any, path: str) -> int:
                 embed = vocab * dim if vocab > 0 else 0
                 return per_layer * n_layers + embed
 
-    # Tier 2: file-size heuristic
+    # Tier 2: file-size heuristic with quant-type-aware bytes_per_param
     try:
         file_size = Path(path).stat().st_size
         if file_size > 0:
-            # Q4_K_M ≈ 0.55 bytes per param; Q8 ≈ 1.1; rough middle
-            return int(file_size / 0.55)
+            quant = _detect_gguf_quant_type(path)
+            bpp = _GGUF_BYTES_PER_PARAM.get(quant, 0.55) if quant else 0.55
+            return int(file_size / bpp)
     except OSError:
         pass
 
@@ -128,7 +171,7 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
             if tools_ctx:
                 lines.append("")
                 lines.append(tools_ctx)
-        except Exception as exc:
+        except (ImportError, AttributeError) as exc:
             logger.debug("Tool prompt build failed: %s", exc)
 
         # Config overrides
@@ -162,7 +205,7 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
             # Also include what the user typed (may not be in history yet)
             try:
                 input_text = self.chat_input.get("1.0", "end").strip()
-            except Exception:
+            except (AttributeError, tk.TclError):
                 input_text = ""
             query = input_text or last_msg
             if query:
@@ -226,6 +269,15 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
             "The image will be rendered inline in chat. "
             "Use [CMD]imagegen.status[/CMD] to check available "
             "backends (SD WebUI, ComfyUI, diffusers).")
+
+        lines.append("")
+        lines.append(
+            "Image Search: You can find images from the web using "
+            "[CMD]search.images <query>[/CMD]. This returns image "
+            "URLs that you can embed inline using markdown syntax: "
+            "![description](url). The images will render directly "
+            "in the chat. Use this to illustrate explanations with "
+            "diagrams, photos, or visual examples when relevant.")
 
         # Terminal agent capability
         lines.append("")
@@ -453,6 +505,7 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
         entry.delete(0, "end")
         entry.insert(0, display)
         self.config_overrides[name] = clamped
+        self._save_config_overrides()
 
     # ================================================================
     # Logic - Model loading
@@ -460,6 +513,12 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
 
     def _load_model(self, path: str):
         """Load a model file in a background thread and update the UI."""
+        if getattr(self, '_model_loading', False):
+            self._chat_system("Model already loading. Please wait.")
+            return
+        if getattr(self, '_is_generating', False):
+            self._chat_system("Cannot load model while generating. Stop generation first.")
+            return
         if self.engine is not None:
             self._unload_model()
 
@@ -642,6 +701,8 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
         self.model_path = None
 
         try:
+            import gc
+            gc.collect()
             import torch
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
@@ -786,6 +847,12 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
         self.route_assignments.pop(route_key, None)
         # Persist route assignments to disk
         save_route_assignments(self.route_assignments)
+
+        # Reset the dropdown menu on the ROUTER page to "None"
+        route_menus = getattr(self, "_route_menus", {})
+        menu = route_menus.get(route_key)
+        if menu:
+            menu.set("None")
 
         if route_key == "chat" and self.engine is not None:
             self._unload_model()

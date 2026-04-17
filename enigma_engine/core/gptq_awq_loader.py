@@ -271,7 +271,9 @@ class BaseQuantizedModel:
                 top_k=top_k if do_sample else 0,
                 repetition_penalty=repetition_penalty,
                 do_sample=do_sample,
-                pad_token_id=self.tokenizer.pad_token_id,
+                pad_token_id=getattr(
+                    self.tokenizer, 'pad_token_id', None
+                ) or self.tokenizer.eos_token_id,
                 eos_token_id=self.tokenizer.eos_token_id,
                 **kwargs
             )
@@ -461,16 +463,25 @@ class GPTQModel(BaseQuantizedModel):
         # Check for quantize_config.json
         config_path = model_dir / "quantize_config.json"
         if config_path.exists():
-            with open(config_path, encoding='utf-8') as f:
-                return json.load(f)
+            try:
+                with open(config_path, encoding='utf-8') as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, OSError) as exc:
+                logger.warning("Bad quantize_config.json in %s: %s",
+                               model_dir, exc)
+                return None
 
         # Check for config.json with quantization_config
         config_path = model_dir / "config.json"
         if config_path.exists():
-            with open(config_path, encoding='utf-8') as f:
-                config = json.load(f)
-                if "quantization_config" in config:
-                    return config["quantization_config"]
+            try:
+                with open(config_path, encoding='utf-8') as f:
+                    config = json.load(f)
+                    if "quantization_config" in config:
+                        return config["quantization_config"]
+            except (json.JSONDecodeError, OSError) as exc:
+                logger.warning("Bad config.json in %s: %s",
+                               model_dir, exc)
 
         return None
 
@@ -559,17 +570,10 @@ class GPTQModel(BaseQuantizedModel):
         if not HAVE_AUTO_GPTQ:
             raise RuntimeError("auto-gptq required for quantization")
 
-        from transformers import AutoModelForCausalLM
-
         logger.info(f"Quantizing model to {bits}-bit GPTQ...")
 
-        # Load original model
+        # Load tokenizer
         tokenizer = AutoTokenizer.from_pretrained(model_path)
-        model = AutoModelForCausalLM.from_pretrained(
-            model_path,
-            torch_dtype=torch.float16,
-            device_map="auto",
-        )
 
         # Create quantization config
         quant_config = BaseQuantizeConfig(
@@ -579,20 +583,10 @@ class GPTQModel(BaseQuantizedModel):
             sym=sym,
         )
 
-        # Prepare calibration dataset
-        def prepare_data(examples):
-            return tokenizer(
-                examples,
-                padding=True,
-                truncation=True,
-                max_length=2048,
-                return_tensors="pt"
-            )
-
-        # Quantize
+        # Load model for quantization (auto-gptq expects path, not model object)
         quantized_model = AutoGPTQForCausalLM.from_pretrained(
-            model,
-            quant_config,
+            model_path,
+            quantize_config=quant_config,
         )
 
         # Calibrate and quantize
@@ -659,18 +653,27 @@ class AWQModel(BaseQuantizedModel):
         for config_name in ["quant_config.json", "quantize_config.json"]:
             config_path = model_dir / config_name
             if config_path.exists():
-                with open(config_path, encoding='utf-8') as f:
-                    return json.load(f)
+                try:
+                    with open(config_path, encoding='utf-8') as f:
+                        return json.load(f)
+                except (json.JSONDecodeError, OSError) as exc:
+                    logger.warning("Bad %s in %s: %s",
+                                   config_name, model_dir, exc)
+                    return None
 
         # Check config.json
         config_path = model_dir / "config.json"
         if config_path.exists():
-            with open(config_path, encoding='utf-8') as f:
-                config = json.load(f)
-                if "quantization_config" in config:
-                    qc = config["quantization_config"]
-                    if qc.get("quant_method") == "awq":
-                        return qc
+            try:
+                with open(config_path, encoding='utf-8') as f:
+                    config = json.load(f)
+                    if "quantization_config" in config:
+                        qc = config["quantization_config"]
+                        if qc.get("quant_method") == "awq":
+                            return qc
+            except (json.JSONDecodeError, OSError) as exc:
+                logger.warning("Bad config.json in %s: %s",
+                               model_dir, exc)
 
         return None
 
@@ -800,30 +803,38 @@ def detect_quantization_type(model_path: str) -> Optional[QuantizationType]:
 
     # Check for explicit config files
     if (model_dir / "quantize_config.json").exists():
-        with open(model_dir / "quantize_config.json", encoding='utf-8') as f:
-            config = json.load(f)
-            if "quant_method" in config:
-                method = config["quant_method"].lower()
-                if method == "awq":
-                    return QuantizationType.AWQ
-                elif method == "gptq":
+        try:
+            with open(model_dir / "quantize_config.json", encoding='utf-8') as f:
+                config = json.load(f)
+                if "quant_method" in config:
+                    method = config["quant_method"].lower()
+                    if method == "awq":
+                        return QuantizationType.AWQ
+                    elif method == "gptq":
+                        return QuantizationType.GPTQ
+                # GPTQ configs typically have 'bits' and 'group_size' without method
+                if "bits" in config and "group_size" in config:
                     return QuantizationType.GPTQ
-            # GPTQ configs typically have 'bits' and 'group_size' without method
-            if "bits" in config and "group_size" in config:
-                return QuantizationType.GPTQ
+        except (json.JSONDecodeError, OSError) as exc:
+            logger.warning("Bad quantize_config.json in %s: %s",
+                           model_dir, exc)
 
     # Check config.json
     config_path = model_dir / "config.json"
     if config_path.exists():
-        with open(config_path, encoding='utf-8') as f:
-            config = json.load(f)
-            if "quantization_config" in config:
-                qc = config["quantization_config"]
-                method = qc.get("quant_method", "").lower()
-                if method == "awq":
-                    return QuantizationType.AWQ
-                elif method == "gptq":
-                    return QuantizationType.GPTQ
+        try:
+            with open(config_path, encoding='utf-8') as f:
+                config = json.load(f)
+                if "quantization_config" in config:
+                    qc = config["quantization_config"]
+                    method = qc.get("quant_method", "").lower()
+                    if method == "awq":
+                        return QuantizationType.AWQ
+                    elif method == "gptq":
+                        return QuantizationType.GPTQ
+        except (json.JSONDecodeError, OSError) as exc:
+            logger.warning("Bad config.json in %s: %s",
+                           model_dir, exc)
 
     # Check model name patterns
     path_str = str(model_path).lower()

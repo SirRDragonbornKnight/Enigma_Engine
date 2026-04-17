@@ -91,6 +91,27 @@ class CuratedDataset:
 
     # ---- Entry management ----
 
+    def _add_unlocked(
+        self,
+        text: str,
+        source: str,
+        stage: str,
+        status: str,
+        metadata: dict[str, Any] | None,
+    ) -> int:
+        """Add entry without acquiring lock. Caller must hold self._lock."""
+        entry = DatasetEntry(
+            text=text,
+            source=source,
+            stage=stage,
+            status=status,
+            metadata=metadata or {},
+        )
+        self._entries.append(entry)
+        idx = len(self._entries) - 1
+        logger.debug("Dataset: added entry #%d from %s", idx, source)
+        return idx
+
     def add(
         self,
         text: str,
@@ -100,18 +121,11 @@ class CuratedDataset:
         metadata: dict[str, Any] | None = None,
     ) -> int:
         """Add a new entry. Returns its index."""
-        entry = DatasetEntry(
-            text=text,
-            source=source,
-            stage=stage,
-            status=status,
-            metadata=metadata or {},
-        )
+        if not text or not text.strip():
+            logger.debug("Dataset: skipping empty text from %s", source)
+            return -1
         with self._lock:
-            self._entries.append(entry)
-            idx = len(self._entries) - 1
-        logger.debug("Dataset: added entry #%d from %s", idx, source)
-        return idx
+            return self._add_unlocked(text, source, stage, status, metadata)
 
     def add_batch(
         self,
@@ -120,14 +134,22 @@ class CuratedDataset:
         stage: str = "",
         status: str = "pending",
     ) -> int:
-        """Add multiple entries at once. Returns count added."""
+        """Add multiple entries at once. Returns count added.
+
+        Deduplicates within the batch and against existing entries
+        — if the same text appears multiple times or is already
+        in the dataset, only the first new occurrence is added.
+        """
+        seen: set[str] = set()
         count = 0
-        for text in texts:
-            text = text.strip()
-            if text:
-                self.add(text, source=source, stage=stage,
-                         status=status)
-                count += 1
+        with self._lock:
+            existing = {e.text for e in self._entries}
+            for text in texts:
+                text = text.strip()
+                if text and text not in seen and text not in existing:
+                    seen.add(text)
+                    self._add_unlocked(text, source, stage, status, None)
+                    count += 1
         return count
 
     def approve(self, index: int) -> bool:
@@ -268,15 +290,16 @@ class CuratedDataset:
         if not self.path.exists():
             return
         with self._lock:
-            self._entries = []
+            loaded: list[DatasetEntry] = []
             try:
                 with open(self.path, "r", encoding="utf-8") as f:
                     for line in f:
                         line = line.strip()
                         if line:
                             data = json.loads(line)
-                            self._entries.append(
+                            loaded.append(
                                 DatasetEntry.from_dict(data))
+                self._entries = loaded
                 logger.info(
                     "Dataset loaded: %d entries from %s",
                     len(self._entries), self.path)

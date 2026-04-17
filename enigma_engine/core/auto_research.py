@@ -101,7 +101,7 @@ def auto_research(query: str, max_results: int = 3,
         return ""
 
     try:
-        from enigma_engine.core.web_utils import ddg_search
+        from enigma_engine.core.web_utils import ddg_search, ddg_image_search
     except ImportError:
         logger.debug("web_utils not available for auto-research")
         return ""
@@ -141,9 +141,13 @@ def auto_research(query: str, max_results: int = 3,
                 for idx, url in urls_to_fetch
             }
             fetched: dict[int, str] = {}
-            for future in as_completed(futures):
+            for future in as_completed(futures, timeout=60):
                 idx = futures[future]
-                text = future.result()
+                try:
+                    text = future.result(timeout=30)
+                except Exception:
+                    logger.debug("Web fetch failed for idx=%d", idx)
+                    text = None
                 if text:
                     fetched[idx] = text
 
@@ -154,6 +158,18 @@ def auto_research(query: str, max_results: int = 3,
     if not context_parts:
         _cache_put(cache_key, "")
         return ""
+
+    # Pull 1-2 relevant images so the AI can embed them
+    try:
+        images = ddg_image_search(query, max_results=2)
+        for img in images:
+            img_title = img.get("title", "image")
+            img_url = img.get("url", "")
+            if img_url:
+                context_parts.append(
+                    f"• Image: ![{img_title}]({img_url})")
+    except Exception:
+        logger.debug("Auto-research image search failed")
 
     result = (
         "[WEB RESEARCH — auto-retrieved context]\n"

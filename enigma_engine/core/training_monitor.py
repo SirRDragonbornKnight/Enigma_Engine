@@ -133,6 +133,12 @@ class TrainingMonitor:
         self._start_time: float = 0.0
         self._best_loss = float("inf")
 
+        # Throughput telemetry
+        self._step_times: list[float] = []  # seconds per step
+        self._tokens_per_sec: list[float] = []  # tokens/sec per step
+        self._total_tokens: int = 0
+        self._last_step_time: float = 0.0
+
     # -----------------------------------------------------------------
     # LIVE LOSS TRACKING (TM-B)
     # -----------------------------------------------------------------
@@ -147,6 +153,10 @@ class TrainingMonitor:
             self._global_step = 0
             self._best_loss = float("inf")
             self._start_time = time.time()
+            self._step_times.clear()
+            self._tokens_per_sec.clear()
+            self._total_tokens = 0
+            self._last_step_time = 0.0
 
     def record_loss(self, loss: float, step: int | None = None) -> None:
         """Record a single loss value.
@@ -199,6 +209,49 @@ class TrainingMonitor:
             self._epoch_losses.append(epoch_loss)
             self._epoch_perplexities.append(ppl)
 
+    def record_throughput(
+        self, tokens_in_batch: int, step_time: float,
+    ) -> None:
+        """Record throughput metrics for one training step.
+
+        Args:
+            tokens_in_batch: Number of tokens processed in this step.
+            step_time: Wall-clock time for this step (seconds).
+        """
+        with self._lock:
+            self._total_tokens += tokens_in_batch
+            if step_time > 0:
+                self._step_times.append(step_time)
+                self._tokens_per_sec.append(tokens_in_batch / step_time)
+
+                # Cap to prevent unbounded growth (same as losses)
+                if len(self._step_times) > self._max_losses:
+                    half = self._max_losses // 2
+                    self._step_times = self._step_times[-half:]
+                    self._tokens_per_sec = self._tokens_per_sec[-half:]
+
+    @property
+    def avg_tokens_per_sec(self) -> float:
+        """Average tokens/sec over the run."""
+        with self._lock:
+            if not self._tokens_per_sec:
+                return 0.0
+            return sum(self._tokens_per_sec) / len(self._tokens_per_sec)
+
+    @property
+    def avg_step_time(self) -> float:
+        """Average step time in seconds."""
+        with self._lock:
+            if not self._step_times:
+                return 0.0
+            return sum(self._step_times) / len(self._step_times)
+
+    @property
+    def total_tokens(self) -> int:
+        """Total tokens processed in the run."""
+        with self._lock:
+            return self._total_tokens
+
     @property
     def losses(self) -> list[float]:
         """All recorded loss values (for charting) — returns a copy."""
@@ -244,17 +297,32 @@ class TrainingMonitor:
             List of moving-average values (same length as losses,
             with early entries using smaller windows).
         """
+        import math
+
         w = window or self.moving_avg_window
         with self._lock:
             losses_copy = list(self._losses)
         result: list[float] = []
         running_sum = 0.0
+        valid_count = 0
         for i in range(len(losses_copy)):
-            running_sum += losses_copy[i]
+            val = losses_copy[i]
+            # Subtract old value leaving the window BEFORE NaN check —
+            # otherwise `continue` skips the subtraction and stale
+            # values accumulate in running_sum.
             if i >= w:
-                running_sum -= losses_copy[i - w]
-            count = min(i + 1, w)
-            result.append(running_sum / count)
+                old = losses_copy[i - w]
+                if not (math.isnan(old) or math.isinf(old)):
+                    running_sum -= old
+                    valid_count -= 1
+            if math.isnan(val) or math.isinf(val):
+                # Carry forward previous average (or 0.0)
+                result.append(result[-1] if result else 0.0)
+                continue
+            running_sum += val
+            valid_count += 1
+            count = min(valid_count, w)
+            result.append(running_sum / count if count > 0 else 0.0)
         return result
 
     def get_chart_data(self) -> dict[str, Any]:
@@ -270,17 +338,33 @@ class TrainingMonitor:
             epoch_ppl_snap = list(self._epoch_perplexities)
             best = self._best_loss
             total = self._global_step
+            tps_snap = list(self._tokens_per_sec)
+            st_snap = list(self._step_times)
+            total_tok = self._total_tokens
 
         # Compute moving average from snapshot (no lock needed)
+        import math
+
         w = self.moving_avg_window
         ma: list[float] = []
         running_sum = 0.0
+        valid_count = 0
         for i in range(len(losses_snap)):
-            running_sum += losses_snap[i]
+            val = losses_snap[i]
+            # Subtract old value leaving the window BEFORE NaN check
             if i >= w:
-                running_sum -= losses_snap[i - w]
-            count = min(i + 1, w)
-            ma.append(running_sum / count)
+                old = losses_snap[i - w]
+                if not (math.isnan(old) or math.isinf(old)):
+                    running_sum -= old
+                    valid_count -= 1
+            if math.isnan(val) or math.isinf(val):
+                # Carry forward previous average (or 0.0)
+                ma.append(ma[-1] if ma else 0.0)
+                continue
+            running_sum += val
+            valid_count += 1
+            count = min(valid_count, w)
+            ma.append(running_sum / count if count > 0 else 0.0)
 
         return {
             "steps": steps_snap,
@@ -290,6 +374,13 @@ class TrainingMonitor:
             "epoch_perplexities": epoch_ppl_snap,
             "best_loss": best,
             "total_steps": total,
+            "tokens_per_sec": tps_snap,
+            "step_times": st_snap,
+            "total_tokens": total_tok,
+            "avg_tokens_per_sec": (
+                sum(tps_snap) / len(tps_snap) if tps_snap else 0.0),
+            "avg_step_time": (
+                sum(st_snap) / len(st_snap) if st_snap else 0.0),
         }
 
     # -----------------------------------------------------------------
@@ -328,12 +419,24 @@ class TrainingMonitor:
             n_epochs = len(self._epoch_losses)
             total = self._global_step
             ppl_snap = list(self._epoch_perplexities)
+            total_tok = self._total_tokens
+            tps_snap = list(self._tokens_per_sec)
 
         # Include perplexity in extra metadata (EV-B)
         run_extra = dict(extra or {})
         if ppl_snap:
             run_extra["final_perplexity"] = round(ppl_snap[-1], 4)
             run_extra["best_perplexity"] = round(min(ppl_snap), 4)
+
+        # Include throughput telemetry
+        if total_tok > 0:
+            run_extra["total_tokens"] = total_tok
+        if tps_snap:
+            run_extra["avg_tokens_per_sec"] = round(
+                sum(tps_snap) / len(tps_snap), 1)
+        if duration > 0 and total_tok > 0:
+            run_extra["overall_tokens_per_sec"] = round(
+                total_tok / duration, 1)
 
         run = TrainingRun(
             run_id=f"{int(time.time())}_{mode}",

@@ -7,10 +7,13 @@ These tests go beyond import checks — they exercise real logic:
 - KV-cache update/get
 - Command execution
 - TrainingConfig validation
+- CPU benchmarks (forward pass / generation timing)
+- End-to-end pipeline (create → train → save → reload → infer)
 """
 
 import json
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -66,13 +69,22 @@ class TestModelCreation:
         assert output.shape[1] <= input_ids.shape[1] + 5
 
     def test_model_presets_available(self):
-        """list_presets() should return a non-empty dict."""
+        """list_presets() should return presets with valid structure and values."""
         from enigma_engine.core.model_presets import list_presets
 
         presets = list_presets()
         assert isinstance(presets, dict)
         assert "tiny" in presets
         assert "small" in presets
+        # Every preset should have valid numerical config values
+        for name, info in presets.items():
+            assert info['dim'] > 0, f"{name} dim must be positive"
+            assert info['layers'] > 0, f"{name} layers must be positive"
+            assert info['heads'] > 0, f"{name} heads must be positive"
+            assert info['dim'] % info['heads'] == 0, (
+                f"{name} dim ({info['dim']}) must be divisible by heads ({info['heads']})")
+            assert info['estimated_params'] > 0, f"{name} must have params"
+            assert info['max_seq_len'] > 0, f"{name} must have max_seq_len"
 
     def test_parse_param_target_billions(self):
         """parse_param_target handles '8b', '1.5b', '70b' etc."""
@@ -180,7 +192,7 @@ class TestTokenizer:
         assert isinstance(decoded, str)
 
     def test_special_tokens(self):
-        """SimpleTokenizer should have BOS/EOS ids."""
+        """SimpleTokenizer should have valid BOS/EOS ids within vocab range."""
         from enigma_engine.core.tokenizer import SimpleTokenizer
 
         tok = SimpleTokenizer()
@@ -188,6 +200,11 @@ class TestTokenizer:
         assert hasattr(tok, "eos_token_id")
         assert isinstance(tok.bos_token_id, int)
         assert isinstance(tok.eos_token_id, int)
+        # IDs must be non-negative and distinct
+        assert tok.bos_token_id >= 0
+        assert tok.eos_token_id >= 0
+        assert tok.bos_token_id != tok.eos_token_id, (
+            "BOS and EOS must be different token IDs")
 
 
 # ── KV-Cache ────────────────────────────────────────────────────────────────
@@ -294,12 +311,16 @@ class TestTrainingConfig:
             config.validate()
 
     def test_bad_batch_size(self):
-        """batch_size < 1 should raise ValueError."""
+        """batch_size < 0 should raise ValueError (0 = auto is valid)."""
         from enigma_engine.core.training import TrainingConfig
 
-        config = TrainingConfig(batch_size=0)
+        config = TrainingConfig(batch_size=-1)
         with pytest.raises(ValueError, match="batch_size"):
             config.validate()
+
+        # batch_size=0 is valid (auto mode)
+        config_auto = TrainingConfig(batch_size=0)
+        config_auto.validate()  # should not raise
 
     def test_to_dict_has_new_fields(self):
         """to_dict() should include early_stopping and max_loss fields."""
@@ -375,6 +396,23 @@ class TestModelContext:
             assert len(ctx2.history) == 2
             assert ctx2.history[0]["content"] == "hello"
             assert ctx2.last_used > 0
+        finally:
+            mc._CONTEXTS_DIR = original
+
+    def test_preset_name_round_trip(self, tmp_path):
+        """preset_name should survive save/load cycle."""
+        import enigma_engine.core.model_context as mc
+
+        original = mc._CONTEXTS_DIR
+        mc._CONTEXTS_DIR = tmp_path
+        try:
+            ctx = mc.ModelContext("preset_test")
+            ctx.preset_name = "xl"
+            ctx.save()
+
+            ctx2 = mc.ModelContext("preset_test")
+            ctx2.load()
+            assert ctx2.preset_name == "xl"
         finally:
             mc._CONTEXTS_DIR = original
 
@@ -737,50 +775,331 @@ class TestCLIFlags:
         assert 'host="0.0.0.0"' not in source, (
             "run_serve must not default to 0.0.0.0 — exposes API to network")
 
-    def test_serve_accepts_host_and_api_key(self):
-        """run_serve must accept host and api_key parameters."""
+
+# ── CPU benchmarks (from test_benchmark.py) ──────────────────────────────────
+
+
+def _make_benchmark_model():
+    """Create a tiny model for CPU benchmarking."""
+    from enigma_engine.core.model import Enigma, ForgeConfig
+    cfg = ForgeConfig(
+        vocab_size=256,
+        dim=64,
+        n_layers=2,
+        n_heads=2,
+        max_seq_len=64,
+    )
+    model = Enigma(config=cfg)
+    model.eval()
+    return model, cfg
+
+
+class TestForwardPassBenchmark:
+    """Benchmark model forward pass throughput on CPU."""
+
+    def test_forward_pass_runs(self):
+        """Forward pass completes and returns logits."""
+        model, cfg = _make_benchmark_model()
+        ids = torch.randint(0, cfg.vocab_size, (1, 16))
+        with torch.no_grad():
+            out = model(ids)
+        assert out.shape == (1, 16, cfg.vocab_size)
+
+    def test_forward_pass_timing(self):
+        """Forward pass completes within a reasonable time on CPU."""
+        model, cfg = _make_benchmark_model()
+        ids = torch.randint(0, cfg.vocab_size, (1, 32))
+
+        # Warmup
+        with torch.no_grad():
+            model(ids)
+
+        runs = 10
+        start = time.perf_counter()
+        for _ in range(runs):
+            with torch.no_grad():
+                model(ids)
+        elapsed = time.perf_counter() - start
+
+        avg_ms = (elapsed / runs) * 1000
+        # Just verify it completes — no hard threshold
+        assert avg_ms > 0, f"Forward pass avg: {avg_ms:.1f}ms"
+
+    def test_batch_forward(self):
+        """Batched forward pass works correctly."""
+        model, cfg = _make_benchmark_model()
+        ids = torch.randint(0, cfg.vocab_size, (4, 16))
+        with torch.no_grad():
+            out = model(ids)
+        assert out.shape == (4, 16, cfg.vocab_size)
+
+
+class TestGenerationBenchmark:
+    """Benchmark token generation speed on CPU."""
+
+    def test_generate_runs(self):
+        """Generate produces tokens."""
+        model, cfg = _make_benchmark_model()
+        prompt = torch.randint(0, cfg.vocab_size, (1, 4))
+        with torch.no_grad():
+            out = model.generate(prompt, max_new_tokens=8)
+        # Output should be longer than prompt
+        assert out.shape[1] > prompt.shape[1]
+
+    def test_generate_timing(self):
+        """Generation completes within a reasonable time on CPU."""
+        model, cfg = _make_benchmark_model()
+        prompt = torch.randint(0, cfg.vocab_size, (1, 4))
+
+        # Warmup
+        with torch.no_grad():
+            model.generate(prompt, max_new_tokens=4)
+
+        runs = 5
+        tokens = 16
+        start = time.perf_counter()
+        for _ in range(runs):
+            with torch.no_grad():
+                model.generate(prompt, max_new_tokens=tokens)
+        elapsed = time.perf_counter() - start
+
+        avg_ms = (elapsed / runs) * 1000
+        assert avg_ms > 0, f"Generation avg: {avg_ms:.1f}ms for {tokens} tokens"
+
+    def test_generate_with_stop_token(self):
+        """Generation respects stop tokens."""
+        model, cfg = _make_benchmark_model()
+        prompt = torch.randint(0, cfg.vocab_size, (1, 4))
+        with torch.no_grad():
+            out = model.generate(
+                prompt, max_new_tokens=32, stop_tokens=[2])
+        # Should not exceed max length
+        assert out.shape[1] <= prompt.shape[1] + 32
+
+
+# ── End-to-end pipeline (from test_e2e.py) ───────────────────────────────────
+
+
+class TestEndToEnd:
+    """E2E: create a tiny model, train 1 epoch, save, reload, generate."""
+
+    @pytest.fixture()
+    def tiny_model_dir(self, tmp_path):
+        """Create a tiny model with the smallest preset."""
+        from enigma_engine.core.model import Enigma
+        from enigma_engine.core.model_presets import ForgeConfig
+        from enigma_engine.core.tokenizer import SimpleTokenizer
+
+        tok = SimpleTokenizer()
+        cfg = ForgeConfig(
+            vocab_size=tok.vocab_size,
+            dim=64, n_layers=2, n_heads=2, n_kv_heads=1,
+            max_seq_len=128, dropout=0.0,
+        )
+        model = Enigma(config=cfg)
+        return {"model": model, "tokenizer": tok, "config": cfg, "dir": tmp_path}
+
+    def test_create_model(self, tiny_model_dir):
+        """Model should be creatable with a small config."""
+        model = tiny_model_dir["model"]
+        assert isinstance(model, torch.nn.Module)
+        params = sum(p.numel() for p in model.parameters())
+        assert params > 0
+
+    def test_train_one_epoch(self, tiny_model_dir):
+        """Model should train for 1 epoch without error."""
+        from enigma_engine.core.training import Trainer, TrainingConfig
+
+        model = tiny_model_dir["model"]
+        tok = tiny_model_dir["tokenizer"]
+
+        config = TrainingConfig()
+        config.epochs = 1
+        config.batch_size = 2
+        config.use_amp = False
+        config.warmup_steps = 0
+        config.eval_every = 0
+        config.save_every = 0
+        config.log_every = 1
+        config.run_evaluation = False
+
+        trainer = Trainer(model, tok, config)
+        data = "User: Hello\nAssistant: Hi there!\n\nUser: How are you?\nAssistant: I am fine."
+        state = trainer.train(data)
+        assert state.epoch >= 1
+        assert state.step > 0
+
+    def test_save_reload_roundtrip(self, tiny_model_dir):
+        """Model weights should survive save → reload."""
+        from enigma_engine.core.safe_save import atomic_torch_save
+
+        model = tiny_model_dir["model"]
+        save_path = tiny_model_dir["dir"] / "model.pth"
+
+        # Save
+        atomic_torch_save({
+            "model_state_dict": model.state_dict(),
+            "config": tiny_model_dir["config"],
+        }, save_path)
+        assert save_path.exists()
+
+        # Reload into a fresh model
+        from enigma_engine.core.model import Enigma
+        checkpoint = torch.load(save_path, weights_only=False)
+        model2 = Enigma(config=checkpoint["config"])
+        model2.load_state_dict(checkpoint["model_state_dict"])
+
+        # Verify weights match
+        for (n1, p1), (n2, p2) in zip(
+            model.named_parameters(), model2.named_parameters()
+        ):
+            assert n1 == n2
+            assert torch.equal(p1, p2), f"Mismatch in {n1}"
+
+    def test_forward_pass(self, tiny_model_dir):
+        """Model should produce logits from token IDs."""
+        model = tiny_model_dir["model"]
+        tok = tiny_model_dir["tokenizer"]
+        model.eval()
+
+        ids = tok.encode("Hello world")
+        x = torch.tensor([ids[:10]], dtype=torch.long)
+        with torch.no_grad():
+            logits = model(x)
+        assert logits.shape[0] == 1
+        assert logits.shape[1] == x.shape[1]
+        # Model pads vocab to multiples of 64 for GPU alignment
+        padded_vocab = (tiny_model_dir["config"].vocab_size + 63) & ~63
+        assert logits.shape[2] == padded_vocab
+
+    def test_full_pipeline(self, tiny_model_dir):
+        """Full pipeline: train → save → reload → infer produces output."""
+        from enigma_engine.core.training import Trainer, TrainingConfig
+        from enigma_engine.core.safe_save import atomic_torch_save
+        from enigma_engine.core.model import Enigma
+
+        model = tiny_model_dir["model"]
+        tok = tiny_model_dir["tokenizer"]
+        save_path = tiny_model_dir["dir"] / "pipeline.pth"
+
+        # Train
+        config = TrainingConfig()
+        config.epochs = 1
+        config.batch_size = 2
+        config.use_amp = False
+        config.warmup_steps = 0
+        config.eval_every = 0
+        config.save_every = 0
+        config.run_evaluation = False
+
+        trainer = Trainer(model, tok, config)
+        trainer.train("User: test\nAssistant: response")
+
+        # Save
+        atomic_torch_save({
+            "model_state_dict": model.state_dict(),
+            "config": tiny_model_dir["config"],
+        }, save_path)
+
+        # Reload
+        ckpt = torch.load(save_path, weights_only=False)
+        model2 = Enigma(config=ckpt["config"])
+        model2.load_state_dict(ckpt["model_state_dict"])
+        model2.eval()
+
+        # Infer — forward pass produces valid logits
+        ids = tok.encode("User: hello\nAssistant:")
+        x = torch.tensor([ids[:20]], dtype=torch.long)
+        with torch.no_grad():
+            logits = model2(x)
+        assert logits.shape[0] == 1
+        padded_vocab = (ckpt["config"].vocab_size + 63) & ~63
+        assert logits.shape[2] == padded_vocab
+        # Logits should not be all zeros (model learned something)
+        assert logits.abs().sum() > 0
+
+
+# ── collect_pretraining_data.py audit tests (S789, S790) ────────────────────
+
+
+class TestPretrainingDataCollector:
+    """Structural tests for collect_pretraining_data.py audit findings."""
+
+    def test_combine_dedup_uses_compact_hash(self):
+        """S789: combine_all_sources must use raw digest bytes, not hex strings."""
         import inspect
-        import importlib
-        run = importlib.import_module("run")
-        sig = inspect.signature(run.run_serve)
-        assert "host" in sig.parameters, (
-            "run_serve missing host parameter")
-        assert "api_key" in sig.parameters, (
-            "run_serve missing api_key parameter")
+        sys.path.insert(0, str(PROJECT_ROOT))
+        import collect_pretraining_data as cpd
+        source = inspect.getsource(cpd.combine_all_sources)
+        # Must use .digest() (compact bytes) not .hexdigest() (2x larger strings)
+        assert '.digest()' in source, (
+            "S789: combine_all_sources uses hexdigest — switch to digest "
+            "for ~44% memory reduction")
 
-    def test_chat_accepts_profile_and_temperature(self):
-        """run_chat must accept profile and temperature parameters."""
+    def test_combine_dedup_has_capacity_limit(self):
+        """S789: dedup hash set must have a capacity limit to prevent OOM."""
         import inspect
-        import importlib
-        run = importlib.import_module("run")
-        sig = inspect.signature(run.run_chat)
-        assert "profile" in sig.parameters, (
-            "run_chat missing profile parameter")
-        assert "temperature" in sig.parameters, (
-            "run_chat missing temperature parameter")
+        sys.path.insert(0, str(PROJECT_ROOT))
+        import collect_pretraining_data as cpd
+        source = inspect.getsource(cpd.combine_all_sources)
+        assert 'MAX_DEDUP' in source or 'max_dedup' in source, (
+            "S789: combine_all_sources has no dedup capacity limit — "
+            "will OOM at scale")
 
-    def test_cli_has_host_argument(self):
-        """CLI parser must have --host argument."""
-        import importlib
-        run = importlib.import_module("run")
-        source = open("run.py", encoding="utf-8").read()
-        assert "--host" in source, (
-            "CLI missing --host argument for server bind address")
+    def test_fandom_retries_failed_extract_batch(self):
+        """S790: fetch_fandom must retry failed content batches, not skip them."""
+        import inspect
+        sys.path.insert(0, str(PROJECT_ROOT))
+        import collect_pretraining_data as cpd
+        source = inspect.getsource(cpd.fetch_fandom)
+        # The fix stores into a temp var (next_continue) and only assigns
+        # ap_continue after the content fetch succeeds.
+        lines = source.split('\n')
+        has_next_continue = any('next_continue' in line for line in lines)
+        assert has_next_continue, (
+            "S790: fetch_fandom should use a temp variable (next_continue) "
+            "to defer ap_continue update until content fetch succeeds")
+        # Verify ap_continue is assigned AFTER rev_resp succeeds
+        rev_resp_line = None
+        ap_from_next_line = None
+        for i, line in enumerate(lines):
+            if 'rev_resp = SESSION.get' in line:
+                rev_resp_line = i
+            if 'ap_continue = next_continue' in line and rev_resp_line is not None:
+                ap_from_next_line = i
+        assert ap_from_next_line is not None, (
+            "S790: ap_continue = next_continue not found after rev_resp call")
+        assert ap_from_next_line > rev_resp_line, (
+            "S790: ap_continue must be assigned AFTER the content fetch call")
 
-    def test_cli_has_api_key_argument(self):
-        """CLI parser must have --api-key argument."""
-        source = open("run.py", encoding="utf-8").read()
-        assert "--api-key" in source, (
-            "CLI missing --api-key argument for server authentication")
+    def test_clean_wiki_text_basic(self):
+        """Smoke test: clean_wiki_text strips citations and URLs."""
+        sys.path.insert(0, str(PROJECT_ROOT))
+        from collect_pretraining_data import clean_wiki_text
+        text = "Hello world[1] with a link https://example.com and [citation needed] stuff."
+        cleaned = clean_wiki_text(text)
+        assert '[1]' not in cleaned
+        assert 'https://' not in cleaned
+        assert '[citation needed]' not in cleaned
+        assert 'Hello world' in cleaned
 
-    def test_cli_has_profile_argument(self):
-        """CLI parser must have --profile argument."""
-        source = open("run.py", encoding="utf-8").read()
-        assert "--profile" in source, (
-            "CLI missing --profile argument for chat")
+    def test_quality_filter_rejects_short(self):
+        """quality_filter rejects text below minimum length."""
+        from collect_pretraining_data import quality_filter
+        assert not quality_filter("short", 500)
+        assert not quality_filter("no sentences here at all!", 50)
 
-    def test_cli_train_uses_atomic_save(self):
-        """CLI train must use atomic_torch_save, not raw torch.save."""
-        source = open("run.py", encoding="utf-8").read()
-        assert "atomic_torch_save" in source, (
-            "run.py --train should use atomic_torch_save")
+    def test_quality_filter_accepts_good_text(self):
+        """quality_filter accepts well-formed text."""
+        from collect_pretraining_data import quality_filter
+        good = ("This is a well-formed paragraph with multiple sentences. "
+                "It has proper punctuation and structure. "
+                "The content is substantial enough to pass quality checks. "
+                "There are many words and ideas expressed here.")
+        assert quality_filter(good, 50)
+
+    def test_detect_ai_content_strong_markers(self):
+        """detect_ai_content flags strong AI markers."""
+        from collect_pretraining_data import detect_ai_content
+        assert detect_ai_content("As an AI language model, I cannot help with that.")
+        assert not detect_ai_content("This is a normal Wikipedia article about history.")

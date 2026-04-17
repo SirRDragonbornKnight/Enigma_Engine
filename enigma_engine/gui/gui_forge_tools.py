@@ -59,10 +59,18 @@ class ForgeToolsMixin:
             return
 
         try:
-            num_pairs = int(self.guided_pairs_entry.get())
+            raw_pairs = self.guided_pairs_entry.get().strip()
+            num_pairs = int(raw_pairs)
             if num_pairs < 1 or num_pairs > 500:
-                raise ValueError
+                self._log(f"[!] Pairs '{raw_pairs}' out of range "
+                          f"(1-500), using 20")
+                num_pairs = 20
         except (ValueError, AttributeError):
+            raw_w = getattr(self, "guided_pairs_entry", None)
+            raw = raw_w.get().strip() if raw_w else ""
+            if raw:
+                self._log(f"[!] Pairs '{raw}' not a number, "
+                          f"using 20")
             num_pairs = 20
 
         # Data file is optional — supplements TRAINER output
@@ -312,7 +320,7 @@ class ForgeToolsMixin:
                         continue
 
                     # STUDENT answers (with persona prompt)
-                    s_answer = student_engine.chat(
+                    s_answer = student_engine.generate(
                         test_q,
                         system_prompt=student_sys,
                         max_gen=256,
@@ -395,6 +403,34 @@ class ForgeToolsMixin:
                 else:
                     self._log(
                         "\n[!] No test results to evaluate.")
+
+                # Tool/command usage evaluation
+                try:
+                    from enigma_engine.core.training_evaluation import (
+                        evaluate_tool_usage,
+                        DEFAULT_TOOL_TEST_CASES,
+                    )
+                    if DEFAULT_TOOL_TEST_CASES:
+                        self._log("\n--- TOOL USAGE EVALUATION ---")
+                        tool_results = evaluate_tool_usage(
+                            model=student_engine.model,
+                            tokenizer=student_engine.tokenizer,
+                            engine=student_engine,
+                            test_cases=DEFAULT_TOOL_TEST_CASES,
+                            device=str(next(
+                                student_engine.model.parameters()
+                            ).device),
+                        )
+                        self._log(
+                            f"Success rate: "
+                            f"{tool_results['success_rate']:.0%} "
+                            f"({tool_results['successes']}/"
+                            f"{tool_results['total_tests']})")
+                except ImportError:
+                    pass
+                except Exception as exc:
+                    self._log(
+                        f"[!] Tool eval skipped: {exc}")
 
             except Exception as exc:
                 self._log(f"\n[!] Evaluation failed: {exc}")
@@ -996,6 +1032,7 @@ class ForgeToolsMixin:
             # "Custom" — leave fields as-is
             return
         epochs, lr, batch = preset
+        self._preset_programmatic = True
         for entry, val in [
             (self.ft_epochs_entry, epochs),
             (self.ft_lr_entry, lr),
@@ -1003,6 +1040,7 @@ class ForgeToolsMixin:
         ]:
             entry.delete(0, "end")
             entry.insert(0, val)
+        self._preset_programmatic = False
         self._log(
             f"Preset '{choice}': {epochs} epochs, "
             f"lr={lr}, batch={batch}")
@@ -1296,7 +1334,110 @@ class ForgeToolsMixin:
                     "usage": usage or name,
                 })
 
+        if not commands:
+            logger.warning("_parse_commands_reference: no commands parsed from %s",
+                           self._COMMANDS_REF_PATH)
         return commands
+
+    # ================================================================
+    # Tokenizer analysis
+    # ================================================================
+
+    def _analyze_tokenizer(self):
+        """Analyze the current tokenizer and log results."""
+        btn = getattr(self, 'analyze_tok_btn', None)
+        if btn is not None:
+            btn.configure(state="disabled")
+
+        def _run():
+            try:
+                from enigma_engine.core.bpe_tokenizer import BPETokenizer
+                from enigma_engine.core.tokenizer_metrics import (
+                    analyze_vocabulary, evaluate_coverage,
+                    compute_compression_ratio, detect_issues)
+
+                # Find tokenizer
+                candidates = [
+                    MODELS_DIR / "tokenizer.json",
+                    Path(__file__).parent.parent / "vocab_model"
+                    / "bpe_vocab.json",
+                    Path(__file__).parent.parent / "vocab_model"
+                    / "tokenizer.json",
+                ]
+                tok_file = next(
+                    (p for p in candidates if p.exists()), None)
+                if tok_file is None:
+                    self._log(
+                        "[!] No tokenizer found. Train one first.")
+                    return
+
+                self._log("--- TOKENIZER ANALYSIS ---")
+                self._log(f"File: {tok_file.name}")
+                tokenizer = BPETokenizer(tok_file)
+
+                # Load data for analysis
+                texts = []
+                data_path = getattr(self, 'train_data_var', None)
+                if data_path and data_path.get():
+                    p = Path(data_path.get())
+                    if p.exists():
+                        texts.append(p.read_text(
+                            encoding="utf-8", errors="replace"))
+                if not texts:
+                    for f in sorted(DATA_DIR.glob("*.txt")):
+                        t = f.read_text(
+                            encoding="utf-8", errors="replace")
+                        if t.strip():
+                            texts.append(t)
+                if not texts:
+                    texts = [
+                        "Hello, how are you today?",
+                        "The quick brown fox jumps over the lazy dog.",
+                    ]
+
+                vocab = analyze_vocabulary(tokenizer)
+                cov = evaluate_coverage(tokenizer, texts)
+                comp = compute_compression_ratio(tokenizer, texts)
+                issues = detect_issues(tokenizer, texts)
+
+                self._log(
+                    f"Vocab    : {vocab['vocab_size']:,} tokens, "
+                    f"{vocab['num_merges']:,} merges")
+                self._log(
+                    f"Specials : {vocab['num_special']}  |  "
+                    f"Base chars: {vocab['single_char_tokens']}")
+                self._log(
+                    f"UTF-8    : "
+                    f"{'enabled' if vocab['use_utf8_bytes'] else 'disabled'}")
+                self._log(
+                    f"Lengths  : "
+                    f"min={vocab['token_lengths']['min']} "
+                    f"max={vocab['token_lengths']['max']} "
+                    f"mean={vocab['token_lengths']['mean']}")
+                self._log(
+                    f"Coverage : {cov['coverage']:.2%} "
+                    f"({cov['unk_count']} UNK of "
+                    f"{cov['total_tokens']:,})")
+                self._log(
+                    f"Compress : {comp['chars_per_token']} "
+                    f"chars/token ({comp['total_chars']:,} chars "
+                    f"-> {comp['total_tokens']:,} tokens)")
+
+                if issues:
+                    for w in issues:
+                        self._log(f"  [!] {w}")
+                else:
+                    self._log("  No issues detected.")
+
+                self._log("--- ANALYSIS COMPLETE ---")
+            except Exception as exc:
+                self._log(f"[!] Analysis failed: {exc}")
+            finally:
+                if btn is not None:
+                    self.after(0, lambda: btn.configure(
+                        state="normal"))
+
+        threading.Thread(target=_run, daemon=True).start()
 
     # ================================================================
     # Progress bar
@@ -1323,6 +1464,14 @@ class ForgeToolsMixin:
             if label is not None:
                 label.configure(text="")
         self.after(0, _do)
+
+    def _notify_training_complete(self):
+        """Play a system sound to notify the user training finished."""
+        try:
+            import winsound
+            winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+        except Exception:
+            pass  # Not on Windows or no audio — silent
 
     def _clear_loss_chart(self):
         """Clear any previously rendered loss chart (thread-safe)."""
@@ -1374,10 +1523,16 @@ class ForgeToolsMixin:
             w = canvas.winfo_width()
             h = canvas.winfo_height()
             if w < 20 or h < 20:
-                # Widget not yet mapped — schedule retry
+                # Widget not yet mapped — retry up to 10 times (1 s)
+                retries = getattr(self, "_loss_chart_retries", 0)
+                if retries >= 10:
+                    self._loss_chart_retries = 0
+                    return
+                self._loss_chart_retries = retries + 1
                 self.after(100, lambda: self._update_loss_chart(
                     losses, moving_avg, perplexities))
                 return
+            self._loss_chart_retries = 0
 
             # Chart margins
             margin_l = 50

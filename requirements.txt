@@ -37,6 +37,9 @@ python-multipart>=0.0.5
 
 # === OPTIONAL ===
 
+# Pre-training data collection (for collect_pretraining_data.py --wiki-dump)
+# mwparserfromhell>=0.6.0   # Wikipedia wikitext markup parser
+
 # Document parsing (for PDF and Word files in DOCS/training)
 # pymupdf>=1.24.0          # PDF text extraction
 # python-docx>=1.1.0       # Word .docx text extraction

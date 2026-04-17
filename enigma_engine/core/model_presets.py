@@ -68,7 +68,7 @@ class ForgeConfig:
     # ─────────────────────────────────────────────────────────────────────────
     # CORE PARAMETERS
     # ─────────────────────────────────────────────────────────────────────────
-    vocab_size: int = 8000      # Size of vocabulary (tokenizer determines this)
+    vocab_size: int = 32000      # Size of vocabulary (tokenizer determines this)
     dim: int = 512              # Model hidden dimension (larger = smarter but slower)
     n_layers: int = 8           # Number of transformer layers (deeper = more capable)
     n_heads: int = 8            # Attention heads (more = better pattern recognition)
@@ -110,7 +110,7 @@ class ForgeConfig:
     # ─────────────────────────────────────────────────────────────────────────
     # MEMORY OPTIMIZATION
     # ─────────────────────────────────────────────────────────────────────────
-    use_gradient_checkpointing: bool = False  # Trade compute for memory during training
+    use_gradient_checkpointing: bool = True  # Trade compute for memory during training
 
     # ─────────────────────────────────────────────────────────────────────────
     # MULTI-MODAL SUPPORT
@@ -121,17 +121,51 @@ class ForgeConfig:
     # ─────────────────────────────────────────────────────────────────────────
     # TRAINING STABILITY & REGULARIZATION
     # ─────────────────────────────────────────────────────────────────────────
-    use_qk_norm: bool = False         # Normalize Q and K in attention (fp16 overflow guard)
+    use_qk_norm: bool = True          # Normalize Q and K in attention (stabilizes, prevents head collapse)
     use_layer_scale: bool = False     # Learnable residual scaling (stabilizes deep training)
     drop_path_rate: float = 0.0       # Stochastic depth (0.0 = disabled, 0.1-0.3 typical)
+    use_differential_attn: bool = True   # R22: Differential attention (noise cancellation, reduces hallucination)
+    neftune_alpha: float = 5.0        # R27: NEFTune embedding noise during training (5.0 = AlpacaEval optimal)
+    n_predict_heads: int = 2          # R25: Multi-token prediction extra heads (biggest gain at small model sizes)
 
-    # ─────────────────────────────────────────────────────────────────────────
-    # LEGACY ALIASES - For backwards compatibility
-    # ─────────────────────────────────────────────────────────────────────────
-    depth: Optional[int] = None      # Old name for n_layers
-    heads: Optional[int] = None      # Old name for n_heads
-    max_len: Optional[int] = None    # Old name for max_seq_len
-    embed_dim: Optional[int] = None  # Old name for dim
+    # nGPT: Weight normalization (Salimans & Kingma / Loshchilov et al.)
+    # Decomposes each Linear layer's weight into direction (v/||v||) and
+    # magnitude (g), stabilizing training by keeping updates on the
+    # hypersphere.  Non-breaking toggle — applies post-init.
+    use_weight_norm: bool = False
+
+    # T3-1: Cross-layer KV sharing (YOCO-style)
+    # Group layers into bands that share KV projections. First layer in
+    # each band computes K, V; followers reuse them. 0 = disabled.
+    kv_share_groups: int = 0
+
+    # T3-2: Self-speculative decoding (early exit)
+    # Layer index after which an early-exit head produces draft tokens.
+    # 0 = disabled. Recommended: n_layers // 3.
+    early_exit_layer: int = 0
+
+    # T3-4: Mixture of Depths (MoD)
+    # Router selects which tokens get full FFN processing.
+    # Unselected tokens skip FFN (identity passthrough).
+    use_mixture_of_depths: bool = False
+    mod_capacity_factor: float = 0.5  # Fraction of tokens processed per layer
+
+    # T3-8: LongLoRA shifted sparse attention
+    # Halves attention compute by using local chunked attention.
+    # Half the heads shift by group_size//2 for cross-boundary info flow.
+    # Only active during training (T > 1, not KV-cache).
+    use_shifted_attention: bool = False
+    shifted_group_size: int = 256     # Local attention window size
+
+    # T5-4: Token Merging (ToMe) — merge similar tokens mid-forward-pass
+    # using bipartite soft matching. Reduces sequence length for attention
+    # computation. 0.0 = disabled, 0.1-0.3 = merge 10-30% of tokens.
+    tome_ratio: float = 0.0
+
+    # T5-6: Multi-Head Latent Attention (MLA)
+    # Compress K/V into a low-rank latent before caching. Drastically
+    # reduces KV cache size. 0 = disabled, 64-256 = latent dimension.
+    mla_latent_dim: int = 0
 
     # Track if config is frozen (immutable after creation)
     _frozen: bool = False
@@ -141,18 +175,6 @@ class ForgeConfig:
         Post-initialization: validate and set computed defaults.
         Called automatically after __init__ (dataclass magic).
         """
-        # ─────────────────────────────────────────────────────────────────────
-        # MAP LEGACY NAMES: Support old config files
-        # ─────────────────────────────────────────────────────────────────────
-        if self.depth:
-            self.n_layers = self.depth
-        if self.heads:
-            self.n_heads = self.heads
-        if self.max_len:
-            self.max_seq_len = self.max_len
-        if self.embed_dim:
-            self.dim = self.embed_dim
-
         # ─────────────────────────────────────────────────────────────────────
         # AUTO-CALCULATE KV HEADS: Default to same as n_heads (no GQA)
         # ─────────────────────────────────────────────────────────────────────
@@ -355,6 +377,25 @@ class ForgeConfig:
             'use_gradient_checkpointing': self.use_gradient_checkpointing,
             'vision_hidden_size': self.vision_hidden_size,
             'audio_hidden_size': self.audio_hidden_size,
+            # Training stability & regularization
+            'use_qk_norm': self.use_qk_norm,
+            'use_layer_scale': self.use_layer_scale,
+            'drop_path_rate': self.drop_path_rate,
+            'use_differential_attn': self.use_differential_attn,
+            'neftune_alpha': self.neftune_alpha,
+            'n_predict_heads': self.n_predict_heads,
+            # T3 architecture features
+            'kv_share_groups': self.kv_share_groups,
+            'early_exit_layer': self.early_exit_layer,
+            'use_mixture_of_depths': self.use_mixture_of_depths,
+            'mod_capacity_factor': self.mod_capacity_factor,
+            'use_shifted_attention': self.use_shifted_attention,
+            'shifted_group_size': self.shifted_group_size,
+            # T5 features
+            'tome_ratio': self.tome_ratio,
+            'mla_latent_dim': self.mla_latent_dim,
+            # nGPT
+            'use_weight_norm': self.use_weight_norm,
         }
 
     @classmethod
@@ -362,13 +403,20 @@ class ForgeConfig:
         known = {
             'vocab_size', 'dim', 'n_layers', 'n_heads', 'n_kv_heads',
             'hidden_dim', 'max_seq_len', 'dropout', 'use_rope', 'use_rms_norm',
-            'use_swiglu', 'use_bias', 'rope_theta', 'depth', 'heads',
-            'max_len', 'embed_dim',
+            'use_swiglu', 'use_bias', 'rope_theta',
             # New parameters
             'rope_scaling_type', 'rope_scaling_factor', 'use_moe', 'num_experts',
             'num_experts_per_token', 'moe_load_balancing', 'sliding_window',
             'use_paged_attn', 'kv_cache_dtype', 'use_gradient_checkpointing',
-            'vision_hidden_size', 'audio_hidden_size'
+            'vision_hidden_size', 'audio_hidden_size',
+            'use_qk_norm', 'use_layer_scale', 'drop_path_rate',
+            'use_differential_attn',
+            'neftune_alpha', 'n_predict_heads',
+            'kv_share_groups', 'early_exit_layer',
+            'use_mixture_of_depths', 'mod_capacity_factor',
+            'use_shifted_attention', 'shifted_group_size',
+            'tome_ratio', 'mla_latent_dim',
+            'use_weight_norm',
         }
         return cls(**{k: v for k, v in d.items() if k in known})
 
@@ -442,9 +490,10 @@ class QuantizationConfig:
 # ROUGH GUIDELINES:
 #   • 4GB RAM/VRAM → tiny or mini
 #   • 8GB VRAM → small or medium
-#   • 16GB VRAM → large or xl
-#   • 24GB+ VRAM → xxl or larger
-#   • Multi-GPU → huge, giant, etc.
+#   • 16GB VRAM → base
+#   • 32GB VRAM → large (measured: 28 GB at batch=1)
+#   • 24GB+ VRAM (3090/4090/5090) → xl (~12 GB with grad ckpt)
+#   • Multi-GPU → xxl and above
 
 MODEL_PRESETS = {
     # ─────────────────────────────────────────────────────────────────────────
@@ -473,74 +522,112 @@ MODEL_PRESETS = {
     # CONSUMER GPU (~27-85M params) - RTX 2080 to RTX 3070
     # ─────────────────────────────────────────────────────────────────────────
     'small': ForgeConfig(dim=512, n_layers=8, n_heads=8, n_kv_heads=4, max_seq_len=1024),
-    'medium': ForgeConfig(dim=768, n_layers=12, n_heads=12, n_kv_heads=4, max_seq_len=2048),
-    'base': ForgeConfig(dim=896, n_layers=14, n_heads=14, n_kv_heads=2, max_seq_len=2048),
+    'medium': ForgeConfig(dim=768, n_layers=12, n_heads=12, n_kv_heads=4, max_seq_len=2048, rope_theta=500000.0),
+    'base': ForgeConfig(dim=896, n_layers=14, n_heads=14, n_kv_heads=2, max_seq_len=2048, rope_theta=500000.0),
 
     # ─────────────────────────────────────────────────────────────────────────
-    # PROSUMER GPU (~200M-600M params) - RTX 3080, RTX 4080, RTX 4090
+    # PROSUMER GPU (~200M-600M params) - RTX 4090 (large) or A100 (xl)
     # ─────────────────────────────────────────────────────────────────────────
-    'large': ForgeConfig(dim=1024, n_layers=16, n_heads=16, n_kv_heads=4, max_seq_len=4096),
-    'xl': ForgeConfig(dim=1536, n_layers=24, n_heads=24, n_kv_heads=6, max_seq_len=4096, dropout=0.05),
+    'large': ForgeConfig(dim=1024, n_layers=16, n_heads=16, n_kv_heads=4, max_seq_len=4096, rope_theta=500000.0),
+    'xl': ForgeConfig(dim=1536, n_layers=24, n_heads=24, n_kv_heads=6, max_seq_len=4096, rope_theta=500000.0, dropout=0.05),
 
     # ─────────────────────────────────────────────────────────────────────────
     # MULTI-GPU / SERVER (~1B-3B params) - 2-4x A100, workstation setups
     # ─────────────────────────────────────────────────────────────────────────
-    'xxl': ForgeConfig(dim=2048, n_layers=32, n_heads=32, n_kv_heads=8, max_seq_len=8192, dropout=0.05),
-    'huge': ForgeConfig(dim=2560, n_layers=40, n_heads=40, n_kv_heads=8, max_seq_len=8192, dropout=0.05),
+    'xxl': ForgeConfig(dim=2048, n_layers=32, n_heads=32, n_kv_heads=8, max_seq_len=8192, rope_theta=500000.0, dropout=0.05),
+    'huge': ForgeConfig(dim=2560, n_layers=40, n_heads=40, n_kv_heads=8, max_seq_len=8192, rope_theta=500000.0, dropout=0.05),
 
     # ─────────────────────────────────────────────────────────────────────────
     # DATACENTER / CLOUD (~7B-13B params) - 8x A100, cloud instances
     # ─────────────────────────────────────────────────────────────────────────
-    'giant': ForgeConfig(dim=4096, n_layers=32, n_heads=32, n_kv_heads=8, max_seq_len=8192, dropout=0.05),
-    'colossal': ForgeConfig(dim=4096, n_layers=48, n_heads=32, n_kv_heads=8, max_seq_len=16384, dropout=0.05),
+    'giant': ForgeConfig(dim=4096, n_layers=32, n_heads=32, n_kv_heads=8, max_seq_len=8192, rope_theta=500000.0, dropout=0.05),
+    'colossal': ForgeConfig(dim=4096, n_layers=48, n_heads=32, n_kv_heads=8, max_seq_len=16384, rope_theta=500000.0, dropout=0.05),
 
     # ─────────────────────────────────────────────────────────────────────────
     # MAXIMUM SCALE (~30B+ params) - Full datacenter, research frontier
     # ─────────────────────────────────────────────────────────────────────────
-    'titan': ForgeConfig(dim=6144, n_layers=48, n_heads=48, n_kv_heads=12, max_seq_len=16384, dropout=0.05),
-    'omega': ForgeConfig(dim=8192, n_layers=64, n_heads=64, n_kv_heads=16, max_seq_len=32768, dropout=0.05),
+    'titan': ForgeConfig(dim=6144, n_layers=48, n_heads=48, n_kv_heads=12, max_seq_len=16384, rope_theta=500000.0, dropout=0.05),
+    'omega': ForgeConfig(dim=8192, n_layers=64, n_heads=64, n_kv_heads=16, max_seq_len=32768, rope_theta=500000.0, dropout=0.05),
 }
 
 # Human-readable descriptions
 MODEL_DESCRIPTIONS = {
     # Pi-optimized presets
     'pi_zero': "Raspberry Pi Zero 2W - needs <1 GB RAM",
-    'pi_4': "Raspberry Pi 4 - needs ~4 GB RAM",
-    'pi_5': "Raspberry Pi 5 - needs ~8 GB RAM",
-    # Standard presets (VRAM = training estimate)
+    'pi_4': "Raspberry Pi 4 - needs <1 GB RAM",
+    'pi_5': "Raspberry Pi 5 - needs <1 GB RAM",
+    # Standard presets (VRAM = training with gradient checkpointing, batch=1)
     'nano': "Microcontrollers - needs <1 GB",
     'micro': "IoT devices - needs <1 GB",
     'tiny': "Edge devices - needs <1 GB",
     'mini': "Mobile, low-power - needs <1 GB",
     'small': "Entry GPU - needs ~1 GB VRAM",
-    'medium': "Mid-range GPU - needs ~2 GB VRAM",
-    'base': "Good GPU - needs ~3 GB VRAM",
-    'large': "RTX 3080+ - needs ~4 GB VRAM",
-    'xl': "RTX 4090 - needs ~11 GB VRAM",
-    'xxl': "Multi-GPU - needs ~27 GB VRAM",
-    'huge': "Server GPU - needs ~54 GB VRAM",
-    'giant': "Multi-node - needs ~130 GB VRAM",
-    'colossal': "Distributed - needs ~200 GB VRAM",
-    'titan': "Full datacenter - needs ~550 GB VRAM",
-    'omega': "Cluster - needs ~1.3 TB VRAM",
+    'medium': "Mid-range GPU - needs ~2.5 GB VRAM",
+    'base': "Mid-range GPU - needs ~3 GB VRAM",
+    'large': "Good GPU - needs ~6 GB VRAM",
+    'xl': "RTX 4090 / 16 GB+ GPU - needs ~12 GB VRAM",
+    'xxl': "RTX 4090 / 32 GB+ GPU - needs ~34 GB VRAM",
+    'huge': "Multi-GPU / 48 GB+ - needs ~50 GB VRAM",
+    'giant': "Multi-GPU / A100 - needs ~77 GB VRAM",
+    'colossal': "Multi-node - needs ~153 GB VRAM",
+    'titan': "Datacenter - needs ~280 GB VRAM",
+    'omega': "Large cluster - needs ~904 GB VRAM",
 }
 
 
-def estimate_training_vram(config: ForgeConfig) -> float:
+def estimate_training_vram(
+    config: ForgeConfig,
+    gradient_checkpointing: bool = True,
+) -> float:
     """
     Estimate VRAM needed for training a model config, in GB.
 
-    Accounts for weights (fp16), optimizer states (Adam fp32),
-    gradients (fp16), activations, and CUDA overhead.
-    Returns a conservative estimate with safety margin.
+    Accounts for weights (bf16), optimizer states (bf16 AdamW),
+    gradients (bf16), attention score matrices (quadratic in seq_len),
+    linear activations saved for backward, and output logits.
+
+    Args:
+        config: Model configuration.
+        gradient_checkpointing: If True (default), assumes gradient
+            checkpointing is enabled — only ~2 layers of activations
+            are stored at a time instead of all layers.  This matches
+            real training behavior (the OOM handler auto-enables it).
     """
     params = estimate_parameters(config)
-    # 2 (weights fp16) + 8 (adam fp32 states) + 2 (gradients fp16) = 12 bytes/param
-    # + ~4 bytes/param for activations/buffers (varies with batch/seq)
-    # + 20% safety margin for CUDA overhead and fragmentation
-    bytes_needed = params * 16 * 1.2
-    vram_gb = bytes_needed / (1024 ** 3)
-    # Minimum ~0.5 GB for PyTorch CUDA overhead
+    # bf16 training: weights(2) + grads(2) + Adam momentum(2) + variance(2)
+    # = 8 bytes/param (optimizer states are bf16 when model is bf16)
+    fixed_bytes = params * 8
+
+    # Per-layer activation memory for backward pass (batch=1 minimum)
+    # Linear term: autograd saves inputs to all linear layers, norms,
+    # activation functions, and element-wise ops. Coefficient calibrated
+    # against measured data: ~60 * dim bytes per (token * layer) in bf16.
+    linear_per_layer = config.max_seq_len * config.dim * 60 * 2
+
+    # Quadratic term: standard attention materializes full seq*seq score
+    # matrix per head (no Flash Attention). This dominates for seq>1024.
+    attn_per_layer = config.n_heads * config.max_seq_len ** 2 * 2
+
+    act_per_layer = linear_per_layer + attn_per_layer
+
+    if gradient_checkpointing:
+        # GC recomputes activations during backward — only ~1 layer
+        # held at a time.  Use 2 for safety margin.
+        act_bytes = act_per_layer * min(2, config.n_layers)
+    else:
+        act_bytes = act_per_layer * config.n_layers
+
+    # Output logits tensor (float32 for cross-entropy loss computation)
+    logits_bytes = config.max_seq_len * config.vocab_size * 4
+
+    # 1.5x empirical correction: PyTorch autograd stores additional
+    # intermediate values beyond minimal saved tensors (residual copies,
+    # dropout masks, norm statistics, etc.)
+    act_total = (act_bytes + logits_bytes) * 1.5
+
+    # 10% safety margin for CUDA allocator overhead and fragmentation
+    total_bytes = (fixed_bytes + act_total) * 1.1
+    vram_gb = total_bytes / (1024 ** 3)
     return round(max(0.5, vram_gb), 1)
 
 
@@ -567,7 +654,59 @@ def recommend_preset_for_vram(vram_gb: float) -> str:
     return best_name
 
 
-def get_preset(name: str, vocab_size: int = 8000) -> ForgeConfig:
+def recommend_preset_for_tokens(
+    token_count: int,
+    vocab_size: int = 32000,
+    vram_gb: float | None = None,
+) -> tuple[str, int]:
+    """Return the largest preset whose Chinchilla-optimal token count
+    is at or below *token_count*.
+
+    Chinchilla scaling (Hoffmann et al., 2022): optimal training uses
+    ~20 tokens per parameter.  So a 27M-param model needs ~540M tokens;
+    an 85M model needs ~1.7B tokens.
+
+    When *vram_gb* is given, results are further capped to presets
+    that fit the GPU for training.
+
+    Args:
+        token_count: Estimated number of tokens in the training data.
+        vocab_size: Vocabulary size for parameter estimation.
+        vram_gb: Available GPU VRAM in GB (optional).
+
+    Returns:
+        (preset_name, estimated_params) of the recommended preset.
+    """
+    best_name = "pi_zero"
+    best_params = 0
+
+    for name, cfg in MODEL_PRESETS.items():
+        cfg_copy = copy.deepcopy(cfg)
+        cfg_copy.vocab_size = vocab_size
+        params = estimate_parameters(cfg_copy)
+        # Chinchilla: need ~20 tokens per param
+        needed_tokens = params * 20
+        if needed_tokens > token_count:
+            continue
+        # Optionally filter by VRAM
+        if vram_gb is not None:
+            needed_vram = estimate_training_vram(cfg_copy)
+            if needed_vram > vram_gb:
+                continue
+        if params > best_params:
+            best_params = params
+            best_name = name
+
+    if best_params == 0:
+        # Even the smallest preset is too large — still return it
+        cfg_copy = copy.deepcopy(MODEL_PRESETS["pi_zero"])
+        cfg_copy.vocab_size = vocab_size
+        best_params = estimate_parameters(cfg_copy)
+
+    return best_name, best_params
+
+
+def get_preset(name: str, vocab_size: int = 32000) -> ForgeConfig:
     """Get a preset configuration."""
     if name not in MODEL_PRESETS:
         raise ValueError(f"Unknown preset: {name}. Available: {list(MODEL_PRESETS.keys())}")
@@ -582,6 +721,7 @@ def get_preset(name: str, vocab_size: int = 8000) -> ForgeConfig:
         n_kv_heads=preset.n_kv_heads,
         max_seq_len=preset.max_seq_len,
         dropout=preset.dropout,
+        rope_theta=preset.rope_theta,
     )
 
 
@@ -692,7 +832,12 @@ def config_for_param_target(
     a = 12 * n_layers
     b = vocab_size
     discriminant = b * b + 4 * a * target
-    dim = int((-b + math.sqrt(discriminant)) / (2 * a))
+    if discriminant < 0:
+        # Negative discriminant means target is too small;
+        # fall back to minimum dimension.
+        dim = 64
+    else:
+        dim = int((-b + math.sqrt(discriminant)) / (2 * a))
 
     # Ensure dim is at least 64
     dim = max(64, dim)
@@ -756,18 +901,36 @@ def config_for_param_target(
 
 
 def estimate_parameters(config: ForgeConfig) -> int:
-    """Estimate number of parameters for a config."""
-    # Embedding: vocab_size * dim
+    """Estimate number of parameters for a config.
+
+    Accounts for GQA (smaller K,V projections), per-layer norms,
+    SwiGLU FFN, weight-tied output head, and MTP predict heads.
+    """
+    # Embedding (weight-tied with output, counted once)
     embed = config.vocab_size * config.dim
 
-    # Per layer: attention + FFN
-    # Attention: 4 * dim * dim (Q, K, V, O)
-    # FFN: 3 * dim * hidden_dim (SwiGLU has 3 matrices)
-    per_layer = (4 * config.dim * config.dim +
-                 3 * config.dim * (config.hidden_dim or 4 * config.dim))
+    # Per-layer attention with GQA
+    head_dim = config.dim // config.n_heads
+    kv_dim = config.n_kv_heads * head_dim
+    # Wq + Wo: full dim×dim; Wk + Wv: dim×kv_dim (smaller with GQA)
+    attn = 2 * config.dim * config.dim + 2 * config.dim * kv_dim
 
-    # Total
-    return embed + (per_layer * config.n_layers) + config.dim
+    # SwiGLU FFN: w1, w2, w3 (3 matrices)
+    hidden = config.hidden_dim or int(2 * (4 * config.dim) / 3)
+    ffn = 3 * config.dim * hidden
+
+    # 2 RMSNorm per layer
+    norms = 2 * config.dim
+
+    per_layer = attn + ffn + norms
+
+    # Final norm
+    final_norm = config.dim
+
+    # MTP predict heads (not weight-tied)
+    mtp = config.n_predict_heads * config.vocab_size * config.dim
+
+    return embed + (per_layer * config.n_layers) + final_norm + mtp
 
 
 def list_presets() -> dict:

@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 # Type hints for optional dependencies
 if TYPE_CHECKING:
     from transformers import AutoModelForCausalLM, AutoTokenizer
-    from enigma_engine.core.model import Forge
+    from enigma_engine.core.model import Enigma  # noqa: F401
 
 # Deferred imports — loaded on first use to avoid ~90 MB RAM at startup
 _HAVE_TRANSFORMERS: bool | None = None  # None = not yet checked
@@ -294,7 +294,14 @@ class HuggingFaceModel:
 
             # Set pad token if not set
             if self.tokenizer.pad_token is None:
-                self.tokenizer.pad_token = self.tokenizer.eos_token
+                if self.tokenizer.eos_token is not None:
+                    self.tokenizer.pad_token = self.tokenizer.eos_token
+                else:
+                    logger.warning(
+                        "Tokenizer has no pad_token or eos_token — "
+                        "generation may fail. Setting pad_token_id=0."
+                    )
+                    self.tokenizer.pad_token_id = 0
 
             # Load model
             model_kwargs: dict[str, Any] = {
@@ -579,11 +586,11 @@ class HuggingFaceModel:
             # Join with EOS token and add final EOS for generation
             prompt = self.tokenizer.eos_token.join(conversation_parts) + self.tokenizer.eos_token
 
-            # Generate with DialoGPT-specific settings
+            # Generate with DialoGPT-specific settings (use caller params with sensible defaults)
             response = self.generate(
                 prompt,
                 max_new_tokens=min(max_new_tokens, 50),  # DialoGPT works better with shorter responses
-                temperature=0.7,
+                temperature=temperature,
                 top_p=0.9,
                 top_k=50,
                 repetition_penalty=1.2,  # Higher repetition penalty for DialoGPT
@@ -839,19 +846,30 @@ class HuggingFaceEngine:
         if reset_history:
             self.chat_history = []
 
-        # Use the universal router that works with any model
-        from .universal_router import chat_with_tools
+        try:
+            from .universal_router import chat_with_tools
+        except ImportError:
+            # universal_router not available — fall back to regular chat
+            return self.chat(message, max_gen=max_gen, temperature=temperature,
+                             reset_history=False, **kwargs)
 
         # Create a chat function that includes history
+        # NOTE: self.chat() already appends to self.chat_history,
+        # so we must NOT append again after the router returns.
         def chat_fn(msg, **kw):
             return self.chat(msg, max_gen=max_gen, temperature=temperature,
                            reset_history=False, **kw)
 
         response = chat_with_tools(message, chat_fn, **kwargs)
 
-        # Update history
-        self.chat_history.append({"role": "user", "content": message})
-        self.chat_history.append({"role": "assistant", "content": response})
+        # If the router handled the message via a tool (without calling
+        # chat_fn), we still need history updated.  If chat_fn was called,
+        # self.chat() already appended.  Check whether the last entry
+        # matches to avoid duplicates.
+        if (not self.chat_history
+                or self.chat_history[-1].get("content") != response):
+            self.chat_history.append({"role": "user", "content": message})
+            self.chat_history.append({"role": "assistant", "content": response})
 
         # Trim history if too long
         if len(self.chat_history) > self._max_chat_history:
@@ -956,8 +974,11 @@ def convert_hf_config_to_forge(hf_config) -> dict:
 
     # Model-specific configurations
     if model_type in ['gpt2', 'gpt_neo', 'gpt_neox']:
-        # GPT-2 family - standard transformer
-        pass  # Base config is sufficient
+        # GPT-2 family uses absolute position embeds, LayerNorm, GELU, bias
+        config['use_rope'] = False
+        config['use_rms_norm'] = False
+        config['use_swiglu'] = False
+        config['use_bias'] = True
 
     elif model_type == 'llama':
         # LLaMA family - has GQA
@@ -980,8 +1001,10 @@ def convert_hf_config_to_forge(hf_config) -> dict:
             config['rope_theta'] = hf_config.rope_theta
 
     elif model_type in ['phi', 'phi-msft']:
-        # Phi models - Microsoft's small efficient models
-        # Use partial rotary embeddings
+        # Phi-1/Phi-2: partial rotary, LayerNorm, GELU, bias=True
+        config['use_rms_norm'] = False
+        config['use_swiglu'] = False
+        config['use_bias'] = True
         if hasattr(hf_config, 'partial_rotary_factor'):
             config['partial_rotary_factor'] = hf_config.partial_rotary_factor
 
@@ -1056,7 +1079,7 @@ def convert_hf_weights_to_forge(hf_state_dict: dict, model_type: str) -> dict:
 def convert_huggingface_to_forge(
     model_id: str,
     **kwargs
-) -> 'Forge':
+) -> 'Enigma':
     """
     Load a HuggingFace model and convert it to Forge format.
 
@@ -1080,8 +1103,8 @@ def convert_huggingface_to_forge(
             "Install with: pip install transformers"
         )
 
-    # Import Forge components
-    from .model import Forge, ForgeConfig
+    # Import Enigma components
+    from .model import Enigma, ForgeConfig
 
     logger.info(f"Loading HuggingFace model: {model_id}")
 
@@ -1109,7 +1132,7 @@ def convert_huggingface_to_forge(
     forge_config = ForgeConfig(**forge_config_dict)
 
     # Create Forge model
-    forge_model = Forge(config=forge_config)
+    forge_model = Enigma(config=forge_config)
 
     # Get HuggingFace state dict
     hf_state_dict = hf_model.state_dict()

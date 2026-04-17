@@ -3,6 +3,7 @@ Model Registry - Safe Model Loading and Caching
 
 Provides thread-safe model loading with security checks.
 """
+import copy
 import hashlib
 import json
 import logging
@@ -39,16 +40,21 @@ class ModelRegistry:
             try:
                 with open(self.registry_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
+                if not isinstance(data, dict) or "models" not in data:
+                    logger.error("Model registry missing 'models' key, resetting")
+                    data = {"models": {}}
                 with self._lock:
                     self.registry = data
-            except (json.JSONDecodeError, OSError) as e:
-                logger.warning(f"Failed to load registry: {e}")
+            except json.JSONDecodeError as e:
+                logger.error(f"Model registry corrupted: {e}")
+            except OSError as e:
+                logger.warning(f"Cannot read model registry: {e}")
 
     def _save_registry(self):
         """Save registry to disk."""
         from enigma_engine.core.safe_save import atomic_write_json
         with self._lock:
-            data = json.loads(json.dumps(self.registry))
+            data = copy.deepcopy(self.registry)
         atomic_write_json(self.registry_file, data)
 
     def list_models(self) -> dict:
@@ -88,9 +94,6 @@ class ModelRegistry:
 
 # Thread-safe lock for model loading
 _load_lock = threading.Lock()
-
-# Cache of loaded models
-_model_cache: dict[str, Any] = {}
 
 
 def safe_load_weights(
@@ -181,8 +184,30 @@ def get_state_dict(
     elif 'model' in checkpoint:
         state_dict = checkpoint['model']
     else:
-        # Assume it's already a state dict
+        # Check for single-key nested checkpoint wrapping a state dict
+        if len(checkpoint) == 1:
+            nested_key = next(iter(checkpoint))
+            nested = checkpoint[nested_key]
+            if isinstance(nested, dict):
+                logger.info(
+                    "Unwrapping nested checkpoint key '%s'",
+                    nested_key)
+                return get_state_dict(nested, prefix)
+        # Assume it's already a state dict — warn in case it contains
+        # non-tensor entries (optimizer state, config, etc.).
+        non_tensor = [k for k in list(checkpoint.keys())[:5]
+                      if not isinstance(checkpoint.get(k), torch.Tensor)]
+        if non_tensor:
+            logger.warning(
+                "Checkpoint has no 'model_state_dict'/'state_dict'/'model' "
+                "key. Using it as-is, but it may contain non-tensor entries: %s",
+                non_tensor)
         state_dict = checkpoint
+
+    if not state_dict:
+        logger.warning(
+            "Extracted state dict is empty — checkpoint may be "
+            "corrupted or in an unrecognized format")
 
     # Strip prefix if present
     if prefix:
@@ -195,24 +220,6 @@ def get_state_dict(
         state_dict = new_state_dict
 
     return state_dict
-
-
-def cache_model(key: str, model: Any) -> None:
-    """Cache a model instance."""
-    with _load_lock:
-        _model_cache[key] = model
-
-
-def get_cached_model(key: str) -> Optional[Any]:
-    """Get a cached model instance."""
-    with _load_lock:
-        return _model_cache.get(key)
-
-
-def clear_cache() -> None:
-    """Clear the model cache."""
-    with _load_lock:
-        _model_cache.clear()
 
 
 def get_model_hash(path: Union[str, Path]) -> str:
@@ -233,8 +240,5 @@ __all__ = [
     'ModelRegistry',
     'safe_load_weights',
     'get_state_dict',
-    'cache_model',
-    'get_cached_model',
-    'clear_cache',
     'get_model_hash',
 ]

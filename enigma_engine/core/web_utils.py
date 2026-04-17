@@ -99,6 +99,73 @@ def ddg_search(query: str, max_results: int = 10) -> list[dict]:
     return parser.results[:max_results]
 
 
+def ddg_image_search(query: str, max_results: int = 5) -> list[dict]:
+    """Search DuckDuckGo for images and return results.
+
+    Each result is ``{"title": str, "url": str, "thumbnail": str}``.
+    Returns an empty list on error.
+
+    Uses DuckDuckGo's image search via the ``vqd`` token mechanism.
+
+    Args:
+        query: Image search query string.
+        max_results: Maximum number of results to return.
+    """
+    import requests
+    from urllib.parse import quote_plus
+
+    # Step 1: Get vqd token from DDG search page
+    token_url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
+    try:
+        token_resp = requests.get(token_url, headers=_HEADERS, timeout=10)
+        token_resp.raise_for_status()
+    except Exception as exc:
+        logger.warning("DDG image search token request failed: %s", exc)
+        return []
+
+    # Extract vqd token
+    import re
+    vqd_match = re.search(r'vqd="([^"]+)"', token_resp.text)
+    if not vqd_match:
+        vqd_match = re.search(r"vqd=([^&'\"]+)", token_resp.text)
+    if not vqd_match:
+        logger.warning("DDG image search: could not extract vqd token")
+        return []
+
+    vqd = vqd_match.group(1)
+
+    # Step 2: Fetch image results JSON
+    img_url = (
+        f"https://duckduckgo.com/i.js?l=us-en&o=json"
+        f"&q={quote_plus(query)}&vqd={vqd}"
+        f"&f=,,,,,&p=1"
+    )
+    img_headers = {**_HEADERS, "Referer": "https://duckduckgo.com/"}
+    try:
+        img_resp = requests.get(img_url, headers=img_headers, timeout=10)
+        img_resp.raise_for_status()
+        data = img_resp.json()
+    except Exception as exc:
+        logger.warning("DDG image search request failed: %s", exc)
+        return []
+
+    results: list[dict] = []
+    for item in data.get("results", []):
+        image_url = item.get("image", "")
+        thumbnail = item.get("thumbnail", "")
+        title = item.get("title", "")
+        if image_url:
+            results.append({
+                "title": title,
+                "url": image_url,
+                "thumbnail": thumbnail,
+            })
+        if len(results) >= max_results:
+            break
+
+    return results
+
+
 def fetch_page_text(url: str, max_chars: int = 3000) -> str:
     """Fetch a URL and extract readable text content.
 
@@ -172,7 +239,7 @@ class _DDGParser(HTMLParser):
         if tag == "a" and "result__a" in attrs_d.get("class", ""):
             self._in_title = True
             self._url = attrs_d.get("href", "")
-        if (tag == "a"
+        elif (tag == "a"
                 and "result__snippet" in attrs_d.get("class", "")):
             self._in_snippet = True
 
@@ -221,5 +288,5 @@ class _TextExtractor(HTMLParser):
     def handle_data(self, data: str) -> None:
         if self._skip_depth == 0:
             t = data.strip()
-            if t and len(t) > 2:
+            if t:
                 self.text.append(t)

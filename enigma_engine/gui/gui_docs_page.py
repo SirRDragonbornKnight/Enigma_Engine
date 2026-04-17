@@ -21,12 +21,13 @@ from pathlib import Path
 import customtkinter as ctk
 
 from enigma_engine.gui.widgets import (
-    C_ACCENT, C_ACCENT_DIM, C_BORDER, C_CYAN, C_GREEN,
-    C_GREEN_DIM, C_INPUT, C_ORANGE, C_PANEL, C_RED,
-    C_SURFACE, C_TEXT, C_TEXT_BRIGHT, C_TEXT_DIM,
+    C_ACCENT, C_BORDER, C_CYAN, C_GREEN,
+    C_INPUT, C_ORANGE, C_PANEL, C_RED,
+    C_SURFACE, C_TEXT, C_TEXT_BRIGHT,
+    C_TEXT_DIM,
     FONT_BODY, FONT_SMALL, FONT_TINY,
     HUDFrame, SectionLabel, SelectableLabel, Tooltip,
-    wire_hotkeys,
+    themed_button, wire_hotkeys,
 )
 from enigma_engine.gui.scanners import (
     INFO_DIR, scan_docs,
@@ -58,11 +59,11 @@ class DocsPageMixin:
             side="left", fill="x", expand=True)
 
         # New file button
-        new_btn = ctk.CTkButton(
-            top, text="+ NEW", width=80, height=34,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
-            text_color=C_ACCENT, command=self._docs_new_file)
+        new_btn = themed_button(
+            top, "+ NEW", style="action",
+            width=80, height=34,
+            font=FONT_SMALL,
+            command=self._docs_new_file)
         new_btn.pack(side="right", padx=(4, 0))
         Tooltip(new_btn, "Create new file")
 
@@ -140,27 +141,27 @@ class DocsPageMixin:
         btn_frame = ctk.CTkFrame(editor_top, fg_color="transparent")
         btn_frame.grid(row=0, column=1, sticky="e")
 
-        save_btn = ctk.CTkButton(
-            btn_frame, text="SAVE", width=70, height=30,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_GREEN_DIM, hover_color="#1a5a2a",
-            text_color=C_GREEN, command=self._docs_save)
+        save_btn = themed_button(
+            btn_frame, "SAVE", style="primary",
+            width=70, height=30,
+            font=FONT_SMALL,
+            command=self._docs_save)
         save_btn.pack(side="left", padx=(0, 4))
         Tooltip(save_btn, "Save changes (Ctrl+S)")
 
-        del_btn = ctk.CTkButton(
-            btn_frame, text="DELETE", width=70, height=30,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color="#5a1a1a",
-            text_color=C_RED, command=self._docs_delete)
+        del_btn = themed_button(
+            btn_frame, "DELETE", style="danger",
+            width=70, height=30,
+            font=FONT_SMALL,
+            command=self._docs_delete)
         del_btn.pack(side="left", padx=(0, 4))
         Tooltip(del_btn, "Delete this file")
 
-        reload_btn = ctk.CTkButton(
-            btn_frame, text="RELOAD", width=70, height=30,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_BORDER,
-            text_color=C_TEXT_DIM, command=self._docs_refresh)
+        reload_btn = themed_button(
+            btn_frame, "RELOAD", style="secondary",
+            width=70, height=30,
+            font=FONT_SMALL,
+            command=self._docs_refresh)
         reload_btn.pack(side="left")
         Tooltip(reload_btn, "Refresh file list")
 
@@ -172,25 +173,22 @@ class DocsPageMixin:
             self._docs_unsaved_bar, text="Unsaved changes",
             font=FONT_TINY, text_color=C_ORANGE, anchor="w"
         ).pack(side="left", padx=(4, 6))
-        ctk.CTkButton(
-            self._docs_unsaved_bar, text="SAVE", width=50, height=24,
-            font=FONT_TINY, corner_radius=2,
-            fg_color=C_GREEN_DIM, hover_color="#1a5a2a",
-            text_color=C_GREEN,
+        themed_button(
+            self._docs_unsaved_bar, "SAVE", style="primary",
+            width=50, height=24,
+            font=FONT_TINY,
             command=self._docs_unsaved_save
         ).pack(side="left", padx=(0, 4))
-        ctk.CTkButton(
-            self._docs_unsaved_bar, text="DISCARD", width=60, height=24,
-            font=FONT_TINY, corner_radius=2,
-            fg_color="#3a1111", hover_color="#5a1a1a",
-            text_color=C_RED,
+        themed_button(
+            self._docs_unsaved_bar, "DISCARD", style="danger",
+            width=60, height=24,
+            font=FONT_TINY,
             command=self._docs_unsaved_discard
         ).pack(side="left", padx=(0, 4))
-        ctk.CTkButton(
-            self._docs_unsaved_bar, text="CANCEL", width=55, height=24,
-            font=FONT_TINY, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_BORDER,
-            text_color=C_TEXT_DIM,
+        themed_button(
+            self._docs_unsaved_bar, "CANCEL", style="secondary",
+            width=55, height=24,
+            font=FONT_TINY,
             command=self._docs_unsaved_cancel
         ).pack(side="left")
 
@@ -201,18 +199,16 @@ class DocsPageMixin:
             self._docs_delete_bar, text="Delete file?",
             font=FONT_TINY, text_color=C_RED, anchor="w")
         self._docs_delete_label.pack(side="left", padx=(4, 6))
-        ctk.CTkButton(
-            self._docs_delete_bar, text="YES", width=40, height=24,
-            font=FONT_TINY, corner_radius=2,
-            fg_color="#3a1111", hover_color="#5a1a1a",
-            text_color=C_RED,
+        themed_button(
+            self._docs_delete_bar, "YES", style="danger",
+            width=40, height=24,
+            font=FONT_TINY,
             command=self._docs_confirm_delete
         ).pack(side="left", padx=(0, 4))
-        ctk.CTkButton(
-            self._docs_delete_bar, text="NO", width=40, height=24,
-            font=FONT_TINY, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_BORDER,
-            text_color=C_TEXT_DIM,
+        themed_button(
+            self._docs_delete_bar, "NO", style="secondary",
+            width=40, height=24,
+            font=FONT_TINY,
             command=self._docs_delete_bar.grid_forget
         ).pack(side="left")
 
@@ -261,7 +257,7 @@ class DocsPageMixin:
         # Editor footer: stats strip
         footer = ctk.CTkFrame(editor_col, fg_color="transparent",
                               height=20)
-        footer.grid(row=2, column=0, sticky="ew", pady=(2, 0))
+        footer.grid(row=3, column=0, sticky="ew", pady=(2, 0))
         footer.grid_columnconfigure(0, weight=1)
 
         self._docs_stats_label = SelectableLabel(
@@ -278,8 +274,13 @@ class DocsPageMixin:
         # Populate browser
         self._docs_refresh()
 
+        # Cancel any existing auto-save timer before starting a new one
+        old_id = getattr(self, "_docs_auto_save_id", None)
+        if old_id is not None:
+            self.after_cancel(old_id)
         # Start auto-save timer (30s interval)
-        self.after(30_000, self._docs_auto_save)
+        self._docs_auto_save_id: str | None = None
+        self._docs_auto_save_id = self.after(30_000, self._docs_auto_save)
 
     # ================================================================
     # File browser
@@ -404,15 +405,36 @@ class DocsPageMixin:
                         f"Install the required library:\n"
                         f"  pip install {lib}"
                     )
+                elif len(content) > 500_000:
+                    content = (
+                        content[:500_000]
+                        + f"\n\n--- Truncated (showing first 500,000 of "
+                        f"{len(content):,} chars) ---"
+                    )
             except Exception as e:
                 content = f"Error reading {p.name}:\n{e}"
         else:
             try:
                 content = p.read_text(encoding="utf-8")
+                if len(content) > 500_000:
+                    content = (
+                        content[:500_000]
+                        + f"\n\n--- Truncated (showing first 500,000 of "
+                        f"{len(content):,} chars) ---"
+                    )
             except OSError as e:
                 self._docs_editor.delete("1.0", "end")
                 self._docs_editor.insert("1.0", f"Error reading file:\n{e}")
                 return
+
+        # Clean up stale inline widgets from the previous file
+        self._docs_cancel_rename()
+        if hasattr(self, "_docs_delete_bar") \
+                and self._docs_delete_bar.winfo_ismapped():
+            self._docs_delete_bar.grid_forget()
+        if hasattr(self, "_docs_find_bar") \
+                and self._docs_find_bar.winfo_ismapped():
+            self._docs_toggle_find()
 
         self._docs_current_path = path
         self._docs_saved_content = content
@@ -558,10 +580,12 @@ class DocsPageMixin:
         self._docs_modified = False
 
         # Update status
+        saved_name = path.name
         self._docs_filename.configure(
-            text=f"{path.name} (saved)", text_color=C_GREEN)
-        self.after(2000, lambda: self._docs_filename.configure(
-            text=path.name, text_color=C_TEXT_BRIGHT))
+            text=f"{saved_name} (saved)", text_color=C_GREEN)
+        self.after(2000, lambda n=saved_name:
+                   self._docs_filename.configure(
+                       text=n, text_color=C_TEXT_BRIGHT))
 
     def _docs_delete(self):
         """Show inline delete confirmation for the current file."""
@@ -572,7 +596,7 @@ class DocsPageMixin:
         self._docs_delete_label.configure(
             text=f"Delete {path.name}?")
         self._docs_delete_bar.grid(
-            row=3, column=0, sticky="ew", pady=(2, 0))
+            row=4, column=0, sticky="ew", pady=(2, 0))
 
     def _docs_confirm_delete(self):
         """Actually delete the file after inline confirmation."""
@@ -634,9 +658,16 @@ class DocsPageMixin:
         old_path = Path(self._docs_current_path)
 
         # Validate
+        _RESERVED_NAMES = frozenset({
+            'CON', 'PRN', 'AUX', 'NUL',
+            *(f'COM{i}' for i in range(1, 10)),
+            *(f'LPT{i}' for i in range(1, 10)),
+        })
         if (not new_stem
                 or new_stem == old_path.stem
-                or any(c in new_stem for c in r'\/:*?"<>|')):
+                or any(c in new_stem for c in r'\/:*?"<>|')
+                or '..' in new_stem
+                or new_stem.upper() in _RESERVED_NAMES):
             self._docs_cancel_rename()
             return
 
@@ -723,7 +754,10 @@ class DocsPageMixin:
         menu.add_command(
             label="Find (Ctrl+F)",
             command=self._docs_toggle_find)
-        menu.tk_popup(event.x_root, event.y_root)
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.destroy()
 
     def _docs_paste(self):
         """Paste clipboard text into DOCS editor, replacing selection."""
@@ -773,18 +807,16 @@ class DocsPageMixin:
                 "<Return>", lambda e: self._docs_find_next())
             self._docs_find_entry.bind(
                 "<Escape>", lambda e: self._docs_toggle_find())
-            ctk.CTkButton(
-                self._docs_find_bar, text="\u25b2", width=30,
-                height=28, font=FONT_TINY, corner_radius=2,
-                fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
-                text_color=C_TEXT_DIM,
+            themed_button(
+                self._docs_find_bar, "\u25b2",
+                style="secondary", width=30, height=28,
+                font=FONT_TINY,
                 command=self._docs_find_prev
             ).pack(side="left", padx=1, pady=3)
-            ctk.CTkButton(
-                self._docs_find_bar, text="\u25bc", width=30,
-                height=28, font=FONT_TINY, corner_radius=2,
-                fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
-                text_color=C_TEXT_DIM,
+            themed_button(
+                self._docs_find_bar, "\u25bc",
+                style="secondary", width=30, height=28,
+                font=FONT_TINY,
                 command=self._docs_find_next
             ).pack(side="left", padx=1, pady=3)
             self._docs_find_count = SelectableLabel(
@@ -792,11 +824,10 @@ class DocsPageMixin:
                 font=FONT_TINY, text_color=C_TEXT_DIM)
             self._docs_find_count.pack(
                 side="left", padx=(8, 0), pady=3)
-            ctk.CTkButton(
-                self._docs_find_bar, text="\u2716", width=28,
-                height=28, font=FONT_TINY, corner_radius=2,
-                fg_color="transparent", hover_color=C_ACCENT_DIM,
-                text_color=C_TEXT_DIM,
+            themed_button(
+                self._docs_find_bar, "\u2716",
+                style="icon", width=28, height=28,
+                font=FONT_TINY,
                 command=self._docs_toggle_find
             ).pack(side="right", padx=4, pady=3)
             # Configure highlight tag
@@ -909,4 +940,4 @@ class DocsPageMixin:
                 pass  # Silently skip — user can manual-save
         # Re-schedule (30 seconds)
         if hasattr(self, "after"):
-            self.after(30_000, self._docs_auto_save)
+            self._docs_auto_save_id = self.after(30_000, self._docs_auto_save)

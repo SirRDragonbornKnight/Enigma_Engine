@@ -171,9 +171,11 @@ class OllamaModelLoader:
             elif "params" in media_type or "config" in media_type:
                 config_layer = layer
             elif "template" in media_type:
-                template = self._read_blob(layer.get("digest", ""))
+                raw = self._read_blob(layer.get("digest", ""))
+                template = raw.decode("utf-8", errors="replace") if raw else ""
             elif "system" in media_type:
-                system = self._read_blob(layer.get("digest", ""))
+                raw = self._read_blob(layer.get("digest", ""))
+                system = raw.decode("utf-8", errors="replace") if raw else ""
 
         if not model_layer:
             return None
@@ -201,8 +203,8 @@ class OllamaModelLoader:
             quantization=config.get("quantization", "unknown"),
             parameter_size=self._estimate_param_size(size),
             family=config.get("architecture", config.get("model_type", "unknown")),
-            template=template if isinstance(template, str) else "",
-            system_prompt=system if isinstance(system, str) else "",
+            template=template,
+            system_prompt=system,
             context_length=config.get("context_length", 4096),
             embedding_length=config.get("embedding_length", 4096),
             attention_heads=config.get("num_attention_heads", 32),

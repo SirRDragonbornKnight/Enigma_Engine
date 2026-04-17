@@ -121,6 +121,7 @@ class RolloutBuffer:
         self._masks: list[torch.Tensor] = []
         self._full_ids: list[torch.Tensor | None] = []
         self._prompt_lens: list[int | None] = []
+        self._ref_logps: list[torch.Tensor | None] = []
 
     def store(
         self,
@@ -130,12 +131,14 @@ class RolloutBuffer:
         response_mask: torch.Tensor,
         full_ids: torch.Tensor | None = None,
         prompt_len: int | None = None,
+        ref_logps: torch.Tensor | None = None,
     ) -> None:
         """Store one rollout experience.
 
         All tensors should be 1D with the same length (response tokens).
         full_ids and prompt_len are optional — when provided, PPO epochs
         can recompute fresh log-probs for proper importance sampling.
+        ref_logps are reference-model log-probs for per-token KL penalty.
         """
         self._log_probs.append(log_probs.detach())
         self._values.append(values.detach())
@@ -143,6 +146,8 @@ class RolloutBuffer:
         self._masks.append(response_mask.detach())
         self._full_ids.append(full_ids.detach() if full_ids is not None else None)
         self._prompt_lens.append(prompt_len)
+        self._ref_logps.append(
+            ref_logps.detach() if ref_logps is not None else None)
 
     def __len__(self) -> int:
         return len(self._log_probs)
@@ -154,6 +159,7 @@ class RolloutBuffer:
         self._masks.clear()
         self._full_ids.clear()
         self._prompt_lens.clear()
+        self._ref_logps.clear()
 
     def compute_advantages(
         self,
@@ -338,6 +344,12 @@ def _get_response_logps(
         2, targets.unsqueeze(-1)).squeeze(-1)  # (1, L-1)
 
     response_start = max(prompt_len - 1, 0)
+    seq_len = per_token.shape[1]
+    if response_start >= seq_len:
+        logger.warning(
+            "prompt_len %d >= sequence length %d — returning zeros",
+            prompt_len, seq_len + 1)
+        return per_token.new_zeros(1)
     return per_token[0, response_start:]
 
 
@@ -360,6 +372,12 @@ def _get_response_entropy(
     entropy = -(probs * log_probs).sum(dim=-1)  # (1, L-1)
 
     response_start = max(prompt_len - 1, 0)
+    seq_len = entropy.shape[1]
+    if response_start >= seq_len:
+        logger.warning(
+            "prompt_len %d >= sequence length %d — returning zeros",
+            prompt_len, seq_len + 1)
+        return entropy.new_zeros(1)
     return entropy[0, response_start:]
 
 
@@ -469,6 +487,10 @@ class RewardModel(nn.Module):
         if attention_mask is not None:
             # Last non-zero position per batch
             lengths = attention_mask.sum(dim=-1).long() - 1
+            if (lengths < 0).any():
+                logger.warning(
+                    "RewardModel received all-padding batch — "
+                    "reward scores will be unreliable.")
             lengths = lengths.clamp(min=0)
             last_hidden = h[torch.arange(B, device=h.device), lengths]
         else:
@@ -558,7 +580,7 @@ class RewardTrainer:
             eps=self.config.adam_eps,
         )
 
-        amp_dt = _resolve_amp_dtype(getattr(self.config, "amp_dtype", "auto"))
+        amp_dt = _resolve_amp_dtype(self.config.amp_dtype)
         scaler = torch.amp.GradScaler("cuda") if (
             self.config.use_amp and torch.cuda.is_available()
             and amp_dt != torch.bfloat16
@@ -655,6 +677,270 @@ class RewardTrainer:
         return pairs
 
 
+
+
+# =============================================================================
+# T5-8: PROCESS REWARD MODEL (PRM) -- per-step reward scoring
+# =============================================================================
+
+class ProcessRewardModel(nn.Module):
+    """Reward model that scores each reasoning step, not just the final answer.
+
+    For chain-of-thought / ``<think>`` blocks, assigns a scalar reward
+    to each step boundary (e.g. sentence-ending tokens or explicit step
+    markers). Provides denser training signal than outcome-based rewards.
+
+    Args:
+        base_model: Base Enigma model whose architecture is reused.
+        freeze_base: Freeze transformer weights, train only the step head.
+        step_markers: Token IDs that mark reasoning step boundaries.
+    """
+
+    def __init__(
+        self,
+        base_model: nn.Module,
+        freeze_base: bool = True,
+        step_markers: list[int] | None = None,
+    ):
+        super().__init__()
+
+        self.base_config = getattr(base_model, "config", None)
+        self.tok_embeddings = base_model.tok_embeddings
+        self.layers = base_model.layers
+        self.norm = base_model.norm
+
+        if hasattr(base_model, "freqs_cis") and base_model.freqs_cis is not None:
+            self.register_buffer("freqs_cis", base_model.freqs_cis.clone())
+        else:
+            self.freqs_cis = None
+
+        self._causal_mask: torch.Tensor | None = None
+        self._causal_mask_size: int = 0
+
+        config = getattr(base_model, "config", None)
+        self._use_rope = getattr(config, "use_rope", True)
+        if not self._use_rope and hasattr(base_model, "pos"):
+            self.pos = base_model.pos
+
+        dim = getattr(config, "dim", 512)
+
+        # Per-token step reward head
+        self.step_head = nn.Linear(dim, 1, bias=False)
+        nn.init.normal_(self.step_head.weight, std=0.02)
+
+        # Step boundary token IDs
+        self.step_markers: set[int] = set(step_markers or [])
+
+        if freeze_base:
+            for param in self.tok_embeddings.parameters():
+                param.requires_grad = False
+            for param in self.layers.parameters():
+                param.requires_grad = False
+            for param in self.norm.parameters():
+                param.requires_grad = False
+
+    def _get_causal_mask(self, size: int) -> torch.Tensor:
+        if self._causal_mask is None or self._causal_mask_size < size:
+            mask = torch.full((size, size), float('-inf'))
+            self._causal_mask = torch.triu(mask, diagonal=1)
+            self._causal_mask_size = size
+        return self._causal_mask[:size, :size]
+
+    def forward(
+        self,
+        input_ids: torch.Tensor,
+        step_mask: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        """Compute per-step rewards.
+
+        Args:
+            input_ids: (B, L) token IDs.
+            step_mask: Optional (B, L) boolean mask -- True at step boundary
+                positions. If None, auto-detect from step_markers.
+
+        Returns:
+            (B, N) rewards where N is the number of step boundary tokens per
+            sequence, or (B, L) if step_mask is None and no markers are set.
+        """
+        B, T = input_ids.shape
+        h = self.tok_embeddings(input_ids)
+
+        if not self._use_rope and hasattr(self, "pos"):
+            h = h + self.pos[:, :T]
+
+        mask = None
+        if T > 1:
+            mask = self._get_causal_mask(T).to(device=h.device).unsqueeze(0).unsqueeze(0)
+
+        for layer in self.layers:
+            h = layer(h, self.freqs_cis, mask, False, 0)
+        h = self.norm(h)
+
+        # Per-token rewards
+        all_rewards = self.step_head(h).squeeze(-1)  # (B, L)
+
+        # Auto-detect step boundaries if no mask provided
+        if step_mask is None and self.step_markers:
+            step_mask = torch.zeros_like(input_ids, dtype=torch.bool)
+            for marker in self.step_markers:
+                step_mask |= (input_ids == marker)
+
+        if step_mask is not None and step_mask.any():
+            # Return only rewards at step boundary positions
+            max_steps = step_mask.sum(dim=1).max().item()
+            result = all_rewards.new_zeros(B, max(max_steps, 1))
+            for b in range(B):
+                positions = step_mask[b].nonzero(as_tuple=True)[0]
+                for i, pos in enumerate(positions):
+                    if i < result.shape[1]:
+                        result[b, i] = all_rewards[b, pos]
+            return result
+
+        return all_rewards
+
+
+@dataclass
+class PRMTrainerConfig:
+    """Config for Process Reward Model training."""
+    epochs: int = 3
+    learning_rate: float = 1e-5
+    batch_size: int = 4
+    gradient_clip: float = 1.0
+    max_length: int = 512
+    use_amp: bool = True
+    amp_dtype: str = "auto"
+
+
+class PRMTrainer:
+    """Train a ProcessRewardModel from step-level labeled data.
+
+    Training data format: list of dicts with ``input_ids``,
+    ``step_positions`` (indices of step boundaries), and
+    ``step_labels`` (+1 for correct steps, -1 for wrong steps).
+    """
+
+    def __init__(
+        self,
+        prm: ProcessRewardModel,
+        tokenizer: Any,
+        config: PRMTrainerConfig | None = None,
+    ):
+        self.model = prm
+        self.tokenizer = tokenizer
+        self.config = config or PRMTrainerConfig()
+        self.device = next(prm.parameters()).device
+        self.on_progress: Callable[[int, str], None] | None = None
+        self._stop_requested = False
+        self._lock = threading.Lock()
+
+    def request_stop(self) -> None:
+        with self._lock:
+            self._stop_requested = True
+
+    def _should_stop(self) -> bool:
+        with self._lock:
+            return self._stop_requested
+
+    def train(
+        self,
+        step_data: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Train PRM on step-level labeled data.
+
+        Args:
+            step_data: List of dicts with keys:
+                - "input_ids": list[int] -- tokenized sequence
+                - "step_positions": list[int] -- indices of step boundaries
+                - "step_labels": list[float] -- +1.0 correct, -1.0 wrong
+
+        Returns:
+            Dict with final_loss, epochs_completed.
+        """
+        self._stop_requested = False
+        self.model.train()
+
+        optimizer = torch.optim.AdamW(
+            [p for p in self.model.parameters() if p.requires_grad],
+            lr=self.config.learning_rate,
+        )
+
+        amp_dt = _resolve_amp_dtype(self.config.amp_dtype)
+        scaler = torch.amp.GradScaler("cuda") if (
+            self.config.use_amp and torch.cuda.is_available()
+            and amp_dt != torch.bfloat16
+        ) else None
+        use_amp = self.config.use_amp and torch.cuda.is_available()
+
+        final_loss = float("inf")
+        epochs_done = 0
+
+        for epoch in range(self.config.epochs):
+            if self._should_stop():
+                break
+
+            epoch_loss = 0.0
+            n_batches = 0
+
+            for item in step_data:
+                if self._should_stop():
+                    break
+
+                ids = item.get("input_ids", [])
+                positions = item.get("step_positions", [])
+                labels = item.get("step_labels", [])
+
+                if not ids or not positions or len(positions) != len(labels):
+                    continue
+
+                # Truncate to max length
+                ids = ids[:self.config.max_length]
+                positions = [p for p in positions if p < len(ids)]
+                labels = labels[:len(positions)]
+                if not positions:
+                    continue
+
+                input_ids = torch.tensor([ids], dtype=torch.long, device=self.device)
+                step_mask = torch.zeros(1, len(ids), dtype=torch.bool, device=self.device)
+                for p in positions:
+                    step_mask[0, p] = True
+                target = torch.tensor([labels], dtype=torch.float, device=self.device)
+
+                optimizer.zero_grad()
+
+                with torch.amp.autocast("cuda", dtype=amp_dt, enabled=use_amp):
+                    rewards = self.model(input_ids, step_mask=step_mask)
+                    # Trim to match target length
+                    n_steps = min(rewards.shape[1], target.shape[1])
+                    loss = F.mse_loss(rewards[:, :n_steps], target[:, :n_steps])
+
+                if scaler is not None:
+                    scaler.scale(loss).backward()
+                    scaler.unscale_(optimizer)
+                    nn.utils.clip_grad_norm_(
+                        self.model.parameters(), self.config.gradient_clip)
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    loss.backward()
+                    nn.utils.clip_grad_norm_(
+                        self.model.parameters(), self.config.gradient_clip)
+                    optimizer.step()
+
+                epoch_loss += loss.item()
+                n_batches += 1
+
+            avg = epoch_loss / max(n_batches, 1)
+            final_loss = avg
+            epochs_done = epoch + 1
+            logger.info("PRM epoch %d: loss=%.4f", epoch + 1, avg)
+
+            if self.on_progress:
+                pct = int((epoch + 1) / self.config.epochs * 100)
+                self.on_progress(pct, f"PRM epoch {epoch + 1}: loss={avg:.4f}")
+
+        self.model.eval()
+        return {"final_loss": final_loss, "epochs_completed": epochs_done}
+
 # =============================================================================
 # RLHF TRAINER (RL-B) â€” PPO-style policy gradient with reward model
 # =============================================================================
@@ -664,7 +950,9 @@ class RLHFConfig:
     """Config for RLHF training with PPO."""
     epochs: int = 3
     learning_rate: float = 1e-6
-    kl_coeff: float = 0.1  # KL penalty coefficient
+    kl_coeff: float = 0.1  # KL penalty coefficient (initial value)
+    kl_target: float = 0.0  # Target KL divergence for adaptive KL (0 = disabled)
+    kl_horizon: float = 10000.0  # Adaptive KL update speed (higher = slower adaptation)
     clip_range: float = 0.2  # PPO clipped surrogate ratio
     n_responses: int = 4  # responses per prompt for best-of-N
     max_new_tokens: int = 128
@@ -723,6 +1011,22 @@ class RLHFTrainer:
         self.on_progress: Callable[[int, str], None] | None = None
         self._stop_requested = False
         self._lock = threading.Lock()
+
+        # Adaptive KL coefficient (R9). Updated each epoch if kl_target > 0.
+        self._kl_coeff = self.config.kl_coeff
+
+    def _update_adaptive_kl(self, observed_kl: float) -> None:
+        """Adjust ``_kl_coeff`` toward ``kl_target`` (PPO-Max style).
+
+        If observed KL is above target, increase coefficient to
+        penalise more.  If below, decrease to allow more exploration.
+        """
+        target = self.config.kl_target
+        if target <= 0:
+            return  # adaptive KL disabled
+        proportional_error = (observed_kl - target) / target
+        mult = 1.0 + proportional_error / self.config.kl_horizon
+        self._kl_coeff = max(1e-6, self._kl_coeff * mult)
 
     def request_stop(self) -> None:
         with self._lock:
@@ -787,11 +1091,12 @@ class RLHFTrainer:
         """Set up the reference policy for KL penalty.
 
         Preferred: wrap model with LoRA so the frozen base *is* the
-        reference — zero extra VRAM.  Fallback: CPU-offloaded copy
-        (one GPU transfer per KL computation).
+        reference — zero extra VRAM.  Fallback: keep reference on GPU
+        if there's enough VRAM, otherwise CPU-offloaded copy.
         """
         self._use_lora_ref = False
         self._ref_model_cpu = None
+        self._ref_on_gpu = False
 
         try:
             from enigma_engine.core.lora_utils import (
@@ -806,13 +1111,33 @@ class RLHFTrainer:
                     "as reference policy (no extra VRAM)")
                 return
         except Exception as exc:
-            logger.debug("LoRA setup failed, using CPU offload: %s", exc)
+            logger.debug("LoRA setup failed, using copy: %s", exc)
 
-        # Fallback: CPU-offloaded reference
         ref = copy.deepcopy(self.model)
         ref.eval()
         for p in ref.parameters():
             p.requires_grad = False
+
+        # Try keeping ref on GPU if enough VRAM (S546 — avoids 1000+ transfers)
+        if torch.cuda.is_available() and self.device.type == "cuda":
+            try:
+                model_bytes = sum(
+                    p.nelement() * p.element_size()
+                    for p in ref.parameters())
+                free_bytes = torch.cuda.mem_get_info(self.device)[0]
+                # Keep on GPU if model fits in <50% of remaining VRAM
+                if model_bytes < free_bytes * 0.5:
+                    self._ref_model_cpu = ref.to(self.device)
+                    self._ref_on_gpu = True
+                    logger.info(
+                        "RLHF: reference model kept on GPU "
+                        "(%.0f MB model, %.0f MB free)",
+                        model_bytes / 1e6, free_bytes / 1e6)
+                    return
+            except Exception as exc:
+                logger.debug("GPU ref check failed: %s", exc)
+
+        # Fallback: CPU-offloaded reference
         ref = ref.cpu()
         self._ref_model_cpu = ref
         logger.info(
@@ -835,7 +1160,20 @@ class RLHFTrainer:
             self.model.train()
             return ref_logps
 
-        ref = self._ref_model_cpu.to(self.device)
+        # Reference model already on GPU — no transfer needed (S546)
+        if self._ref_on_gpu:
+            with torch.no_grad():
+                return _get_response_logps(
+                    self._ref_model_cpu, full_ids, prompt_len)
+
+        try:
+            ref = self._ref_model_cpu.to(self.device)
+        except RuntimeError as e:
+            if "out of memory" in str(e).lower():
+                logger.error("OOM moving reference model to %s — freeing cache", self.device)
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            raise
         try:
             with torch.no_grad():
                 ref_logps = _get_response_logps(ref, full_ids, prompt_len)
@@ -874,7 +1212,7 @@ class RLHFTrainer:
         if T > 1 and hasattr(model, '_get_causal_mask'):
             mask = model._get_causal_mask(T).to(device=h.device).unsqueeze(0).unsqueeze(0)
 
-        for layer in model.layers:
+        for layer in getattr(model, 'layers', []):
             h = layer(h, freqs, mask, False, 0)
 
         h = model.norm(h)  # (1, T, dim)
@@ -931,7 +1269,7 @@ class RLHFTrainer:
             eps=cfg.adam_eps,
         )
 
-        amp_dt = _resolve_amp_dtype(getattr(cfg, "amp_dtype", "auto"))
+        amp_dt = _resolve_amp_dtype(cfg.amp_dtype)
         scaler = torch.amp.GradScaler("cuda") if (
             cfg.use_amp and torch.cuda.is_available()
             and amp_dt != torch.bfloat16
@@ -1005,7 +1343,7 @@ class RLHFTrainer:
                                 temperature=cfg.temperature,
                             )
                         except Exception as exc:
-                            logger.debug("Generation failed: %s", exc)
+                            logger.warning("Generation failed: %s", exc)
                             continue
 
                     resp_ids = gen_ids[:, prompt_len:]
@@ -1063,6 +1401,7 @@ class RLHFTrainer:
                     response_mask=response_mask,
                     full_ids=full_ids,
                     prompt_len=prompt_len,
+                    ref_logps=ref_logps,
                 )
 
                 # Add to replay buffer for cross-epoch reuse
@@ -1107,8 +1446,12 @@ class RLHFTrainer:
 
             # Normalize advantages
             if advantages.numel() > 1:
-                advantages = (advantages - advantages.mean()) / (
-                    advantages.std() + 1e-8)
+                adv_std = advantages.std()
+                if adv_std > 1e-6:
+                    advantages = (advantages - advantages.mean()) / (
+                        adv_std + 1e-8)
+                else:
+                    advantages = advantages - advantages.mean()
 
             # Store full_ids and prompt_lens for recomputation
             # We need to re-forward through the model on each PPO epoch.
@@ -1124,6 +1467,12 @@ class RLHFTrainer:
                 indices = list(range(n_rollouts))
                 random.shuffle(indices)
 
+                # Pre-compute cumulative offsets for O(1) lookup
+                _offsets = [0] * (n_rollouts + 1)
+                for _i in range(n_rollouts):
+                    _offsets[_i + 1] = (
+                        _offsets[_i] + rollout._log_probs[_i].shape[0])
+
                 for mb_start in range(0, n_rollouts, cfg.minibatch_size):
                     mb_indices = indices[mb_start:mb_start + cfg.minibatch_size]
 
@@ -1133,13 +1482,13 @@ class RLHFTrainer:
                         0.0, device=self.device)
                     total_entropy = torch.tensor(
                         0.0, device=self.device)
+                    total_kl = torch.tensor(
+                        0.0, device=self.device)
                     n_tokens = 0
 
                     for idx in mb_indices:
                         rollout_len = rollout._log_probs[idx].shape[0]
-                        start = sum(
-                            rollout._log_probs[j].shape[0]
-                            for j in range(idx))
+                        start = _offsets[idx]
                         end = start + rollout_len
 
                         mb_advantages_i = advantages[start:end]
@@ -1159,8 +1508,15 @@ class RLHFTrainer:
                                 new_values = value_head(hidden).squeeze(0)
                                 entropy = _get_response_entropy(
                                     self.model, stored_ids, stored_plen)
-                            ratio = torch.exp(new_logps - mb_old_logps_i)
+                            log_ratio = (new_logps - mb_old_logps_i).clamp(-20, 20)
+                            ratio = torch.exp(log_ratio)
                             entropy_bonus = entropy.mean()
+
+                            # Per-token KL: current policy vs reference
+                            stored_ref = rollout._ref_logps[idx]
+                            if stored_ref is not None:
+                                total_kl = total_kl + (
+                                    new_logps - stored_ref).mean()
                         else:
                             # Replay items: no full_ids, fall back to
                             # ratio=1 (first PPO epoch is exact)
@@ -1193,8 +1549,12 @@ class RLHFTrainer:
                         total_policy_loss / mb_count
                         + cfg.value_coeff * total_value_loss / mb_count
                         - cfg.entropy_coeff * total_entropy / mb_count
-                        + cfg.kl_coeff * abs(epoch_kl / max(n_collected, 1))
+                        + self._kl_coeff * total_kl / mb_count
                     )
+
+                    # Adaptive KL update (R9) — use scalar KL
+                    batch_avg_kl = abs((total_kl / mb_count).item())
+                    self._update_adaptive_kl(batch_avg_kl)
 
                     optimizer.zero_grad()
                     if scaler is not None:
@@ -1258,6 +1618,8 @@ class SelfPlayConfig:
     epochs: int = 3
     learning_rate: float = 1e-6
     kl_coeff: float = 0.05
+    kl_target: float = 0.0  # Target KL for adaptive KL (0 = disabled)
+    kl_horizon: float = 10000.0  # Adaptive KL update speed
     clip_range: float = 0.2  # PPO clipped surrogate ratio
     n_responses: int = 4
     max_new_tokens: int = 128
@@ -1320,6 +1682,18 @@ class SelfPlayTrainer:
         self.on_progress: Callable[[int, str], None] | None = None
         self._stop_requested = False
         self._lock = threading.Lock()
+
+        # Adaptive KL coefficient (R9)
+        self._kl_coeff = self.config.kl_coeff
+
+    def _update_adaptive_kl(self, observed_kl: float) -> None:
+        """Adjust ``_kl_coeff`` toward ``kl_target``."""
+        target = self.config.kl_target
+        if target <= 0:
+            return
+        proportional_error = (observed_kl - target) / target
+        mult = 1.0 + proportional_error / self.config.kl_horizon
+        self._kl_coeff = max(1e-6, self._kl_coeff * mult)
 
     def request_stop(self) -> None:
         with self._lock:
@@ -1470,7 +1844,14 @@ class SelfPlayTrainer:
             self.student.train()
             return ref_logps
 
-        ref = self._ref_model_cpu.to(self.device)
+        try:
+            ref = self._ref_model_cpu.to(self.device)
+        except RuntimeError as e:
+            if "out of memory" in str(e).lower():
+                logger.error("OOM moving reference model to %s — freeing cache", self.device)
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            raise
         try:
             with torch.no_grad():
                 ref_logps = _get_response_logps(ref, full_ids, prompt_len)
@@ -1501,7 +1882,7 @@ class SelfPlayTrainer:
         if T > 1 and hasattr(model, '_get_causal_mask'):
             mask = model._get_causal_mask(T).to(device=h.device).unsqueeze(0).unsqueeze(0)
 
-        for layer in model.layers:
+        for layer in getattr(model, 'layers', []):
             h = layer(h, freqs, mask, False, 0)
 
         h = model.norm(h)
@@ -1548,7 +1929,7 @@ class SelfPlayTrainer:
             eps=cfg.adam_eps,
         )
 
-        amp_dt = _resolve_amp_dtype(getattr(cfg, "amp_dtype", "auto"))
+        amp_dt = _resolve_amp_dtype(cfg.amp_dtype)
         scaler = torch.amp.GradScaler("cuda") if (
             cfg.use_amp and torch.cuda.is_available()
             and amp_dt != torch.bfloat16
@@ -1665,6 +2046,7 @@ class SelfPlayTrainer:
                     response_mask=response_mask,
                     full_ids=full_ids,
                     prompt_len=prompt_len,
+                    ref_logps=ref_logps,
                 )
 
                 # Add to replay buffer for cross-epoch reuse
@@ -1708,8 +2090,12 @@ class SelfPlayTrainer:
 
             # Normalize advantages
             if advantages.numel() > 1:
-                advantages = (advantages - advantages.mean()) / (
-                    advantages.std() + 1e-8)
+                adv_std = advantages.std()
+                if adv_std > 1e-6:
+                    advantages = (advantages - advantages.mean()) / (
+                        adv_std + 1e-8)
+                else:
+                    advantages = advantages - advantages.mean()
 
             n_rollouts = len(rollout)
 
@@ -1720,6 +2106,12 @@ class SelfPlayTrainer:
                 indices = list(range(n_rollouts))
                 random.shuffle(indices)
 
+                # Pre-compute cumulative offsets for O(1) lookup
+                _offsets = [0] * (n_rollouts + 1)
+                for _i in range(n_rollouts):
+                    _offsets[_i + 1] = (
+                        _offsets[_i] + rollout._log_probs[_i].shape[0])
+
                 for mb_start in range(0, n_rollouts, cfg.minibatch_size):
                     mb_indices = indices[mb_start:mb_start + cfg.minibatch_size]
 
@@ -1729,12 +2121,12 @@ class SelfPlayTrainer:
                         0.0, device=self.device)
                     total_entropy = torch.tensor(
                         0.0, device=self.device)
+                    total_kl = torch.tensor(
+                        0.0, device=self.device)
 
                     for idx in mb_indices:
                         rollout_len = rollout._log_probs[idx].shape[0]
-                        start = sum(
-                            rollout._log_probs[j].shape[0]
-                            for j in range(idx))
+                        start = _offsets[idx]
                         end = start + rollout_len
 
                         mb_advantages_i = advantages[start:end]
@@ -1754,8 +2146,15 @@ class SelfPlayTrainer:
                                 new_values = value_head(hidden).squeeze(0)
                                 entropy = _get_response_entropy(
                                     self.student, stored_ids, stored_plen)
-                            ratio = torch.exp(new_logps - mb_old_logps_i)
+                            log_ratio = (new_logps - mb_old_logps_i).clamp(-20, 20)
+                            ratio = torch.exp(log_ratio)
                             entropy_bonus = entropy.mean()
+
+                            # Per-token KL: current policy vs reference
+                            stored_ref = rollout._ref_logps[idx]
+                            if stored_ref is not None:
+                                total_kl = total_kl + (
+                                    new_logps - stored_ref).mean()
                         else:
                             ratio = torch.ones_like(mb_old_logps_i)
                             new_values = old_values_all[start:end]
@@ -1783,8 +2182,12 @@ class SelfPlayTrainer:
                         total_policy_loss / mb_count
                         + cfg.value_coeff * total_value_loss / mb_count
                         - cfg.entropy_coeff * total_entropy / mb_count
-                        + cfg.kl_coeff * abs(epoch_kl / max(n_collected, 1))
+                        + self._kl_coeff * total_kl / mb_count
                     )
+
+                    # Adaptive KL update (R9) — use scalar KL
+                    batch_avg_kl = abs((total_kl / mb_count).item())
+                    self._update_adaptive_kl(batch_avg_kl)
 
                     optimizer.zero_grad()
                     if scaler is not None:
@@ -1827,5 +2230,577 @@ class SelfPlayTrainer:
             "epochs_completed": epochs_done,
             "avg_scores": all_scores,
             "final_score": all_scores[-1] if all_scores else 0.0,
+        }
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# R16 — GRPO: Group Relative Policy Optimization
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+@dataclass
+class GRPOConfig:
+    """Config for Group Relative Policy Optimization (R16).
+
+    GRPO eliminates the value head entirely — it generates a *group*
+    of N responses per prompt, scores them with a reward model (or
+    external scorer), and uses the within-group ranking as the advantage
+    signal.  No GAE, no value network, no critic head to train.
+    """
+    epochs: int = 3
+    learning_rate: float = 1e-6
+    kl_coeff: float = 0.05
+    kl_target: float = 0.0
+    kl_horizon: float = 10000.0
+    clip_range: float = 0.2
+    group_size: int = 4  # N responses generated per prompt
+    max_new_tokens: int = 128
+    temperature: float = 0.8
+    gradient_clip: float = 1.0
+    use_amp: bool = True
+    amp_dtype: str = "auto"
+    max_prompt_length: int = 256
+    normalize_advantages: bool = True
+    entropy_coeff: float = 0.01
+    ppo_epochs: int = 1  # update passes per rollout batch
+    # Optimizer
+    adam_beta1: float = 0.9
+    adam_beta2: float = 0.95
+    adam_eps: float = 1e-8
+    checkpoint_dir: str = ""
+
+
+class GRPOTrainer:
+    """Group Relative Policy Optimization (R16).
+
+    For each prompt, generates ``group_size`` responses, scores them
+    with ``reward_fn``, and computes per-response advantage as the
+    normalized deviation from the group mean reward.  No value head
+    or GAE required.
+
+    The policy gradient uses a clipped surrogate objective identical
+    to PPO, but advantages come from group ranking instead of a
+    learned value function.
+
+    Args:
+        model: Policy model (Enigma).
+        tokenizer: Tokenizer for encoding/decoding.
+        reward_fn: Callable that takes ``(prompt_str, response_str)``
+            and returns a float reward score.  Can be a RewardModel
+            wrapper, an external API call, or any scoring function.
+        config: GRPO training config.
+    """
+
+    def __init__(
+        self,
+        model: nn.Module,
+        tokenizer: Any,
+        reward_fn: Callable[[str, str], float],
+        config: GRPOConfig | None = None,
+    ):
+        self.model = model
+        self.tokenizer = tokenizer
+        self.reward_fn = reward_fn
+        self.config = config or GRPOConfig()
+        self.device = next(model.parameters()).device
+
+        self.on_progress: Callable[[int, str], None] | None = None
+        self._stop_requested = False
+        self._lock = threading.Lock()
+        self._kl_coeff = self.config.kl_coeff
+
+    def _update_adaptive_kl(self, observed_kl: float) -> None:
+        """Adjust ``_kl_coeff`` toward ``kl_target``."""
+        target = self.config.kl_target
+        if target <= 0:
+            return
+        proportional_error = (observed_kl - target) / target
+        mult = 1.0 + proportional_error / self.config.kl_horizon
+        self._kl_coeff = max(1e-6, self._kl_coeff * mult)
+
+    def request_stop(self) -> None:
+        with self._lock:
+            self._stop_requested = True
+
+    def _should_stop(self) -> bool:
+        with self._lock:
+            return self._stop_requested
+
+    def train(self, prompts: list[str]) -> dict[str, Any]:
+        """Run GRPO training loop.
+
+        Args:
+            prompts: List of prompt strings.
+
+        Returns:
+            Dict with ``epochs_completed``, ``avg_rewards``, ``final_reward``.
+        """
+        cfg = self.config
+        amp_dtype = _resolve_amp_dtype(cfg.amp_dtype)
+        use_amp = cfg.use_amp and self.device.type == "cuda"
+
+        # Frozen reference for KL
+        ref_model = copy.deepcopy(self.model)
+        ref_model.eval()
+        for p in ref_model.parameters():
+            p.requires_grad = False
+
+        optimizer = torch.optim.AdamW(
+            [p for p in self.model.parameters() if p.requires_grad],
+            lr=cfg.learning_rate,
+            betas=(cfg.adam_beta1, cfg.adam_beta2),
+            eps=cfg.adam_eps,
+        )
+
+        scaler = None
+        if use_amp and amp_dtype == torch.float16:
+            scaler = torch.amp.GradScaler("cuda")
+
+        avg_rewards: list[float] = []
+        epochs_done = 0
+
+        for epoch in range(cfg.epochs):
+            if self._should_stop():
+                break
+
+            epoch_reward = 0.0
+            n_updates = 0
+            random.shuffle(prompts)
+
+            for prompt in prompts:
+                if self._should_stop():
+                    break
+
+                prompt_ids = self.tokenizer.encode(prompt)
+                prompt_ids = prompt_ids[:cfg.max_prompt_length]
+                prompt_tensor = torch.tensor(
+                    [prompt_ids], dtype=torch.long, device=self.device)
+                prompt_len = len(prompt_ids)
+
+                # Generate a group of N responses
+                group_gens: list[torch.Tensor] = []
+                group_rewards: list[float] = []
+
+                self.model.eval()
+                for _ in range(cfg.group_size):
+                    with torch.no_grad():
+                        try:
+                            gen_ids = self.model.generate(
+                                prompt_tensor,
+                                max_new_tokens=cfg.max_new_tokens,
+                                temperature=cfg.temperature,
+                            )
+                        except Exception:
+                            continue
+
+                    resp_ids = gen_ids[:, prompt_len:]
+                    if resp_ids.shape[1] < 1:
+                        continue
+
+                    resp_text = self.tokenizer.decode(resp_ids[0].tolist())
+                    r = self.reward_fn(prompt, resp_text)
+                    group_gens.append(gen_ids)
+                    group_rewards.append(r)
+
+                self.model.train()
+
+                if len(group_gens) < 2:
+                    continue  # Need at least 2 for relative ranking
+
+                # Compute group-relative advantages
+                r_tensor = torch.tensor(group_rewards, dtype=torch.float32)
+                if cfg.normalize_advantages:
+                    r_mean = r_tensor.mean()
+                    r_std = r_tensor.std(unbiased=False)
+                    if r_std > 1e-6:
+                        advantages = ((r_tensor - r_mean) / (r_std + 1e-8)).tolist()
+                    else:
+                        advantages = (r_tensor - r_mean).tolist()
+                else:
+                    advantages = r_tensor.tolist()
+
+                epoch_reward += sum(group_rewards) / len(group_rewards)
+
+                # PPO-style update for each response in the group
+                for ppo_epoch in range(cfg.ppo_epochs):
+                    for gen_ids, adv in zip(group_gens, advantages):
+                        full_ids = gen_ids
+                        resp_len = full_ids.shape[1] - prompt_len
+                        if resp_len < 1:
+                            continue
+
+                        optimizer.zero_grad()
+
+                        with torch.amp.autocast(
+                            "cuda", dtype=amp_dtype, enabled=use_amp
+                        ):
+                            # Policy log-probs
+                            logits = self.model(full_ids)
+                            if hasattr(logits, "logits"):
+                                logits = logits.logits
+                            resp_logits = logits[:, prompt_len - 1:-1, :]
+                            resp_targets = full_ids[:, prompt_len:]
+                            log_probs = F.log_softmax(resp_logits, dim=-1)
+                            token_logps = log_probs.gather(
+                                2, resp_targets.unsqueeze(-1)).squeeze(-1)
+
+                            # Reference log-probs
+                            with torch.no_grad():
+                                ref_logits = ref_model(full_ids)
+                                if hasattr(ref_logits, "logits"):
+                                    ref_logits = ref_logits.logits
+                                ref_resp = ref_logits[:, prompt_len - 1:-1, :]
+                                ref_log_probs = F.log_softmax(ref_resp, dim=-1)
+                                ref_token_logps = ref_log_probs.gather(
+                                    2, resp_targets.unsqueeze(-1)).squeeze(-1)
+
+                            # Log-ratio for clipping
+                            log_ratio = (token_logps - ref_token_logps
+                                         ).clamp(-20, 20)
+                            ratio = log_ratio.exp()
+
+                            adv_t = torch.tensor(
+                                adv, dtype=torch.float32,
+                                device=self.device)
+
+                            surr1 = ratio * adv_t
+                            surr2 = torch.clamp(
+                                ratio,
+                                1.0 - cfg.clip_range,
+                                1.0 + cfg.clip_range,
+                            ) * adv_t
+                            policy_loss = -torch.min(surr1, surr2).mean()
+
+                            # KL penalty (single-sample estimate, consistent
+                            # with RLHF/SelfPlay: KL(policy||ref) ≈ mean(log π - log π_ref))
+                            kl = (token_logps - ref_token_logps).mean()
+                            kl_penalty = self._kl_coeff * kl
+
+                            # Entropy bonus
+                            entropy = -(log_probs.exp() * log_probs).sum(-1).mean()
+                            ent_bonus = cfg.entropy_coeff * entropy
+
+                            loss = policy_loss + kl_penalty - ent_bonus
+
+                        if scaler is not None:
+                            scaler.scale(loss).backward()
+                            if cfg.gradient_clip > 0:
+                                scaler.unscale_(optimizer)
+                                nn.utils.clip_grad_norm_(
+                                    self.model.parameters(), cfg.gradient_clip)
+                            scaler.step(optimizer)
+                            scaler.update()
+                        else:
+                            loss.backward()
+                            if cfg.gradient_clip > 0:
+                                nn.utils.clip_grad_norm_(
+                                    self.model.parameters(), cfg.gradient_clip)
+                            optimizer.step()
+
+                        n_updates += 1
+
+                # Adaptive KL update
+                if group_rewards:
+                    # Approximate KL from mean log-ratio of last group
+                    with torch.no_grad():
+                        last_gen = group_gens[-1]
+                        logits_p = self.model(last_gen)
+                        if hasattr(logits_p, "logits"):
+                            logits_p = logits_p.logits
+                        logits_r = ref_model(last_gen)
+                        if hasattr(logits_r, "logits"):
+                            logits_r = logits_r.logits
+                        lp = F.log_softmax(logits_p[:, prompt_len - 1:-1, :], dim=-1)
+                        lr = F.log_softmax(logits_r[:, prompt_len - 1:-1, :], dim=-1)
+                        tgts = last_gen[:, prompt_len:]
+                        obs_kl = (lr.gather(2, tgts.unsqueeze(-1)).squeeze(-1)
+                                  - lp.gather(2, tgts.unsqueeze(-1)).squeeze(-1)).mean().item()
+                    self._update_adaptive_kl(abs(obs_kl))
+
+            avg_r = epoch_reward / max(len(prompts), 1)
+            avg_rewards.append(avg_r)
+            epochs_done = epoch + 1
+
+            logger.info("GRPO epoch %d: avg_reward=%.3f, updates=%d",
+                        epoch + 1, avg_r, n_updates)
+
+            if self.on_progress:
+                pct = int((epoch + 1) / cfg.epochs * 100)
+                self.on_progress(pct, f"GRPO epoch {epoch + 1}: "
+                                 f"reward={avg_r:.3f}")
+
+        self.model.eval()
+        del ref_model
+
+        return {
+            "epochs_completed": epochs_done,
+            "avg_rewards": avg_rewards,
+            "final_reward": avg_rewards[-1] if avg_rewards else 0.0,
+        }
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# R33 — ReMax: Simplified REINFORCE with Mean-Reward Baseline
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+@dataclass
+class ReMaxConfig:
+    """Config for ReMax RL training (Li et al., R33).
+
+    ReMax simplifies PPO by removing the value head entirely.
+    Instead of GAE-computed advantages, it uses a simple
+    mean-reward baseline:
+
+        advantage_i = reward_i - mean(rewards in batch)
+
+    This eliminates ~50% of trainable parameters (no value head)
+    and the complexity of advantage estimation, while achieving
+    comparable performance on language model alignment tasks.
+    """
+    epochs: int = 3
+    learning_rate: float = 1e-6
+    kl_coeff: float = 0.05
+    kl_target: float = 0.0
+    kl_horizon: float = 10000.0
+    clip_range: float = 0.2
+    n_responses: int = 4  # Responses per prompt for baseline estimation
+    max_new_tokens: int = 128
+    temperature: float = 0.8
+    gradient_clip: float = 1.0
+    use_amp: bool = True
+    amp_dtype: str = "auto"
+    max_prompt_length: int = 256
+    entropy_coeff: float = 0.01
+    # Optimizer
+    adam_beta1: float = 0.9
+    adam_beta2: float = 0.95
+    adam_eps: float = 1e-8
+    checkpoint_dir: str = ""
+
+
+class ReMaxTrainer:
+    """ReMax: REINFORCE with mean-reward baseline (R33).
+
+    For each prompt, generates ``n_responses`` responses, scores them
+    with ``reward_fn``, and uses the mean reward as the baseline.
+    No value head, no GAE, no critic — just policy gradient with
+    a simple variance-reduction baseline.
+
+    The update rule is:
+        loss = -sum_i[ (reward_i - mean_reward) * log_prob_i ]
+
+    With optional clipping (same as PPO) and entropy bonus.
+
+    Args:
+        model: Policy model.
+        tokenizer: Tokenizer for encoding/decoding.
+        reward_fn: Callable (prompt, response) → float reward.
+        config: ReMax config.
+    """
+
+    def __init__(
+        self,
+        model: nn.Module,
+        tokenizer: Any,
+        reward_fn: Callable[[str, str], float],
+        config: ReMaxConfig | None = None,
+    ):
+        self.model = model
+        self.tokenizer = tokenizer
+        self.reward_fn = reward_fn
+        self.config = config or ReMaxConfig()
+        self.device = next(model.parameters()).device
+
+        self.on_progress: Callable[[int, str], None] | None = None
+        self._stop_requested = False
+        self._lock = threading.Lock()
+        self._kl_coeff = self.config.kl_coeff
+
+    def _should_stop(self) -> bool:
+        with self._lock:
+            return self._stop_requested
+
+    def request_stop(self) -> None:
+        with self._lock:
+            self._stop_requested = True
+
+    def _update_adaptive_kl(self, mean_kl: float) -> None:
+        """Same adaptive KL as R9."""
+        if self.config.kl_target <= 0:
+            return
+        if mean_kl > self.config.kl_target * 1.5:
+            self._kl_coeff *= 1.0 + 0.5 / self.config.kl_horizon
+        elif mean_kl < self.config.kl_target / 1.5:
+            self._kl_coeff *= 1.0 - 0.5 / self.config.kl_horizon
+        self._kl_coeff = max(1e-6, min(10.0, self._kl_coeff))
+
+    def train(self, prompts: list[str]) -> dict[str, Any]:
+        """Run ReMax training loop.
+
+        Args:
+            prompts: List of prompt strings.
+
+        Returns:
+            Dict with ``epochs_completed``, ``avg_rewards``, ``final_reward``.
+        """
+        if not prompts:
+            raise ValueError("No prompts provided for ReMax training")
+
+        cfg = self.config
+        amp_dtype = _resolve_amp_dtype(cfg.amp_dtype)
+        use_amp = cfg.use_amp and self.device.type == "cuda"
+
+        # Frozen reference for KL
+        ref_model = copy.deepcopy(self.model)
+        ref_model.eval()
+        for p in ref_model.parameters():
+            p.requires_grad = False
+
+        optimizer = torch.optim.AdamW(
+            [p for p in self.model.parameters() if p.requires_grad],
+            lr=cfg.learning_rate,
+            betas=(cfg.adam_beta1, cfg.adam_beta2),
+            eps=cfg.adam_eps,
+        )
+
+        scaler = None
+        if use_amp and amp_dtype == torch.float16:
+            scaler = torch.amp.GradScaler("cuda")
+
+        avg_rewards: list[float] = []
+        epochs_done = 0
+
+        for epoch in range(cfg.epochs):
+            if self._should_stop():
+                break
+
+            epoch_reward = 0.0
+            n_updates = 0
+            random.shuffle(prompts)
+
+            for prompt in prompts:
+                if self._should_stop():
+                    break
+
+                prompt_ids = self.tokenizer.encode(prompt)
+                prompt_ids = prompt_ids[:cfg.max_prompt_length]
+                prompt_tensor = torch.tensor(
+                    [prompt_ids], dtype=torch.long, device=self.device)
+                prompt_len = len(prompt_ids)
+
+                # Generate N responses
+                responses: list[tuple[torch.Tensor, float]] = []
+
+                self.model.eval()
+                for _ in range(cfg.n_responses):
+                    with torch.no_grad():
+                        try:
+                            gen_ids = self.model.generate(
+                                prompt_tensor,
+                                max_new_tokens=cfg.max_new_tokens,
+                                temperature=cfg.temperature,
+                            )
+                        except Exception:
+                            continue
+
+                    resp_ids = gen_ids[:, prompt_len:]
+                    if resp_ids.shape[1] < 1:
+                        continue
+
+                    resp_text = self.tokenizer.decode(resp_ids[0].tolist())
+                    r = self.reward_fn(prompt, resp_text)
+                    responses.append((gen_ids, r))
+
+                self.model.train()
+
+                if len(responses) < 2:
+                    continue
+
+                # Mean reward baseline
+                rewards = [r for _, r in responses]
+                mean_reward = sum(rewards) / len(rewards)
+                epoch_reward += mean_reward
+
+                # REINFORCE with mean-reward baseline and clipped surrogate
+                for gen_ids, reward in responses:
+                    advantage = reward - mean_reward
+                    full_ids = gen_ids
+                    resp_len = full_ids.shape[1] - prompt_len
+                    if resp_len < 1:
+                        continue
+
+                    with torch.amp.autocast("cuda", dtype=amp_dtype,
+                                            enabled=use_amp):
+                        # Current policy log-probs
+                        new_logps = _get_response_logps(
+                            self.model, full_ids, prompt_len)
+                        # Old log-probs (from generation — frozen ref approx)
+                        with torch.no_grad():
+                            old_logps = _get_response_logps(
+                                ref_model, full_ids, prompt_len)
+
+                        log_ratio = (new_logps - old_logps).clamp(-20, 20)
+                        ratio = torch.exp(log_ratio)
+
+                        # Clipped surrogate (same as PPO)
+                        adv_tensor = torch.full_like(ratio, advantage)
+                        surr1 = ratio * adv_tensor
+                        surr2 = torch.clamp(
+                            ratio,
+                            1.0 - cfg.clip_range,
+                            1.0 + cfg.clip_range,
+                        ) * adv_tensor
+                        policy_loss = -torch.min(surr1, surr2).mean()
+
+                        # Entropy bonus
+                        entropy = _get_response_entropy(
+                            self.model, full_ids, prompt_len)
+                        entropy_bonus = entropy.mean()
+
+                        # KL penalty: KL(policy||ref) ≈ mean(log π - log π_ref)
+                        kl = (new_logps - old_logps).mean()
+                        kl_loss = self._kl_coeff * kl
+
+                        loss = policy_loss - cfg.entropy_coeff * entropy_bonus + kl_loss
+
+                    if scaler is not None:
+                        scaler.scale(loss).backward()
+                        scaler.unscale_(optimizer)
+                        nn.utils.clip_grad_norm_(
+                            self.model.parameters(), cfg.gradient_clip)
+                        scaler.step(optimizer)
+                        scaler.update()
+                    else:
+                        loss.backward()
+                        nn.utils.clip_grad_norm_(
+                            self.model.parameters(), cfg.gradient_clip)
+                        optimizer.step()
+
+                    optimizer.zero_grad()
+                    n_updates += 1
+
+                    self._update_adaptive_kl(kl.item())
+
+            n_prompts = max(1, len(prompts))
+            avg_r = epoch_reward / n_prompts
+            avg_rewards.append(avg_r)
+            epochs_done = epoch + 1
+
+            logger.info("ReMax epoch %d: avg_reward=%.3f, updates=%d",
+                        epoch + 1, avg_r, n_updates)
+
+            if self.on_progress:
+                pct = int((epoch + 1) / cfg.epochs * 100)
+                self.on_progress(pct, f"ReMax epoch {epoch + 1}: "
+                                 f"reward={avg_r:.3f}")
+
+        self.model.eval()
+        del ref_model
+
+        return {
+            "epochs_completed": epochs_done,
+            "avg_rewards": avg_rewards,
+            "final_reward": avg_rewards[-1] if avg_rewards else 0.0,
         }
 

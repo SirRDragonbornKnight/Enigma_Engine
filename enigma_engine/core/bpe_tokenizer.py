@@ -14,10 +14,14 @@ This creates subword tokens that capture common patterns in YOUR specific data.
 """
 import json
 import logging
+import heapq
+import random
 import re
+import threading
+import time
 from collections import Counter, OrderedDict
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +73,7 @@ class BPETokenizer:
 
         # Cache for encoding (LRU via OrderedDict)
         self.cache: OrderedDict[str, list[str]] = OrderedDict()
+        self._cache_lock = threading.Lock()
 
         # UTF-8 byte-level mode: encode text as UTF-8 bytes
         # before BPE, so any Unicode character can be represented
@@ -82,6 +87,15 @@ class BPETokenizer:
             self._init_base_vocab()
 
         self.vocab_size = len(self.token_to_id)
+
+    def _sync_special_ids(self):
+        """Rebuild convenience IDs from special_tokens map."""
+        self.pad_token_id = self.special_tokens.get("<pad>", 0)
+        self.bos_token_id = self.special_tokens.get("<s>", 1)
+        self.eos_token_id = self.special_tokens.get("</s>", 2)
+        self.unk_token_id = self.special_tokens.get("<unk>", 3)
+        self.think_start_id = self.special_tokens.get("<think>", 10)
+        self.think_end_id = self.special_tokens.get("</think>", 11)
 
     def _init_base_vocab(self):
         """Initialize with special tokens and base characters."""
@@ -117,8 +131,9 @@ class BPETokenizer:
         """
         return byte_string.encode('latin-1').decode('utf-8', errors='replace')
 
-    def train(self, texts: list[str], vocab_size: int = 8000, min_frequency: int = 2,
-              verbose: bool = True):
+    def train(self, texts: list[str], vocab_size: int = 32000, min_frequency: int = 2,
+              verbose: bool = True,
+              on_progress: Callable[[int, str], None] | None = None):
         """
         Train BPE on a list of texts.
 
@@ -130,11 +145,19 @@ class BPETokenizer:
             vocab_size: Target vocabulary size
             min_frequency: Minimum pair frequency to merge
             verbose: Print progress
+            on_progress: Optional callback(percent, message) for live updates
         """
         if verbose:
             logger.info("Training BPE tokenizer...")
             logger.info(f"Target vocab size: {vocab_size}")
             logger.info(f"Training texts: {len(texts)}")
+
+        if not texts:
+            raise ValueError("Cannot train BPE tokenizer on empty text list")
+
+        if min_frequency < 1:
+            raise ValueError(
+                f"min_frequency must be >= 1, got {min_frequency}")
 
         # Reset to base vocabulary
         self._init_base_vocab()
@@ -170,18 +193,50 @@ class BPETokenizer:
         # BPE training loop
         num_merges = vocab_size - len(self.token_to_id)
 
-        for i in range(num_merges):
-            # Count all adjacent pairs
-            pair_freqs = self._count_pairs(word_freqs)
+        # Build initial pair counts and a reverse index from
+        # pairs → set of words containing that pair.  This lets
+        # us do incremental updates instead of rescanning all words
+        # on every merge (O(affected) instead of O(all_words)).
+        pair_freqs: Counter = Counter()
+        pair_to_words: dict[tuple[str, str], set[tuple[str, ...]]] = {}
 
-            if not pair_freqs:
+        for word_tuple, freq in word_freqs.items():
+            for j in range(len(word_tuple) - 1):
+                pair = (word_tuple[j], word_tuple[j + 1])
+                pair_freqs[pair] += freq
+                if pair not in pair_to_words:
+                    pair_to_words[pair] = set()
+                pair_to_words[pair].add(word_tuple)
+
+        if on_progress:
+            on_progress(0, f"Starting {num_merges:,} merges "
+                        f"({len(word_freqs):,} unique words)")
+
+        # Max-heap for O(log N) best-pair lookup instead of O(N)
+        # linear scan.  Python heapq is a min-heap, so we negate
+        # frequencies.  Stale entries are skipped via lazy deletion
+        # (check current pair_freqs before accepting a pop).
+        heap: list[tuple[int, tuple[str, str]]] = []
+        for pair, freq in pair_freqs.items():
+            heapq.heappush(heap, (-freq, pair))
+
+        for i in range(num_merges):
+            # Pop stale entries until we find one matching current freq
+            best_pair = None
+            best_freq = 0
+            while heap:
+                neg_freq, candidate = heapq.heappop(heap)
+                current = pair_freqs.get(candidate, 0)
+                if current > 0 and current == -neg_freq:
+                    best_pair = candidate
+                    best_freq = current
+                    break
+                # Stale entry — skip
+
+            if best_pair is None:
                 if verbose:
                     logger.info(f"No more pairs to merge at iteration {i}")
                 break
-
-            # Find most frequent pair
-            best_pair = max(pair_freqs, key=pair_freqs.get)
-            best_freq = pair_freqs[best_pair]
 
             if best_freq < min_frequency:
                 if verbose:
@@ -201,12 +256,82 @@ class BPETokenizer:
             self.merges.append(best_pair)
             self.merge_ranks[best_pair] = len(self.merges) - 1
 
-            # Apply merge to all words
-            word_freqs = self._apply_merge(word_freqs, best_pair, new_token)
+            # Incremental update: only process words that contain
+            # the merged pair, update pair_freqs and pair_to_words
+            affected = pair_to_words.pop(best_pair, set())
+            del pair_freqs[best_pair]
+
+            for old_word in affected:
+                freq = word_freqs.get(old_word, 0)
+                if freq == 0:
+                    continue
+
+                # Build new word with merged pair
+                new_word_list: list[str] = []
+                j = 0
+                while j < len(old_word):
+                    if (j < len(old_word) - 1
+                            and old_word[j] == best_pair[0]
+                            and old_word[j + 1] == best_pair[1]):
+                        new_word_list.append(new_token)
+                        j += 2
+                    else:
+                        new_word_list.append(old_word[j])
+                        j += 1
+                new_word = tuple(new_word_list)
+
+                if new_word == old_word:
+                    continue
+
+                # Remove old word's pair contributions
+                for j in range(len(old_word) - 1):
+                    p = (old_word[j], old_word[j + 1])
+                    if p != best_pair and p in pair_freqs:
+                        pair_freqs[p] -= freq
+                        if pair_freqs[p] <= 0:
+                            del pair_freqs[p]
+                        else:
+                            # S712: Repush decremented pair so it
+                            # stays visible in the heap.  Without
+                            # this, the old heap entry (higher freq)
+                            # is stale and gets skipped, making the
+                            # pair invisible despite positive freq.
+                            heapq.heappush(
+                                heap, (-pair_freqs[p], p))
+                        if p in pair_to_words:
+                            pair_to_words[p].discard(old_word)
+                            if not pair_to_words[p]:
+                                del pair_to_words[p]
+
+                # Add new word's pair contributions
+                for j in range(len(new_word) - 1):
+                    p = (new_word[j], new_word[j + 1])
+                    pair_freqs[p] = pair_freqs.get(p, 0) + freq
+                    if p not in pair_to_words:
+                        pair_to_words[p] = set()
+                    pair_to_words[p].add(new_word)
+                    # Push updated freq onto heap (stale entries
+                    # are handled by lazy deletion on pop)
+                    heapq.heappush(heap, (-pair_freqs[p], p))
+
+                # Update word_freqs
+                del word_freqs[old_word]
+                word_freqs[new_word] = freq
 
             if verbose and (i + 1) % 500 == 0:
                 logger.info(
                     f"Merge {i + 1}/{num_merges}: '{best_pair[0]}' + '{best_pair[1]}' -> '{new_token}' (freq: {best_freq})")
+            if (i + 1) % 100 == 0:
+                # Yield GIL so the GUI main thread can process
+                # events.  Without this, ~32k merge iterations
+                # starve tkinter and the window freezes.
+                time.sleep(0)
+                if on_progress:
+                    pct = int((i + 1) / num_merges * 100)
+                    on_progress(
+                        pct,
+                        f"Merge {i + 1:,}/{num_merges:,} "
+                        f"(freq: {best_freq:,})")
 
         self.vocab_size = len(self.token_to_id)
 
@@ -254,45 +379,26 @@ class BPETokenizer:
 
         return result
 
-    def _count_pairs(self, word_freqs: Counter) -> Counter:
-        """Count frequency of all adjacent pairs."""
-        pair_freqs: Counter = Counter()
+    def _tokenize_word(self, word: str, dropout: float = 0.0) -> list[str]:
+        """Tokenize a single word using learned BPE merges.
 
-        for word_tuple, freq in word_freqs.items():
-            if len(word_tuple) < 2:
-                continue
-            for i in range(len(word_tuple) - 1):
-                pair = (word_tuple[i], word_tuple[i + 1])
-                pair_freqs[pair] += freq
+        Uses a heap-based approach: O(n log n) instead of the naive O(n²)
+        linear scan.  All adjacent pairs are inserted with their merge rank;
+        each iteration pops the lowest-rank (most common) pair, merges it,
+        and pushes any new pairs formed by the merge.
 
-        return pair_freqs
-
-    def _apply_merge(self, word_freqs: Counter, pair: tuple[str, str],
-                     new_token: str) -> Counter:
-        """Apply a merge to all words."""
-        new_word_freqs: Counter = Counter()
-
-        for word_tuple, freq in word_freqs.items():
-            new_word = []
-            i = 0
-            while i < len(word_tuple):
-                if (i < len(word_tuple) - 1 and
-                    word_tuple[i] == pair[0] and
-                        word_tuple[i + 1] == pair[1]):
-                    new_word.append(new_token)
-                    i += 2
-                else:
-                    new_word.append(word_tuple[i])
-                    i += 1
-            new_word_freqs[tuple(new_word)] = freq
-
-        return new_word_freqs
-
-    def _tokenize_word(self, word: str) -> list[str]:
-        """Tokenize a single word using learned BPE merges."""
-        if word in self.cache:
-            self.cache.move_to_end(word)
-            return list(self.cache[word])
+        Args:
+            dropout: Probability of skipping each merge (BPE-Dropout).
+                0.0 = canonical tokenization.  0.1 = skip 10% of merges
+                (training-time subword regularization).
+        """
+        dropout = max(0.0, min(1.0, dropout))
+        # Skip cache when dropout is active (results are stochastic)
+        if dropout <= 0.0:
+            with self._cache_lock:
+                if word in self.cache:
+                    self.cache.move_to_end(word)
+                    return list(self.cache[word])
 
         # Check if it's a special token
         if word in self.special_tokens:
@@ -306,49 +412,71 @@ class BPETokenizer:
         # Start with characters
         tokens = list(word) + ['</w>']
 
-        # Apply merges in order
-        while len(tokens) > 1:
-            # Find the best merge (lowest rank = learned earlier = more common)
-            best_pair = None
-            best_rank = float('inf')
-
+        if len(tokens) > 1:
+            # Build a heap of (rank, insertion_order, position, left, right)
+            # insertion_order breaks ties deterministically and lets us
+            # lazily invalidate stale entries (position may have been merged).
+            heap: list[tuple[int, int, int, str, str]] = []
+            seq_counter = 0
             for i in range(len(tokens) - 1):
                 pair = (tokens[i], tokens[i + 1])
                 if pair in self.merge_ranks:
-                    rank = self.merge_ranks[pair]
-                    if rank < best_rank:
-                        best_rank = rank
-                        best_pair = pair
+                    heapq.heappush(heap, (self.merge_ranks[pair], seq_counter, i, tokens[i], tokens[i + 1]))
+                    seq_counter += 1
 
-            if best_pair is None:
-                break
+            while heap and len(tokens) > 1:
+                _rank, _seq, pos, left, right = heapq.heappop(heap)
+                # Validate: the pair at 'pos' must still be (left, right)
+                if (pos >= len(tokens) - 1
+                        or tokens[pos] != left
+                        or tokens[pos + 1] != right):
+                    continue  # stale entry — skip
 
-            # Apply the merge
-            new_tokens = []
-            i = 0
-            while i < len(tokens):
-                if (i < len(tokens) - 1 and
-                    tokens[i] == best_pair[0] and
-                        tokens[i + 1] == best_pair[1]):
-                    new_tokens.append(best_pair[0] + best_pair[1])
-                    i += 2
-                else:
-                    new_tokens.append(tokens[i])
-                    i += 1
-            tokens = new_tokens
+                # BPE-Dropout: randomly skip this merge
+                if dropout > 0.0 and random.random() < dropout:
+                    continue
 
-        # Cache result (with LRU eviction to prevent memory growth)
-        if len(self.cache) > 10000:
-            for _ in range(5000):
-                self.cache.popitem(last=False)
-        self.cache[word] = tokens
+                # Merge the pair in-place
+                merged = left + right
+                tokens[pos] = merged
+                del tokens[pos + 1]
+
+                # S713: Rebuild heap from current tokens.
+                # Position shift from del tokens[pos+1] makes
+                # all entries after pos stale.  Token lists are
+                # short (per-word), so full rebuild is cheap and
+                # guarantees no pairs are orphaned.
+                heap = []
+                for k in range(len(tokens) - 1):
+                    new_pair = (tokens[k], tokens[k + 1])
+                    if new_pair in self.merge_ranks:
+                        seq_counter += 1
+                        heapq.heappush(
+                            heap,
+                            (self.merge_ranks[new_pair],
+                             seq_counter, k,
+                             tokens[k], tokens[k + 1]))
+
+        # Cache result (with gradual eviction to avoid GC spikes)
+        # Only cache deterministic (non-dropout) tokenizations
+        if dropout <= 0.0:
+            with self._cache_lock:
+                while len(self.cache) >= 10000:
+                    self.cache.popitem(last=False)
+                self.cache[word] = tokens
         return tokens
 
-    def encode(self, text: str, add_special_tokens: bool = True) -> list[int]:
+    def encode(self, text: str, add_special_tokens: bool = True,
+               dropout: float = 0.0) -> list[int]:
         """Encode text to token IDs.
 
         In UTF-8 byte mode, text is first converted to UTF-8 bytes
         mapped as latin-1 characters, so any Unicode can be encoded.
+
+        Args:
+            dropout: BPE-Dropout probability (0.0 = off, 0.1 typical
+                for training).  Randomly skips merges to produce
+                diverse tokenizations as data augmentation.
         """
         ids = []
 
@@ -372,7 +500,7 @@ class BPETokenizer:
                 continue
 
             # Tokenize word with BPE
-            tokens = self._tokenize_word(word)
+            tokens = self._tokenize_word(word, dropout=dropout)
 
             for token in tokens:
                 if token in self.token_to_id:
@@ -431,8 +559,9 @@ class BPETokenizer:
 
         return text.strip()
 
-    def save(self, path: Path):
+    def save(self, path: Path | str):
         """Save tokenizer to file."""
+        path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
 
         data = {
@@ -462,6 +591,7 @@ class BPETokenizer:
         if 'special_tokens' in data:
             self.special_tokens = data['special_tokens']
 
+        self._sync_special_ids()
         self.use_utf8_bytes = data.get('use_utf8_bytes', False)
 
         self.vocab_size = len(self.token_to_id)
@@ -495,7 +625,7 @@ class BPETokenizer:
         return self.token_to_id.copy()
 
 
-def train_bpe_tokenizer(data_paths: list[str], vocab_size: int = 8000,
+def train_bpe_tokenizer(data_paths: list[str], vocab_size: int = 32000,
                         output_path: Optional[str] = None) -> BPETokenizer:
     """
     Train a BPE tokenizer on data files.

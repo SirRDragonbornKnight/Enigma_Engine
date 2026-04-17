@@ -34,6 +34,7 @@ from enigma_engine.gui.widgets import (
     C_TEXT_DIM, VERSION,
     FONT_SECTION, FONT_SMALL, FONT_TINY, FONT_TITLE,
     NavButton, SelectableLabel, StatusBar, StatusDot, Tooltip,
+    themed_button,
 )
 from enigma_engine.gui.gui_pages import PagesMixin
 from enigma_engine.gui.gui_logic import LogicMixin
@@ -43,8 +44,7 @@ from enigma_engine.gui.gui_mod_page import ModPageMixin
 from enigma_engine.gui.gui_cmd_page import CMDPageMixin
 from enigma_engine.gui.gui_docs_page import DocsPageMixin
 
-# Backward-compatible re-exports (tests and external code
-# import these from enigma_engine.gui.desktop)
+# Re-exports (tests import these from enigma_engine.gui.desktop)
 from enigma_engine.gui.scanners import (  # noqa: F401
     CONFIG_DESCRIPTIONS, CONFIG_LIMITS, ROUTE_KEYS,
     MODS_DIR, DATA_DIR, INFO_DIR, MEMORY_DIR, MODELS_DIR,
@@ -93,8 +93,8 @@ class EnigmaGUI(
         self.model_path = model_path
         self.config_overrides: dict[str, Any] = {}
         self.history: list[dict[str, str]] = []
-        self._history_lock = threading.Lock()
         self.mod_processes: dict[str, subprocess.Popen] = {}
+        self._mod_lock = threading.Lock()
         self.training_active = False
         self.voice_enabled = False
         self.web_access = False
@@ -143,10 +143,6 @@ class EnigmaGUI(
         # Per-model context (history + prompt persistence)
         self.model_context = None
 
-        # Monologue idle tracker
-        self._idle_tracker = None
-        self._monologue_running = False
-
         # Per-route model assignments: route_key -> model path
         self.route_assignments: dict[str, str | None] = {}
 
@@ -164,8 +160,6 @@ class EnigmaGUI(
             "auto_unload_on_minimize", False)
         self._chat_learning_enabled = self._read_gui_bool_setting(
             "learn_while_chatting", False)
-        self._confirm_file_operations = self._read_gui_bool_setting(
-            "confirm_file_operations", True)
         self._refresh_performance_mode()
 
         # Build UI
@@ -188,9 +182,6 @@ class EnigmaGUI(
         self._load_display_names()
         self._load_route_assignments()
         self._start_status_ticker()
-
-        # Start monologue idle check timer (30s interval)
-        self._start_monologue_timer()
 
         # Start mod router for mod communication
         self._router = None
@@ -305,21 +296,19 @@ class EnigmaGUI(
         # Only process resize events for the main window, not child widgets
         if event.widget != self:
             return
-
+        
         # Cancel any pending resize completion
         if self._resize_timer:
             self.after_cancel(self._resize_timer)
-
+        
         # Mark as resizing and schedule completion check
         self._resizing = True
         self._resize_timer = self.after(150, self._on_resize_complete)
-
+    
     def _on_resize_complete(self):
         """Called after resize has stopped for 150ms."""
         self._resizing = False
         self._resize_timer = None
-        # Force a single geometry update after resize completes
-        self.update_idletasks()
 
     def _on_window_unmap(self, _event=None):
         """Suspend the loaded chat model when the window is minimized."""
@@ -339,7 +328,36 @@ class EnigmaGUI(
 
     def _on_close(self):
         """Clean up resources when the window is closed."""
+        if getattr(self, '_shutting_down', False):
+            return  # Already shutting down, don't re-enter
         self._shutting_down = True
+
+        # Stop any active training so background threads release GPU
+        if self.training_active:
+            self.training_active = False
+
+        # Stop all GIF animations so their after() loops stop
+        for anim in getattr(self, '_chat_gif_animations', []):
+            anim['active'] = False
+
+        # Flush any pending log entries before shutdown
+        flush = getattr(self, '_flush_log', None)
+        if flush:
+            try:
+                flush()
+            except (RuntimeError, AttributeError):
+                pass  # Widget may be partially destroyed
+
+        # Close the session log file
+        close_log = getattr(self, '_close_log_file', None)
+        if close_log:
+            try:
+                close_log()
+            except (RuntimeError, AttributeError):
+                pass
+
+        # Hide the window immediately so it feels instant
+        self.withdraw()
 
         # Stop loaded model backend (including GGUF llama-server) first.
         if getattr(self, 'engine', None) is not None:
@@ -350,14 +368,17 @@ class EnigmaGUI(
                 logger.debug("Engine release failed during shutdown: %s", exc)
 
         # Stop all mod subprocesses
-        for mod_id, proc in self.mod_processes.items():
+        with self._mod_lock:
+            procs = list(self.mod_processes.items())
+        for mod_id, proc in procs:
             if proc and proc.poll() is None:
                 proc.terminate()
                 try:
                     proc.wait(timeout=3)
                 except Exception:
                     proc.kill()
-        self.mod_processes.clear()
+        with self._mod_lock:
+            self.mod_processes.clear()
 
         # Kill any running CMD page subprocess
         cmd_proc = getattr(self, '_cmd_proc', None)
@@ -372,12 +393,17 @@ class EnigmaGUI(
                     logger.debug("CMD subprocess kill failed: %s", kill_exc)
                 logger.debug("CMD subprocess terminate/wait failed: %s", exc)
 
-        # Stop the mod router
+        # Stop the mod router (with timeout so it can't block shutdown)
         if self._router:
-            try:
-                self._router.stop()
-            except Exception as exc:
-                logger.debug("Router stop failed during shutdown: %s", exc)
+            import threading as _thr
+            def _stop_router():
+                try:
+                    self._router.stop()
+                except Exception as exc:
+                    logger.debug("Router stop failed during shutdown: %s", exc)
+            t = _thr.Thread(target=_stop_router, daemon=True)
+            t.start()
+            t.join(timeout=3)
 
         # Stop voice input / TTS
         self._voice_recording = False
@@ -391,10 +417,28 @@ class EnigmaGUI(
 
         self._save_window_geometry()
         self._save_config_overrides()
+
+        # Cancel pending auto-save timer
+        auto_save_id = getattr(self, '_docs_auto_save_id', None)
+        if auto_save_id:
+            try:
+                self.after_cancel(auto_save_id)
+            except ValueError:
+                pass  # timer already fired
+
+        # Force GC + CUDA cleanup so GPU memory is freed
         try:
-            self._save_training_brief()
+            import gc
+            gc.collect()
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
         except Exception:
             pass
+
+        # Release single-instance lock so re-opening works immediately
+        _release_instance_lock()
+
         self.destroy()
 
     def _start_parent_watchdog(self):
@@ -575,16 +619,36 @@ class EnigmaGUI(
             x = data.get("window_x")
             y = data.get("window_y")
             if w >= 800 and h >= 500 and x is not None and y is not None:
-                # Clamp position so window stays on-screen
-                x = max(0, x)
-                y = max(0, y)
+                # Use virtual screen bounds (all monitors) for clamping
+                vx, vy, vw, vh = self._get_virtual_screen_bounds()
+                x = max(vx - w + 100, min(vx + vw - 100, x))
+                y = max(vy - h + 50, min(vy + vh - 50, y))
                 self.geometry(f"{w}x{h}+{x}+{y}")
         except (json.JSONDecodeError, OSError, TypeError):
             pass
 
+    @staticmethod
+    def _get_virtual_screen_bounds() -> tuple[int, int, int, int]:
+        """Return (x, y, width, height) of the virtual screen spanning all monitors."""
+        import sys
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                user32 = ctypes.windll.user32
+                vx = user32.GetSystemMetrics(76)   # SM_XVIRTUALSCREEN
+                vy = user32.GetSystemMetrics(77)   # SM_YVIRTUALSCREEN
+                vw = user32.GetSystemMetrics(78)   # SM_CXVIRTUALSCREEN
+                vh = user32.GetSystemMetrics(79)   # SM_CYVIRTUALSCREEN
+                if vw > 0 and vh > 0:
+                    return (vx, vy, vw, vh)
+            except Exception:
+                pass
+        return (0, 0, 1920, 1080)
+
     def _save_window_geometry(self):
         """Save current window position and size to gui_settings.json."""
         import json
+        from enigma_engine.core.safe_save import atomic_write_json
         settings_path = DATA_DIR / "gui_settings.json"
         data = {}
         if settings_path.exists():
@@ -598,7 +662,6 @@ class EnigmaGUI(
             data["window_height"] = self.winfo_height()
             data["window_x"] = self.winfo_x()
             data["window_y"] = self.winfo_y()
-            from enigma_engine.core.safe_save import atomic_write_json
             atomic_write_json(settings_path, data)
         except (OSError, RuntimeError):
             pass
@@ -683,29 +746,28 @@ class EnigmaGUI(
             text_color=C_TEXT_DIM).pack(side="left", pady=(6, 0))
 
         # Nav toggle button in header (arrow icon)
-        self._nav_toggle = ctk.CTkButton(
-            header, text="\u25c0", width=38, height=38,
-            font=FONT_SECTION, corner_radius=2,
-            fg_color="transparent", hover_color=C_SURFACE,
-            text_color=C_ACCENT, command=self._toggle_nav)
+        self._nav_toggle = themed_button(
+            header, "\u25c0", style="icon",
+            width=38, height=38,
+            font=FONT_SECTION, text_color=C_ACCENT,
+            command=self._toggle_nav)
         self._nav_toggle.pack(side="left", padx=(4, 0))
         Tooltip(self._nav_toggle, "Collapse navigation")
 
         # Pin / always-on-top toggle
-        self._pin_btn = ctk.CTkButton(
-            header, text="\U0001F4CC", width=38, height=38,
-            font=FONT_SECTION, corner_radius=2,
-            fg_color="transparent", hover_color=C_SURFACE,
-            text_color=C_TEXT_DIM, command=self._toggle_pin)
+        self._pin_btn = themed_button(
+            header, "\U0001F4CC", style="icon",
+            width=38, height=38,
+            font=FONT_SECTION,
+            command=self._toggle_pin)
         self._pin_btn.pack(side="left", padx=(2, 0))
         Tooltip(self._pin_btn, "Pin window on top")
 
         # Keyboard shortcuts help button
-        self._shortcuts_btn = ctk.CTkButton(
-            header, text="?", width=38, height=38,
-            font=FONT_SECTION, corner_radius=2,
-            fg_color="transparent", hover_color=C_SURFACE,
-            text_color=C_TEXT_DIM,
+        self._shortcuts_btn = themed_button(
+            header, "?", style="icon",
+            width=38, height=38,
+            font=FONT_SECTION,
             command=self._show_shortcuts_overlay)
         self._shortcuts_btn.pack(side="left", padx=(2, 0))
         Tooltip(self._shortcuts_btn, "Keyboard shortcuts")
@@ -856,9 +918,8 @@ class EnigmaGUI(
             ("Ctrl + N", "New chat session"),
             ("Escape", "Stop generation"),
             ("Shift + Return", "Newline in chat input"),
-            ("Ctrl + Z", "Undo (all text inputs)"),
-            ("Ctrl + Y", "Redo (all text inputs)"),
-            ("Ctrl + A", "Select all (all text inputs)"),
+            ("Ctrl + Z", "Undo (docs editor)"),
+            ("Ctrl + Y", "Redo (docs editor)"),
             ("Ctrl + S", "Save (docs editor)"),
             ("Ctrl + F", "Find (docs editor)"),
             ("Up / Down", "Command history (CMD page)"),
@@ -902,20 +963,12 @@ class EnigmaGUI(
                 except Exception:
                     pass
                 self._shortcuts_dropdown = None
-            # Restore clean Escape binding (remove accumulated handlers)
-            self._bind_escape_stop()
 
         self.bind("<Escape>", lambda e: _dismiss(), add="+")
 
     def _switch_page(self, name: str):
         if name == self._current_page:
             return
-        # Persist FORGE settings when leaving the page
-        if self._current_page == "FORGE":
-            try:
-                self._save_training_brief()
-            except Exception:
-                pass
         for key, btn in self._nav_buttons.items():
             btn.set_active(key == name)
         for key, page in self._pages.items():
@@ -978,6 +1031,65 @@ class EnigmaGUI(
         if self.models_data:
             self._populate_model_cards(frame)
 
+    # ================================================================
+    # Monologue / Journal greeting
+    # ================================================================
+
+    def _get_monologue_mode(self) -> str:
+        """Return the current monologue mode.
+
+        Reads from gui_settings.json first, falls back to
+        get_config for the default.
+        """
+        try:
+            settings_path = DATA_DIR / "gui_settings.json"
+            if settings_path.exists():
+                import json
+                settings = json.loads(
+                    settings_path.read_text(encoding="utf-8"))
+                mode = settings.get("monologue_mode", "")
+                if mode:
+                    return mode
+        except (json.JSONDecodeError, OSError):
+            pass
+        from enigma_engine.config.defaults import get_config
+        return get_config("monologue_mode", "disabled")
+
+    def _show_journal_greeting(self):
+        """Show a journal-based greeting if monologue is enabled.
+
+        Reads the most recent journal entry that passes the
+        coherence quality gate and displays it as a system message.
+        """
+        try:
+            mode = self._get_monologue_mode()
+            if mode == "disabled":
+                return
+
+            from enigma_engine.core.monologue import (
+                Journal, DEFAULT_COHERENCE_THRESHOLD)
+
+            model_path = getattr(self, "model_path", None)
+            if not model_path:
+                return
+
+            from pathlib import Path as _Path
+            journal_dir = _Path(model_path).parent
+            journal = Journal(journal_dir)
+            entry = journal.latest()
+            if entry is None:
+                return
+
+            coherence = entry.get("coherence", 0.0)
+            if coherence < DEFAULT_COHERENCE_THRESHOLD:
+                return
+
+            text = entry.get("text", "").strip()
+            if text:
+                self._chat_system(f"[Journal] {text}")
+        except Exception as exc:
+            logger.debug("Journal greeting failed: %s", exc)
+
     def _start_status_ticker(self):
         """Update status bar with uptime every second."""
         # Detect CPU and GPU names in background
@@ -1012,217 +1124,81 @@ class EnigmaGUI(
             threading.Thread(target=_detect_hw, daemon=True).start()
 
         def _tick():
-            elapsed = int(time.time() - self._boot_time)
-            h = elapsed // 3600
-            m = (elapsed % 3600) // 60
-            s = elapsed % 60
-            self.status_bar.set_right(
-                f"UPTIME {h:02d}:{m:02d}:{s:02d}")
-            self.status_bar.set_center(self._hw_device_label)
+            if getattr(self, '_shutting_down', False):
+                return
+            # Skip updates when window is minimized — saves CPU
+            if self.state() != 'iconic':
+                elapsed = int(time.time() - self._boot_time)
+                h = elapsed // 3600
+                m = (elapsed % 3600) // 60
+                s = elapsed % 60
+                self.status_bar.set_right(
+                    f"UPTIME {h:02d}:{m:02d}:{s:02d}")
+                self.status_bar.set_center(self._hw_device_label)
             self.after(tick_ms, _tick)
         self.after(100, _tick)
 
-    def _start_monologue_timer(self):
-        """Start a periodic check for idle-triggered reflection."""
-        from enigma_engine.core.monologue import IdleTracker
-        self._idle_tracker = IdleTracker()
 
-        def _check():
-            self._check_monologue()
-            self.after(30_000, _check)  # check every 30 seconds
-        self.after(30_000, _check)
+# -------------------------------------------------------------------
+# Single-instance guard
+# -------------------------------------------------------------------
 
-    def _get_monologue_mode(self) -> str:
-        """Read current monologue_mode from gui_settings or forge_config.
+_lock_handle = None  # kept alive for process lifetime
 
-        Checks gui_settings.json first (GUI users). Falls back to
-        forge_config.json / CONFIG['monologue_mode'] so that CLI and
-        API users can also configure the setting.
-        """
+
+def _release_instance_lock():
+    """Release the single-instance lock so re-opening works immediately."""
+    global _lock_handle
+    if _lock_handle is None:
+        return
+    if os.name == "nt":
+        import ctypes as _ct
+        _ct.windll.kernel32.ReleaseMutex(_lock_handle)
+        _ct.windll.kernel32.CloseHandle(_lock_handle)
+    else:
         try:
-            import json as _mj
-            from pathlib import Path
-            settings_path = Path(__file__).parent.parent.parent / "data" / "gui_settings.json"
-            if settings_path.exists():
-                settings = _mj.loads(
-                    settings_path.read_text(encoding="utf-8"))
-                mode = settings.get("monologue_mode")
-                if mode is not None:
-                    return mode
+            import fcntl
+            fcntl.flock(_lock_handle, fcntl.LOCK_UN)
+            _lock_handle.close()
         except Exception:
             pass
-        # Fallback: forge_config.json via CONFIG
+    _lock_handle = None
+
+
+def _acquire_instance_lock() -> bool:
+    """Prevent multiple GUI instances from running simultaneously.
+
+    Uses a Windows kernel mutex (or a lockfile on other OSes).
+    Returns True if this is the only instance, False if another
+    GUI is already running.
+    """
+    global _lock_handle
+    if os.name == "nt":
+        # Windows: named mutex is the most reliable approach
+        import ctypes as _ct
+        _lock_handle = _ct.windll.kernel32.CreateMutexW(
+            None, True, "EnigmaEngineGUI_SingleInstance")
+        # ERROR_ALREADY_EXISTS = 183
+        if _ct.windll.kernel32.GetLastError() == 183:
+            _ct.windll.kernel32.CloseHandle(_lock_handle)
+            _lock_handle = None
+            return False
+        return True
+    else:
+        # Unix: use a lockfile with fcntl
+        import fcntl
+        from pathlib import Path as _LockPath
+        lock_path = _LockPath(
+            os.environ.get("XDG_RUNTIME_DIR",
+                           "/tmp")) / ".enigma_gui.lock"  # noqa: S108
+        _lock_handle = open(lock_path, "w")  # noqa: SIM115
         try:
-            from enigma_engine.config import get_config
-            mode = get_config("monologue_mode", "disabled")
-            if mode in ("disabled", "journal_only", "automatic"):
-                return mode
-        except Exception:
-            pass
-        return "disabled"
-
-    def _check_monologue(self):
-        """Check if conditions are met for a background reflection."""
-        mode = self._get_monologue_mode()
-        if mode == "disabled":
-            return
-        tracker = getattr(self, "_idle_tracker", None)
-        if tracker is None or not tracker.is_idle():
-            return
-        # Need a loaded model + context
-        if self.engine is None or self.model_context is None:
-            return
-        # Don't run if already generating or training
-        if getattr(self, "_is_generating", False):
-            return
-        if getattr(self, "training_active", False):
-            return
-        if self._monologue_running:
-            return
-        # Trigger reflection in background
-        self._monologue_running = True
-        tracker.mark_reflected()
-        threading.Thread(
-            target=self._run_reflection,
-            args=(mode,),
-            daemon=True,
-        ).start()
-
-    def _run_reflection(self, mode: str):
-        """Generate a reflection and store it in the journal.
-
-        Runs in a background thread. If mode is 'automatic' and the
-        coherence score passes the quality gate, the reflection is
-        also displayed as a greeting in the CMD activity log.
-        """
-        try:
-            from enigma_engine.core.monologue import (
-                build_reflection_prompt, score_coherence,
-                DEFAULT_COHERENCE_THRESHOLD,
-            )
-            ctx = self.model_context
-            if ctx is None or self.engine is None:
-                return
-
-            # Gather context for reflection
-            emo_state = dict(ctx.emotional_state)
-            recent_topics = self._extract_recent_topics()
-            memory_facts = self._get_memory_facts()
-
-            prompt = build_reflection_prompt(
-                emotional_state=emo_state,
-                recent_topics=recent_topics,
-                memory_facts=memory_facts,
-            )
-
-            # Generate using the loaded model
-            reflection = self.engine.chat(
-                prompt,
-                max_tokens=256,
-                temperature=0.7,
-            )
-            if not reflection or not reflection.strip():
-                return
-
-            # Strip any reasoning tags
-            from enigma_engine.core.reasoning import strip_reasoning
-            reflection = strip_reasoning(reflection).strip()
-            if not reflection:
-                return
-
-            # Score coherence
-            coherence = score_coherence(reflection)
-
-            # Always store in journal
-            ctx.journal.add(reflection, coherence=coherence)
-
-            # If automatic + passes quality gate, show to user
-            if (mode == "automatic"
-                    and coherence >= DEFAULT_COHERENCE_THRESHOLD):
-                self.after(0, lambda r=reflection: self._show_reflection(r))
-
-            logger.info(
-                "Monologue: stored reflection (coherence=%.2f, mode=%s)",
-                coherence, mode)
-        except Exception as exc:
-            logger.debug("Monologue reflection failed: %s", exc)
-        finally:
-            self._monologue_running = False
-
-    def _show_reflection(self, text: str):
-        """Display a reflection in the CMD activity log and refresh journal."""
-        try:
-            self._cmd_activity(f"[Reflection] {text}", tag="info")
-        except Exception:
-            pass
-        try:
-            self._refresh_journal_display()
-        except Exception:
-            pass
-
-    def _show_journal_greeting(self):
-        """Display the latest journal entry as a greeting after model load.
-
-        Called once at model load time. Reads the most recent journal
-        entry from the model context and displays it if:
-          - monologue_mode is 'journal_only' or 'automatic'
-          - the entry's coherence score meets the quality gate
-        """
-        mode = self._get_monologue_mode()
-        if mode == "disabled":
-            return
-        ctx = getattr(self, "model_context", None)
-        if ctx is None:
-            return
-        journal = getattr(ctx, "journal", None)
-        if journal is None:
-            return
-        entry = journal.latest()
-        if entry is None:
-            return
-        coherence = entry.get("coherence", 0.0)
-        from enigma_engine.core.monologue import DEFAULT_COHERENCE_THRESHOLD
-        if coherence < DEFAULT_COHERENCE_THRESHOLD:
-            return
-        text = entry.get("text", "").strip()
-        if not text:
-            return
-        ai = self._active_ai_name()
-        self._chat_append(
-            "assistant_prefix",
-            f"\n  {ai}  ",
-            "assistant",
-            f"[Journal] {text}\n")
-        self._cmd_activity(f"[Greeting] {text}", tag="info")
-
-    def _extract_recent_topics(self) -> list[str]:
-        """Extract keywords from recent chat history for reflection context."""
-        with self._history_lock:
-            recent = self.history[-10:]
-        if not recent:
-            return []
-        # Simple keyword extraction: long words from recent messages
-        import re
-        words: dict[str, int] = {}
-        stop = {"the", "and", "for", "that", "this", "with", "are",
-                "was", "you", "your", "have", "from", "they"}
-        for msg in recent:
-            content = msg.get("content", "")
-            for w in re.findall(r"[a-z]{4,}", content.lower()):
-                if w not in stop:
-                    words[w] = words.get(w, 0) + 1
-        # Return top-5 most frequent
-        sorted_words = sorted(words.items(), key=lambda x: -x[1])
-        return [w for w, _ in sorted_words[:5]]
-
-    def _get_memory_facts(self) -> list[str]:
-        """Get a few memory facts for reflection context."""
-        try:
-            from enigma_engine.core.memory import PersistentMemory
-            mem = PersistentMemory()
-            return mem.facts[:5]
-        except Exception:
-            return []
+            fcntl.flock(_lock_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return True
+        except OSError:
+            _lock_handle.close()
+            _lock_handle = None
+            return False
 
 
 # -------------------------------------------------------------------
@@ -1231,8 +1207,48 @@ class EnigmaGUI(
 
 def run_gui(model_path: str | None = None):
     """Launch the desktop GUI."""
+    if not _acquire_instance_lock():
+        logger.warning(
+            "Another Enigma GUI is already running — exiting.")
+        print("\n  Another Enigma GUI is already running.\n"
+              "  Close it first, or use Task Manager to end "
+              "leftover python.exe processes.\n")
+        return
+
     app = EnigmaGUI(model_path=model_path)
-    app.mainloop()
+
+    # On Windows, register a console event handler so closing the cmd
+    # window triggers a clean shutdown instead of leaving a zombie.
+    if os.name == "nt":
+        import ctypes as _ct
+
+        @_ct.WINFUNCTYPE(_ct.c_bool, _ct.c_uint)
+        def _console_handler(event):
+            # CTRL_CLOSE_EVENT=2, CTRL_LOGOFF_EVENT=5, CTRL_SHUTDOWN_EVENT=6
+            if event in (2, 5, 6):
+                try:
+                    app._on_close()
+                except Exception:
+                    pass
+                # Return True so Python doesn't raise SystemExit
+                # while we're cleaning up
+                return True
+            return False
+
+        _ct.windll.kernel32.SetConsoleCtrlHandler(_console_handler, True)
+
+    try:
+        app.mainloop()
+    except (KeyboardInterrupt, SystemExit):
+        pass
+    finally:
+        # Ensure resources are freed even on abnormal exit
+        if not getattr(app, '_shutting_down', False):
+            try:
+                app._on_close()
+            except Exception:
+                pass
+        _release_instance_lock()
 
 
 if __name__ == "__main__":

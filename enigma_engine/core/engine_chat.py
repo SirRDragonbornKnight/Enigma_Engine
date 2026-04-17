@@ -270,11 +270,21 @@ class _ChatMixin:
 
         # Reserve space for: system prompt + current message + response
         reserved = reserve_for_response
-        if system_prompt:
-            reserved += self.count_tokens(f"System: {system_prompt}\n")
-        reserved += self.count_tokens(f"User: {current_message}\nAssistant:")
+        try:
+            if system_prompt:
+                reserved += self.count_tokens(f"System: {system_prompt}\n")
+            reserved += self.count_tokens(f"User: {current_message}\nAssistant:")
+        except Exception:
+            # Fallback: rough char-based estimate if tokenizer unavailable.
+            # CJK text averages ~1.5 chars/token vs ~4 for Latin.
+            sample = (system_prompt or "") + current_message
+            has_cjk = any('\u4e00' <= c <= '\u9fff' for c in sample[:200])
+            chars_per_token = 2 if has_cjk else 4
+            if system_prompt:
+                reserved += len(f"System: {system_prompt}\n") // chars_per_token
+            reserved += len(f"User: {current_message}\nAssistant:") // chars_per_token
 
-        max_history_tokens = max_history_tokens or (max_context - reserved)
+        max_history_tokens = max_history_tokens or max(0, max_context - reserved)
 
         # If very limited context, keep only last exchange
         if max_history_tokens < 100:
@@ -289,7 +299,10 @@ class _ChatMixin:
             role = msg.get("role", "user").capitalize()
             content = msg.get("content", "")
             msg_text = f"{role}: {content}\n"
-            msg_tokens = self.count_tokens(msg_text)
+            try:
+                msg_tokens = self.count_tokens(msg_text)
+            except Exception:
+                msg_tokens = len(msg_text) // 4
 
             if total_tokens + msg_tokens > max_history_tokens:
                 # Don't add this message, we're at limit
@@ -370,6 +383,13 @@ class _ChatMixin:
                 system_prompt = reasoning_instruction
             # Give extra token budget for the thinking section
             max_gen = int(max_gen * 1.5)
+            # Clamp to model's max_seq_len to avoid context overflow
+            seq_limit = getattr(
+                getattr(self, 'model', None), 'config', None)
+            if seq_limit is not None:
+                seq_limit = getattr(seq_limit, 'max_seq_len', None)
+            if isinstance(seq_limit, int) and max_gen > seq_limit:
+                max_gen = seq_limit
 
         # ── Build GGUF-style messages list ───────────────────────────────
         messages: list[dict[str, str]] = []
@@ -547,6 +567,35 @@ class _ChatMixin:
                     len(images), tuple(vision_features.shape),
                 )
 
+        # ── Prefix KV cache: skip system-prompt prefill on cache hit ─────
+        # Only applicable for native models (not GGUF, not vision)
+        self._pending_prefix_cache = None
+        self._pending_prefix_build = None
+        effective_system = (
+            ctx.messages[0]["content"]
+            if ctx.messages and ctx.messages[0].get("role") == "system"
+            else None
+        )
+        if (effective_system
+                and vision_features is None
+                and hasattr(self, "model")
+                and hasattr(self.model, "clear_cache")):
+            import hashlib
+            prompt_hash = hashlib.sha256(
+                effective_system.encode("utf-8", errors="replace")
+            ).hexdigest()[:16]
+            if (prompt_hash == self._prefix_prompt_hash
+                    and self._prefix_kv_cache is not None):
+                self._pending_prefix_cache = self._prefix_kv_cache
+                logger.debug("Prefix KV cache hit (hash=%s)", prompt_hash)
+            else:
+                self._pending_prefix_build = {
+                    "hash": prompt_hash,
+                    "system_prefix_text": f"System: {effective_system}\n",
+                }
+                logger.debug(
+                    "Prefix KV cache miss — will snapshot after generation")
+
         if vision_features is not None and not ctx.is_gguf:
             response = self._generate_with_vision(
                 prompt=ctx.prompt,
@@ -713,6 +762,7 @@ class _ChatMixin:
         # don't leak partial stop sequences to consumers.
         pending = ""
         max_stop_len = max((len(s) for s in ctx.stop_strings), default=0)
+        stopped = False
 
         for token in self.stream_generate(ctx.prompt, max_gen=ctx.max_gen, **kwargs):
             pending += token
@@ -749,7 +799,7 @@ class _ChatMixin:
                 pending = pending[safe_end:]
 
         # Flush remaining pending at EOF (generation ended, no stop string hit)
-        if pending:
+        if pending and not stopped:
             yield pending
 
 

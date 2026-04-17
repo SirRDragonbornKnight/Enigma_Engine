@@ -47,6 +47,7 @@ _PLUGINS_DIR = Path(__file__).resolve().parent.parent.parent / "plugins"
 # If any of these appear in the AST the plugin is rejected before execution.
 _DANGEROUS_CALLS: frozenset[str] = frozenset({
     "exec", "eval", "compile", "__import__",
+    "globals", "locals", "vars", "getattr", "delattr",
 })
 _DANGEROUS_ATTRS: frozenset[str] = frozenset({
     "os.system", "os.popen", "os.exec", "os.execl", "os.execle",
@@ -157,6 +158,10 @@ def _is_trusted(path: Path) -> bool:
     from enigma_engine import CONFIG
     trusted: list[str] = CONFIG.get("trusted_plugins", [])
     if not trusted:
+        logger.warning(
+            "trusted_plugins list is empty — all plugins allowed. "
+            "Set trusted_plugins in config to restrict."
+        )
         return True  # empty list = allow all
     return path.name in trusted
 

@@ -568,12 +568,14 @@ if HAS_NUMPY:
 
         def _write_tensors_info(self) -> None:
             """Write tensor information."""
+            self._offset_positions: list[int] = []
             for tensor in self.tensors:
                 self._write_string(tensor.name)
                 self._file.write(struct.pack('<I', tensor.n_dims))
                 for dim in reversed(tensor.shape):
                     self._file.write(struct.pack('<Q', dim))
                 self._file.write(struct.pack('<I', tensor.type.value))
+                self._offset_positions.append(self._file.tell())
                 self._file.write(struct.pack('<Q', 0))  # Offset placeholder
 
         def _write_tensor_data(self) -> None:
@@ -583,7 +585,12 @@ if HAS_NUMPY:
             padding = (32 - (current_pos % 32)) % 32
             self._file.write(b'\x00' * padding)
 
-            for tensor in self.tensors:
+            data_start = self._file.tell()
+
+            for i, tensor in enumerate(self.tensors):
+                # Record offset relative to data section start
+                tensor_offset = self._file.tell() - data_start
+
                 data = tensor.data
 
                 # Convert to appropriate format
@@ -601,6 +608,12 @@ if HAS_NUMPY:
                 size = len(data.tobytes())
                 padding = (32 - (size % 32)) % 32
                 self._file.write(b'\x00' * padding)
+
+                # Seek back to fill in the offset placeholder
+                end_pos = self._file.tell()
+                self._file.seek(self._offset_positions[i])
+                self._file.write(struct.pack('<Q', tensor_offset))
+                self._file.seek(end_pos)
 
         def _write_string(self, s: str) -> None:
             """Write a string value."""

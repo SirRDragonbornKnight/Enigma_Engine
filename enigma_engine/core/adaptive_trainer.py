@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import threading
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from pathlib import Path
@@ -149,8 +150,12 @@ class TrainingPlan:
         # Score below threshold — retry if attempts remain
         if self.current_attempt < self.max_retries:
             # Escalate difficulty for next attempt
-            idx = DIFFICULTY_LEVELS.index(
-                self.current_difficulty)
+            try:
+                idx = DIFFICULTY_LEVELS.index(
+                    self.current_difficulty)
+            except ValueError:
+                self.current_difficulty = DIFFICULTY_LEVELS[0]
+                idx = 0
             if idx + 1 < len(DIFFICULTY_LEVELS):
                 self.current_difficulty = (
                     DIFFICULTY_LEVELS[idx + 1])
@@ -238,6 +243,7 @@ _ADAPTIVE_PROMPTS_FILE = (
 # modification time changes.
 _cached_prompts: dict | None = None
 _cached_prompts_mtime: float = 0.0
+_cached_prompts_lock = threading.Lock()
 
 
 def _load_adaptive_prompts() -> dict:
@@ -247,20 +253,21 @@ def _load_adaptive_prompts() -> dict:
     missing or malformed (caller falls back to defaults).
     """
     global _cached_prompts, _cached_prompts_mtime  # noqa: PLW0603
-    try:
-        if _ADAPTIVE_PROMPTS_FILE.exists():
-            mtime = _ADAPTIVE_PROMPTS_FILE.stat().st_mtime
-            if _cached_prompts is not None and mtime == _cached_prompts_mtime:
-                return _cached_prompts
-            data = json.loads(
-                _ADAPTIVE_PROMPTS_FILE.read_text(encoding="utf-8"))
-            if isinstance(data, dict):
-                _cached_prompts = data
-                _cached_prompts_mtime = mtime
-                return data
-    except Exception as exc:
-        logger.warning("Could not load adaptive prompts: %s", exc)
-    return {}
+    with _cached_prompts_lock:
+        try:
+            if _ADAPTIVE_PROMPTS_FILE.exists():
+                mtime = _ADAPTIVE_PROMPTS_FILE.stat().st_mtime
+                if _cached_prompts is not None and mtime == _cached_prompts_mtime:
+                    return _cached_prompts
+                data = json.loads(
+                    _ADAPTIVE_PROMPTS_FILE.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    _cached_prompts = data
+                    _cached_prompts_mtime = mtime
+                    return data
+        except Exception as exc:
+            logger.warning("Could not load adaptive prompts: %s", exc)
+        return {}
 
 
 # Hardcoded fallback prompts used when the JSON file is missing
@@ -419,6 +426,12 @@ def loss_to_proxy_score(loss: float) -> int:
         Integer score 1-8.
     """
     import math
+    if not isinstance(loss, (int, float)):
+        # Handle numpy scalar types
+        try:
+            loss = float(loss)
+        except (TypeError, ValueError):
+            return 1
     if math.isinf(loss) or math.isnan(loss):
         return 1
     # Linear: 9 - 4*loss, clamped to [1, 8]
@@ -477,6 +490,8 @@ def build_test_prompt(
     """
     context = _TEST_PROMPT_CONTEXT.get(
         stage, _TEST_PROMPT_CONTEXT["basics"])
+    if stage not in _TEST_PROMPT_CONTEXT:
+        logger.warning("Unknown adaptive stage '%s', using 'basics'", stage)
     return (
         f"Test #{test_num}: Generate a {difficulty}-difficulty "
         f"question for the {stage.upper()} stage.\n"

@@ -164,20 +164,12 @@ class ForgeTrainingMixin:
                 f"    Browse for a valid file or pick from Quick select.")
             return
 
-        try:
-            epochs = int(self.ft_epochs_entry.get())
-            if epochs < 1 or epochs > 1000:
-                raise ValueError
-        except ValueError:
-            self._log("[!] Fine-tune epochs must be 1-1000.")
+        result = self._validate_epochs_lr()
+        if result is None:
             return
+        epochs, lr = result
 
-        try:
-            lr = float(self.ft_lr_entry.get())
-            if lr <= 0 or lr > 1:
-                raise ValueError
-        except ValueError:
-            self._log("[!] Learning rate must be 0 to 1.")
+        if not self._validate_general_data_path():
             return
 
         model_name = Path(student_path).stem
@@ -187,10 +179,13 @@ class ForgeTrainingMixin:
         self.stop_train_btn.configure(state="normal")
         self.status_bar.set_left("\u2692 SOLO TRAINING...")
 
-        self._log("--- SOLO TRAINING INITIATED ---")
-        self._log(f"Student : {model_name}")
-        self._log(f"Data    : {Path(data_path).name}")
-        self._log(f"Epochs  : {epochs}  |  LR: {lr}")
+        self._log_training_summary(
+            "Solo Training",
+            Student=model_name,
+            Data=Path(data_path).name,
+            Epochs=epochs,
+            LR=lr,
+        )
         self._clear_forge_param_count()
         self._reset_forge_progress()
 
@@ -225,7 +220,9 @@ class ForgeTrainingMixin:
                     cfg_dict = checkpoint.get("model_config") or checkpoint.get("config", {})
                     if isinstance(cfg_dict, dict) and "epochs" in cfg_dict:
                         cfg_dict = checkpoint.get("model_config", {})
-                    config = ForgeConfig(**cfg_dict)
+                    config = ForgeConfig(**{
+                        k: v for k, v in cfg_dict.items()
+                        if k in ForgeConfig.__dataclass_fields__})
                     state_dict = get_state_dict(checkpoint)
 
                 model = Enigma(config=config)
@@ -239,10 +236,15 @@ class ForgeTrainingMixin:
                     tokenizer = _load_hf_tokenizer(sp, self._log)
                 if tokenizer is None:
                     tokenizer = get_tokenizer("auto")
-                    if sp.is_dir() and tokenizer.vocab_size != config.vocab_size:
-                        self._log(
-                            f"  [!] Tokenizer vocab ({tokenizer.vocab_size}) "
-                            f"!= model vocab ({config.vocab_size})")
+                if tokenizer.vocab_size != config.vocab_size:
+                    self._log(
+                        f"  [!] Tokenizer vocab ({tokenizer.vocab_size}) "
+                        f"!= model vocab ({config.vocab_size})")
+                    if tokenizer.vocab_size > config.vocab_size:
+                        raise ValueError(
+                            f"Tokenizer vocab ({tokenizer.vocab_size}) exceeds "
+                            f"model vocab ({config.vocab_size}) — token IDs "
+                            f"will be out of range. Use a matching tokenizer.")
                 self._log(
                     f"Tokenizer: {type(tokenizer).__name__} "
                     f"(vocab {tokenizer.vocab_size})")
@@ -260,13 +262,17 @@ class ForgeTrainingMixin:
                     learning_rate=lr,
                     max_grad_accumulation=forge_params["max_grad_accumulation"],
                     use_gradient_checkpointing=forge_params["use_gradient_checkpointing"],
+                    use_sequence_packing=True,
+                    ce_chunk_size=4096,
+                    use_compile=True,
+                    rolling_best_k=forge_params["rolling_best_k"],
                     general_mix_ratio=forge_params["general_mix_ratio"],
                     general_data=forge_params["general_data"],
                     val_split=forge_params["val_split"],
                     save_every=max(1, epochs // 5),
                     checkpoint_dir=str(MODELS_DIR / "checkpoints"),
                     use_amp=torch.cuda.is_available(),
-                    run_evaluation=True)  # Enable before/after evaluation
+                    run_evaluation=True)
 
                 if forge_params["general_data"]:
                     self._log(
@@ -274,6 +280,91 @@ class ForgeTrainingMixin:
 
                 trainer = Trainer(
                     model, tokenizer, train_config)
+                self._log(f"Batch   : {trainer.config.batch_size}")
+
+                # --- Live training callbacks ---
+                # Throttle: only log+update when percentage
+                # changes to avoid flooding the GUI event queue.
+                import time as _time
+                _last_pct = [-1]
+                _last_progress_t = [0.0]
+
+                def on_progress(pct, msg):
+                    if not self.training_active:
+                        raise KeyboardInterrupt("Stopped")
+                    now = _time.monotonic()
+                    if now - _last_progress_t[0] >= 1.0:
+                        self._update_forge_progress(pct, msg)
+                        _last_progress_t[0] = now
+                    if pct != _last_pct[0]:
+                        _last_pct[0] = pct
+                trainer.on_progress = on_progress
+
+                # Throughput: accumulate tokens for speed calc
+                _throughput_tokens = [0]
+                _throughput_time = [0.0]
+
+                def on_throughput(tokens: int, step_time: float):
+                    _throughput_tokens[0] += tokens
+                    _throughput_time[0] += step_time
+                trainer.on_throughput = on_throughput
+
+                # Loss: compact step line with loss + tok/s + VRAM
+                # Throttled to 2 updates/sec to prevent GUI freeze.
+                _last_loss_t = [0.0]
+
+                def on_loss(loss: float):
+                    now = _time.monotonic()
+                    if now - _last_loss_t[0] < 0.5:
+                        return
+                    _last_loss_t[0] = now
+                    import torch as _torch
+                    tok_s = int(
+                        _throughput_tokens[0]
+                        / max(0.001, _throughput_time[0]))
+                    _throughput_tokens[0] = 0
+                    _throughput_time[0] = 0.0
+                    vram = ""
+                    if _torch.cuda.is_available():
+                        used_gb = (_torch.cuda.memory_allocated()
+                                   / 1e9)
+                        total_gb = (
+                            _torch.cuda
+                            .get_device_properties(0)
+                            .total_memory / 1e9)
+                        vram = (f" | {used_gb:.1f}/"
+                                f"{total_gb:.0f} GB")
+                    step = trainer.state.step
+                    lr = trainer.optimizer.param_groups[0]['lr']
+                    # Batch-level ETA from total_steps
+                    eta_str = ""
+                    total = getattr(
+                        trainer, '_total_training_steps', 0)
+                    if total > 0 and step > 0:
+                        elapsed = now - _train_start[0]
+                        remaining = (elapsed / step) * (
+                            total - step)
+                        if remaining >= 3600:
+                            h = int(remaining // 3600)
+                            m = int((remaining % 3600) // 60)
+                            eta_str = f" | ETA {h}h {m:02d}m"
+                        else:
+                            m = int(remaining // 60)
+                            s = int(remaining % 60)
+                            eta_str = f" | ETA {m}m {s:02d}s"
+                    self._log(
+                        f"  Step {step:>5d}/{total} | loss {loss:.4f}"
+                        f" | lr {lr:.2e}"
+                        f" | {tok_s:,} tok/s{vram}{eta_str}")
+                    # Update progress bar at step-level
+                    if total > 0 and step > 0:
+                        step_pct = int(step / total * 100)
+                        self._update_forge_progress(
+                            step_pct,
+                            f"Step {step:,}/{total:,}")
+                trainer.on_loss = on_loss
+
+                _train_start = [_time.monotonic()]
 
                 def on_epoch(epoch, loss):
                     if not self.training_active:
@@ -282,20 +373,67 @@ class ForgeTrainingMixin:
                     pct = int(epoch / epochs * 100)
                     self._update_forge_progress(
                         pct, f"Epoch {epoch}/{epochs}")
+                    elapsed = _time.monotonic() - _train_start[0]
+                    mins = int(elapsed // 60)
+                    secs = int(elapsed % 60)
+                    trend = ""
+                    if len(losses) >= 2:
+                        delta = losses[-1] - losses[-2]
+                        trend = f"  ({delta:+.4f})"
+                    # ETA based on average epoch time
+                    eta = ""
+                    if epoch > 0:
+                        remaining = (elapsed / epoch) * (
+                            epochs - epoch)
+                        r_m = int(remaining // 60)
+                        r_s = int(remaining % 60)
+                        eta = f"  |  ETA {r_m}m {r_s:02d}s"
+                    best = trainer.state.best_loss
+                    import math as _math
+                    best_str = (f"  |  best {best:.4f}"
+                                if not _math.isinf(best) else "")
                     self._log(
-                        f"  Epoch {epoch:>3d}  |  "
-                        f"loss {loss:.4f}")
+                        f"  Epoch {epoch:>3d}/{epochs}  |  "
+                        f"loss {loss:.4f}{trend}{best_str}  |  "
+                        f"{mins}m {secs:02d}s{eta}")
                 trainer.on_epoch_complete = on_epoch
 
+                # I-14: Check for checkpoint resume
+                from enigma_engine.core.training import Trainer as _T
+                ckpt_dir = Path(
+                    train_config.checkpoint_dir or
+                    str(MODELS_DIR / "checkpoints"))
+                resume_enabled = getattr(
+                    self, 'forge_resume_var', None)
+                try_resume = (resume_enabled is None
+                              or resume_enabled.get())
+                resume_path = (
+                    _T._find_latest_checkpoint(ckpt_dir)
+                    if try_resume else None)
+                if resume_path is not None:
+                    self._log(
+                        f"--- RESUMING from {resume_path.name} ---")
+                elif not try_resume:
+                    existing = _T._find_latest_checkpoint(ckpt_dir)
+                    if existing is not None:
+                        self._log(
+                            "[i] Checkpoint exists but Resume is "
+                            "unchecked — starting fresh.")
+
                 self._log("Training...\n")
-                state = trainer.train(text)
+                state = trainer.train(
+                    text,
+                    resume_from=str(resume_path)
+                    if resume_path is not None else None)
 
                 # Check for early termination (OOM / NaN / Inf)
                 import math
                 if math.isinf(state.best_loss) and not losses:
+                    reason = getattr(state, 'abort_reason', '') or (
+                        "likely OOM or NaN loss")
                     self._log(
-                        "\n[!] Training aborted on first batch "
-                        "(likely OOM or NaN loss).")
+                        f"\n[!] Training aborted on first batch "
+                        f"({reason}).")
                     self._log(
                         "    Try LoRA training instead for large "
                         "models, or reduce batch size.")
@@ -324,7 +462,7 @@ class ForgeTrainingMixin:
                 from enigma_engine.core.safe_save import atomic_torch_save
                 atomic_torch_save({
                     "model_state_dict": model.state_dict(),
-                    "config": self._model_config_dict(model),
+                    "model_config": self._model_config_dict(model),
                     "training_state": {
                         "epochs": state.epoch,
                         "best_loss": state.best_loss,
@@ -334,6 +472,9 @@ class ForgeTrainingMixin:
                 self._log("\n--- SOLO TRAINING COMPLETE ---")
                 self._log(f"Best loss : {state.best_loss:.4f}")
                 self._log(f"Saved to  : {out}")
+                total = _time.monotonic() - _train_start[0]
+                t_m, t_s = int(total // 60), int(total % 60)
+                self._log(f"Duration  : {t_m}m {t_s:02d}s")
                 self._update_forge_progress(100, "Complete")
                 self._save_training_run(
                     "Solo", model_name, epochs,
@@ -344,13 +485,17 @@ class ForgeTrainingMixin:
                 if losses:
                     self._display_loss_curve(losses)
                 self.after(0, self._refresh_models)
+                self._notify_training_complete()
 
             except KeyboardInterrupt:
                 self._log("\n--- SOLO TRAINING STOPPED ---")
                 if losses:
                     self._display_loss_curve(losses)
             except Exception as exc:
+                import traceback
+                tb = traceback.format_exc()
                 self._log(f"\n[!] Solo training failed: {exc}")
+                self._log(tb)
             finally:
                 self.training_active = False
                 self._reset_forge_progress()
@@ -399,40 +544,35 @@ class ForgeTrainingMixin:
                 f"    Browse for a valid file or pick from Quick select.")
             return
 
-        if not data_path.endswith(".jsonl"):
-            self._log(
-                "[!] DPO requires a .jsonl file format.\n"
-                "    Each line: "
-                '{"prompt": "...", "chosen": "...", "rejected": "..."}')
+        if not self._validate_jsonl_structure(
+            data_path, ("prompt", "chosen", "rejected"),
+        ):
             return
 
-        try:
-            epochs = int(self.ft_epochs_entry.get())
-            if epochs < 1 or epochs > 1000:
-                raise ValueError
-        except ValueError:
-            self._log("[!] Fine-tune epochs must be 1-1000.")
+        result = self._validate_epochs_lr()
+        if result is None:
             return
+        epochs, lr = result
 
-        try:
-            lr = float(self.ft_lr_entry.get())
-            if lr <= 0 or lr > 1:
-                raise ValueError
-        except ValueError:
-            self._log("[!] Learning rate must be 0 to 1.")
+        if not self._validate_general_data_path():
             return
 
         beta_val = 0.1
 
+        model_name = Path(student_path).stem
         self.training_active = True
         self.solo_train_btn.configure(state="disabled",
                                       text="TRAINING...")
         self.stop_train_btn.configure(state="normal")
         self.status_bar.set_left("\u2692 DPO TRAINING...")
 
-        self._log("=" * 40)
-        self._log("  DPO Training")
-        self._log("=" * 40)
+        self._log_training_summary(
+            "DPO Training",
+            Student=model_name,
+            Data=Path(data_path).name,
+            Epochs=epochs,
+            LR=lr,
+        )
         self._clear_forge_param_count()
         self._reset_forge_progress()
 
@@ -458,6 +598,9 @@ class ForgeTrainingMixin:
                                    ("prompt", "chosen", "rejected")):
                                 pref_data.append(item)
                         except _json.JSONDecodeError:
+                            self._log(
+                                f"[!] Skipping malformed JSONL line "
+                                f"{len(pref_data) + 1}")
                             continue
 
                 if not pref_data:
@@ -483,7 +626,9 @@ class ForgeTrainingMixin:
                 cfg_dict = checkpoint.get("model_config") or checkpoint.get("config", {})
                 if isinstance(cfg_dict, dict) and "epochs" in cfg_dict:
                     cfg_dict = checkpoint.get("model_config", {})
-                config = ForgeConfig(**cfg_dict)
+                config = ForgeConfig(**{
+                    k: v for k, v in cfg_dict.items()
+                    if k in ForgeConfig.__dataclass_fields__})
                 model = Enigma(config=config)
                 state_dict = get_state_dict(checkpoint)
                 model.load_state_dict(state_dict)
@@ -507,19 +652,53 @@ class ForgeTrainingMixin:
                     batch_size=forge_params["batch_size"],
                     max_grad_accumulation=forge_params["max_grad_accumulation"],
                     use_gradient_checkpointing=forge_params["use_gradient_checkpointing"],
+                    use_sequence_packing=True,
+                    ce_chunk_size=4096,
+                    use_compile=True,
+                    rolling_best_k=forge_params["rolling_best_k"],
                     general_mix_ratio=forge_params["general_mix_ratio"],
                     general_data=forge_params["general_data"],
                     val_split=forge_params["val_split"],
-                )
+                    save_every=max(1, epochs // 5),
+                    checkpoint_dir=str(MODELS_DIR / "checkpoints"),
+                    use_amp=torch.cuda.is_available(),
+                    run_evaluation=True)
                 trainer = Trainer(model, tokenizer, train_config)
 
+                import time as _time
+                _last_dpo_pct = [-1]
+                _last_dpo_t = [0.0]
+                _dpo_start = [_time.monotonic()]
+
                 def on_progress(pct: int, msg: str):
-                    self._update_forge_progress(pct, msg)
-                    self.after(0, lambda: self._log(f"[{pct}%] {msg}"))
+                    if not self.training_active:
+                        raise KeyboardInterrupt("Stopped")
+                    now = _time.monotonic()
+                    if now - _last_dpo_t[0] >= 1.0:
+                        eta = ""
+                        if pct > 0:
+                            elapsed = now - _dpo_start[0]
+                            remaining = (elapsed / pct) * (
+                                100 - pct)
+                            r_m = int(remaining // 60)
+                            r_s = int(remaining % 60)
+                            eta = f" | ETA {r_m}m {r_s:02d}s"
+                        self._update_forge_progress(
+                            pct, f"{msg}{eta}")
+                        _last_dpo_t[0] = now
+
+                _last_dpo_loss_t = [0.0]
 
                 def on_loss(loss: float):
-                    self.after(
-                        0, lambda l=loss: self._log(f"  loss: {l:.4f}"))
+                    now = _time.monotonic()
+                    if now - _last_dpo_loss_t[0] < 0.5:
+                        return
+                    _last_dpo_loss_t[0] = now
+                    step = trainer.state.step
+                    lr = trainer.optimizer.param_groups[0]['lr']
+                    self._log(
+                        f"  Step {step:>5d} | loss {loss:.4f}"
+                        f" | lr {lr:.2e}")
 
                 trainer.on_progress = on_progress
                 trainer.on_loss = on_loss
@@ -533,7 +712,7 @@ class ForgeTrainingMixin:
                 from enigma_engine.core.safe_save import atomic_torch_save
                 atomic_torch_save({
                     "model_state_dict": model.state_dict(),
-                    "config": self._model_config_dict(model),
+                    "model_config": self._model_config_dict(model),
                     "training_state": {
                         "epochs": state.epoch if hasattr(state, 'epoch') else epochs,
                         "best_loss": state.best_loss if hasattr(state, 'best_loss') else 0.0,
@@ -543,12 +722,16 @@ class ForgeTrainingMixin:
                 best = state.best_loss if hasattr(state, 'best_loss') else 0.0
                 self._log(
                     f"DPO complete — best loss: {best:.4f}")
+                total = _time.monotonic() - _dpo_start[0]
+                t_m, t_s = int(total // 60), int(total % 60)
+                self._log(f"Duration  : {t_m}m {t_s:02d}s")
                 self._update_forge_progress(100, "Complete")
                 self._save_training_run(
                     "DPO", Path(student_path).stem,
                     epochs, best)
                 self.after(0, lambda pc=pc: self._update_forge_param_count(pc))
                 self.after(0, self._refresh_models)
+                self._notify_training_complete()
 
             except KeyboardInterrupt:
                 self._log("\n--- DPO TRAINING STOPPED ---")
@@ -611,20 +794,12 @@ class ForgeTrainingMixin:
                 "    Format 2: captions.jsonl with image+text fields")
             return
 
-        try:
-            epochs = int(self.ft_epochs_entry.get())
-            if epochs < 1 or epochs > 1000:
-                raise ValueError
-        except ValueError:
-            self._log("[!] Epochs must be 1-1000.")
+        result = self._validate_epochs_lr()
+        if result is None:
             return
+        epochs, lr = result
 
-        try:
-            lr = float(self.ft_lr_entry.get())
-            if lr <= 0 or lr > 1:
-                raise ValueError
-        except ValueError:
-            self._log("[!] Learning rate must be 0 to 1.")
+        if not self._validate_general_data_path():
             return
 
         # Get encoder preset from UI
@@ -638,20 +813,15 @@ class ForgeTrainingMixin:
         self.stop_train_btn.configure(state="normal")
         self.status_bar.set_left("\u2692 VISION TRAINING...")
 
-        # Read focus field from UI
-        focus_field = ""
-        ff_widget = getattr(self, "forge_focus_field", None)
-        if ff_widget is not None:
-            focus_field = ff_widget.get().strip()
-
-        self._log("=" * 40)
-        self._log("  Vision Training")
-        self._log("=" * 40)
-        self._log(f"Data dir : {vision_dir}")
-        self._log(f"Pairs    : {len(pairs)}")
-        self._log(f"Encoder  : {preset}")
-        if focus_field:
-            self._log(f"Focus   : {focus_field}")
+        summary_fields = {
+            "Student": Path(student_path).stem,
+            "Data dir": vision_dir,
+            "Pairs": str(len(pairs)),
+            "Encoder": preset,
+            "Epochs": epochs,
+            "LR": lr,
+        }
+        self._log_training_summary("Vision Training", **summary_fields)
         self._clear_forge_param_count()
         self._reset_forge_progress()
 
@@ -686,7 +856,9 @@ class ForgeTrainingMixin:
                 v_preset = VISION_PRESETS.get(preset, VISION_PRESETS["small"])
                 cfg_dict["vision_hidden_size"] = v_preset.dim
 
-                config = ForgeConfig(**cfg_dict)
+                config = ForgeConfig(**{
+                    k: v for k, v in cfg_dict.items()
+                    if k in ForgeConfig.__dataclass_fields__})
                 model = Enigma(config=config)
                 state_dict = get_state_dict(checkpoint)
                 # Load with strict=False since we may have added vision_projection
@@ -721,18 +893,32 @@ class ForgeTrainingMixin:
                     learning_rate=lr,
                     max_grad_accumulation=forge_params["max_grad_accumulation"],
                     use_gradient_checkpointing=forge_params["use_gradient_checkpointing"],
+                    use_sequence_packing=True,
+                    ce_chunk_size=4096,
+                    use_compile=True,
+                    rolling_best_k=forge_params["rolling_best_k"],
                     general_mix_ratio=forge_params["general_mix_ratio"],
                     general_data=forge_params["general_data"],
                     val_split=forge_params["val_split"],
                     save_every=max(1, epochs // 5),
                     checkpoint_dir=str(MODELS_DIR / "checkpoints"),
-                    use_amp=torch.cuda.is_available())
+                    use_amp=torch.cuda.is_available(),
+                    run_evaluation=True)
 
                 trainer = Trainer(model, tokenizer, train_config)
 
+                import time as _time
+                _last_vis_pct = [-1]
+                _last_vis_t = [0.0]
+                _vis_start = [_time.monotonic()]
+
                 def on_progress(pct: int, msg: str):
-                    self._update_forge_progress(pct, msg)
-                    self.after(0, lambda: self._log(f"[{pct}%] {msg}"))
+                    if not self.training_active:
+                        raise KeyboardInterrupt("Stopped")
+                    now = _time.monotonic()
+                    if now - _last_vis_t[0] >= 1.0:
+                        self._update_forge_progress(pct, msg)
+                        _last_vis_t[0] = now
 
                 def on_epoch(epoch, loss):
                     if not self.training_active:
@@ -741,9 +927,24 @@ class ForgeTrainingMixin:
                     pct = int(epoch / epochs * 100)
                     self._update_forge_progress(
                         pct, f"Epoch {epoch}/{epochs}")
+                    elapsed = _time.monotonic() - _vis_start[0]
+                    mins = int(elapsed // 60)
+                    secs = int(elapsed % 60)
+                    eta = ""
+                    if epoch > 0:
+                        remaining = (elapsed / epoch) * (
+                            epochs - epoch)
+                        r_m = int(remaining // 60)
+                        r_s = int(remaining % 60)
+                        eta = f"  |  ETA {r_m}m {r_s:02d}s"
+                    best = trainer.state.best_loss
+                    import math as _math
+                    best_str = (f"  |  best {best:.4f}"
+                                if not _math.isinf(best) else "")
                     self._log(
-                        f"  Epoch {epoch:>3d}  |  "
-                        f"loss {loss:.4f}")
+                        f"  Epoch {epoch:>3d}/{epochs}  |  "
+                        f"loss {loss:.4f}{best_str}  |  "
+                        f"{mins}m {secs:02d}s{eta}")
 
                 trainer.on_progress = on_progress
                 trainer.on_epoch_complete = on_epoch
@@ -757,8 +958,7 @@ class ForgeTrainingMixin:
                 from enigma_engine.core.safe_save import atomic_torch_save
                 save_dict = {
                     "model_state_dict": model.state_dict(),
-                    "config": self._model_config_dict(model),
-                    "model_config": config.to_dict(),
+                    "model_config": self._model_config_dict(model),
                     "vision_encoder_state": v_encoder.state_dict(),
                     "vision_encoder_config": v_preset.to_dict(),
                     "training_state": {
@@ -771,6 +971,9 @@ class ForgeTrainingMixin:
                 self._log("\n--- VISION TRAINING COMPLETE ---")
                 self._log(f"Best loss : {state.best_loss:.4f}")
                 self._log(f"Saved to  : {Path(student_path).name}")
+                total = _time.monotonic() - _vis_start[0]
+                t_m, t_s = int(total // 60), int(total % 60)
+                self._log(f"Duration  : {t_m}m {t_s:02d}s")
                 self._update_forge_progress(100, "Complete")
                 self._save_training_run(
                     "Vision", Path(student_path).stem,
@@ -779,6 +982,7 @@ class ForgeTrainingMixin:
                 if losses:
                     self._display_loss_curve(losses)
                 self.after(0, self._refresh_models)
+                self._notify_training_complete()
 
             except KeyboardInterrupt:
                 self._log("\n--- VISION TRAINING STOPPED ---")
@@ -833,37 +1037,41 @@ class ForgeTrainingMixin:
                 f"    Browse for a valid file or pick from Quick select.")
             return
 
-        try:
-            epochs = int(self.ft_epochs_entry.get())
-            if epochs < 1 or epochs > 1000:
-                raise ValueError
-        except ValueError:
-            self._log("[!] Epochs must be 1-1000.")
+        result = self._validate_epochs_lr()
+        if result is None:
             return
+        epochs, lr = result
 
-        try:
-            lr = float(self.ft_lr_entry.get())
-            if lr <= 0 or lr > 1:
-                raise ValueError
-        except ValueError:
-            self._log("[!] Learning rate must be 0 to 1.")
+        if not self._validate_general_data_path():
             return
 
         # Read LoRA config from UI
         rank_var = getattr(self, "forge_lora_rank_var", None)
         alpha_var = getattr(self, "forge_lora_alpha_var", None)
         try:
-            lora_rank = int(rank_var.get()) if rank_var else 8
+            raw_rank = rank_var.get().strip() if rank_var else ""
+            lora_rank = int(raw_rank) if raw_rank else 8
             if lora_rank < 1 or lora_rank > 128:
-                raise ValueError
+                self._log(f"[!] LoRA rank '{raw_rank}' out of range "
+                          f"(1-128), using 8")
+                lora_rank = 8
         except (ValueError, TypeError):
+            if rank_var and rank_var.get().strip():
+                self._log(f"[!] LoRA rank '{rank_var.get().strip()}' "
+                          f"not a number, using 8")
             lora_rank = 8
 
         try:
-            lora_alpha = int(alpha_var.get()) if alpha_var else 16
+            raw_alpha = alpha_var.get().strip() if alpha_var else ""
+            lora_alpha = int(raw_alpha) if raw_alpha else 16
             if lora_alpha < 1 or lora_alpha > 256:
-                raise ValueError
+                self._log(f"[!] LoRA alpha '{raw_alpha}' out of "
+                          f"range (1-256), using 16")
+                lora_alpha = 16
         except (ValueError, TypeError):
+            if alpha_var and alpha_var.get().strip():
+                self._log(f"[!] LoRA alpha '{alpha_var.get().strip()}'"
+                          f" not a number, using 16")
             lora_alpha = 16
 
         self.training_active = True
@@ -872,20 +1080,16 @@ class ForgeTrainingMixin:
         self.stop_train_btn.configure(state="normal")
         self.status_bar.set_left("\u2692 LoRA TRAINING...")
 
-        # Read focus field from UI
-        focus_field = ""
-        ff_widget = getattr(self, "forge_focus_field", None)
-        if ff_widget is not None:
-            focus_field = ff_widget.get().strip()
-
         model_name = Path(student_path).stem
-        self._log("=" * 40)
-        self._log("  LoRA Training")
-        self._log("=" * 40)
-        self._log(f"Student : {model_name}")
-        self._log(f"Rank    : {lora_rank}  |  Alpha: {lora_alpha}")
-        if focus_field:
-            self._log(f"Focus   : {focus_field}")
+        summary_fields = {
+            "Student": model_name,
+            "Data": Path(data_path).name,
+            "Rank": lora_rank,
+            "Alpha": lora_alpha,
+            "Epochs": epochs,
+            "LR": lr,
+        }
+        self._log_training_summary("LoRA Training", **summary_fields)
         self._clear_forge_param_count()
         self._reset_forge_progress()
 
@@ -919,7 +1123,9 @@ class ForgeTrainingMixin:
                     if isinstance(cfg_dict, dict) and "epochs" in cfg_dict:
                         cfg_dict = checkpoint.get("model_config", {})
 
-                    config = ForgeConfig(**cfg_dict)
+                    config = ForgeConfig(**{
+                        k: v for k, v in cfg_dict.items()
+                        if k in ForgeConfig.__dataclass_fields__})
                     state_dict = get_state_dict(checkpoint)
 
                 model = Enigma(config=config)
@@ -937,6 +1143,8 @@ class ForgeTrainingMixin:
 
                 ppl_before = None
                 ppl_after = None
+                import time as _time
+                _lora_start_common = [_time.monotonic()]
                 # Try PEFT LoRA first, fall back to manual
                 try:
                     from enigma_engine.core.lora_utils import (
@@ -961,9 +1169,24 @@ class ForgeTrainingMixin:
                         if not self.training_active:
                             raise KeyboardInterrupt("Stopped")
                         losses.append(loss)
+                        elapsed = _time.monotonic() - _lora_start_common[0]
+                        mins = int(elapsed // 60)
+                        secs = int(elapsed % 60)
+                        eta = ""
+                        if epoch > 0:
+                            remaining = (elapsed / epoch) * (
+                                epochs - epoch)
+                            r_m = int(remaining // 60)
+                            r_s = int(remaining % 60)
+                            eta = f"  |  ETA {r_m}m {r_s:02d}s"
+                        best = lora_trainer.state.best_loss
+                        import math as _math
+                        best_str = (f"  |  best {best:.4f}"
+                                    if not _math.isinf(best) else "")
                         self._log(
-                            f"  Epoch {epoch:>3d}  |  "
-                            f"loss {loss:.4f}")
+                            f"  Epoch {epoch:>3d}/{epochs}  |  "
+                            f"loss {loss:.4f}{best_str}  |  "
+                            f"{mins}m {secs:02d}s{eta}")
 
                     lora_trainer.on_epoch_complete = on_epoch
                     self._log("Training LoRA adapters...\n")
@@ -1012,13 +1235,17 @@ class ForgeTrainingMixin:
                         learning_rate=lr,
                         max_grad_accumulation=forge_params["max_grad_accumulation"],
                         use_gradient_checkpointing=forge_params["use_gradient_checkpointing"],
+                        use_sequence_packing=True,
+                        ce_chunk_size=4096,
+                        use_compile=True,
+                        rolling_best_k=forge_params["rolling_best_k"],
                         general_mix_ratio=forge_params["general_mix_ratio"],
                         general_data=forge_params["general_data"],
                         val_split=forge_params["val_split"],
                         save_every=max(1, epochs // 5),
                         checkpoint_dir=str(MODELS_DIR / "checkpoints"),
                         use_amp=torch.cuda.is_available(),
-                        run_evaluation=True)  # Enable before/after evaluation
+                        run_evaluation=True)
 
                     trainer = Trainer(model, tokenizer, train_config)
 
@@ -1026,9 +1253,24 @@ class ForgeTrainingMixin:
                         if not self.training_active:
                             raise KeyboardInterrupt("Stopped")
                         losses.append(loss)
+                        elapsed = _time.monotonic() - _lora_start_common[0]
+                        mins = int(elapsed // 60)
+                        secs = int(elapsed % 60)
+                        eta = ""
+                        if epoch > 0:
+                            remaining = (elapsed / epoch) * (
+                                epochs - epoch)
+                            r_m = int(remaining // 60)
+                            r_s = int(remaining % 60)
+                            eta = f"  |  ETA {r_m}m {r_s:02d}s"
+                        best = trainer.state.best_loss
+                        import math as _math
+                        best_str = (f"  |  best {best:.4f}"
+                                    if not _math.isinf(best) else "")
                         self._log(
-                            f"  Epoch {epoch:>3d}  |  "
-                            f"loss {loss:.4f}")
+                            f"  Epoch {epoch:>3d}/{epochs}  |  "
+                            f"loss {loss:.4f}{best_str}  |  "
+                            f"{mins}m {secs:02d}s{eta}")
                     trainer.on_epoch_complete = on_epoch
 
                     self._log("Training (partial freeze)...\n")
@@ -1058,7 +1300,7 @@ class ForgeTrainingMixin:
                     save_path = save_path.with_suffix(".pth")
                 atomic_torch_save({
                     "model_state_dict": model.state_dict(),
-                    "config": self._model_config_dict(model),
+                    "model_config": self._model_config_dict(model),
                     "training_state": {
                         "epochs": epochs,
                         "best_loss": min(losses) if losses else 0.0,
@@ -1070,6 +1312,9 @@ class ForgeTrainingMixin:
                 if losses:
                     self._log(f"Best loss : {best_loss:.4f}")
                 self._log("--- LoRA TRAINING COMPLETE ---")
+                total = _time.monotonic() - _lora_start_common[0]
+                t_m, t_s = int(total // 60), int(total % 60)
+                self._log(f"Duration  : {t_m}m {t_s:02d}s")
                 self._update_forge_progress(100, "Complete")
                 self._save_training_run(
                     "LoRA", model_name, epochs, best_loss,
@@ -1079,6 +1324,7 @@ class ForgeTrainingMixin:
                 if losses:
                     self._display_loss_curve(losses)
                 self.after(0, self._refresh_models)
+                self._notify_training_complete()
 
             except KeyboardInterrupt:
                 self._log("\n--- LoRA TRAINING STOPPED ---")

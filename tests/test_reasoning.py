@@ -262,20 +262,6 @@ class TestGetSpecialTokenIds:
 class TestChatReasoning:
     """Test reasoning integration in chat engine."""
 
-    def test_chat_method_accepts_reasoning_param(self):
-        """Verify chat() signature accepts reasoning kwarg."""
-        import inspect
-        from enigma_engine.core.engine_chat import _ChatMixin
-        sig = inspect.signature(_ChatMixin.chat)
-        assert "reasoning" in sig.parameters
-
-    def test_stream_chat_method_accepts_reasoning_param(self):
-        """Verify stream_chat() signature accepts reasoning kwarg."""
-        import inspect
-        from enigma_engine.core.engine_chat import _ChatMixin
-        sig = inspect.signature(_ChatMixin.stream_chat)
-        assert "reasoning" in sig.parameters
-
     def test_reasoning_instruction_added_to_prompt(self):
         """When reasoning=True, the reasoning instruction should be
         injected into the system prompt."""

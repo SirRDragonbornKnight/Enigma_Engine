@@ -90,7 +90,13 @@ def apply_repetition_penalty(
         Modified logits with repetition penalty applied (new tensor, not in-place)
     """
     if penalty == 1.0:
-        return logits
+        return logits.clone()
+
+    if penalty < 1.0:
+        logger.warning(
+            "Repetition penalty %.3f < 1.0 amplifies repeated tokens "
+            "instead of suppressing them", penalty,
+        )
 
     # Clone to avoid in-place mutation (important for beam search, speculative decoding)
     logits = logits.clone()
@@ -119,8 +125,10 @@ def apply_repetition_penalty(
                         scores > 0, scores / penalty, scores * penalty)
     else:
         # Bincount for longer sequences (better vectorization)
-        flat_tokens = tokens.view(-1).clamp(0, vocab_size - 1)
-        token_counts = torch.bincount(flat_tokens, minlength=vocab_size)
+        flat_tokens = tokens.view(-1)
+        valid_mask = (flat_tokens >= 0) & (flat_tokens < vocab_size)
+        valid_tokens = flat_tokens[valid_mask]
+        token_counts = torch.bincount(valid_tokens, minlength=vocab_size)
         appeared_mask = token_counts > 0
         if logits.dim() == 1:
             scores = logits[appeared_mask]
@@ -141,9 +149,10 @@ def sample_next_token(
     top_k: int = 50,
     top_p: float = 0.9,
     repetition_penalty: float = 1.1,
+    min_p: float = 0.0,
 ) -> torch.Tensor:
     """
-    Sample one token from logits with repetition penalty, top-k, and top-p.
+    Sample one token from logits with repetition penalty, top-k, top-p, and min-p.
 
     Shared helper used by :meth:`Enigma.generate` and
     :meth:`Enigma.generate_stream` so the sampling logic lives in one place.
@@ -155,10 +164,16 @@ def sample_next_token(
         top_k: Keep only the top-k highest-probability tokens (0 = disabled).
         top_p: Nucleus sampling threshold (<1.0 to enable).
         repetition_penalty: Penalty for previously seen tokens (1.0 = off).
+        min_p: Min-p filtering threshold (0 = disabled). Removes tokens
+            whose probability is below ``min_p * max_probability``.
 
     Returns:
         Sampled token IDs [batch, 1].
     """
+    # --- Greedy decode for temperature <= 0 ---
+    if temperature <= 0:
+        return logits.argmax(dim=-1, keepdim=True)
+
     # --- Repetition penalty on raw logits first (order matters) ---
     if repetition_penalty != 1.0:
         logits = apply_repetition_penalty(
@@ -166,6 +181,16 @@ def sample_next_token(
         )
 
     next_logits = logits / temperature
+
+    # Save pre-filter logits for NaN fallback (S720)
+    pre_filter_logits = next_logits.clone()
+
+    # --- Min-p filtering: remove tokens below min_p * max_probability ---
+    if min_p > 0.0:
+        probs_for_filter = F.softmax(next_logits, dim=-1)
+        max_prob = probs_for_filter.max(dim=-1, keepdim=True).values
+        next_logits = next_logits.masked_fill(
+            probs_for_filter < min_p * max_prob, float('-inf'))
 
     # --- Top-k filtering ---
     if top_k > 0:
@@ -184,6 +209,14 @@ def sample_next_token(
 
     # --- Sample ---
     probs = F.softmax(next_logits, dim=-1)
+    # Guard: if all logits were -inf, softmax produces NaN.
+    # Fall back to pre-filter distribution (S720).
+    if torch.isnan(probs).any():
+        probs = F.softmax(pre_filter_logits, dim=-1)
+        # Second-level guard: if pre-filter logits were also
+        # all -inf (model produced garbage), uniform sample.
+        if torch.isnan(probs).any():
+            probs = torch.ones_like(probs) / probs.shape[-1]
     return torch.multinomial(probs, num_samples=1)
 
 
@@ -242,7 +275,19 @@ def estimate_memory_usage(size: str, quantization: str = "none") -> dict[str, fl
     """
     try:
         from .hardware_detection import estimate_memory_usage as _estimate
-        return _estimate(size, quantization)
+        use_half = quantization in ("dynamic", "int8", "int4")
+        result = _estimate(size, use_half=use_half)
+        # Apply quantization scaling to model_memory
+        if quantization == "int4":
+            result["model_memory"] *= 0.5
+        elif quantization == "int8":
+            result["model_memory"] *= 0.5 if use_half else 0.25
+        result["total"] = result["model_memory"] + result["kv_cache"]
+        return {
+            "model_size_mb": result["model_memory"] * 1024,
+            "inference_ram_mb": result["total"] * 1024,
+            "training_ram_mb": result["total"] * 1024 * 3,
+        }
     except ImportError:
         # Fallback estimation
         param_counts = {

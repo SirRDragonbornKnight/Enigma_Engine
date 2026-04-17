@@ -33,8 +33,15 @@ C_TEXT_DIM = _theme.text_dim
 C_TEXT_BRIGHT = _theme.text_bright
 C_GREEN = _theme.green
 C_GREEN_DIM = _theme.green_dim
+C_GREEN_HOVER = _theme.green_hover
 C_RED = _theme.red
+C_RED_DIM = _theme.red_dim
+C_RED_HOVER = _theme.red_hover
 C_ORANGE = _theme.orange
+C_ORANGE_DIM = _theme.orange_dim
+C_ORANGE_HOVER = _theme.orange_hover
+C_CYAN_DIM = _theme.cyan_dim
+C_CYAN_HOVER = _theme.cyan_hover
 C_BORDER = _theme.border
 C_BORDER_ACCENT = _theme.border_accent
 
@@ -139,7 +146,10 @@ def reload_theme(name: str) -> dict[str, str]:
     global C_ACCENT, C_ACCENT_DIM, C_ACCENT_MUTED  # noqa: PLW0603
     global C_PURPLE, C_PURPLE_DIM, C_PURPLE_MUTED  # noqa: PLW0603
     global C_CYAN, C_TEXT, C_TEXT_DIM, C_TEXT_BRIGHT  # noqa: PLW0603
-    global C_GREEN, C_GREEN_DIM, C_RED, C_ORANGE  # noqa: PLW0603
+    global C_GREEN, C_GREEN_DIM, C_GREEN_HOVER  # noqa: PLW0603
+    global C_RED, C_RED_DIM, C_RED_HOVER  # noqa: PLW0603
+    global C_ORANGE, C_ORANGE_DIM, C_ORANGE_HOVER  # noqa: PLW0603
+    global C_CYAN_DIM, C_CYAN_HOVER  # noqa: PLW0603
     global C_BORDER, C_BORDER_ACCENT  # noqa: PLW0603
 
     old = _theme
@@ -173,10 +183,21 @@ def reload_theme(name: str) -> dict[str, str]:
     C_TEXT_BRIGHT = new.text_bright
     C_GREEN = new.green
     C_GREEN_DIM = new.green_dim
+    C_GREEN_HOVER = new.green_hover
     C_RED = new.red
+    C_RED_DIM = new.red_dim
+    C_RED_HOVER = new.red_hover
     C_ORANGE = new.orange
+    C_ORANGE_DIM = new.orange_dim
+    C_ORANGE_HOVER = new.orange_hover
+    C_CYAN_DIM = new.cyan_dim
+    C_CYAN_HOVER = new.cyan_hover
     C_BORDER = new.border
     C_BORDER_ACCENT = new.border_accent
+
+    # Rebuild button styles with updated colours
+    global BUTTON_STYLES  # noqa: PLW0603
+    BUTTON_STYLES = _build_button_styles()
 
     # Propagate to all GUI modules that imported C_* constants
     this_mod = sys.modules[__name__]
@@ -201,6 +222,7 @@ class _EntryUndoStack:
     """Lightweight undo/redo stack for tk.Entry (which has no native undo)."""
 
     __slots__ = ("_stack", "_redo", "_lock")
+    _MAX_DEPTH = 200
 
     def __init__(self) -> None:
         self._stack: list[str] = []
@@ -213,6 +235,8 @@ class _EntryUndoStack:
         if self._stack and self._stack[-1] == text:
             return
         self._stack.append(text)
+        if len(self._stack) > self._MAX_DEPTH:
+            self._stack = self._stack[-self._MAX_DEPTH:]
         self._redo.clear()
 
     def undo(self, current: str) -> str | None:
@@ -341,6 +365,71 @@ def themed_entry(parent, width=140, height=34, **kw):
     kw.setdefault("corner_radius", 2)
     entry = ctk.CTkEntry(parent, width=width, height=height, **kw)
     wire_hotkeys(entry)
+    # Select all text on focus so user can immediately type a new value
+    entry.bind("<FocusIn>", lambda e: e.widget.after(
+        10, lambda: e.widget.select_range(0, "end")))
+    return entry
+
+
+def themed_numeric_entry(
+    parent, *, mode: str = "int",
+    allow_auto: bool = False,
+    width: int = 80, height: int = 34, **kw,
+) -> ctk.CTkEntry:
+    """CTkEntry that only accepts numeric input.
+
+    Args:
+        mode: ``"int"`` for integers only, ``"float"`` for decimals
+              and scientific notation (e.g. ``5e-5``).
+        allow_auto: When True the literal text ``auto`` is also
+                    accepted (useful for batch-size fields).
+    """
+    entry = themed_entry(parent, width=width, height=height, **kw)
+
+    # Keystroke filter — runs on every insertion/deletion
+    def _validate_key(event):
+        # Allow control keys (backspace, delete, arrows, select-all)
+        if event.keysym in (
+            "BackSpace", "Delete", "Left", "Right",
+            "Home", "End", "Tab", "Return",
+        ):
+            return
+        # Allow Ctrl+A/C/V/X shortcuts
+        if event.state & 0x4:  # Control key held
+            return
+
+        inner = entry._entry  # type: ignore[attr-defined]
+        after_text = inner.get()
+
+        if allow_auto and after_text.lower() in (
+            "a", "au", "aut", "auto",
+        ):
+            return
+
+        if mode == "int":
+            if not after_text.lstrip("-").isdigit() and after_text != "":
+                # Reject — restore previous value
+                inner.delete(0, "end")
+                inner.insert(0, after_text[:-1] if len(after_text) > 1
+                             else "")
+        else:
+            # Float mode: digits, dot, e/E, minus
+            stripped = after_text
+            if not stripped:
+                return
+            try:
+                # Allow partial typing like "0.", "1e", "1e-"
+                if stripped in (".", "-", "e", "E") or stripped.endswith(
+                    ("e", "E", "e-", "E-", ".")
+                ):
+                    return
+                float(stripped)
+            except ValueError:
+                inner.delete(0, "end")
+                inner.insert(0, after_text[:-1] if len(after_text) > 1
+                             else "")
+
+    entry.bind("<KeyRelease>", _validate_key)
     return entry
 
 
@@ -355,12 +444,95 @@ def themed_dropdown(parent, values, width=180, height=32, **kw):
 
 
 def themed_scroll(parent, **kw):
-    """CTkScrollableFrame with standard dark theme applied."""
+    """CTkScrollableFrame with standard dark theme applied.
+
+    Sets ``yscrollincrement`` on the underlying canvas so that
+    scroll speed scales naturally with the OS mouse-wheel setting
+    (no custom multiplier needed).
+    """
     kw.setdefault("fg_color", C_PANEL)
     kw.setdefault("corner_radius", 2)
     kw.setdefault("scrollbar_button_color", C_ACCENT_DIM)
     kw.setdefault("scrollbar_button_hover_color", C_ACCENT_MUTED)
-    return ctk.CTkScrollableFrame(parent, **kw)
+    frame = ctk.CTkScrollableFrame(parent, **kw)
+
+    # CTk's _mouse_wheel_all does `scroll(-int(delta/6), "units")`.
+    # On Windows delta=120 per notch → 20 units.  Without
+    # yscrollincrement the canvas treats 1 unit = 1/10 of the view,
+    # which is unpredictable.  Setting yscrollincrement=5 makes each
+    # unit = 5 px, so a single notch scrolls 100 px — and the OS
+    # delta naturally scales with the user's mouse speed setting.
+    frame._parent_canvas.configure(yscrollincrement=5)
+
+    return frame
+
+
+# -------------------------------------------------------------------
+# Button styles — single source of truth for all button colours
+# -------------------------------------------------------------------
+
+def _build_button_styles() -> dict[str, dict[str, str]]:
+    """Build the style dict from current C_* globals.
+
+    Called at module load time and after reload_theme().
+    """
+    return {
+        "primary": {
+            "fg_color": C_GREEN_DIM,
+            "hover_color": C_GREEN_HOVER,
+            "text_color": C_GREEN,
+        },
+        "danger": {
+            "fg_color": C_RED_DIM,
+            "hover_color": C_RED_HOVER,
+            "text_color": C_RED,
+        },
+        "action": {
+            "fg_color": C_ACCENT_DIM,
+            "hover_color": C_ACCENT_MUTED,
+            "text_color": C_ACCENT,
+        },
+        "tool": {
+            "fg_color": C_CYAN_DIM,
+            "hover_color": C_CYAN_HOVER,
+            "text_color": C_CYAN,
+        },
+        "secondary": {
+            "fg_color": C_SURFACE,
+            "hover_color": C_BORDER,
+            "text_color": C_TEXT_DIM,
+        },
+        "warning": {
+            "fg_color": C_ORANGE_DIM,
+            "hover_color": C_ORANGE_HOVER,
+            "text_color": C_ORANGE,
+        },
+        "icon": {
+            "fg_color": "transparent",
+            "hover_color": C_SURFACE,
+            "text_color": C_TEXT_DIM,
+        },
+    }
+
+
+BUTTON_STYLES: dict[str, dict[str, str]] = _build_button_styles()
+
+
+def themed_button(parent, text: str, *, style: str = "action",
+                  width: int = 100, height: int = 30, **kw):
+    """CTkButton with consistent theme-aware colours.
+
+    Styles: primary, danger, action, tool, secondary, warning, icon.
+    Caller can override any kwarg (fg_color, hover_color, etc.).
+    """
+    colors = BUTTON_STYLES.get(style, BUTTON_STYLES["action"])
+    kw.setdefault("fg_color", colors["fg_color"])
+    kw.setdefault("hover_color", colors["hover_color"])
+    kw.setdefault("text_color", colors["text_color"])
+    kw.setdefault("font", FONT_SMALL)
+    kw.setdefault("corner_radius", 2)
+    return ctk.CTkButton(parent, text=text, width=width,
+                         height=height, **kw)
 
 
 # -------------------------------------------------------------------
@@ -397,7 +569,9 @@ def _resolve_parent_bg(widget, fg_color):
             return fg_color[1]  # dark mode value
         return fg_color
     parent = widget
-    while parent:
+    depth = 0
+    while parent and depth < 50:
+        depth += 1
         try:
             fg = parent.cget("fg_color")
             if fg and fg != "transparent":
@@ -551,6 +725,7 @@ class SelectableLabel(ctk.CTkFrame):
                 label="Select All",
                 command=self._select_all)
         menu.tk_popup(event.x_root, event.y_root)
+        menu.bind("<Unmap>", lambda _e: menu.destroy())
 
     def _copy(self, text):
         """Copy text to system clipboard."""
@@ -918,26 +1093,64 @@ class StatusBar(ctk.CTkFrame):
 class Tooltip:
     """Displays a small tooltip near the mouse when hovering a widget.
 
+    Stays visible as long as the mouse is over the widget or the tooltip
+    itself.  A short grace period (150 ms) lets the mouse travel between
+    the widget and the tooltip without flickering.
+
     Usage:
         Tooltip(my_button, "Send your message")
     """
 
-    def __init__(self, widget, text: str, delay: int = 400):
+    _active: "Tooltip | None" = None  # class-level: only one tooltip at a time
+    _focus_bound_roots: set = set()  # root windows with FocusOut binding
+
+    def __init__(self, widget, text: str, delay: int = 1000):
         self._widget = widget
         self._text = text
         self._delay = delay
         self._tip_window = None
         self._after_id = None
+        self._hide_timer_id = None
         widget.bind("<Enter>", self._schedule, add="+")
-        widget.bind("<Leave>", self._cancel, add="+")
-        widget.bind("<ButtonPress>", self._cancel, add="+")
+        widget.bind("<Leave>", self._on_widget_leave, add="+")
+        widget.bind("<ButtonPress>", self._dismiss, add="+")
+        widget.bind("<Destroy>", self._on_destroy, add="+")
+        # Dismiss tooltips when app loses focus (once per root window)
+        root = widget.winfo_toplevel()
+        root_id = id(root)
+        if root_id not in Tooltip._focus_bound_roots:
+            root.bind("<FocusOut>", Tooltip._on_app_focus_out, add="+")
+            Tooltip._focus_bound_roots.add(root_id)
+
+    @staticmethod
+    def _on_app_focus_out(event=None):
+        """Dismiss active tooltip when app loses focus."""
+        # Only react when the root window itself loses focus
+        if event and event.widget is event.widget.winfo_toplevel():
+            if Tooltip._active is not None:
+                Tooltip._active._hide()
+
+    def _on_destroy(self, event=None):
+        """Clean up when widget is destroyed."""
+        if self._after_id:
+            try:
+                self._widget.after_cancel(self._after_id)
+            except Exception:
+                pass
+            self._after_id = None
+        self._cancel_hide_timer()
+        self._hide()
 
     def _schedule(self, event=None):
-        self._cancel()
+        self._cancel_hide_timer()
+        if self._tip_window:
+            return  # already showing
+        if self._after_id:
+            self._widget.after_cancel(self._after_id)
         self._after_id = self._widget.after(
             self._delay, self._show)
 
-    def _cancel(self, event=None):
+    def _on_widget_leave(self, event=None):
         # On Leave events, ignore child-boundary transitions:
         # tkinter fires <Leave> on the parent when the cursor enters
         # a child widget.  Check if the pointer is still within this
@@ -958,26 +1171,117 @@ class Tooltip:
         if self._after_id:
             self._widget.after_cancel(self._after_id)
             self._after_id = None
+        # Don't hide immediately — allow mouse to travel to the tooltip
+        if self._tip_window:
+            self._schedule_hide_timer()
+
+    def _dismiss(self, event=None):
+        """Immediate hide on click."""
+        if self._after_id:
+            self._widget.after_cancel(self._after_id)
+            self._after_id = None
+        self._cancel_hide_timer()
         self._hide()
+
+    def _cancel_hide_timer(self):
+        if self._hide_timer_id:
+            try:
+                self._widget.after_cancel(self._hide_timer_id)
+            except Exception:
+                pass
+            self._hide_timer_id = None
+
+    def _schedule_hide_timer(self):
+        self._cancel_hide_timer()
+        self._hide_timer_id = self._widget.after(150, self._hide)
+
+    def _on_tip_enter(self, event=None):
+        self._cancel_hide_timer()
+
+    def _on_tip_leave(self, event=None):
+        self._schedule_hide_timer()
 
     def _show(self):
         if self._tip_window:
             return
+        # Dismiss any other active tooltip first
+        if Tooltip._active is not None and Tooltip._active is not self:
+            Tooltip._active._hide()
+        Tooltip._active = self
         import tkinter as tk
         x = self._widget.winfo_rootx() + 10
         y = self._widget.winfo_rooty() + self._widget.winfo_height() + 4
         self._tip_window = tw = tk.Toplevel(self._widget)
         tw.wm_overrideredirect(True)
+        tw.wm_transient(self._widget.winfo_toplevel())
         tw.wm_geometry(f"+{x}+{y}")
-        tw.attributes("-topmost", True)
         label = tk.Label(
             tw, text=self._text, justify="left",
             background=C_INPUT, foreground=C_TEXT,
             relief="solid", borderwidth=1,
             font=FONT_TINY, padx=6, pady=3)
         label.pack()
+        # Let mouse hover over the tooltip without it disappearing
+        tw.bind("<Enter>", self._on_tip_enter)
+        tw.bind("<Leave>", self._on_tip_leave)
+        # Watchdog: auto-dismiss if mouse drifts away and Leave was missed
+        self._start_watchdog()
 
     def _hide(self):
+        self._cancel_hide_timer()
+        self._cancel_watchdog()
         if self._tip_window:
             self._tip_window.destroy()
             self._tip_window = None
+        if Tooltip._active is self:
+            Tooltip._active = None
+
+    # -- Watchdog: catches stuck tooltips when Leave events are missed --
+
+    _WATCHDOG_INTERVAL = 1000  # ms between checks
+
+    def _start_watchdog(self):
+        """Schedule periodic check that tooltip is still warranted."""
+        self._watchdog_id = self._widget.after(
+            self._WATCHDOG_INTERVAL, self._watchdog_check)
+
+    def _cancel_watchdog(self):
+        wid = getattr(self, "_watchdog_id", None)
+        if wid:
+            try:
+                self._widget.after_cancel(wid)
+            except Exception:
+                pass
+            self._watchdog_id = None
+
+    def _watchdog_check(self):
+        """Auto-dismiss if mouse is not over the widget or tooltip."""
+        self._watchdog_id = None
+        if not self._tip_window:
+            return
+        try:
+            mx = self._widget.winfo_pointerx()
+            my = self._widget.winfo_pointery()
+            # Check widget bounds
+            wx = self._widget.winfo_rootx()
+            wy = self._widget.winfo_rooty()
+            in_widget = (wx <= mx < wx + self._widget.winfo_width()
+                         and wy <= my < wy + self._widget.winfo_height())
+            # Check tooltip bounds
+            in_tip = False
+            tw = self._tip_window
+            if tw and tw.winfo_exists():
+                tx = tw.winfo_rootx()
+                ty = tw.winfo_rooty()
+                in_tip = (tx <= mx < tx + tw.winfo_width()
+                          and ty <= my < ty + tw.winfo_height())
+            if not in_widget and not in_tip:
+                self._hide()
+                return
+        except Exception:
+            # Widget destroyed or other error — clean up
+            self._hide()
+            return
+        # Still valid — reschedule
+        self._watchdog_id = self._widget.after(
+            self._WATCHDOG_INTERVAL, self._watchdog_check)

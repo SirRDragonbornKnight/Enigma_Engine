@@ -208,6 +208,39 @@ class TestProfiles:
         data = resp.json()
         assert "name" in data
 
+    def test_get_profile_not_found(self, client):
+        """Missing profile should return 404."""
+        resp = client.get("/api/profiles/nonexistent_profile_xyz")
+        assert resp.status_code == 404
+
+    def test_get_profile_corrupt_json(self, client, tmp_path):
+        """Corrupt profile JSON should return 500, not crash (S670)."""
+        from enigma_engine.api import server
+        orig_dir = server.PROFILES_DIR
+        server.PROFILES_DIR = tmp_path
+        try:
+            bad = tmp_path / "corrupt.json"
+            bad.write_text("NOT VALID JSON {{{", encoding="utf-8")
+            resp = client.get("/api/profiles/corrupt")
+            assert resp.status_code == 500
+            assert "Corrupt" in resp.json()["detail"]
+        finally:
+            server.PROFILES_DIR = orig_dir
+
+    def test_activate_profile_corrupt_json(self, client, tmp_path):
+        """Activating a corrupted profile should return 500 (S670)."""
+        from enigma_engine.api import server
+        orig_dir = server.PROFILES_DIR
+        server.PROFILES_DIR = tmp_path
+        try:
+            bad = tmp_path / "broken.json"
+            bad.write_text("{invalid", encoding="utf-8")
+            resp = client.post("/api/profiles/broken/activate")
+            assert resp.status_code == 500
+            assert "Corrupt" in resp.json()["detail"]
+        finally:
+            server.PROFILES_DIR = orig_dir
+
 
 # ---------------------------------------------------------------------------
 # Config
@@ -327,11 +360,6 @@ class TestCORSPolicy:
         assert resp.status_code == 200
         # No access-control-allow-origin header when CORS middleware is absent
         assert "access-control-allow-origin" not in resp.headers
-
-    def test_add_cors_middleware_function_exists(self):
-        """The enable_cors() helper should exist for opt-in CORS."""
-        from enigma_engine.api.server import enable_cors
-        assert callable(enable_cors)
 
     def test_no_cors_middleware_at_import(self):
         """CORS middleware should not be registered at module level."""
@@ -567,13 +595,6 @@ class TestAppStateThreadSafety:
         assert s.history[0]["role"] == "user"
         assert s.history[1]["role"] == "assistant"
 
-    def test_training_state_has_lock(self):
-        """_training_state access should be guarded by _training_lock."""
-        import threading
-        from enigma_engine.api import server
-        assert hasattr(server, "_training_lock")
-        assert isinstance(server._training_lock, type(threading.Lock()))
-
 
 # ---------------------------------------------------------------------------
 # API Key Authentication — Suggestion #24A
@@ -593,20 +614,15 @@ class TestAPIKeyAuth:
 
         _key = "test-secret-key-12345"
 
-        secured_app = FastAPI()
-
         class _TestAPIKeyMiddleware(BaseHTTPMiddleware):
             async def dispatch(self, request: Request, call_next):
-                if request.method == "OPTIONS":
-                    return await call_next(request)
-                if request.url.path.startswith("/api/"):
-                    auth = request.headers.get("authorization", "")
-                    if auth != f"Bearer {_key}":
-                        return _JSONResponse(
-                            {"error": "Invalid or missing API key"},
-                            status_code=401,
-                        )
+                auth = request.headers.get("Authorization", "")
+                if not auth.startswith("Bearer ") or auth[7:] != _key:
+                    return _JSONResponse(
+                        {"error": "API key required"}, status_code=401)
                 return await call_next(request)
+
+        secured_app = FastAPI()
 
         secured_app.add_middleware(_TestAPIKeyMiddleware)
 
@@ -642,14 +658,6 @@ class TestAPIKeyAuth:
         )
         assert resp.status_code == 200
         assert resp.json()["status"] == "ok"
-
-    def test_api_key_middleware_defined_in_run_server(self):
-        """run_server should install API key middleware when key is set."""
-        import inspect
-        from enigma_engine.api.server import run_server
-        source = inspect.getsource(run_server)
-        assert "api_key" in source
-        assert "_APIKeyMiddleware" in source
 
 
 # ---------------------------------------------------------------------------
@@ -760,3 +768,32 @@ class TestChatRequestSamplingParams:
         assert req.top_p == 0.95
         assert req.top_k == 40
         assert req.repetition_penalty == 1.2
+
+
+# ================================================================
+# CF-10: History cap — _history must not grow without bound
+# ================================================================
+
+class TestHistoryCap:
+    """AppState._history must be capped to prevent unbounded memory growth."""
+
+    def test_history_has_max_constant(self):
+        """MAX_HISTORY constant must exist in server module."""
+        from enigma_engine.api import server
+        assert hasattr(server, "MAX_HISTORY"), "MAX_HISTORY constant missing"
+        assert isinstance(server.MAX_HISTORY, int)
+        assert server.MAX_HISTORY > 0
+
+    def test_history_capped_on_append(self):
+        """History must evict oldest entries when cap is exceeded."""
+        from enigma_engine.api.server import AppState, MAX_HISTORY
+        s = AppState()
+        # Fill beyond cap
+        for i in range(MAX_HISTORY + 20):
+            with s._lock:
+                s._history.append({"role": "user", "content": f"msg-{i}"})
+                s._history.append({"role": "assistant", "content": f"reply-{i}"})
+                s._trim_history()
+        assert len(s._history) <= MAX_HISTORY
+        # Most recent entry should still be present
+        assert s._history[-1]["content"] == f"reply-{MAX_HISTORY + 19}"

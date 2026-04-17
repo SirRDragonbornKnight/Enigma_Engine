@@ -61,7 +61,11 @@ class LogicMediaMixin:
                 self._make_url_clickable(url)
 
     def _insert_media(self, path_str: str, source: str = "file"):
-        """Insert an image inline in the chat display."""
+        """Insert an image inline in the chat display.
+
+        URL downloads run in a background thread to avoid freezing
+        the GUI (up to 10s timeout per image).
+        """
         from enigma_engine.gui.media import (
             load_chat_image, load_url_image, get_media_chat_width,
         )
@@ -72,12 +76,22 @@ class LogicMediaMixin:
             max_w = 400
 
         if source == "url":
-            photo = load_url_image(path_str, max_width=max_w)
-        else:
-            photo = load_chat_image(path_str, max_width=max_w)
+            # Network download — offload to thread to avoid GUI freeze
+            def _download_and_insert():
+                photo = load_url_image(path_str, max_width=max_w)
+                self.after(0, lambda: self._insert_media_widget(
+                    path_str, photo))
 
+            threading.Thread(
+                target=_download_and_insert, daemon=True).start()
+            return
+
+        photo = load_chat_image(path_str, max_width=max_w)
+        self._insert_media_widget(path_str, photo)
+
+    def _insert_media_widget(self, path_str: str, photo):
+        """Insert an already-loaded image into the chat display."""
         if photo is None:
-            # Show feedback that the image could not be loaded
             name = Path(path_str).name if "/" in path_str or \
                 "\\" in path_str else path_str
             if len(name) > 60:
@@ -107,7 +121,10 @@ class LogicMediaMixin:
         self._scroll_chat_to_bottom()
 
     def _insert_gif(self, path_str: str, source: str = "file"):
-        """Insert an animated GIF inline in the chat display."""
+        """Insert an animated GIF inline in the chat display.
+
+        URL downloads run in a background thread to avoid GUI freeze.
+        """
         from enigma_engine.gui.media import (
             extract_gif_frames, get_media_chat_width,
         )
@@ -117,7 +134,24 @@ class LogicMediaMixin:
         except Exception:
             max_w = 400
 
+        if source == "url":
+            # Network download — offload to thread
+            def _download_and_insert():
+                frames = extract_gif_frames(path_str, max_width=max_w)
+                self.after(0, lambda: self._insert_gif_widget(
+                    path_str, source, frames, max_w))
+
+            threading.Thread(
+                target=_download_and_insert, daemon=True).start()
+            return
+
         frames = extract_gif_frames(path_str, max_width=max_w)
+        self._insert_gif_widget(path_str, source, frames, max_w)
+
+    def _insert_gif_widget(
+            self, path_str: str, source: str,
+            frames: list | None, max_w: int):
+        """Insert already-loaded GIF frames into the chat display."""
         if not frames:
             # Fall back to static image
             self._insert_media(path_str, source)
@@ -154,6 +188,8 @@ class LogicMediaMixin:
 
     def _animate_gif(self, anim_data: dict):
         """Cycle through GIF frames using after() scheduling."""
+        if getattr(self, '_shutting_down', False):
+            return
         if not anim_data.get("active", False):
             return
         frames = anim_data["frames"]
@@ -488,7 +524,7 @@ class LogicMediaMixin:
         # Lazily create the TTS worker thread + queue
         if not getattr(self, '_tts_queue', None):
             import queue as _queue
-            self._tts_queue = _queue.Queue()
+            self._tts_queue = _queue.Queue(maxsize=100)
             self._tts_alive = True
 
             def _tts_worker():

@@ -1,4 +1,4 @@
-# Bricks - Standalone AI Services
+# Mods - Standalone AI Services
 
 Modular AI services that can run independently or connect to a central router.
 
@@ -13,37 +13,39 @@ Modular AI services that can run independently or connect to a central router.
 | **threed** | 9905 | 3D model generation (Shap-E, built-in OBJ) |
 | **vision** | 9906 | Screen capture and image analysis |
 | **voice** | 9907 | Unified speech-to-text + audio generation (pyttsx3, ElevenLabs, system) |
+| **audiogen** | — | Audio/music generation |
+| **transcriber** | — | Audio transcription |
 
 ## Quick Start
 
 ### Run a service standalone
 ```bash
 # Generate an image directly
-python bricks/imagegen/imagegen.py --generate "a sunset over mountains"
+python mods/imagegen/imagegen.py --generate "a sunset over mountains"
 
 # Start image service on port 9901
-python bricks/imagegen/imagegen.py --port 9901
+python mods/imagegen/imagegen.py --port 9901
 
 # Speak text
-python bricks/voice/voice.py --speak "Hello world"
+python mods/voice/voice.py --speak "Hello world"
 
 # Capture screen
-python bricks/vision/vision.py --capture
+python mods/vision/vision.py --capture
 ```
 
 ### Run with router (coordinated)
 ```bash
 # Terminal 1: Start router
-python bricks/router/router.py
+python mods/router/router.py
 
 # Terminal 2: Start image service
-python bricks/imagegen/imagegen.py --router localhost:9900
+python mods/imagegen/imagegen.py --router localhost:9900
 
 # Terminal 3: Start code service
-python bricks/codegen/codegen.py --router localhost:9900
+python mods/codegen/codegen.py --router localhost:9900
 
 # Terminal 4: Check connected services
-python bricks/router/router.py --list
+python mods/router/router.py --list
 ```
 
 ## Protocol
@@ -127,7 +129,7 @@ ELEVENLABS_API_KEY=...
 ## Python Client Example
 
 ```python
-from bricks.router.router import RouterClient
+from mods.router.router import RouterClient
 
 # Connect to router
 client = RouterClient("localhost", 9900)

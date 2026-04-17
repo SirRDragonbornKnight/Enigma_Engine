@@ -91,7 +91,7 @@ def compute_layer_mapping(old_layers: int, new_layers: int) -> list[int]:
     # Place old layers at evenly spaced positions
     for old_idx in range(old_layers):
         # Map old_idx to proportional position in new depth
-        new_idx = round(old_idx * (new_layers - 1) / max(old_layers - 1, 1))
+        new_idx = (old_idx * new_layers) // old_layers
         mapping[new_idx] = old_idx
 
     return mapping
@@ -102,6 +102,10 @@ def _expand_2d(old: 'torch.Tensor', new_rows: int, new_cols: int,
     """Expand a 2D weight tensor, preserving old values in top-left corner."""
     import torch
     old_rows, old_cols = old.shape
+    if new_rows < old_rows or new_cols < old_cols:
+        raise ValueError(
+            f"Cannot shrink tensor from ({old_rows}, {old_cols}) "
+            f"to ({new_rows}, {new_cols})")
     new = torch.full((new_rows, new_cols), fill, dtype=old.dtype)
     new[:old_rows, :old_cols] = old
     return new
@@ -158,7 +162,11 @@ def expand_model_weights(
     # ── Global tensors ────────────────────────────────────────────────
 
     # Embeddings: [padded_vocab, dim]
-    old_emb = source_sd['tok_embeddings.weight']
+    old_emb = source_sd.get('tok_embeddings.weight')
+    if old_emb is None:
+        raise ValueError(
+            "State dict missing 'tok_embeddings.weight' — "
+            "cannot expand model weights")
     new_emb = torch.zeros(tgt_padded_vocab, tgt.dim, dtype=old_emb.dtype)
     copy_rows = min(src_padded_vocab, tgt_padded_vocab)
     new_emb[:copy_rows, :src.dim] = old_emb[:copy_rows]
@@ -202,7 +210,29 @@ def expand_model_weights(
         else:
             # Identity-initialized layer (zero residual outputs)
             _init_identity_layer(
-                new_sd, tp, tgt, tgt_head_dim)
+                new_sd, tp, tgt, tgt_head_dim,
+                device=old_emb.device,
+                dtype=old_emb.dtype)
+
+    # ── Multi-token prediction heads (R25) ────────────────────────────
+
+    if tgt.n_predict_heads > 0:
+        for h_idx in range(tgt.n_predict_heads):
+            src_key = f'predict_heads.{h_idx}.weight'
+            tgt_key = f'predict_heads.{h_idx}.weight'
+            if src_key in source_sd:
+                # Expand existing head: [padded_vocab, dim]
+                old_hw = source_sd[src_key]
+                new_hw = torch.zeros(
+                    tgt_padded_vocab, tgt.dim, dtype=old_hw.dtype)
+                copy_rows = min(src_padded_vocab, tgt_padded_vocab)
+                new_hw[:copy_rows, :src.dim] = old_hw[:copy_rows]
+                new_sd[tgt_key] = new_hw
+            else:
+                # New head — small random init
+                new_sd[tgt_key] = torch.randn(
+                    tgt_padded_vocab, tgt.dim,
+                    dtype=old_emb.dtype) * 0.02
 
     return new_sd
 
@@ -264,6 +294,13 @@ def _expand_layer(
             new_sd[f'{tp}.{suffix}'] = _expand_1d(
                 source_sd[f'{sp}.{suffix}'], tgt_head_dim, fill=1.0)
 
+    # R22: Differential attention _diff_lambda: [n_heads // 2]
+    diff_key = f'{sp}.attention._diff_lambda'
+    if diff_key in source_sd:
+        tgt_half = tgt.n_heads // 2
+        new_sd[f'{tp}.attention._diff_lambda'] = _expand_1d(
+            source_sd[diff_key], tgt_half, fill=0.05)
+
     # LayerScale: [dim]
     for suffix in ('ls_attn', 'ls_ffn'):
         if f'{sp}.{suffix}' in source_sd:
@@ -324,6 +361,7 @@ def _expand_attn_proj(
 
     weight_key = f'{src_key}.weight'
     if weight_key not in source_sd:
+        logger.debug("Skipping expansion: %s not in source", weight_key)
         return
 
     old_w = source_sd[weight_key]
@@ -361,6 +399,7 @@ def _expand_attn_proj_output(
 
     weight_key = f'{src_key}.weight'
     if weight_key not in source_sd:
+        logger.debug("Skipping expansion: %s not in source", weight_key)
         return
 
     old_w = source_sd[weight_key]  # [src_dim, src_n * src_hd]
@@ -385,6 +424,7 @@ def _expand_attn_proj_output(
 def _init_identity_layer(
     new_sd: dict, tp: str,
     tgt: ForgeConfig, tgt_head_dim: int,
+    device: str = 'cpu', dtype: 'torch.dtype | None' = None,
 ) -> None:
     """Initialize a new layer as identity (pass-through via residual skip).
 
@@ -394,41 +434,262 @@ def _init_identity_layer(
     """
     import torch
 
+    kw: dict = {}
+    if dtype is not None:
+        kw['dtype'] = dtype
+    kw['device'] = device
+
     # Norms: weight=1 is the identity for RMSNorm/LayerNorm
-    new_sd[f'{tp}.attention_norm.weight'] = torch.ones(tgt.dim)
-    new_sd[f'{tp}.ffn_norm.weight'] = torch.ones(tgt.dim)
+    new_sd[f'{tp}.attention_norm.weight'] = torch.ones(tgt.dim, **kw)
+    new_sd[f'{tp}.ffn_norm.weight'] = torch.ones(tgt.dim, **kw)
 
     # Attention projections: small random init for Q/K/V, zero for output
     new_sd[f'{tp}.attention.wq.weight'] = torch.randn(
-        tgt.n_heads * tgt_head_dim, tgt.dim) * 0.02
+        tgt.n_heads * tgt_head_dim, tgt.dim, **kw) * 0.02
     new_sd[f'{tp}.attention.wk.weight'] = torch.randn(
-        tgt.n_kv_heads * tgt_head_dim, tgt.dim) * 0.02
+        tgt.n_kv_heads * tgt_head_dim, tgt.dim, **kw) * 0.02
     new_sd[f'{tp}.attention.wv.weight'] = torch.randn(
-        tgt.n_kv_heads * tgt_head_dim, tgt.dim) * 0.02
+        tgt.n_kv_heads * tgt_head_dim, tgt.dim, **kw) * 0.02
     # Zero output → residual skip is identity
     new_sd[f'{tp}.attention.wo.weight'] = torch.zeros(
-        tgt.dim, tgt.n_heads * tgt_head_dim)
+        tgt.dim, tgt.n_heads * tgt_head_dim, **kw)
 
     if tgt.use_bias:
         new_sd[f'{tp}.attention.wq.bias'] = torch.zeros(
-            tgt.n_heads * tgt_head_dim)
+            tgt.n_heads * tgt_head_dim, **kw)
         new_sd[f'{tp}.attention.wk.bias'] = torch.zeros(
-            tgt.n_kv_heads * tgt_head_dim)
+            tgt.n_kv_heads * tgt_head_dim, **kw)
         new_sd[f'{tp}.attention.wv.bias'] = torch.zeros(
-            tgt.n_kv_heads * tgt_head_dim)
-        new_sd[f'{tp}.attention.wo.bias'] = torch.zeros(tgt.dim)
+            tgt.n_kv_heads * tgt_head_dim, **kw)
+        new_sd[f'{tp}.attention.wo.bias'] = torch.zeros(tgt.dim, **kw)
+
+    # QK norm (identity init = weight 1.0)
+    if tgt.use_qk_norm:
+        new_sd[f'{tp}.attention.q_norm.weight'] = torch.ones(
+            tgt_head_dim, **kw)
+        new_sd[f'{tp}.attention.k_norm.weight'] = torch.ones(
+            tgt_head_dim, **kw)
+
+    # R22: Differential attention — init near zero
+    if (tgt.use_differential_attn and tgt.n_heads >= 2
+            and tgt.n_heads % 2 == 0):
+        new_sd[f'{tp}.attention._diff_lambda'] = torch.full(
+            (tgt.n_heads // 2,), 0.05, **kw)
 
     # FFN: small random init for input projections, zero output
     if tgt.use_swiglu:
         new_sd[f'{tp}.feed_forward.w1.weight'] = torch.randn(
-            tgt.hidden_dim, tgt.dim) * 0.02
+            tgt.hidden_dim, tgt.dim, **kw) * 0.02
         new_sd[f'{tp}.feed_forward.w3.weight'] = torch.randn(
-            tgt.hidden_dim, tgt.dim) * 0.02
+            tgt.hidden_dim, tgt.dim, **kw) * 0.02
         # Zero output → residual skip is identity
         new_sd[f'{tp}.feed_forward.w2.weight'] = torch.zeros(
-            tgt.dim, tgt.hidden_dim)
+            tgt.dim, tgt.hidden_dim, **kw)
     else:
         new_sd[f'{tp}.feed_forward.up.weight'] = torch.randn(
-            tgt.hidden_dim, tgt.dim) * 0.02
+            tgt.hidden_dim, tgt.dim, **kw) * 0.02
         new_sd[f'{tp}.feed_forward.down.weight'] = torch.zeros(
-            tgt.dim, tgt.hidden_dim)
+            tgt.dim, tgt.hidden_dim, **kw)
+
+
+# =============================================================================
+# GRADUAL UNFREEZING (R12, Howard & Ruder)
+# =============================================================================
+
+def setup_gradual_unfreeze(
+    model: 'torch.nn.Module',
+    n_layers: int,
+    unfreeze_schedule: list[int] | None = None,
+) -> 'GradualUnfreezer':
+    """Set up gradual unfreezing after progressive growth.
+
+    Freezes all transformer layers initially, then unfreezes
+    them bottom-up according to a schedule.
+
+    Args:
+        model: The expanded model.
+        n_layers: Total number of transformer layers.
+        unfreeze_schedule: List of step counts at which to unfreeze
+            the next layer group (from top to bottom).  If None,
+            defaults to unfreezing one layer every 100 steps.
+
+    Returns:
+        A GradualUnfreezer that should be called each training step.
+    """
+    return GradualUnfreezer(model, n_layers, unfreeze_schedule)
+
+
+class GradualUnfreezer:
+    """Manages gradual layer unfreezing during training (R12).
+
+    Freezes all layers initially, unfreezes top-down so the
+    newest/highest layers (which need the most adaptation) train
+    first, and deeper layers are progressively unlocked.
+    """
+
+    def __init__(
+        self,
+        model: 'torch.nn.Module',
+        n_layers: int,
+        unfreeze_schedule: list[int] | None = None,
+    ) -> None:
+        self.model = model
+        self.n_layers = n_layers
+        # Default: unfreeze one layer every 100 steps, top-down
+        if unfreeze_schedule is None:
+            self.schedule = [100 * (i + 1) for i in range(n_layers)]
+        else:
+            self.schedule = list(unfreeze_schedule)
+            if len(self.schedule) < n_layers:
+                last_step = self.schedule[-1] if self.schedule else 0
+                interval = (
+                    (self.schedule[-1] - self.schedule[-2])
+                    if len(self.schedule) >= 2
+                    else 100
+                )
+                while len(self.schedule) < n_layers:
+                    last_step += interval
+                    self.schedule.append(last_step)
+                logger.warning(
+                    "unfreeze_schedule had %d entries for %d layers "
+                    "— padded with interval %d",
+                    len(unfreeze_schedule), n_layers, interval,
+                )
+        self._layers_unfrozen = 0
+        # Start with all layers frozen
+        self._freeze_all_layers()
+        # Always keep embeddings, output, and final norm trainable
+        self._unfreeze_head()
+
+    def _freeze_all_layers(self) -> None:
+        """Freeze all transformer layer parameters."""
+        for name, param in self.model.named_parameters():
+            if 'layers.' in name:
+                param.requires_grad = False
+
+    def _unfreeze_head(self) -> None:
+        """Keep non-layer params (embeddings, norm, output) trainable."""
+        for name, param in self.model.named_parameters():
+            if 'layers.' not in name:
+                param.requires_grad = True
+
+    def _unfreeze_layer(self, layer_idx: int) -> None:
+        """Unfreeze a specific transformer layer."""
+        prefix = f'layers.{layer_idx}.'
+        for name, param in self.model.named_parameters():
+            if name.startswith(prefix):
+                param.requires_grad = True
+        logger.info("Unfroze layer %d", layer_idx)
+
+    def step(self, global_step: int) -> None:
+        """Call each training step to check if more layers should unfreeze.
+
+        Unfreezes from top (last layer) to bottom (first layer).
+        """
+        while (self._layers_unfrozen < self.n_layers
+               and self._layers_unfrozen < len(self.schedule)
+               and global_step >= self.schedule[self._layers_unfrozen]):
+            # Unfreeze top-down: start with the last layer
+            layer_to_unfreeze = self.n_layers - 1 - self._layers_unfrozen
+            self._unfreeze_layer(layer_to_unfreeze)
+            self._layers_unfrozen += 1
+
+    @property
+    def fully_unfrozen(self) -> bool:
+        """True when all layers are trainable."""
+        return self._layers_unfrozen >= self.n_layers
+
+
+# =============================================================================
+# LISA: LAYERWISE IMPORTANCE SAMPLED ADAMW (R26, Pan et al. 2024)
+# =============================================================================
+
+class LISAScheduler:
+    """LISA: Layerwise Importance Sampled AdamW (R26, Pan et al. 2024).
+
+    Always trains embeddings, output head, norms, first layer, and last layer.
+    Each optimizer step, randomly samples K middle layers to train; the rest
+    are frozen. Outperforms LoRA at the same memory budget.
+    """
+
+    def __init__(
+        self,
+        model: 'torch.nn.Module',
+        n_layers: int,
+        activated_layers: int = 2,
+    ) -> None:
+        self.model = model
+        self.n_layers = n_layers
+        # Middle layers = all except first and last
+        self.middle_layers = list(range(1, max(1, n_layers - 1)))
+        self.activated_layers = min(activated_layers, len(self.middle_layers))
+        self._active_middle: list[int] = []
+        # Initial setup
+        self.step()
+
+    def step(self) -> None:
+        """Resample which middle layers are trainable this step."""
+        import random as _random
+
+        # Freeze all middle layers
+        for idx in self.middle_layers:
+            prefix = f'layers.{idx}.'
+            for name, param in self.model.named_parameters():
+                if name.startswith(prefix):
+                    param.requires_grad = False
+
+        # Randomly sample K middle layers to activate
+        self._active_middle = []
+        if self.middle_layers and self.activated_layers > 0:
+            self._active_middle = _random.sample(
+                self.middle_layers,
+                min(self.activated_layers, len(self.middle_layers)),
+            )
+            for idx in self._active_middle:
+                prefix = f'layers.{idx}.'
+                for name, param in self.model.named_parameters():
+                    if name.startswith(prefix):
+                        param.requires_grad = True
+
+        # Always train first and last layer
+        for idx in (0, self.n_layers - 1):
+            prefix = f'layers.{idx}.'
+            for name, param in self.model.named_parameters():
+                if name.startswith(prefix):
+                    param.requires_grad = True
+
+        # Always train non-layer params (embeddings, norm, output head)
+        for name, param in self.model.named_parameters():
+            if 'layers.' not in name:
+                param.requires_grad = True
+
+
+# =============================================================================
+# BERT2BERT LAYER COPYING (R20, Rothe et al.)
+# =============================================================================
+
+def compute_layer_mapping_bert2bert(
+    old_layers: int,
+    new_layers: int,
+) -> list[int]:
+    """Copy-stack layer mapping: duplicate existing layers for new depth.
+
+    Unlike zero-init identity layers, copy-stacked layers start
+    functional — they produce meaningful attention and FFN outputs
+    from step 0.
+
+    Strategy: cycle through old layers, repeating them to fill
+    the new depth.  This means layer i in the new model gets
+    weights from layer ``i % old_layers`` of the old model.
+
+    Args:
+        old_layers: Number of layers in the source model.
+        new_layers: Number of layers in the target model.
+
+    Returns:
+        List of length new_layers, each entry is a source layer index.
+
+    Example:
+        compute_layer_mapping_bert2bert(2, 6) -> [0, 1, 0, 1, 0, 1]
+    """
+    return [i % old_layers for i in range(new_layers)]

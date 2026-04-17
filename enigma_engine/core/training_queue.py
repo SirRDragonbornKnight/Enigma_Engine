@@ -155,6 +155,7 @@ class TrainingQueue:
 
         Returns True if removed, False if not found or running.
         """
+        removed = False
         with self._lock:
             for i, job in enumerate(self._jobs):
                 if job.job_id == job_id:
@@ -162,18 +163,25 @@ class TrainingQueue:
                         return False
                     self._jobs.pop(i)
                     logger.info("Queue: removed job #%d", job_id)
-                    return True
-        return False
+                    removed = True
+                    break
+        if removed:
+            self._save_state()
+        return removed
 
     def cancel_job(self, job_id: int) -> bool:
         """Cancel a pending job (marks as cancelled)."""
+        cancelled = False
         with self._lock:
             for job in self._jobs:
                 if job.job_id == job_id and job.status == "pending":
                     job.status = "cancelled"
                     logger.info("Queue: cancelled job #%d", job_id)
-                    return True
-        return False
+                    cancelled = True
+                    break
+        if cancelled:
+            self._save_state()
+        return cancelled
 
     def reorder_job(self, job_id: int, new_position: int) -> bool:
         """Move a pending job to a new position in the queue.
@@ -184,6 +192,7 @@ class TrainingQueue:
 
         Returns True if moved, False otherwise.
         """
+        reordered = False
         with self._lock:
             # Find the job
             job_idx = None
@@ -191,25 +200,27 @@ class TrainingQueue:
                 if job.job_id == job_id and job.status == "pending":
                     job_idx = i
                     break
-            if job_idx is None:
-                return False
+            if job_idx is not None:
+                job = self._jobs.pop(job_idx)
 
-            job = self._jobs.pop(job_idx)
-
-            # Find position among pending jobs
-            pending_positions = [
-                i for i, j in enumerate(self._jobs)
-                if j.status == "pending"
-            ]
-            if new_position >= len(pending_positions):
-                self._jobs.append(job)
-            elif pending_positions:
-                insert_at = pending_positions[
-                    min(new_position, len(pending_positions) - 1)]
-                self._jobs.insert(insert_at, job)
-            else:
-                self._jobs.append(job)
-            return True
+                # Find position among remaining pending jobs
+                # (computed AFTER pop so indices are correct)
+                pending_positions = [
+                    i for i, j in enumerate(self._jobs)
+                    if j.status == "pending"
+                ]
+                if new_position >= len(pending_positions):
+                    self._jobs.append(job)
+                elif pending_positions:
+                    insert_at = pending_positions[
+                        min(new_position, len(pending_positions) - 1)]
+                    self._jobs.insert(insert_at, job)
+                else:
+                    self._jobs.append(job)
+                reordered = True
+        if reordered:
+            self._save_state()
+        return reordered
 
     def clear_completed(self) -> int:
         """Remove all completed/failed/cancelled jobs. Returns count removed."""
@@ -250,7 +261,8 @@ class TrainingQueue:
     @property
     def current_job(self) -> TrainingJob | None:
         """The currently executing job, or None."""
-        return self._current_job
+        with self._lock:
+            return self._current_job
 
     # ---- Queue control ----
 
@@ -326,7 +338,10 @@ class TrainingQueue:
 
             logger.info("Training queue finished")
         except Exception as exc:
-            logger.error("Training queue loop error: %s", exc)
+            import traceback
+            logger.error(
+                "Training queue loop error: %s\n%s",
+                exc, traceback.format_exc())
             self._running = False
 
     def _next_pending(self) -> TrainingJob | None:
@@ -371,13 +386,15 @@ class TrainingQueue:
 
         except Exception as exc:
             err_msg = str(exc)
+            import traceback
+            tb = traceback.format_exc()
             with self._lock:
                 job.status = "failed"
                 job.error = err_msg
                 job.completed_at = datetime.now().isoformat()
 
             logger.error(
-                "Queue: job #%d failed: %s", job.job_id, err_msg)
+                "Queue: job #%d failed: %s\n%s", job.job_id, err_msg, tb)
 
             if self.on_job_failed:
                 try:
@@ -385,7 +402,8 @@ class TrainingQueue:
                 except Exception as cb_exc:
                     logger.debug("Job failed callback error: %s", cb_exc)
 
-        self._current_job = None
+        with self._lock:
+            self._current_job = None
         self._save_state()
 
     # ---- Persistence ----
@@ -439,21 +457,25 @@ class TrainingQueue:
 
     def summary(self) -> str:
         """Human-readable summary of queue state."""
+        with self._lock:
+            jobs_snapshot = list(self._jobs)
+            current = self._current_job
+
         lines = ["Training Queue:"]
         counts = {}
-        for job in self._jobs:
+        for job in jobs_snapshot:
             counts[job.status] = counts.get(job.status, 0) + 1
 
         for status, count in sorted(counts.items()):
             lines.append(f"  {status}: {count}")
 
-        if self._current_job:
-            j = self._current_job
+        if current:
+            j = current
             lines.append(
                 f"  Current: #{j.job_id} {j.mode} "
                 f"({j.progress}% - {j.message})")
 
-        for job in self._jobs:
+        for job in jobs_snapshot:
             icon = {
                 "pending": "○",
                 "running": "●",

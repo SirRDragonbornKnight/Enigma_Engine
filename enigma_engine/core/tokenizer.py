@@ -244,7 +244,9 @@ def get_special_token_ids(tokenizer: Any) -> dict[str, int]:
                 'pad': 0, 'bos': 1, 'eos': 2, 'unk': 3,
                 'think_start': 4, 'think_end': 5,
             }
-            result[name] = defaults.get(name, -1)
+            fallback = defaults.get(name, -1)
+            logger.warning("Tokenizer missing '%s' attribute, using default %d", name, fallback)
+            result[name] = fallback
 
     return result
 
@@ -378,11 +380,25 @@ class SimpleTokenizer:
                 self.token_to_id[word] = idx
                 self.id_to_token[idx] = word
 
+    def _sync_special_ids(self):
+        """Rebuild convenience IDs from special_tokens map."""
+        self.pad_token_id = self.special_tokens.get("<pad>", 0)
+        self.bos_token_id = self.special_tokens.get("<s>", 1)
+        self.eos_token_id = self.special_tokens.get("</s>", 2)
+        self.unk_token_id = self.special_tokens.get("<unk>", 3)
+        self.think_start_id = self.special_tokens.get("<think>", 4)
+        self.think_end_id = self.special_tokens.get("</think>", 5)
+
     def _load_vocab(self, vocab_file: Path):
         """Load vocabulary from JSON file."""
         with open(vocab_file, encoding='utf-8') as f:
             self.token_to_id = json.load(f)
         self.id_to_token = {v: k for k, v in self.token_to_id.items()}
+        # Rebuild convenience IDs in case loaded vocab has different mappings
+        for tok, tok_id in self.special_tokens.items():
+            if tok in self.token_to_id:
+                self.special_tokens[tok] = self.token_to_id[tok]
+        self._sync_special_ids()
 
     def save_vocab(self, vocab_file: Path) -> None:
         """Save vocabulary to JSON file."""
@@ -758,7 +774,7 @@ def clear_tokenizer_cache():
 
 def train_tokenizer(
     data_paths: list[str],
-    vocab_size: int = 8000,
+    vocab_size: int = 32000,
     output_path: Optional[str] = None,
     tokenizer_type: str = "bpe"
 ) -> Any:

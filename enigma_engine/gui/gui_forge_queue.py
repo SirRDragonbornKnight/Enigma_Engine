@@ -58,7 +58,11 @@ class ForgeQueueMixin:
         if ds is None:
             from enigma_engine.core.curated_dataset import CuratedDataset
             ds = CuratedDataset(_DATASET_PATH)
-            self._curated_dataset = ds
+            # Only set if another thread didn't beat us
+            if getattr(self, "_curated_dataset", None) is None:
+                self._curated_dataset = ds
+            else:
+                ds = self._curated_dataset
         return ds
 
     # ================================================================
@@ -231,7 +235,9 @@ class ForgeQueueMixin:
                     or checkpoint.get("config", {}))
         if isinstance(cfg_dict, dict) and "epochs" in cfg_dict:
             cfg_dict = checkpoint.get("model_config", {})
-        model_cfg = ForgeConfig(**cfg_dict)
+        model_cfg = ForgeConfig(**{
+            k: v for k, v in cfg_dict.items()
+            if k in ForgeConfig.__dataclass_fields__})
         model = Enigma(config=model_cfg)
         state_dict = get_state_dict(checkpoint)
         model.load_state_dict(state_dict)
@@ -263,7 +269,7 @@ class ForgeQueueMixin:
         from enigma_engine.core.safe_save import atomic_torch_save
         save_data = {
             "model_state_dict": model.state_dict(),
-            "model_config": model_cfg.__dict__,
+            "model_config": self._model_config_dict(model),
         }
         atomic_torch_save(save_data, student_path)
         self._log(

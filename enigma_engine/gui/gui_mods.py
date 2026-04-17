@@ -55,10 +55,15 @@ class ModMixin:
                     stderr_out.strip())
                 return None
             except subprocess.TimeoutExpired:
-                # Still running after 1s — that's good, close stderr
+                # Still running after 1s — that's good, discard stderr
+                # to avoid pipe buffer deadlock (64KB limit).
                 if proc.stderr:
-                    proc.stderr.close()
-            self.mod_processes[mod["id"]] = proc
+                    try:
+                        proc.stderr.close()
+                    except OSError:
+                        pass
+            with self._mod_lock:
+                self.mod_processes[mod["id"]] = proc
             mod["_running"] = True
             self._update_mod_page_status(mod)
             return proc
@@ -87,7 +92,8 @@ class ModMixin:
         mod_id = mod["id"]
         if not mod.get("_running", False):
             return
-        proc = self.mod_processes.get(mod_id)
+        with self._mod_lock:
+            proc = self.mod_processes.get(mod_id)
         if proc and proc.poll() is None:
             proc.terminate()
             try:
@@ -97,7 +103,8 @@ class ModMixin:
                     proc.kill()
                 except OSError:
                     pass  # process already exited between terminate timeout and kill
-        self.mod_processes.pop(mod_id, None)
+        with self._mod_lock:
+            self.mod_processes.pop(mod_id, None)
         mod["_running"] = False
         self._update_mod_page_status(mod)
         self._mod_log(mod, f"Stopped: {mod['name']}")

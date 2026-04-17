@@ -65,27 +65,27 @@ class ForgeAdaptiveMixin:
                 "    Go to ROUTER and assign the model to train.")
             return
 
-        try:
-            epochs = int(self.guided_epochs_entry.get())
-            if epochs < 1 or epochs > 1000:
-                raise ValueError
-        except ValueError:
-            self._log("[!] Epochs must be 1-1000.")
+        result = self._validate_epochs_lr()
+        if result is None:
+            return
+        epochs, lr = result
+
+        if not self._validate_general_data_path():
             return
 
         try:
-            lr = float(self.guided_lr_entry.get())
-            if lr <= 0 or lr > 1:
-                raise ValueError
-        except ValueError:
-            self._log("[!] Learning rate must be 0 to 1.")
-            return
-
-        try:
-            num_pairs = int(self.guided_pairs_entry.get())
+            raw_pairs = self.guided_pairs_entry.get().strip()
+            num_pairs = int(raw_pairs)
             if num_pairs < 1 or num_pairs > 500:
-                raise ValueError
+                self._log(f"[!] Pairs '{raw_pairs}' out of range "
+                          f"(1-500), using 20")
+                num_pairs = 20
         except (ValueError, AttributeError):
+            raw_w = getattr(self, "guided_pairs_entry", None)
+            raw = raw_w.get().strip() if raw_w else ""
+            if raw:
+                self._log(f"[!] Pairs '{raw}' not a number, "
+                          f"using 20")
             num_pairs = 20
 
         # Data file is optional — supplements curriculum
@@ -130,6 +130,10 @@ class ForgeAdaptiveMixin:
         from enigma_engine.core.adaptive_trainer import ALL_STAGES as _ALL_STAGES
         _start_idx = (_ALL_STAGES.index(_selected_stage)
                       if _selected_stage in _ALL_STAGES else 0)
+        if _selected_stage not in _ALL_STAGES:
+            logger.warning(
+                "Invalid stage '%s', defaulting to '%s'",
+                _selected_stage, _ALL_STAGES[0])
         plan_stages = _ALL_STAGES[_start_idx:]
 
         def _adaptive():
@@ -256,6 +260,7 @@ class ForgeAdaptiveMixin:
                     0, lambda sp=s_params:
                     self._update_forge_param_count(sp))
                 self.after(0, self._refresh_models)
+                self._notify_training_complete()
 
                 # Training report card + next steps
                 self._log_training_report(
@@ -276,8 +281,11 @@ class ForgeAdaptiveMixin:
                 if all_losses:
                     self._display_loss_curve(all_losses)
             except Exception as exc:
+                import traceback
+                tb = traceback.format_exc()
                 self._log(
                     f"\n[!] Adaptive pipeline failed: {exc}")
+                self._log(tb)
                 if plan is not None:
                     plan.status = "failed"
                     plan.reset_difficulty()
@@ -525,7 +533,12 @@ class ForgeAdaptiveMixin:
             else:
                 rejected += 1
                 self._log(
-                    f"  [{i + 1}/{num_pairs}] (rejected, bad format)")
+                    f"  [{i + 1}/{num_pairs}] "
+                    f"(rejected after {max_retries_per_example} "
+                    f"retries, last raw: {repr(raw[:80])})"
+                    if raw else
+                    f"  [{i + 1}/{num_pairs}] "
+                    f"(rejected, teacher returned empty)")
         if rejected:
             self._log(
                 f"  Quality filter: {rejected} rejected, "
@@ -590,6 +603,8 @@ class ForgeAdaptiveMixin:
         trainer_obj = Trainer(
             student, tokenizer, train_config)
         stage_losses = []
+        import time as _time_ad
+        _ad_stage_start = [_time_ad.monotonic()]
 
         def on_epoch(epoch, loss, _sl=stage_losses):
             if not self.training_active:
@@ -603,9 +618,25 @@ class ForgeAdaptiveMixin:
                 min(99, pct),
                 f"{stage.upper()} "
                 f"Epoch {epoch}/{epochs}")
+            elapsed = (
+                _time_ad.monotonic()
+                - _ad_stage_start[0])
+            mins = int(elapsed // 60)
+            secs = int(elapsed % 60)
+            eta = ""
+            if epoch > 0:
+                remaining = (
+                    (elapsed / epoch)
+                    * (epochs - epoch))
+                r_m = int(remaining // 60)
+                r_s = int(remaining % 60)
+                eta = (
+                    f"  |  ETA "
+                    f"{r_m}m {r_s:02d}s")
             self._log(
-                f"  Epoch {epoch:>3d}  |  "
-                f"loss {loss:.4f}")
+                f"  Epoch {epoch:>3d}/{epochs}  |  "
+                f"loss {loss:.4f}  |  "
+                f"{mins}m {secs:02d}s{eta}")
         trainer_obj.on_epoch_complete = on_epoch
 
         state = trainer_obj.train(combined)
@@ -757,6 +788,7 @@ class ForgeAdaptiveMixin:
 
         overall = (sum(all_scores) / len(all_scores)
                    if all_scores else 0.0)
+        has_valid_scores = bool(all_scores)
         best_loss = (min(all_losses)
                      if all_losses else float("inf"))
         worst_loss = (max(all_losses)
@@ -786,8 +818,14 @@ class ForgeAdaptiveMixin:
         self._log("  TRAINING REPORT CARD")
         self._log("=" * 50)
         self._log(f"Student  : {student_name}")
-        self._log(f"Score    : {overall:.1f}/10  ({grade})")
-        self._log(f"Verdict  : {verdict}")
+        if has_valid_scores:
+            self._log(f"Score    : {overall:.1f}/10  ({grade})")
+            self._log(f"Verdict  : {verdict}")
+        else:
+            self._log("Score    : N/A (no valid test scores)")
+            self._log(
+                "Verdict  : Cannot assess — no tests "
+                "completed successfully")
         self._log(f"Loss     : {best_loss:.4f} best"
                   f" / {worst_loss:.4f} worst")
         if len(all_losses) >= 2:

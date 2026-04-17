@@ -10,13 +10,13 @@ from __future__ import annotations
 import customtkinter as ctk
 
 from enigma_engine.gui.widgets import (
-    C_ACCENT, C_ACCENT_DIM, C_ACCENT_MUTED, C_BORDER, C_BORDER_ACCENT,
+    C_ACCENT, C_ACCENT_DIM, C_ACCENT_MUTED, C_BORDER,
     C_GREEN, C_INPUT, C_PANEL,
-    C_SURFACE, C_TEXT, C_TEXT_BRIGHT, C_TEXT_DIM,
+    C_TEXT, C_TEXT_BRIGHT, C_TEXT_DIM,
     FONT_MONO, FONT_SECTION, FONT_SMALL, FONT_TINY,
     HUDFrame, SectionLabel, SelectableLabel, SelectableTextbox,
     StatusDot, Tooltip,
-    themed_entry, themed_dropdown,
+    themed_button, themed_entry, themed_dropdown,
 )
 
 
@@ -276,13 +276,11 @@ class ModPageMixin:
 
                 elif w_type == "button":
                     cmd_name = widget.get("command", "")
-                    ctk.CTkButton(
-                        ui_inner, text=w_label.upper(),
+                    themed_button(
+                        ui_inner, w_label.upper(),
+                        style="action",
                         width=140, height=36,
-                        font=FONT_SECTION, corner_radius=2,
-                        fg_color=C_ACCENT_DIM,
-                        hover_color=C_ACCENT_MUTED,
-                        text_color=C_ACCENT,
+                        font=FONT_SECTION,
                         command=lambda m=mod, c=cmd_name: (
                             self._send_mod_command(m, c))
                     ).pack(anchor="w", pady=(4, 4))
@@ -328,11 +326,10 @@ class ModPageMixin:
         SectionLabel(log_header, "Output", color=C_GREEN).pack(
             side="left")
 
-        clear_log_btn = ctk.CTkButton(
-            log_header, text="CLEAR", width=60, height=24,
-            font=FONT_TINY, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_BORDER_ACCENT,
-            text_color=C_TEXT_DIM,
+        clear_log_btn = themed_button(
+            log_header, "CLEAR", style="secondary",
+            width=60, height=24,
+            font=FONT_TINY,
             command=lambda m=mod: m["_log"].clear())
         clear_log_btn.pack(side="right")
         Tooltip(clear_log_btn, "Clear output log")
@@ -343,3 +340,42 @@ class ModPageMixin:
             border_width=0, corner_radius=2)
         mod["_log"].pack(
             fill="both", expand=True, padx=6, pady=(0, 6))
+
+        # S643: Dynamic wraplength — labels adapt to window width
+        _mod_wrap_labels: list = []
+        _mod_resize_timer = [None]  # mutable container for debounce
+        _mod_last_w = [0]  # skip no-op reconfigures
+
+        def _collect_mod_wrap(widget):
+            for child in widget.winfo_children():
+                if isinstance(child, ctk.CTkLabel):
+                    try:
+                        wl = child.cget("wraplength")
+                        if wl and int(wl) > 0:
+                            _mod_wrap_labels.append(child)
+                    except Exception:
+                        pass
+                _collect_mod_wrap(child)
+
+        _collect_mod_wrap(left_col)
+
+        def _apply_mod_wraplength(w):
+            _mod_resize_timer[0] = None
+            _mod_last_w[0] = w
+            for lbl in _mod_wrap_labels:
+                lbl.configure(wraplength=w)
+
+        def _on_mod_resize(event):
+            w = event.width - 40
+            if w < 100 or w == _mod_last_w[0]:
+                return
+            # Debounce: cancel pending, schedule after 100ms
+            if _mod_resize_timer[0] is not None:
+                try:
+                    self.after_cancel(_mod_resize_timer[0])
+                except (ValueError, Exception):
+                    pass
+            _mod_resize_timer[0] = self.after(
+                100, lambda: _apply_mod_wraplength(w))
+
+        left_col.bind("<Configure>", _on_mod_resize)

@@ -31,9 +31,9 @@ Endpoints:
 """
 from __future__ import annotations
 
+import hmac
 import json
 import logging
-import os
 import threading
 import time
 from pathlib import Path
@@ -47,6 +47,11 @@ from pydantic import BaseModel, Field, field_validator
 from enigma_engine import __version__
 
 logger = logging.getLogger(__name__)
+
+# Maximum chat history entries (user + assistant pairs).
+# Oldest entries evicted when exceeded.  Prevents unbounded memory growth
+# on long-running server sessions.
+MAX_HISTORY = 10_000
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -114,7 +119,17 @@ class AppState:
         # Unload previous
         self.unload_model()
 
-        engine = EnigmaEngine(model_path=model_path)
+        try:
+            engine = EnigmaEngine(model_path=model_path)
+        except Exception:
+            # Cleanup any partially loaded state
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except ImportError:
+                pass
+            raise
 
         # Gather info
         param_count = 0
@@ -186,15 +201,29 @@ class AppState:
         # Try passing kwargs to engine.chat; fall back to no-kwargs if unsupported
         try:
             response = self.engine.chat(message, **kwargs)
-        except TypeError:
-            response = self.engine.chat(message)
+        except TypeError as exc:
+            if "unexpected keyword argument" in str(exc) or "got an unexpected" in str(exc):
+                logger.debug("Engine.chat() does not accept kwargs, retrying without")
+                response = self.engine.chat(message)
+            else:
+                raise
 
         # Track history
         with self._lock:
             self._history.append({"role": "user", "content": message})
             self._history.append({"role": "assistant", "content": response})
+            self._trim_history()
 
         return response
+
+    def _trim_history(self) -> None:
+        """Evict oldest entries when history exceeds MAX_HISTORY.
+
+        Must be called while self._lock is held.
+        """
+        if len(self._history) > MAX_HISTORY:
+            excess = len(self._history) - MAX_HISTORY
+            del self._history[:excess]
 
 
 state = AppState()
@@ -392,15 +421,21 @@ async def load_model(req: ModelLoadRequest):
     """Load a model by path."""
     path = Path(req.path).resolve()
     # Prevent path traversal — model must be inside MODELS_DIR
-    models_root = MODELS_DIR.resolve()
-    if not (path == models_root or str(path).startswith(str(models_root) + os.sep)):
-        raise HTTPException(403, "Path must be inside the models directory")
+    try:
+        path.relative_to(MODELS_DIR.resolve())
+    except ValueError:
+        raise HTTPException(403, "Path must be inside the models directory") from None
     if not path.exists():
         raise HTTPException(404, f"Model not found: {req.path}")
     try:
         info = state.load_model(str(path))
         return {"status": "ok", "model": info}
     except Exception as exc:
+        # Ensure partial load doesn't leave stale state
+        try:
+            state.unload_model()
+        except Exception:
+            pass
         logger.exception("Failed to load model")
         raise HTTPException(500, f"Failed to load model: {exc}") from exc
 
@@ -445,7 +480,17 @@ async def chat(req: ChatRequest):
             req.message,
             **kw,
         )
-        return {"message": response}
+        # Cap response length to prevent memory exhaustion
+        truncated = False
+        if isinstance(response, str) and len(response) > 500_000:
+            original_len = len(response)
+            response = response[:500_000]
+            truncated = True
+            logger.warning("Response truncated from %d to 500000 chars", original_len)
+        result: dict[str, Any] = {"message": response}
+        if truncated:
+            result["truncated"] = True
+        return result
     except Exception as exc:
         logger.exception("Chat error")
         return JSONResponse(
@@ -526,6 +571,7 @@ async def chat_stream(req: ChatRequest):
                         {"role": "user", "content": req.message})
                     state._history.append(
                         {"role": "assistant", "content": combined})
+                    state._trim_history()
 
             except Exception as exc:
                 logger.exception("Stream chat error")
@@ -536,14 +582,18 @@ async def chat_stream(req: ChatRequest):
         finally:
             _inference_lock.release()
 
-    return FastAPIStreamingResponse(
-        _sse_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
-    )
+    try:
+        return FastAPIStreamingResponse(
+            _sse_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            },
+        )
+    except Exception:
+        _inference_lock.release()
+        raise
 
 
 # ---------------------------------------------------------------------------
@@ -613,6 +663,7 @@ async def batch_inference(req: BatchRequest):
                     resp = state.engine.chat(prompt, **kwargs)
                     responses.append(resp)
                 except TypeError:
+                    logger.debug("Engine.chat() does not accept kwargs, retrying without")
                     resp = state.engine.chat(prompt)
                     responses.append(resp)
 
@@ -677,8 +728,10 @@ def _safe_profile_path(profile_id: str) -> Path:
     # Strip path separators to prevent directory traversal
     safe_id = Path(profile_id).name
     path = (PROFILES_DIR / f"{safe_id}.json").resolve()
-    if not str(path).startswith(str(PROFILES_DIR.resolve()) + os.sep):
-        raise HTTPException(403, "Invalid profile ID")
+    try:
+        path.relative_to(PROFILES_DIR.resolve())
+    except ValueError:
+        raise HTTPException(403, "Invalid profile ID") from None
     return path
 
 
@@ -688,7 +741,10 @@ async def get_profile(profile_id: str):
     path = _safe_profile_path(profile_id)
     if not path.exists():
         raise HTTPException(404, f"Profile not found: {profile_id}")
-    data = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        raise HTTPException(500, f"Corrupt profile: {profile_id}") from None
     return data
 
 
@@ -699,13 +755,20 @@ async def activate_profile(profile_id: str):
     if not path.exists():
         raise HTTPException(404, f"Profile not found: {profile_id}")
 
-    data = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        raise HTTPException(500, f"Corrupt profile: {profile_id}") from None
     state.active_profile = profile_id
 
-    # Apply generation settings from profile
+    # Apply generation settings from profile (validated)
     gen = data.get("generation", {})
     if gen:
-        state.config_overrides.update(gen)
+        validated = ConfigUpdate(**{
+            k: v for k, v in gen.items()
+            if k in ConfigUpdate.__annotations__
+        }).validated()
+        state.config_overrides.update(validated)
 
     return {"status": "ok", "active": profile_id, "settings": gen}
 
@@ -791,8 +854,10 @@ async def start_training(req: TrainRequest):
     # Resolve data file path safely
     data_dir = PROJECT_ROOT / "data"
     data_path = (data_dir / req.data_file).resolve()
-    if not str(data_path).startswith(str(data_dir.resolve()) + os.sep):
-        raise HTTPException(403, "Data file must be inside the data directory")
+    try:
+        data_path.relative_to(data_dir.resolve())
+    except ValueError:
+        raise HTTPException(403, "Data file must be inside the data directory") from None
     if not data_path.exists():
         raise HTTPException(404, f"Data file not found: {req.data_file}")
 
@@ -906,7 +971,7 @@ def run_server(host: str = "127.0.0.1", port: int = 8080, model_path: str | None
                     return await call_next(request)
                 if request.url.path.startswith("/api/"):
                     auth = request.headers.get("authorization", "")
-                    if auth != f"Bearer {_key}":
+                    if not hmac.compare_digest(auth, f"Bearer {_key}"):
                         return _JSONResponse(
                             {"error": "Invalid or missing API key"},
                             status_code=401,

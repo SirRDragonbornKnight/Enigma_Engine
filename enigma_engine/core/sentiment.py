@@ -79,11 +79,37 @@ def analyze_sentiment(text: str) -> dict[str, float]:
         }
 
     words = set(re.findall(r"[a-z']+", text.lower()))
+    word_list = re.findall(r"[a-z']+", text.lower())
     char_count = len(text)
 
-    # --- Valence: positive vs negative word ratio ---
-    pos_count = len(words & _POSITIVE_WORDS)
-    neg_count = len(words & _NEGATIVE_WORDS)
+    # Negation-aware sentiment scoring (VADER-style 3-word lookback).
+    # "not happy" should count as negative, not positive.
+    _NEGATION = frozenset({
+        "not", "no", "never", "don't", "didn't", "isn't", "wasn't",
+        "aren't", "weren't", "won't", "can't", "couldn't", "shouldn't",
+        "wouldn't", "hardly", "barely", "neither", "nor",
+    })
+    _NEGATION_WINDOW = 3  # how many words back to look for a negator
+
+    pos_count = 0
+    neg_count = 0
+    for i, w in enumerate(word_list):
+        if w in _POSITIVE_WORDS or w in _NEGATIVE_WORDS:
+            # Count negators (even count cancels out: "not not happy" = positive)
+            start = max(0, i - _NEGATION_WINDOW)
+            neg_count_window = sum(
+                1 for j in range(start, i) if word_list[j] in _NEGATION)
+            negated = neg_count_window % 2 == 1
+            if w in _POSITIVE_WORDS:
+                if negated:
+                    neg_count += 1  # "not happy" → negative
+                else:
+                    pos_count += 1
+            else:  # negative word
+                if negated:
+                    pos_count += 1  # "not bad" → positive
+                else:
+                    neg_count += 1
     valence = (pos_count - neg_count) / max(pos_count + neg_count, 1)
     # Scale to make moderate sentiment visible
     valence = max(-1.0, min(1.0, valence * 0.8))

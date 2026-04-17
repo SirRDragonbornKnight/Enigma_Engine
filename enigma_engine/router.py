@@ -15,6 +15,8 @@ import queue
 import socket
 import threading
 import time
+import traceback
+from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -23,13 +25,16 @@ logger = logging.getLogger(__name__)
 
 # Deferred torch import — loaded on first use to avoid 540 MB idle RAM
 _torch = None
+_torch_lock = threading.Lock()
 
 def _ensure_torch() -> Any:
     """Import torch on first use."""
     global _torch
     if _torch is None:
-        import torch
-        _torch = torch
+        with _torch_lock:
+            if _torch is None:
+                import torch
+                _torch = torch
     return _torch
 
 
@@ -125,7 +130,7 @@ class BackgroundTrainer(threading.Thread):
         # Replay buffer: capped at max size, keeps recent examples
         # for periodic retraining to prevent catastrophic forgetting.
         self.replay_buffer_size: int = replay_buffer_size
-        self.replay_buffer: list[TrainingExample] = []
+        self.replay_buffer: deque[TrainingExample] = deque(maxlen=replay_buffer_size)
         self._replay_lock = threading.Lock()
 
         # DPO preference pairs: (rejected_example, chosen_response)
@@ -140,21 +145,22 @@ class BackgroundTrainer(threading.Thread):
 
     def set_model(self, model, tokenizer) -> None:
         """Set or update the model to train."""
-        self.model = model
-        self.tokenizer = tokenizer
-        if model is not None:
-            torch = _ensure_torch()
-            self.optimizer = torch.optim.AdamW(
-                model.parameters(),
-                lr=self.learning_rate,
-                weight_decay=0.01,
-                betas=self.adam_betas,
-                eps=self.adam_eps,
-            )
-            # Keep model in eval mode — _train_batch switches to
-            # train mode only inside the lock and restores eval after.
-            model.eval()
-            logger.info("BackgroundTrainer: Model set for training")
+        with self._train_lock:
+            self.model = model
+            self.tokenizer = tokenizer
+            if model is not None:
+                torch = _ensure_torch()
+                self.optimizer = torch.optim.AdamW(
+                    model.parameters(),
+                    lr=self.learning_rate,
+                    weight_decay=0.01,
+                    betas=self.adam_betas,
+                    eps=self.adam_eps,
+                )
+                # Keep model in eval mode — _train_batch switches to
+                # train mode only inside the lock and restores eval after.
+                model.eval()
+                logger.info("BackgroundTrainer: Model set for training")
 
     def add_example(self, prompt: str, response: str, score: float = 1.0, source: str = "chat") -> None:
         """Add a training example to the queue and replay buffer.
@@ -172,11 +178,9 @@ class BackgroundTrainer(threading.Thread):
         # Add to training queue
         self.example_queue.put(example)
 
-        # Add to replay buffer, capped by recency
+        # Add to replay buffer (deque auto-trims to maxlen)
         with self._replay_lock:
             self.replay_buffer.append(example)
-            if len(self.replay_buffer) > self.replay_buffer_size:
-                self.replay_buffer = self.replay_buffer[-self.replay_buffer_size:]
 
         logger.debug(
             "Added training example (queue=%d, replay=%d)",
@@ -234,6 +238,14 @@ class BackgroundTrainer(threading.Thread):
                 try:
                     total_batch_loss = 0.0
 
+                    # Forward/backward all examples, single optimizer step
+                    if self.optimizer is None:
+                        logger.warning("No optimizer configured — skipping training batch")
+                        return
+                    self.optimizer.zero_grad()
+                    valid_count = 0
+                    batch_len = len(batch)
+
                     for example in batch:
                         # Prepare input with optional system prompt context
                         if self.system_prompt:
@@ -252,16 +264,13 @@ class BackgroundTrainer(threading.Thread):
 
                         # Convert to tensor
                         torch = _ensure_torch()
-                        input_ids = torch.tensor([tokens[:-1]], dtype=torch.long)
-                        target_ids = torch.tensor([tokens[1:]], dtype=torch.long)
-
-                        # Move to device
                         device = next(self.model.parameters()).device
-                        input_ids = input_ids.to(device)
-                        target_ids = target_ids.to(device)
+                        input_ids = torch.tensor(
+                            [tokens[:-1]], dtype=torch.long, device=device)
+                        target_ids = torch.tensor(
+                            [tokens[1:]], dtype=torch.long, device=device)
 
                         # Forward pass
-                        self.optimizer.zero_grad()
                         output = self.model(input_ids)
                         # Unpack tuple if model returns (logits, loss)
                         logits = output[0] if isinstance(output, tuple) else output
@@ -272,16 +281,17 @@ class BackgroundTrainer(threading.Thread):
                             target_ids.reshape(-1)
                         )
 
-                        # Backward pass
-                        loss.backward()
-
-                        # Gradient clipping
-                        _ensure_torch().nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
-
-                        # Update weights
-                        self.optimizer.step()
+                        # Backward — scale for gradient accumulation
+                        (loss / batch_len).backward()
 
                         total_batch_loss += loss.item()
+                        valid_count += 1
+
+                    # Single optimizer step after all examples
+                    if valid_count > 0:
+                        _ensure_torch().nn.utils.clip_grad_norm_(
+                            self.model.parameters(), 1.0)
+                        self.optimizer.step()
                 finally:
                     # Always restore eval mode — even on exception — so
                     # dropout / batchnorm don't corrupt inference output.
@@ -313,7 +323,8 @@ class BackgroundTrainer(threading.Thread):
                 avg_loss, self.examples_processed)
 
         except Exception as e:
-            logger.error(f"Training batch error: {e}")
+            logger.error("Training batch error: %s\n%s", e,
+                         traceback.format_exc())
 
     def _retrain_on_replay(self) -> None:
         """Retrain on the best examples in the replay buffer (BT-D).
@@ -323,6 +334,8 @@ class BackgroundTrainer(threading.Thread):
         forgetting by periodically reinforcing the best exchanges.
         """
         if self.model is None or not self.replay_buffer:
+            return
+        if self.optimizer is None:
             return
 
         with self._replay_lock:
@@ -349,6 +362,10 @@ class BackgroundTrainer(threading.Thread):
                     orig_lrs.append(pg["lr"])
                     pg["lr"] = pg["lr"] * 0.5
                 try:
+                    self.optimizer.zero_grad()
+                    valid_count = 0
+                    replay_len = len(replay_batch)
+
                     for example in replay_batch:
                         if self.system_prompt:
                             text = (
@@ -369,37 +386,44 @@ class BackgroundTrainer(threading.Thread):
                             continue
 
                         torch = _ensure_torch()
-                        input_ids = torch.tensor(
-                            [tokens[:-1]], dtype=torch.long)
-                        target_ids = torch.tensor(
-                            [tokens[1:]], dtype=torch.long)
-
                         device = next(self.model.parameters()).device
-                        input_ids = input_ids.to(device)
-                        target_ids = target_ids.to(device)
+                        input_ids = torch.tensor(
+                            [tokens[:-1]], dtype=torch.long, device=device)
+                        target_ids = torch.tensor(
+                            [tokens[1:]], dtype=torch.long, device=device)
 
-                        self.optimizer.zero_grad()
                         output = self.model(input_ids)
                         logits = (output[0] if isinstance(output, tuple)
                                   else output)
                         loss = torch.nn.functional.cross_entropy(
                             logits.reshape(-1, logits.size(-1)),
                             target_ids.reshape(-1))
-                        loss.backward()
+                        (loss / replay_len).backward()
+                        valid_count += 1
+
+                    if valid_count > 0:
                         torch.nn.utils.clip_grad_norm_(
                             self.model.parameters(), 1.0)
                         self.optimizer.step()
                 finally:
                     # Restore original LR and eval mode
-                    for pg, lr in zip(self.optimizer.param_groups,
-                                      orig_lrs):
-                        pg["lr"] = lr
+                    if len(orig_lrs) != len(self.optimizer.param_groups):
+                        logger.warning(
+                            "Param group count changed during replay "
+                            "(%d -> %d), skipping LR restore",
+                            len(orig_lrs),
+                            len(self.optimizer.param_groups))
+                    else:
+                        for pg, lr in zip(self.optimizer.param_groups,
+                                          orig_lrs):
+                            pg["lr"] = lr
                     self.model.eval()
 
             logger.info("BackgroundTrainer: replay retrain complete")
 
         except Exception as e:
-            logger.error("Replay retrain error: %s", e)
+            logger.error("Replay retrain error: %s\n%s", e,
+                         traceback.format_exc())
 
     def _save_checkpoint(self) -> None:
         """Save a training checkpoint."""
@@ -418,8 +442,19 @@ class BackgroundTrainer(threading.Thread):
                 'replay_buffer_size': len(self.replay_buffer),
             }
             if hasattr(self.model, 'config'):
-                save_data['model_config'] = self.model.config.__dict__
-                save_data['config'] = self.model.config.__dict__
+                c = self.model.config
+                cfg_dict = {
+                    "vocab_size": c.vocab_size, "dim": c.dim,
+                    "n_layers": c.n_layers, "n_heads": c.n_heads,
+                    "n_kv_heads": c.n_kv_heads,
+                    "hidden_dim": c.hidden_dim,
+                    "max_seq_len": c.max_seq_len,
+                    "dropout": c.dropout,
+                    "use_rope": c.use_rope,
+                    "use_moe": c.use_moe,
+                }
+                save_data['model_config'] = cfg_dict
+                save_data['config'] = cfg_dict
             atomic_torch_save(save_data, checkpoint_path)
 
             logger.info(f"Saved checkpoint: {checkpoint_path}")
@@ -428,7 +463,8 @@ class BackgroundTrainer(threading.Thread):
                 self.on_checkpoint(str(checkpoint_path))
 
         except Exception as e:
-            logger.error(f"Failed to save checkpoint: {e}")
+            logger.error("Failed to save checkpoint: %s\n%s", e,
+                         traceback.format_exc())
 
     def pause(self) -> None:
         """Pause training."""
@@ -517,6 +553,7 @@ class ModRouter:
         }
 
         # Training
+        self._train_lock = threading.Lock()
         self.trainer = BackgroundTrainer() if enable_training else None
 
         # Callbacks
@@ -633,7 +670,9 @@ class ModRouter:
         while self.running:
             try:
                 # Reject when at capacity
-                if len(self.mods) >= self.max_connections:
+                with self.mod_lock:
+                    at_capacity = len(self.mods) >= self.max_connections
+                if at_capacity:
                     time.sleep(0.5)
                     continue
 
@@ -721,8 +760,7 @@ class ModRouter:
             # Cleanup
             if mod_id:
                 with self.mod_lock:
-                    if mod_id in self.mods:
-                        del self.mods[mod_id]
+                    self.mods.pop(mod_id, None)
 
                 if self.on_mod_disconnected:
                     self.on_mod_disconnected(mod_id)
@@ -759,14 +797,16 @@ class ModRouter:
 
         elif msg_type == 'ping':
             # Respond to ping
-            mod = self.mods.get(mod_id)
+            with self.mod_lock:
+                mod = self.mods.get(mod_id)
             if mod:
                 mod.last_seen = time.time()
                 self._send_message(mod.socket, {'type': 'pong'})
 
         elif msg_type == 'pong':
             # Heartbeat reply — update last_seen
-            mod = self.mods.get(mod_id)
+            with self.mod_lock:
+                mod = self.mods.get(mod_id)
             if mod:
                 mod.last_seen = time.time()
 
@@ -777,9 +817,16 @@ class ModRouter:
     def _receive_message(self, sock: socket.socket) -> dict | None:
         """Receive a JSON message."""
         try:
+            deadline = time.monotonic() + 30.0  # aggregate timeout
+
             # Read length prefix (4 bytes)
             length_data = b''
             while len(length_data) < 4:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    logger.warning("Message receive timed out (header)")
+                    return None
+                sock.settimeout(min(remaining, 60.0))
                 chunk = sock.recv(4 - len(length_data))
                 if not chunk:
                     return None
@@ -788,12 +835,23 @@ class ModRouter:
             length = int.from_bytes(length_data, 'big')
 
             if length > 1_000_000:  # 1MB max
-                logger.warning(f"Message too large: {length}")
+                try:
+                    client_ip = sock.getpeername()[0]
+                except Exception:
+                    client_ip = "unknown"
+                logger.warning(
+                    "Message too large from %s: %d bytes",
+                    client_ip, length)
                 return None
 
             # Read message
             data = b''
             while len(data) < length:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    logger.warning("Message receive timed out (body)")
+                    return None
+                sock.settimeout(min(remaining, 60.0))
                 chunk = sock.recv(min(4096, length - len(data)))
                 if not chunk:
                     return None
@@ -835,22 +893,25 @@ class ModRouter:
         """Broadcast a message to all connected mods."""
         exclude_set = set(exclude or [])
         with self.mod_lock:
-            for mod_id, mod in self.mods.items():
-                if mod_id not in exclude_set:
-                    self._send_message(mod.socket, message)
+            targets = [
+                (mod_id, mod) for mod_id, mod in self.mods.items()
+                if mod_id not in exclude_set
+            ]
+        for _mod_id, mod in targets:
+            self._send_message(mod.socket, message)
 
     def get_connected_mods(self) -> list[dict]:
         """Get list of connected mods."""
         with self.mod_lock:
             return [
                 {
-                    'mod_id': b.mod_id,
-                    'name': b.name,
-                    'capabilities': b.capabilities,
-                    'connected_at': b.connected_at,
-                    'uptime': time.time() - b.connected_at,
+                    'mod_id': mod.mod_id,
+                    'name': mod.name,
+                    'capabilities': mod.capabilities,
+                    'connected_at': mod.connected_at,
+                    'uptime': time.time() - mod.connected_at,
                 }
-                for b in self.mods.values()
+                for mod in self.mods.values()
             ]
 
     def add_training_example(self, prompt: str, response: str, score: float = 1.0) -> None:
@@ -860,18 +921,19 @@ class ModRouter:
 
     def set_training_enabled(self, enabled: bool) -> None:
         """Enable or disable the background trainer at runtime."""
-        if enabled:
-            if self.trainer is not None:
+        with self._train_lock:
+            if enabled:
+                if self.trainer is not None:
+                    return
+                self.trainer = BackgroundTrainer()
+                if self.running:
+                    self.trainer.start()
                 return
-            self.trainer = BackgroundTrainer()
-            if self.running:
-                self.trainer.start()
-            return
 
-        trainer = self.trainer
-        if trainer is None:
-            return
-        self.trainer = None
+            trainer = self.trainer
+            if trainer is None:
+                return
+            self.trainer = None
         trainer.stop()
 
     def set_training_model(self, model, tokenizer, system_prompt: str = "") -> None:
@@ -991,13 +1053,16 @@ class ModRouter:
 # =============================================================================
 
 _router_instance: ModRouter | None = None
+_router_lock = threading.Lock()
 
 
 def get_router() -> ModRouter:
     """Get or create the global router instance."""
     global _router_instance
     if _router_instance is None:
-        _router_instance = ModRouter()
+        with _router_lock:
+            if _router_instance is None:
+                _router_instance = ModRouter()
     return _router_instance
 
 

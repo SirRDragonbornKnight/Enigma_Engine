@@ -18,8 +18,11 @@ Supported media:
 """
 from __future__ import annotations
 
+import logging
 import re
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 from typing import Any
 
 # Optional imaging imports
@@ -41,7 +44,7 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 # -------------------------------------------------------------------
 # Limits and defaults
 # -------------------------------------------------------------------
-MAX_GIF_FRAMES = 500
+MAX_GIF_FRAMES = 120
 MAX_IMAGE_DOWNLOAD_BYTES = 10 * 1024 * 1024   # 10 MB
 MAX_GIF_DOWNLOAD_BYTES = 20 * 1024 * 1024     # 20 MB
 MAX_CHAT_IMAGES = 200  # Cap retained PhotoImage refs per conversation
@@ -79,7 +82,7 @@ _MEDIA_PATH_RE = re.compile(
 
 # Regex for detecting URLs
 _URL_RE = re.compile(
-    r'https?://[^\s<>"\')\]]+',
+    r'https?://[^\s<>"\'\)\]]+(?<![.,;:!?)])',
     re.IGNORECASE,
 )
 # Regex for markdown image syntax: ![alt text](url)
@@ -200,14 +203,24 @@ def _resolve_path(path_str: str) -> Path | None:
     p = Path(path_str)
     if p.is_absolute() and p.exists():
         return p
-    # Try relative to project root
+    # Try relative to project root — validate no traversal escape
     rel = PROJECT_ROOT / path_str
     if rel.exists():
+        try:
+            rel.resolve().relative_to(PROJECT_ROOT.resolve())
+        except ValueError:
+            logger.warning("Relative path escapes project root: %s", path_str)
+            return None
         return rel
     # Try in outputs directory sub-paths
     if not p.is_absolute():
         outputs = PROJECT_ROOT / "outputs" / path_str
         if outputs.exists():
+            try:
+                outputs.resolve().relative_to(PROJECT_ROOT.resolve())
+            except ValueError:
+                logger.warning("Output path escapes project root: %s", path_str)
+                return None
             return outputs
     return None
 
@@ -226,6 +239,17 @@ def load_chat_image(
         resolved = _resolve_path(path_str)
         if resolved is None:
             return None
+        # Guard against very large files
+        try:
+            fsize = Path(resolved).stat().st_size
+            if fsize > MAX_IMAGE_DOWNLOAD_BYTES:
+                logger.warning(
+                    "Skipping image >%dMB: %s (%d bytes)",
+                    MAX_IMAGE_DOWNLOAD_BYTES // (1024 * 1024),
+                    path_str, fsize)
+                return None
+        except OSError:
+            pass
         img = Image.open(resolved)
         img = img.convert("RGBA")
         # Resize to fit within bounds
@@ -282,7 +306,10 @@ def extract_gif_frames(
                     path_str, max_width, max_height)
             return None
         img = Image.open(resolved)
-        return _process_gif_frames(img, max_width, max_height)
+        try:
+            return _process_gif_frames(img, max_width, max_height)
+        finally:
+            img.close()
     except Exception:
         return None
 
@@ -299,7 +326,10 @@ def _extract_gif_frames_url(
         with urllib.request.urlopen(req, timeout=MEDIA_DOWNLOAD_TIMEOUT) as resp:
             data = resp.read(MAX_GIF_DOWNLOAD_BYTES)
         img = Image.open(io.BytesIO(data))
-        return _process_gif_frames(img, max_width, max_height)
+        try:
+            return _process_gif_frames(img, max_width, max_height)
+        finally:
+            img.close()
     except Exception:
         return None
 
@@ -313,6 +343,9 @@ def _process_gif_frames(
         n_frames = getattr(img, "n_frames", 1)
         # Cap frames to prevent memory issues
         max_frames = min(n_frames, MAX_GIF_FRAMES)
+        if max_frames < n_frames:
+            logger.warning("GIF truncated from %d to %d frames",
+                           n_frames, max_frames)
         for i in range(max_frames):
             img.seek(i)
             frame = img.copy().convert("RGBA")
@@ -346,12 +379,14 @@ def extract_video_thumbnail(
         if resolved is None:
             return None
         cap = cv2.VideoCapture(str(resolved))
-        if not cap.isOpened():
-            return None
-        ret, frame = cap.read()
-        cap.release()
-        if not ret or frame is None:
-            return None
+        try:
+            if not cap.isOpened():
+                return None
+            ret, frame = cap.read()
+            if not ret or frame is None:
+                return None
+        finally:
+            cap.release()
         # Convert BGR to RGB
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         img = Image.fromarray(frame_rgb)

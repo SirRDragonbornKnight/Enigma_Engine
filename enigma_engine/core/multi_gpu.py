@@ -23,10 +23,13 @@ Utilities for splitting model training across multiple GPUs.
 │    trainer = DistributedTrainer(model, tokenizer, config)                  │
 │    trainer.train(data)                  # handles spawn, sync, cleanup     │
 └─────────────────────────────────────────────────────────────────────────────┘
+│  Multi-GPU support utilities.                                               │
+│  Currently DORMANT — no callers in the codebase.                            │
+│  Exported in __init__.py for future use.                                    │
+└─────────────────────────────────────────────────────────────────────────────┘
 
 🔗 CONNECTED FILES:
-    ← USED BY: enigma_engine/core/training.py (optional multi-GPU wrapping)
-    ← USED BY: enigma_engine/gui/gui_forge.py (multi-GPU toggle)
+    ← EXPORTED BY: enigma_engine/__init__.py
 """
 from __future__ import annotations
 
@@ -253,6 +256,8 @@ class DistributedTrainer:
             import torch.distributed as dist
             if dist.is_initialized():
                 dist.destroy_process_group()
+            os.environ.pop("MASTER_ADDR", None)
+            os.environ.pop("MASTER_PORT", None)
             self._initialized = False
             logger.info("DDP process group destroyed")
         except Exception:

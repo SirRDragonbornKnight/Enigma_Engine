@@ -33,6 +33,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import threading
 import time
 from collections import Counter
 from datetime import datetime, timezone
@@ -75,7 +76,7 @@ class Journal:
       - ``timestamp``: ISO 8601 creation time
       - ``coherence``: float score at time of writing
 
-    Thread-safe via file-level atomicity (atomic writes).
+    Thread-safe via lock + file-level atomicity (atomic writes).
     """
 
     def __init__(
@@ -86,6 +87,7 @@ class Journal:
         self._path = Path(journal_dir) / "journal.json"
         self._max_entries = max_entries
         self._entries: list[dict] = []
+        self._lock = threading.Lock()
         self._load()
 
     def _load(self) -> None:
@@ -106,14 +108,17 @@ class Journal:
             logger.warning("Failed to load journal: %s", exc)
             self._entries = []
 
-    def _save(self) -> None:
+    def _save(self, snapshot: list[dict] | None = None) -> None:
         """Write journal to disk atomically."""
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
+            if snapshot is None:
+                with self._lock:
+                    snapshot = list(self._entries)
             data = {
                 "version": 1,
-                "entry_count": len(self._entries),
-                "entries": self._entries,
+                "entry_count": len(snapshot),
+                "entries": snapshot,
             }
             from enigma_engine.core.safe_save import atomic_write_json
             atomic_write_json(self._path, data)
@@ -131,27 +136,32 @@ class Journal:
                 timespec="seconds"),
             "coherence": round(coherence, 3),
         }
-        self._entries.append(entry)
-        # Trim oldest if over capacity
-        while len(self._entries) > self._max_entries:
-            self._entries.pop(0)
-        self._save()
+        with self._lock:
+            self._entries.append(entry)
+            # Trim oldest if over capacity
+            while len(self._entries) > self._max_entries:
+                self._entries.pop(0)
+            snapshot = list(self._entries)
+        self._save(snapshot)
 
     @property
     def entries(self) -> list[dict]:
         """Return a copy of all journal entries."""
-        return list(self._entries)
+        with self._lock:
+            return list(self._entries)
 
     @property
     def count(self) -> int:
         """Number of journal entries."""
-        return len(self._entries)
+        with self._lock:
+            return len(self._entries)
 
     def latest(self) -> dict | None:
         """Return the most recent entry, or None if empty."""
-        if not self._entries:
-            return None
-        return self._entries[-1]
+        with self._lock:
+            if not self._entries:
+                return None
+            return self._entries[-1]
 
     def build_context(self, max_entries: int = 5) -> str:
         """Format recent journal entries for injection into prompts.
@@ -159,9 +169,10 @@ class Journal:
         Returns a string suitable for appending to the system prompt,
         or empty string if no entries.
         """
-        if not self._entries:
-            return ""
-        recent = self._entries[-max_entries:]
+        with self._lock:
+            if not self._entries:
+                return ""
+            recent = list(self._entries[-max_entries:])
         lines = ["[JOURNAL — Recent reflections]"]
         for entry in recent:
             ts = entry.get("timestamp", "")

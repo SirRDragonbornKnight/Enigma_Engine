@@ -65,7 +65,7 @@ import torch
 from ..config import CONFIG
 from .engine_chat import _ChatMixin
 from .engine_generation import _GenerationMixin
-from .model import MODEL_PRESETS, Forge, create_model
+from .model import MODEL_PRESETS, Enigma, create_model
 from .tokenizer import get_tokenizer
 
 logger = logging.getLogger(__name__)
@@ -222,6 +222,10 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
         self._chat_history: list = []
         self._token_count_cache: dict[str, int] = {}
 
+        # Prefix KV cache for skipping system prompt prefill (T1-2)
+        self._prefix_kv_cache = None
+        self._prefix_prompt_hash: str | None = None
+
     def set_train_lock(self, lock: threading.Lock | None) -> None:
         """Set the training lock for inference/training coordination.
 
@@ -361,6 +365,7 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
         if torch.cuda.is_available():
             # Apply GPU memory limit from config
             gpu_fraction = CONFIG.get("gpu_memory_fraction", 0.9)
+            gpu_fraction = max(0.1, min(1.0, float(gpu_fraction)))
             try:
                 torch.cuda.set_per_process_memory_fraction(gpu_fraction)
             except (RuntimeError, AttributeError) as e:
@@ -491,7 +496,7 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
         elif LEGACY_MODEL.exists():
             detected_model = LEGACY_MODEL
         else:
-            for f in MODELS_DIR.glob("*.pth"):
+            for f in sorted(MODELS_DIR.glob("*.pth")):
                 detected_model = f
                 break
 
@@ -513,7 +518,7 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
         self,
         model_path: str | Path | None,
         model_size: str
-    ) -> Forge:
+    ) -> Enigma:
         """
         Load or create the model.
 
@@ -577,7 +582,7 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
             model_file = LEGACY_MODEL
         else:
             # Look for any .pth file in models dir
-            for f in MODELS_DIR.glob("*.pth"):
+            for f in sorted(MODELS_DIR.glob("*.pth")):
                 model_file = f
                 break
 
@@ -661,9 +666,9 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
         model_size: str,
         auto_quantize: bool,
         quantization_mode: str
-    ) -> Forge:
+    ) -> Enigma:
         """Load a PyTorch (.pth) model or raise if none found."""
-        vocab_size = getattr(self.tokenizer, "vocab_size", 8000)
+        vocab_size = getattr(self.tokenizer, "vocab_size", 32000)
 
         if model_file and model_file.exists():
             # Load state dict to infer model architecture
@@ -700,7 +705,7 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
             if isinstance(saved_config, dict):
                 inferred_config.update(saved_config)
 
-            vocab_size = inferred_config.get('vocab_size', 8000)
+            vocab_size = inferred_config.get('vocab_size', 32000)
             max_seq_len = inferred_config.get('max_seq_len', 1024)
             n_layers = inferred_config.get('n_layers')
             n_heads = inferred_config.get('n_heads')
@@ -726,11 +731,24 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
             # Remove freqs_cis and pad vocab weights — handled by
             # Enigma.load_state_dict() override, but also strip here
             # so the state_dict is clean before the call.
-            state_dict.pop('freqs_cis', None)
+            if 'freqs_cis' in state_dict:
+                state_dict.pop('freqs_cis')
+                if not inferred_config.get('use_rope', True):
+                    logger.warning(
+                        "Checkpoint had freqs_cis but model has "
+                        "use_rope=False — RoPE will be disabled.")
 
             # Load weights — fail loudly instead of silently using random weights
             try:
-                model.load_state_dict(state_dict, strict=False)
+                load_result = model.load_state_dict(state_dict, strict=False)
+                if load_result.missing_keys:
+                    logger.warning(
+                        "Missing keys when loading %s: %s",
+                        model_file, load_result.missing_keys)
+                if load_result.unexpected_keys:
+                    logger.warning(
+                        "Unexpected keys when loading %s: %s",
+                        model_file, load_result.unexpected_keys)
                 logger.info(f"Loaded model from {model_file}")
             except Exception as e:
                 raise RuntimeError(
@@ -743,23 +761,32 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
             # APPLY AUTO-QUANTIZATION IF NEEDED
             # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             if auto_quantize and quantization_mode != "none":
-                try:
-                    logger.info(f"[Quantization] Applying {quantization_mode} quantization...")
-                    model = model.quantize(mode=quantization_mode)
-                    logger.info(f"[Quantization] Successfully applied {quantization_mode}")
-                except AttributeError:
-                    # Model doesn't have quantize method - try manual
-                    if quantization_mode == "dynamic":
-                        try:
-                            import torch.quantization as tq
-                            model = tq.quantize_dynamic(
-                                model, {torch.nn.Linear}, dtype=torch.qint8
-                            )
-                            logger.info("[Quantization] Applied dynamic quantization")
-                        except Exception as qe:
-                            logger.warning(f"[Quantization] Failed to apply: {qe}")
-                except Exception as e:
-                    logger.warning(f"[Quantization] Could not apply {quantization_mode}: {e}")
+                # Skip if model is already quantized (e.g. loaded from quantized checkpoint)
+                already_quantized = any(
+                    hasattr(m, '_packed_params') or
+                    'Quantized' in type(m).__name__
+                    for m in model.modules()
+                )
+                if already_quantized:
+                    logger.info("[Quantization] Model is already quantized, skipping")
+                else:
+                    try:
+                        logger.info(f"[Quantization] Applying {quantization_mode} quantization...")
+                        model = model.quantize(mode=quantization_mode)
+                        logger.info(f"[Quantization] Successfully applied {quantization_mode}")
+                    except AttributeError:
+                        # Model doesn't have quantize method - try manual
+                        if quantization_mode == "dynamic":
+                            try:
+                                import torch.quantization as tq
+                                model = tq.quantize_dynamic(
+                                    model, {torch.nn.Linear}, dtype=torch.qint8
+                                )
+                                logger.info("[Quantization] Applied dynamic quantization")
+                            except Exception as qe:
+                                logger.warning(f"[Quantization] Failed to apply: {qe}")
+                    except Exception as e:
+                        logger.warning(f"[Quantization] Could not apply {quantization_mode}: {e}")
         else:
             # No model file found - raise error instead of creating untrained model
             raise FileNotFoundError(
@@ -779,10 +806,17 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
 
         # Get vocab_size and dim from embedding
         for key, tensor in state_dict.items():
-            if ('embed' in key.lower() or 'token' in key.lower()) and tensor.dim() == 2:
-                config['vocab_size'] = tensor.shape[0]
-                config['dim'] = tensor.shape[1]
-                break
+            if 'embed' in key.lower() or 'token' in key.lower():
+                if tensor.dim() == 2:
+                    config['vocab_size'] = tensor.shape[0]
+                    config['dim'] = tensor.shape[1]
+                    break
+                else:
+                    logger.warning(
+                        "Embedding tensor '%s' has %dD shape %s, "
+                        "expected 2D", key, tensor.dim(),
+                        tuple(tensor.shape))
+                    continue
 
         # Fallback dim from norm weights
         if 'dim' not in config:
@@ -1230,20 +1264,11 @@ def load_engine(
 
 
 # =============================================================================
-# Backward Compatibility Alias
-# =============================================================================
-
-# Keep ForgeEngine as an alias for existing code
-ForgeEngine = EnigmaEngine
-
-
-# =============================================================================
 # Module Exports
 # =============================================================================
 
 __all__ = [
     "EnigmaEngine",
-    "ForgeEngine",  # Backward compatibility alias
     "generate",
     "load_engine",
 ]

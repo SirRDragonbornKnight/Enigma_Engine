@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import traceback
 from pathlib import Path
 
 from enigma_engine.gui.scanners import scan_models, MODELS_DIR
@@ -130,13 +131,21 @@ class ForgeModelsMixin:
 
         def _on_progress(progress):
             """Update status label with download progress."""
+            try:
+                if not self.winfo_exists():
+                    return
+            except Exception:
+                return
             pct = progress.percentage
             if pct > 0:
                 msg = f"Downloading {repo_id}: {pct:.0f}%"
             else:
                 msg = f"Downloading {repo_id}..."
-            self.after(0, lambda m=msg: self._models_msg(
-                m, "#e8e8e8"))
+            try:
+                self.after(0, lambda m=msg: self._models_msg(
+                    m, "#e8e8e8"))
+            except Exception:
+                pass  # Widget destroyed during download
 
         def _do_download():
             try:
@@ -160,6 +169,7 @@ class ForgeModelsMixin:
                         "#ef4444"))
             except Exception as exc:
                 err_msg = str(exc)
+                logger.error("Download error:\n%s", traceback.format_exc())
                 self.after(0, lambda m=err_msg: self._models_msg(
                     f"Download failed: {m}", "#ef4444"))
             finally:
@@ -170,31 +180,45 @@ class ForgeModelsMixin:
     def _refresh_models(self):
         """Refresh model cards and route dropdowns.
 
-        Runs ``scan_models()`` in a background thread because it loads
-        every native .pth/.pt file to count parameters, which blocks
-        the GUI on large model directories.
+        Debounces rapid successive calls (e.g. multi-model import) into
+        a single rebuild after 300ms of quiet.  Runs ``scan_models()``
+        in a background thread to avoid blocking the GUI.
         """
-        def _scan_and_update():
-            models = scan_models()
+        # Cancel any pending debounce timer
+        pending = getattr(self, "_refresh_timer", None)
+        if pending is not None:
+            self.after_cancel(pending)
 
-            def _update():
-                self.models_data = models
-                for w in self.model_cards_frame.winfo_children():
-                    w.destroy()
-                if self.models_data:
-                    self._populate_model_cards(
-                        self.model_cards_frame)
-                model_names = (
-                    ["None"]
-                    + [m["name"] for m in self.models_data])
-                route_menus = getattr(self, "_route_menus", {})
-                for menu in route_menus.values():
-                    menu.configure(values=model_names)
+        def _do_refresh():
+            self._refresh_timer = None
+            seq = getattr(self, "_refresh_seq", 0) + 1
+            self._refresh_seq = seq
 
-            self.after(0, _update)
+            def _scan_and_update():
+                models = scan_models()
 
-        threading.Thread(
-            target=_scan_and_update, daemon=True).start()
+                def _update():
+                    if getattr(self, "_refresh_seq", 0) != seq:
+                        return  # stale — newer refresh in progress
+                    self.models_data = models
+                    for w in self.model_cards_frame.winfo_children():
+                        w.destroy()
+                    if self.models_data:
+                        self._populate_model_cards(
+                            self.model_cards_frame)
+                    model_names = (
+                        ["None"]
+                        + [m["name"] for m in self.models_data])
+                    route_menus = getattr(self, "_route_menus", {})
+                    for menu in route_menus.values():
+                        menu.configure(values=model_names)
+
+                self.after(0, _update)
+
+            threading.Thread(
+                target=_scan_and_update, daemon=True).start()
+
+        self._refresh_timer = self.after(300, _do_refresh)
 
     def _delete_model(self, model: dict):
         """Show inline delete confirmation on the model card.
@@ -216,7 +240,7 @@ class ForgeModelsMixin:
                 dr_model = getattr(dr, "_model", None)
                 if dr_model and dr_model.get("path") == model.get("path"):
                     dr.grid(
-                        row=4, column=0, columnspan=2,
+                        row=5, column=0, columnspan=2,
                         sticky="w", pady=(4, 0))
 
     def _confirm_delete_model(self, model: dict, delete_row=None):
@@ -235,13 +259,7 @@ class ForgeModelsMixin:
         path = Path(model["path"])
         name = model["name"]
 
-        # Unassign from any routes using this model
-        for route_key, assigned in list(
-                self.route_assignments.items()):
-            if assigned == str(path):
-                self._unassign_route(route_key)
-
-        # Unload if currently loaded (quick flag reset on main thread)
+        # Unload first if currently loaded (before unassigning routes)
         if self.model_path and Path(self.model_path) == path:
             # Save context, clear engine reference, update UI
             self._save_model_context()
@@ -257,6 +275,12 @@ class ForgeModelsMixin:
             if chat_menu:
                 chat_menu.set("None")
             self._update_route_status()
+
+        # Unassign from any routes using this model
+        for route_key, assigned in list(
+                self.route_assignments.items()):
+            if assigned == str(path):
+                self._unassign_route(route_key)
 
         self._model_op_in_progress = True
         self._models_msg(f"Deleting {name}...", "#e8e8e8")
@@ -292,6 +316,36 @@ class ForgeModelsMixin:
     # Models page status helpers
     # ----------------------------------------------------------------
 
+    def _clean_checkpoints(self, ckpt_dir: Path):
+        """Delete unprotected checkpoints from a model's checkpoint dir.
+
+        Protected checkpoints (those with a ``.keep`` sidecar) are kept.
+        Refreshes the model cards after cleanup.
+        """
+        if not ckpt_dir.is_dir():
+            return
+
+        deleted = 0
+        skipped = 0
+        for f in list(ckpt_dir.iterdir()):
+            if f.suffix != ".pt":
+                continue
+            keep_marker = f.parent / (f.name + ".keep")
+            if keep_marker.exists():
+                skipped += 1
+                continue
+            try:
+                f.unlink()
+                deleted += 1
+            except OSError:
+                pass
+
+        msg = f"Cleaned {deleted} checkpoint(s)"
+        if skipped:
+            msg += f", {skipped} protected"
+        self._models_msg(msg, "#22c55e")
+        self.after(300, self._refresh_models)
+
     def _models_msg(self, text: str, color: str | None = None):
         """Show a message on the MODELS page status label and status bar."""
         label = getattr(self, "_models_status", None)
@@ -301,7 +355,7 @@ class ForgeModelsMixin:
         self.status_bar.set_left(text)
 
     def _create_new_model(self):
-        """Create a new blank model with the default small preset."""
+        """Create a new blank model sized to the user's memory budget."""
         if self._model_op_busy():
             return
 
@@ -317,9 +371,14 @@ class ForgeModelsMixin:
             self._models_msg("Invalid model name.", C_TEXT)
             return
 
-        out_path = MODELS_DIR / f"{safe}.pth"
-        if out_path.exists():
-            self._models_msg(f"Model '{safe}' already exists.", C_TEXT)
+        # Read memory budget and pick the best preset
+        vram_var = getattr(self, "model_vram_var", None)
+        try:
+            vram_gb = float(vram_var.get()) if vram_var else 8.0
+            if vram_gb <= 0:
+                raise ValueError
+        except (ValueError, TypeError):
+            self._models_msg("Memory must be a positive number.", C_TEXT)
             return
 
         self._model_op_in_progress = True
@@ -327,25 +386,46 @@ class ForgeModelsMixin:
 
         def _create():
             try:
-                from enigma_engine.core.model import (
-                    MODEL_PRESETS as MP, Enigma)
+                from enigma_engine.core.model import Enigma
+                from enigma_engine.core.model_presets import (
+                    recommend_preset_for_vram, get_preset,
+                    estimate_training_vram)
                 from enigma_engine.core.tokenizer import get_tokenizer
 
                 tokenizer = get_tokenizer("auto")
 
-                # Use the user-selected preset
-                preset_var = getattr(self, "model_preset_var", None)
-                preset_name = (preset_var.get()
-                               if preset_var else "small")
-                # Strip description suffix from display value
-                preset_name = preset_name.split(" - ", 1)[0]
-                if preset_name not in MP:
-                    preset_name = "small"
-                preset = MP[preset_name]
-                preset.vocab_size = tokenizer.vocab_size
-
+                preset_name = recommend_preset_for_vram(vram_gb)
+                preset = get_preset(
+                    preset_name, vocab_size=tokenizer.vocab_size)
                 model = Enigma(config=preset)
+
                 pc = sum(p.numel() for p in model.parameters())
+                vram_est = estimate_training_vram(preset)
+
+                full_name = safe
+                out_path = MODELS_DIR / f"{full_name}.pth"
+                if out_path.exists():
+                    # Ask user on main thread, wait for answer
+                    from tkinter import messagebox as _mb
+                    _result: list[bool] = []
+                    _done = threading.Event()
+
+                    def _ask():
+                        res = _mb.askyesno(
+                            "Model Already Exists",
+                            f"'{full_name}' already exists.\n\n"
+                            "Overwrite it?",
+                            icon=_mb.QUESTION)
+                        _result.append(res)
+                        _done.set()
+
+                    self.after(0, _ask)
+                    _done.wait()
+                    if not _result or not _result[0]:
+                        self.after(0, lambda: self._models_msg(
+                            f"Cancelled — '{full_name}' kept.",
+                            C_TEXT))
+                        return
 
                 from enigma_engine.core.safe_save import atomic_torch_save
                 atomic_torch_save({
@@ -353,9 +433,26 @@ class ForgeModelsMixin:
                     "config": self._model_config_dict(model),
                 }, out_path)
 
-                msg = f"Created: {safe} ({pc:,} params)"
-                self.after(0, lambda: self._models_msg(
-                    msg, "#22c55e"))
+                # Persist preset name in model context
+                from enigma_engine.core.model_context import (
+                    ModelContext, model_key_from_path)
+                ctx = ModelContext(model_key_from_path(str(out_path)))
+                ctx.load()
+                ctx.preset_name = preset_name
+                ctx.save()
+
+                msg = (f"Created: {full_name} "
+                       f"({pc:,} params, ~{vram_est} GB of "
+                       f"{vram_gb:.0f} GB memory budget, "
+                       f"preset: {preset_name})")
+
+                def _on_created():
+                    self._models_msg(msg, "#22c55e")
+                    # Clear name field so the user doesn't
+                    # accidentally create duplicates.
+                    self.new_model_name.delete(0, "end")
+
+                self.after(0, _on_created)
                 self.after(0, self._refresh_models)
             except Exception as exc:
                 err_msg = str(exc)
@@ -509,7 +606,12 @@ class ForgeModelsMixin:
             if case_only_change:
                 tmp = src.parent / f"{safe}_tmp_rename{src.suffix}"
                 src.rename(tmp)
-                tmp.rename(dest)
+                try:
+                    tmp.rename(dest)
+                except OSError:
+                    # Recovery: move back to original name
+                    tmp.rename(src)
+                    raise
             else:
                 src.rename(dest)
             from enigma_engine.gui.scanners import (
@@ -569,7 +671,9 @@ class ForgeModelsMixin:
                     or checkpoint.get("config", {}))
                 if isinstance(cfg_dict, dict) and "epochs" in cfg_dict:
                     cfg_dict = checkpoint.get("model_config", {})
-                config = ForgeConfig(**cfg_dict)
+                config = ForgeConfig(**{
+                    k: v for k, v in cfg_dict.items()
+                    if k in ForgeConfig.__dataclass_fields__})
                 model = Enigma(config=config)
                 state_dict = get_state_dict(checkpoint)
                 model.load_state_dict(state_dict)
@@ -594,6 +698,7 @@ class ForgeModelsMixin:
                 self.after(0, self._refresh_models)
             except Exception as exc:
                 err_msg = str(exc)
+                logger.error("Model create/quantize error:\n%s", traceback.format_exc())
                 self._log(f"[ERROR] Quantize failed: {err_msg}\n")
 
         import threading
@@ -633,7 +738,9 @@ class ForgeModelsMixin:
                     or checkpoint.get("config", {}))
                 if isinstance(cfg_dict, dict) and "epochs" in cfg_dict:
                     cfg_dict = checkpoint.get("model_config", {})
-                config = ForgeConfig(**cfg_dict)
+                config = ForgeConfig(**{
+                    k: v for k, v in cfg_dict.items()
+                    if k in ForgeConfig.__dataclass_fields__})
                 model = Enigma(config=config)
                 state_dict = get_state_dict(checkpoint)
                 model.load_state_dict(state_dict)
@@ -753,10 +860,9 @@ class ForgeModelsMixin:
         """Show an inline grow size picker on the MODELS page."""
         import customtkinter as ctk
         from enigma_engine.gui.widgets import (
-            C_ACCENT_MUTED,
-            C_GREEN, C_GREEN_DIM, C_SURFACE, C_TEXT_DIM,
+            C_TEXT_DIM,
             FONT_TINY, SelectableLabel,
-            Tooltip, themed_dropdown,
+            Tooltip, themed_button, themed_dropdown,
         )
 
         # Create inline row under the models status area
@@ -786,19 +892,19 @@ class ForgeModelsMixin:
             grow_frame.pack_forget()
             grow_frame.destroy()
 
-        _go = ctk.CTkButton(
-            grow_frame, text="GROW", width=60, height=28,
-            font=FONT_TINY, corner_radius=2,
-            fg_color=C_GREEN_DIM, hover_color="#1a5a2a",
-            text_color=C_GREEN, command=_do_grow)
+        _go = themed_button(
+            grow_frame, "GROW", style="primary",
+            width=60, height=28,
+            font=FONT_TINY,
+            command=_do_grow)
         _go.pack(side="left", padx=(0, 4))
         Tooltip(_go, "Create expanded model")
 
-        _cancel_btn = ctk.CTkButton(
-            grow_frame, text="CANCEL", width=65, height=28,
-            font=FONT_TINY, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_ACCENT_MUTED,
-            text_color=C_TEXT_DIM, command=_cancel)
+        _cancel_btn = themed_button(
+            grow_frame, "CANCEL", style="secondary",
+            width=65, height=28,
+            font=FONT_TINY,
+            command=_cancel)
         _cancel_btn.pack(side="left")
 
     def _execute_grow(self, model: dict, src_config, preset_name: str):
@@ -864,6 +970,15 @@ class ForgeModelsMixin:
                     "model_state_dict": model_obj.state_dict(),
                     "config": target_config.to_dict(),
                 }, out_path)
+
+                # Persist preset name in model context
+                from enigma_engine.core.model_context import (
+                    ModelContext, model_key_from_path)
+                grow_ctx = ModelContext(
+                    model_key_from_path(str(out_path)))
+                grow_ctx.load()
+                grow_ctx.preset_name = preset_name
+                grow_ctx.save()
 
                 msg = (f"Grown: {stem} -> {stem}_{preset_name} "
                        f"({new_params:,} params)")

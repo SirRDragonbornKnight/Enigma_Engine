@@ -74,7 +74,7 @@ Train the model to understand images using a Vision Transformer.
 |--------|--------|-----|-------|--------|
 | Tiny | 2 | 128 | 4 | ~500K |
 | Small | 4 | 256 | 4 | ~4M |
-| Medium | 6 | 512 | 4 | ~25M |
+| Medium | 6 | 512 | 8 | ~25M |
 
 ### Quick Tune (LoRA)
 
@@ -116,7 +116,7 @@ When enabled, training becomes an AI-assisted 3-phase process:
 The data file becomes optional — the TRAINER generates training
 data automatically. The current training stage and focus field
 guide what the TRAINER teaches. Generated curriculum is saved
-to `data/guided_{student}_{stage}_{timestamp}.txt` so you can
+to `data/adaptive_{student}_{stage}_{timestamp}.txt` so you can
 review it on the DOCS page.
 
 ---
@@ -224,7 +224,7 @@ Additional parameters in TrainingConfig:
 | Weight Decay | 0.01 | L2 regularization |
 | Warmup Steps | 100 | Learning rate warmup |
 | Gradient Clip | 1.0 | Max gradient norm |
-| Early Stopping Patience | 0 (disabled) | Stop if no improvement for N epochs |
+| Early Stopping Patience | 5 | Stop if no improvement for N epochs |
 | Max Loss | 100.0 | Abort if loss exceeds this |
 | AMP | True | Automatic mixed precision (fp16) |
 
@@ -232,21 +232,26 @@ Additional parameters in TrainingConfig:
 
 ## Model Sizes
 
-Type your target parameter count when creating a model:
+**GUI (MODELS tab):** Type a number in the **Memory (GB)** field
+and click CREATE. The engine auto-picks the largest architecture
+that fits your memory budget.
 
-| Input | Parameters | Good For |
-|-------|-----------|----------|
-| `27m` | ~27M | Testing, learning |
-| `85m` | ~85M | Basic quality |
-| `500m` | ~500M | Solid results |
-| `1.5b` | ~1.5B | Near-production |
-| `7b` | ~7B | Commercial grade |
-| `8b` | ~8B | Great quality |
-| `13b` | ~13B | High quality |
-| `70b` | ~70B+ | Research frontier |
+| Memory (GB) | Auto-picks | ~Params | Train VRAM |
+|-------------|-----------|---------|-----------|
+| 1 | small | ~27M | ~1 GB |
+| 4 | base | ~120M | ~3 GB |
+| 8 | large | ~200M | ~6 GB |
+| 12+ | xl | ~600M | ~12 GB |
 
-The engine auto-matches your target to the closest architecture
-preset. RoPE head dimensions are always even (required for
+**CLI:** Use `--model-size` with a preset name:
+
+```
+python run.py --train data/training.txt --model-size large
+```
+
+Available presets: `pi_zero`, `nano`, `tiny`, `small`, `medium`, `large`.
+
+RoPE head dimensions are always even (required for
 rotary embeddings).
 
 ---

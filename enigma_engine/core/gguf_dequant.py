@@ -72,24 +72,39 @@ def parse_gguf_tensors(
 
     # Read tensor info entries
     tensor_infos = []
-    for _ in range(header['tensor_count']):
-        # Read tensor name
-        name_len = struct.unpack('<Q', f.read(8))[0]
-        name = f.read(name_len).decode('utf-8', errors='replace')
+    tensor_count = header['tensor_count']
+    if tensor_count < 0 or tensor_count > 100_000:
+        logger.error("Invalid GGUF tensor_count: %s", tensor_count)
+        return {}
+    for _ in range(tensor_count):
+        try:
+            # Read tensor name
+            name_len = struct.unpack('<Q', f.read(8))[0]
+            if name_len > 1_000_000:
+                logger.error("GGUF tensor name_len %d exceeds 1MB limit", name_len)
+                return {}
+            name = f.read(name_len).decode('utf-8', errors='replace')
 
-        # Read number of dimensions
-        n_dims = struct.unpack('<I', f.read(4))[0]
+            # Read number of dimensions
+            n_dims = struct.unpack('<I', f.read(4))[0]
+            if n_dims > 16:
+                logger.error("GGUF tensor n_dims %d exceeds limit of 16", n_dims)
+                return {}
 
-        # Read dimensions
-        dims = []
-        for _ in range(n_dims):
-            dims.append(struct.unpack('<Q', f.read(8))[0])
+            # Read dimensions
+            dims = []
+            for _ in range(n_dims):
+                dims.append(struct.unpack('<Q', f.read(8))[0])
 
-        # Read tensor type
-        tensor_type = struct.unpack('<I', f.read(4))[0]
+            # Read tensor type
+            tensor_type = struct.unpack('<I', f.read(4))[0]
 
-        # Read offset
-        offset = struct.unpack('<Q', f.read(8))[0]
+            # Read offset
+            offset = struct.unpack('<Q', f.read(8))[0]
+        except struct.error as exc:
+            logger.error("Corrupt GGUF tensor info at entry %d: %s",
+                         len(tensor_infos), exc)
+            break
 
         tensor_infos.append({
             'name': name,
@@ -106,6 +121,12 @@ def parse_gguf_tensors(
 
     tensor_data_start = f.tell()
 
+    # Get file size for offset validation (S197)
+    _saved_pos = f.tell()
+    f.seek(0, 2)  # seek to end
+    _file_size = f.tell()
+    f.seek(_saved_pos)
+
     # Read tensor data
     for info in tensor_infos:
         name = info['name']
@@ -114,12 +135,36 @@ def parse_gguf_tensors(
         offset = info['offset']
 
         # Seek to tensor data
-        f.seek(tensor_data_start + offset)
+        abs_offset = tensor_data_start + offset
+        if abs_offset >= _file_size:
+            logger.warning(
+                "Tensor '%s' offset %d exceeds file size %d — skipping",
+                name, abs_offset, _file_size,
+            )
+            continue
+        f.seek(abs_offset)
 
-        # Calculate tensor size
+        # Calculate tensor size with overflow guard
         n_elements = 1
+        _MAX_ELEMENTS = 2**32  # ~4 billion elements, ~16 GB at fp32
         for dim in dims:
+            if dim <= 0 or dim > _MAX_ELEMENTS:
+                logger.warning(
+                    "Tensor '%s' has invalid dimension %d — skipping",
+                    name, dim,
+                )
+                n_elements = 0
+                break
             n_elements *= dim
+            if n_elements > _MAX_ELEMENTS:
+                logger.warning(
+                    "Tensor '%s' total elements %d exceeds safety "
+                    "limit — skipping", name, n_elements,
+                )
+                n_elements = 0
+                break
+        if n_elements == 0:
+            continue
 
         # Read and convert based on type
         if tensor_type == GGML_TYPE_F32:
@@ -140,6 +185,11 @@ def parse_gguf_tensors(
                 n_blocks = (n_elements + block_size - 1) // block_size
                 n_bytes = n_blocks * bytes_per_block
                 raw_data = f.read(n_bytes)
+                if len(raw_data) < n_bytes:
+                    logger.warning(
+                        "Truncated Q4_0 tensor '%s': expected %d bytes, "
+                        "got %d", name, n_bytes, len(raw_data))
+                    continue
                 tensor = dequantize_q4_0(raw_data, tuple(dims))
             else:
                 logger.warning(f"Skipping quantized tensor (no dequantize): {name}")
@@ -152,6 +202,11 @@ def parse_gguf_tensors(
                 n_blocks = (n_elements + block_size - 1) // block_size
                 n_bytes = n_blocks * bytes_per_block
                 raw_data = f.read(n_bytes)
+                if len(raw_data) < n_bytes:
+                    logger.warning(
+                        "Truncated Q8_0 tensor '%s': expected %d bytes, "
+                        "got %d", name, n_bytes, len(raw_data))
+                    continue
                 tensor = dequantize_q8_0(raw_data, tuple(dims))
             else:
                 logger.warning(f"Skipping quantized tensor (no dequantize): {name}")
@@ -292,7 +347,7 @@ def dequantize_q4_0(data: bytes, shape: tuple) -> 'torch.Tensor':
 
         # Unpack 4-bit values (2 per byte)
         for j in range(16):
-            byte_val = packed[j]
+            byte_val = int(packed[j])
             low = (byte_val & 0xF) - 8  # Signed 4-bit (-8 to 7)
             high = ((byte_val >> 4) & 0xF) - 8
 

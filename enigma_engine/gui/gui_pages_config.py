@@ -12,11 +12,11 @@ import logging
 import customtkinter as ctk
 
 from enigma_engine.gui.widgets import (
-    C_ACCENT, C_ACCENT_DIM, C_ACCENT_MUTED, C_BG, C_BORDER,
+    C_ACCENT_DIM, C_BG, C_BORDER,
     C_SURFACE, C_TEXT, C_TEXT_BRIGHT, C_TEXT_DIM,
     FONT_SECTION, FONT_SMALL, FONT_TINY,
     HUDFrame, SectionLabel, SelectableLabel, Tooltip,
-    themed_dropdown, themed_entry, themed_scroll,
+    themed_button, themed_dropdown, themed_entry, themed_scroll,
 )
 from enigma_engine.gui.scanners import (
     CONFIG_DESCRIPTIONS, CONFIG_DISPLAY_NAMES, CONFIG_LIMITS,
@@ -161,17 +161,16 @@ class ConfigPageMixin:
         name_btns = ctk.CTkFrame(
             names_inner, fg_color="transparent")
         name_btns.pack(fill="x", pady=(6, 0))
-        ctk.CTkButton(
-            name_btns, text="SAVE NAMES", width=120, height=30,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_ACCENT_DIM, hover_color=C_ACCENT_MUTED,
-            text_color=C_ACCENT, command=self._save_display_names
+        themed_button(
+            name_btns, "SAVE NAMES", style="action",
+            width=120, height=30,
+            font=FONT_SMALL,
+            command=self._save_display_names
         ).pack(side="left", padx=(0, 4))
-        ctk.CTkButton(
-            name_btns, text="RESET", width=80, height=30,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_BORDER,
-            text_color=C_TEXT_DIM,
+        themed_button(
+            name_btns, "RESET", style="secondary",
+            width=80, height=30,
+            font=FONT_SMALL,
             command=self._reset_display_names
         ).pack(side="left")
 
@@ -257,11 +256,10 @@ class ConfigPageMixin:
             font=FONT_TINY, text_color=C_ACCENT_DIM, anchor="w"
         ).grid(row=0, column=2, sticky="w", padx=(8, 0))
 
-        ctk.CTkButton(
-            font_inner, text="APPLY", width=90, height=30,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_ACCENT_DIM, hover_color=C_ACCENT_MUTED,
-            text_color=C_ACCENT,
+        themed_button(
+            font_inner, "APPLY", style="action",
+            width=90, height=30,
+            font=FONT_SMALL,
             command=self._apply_font_size
         ).pack(anchor="w", pady=(6, 0))
         Tooltip(self._font_size_entry,
@@ -337,7 +335,10 @@ class ConfigPageMixin:
         ).grid(row=0, column=0, sticky="w", padx=(0, 4))
 
         # Load current history cap from cached settings
-        _hist_cap = int(_cached_settings.get("history_cap", 500))
+        try:
+            _hist_cap = int(_cached_settings.get("history_cap", 500))
+        except (ValueError, TypeError):
+            _hist_cap = 500
 
         self._history_cap_var = ctk.StringVar(value=str(_hist_cap))
         hist_entry = themed_entry(
@@ -542,11 +543,10 @@ class ConfigPageMixin:
                 "the AI requests. When disabled, file operations are\n"
                 "auto-approved.")
 
-        ctk.CTkButton(
-            perf_inner, text="APPLY GAMING MODE", width=180, height=30,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_ACCENT_DIM, hover_color=C_ACCENT_MUTED,
-            text_color=C_ACCENT,
+        themed_button(
+            perf_inner, "APPLY GAMING MODE", style="action",
+            width=180, height=30,
+            font=FONT_SMALL,
             command=self._apply_gaming_mode_preset
         ).pack(anchor="w", pady=(8, 0))
         ctk.CTkLabel(
@@ -627,11 +627,10 @@ class ConfigPageMixin:
             entry.insert(0, str(default))
             self.path_entries[key] = entry
 
-            ctk.CTkButton(
-                path_row, text="...", width=36, height=30,
-                font=FONT_SMALL, corner_radius=2,
-                fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
-                text_color=C_TEXT_DIM,
+            themed_button(
+                path_row, "...", style="secondary",
+                width=36, height=30,
+                font=FONT_SMALL,
                 command=lambda k=key: self._browse_path(k)
             ).grid(row=0, column=2)
 
@@ -639,18 +638,18 @@ class ConfigPageMixin:
             paths_inner, fg_color="transparent")
         path_btns.pack(fill="x", pady=(6, 0))
 
-        ctk.CTkButton(
-            path_btns, text="SAVE PATHS", width=120, height=30,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_ACCENT_DIM, hover_color=C_ACCENT_MUTED,
-            text_color=C_ACCENT, command=self._save_paths
+        themed_button(
+            path_btns, "SAVE PATHS", style="action",
+            width=120, height=30,
+            font=FONT_SMALL,
+            command=self._save_paths
         ).pack(side="left", padx=(0, 4))
 
-        ctk.CTkButton(
-            path_btns, text="RESET", width=80, height=30,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_BORDER,
-            text_color=C_TEXT_DIM, command=self._reset_paths
+        themed_button(
+            path_btns, "RESET", style="secondary",
+            width=80, height=30,
+            font=FONT_SMALL,
+            command=self._reset_paths
         ).pack(side="left")
 
         # --- Backup / Restore section ---
@@ -675,18 +674,18 @@ class ConfigPageMixin:
             backup_inner, fg_color="transparent")
         backup_btns.pack(fill="x", pady=(2, 0))
 
-        ctk.CTkButton(
-            backup_btns, text="EXPORT BACKUP", width=140, height=30,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_ACCENT_DIM, hover_color=C_ACCENT_MUTED,
-            text_color=C_ACCENT, command=self._export_backup
+        themed_button(
+            backup_btns, "EXPORT BACKUP", style="action",
+            width=140, height=30,
+            font=FONT_SMALL,
+            command=self._export_backup
         ).pack(side="left", padx=(0, 8))
 
-        ctk.CTkButton(
-            backup_btns, text="IMPORT BACKUP", width=140, height=30,
-            font=FONT_SMALL, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_BORDER,
-            text_color=C_TEXT_DIM, command=self._import_backup
+        themed_button(
+            backup_btns, "IMPORT BACKUP", style="secondary",
+            width=140, height=30,
+            font=FONT_SMALL,
+            command=self._import_backup
         ).pack(side="left")
 
         # Inline import confirmation bar (hidden until needed)
@@ -697,20 +696,57 @@ class ConfigPageMixin:
             text="Overwrite settings with backup?",
             font=FONT_TINY, text_color="#f97316", anchor="w"
         ).pack(side="left", padx=(0, 6))
-        ctk.CTkButton(
-            self._import_confirm_bar, text="YES", width=40, height=24,
-            font=FONT_TINY, corner_radius=2,
-            fg_color="#3a2a11", hover_color="#5a3a1a",
-            text_color="#f97316",
+        themed_button(
+            self._import_confirm_bar, "YES", style="warning",
+            width=40, height=24,
+            font=FONT_TINY,
             command=self._confirm_import_backup
         ).pack(side="left", padx=(0, 4))
-        ctk.CTkButton(
-            self._import_confirm_bar, text="NO", width=40, height=24,
-            font=FONT_TINY, corner_radius=2,
-            fg_color=C_SURFACE, hover_color=C_BORDER,
-            text_color=C_TEXT_DIM,
+        themed_button(
+            self._import_confirm_bar, "NO", style="secondary",
+            width=40, height=24,
+            font=FONT_TINY,
             command=self._import_confirm_bar.pack_forget
         ).pack(side="left")
+
+        # S643: Dynamic wraplength — labels adapt to window width
+        _wrap_labels: list = []
+        _wrap_resize_timer = [None]  # mutable container for debounce
+        _wrap_last_w = [0]  # skip no-op reconfigures
+
+        def _collect_wrap(widget):
+            for child in widget.winfo_children():
+                if isinstance(child, ctk.CTkLabel):
+                    try:
+                        wl = child.cget("wraplength")
+                        if wl and int(wl) > 0:
+                            _wrap_labels.append(child)
+                    except Exception:
+                        pass
+                _collect_wrap(child)
+
+        _collect_wrap(scroll)
+
+        def _apply_config_wraplength(w):
+            _wrap_resize_timer[0] = None
+            _wrap_last_w[0] = w
+            for lbl in _wrap_labels:
+                lbl.configure(wraplength=w)
+
+        def _on_config_resize(event):
+            w = event.width - 60
+            if w < 100 or w == _wrap_last_w[0]:
+                return
+            # Debounce: cancel pending, schedule after 100ms
+            if _wrap_resize_timer[0] is not None:
+                try:
+                    self.after_cancel(_wrap_resize_timer[0])
+                except (ValueError, Exception):
+                    pass
+            _wrap_resize_timer[0] = self.after(
+                100, lambda: _apply_config_wraplength(w))
+
+        scroll.bind("<Configure>", _on_config_resize)
 
         # Load saved path overrides into entries
         self._load_path_settings()
@@ -817,6 +853,8 @@ class ConfigPageMixin:
         try:
             val = int(self._history_cap_var.get())
         except (ValueError, TypeError):
+            self.status_bar.set_left(
+                "[!] History cap must be a number (10-10000)")
             return
         val = max(10, min(val, 10000))
         self._history_cap_var.set(str(val))
@@ -1151,20 +1189,24 @@ class ConfigPageMixin:
 
         try:
             data_dir = DATA_DIR
+            project_root = Path(data_dir).parent.resolve()
             with zipfile.ZipFile(src, "r") as zf:
                 for entry in zf.namelist():
                     # Security: reject absolute or traversal paths
                     if entry.startswith("/") or ".." in entry:
                         continue
                     target = data_dir / entry
-                    # Directories for notes/ and prompts/
-                    if entry.endswith("/"):
-                        target.mkdir(parents=True, exist_ok=True)
-                        continue
                     # Profiles go to project-level profiles/
                     if entry.startswith("profiles/"):
                         target = (
                             Path(data_dir).parent / entry)
+                    # Final resolve check: must stay under project root
+                    if not target.resolve().is_relative_to(project_root):
+                        continue
+                    # Directories for notes/ and prompts/
+                    if entry.endswith("/"):
+                        target.mkdir(parents=True, exist_ok=True)
+                        continue
                     target.parent.mkdir(parents=True, exist_ok=True)
                     target.write_bytes(zf.read(entry))
 

@@ -74,6 +74,7 @@ def detect_hardware() -> HardwareProfile:
         profile.ram_gb = mem.total / (1024**3)
         profile.available_ram_gb = mem.available / (1024**3)
     except ImportError:
+        logger.warning("psutil not installed — defaulting to 8 GB RAM")
         profile.ram_gb = 8.0  # Default assumption
         profile.available_ram_gb = profile.ram_gb * 0.5
     profile.total_ram_gb = profile.ram_gb
@@ -239,22 +240,36 @@ def estimate_memory_usage(
     """
     Estimate memory usage for a given configuration.
 
+    Reads dim/n_layers from MODEL_PRESETS so estimates stay in
+    sync with actual model definitions.
+
     Returns:
         Dict with estimated memory in GB: model_memory, kv_cache, total
     """
-    # Approximate parameter counts
-    param_counts = {
-        "pi_zero": 0.5e6,
-        "nano": 1e6,
-        "tiny": 5e6,
-        "small": 27e6,
-        "medium": 85e6,
-        "large": 200e6,
-        "xl": 600e6,
-        "xxl": 1.5e9,
-    }
+    # Pull real config from presets when available
+    dim: int = 512
+    n_layers: int = 12
+    vocab_size: int = 32000
+    try:
+        from enigma_engine.core.model_presets import MODEL_PRESETS
+        cfg = MODEL_PRESETS.get(model_size)
+        if cfg is not None:
+            dim = cfg.dim
+            n_layers = cfg.n_layers
+            vocab_size = cfg.vocab_size
+    except ImportError:
+        pass
 
-    params = param_counts.get(model_size, 27e6)
+    # Estimate parameter count from architecture:
+    # embeddings + output + per-layer (QKV + out + FFN gate/up/down)
+    ffn_dim = int(dim * 8 / 3)  # SwiGLU default
+    per_layer = (
+        3 * dim * dim      # Q, K, V projections
+        + dim * dim         # output projection
+        + 3 * dim * ffn_dim  # gate + up + down
+    )
+    params = 2 * vocab_size * dim + n_layers * per_layer
+
     bytes_per_param = 2 if use_half else 4
 
     # Model weight memory
@@ -262,21 +277,6 @@ def estimate_memory_usage(
 
     # KV-cache estimate (rough)
     # For transformer: 2 * layers * 2 * hidden_dim * seq_len * batch_size
-    hidden_dims = {
-        "pi_zero": 128,
-        "nano": 256,
-        "tiny": 384,
-        "small": 512,
-        "medium": 768,
-        "large": 1024,
-        "xl": 1536,
-        "xxl": 2048,
-    }
-    layers = {"pi_zero": 4, "nano": 6, "tiny": 8, "small": 12, "medium": 16, "large": 24, "xl": 32, "xxl": 48}
-
-    dim = hidden_dims.get(model_size, 512)
-    n_layers = layers.get(model_size, 12)
-
     kv_bytes = 2 * n_layers * 2 * dim * seq_len * batch_size * bytes_per_param
     kv_gb = kv_bytes / (1024**3)
 

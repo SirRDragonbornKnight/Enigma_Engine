@@ -19,8 +19,7 @@ logger = logging.getLogger(__name__)
 # Shell metacharacters that must never appear in command arguments.
 # These could be used for injection if an AI-generated argument
 # reaches a subprocess or shell eval.
-SHELL_METACHARACTERS = frozenset(";|&$`\\!{}")
-
+SHELL_METACHARACTERS = frozenset(";|&`{}*?<>()[]")
 
 def sanitize_args(args: list[str]) -> list[str]:
     """Strip shell metacharacters from command arguments.
@@ -36,6 +35,12 @@ def sanitize_args(args: list[str]) -> list[str]:
     for arg in args:
         stripped = "".join(ch for ch in arg if ch not in SHELL_METACHARACTERS)
         if stripped != arg:
+            if not stripped:
+                logger.warning(
+                    "Rejected command arg: %r (entirely shell metacharacters)",
+                    arg,
+                )
+                continue
             logger.warning(
                 "Sanitized command arg: %r → %r (removed shell metacharacters)",
                 arg, stripped,

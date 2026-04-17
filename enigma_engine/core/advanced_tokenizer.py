@@ -6,6 +6,8 @@ This provides the AdvancedBPETokenizer class expected by inference.py
 """
 import json
 import logging
+import re
+import threading
 from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Optional, Union
@@ -61,6 +63,7 @@ class AdvancedBPETokenizer:
         self.merge_ranks: dict[tuple[str, str], int] = {}
 
         # Cache for encoding (LRU via OrderedDict)
+        self._cache_lock = threading.Lock()
         self.cache: OrderedDict[str, list[str]] = OrderedDict()
 
         if vocab_file and Path(vocab_file).exists():
@@ -90,7 +93,12 @@ class AdvancedBPETokenizer:
         vocab_file = Path(vocab_file)
 
         with open(vocab_file, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+            try:
+                data = json.load(f)
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    f"Corrupt vocabulary file {vocab_file}: {exc}"
+                ) from exc
 
         # Handle different formats
         if 'encoder' in data:
@@ -151,9 +159,10 @@ class AdvancedBPETokenizer:
     def _tokenize_word(self, word: str) -> list[str]:
         """Tokenize a single word using learned BPE merges."""
         # Check cache (LRU: move to end on hit)
-        if word in self.cache:
-            self.cache.move_to_end(word)
-            return list(self.cache[word])
+        with self._cache_lock:
+            if word in self.cache:
+                self.cache.move_to_end(word)
+                return list(self.cache[word])
 
         # Check if whole word is in vocabulary
         if word in self.token_to_id:
@@ -193,10 +202,11 @@ class AdvancedBPETokenizer:
             tokens = new_tokens
 
         # Cache result (LRU eviction)
-        if len(self.cache) > 10000:
-            for _ in range(5000):
-                self.cache.popitem(last=False)
-        self.cache[word] = tokens
+        with self._cache_lock:
+            if len(self.cache) > 10000:
+                for _ in range(5000):
+                    self.cache.popitem(last=False)
+            self.cache[word] = tokens
         return tokens
 
     def encode(self, text: str, add_special_tokens: bool = True) -> list[int]:
@@ -207,17 +217,22 @@ class AdvancedBPETokenizer:
         ids = []
 
         if add_special_tokens:
-            ids.append(self.bos_token_id)
+            if self.bos_token_id in self.id_to_token or \
+                    self.bos_token in self.token_to_id:
+                ids.append(self.bos_token_id)
 
         # If we have merges, use BPE encoding
         if self.merges:
-            import re
-            # Pre-split reasoning tags so they stay as whole tokens
-            for token in self.special_tokens:
-                if len(token) > 1 and token in text:
-                    text = text.replace(token, f" {token} ")
-            # Split into words (keep punctuation separate)
-            pattern = r"'s|'t|'re|'ve|'m|'ll|'d|\w+|[^\s\w]+|\s+"
+            # Build regex with special tokens as alternatives (longest first)
+            # so multi-char tokens like <think> match as whole tokens
+            special_alts = "|".join(
+                re.escape(t)
+                for t in sorted(self.special_tokens, key=len, reverse=True)
+                if len(t) > 1
+            )
+            base_pattern = r"'s|'t|'re|'ve|'m|'ll|'d|\w+|[^\s\w]+|\s+"
+            pattern = (special_alts + "|" + base_pattern
+                       if special_alts else base_pattern)
             words = re.findall(pattern, text)
 
             for word in words:
@@ -252,7 +267,9 @@ class AdvancedBPETokenizer:
                     ids.append(self.unk_token_id)
 
         if add_special_tokens:
-            ids.append(self.eos_token_id)
+            if self.eos_token_id in self.id_to_token or \
+                    self.eos_token in self.token_to_id:
+                ids.append(self.eos_token_id)
 
         return ids
 

@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Union
 
 if TYPE_CHECKING:
-    from enigma_engine.core.model import Forge
+    from enigma_engine.core.model import Enigma  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +100,10 @@ def extract_onnx_weights(onnx_model_path: Union[str, Path]) -> dict[str, torch.T
         tensor = torch.from_numpy(np_array)
 
         # Store with parameter name
+        if initializer.name in weights:
+            logger.warning(
+                "Duplicate ONNX initializer %r — overwriting previous",
+                initializer.name)
         weights[initializer.name] = tensor
         logger.debug(f"Extracted weight: {initializer.name}, shape: {tensor.shape}")
 
@@ -169,7 +173,7 @@ def load_onnx_model(
     onnx_model_path: Union[str, Path],
     config: Optional[Any] = None,
     **kwargs
-) -> 'Forge':
+) -> 'Enigma':
     """
     Load an ONNX model and convert it to Forge format.
 
@@ -201,7 +205,7 @@ def load_onnx_model(
         )
 
     # Import here to avoid circular imports
-    from .model import Forge, ForgeConfig
+    from .model import Enigma, ForgeConfig
     from .weight_mapping import WeightMapper
 
     onnx_model_path = Path(onnx_model_path)
@@ -243,7 +247,7 @@ def load_onnx_model(
 
     # Create Forge model
     logger.info("Creating Forge model...")
-    forge_model = Forge(config=config)
+    forge_model = Enigma(config=config)
 
     # Map ONNX weights to Forge format
     logger.info("Mapping ONNX weights to Forge format...")
@@ -281,7 +285,7 @@ def load_onnx_model(
     return forge_model
 
 
-def validate_loaded_model(model: 'Forge') -> None:
+def validate_loaded_model(model: 'Enigma') -> None:
     """
     Validate that a Forge model works correctly after loading weights.
 
@@ -372,6 +376,7 @@ def validate_onnx_model(onnx_model_path: Union[str, Path]) -> dict[str, Any]:
         }
 
     except Exception as e:
+        logger.warning("ONNX model validation failed: %s", e)
         return {
             'valid': False,
             'error': str(e)

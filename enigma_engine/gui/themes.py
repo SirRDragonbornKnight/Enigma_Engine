@@ -52,8 +52,15 @@ class Theme:
     cyan: str            # CMD highlights
     green: str           # success / running
     green_dim: str
+    green_hover: str     # green button hover
     red: str             # error / stopped
+    red_dim: str         # destructive button background
+    red_hover: str       # red button hover
     orange: str          # warnings / system messages
+    orange_dim: str      # warning button background
+    orange_hover: str    # warning button hover
+    cyan_dim: str        # tool button background
+    cyan_hover: str      # tool button hover
 
     # Text
     text: str            # normal text
@@ -82,8 +89,10 @@ THEMES: dict[str, Theme] = {
         accent="#8B95A5", accent_dim="#2a2a2a", accent_muted="#3d3d3d",
         purple="#a855f7", purple_dim="#2a1a3e", purple_muted="#3d2a55",
         cyan="#22d3ee",
-        green="#22c55e", green_dim="#0e3a1e",
-        red="#ef4444", orange="#f97316",
+        green="#22c55e", green_dim="#0e3a1e", green_hover="#1a5a2a",
+        red="#ef4444", red_dim="#3b1111", red_hover="#5a1a1a",
+        orange="#f97316", orange_dim="#3a2a11", orange_hover="#5a3a1a",
+        cyan_dim="#0e2a3a", cyan_hover="#1a3a4e",
         text="#b0b0b0", text_dim="#555555", text_bright="#e8e8e8",
         border="#1f1f1f", border_accent="#2e2e2e",
     ),
@@ -93,8 +102,10 @@ THEMES: dict[str, Theme] = {
         accent="#7b8fbb", accent_dim="#1e2744", accent_muted="#2e3a5a",
         purple="#9b6dff", purple_dim="#261640", purple_muted="#3a2460",
         cyan="#38bdf8",
-        green="#34d399", green_dim="#0c2e1c",
-        red="#f87171", orange="#fb923c",
+        green="#34d399", green_dim="#0c2e1c", green_hover="#165a30",
+        red="#f87171", red_dim="#3a1118", red_hover="#5a1a22",
+        orange="#fb923c", orange_dim="#3a2a14", orange_hover="#5a3a1e",
+        cyan_dim="#0e2438", cyan_hover="#1a3448",
         text="#b4bed0", text_dim="#4a5578", text_bright="#e2e8f0",
         border="#1a2340", border_accent="#283654",
     ),
@@ -104,8 +115,10 @@ THEMES: dict[str, Theme] = {
         accent="#a0a0a0", accent_dim="#333333", accent_muted="#444444",
         purple="#bb86fc", purple_dim="#2d1b4e", purple_muted="#3e2a62",
         cyan="#03dac6",
-        green="#4caf50", green_dim="#1b3a1d",
-        red="#cf6679", orange="#ffab40",
+        green="#4caf50", green_dim="#1b3a1d", green_hover="#245a26",
+        red="#cf6679", red_dim="#3a1420", red_hover="#5a1e2e",
+        orange="#ffab40", orange_dim="#3a2e14", orange_hover="#5a4020",
+        cyan_dim="#0e2e2a", cyan_hover="#1a3e38",
         text="#c0c0c0", text_dim="#666666", text_bright="#f0f0f0",
         border="#2a2a2a", border_accent="#3a3a3a",
     ),
@@ -115,8 +128,10 @@ THEMES: dict[str, Theme] = {
         accent="#839496", accent_dim="#094050", accent_muted="#0e5263",
         purple="#d33682", purple_dim="#2a0e1e", purple_muted="#3d1530",
         cyan="#2aa198",
-        green="#859900", green_dim="#1a2000",
-        red="#dc322f", orange="#cb4b16",
+        green="#859900", green_dim="#1a2000", green_hover="#2a3a10",
+        red="#dc322f", red_dim="#2a0e0e", red_hover="#3e1616",
+        orange="#cb4b16", orange_dim="#2a1e0a", orange_hover="#3e2e14",
+        cyan_dim="#0a2e2c", cyan_hover="#143e3a",
         text="#93a1a1", text_dim="#586e75", text_bright="#eee8d5",
         border="#094050", border_accent="#0e5263",
     ),

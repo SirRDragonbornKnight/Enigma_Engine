@@ -292,7 +292,7 @@ class AudioEncoder(nn.Module):
                 dim=config.dim,
                 n_heads=config.n_heads,
                 dropout=config.dropout,
-                use_conformer=getattr(config, "use_conformer", False),
+                use_conformer=config.use_conformer,
             )
             for _ in range(config.n_layers)
         ])
@@ -379,6 +379,8 @@ def mel_filterbank(
     Returns:
         Mel filterbank [n_mels, n_fft // 2 + 1].
     """
+    if sr <= 0:
+        raise ValueError(f"Sample rate must be positive, got {sr}")
     n_freqs = n_fft // 2 + 1
     # Mel-spaced center frequencies
     mel_low = _hz_to_mel(0.0)
@@ -518,9 +520,18 @@ def _load_wav(path: Path, target_sr: int) -> torch.Tensor:
         sample_width = wf.getsampwidth()
         sr = wf.getframerate()
         n_frames = wf.getnframes()
+        if n_channels <= 0 or n_frames <= 0:
+            raise ValueError(
+                f"Invalid WAV: {n_frames} frames, {n_channels} channels")
         raw = wf.readframes(n_frames)
 
     # Decode raw bytes to float32
+    expected_bytes = n_frames * n_channels * sample_width
+    if len(raw) < expected_bytes:
+        raise ValueError(
+            f"Truncated WAV: expected {expected_bytes} bytes, "
+            f"got {len(raw)}"
+        )
     if sample_width == 2:
         fmt = f"<{n_frames * n_channels}h"
         samples = struct.unpack(fmt, raw)
@@ -529,6 +540,15 @@ def _load_wav(path: Path, target_sr: int) -> torch.Tensor:
         fmt = f"<{n_frames * n_channels}i"
         samples = struct.unpack(fmt, raw)
         waveform = torch.tensor(samples, dtype=torch.float32) / 2147483648.0
+    elif sample_width == 3:
+        # 24-bit WAV: unpack 3-byte little-endian signed integers
+        n_samples = n_frames * n_channels
+        samples = []
+        for i in range(n_samples):
+            b = raw[i * 3: i * 3 + 3]
+            val = int.from_bytes(b, byteorder="little", signed=True)
+            samples.append(val)
+        waveform = torch.tensor(samples, dtype=torch.float32) / 8388608.0
     elif sample_width == 1:
         samples = [b - 128 for b in raw]
         waveform = torch.tensor(samples, dtype=torch.float32) / 128.0
@@ -551,7 +571,7 @@ def _resample_linear(waveform: torch.Tensor, orig_sr: int, target_sr: int) -> to
     ratio = target_sr / orig_sr
     new_len = int(len(waveform) * ratio)
     if new_len == 0:
-        return torch.zeros(1)
+        return torch.zeros_like(waveform[:1])
     return F.interpolate(
         waveform.unsqueeze(0).unsqueeze(0),
         size=new_len,
