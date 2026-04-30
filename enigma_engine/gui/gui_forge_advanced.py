@@ -477,7 +477,7 @@ class ForgeAdvancedMixin:
                             "use_gradient_checkpointing"
                         ]),
                     use_sequence_packing=True,
-                    ce_chunk_size=4096,
+                    ce_chunk_size=forge_params["ce_chunk_size"],
                     use_compile=True,
                     rolling_best_k=(
                         forge_params["rolling_best_k"]),
@@ -536,6 +536,7 @@ class ForgeAdvancedMixin:
                 trainer_obj.on_epoch_complete = (
                     on_epoch)
 
+                self._active_trainer = trainer_obj
                 state = trainer_obj.train(combined)
 
                 # Save trained STUDENT
@@ -595,6 +596,7 @@ class ForgeAdvancedMixin:
                     f"\n[!] Dialogue training failed: {exc}")
                 self._log(tb)
             finally:
+                self._active_trainer = None
                 self.training_active = False
                 self._reset_forge_progress()
                 self.after(
@@ -602,7 +604,7 @@ class ForgeAdvancedMixin:
                         state="normal", text="TRAIN"))
                 self.after(
                     0, lambda: self.stop_train_btn.configure(
-                        state="disabled"))
+                        state="disabled", text="STOP"))
                 self.after(0, lambda: self.status_bar.set_left(
                     "\u26a1 READY"))
 
@@ -712,7 +714,15 @@ class ForgeAdvancedMixin:
                     for p in student.parameters())
                 self._log(f"Params  : {s_params:,}")
 
-                tokenizer = get_tokenizer("auto")
+                _bpe_path = MODELS_DIR / "tokenizer.json"
+                if _bpe_path.exists():
+                    try:
+                        from enigma_engine.core.bpe_tokenizer import BPETokenizer
+                        tokenizer = BPETokenizer(_bpe_path)
+                    except Exception:
+                        tokenizer = get_tokenizer("auto")
+                else:
+                    tokenizer = get_tokenizer("auto")
 
                 # Evolutionary loop: generate candidates,
                 # keep best, train
@@ -812,7 +822,7 @@ class ForgeAdvancedMixin:
                                 "use_gradient_checkpointing"
                             ]),
                         use_sequence_packing=True,
-                        ce_chunk_size=4096,
+                        ce_chunk_size=forge_params["ce_chunk_size"],
                         use_compile=True,
                         rolling_best_k=(
                             forge_params[
@@ -876,6 +886,7 @@ class ForgeAdvancedMixin:
                     trainer_obj.on_epoch_complete = (
                         on_epoch)
 
+                    self._active_trainer = trainer_obj
                     trainer_obj.train(combined)
 
                 # Save final model
@@ -929,6 +940,7 @@ class ForgeAdvancedMixin:
                     f"failed: {exc}")
                 self._log(tb)
             finally:
+                self._active_trainer = None
                 self.training_active = False
                 self._reset_forge_progress()
                 self.after(
@@ -936,7 +948,7 @@ class ForgeAdvancedMixin:
                         state="normal", text="TRAIN"))
                 self.after(
                     0, lambda: self.stop_train_btn.configure(
-                        state="disabled"))
+                        state="disabled", text="STOP"))
                 self.after(0, lambda:
                     self.status_bar.set_left(
                         "\u26a1 READY"))

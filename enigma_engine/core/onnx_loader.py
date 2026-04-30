@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Union
 
 if TYPE_CHECKING:
-    from enigma_engine.core.model import Enigma  # noqa: F401
+    from enigma_engine.core.model import Enigma
 
 logger = logging.getLogger(__name__)
 

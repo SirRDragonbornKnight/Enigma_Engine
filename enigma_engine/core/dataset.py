@@ -26,8 +26,19 @@ MAX_FILE_SIZE: int = 100_000_000_000  # 100 GB
 # Files above this threshold are read in chunks instead of all at once.
 # This limits peak memory (avoids 2x file-size during clean_text) and
 # yields the GIL between chunks so the GUI event loop stays responsive.
-_STREAM_THRESHOLD: int = 500_000_000  # 500 MB
-_CHUNK_READ_CHARS: int = 200_000_000  # ~200 MB per read
+# Values scaled to RAM via InferenceMemoryBudget (S806).
+def _get_stream_constants() -> tuple[int, int]:
+    """Return (stream_threshold, chunk_chars) scaled to available RAM."""
+    try:
+        from .hardware_detection import InferenceMemoryBudget
+        budget = InferenceMemoryBudget()
+        return budget.dataset_stream_threshold, budget.dataset_chunk_chars
+    except Exception:
+        return 500_000_000, 200_000_000  # safe fallback
+
+_STREAM_THRESHOLD: int
+_CHUNK_READ_CHARS: int
+_STREAM_THRESHOLD, _CHUNK_READ_CHARS = _get_stream_constants()
 
 # =========================================================================
 # Known datasets — registry of downloadable pre-training corpora

@@ -19,6 +19,7 @@ import hashlib
 import json
 import logging
 import math
+import os
 import random
 import re
 import threading
@@ -35,6 +36,28 @@ from torch.optim.lr_scheduler import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _effective_warmup(warmup_steps: int, total_steps: int) -> int:
+    """Cap warmup at 20% of total steps to prevent short-run waste.
+
+    Sched-2 fix: With the default ``warmup_steps=100`` a 100-step SFT/DPO
+    run was 100% warmup (no decay phase at all); a 200-step run was 50%.
+    This cap clamps warmup to ``total_steps // 5`` so the schedule always
+    has at least 80% of steps in the decay phase. Long runs are
+    unaffected (cap is inactive when ``warmup_steps <= total_steps // 5``).
+
+    Args:
+        warmup_steps: Configured warmup steps from ``TrainingConfig``.
+        total_steps: Total training steps for this run.
+
+    Returns:
+        Effective warmup count, always >= 1.
+    """
+    if total_steps <= 0:
+        return max(1, warmup_steps)
+    cap = max(1, total_steps // 5)
+    return max(1, min(warmup_steps, cap))
 
 
 # =============================================================================
@@ -282,17 +305,37 @@ class Muon(torch.optim.Optimizer):
         return loss
 
 
-def set_training_seed(seed: int = 42) -> None:
+def set_training_seed(seed: int = 42, deterministic: bool = False) -> None:
     """Set random seed for reproducible training.
 
     Seeds Python random, PyTorch CPU, and PyTorch CUDA (if available).
     Call before training for deterministic runs.
+
+    When ``deterministic=True`` (DET-2 opt-in), additionally pins GPU kernel
+    selection by setting ``CUBLAS_WORKSPACE_CONFIG=:4096:8`` and calling
+    ``torch.use_deterministic_algorithms(True, warn_only=True)``. This is
+    required for bitwise reproducibility on CUDA — same seed alone leaves
+    cuBLAS/cuDNN free to pick different kernels per launch. Costs ~5-15%
+    throughput per the PyTorch reproducibility docs. ``warn_only=True``
+    keeps non-deterministic ops (e.g. ``index_add_`` used by MoE scatter)
+    from crashing the run; they emit a UserWarning instead.
     """
     random.seed(seed)
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
-    logger.info("Random seed set to %d", seed)
+    if deterministic:
+        # CUBLAS_WORKSPACE_CONFIG must be set before the first cuBLAS call;
+        # setting here covers the common pattern of seed-then-train.
+        os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+        torch.use_deterministic_algorithms(True, warn_only=True)
+        logger.info(
+            "Random seed set to %d (deterministic=True; "
+            "CUBLAS_WORKSPACE_CONFIG=:4096:8, ~5-15%% throughput cost)",
+            seed,
+        )
+    else:
+        logger.info("Random seed set to %d", seed)
 
 
 def dataset_fingerprint(data: str) -> str:
@@ -341,6 +384,7 @@ class TrainingConfig:
     warmup_steps: int = 100
     gradient_clip: float = 1.0
     save_every: int = 0
+    save_every_steps: int = 0  # Save checkpoint every N steps (0 = disabled)
     checkpoint_dir: str = "models/checkpoints"
     eval_every: int = 0
     log_every: int = 10
@@ -455,6 +499,12 @@ class TrainingConfig:
     # None = don't set seed (non-deterministic). 42 = common default.
     seed: int | None = None
 
+    # DET-2: full bitwise GPU reproducibility. When True (and seed is set),
+    # set_training_seed() also flips on torch.use_deterministic_algorithms
+    # and pins CUBLAS_WORKSPACE_CONFIG so cuBLAS/cuDNN kernel selection is
+    # stable across runs. Costs ~5-15% throughput; off by default.
+    deterministic: bool = False
+
     # Golden prompt regression eval — JSON file with prompt+expected pairs.
     # Run before and after training to detect regressions.
     # Empty string = disabled.
@@ -488,16 +538,29 @@ class TrainingConfig:
     # before training to find the steepest-descent point automatically.
     auto_lr: bool = False
 
+    # Training memory budget override (GB of system RAM to use).
+    # 0 = auto-detect from hardware.  Set explicitly on constrained
+    # systems (Raspberry Pi, shared servers) or to leave headroom
+    # for other applications.
+    training_memory_gb: float = 0.0
+
     def validate(self) -> None:
         """Raise *ValueError* if any field is nonsensical."""
         if self.epochs < 1:
             raise ValueError(f"epochs must be >= 1, got {self.epochs}")
         if self.batch_size < 0:
             raise ValueError(f"batch_size must be >= 0 (0 = auto), got {self.batch_size}")
+        if self.training_memory_gb < 0:
+            raise ValueError(
+                f"training_memory_gb must be >= 0 (0 = auto), got {self.training_memory_gb}")
         if self.learning_rate <= 0:
             raise ValueError(f"learning_rate must be > 0, got {self.learning_rate}")
         if self.gradient_clip < 0:
             raise ValueError(f"gradient_clip must be >= 0, got {self.gradient_clip}")
+        if self.save_every_steps < 0:
+            raise ValueError(
+                f"save_every_steps must be >= 0 (0 = disabled), "
+                f"got {self.save_every_steps}")
         if self.max_grad_accumulation < 1:
             raise ValueError(
                 f"max_grad_accumulation must be >= 1, got {self.max_grad_accumulation}"
@@ -568,10 +631,12 @@ class TrainingConfig:
             "warmup_steps": self.warmup_steps,
             "gradient_clip": self.gradient_clip,
             "save_every": self.save_every,
+            "save_every_steps": self.save_every_steps,
             "checkpoint_dir": self.checkpoint_dir,
             "eval_every": self.eval_every,
             "log_every": self.log_every,
             "use_amp": self.use_amp,
+            "amp_dtype": self.amp_dtype,
             "max_grad_accumulation": self.max_grad_accumulation,
             "use_gradient_checkpointing": self.use_gradient_checkpointing,
             "adam_beta1": self.adam_beta1,
@@ -581,6 +646,8 @@ class TrainingConfig:
             "early_stopping_patience": self.early_stopping_patience,
             "max_loss": self.max_loss,
             "max_training_seconds": self.max_training_seconds,
+            "run_evaluation": self.run_evaluation,
+            "eval_test_prompts": self.eval_test_prompts,
             "label_smoothing": self.label_smoothing,
             "val_split": self.val_split,
             "ema_decay": self.ema_decay,
@@ -599,16 +666,22 @@ class TrainingConfig:
             "reasoning_loss_weight": self.reasoning_loss_weight,
             "general_mix_ratio": self.general_mix_ratio,
             "general_data": self.general_data,
+            "z_loss_weight": self.z_loss_weight,
             "seed": self.seed,
+            "deterministic": self.deterministic,
+            "golden_eval_path": self.golden_eval_path,
             "optimizer": self.optimizer,
             "ademamix_beta3": self.ademamix_beta3,
             "ademamix_alpha": self.ademamix_alpha,
             "ademamix_alpha_initial": self.ademamix_alpha_initial,
             "ademamix_alpha_warmup": self.ademamix_alpha_warmup,
             "ce_chunk_size": self.ce_chunk_size,
+            "use_lisa": self.use_lisa,
+            "lisa_activated_layers": self.lisa_activated_layers,
             "curriculum": self.curriculum,
             "llrd_decay": self.llrd_decay,
             "auto_lr": self.auto_lr,
+            "training_memory_gb": self.training_memory_gb,
         }
 
 
@@ -857,7 +930,13 @@ def build_packing_masks(
             mask[start:end, start:end] = causal[:span, :span]
         masks.append(mask)
 
-    return torch.stack(masks).unsqueeze(1)  # (B, 1, T, T)
+    # Clamp -inf to a large finite negative so padded positions (where all
+    # attention keys are blocked) produce softmax([-1e9,...]) ≈ 0 instead of
+    # softmax([-inf,...]) = NaN.  This NaN propagates through the residual
+    # stream under torch.compile's compiled kernels and kills training.
+    # Valid causal masking is unaffected: -1e9 is effectively zero after exp().
+    stacked = torch.stack(masks).unsqueeze(1)  # (B, 1, T, T)
+    return stacked.clamp(min=-1e9)
 
 
 # =============================================================================
@@ -866,7 +945,7 @@ def build_packing_masks(
 
 def minhash_dedup(
     texts: list[str],
-    threshold: float = 0.8,
+    threshold: float = 0.75,
     num_hashes: int = 128,
     shingle_size: int = 3,
 ) -> list[str]:
@@ -883,7 +962,9 @@ def minhash_dedup(
     Args:
         texts: Input text list.
         threshold: Jaccard similarity threshold for near-duplicate
-            detection.  0.8 = 80% shingle overlap.
+            detection.  Default 0.75 matches the FineWeb / DCLM / SmolLM3
+            industry standard (FineWeb tech report arxiv:2406.17557 §3.4:
+            "targeting documents that are at least 75% similar").
         num_hashes: Number of MinHash permutations (more = more accurate,
             slower).  128 is a good tradeoff.
         shingle_size: Character n-gram size for shingling.
@@ -1195,6 +1276,14 @@ class Trainer:
 
         self.config.validate()  # fail-fast on bad config
 
+        # Build memory budget — scales all RAM/VRAM-sensitive constants
+        # to the actual hardware.  Explicit override via config field.
+        from .hardware_detection import TrainingMemoryBudget
+        self._budget = TrainingMemoryBudget(
+            ram_gb=self.config.training_memory_gb,  # 0 = auto
+            vram_gb=0.0,  # always auto-detect VRAM from device
+        )
+
         # Callbacks for progress updates
         self.on_progress: Callable[[int, str], None] | None = None
         self.on_loss: Callable[[float], None] | None = None
@@ -1298,7 +1387,12 @@ class Trainer:
             for name, param in self.model.named_parameters():
                 if not param.requires_grad:
                     continue
-                if 'bias' in name or 'norm' in name:
+                # Bias, norm, and embedding params should not get weight decay.
+                # Embeddings are already at-scale tokens; decaying them shrinks
+                # the representation magnitude and hurts convergence.
+                # Note: output head is weight-tied to tok_embeddings (same tensor),
+                # so it's only counted once by the optimizer.
+                if 'bias' in name or 'norm' in name or 'embed' in name:
                     no_decay_params.append(param)
                 else:
                     decay_params.append(param)
@@ -1367,7 +1461,8 @@ class Trainer:
         for name, param in self.model.named_parameters():
             if not param.requires_grad:
                 continue
-            is_no_decay = 'bias' in name or 'norm' in name
+            # Bias, norm, and embedding params get no weight decay (see D-8).
+            is_no_decay = 'bias' in name or 'norm' in name or 'embed' in name
 
             # Try to extract layer index from name (e.g. "layers.3.attention.wq.weight")
             layer_idx = None
@@ -1430,11 +1525,17 @@ class Trainer:
         Falls back to 4 on CPU or if the trial fails.
 
         Returns:
-            Power-of-2 batch size clamped to [1, 64].
+            Power-of-2 batch size clamped to [1, batch_size_cap].
         """
+        from .hardware_detection import TrainingMemoryBudget
+        budget = TrainingMemoryBudget(
+            ram_gb=self.config.training_memory_gb)
+
         if not torch.cuda.is_available() or self.device.type != "cuda":
-            logger.info("Auto batch size: CPU detected, using batch_size=4")
-            return 4
+            cpu_bs = budget.cpu_batch_size
+            logger.info("Auto batch size: CPU detected, using batch_size=%d",
+                        cpu_bs)
+            return cpu_bs
 
         cfg = getattr(self.model, "config", None)
         seq_len = getattr(cfg, "max_seq_len", 512)
@@ -1483,7 +1584,7 @@ class Trainer:
             if "out of memory" not in str(exc).lower():
                 raise  # Re-raise non-OOM errors (shape mismatch, etc.)
             # OOM with batch=2 — model barely fits; free everything
-            dummy_ids = logits = shift_logits = shift_labels = loss = None  # noqa: F841
+            dummy_ids = logits = shift_logits = shift_labels = loss = None
             for p in self.model.parameters():
                 if p.grad is not None:
                     p.grad = None
@@ -1540,8 +1641,8 @@ class Trainer:
             return 1
 
         max_batch = usable_vram // per_sample
-        # Hard cap at 64 — larger batches rarely help and risk OOM
-        max_batch = max(1, min(max_batch, 64))
+        # Cap scales with VRAM — larger GPUs can use bigger batches
+        max_batch = max(1, min(max_batch, budget.batch_size_cap))
 
         # Round down to nearest power of 2 for GPU efficiency
         batch = 1
@@ -1560,7 +1661,7 @@ class Trainer:
 
     def _lr_find(
         self,
-        batches: list[tuple[torch.Tensor, torch.Tensor]],
+        batches,
         min_lr: float = 1e-7,
         max_lr: float = 10.0,
         num_steps: int = 100,
@@ -1575,10 +1676,11 @@ class Trainer:
         after the sweep so training can proceed cleanly.
 
         Args:
-            batches: Pre-built training batches.
+            batches: Training batches (list or generator).
             min_lr: Starting LR for the sweep.
             max_lr: Ending LR for the sweep.
-            num_steps: Number of sweep steps (capped to len(batches)).
+            num_steps: Number of sweep steps (capped to len(batches)
+                when batches is a list).
 
         Returns:
             Suggested learning rate.
@@ -1586,7 +1688,15 @@ class Trainer:
         import copy
         import math
 
-        num_steps = min(num_steps, len(batches))
+        # Accept both lists and generators.  For generators, pre-collect
+        # up to num_steps batches so we know the count and can index.
+        if hasattr(batches, '__len__'):
+            num_steps = min(num_steps, len(batches))
+            batch_list = batches
+        else:
+            import itertools
+            batch_list = list(itertools.islice(batches, num_steps))
+            num_steps = len(batch_list)
         if num_steps < 10:
             logger.warning(
                 "LR finder: too few batches (%d), keeping default LR",
@@ -1614,7 +1724,7 @@ class Trainer:
 
         self.model.train()
         for i in range(num_steps):
-            batch_tensor, attention_mask = batches[i]
+            batch_tensor, attention_mask = batch_list[i]
             input_ids = batch_tensor[:, :-1]
             target_ids = batch_tensor[:, 1:]
 
@@ -1710,7 +1820,7 @@ class Trainer:
             except Exception as e:
                 logger.debug(f"Progress callback error: {e}")
 
-    def _emit_loss(self, loss: float) -> None:
+    def _emit_loss(self, loss: float, val_loss: float | None = None) -> None:
         """Emit loss update via callback."""
         if self.on_loss:
             try:
@@ -1904,16 +2014,16 @@ class Trainer:
         self,
         encoded_seqs: list[list[int]],
         max_length: int,
-    ) -> list[tuple[torch.Tensor, torch.Tensor]]:
+    ):
         """Pack encoded sequences into dense rows with 4D masks.
 
-        Uses the lazy packing path so masks are built per-batch,
-        keeping peak memory at ``batch_size * T * T * 4`` bytes
+        Generator — yields one ``(packed_tensor, mask_4d)`` tuple per
+        batch so peak memory stays at ``batch_size * T * T * 4`` bytes
         instead of ``num_rows * T * T * 4``.
 
-        Returns:
-            List of (packed_tensor, mask_4d) tuples.  ``mask_4d`` has
-            shape ``(B, 1, T, T)`` with 0 = attend and -inf = block.
+        Yields:
+            ``(packed_tensor, mask_4d)`` where ``mask_4d`` has shape
+            ``(B, 1, T, T)`` with 0 = attend and ``-inf`` = block.
         """
         eos_id = getattr(self.tokenizer, "eos_token_id", 2)
         rows, boundaries = pack_sequences_lazy(
@@ -1923,9 +2033,10 @@ class Trainer:
             pad_id=self.pad_token_id,
         )
 
-        # Pad rows and build tensors + masks per-batch to stay memory-safe
+        # Pad rows and build tensors + masks per-batch to stay memory-safe.
+        # Keep on CPU — callers move to device just before the forward pass
+        # so only one batch lives on GPU at a time.
         batch_size = self.config.batch_size
-        batches = []
         for i in range(0, len(rows), batch_size):
             batch_rows = rows[i:i + batch_size]
             batch_bounds = boundaries[i:i + batch_size]
@@ -1936,13 +2047,9 @@ class Trainer:
                 pad_len = max_length - len(row)
                 padded.append(row + [self.pad_token_id] * pad_len)
 
-            packed = torch.tensor(
-                padded, dtype=torch.long, device=self.device)
-            masks = build_packing_masks(
-                batch_bounds, max_length).to(self.device)
-            batches.append((packed, masks))
-
-        return batches
+            packed = torch.tensor(padded, dtype=torch.long)
+            masks = build_packing_masks(batch_bounds, max_length)
+            yield (packed, masks)
 
     def _score_sequences_by_loss(
         self,
@@ -1991,11 +2098,10 @@ class Trainer:
     # Streaming batch generation for large datasets
     # =================================================================
 
-    # Threshold (sequence count) above which training switches to
-    # disk-backed streaming to bound RAM usage.
+    # Legacy class-level defaults — used by tests and as fallbacks
+    # when _budget is not available.  Actual values come from
+    # self._budget (TrainingMemoryBudget) which scales to hardware.
     _STREAMING_THRESHOLD = 50_000
-
-    # How many sequences to tokenize + pack at a time.
     _STREAMING_WINDOW = 5_000
 
     @staticmethod
@@ -2054,7 +2160,7 @@ class Trainer:
         resulting batches, then frees them.  Peak memory is bounded
         to one window regardless of dataset size.
         """
-        window = self._STREAMING_WINDOW
+        window = self._budget.streaming_window
         for win_start in range(0, len(indices), window):
             win_indices = indices[win_start:win_start + window]
             win_seqs = self._read_sequences_from_disk(
@@ -2072,17 +2178,20 @@ class Trainer:
         self,
         sequences: list[str],
         max_length: int | None = None,
-    ) -> list[tuple[torch.Tensor, torch.Tensor]]:
-        """
-        Create batches from sequences.
+    ):
+        """Create batches from sequences.
+
+        Generator — yields ``(batch_tensor, attention_mask)`` tuples
+        one at a time.  Wrap with ``list()`` when random access or
+        ``len()`` is needed (small datasets / LR finder).
 
         Args:
             sequences: List of text sequences
             max_length: Maximum sequence length.  Defaults to the
                 model's ``max_seq_len`` if available, otherwise 512.
 
-        Returns:
-            List of (batch_tensor, attention_mask) tuples.
+        Yields:
+            ``(batch_tensor, attention_mask)`` tuples.
             attention_mask has 1 for real tokens, 0 for padding.
             When sequence packing is enabled, attention_mask is a 4D
             tensor ``(B, 1, T, T)`` instead of 2D ``(B, T)``.
@@ -2121,14 +2230,14 @@ class Trainer:
 
         # ---- Sequence packing path ----
         if self.config.use_sequence_packing:
-            return self._pack_sequences(encoded, max_length)
+            yield from self._pack_sequences(encoded, max_length)
+            return
 
         # ---- Standard padding path ----
         # Sort by length for efficient batching
         encoded.sort(key=len, reverse=True)
 
         # Create batches
-        batches = []
         batch_size = self.config.batch_size
 
         for i in range(0, len(encoded), batch_size):
@@ -2145,9 +2254,7 @@ class Trainer:
 
             batch_tensor = torch.tensor(padded, dtype=torch.long, device=self.device)
             attention_mask = torch.tensor(masks, dtype=torch.long, device=self.device)
-            batches.append((batch_tensor, attention_mask))
-
-        return batches
+            yield (batch_tensor, attention_mask)
 
     def train(self, data: "str | list | None" = None,
               resume_from: str | Path | None = None,
@@ -2185,6 +2292,9 @@ class Trainer:
                     "best_loss=%.4f",
                     self.state.epoch, self.state.step,
                     self.state.best_loss)
+                self._emit_progress(
+                    0, f"Resuming from step {self.state.step}, "
+                       f"epoch {self.state.epoch}")
             else:
                 logger.warning(
                     "Checkpoint not found: %s — training from scratch",
@@ -2196,7 +2306,7 @@ class Trainer:
 
         # Reproducibility: set seed if configured
         if self.config.seed is not None:
-            set_training_seed(self.config.seed)
+            set_training_seed(self.config.seed, deterministic=self.config.deterministic)
 
         self._emit_progress(0, "Preparing training data...")
         logger.info("Starting training")
@@ -2299,12 +2409,14 @@ class Trainer:
             # LR finder on sample window
             if self.config.auto_lr:
                 self._emit_progress(6, "Running LR range test...")
-                sample_n = min(self._STREAMING_WINDOW, n_sequences)
+                # Cap to 200 sequences — LR finder only needs ~100 batches
+                lr_cap = 100 * max(1, self.config.batch_size)
+                sample_n = min(lr_cap, n_sequences)
                 sample_indices = list(range(sample_n))
                 sample_seqs = self._read_sequences_from_disk(
                     _seq_file, seq_offsets, sample_indices)
-                sample_batches = self._create_batches(
-                    sample_seqs, max_length=max_seq_len)
+                sample_batches = list(self._create_batches(
+                    sample_seqs, max_length=max_seq_len))
                 del sample_seqs
                 found_lr = self._lr_find(sample_batches)
                 del sample_batches
@@ -2437,15 +2549,16 @@ class Trainer:
                 self._emit_progress(2, msg)
 
             # T4-1: Near-duplicate detection via MinHash.
-            # Removes sequences with Jaccard similarity > 0.8 (keeps longest).
-            # Skip for large pre-training corpora (>50K sequences): the O(n²)
-            # pairwise loop + shingle sets would require hundreds of GB of RAM
-            # and take hours. Exact dedup above is sufficient for curated data.
-            _MINHASH_LIMIT = 50_000
+            # Removes sequences with Jaccard similarity > 0.75 (keeps longest).
+            # 0.75 matches FineWeb / DCLM / SmolLM3 industry standard
+            # (FineWeb tech report arxiv:2406.17557 §3.4).
+            # Skip for large pre-training corpora: the O(n²)
+            # pairwise loop + shingle sets scale with RAM.
+            _MINHASH_LIMIT = self._budget.minhash_limit
             if 1 < len(sequences) <= _MINHASH_LIMIT:
                 self._emit_progress(2, f"MinHash dedup on {len(sequences):,} sequences...")
                 pre_minhash = len(sequences)
-                sequences = minhash_dedup(sequences, threshold=0.8)
+                sequences = minhash_dedup(sequences)
                 n_removed = pre_minhash - len(sequences)
                 if n_removed > 0:
                     msg = (f"MinHash: removed {n_removed} near-duplicates "
@@ -2516,9 +2629,9 @@ class Trainer:
             # T4-2: Curriculum learning — sort sequences by difficulty.
             # "easy_first" scores each sequence by model loss, then sorts
             # so the model learns fundamentals before tackling hard examples.
-            # Skip for large datasets: scoring 1M+ sequences = 1M forward
-            # passes, which would take hours before training even starts.
-            _CURRICULUM_LIMIT = 50_000
+            # Skip for large datasets: scoring many sequences = many forward
+            # passes.  Limit scales with available VRAM/RAM.
+            _CURRICULUM_LIMIT = self._budget.curriculum_limit
             if (self.config.curriculum == "easy_first"
                     and 1 < len(sequences) <= _CURRICULUM_LIMIT):
                 self._emit_progress(4, "Scoring sequences for curriculum...")
@@ -2572,7 +2685,7 @@ class Trainer:
             # disk and streaming batches in windows prevents OOM.  The
             # raw strings are freed after writing; only byte-offset
             # indices (ints) stay in RAM.
-            use_streaming = len(sequences) > self._STREAMING_THRESHOLD
+            use_streaming = len(sequences) > self._budget.streaming_threshold
             _seq_file: Path | None = None  # temp file for cleanup
             _val_file: Path | None = None
 
@@ -2598,7 +2711,7 @@ class Trainer:
                     "Streaming: %d sequences on disk, "
                     "~%d batches/epoch (window=%d)",
                     n_sequences, est_batches_per_epoch,
-                    self._STREAMING_WINDOW)
+                    self._budget.streaming_window)
 
                 # Val sequences to disk
                 n_val_sequences = 0
@@ -2616,12 +2729,14 @@ class Trainer:
                 # LR finder: build sample batches from first window
                 if self.config.auto_lr:
                     self._emit_progress(6, "Running LR range test...")
-                    sample_n = min(self._STREAMING_WINDOW, n_sequences)
+                    # Cap to 200 sequences — LR finder only needs ~100 batches
+                    lr_cap = 100 * max(1, self.config.batch_size)
+                    sample_n = min(lr_cap, n_sequences)
                     sample_indices = list(range(sample_n))
                     sample_seqs = self._read_sequences_from_disk(
                         _seq_file, seq_offsets, sample_indices)
-                    sample_batches = self._create_batches(
-                        sample_seqs, max_length=max_seq_len)
+                    sample_batches = list(self._create_batches(
+                        sample_seqs, max_length=max_seq_len))
                     del sample_seqs
                     found_lr = self._lr_find(sample_batches)
                     del sample_batches
@@ -2645,8 +2760,8 @@ class Trainer:
                 val_offsets = []
 
                 try:
-                    batches = self._create_batches(
-                        sequences, max_length=max_seq_len)
+                    batches = list(self._create_batches(
+                        sequences, max_length=max_seq_len))
                     logger.info(f"Created {len(batches)} training batches")
                     self._emit_progress(
                         5, f"Created {len(batches):,} batches "
@@ -2658,8 +2773,8 @@ class Trainer:
                 val_batches = []
                 if val_sequences:
                     try:
-                        val_batches = self._create_batches(
-                            val_sequences, max_length=max_seq_len)
+                        val_batches = list(self._create_batches(
+                            val_sequences, max_length=max_seq_len))
                         logger.info(
                             f"Created {len(val_batches)} validation batches")
                     except Exception as exc:
@@ -2681,7 +2796,7 @@ class Trainer:
         # Setup scheduler
         self._total_training_steps = total_steps
 
-        warmup = max(1, self.config.warmup_steps)
+        warmup = _effective_warmup(self.config.warmup_steps, total_steps)
         decay_steps = max(1, total_steps - warmup)
 
         warmup_scheduler = LambdaLR(
@@ -2948,6 +3063,22 @@ class Trainer:
                             epoch_loss / max(1, epoch_tokens),
                             val_loss=_step_val)
 
+                # Step-based checkpoint save (save_every_steps > 0).
+                # Critical for long single-epoch pre-training runs
+                # where epoch-end saves would never fire until the
+                # very end — potentially months of lost progress.
+                if (
+                    self.config.save_every_steps > 0
+                    and self.state.step % self.config.save_every_steps == 0
+                ):
+                    stem = self._checkpoint_stem
+                    ckpt_path = (
+                        checkpoint_dir
+                        / f"{stem}_step{self.state.step}.pt")
+                    self._save_checkpoint(ckpt_path)
+                    self._cleanup_periodic_checkpoints(
+                        checkpoint_dir, f"{stem}_step", keep=3)
+
                 # Yield GIL so GUI/other threads stay responsive.
                 # On fast GPUs the batch loop can starve the main
                 # thread; sleep(0) releases our time-slice.
@@ -3116,6 +3247,10 @@ class Trainer:
         on CUDA OOM so the caller can handle recovery.
         """
         batch_tensor, attention_mask = batch
+        # Lazy device transfer: tensors stay on CPU until needed so
+        # only one batch occupies VRAM at a time.
+        batch_tensor = batch_tensor.to(self.device)
+        attention_mask = attention_mask.to(self.device)
         is_packed = attention_mask.ndim == 4  # 4D = sequence packing
 
         # LISA: resample active layers each optimizer step (R26)
@@ -3284,7 +3419,9 @@ class Trainer:
                 self.swa.update(self.model, step)
                 restart_t0 = self.config.cosine_restart_period
                 if restart_t0 > 0:
-                    warmup = max(1, self.config.warmup_steps)
+                    warmup = _effective_warmup(
+                        self.config.warmup_steps,
+                        self._total_training_steps)
                     step_in_cosine = step - warmup
                     if (step_in_cosine > 0
                             and step_in_cosine % restart_t0 == 0
@@ -3327,6 +3464,8 @@ class Trainer:
 
         try:
             for batch_tensor, attention_mask in val_batches:
+                batch_tensor = batch_tensor.to(self.device)
+                attention_mask = attention_mask.to(self.device)
                 is_packed = attention_mask.ndim == 4
                 with torch.amp.autocast(
                     'cuda',
@@ -3691,7 +3830,7 @@ class Trainer:
         loss = -log(sigma(beta * (log pi(y_w|x)/pi_ref(y_w|x)
                                 - log pi(y_l|x)/pi_ref(y_l|x))))
         """
-        import torch.nn.functional as F  # noqa: N812
+        import torch.nn.functional as F
         import torch
 
         chosen_rewards = beta * (policy_chosen_logps - ref_chosen_logps)
@@ -3701,6 +3840,63 @@ class Trainer:
             logger.warning("DPO loss is non-finite (%s), clamping to 0", loss.item())
             loss = torch.zeros_like(loss)
         return loss
+
+    @staticmethod
+    def _apo_zero_loss(
+        policy_chosen_logps: "torch.Tensor",
+        policy_rejected_logps: "torch.Tensor",
+        ref_chosen_logps: "torch.Tensor",
+        ref_rejected_logps: "torch.Tensor",
+        beta: float = 0.1,
+    ) -> "torch.Tensor":
+        """Anchored Preference Optimization, zero variant — D-9 / Pass 156j.
+
+        APO-zero (D'Oosterlinck et al., 2024) anchors *both sides
+        independently* to the reference policy: chosen is pushed above
+        ref, rejected is pushed below ref. Unlike DPO — which couples
+        the two via the reward difference and can be satisfied by
+        degrading the rejected response without improving chosen —
+        APO-zero is satisfied only when the chosen actually rises above
+        ref and the rejected actually falls below it.
+
+        loss = sigmoid(-beta * (policy_chosen - ref_chosen))
+             + sigmoid( beta * (policy_rejected - ref_rejected))
+
+        Equivalent to TRL's `apo_zero` formulation:
+            (1 - sigmoid(beta * chosen_logratio))
+            + sigmoid(beta * rejected_logratio)
+        """
+        import torch
+
+        chosen_logratio = policy_chosen_logps - ref_chosen_logps
+        rejected_logratio = policy_rejected_logps - ref_rejected_logps
+        chosen_term = torch.sigmoid(-beta * chosen_logratio)
+        rejected_term = torch.sigmoid(beta * rejected_logratio)
+        loss = (chosen_term + rejected_term).mean()
+        if not torch.isfinite(loss):
+            logger.warning(
+                "APO-zero loss is non-finite (%s), clamping to 0",
+                loss.item() if loss.numel() == 1 else "tensor")
+            loss = torch.zeros_like(loss)
+        return loss
+
+    @staticmethod
+    def _resolve_preference_loss(loss_type: str):
+        """Map a string preference-loss name to its static implementation.
+
+        Accepted values: ``"dpo"`` (default), ``"apo_zero"``. Anything
+        else raises ``ValueError`` so misspellings fail loud at the call
+        site instead of silently falling back to DPO.
+        """
+        registry = {
+            "dpo": Trainer._dpo_loss,
+            "apo_zero": Trainer._apo_zero_loss,
+        }
+        if loss_type not in registry:
+            raise ValueError(
+                f"Unknown loss_type {loss_type!r}; must be one of "
+                f"{sorted(registry)}")
+        return registry[loss_type]
 
     def _get_sequence_logps(
         self, model: "nn.Module", input_ids: "torch.Tensor",
@@ -3718,7 +3914,7 @@ class Trainer:
         Returns:
             (B,) tensor of average log-probabilities.
         """
-        import torch.nn.functional as F  # noqa: N812
+        import torch.nn.functional as F
 
         attn_mask = attention_mask[:, :-1] if attention_mask is not None else None
         logits, _ = model(input_ids[:, :-1], targets=None, attention_mask=attn_mask)
@@ -3862,6 +4058,7 @@ class Trainer:
         reward_fn: "Callable[[str, str], float] | None" = None,
         dpo_online_interval: int = 0,
         dpo_online_samples: int = 4,
+        loss_type: str = "dpo",
     ) -> TrainingState:
         """Train with Direct Preference Optimization.
 
@@ -3883,6 +4080,12 @@ class Trainer:
                 steps.  0 = disabled.
             dpo_online_samples: Number of responses to generate per prompt
                 for online pair creation.
+            loss_type: ``"dpo"`` (default) for the original Rafailov 2023
+                loss, or ``"apo_zero"`` for the Anchored Preference
+                Optimization zero variant (D-9, Pass 156j) which anchors
+                chosen and rejected independently to the reference,
+                avoiding the DPO failure mode where the model satisfies
+                the loss by degrading rejected without improving chosen.
 
         Returns:
             Final :class:`TrainingState`.
@@ -3891,6 +4094,18 @@ class Trainer:
 
         if not preference_data:
             raise ValueError("No preference data provided")
+
+        # Resolve the preference loss variant up front so a typo fails
+        # before any model setup work happens.
+        loss_fn = self._resolve_preference_loss(loss_type)
+
+        # Pass 156i (DET-1): seed RNGs from config.seed when set so
+        # the per-epoch random.shuffle(pairs) is reproducible across
+        # runs. Mirrors train() / train_vision() pattern.
+        # Pass 156i3 (DET-2): forwards `deterministic` flag for
+        # bitwise GPU reproducibility when user opts in.
+        if self.config.seed is not None:
+            set_training_seed(self.config.seed, deterministic=self.config.deterministic)
 
         self._stop_requested = False
         self.model.train()
@@ -3937,7 +4152,7 @@ class Trainer:
         # Setup scheduler: SequentialLR(warmup â†’ cosine decay)
         steps_per_epoch = max(1, len(pairs) // accum_steps)
         total_steps = steps_per_epoch * self.config.epochs
-        warmup = max(1, self.config.warmup_steps)
+        warmup = _effective_warmup(self.config.warmup_steps, total_steps)
         decay_steps = max(1, total_steps - warmup)
 
         warmup_sched = LambdaLR(
@@ -4010,7 +4225,7 @@ class Trainer:
                             ref_model, input_ids[1:], rejected_labels,
                             attention_mask=attention_mask[1:])
 
-                loss = self._dpo_loss(
+                loss = loss_fn(
                     policy_chosen, policy_rejected,
                     ref_chosen, ref_rejected, beta=beta)
 
@@ -4134,6 +4349,10 @@ class Trainer:
         if not preference_data:
             raise ValueError("No preference data provided")
 
+        # Pass 156i (DET-1): seed RNGs from config.seed when set.
+        if self.config.seed is not None:
+            set_training_seed(self.config.seed, deterministic=self.config.deterministic)
+
         self._stop_requested = False
         self.model.train()
         self._training_start_time = time.monotonic()
@@ -4233,7 +4452,14 @@ class Trainer:
 
                 loss = loss / accum_steps
                 loss.backward()
-                epoch_loss += loss.item() * accum_steps
+                batch_loss = loss.item() * accum_steps
+                epoch_loss += batch_loss
+
+                if math.isnan(batch_loss) or math.isinf(batch_loss):
+                    logger.error("SimPO aborted: NaN/Inf loss detected")
+                    self.state.abort_reason = "SimPO NaN/Inf loss detected"
+                    self.model.eval()
+                    return self.state
 
                 if (i + 1) % accum_steps == 0:
                     if self.config.gradient_clip > 0:
@@ -4309,6 +4535,10 @@ class Trainer:
 
         if not desirable and not undesirable:
             raise ValueError("No valid feedback after filtering")
+
+        # Pass 156i (DET-1): seed RNGs from config.seed when set.
+        if self.config.seed is not None:
+            set_training_seed(self.config.seed, deterministic=self.config.deterministic)
 
         self._stop_requested = False
         self.model.train()
@@ -4428,7 +4658,14 @@ class Trainer:
                 accum = max(1, self.config.max_grad_accumulation)
                 loss = loss / accum
                 loss.backward()
-                epoch_loss += loss.item() * accum
+                batch_loss = loss.item() * accum
+                epoch_loss += batch_loss
+
+                if math.isnan(batch_loss) or math.isinf(batch_loss):
+                    logger.error("KTO aborted: NaN/Inf loss detected")
+                    self.state.abort_reason = "KTO NaN/Inf loss detected"
+                    self.model.eval()
+                    return self.state
 
                 if (i + 1) % accum == 0:
                     if self.config.gradient_clip > 0:
@@ -4498,6 +4735,10 @@ class Trainer:
 
         if not preference_data:
             raise ValueError("No preference data provided")
+
+        # Pass 156i (DET-1): seed RNGs from config.seed when set.
+        if self.config.seed is not None:
+            set_training_seed(self.config.seed, deterministic=self.config.deterministic)
 
         self._stop_requested = False
         self.model.train()
@@ -4666,6 +4907,7 @@ class Trainer:
         vision_encoder: nn.Module,
         data: list[dict[str, Any]],
         unfreeze_text_layers: int = 0,
+        val_data: list[dict[str, Any]] | None = None,
     ) -> "TrainingState":
         """
         Train the vision encoder and projection layer on image-text pairs.
@@ -4684,6 +4926,13 @@ class Trainer:
             unfreeze_text_layers: Number of last text transformer layers to
                 unfreeze (0 = freeze all text layers, only train encoder +
                 projection).
+            val_data: Optional held-out image-text pairs. When provided
+                (and non-empty after validation), a no-grad evaluation
+                pass runs after each epoch; results land in
+                ``state.validation_losses`` and drive best-checkpoint /
+                early-stopping decisions instead of the training avg.
+                V-6: closes the "overfitting on small datasets is
+                invisible" gap noted in the F/Code-6 audit.
 
         Returns:
             TrainingState with loss history.
@@ -4701,6 +4950,14 @@ class Trainer:
             )
         if not data:
             raise ValueError("No training data provided for vision training.")
+
+        # Pass 156h: seed RNGs from config.seed when set, mirroring
+        # train(). Without this the per-epoch random.shuffle(pairs)
+        # below uses un-seeded global state, so two runs with the same
+        # data + same seed process samples in different orders —
+        # violates the AA "deterministic in infrastructure" rule.
+        if self.config.seed is not None:
+            set_training_seed(self.config.seed, deterministic=self.config.deterministic)
 
         self._stop_requested = False
         self.state = TrainingState()
@@ -4765,7 +5022,7 @@ class Trainer:
 
         # Setup scheduler: SequentialLR(warmup + cosine decay)
         total_steps = len(data) * self.config.epochs  # 1 step per pair
-        warmup = max(1, self.config.warmup_steps)
+        warmup = _effective_warmup(self.config.warmup_steps, total_steps)
         decay_steps = max(1, total_steps - warmup)
         warmup_scheduler = LambdaLR(
             optimizer,
@@ -4780,7 +5037,12 @@ class Trainer:
 
         image_size = getattr(getattr(vision_encoder, 'config', None), 'image_size', 224)
         use_imagenet = getattr(getattr(vision_encoder, 'config', None), "use_pretrained", False)
-        pairs: list[tuple[torch.Tensor, list[int]]] = []
+        # V-2: lazy preprocess. Store image refs (paths or PIL objects)
+        # only — never preprocess/.to(device) eagerly. At LLaVA-Pretrain
+        # scale (558K × 600 KB tensors) eager prep would OOM the GPU
+        # immediately on a 16 GB VRAM budget. Tensors are built per-step
+        # below and freed after backward.
+        pairs: list[tuple[object, list[int]]] = []
 
         for i, item in enumerate(data):
             image = item.get("image")
@@ -4789,26 +5051,59 @@ class Trainer:
                 logger.warning(f"Skipping vision data item {i}: missing image or text")
                 continue
 
-            # Preprocess image to tensor
-            try:
-                img_tensor = preprocess_image(
-                    image,
-                    image_size=image_size,
-                    imagenet_normalize=use_imagenet,
-                )
-                img_tensor = img_tensor.to(self.device)
-            except Exception as exc:
-                logger.warning(f"Skipping vision data item {i}: {exc}")
-                continue
+            # V-2: lightweight readability probe for path inputs so bad
+            # files surface here instead of mid-training. PIL `verify()`
+            # parses the header without decoding pixels — cheap.
+            if isinstance(image, (str, Path)):
+                try:
+                    from PIL import Image as _PILImage
+                    with _PILImage.open(str(image)) as _probe:
+                        _probe.verify()
+                except Exception as exc:
+                    logger.warning(
+                        f"Skipping vision data item {i}: {exc}")
+                    continue
 
             # Encode text to token IDs
             token_ids = self.tokenizer.encode(text)
             if len(token_ids) < 1:
                 continue
-            pairs.append((img_tensor, token_ids))
+            pairs.append((image, token_ids))
 
         if not pairs:
             raise ValueError("No valid image-text pairs found in training data.")
+
+        # V-6: optional held-out validation pairs. Same lightweight
+        # readability probe as train; same lazy-preprocess discipline
+        # (no .to(device) until inside the eval pass). Pairs whose
+        # caption is <2 tokens are skipped silently because the
+        # next-token loss can't be computed on them — matches the
+        # train-loop drop policy at min_len < 1.
+        val_pairs: list[tuple[object, list[int]]] = []
+        if val_data:
+            for i, item in enumerate(val_data):
+                v_image = item.get("image")
+                v_text = item.get("text", "")
+                if v_image is None or not v_text:
+                    logger.warning(
+                        f"Skipping vision val item {i}: missing image or text")
+                    continue
+                if isinstance(v_image, (str, Path)):
+                    try:
+                        from PIL import Image as _PILImage
+                        with _PILImage.open(str(v_image)) as _probe:
+                            _probe.verify()
+                    except Exception as exc:
+                        logger.warning(
+                            f"Skipping vision val item {i}: {exc}")
+                        continue
+                v_token_ids = self.tokenizer.encode(v_text)
+                if len(v_token_ids) < 2:
+                    continue
+                val_pairs.append((v_image, v_token_ids))
+            if val_pairs:
+                logger.info(
+                    f"Vision validation: {len(val_pairs)} held-out pairs")
 
         self._emit_progress(5, f"Prepared {len(pairs)} image-text pairs")
         logger.info(f"Vision training: {len(pairs)} pairs, {self.config.epochs} epochs")
@@ -4819,6 +5114,103 @@ class Trainer:
 
         checkpoint_dir = Path(self.config.checkpoint_dir)
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
+        # V-7: count captions dropped because text length collapses to <1
+        # after the next-token shift. First occurrence logs once; total
+        # is summarized at the end. Avoids per-sample log spam while
+        # keeping the pipeline observable.
+        dropped_short_captions = 0
+
+        def _emit_drop_summary():
+            """V-7 audit fix: emit the dropped-captions summary on every
+            exit path (success, NaN/Inf abort, max_loss abort, stop,
+            early-stop). Otherwise the most diagnostic-critical paths
+            silently lose the partial-data signal."""
+            if dropped_short_captions > 0:
+                logger.warning(
+                    "Vision training: %d caption(s) dropped during "
+                    "training for being too short after next-token "
+                    "shift. Consider filtering single-token captions "
+                    "during data prep.",
+                    dropped_short_captions,
+                )
+
+        def _run_validation() -> float | None:
+            """V-6: no-grad evaluation over the held-out val_pairs.
+            Returns mean cross-entropy loss across all valid val
+            samples, or None when val_pairs is empty / every sample
+            was dropped. Caller restores train mode.
+
+            Pass 156g audit (Bug B): polls ``self._should_stop()``
+            between samples so the user's STOP press isn't ignored
+            during a long val pass at LLaVA scale (~28K samples on a
+            5% split). Returns the partial mean over completed samples
+            on early exit; ``None`` if zero finished."""
+            if not val_pairs:
+                return None
+            vision_encoder.eval()
+            self.model.eval()
+            losses: list[float] = []
+            try:
+                with torch.no_grad():
+                    for v_ref, v_ids in val_pairs:
+                        if self._should_stop():
+                            logger.info(
+                                "Vision validation stopped by user "
+                                "request after %d sample(s)",
+                                len(losses))
+                            break
+                        try:
+                            v_img = preprocess_image(
+                                v_ref,
+                                image_size=image_size,
+                                imagenet_normalize=use_imagenet,
+                            ).to(self.device)
+                        except Exception as exc:
+                            logger.debug(
+                                "Vision val: preprocess failed (%s); "
+                                "skipping", exc)
+                            continue
+                        with torch.amp.autocast(
+                            "cuda",
+                            dtype=self._amp_dtype,
+                            enabled=self.config.use_amp
+                            and self.device.type == "cuda",
+                        ):
+                            v_feats = vision_encoder(v_img)
+                            v_text_tensor = torch.tensor(
+                                [v_ids], dtype=torch.long,
+                                device=self.device,
+                            )
+                            v_logits = self.model.forward_multimodal(
+                                input_ids=v_text_tensor,
+                                vision_features=v_feats,
+                            )
+                            v_n_patches = v_feats.shape[1]
+                            if v_n_patches >= v_logits.shape[1]:
+                                continue
+                            v_text_logits = v_logits[
+                                :, v_n_patches:-1, :]
+                            v_text_targets = v_text_tensor[:, 1:]
+                            v_min_len = min(
+                                v_text_logits.shape[1],
+                                v_text_targets.shape[1])
+                            if v_min_len < 1:
+                                continue
+                            v_text_logits = v_text_logits[:, :v_min_len, :]
+                            v_text_targets = v_text_targets[:, :v_min_len]
+                            v_loss = nn.functional.cross_entropy(
+                                v_text_logits.reshape(
+                                    -1, v_text_logits.size(-1)),
+                                v_text_targets.reshape(-1),
+                            )
+                        losses.append(v_loss.item())
+            finally:
+                vision_encoder.train()
+                self.model.train()
+            if not losses:
+                return None
+            return sum(losses) / len(losses)
 
         for epoch in range(self.config.epochs):
             if self._should_stop():
@@ -4834,17 +5226,43 @@ class Trainer:
             epoch_loss = 0.0
             epoch_steps = 0
 
+            # V-1: gradient accumulation. Other train_* methods honor
+            # config.max_grad_accumulation; vision must too. Only count
+            # successful backwards (skipped/short-caption samples don't
+            # advance the boundary counter).
+            accum_steps = max(1, self.config.max_grad_accumulation)
+            accum_count = 0
+
             # Shuffle training pairs each epoch
             random.shuffle(pairs)
 
-            for step, (img_tensor, token_ids) in enumerate(pairs):
+            # Zero grads once at the start of the epoch; thereafter only
+            # zero after a real optimizer step (boundary or remainder).
+            optimizer.zero_grad()
+
+            for step, (image_ref, token_ids) in enumerate(pairs):
                 if self._should_stop():
                     break
 
+                # V-2: lazy preprocess — build tensor here so each one
+                # is freed after backward instead of accumulating across
+                # the full dataset. Per-image preprocess errors skip
+                # the sample (already validated by header probe in prep,
+                # so this should be rare).
+                try:
+                    img_tensor = preprocess_image(
+                        image_ref,
+                        image_size=image_size,
+                        imagenet_normalize=use_imagenet,
+                    ).to(self.device)
+                except Exception as exc:
+                    logger.warning(
+                        "Vision step %d: preprocess failed (%s); "
+                        "skipping sample", step, exc)
+                    continue
+
                 # Training-time augmentation (random flip, color jitter)
                 img_tensor = augment_vision_tensor(img_tensor)
-
-                optimizer.zero_grad()
 
                 # Encode image through vision encoder
                 with torch.amp.autocast(
@@ -4881,6 +5299,19 @@ class Trainer:
                     # Align lengths (in case of truncation)
                     min_len = min(text_logits.shape[1], text_targets.shape[1])
                     if min_len < 1:
+                        # V-7: caption too short for next-token loss.
+                        # Log the first occurrence with explanation;
+                        # subsequent drops are counted silently and
+                        # summarized after training.
+                        if dropped_short_captions == 0:
+                            logger.warning(
+                                "Vision caption too short for next-token "
+                                "loss after shift (need >=2 tokens) at "
+                                "epoch %d step %d. Further drops will be "
+                                "summed and reported at end of training.",
+                                epoch + 1, step,
+                            )
+                        dropped_short_captions += 1
                         continue
 
                     text_logits = text_logits[:, :min_len, :]
@@ -4890,28 +5321,39 @@ class Trainer:
                         text_logits.reshape(-1, text_logits.size(-1)),
                         text_targets.reshape(-1),
                     )
+                    # V-1: scale loss for accumulation. Recover unscaled
+                    # value below for logging / NaN guards.
+                    loss = loss / accum_steps
 
-                # Backward and optimize
+                # Backward (always); step only at accum boundary.
                 if self.config.use_amp and self.device.type == "cuda":
                     scaler.scale(loss).backward()
-                    if self.config.gradient_clip > 0:
-                        scaler.unscale_(optimizer)
-                        torch.nn.utils.clip_grad_norm_(
-                            trainable_params, self.config.gradient_clip
-                        )
-                    scaler.step(optimizer)
-                    scaler.update()
                 else:
                     loss.backward()
-                    if self.config.gradient_clip > 0:
-                        torch.nn.utils.clip_grad_norm_(
-                            trainable_params, self.config.gradient_clip
-                        )
-                    optimizer.step()
 
-                scheduler.step()
+                accum_count += 1
+                is_boundary = (accum_count % accum_steps == 0)
 
-                loss_val = loss.item()
+                if is_boundary:
+                    if self.config.use_amp and self.device.type == "cuda":
+                        if self.config.gradient_clip > 0:
+                            scaler.unscale_(optimizer)
+                            torch.nn.utils.clip_grad_norm_(
+                                trainable_params, self.config.gradient_clip
+                            )
+                        scaler.step(optimizer)
+                        scaler.update()
+                    else:
+                        if self.config.gradient_clip > 0:
+                            torch.nn.utils.clip_grad_norm_(
+                                trainable_params, self.config.gradient_clip
+                            )
+                        optimizer.step()
+                    scheduler.step()
+                    optimizer.zero_grad()
+
+                # Recover unscaled loss for logging / guards.
+                loss_val = loss.item() * accum_steps
 
                 # NaN guard
                 if math.isnan(loss_val) or math.isinf(loss_val):
@@ -4920,6 +5362,7 @@ class Trainer:
                     self.state.abort_reason = (
                         f"Vision NaN/Inf loss at epoch "
                         f"{epoch + 1}, step {step}")
+                    _emit_drop_summary()  # V-7 audit fix
                     self.model.eval()
                     return self.state
 
@@ -4930,12 +5373,14 @@ class Trainer:
                     self.state.abort_reason = (
                         f"Vision loss {loss_val:.2f} exceeded "
                         f"max_loss {self.config.max_loss}")
+                    _emit_drop_summary()  # V-7 audit fix
                     self.model.eval()
                     return self.state
 
                 epoch_loss += loss_val
                 epoch_steps += 1
-                self.state.step += 1
+                if is_boundary:
+                    self.state.step += 1
 
                 # Log every N steps
                 if self.config.log_every > 0 and self.state.step % self.config.log_every == 0:
@@ -4947,6 +5392,29 @@ class Trainer:
                 pct = min(int(done_steps / max(total_steps, 1) * 95) + 5, 99)
                 self._emit_progress(pct, f"Epoch {epoch + 1}/{self.config.epochs} â€” loss: {loss_val:.4f}")
 
+            # V-1: end-of-epoch remainder flush. If samples don't divide
+            # evenly into accum_steps, the trailing micro-batches have
+            # accumulated grads that would be discarded by the next
+            # epoch's zero_grad(). Flush them now.
+            if accum_count % accum_steps != 0:
+                if self.config.use_amp and self.device.type == "cuda":
+                    if self.config.gradient_clip > 0:
+                        scaler.unscale_(optimizer)
+                        torch.nn.utils.clip_grad_norm_(
+                            trainable_params, self.config.gradient_clip
+                        )
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    if self.config.gradient_clip > 0:
+                        torch.nn.utils.clip_grad_norm_(
+                            trainable_params, self.config.gradient_clip
+                        )
+                    optimizer.step()
+                scheduler.step()
+                optimizer.zero_grad()
+                self.state.step += 1
+
             # Epoch summary
             avg_loss = epoch_loss / max(epoch_steps, 1)
             self.state.training_losses.append(avg_loss)
@@ -4954,15 +5422,26 @@ class Trainer:
             self._emit_loss(avg_loss)
             logger.info(f"Vision Epoch {epoch + 1}: avg_loss={avg_loss:.4f}")
 
+            # V-6: held-out validation pass after each epoch. Drives
+            # best-checkpoint + early-stopping when available; falls
+            # back to training avg_loss otherwise.
+            val_loss = _run_validation()
+            if val_loss is not None:
+                self.state.validation_losses.append(val_loss)
+                logger.info(
+                    f"Vision Epoch {epoch + 1}: val_loss={val_loss:.4f}")
+
             if self.on_epoch_complete:
                 try:
                     self.on_epoch_complete(epoch + 1, avg_loss)
                 except Exception:
                     logger.debug("on_epoch_complete callback error", exc_info=True)
 
-            # Best model tracking and early stopping
-            if avg_loss < self.state.best_loss:
-                self.state.best_loss = avg_loss
+            # Best model tracking and early stopping. Prefer val_loss
+            # when present (V-6); fall back to train avg_loss.
+            tracked_loss = val_loss if val_loss is not None else avg_loss
+            if tracked_loss < self.state.best_loss:
+                self.state.best_loss = tracked_loss
                 self._epochs_without_improvement = 0
                 self._save_checkpoint(
                     checkpoint_dir / f"{self._checkpoint_stem}_vision_best.pt")
@@ -4987,6 +5466,9 @@ class Trainer:
         self._emit_progress(100, "Vision training complete!")
         self.model.eval()
         vision_encoder.eval()
+
+        # V-7: end-of-run summary if any captions were dropped.
+        _emit_drop_summary()
 
         # Re-enable all model parameters for subsequent use
         for param in self.model.parameters():
@@ -5032,6 +5514,24 @@ class Trainer:
         """
         if not prompts:
             raise ValueError("No prompts provided for ReST")
+
+        # Pass 156i (DET-1): seed RNGs from config.seed when set so the
+        # outer round-loop generation is reproducible (the inner DPO
+        # call also seeds, but we want round-1 generation deterministic
+        # too). Mirrors train() / train_vision().
+        #
+        # RNG flow note (Pass 156i2 logic-eye finding): each inner
+        # train_dpo() call re-seeds back to config.seed at its own
+        # entry. Round-2 DPO therefore starts from the *same* RNG
+        # state as round-1 DPO, but operates on different `pairs`
+        # (regenerated from the updated model). The actual sample
+        # order differs because the data differs; the RNG draws are
+        # identical streams across rounds. This is intentional —
+        # reproducibility is the goal — but a user expecting "fresh
+        # randomness per round" should derive a per-round seed
+        # (config.seed + rnd) outside this method.
+        if self.config.seed is not None:
+            set_training_seed(self.config.seed, deterministic=self.config.deterministic)
 
         self._stop_requested = False
         logger.info(
@@ -5121,6 +5621,11 @@ class Trainer:
         if not data:
             raise ValueError("No training data provided for audio training.")
 
+        # Pass 156i (DET-1): seed RNGs from config.seed when set so the
+        # per-epoch random.shuffle(pairs) is reproducible.
+        if self.config.seed is not None:
+            set_training_seed(self.config.seed, deterministic=self.config.deterministic)
+
         self._stop_requested = False
         self.state = TrainingState()
         self._epochs_without_improvement = 0
@@ -5174,7 +5679,7 @@ class Trainer:
 
         # Setup scheduler: SequentialLR(warmup + cosine decay)
         total_steps = len(data) * self.config.epochs  # 1 step per pair
-        warmup = max(1, self.config.warmup_steps)
+        warmup = _effective_warmup(self.config.warmup_steps, total_steps)
         decay_steps = max(1, total_steps - warmup)
         warmup_scheduler = LambdaLR(
             optimizer,

@@ -250,6 +250,9 @@ class ReplayBuffer:
         rewards: torch.Tensor,
         response_mask: torch.Tensor,
         reward_scalar: float,
+        full_ids: torch.Tensor | None = None,
+        prompt_len: int | None = None,
+        ref_logps: torch.Tensor | None = None,
     ) -> None:
         """Store one rollout experience (moved to CPU)."""
         exp = {
@@ -258,6 +261,9 @@ class ReplayBuffer:
             "rewards": rewards.detach().cpu(),
             "mask": response_mask.detach().cpu(),
             "priority": abs(reward_scalar) + 1e-6,
+            "full_ids": full_ids.detach().cpu() if full_ids is not None else None,
+            "prompt_len": prompt_len,
+            "ref_logps": ref_logps.detach().cpu() if ref_logps is not None else None,
         }
         self._experiences.append(exp)
         # Evict lowest-priority when over capacity
@@ -284,12 +290,19 @@ class ReplayBuffer:
         result = []
         for idx in indices:
             exp = self._experiences[idx]
-            result.append({
+            entry: dict[str, Any] = {
                 "log_probs": exp["log_probs"].to(device),
                 "values": exp["values"].to(device),
                 "rewards": exp["rewards"].to(device),
                 "mask": exp["mask"].to(device),
-            })
+            }
+            if exp.get("full_ids") is not None:
+                entry["full_ids"] = exp["full_ids"].to(device)
+            if exp.get("prompt_len") is not None:
+                entry["prompt_len"] = exp["prompt_len"]
+            if exp.get("ref_logps") is not None:
+                entry["ref_logps"] = exp["ref_logps"].to(device)
+            result.append(entry)
         return result
 
     def state_dict(self) -> dict:
@@ -379,6 +392,94 @@ def _get_response_entropy(
             prompt_len, seq_len + 1)
         return entropy.new_zeros(1)
     return entropy[0, response_start:]
+
+
+def _get_logps_hidden_entropy(
+    model: nn.Module,
+    full_ids: torch.Tensor,
+    prompt_len: int,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Single forward pass returning logps, hidden states, and entropy.
+
+    Replaces the three separate calls:
+        _get_response_logps + _get_hidden_states + _get_response_entropy
+
+    Runs through model internals manually (embeddings → layers → norm),
+    then applies the output projection to get logits.  All three outputs
+    are derived from those logits and the pre-head hidden states.
+
+    Mirrors Enigma.forward() behavior for NEFTune when model is in train
+    mode so PPO training-mode semantics stay consistent.
+
+    Args:
+        model: Enigma model (must have tok_embeddings, layers, norm, output).
+        full_ids: (1, prompt_len + response_len) token ids.
+        prompt_len: Length of the prompt prefix.
+
+    Returns:
+        (response_logps, response_hidden, response_entropy)
+        - response_logps:   (resp_len,) per-token log-probs
+        - response_hidden:  (1, resp_len, dim) normalized hidden states
+        - response_entropy: (resp_len,) per-token entropy
+    """
+    # --- forward through model internals (single pass) ---
+    h = model.tok_embeddings(full_ids[:, :-1])  # (1, T, dim)
+
+    config = getattr(model, "config", None)
+
+    # Keep parity with Enigma.forward() training behavior.
+    if model.training and config is not None and config.neftune_alpha > 0:
+        dims = h.shape[1] * h.shape[2]
+        mag = config.neftune_alpha / math.sqrt(dims)
+        h = h + torch.empty_like(h).uniform_(-mag, mag)
+
+    use_rope = getattr(config, "use_rope", True)
+    if not use_rope and hasattr(model, "pos"):
+        T = full_ids.shape[1] - 1
+        h = h + model.pos[:, :T]
+
+    freqs = getattr(model, "freqs_cis", None)
+    T = h.shape[1]
+    mask = None
+    if T > 1 and hasattr(model, "_get_causal_mask"):
+        mask = (model._get_causal_mask(T)
+                .to(device=h.device).unsqueeze(0).unsqueeze(0))
+
+    for layer in getattr(model, "layers", []):
+        h = layer(h, freqs, mask, False, 0)
+
+    h = model.norm(h)  # (1, T, dim) — normalised hidden states
+
+    # --- logits from the output projection ---
+    output_layer = getattr(model, "output", None)
+    if output_layer is None:
+        raise RuntimeError("Model is missing output projection layer")
+    logits = output_layer(h)  # (1, T, V)
+
+    # --- derive all three outputs from logits + h ---
+    log_probs = F.log_softmax(logits, dim=-1)   # (1, T, V)
+    probs = torch.exp(log_probs)
+    entropy = -(probs * log_probs).sum(dim=-1)  # (1, T)
+
+    targets = full_ids[:, 1:]  # (1, T)
+    per_token_logps = log_probs.gather(
+        2, targets.unsqueeze(-1)).squeeze(-1)    # (1, T)
+
+    response_start = max(prompt_len - 1, 0)
+    seq_len = per_token_logps.shape[1]
+    if response_start >= seq_len:
+        logger.warning(
+            "prompt_len %d >= sequence length %d — returning zeros",
+            prompt_len, seq_len + 1)
+        zeros = per_token_logps.new_zeros(1)
+        dummy_hidden = h[:, :1, :]
+        return zeros, dummy_hidden, zeros
+
+    return (
+        per_token_logps[0, response_start:],   # (resp_len,)
+        h[:, response_start:, :],              # (1, resp_len, dim)
+        entropy[0, response_start:],           # (resp_len,)
+    )
 
 
 # =============================================================================
@@ -1183,43 +1284,6 @@ class RLHFTrainer:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
-    def _get_hidden_states(
-        self,
-        model: nn.Module,
-        full_ids: torch.Tensor,
-        prompt_len: int,
-    ) -> torch.Tensor:
-        """Get hidden states for the response portion (for value head).
-
-        Runs a forward pass through the model's embeddings and layers
-        to extract hidden states without the LM head.
-        """
-        # Use model.forward to get logits, then extract from model internals
-        # The simplest approach: we already run forward for logps, so we
-        # re-run with a hook or use the intermediate hidden state.
-        # For efficiency: separate hidden state extraction.
-        h = model.tok_embeddings(full_ids[:, :-1])
-
-        config = getattr(model, "config", None)
-        use_rope = getattr(config, "use_rope", True)
-        if not use_rope and hasattr(model, "pos"):
-            T = full_ids.shape[1] - 1
-            h = h + model.pos[:, :T]
-
-        freqs = getattr(model, "freqs_cis", None)
-        T = h.shape[1]
-        mask = None
-        if T > 1 and hasattr(model, '_get_causal_mask'):
-            mask = model._get_causal_mask(T).to(device=h.device).unsqueeze(0).unsqueeze(0)
-
-        for layer in getattr(model, 'layers', []):
-            h = layer(h, freqs, mask, False, 0)
-
-        h = model.norm(h)  # (1, T, dim)
-
-        response_start = max(prompt_len - 1, 0)
-        return h[:, response_start:, :]  # (1, resp_len, dim)
-
     def train(
         self,
         prompts: list[str],
@@ -1381,11 +1445,9 @@ class RLHFTrainer:
                     resp_len, device=self.device)
                 per_token_rewards[-1] = reward_scalar
 
-                # Collect old log-probs and values (no grad)
+                # Collect old log-probs and values (no grad) — single combined pass
                 with torch.no_grad(), torch.amp.autocast("cuda", dtype=amp_dt, enabled=use_amp):
-                        old_logps = _get_response_logps(
-                            self.model, full_ids, prompt_len)
-                        hidden = self._get_hidden_states(
+                        old_logps, hidden, _ = _get_logps_hidden_entropy(
                             self.model, full_ids, prompt_len)
                         old_values = value_head(hidden).squeeze(0)  # (resp_len,)
 
@@ -1412,6 +1474,9 @@ class RLHFTrainer:
                         rewards=per_token_rewards,
                         response_mask=response_mask,
                         reward_scalar=reward_scalar,
+                        full_ids=full_ids,
+                        prompt_len=prompt_len,
+                        ref_logps=ref_logps,
                     )
 
                 epoch_reward += best_reward
@@ -1437,6 +1502,9 @@ class RLHFTrainer:
                         values=s["values"],
                         rewards=s["rewards"],
                         response_mask=s["mask"],
+                        full_ids=s.get("full_ids"),
+                        prompt_len=s.get("prompt_len"),
+                        ref_logps=s.get("ref_logps"),
                     )
 
             advantages, returns = rollout.compute_advantages(
@@ -1446,7 +1514,7 @@ class RLHFTrainer:
 
             # Normalize advantages
             if advantages.numel() > 1:
-                adv_std = advantages.std()
+                adv_std = advantages.std(unbiased=False)
                 if adv_std > 1e-6:
                     advantages = (advantages - advantages.mean()) / (
                         adv_std + 1e-8)
@@ -1501,13 +1569,10 @@ class RLHFTrainer:
                         stored_plen = rollout._prompt_lens[idx]
                         if stored_ids is not None and stored_plen is not None:
                             with torch.amp.autocast("cuda", dtype=amp_dt, enabled=use_amp):
-                                new_logps = _get_response_logps(
-                                    self.model, stored_ids, stored_plen)
-                                hidden = self._get_hidden_states(
+                                # Single combined pass: logps + hidden + entropy
+                                new_logps, hidden, entropy = _get_logps_hidden_entropy(
                                     self.model, stored_ids, stored_plen)
                                 new_values = value_head(hidden).squeeze(0)
-                                entropy = _get_response_entropy(
-                                    self.model, stored_ids, stored_plen)
                             log_ratio = (new_logps - mb_old_logps_i).clamp(-20, 20)
                             ratio = torch.exp(log_ratio)
                             entropy_bonus = entropy.mean()
@@ -1861,34 +1926,6 @@ class SelfPlayTrainer:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
-    def _get_hidden_states(
-        self,
-        model: nn.Module,
-        full_ids: torch.Tensor,
-        prompt_len: int,
-    ) -> torch.Tensor:
-        """Get hidden states for the response portion (for value head)."""
-        h = model.tok_embeddings(full_ids[:, :-1])
-
-        config = getattr(model, "config", None)
-        use_rope = getattr(config, "use_rope", True)
-        if not use_rope and hasattr(model, "pos"):
-            T = full_ids.shape[1] - 1
-            h = h + model.pos[:, :T]
-
-        freqs = getattr(model, "freqs_cis", None)
-        T = h.shape[1]
-        mask = None
-        if T > 1 and hasattr(model, '_get_causal_mask'):
-            mask = model._get_causal_mask(T).to(device=h.device).unsqueeze(0).unsqueeze(0)
-
-        for layer in getattr(model, 'layers', []):
-            h = layer(h, freqs, mask, False, 0)
-
-        h = model.norm(h)
-        response_start = max(prompt_len - 1, 0)
-        return h[:, response_start:, :]
-
     def train(
         self,
         prompts: list[str],
@@ -2027,11 +2064,9 @@ class SelfPlayTrainer:
                     resp_len, device=self.device)
                 per_token_rewards[-1] = reward_scalar
 
-                # Collect old log-probs and values
+                # Collect old log-probs and values — single combined pass
                 with torch.no_grad(), torch.amp.autocast("cuda", dtype=amp_dt, enabled=use_amp):
-                    old_logps = _get_response_logps(
-                        self.student, full_ids, prompt_len)
-                    hidden = self._get_hidden_states(
+                    old_logps, hidden, _ = _get_logps_hidden_entropy(
                         self.student, full_ids, prompt_len)
                     old_values = value_head(hidden).squeeze(0)
                     ref_logps = self._get_ref_logps(full_ids, prompt_len)
@@ -2057,6 +2092,9 @@ class SelfPlayTrainer:
                         rewards=per_token_rewards,
                         response_mask=response_mask,
                         reward_scalar=reward_scalar,
+                        full_ids=full_ids,
+                        prompt_len=prompt_len,
+                        ref_logps=ref_logps,
                     )
 
                 epoch_score += best_score
@@ -2081,6 +2119,9 @@ class SelfPlayTrainer:
                         values=s["values"],
                         rewards=s["rewards"],
                         response_mask=s["mask"],
+                        full_ids=s.get("full_ids"),
+                        prompt_len=s.get("prompt_len"),
+                        ref_logps=s.get("ref_logps"),
                     )
 
             advantages, returns = rollout.compute_advantages(
@@ -2090,7 +2131,7 @@ class SelfPlayTrainer:
 
             # Normalize advantages
             if advantages.numel() > 1:
-                adv_std = advantages.std()
+                adv_std = advantages.std(unbiased=False)
                 if adv_std > 1e-6:
                     advantages = (advantages - advantages.mean()) / (
                         adv_std + 1e-8)
@@ -2139,13 +2180,10 @@ class SelfPlayTrainer:
                         stored_plen = rollout._prompt_lens[idx]
                         if stored_ids is not None and stored_plen is not None:
                             with torch.amp.autocast("cuda", dtype=amp_dt, enabled=use_amp):
-                                new_logps = _get_response_logps(
-                                    self.student, stored_ids, stored_plen)
-                                hidden = self._get_hidden_states(
+                                # Single combined pass: logps + hidden + entropy
+                                new_logps, hidden, entropy = _get_logps_hidden_entropy(
                                     self.student, stored_ids, stored_plen)
                                 new_values = value_head(hidden).squeeze(0)
-                                entropy = _get_response_entropy(
-                                    self.student, stored_ids, stored_plen)
                             log_ratio = (new_logps - mb_old_logps_i).clamp(-20, 20)
                             ratio = torch.exp(log_ratio)
                             entropy_bonus = entropy.mean()
@@ -2732,8 +2770,8 @@ class ReMaxTrainer:
 
                     with torch.amp.autocast("cuda", dtype=amp_dtype,
                                             enabled=use_amp):
-                        # Current policy log-probs
-                        new_logps = _get_response_logps(
+                        # Current policy log-probs + entropy — single combined pass
+                        new_logps, _, entropy = _get_logps_hidden_entropy(
                             self.model, full_ids, prompt_len)
                         # Old log-probs (from generation — frozen ref approx)
                         with torch.no_grad():
@@ -2753,9 +2791,7 @@ class ReMaxTrainer:
                         ) * adv_tensor
                         policy_loss = -torch.min(surr1, surr2).mean()
 
-                        # Entropy bonus
-                        entropy = _get_response_entropy(
-                            self.model, full_ids, prompt_len)
+                        # Entropy bonus (already computed in combined pass above)
                         entropy_bonus = entropy.mean()
 
                         # KL penalty: KL(policy||ref) ≈ mean(log π - log π_ref)

@@ -6,11 +6,7 @@
   "model_path": "",
   "model_type": "auto",
   "system_prompt": "You are Enigma, a helpful AI assistant running locally on the user's computer.\nYou can execute commands using [CMD]command[/CMD] blocks.\nBe concise, helpful, and friendly.",
-  "personality": {
-    "tone": "helpful",
-    "verbosity": "balanced",
-    "formality": "casual"
-  },
+  "personality": {},
   "chat_template": null,
   "generation": {
     "temperature": 0.7,

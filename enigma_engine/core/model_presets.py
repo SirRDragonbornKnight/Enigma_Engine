@@ -126,7 +126,12 @@ class ForgeConfig:
     drop_path_rate: float = 0.0       # Stochastic depth (0.0 = disabled, 0.1-0.3 typical)
     use_differential_attn: bool = True   # R22: Differential attention (noise cancellation, reduces hallucination)
     neftune_alpha: float = 5.0        # R27: NEFTune embedding noise during training (5.0 = AlpacaEval optimal)
-    n_predict_heads: int = 2          # R25: Multi-token prediction extra heads (biggest gain at small model sizes)
+    n_predict_heads: int = 0          # R25 / MTP-2b: Multi-token prediction extra heads.
+                                       # Paper (arxiv:2404.19737) shows MTP gain grows with model size and is
+                                       # marginal sub-1B; each head is `dim × padded_vocab` un-tied params
+                                       # (~33-49M each at 742M scale). Default 0 because Pass 148 supersedes
+                                       # Medusa inference (the only consumer) with EAGLE-2. Set >0 explicitly
+                                       # if Medusa speculative decoding is required for a run.
 
     # nGPT: Weight normalization (Salimans & Kingma / Loshchilov et al.)
     # Decomposes each Linear layer's weight into direction (v/||v||) and

@@ -288,6 +288,44 @@ class LogicChatMixin:
                     # Strip truncated <think> from token-limited output
                     resp = strip_incomplete_think(resp)
 
+                # AutoResearch-2 Stage A wiring (Pass 154):
+                # Post-generation uncertainty gate. If web access is on,
+                # no pre-gen research ran, and the visible reply scores
+                # >= threshold uncertain, retry once with research context.
+                if (_web_access_on
+                        and not web_research_ctx
+                        and not getattr(self, '_stop_requested', False)):
+                    try:
+                        from enigma_engine.core.auto_research import (
+                            auto_research as _ar_fetch,
+                            should_retry_with_research)
+                        if should_retry_with_research(
+                                _msg_for_research, resp):
+                            retry_ctx = _ar_fetch(
+                                _msg_for_research, max_results=3)
+                            if retry_ctx:
+                                retry_kwargs = dict(kwargs)
+                                retry_kwargs["system_prompt"] = (
+                                    f"{combined_prompt}\n\n{retry_ctx}")
+                                logger.info(
+                                    "AutoResearch-2: low-confidence "
+                                    "reply, retrying with research "
+                                    "context")
+                                try:
+                                    resp = self.engine.chat(
+                                        full_msg, **retry_kwargs)
+                                except TypeError:
+                                    resp = self.engine.chat(full_msg)
+                                # Re-extract reasoning from retry output
+                                if has_reasoning(resp):
+                                    thinking_text, resp = (
+                                        extract_reasoning(resp))
+                                else:
+                                    resp = strip_incomplete_think(resp)
+                    except Exception as exc:
+                        logger.debug(
+                            "AutoResearch-2 retry failed: %s", exc)
+
                 # Parse and execute [CMD] blocks from response
                 from enigma_engine.core.commands import (
                     parse_commands)
@@ -516,6 +554,35 @@ class LogicChatMixin:
             "timestamp", f"\n  {ts} ",
             "system_prefix", "System  ",
             "error", text + "\n")
+
+    def _chat_session_marker(self, text: str):
+        """Render a divider line marking a session-state change.
+
+        Pass 156v Step 1 (Session-1 unification): single source of
+        truth for visually distinct chat-log markers when runtime
+        state changes (LoRA adapter swap / clear / stack apply).
+        Future incremental adoption: model swap, profile swap,
+        system-prompt edit, RAG corpus change.
+
+        The divider uses the dedicated ``session_marker`` text-tag
+        (configured on the chat display) so it is visually separate
+        from regular ``_chat_system`` messages — the user can scan
+        the chat log and find the seam where weights changed if
+        quality regresses afterwards.
+
+        Use this for SUCCESS state changes only. Errors (e.g.
+        engine raised, file missing) and load-first hints continue
+        to use ``_chat_error`` and ``_chat_system`` respectively.
+
+        Args:
+            text: Short human-readable description of the change
+                (e.g. ``"LoRA adapter: foo_lora"``,
+                ``"LoRA stack: foo@0.70, bar@0.30"``,
+                ``"using base weights"``). The helper wraps it in
+                horizontal bars for the divider look.
+        """
+        self._chat_append(
+            "session_marker", f"\n  ─── {text} ───\n")
 
     def _reset_display(self):
         """Clear the chat display widget only."""

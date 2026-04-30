@@ -11,6 +11,7 @@ import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
@@ -221,3 +222,121 @@ def should_auto_research(query: str) -> bool:
 
     # Questions (ending with ?)
     return bool(q.endswith("?"))
+
+
+# ---------------------------------------------------------------------------
+# AutoResearch-2 Stage A — post-generation uncertainty gate.
+#
+# Spec: SUGGESTIONS.md R-UNPREDICT-1 (Pass 146), AutoResearch-2.
+# Signal-driven (calibrated uncertainty markers + low-evidence patterns),
+# deterministic — no RNG. Caller chooses threshold.
+#
+# Stage B (inline `<search>` token in generation loop) is separate work
+# that requires logits access and training-loop changes.
+# ---------------------------------------------------------------------------
+
+# Calibrated uncertainty / hedge markers. Substring match (case-insensitive).
+_HEDGE_PHRASES: tuple[str, ...] = (
+    "i'm not sure", "i am not sure", "not sure",
+    "i don't know", "i do not know", "don't know",
+    "not certain", "uncertain", "unclear",
+    "i think", "i believe", "i guess",
+    "might be", "may be", "could be",
+    "perhaps", "possibly",
+    "i can't say", "i cannot say", "hard to say",
+)
+
+# Refusal / apology patterns — stronger uncertainty signal than hedging.
+_REFUSAL_PHRASES: tuple[str, ...] = (
+    "i apologize", "i'm sorry", "i am sorry",
+    "i cannot answer", "i can't answer",
+    "i'm unable", "i am unable",
+    "i don't have", "i do not have",
+    "no information", "no data",
+)
+
+
+@dataclass(frozen=True)
+class UncertaintyResult:
+    """Score from `score_uncertainty()`.
+
+    Attributes:
+        score: 0.0 (confident) to 1.0 (highly uncertain).
+        reasons: Which signals fired — for logging / debugging.
+    """
+    score: float
+    reasons: tuple[str, ...]
+
+
+def score_uncertainty(query: str, response: str) -> UncertaintyResult:
+    """Score a generated response for uncertainty.
+
+    Stage A of AutoResearch-2. Combines:
+      - hedge phrase hits (capped),
+      - refusal / apology hits (capped),
+      - length anomaly (substantive query, very short response),
+      - question-echo (response largely repeats the query).
+
+    Higher score = more uncertain. Caller decides threshold via
+    `should_retry_with_research()`.
+    """
+    if not response or not response.strip():
+        return UncertaintyResult(score=1.0, reasons=("empty_response",))
+
+    r = response.lower()
+    q = (query or "").lower().strip()
+    score = 0.0
+    reasons: list[str] = []
+
+    # Hedge phrases — cap so a hedge-heavy reply does not saturate alone.
+    hedge_hits = sum(1 for p in _HEDGE_PHRASES if p in r)
+    if hedge_hits:
+        score += min(0.6, hedge_hits * 0.2)
+        reasons.append(f"hedge_phrases={hedge_hits}")
+
+    # Refusal / apology — slightly stronger weight per hit, also capped.
+    refusal_hits = sum(1 for p in _REFUSAL_PHRASES if p in r)
+    if refusal_hits:
+        score += min(0.6, refusal_hits * 0.4)
+        reasons.append(f"refusal={refusal_hits}")
+
+    # Length anomaly: substantive question with a tiny response.
+    if len(q) > 30 and len(response.strip()) < 50:
+        score += 0.3
+        reasons.append("short_response")
+
+    # Question echo: response largely repeats the query with little new content.
+    if q and len(q) > 20:
+        q_clean = q.rstrip("?.! ").strip()
+        if q_clean and q_clean in r:
+            extra_chars = len(response.strip()) - len(q_clean)
+            if extra_chars < 30:
+                score += 0.3
+                reasons.append("question_echo")
+
+    score = min(1.0, score)
+    return UncertaintyResult(score=score, reasons=tuple(reasons))
+
+
+def should_retry_with_research(
+    query: str,
+    response: str,
+    threshold: float = 0.55,
+    enabled: bool = True,
+) -> bool:
+    """Decide whether to retry generation with web-research context attached.
+
+    Stage A of AutoResearch-2 (Pass 146 spec). Signal-driven; no RNG.
+
+    Args:
+        query: The user's original message.
+        response: The model's first-pass response.
+        threshold: Score >= threshold triggers retry. Default 0.55.
+        enabled: Hard off-switch. False always returns False.
+
+    Returns:
+        True if the caller should re-run with `auto_research()` context.
+    """
+    if not enabled:
+        return False
+    return score_uncertainty(query, response).score >= threshold

@@ -12,7 +12,6 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from enigma_engine.core.curated_dataset import CuratedDataset, DatasetEntry
 from enigma_engine.core.dataset import (
     KNOWN_DATASETS,
-    MAX_FILE_SIZE,
     clean_text,
     download_dataset,
     estimate_token_count,
@@ -509,9 +508,8 @@ class TestDownloadDataset:
     def test_creates_dest_dir(self, tmp_path):
         dest = tmp_path / "sub" / "dir"
         with patch("huggingface_hub.snapshot_download",
-                    side_effect=RuntimeError("mocked")):
-            with pytest.raises(RuntimeError):
-                download_dataset("tinystories", dest)
+                    side_effect=RuntimeError("mocked")), pytest.raises(RuntimeError):
+            download_dataset("tinystories", dest)
         # dest dir should exist even if download fails
         assert dest.exists()
 

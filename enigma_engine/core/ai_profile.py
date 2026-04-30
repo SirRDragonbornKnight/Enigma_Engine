@@ -68,6 +68,21 @@ class AIProfile:
     Similar to mod.json but for AI models. Defines everything
     needed to load and configure an AI personality.
 
+    Identity vs roleplay (Personality-3/4 boundary):
+        Base AI identity (the way the model "is itself") is
+        weight-trained per the Personality-5 plan, NOT controlled
+        through this dataclass. The ``personality`` dict on this
+        profile is a **roleplay overlay** — empty means the AI is
+        being itself (or being pointed at a task via ``system_prompt``
+        + ``adapter`` only), populated means the profile defines a
+        fictional character the AI is acting as. Task-preset profiles
+        (coding, research, creative writing) keep ``personality`` empty
+        — they steer behaviour through ``system_prompt`` and
+        generation knobs, not through character traits. Only
+        explicit roleplay/character profiles populate the dict.
+        Use ``is_roleplay()`` to distinguish the two at runtime;
+        ``apply_profile_to_engine`` logs which branch fires.
+
     Attributes:
         name: Display name for the AI (e.g., "Assistant", "Coder", "Creative")
         id: Unique identifier (e.g., "assistant", "coding_helper")
@@ -78,7 +93,10 @@ class AIProfile:
         model_type: Type of model ("gguf", "pytorch", "huggingface", "ollama")
 
         system_prompt: Default system prompt for this AI
-        personality: Personality traits (for consistency)
+        personality: **Roleplay-only** overlay traits (tone, verbosity,
+            formality, humor, etc.). Default empty — leave empty for
+            base AI profiles. Populate only on character/roleplay
+            profiles where the user is defining a fictional persona.
 
         chat_template: How to format messages (None = auto-detect)
         generation: Generation parameters
@@ -100,14 +118,12 @@ class AIProfile:
     model_path: str = ""
     model_type: str = "auto"  # auto, gguf, pytorch, huggingface, ollama
 
-    # Personality
+    # Personality (ROLEPLAY OVERLAY — see class docstring)
+    # Empty by default. Base AI identity is weight-trained per
+    # Personality-5; populating this dict on a base profile is the
+    # wrong abstraction. Populate only on roleplay/character profiles.
     system_prompt: str = "You are a helpful AI assistant."
-    personality: Dict[str, Any] = field(default_factory=lambda: {
-        "tone": "helpful",
-        "verbosity": "balanced",
-        "formality": "casual",
-        "humor": "occasional",
-    })
+    personality: Dict[str, Any] = field(default_factory=dict)
 
     # Chat
     chat_template: Optional[str] = None  # None = auto-detect from model
@@ -121,6 +137,12 @@ class AIProfile:
     # Commands
     commands: List[str] = field(default_factory=list)  # Empty = all allowed
     disabled_commands: List[str] = field(default_factory=list)
+
+    # LoRA adapter (optional — Pass 156t LoRA-1b UX)
+    # Path to a PEFT adapter directory. None or empty = base weights.
+    # The adapter's recorded base must match ``model_path``; mismatched
+    # adapters are skipped at apply time with a warning.
+    adapter: Optional[str] = None
 
     # Metadata
     author: str = ""
@@ -167,6 +189,20 @@ class AIProfile:
 
         # Check if in allowed list
         return command in self.commands
+
+    def is_roleplay(self) -> bool:
+        """Return True if this profile represents a roleplay/character overlay.
+
+        Personality-3 boundary signal. A profile is a roleplay overlay
+        when its ``personality`` dict has any populated entry; base AI
+        profiles have an empty dict because base identity is
+        weight-trained per Personality-5, not configured here.
+
+        Downstream consumers (system-prompt builders, identity guards,
+        future Personality-4 work) use this to decide whether to inject
+        roleplay framing or to leave the AI as itself.
+        """
+        return bool(self.personality)
 
 
 # =============================================================================
@@ -443,11 +479,10 @@ DEFAULT_PROFILES = {
         system_prompt="""You are Enigma, a helpful AI assistant running locally on the user's computer.
 You can execute commands using [CMD]command[/CMD] blocks.
 Be concise, helpful, and friendly.""",
-        personality={
-            "tone": "helpful",
-            "verbosity": "balanced",
-            "formality": "casual",
-        },
+        # Personality-3: base AI has NO personality overlay — identity
+        # is weight-trained per Personality-5. The personality dict is
+        # reserved for roleplay/character profiles. ``is_roleplay()``
+        # returns False on this profile, which is correct.
         tags=["general", "assistant"],
     ),
 
@@ -459,11 +494,12 @@ Be concise, helpful, and friendly.""",
 Use [CMD]file.read path[/CMD] to read files.
 Use [CMD]file.write path content[/CMD] to save code.
 Be precise and technical. Show code examples.""",
-        personality={
-            "tone": "technical",
-            "verbosity": "detailed",
-            "formality": "professional",
-        },
+        # Personality-4 (P1 row 10): task overlay, NOT a roleplay
+        # character. Generic tone/verbosity/formality knobs were
+        # decorative legacy from before Pass 156y; they made every
+        # task-preset profile satisfy ``is_roleplay() == True`` for
+        # the wrong reason. Empty by default — the user can populate
+        # explicitly only when they want a coding-themed character.
         generation=GenerationConfig(
             temperature=0.3,  # Lower for more precise code
             top_p=0.95,
@@ -477,12 +513,7 @@ Be precise and technical. Show code examples.""",
         description="For creative writing and storytelling",
         system_prompt="""You are a creative writing assistant. Help users with stories,
 poems, scripts, and creative content. Be imaginative and expressive.""",
-        personality={
-            "tone": "creative",
-            "verbosity": "expressive",
-            "formality": "casual",
-            "humor": "witty",
-        },
+        # Personality-4: task overlay, not a character. See coding_helper above.
         generation=GenerationConfig(
             temperature=0.9,  # Higher for creativity
             top_p=0.95,
@@ -500,11 +531,7 @@ analyze data, and understand complex topics.
 Use [CMD]search.web query[/CMD] to search the internet.
 Use [CMD]web.fetch url[/CMD] to read web pages.
 Always cite sources and be factual.""",
-        personality={
-            "tone": "analytical",
-            "verbosity": "detailed",
-            "formality": "academic",
-        },
+        # Personality-4: task overlay, not a character. See coding_helper above.
         generation=GenerationConfig(
             temperature=0.5,
             top_p=0.9,
@@ -581,4 +608,34 @@ def apply_profile_to_engine(profile: AIProfile, engine) -> None:
     if hasattr(engine, 'system_prompt'):
         engine.system_prompt = profile.system_prompt
 
-    logger.info(f"Applied profile '{profile.name}' to engine")
+    # Apply or clear LoRA adapter (Pass 156t LoRA-1b UX)
+    # Profiles can pin a per-base adapter. If the profile has no adapter
+    # field (or empty string / None), clear any active adapter so the
+    # profile boundary is honored — switching to a profile that doesn't
+    # specify an adapter must NOT silently inherit the previous
+    # profile's adapter. Skip silently if the engine pre-dates Pass 156s
+    # (no apply_adapter method).
+    adapter_path = (profile.adapter or "").strip() or None
+    if hasattr(engine, 'apply_adapter') and hasattr(engine, 'clear_adapter'):
+        try:
+            if adapter_path is None:
+                engine.clear_adapter()
+            else:
+                engine.apply_adapter(adapter_path)
+        except (FileNotFoundError, ImportError, RuntimeError) as e:
+            logger.warning(
+                f"Profile '{profile.name}' adapter not applied: {e}")
+
+    # Personality-4 boundary signal at the apply site — gives
+    # ``is_roleplay()`` an end-to-end consumer (without it the signal
+    # is dead infrastructure). Different log line for each branch so
+    # ops / logs can audit when the AI is being itself vs acting as a
+    # character. Behaviour is identical either way; only the marker
+    # differs.
+    if profile.is_roleplay():
+        logger.info(
+            f"Applied roleplay profile '{profile.name}' to engine "
+            f"(personality overlay: {sorted(profile.personality.keys())})"
+        )
+    else:
+        logger.info(f"Applied profile '{profile.name}' to engine")

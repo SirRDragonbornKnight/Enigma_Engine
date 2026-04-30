@@ -1,5 +1,4 @@
 """Tests for training evaluation features."""
-import pytest
 from unittest.mock import MagicMock
 
 
@@ -154,3 +153,151 @@ class TestEvalBugFixes:
         result = run_golden_eval(model, tok, golden, device="cpu")
         # Empty expected = no constraint = meaningless test → skip
         assert result["total"] == 0
+
+
+class TestGSM8KBenchmark:
+    """Eval-1: GSM8K reasoning benchmark."""
+
+    # ---- parse_final_number ----
+
+    def test_parse_final_number_gold_format(self):
+        """`#### N` is the canonical GSM8K answer marker."""
+        from enigma_engine.core.training_evaluation import parse_final_number
+        assert parse_final_number("Janet has 3 ducks ... #### 18") == 18.0
+
+    def test_parse_final_number_with_commas(self):
+        """Numbers with thousand separators must parse."""
+        from enigma_engine.core.training_evaluation import parse_final_number
+        assert parse_final_number("total #### 1,234") == 1234.0
+
+    def test_parse_final_number_negative(self):
+        """Negative numbers must parse."""
+        from enigma_engine.core.training_evaluation import parse_final_number
+        assert parse_final_number("loss #### -42") == -42.0
+
+    def test_parse_final_number_decimal(self):
+        """Decimal numbers must parse."""
+        from enigma_engine.core.training_evaluation import parse_final_number
+        assert parse_final_number("price #### 3.5") == 3.5
+
+    def test_parse_final_number_fallback_last_number(self):
+        """No `####` → fall back to last number in text."""
+        from enigma_engine.core.training_evaluation import parse_final_number
+        assert parse_final_number("the answer is 42") == 42.0
+
+    def test_parse_final_number_returns_none_no_number(self):
+        """No number anywhere → None."""
+        from enigma_engine.core.training_evaluation import parse_final_number
+        assert parse_final_number("I don't know") is None
+
+    def test_parse_final_number_empty_string(self):
+        """Empty input → None."""
+        from enigma_engine.core.training_evaluation import parse_final_number
+        assert parse_final_number("") is None
+
+    # ---- load_gsm8k ----
+
+    def test_load_gsm8k_missing_file_raises_clear_error(self, tmp_path):
+        """Missing JSONL → FileNotFoundError mentioning recovery command."""
+        from enigma_engine.core.training_evaluation import load_gsm8k
+
+        missing = tmp_path / "no_such.jsonl"
+        try:
+            load_gsm8k(missing)
+        except FileNotFoundError as exc:
+            msg = str(exc)
+            assert "gsm8k" in msg.lower() or "openai/gsm8k" in msg
+            assert "load_dataset" in msg or "datasets" in msg
+        else:
+            raise AssertionError("expected FileNotFoundError")
+
+    def test_load_gsm8k_reads_jsonl(self, tmp_path):
+        """Read items from a JSONL file."""
+        import json
+        from enigma_engine.core.training_evaluation import load_gsm8k
+
+        path = tmp_path / "g.jsonl"
+        items = [
+            {"question": "q1", "answer": "step\n#### 1"},
+            {"question": "q2", "answer": "step\n#### 2"},
+            {"question": "q3", "answer": "step\n#### 3"},
+        ]
+        path.write_text(
+            "\n".join(json.dumps(it) for it in items) + "\n",
+            encoding="utf-8")
+
+        loaded = load_gsm8k(path)
+        assert len(loaded) == 3
+        assert loaded[0]["question"] == "q1"
+        assert loaded[2]["answer"].endswith("#### 3")
+
+    def test_load_gsm8k_caps_n(self, tmp_path):
+        """Positive `n` caps the number of returned items."""
+        import json
+        from enigma_engine.core.training_evaluation import load_gsm8k
+
+        path = tmp_path / "g.jsonl"
+        items = [{"question": f"q{i}", "answer": f"#### {i}"} for i in range(5)]
+        path.write_text(
+            "\n".join(json.dumps(it) for it in items) + "\n",
+            encoding="utf-8")
+
+        loaded = load_gsm8k(path, n=2)
+        assert len(loaded) == 2
+
+    # ---- run_gsm8k_benchmark ----
+
+    def test_run_gsm8k_benchmark_with_mock_engine(self):
+        """Engine that always answers 18 → correct on items whose gold is 18."""
+        from enigma_engine.core.training_evaluation import run_gsm8k_benchmark
+
+        engine = MagicMock()
+        engine.generate.return_value = "thinking ... #### 18"
+
+        examples = [
+            {"question": "q1", "answer": "step\n#### 18"},   # correct
+            {"question": "q2", "answer": "step\n#### 18"},   # correct
+            {"question": "q3", "answer": "step\n#### 99"},   # wrong
+        ]
+
+        result = run_gsm8k_benchmark(engine, examples, num_shots=0,
+                                      max_gen=32)
+        assert result["total"] == 3
+        assert result["correct"] == 2
+        assert abs(result["accuracy"] - 2 / 3) < 1e-6
+
+    def test_run_gsm8k_benchmark_handles_unparseable_output(self):
+        """Engine output with no number → counted incorrect, no crash."""
+        from enigma_engine.core.training_evaluation import run_gsm8k_benchmark
+
+        engine = MagicMock()
+        engine.generate.return_value = "i dunno"
+
+        examples = [{"question": "q1", "answer": "#### 7"}]
+        result = run_gsm8k_benchmark(engine, examples, num_shots=0,
+                                      max_gen=32)
+        assert result["total"] == 1
+        assert result["correct"] == 0
+        assert result["accuracy"] == 0.0
+
+    def test_run_gsm8k_benchmark_floating_point_tolerance(self):
+        """3.0 vs 3.00 must compare equal (numeric, not string)."""
+        from enigma_engine.core.training_evaluation import run_gsm8k_benchmark
+
+        engine = MagicMock()
+        engine.generate.return_value = "#### 3.00"
+
+        examples = [{"question": "q1", "answer": "#### 3"}]
+        result = run_gsm8k_benchmark(engine, examples, num_shots=0,
+                                      max_gen=32)
+        assert result["correct"] == 1
+
+    def test_run_gsm8k_benchmark_empty_returns_zero_total(self):
+        """No examples → total=0, accuracy=0.0, no crash."""
+        from enigma_engine.core.training_evaluation import run_gsm8k_benchmark
+
+        engine = MagicMock()
+        result = run_gsm8k_benchmark(engine, [], num_shots=0, max_gen=32)
+        assert result["total"] == 0
+        assert result["correct"] == 0
+        assert result["accuracy"] == 0.0

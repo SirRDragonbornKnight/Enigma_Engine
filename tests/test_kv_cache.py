@@ -273,7 +273,7 @@ class TestJsonSchemaConstraintInit:
 
     def test_creates_from_schema(self):
         """Constraint can be created from a simple schema."""
-        torch = pytest.importorskip("torch")
+        pytest.importorskip("torch")
         from enigma_engine.core.json_schema_mask import JsonSchemaConstraint
         schema = {
             "type": "object",
@@ -286,7 +286,7 @@ class TestJsonSchemaConstraintInit:
 
     def test_reset_returns_to_initial(self):
         """reset() puts FSM back to EXPECT_OPEN state."""
-        torch = pytest.importorskip("torch")
+        pytest.importorskip("torch")
         from enigma_engine.core.json_schema_mask import JsonSchemaConstraint
         schema = {"type": "object", "properties": {"x": {"type": "string"}}}
         c = JsonSchemaConstraint(schema, _MockTokenizer())
@@ -301,7 +301,7 @@ class TestJsonSchemaConstraintFSM:
 
     def test_advance_through_simple_object(self):
         """FSM transitions through a complete {"name": "val"} object."""
-        torch = pytest.importorskip("torch")
+        pytest.importorskip("torch")
         from enigma_engine.core.json_schema_mask import JsonSchemaConstraint
         schema = {
             "type": "object",
@@ -318,7 +318,7 @@ class TestJsonSchemaConstraintFSM:
 
     def test_advance_multi_field(self):
         """FSM handles multiple key-value pairs."""
-        torch = pytest.importorskip("torch")
+        pytest.importorskip("torch")
         from enigma_engine.core.json_schema_mask import JsonSchemaConstraint
         schema = {
             "type": "object",
@@ -334,7 +334,7 @@ class TestJsonSchemaConstraintFSM:
 
     def test_empty_object_schema(self):
         """Schema with no properties: {} should complete immediately."""
-        torch = pytest.importorskip("torch")
+        pytest.importorskip("torch")
         from enigma_engine.core.json_schema_mask import JsonSchemaConstraint
         schema = {"type": "object", "properties": {}}
         c = JsonSchemaConstraint(schema, _MockTokenizer())
@@ -351,7 +351,7 @@ class TestJsonSchemaConstraintNested:
     """S736-S738: FSM handles nested objects, arrays, and key-based types."""
 
     def _make(self, schema):
-        torch = pytest.importorskip("torch")
+        pytest.importorskip("torch")
         from enigma_engine.core.json_schema_mask import JsonSchemaConstraint
         return JsonSchemaConstraint(schema, _MockTokenizer())
 
@@ -473,7 +473,7 @@ class TestH2OEvictionQuantized:
 
     def test_not_done_mid_object(self):
         """FSM is not done while mid-object."""
-        torch = pytest.importorskip("torch")
+        pytest.importorskip("torch")
         from enigma_engine.core.json_schema_mask import JsonSchemaConstraint
         schema = {"type": "object", "properties": {"x": {"type": "string"}}}
         c = JsonSchemaConstraint(schema, _MockTokenizer())

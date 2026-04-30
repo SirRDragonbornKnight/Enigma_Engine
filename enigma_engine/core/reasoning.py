@@ -42,9 +42,28 @@ logger = logging.getLogger(__name__)
 THINK_START = "<think>"
 THINK_END = "</think>"
 
+# Stage B-1 (AutoResearch-2): inline search-query tags. The model
+# emits ``<search>query</search>`` mid-generation to request that the
+# generation loop pause, run a RAG/web lookup, and inject results
+# back into the prompt before resuming. Stage B-1 ships only the
+# token registry + extraction helpers; the generation hook (Stage
+# B-2) and RAG wire (Stage B-3) are separate work tracked in
+# SUGGESTIONS.md. Models trained without these tokens will never
+# emit them, so the feature degrades silently to a no-op.
+SEARCH_START = "<search>"
+SEARCH_END = "</search>"
+
 # Regex to match <think>...</think> blocks (DOTALL for multiline)
 _THINK_PATTERN = re.compile(
     re.escape(THINK_START) + r"(.*?)" + re.escape(THINK_END),
+    re.DOTALL,
+)
+
+# Regex to match <search>...</search> blocks (DOTALL for multiline).
+# Stage B-1 mirrors the THINK pattern shape so all helpers use the
+# same lazy-match semantics.
+_SEARCH_PATTERN = re.compile(
+    re.escape(SEARCH_START) + r"(.*?)" + re.escape(SEARCH_END),
     re.DOTALL,
 )
 
@@ -201,7 +220,58 @@ def format_reasoning_example(
 
 
 # =============================================================================
-# 🔀 MULTI-STEP REASONING (CoT-D)
+# � INLINE SEARCH (AutoResearch-2 Stage B-1)
+# =============================================================================
+
+def extract_search_queries(text: str) -> list[str]:
+    """Extract all ``<search>...</search>`` query strings from *text*.
+
+    Stage B-1 helper: the model emits one or more ``<search>query</search>``
+    blocks mid-generation when it wants to look something up.  This
+    returns the *query strings* (whitespace-stripped) in source order so
+    Stage B-3 can dispatch them to the RAG/web backend.
+
+    Unclosed ``<search>`` tags are ignored (matches ``has_reasoning``
+    semantics on truncated output).
+
+    Args:
+        text: Raw model output.
+
+    Returns:
+        List of query strings.  Empty list if no closed blocks.
+
+    Examples:
+        >>> extract_search_queries("<search>weather today</search>")
+        ['weather today']
+        >>> extract_search_queries("plain answer")
+        []
+        >>> extract_search_queries(
+        ...     "<search>a</search> middle <search>b</search>"
+        ... )
+        ['a', 'b']
+    """
+    return [m.group(1).strip() for m in _SEARCH_PATTERN.finditer(text)]
+
+
+def strip_search_blocks(text: str) -> str:
+    """Remove all ``<search>...</search>`` blocks from *text*.
+
+    Stage B-1 helper: complement to ``strip_reasoning``.  Unclosed
+    tags are left intact (caller can use ``strip_incomplete_search``).
+    """
+    return _SEARCH_PATTERN.sub("", text).strip()
+
+
+def has_search_request(text: str) -> bool:
+    """Check whether *text* contains a complete ``<search>...</search>`` block.
+
+    An unclosed ``<search>`` tag does **not** count.
+    """
+    return bool(_SEARCH_PATTERN.search(text))
+
+
+# =============================================================================
+# �🔀 MULTI-STEP REASONING (CoT-D)
 # =============================================================================
 
 def extract_all_reasoning(text: str) -> list[tuple[str, str]]:
@@ -311,17 +381,17 @@ def format_multistep_example(
 # =============================================================================
 
 __all__ = [
-    "THINK_START",
     "THINK_END",
-    "extract_reasoning",
-    "extract_all_reasoning",
-    "strip_reasoning",
-    "has_reasoning",
-    "wrap_reasoning",
-    "build_reasoning_instruction",
+    "THINK_START",
     "build_multistep_reasoning_instruction",
-    "format_reasoning_example",
-    "format_multistep_example",
+    "build_reasoning_instruction",
     "count_reasoning_steps",
+    "extract_all_reasoning",
+    "extract_reasoning",
+    "format_multistep_example",
+    "format_reasoning_example",
+    "has_reasoning",
     "strip_incomplete_think",
+    "strip_reasoning",
+    "wrap_reasoning",
 ]

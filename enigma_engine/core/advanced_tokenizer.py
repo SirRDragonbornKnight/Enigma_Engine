@@ -40,6 +40,8 @@ class AdvancedBPETokenizer:
             "<unk>": 3,
             "<think>": 4,
             "</think>": 5,
+            "<search>": 6,   # Stage B-1: inline search-query start
+            "</search>": 7,  # Stage B-1: inline search-query end
         }
 
         self.pad_token = "<pad>"
@@ -53,6 +55,9 @@ class AdvancedBPETokenizer:
         self.unk_token_id = 3
         self.think_start_id = self.special_tokens["<think>"]
         self.think_end_id = self.special_tokens["</think>"]
+        # Stage B-1: see bpe_tokenizer for None-on-legacy rationale.
+        self.search_start_id: int | None = self.special_tokens.get("<search>")
+        self.search_end_id: int | None = self.special_tokens.get("</search>")
 
         # Vocabulary mappings
         self.token_to_id: dict[str, int] = {}
@@ -65,6 +70,15 @@ class AdvancedBPETokenizer:
         # Cache for encoding (LRU via OrderedDict)
         self._cache_lock = threading.Lock()
         self.cache: OrderedDict[str, list[str]] = OrderedDict()
+        self._cache_cap = self._compute_cache_cap()
+
+        # UTF-8 byte-level mode (Tok-2): when True, words are
+        # converted to UTF-8 bytes before BPE so any Unicode
+        # codepoint can be encoded via the 256 base byte tokens
+        # (matches GPT-2 / Llama / Qwen3). Default ON for fresh
+        # tokenizers; legacy vocab files without the flag load
+        # with use_utf8_bytes=False (see load()).
+        self.use_utf8_bytes: bool = True
 
         if vocab_file and Path(vocab_file).exists():
             self.load(vocab_file)
@@ -72,6 +86,15 @@ class AdvancedBPETokenizer:
             self._init_base_vocab()
 
         self.vocab_size = len(self.token_to_id)
+
+    @staticmethod
+    def _compute_cache_cap() -> int:
+        """Cache cap scaled to RAM via InferenceMemoryBudget (S805)."""
+        try:
+            from .hardware_detection import InferenceMemoryBudget
+            return InferenceMemoryBudget().advanced_tok_cache_cap
+        except Exception:
+            return 10000  # safe fallback
 
     def _init_base_vocab(self):
         """Initialize with special tokens and base characters."""
@@ -88,6 +111,27 @@ class AdvancedBPETokenizer:
                 self.id_to_token[next_id] = char
                 next_id += 1
 
+    @staticmethod
+    def _text_to_bytes(text: str) -> str:
+        """Convert text to a UTF-8 byte string using latin-1 mapping.
+
+        Each byte of the UTF-8 encoding maps 1:1 to a latin-1 char
+        (the base vocab covers all 256 byte values via
+        ``_init_base_vocab``), letting BPE operate on byte-level
+        tokens. Mirrors ``BPETokenizer._text_to_bytes``.
+        """
+        return text.encode('utf-8').decode('latin-1')
+
+    @staticmethod
+    def _bytes_to_text(byte_string: str) -> str:
+        """Convert a latin-1 byte string back to UTF-8 text.
+
+        Reverses ``_text_to_bytes``. Invalid byte sequences are
+        replaced rather than raising.
+        """
+        return byte_string.encode('latin-1').decode('utf-8',
+                                                     errors='replace')
+
     def load(self, vocab_file: Union[str, Path]) -> None:
         """Load vocabulary from file."""
         vocab_file = Path(vocab_file)
@@ -99,6 +143,11 @@ class AdvancedBPETokenizer:
                 raise ValueError(
                     f"Corrupt vocabulary file {vocab_file}: {exc}"
                 ) from exc
+
+        # use_utf8_bytes flag: legacy files without the flag default
+        # to False so an existing tokenizer trained at character-level
+        # is not silently re-interpreted as byte-level (Tok-2).
+        self.use_utf8_bytes = bool(data.get('use_utf8_bytes', False))
 
         # Handle different formats
         if 'encoder' in data:
@@ -125,6 +174,18 @@ class AdvancedBPETokenizer:
                     self.unk_token_id = data['special_tokens']['[E:unk]']
                     self.unk_token = '[E:unk]'
 
+                # Stage B-1: re-derive search-token IDs from the loaded
+                # vocab.  Legacy files written before <search> existed
+                # must yield None so the generation hook (Stage B-2)
+                # detects "feature unavailable on this model" instead
+                # of aliasing a learned ID.
+                self.search_start_id = data['special_tokens'].get('<search>')
+                self.search_end_id = data['special_tokens'].get('</search>')
+                if self.search_start_id is None:
+                    self.special_tokens.pop('<search>', None)
+                if self.search_end_id is None:
+                    self.special_tokens.pop('</search>', None)
+
             self.vocab_size = data.get('vocab_size', len(self.token_to_id))
 
         elif 'token_to_id' in data:
@@ -135,6 +196,15 @@ class AdvancedBPETokenizer:
             if 'merges' in data:
                 self.merges = [tuple(m) for m in data['merges']]
                 self.merge_ranks = {m: i for i, m in enumerate(self.merges)}
+
+            # Stage B-1: standard format has no separate special_tokens
+            # dict; derive from token_to_id.
+            self.search_start_id = self.token_to_id.get('<search>')
+            self.search_end_id = self.token_to_id.get('</search>')
+            if self.search_start_id is None:
+                self.special_tokens.pop('<search>', None)
+            if self.search_end_id is None:
+                self.special_tokens.pop('</search>', None)
 
             self.vocab_size = len(self.token_to_id)
         else:
@@ -151,6 +221,7 @@ class AdvancedBPETokenizer:
             'vocab_size': self.vocab_size,
             'encoder': self.token_to_id,
             'special_tokens': self.special_tokens,
+            'use_utf8_bytes': self.use_utf8_bytes,
         }
 
         from enigma_engine.core.safe_save import atomic_write_json
@@ -201,10 +272,12 @@ class AdvancedBPETokenizer:
                     i += 1
             tokens = new_tokens
 
-        # Cache result (LRU eviction)
+        # Cache result (LRU eviction, cap scaled to RAM — S805)
         with self._cache_lock:
-            if len(self.cache) > 10000:
-                for _ in range(5000):
+            cap = self._cache_cap
+            if len(self.cache) > cap:
+                evict = cap // 2
+                for _ in range(evict):
                     self.cache.popitem(last=False)
             self.cache[word] = tokens
         return tokens
@@ -238,10 +311,18 @@ class AdvancedBPETokenizer:
             for word in words:
                 if not word:
                     continue
-                # Check special tokens
+                # Check special tokens (always on the original text
+                # before any byte conversion)
                 if word in self.special_tokens:
                     ids.append(self.special_tokens[word])
                     continue
+                # Convert to UTF-8 bytes for sub-word lookup so any
+                # Unicode codepoint is representable via the 256
+                # latin-1 base tokens (Tok-2). Whole-word vocab hits
+                # are still possible if a multi-byte sequence was
+                # learned as a merged token during training.
+                if self.use_utf8_bytes:
+                    word = self._text_to_bytes(word)
                 # Check if whole word is in vocab
                 if word in self.token_to_id:
                     ids.append(self.token_to_id[word])
@@ -259,12 +340,21 @@ class AdvancedBPETokenizer:
                             else:
                                 ids.append(self.unk_token_id)
         else:
-            # No merges loaded — character-level fallback
-            for char in text:
-                if char in self.token_to_id:
-                    ids.append(self.token_to_id[char])
-                else:
-                    ids.append(self.unk_token_id)
+            # No merges loaded — byte-level fallback when enabled,
+            # otherwise legacy character-level (Tok-2).
+            if self.use_utf8_bytes:
+                byte_str = self._text_to_bytes(text)
+                for char in byte_str:
+                    if char in self.token_to_id:
+                        ids.append(self.token_to_id[char])
+                    else:
+                        ids.append(self.unk_token_id)
+            else:
+                for char in text:
+                    if char in self.token_to_id:
+                        ids.append(self.token_to_id[char])
+                    else:
+                        ids.append(self.unk_token_id)
 
         if add_special_tokens:
             if self.eos_token_id in self.id_to_token or \
@@ -274,7 +364,12 @@ class AdvancedBPETokenizer:
         return ids
 
     def decode(self, token_ids: list[int], skip_special_tokens: bool = True) -> str:
-        """Decode token IDs to text."""
+        """Decode token IDs to text.
+
+        In UTF-8 byte mode, the latin-1 byte string assembled from
+        token pieces is converted back to UTF-8 text after de-tokenization
+        (Tok-2). Unknown IDs render as the unk token.
+        """
         chars = []
 
         special_ids = set(self.special_tokens.values()) if skip_special_tokens else set()
@@ -287,7 +382,12 @@ class AdvancedBPETokenizer:
             else:
                 chars.append(self.unk_token)
 
-        return ''.join(chars)
+        text = ''.join(chars)
+
+        if self.use_utf8_bytes:
+            text = self._bytes_to_text(text)
+
+        return text
 
     def encode_chat(
         self,

@@ -230,7 +230,7 @@ def get_model_hash(path: Union[str, Path]) -> str:
 
     # Use file size and modification time for quick hash (not security-sensitive)
     stat = path.stat()
-    return hashlib.md5(  # noqa: S324
+    return hashlib.md5(
         f"{path}:{stat.st_size}:{stat.st_mtime}".encode(),
         usedforsecurity=False,
     ).hexdigest()
@@ -238,7 +238,7 @@ def get_model_hash(path: Union[str, Path]) -> str:
 
 __all__ = [
     'ModelRegistry',
-    'safe_load_weights',
-    'get_state_dict',
     'get_model_hash',
+    'get_state_dict',
+    'safe_load_weights',
 ]

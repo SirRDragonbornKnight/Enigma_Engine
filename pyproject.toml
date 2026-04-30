@@ -109,6 +109,7 @@ select = [
     "PIE",    # flake8-pie (misc cleanups)
     "PLE",    # pylint errors
     "PLW",    # pylint warnings
+    "RUF",    # ruff-native rules (mutable class defaults, implicit Optional, etc.)
 ]
 ignore = [
     "E402",   # module-import-not-at-top — deferred imports pattern
@@ -157,6 +158,26 @@ ignore = [
     "UP037",  # quoted-annotation — 'Type' vs Type
     "PIE810", # multiple-starts-ends-with — cosmetic
     "E401",   # multiple-imports-on-one-line — import a, b
+    # RUF unicode noise — box-drawing chars (─│└) and emoji in docstrings
+    # / comments are intentional in this codebase. Ruff flags them as
+    # "ambiguous unicode" but they are not Cyrillic homoglyphs.
+    "RUF001", # ambiguous-unicode-character-string
+    "RUF002", # ambiguous-unicode-character-docstring
+    "RUF003", # ambiguous-unicode-character-comment
+    # Style choices that don't catch bugs:
+    "RUF005", # collection-literal-concatenation — readability choice
+    "RUF043", # pytest-raises-ambiguous-pattern — overly strict on regex
+    "RUF059", # unused-unpacked-variable — many intentional (a, _ = ...)
+    # Manual-only RUF rules tracked for a future tightening pass:
+    "RUF012", # mutable-class-default — 15 sites, all class-level constants
+              # used as constants (lookup dicts, suggested models). Need
+              # `ClassVar[dict[...]]` annotations; safe but tedious.
+    "RUF013", # implicit-optional — 23 sites with `def f(x: T = None)`.
+              # Real type-hint improvement; needs `Optional[T]` / `T | None`
+              # but project still targets py39 so unsafe-fix can't use `|`.
+    "RUF015", # unnecessary-iterable-allocation-for-first-element — 1 site
+    "RUF022", # unsorted-dunder-all — 2 sites with grouped/commented __all__
+              # blocks; auto-sort destroys the grouping.
 ]
 
 [tool.ruff.lint.per-file-ignores]

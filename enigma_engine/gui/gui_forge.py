@@ -18,13 +18,13 @@ from enigma_engine.gui.widgets import (
     C_GREEN, C_GREEN_DIM, C_SURFACE, C_TEXT)
 
 # Re-export so existing imports keep working
-from enigma_engine.gui.gui_forge_training import ForgeTrainingMixin  # noqa: F401
-from enigma_engine.gui.gui_forge_advanced import ForgeAdvancedMixin  # noqa: F401
-from enigma_engine.gui.gui_forge_adaptive import ForgeAdaptiveMixin  # noqa: F401
-from enigma_engine.gui.gui_forge_tools import ForgeToolsMixin  # noqa: F401
-from enigma_engine.gui.gui_forge_models import ForgeModelsMixin  # noqa: F401
-from enigma_engine.gui.gui_forge_queue import ForgeQueueMixin  # noqa: F401
-from enigma_engine.gui.gui_forge_new_modes import ForgeNewModesMixin  # noqa: F401
+from enigma_engine.gui.gui_forge_training import ForgeTrainingMixin
+from enigma_engine.gui.gui_forge_advanced import ForgeAdvancedMixin
+from enigma_engine.gui.gui_forge_adaptive import ForgeAdaptiveMixin
+from enigma_engine.gui.gui_forge_tools import ForgeToolsMixin
+from enigma_engine.gui.gui_forge_models import ForgeModelsMixin
+from enigma_engine.gui.gui_forge_queue import ForgeQueueMixin
+from enigma_engine.gui.gui_forge_new_modes import ForgeNewModesMixin
 
 logger = logging.getLogger(__name__)
 
@@ -351,7 +351,18 @@ class ForgeMixin(
             "val_split": val_split,
             "general_mix_ratio": general_mix_ratio,
             "general_data": general_data,
+            "ce_chunk_size": self._get_ce_chunk_size(),
         }
+
+    def _get_ce_chunk_size(self) -> int:
+        """Compute ce_chunk_size scaled to available VRAM."""
+        try:
+            from enigma_engine.core.hardware_detection import (
+                TrainingMemoryBudget,
+            )
+            return TrainingMemoryBudget().ce_chunk_size
+        except Exception:
+            return 4096  # safe fallback
 
     # ================================================================
     # Training Brief — user describes what the AI should be
@@ -404,7 +415,6 @@ class ForgeMixin(
 
     def _save_training_brief(self):
         """Save training brief fields to data/training_brief.json."""
-        import json
 
         data = {}
 
@@ -497,10 +507,51 @@ class ForgeMixin(
         if train_data is not None:
             data["_train_data_path"] = train_data.get()
 
+        # Persist boolean checkboxes
+        for attr, key in (("forge_reasoning_var", "_reasoning"),
+                          ("forge_evolutionary_var", "_evolutionary"),
+                          ("forge_auto_train_var", "_auto_train"),
+                          ("forge_resume_var", "_resume_training")):
+            try:
+                data[key] = bool(getattr(self, attr, None).get())
+            except (TypeError, AttributeError):
+                pass
+
+        # Persist StringVar controls not yet covered
+        for attr, key in (("forge_general_mix_var", "_general_mix"),
+                          ("forge_general_data_var", "_general_data_path"),
+                          ("distill_num_examples_var", "_distill_num_examples"),
+                          ("distill_max_tokens_var", "_distill_max_tokens"),
+                          ("ai_supplement_var", "_ai_supplement_path"),
+                          ("forge_vision_dir_var", "_vision_dir"),
+                          ("forge_vision_preset_var", "_vision_preset"),
+                          ("training_stage_var", "_training_stage"),
+                          ("forge_replay_capacity_var", "_replay_capacity"),
+                          ("forge_replay_ratio_var", "_replay_ratio"),
+                          ("quantize_mode_var", "_quantize_mode"),
+                          ("export_gguf_mode_var", "_export_gguf_mode")):
+            try:
+                val = getattr(self, attr, None).get()
+                if val:
+                    data[key] = val
+            except (TypeError, AttributeError):
+                pass
+
+        # Persist numeric entry widgets not yet covered
+        for attr, key in (("guided_pairs_entry", "_guided_pairs"),
+                          ("web_learn_pages_entry", "_web_learn_pages"),
+                          ("vocab_entry", "_vocab_size")):
+            try:
+                val = getattr(self, attr, None).get().strip()
+                if val:
+                    data[key] = val
+            except (TypeError, AttributeError):
+                pass
+
         path = DATA_DIR / "training_brief.json"
         try:
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
+            from enigma_engine.core.safe_save import atomic_write_json
+            atomic_write_json(path, data)
         except OSError:
             pass
 
@@ -630,6 +681,53 @@ class ForgeMixin(
         train_var = getattr(self, "train_data_var", None)
         if train_path and train_var is not None:
             train_var.set(train_path)
+
+        # Restore boolean checkboxes
+        for attr, key in (("forge_reasoning_var", "_reasoning"),
+                          ("forge_evolutionary_var", "_evolutionary"),
+                          ("forge_auto_train_var", "_auto_train"),
+                          ("forge_resume_var", "_resume_training")):
+            val = data.get(key)
+            var = getattr(self, attr, None)
+            if val is not None and var is not None:
+                try:
+                    var.set(bool(val))
+                except Exception:
+                    pass
+
+        # Restore StringVar controls not yet covered
+        for attr, key in (("forge_general_mix_var", "_general_mix"),
+                          ("forge_general_data_var", "_general_data_path"),
+                          ("distill_num_examples_var", "_distill_num_examples"),
+                          ("distill_max_tokens_var", "_distill_max_tokens"),
+                          ("ai_supplement_var", "_ai_supplement_path"),
+                          ("forge_vision_dir_var", "_vision_dir"),
+                          ("forge_vision_preset_var", "_vision_preset"),
+                          ("training_stage_var", "_training_stage"),
+                          ("forge_replay_capacity_var", "_replay_capacity"),
+                          ("forge_replay_ratio_var", "_replay_ratio"),
+                          ("quantize_mode_var", "_quantize_mode"),
+                          ("export_gguf_mode_var", "_export_gguf_mode")):
+            val = data.get(key)
+            var = getattr(self, attr, None)
+            if val and var is not None:
+                try:
+                    var.set(str(val))
+                except Exception:
+                    pass
+
+        # Restore numeric entry widgets not yet covered
+        for attr, key in (("guided_pairs_entry", "_guided_pairs"),
+                          ("web_learn_pages_entry", "_web_learn_pages"),
+                          ("vocab_entry", "_vocab_size")):
+            val = data.get(key)
+            widget = getattr(self, attr, None)
+            if val is not None and widget is not None:
+                try:
+                    widget.delete(0, "end")
+                    widget.insert(0, str(val))
+                except Exception:
+                    pass
 
     def _on_training_mode_selected(self):
         """Apply and persist the selected FORGE training mode."""
@@ -1108,10 +1206,17 @@ class ForgeMixin(
     def _on_data_selected(self, choice: str):
         if choice == "(none)":
             self.train_data_var.set("")
+            # D-11c-DPO (Pass 156q): user explicitly picked (none),
+            # so future mode changes must not silently overwrite it.
+            self._train_data_smart_default = None
             return
         for f in self.training_files:
             if choice.startswith(f["name"]):
                 self.train_data_var.set(f["path"])
+                # D-11c-DPO (Pass 156q): user picked a specific file;
+                # mark the picker as user-customised so a later mode
+                # change does not clobber it with a smart default.
+                self._train_data_smart_default = None
                 break
 
     def _on_supplement_selected(self, choice: str):
@@ -1126,7 +1231,7 @@ class ForgeMixin(
 
     _LOG_MAX_LINES = 2000
     _LOG_FLUSH_MS = 200  # Flush buffered log entries every 200ms
-    _LOG_MAX_FILES = 10  # Keep last N log files, delete oldest
+    _LOG_MAX_FILES = 100  # Keep last N log files, delete oldest
 
     def _log(self, text: str):
         from datetime import datetime
@@ -1311,7 +1416,16 @@ class ForgeMixin(
 
     def _stop_training(self):
         self.training_active = False
-        self._log("Stopping after current epoch...")
+        # Signal the Trainer's own stop flag so _should_stop()
+        # triggers at the next batch boundary (before the batch
+        # runs, not after).
+        trainer = getattr(self, "_active_trainer", None)
+        if trainer is not None:
+            trainer.request_stop()
+        # Visual feedback — user sees the button responded
+        self.after(0, lambda: self.stop_train_btn.configure(
+            state="disabled", text="STOPPING..."))
+        self._log("Stopping after current batch...")
 
     # ================================================================
     # Unified training dispatcher
@@ -1323,6 +1437,7 @@ class ForgeMixin(
         "Pre-Train": "Pre-Train",
         "Distill": "Distill",
         "Basic": "Basic",
+        "LoRA": "LoRA",
         "AI-Guided": "AI-Guided",
         "Image": "Image",
         "Dialogue": "Dialogue",
@@ -1343,6 +1458,10 @@ class ForgeMixin(
         "Basic": (
             "Train on your own data (text files, JSONL).\n"
             "Auto-selects LoRA for large models.\n"
+            "Needs: STUDENT model + data file."),
+        "LoRA": (
+            "Force low-rank adapter training on any model size.\n"
+            "Saves a small (10-30 MB) adapter alongside base model.\n"
             "Needs: STUDENT model + data file."),
         "AI-Guided": (
             "AI teacher creates curriculum and trains your model.\n"
@@ -1391,6 +1510,12 @@ class ForgeMixin(
             ])
         if chosen and target_var:
             target_var.set(chosen)
+            # D-11c-DPO (Pass 156q): if the user just browsed for the
+            # main training-data picker, mark it as user-customised so
+            # subsequent mode changes do not silently swap the default
+            # underneath them.
+            if target_var is getattr(self, "train_data_var", None):
+                self._train_data_smart_default = None
 
     def _browse_vision_dir(self):
         """Open a folder picker for the vision image directory."""
@@ -1456,8 +1581,11 @@ class ForgeMixin(
             visible = {"basic", "evolutionary", "preserve"}
         elif mode == "Self-Play":
             visible = {"basic", "evolutionary", "preserve"}
+        elif mode in ("GRPO", "ReMax", "SimPO", "ORPO", "APO"):
+            visible = {"basic"}
         else:
-            # Basic (default)
+            # Basic / LoRA (default — both use the data file picker
+            # plus evolutionary + preserve toggles)
             visible = {"basic", "evolutionary", "preserve"}
         
         # Show/hide sections
@@ -1469,7 +1597,31 @@ class ForgeMixin(
                     widget.pack(fill="x", padx=0, pady=(8, 0))
             else:
                 widget.pack_forget()
-        
+
+        # D-11c-DPO (Pass 156q): swap the shared `train_data_var`
+        # default to a mode-appropriate file when the user has not
+        # customised it. Preference-pair modes (DPO/APO/SimPO/ORPO/
+        # GRPO/ReMax/RLHF/Self-Play) prefer `data/dpo/combined.jsonl`;
+        # SFT modes (Basic/LoRA) prefer the fine-tune SFT corpus.
+        # Only override when the picker still holds the previous
+        # smart default \u2014 a user-chosen path is left untouched.
+        train_var = getattr(self, "train_data_var", None)
+        files = getattr(self, "training_files", None)
+        if train_var is not None and files:
+            from enigma_engine.gui.scanners import (
+                _pick_default_train_data_for_mode)
+            previous_default = getattr(
+                self, "_train_data_smart_default", None)
+            current_value = train_var.get()
+            if previous_default is not None and (
+                    current_value == previous_default
+                    or current_value == ""):
+                new_default = _pick_default_train_data_for_mode(
+                    files, mode)
+                if new_default and new_default != current_value:
+                    train_var.set(new_default)
+                self._train_data_smart_default = new_default or None
+
         # Update stage button colors
         if hasattr(self, "_stage_buttons"):
             active = getattr(self, "training_stage_var", None)
@@ -1513,6 +1665,10 @@ class ForgeMixin(
             self._start_distill_training()
         elif mode_name == "Basic":
             self._start_basic_training()
+        elif mode_name == "LoRA":
+            # LoRA-1 (Pass 156p): force adapter training on any model
+            # size. Skips the >7B auto-detection in Basic mode.
+            self._start_lora_training()
         elif mode_name == "AI-Guided":
             self._start_ai_guided_training()
         elif mode_name == "Image":
@@ -1531,6 +1687,8 @@ class ForgeMixin(
             self._start_simpo_training()
         elif mode_name == "ORPO":
             self._start_orpo_training()
+        elif mode_name == "APO":
+            self._start_apo_training()
         else:
             self._start_basic_training()  # Fallback
     

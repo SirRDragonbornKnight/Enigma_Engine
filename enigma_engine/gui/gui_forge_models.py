@@ -209,9 +209,31 @@ class ForgeModelsMixin:
                     model_names = (
                         ["None"]
                         + [m["name"] for m in self.models_data])
+                    merge_names = [m["name"] for m in self.models_data]
+                    if not merge_names:
+                        merge_names = ["None"]
                     route_menus = getattr(self, "_route_menus", {})
                     for menu in route_menus.values():
                         menu.configure(values=model_names)
+
+                    merge_menu_a = getattr(self, "_merge_model_a_menu", None)
+                    merge_menu_b = getattr(self, "_merge_model_b_menu", None)
+                    merge_var_a = getattr(self, "_merge_model_a_var", None)
+                    merge_var_b = getattr(self, "_merge_model_b_var", None)
+
+                    if merge_menu_a is not None:
+                        merge_menu_a.configure(values=merge_names)
+                    if merge_menu_b is not None:
+                        merge_menu_b.configure(values=merge_names)
+
+                    if merge_var_a is not None:
+                        if merge_var_a.get() not in merge_names:
+                            merge_var_a.set(merge_names[0])
+                    if merge_var_b is not None:
+                        if merge_var_b.get() not in merge_names:
+                            merge_var_b.set(
+                                merge_names[1] if len(merge_names) > 1
+                                else merge_names[0])
 
                 self.after(0, _update)
 
@@ -219,6 +241,136 @@ class ForgeModelsMixin:
                 target=_scan_and_update, daemon=True).start()
 
         self._refresh_timer = self.after(300, _do_refresh)
+
+    def _find_model_path_by_name(self, model_name: str) -> str | None:
+        """Return model path for a card name, or None if not found."""
+        for model in getattr(self, "models_data", []):
+            if model.get("name") == model_name:
+                return str(model.get("path"))
+        return None
+
+    def _merge_models(self):
+        """Merge two models from the MODELS page merge row."""
+        if self._model_op_busy():
+            return
+
+        model_a_var = getattr(self, "_merge_model_a_var", None)
+        model_b_var = getattr(self, "_merge_model_b_var", None)
+        mode_var = getattr(self, "_merge_mode_var", None)
+        t_var = getattr(self, "_merge_t_var", None)
+        density_var = getattr(self, "_merge_density_var", None)
+        output_entry = getattr(self, "_merge_output_entry", None)
+
+        if None in (
+            model_a_var, model_b_var, mode_var,
+            t_var, density_var, output_entry,
+        ):
+            self._models_msg("Merge controls are not ready.", "#ef4444")
+            return
+
+        model_a_name = model_a_var.get().strip()
+        model_b_name = model_b_var.get().strip()
+        mode = mode_var.get().strip().upper()
+        output_name = output_entry.get().strip()
+
+        if not model_a_name or model_a_name == "None":
+            self._models_msg("Select model A.", "#ef4444")
+            return
+        if not model_b_name or model_b_name == "None":
+            self._models_msg("Select model B.", "#ef4444")
+            return
+        if model_a_name == model_b_name:
+            self._models_msg("Model A and B must be different.", "#ef4444")
+            return
+
+        path_a = self._find_model_path_by_name(model_a_name)
+        path_b = self._find_model_path_by_name(model_b_name)
+        if not path_a or not path_b:
+            self._models_msg("Selected model is missing.", "#ef4444")
+            return
+
+        try:
+            t_value = float(t_var.get().strip())
+        except (TypeError, ValueError):
+            t_value = 0.5
+
+        try:
+            density_value = float(density_var.get().strip())
+        except (TypeError, ValueError):
+            density_value = 0.2
+
+        if not output_name:
+            output_name = (
+                f"{Path(path_a).stem}_{mode.lower()}_{Path(path_b).stem}")
+
+        safe_name = "".join(
+            c for c in output_name if c.isalnum() or c in "_-")
+        if not safe_name:
+            self._models_msg("Invalid output name.", "#ef4444")
+            return
+
+        output_path = MODELS_DIR / f"{safe_name}.pth"
+        if output_path.exists():
+            self._models_msg(
+                f"{output_path.name} already exists.", "#ef4444")
+            return
+
+        self._model_op_in_progress = True
+        self._models_msg(
+            f"Merging {model_a_name} + {model_b_name} ({mode})...",
+            "#e8e8e8")
+
+        def _run_merge():
+            try:
+                from enigma_engine.core.model_merging import (
+                    linear_merge, slerp_merge, ties_merge,
+                )
+
+                def _progress(pct: int, message: str):
+                    self.after(
+                        0,
+                        lambda m=message: self._models_msg(m, "#e8e8e8"),
+                    )
+
+                if mode == "SLERP":
+                    slerp_merge(
+                        path_a, path_b, t=t_value,
+                        output_path=output_path,
+                        on_progress=_progress,
+                    )
+                elif mode == "LINEAR":
+                    linear_merge(
+                        path_a, path_b, t=t_value,
+                        output_path=output_path,
+                        on_progress=_progress,
+                    )
+                elif mode == "TIES":
+                    ties_merge(
+                        [path_a, path_b],
+                        density=density_value,
+                        output_path=output_path,
+                        on_progress=_progress,
+                    )
+                else:
+                    raise ValueError(f"Unknown merge mode: {mode}")
+
+                self.after(
+                    0,
+                    lambda: self._models_msg(
+                        f"Merged: {output_path.name}", "#22c55e"),
+                )
+                self.after(0, self._refresh_models)
+            except Exception as exc:
+                err_msg = str(exc)
+                self.after(
+                    0,
+                    lambda m=err_msg: self._models_msg(
+                        f"Merge failed: {m}", "#ef4444"),
+                )
+            finally:
+                self._model_op_in_progress = False
+
+        threading.Thread(target=_run_merge, daemon=True).start()
 
     def _delete_model(self, model: dict):
         """Show inline delete confirmation on the model card.
@@ -392,7 +544,15 @@ class ForgeModelsMixin:
                     estimate_training_vram)
                 from enigma_engine.core.tokenizer import get_tokenizer
 
-                tokenizer = get_tokenizer("auto")
+                _bpe_path = MODELS_DIR / "tokenizer.json"
+                if _bpe_path.exists():
+                    try:
+                        from enigma_engine.core.bpe_tokenizer import BPETokenizer
+                        tokenizer = BPETokenizer(_bpe_path)
+                    except Exception:
+                        tokenizer = get_tokenizer("auto")
+                else:
+                    tokenizer = get_tokenizer("auto")
 
                 preset_name = recommend_preset_for_vram(vram_gb)
                 preset = get_preset(
@@ -747,7 +907,15 @@ class ForgeModelsMixin:
 
                 from enigma_engine.core.tokenizer import (
                     get_tokenizer)
-                tokenizer = get_tokenizer("auto")
+                _bpe_path = MODELS_DIR / "tokenizer.json"
+                if _bpe_path.exists():
+                    try:
+                        from enigma_engine.core.bpe_tokenizer import BPETokenizer
+                        tokenizer = BPETokenizer(_bpe_path)
+                    except Exception:
+                        tokenizer = get_tokenizer("auto")
+                else:
+                    tokenizer = get_tokenizer("auto")
 
                 stem = Path(student_path).stem
                 out_path = str(

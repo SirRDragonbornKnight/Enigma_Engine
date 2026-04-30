@@ -323,6 +323,70 @@ class _GenerationMixin:
 
         return text
 
+    def _record_search_emissions(
+        self, text: str, prompt: str | None = None,
+    ) -> None:
+        """AutoResearch-2 Stage B-2: scan model-generated text for inline
+        ``<search>...</search>`` blocks, store the decoded queries on
+        ``self.last_search_queries``, and log a WARNING per call
+        (rate-limited to one log line, query count only — full queries
+        go in the list for caller inspection).
+
+        Called from every public-facing return path of
+        :meth:`_generate_text` so observability is uniform across
+        native, GGUF, and tool-execution flows.  Boundary signal:
+        when Stage B-3 RAG splice ships, this method becomes the
+        wire-site that triggers the splice.
+
+        Args:
+            text: The raw decoded sequence.  May be the full
+                ``prompt + continuation`` (native paths that decode the
+                whole sequence) or just the continuation (GGUF / stream
+                paths).  When ``prompt`` is provided, it is stripped
+                from the front of ``text`` before scanning so user
+                prompts that contain a literal ``<search>foo</search>``
+                (e.g. asking about the syntax itself) are NOT recorded
+                as model emissions.  Pass 156z9e audit: this slicing
+                was missing on 5 of 8 call sites — the docstring
+                promised "what the model emitted" but the code was
+                scanning prompt+continuation.
+            prompt: Optional original prompt string.  When supplied
+                and ``text`` starts with it, the prompt prefix is
+                removed before scanning.  Pass ``None`` for paths that
+                already return continuation-only (GGUF native, stream).
+
+        Pass 156z9c (Stage B-1) ``honest degradation``: if the active
+        tokenizer doesn't have ``<search>`` registered (legacy
+        vocab), ``search_start_id`` is ``None`` on the tokenizer.
+        We don't gate on that here — the helper is purely text-side
+        and works on the decoded string regardless of tokenizer
+        registry state.  The two layers are decoupled by design.
+        """
+        if prompt and isinstance(text, str) and text.startswith(prompt):
+            scan_text = text[len(prompt):]
+        else:
+            scan_text = text
+        try:
+            from .reasoning import extract_search_queries
+            queries = extract_search_queries(scan_text)
+        except Exception:
+            # Stage B-2 must NEVER raise into the caller — it's pure
+            # observability layered on top of generation.  Log and
+            # leave the list empty.
+            logger.exception(
+                "Stage B-2: search-emission scan crashed; "
+                "last_search_queries left empty")
+            self.last_search_queries = []
+            return
+
+        self.last_search_queries = queries
+        if queries:
+            logger.warning(
+                "Stage B-2: model emitted %d <search> request(s) but "
+                "Stage B-3 RAG splice is not implemented; queries "
+                "recorded on engine.last_search_queries for inspection",
+                len(queries))
+
     def _generate_text(
         self,
         prompt: str,
@@ -334,6 +398,7 @@ class _GenerationMixin:
         stop_strings: list[str] | None,
         use_cache: bool,
         min_p: float = 0.0,
+        json_schema: dict | None = None,
     ) -> str:
         """
         Internal method for standard text generation.
@@ -383,6 +448,16 @@ class _GenerationMixin:
         # ─────────────────────────────────────────────────────────────────────
         if getattr(self, '_is_gguf', False) or (hasattr(self.model, 'is_loaded') and hasattr(self.model, 'chat')):
             # This is a GGUFModel - use its native generation
+            if json_schema is not None:
+                # GGUF models use llama.cpp's own sampler — our logit
+                # mask never gets a chance to run. Be loud about the
+                # mismatch instead of silently producing unconstrained
+                # output that the caller will trust as schema-valid.
+                raise NotImplementedError(
+                    "json_schema constrained decoding is not supported "
+                    "on GGUF models (llama.cpp uses its own sampler). "
+                    "Load a native PyTorch model or drop the schema."
+                )
             try:
                 text = self.model.generate(
                     prompt,
@@ -393,6 +468,7 @@ class _GenerationMixin:
                     repeat_penalty=repetition_penalty,
                     stop=stop_strings
                 )
+                self._record_search_emissions(text)
                 return text
             except Exception as e:
                 logger.error(f"GGUF generation failed: {e}")
@@ -442,11 +518,20 @@ class _GenerationMixin:
         # All native generation goes through _generate_manual() which has
         # KV-cache, windowed repetition penalty, and min-p — one path.
         # ─────────────────────────────────────────────────────────────────────
+        # Pass 156z3 (N-15): build JSON schema constraint once per call.
+        # Construction iterates the full vocab to build a first-char →
+        # token-id lookup; cost is paid once here, not per token.
+        json_constraint = None
+        if json_schema is not None:
+            from .json_schema_mask import JsonSchemaConstraint
+            json_constraint = JsonSchemaConstraint(json_schema, self.tokenizer)
+
         with torch.no_grad():  # Disable gradient computation (inference only)
             output_ids = self._generate_manual(
                 input_ids, max_gen, temperature, top_k, top_p,
                 repetition_penalty, min_p, stop_strings=stop_strings,
                 prefix_cache=prefix_cache,
+                json_constraint=json_constraint,
             )
 
             # Snapshot prefix KV on cache miss so next turn can skip prefill
@@ -492,6 +577,7 @@ class _GenerationMixin:
                     text = text[:prompt_len + stop_pos]
                     break
 
+        self._record_search_emissions(text, prompt=prompt)
         return text
 
     # How often (in tokens) to check for stop strings during generation.
@@ -532,6 +618,7 @@ class _GenerationMixin:
         min_p: float = 0.0,
         stop_strings: list[str] | None = None,
         prefix_cache=None,
+        json_constraint: object | None = None,
     ) -> torch.Tensor:
         """Manual autoregressive generation with KV-cache acceleration.
 
@@ -617,6 +704,7 @@ class _GenerationMixin:
                 repetition_penalty,
                 min_p,
                 exempt_tokens=exempt_tokens,
+                json_constraint=json_constraint,
             )
 
             # Track max softmax probability for adaptive stop-check interval.
@@ -636,6 +724,17 @@ class _GenerationMixin:
             eos_id = getattr(self.tokenizer, 'eos_token_id', 2)
             if next_token[0, 0].item() == eos_id:
                 break
+
+            # Pass 156z3 (N-15): advance JSON FSM with the new token. The
+            # constraint tracks structural state (key/value position,
+            # brace depth, closing string detection) by decoding each
+            # token's text. Stop early if the FSM reaches DONE — extra
+            # tokens past schema completion would have nothing valid to
+            # generate and the masker would mask everything to -inf.
+            if json_constraint is not None:
+                json_constraint.advance(int(next_token[0, 0].item()))
+                if json_constraint.is_done:
+                    break
 
             # Periodic stop-string check (amortised decode cost).
             # T2-7: Adaptive interval based on model confidence.
@@ -1022,7 +1121,8 @@ class _GenerationMixin:
         min_p: float = 0.0,
         max_tokens: int | None = None,  # Alias for max_gen (backward compatibility)
         max_new_tokens: int | None = None,  # Alias for max_gen (Forge model compatibility)
-        max_length: int | None = None  # Alias for max_gen (common parameter name)
+        max_length: int | None = None,  # Alias for max_gen (common parameter name)
+        json_schema: dict | None = None,
     ) -> Generator[str]:
         """
         Stream generated tokens one at a time.
@@ -1037,6 +1137,12 @@ class _GenerationMixin:
             max_tokens: Alias for max_gen (backward compatibility)
             max_new_tokens: Alias for max_gen (Forge model compatibility)
             max_length: Alias for max_gen (common parameter name)
+            json_schema: Optional JSON schema dict. When set, masks logits
+                each step so only schema-conforming tokens are emitted, and
+                stops yielding once the FSM reaches DONE. Mirrors the
+                non-streaming path in ``_generate_text``. NOT supported on
+                GGUF — caller (``stream_chat``) raises NotImplementedError
+                up the stack before reaching here.
 
         Yields:
             Each newly generated token as it's produced
@@ -1049,9 +1155,22 @@ class _GenerationMixin:
         if max_length is not None:
             max_gen = max_length
 
+        # N-15c: build JSON schema constraint once per call (vocab scan
+        # amortised across all tokens, same discipline as _generate_text).
+        json_constraint = None
+        if json_schema is not None:
+            from .json_schema_mask import JsonSchemaConstraint
+            json_constraint = JsonSchemaConstraint(json_schema, self.tokenizer)
+
         input_ids = self._encode_prompt(prompt)
         generated = input_ids
         max_len = self.model.config.max_seq_len
+
+        # Stage B-2 (Pass 156z9d): accumulate yielded token strings so
+        # we can scan for ``<search>`` emissions on stream completion
+        # (or generator cancellation via try/finally).  Same observability
+        # contract as :meth:`_generate_text` non-streaming path.
+        emitted_chunks: list[str] = []
 
         # Acquire generation lock to protect KV-cache state
         with self._generation_lock, torch.no_grad():
@@ -1076,48 +1195,83 @@ class _GenerationMixin:
                 input_ids, repetition_penalty,
             )
 
-            for _ in range(max_gen):
-                # Sample
-                next_token = self._sample_token(
-                    logits[:, -1, :],
-                    generated,
-                    temperature,
-                    top_k,
-                    top_p,
-                    repetition_penalty,
-                    min_p,
-                    exempt_tokens=exempt_tokens,
-                )
-
-                generated = torch.cat([generated, next_token], dim=1)
-
-                # Decode and yield
-                token_id = next_token[0, 0].item()
-
-                if hasattr(self.tokenizer, 'decode'):
-                    token_str = self.tokenizer.decode([token_id], skip_special_tokens=True)
-                else:
-                    token_str = self.tokenizer.id_to_token.get(token_id, "")
-
-                yield token_str
-
-                # Check for EOS
-                eos_id = getattr(self.tokenizer, 'eos_token_id', 2)
-                if token_id == eos_id:
-                    break
-
-                # Decode step: only feed new token with start_pos
-                if has_cache:
-                    logits = self.model(
-                        next_token,
-                        use_cache=True,
-                        start_pos=generated.shape[1] - 1,
+            try:
+                for _ in range(max_gen):
+                    # Sample
+                    next_token = self._sample_token(
+                        logits[:, -1, :],
+                        generated,
+                        temperature,
+                        top_k,
+                        top_p,
+                        repetition_penalty,
+                        min_p,
+                        exempt_tokens=exempt_tokens,
+                        json_constraint=json_constraint,
                     )
-                else:
-                    curr_input = generated
-                    if curr_input.shape[1] > max_len:
-                        curr_input = curr_input[:, -max_len:]
-                    logits = self.model(curr_input)
+
+                    generated = torch.cat([generated, next_token], dim=1)
+
+                    # Decode and yield
+                    token_id = next_token[0, 0].item()
+
+                    if hasattr(self.tokenizer, 'decode'):
+                        token_str = self.tokenizer.decode([token_id], skip_special_tokens=True)
+                    else:
+                        token_str = self.tokenizer.id_to_token.get(token_id, "")
+
+                    emitted_chunks.append(token_str)
+                    yield token_str
+
+                    # Check for EOS
+                    eos_id = getattr(self.tokenizer, 'eos_token_id', 2)
+                    if token_id == eos_id:
+                        break
+
+                    # N-15c: advance FSM and early-stop on DONE. Without the
+                    # is_done break, the masker would return the empty allowed
+                    # set past DONE → all logits -inf → softmax NaN. Same
+                    # contract as _generate_manual.
+                    if json_constraint is not None:
+                        json_constraint.advance(int(next_token[0, 0].item()))
+                        if json_constraint.is_done:
+                            break
+
+                    # Decode step: only feed new token with start_pos
+                    if has_cache:
+                        logits = self.model(
+                            next_token,
+                            use_cache=True,
+                            start_pos=generated.shape[1] - 1,
+                        )
+                    else:
+                        curr_input = generated
+                        if curr_input.shape[1] > max_len:
+                            curr_input = curr_input[:, -max_len:]
+                        logits = self.model(curr_input)
+            finally:
+                # Stage B-2: scan emitted text for <search> blocks. Do
+                # both a chunk-join (catches byte-level emissions, the
+                # likely path before Stage B-4 SFT) and a full-decode
+                # without skip_special_tokens (catches direct
+                # special-token emissions once the model is trained).
+                # Runs on normal completion AND on generator
+                # cancellation (caller breaks early).
+                try:
+                    streamed_text = "".join(emitted_chunks)
+                    if generated.shape[1] > input_ids.shape[1]:
+                        new_ids = generated[0, input_ids.shape[1]:].tolist()
+                        if hasattr(self.tokenizer, 'decode'):
+                            try:
+                                streamed_text += self.tokenizer.decode(
+                                    new_ids, skip_special_tokens=False)
+                            except Exception:
+                                pass
+                    self._record_search_emissions(streamed_text)
+                except Exception:
+                    logger.exception(
+                        "Stage B-2: stream scan crashed; "
+                        "last_search_queries left at previous value")
 
     # =========================================================================
     # Batch Generation
@@ -1253,6 +1407,23 @@ class _GenerationMixin:
 
             results.append(text)
 
+        # Stage B-2b: per-prompt attribution.  Earlier slice (B-2)
+        # joined results and scanned once, which lost which prompt
+        # produced which query.  Now we scan each result independently,
+        # populate ``last_search_queries_per_prompt`` (parallel to
+        # ``prompts``), and set the flat ``last_search_queries`` to
+        # the union so single-prompt callers still see everything.
+        # Errors in one prompt's scan do NOT corrupt other prompts'
+        # results — each call to ``_record_search_emissions`` is
+        # already exception-safe.
+        per_prompt: list[list[str]] = []
+        flat: list[str] = []
+        for prompt_text, output_text in zip(prompts, results):
+            self._record_search_emissions(output_text, prompt=prompt_text)
+            per_prompt.append(list(self.last_search_queries))
+            flat.extend(self.last_search_queries)
+        self.last_search_queries_per_prompt = per_prompt
+        self.last_search_queries = flat
         return results
 
     # =========================================================================
@@ -1289,11 +1460,27 @@ class _GenerationMixin:
             repetition_penalty: Penalty for repeated tokens.
             stop_strings: Strings that terminate generation.
             min_p: Min-p filtering threshold.
-            **kwargs: Ignored (absorbs extra chat kwargs).
+            **kwargs: Ignored (absorbs extra chat kwargs) EXCEPT
+                ``json_schema`` — see below.
+
+        Raises:
+            NotImplementedError: when ``json_schema`` is passed. The
+                vision generation path samples without going through
+                ``_generate_text``/``_generate_manual``, so the
+                constraint FSM never gets wired in. Silent drop would
+                let multimodal callers receive unconstrained output
+                labelled as schema-conforming. Pass 156z7 (N-15c2)
+                sibling-boundary site missed by Pass 156z6.
 
         Returns:
             The full generated text (prompt + new tokens).
         """
+        if kwargs.get("json_schema") is not None:
+            raise NotImplementedError(
+                "json_schema constrained decoding is not supported on "
+                "the vision (multimodal) generation path. Drop the "
+                "schema or use a text-only prompt."
+            )
         if not isinstance(prompt, str) or not prompt.strip():
             return ""
 
@@ -1390,6 +1577,10 @@ class _GenerationMixin:
                     text = text[:prompt_len + stop_pos]
                     break
 
+        # Stage B-2 sibling sweep: vision path returns final text here.
+        # Pass 156z9e: pass prompt= so user prompts containing literal
+        # ``<search>foo</search>`` aren't falsely recorded as emissions.
+        self._record_search_emissions(text, prompt=prompt)
         return text
 
     # =========================================================================
@@ -1636,6 +1827,9 @@ class _GenerationMixin:
                 if ss in gen_part:
                     text = text[:pl + gen_part.find(ss)]
                     break
+        # Stage B-2 sibling sweep: speculative decoding return path.
+        # Pass 156z9e: prompt-slice so prompt-side <search> isn't recorded.
+        self._record_search_emissions(text, prompt=prompt)
         return text
 
     def medusa_generate(
@@ -1808,6 +2002,9 @@ class _GenerationMixin:
                 if ss in gen_part:
                     text = text[:pl + gen_part.find(ss)]
                     break
+        # Stage B-2 sibling sweep: medusa decoding return path.
+        # Pass 156z9e: prompt-slice so prompt-side <search> isn't recorded.
+        self._record_search_emissions(text, prompt=prompt)
         return text
 
     # =========================================================================
@@ -2066,6 +2263,9 @@ class _GenerationMixin:
                 if ss in gen_part:
                     text = text[:pl + gen_part.find(ss)]
                     break
+        # Stage B-2 sibling sweep: lookahead decoding return path.
+        # Pass 156z9e: prompt-slice so prompt-side <search> isn't recorded.
+        self._record_search_emissions(text, prompt=prompt)
         return text
 
     @staticmethod

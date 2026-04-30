@@ -113,7 +113,6 @@ class TestCodeSandbox:
 
     def test_code_run_safe_open_path_traversal(self):
         """_safe_open should block writes to dirs starting with 'outputs' but outside it (S739)."""
-        import inspect
         from enigma_engine.core.builtin_commands import register_builtin_commands
         source = inspect.getsource(register_builtin_commands)
         # Verify the sandbox uses relative_to() instead of startswith()
@@ -300,7 +299,6 @@ class TestShellMetacharNotBlocked:
 
     def test_no_metacharacter_error_in_shell_handler(self):
         """shell command handler does not contain metacharacter blocking."""
-        import inspect
         from enigma_engine.core.builtin_commands import register_builtin_commands
         source = inspect.getsource(register_builtin_commands)
         # Find the shell command handler
@@ -333,7 +331,6 @@ class TestRunCommandRemovedFromDefaults:
 # Command handler tests
 # ================================================================
 
-import pytest
 
 
 def _get_handler(name):

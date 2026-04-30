@@ -214,7 +214,6 @@ class TestFFDPacking:
 
     def test_multipack_tighter_packing(self):
         """Multipack packs tighter than naive FFD on adversarial input."""
-        import torch
         from enigma_engine.core.training import pack_sequences
         # Sequences designed to pack better with best-fit:
         # max_length=20, seqs: [9, 9, 5, 5, 5, 5]
@@ -875,7 +874,19 @@ class TestMultiTokenPrediction:
         from enigma_engine.core.model_presets import ForgeConfig
         cfg = ForgeConfig()
         assert hasattr(cfg, "n_predict_heads")
-        assert cfg.n_predict_heads == 2
+        # MTP-2b: default flipped 2 → 0 — Medusa inference is superseded
+        # by EAGLE-2 (Pass 148), so paying ~33-49M params per head by
+        # default is no longer justified. Explicit opt-in for Medusa runs.
+        assert cfg.n_predict_heads == 0
+
+    def test_default_model_has_no_predict_heads(self):
+        """MTP-2b: default ForgeConfig builds a model with zero MTP heads."""
+        from enigma_engine.core.model import Enigma
+        from enigma_engine.core.model_presets import ForgeConfig
+        cfg = ForgeConfig(vocab_size=64, dim=32, n_heads=2, n_layers=2)
+        model = Enigma(config=cfg)
+        assert hasattr(model, "predict_heads")
+        assert len(model.predict_heads) == 0
 
     def test_model_has_predict_heads_list(self):
         from enigma_engine.core.model import Enigma
@@ -1080,11 +1091,10 @@ class TestLISA:
         assert cfg.lisa_activated_layers == 2
 
     def test_lisa_freezes_middle_layers(self):
-        import torch.nn as nn
 
         from enigma_engine.core.progressive_growing import LISAScheduler
         model = FakeModel()
-        lisa = LISAScheduler(model, n_layers=6, activated_layers=1)
+        LISAScheduler(model, n_layers=6, activated_layers=1)
 
         # First and last layer should always be trainable
         for p in model.layers[0].parameters():
@@ -1108,7 +1118,6 @@ class TestLISA:
         assert active_middle == 1
 
     def test_lisa_resamples_on_step(self):
-        import torch.nn as nn
 
         from enigma_engine.core.progressive_growing import LISAScheduler
         model = FakeModel(8)
@@ -1557,6 +1566,355 @@ class TestJsonSchemaConstraint:
         assert c._state == 'EXPECT_OPEN'
 
 
+class TestJsonSchemaConstraintBoundaryValidation:
+    """Pass after 156z9e: schema validation at constructor time.
+
+    Closes the API-validation follow-up filed under Pass 156z3 / 156z4
+    ("API accepts any dict shape; malformed schema reaches the FSM
+    and silently produces degraded output").  Now the constructor
+    raises ``ValueError`` with a message naming the bad field, so
+    HTTP callers (`/api/chat` with json_schema) and Python callers
+    (`engine.generate(json_schema=...)`) both fail loud at the
+    boundary instead of silently getting free-form output.
+    """
+
+    def test_non_dict_schema_raises(self):
+        from enigma_engine.core.json_schema_mask import JsonSchemaConstraint
+        with pytest.raises(ValueError, match="must be a dict"):
+            JsonSchemaConstraint("not a dict", FakeTokenizer())  # type: ignore[arg-type]
+
+    def test_non_object_top_level_type_raises(self):
+        from enigma_engine.core.json_schema_mask import JsonSchemaConstraint
+        with pytest.raises(ValueError, match="'type'.*'object'"):
+            JsonSchemaConstraint(
+                {"type": "array", "properties": {}},
+                FakeTokenizer(),
+            )
+
+    def test_non_dict_properties_raises(self):
+        from enigma_engine.core.json_schema_mask import JsonSchemaConstraint
+        with pytest.raises(ValueError, match="properties.*must be a dict"):
+            JsonSchemaConstraint(
+                {"type": "object", "properties": ["name", "age"]},
+                FakeTokenizer(),
+            )
+
+    def test_non_dict_property_spec_raises(self):
+        from enigma_engine.core.json_schema_mask import JsonSchemaConstraint
+        with pytest.raises(ValueError, match="'name'"):
+            JsonSchemaConstraint(
+                {"type": "object", "properties": {"name": "string"}},
+                FakeTokenizer(),
+            )
+
+    def test_unsupported_property_type_raises(self):
+        from enigma_engine.core.json_schema_mask import JsonSchemaConstraint
+        with pytest.raises(ValueError, match="not supported"):
+            JsonSchemaConstraint(
+                {"type": "object",
+                 "properties": {"x": {"type": "frobnicate"}}},
+                FakeTokenizer(),
+            )
+
+    def test_default_top_level_type_accepted(self):
+        """A schema with no top-level ``type`` defaults to 'object' —
+        accepted, since the FSM is object-only and the absence is
+        consistent with that default."""
+        from enigma_engine.core.json_schema_mask import JsonSchemaConstraint
+        # Should not raise
+        c = JsonSchemaConstraint(
+            {"properties": {"x": {"type": "string"}}},
+            FakeTokenizer(),
+        )
+        assert c._n_keys == 1
+
+    def test_default_property_type_accepted(self):
+        """A property with no ``type`` defaults to 'string' (existing
+        FSM behaviour) — accepted."""
+        from enigma_engine.core.json_schema_mask import JsonSchemaConstraint
+        c = JsonSchemaConstraint(
+            {"type": "object", "properties": {"x": {}}},
+            FakeTokenizer(),
+        )
+        assert c._key_type_map["x"] == "string"
+
+
+# ════════════════════════════════════════════════════════════════════
+# N-15 — JSON Schema Constraint Wired Into EnigmaEngine.generate
+# ════════════════════════════════════════════════════════════════════
+
+class TestJsonSchemaConstraintWiring:
+    """Pass 156z3 (N-15): close the dead-infra gap on JsonSchemaConstraint.
+
+    Pre-fix: ``JsonSchemaConstraint`` (T3-9) had full FSM logic + 5
+    unit tests but ZERO production callers. ``_sample_token`` accepted
+    a ``json_constraint`` kwarg but no caller in ``_generate_manual``
+    ever set it, AND ``.advance()`` was never called from the loop.
+    Two-layer dead infra (per AA principle).
+
+    Tests below gate the three wire-sites that close the chain:
+    public ``generate`` → ``_generate_text`` → ``_generate_manual``.
+    Structural is justified here because the behavioural path through
+    ``_generate_manual`` requires stubbing the full engine
+    scaffolding (model.forward, KV cache, _build_exempt_tokens,
+    _adaptive_stop_interval, tokenizer.decode/eos_token_id) — far
+    more code than the wiring being tested. The GGUF rejection test
+    IS behavioural since it short-circuits before any of that.
+    """
+
+    def test_public_generate_signature_accepts_json_schema(self):
+        """N-15: the public API must expose ``json_schema`` so callers
+        can opt in. Structural — proves the kwarg is in the signature
+        and forwarded to ``_generate_text``."""
+        from enigma_engine.core.inference import EnigmaEngine
+        sig = inspect.signature(EnigmaEngine.generate)
+        assert "json_schema" in sig.parameters, (
+            "EnigmaEngine.generate must accept json_schema kwarg")
+        src = inspect.getsource(EnigmaEngine.generate)
+        # Wired through to the internal _generate_text helper
+        assert "json_schema=json_schema" in src, (
+            "EnigmaEngine.generate must forward json_schema to "
+            "_generate_text — without this, the public kwarg is a "
+            "silent no-op")
+
+    def test_generate_text_builds_constraint_and_forwards(self):
+        """N-15: ``_generate_text`` must construct a
+        ``JsonSchemaConstraint`` from the schema (paying the one-time
+        vocab-scan cost once per call, not per token) and forward it
+        to ``_generate_manual`` as ``json_constraint=``."""
+        from enigma_engine.core import engine_generation
+        src = inspect.getsource(engine_generation._GenerationMixin._generate_text)
+        assert "JsonSchemaConstraint(json_schema, self.tokenizer)" in src, (
+            "_generate_text must build JsonSchemaConstraint with the "
+            "schema + tokenizer (the only valid construction signature)")
+        assert "json_constraint=json_constraint" in src, (
+            "_generate_text must forward the constraint to "
+            "_generate_manual — without this, the constraint is built "
+            "and immediately discarded")
+
+    def test_generate_manual_advances_constraint_and_early_stops(self):
+        """N-15: ``_generate_manual`` must (1) pass the constraint to
+        ``_sample_token`` so the mask is applied per step, (2) call
+        ``constraint.advance(token_id)`` after each sample to drive the
+        FSM forward, and (3) check ``is_done`` to exit the loop early
+        when the JSON is structurally complete (otherwise the masker
+        would block all further tokens to -inf and the loop would
+        either NaN-fallback or waste tokens to max_gen)."""
+        from enigma_engine.core import engine_generation
+        src = inspect.getsource(engine_generation._GenerationMixin._generate_manual)
+        assert "json_constraint=json_constraint" in src, (
+            "_generate_manual must forward json_constraint to "
+            "_sample_token (the mask hook lives there)")
+        assert "json_constraint.advance(" in src, (
+            "_generate_manual must call constraint.advance(token_id) "
+            "after sampling — without this, the FSM never moves past "
+            "EXPECT_OPEN and every token after the first '{' is masked "
+            "to -inf forever")
+        assert "json_constraint.is_done" in src, (
+            "_generate_manual must early-stop on is_done — past DONE "
+            "the masker returns the empty allowed set and downstream "
+            "sampling NaN-fallbacks")
+
+    def test_gguf_model_with_schema_raises_notimplemented(self):
+        """N-15 honesty gate: GGUF models route through llama.cpp's
+        own sampler (``model.generate(...)`` in C++), which never sees
+        our logit mask. Silently returning unconstrained output
+        labelled as schema-conforming would be a correctness lie. Be
+        loud at the API boundary instead."""
+        from enigma_engine.core import engine_generation
+
+        class _FakeSelf:
+            _is_gguf = True
+            model = object()  # any non-None value; never accessed
+
+        with pytest.raises(NotImplementedError, match="GGUF"):
+            engine_generation._GenerationMixin._generate_text(
+                _FakeSelf(),
+                "irrelevant prompt",
+                max_gen=4,
+                temperature=0.8,
+                top_k=50,
+                top_p=0.9,
+                repetition_penalty=1.1,
+                stop_strings=None,
+                use_cache=True,
+                min_p=0.0,
+                json_schema={"type": "object", "properties": {}},
+            )
+
+    def test_stream_generate_builds_constraint_advances_and_breaks(self):
+        """Pass 156z6 (N-15c): ``stream_generate`` must mirror the
+        non-streaming wiring — build the constraint once before the
+        loop, forward to ``_sample_token`` so the mask runs each step,
+        advance the FSM after sampling, and break on ``is_done``.
+        Without all four pieces the streaming path is dead infra
+        regardless of how complete ``_generate_manual`` is.
+
+        Structural is justified for the same reason as the
+        ``_generate_manual`` test above: the behavioural path requires
+        stubbing model.forward + KV cache + tokenizer + lock — far
+        more code than the wiring being tested. Behavioural coverage
+        for the constraint itself lives in ``TestJsonSchemaConstraint``.
+        """
+        from enigma_engine.core import engine_generation
+        src = inspect.getsource(engine_generation._GenerationMixin.stream_generate)
+        assert "json_schema" in inspect.signature(
+            engine_generation._GenerationMixin.stream_generate
+        ).parameters, (
+            "stream_generate must accept json_schema kwarg (N-15c)")
+        assert "JsonSchemaConstraint(json_schema, self.tokenizer)" in src, (
+            "stream_generate must build JsonSchemaConstraint — without "
+            "this, the kwarg is silently dropped and streaming callers "
+            "get unconstrained output labelled as schema-conforming")
+        assert "json_constraint=json_constraint" in src, (
+            "stream_generate must forward json_constraint to "
+            "_sample_token (the mask hook lives there)")
+        assert "json_constraint.advance(" in src, (
+            "stream_generate must advance the FSM each step — without "
+            "this the FSM stays in EXPECT_OPEN forever and every token "
+            "after the first '{' is masked to -inf")
+        assert "json_constraint.is_done" in src, (
+            "stream_generate must break on is_done — past DONE the "
+            "mask returns the empty allowed set and softmax NaNs")
+
+    def test_stream_chat_gguf_with_schema_raises_notimplemented(self):
+        """Pass 156z6 (N-15c): the streaming GGUF path must reject
+        json_schema with the same NotImplementedError as the
+        non-streaming GGUF path. Without this, GGUF callers using
+        /api/chat/stream would silently receive unconstrained tokens
+        because llama.cpp's stream sampler never sees our mask.
+        """
+        from enigma_engine.core.engine_chat import ChatContext, _ChatMixin
+
+        # Stub _prepare_chat to return a GGUF-flagged ctx without
+        # touching tokenizer/history machinery.
+        fake_ctx = ChatContext(
+            messages=[{"role": "user", "content": "hi"}],
+            prompt="hi",
+            stop_strings=[],
+            max_gen=8,
+            temperature=0.7,
+            repeat_penalty=1.1,
+            top_p=0.9,
+            top_k=40,
+            is_gguf=True,
+            has_server_backend=False,
+        )
+
+        class _FakeModel:
+            def chat(self, *a, **kw):  # makes hasattr(model, 'chat') True
+                return ""
+
+        class _FakeSelf:
+            model = _FakeModel()
+
+            def _prepare_chat(self, *a, **kw):
+                return fake_ctx
+
+        gen = _ChatMixin.stream_chat(
+            _FakeSelf(),
+            "hi",
+            json_schema={"type": "object", "properties": {}},
+        )
+        with pytest.raises(NotImplementedError, match="GGUF"):
+            next(gen)
+
+    def test_chat_gguf_with_schema_raises_notimplemented(self):
+        """Pass 156z7 (N-15c2) sibling-boundary fix: ``chat()`` GGUF
+        branch must raise NotImplementedError on json_schema, mirroring
+        ``stream_chat``. Pass 156z6 fixed only the streaming sibling
+        and missed the non-streaming twin \u2014 production path
+        ``POST /api/chat`` \u2192 ``state.chat`` \u2192 ``engine.chat`` would
+        silently pass GGUF callers unconstrained output labelled as
+        schema-conforming.
+        """
+        from enigma_engine.core.engine_chat import ChatContext, _ChatMixin
+
+        fake_ctx = ChatContext(
+            messages=[{"role": "user", "content": "hi"}],
+            prompt="hi",
+            stop_strings=[],
+            max_gen=8,
+            temperature=0.7,
+            repeat_penalty=1.1,
+            top_p=0.9,
+            top_k=40,
+            is_gguf=True,
+            has_server_backend=False,
+        )
+
+        class _FakeModel:
+            def chat(self, *a, **kw):  # makes hasattr(model, 'chat') True
+                return ""
+
+        class _FakeSelf:
+            model = _FakeModel()
+
+            def _prepare_chat(self, *a, **kw):
+                return fake_ctx
+
+        with pytest.raises(NotImplementedError, match="GGUF"):
+            _ChatMixin.chat(
+                _FakeSelf(),
+                "hi",
+                json_schema={"type": "object", "properties": {}},
+            )
+
+    def test_generate_with_vision_with_schema_raises_notimplemented(self):
+        """Pass 156z7 (N-15c2) sibling-boundary fix:
+        ``_generate_with_vision`` must raise on json_schema. The
+        multimodal path samples without going through
+        ``_generate_text``/``_generate_manual``, so the constraint
+        FSM is never wired in. Reachable via
+        ``engine.chat(images=[...], json_schema={...})`` from any
+        Python caller.
+        """
+        from enigma_engine.core import engine_generation
+
+        # _generate_with_vision short-circuits on empty prompt AFTER the
+        # gate; if the gate is missing, this returns "" without raising.
+        # If the gate is present, we get NotImplementedError before any
+        # tokenizer/model access.
+        with pytest.raises(NotImplementedError, match="vision"):
+            engine_generation._GenerationMixin._generate_with_vision(
+                object(),  # `self` never accessed before the gate
+                "irrelevant prompt",
+                vision_features=object(),  # never accessed before the gate
+                json_schema={"type": "object", "properties": {}},
+            )
+
+    def test_generate_with_schema_and_execute_tools_raises_value_error(self):
+        """Pass 156z7 (N-15c2) sibling-boundary fix: when
+        ``json_schema`` and ``execute_tools=True`` are both set,
+        ``EnigmaEngine.generate`` must raise ValueError. Without the
+        gate, the first generation is schema-constrained but
+        ``_execute_tools_in_text`` re-enters ``_generate_text``
+        without the schema on every tool-call detection \u2014 silent
+        partial constraint, output still labelled as schema-conforming.
+
+        Behavioural: pass enable_tools=True path into a stub engine,
+        assert the error message points at the right knob.
+        """
+        from enigma_engine.core.inference import EnigmaEngine
+
+        class _FakeSelf:
+            enable_tools = True
+            use_routing = False
+            _tool_router = None
+            # Anything below should never be reached before the raise
+            model = None
+            tokenizer = None
+
+        with pytest.raises(ValueError, match="execute_tools"):
+            EnigmaEngine.generate(
+                _FakeSelf(),
+                "irrelevant",
+                max_gen=4,
+                json_schema={"type": "object", "properties": {}},
+                execute_tools=True,
+            )
+
+
 # ════════════════════════════════════════════════════════════════════
 # S562 — PrefixKVCache.prompt_hash Removed
 # ════════════════════════════════════════════════════════════════════
@@ -1700,7 +2058,7 @@ class TestORPO:
     def test_orpo_empty_data_raises(self):
         """Empty preference data should raise ValueError."""
         from unittest.mock import MagicMock
-        from enigma_engine.core.training import Trainer, TrainingConfig
+        from enigma_engine.core.training import Trainer
         trainer = MagicMock(spec=Trainer)
         trainer.train_orpo = Trainer.train_orpo.__get__(trainer, Trainer)
         with pytest.raises(ValueError, match="No preference data"):
@@ -1968,7 +2326,6 @@ class TestCrossLayerKVSharing:
 
     def test_sharing_disabled_by_default(self):
         """With kv_share_groups=0, no layers should be followers."""
-        import torch
         from enigma_engine.core.model_presets import ForgeConfig
         from enigma_engine.core.model import Enigma
 
@@ -1982,7 +2339,6 @@ class TestCrossLayerKVSharing:
 
     def test_sharing_links_set_correctly(self):
         """With kv_share_groups=2 and 4 layers, layers 1 and 3 are followers."""
-        import torch
         from enigma_engine.core.model_presets import ForgeConfig
         from enigma_engine.core.model import Enigma
 
@@ -2202,7 +2558,6 @@ class TestMixtureOfDepths:
 
     def test_disabled_by_default(self):
         """Without MoD, TransformerBlock has no depth_router."""
-        import torch
         from enigma_engine.core.model_presets import ForgeConfig
         from enigma_engine.core.model_components import TransformerBlock
 
@@ -2212,7 +2567,6 @@ class TestMixtureOfDepths:
 
     def test_router_created_when_enabled(self):
         """With MoD, TransformerBlock should have depth_router."""
-        import torch
         from enigma_engine.core.model_presets import ForgeConfig
         from enigma_engine.core.model_components import TransformerBlock
 
@@ -2260,7 +2614,6 @@ class TestMixtureOfDepths:
 
     def test_mod_no_aux_loss_when_disabled(self):
         """get_mod_aux_loss() returns 0 when MoD is disabled."""
-        import torch
         from enigma_engine.core.model_presets import ForgeConfig
         from enigma_engine.core.model_components import TransformerBlock
 
@@ -2353,6 +2706,18 @@ class TestMinHashDedup:
         result = minhash_dedup(texts, threshold=1.0)
         assert len(result) == 2
 
+    def test_default_threshold_matches_fineweb_standard(self):
+        """Data-5b: MinHash default must be 0.75 (FineWeb/DCLM/SmolLM3 standard).
+
+        FineWeb tech report (arxiv:2406.17557 \u00a73.4) targets documents
+        \u226575% similar. The previous 0.8 default was slightly more permissive
+        than industry practice and disagreed with the cited research.
+        """
+        import inspect
+        from enigma_engine.core.training import minhash_dedup
+        sig = inspect.signature(minhash_dedup)
+        assert sig.parameters["threshold"].default == 0.75
+
 
 # ════════════════════════════════════════════════════════════════════
 # T4-2 — Curriculum Learning (Easy→Hard)
@@ -2441,6 +2806,19 @@ class TestTokenMerging:
         restored = mc._tome_unmerge(merged, 8, merged_mask, merge_dst)
         assert restored.shape == x.shape
 
+    def test_tome_skip_long_sequences(self):
+        """S822: _bipartite_soft_matching returns identity for T > 4096."""
+        import torch
+        mc = __import__('enigma_engine.core.model_components',
+                        fromlist=['_bipartite_soft_matching'])
+        # Create input over the 4096-token threshold
+        x = torch.randn(1, 4097, 16)
+        merge_dst, unmerge_src, merged_mask = mc._bipartite_soft_matching(
+            x, r=2)
+        # Identity: no tokens merged (all False = nothing removed)
+        assert not merged_mask.any(), "Long sequence should skip merging"
+        assert merge_dst.shape == (1, 4097)
+
 
 # ════════════════════════════════════════════════════════════════════
 # T5-5 — Lookahead Decoding (Jacobi iteration)
@@ -2518,7 +2896,6 @@ class TestMLA:
 
     def test_mla_disabled_by_default(self):
         """With mla_latent_dim=0, standard wk/wv are used."""
-        import torch
         from enigma_engine.core.model_presets import ForgeConfig
         from enigma_engine.core.model_components import Attention
 
@@ -2530,7 +2907,6 @@ class TestMLA:
 
     def test_mla_enabled_creates_latent_layers(self):
         """With mla_latent_dim>0, wkv_down/wk_up/wv_up should exist."""
-        import torch
         from enigma_engine.core.model_presets import ForgeConfig
         from enigma_engine.core.model_components import Attention
 

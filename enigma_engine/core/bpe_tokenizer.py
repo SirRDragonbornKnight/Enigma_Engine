@@ -32,7 +32,12 @@ class BPETokenizer:
 
     Learns subword patterns directly from your training data.
     No external dependencies - pure Python implementation.
+    Automatically uses Rust backend (enigma_bpe) for encode/decode
+    when available (~6x faster).
     """
+
+    # Rust backend availability (class-level, checked once)
+    _rust_available: bool | None = None
 
     def __init__(self, vocab_file: Optional[Path] = None):
         # Special tokens with reserved IDs
@@ -49,6 +54,8 @@ class BPETokenizer:
             "<BOT>": 9,
             "<think>": 10,
             "</think>": 11,
+            "<search>": 12,   # Stage B-1: inline search-query start
+            "</search>": 13,  # Stage B-1: inline search-query end
         }
 
         self.pad_token = "<pad>"
@@ -62,6 +69,11 @@ class BPETokenizer:
         self.unk_token_id = 3
         self.think_start_id = self.special_tokens["<think>"]
         self.think_end_id = self.special_tokens["</think>"]
+        # Stage B-1: None on legacy load. Rust SPECIAL_TOKENS aligned
+        # to this dict in B-1b (Pass after 156z9e) so Rust train no
+        # longer drops <search>/</search>.
+        self.search_start_id: int | None = self.special_tokens.get("<search>")
+        self.search_end_id: int | None = self.special_tokens.get("</search>")
 
         # Vocabulary mappings
         self.token_to_id: dict[str, int] = {}
@@ -74,12 +86,19 @@ class BPETokenizer:
         # Cache for encoding (LRU via OrderedDict)
         self.cache: OrderedDict[str, list[str]] = OrderedDict()
         self._cache_lock = threading.Lock()
+        self._cache_cap = self._compute_cache_cap()
 
         # UTF-8 byte-level mode: encode text as UTF-8 bytes
         # before BPE, so any Unicode character can be represented
-        # as a sequence of byte tokens.  Off by default for
-        # backward compatibility with existing vocab files.
-        self.use_utf8_bytes: bool = False
+        # as a sequence of byte tokens (matches GPT-2 / Llama / Qwen3).
+        # Default ON (Tok-2) so fresh tokenizers handle Unicode
+        # without emitting <unk>. Existing vocab files preserve their
+        # stored flag through load() (see line ~631), so legacy
+        # tokenizers are not silently re-interpreted.
+        self.use_utf8_bytes: bool = True
+
+        # Rust backend (None = not loaded yet)
+        self._rust_backend = None
 
         if vocab_file and vocab_file.exists():
             self.load(vocab_file)  # may overwrite use_utf8_bytes
@@ -96,6 +115,19 @@ class BPETokenizer:
         self.unk_token_id = self.special_tokens.get("<unk>", 3)
         self.think_start_id = self.special_tokens.get("<think>", 10)
         self.think_end_id = self.special_tokens.get("</think>", 11)
+        # Stage B-1: None on legacy vocabs (no numeric fallback — would
+        # alias a learned merge ID).
+        self.search_start_id = self.special_tokens.get("<search>")
+        self.search_end_id = self.special_tokens.get("</search>")
+
+    @staticmethod
+    def _compute_cache_cap() -> int:
+        """Cache cap scaled to RAM via InferenceMemoryBudget (S804)."""
+        try:
+            from .hardware_detection import InferenceMemoryBudget
+            return InferenceMemoryBudget().bpe_cache_cap
+        except Exception:
+            return 10000  # safe fallback
 
     def _init_base_vocab(self):
         """Initialize with special tokens and base characters."""
@@ -158,6 +190,15 @@ class BPETokenizer:
         if min_frequency < 1:
             raise ValueError(
                 f"min_frequency must be >= 1, got {min_frequency}")
+
+        # Attempt Rust fast path (R-2)
+        if self._try_rust_train(texts, vocab_size, min_frequency,
+                                on_progress):
+            if verbose:
+                logger.info(
+                    f"Rust BPE train complete: vocab={self.vocab_size}, "
+                    f"merges={len(self.merges)}")
+            return
 
         # Reset to base vocabulary
         self._init_base_vocab()
@@ -321,11 +362,11 @@ class BPETokenizer:
             if verbose and (i + 1) % 500 == 0:
                 logger.info(
                     f"Merge {i + 1}/{num_merges}: '{best_pair[0]}' + '{best_pair[1]}' -> '{new_token}' (freq: {best_freq})")
+            # Yield GIL every merge so the GUI stays responsive.
+            # Early merges can take 10+ seconds each with millions
+            # of unique words — yielding every 100 was too rare.
+            time.sleep(0)
             if (i + 1) % 100 == 0:
-                # Yield GIL so the GUI main thread can process
-                # events.  Without this, ~32k merge iterations
-                # starve tkinter and the window freezes.
-                time.sleep(0)
                 if on_progress:
                     pct = int((i + 1) / num_merges * 100)
                     on_progress(
@@ -347,7 +388,7 @@ class BPETokenizer:
         # Handle special markers first - extract them before regex processing
         # Pattern to match Q:, A:, User:, Bot:, Human:, Assistant:,
         # and reasoning tags <think>, </think>
-        special_pattern = r'(<think>|</think>|(?<![A-Za-z])Q:|(?<![A-Za-z])A:|(?<![A-Za-z])User:|(?<![A-Za-z])Bot:|(?<![A-Za-z])Human:|(?<![A-Za-z])Assistant:)'
+        special_pattern = r'(<think>|</think>|<search>|</search>|(?<![A-Za-z])Q:|(?<![A-Za-z])A:|(?<![A-Za-z])User:|(?<![A-Za-z])Bot:|(?<![A-Za-z])Human:|(?<![A-Za-z])Assistant:)'
 
         parts = re.split(special_pattern, text)
 
@@ -356,7 +397,7 @@ class BPETokenizer:
                 continue
 
             # Map markers to special tokens
-            if part in ('<think>', '</think>'):
+            if part in ('<think>', '</think>', '<search>', '</search>'):
                 result.append(part)
             elif part == 'Q:':
                 result.append('<Q>')
@@ -461,7 +502,8 @@ class BPETokenizer:
         # Only cache deterministic (non-dropout) tokenizations
         if dropout <= 0.0:
             with self._cache_lock:
-                while len(self.cache) >= 10000:
+                cap = self._cache_cap
+                while len(self.cache) >= cap:
                     self.cache.popitem(last=False)
                 self.cache[word] = tokens
         return tokens
@@ -478,6 +520,10 @@ class BPETokenizer:
                 for training).  Randomly skips merges to produce
                 diverse tokenizations as data augmentation.
         """
+        # Rust fast path (no dropout support in Rust backend)
+        if self._rust_backend is not None and dropout == 0.0:
+            return self._rust_backend.encode(text, add_special_tokens)
+
         ids = []
 
         if add_special_tokens:
@@ -524,6 +570,10 @@ class BPETokenizer:
         In UTF-8 byte mode, the latin-1 byte string is converted
         back to proper UTF-8 text after de-tokenization.
         """
+        # Rust fast path
+        if self._rust_backend is not None:
+            return self._rust_backend.decode(ids, skip_special_tokens)
+
         tokens = []
 
         for idx in ids:
@@ -597,8 +647,77 @@ class BPETokenizer:
         self.vocab_size = len(self.token_to_id)
         self.cache: OrderedDict[str, list[str]] = OrderedDict()
 
+        # Try loading Rust backend for fast encode/decode
+        self._try_load_rust_backend(str(path))
+
         logger.info(
-            f"Loaded tokenizer from {path} (vocab: {self.vocab_size}, merges: {len(self.merges)})")
+            f"Loaded tokenizer from {path} (vocab: {self.vocab_size}, merges: {len(self.merges)}"
+            f"{', rust backend' if self._rust_backend else ''})")
+
+    def _try_load_rust_backend(self, path: str):
+        """Attempt to load the Rust BPE backend for faster encode/decode."""
+        if BPETokenizer._rust_available is False:
+            return
+        try:
+            from enigma_bpe import RustBPETokenizer
+            BPETokenizer._rust_available = True
+            backend = RustBPETokenizer()
+            backend.load(path)
+            self._rust_backend = backend
+        except ImportError:
+            BPETokenizer._rust_available = False
+            logger.debug("Rust BPE backend not available, using Python")
+        except Exception as exc:
+            logger.warning(f"Rust BPE backend failed to load: {exc}")
+            self._rust_backend = None
+
+    def _try_rust_train(
+        self,
+        texts: list[str],
+        vocab_size: int,
+        min_frequency: int,
+        on_progress: Callable[[int, str], None] | None,
+    ) -> bool:
+        """Attempt BPE training via Rust backend.
+
+        Returns True if Rust training succeeded and Python state was
+        synced.  Returns False if Rust is unavailable or fails, so the
+        caller should fall through to the Python implementation.
+        """
+        if BPETokenizer._rust_available is False:
+            return False
+        try:
+            from enigma_bpe import RustBPETokenizer
+            BPETokenizer._rust_available = True
+        except ImportError:
+            BPETokenizer._rust_available = False
+            return False
+
+        try:
+            backend = RustBPETokenizer()
+            result = backend.train(
+                texts,
+                vocab_size=vocab_size,
+                min_frequency=min_frequency,
+                use_utf8_bytes=self.use_utf8_bytes,
+                callback=on_progress,
+            )
+
+            # Sync Python state from Rust result
+            self.token_to_id = dict(result["token_to_id"])
+            self.id_to_token = {v: k for k, v in self.token_to_id.items()}
+            self.merges = [tuple(m) for m in result["merges"]]
+            self.merge_ranks = {
+                m: i for i, m in enumerate(self.merges)
+            }
+            self.special_tokens = dict(result["special_tokens"])
+            self.vocab_size = len(self.token_to_id)
+            self.cache: OrderedDict[str, list[str]] = OrderedDict()
+            self._rust_backend = backend
+            return True
+        except Exception as exc:
+            logger.warning(f"Rust BPE train failed, falling back to Python: {exc}")
+            return False
 
     def __call__(self, text: str, return_tensors: str = None,
                  padding: bool = None, truncation: bool = None,

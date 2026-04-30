@@ -3,10 +3,7 @@
 Tests the weight expansion logic that lets a trained smaller model
 grow into a larger architecture while preserving learned weights.
 """
-import inspect
-import math
 import unittest
-from unittest.mock import patch
 
 import torch
 
@@ -165,7 +162,7 @@ class TestExpandModelWeights(unittest.TestCase):
     def test_depth_expansion_layer_mapping(self):
         """Old layers are spread evenly into new positions."""
         from enigma_engine.core.progressive_growing import (
-            expand_model_weights, compute_layer_mapping)
+            compute_layer_mapping)
 
         # 2 old layers → 4 new: mapping should spread them
         mapping = compute_layer_mapping(2, 4)

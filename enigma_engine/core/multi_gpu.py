@@ -298,11 +298,11 @@ class DistributedTrainer:
 # =============================================================================
 
 __all__ = [
+    "DistributedConfig",
+    "DistributedTrainer",
     "get_gpu_count",
     "get_gpu_info",
     "is_multi_gpu",
-    "wrap_data_parallel",
     "unwrap_data_parallel",
-    "DistributedConfig",
-    "DistributedTrainer",
+    "wrap_data_parallel",
 ]

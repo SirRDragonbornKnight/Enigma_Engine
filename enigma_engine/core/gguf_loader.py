@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
-    from enigma_engine.core.model import Enigma  # noqa: F401
+    from enigma_engine.core.model import Enigma
 
 logger = logging.getLogger(__name__)
 
@@ -1007,13 +1007,13 @@ def recommend_gpu_layers(model_size_gb: float, vram_gb: float) -> int:
 # GGUF parsing: delegated to the shared implementation in gguf.py
 # Re-exported here for backward compatibility.
 # ---------------------------------------------------------------------------
-from .gguf import parse_gguf_header, parse_gguf_metadata, read_gguf_value  # noqa: E402, F401
+from .gguf import parse_gguf_header, parse_gguf_metadata, read_gguf_value  # noqa: F401
 
 # ---------------------------------------------------------------------------
 # Tensor parsing & dequantization: moved to gguf_dequant.py
 # Re-exported here for backward compatibility.
 # ---------------------------------------------------------------------------
-from .gguf_dequant import (  # noqa: E402, F401
+from .gguf_dequant import (  # noqa: F401
     parse_gguf_tensors,
     extract_config_from_metadata,
     dequantize_q4_0,

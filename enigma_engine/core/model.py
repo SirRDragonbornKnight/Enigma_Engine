@@ -37,22 +37,22 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────────────────────────
 # Re-exports from sub-modules
 # ─────────────────────────────────────────────────────────────────────────────
-from .model_presets import (  # noqa: E402, F401
+from .model_presets import (  # noqa: F401
     ForgeConfig, QuantizationConfig, MODEL_PRESETS, MODEL_DESCRIPTIONS,
     get_preset, estimate_parameters, list_presets,
 )
-from .model_components import (  # noqa: E402, F401
+from .model_components import (  # noqa: F401
     RMSNorm, DropPath, Attention, FeedForward, MoEFeedForward, TransformerBlock,
     precompute_rope_frequencies, apply_rotary_embedding,
     HAS_FLASH_ATTN, flash_attn_func,
 )
-from .model_utils import (  # noqa: E402, F401
+from .model_utils import (  # noqa: F401
     apply_repetition_penalty, sample_next_token,
     detect_hardware, recommend_model_size, estimate_memory_usage,
     get_running_models, is_model_loaded, register_model, unregister_model, get_model,
     _LOADED_MODELS, _MODELS_LOCK,
 )
-from .safe_save import atomic_torch_save, atomic_write_json  # noqa: E402
+from .safe_save import atomic_torch_save, atomic_write_json
 
 
 # =============================================================================
@@ -183,12 +183,22 @@ class Enigma(nn.Module):
         # ─────────────────────────────────────────────────────────────────────
         # These allow integrating vision/audio encoders with the text model
         if self.config.vision_hidden_size is not None:
-            self.vision_projection = nn.Linear(
-                self.config.vision_hidden_size,
-                self.config.dim,
-                bias=False
+            # LLaVA-1.5 (arxiv:2310.03744 §3.2): 2-layer MLP with GELU,
+            # bias=True on both Linears. Reference impl is HF
+            # `LlavaMultiModalProjector`. Was a single bias-free Linear in
+            # LLaVA-1; the MLP upgrade was the headline architecture change.
+            # State-dict keys: vision_projection.{0,2}.{weight,bias}.
+            self.vision_projection = nn.Sequential(
+                nn.Linear(self.config.vision_hidden_size, self.config.dim,
+                          bias=True),
+                nn.GELU(),
+                nn.Linear(self.config.dim, self.config.dim, bias=True),
             )
-            logger.info(f"Added vision projection: {self.config.vision_hidden_size} → {self.config.dim}")
+            logger.info(
+                f"Added vision projection (LLaVA-1.5 MLP): "
+                f"{self.config.vision_hidden_size} → {self.config.dim} "
+                f"→ {self.config.dim}"
+            )
         else:
             self.vision_projection = None
 
@@ -1411,10 +1421,11 @@ class Enigma(nn.Module):
         # Save config alongside
         config_path = path.with_suffix('.json')
         import json as _json
-        config_path.write_text(
+        from enigma_engine.core.safe_save import atomic_write_text
+        atomic_write_text(
+            config_path,
             _json.dumps(self.config.to_dict(), indent=2,
-                        ensure_ascii=False),
-            encoding="utf-8")
+                        ensure_ascii=False))
         logger.info(f"Exported config to: {config_path}")
 
     def export_to_onnx(

@@ -90,9 +90,9 @@ def set_font_size_offset(offset: int) -> None:
     makes FONT_BODY go from size 16 to 18. Offset can be negative.
     Clamped to [-4, 8] range for safety.
     """
-    global _font_size_offset  # noqa: PLW0603
-    global FONT_TITLE, FONT_SECTION, FONT_BODY, FONT_SMALL  # noqa: PLW0603
-    global FONT_TINY, FONT_CHAT, FONT_INPUT, FONT_MONO, FONT_CMD  # noqa: PLW0603
+    global _font_size_offset
+    global FONT_TITLE, FONT_SECTION, FONT_BODY, FONT_SMALL
+    global FONT_TINY, FONT_CHAT, FONT_INPUT, FONT_MONO, FONT_CMD
 
     offset = max(-4, min(8, offset))
     _font_size_offset = offset
@@ -141,16 +141,16 @@ def reload_theme(name: str) -> dict[str, str]:
     from dataclasses import fields as dc_fields
     from enigma_engine.gui.themes import Theme, get_theme
 
-    global _theme  # noqa: PLW0603
-    global C_BG, C_PANEL, C_SURFACE, C_INPUT  # noqa: PLW0603
-    global C_ACCENT, C_ACCENT_DIM, C_ACCENT_MUTED  # noqa: PLW0603
-    global C_PURPLE, C_PURPLE_DIM, C_PURPLE_MUTED  # noqa: PLW0603
-    global C_CYAN, C_TEXT, C_TEXT_DIM, C_TEXT_BRIGHT  # noqa: PLW0603
-    global C_GREEN, C_GREEN_DIM, C_GREEN_HOVER  # noqa: PLW0603
-    global C_RED, C_RED_DIM, C_RED_HOVER  # noqa: PLW0603
-    global C_ORANGE, C_ORANGE_DIM, C_ORANGE_HOVER  # noqa: PLW0603
-    global C_CYAN_DIM, C_CYAN_HOVER  # noqa: PLW0603
-    global C_BORDER, C_BORDER_ACCENT  # noqa: PLW0603
+    global _theme
+    global C_BG, C_PANEL, C_SURFACE, C_INPUT
+    global C_ACCENT, C_ACCENT_DIM, C_ACCENT_MUTED
+    global C_PURPLE, C_PURPLE_DIM, C_PURPLE_MUTED
+    global C_CYAN, C_TEXT, C_TEXT_DIM, C_TEXT_BRIGHT
+    global C_GREEN, C_GREEN_DIM, C_GREEN_HOVER
+    global C_RED, C_RED_DIM, C_RED_HOVER
+    global C_ORANGE, C_ORANGE_DIM, C_ORANGE_HOVER
+    global C_CYAN_DIM, C_CYAN_HOVER
+    global C_BORDER, C_BORDER_ACCENT
 
     old = _theme
     new = get_theme(name)
@@ -196,7 +196,7 @@ def reload_theme(name: str) -> dict[str, str]:
     C_BORDER_ACCENT = new.border_accent
 
     # Rebuild button styles with updated colours
-    global BUTTON_STYLES  # noqa: PLW0603
+    global BUTTON_STYLES
     BUTTON_STYLES = _build_button_styles()
 
     # Propagate to all GUI modules that imported C_* constants
@@ -221,7 +221,7 @@ def reload_theme(name: str) -> dict[str, str]:
 class _EntryUndoStack:
     """Lightweight undo/redo stack for tk.Entry (which has no native undo)."""
 
-    __slots__ = ("_stack", "_redo", "_lock")
+    __slots__ = ("_lock", "_redo", "_stack")
     _MAX_DEPTH = 200
 
     def __init__(self) -> None:

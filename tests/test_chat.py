@@ -792,3 +792,368 @@ class TestAgenticToolLoop:
         # No match
         m = pattern.search("no tool call here")
         assert m is None
+
+
+# ---------------------------------------------------------------------------
+# AutoResearch-2 Stage B-2 (Pass 156z9d): inline <search> emission detector
+# ---------------------------------------------------------------------------
+
+class TestStageB2SearchEmissionRecording:
+    """``_record_search_emissions`` is the post-generation observability
+    hook for AutoResearch-2 Stage B-2.  It scans completed generated text
+    for ``<search>...</search>`` blocks the model emitted, logs a
+    WARNING summarising the count, and stores the decoded queries on
+    ``engine.last_search_queries`` for callers (and future Stage B-3
+    RAG splice) to consume.
+
+    These tests exercise the helper directly via a stub instance built
+    with ``object.__new__`` to avoid loading a real model.
+    """
+
+    def _stub(self):
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        obj = object.__new__(_GenerationMixin)
+        obj.last_search_queries = []
+        return obj
+
+    def test_no_emission_yields_empty_list(self):
+        obj = self._stub()
+        obj._record_search_emissions(
+            "Just some normal answer text without any search request.")
+        assert obj.last_search_queries == []
+
+    def test_single_emission_records_query(self):
+        obj = self._stub()
+        obj._record_search_emissions(
+            "I'll look this up. <search>capital of France</search> "
+            "The answer is Paris.")
+        assert obj.last_search_queries == ["capital of France"]
+
+    def test_multiple_emissions_records_all_in_order(self):
+        obj = self._stub()
+        obj._record_search_emissions(
+            "<search>q1</search> middle "
+            "<search>q2</search> end "
+            "<search>q3</search>")
+        assert obj.last_search_queries == ["q1", "q2", "q3"]
+
+    def test_unclosed_search_block_is_ignored(self):
+        # extract_search_queries only matches closed pairs; a stray
+        # opener should not produce a phantom query.
+        obj = self._stub()
+        obj._record_search_emissions("<search>never closed and rest of text")
+        assert obj.last_search_queries == []
+
+    def test_emission_overwrites_previous_call(self):
+        obj = self._stub()
+        obj._record_search_emissions("<search>old</search>")
+        assert obj.last_search_queries == ["old"]
+        obj._record_search_emissions("text with no search")
+        # Cleared, not appended — last_search_queries reflects the
+        # MOST RECENT call, not a session-wide accumulator.
+        assert obj.last_search_queries == []
+
+    def test_emission_logs_warning_with_count(self, caplog):
+        import logging
+        obj = self._stub()
+        with caplog.at_level(logging.WARNING,
+                             logger="enigma_engine.core.engine_generation"):
+            obj._record_search_emissions(
+                "<search>a</search> <search>b</search>")
+        assert any("Stage B-2" in r.message and "2" in r.message
+                   for r in caplog.records), (
+            "Expected WARNING naming Stage B-2 and the request count")
+
+    def test_no_emission_logs_nothing(self, caplog):
+        import logging
+        obj = self._stub()
+        with caplog.at_level(logging.WARNING,
+                             logger="enigma_engine.core.engine_generation"):
+            obj._record_search_emissions("plain text with no tags")
+        assert not any("Stage B-2" in r.message for r in caplog.records), (
+            "Empty-emission path must be silent — loud-on-real-issue, "
+            "silent-on-normal-path discipline")
+
+    def test_helper_swallows_internal_exception(self, monkeypatch, caplog):
+        """Stage B-2 must NEVER raise into the caller — it's pure
+        observability layered on top of generation.  Force the
+        ``extract_search_queries`` import target to crash and assert
+        we get an empty list, an exception log, and no propagation."""
+        import logging
+        from enigma_engine.core import reasoning as _reasoning_mod
+
+        def boom(_text):
+            raise RuntimeError("synthetic crash")
+
+        monkeypatch.setattr(_reasoning_mod, "extract_search_queries", boom)
+
+        obj = self._stub()
+        obj.last_search_queries = ["stale"]
+        with caplog.at_level(logging.ERROR,
+                             logger="enigma_engine.core.engine_generation"):
+            obj._record_search_emissions("<search>q</search>")
+        assert obj.last_search_queries == []
+        assert any("Stage B-2" in r.message for r in caplog.records)
+
+
+class TestStageB2EngineWiring:
+    """Verify ``last_search_queries`` is initialised in ``_init_common``
+    so every engine instance has the attribute regardless of which
+    constructor path created it (``__init__`` vs ``from_model``)."""
+
+    def test_init_common_sets_last_search_queries_attribute(self):
+        import inspect
+        from enigma_engine.core.inference import EnigmaEngine
+        src = inspect.getsource(EnigmaEngine._init_common)
+        assert "self.last_search_queries" in src, (
+            "_init_common must initialise last_search_queries so both "
+            "__init__ and from_model paths see the attribute. "
+            "Pass 156z9d Stage B-2 wire-site test.")
+
+    def test_generate_text_calls_record_on_main_return_path(self):
+        import inspect
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        src = inspect.getsource(_GenerationMixin._generate_text)
+        # Native PyTorch return path
+        assert "_record_search_emissions" in src, (
+            "_generate_text must call _record_search_emissions on its "
+            "native return path. Pass 156z9d Stage B-2 wire-site test.")
+
+    def test_stream_generate_calls_record_in_finally(self):
+        import inspect
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        src = inspect.getsource(_GenerationMixin.stream_generate)
+        assert "_record_search_emissions" in src, (
+            "stream_generate must call _record_search_emissions inside "
+            "the finally block so observability covers both normal "
+            "completion AND generator cancellation.")
+        assert "finally" in src, (
+            "stream_generate must wrap its yield loop in try/finally "
+            "so the scan runs on early caller break.")
+
+    def test_sibling_generation_paths_all_record(self):
+        """Pass 156z7 sibling-boundary-sweep: every public generation
+        method that returns final text must hook the Stage B-2 scanner
+        on its return path.  Without this, a user calling
+        ``speculative_generate`` / ``medusa_generate`` /
+        ``lookahead_generate`` / ``batch_generate`` /
+        ``_generate_with_vision`` directly would see
+        ``last_search_queries`` from a stale earlier call."""
+        import inspect
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        for name in (
+            "speculative_generate", "medusa_generate",
+            "lookahead_generate", "batch_generate",
+            "_generate_with_vision",
+        ):
+            method = getattr(_GenerationMixin, name)
+            src = inspect.getsource(method)
+            assert "_record_search_emissions" in src, (
+                f"Stage B-2 sibling-sweep miss: {name} does not call "
+                f"_record_search_emissions on its return path. A user "
+                f"hitting this path bypasses the inline-search "
+                f"observability layer.")
+
+
+# ---------------------------------------------------------------------------
+# Pass 156z9e audit follow-up — prompt-echo + GGUF chat sibling sweep
+# ---------------------------------------------------------------------------
+
+class TestStageB2PromptEchoSlicing:
+    """Pass 156z9e (logic-eye audit on Pass 156z9d): native generation
+    paths decode the FULL ``prompt + continuation`` sequence, not just
+    the new tokens.  Without prompt-side slicing, a user prompt that
+    contains a literal ``<search>foo</search>`` (e.g. asking the model
+    "what does the <search> token do?") gets falsely recorded as a
+    model emission.  The hook must strip the prompt prefix when
+    supplied by the caller."""
+
+    def _stub(self):
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        return object.__new__(_GenerationMixin)
+
+    def test_prompt_echo_does_not_record_user_supplied_search_block(self):
+        obj = self._stub()
+        obj.last_search_queries = []
+        prompt = "Explain the <search>weather in Paris</search> syntax."
+        # Model echoed prompt and added a benign continuation with no
+        # <search> of its own.
+        full_text = prompt + "\nAssistant: It is a markup tag."
+        obj._record_search_emissions(full_text, prompt=prompt)
+        assert obj.last_search_queries == [], (
+            "Prompt-side <search> blocks must NOT be recorded as model "
+            "emissions. Pass 156z9e logic-eye audit.")
+
+    def test_prompt_slice_still_records_continuation_search(self):
+        obj = self._stub()
+        obj.last_search_queries = []
+        prompt = "Explain the <search>prompt query</search> syntax."
+        full_text = (prompt
+                     + " <search>continuation query</search> more text")
+        obj._record_search_emissions(full_text, prompt=prompt)
+        assert obj.last_search_queries == ["continuation query"], (
+            "Continuation-side <search> blocks MUST still be recorded "
+            "after prompt-slicing.")
+
+    def test_no_prompt_arg_falls_back_to_full_scan(self):
+        """GGUF and stream paths pass continuation-only text and pass
+        ``prompt=None`` (default).  In that mode the helper scans the
+        full text — which is correct because there's no prompt prefix
+        to strip."""
+        obj = self._stub()
+        obj.last_search_queries = []
+        obj._record_search_emissions("<search>q</search>")
+        assert obj.last_search_queries == ["q"]
+
+    def test_text_not_starting_with_prompt_skips_slicing(self):
+        """Defensive: if ``text`` does not start with ``prompt`` (e.g.
+        leading whitespace was stripped), do NOT slice — scan the full
+        text rather than corrupting the offsets."""
+        obj = self._stub()
+        obj.last_search_queries = []
+        obj._record_search_emissions(
+            "<search>q</search>", prompt="something else entirely")
+        assert obj.last_search_queries == ["q"]
+
+
+class TestStageB2GgufChatSiblingSweep:
+    """Pass 156z9e sibling-boundary-sweep audit on Pass 156z9d: the
+    chat() and stream_chat() GGUF branches in ``engine_chat.py`` call
+    ``self.model.chat()`` directly, BYPASSING ``_generate_text`` /
+    ``stream_generate`` and therefore their ``_record_search_emissions``
+    hooks.  Without dedicated hooks, a user driving the engine through
+    ``engine.chat(...)`` against a GGUF model would get
+    ``last_search_queries == []`` even when the model emitted a search
+    request — silent observability loss in the same family Pass 156z7
+    already cleaned up for json_schema.
+
+    These are structural tests because behavioural tests would require
+    either a loaded GGUF model or a multi-layer mock of llama-cpp-python.
+    Companion behavioural test on the helper itself lives in
+    ``TestStageB2SearchEmissionRecording`` above."""
+
+    def test_chat_gguf_branch_records_search_emissions(self):
+        import inspect
+        from enigma_engine.core.engine_chat import _ChatMixin
+        src = inspect.getsource(_ChatMixin.chat)
+        # Pull the GGUF branch (between "if ctx.is_gguf" and the
+        # next major branch comment) and assert the hook lives there.
+        gguf_start = src.find("if ctx.is_gguf and hasattr(self.model")
+        assert gguf_start != -1, "GGUF branch not found in chat()"
+        # Search the next ~80 lines after the branch entry
+        gguf_block = src[gguf_start:gguf_start + 4000]
+        assert "_record_search_emissions" in gguf_block, (
+            "chat() GGUF branch must call _record_search_emissions on "
+            "the response — Pass 156z9e sibling sweep miss.")
+
+    def test_stream_chat_gguf_server_branch_records(self):
+        import inspect
+        from enigma_engine.core.engine_chat import _ChatMixin
+        src = inspect.getsource(_ChatMixin.stream_chat)
+        # Server-backend branch yields response in one piece without
+        # going through stream_generate's finally hook.
+        server_start = src.find("if ctx.has_server_backend")
+        assert server_start != -1, (
+            "GGUF server-backend branch not found in stream_chat()")
+        server_block = src[server_start:server_start + 1500]
+        assert "_record_search_emissions" in server_block, (
+            "stream_chat() GGUF server branch must call "
+            "_record_search_emissions before yielding — Pass 156z9e "
+            "sibling sweep miss.")
+
+    def test_stream_chat_gguf_llamacpp_branch_records_in_finally(self):
+        import inspect
+        from enigma_engine.core.engine_chat import _ChatMixin
+        src = inspect.getsource(_ChatMixin.stream_chat)
+        # llama-cpp-python in-process streaming branch
+        llamacpp_marker = "create_chat_completion"
+        idx = src.find(llamacpp_marker)
+        assert idx != -1, (
+            "GGUF llama-cpp streaming branch not found in stream_chat()")
+        # Window covers the try/finally that wraps the chunk loop
+        window = src[max(0, idx - 500):idx + 3000]
+        assert "_record_search_emissions" in window, (
+            "stream_chat() GGUF llama-cpp branch must call "
+            "_record_search_emissions in its finally block so "
+            "cancellation still flushes the scan — Pass 156z9e.")
+        assert "finally" in window, (
+            "stream_chat() GGUF llama-cpp branch must wrap its yield "
+            "loop in try/finally so the scan survives early break.")
+
+
+# ---------------------------------------------------------------------------
+# Pass after 156z9e — Stage B-2b per-prompt attribution for batch_generate
+# ---------------------------------------------------------------------------
+
+class TestStageB2bBatchPerPromptAttribution:
+    """B-2b closes the per-prompt attribution gap from Pass 156z9d's
+    sibling sweep on ``batch_generate``.  Earlier slice joined the batch
+    output with newlines and scanned once, which lost which prompt
+    produced which query.  Now ``last_search_queries_per_prompt`` is a
+    parallel-to-prompts list-of-lists; the flat ``last_search_queries``
+    is the union for callers that don't care about attribution.
+
+    Behavioural tests on a stub instance — no model load required."""
+
+    def _stub(self):
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        obj = object.__new__(_GenerationMixin)
+        obj.last_search_queries = []
+        obj.last_search_queries_per_prompt = []
+        return obj
+
+    def test_per_prompt_list_parallel_to_prompts(self):
+        """Each entry in ``last_search_queries_per_prompt`` is the
+        emissions for the prompt at the same index — including empty
+        lists for prompts where the model emitted nothing."""
+        obj = self._stub()
+        prompts = ["p0", "p1", "p2"]
+        results = [
+            "p0 <search>q0a</search> <search>q0b</search>",
+            "p1 nothing here",
+            "p2 <search>q2</search>",
+        ]
+        per_prompt: list[list[str]] = []
+        flat: list[str] = []
+        for prompt_text, output_text in zip(prompts, results):
+            obj._record_search_emissions(output_text, prompt=prompt_text)
+            per_prompt.append(list(obj.last_search_queries))
+            flat.extend(obj.last_search_queries)
+        obj.last_search_queries_per_prompt = per_prompt
+        obj.last_search_queries = flat
+
+        assert obj.last_search_queries_per_prompt == [
+            ["q0a", "q0b"],
+            [],
+            ["q2"],
+        ]
+        assert obj.last_search_queries == ["q0a", "q0b", "q2"]
+
+    def test_init_common_initialises_per_prompt_attribute(self):
+        """Engine constructors must initialise the attribute so callers
+        can read it without an AttributeError before the first
+        ``batch_generate`` call."""
+        import inspect
+        from enigma_engine.core.inference import EnigmaEngine
+        src = inspect.getsource(EnigmaEngine._init_common)
+        assert "self.last_search_queries_per_prompt" in src, (
+            "_init_common must initialise last_search_queries_per_prompt "
+            "so every engine has the attribute regardless of "
+            "construction path. B-2b wire-site test.")
+
+    def test_batch_generate_wires_per_prompt_attribution(self):
+        """Wire-site structural test: ``batch_generate`` must populate
+        ``last_search_queries_per_prompt`` (one entry per prompt) AND
+        the flat union list, NOT the legacy join-and-scan."""
+        import inspect
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        src = inspect.getsource(_GenerationMixin.batch_generate)
+        assert "last_search_queries_per_prompt" in src, (
+            "batch_generate must populate last_search_queries_per_prompt "
+            "to give callers per-prompt attribution. B-2b.")
+        # Catches the regression where someone reverts to the old
+        # join-and-scan path.
+        assert '"\\n".join(results)' not in src, (
+            "batch_generate must NOT use the legacy join-and-scan "
+            "path — that loses per-prompt attribution. B-2b.")
+

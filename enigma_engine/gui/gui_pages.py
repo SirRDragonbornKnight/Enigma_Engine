@@ -33,8 +33,8 @@ from enigma_engine.gui.widgets import (
 )
 # Re-export so existing imports keep working
 from enigma_engine.gui.gui_mod_page import ModPageMixin  # noqa: F401
-from enigma_engine.gui.gui_pages_forge import ForgePageMixin  # noqa: F401
-from enigma_engine.gui.gui_pages_config import ConfigPageMixin  # noqa: F401
+from enigma_engine.gui.gui_pages_forge import ForgePageMixin
+from enigma_engine.gui.gui_pages_config import ConfigPageMixin
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +133,14 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
         tb.tag_configure("system_msg", foreground=C_ORANGE,
                          lmargin1=12, lmargin2=12, rmargin=12,
                          spacing1=2)
+        # Pass 156v Step 1 — session-state-change divider.
+        # Dim text + italic-equivalent (smaller font) + extra
+        # vertical breathing room so the user can scan the log
+        # and locate adapter/model/profile swaps visually.
+        tb.tag_configure("session_marker", foreground=C_TEXT_DIM,
+                         font=("Consolas", 13),
+                         lmargin1=12, lmargin2=12,
+                         spacing1=6, spacing3=6)
         tb.tag_configure("timestamp", foreground=C_TEXT_DIM,
                          font=("Consolas", 12))
         tb.tag_configure("user_prefix", foreground=C_PURPLE,
@@ -893,12 +901,13 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
             pass
         self.model_vram_var = ctk.StringVar(value=_default_mem)
         _mem_entry = themed_numeric_entry(
-            form_row, mode="int",
+            form_row, mode="float",
             textvariable=self.model_vram_var,
             width=60, height=30, font=FONT_SMALL)
         _mem_entry.pack(side="left", padx=(0, 8))
         Tooltip(_mem_entry,
                 "Available memory for training (GB).\n"
+                "Decimals allowed (e.g. 0.5 for smoke tests).\n"
                 "GPU VRAM if available, otherwise system RAM.\n"
                 "The largest model that fits will be selected.")
 
@@ -937,6 +946,69 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
             placeholder_text="e.g. gpt2 or username/model-name")
         self._hf_repo_entry.bind(
             "<Return>", lambda e: self._download_huggingface())
+
+        # Model merge row (N-21)
+        merge_row = ctk.CTkFrame(create_frame, fg_color="transparent")
+        merge_row.pack(fill="x", pady=(6, 0))
+
+        SelectableLabel(
+            merge_row, text="Merge:", font=FONT_TINY,
+            text_color=C_TEXT_DIM
+        ).pack(side="left", padx=(0, 4))
+
+        _model_names = [m["name"] for m in self.models_data]
+        _merge_values = _model_names if _model_names else ["None"]
+
+        self._merge_model_a_var = ctk.StringVar(value=_merge_values[0])
+        self._merge_model_a_menu = themed_dropdown(
+            merge_row, _merge_values, variable=self._merge_model_a_var,
+            width=130, height=30)
+        self._merge_model_a_menu.pack(side="left", padx=(0, 4))
+
+        _merge_b_default = (
+            _merge_values[1]
+            if len(_merge_values) > 1 else _merge_values[0])
+        self._merge_model_b_var = ctk.StringVar(value=_merge_b_default)
+        self._merge_model_b_menu = themed_dropdown(
+            merge_row, _merge_values, variable=self._merge_model_b_var,
+            width=130, height=30)
+        self._merge_model_b_menu.pack(side="left", padx=(0, 4))
+
+        self._merge_mode_var = ctk.StringVar(value="SLERP")
+        self._merge_mode_menu = themed_dropdown(
+            merge_row, ["SLERP", "LINEAR", "TIES"],
+            variable=self._merge_mode_var,
+            width=85, height=30)
+        self._merge_mode_menu.pack(side="left", padx=(0, 4))
+
+        self._merge_t_var = ctk.StringVar(value="0.5")
+        self._merge_t_entry = themed_numeric_entry(
+            merge_row, mode="float", textvariable=self._merge_t_var,
+            width=55, height=30, font=FONT_SMALL)
+        self._merge_t_entry.pack(side="left", padx=(0, 4))
+        Tooltip(self._merge_t_entry, "SLERP/LINEAR ratio t (0.0 to 1.0)")
+
+        self._merge_density_var = ctk.StringVar(value="0.2")
+        self._merge_density_entry = themed_numeric_entry(
+            merge_row, mode="float",
+            textvariable=self._merge_density_var,
+            width=55, height=30, font=FONT_SMALL)
+        self._merge_density_entry.pack(side="left", padx=(0, 4))
+        Tooltip(self._merge_density_entry,
+                "TIES density (0.0 to 1.0)")
+
+        self._merge_output_entry = themed_entry(
+            merge_row, width=130, height=30, font=FONT_SMALL)
+        self._merge_output_entry.pack(side="left", padx=(0, 6))
+        self._merge_output_entry.configure(
+            placeholder_text="output name")
+
+        _merge_btn = themed_button(
+            merge_row, "MERGE", style="action",
+            width=80, height=30, font=FONT_SMALL,
+            command=self._merge_models)
+        _merge_btn.pack(side="left")
+        Tooltip(_merge_btn, "Merge two models into a new .pth file")
 
         # Status label for create/delete feedback (visible on this page)
         self._models_status = SelectableLabel(
@@ -1269,6 +1341,13 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
                     command=lambda d=ckpt_dir: self._clean_checkpoints(d)
                 ).pack(side="left", padx=(0, 4))
 
+            # Row 5 — LoRA adapters (Pass 156t LoRA-1b UX).
+            # Per-card listing scoped to this base model. Apply/Clear
+            # are gated on the model being currently loaded; clicking
+            # while another base is active surfaces a chat hint
+            # instead of attempting a cross-base apply.
+            self._build_lora_section_for_card(inner, model)
+
             # Row 4 — Inline delete confirmation (hidden)
             delete_row = ctk.CTkFrame(inner, fg_color="transparent")
             _del_msg = SelectableLabel(
@@ -1381,6 +1460,276 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
                         font=FONT_TINY, text_color=C_ACCENT,
                         anchor="w"
                     ).pack(anchor="w")
+
+    # ================================================================
+    # LoRA adapter section (Pass 156t LoRA-1b UX)
+    # ================================================================
+
+    def _build_lora_section_for_card(self, inner, model):
+        """Render the per-card LoRA adapter list with Apply/Clear.
+
+        Pass 156t (LoRA-1b UX): scans adapters compatible with this
+        base via :func:`scan_lora_adapters` (filtered by base-stem so
+        a math-base adapter cannot reach a coding-base card). If no
+        compatible adapters exist, this section renders nothing.
+
+        Pass 156u-B (LoRA-1b stacking UI): each row gains a stack
+        checkbox and a numeric weight entry (default "1.0"). When
+        the user ticks 2+ rows and clicks **APPLY STACK** the
+        selected adapters are merged via
+        :meth:`EnigmaEngine.apply_adapter_stack`. A single-tick
+        Apply Stack falls through to the single-adapter path
+        (avoids the ``_stack`` PEFT indirection for the trivial
+        case). Per Dia rule: numeric input only — no sliders.
+
+        Apply/Clear buttons are gated on the model being currently
+        loaded — clicking while another base is active surfaces a
+        chat-system hint instead of attempting a cross-base apply.
+        Clear is only shown when an adapter is currently active for
+        this base (read from ``route_assignments``).
+        """
+        from enigma_engine.gui.scanners import scan_lora_adapters
+
+        adapters = scan_lora_adapters(model["path"])
+        if not adapters:
+            return
+
+        route_key = f"chat_adapter:{Path(model['path']).stem}"
+        active_path = self.route_assignments.get(route_key)
+        active_name = (
+            Path(active_path).name if active_path else None)
+
+        lora_frame = ctk.CTkFrame(inner, fg_color="transparent")
+        lora_frame.grid(
+            row=5, column=0, columnspan=2,
+            sticky="ew", pady=(4, 0))
+        lora_frame.grid_columnconfigure(0, weight=1)
+
+        # Header row: title + active indicator + Clear button.
+        header = ctk.CTkFrame(lora_frame, fg_color="transparent")
+        header.grid(row=0, column=0, sticky="ew")
+
+        SelectableLabel(
+            header,
+            text=f"LoRA Adapters: {len(adapters)} available",
+            font=FONT_TINY, text_color=C_TEXT_DIM, anchor="w"
+        ).pack(side="left", padx=(0, 8))
+
+        if active_name:
+            SelectableLabel(
+                header, text=f"active: {active_name}",
+                font=FONT_TINY, text_color=C_GREEN, anchor="w"
+            ).pack(side="left", padx=(0, 8))
+
+            _clear_btn = themed_button(
+                header, "CLEAR", style="secondary",
+                width=60, height=22, font=FONT_TINY,
+                command=lambda m=model: self._on_lora_clear(m))
+            _clear_btn.pack(side="left", padx=(0, 4))
+            Tooltip(
+                _clear_btn,
+                "Clear the active LoRA adapter (use base weights)")
+
+        # Per-row state for stacking. Each entry is
+        # (adapter_dict, BooleanVar, StringVar) — the BooleanVar
+        # tracks the stack-selection checkbox; the StringVar tracks
+        # the weight entry's text. State lives only for the lifetime
+        # of this card render; _refresh_model_cards rebuilds it.
+        stack_state: list[tuple[dict, ctk.BooleanVar, ctk.StringVar]] = []
+
+        # One row per adapter.
+        for idx, adapter in enumerate(adapters):
+            row = ctk.CTkFrame(lora_frame, fg_color="transparent")
+            row.grid(
+                row=idx + 1, column=0,
+                sticky="ew", pady=(2, 0))
+            row.grid_columnconfigure(2, weight=1)
+
+            # Stack checkbox (column 0).
+            check_var = ctk.BooleanVar(value=False)
+            check = ctk.CTkCheckBox(
+                row, text="", variable=check_var,
+                width=20, height=20,
+                checkbox_width=16, checkbox_height=16)
+            check.grid(row=0, column=0, padx=(0, 4))
+            Tooltip(
+                check,
+                "Tick to include this adapter in a multi-LoRA "
+                "stack (then click APPLY STACK)")
+
+            # Weight entry (column 1) — float mode allows negatives
+            # and scientific notation. Default "1.0".
+            weight_var = ctk.StringVar(value="1.0")
+            weight_entry = themed_numeric_entry(
+                row, mode="float",
+                width=56, height=22,
+                textvariable=weight_var)
+            weight_entry.grid(row=0, column=1, padx=(0, 6))
+            Tooltip(
+                weight_entry,
+                "Weight for this adapter in the stack "
+                "(negatives subtract; default 1.0)")
+
+            stack_state.append((adapter, check_var, weight_var))
+
+            rank = adapter.get("rank", "?")
+            alpha = adapter.get("alpha", "?")
+            label_text = (
+                f"{adapter['name']}  (rank={rank}, alpha={alpha})")
+            is_active = (active_path == adapter["path"])
+            SelectableLabel(
+                row, text=label_text,
+                font=FONT_TINY,
+                text_color=C_GREEN if is_active else C_TEXT,
+                anchor="w"
+            ).grid(row=0, column=2, sticky="w")
+
+            if is_active:
+                # No per-row Apply button when already active —
+                # Clear is on the header row. Stack checkbox is
+                # still rendered so the user can include this in
+                # a stack.
+                continue
+
+            _apply_btn = themed_button(
+                row, "APPLY", style="action",
+                width=60, height=22, font=FONT_TINY,
+                command=lambda m=model, a=adapter:
+                    self._on_lora_apply(m, a))
+            _apply_btn.grid(row=0, column=3, padx=(4, 0))
+            Tooltip(
+                _apply_btn,
+                f"Apply '{adapter['name']}' to the chat session")
+
+        # Apply Stack button (bottom of section). Always rendered
+        # when 2+ adapters exist — handler validates selection at
+        # click-time and surfaces hints for empty / 1-row picks.
+        if len(adapters) >= 2:
+            stack_row = ctk.CTkFrame(
+                lora_frame, fg_color="transparent")
+            stack_row.grid(
+                row=len(adapters) + 1, column=0,
+                sticky="ew", pady=(4, 0))
+
+            _stack_btn = themed_button(
+                stack_row, "APPLY STACK", style="action",
+                width=110, height=22, font=FONT_TINY,
+                command=lambda m=model, st=stack_state:
+                    self._on_lora_apply_stack(
+                        m,
+                        [(a["path"], wv.get())
+                         for (a, cv, wv) in st if cv.get()]))
+            _stack_btn.pack(side="left")
+            Tooltip(
+                _stack_btn,
+                "Merge the ticked adapters into a weighted "
+                "stack and apply to the chat session")
+
+    def _on_lora_apply(self, model, adapter):
+        """Handle Apply button on a model card's adapter row.
+
+        Pass 156t (LoRA-1b UX): if the model is currently loaded,
+        delegates to ``_set_chat_adapter``. Otherwise surfaces a chat
+        hint — we do NOT auto-load the base because it's a heavy
+        operation the user didn't explicitly request.
+        """
+        active_path = getattr(self, "model_path", None)
+        if active_path != model["path"]:
+            self._chat_system(
+                f"Load '{model['name']}' first, then apply "
+                f"'{adapter['name']}'.")
+            return
+        self._set_chat_adapter(model["path"], adapter["path"])
+        # Refresh the cards so active-adapter highlight updates.
+        self._refresh_model_cards()
+
+    def _on_lora_apply_stack(
+        self, model, selections: list[tuple[str, str]],
+    ):
+        """Handle the APPLY STACK button at the bottom of a card.
+
+        Pass 156u-B (LoRA-1b stacking UI): given the user's
+        per-row selections (path + raw weight string), validates,
+        parses, and dispatches to either the single-adapter path
+        (1 selection) or the stack path (2+ selections).
+
+        Args:
+            model: The model card dict (path, name, ...).
+            selections: List of ``(adapter_path, raw_weight_str)``
+                tuples for rows the user has ticked.
+
+        Behaviour:
+            - Base not loaded → chat-system hint, no engine call.
+            - Empty selection → chat-system hint, no engine call.
+            - Parse error in any row → chat-error with ALL
+              messages, no engine call (all-or-nothing).
+            - Exactly one selection → ``_set_chat_adapter`` (skips
+              the ``_stack`` PEFT indirection).
+            - Two+ selections → ``_set_chat_adapter_stack`` with
+              parsed (path, weight) pairs.
+        """
+        from enigma_engine.gui.gui_logic import (
+            _parse_lora_stack_inputs)
+
+        active_path = getattr(self, "model_path", None)
+        if active_path != model["path"]:
+            self._chat_system(
+                f"Load '{model['name']}' first, then apply a "
+                f"LoRA stack.")
+            return
+
+        if not selections:
+            self._chat_system(
+                "No LoRA adapters selected — tick the rows you "
+                "want to stack, then click APPLY STACK.")
+            return
+
+        parsed, errors = _parse_lora_stack_inputs(selections)
+        if errors:
+            for msg in errors:
+                self._chat_error(f"LoRA stack: {msg}")
+            return
+
+        if len(parsed) == 1:
+            # Trivial case — route through the single-adapter path
+            # to avoid the _stack PEFT indirection.
+            single_path, _weight = parsed[0]
+            self._set_chat_adapter(model["path"], single_path)
+            self._refresh_model_cards()
+            return
+
+        self._set_chat_adapter_stack(model["path"], parsed)
+        self._refresh_model_cards()
+
+    def _on_lora_clear(self, model):
+        """Handle Clear button on a model card's adapter section.
+
+        Pass 156t (LoRA-1b UX): same load-first guard as
+        ``_on_lora_apply``.
+        """
+        active_path = getattr(self, "model_path", None)
+        if active_path != model["path"]:
+            self._chat_system(
+                f"Load '{model['name']}' first, then clear "
+                f"its adapter.")
+            return
+        self._set_chat_adapter(model["path"], None)
+        self._refresh_model_cards()
+
+    def _refresh_model_cards(self):
+        """Rebuild the model-cards scroll frame in-place.
+
+        Pass 156t (LoRA-1b UX): keeps the active-adapter highlight in
+        sync after Apply/Clear without requiring a full page rebuild.
+        Silent no-op if the cards frame hasn't been built yet.
+        """
+        frame = getattr(self, "model_cards_frame", None)
+        if frame is None:
+            return
+        for child in frame.winfo_children():
+            child.destroy()
+        if self.models_data:
+            self._populate_model_cards(frame)
 
     # ================================================================
     # Identity editing — inline name field

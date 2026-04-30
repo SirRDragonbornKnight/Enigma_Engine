@@ -902,8 +902,8 @@ class MoEFeedForward(nn.Module):
         flat_expert_idx = top_k_indices.reshape(-1)  # [num_tokens * k]
         flat_weights = top_k_probs.reshape(-1)  # [num_tokens * k]
 
-        # Initialize output accumulator
-        output = torch.zeros_like(x_flat)  # [num_tokens, D]
+        # Initialize output accumulator in fp32 for precision (S824)
+        output = torch.zeros(num_tokens, D, dtype=torch.float32, device=x_flat.device)
 
         # Process each expert's tokens in a single batch
         for expert_id in range(self.num_experts):
@@ -927,10 +927,10 @@ class MoEFeedForward(nn.Module):
             weighted_output = expert_output * selected_weights.unsqueeze(-1)
 
             # Scatter-add back to output (handles duplicate token indices)
-            output.index_add_(0, selected_token_idx, weighted_output)
+            output.index_add_(0, selected_token_idx, weighted_output.float())
 
         # Reshape back to [B, T, D]
-        return output.reshape(B, T, D)
+        return output.to(x_flat.dtype).reshape(B, T, D)
 
     def get_aux_loss(self) -> torch.Tensor:
         """Get the auxiliary load balancing loss for training."""
@@ -961,6 +961,12 @@ def _bipartite_soft_matching(
     """
     B, T, D = metric.shape
     if r <= 0 or T <= 2:
+        idx = torch.arange(T, device=metric.device).unsqueeze(0).expand(B, -1)
+        return idx, idx, torch.zeros(B, T, dtype=torch.bool, device=metric.device)
+
+    # O(T²) similarity matrix — skip for very long sequences to avoid OOM
+    _TOME_MAX_TOKENS = 4096
+    if T > _TOME_MAX_TOKENS:
         idx = torch.arange(T, device=metric.device).unsqueeze(0).expand(B, -1)
         return idx, idx, torch.zeros(B, T, dtype=torch.bool, device=metric.device)
 
@@ -1157,7 +1163,13 @@ class TransformerBlock(nn.Module):
             T = x.shape[1]
             # Rebuild mask for shorter sequence
             if mask is not None and mask.shape[-1] >= original_T:
-                mask = None  # Let attention rebuild causal mask
+                # Build a new causal mask for the merged sequence length.
+                # SDPA/Flash handle is_causal=True internally, but the
+                # standard attention path needs an explicit mask.
+                causal = torch.full(
+                    (T, T), float("-inf"), device=x.device, dtype=x.dtype)
+                causal = torch.triu(causal, diagonal=1)
+                mask = causal.unsqueeze(0).unsqueeze(0)  # (1, 1, T, T)
 
         # Attention sub-layer with residual connection
         attn_out = self.attention(self.attention_norm(x), freqs_cis, mask, use_cache, start_pos)

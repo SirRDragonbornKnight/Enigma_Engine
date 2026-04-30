@@ -243,7 +243,15 @@ class ForgeQueueMixin:
         model.load_state_dict(state_dict)
         model = model.to(device)
 
-        tokenizer = get_tokenizer("auto")
+        _bpe_path = MODELS_DIR / "tokenizer.json"
+        if _bpe_path.exists():
+            try:
+                from enigma_engine.core.bpe_tokenizer import BPETokenizer
+                tokenizer = BPETokenizer(_bpe_path)
+            except Exception:
+                tokenizer = get_tokenizer("auto")
+        else:
+            tokenizer = get_tokenizer("auto")
 
         # Create trainer with correct signature
         trainer = Trainer(model, tokenizer, config)

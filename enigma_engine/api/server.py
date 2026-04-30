@@ -178,8 +178,16 @@ class AppState:
              max_tokens: int | None = None,
              top_p: float | None = None,
              top_k: int | None = None,
-             repetition_penalty: float | None = None) -> str:
-        """Send a message to the engine and get a response."""
+             repetition_penalty: float | None = None,
+             json_schema: dict[str, Any] | None = None) -> str:
+        """Send a message to the engine and get a response.
+
+        N-15b: ``json_schema`` is forwarded through engine.chat() into
+        engine.generate(), where ``JsonSchemaConstraint`` masks logits
+        per token so the response is structurally valid JSON. GGUF
+        models raise ``NotImplementedError`` (their sampler is
+        in-process C++ and never sees our mask).
+        """
         if self.engine is None:
             raise RuntimeError("No model loaded")
 
@@ -197,6 +205,8 @@ class AppState:
             kwargs["top_k"] = top_k
         if repetition_penalty is not None:
             kwargs["repetition_penalty"] = repetition_penalty
+        if json_schema is not None:
+            kwargs["json_schema"] = json_schema
 
         # Try passing kwargs to engine.chat; fall back to no-kwargs if unsupported
         try:
@@ -285,6 +295,13 @@ class ChatRequest(BaseModel):
     top_p: float | None = None
     top_k: int | None = None
     repetition_penalty: float | None = None
+    # N-15b/c: optional JSON schema. When set, the engine masks logits
+    # per token so the response is structurally valid JSON. Supported on
+    # both /api/chat (Pass 156z4) and /api/chat/stream (Pass 156z6, N-15c)
+    # — the constraint FSM advances per yielded token in streaming mode.
+    # Native PyTorch only — GGUF backend rejects loud (llama.cpp uses
+    # its own sampler).
+    json_schema: dict[str, Any] | None = None
 
 class ChatResponse(BaseModel):
     message: str
@@ -302,11 +319,17 @@ class ConfigUpdate(BaseModel):
 
     def validated(self) -> dict[str, Any]:
         """Return only non-None fields, clamped to valid ranges."""
+        # max_tokens upper bound scaled to VRAM (S807)
+        try:
+            from enigma_engine.core.hardware_detection import InferenceMemoryBudget
+            max_tok_cap = InferenceMemoryBudget().api_max_tokens
+        except Exception:
+            max_tok_cap = 4096
         limits = {
             "temperature": (0.0, 2.0),
             "top_p": (0.0, 1.0),
             "top_k": (1, 200),
-            "max_tokens": (16, 4096),
+            "max_tokens": (16, max_tok_cap),
             "repetition_penalty": (1.0, 2.0),
         }
         result: dict[str, Any] = {}
@@ -387,7 +410,7 @@ async def list_models():
                 models.append({
                     "name": p.stem,
                     "filename": p.name,
-                    "path": str(p),
+                    "path": str(p.relative_to(MODELS_DIR)),
                     "size_mb": round(size_mb, 1),
                     "format": p.suffix.lstrip("."),
                 })
@@ -400,7 +423,7 @@ async def list_models():
                         models.append({
                             "name": f"{subdir.name}/{p.stem}",
                             "filename": p.name,
-                            "path": str(p),
+                            "path": str(p.relative_to(MODELS_DIR)),
                             "size_mb": round(size_mb, 1),
                             "format": p.suffix.lstrip("."),
                         })
@@ -419,7 +442,11 @@ async def model_status():
 @app.post("/api/models/load")
 async def load_model(req: ModelLoadRequest):
     """Load a model by path."""
-    path = Path(req.path).resolve()
+    path = Path(req.path)
+    if not path.is_absolute():
+        path = (MODELS_DIR / path).resolve()
+    else:
+        path = path.resolve()
     # Prevent path traversal — model must be inside MODELS_DIR
     try:
         path.relative_to(MODELS_DIR.resolve())
@@ -476,6 +503,8 @@ async def chat(req: ChatRequest):
             kw["top_k"] = req.top_k
         if req.repetition_penalty is not None:
             kw["repetition_penalty"] = req.repetition_penalty
+        if req.json_schema is not None:
+            kw["json_schema"] = req.json_schema
         response = state.chat(
             req.message,
             **kw,
@@ -537,6 +566,12 @@ async def chat_stream(req: ChatRequest):
         kwargs["top_k"] = req.top_k
     if req.repetition_penalty is not None:
         kwargs["repetition_penalty"] = req.repetition_penalty
+    # N-15c: json_schema reaches stream_generate via stream_chat's **kwargs
+    # forwarding. Omit-when-None to stay compatible with legacy engines
+    # that lack the parameter on stream_generate (same discipline as the
+    # non-streaming /api/chat handler).
+    if req.json_schema is not None:
+        kwargs["json_schema"] = req.json_schema
 
     def _sse_generator():
         """Yield SSE-formatted events from engine.stream_chat."""
@@ -769,6 +804,24 @@ async def activate_profile(profile_id: str):
             if k in ConfigUpdate.__annotations__
         }).validated()
         state.config_overrides.update(validated)
+
+    # Apply remaining profile fields (system_prompt, adapter, roleplay
+    # boundary log marker) to the live engine when one is loaded. Pass
+    # 156z2 audit fix: closes the dead-infra-to-dead-infra gap caught
+    # in self-audit on Pass 156z. Pre-fix, the API endpoint dropped
+    # ``system_prompt``, ``adapter``, and the ``is_roleplay()`` boundary
+    # on the floor — only ``generation`` survived the trip from disk to
+    # engine. ``apply_profile_to_engine`` is the canonical applier and
+    # uses ``hasattr`` guards throughout + catches adapter failures
+    # internally, so calling it on a partially-initialised engine is
+    # safe. Engine-not-loaded path is a no-op (profile id still saved
+    # on state), preserving the existing UX where users set the active
+    # profile before loading a model.
+    if state.engine is not None:
+        from enigma_engine.core.ai_profile import (
+            AIProfile, apply_profile_to_engine,
+        )
+        apply_profile_to_engine(AIProfile.from_dict(data), state.engine)
 
     return {"status": "ok", "active": profile_id, "settings": gen}
 

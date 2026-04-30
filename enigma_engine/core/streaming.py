@@ -338,7 +338,7 @@ class StreamingResponse:
         with self._async_lock:
             self._loop = asyncio.get_running_loop()
             if self._async_queue is None:
-                self._async_queue = asyncio.Queue(maxsize=1000)
+                self._async_queue = asyncio.Queue(maxsize=0)
 
                 # Copy existing chunks while lock is held so _emit
                 # cannot push duplicates between queue creation and copy.

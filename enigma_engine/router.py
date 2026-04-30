@@ -23,6 +23,15 @@ from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
+# Continuous-3 (Pass 156i7): repo-default anchor JSONL path. ModRouter
+# wires this into BackgroundTrainer when the file exists, so anchor-set
+# rehearsal is on by default for production users without a hand-edit.
+# Resolved relative to this file (enigma_engine/router.py → repo root)
+# so it works regardless of CWD.
+_DEFAULT_ANCHOR_PATH = (
+    Path(__file__).resolve().parent.parent / "data" / "anchor_examples.jsonl"
+)
+
 # Deferred torch import — loaded on first use to avoid 540 MB idle RAM
 _torch = None
 _torch_lock = threading.Lock()
@@ -76,9 +85,16 @@ class BackgroundTrainer(threading.Thread):
     examples in a queue without blocking the main application.
 
     Smart features (BT-B + BT-D):
-    - Replay buffer: rolling collection of recent examples.
-      Periodic retraining on the full buffer prevents catastrophic
-      forgetting.
+    - Replay buffer: rolling FIFO collection of recent examples
+      (``deque(maxlen=N)``). Periodic retraining sorts by score and
+      rehearses the top half.
+    - Anchor set (Continuous-2, Pass 156i5): optional fixed set of
+      curated examples loaded from JSONL on disk and rehearsed
+      alongside the recent slice on every replay pass. Mitigates
+      catastrophic forgetting of skills not present in recent chat.
+      Forgetting is bounded by anchor coverage — a 50-example anchor
+      set is a floor, not a guarantee. ``anchor_data_path=None``
+      preserves legacy recent-only behaviour.
     - DPO pairs: can be populated externally for preference training.
     """
 
@@ -94,6 +110,9 @@ class BackgroundTrainer(threading.Thread):
         retrain_interval: int = 200,
         adam_betas: tuple[float, float] = (0.9, 0.95),
         adam_eps: float = 1e-8,
+        max_token_length: int = 4096,
+        anchor_data_path: str | Path | None = None,
+        anchor_idle_interval_seconds: float | None = None,
     ):
         super().__init__(daemon=True)
         self.model = model
@@ -104,6 +123,13 @@ class BackgroundTrainer(threading.Thread):
         self.checkpoint_dir = Path(checkpoint_dir)
         self.adam_betas = adam_betas
         self.adam_eps = adam_eps
+        # Continuous-1 (Pass 156i4): hard cap on per-example token length.
+        # Without this, a misbehaving mod or pathological chat input can
+        # push a 1M-token sequence through the model and OOM the GPU.
+        # 4096 matches the typical max_seq_len budget; oversized samples
+        # are skipped (logged at DEBUG) rather than truncated to avoid
+        # silent loss-of-context.
+        self.max_token_length = int(max_token_length)
 
         # System prompt for context (set from PromptTab)
         self.system_prompt: str = ""
@@ -124,11 +150,17 @@ class BackgroundTrainer(threading.Thread):
         # Callbacks
         self.on_progress: Callable[[int, float], None] | None = None
         self.on_checkpoint: Callable[[str], None] | None = None
+        self.inference_idle_check: Callable[[], bool] | None = None
+        self.idle_poll_interval = 0.2
 
         # --- Smart features (BT-B + BT-D) ---
 
         # Replay buffer: capped at max size, keeps recent examples
-        # for periodic retraining to prevent catastrophic forgetting.
+        # for periodic retraining. Mitigates — does NOT prevent —
+        # catastrophic forgetting: only skills present in the recent
+        # window get rehearsed, so anything outside that window can
+        # still drift. See `anchor_data_path` below for the curated
+        # floor that closes the gap.
         self.replay_buffer_size: int = replay_buffer_size
         self.replay_buffer: deque[TrainingExample] = deque(maxlen=replay_buffer_size)
         self._replay_lock = threading.Lock()
@@ -139,6 +171,36 @@ class BackgroundTrainer(threading.Thread):
 
         # Retrain on replay buffer every N examples processed
         self.retrain_interval: int = retrain_interval
+
+        # Continuous-2 (Pass 156i5): optional anchor-set rehearsal.
+        # JSONL file with {"prompt": ..., "response": ..., "score"?: ...}
+        # rows. Rehearsed in addition to the score-sorted recent slice
+        # every replay pass to mitigate catastrophic forgetting of
+        # skills absent from recent chat. Loaded lazily on first
+        # replay; missing/unreadable file logs WARNING and falls back
+        # to recent-only behaviour.
+        self.anchor_data_path: Path | None = (
+            Path(anchor_data_path) if anchor_data_path else None
+        )
+        self._anchor_examples: list[TrainingExample] | None = None
+        self._anchor_load_attempted: bool = False
+
+        # Continuous-3c (Pass 156w): anchor-only idle rehearsal.
+        # When set to a positive number, the run() loop fires
+        # `_retrain_on_replay()` from its idle branch every N seconds
+        # of wall time since the last replay, so anchor coverage keeps
+        # firing during true quiet periods (no recent chat activity)
+        # which is exactly when the per-batch trigger inside
+        # `_train_batch` cannot fire. Default None = disabled
+        # (preserves existing behaviour for users who don't opt in).
+        # 0 / negative inputs collapse to None defensively.
+        self.anchor_idle_interval_seconds: float | None = (
+            float(anchor_idle_interval_seconds)
+            if anchor_idle_interval_seconds
+            and float(anchor_idle_interval_seconds) > 0
+            else None
+        )
+        self._last_anchor_replay_at: float = time.monotonic()
 
         # Ensure checkpoint directory exists
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
@@ -187,6 +249,55 @@ class BackgroundTrainer(threading.Thread):
             self.example_queue.qsize(),
             len(self.replay_buffer))
 
+    def _inference_busy(self) -> bool:
+        """Return True when inference is currently active.
+
+        Fail-open on checker errors so background training does not wedge.
+        """
+        checker = self.inference_idle_check
+        if checker is None:
+            return False
+        try:
+            return not bool(checker())
+        except Exception as exc:
+            logger.debug("inference_idle_check failed: %s", exc)
+            return False
+
+    def _should_run_anchor_idle_replay(self) -> bool:
+        """Continuous-3c: gate for the idle anchor scheduler.
+
+        Returns True iff every condition for firing an anchor-only
+        rehearsal pass is met right now:
+
+        - feature is opted in (``anchor_idle_interval_seconds`` set)
+        - anchors are configured (``anchor_data_path`` not None) —
+          the WHOLE POINT of this scheduler is anchor coverage; if
+          there are no anchors there is nothing to rehearse and
+          firing would be a wasted wakeup
+        - trainer is running and not paused
+        - model + optimizer are wired (otherwise replay is a no-op)
+        - inference is not busy (chat takes priority over background
+          rehearsal — same contract as the per-batch path)
+        - the configured interval has elapsed since the last replay
+          (whether triggered by ``_train_batch`` or by the idle path)
+
+        Throttle by elapsed time, not by absolute schedule, so that
+        a burst of regular replays naturally pushes the next idle
+        replay further out instead of double-firing.
+        """
+        if self.anchor_idle_interval_seconds is None:
+            return False
+        if self.anchor_data_path is None:
+            return False
+        if self.paused or not self.running:
+            return False
+        if self.model is None or self.optimizer is None:
+            return False
+        if self._inference_busy():
+            return False
+        elapsed = time.monotonic() - self._last_anchor_replay_at
+        return elapsed >= self.anchor_idle_interval_seconds
+
     def run(self) -> None:
         self.running = True
         batch: list[TrainingExample] = []
@@ -204,6 +315,11 @@ class BackgroundTrainer(threading.Thread):
                 time.sleep(1.0)
                 continue
 
+            # Defer training work while inference is active.
+            if self._inference_busy():
+                time.sleep(self.idle_poll_interval)
+                continue
+
             # Collect batch
             try:
                 example = self.example_queue.get(timeout=1.0)
@@ -214,6 +330,21 @@ class BackgroundTrainer(threading.Thread):
                     # Process partial batch after timeout
                     self._train_batch(batch)
                     batch = []
+                # Continuous-3c (Pass 156w): true-idle anchor rehearsal.
+                # During quiet periods the per-batch trigger inside
+                # `_train_batch` cannot fire (no recent chat to call it
+                # with), so anchors never rehearse — the exact case
+                # they exist for. Fire `_retrain_on_replay()` here on
+                # an elapsed-time gate. Off by default; opt-in via
+                # `anchor_idle_interval_seconds` constructor kwarg.
+                if self._should_run_anchor_idle_replay():
+                    elapsed = (
+                        time.monotonic() - self._last_anchor_replay_at)
+                    logger.info(
+                        "BackgroundTrainer: idle anchor rehearsal "
+                        "(%.0fs since last replay)", elapsed,
+                    )
+                    self._retrain_on_replay()
                 continue
 
             # Train when batch is full
@@ -262,6 +393,16 @@ class BackgroundTrainer(threading.Thread):
                         if not tokens or len(tokens) < 2:
                             continue
 
+                        # Continuous-1 (Pass 156i4): hard cap on token length
+                        # — protects GPU from oversized inputs.
+                        if len(tokens) > self.max_token_length:
+                            logger.debug(
+                                "BackgroundTrainer: skipping oversize example "
+                                "(%d tokens > cap %d)",
+                                len(tokens), self.max_token_length,
+                            )
+                            continue
+
                         # Convert to tensor
                         torch = _ensure_torch()
                         device = next(self.model.parameters()).device
@@ -280,6 +421,22 @@ class BackgroundTrainer(threading.Thread):
                             logits.reshape(-1, logits.size(-1)),
                             target_ids.reshape(-1)
                         )
+
+                        # Continuous-1 (Pass 156i4): silent-drift guard.
+                        # NaN/Inf loss → skip backward and do NOT increment
+                        # valid_count. The optimizer call below is gated
+                        # on valid_count > 0, so a fully-NaN batch becomes
+                        # a no-op rather than corrupting weights with NaN
+                        # gradients (which would propagate to every future
+                        # update — the silent-over-months failure mode).
+                        if not _ensure_torch().isfinite(loss):
+                            logger.warning(
+                                "BackgroundTrainer: non-finite loss (%s) on "
+                                "example from source=%s — skipping backward; "
+                                "check input quality",
+                                loss.item(), example.source,
+                            )
+                            continue
 
                         # Backward — scale for gradient accumulation
                         (loss / batch_len).backward()
@@ -326,17 +483,102 @@ class BackgroundTrainer(threading.Thread):
             logger.error("Training batch error: %s\n%s", e,
                          traceback.format_exc())
 
+    def _load_anchor_examples(self) -> list[TrainingExample]:
+        """Load and cache anchor examples from JSONL on first call.
+
+        Returns an empty list when no anchor path is configured, the
+        file is missing, or the file cannot be read. WARNING is logged
+        once on configuration errors so a misconfigured path does not
+        silently degrade to recent-only replay (loud-on-real-issue).
+        """
+        if self._anchor_load_attempted:
+            return self._anchor_examples or []
+        self._anchor_load_attempted = True
+
+        if self.anchor_data_path is None:
+            self._anchor_examples = []
+            return []
+
+        if not self.anchor_data_path.exists():
+            logger.warning(
+                "BackgroundTrainer anchor set: file not found at %s — "
+                "falling back to recent-only replay (forgetting bounded "
+                "by recent-buffer coverage only)",
+                self.anchor_data_path,
+            )
+            self._anchor_examples = []
+            return []
+
+        examples: list[TrainingExample] = []
+        try:
+            with self.anchor_data_path.open("r", encoding="utf-8") as fh:
+                for line_no, raw in enumerate(fh, 1):
+                    line = raw.strip()
+                    if not line:
+                        continue
+                    try:
+                        row = json.loads(line)
+                        prompt = str(row.get("prompt", "")).strip()
+                        response = str(row.get("response", "")).strip()
+                        score = float(row.get("score", 1.0))
+                    except (json.JSONDecodeError, ValueError, TypeError) as exc:
+                        logger.debug(
+                            "anchor JSONL line %d skipped: %s", line_no, exc,
+                        )
+                        continue
+                    if prompt and response:
+                        examples.append(TrainingExample(
+                            prompt=prompt,
+                            response=response,
+                            score=score,
+                            source="anchor",
+                        ))
+            if examples:
+                logger.info(
+                    "BackgroundTrainer: loaded %d anchor example(s) from %s",
+                    len(examples), self.anchor_data_path,
+                )
+            else:
+                # Continuous-2a (Pass 156i6): file-present-zero-yield is
+                # a real misconfiguration — loud, not silent INFO 0.
+                logger.warning(
+                    "BackgroundTrainer anchor set: file %s exists but "
+                    "contains no usable rows (all empty/malformed) — "
+                    "falling back to recent-only replay",
+                    self.anchor_data_path,
+                )
+        except OSError as exc:
+            logger.warning(
+                "BackgroundTrainer anchor set: unreadable (%s) — "
+                "falling back to recent-only replay", exc,
+            )
+
+        self._anchor_examples = examples
+        return examples
+
     def _retrain_on_replay(self) -> None:
         """Retrain on the best examples in the replay buffer (BT-D).
 
         Takes a snapshot of the top examples from the replay buffer
-        and runs a mini training pass.  This prevents catastrophic
-        forgetting by periodically reinforcing the best exchanges.
+        and (when configured) the curated anchor set, then runs a mini
+        training pass. Mitigates catastrophic forgetting bounded by
+        anchor coverage — recent-only replay reinforces what's already
+        active, anchors reinforce skills absent from recent chat.
         """
-        if self.model is None or not self.replay_buffer:
+        if self.model is None or self.optimizer is None:
             return
-        if self.optimizer is None:
-            return
+
+        # Continuous-3c audit (Pass 156x2): reset the idle scheduler's
+        # cooldown clock at function ENTRY, not on the success path.
+        # The empty-batch early-out (anchor file present but yields
+        # zero usable rows + empty replay buffer) and the exception
+        # path both need to honor the configured interval, otherwise
+        # the idle scheduler spins at ~1 Hz logging "idle anchor
+        # rehearsal" forever. Comment in the original Pass 156w
+        # placement said "failed pass naturally retries" — wrong
+        # design: retrying immediately won't fix a broken anchor
+        # file, it just spams logs. Wait the full interval.
+        self._last_anchor_replay_at = time.monotonic()
 
         with self._replay_lock:
             # Sort by score (descending) so we retrain on the best examples
@@ -344,6 +586,21 @@ class BackgroundTrainer(threading.Thread):
                 self.replay_buffer, key=lambda x: x.score, reverse=True)
             top_k = min(len(sorted_buf), self.replay_buffer_size // 2)
             replay_batch = list(sorted_buf[:top_k])
+
+        # Continuous-2 (Pass 156i5) + Continuous-2a (Pass 156i6):
+        # Load anchors BEFORE the empty-batch early-out so anchor-only
+        # rehearsal still fires during quiet periods (no recent chat).
+        # Anchors are NOT score-sorted — curated order is intentional.
+        # Extending replay_batch BEFORE replay_len is computed keeps
+        # loss scaling consistent across the combined batch.
+        anchor_examples = self._load_anchor_examples()
+        if anchor_examples:
+            replay_batch = list(replay_batch) + list(anchor_examples)
+            logger.debug(
+                "Replay batch: %d recent + %d anchor = %d total",
+                len(replay_batch) - len(anchor_examples),
+                len(anchor_examples), len(replay_batch),
+            )
 
         if not replay_batch:
             return
@@ -385,6 +642,16 @@ class BackgroundTrainer(threading.Thread):
                         if not tokens or len(tokens) < 2:
                             continue
 
+                        # Continuous-1 (Pass 156i4): same length cap as
+                        # _train_batch — keep the two paths in sync.
+                        if len(tokens) > self.max_token_length:
+                            logger.debug(
+                                "BackgroundTrainer replay: skipping oversize "
+                                "example (%d tokens > cap %d)",
+                                len(tokens), self.max_token_length,
+                            )
+                            continue
+
                         torch = _ensure_torch()
                         device = next(self.model.parameters()).device
                         input_ids = torch.tensor(
@@ -398,6 +665,21 @@ class BackgroundTrainer(threading.Thread):
                         loss = torch.nn.functional.cross_entropy(
                             logits.reshape(-1, logits.size(-1)),
                             target_ids.reshape(-1))
+
+                        # Continuous-1 (Pass 156i4): silent-drift guard
+                        # mirrors _train_batch — NaN/Inf loss skips the
+                        # backward; if every replay sample is bad, the
+                        # `if valid_count > 0` gate below blocks the
+                        # optimizer update entirely.
+                        if not torch.isfinite(loss):
+                            logger.warning(
+                                "BackgroundTrainer replay: non-finite loss "
+                                "(%s) on example from source=%s — skipping "
+                                "backward",
+                                loss.item(), example.source,
+                            )
+                            continue
+
                         (loss / replay_len).backward()
                         valid_count += 1
 
@@ -527,12 +809,22 @@ class ModRouter:
         enable_training: bool = True,
         heartbeat_interval: float = 30.0,
         max_connections: int = 50,
+        anchor_data_path: str | Path | None = None,
     ):
         self.host = host
         self.port = port
         self.enable_training = enable_training
         self.heartbeat_interval = heartbeat_interval
         self.max_connections = max_connections
+
+        # Continuous-3 (Pass 156i7): resolve anchor path. Explicit
+        # caller value wins; otherwise auto-pick the repo default if it
+        # exists; otherwise None (recent-only replay, no warn noise).
+        if anchor_data_path is None:
+            anchor_data_path = (
+                _DEFAULT_ANCHOR_PATH if _DEFAULT_ANCHOR_PATH.exists() else None
+            )
+        self.anchor_data_path: str | Path | None = anchor_data_path
 
         # Server state
         self.server_socket: socket.socket | None = None
@@ -554,7 +846,8 @@ class ModRouter:
 
         # Training
         self._train_lock = threading.Lock()
-        self.trainer = BackgroundTrainer() if enable_training else None
+        self._inference_idle_check: Callable[[], bool] | None = None
+        self.trainer = self._create_trainer() if enable_training else None
 
         # Callbacks
         self.on_mod_connected: Callable[[ModConnection], None] | None = None
@@ -563,6 +856,12 @@ class ModRouter:
 
         # Message handlers
         self.message_handlers: dict[str, Callable] = {}
+
+    def _create_trainer(self) -> BackgroundTrainer:
+        """Create a trainer configured with current router callbacks."""
+        trainer = BackgroundTrainer(anchor_data_path=self.anchor_data_path)
+        trainer.inference_idle_check = self._inference_idle_check
+        return trainer
 
     def start(self) -> bool:
         """Start the router server."""
@@ -925,7 +1224,7 @@ class ModRouter:
             if enabled:
                 if self.trainer is not None:
                     return
-                self.trainer = BackgroundTrainer()
+                self.trainer = self._create_trainer()
                 if self.running:
                     self.trainer.start()
                 return
@@ -935,6 +1234,20 @@ class ModRouter:
                 return
             self.trainer = None
         trainer.stop()
+
+    def set_inference_idle_check(
+        self, checker: Callable[[], bool] | None
+    ) -> None:
+        """Set a callback that reports whether inference is idle.
+
+        Callback should return True when inference is idle/safe for training,
+        False when inference is active and training should defer.
+        """
+        with self._train_lock:
+            self._inference_idle_check = checker
+            trainer = self.trainer
+            if trainer is not None:
+                trainer.inference_idle_check = checker
 
     def set_training_model(self, model, tokenizer, system_prompt: str = "") -> None:
         """Set the model for background training."""

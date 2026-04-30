@@ -14,6 +14,9 @@ Sources:
   - Fandom wikis (--fandom N) - fan wikis from fandom.com (games, movies, TV, books)
   - OpenWebText (--openwebtext N) - web text from Reddit links (requires `datasets`)
   - C4 (--c4 N) - cleaned Common Crawl text (requires `datasets`)
+  - DCLM-Baseline (--dclm N) - model-filtered web text, beats FineWeb-Edu on MMLU (requires `datasets`)
+  - FineMath (--finemath N) - step-by-step math from CommonCrawl, finemath-4+ + infiwebmath-3+ (requires `datasets`)
+  - The Stack v2 (--code N) - source code, 16 languages, permissive licenses (requires `datasets` + HF auth)
 
 Usage:
   python collect_pretraining_data.py --wiki-dump            # Download full Wikipedia dump (RECOMMENDED)
@@ -26,6 +29,9 @@ Usage:
   python collect_pretraining_data.py --fandom 2000          # 2000 articles from Fandom wikis
   python collect_pretraining_data.py --openwebtext 10       # 10 GB of OpenWebText web text
   python collect_pretraining_data.py --c4 20                # 20 GB of C4 cleaned Common Crawl
+  python collect_pretraining_data.py --dclm 15              # 15 GB of DCLM model-filtered web text
+  python collect_pretraining_data.py --finemath 10          # 10 GB of FineMath step-by-step math
+  python collect_pretraining_data.py --code 10              # 10 GB of The Stack v2 code (needs HF auth)
   python collect_pretraining_data.py --all-sources          # Everything: wiki, books, fineweb, SE, wayback, fandom, owt, c4
   python collect_pretraining_data.py --books-only           # Download only Gutenberg books
   python collect_pretraining_data.py --resume               # Resume interrupted download
@@ -40,6 +46,9 @@ Output:
   data/pretrain/stackexchange/   - Stack Exchange Q&A posts (subdirs per site)
   data/pretrain/wayback/         - Wayback Machine educational pages
   data/pretrain/fandom/          - Fandom wiki articles
+  data/pretrain/dclm/            - DCLM-Baseline model-filtered web pages
+  data/pretrain/finemath/        - FineMath step-by-step math pages
+  data/pretrain/the_stack/       - The Stack v2 source code files
   data/pretrain/combined.txt     - All sources merged into one file (ready for FORGE)
 """
 
@@ -78,6 +87,9 @@ WAYBACK_DIR = BASE_DIR / "wayback"
 FANDOM_DIR = BASE_DIR / "fandom"
 OPENWEBTEXT_DIR = BASE_DIR / "openwebtext"
 C4_DIR = BASE_DIR / "c4"
+DCLM_DIR = BASE_DIR / "dclm"
+FINEMATH_DIR = BASE_DIR / "finemath"
+STACK_DIR = BASE_DIR / "the_stack"
 PROGRESS_FILE = BASE_DIR / "progress.json"
 COMBINED_FILE = BASE_DIR / "combined.txt"
 
@@ -2728,6 +2740,222 @@ def fetch_c4(target_gb: float, progress: dict) -> int:
     )
 
 
+def fetch_dclm(target_gb: float, progress: dict) -> int:
+    """Download model-filtered web text from DCLM-Baseline.
+
+    DCLM-Baseline: 4T tokens from Common Crawl, filtered with a fastText
+    classifier trained on OpenHermes 2.5 (instruction-tuned quality signal).
+    Beats FineWeb-Edu at all compute levels on MMLU. Used by SmolLM3 Stage 1.
+    License: CC-BY-4.0. No authentication required.
+
+    Args:
+        target_gb: How many GB to download (recommended 10-20 GB).
+        progress: Progress dict for resume support.
+    """
+    return _fetch_hf_streaming(
+        dataset_name="mlfoundations/dclm-baseline-1.0",
+        config_name=None,
+        text_field="text",
+        output_dir=DCLM_DIR,
+        target_gb=target_gb,
+        label="DCLM",
+        progress=progress,
+        progress_key="dclm",
+    )
+
+
+def fetch_finemath(target_gb: float, progress: dict) -> int:
+    """Download high-quality math text from FineMath (two configs, 50/50 split).
+
+    FineMath-4+: 9.6B tokens scored by LLaMA-3.1-70B, filtered to 4+/5 quality.
+    InfiMM-WebMath-3+: 20.5B tokens, complementary source. SmolLM3 uses 50/50.
+    Combined gives ~50B tokens of step-by-step math from CommonCrawl.
+    License: ODC-By. No authentication required.
+
+    Args:
+        target_gb: Total GB to download (split evenly between both configs).
+        progress: Progress dict for resume support.
+    """
+    half = max(target_gb / 2, 0.1)
+    saved_a = _fetch_hf_streaming(
+        dataset_name="HuggingFaceTB/finemath",
+        config_name="finemath-4plus",
+        text_field="text",
+        output_dir=FINEMATH_DIR,
+        target_gb=half,
+        label="FineMath-4plus",
+        progress=progress,
+        progress_key="finemath_4plus",
+    )
+    saved_b = _fetch_hf_streaming(
+        dataset_name="HuggingFaceTB/finemath",
+        config_name="infiwebmath-3plus",
+        text_field="text",
+        output_dir=FINEMATH_DIR,
+        target_gb=half,
+        label="InfiMM-WebMath",
+        progress=progress,
+        progress_key="infiwebmath_3plus",
+    )
+    return saved_a + saved_b
+
+
+# Languages used by SmolLM3 — priority order (most useful first)
+_STACK_LANGUAGES = [
+    "python", "javascript", "typescript", "java", "c", "cpp",
+    "go", "rust", "ruby", "php", "shell", "sql",
+    "html", "css", "markdown", "json",
+]
+_STACK_PERMISSIVE = {
+    "mit", "apache-2.0", "bsd-2-clause", "bsd-3-clause",
+    "isc", "unlicense", "cc0-1.0", "0bsd",
+}
+
+
+def fetch_the_stack(target_gb: float, progress: dict) -> int:
+    """Download source code from The Stack v2 (bigcode/the-stack-v2).
+
+    Iterates over 16 priority languages (SmolLM3 selection) until the target
+    GB is reached. Filters to permissive licenses (MIT/Apache/BSD/ISC/etc.).
+    Code data teaches structured reasoning, pattern completion, and precise
+    instruction following.
+
+    IMPORTANT: This dataset requires accepting the license on HuggingFace and
+    logging in with `huggingface-cli login` before running.
+
+    Args:
+        target_gb: Total GB to download across all languages.
+        progress: Progress dict for resume support.
+    """
+    try:
+        from datasets import load_dataset
+    except ImportError:
+        print("  [The Stack] ERROR: 'datasets' package not found.")
+        print("  [The Stack] Install with: pip install datasets")
+        return 0
+
+    STACK_DIR.mkdir(parents=True, exist_ok=True)
+
+    existing_files = list(STACK_DIR.glob("*.txt"))
+    existing_bytes = sum(f.stat().st_size for f in existing_files)
+    target_bytes = int(target_gb * 1024 * 1024 * 1024)
+    total_saved = len(existing_files)
+    total_bytes = existing_bytes
+
+    if existing_bytes >= target_bytes:
+        print(f"  [The Stack] Already have {existing_bytes / 1e9:.2f} GB "
+              f"({total_saved} files), target is {target_gb:.1f} GB. Skipping.")
+        return total_saved
+
+    file_target = 5 * 1024 * 1024  # 5 MB per file
+    start_time = time.monotonic()
+
+    for lang in _STACK_LANGUAGES:
+        if total_bytes >= target_bytes:
+            break
+
+        lang_progress_key = f"stack_{lang}"
+        lang_dir_prefix = f"stack_{lang}"
+        records_consumed = progress.get(lang_progress_key, {}).get("records_consumed", 0)
+        remaining_gb = (target_bytes - total_bytes) / 1e9
+        print(f"  [The Stack] Language: {lang} | {remaining_gb:.2f} GB remaining")
+
+        try:
+            ds = load_dataset(
+                "bigcode/the-stack-v2",
+                name=lang,
+                split="train",
+                streaming=True,
+                trust_remote_code=True,
+            )
+        except Exception as e:
+            err = str(e)
+            if "gated" in err.lower() or "401" in err or "403" in err or "access" in err.lower():
+                print(f"  [The Stack] Access denied for '{lang}'.")
+                print("  [The Stack] This dataset is gated. Run: huggingface-cli login")
+                print("  [The Stack] Then accept the license at:")
+                print("  [The Stack]   https://huggingface.co/datasets/bigcode/the-stack-v2")
+                break  # auth issue — stop all languages, not just this one
+            print(f"  [The Stack] Could not load '{lang}': {e} — skipping")
+            continue
+
+        if records_consumed > 0:
+            print(f"  [The Stack] Skipping {records_consumed:,} previously consumed records...")
+            ds = ds.skip(records_consumed)
+
+        batch_text: list[str] = []
+        batch_size = 0
+
+        try:
+            for record in ds:
+                records_consumed += 1
+
+                # License filter — permissive only
+                licenses = record.get("max_stars_repo_licenses", []) or []
+                if licenses and not any(
+                    lic.lower() in _STACK_PERMISSIVE for lic in licenses
+                ):
+                    continue
+
+                text = record.get("content", "")
+                if not text or len(text) < MIN_ARTICLE_LENGTH:
+                    continue
+
+                text_bytes = len(text.encode("utf-8"))
+                batch_text.append(text)
+                batch_size += text_bytes
+
+                if batch_size >= file_target:
+                    filepath = STACK_DIR / f"{lang_dir_prefix}_{total_saved:08d}.txt"
+                    filepath.write_text("\n\n".join(batch_text), encoding="utf-8")
+                    total_saved += 1
+                    total_bytes += batch_size
+                    batch_text = []
+                    batch_size = 0
+
+                    if total_bytes >= target_bytes:
+                        break
+
+                    now = time.monotonic()
+                    elapsed_min = (now - start_time) / 60
+                    speed_mb = (total_bytes - existing_bytes) / max(now - start_time, 1) / 1e6
+                    if elapsed_min > 0 and total_saved % 20 == 0:
+                        print(
+                            f"  [The Stack/{lang}] {total_bytes / 1e9:.2f}/{target_gb:.1f} GB "
+                            f"({total_saved} files) | {speed_mb:.1f} MB/s"
+                        )
+
+            if batch_text:
+                filepath = STACK_DIR / f"{lang_dir_prefix}_{total_saved:08d}.txt"
+                filepath.write_text("\n\n".join(batch_text), encoding="utf-8")
+                total_saved += 1
+                total_bytes += batch_size
+
+        except KeyboardInterrupt:
+            if batch_text:
+                filepath = STACK_DIR / f"{lang_dir_prefix}_{total_saved:08d}.txt"
+                filepath.write_text("\n\n".join(batch_text), encoding="utf-8")
+                total_saved += 1
+                total_bytes += batch_size
+            progress[lang_progress_key] = {"records_consumed": records_consumed}
+            save_progress(progress)
+            elapsed_min = (time.monotonic() - start_time) / 60
+            print(f"\n  [The Stack] Interrupted after {elapsed_min:.0f} min. "
+                  f"{total_saved} files ({total_bytes / 1e9:.2f} GB). "
+                  f"Run with --resume to continue.")
+            return total_saved
+        except Exception as e:
+            print(f"  [The Stack/{lang}] Error: {e} — moving to next language")
+
+        progress[lang_progress_key] = {"records_consumed": records_consumed}
+        save_progress(progress)
+
+    elapsed_min = (time.monotonic() - start_time) / 60
+    print(f"\n  [The Stack] Done: {total_saved} files saved "
+          f"({total_bytes / 1e9:.2f} GB) in {elapsed_min:.0f} min.")
+    return total_saved
+
+
 # ---------------------------------------------------------------------------
 # Combine all sources
 # ---------------------------------------------------------------------------
@@ -2764,6 +2992,9 @@ def combine_all_sources() -> None:
         ("FineWeb-Edu", FINEWEB_DIR),
         ("OpenWebText", OPENWEBTEXT_DIR),
         ("C4", C4_DIR),
+        ("DCLM", DCLM_DIR),
+        ("FineMath", FINEMATH_DIR),
+        ("The Stack", STACK_DIR),
         ("Wayback", WAYBACK_DIR),
         ("Fandom", FANDOM_DIR),
     ]
@@ -2909,6 +3140,9 @@ def print_stats() -> None:
         ("FineWeb-Edu", FINEWEB_DIR, False),
         ("OpenWebText", OPENWEBTEXT_DIR, False),
         ("C4", C4_DIR, False),
+        ("DCLM", DCLM_DIR, False),
+        ("FineMath", FINEMATH_DIR, False),
+        ("The Stack", STACK_DIR, False),
         ("StackExchange", STACKEX_DIR, True),   # subdirs per site
         ("Wayback", WAYBACK_DIR, False),
         ("Fandom", FANDOM_DIR, False),
@@ -3017,6 +3251,12 @@ Examples:
                         help="Download N GB of OpenWebText web text (requires `pip install datasets`)")
     parser.add_argument("--c4", type=float, default=0,
                         help="Download N GB of C4 cleaned Common Crawl (requires `pip install datasets`)")
+    parser.add_argument("--dclm", type=float, default=0,
+                        help="Download N GB of DCLM-Baseline model-filtered web text (requires `pip install datasets`)")
+    parser.add_argument("--finemath", type=float, default=0,
+                        help="Download N GB of FineMath (4+ and InfiMM-WebMath, 50/50 split, requires `pip install datasets`)")
+    parser.add_argument("--code", type=float, default=0,
+                        help="Download N GB of code from The Stack v2 (requires `pip install datasets` + HuggingFace auth)")
 
     args = parser.parse_args()
 
@@ -3041,6 +3281,12 @@ Examples:
             args.openwebtext = 10.0
         if args.c4 <= 0:
             args.c4 = 20.0
+        if args.dclm <= 0:
+            args.dclm = 15.0
+        if args.finemath <= 0:
+            args.finemath = 10.0
+        if args.code <= 0:
+            args.code = 10.0
 
     # --books-only
     if args.books_only:
@@ -3089,6 +3335,12 @@ Examples:
             sources.append(f"{args.openwebtext:.0f} GB OpenWebText")
         if args.c4 > 0:
             sources.append(f"{args.c4:.0f} GB C4")
+        if args.dclm > 0:
+            sources.append(f"{args.dclm:.0f} GB DCLM")
+        if args.finemath > 0:
+            sources.append(f"{args.finemath:.0f} GB FineMath")
+        if args.code > 0:
+            sources.append(f"{args.code:.0f} GB The Stack")
         print(f"  Sources: {', '.join(sources)}")
         print(f"  Output: {BASE_DIR}")
         print()
@@ -3168,6 +3420,24 @@ Examples:
             print("\n--- C4 (Common Crawl) ---")
             c4_count = fetch_c4(args.c4, progress)
 
+        # 10. DCLM-Baseline (model-filtered web text from HuggingFace)
+        dclm_count = 0
+        if args.dclm > 0:
+            print("\n--- DCLM-Baseline ---")
+            dclm_count = fetch_dclm(args.dclm, progress)
+
+        # 11. FineMath (high-quality math text from HuggingFace)
+        finemath_count = 0
+        if args.finemath > 0:
+            print("\n--- FineMath ---")
+            finemath_count = fetch_finemath(args.finemath, progress)
+
+        # 12. The Stack v2 (source code from HuggingFace — requires auth)
+        stack_count = 0
+        if args.code > 0:
+            print("\n--- The Stack v2 ---")
+            stack_count = fetch_the_stack(args.code, progress)
+
         progress["stats"] = {
             "wiki": wiki_count,
             "simple": simple_count,
@@ -3178,6 +3448,9 @@ Examples:
             "fandom": fandom_count,
             "openwebtext": openwebtext_count,
             "c4": c4_count,
+            "dclm": dclm_count,
+            "finemath": finemath_count,
+            "stack": stack_count,
         }
         save_progress(progress)
 

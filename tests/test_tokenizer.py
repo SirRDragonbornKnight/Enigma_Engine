@@ -47,7 +47,6 @@ class TestTokenCounterReliable:
 
     def test_no_estimation_fallback_in_source(self):
         """count_tokens source must not contain len(text) // 4 estimation."""
-        import inspect
         from enigma_engine.core.inference import EnigmaEngine
         source = inspect.getsource(EnigmaEngine.count_tokens)
         assert "// 4" not in source, "count_tokens must not estimate with len(text)//4"
@@ -82,21 +81,23 @@ class TestTokenCounterReliable:
         obj.tokenizer.encode.assert_called_once()
 
     def test_token_count_cache_bounded(self):
-        """Cache clears when exceeding max entries."""
+        """Cache clears when exceeding the scaled cap."""
         from unittest.mock import MagicMock
         from enigma_engine.core.inference import EnigmaEngine
+        from enigma_engine.core.hardware_detection import InferenceMemoryBudget
 
         obj = object.__new__(EnigmaEngine)
         obj.tokenizer = MagicMock()
         obj.tokenizer.encode = MagicMock(return_value=[1])
         obj._token_count_cache = {}
 
+        cap = InferenceMemoryBudget().token_count_cache_cap
         # Fill cache beyond bound
-        for i in range(4100):
+        for i in range(cap + 5):
             obj.count_tokens(f"text_{i}")
 
         # Cache should have been cleared and only have recent entries
-        assert len(obj._token_count_cache) < 4097
+        assert len(obj._token_count_cache) < cap + 1
 
 
 class TestTokenizerNoSilentFallback:
@@ -200,21 +201,30 @@ class TestByteLevelBPE:
         # Should not contain unk_token_id (all bytes are in 0-255)
         assert tok.unk_token_id not in ids
 
-    def test_utf8_mode_off_by_default(self):
-        """UTF-8 byte mode is off by default for backward compat."""
+    def test_utf8_mode_on_by_default(self):
+        """Tok-2: UTF-8 byte mode is ON by default for fresh tokenizers
+        so any Unicode codepoint roundtrips without <unk>. Existing
+        vocab files preserve their stored flag through load()."""
         from enigma_engine.core.bpe_tokenizer import BPETokenizer
         tok = BPETokenizer()
-        assert tok.use_utf8_bytes is False
+        assert tok.use_utf8_bytes is True
 
     def test_utf8_flag_saved_and_loaded(self, tmp_path):
-        """use_utf8_bytes persists through save/load cycle."""
+        """use_utf8_bytes persists through save/load cycle (both states)."""
         from enigma_engine.core.bpe_tokenizer import BPETokenizer
+        # True roundtrip
         tok = BPETokenizer()
         tok.use_utf8_bytes = True
         path = tmp_path / "vocab.json"
         tok.save(path)
         tok2 = BPETokenizer(vocab_file=path)
         assert tok2.use_utf8_bytes is True
+        # False roundtrip (legacy file)
+        tok.use_utf8_bytes = False
+        path2 = tmp_path / "vocab_legacy.json"
+        tok.save(path2)
+        tok3 = BPETokenizer(vocab_file=path2)
+        assert tok3.use_utf8_bytes is False
 
     def test_utf8_decode_reconstructs_multibyte(self):
         """Decoding UTF-8 byte tokens reconstructs multi-byte chars."""
@@ -248,7 +258,69 @@ class TestByteLevelBPE:
         ids = tok.encode("café")
         decoded = tok.decode(ids)
         assert "caf" in decoded
+    def test_default_untrained_roundtrips_unicode(self):
+        """Tok-2 spec: fresh untrained tokenizer roundtrips arbitrary
+        Unicode (CJK / Arabic / emoji) with no <unk> tokens."""
+        from enigma_engine.core.bpe_tokenizer import BPETokenizer
+        tok = BPETokenizer()  # defaults
+        for text in ["こんにちは", "العربية", "🌟🌍", "mixed Hello 世界"]:
+            ids = tok.encode(text, add_special_tokens=False)
+            assert tok.unk_token_id not in ids, (
+                f"unk leaked for {text!r}: {ids}")
+            decoded = tok.decode(ids)
+            assert text in decoded, (
+                f"roundtrip lost {text!r}, got {decoded!r}")
 
+
+class TestAdvancedByteLevel:
+    """Tok-2: AdvancedBPETokenizer must also handle Unicode without <unk>."""
+
+    def test_advanced_default_byte_mode_on(self):
+        from enigma_engine.core.advanced_tokenizer import AdvancedBPETokenizer
+        tok = AdvancedBPETokenizer()
+        assert tok.use_utf8_bytes is True
+
+    def test_advanced_unicode_roundtrip_no_unk(self):
+        """AdvancedBPETokenizer handles CJK/emoji without <unk> by default.
+
+        Was the documented Tok-2 gap: lines 267-279 fell to unk_token_id
+        on any char outside the latin-1 base vocab.
+        """
+        from enigma_engine.core.advanced_tokenizer import AdvancedBPETokenizer
+        tok = AdvancedBPETokenizer()
+        for text in ["こんにちは", "🌟", "العربية"]:
+            ids = tok.encode(text, add_special_tokens=False)
+            assert tok.unk_token_id not in ids, (
+                f"unk leaked for {text!r}: {ids}")
+            decoded = tok.decode(ids)
+            assert text in decoded, (
+                f"roundtrip lost {text!r}, got {decoded!r}")
+
+    def test_advanced_legacy_file_preserves_flag(self, tmp_path):
+        """Loading a vocab file written without the flag keeps legacy
+        (use_utf8_bytes=False) behavior so existing trained tokenizers
+        are not silently re-interpreted."""
+        import json
+        from enigma_engine.core.advanced_tokenizer import AdvancedBPETokenizer
+        path = tmp_path / "legacy.json"
+        path.write_text(json.dumps({
+            "version": "2.0",
+            "vocab_size": 6,
+            "encoder": {"<pad>": 0, "<s>": 1, "</s>": 2,
+                         "<unk>": 3, "<think>": 4, "</think>": 5},
+            "special_tokens": {"<pad>": 0, "<s>": 1, "</s>": 2,
+                                "<unk>": 3, "<think>": 4, "</think>": 5},
+        }))
+        tok = AdvancedBPETokenizer(vocab_file=path)
+        assert tok.use_utf8_bytes is False
+
+    def test_advanced_flag_saved_and_loaded(self, tmp_path):
+        from enigma_engine.core.advanced_tokenizer import AdvancedBPETokenizer
+        tok = AdvancedBPETokenizer()
+        path = tmp_path / "vocab.json"
+        tok.save(path)
+        tok2 = AdvancedBPETokenizer(vocab_file=path)
+        assert tok2.use_utf8_bytes is True
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TC-1: BPE Tokenizer — train / encode / decode
@@ -602,6 +674,151 @@ class TestAnalyzeVocabulary:
         assert 'max' in lengths
         assert 'mean' in lengths
         assert 'median' in lengths
+
+
+# ---- R-2: Rust BPE train integration tests ----
+
+def _rust_available():
+    """Check if Rust BPE backend is importable."""
+    try:
+        from enigma_bpe import RustBPETokenizer  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+@pytest.mark.skipif(not _rust_available(), reason="enigma_bpe not installed")
+class TestRustBPETrain:
+    """Verify Rust BPE train produces correct results and integrates."""
+
+    CORPUS = [
+        "The quick brown fox jumps over the lazy dog.",
+        "The quick brown fox jumps again and again.",
+        "A lazy dog sleeps under a brown tree.",
+    ] * 50
+
+    def test_rust_train_produces_vocab(self):
+        """Rust train returns token_to_id, merges, special_tokens."""
+        from enigma_bpe import RustBPETokenizer
+        tok = RustBPETokenizer()
+        result = tok.train(self.CORPUS, vocab_size=350, min_frequency=2)
+        assert "token_to_id" in result
+        assert "merges" in result
+        assert "special_tokens" in result
+        # Vocab may be smaller than target if corpus exhausts possible merges
+        assert len(result["token_to_id"]) <= 350
+        assert len(result["token_to_id"]) > 270  # base vocab is ~270
+        assert len(result["merges"]) > 0
+        assert len(result["special_tokens"]) == 14
+
+    def test_rust_special_tokens_match_python(self):
+        """B-1b: Rust SPECIAL_TOKENS aligned to Python BPETokenizer dict.
+
+        After Rust train, Python's `self.special_tokens` is replaced with
+        the Rust dict (bpe_tokenizer.py L713). If Rust drops or reorders
+        any special token, Python convenience IDs (search_start_id,
+        think_start_id) silently break. Adversarial test: train via Rust,
+        assert every Python default-special-token name is present at the
+        same ID it has in a fresh Python BPETokenizer.
+        """
+        from enigma_engine.core.bpe_tokenizer import BPETokenizer
+        py_defaults = BPETokenizer().special_tokens.copy()
+        tok = BPETokenizer()
+        tok.train(self.CORPUS, vocab_size=350, min_frequency=2)
+        assert tok._rust_backend is not None  # confirm Rust path used
+        for name, expected_id in py_defaults.items():
+            assert tok.special_tokens.get(name) == expected_id, (
+                f"Rust train clobbered {name}: expected ID {expected_id}, "
+                f"got {tok.special_tokens.get(name)}"
+            )
+        # And the post-train convenience IDs survive
+        assert tok.search_start_id == py_defaults["<search>"]
+        assert tok.search_end_id == py_defaults["</search>"]
+        assert tok.think_start_id == py_defaults["<think>"]
+
+    def test_rust_train_roundtrip(self):
+        """Encode/decode round-trip after Rust training."""
+        from enigma_bpe import RustBPETokenizer
+        tok = RustBPETokenizer()
+        tok.train(self.CORPUS, vocab_size=350, min_frequency=2)
+        test_str = "The quick brown fox"
+        ids = tok.encode(test_str)
+        decoded = tok.decode(ids)
+        # BOS/EOS stripped, content preserved
+        assert "quick" in decoded
+        assert "brown" in decoded
+        assert "fox" in decoded
+
+    def test_python_integration_uses_rust(self):
+        """BPETokenizer.train() uses Rust when available and syncs state."""
+        from enigma_engine.core.bpe_tokenizer import BPETokenizer
+        tok = BPETokenizer()
+        tok.train(self.CORPUS, vocab_size=350, min_frequency=2)
+        # Should have Rust backend after training
+        assert tok._rust_backend is not None
+        assert tok.vocab_size <= 350
+        assert tok.vocab_size > 270  # base vocab ~270
+        assert len(tok.merges) > 0
+        assert len(tok.token_to_id) == tok.vocab_size
+        assert len(tok.id_to_token) == tok.vocab_size
+        assert len(tok.merge_ranks) == len(tok.merges)
+        assert all(
+            isinstance(m, tuple) and len(m) == 2
+            for m in tok.merges
+        )
+
+    def test_python_encode_after_rust_train(self):
+        """Python encode() works after Rust-trained state sync."""
+        from enigma_engine.core.bpe_tokenizer import BPETokenizer
+        tok = BPETokenizer()
+        tok.train(self.CORPUS, vocab_size=350, min_frequency=2)
+        ids = tok.encode("brown fox")
+        assert len(ids) > 0
+        decoded = tok.decode(ids)
+        assert "brown" in decoded
+        assert "fox" in decoded
+
+    def test_rust_vs_python_same_vocab(self):
+        """Rust and Python train produce similar merge count and vocabulary."""
+        from enigma_engine.core.bpe_tokenizer import BPETokenizer
+
+        # Python train (force by disabling Rust)
+        py_tok = BPETokenizer()
+        orig_avail = BPETokenizer._rust_available
+        BPETokenizer._rust_available = False
+        try:
+            py_tok.train(self.CORPUS, vocab_size=350, min_frequency=2)
+        finally:
+            BPETokenizer._rust_available = orig_avail
+
+        # Rust train
+        rust_tok = BPETokenizer()
+        rust_tok.train(self.CORPUS, vocab_size=350, min_frequency=2)
+
+        # Merge counts may differ by a small amount due to tie-breaking
+        # divergence — different merge order with equal frequencies
+        # creates a "butterfly effect" on subsequent pair freqs
+        diff = abs(len(py_tok.merges) - len(rust_tok.merges))
+        assert diff <= 3, (
+            f"Merge count too different: py={len(py_tok.merges)}, "
+            f"rust={len(rust_tok.merges)}"
+        )
+        assert abs(py_tok.vocab_size - rust_tok.vocab_size) <= 3
+
+    def test_callback_receives_progress(self):
+        """on_progress callback is called during Rust training."""
+        from enigma_engine.core.bpe_tokenizer import BPETokenizer
+        progress_calls = []
+
+        def on_progress(pct, msg):
+            progress_calls.append((pct, msg))
+
+        tok = BPETokenizer()
+        tok.train(self.CORPUS, vocab_size=350, min_frequency=2,
+                  on_progress=on_progress)
+        assert len(progress_calls) > 0
+        # Should reach 100%
+        assert any(p >= 100 for p, _ in progress_calls)
 
     def test_all_single_char(self):
         """Stub vocab is all single chars — single_char_tokens should be high."""

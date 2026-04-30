@@ -91,7 +91,12 @@ def register_mod_commands(registry: Any, mods_dir: Path,
                         False,
                         f"[ERROR] Mod '{mod_id}' did not respond")
                 except Exception as exc:
+                    import traceback
                     err_msg = str(exc)
+                    logger.error(
+                        "Mod %s.%s failed: %s\n%s",
+                        mod_id, cmd_name, err_msg,
+                        traceback.format_exc())
                     return CommandResult(
                         False,
                         f"[ERROR] {mod_id}.{cmd_name}: {err_msg}")

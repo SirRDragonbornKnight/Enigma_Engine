@@ -2,7 +2,6 @@
 import sys
 import threading
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 import torch
@@ -179,13 +178,16 @@ class TestCountTokens:
         assert c1 == c2
 
     def test_count_tokens_cache_cap(self):
-        """Cache should clear when it exceeds 4096 entries."""
+        """Cache should clear when it exceeds the scaled cap."""
         engine = _make_engine()
-        # Fill cache to 4096
-        for i in range(4097):
+        # Get the actual scaled cap
+        from enigma_engine.core.hardware_detection import InferenceMemoryBudget
+        cap = InferenceMemoryBudget().token_count_cache_cap
+        # Fill cache past the cap
+        for i in range(cap + 1):
             engine.count_tokens(f"text_{i}")
         # Cache should have been cleared and repopulated with last entry
-        assert len(engine._token_count_cache) < 4096
+        assert len(engine._token_count_cache) < cap
 
 
 # ── clear_kv_cache ───────────────────────────────────────────────────────────
@@ -238,7 +240,6 @@ class TestInferModelConfig:
 
     def test_infer_from_nano_state_dict(self):
         """Should infer vocab_size, dim, n_layers from a nano model."""
-        from enigma_engine.core.inference import EnigmaEngine
         model = _make_tiny_model(256)
         state_dict = model.state_dict()
         # Use from_model to create a minimal engine, then test inference
@@ -503,6 +504,175 @@ class TestSampleToken:
         assert 0 <= token.item() < 256
 
 
+# ── V-8: Vision encoder checkpoint round-trip ────────────────────────────────
+
+class TestVisionEncoderLoad:
+    """`_load_vision_encoder_from_checkpoint` round-trip: train saves it,
+    inference loads it. Bug was: zero readers of `vision_encoder_state` /
+    `vision_encoder_config`, so a vision-trained checkpoint silently dropped
+    image input at chat time."""
+
+    @staticmethod
+    def _make_engine_for_helper():
+        """Bare engine with only the attributes the helper touches."""
+        from enigma_engine.core.inference import EnigmaEngine
+        engine = EnigmaEngine.from_model(
+            _make_tiny_model(vocab_size=256),
+            _make_stub_tokenizer(vocab_size=256),
+            device="cpu",
+        )
+        return engine
+
+    @staticmethod
+    def _make_vision_capable_model():
+        """Tiny model WITH vision_projection so the load helper can attach."""
+        from enigma_engine.core.model import Enigma
+        from enigma_engine.core.model_presets import ForgeConfig
+        cfg = ForgeConfig(
+            vocab_size=256, dim=32, n_layers=1, n_heads=2,
+            max_seq_len=32, vision_hidden_size=16,
+        )
+        return Enigma(config=cfg)
+
+    @staticmethod
+    def _make_vision_encoder_state():
+        """Build a real VisionEncoder state_dict + config dict to embed."""
+        from enigma_engine.core.vision_encoder import (
+            VisionEncoder, VisionEncoderConfig,
+        )
+        vcfg = VisionEncoderConfig(
+            image_size=16, patch_size=8, dim=16, n_layers=1, n_heads=2,
+        )
+        v_enc = VisionEncoder(vcfg)
+        return v_enc.state_dict(), {
+            "image_size": vcfg.image_size,
+            "patch_size": vcfg.patch_size,
+            "dim": vcfg.dim,
+            "n_layers": vcfg.n_layers,
+            "n_heads": vcfg.n_heads,
+        }
+
+    def test_helper_loads_encoder_when_state_and_config_present(self):
+        """Round-trip: state + config in checkpoint → engine.vision_encoder set."""
+        from enigma_engine.core.vision_encoder import VisionEncoder
+        engine = self._make_engine_for_helper()
+        engine.vision_encoder = None  # reset
+        model = self._make_vision_capable_model()
+        v_state, v_cfg = self._make_vision_encoder_state()
+        raw_checkpoint = {
+            "model_state_dict": {},
+            "vision_encoder_state": v_state,
+            "vision_encoder_config": v_cfg,
+        }
+        engine._load_vision_encoder_from_checkpoint(
+            raw_checkpoint, model, Path("fake.pth"),
+        )
+        assert engine.vision_encoder is not None
+        assert isinstance(engine.vision_encoder, VisionEncoder)
+        assert not engine.vision_encoder.training
+
+    def test_helper_silent_when_checkpoint_has_no_vision_keys(self, caplog):
+        """Text-only checkpoint → encoder stays None, no warning emitted."""
+        import logging
+        engine = self._make_engine_for_helper()
+        engine.vision_encoder = None
+        model = self._make_vision_capable_model()
+        raw_checkpoint = {"model_state_dict": {}}  # no vision keys
+        with caplog.at_level(logging.WARNING, logger="enigma_engine"):
+            engine._load_vision_encoder_from_checkpoint(
+                raw_checkpoint, model, Path("fake.pth"),
+            )
+        assert engine.vision_encoder is None
+        # Silent on the normal text-only path.
+        assert not any(
+            "vision" in rec.message.lower()
+            for rec in caplog.records
+            if rec.levelno >= logging.WARNING
+        )
+
+    def test_helper_raises_when_state_present_but_config_missing(self):
+        """Loud failure: state without config cannot be reconstructed."""
+        engine = self._make_engine_for_helper()
+        model = self._make_vision_capable_model()
+        v_state, _ = self._make_vision_encoder_state()
+        raw_checkpoint = {
+            "model_state_dict": {},
+            "vision_encoder_state": v_state,
+            # vision_encoder_config deliberately omitted
+        }
+        with pytest.raises(RuntimeError, match="vision_encoder_config"):
+            engine._load_vision_encoder_from_checkpoint(
+                raw_checkpoint, model, Path("fake.pth"),
+            )
+
+    def test_helper_raises_when_model_lacks_projection(self):
+        """Loud failure: encoder in checkpoint but model has no projection."""
+        engine = self._make_engine_for_helper()
+        # _make_tiny_model is text-only, no vision_projection
+        model = _make_tiny_model(vocab_size=256)
+        v_state, v_cfg = self._make_vision_encoder_state()
+        raw_checkpoint = {
+            "model_state_dict": {},
+            "vision_encoder_state": v_state,
+            "vision_encoder_config": v_cfg,
+        }
+        with pytest.raises(RuntimeError, match="vision_projection"):
+            engine._load_vision_encoder_from_checkpoint(
+                raw_checkpoint, model, Path("fake.pth"),
+            )
+
+    def test_helper_raises_on_state_dict_shape_mismatch(self):
+        """Loud failure: encoder weights don't match the configured shape."""
+        engine = self._make_engine_for_helper()
+        model = self._make_vision_capable_model()
+        _, v_cfg = self._make_vision_encoder_state()
+        # Corrupt: drop a required key so load_state_dict fails strictly.
+        raw_checkpoint = {
+            "model_state_dict": {},
+            "vision_encoder_state": {"bogus.weight": torch.zeros(1)},
+            "vision_encoder_config": v_cfg,
+        }
+        with pytest.raises(RuntimeError, match="vision encoder"):
+            engine._load_vision_encoder_from_checkpoint(
+                raw_checkpoint, model, Path("fake.pth"),
+            )
+
+
+class TestImageDroppedWarning:
+    """V-8 chat-side: when user sends an image but no encoder loaded, the
+    image must NOT silently disappear — log a WARNING per call."""
+
+    def test_warns_when_images_provided_but_no_encoder(self, caplog):
+        """Non-empty image_paths + None encoder → WARNING logged, returns None."""
+        import logging
+        from enigma_engine.core.engine_chat import _ChatMixin
+        mixin = _ChatMixin()
+        mixin.vision_encoder = None  # type: ignore[attr-defined]
+        mixin.device = None  # type: ignore[attr-defined]
+        with caplog.at_level(logging.WARNING, logger="enigma_engine"):
+            result = mixin._encode_images_for_chat(["/fake/path.png"])
+        assert result is None
+        assert any(
+            "vision" in rec.message.lower() and rec.levelno == logging.WARNING
+            for rec in caplog.records
+        ), "Expected a WARNING about missing vision encoder"
+
+    def test_silent_when_no_images_and_no_encoder(self, caplog):
+        """Empty image list + None encoder → no warning (normal text-only)."""
+        import logging
+        from enigma_engine.core.engine_chat import _ChatMixin
+        mixin = _ChatMixin()
+        mixin.vision_encoder = None  # type: ignore[attr-defined]
+        mixin.device = None  # type: ignore[attr-defined]
+        with caplog.at_level(logging.WARNING, logger="enigma_engine"):
+            result = mixin._encode_images_for_chat([])
+        assert result is None
+        assert not any(
+            "vision" in rec.message.lower() and rec.levelno >= logging.WARNING
+            for rec in caplog.records
+        )
+
+
 # ── Stream ───────────────────────────────────────────────────────────────────
 
 class TestStream:
@@ -609,3 +779,212 @@ class TestThreadSafety:
         engine.set_train_lock(threading.Lock())
         engine.set_train_lock(None)
         assert engine._train_lock is None
+
+
+# ── Best-of-N sampling (N-16) ────────────────────────────────────────────────
+
+class TestBestOfN:
+    """Best-of-N generation: produce N candidates, score each with the
+    user-supplied reward function, return the highest-scoring response.
+
+    Uses unbound-method calls with a `_FakeSelf` that exposes a stub
+    ``generate`` so we never touch a real model or tokenizer."""
+
+    @staticmethod
+    def _fake_self(responses):
+        """Build a fake engine whose ``generate`` pops from a queue."""
+        from enigma_engine.core.inference import EnigmaEngine
+
+        class _FakeSelf:
+            def __init__(self, queue):
+                self._queue = list(queue)
+                self.calls = []  # list of (prompt, kwargs)
+
+            def generate(self, prompt, **kwargs):
+                self.calls.append((prompt, dict(kwargs)))
+                return self._queue.pop(0)
+
+        fake = _FakeSelf(responses)
+        # Bind the method-under-test so `self.generate(...)` finds the stub.
+        fake.generate_best_of_n = (
+            EnigmaEngine.generate_best_of_n.__get__(fake)
+        )
+        return fake
+
+    def test_best_of_n_rejects_zero(self):
+        """N-16: n < 1 is a programming error — must raise ValueError
+        before any generate call. Loud-on-real-issue: silent no-op
+        would have the user wondering why best-of-N never improves."""
+        fake = self._fake_self([])
+        with pytest.raises(ValueError, match="n"):
+            fake.generate_best_of_n("p", 0, lambda p, r: 0.0)
+
+    def test_best_of_n_rejects_negative(self):
+        """N-16: negative n is the same class of bug as zero — raise."""
+        fake = self._fake_self([])
+        with pytest.raises(ValueError, match="n"):
+            fake.generate_best_of_n("p", -3, lambda p, r: 0.0)
+
+    def test_best_of_n_returns_highest_scoring(self):
+        """N-16 core contract: the candidate with the highest reward
+        wins. Stub generate yields three distinct strings; reward
+        function scores 'beta' highest. Must return 'beta'."""
+        fake = self._fake_self(["alpha", "beta", "gamma"])
+        scores = {"alpha": 0.1, "beta": 0.9, "gamma": 0.5}
+        best = fake.generate_best_of_n(
+            "prompt", 3, lambda p, r: scores[r], temperature=0.8)
+        assert best == "beta"
+        # Must have called generate exactly N times.
+        assert len(fake.calls) == 3
+
+    def test_best_of_n_return_all_yields_score_list(self):
+        """N-16: ``return_all=True`` returns (best, [(resp, score), ...])
+        so the caller can log all candidates. Order preserved."""
+        fake = self._fake_self(["a", "b", "c"])
+        scores = {"a": 0.2, "b": 0.7, "c": 0.5}
+        best, all_scored = fake.generate_best_of_n(
+            "p", 3, lambda p, r: scores[r],
+            return_all=True, temperature=0.8)
+        assert best == "b"
+        assert all_scored == [("a", 0.2), ("b", 0.7), ("c", 0.5)]
+
+    def test_best_of_n_ties_break_by_first_occurrence(self):
+        """N-16 adversarial: three identical scores must return the
+        FIRST candidate, not a later one. Catches the regression
+        where someone uses ``min`` or reversed iteration."""
+        fake = self._fake_self(["first", "second", "third"])
+        best = fake.generate_best_of_n(
+            "p", 3, lambda p, r: 0.5, temperature=0.8)
+        assert best == "first"
+
+    def test_best_of_n_forwards_gen_kwargs(self):
+        """N-16: ``max_gen`` / ``temperature`` / etc. must reach the
+        underlying generate call unchanged. Catches the regression
+        where the wrapper drops kwargs into a local that's then
+        ignored (Pass 156k label-tracking anti-pattern)."""
+        fake = self._fake_self(["x", "y"])
+        fake.generate_best_of_n(
+            "p", 2, lambda p, r: 0.0,
+            max_gen=42, temperature=0.7, top_p=0.95)
+        for _, kwargs in fake.calls:
+            assert kwargs["max_gen"] == 42
+            assert kwargs["temperature"] == 0.7
+            assert kwargs["top_p"] == 0.95
+
+    def test_best_of_n_forwards_json_schema_to_each_candidate(self):
+        """Pass 156z7 (N-15c2) sibling-sweep follow-up: closes the
+        N-15 contract family. ``json_schema`` is forwarded by the same
+        ``**gen_kwargs`` passthrough as ``max_gen``/``temperature`` —
+        each of the N candidates is independently constrained by the
+        FSM in :meth:`EnigmaEngine.generate`. This test gates the
+        contract explicitly so a regression where someone "improves"
+        best-of-N to consume specific kwargs without forwarding them
+        fails loud here, not silently in production where users would
+        get unconstrained candidates labelled as schema-conforming.
+        """
+        schema = {"type": "object", "properties": {"x": {"type": "integer"}}}
+        fake = self._fake_self(["a", "b", "c"])
+        fake.generate_best_of_n(
+            "p", 3, lambda p, r: 0.0,
+            temperature=0.7, json_schema=schema)
+        assert len(fake.calls) == 3
+        for _, kwargs in fake.calls:
+            assert kwargs.get("json_schema") is schema, (
+                "json_schema must reach every candidate's generate() "
+                "call; if the wrapper drops the kwarg, candidates "
+                "produce unconstrained output mislabelled as "
+                "schema-conforming")
+
+    def test_best_of_n_warns_on_deterministic_sampling(self, caplog):
+        """N-16 logic-eye: best-of-N with temperature 0 produces N
+        identical candidates — wasted compute. Must log a WARNING
+        but proceed (user may be testing). Loud-on-real-issue."""
+        fake = self._fake_self(["same", "same", "same"])
+        with caplog.at_level("WARNING"):
+            fake.generate_best_of_n(
+                "p", 3, lambda p, r: 0.0, temperature=0.0)
+        assert any("temperature" in rec.message.lower()
+                   or "deterministic" in rec.message.lower()
+                   for rec in caplog.records), (
+            "no warning logged on temperature=0 + n>1 — user wastes "
+            "GPU on identical candidates with no signal")
+
+    def test_best_of_n_swallows_reward_errors(self, caplog):
+        """N-16 robustness: a reward function that raises on ONE
+        candidate must not kill the whole batch. Failed candidates
+        get -inf so they can't win, warning logged, batch completes.
+        Otherwise a flaky scorer takes down every best-of-N call."""
+
+        def flaky(prompt, response):
+            if response == "bad":
+                raise RuntimeError("scorer broke")
+            return 1.0 if response == "good" else 0.0
+
+        fake = self._fake_self(["zero", "bad", "good"])
+        with caplog.at_level("WARNING"):
+            best = fake.generate_best_of_n(
+                "p", 3, flaky, temperature=0.8)
+        assert best == "good"
+        assert any("reward" in rec.message.lower()
+                   or "scor" in rec.message.lower()
+                   for rec in caplog.records), (
+            "no warning when reward_fn raised — silent failure")
+
+    def test_best_of_n_n_equals_one(self):
+        """N-16 degenerate case: n=1 still scores the single candidate
+        and returns it. Code paths must converge — no special-case
+        branch that skips reward evaluation when caller passed
+        return_all=True."""
+        scored = []
+
+        def scorer(prompt, response):
+            scored.append(response)
+            return 0.5
+
+        fake = self._fake_self(["only"])
+        best, all_scored = fake.generate_best_of_n(
+            "p", 1, scorer, return_all=True, temperature=0.8)
+        assert best == "only"
+        assert all_scored == [("only", 0.5)]
+        assert scored == ["only"]
+
+    def test_best_of_n_rejects_non_int_n(self):
+        """N-16 audit (Pass 156x2): the boundary guard uses
+        ``isinstance(n, int)`` so callers passing ``n=2.5`` fail loud
+        at the API boundary instead of crashing inside ``range(2.5)``.
+        Adversarial against a regression that drops the type check
+        and only validates ``n < 1`` — that bug would let 2.5 through
+        and TypeError would surface from ``range`` with a less helpful
+        message far from the actual bad input."""
+        fake = self._fake_self([])
+        with pytest.raises(ValueError, match="n"):
+            fake.generate_best_of_n("p", 2.5, lambda p, r: 0.0)
+        with pytest.raises(ValueError, match="n"):
+            fake.generate_best_of_n("p", "3", lambda p, r: 0.0)
+
+    def test_best_of_n_handles_non_numeric_score(self, caplog):
+        """N-16 audit (Pass 156x2): a reward function that returns
+        ``None`` or a string passes the try/except (no exception was
+        raised) but ``float(score)`` then raises TypeError — must be
+        swallowed and logged the same as a raising scorer, not crash
+        the whole batch. Adversarial: real-world judges built around
+        ``json.loads`` can return ``None`` on parse failure."""
+
+        def returns_none(prompt, response):
+            if response == "winner":
+                return 1.0
+            return None  # silently broken scorer
+
+        fake = self._fake_self(["loser", "winner", "loser"])
+        with caplog.at_level("WARNING"):
+            best = fake.generate_best_of_n(
+                "p", 3, returns_none, temperature=0.8)
+        assert best == "winner", (
+            "non-numeric scores must be coerced to -inf so the only "
+            "validly-scored candidate wins")
+        # At least one warning logged for the None scores.
+        assert any(
+            "reward" in rec.message.lower()
+            or "scor" in rec.message.lower()
+            for rec in caplog.records
+        ), "no warning when scorer returned non-numeric — silent fail"

@@ -218,7 +218,15 @@ class ForgeAdaptiveMixin:
                     for p in student.parameters())
                 self._log(f"Student : {s_params:,} params")
 
-                tokenizer = get_tokenizer("auto")
+                _bpe_path = MODELS_DIR / "tokenizer.json"
+                if _bpe_path.exists():
+                    try:
+                        from enigma_engine.core.bpe_tokenizer import BPETokenizer
+                        tokenizer = BPETokenizer(_bpe_path)
+                    except Exception:
+                        tokenizer = get_tokenizer("auto")
+                else:
+                    tokenizer = get_tokenizer("auto")
 
                 # Only reset difficulty for a brand-new plan;
                 # resumed plans keep their saved difficulty.
@@ -294,6 +302,7 @@ class ForgeAdaptiveMixin:
                         / f"plan_{student_name}.json")
                     plan.save(pp)
             finally:
+                self._active_trainer = None
                 self.training_active = False
                 self._reset_forge_progress()
                 self.after(
@@ -301,7 +310,7 @@ class ForgeAdaptiveMixin:
                         state="normal", text="TRAIN"))
                 self.after(
                     0, lambda: self.stop_train_btn.configure(
-                        state="disabled"))
+                        state="disabled", text="STOP"))
                 self.after(
                     0, lambda: self.status_bar.set_left(
                         "\u26a1 READY"))
@@ -535,7 +544,7 @@ class ForgeAdaptiveMixin:
                 self._log(
                     f"  [{i + 1}/{num_pairs}] "
                     f"(rejected after {max_retries_per_example} "
-                    f"retries, last raw: {repr(raw[:80])})"
+                    f"retries, last raw: {raw[:80]!r})"
                     if raw else
                     f"  [{i + 1}/{num_pairs}] "
                     f"(rejected, teacher returned empty)")
@@ -639,6 +648,7 @@ class ForgeAdaptiveMixin:
                 f"{mins}m {secs:02d}s{eta}")
         trainer_obj.on_epoch_complete = on_epoch
 
+        self._active_trainer = trainer_obj
         state = trainer_obj.train(combined)
 
         # Save student checkpoint

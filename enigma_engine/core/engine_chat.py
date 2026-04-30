@@ -79,7 +79,17 @@ class _ChatMixin:
         """
         encoder = getattr(self, "vision_encoder", None)
         if encoder is None:
-            logger.debug("No vision encoder loaded — skipping image encoding")
+            # Loud when caller actually expected images to be processed —
+            # silent on the normal text-only path (V-8).
+            if image_paths:
+                logger.warning(
+                    "Image input provided (%d image(s)) but model has no "
+                    "vision encoder loaded — images will be ignored. Train a "
+                    "vision-capable model with Forge and reload.",
+                    len(image_paths),
+                )
+            else:
+                logger.debug("No vision encoder loaded — skipping image encoding")
             return None
 
         try:
@@ -373,6 +383,29 @@ class _ChatMixin:
             else:
                 system_prompt = history_summary
 
+        # ── RAG — prepend retrieved document context if index is active ──
+        rag_index = getattr(self, "_rag_index", None)
+        if rag_index is not None and getattr(rag_index, "is_built", False) and message:
+            try:
+                from .rag import RAGIndex
+                results = rag_index.query(message, top_k=5)
+                doc_ctx = RAGIndex.format_context(results, max_chars=2000)
+                if doc_ctx:
+                    rag_block = (
+                        "[RETRIEVED DOCUMENT CONTEXT]\n"
+                        f"{doc_ctx}\n"
+                        "[END DOCUMENT CONTEXT]"
+                    )
+                    if system_prompt:
+                        system_prompt = f"{system_prompt}\n\n{rag_block}"
+                    else:
+                        system_prompt = rag_block
+            except Exception:
+                logger.debug(
+                    "RAG query failed — continuing without document context",
+                    exc_info=True,
+                )
+
         # ── Reasoning: inject chain-of-thought instruction ───────────────
         if reasoning:
             from .reasoning import build_reasoning_instruction
@@ -541,6 +574,18 @@ class _ChatMixin:
 
         # ── GGUF model: use native chat completion ──────────────────────
         if ctx.is_gguf and hasattr(self.model, "chat"):
+            # Pass 156z7 (N-15c2): mirror the streaming GGUF gate from
+            # stream_chat. llama.cpp uses its own sampler — our logit
+            # mask never reaches it, so silently returning unconstrained
+            # output labelled as schema-conforming would be a correctness
+            # lie. Loud-reject at the boundary instead. Sibling-boundary
+            # site that Pass 156z6 missed.
+            if kwargs.get("json_schema") is not None:
+                raise NotImplementedError(
+                    "json_schema constrained decoding is not supported "
+                    "on GGUF models (llama.cpp uses its own sampler). "
+                    "Load a native PyTorch model or drop the schema."
+                )
             try:
                 effective_max = kwargs.get("max_tokens", ctx.max_gen)
                 with self._generation_lock:
@@ -552,6 +597,12 @@ class _ChatMixin:
                         top_k=ctx.top_k,
                         repeat_penalty=ctx.repeat_penalty,
                     )
+                # Pass 156z9e (Stage B-2 sibling sweep): GGUF chat
+                # bypasses _generate_text, so the hook there never
+                # ran on this path.  llama.cpp returns continuation
+                # only, so prompt=None.  Loud-on-real-issue: a model
+                # emitting <search> here gets one WARNING.
+                self._record_search_emissions(response)
                 return response
             except Exception:
                 # Let the error propagate — no silent fallback (Suggestion #9A)
@@ -719,6 +770,17 @@ class _ChatMixin:
 
         # ── GGUF streaming path ──────────────────────────────────────────
         if ctx.is_gguf and hasattr(self.model, "chat"):
+            # N-15c: GGUF uses llama.cpp's own sampler — our logit mask
+            # never gets a chance to run on streaming GGUF either. Match
+            # the non-streaming GGUF rejection in `_generate_text` so
+            # callers fail loud at the API boundary instead of silently
+            # receiving unconstrained tokens labelled as schema-valid.
+            if kwargs.get("json_schema") is not None:
+                raise NotImplementedError(
+                    "json_schema constrained decoding is not supported "
+                    "on GGUF models (llama.cpp uses its own sampler). "
+                    "Load a native PyTorch model or drop the schema."
+                )
             # Server backend — no streaming helper yet, yield in one piece
             if ctx.has_server_backend:
                 with self._generation_lock:
@@ -730,29 +792,48 @@ class _ChatMixin:
                         top_p=ctx.top_p,
                         top_k=ctx.top_k,
                     )
+                # Pass 156z9e (Stage B-2 sibling sweep): GGUF server
+                # streaming returns the full response in one chunk
+                # without going through stream_generate's finally hook.
+                self._record_search_emissions(response)
                 yield response
                 return
 
             # In-process llama-cpp-python — true streaming
             try:
-                with self._generation_lock:
-                    stream_resp = self.model.model.create_chat_completion(
-                        messages=ctx.messages,
-                        max_tokens=ctx.max_gen,
-                        temperature=ctx.temperature,
-                        repeat_penalty=ctx.repeat_penalty,
-                        top_p=ctx.top_p,
-                        top_k=ctx.top_k,
-                        stream=True,
-                    )
-                    for chunk in stream_resp:
-                        choices = chunk.get("choices", [])
-                        if choices:
-                            delta = choices[0].get("delta", {})
-                            text = delta.get("content", "")
-                            if text:
-                                yield text
-                return
+                # Pass 156z9e (Stage B-2 sibling sweep): GGUF llama-cpp
+                # streaming bypasses stream_generate, so accumulate
+                # chunks and scan in finally — same shape as the
+                # native stream_generate hook.  Runs on normal
+                # completion AND on generator cancellation.
+                gguf_chunks: list[str] = []
+                try:
+                    with self._generation_lock:
+                        stream_resp = self.model.model.create_chat_completion(
+                            messages=ctx.messages,
+                            max_tokens=ctx.max_gen,
+                            temperature=ctx.temperature,
+                            repeat_penalty=ctx.repeat_penalty,
+                            top_p=ctx.top_p,
+                            top_k=ctx.top_k,
+                            stream=True,
+                        )
+                        for chunk in stream_resp:
+                            choices = chunk.get("choices", [])
+                            if choices:
+                                delta = choices[0].get("delta", {})
+                                text = delta.get("content", "")
+                                if text:
+                                    gguf_chunks.append(text)
+                                    yield text
+                    return
+                finally:
+                    try:
+                        self._record_search_emissions("".join(gguf_chunks))
+                    except Exception:
+                        logger.exception(
+                            "Stage B-2: GGUF stream scan crashed; "
+                            "last_search_queries left at previous value")
             except Exception:
                 # Let the error propagate — no silent fallback (Suggestion #9A)
                 raise

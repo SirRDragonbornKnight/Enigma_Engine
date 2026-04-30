@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import json
 import logging
-import tkinter as tk
 import threading
 from pathlib import Path
 from typing import Any
@@ -36,8 +35,8 @@ from enigma_engine.gui.scanners import (
 # Re-export so existing imports keep working
 from enigma_engine.gui.gui_forge import ForgeMixin  # noqa: F401
 from enigma_engine.gui.gui_mods import ModMixin  # noqa: F401
-from enigma_engine.gui.gui_logic_chat import LogicChatMixin  # noqa: F401
-from enigma_engine.gui.gui_logic_media import LogicMediaMixin  # noqa: F401
+from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+from enigma_engine.gui.gui_logic_media import LogicMediaMixin
 
 
 # Bytes-per-parameter for common GGUF quantization types.
@@ -117,6 +116,71 @@ def _estimate_gguf_params(engine: Any, path: str) -> int:
     return 0
 
 
+def _parse_lora_stack_inputs(
+    items: list[tuple[str, str]],
+    default_weight: float = 1.0,
+) -> tuple[list[tuple[str, float]], list[str]]:
+    """Parse user-typed weight strings for a multi-LoRA stack.
+
+    Pass 156u-B (LoRA-1b stacking UI): the GUI weight entries are
+    free-text strings. This helper converts them to floats with the
+    same rules the engine layer applies, but emitting per-row
+    error messages that name the offending adapter (friendlier than
+    the generic ``ValueError`` from
+    :meth:`EnigmaEngine.apply_adapter_stack`).
+
+    Rules:
+        - Empty / whitespace-only → ``default_weight`` (default 1.0).
+          User intent when ticking a row but not typing.
+        - Non-numeric → error naming the adapter's basename.
+        - NaN / Inf → error naming the adapter's basename.
+        - Negative values are LEGITIMATE (subtract this adapter's
+          contribution from the merged stack) and MUST NOT be
+          rejected.
+
+    Errors are collected — the parser walks every row before
+    returning so the user sees ALL typos at once instead of N
+    round-trips for N typos.
+
+    Args:
+        items: List of ``(adapter_path, raw_weight_str)`` tuples
+            from selected adapter rows.
+        default_weight: Weight used when the raw string is empty
+            or whitespace-only. Default 1.0.
+
+    Returns:
+        ``(parsed_pairs, errors)``. On any error ``parsed_pairs``
+        is the empty list — the caller MUST treat this as an
+        all-or-nothing operation (a partial stack reaching the
+        engine would silently drop the bad rows).
+    """
+    import math
+    parsed: list[tuple[str, float]] = []
+    errors: list[str] = []
+    for raw_path, raw_weight in items:
+        stripped = (raw_weight or "").strip()
+        name = Path(raw_path).name
+        if not stripped:
+            parsed.append((raw_path, float(default_weight)))
+            continue
+        try:
+            w = float(stripped)
+        except (TypeError, ValueError):
+            errors.append(
+                f"weight for '{name}' is not a number: "
+                f"{raw_weight!r}")
+            continue
+        if not math.isfinite(w):
+            errors.append(
+                f"weight for '{name}' is not finite "
+                f"(NaN/Inf not allowed): {raw_weight!r}")
+            continue
+        parsed.append((raw_path, w))
+    if errors:
+        return [], errors
+    return parsed, []
+
+
 class LogicMixin(LogicChatMixin, LogicMediaMixin):
     """Mixin providing logic methods for EnigmaGUI.
 
@@ -191,32 +255,6 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
         else:
             lines.append("")
             lines.append("Web Access: DISABLED")
-
-        # RAG — inject retrieved document context for this query
-        rag_index = getattr(self, "_rag_index", None)
-        if rag_index and getattr(rag_index, "is_built", False):
-            # Peek at the latest user message for retrieval
-            last_msg = ""
-            if self.history:
-                for msg in reversed(self.history):
-                    if msg.get("role") == "user":
-                        last_msg = msg.get("content", "")
-                        break
-            # Also include what the user typed (may not be in history yet)
-            try:
-                input_text = self.chat_input.get("1.0", "end").strip()
-            except (AttributeError, tk.TclError):
-                input_text = ""
-            query = input_text or last_msg
-            if query:
-                from enigma_engine.core.rag import RAGIndex
-                results = rag_index.query(query, top_k=5)
-                ctx = RAGIndex.format_context(results, max_chars=2000)
-                if ctx:
-                    lines.append("")
-                    lines.append("[RETRIEVED DOCUMENT CONTEXT]")
-                    lines.append(ctx)
-                    lines.append("[END DOCUMENT CONTEXT]")
 
         # Memory commands — tell the AI it can save notes
         lines.append("")
@@ -314,6 +352,57 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
                     "learning quality.")
         except Exception:
             pass
+
+        # Emotional state — inject as a tone cue so generation reflects mood
+        ctx_obj = getattr(self, "model_context", None)
+        if ctx_obj is not None:
+            try:
+                emo = ctx_obj._snapshot_emotional_state()
+
+                def _emo_label(key: str, val: float) -> str:
+                    if key == "valence":
+                        if val > 0.3:
+                            return "positive"
+                        if val < -0.3:
+                            return "negative"
+                        return "neutral"
+                    if key == "arousal":
+                        if val > 0.6:
+                            return "energetic"
+                        if val < 0.3:
+                            return "calm"
+                        return "moderate"
+                    if key == "engagement":
+                        if val > 0.7:
+                            return "high"
+                        if val < 0.3:
+                            return "low"
+                        return "engaged"
+                    if key == "trust":
+                        if val > 0.7:
+                            return "high"
+                        if val < 0.3:
+                            return "low"
+                        return "moderate"
+                    if key == "frustration":
+                        if val > 0.6:
+                            return "elevated"
+                        if val < 0.2:
+                            return "none"
+                        return "mild"
+                    return f"{val:.2f}"
+
+                parts = ", ".join(
+                    f"{k}={_emo_label(k, v)}" for k, v in emo.items()
+                )
+                lines.append("")
+                lines.append(
+                    f"[Internal State: {parts}] "
+                    "Let this state color your tone naturally — "
+                    "do not announce it."
+                )
+            except Exception:
+                pass
 
         lines.append("[END SYSTEM CONTEXT]")
         return "\n".join(lines)
@@ -612,12 +701,26 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
 
         # Load per-model context (history + prompt)
         self._load_model_context(path)
-        self._chat_system(
-            f"Model online: {param_count:,} params on {device}")
+        # Pass 156v Step 2: model-load is a genuine session-state
+        # change (KV cache reset, weights swapped) — surface it
+        # via the unified divider marker so the user can scan the
+        # chat log and locate the seam if quality regresses.
+        self._chat_session_marker(
+            f"Model: {name.upper()} "
+            f"({param_count:,} params, {device})"
+        )
 
         # Track the loaded model in chat route assignment
         self.route_assignments["chat"] = path
         save_route_assignments(self.route_assignments)
+
+        # LoRA-1b (Pass 156s): auto-restore the previously selected
+        # adapter for this base model, if any. Adapter is keyed by
+        # the base model's stem so swapping bases drops to base
+        # weights instead of misapplying a foreign adapter. Failures
+        # are logged but do not block the load — base model usage
+        # remains valid even when the saved adapter is missing.
+        self._restore_lora_adapter_for_base(path)
 
         # Update the chat route dropdown to show the loaded model
         route_menus = getattr(self, "_route_menus", {})
@@ -643,6 +746,261 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
         self.header_dot.set_color(C_RED)
         self._chat_error(f"Failed to load model: {error}")
         self.send_btn.configure(state="normal")
+
+    def _adapter_route_key(self, base_path: str) -> str:
+        """Per-base-model key for the saved chat adapter.
+
+        Pass 156s (LoRA-1b foundation): the user's adapter choice is
+        scoped to the base model. Switching base models must NOT
+        attempt to apply the previous base's adapter — different
+        weight shapes / target_modules.
+        """
+        return f"chat_adapter:{Path(base_path).stem}"
+
+    def _adapter_stack_route_key(self, base_path: str) -> str:
+        """Per-base-model key for a saved multi-LoRA stack.
+
+        Pass 156u-A (LoRA-1b stacking): same per-base scoping as the
+        single-adapter key, but holds a list of ``{path, weight}``
+        dicts instead of a single path. The single-adapter key and
+        the stack key are mutually exclusive — writers of either key
+        clear the other.
+        """
+        return f"chat_adapter_stack:{Path(base_path).stem}"
+
+    def _restore_lora_adapter_for_base(self, base_path: str) -> None:
+        """Apply the saved adapter (or stack) for ``base_path``.
+
+        Pass 156s (LoRA-1b foundation): silent no-op when no adapter
+        is saved for this base, when the engine is missing, or when
+        the saved adapter directory has been deleted off-disk. Errors
+        during apply are logged + surfaced in chat but do not break
+        model loading — base weights remain usable.
+
+        Pass 156u-A (LoRA-1b stacking): the per-base
+        ``chat_adapter_stack:`` key is checked FIRST. If a stack is
+        saved it wins over any lingering single-adapter key — stacks
+        are the more recent and more specific intent. Single-adapter
+        fallback only runs when no stack is recorded.
+        """
+        engine = getattr(self, "engine", None)
+        if engine is None:
+            return
+        if not hasattr(engine, "apply_adapter"):
+            return  # Older engine build; skip silently.
+
+        # Stack key takes precedence over single-adapter key.
+        stack_key = self._adapter_stack_route_key(base_path)
+        saved_stack = self.route_assignments.get(stack_key)
+        if isinstance(saved_stack, list) and saved_stack:
+            if not hasattr(engine, "apply_adapter_stack"):
+                # Engine too old for stacking — drop the orphan key
+                # so we don't keep retrying.
+                self.route_assignments.pop(stack_key, None)
+                save_route_assignments(self.route_assignments)
+                self._chat_system(
+                    "Saved LoRA stack requires a newer engine — "
+                    "using base weights.")
+                return
+            # Pass 156u-A2 (stabilization): defensive parse against
+            # corrupted route_assignments.json (hand-edits, partial
+            # writes, format drift). Non-dict entries, missing keys,
+            # or non-numeric weights all drop the WHOLE key — we'd
+            # rather use base weights than crash model load.
+            entries: list[tuple[Path, float]] = []
+            parse_error: str | None = None
+            for item in saved_stack:
+                if not isinstance(item, dict):
+                    parse_error = (
+                        f"entry is not a dict: {type(item).__name__}")
+                    break
+                raw_path = item.get("path", "")
+                try:
+                    w = float(item.get("weight", 1.0))
+                except (TypeError, ValueError):
+                    parse_error = (
+                        f"weight not numeric for "
+                        f"'{Path(str(raw_path)).name}'")
+                    break
+                if not raw_path:
+                    parse_error = "entry missing 'path' field"
+                    break
+                p = Path(raw_path)
+                if not p.exists() or not (
+                        p / "adapter_config.json").exists():
+                    # One member missing — drop the whole stack
+                    # rather than apply a partial merge.
+                    self.route_assignments.pop(stack_key, None)
+                    save_route_assignments(self.route_assignments)
+                    self._chat_system(
+                        f"Saved LoRA stack member '{p.name}' no "
+                        f"longer on disk — using base weights.")
+                    return
+                entries.append((p, w))
+
+            if parse_error is not None:
+                self.route_assignments.pop(stack_key, None)
+                save_route_assignments(self.route_assignments)
+                self._chat_system(
+                    f"Saved LoRA stack is corrupted "
+                    f"({parse_error}) — using base weights.")
+                return
+
+            try:
+                engine.apply_adapter_stack(entries)
+            except (FileNotFoundError, ImportError, RuntimeError,
+                    ValueError) as e:
+                self._chat_error(
+                    f"Could not apply saved LoRA stack: {e}")
+                return
+            names = ", ".join(
+                f"{p.name}@{w:.2f}" for p, w in entries)
+            # Pass 156v Step 1 — divider marks the auto-restored
+            # stack at model-load time.
+            self._chat_session_marker(f"LoRA stack: {names}")
+            return
+
+        # Fall through to single-adapter restore.
+        route_key = self._adapter_route_key(base_path)
+        saved = self.route_assignments.get(route_key)
+        if not saved:
+            return
+
+        adapter_path = Path(saved)
+        if not adapter_path.exists() or not (
+                adapter_path / "adapter_config.json").exists():
+            # Saved adapter no longer on disk — clear the orphan entry
+            # so future loads of this base don't keep trying.
+            self.route_assignments.pop(route_key, None)
+            save_route_assignments(self.route_assignments)
+            self._chat_system(
+                f"Saved adapter '{adapter_path.name}' no longer on "
+                f"disk — using base weights.")
+            return
+
+        try:
+            engine.apply_adapter(adapter_path)
+        except (FileNotFoundError, ImportError, RuntimeError) as e:
+            self._chat_error(
+                f"Could not apply adapter '{adapter_path.name}': {e}")
+            return
+
+        # Pass 156v Step 1 — divider marks the auto-restored
+        # adapter at model-load time.
+        self._chat_session_marker(
+            f"LoRA adapter: {adapter_path.name}")
+
+    def _set_chat_adapter(self, base_path: str,
+                          adapter_path: str | None) -> None:
+        """Apply (or clear) a LoRA adapter and persist the choice.
+
+        Pass 156s (LoRA-1b foundation): single source of truth for
+        runtime adapter changes. Used by the MODELS-page Apply/Clear
+        buttons (Pass 156t) and by profile-driven auto-apply
+        (Pass 156t). Silent no-op if engine is missing.
+
+        Pass 156u-A (LoRA-1b stacking): when called, this method
+        always removes the per-base ``chat_adapter_stack:`` key —
+        the single-adapter and stack keys are mutually exclusive.
+        Without this clear, switching single→stack→single would
+        leave the orphan stack and the next reload would restore it
+        in preference to the just-saved single adapter.
+
+        Args:
+            base_path: Currently loaded base model path (used to scope
+                the persisted choice per-base).
+            adapter_path: Path to a PEFT adapter directory, or
+                ``None`` to clear back to base weights.
+        """
+        engine = getattr(self, "engine", None)
+        if engine is None:
+            return
+        route_key = self._adapter_route_key(base_path)
+        stack_key = self._adapter_stack_route_key(base_path)
+
+        if adapter_path is None:
+            try:
+                engine.clear_adapter()
+            except (AttributeError, RuntimeError) as e:
+                self._chat_error(f"Could not clear adapter: {e}")
+                return
+            self.route_assignments.pop(route_key, None)
+            self.route_assignments.pop(stack_key, None)
+            save_route_assignments(self.route_assignments)
+            # Pass 156v Step 1 — divider marks the seam where
+            # the model reverted to base weights.
+            self._chat_session_marker(
+                "LoRA cleared — using base weights")
+            return
+
+        try:
+            engine.apply_adapter(adapter_path)
+        except (FileNotFoundError, ImportError, RuntimeError) as e:
+            self._chat_error(
+                f"Could not apply adapter "
+                f"'{Path(adapter_path).name}': {e}")
+            return
+
+        self.route_assignments[route_key] = str(adapter_path)
+        self.route_assignments.pop(stack_key, None)
+        save_route_assignments(self.route_assignments)
+        # Pass 156v Step 1 — divider marks the seam where
+        # weights changed.
+        self._chat_session_marker(
+            f"LoRA adapter: {Path(adapter_path).name}")
+
+    def _set_chat_adapter_stack(
+        self,
+        base_path: str,
+        adapters: list[tuple[str, float]],
+    ) -> None:
+        """Apply a multi-LoRA weighted stack and persist the choice.
+
+        Pass 156u-A (LoRA-1b stacking): companion to
+        ``_set_chat_adapter`` for the multi-adapter path. Writes the
+        per-base ``chat_adapter_stack:`` route key as a list of
+        ``{"path": str, "weight": float}`` dicts and clears the
+        single-adapter ``chat_adapter:`` key for mutual exclusion.
+
+        Args:
+            base_path: Currently loaded base model path.
+            adapters: List of ``(adapter_path, weight)`` tuples.
+                Empty list is forwarded to the engine which raises
+                ``ValueError`` — surfaces as a chat-error, not a
+                silent route-key write.
+        """
+        engine = getattr(self, "engine", None)
+        if engine is None:
+            return
+        if not hasattr(engine, "apply_adapter_stack"):
+            self._chat_error(
+                "Engine does not support multi-LoRA stacks "
+                "(requires Pass 156u-A engine build).")
+            return
+
+        route_key = self._adapter_route_key(base_path)
+        stack_key = self._adapter_stack_route_key(base_path)
+
+        try:
+            engine.apply_adapter_stack(
+                [(Path(p), float(w)) for p, w in adapters])
+        except (FileNotFoundError, ImportError, RuntimeError,
+                ValueError) as e:
+            self._chat_error(f"Could not apply LoRA stack: {e}")
+            return
+
+        # Persist as plain dicts so JSON round-trips cleanly.
+        self.route_assignments[stack_key] = [
+            {"path": str(p), "weight": float(w)} for p, w in adapters
+        ]
+        self.route_assignments.pop(route_key, None)
+        save_route_assignments(self.route_assignments)
+
+        names = ", ".join(
+            f"{Path(p).name}@{float(w):.2f}" for p, w in adapters)
+        # Pass 156v Step 1 — divider marks the seam where
+        # the merged stack took effect.
+        self._chat_session_marker(f"LoRA stack: {names}")
 
     def _load_model_display_name(self, path: str):
         """Read AI display name from model_info.json in the model folder.
@@ -729,7 +1087,9 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
                 state="disabled",
                 text="SUSPEND",
                 command=self._suspend_model_memory)
-        self._chat_system("Model unloaded.")
+        # Pass 156v Step 2: unload is a session-state change.
+        self._chat_session_marker(
+            "Model unloaded \u2014 no model active")
         self.status_bar.set_left("\u26a1 READY")
         # Clear chat route assignment
         self.route_assignments.pop("chat", None)
@@ -1105,7 +1465,14 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
                 target=self._build_rag_index, daemon=True).start()
         else:
             self._rag_index = None
-            self._chat_system("Document Q&A DISABLED")
+            eng = getattr(self, "engine", None)
+            if eng is not None:
+                eng._rag_index = None
+            # Pass 156v Step 2: RAG-off changes the retrieval
+            # pipeline that feeds every subsequent answer — same
+            # answer-regression risk as a model swap.
+            self._chat_session_marker(
+                "Document Q&A disabled \u2014 no corpus active")
 
     def _build_rag_index(self):
         """Build RAG index from data/ and information/ in a background thread."""
@@ -1147,11 +1514,20 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
             if index.chunks:
                 index.build()
                 self._rag_index = index
-                self.after(0, lambda: self._chat_system(
-                    f"Document Q&A ENABLED — indexed {indexed} chunks "
-                    f"from {len(set(index.sources))} files"))
+                eng = getattr(self, "engine", None)
+                if eng is not None:
+                    eng._rag_index = index
+                # Pass 156v Step 2: RAG-on with a freshly built
+                # corpus is a session-state change — mark it.
+                self.after(0, lambda: self._chat_session_marker(
+                    f"Document Q&A enabled — "
+                    f"{indexed} chunks from "
+                    f"{len(set(index.sources))} files"))
             else:
                 self._rag_index = None
+                eng = getattr(self, "engine", None)
+                if eng is not None:
+                    eng._rag_index = None
                 btn = getattr(self, '_rag_btn', None)
                 if btn and hasattr(btn, 'set_state'):
                     self.after(0, lambda: btn.set_state(False))
@@ -1162,6 +1538,9 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
             err_msg = str(e)
             logger.warning("RAG index build failed: %s", err_msg)
             self._rag_index = None
+            eng = getattr(self, "engine", None)
+            if eng is not None:
+                eng._rag_index = None
             btn = getattr(self, '_rag_btn', None)
             if btn and hasattr(btn, 'set_state'):
                 self.after(0, lambda: btn.set_state(False))

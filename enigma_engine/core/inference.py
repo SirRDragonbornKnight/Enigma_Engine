@@ -57,6 +57,7 @@ from __future__ import annotations
 import logging
 import threading
 from collections.abc import Generator
+from collections.abc import Callable as _Callable
 from pathlib import Path
 from typing import Any, Optional
 
@@ -207,6 +208,7 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
         self._is_gguf = False
         self._web_enabled = False
         self.vision_encoder = None
+        self._rag_index: Any = None  # Set by GUI or API when RAG is active
 
         # Model metadata
         self.model_metadata: dict[str, Any] = {
@@ -225,6 +227,27 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
         # Prefix KV cache for skipping system prompt prefill (T1-2)
         self._prefix_kv_cache = None
         self._prefix_prompt_hash: str | None = None
+
+        # AutoResearch-2 Stage B-2 (Pass 156z9d): post-generation
+        # detection of inline ``<search>...</search>`` emissions.
+        # Stage B-1 registered the tokens; Stage B-2 records what the
+        # model actually emitted so Stage B-3 (RAG splice) has a
+        # consumer to gate on.  Always-on observability — no behaviour
+        # change to generation flow.  The list is overwritten on every
+        # call to ``generate()`` / ``chat()`` so it always reflects the
+        # most recent turn.  Empty list means either (a) the model
+        # didn't emit any search request, (b) the tokenizer doesn't
+        # have ``<search>`` registered (legacy vocab), or (c) the
+        # generation hasn't run yet.
+        self.last_search_queries: list[str] = []
+
+        # B-2b: per-prompt attribution for batch_generate.  Outer list
+        # has one entry per prompt in the batch (same length and order
+        # as the prompts argument); inner list is that prompt's queries.
+        # For non-batch paths this stays an empty list.  Flat
+        # ``last_search_queries`` remains the union for callers that
+        # don't care about attribution.
+        self.last_search_queries_per_prompt: list[list[str]] = []
 
     def set_train_lock(self, lock: threading.Lock | None) -> None:
         """Set the training lock for inference/training coordination.
@@ -317,10 +340,24 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
         self.use_routing = use_routing
         self.use_offloading = CONFIG.get("enable_offloading", False)
 
+        # LoRA-1b (Pass 156s): active adapter tracking. None = base
+        # weights only. Populated by apply_adapter(); cleared by
+        # clear_adapter(). The chat header reads this to display
+        # "+adapter:<name>".
+        self.active_adapter: str | None = None
+        self._peft_model_active: bool = False
+
         # Tool system setup (optional)
         if enable_tools:
-            from ..tools.tool_executor import ToolExecutor
-            self._tool_executor = ToolExecutor(module_manager=module_manager)
+            try:
+                from ..tools.tool_executor import ToolExecutor
+                self._tool_executor = ToolExecutor(module_manager=module_manager)
+            except ImportError:
+                logger.warning(
+                    "Tool executor module not found — tools disabled. "
+                    "tools/tool_executor.py must exist to enable tools."
+                )
+                self.enable_tools = False
 
         # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         # LOAD TOKENIZER
@@ -610,36 +647,21 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
 
             from .gguf_loader import GGUFModel
 
-            # Auto-detect GPU layers based on available VRAM
-            n_gpu_layers = 0
-            n_ctx = 4096  # Default context size
+            # Auto-detect GPU layers and context via InferenceMemoryBudget (S801)
+            from .hardware_detection import InferenceMemoryBudget
+            budget = InferenceMemoryBudget()
+            n_gpu_layers = budget.gguf_gpu_layers
+            n_ctx = budget.gguf_context_length
             try:
                 import torch
                 if torch.cuda.is_available():
-                    vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
                     gpu_name = torch.cuda.get_device_name(0)
-                    # Scale GPU offload and context by available VRAM
-                    if vram_gb >= 24:
-                        n_gpu_layers = -1  # All layers on GPU
-                        n_ctx = 32768
-                    elif vram_gb >= 16:
-                        n_gpu_layers = -1  # All layers on GPU
-                        n_ctx = 16384
-                    elif vram_gb >= 8:
-                        n_gpu_layers = -1  # Try full offload
-                        n_ctx = 8192
-                    elif vram_gb >= 4:
-                        n_gpu_layers = 20
-                        n_ctx = 4096
-                    elif vram_gb >= 2:
-                        n_gpu_layers = 10
-                        n_ctx = 2048
                     logger.info(
-                        f"GPU: {gpu_name} ({vram_gb:.1f}GB VRAM) — "
+                        f"GPU: {gpu_name} ({budget.vram_gb:.1f}GB VRAM) — "
                         f"n_gpu_layers={n_gpu_layers}, n_ctx={n_ctx}"
                     )
             except Exception as e:
-                logger.debug(f"GPU auto-detection failed: {e}")
+                logger.debug(f"GPU name detection failed: {e}")
 
             model = GGUFModel(
                 str(model_file),
@@ -659,6 +681,67 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
         except Exception as e:
             raise RuntimeError(f"Failed to load GGUF model: {e}") from e
 
+
+    def _load_vision_encoder_from_checkpoint(
+        self,
+        raw_checkpoint: Any,
+        model: Any,
+        model_file: Path,
+    ) -> None:
+        """Restore a VisionEncoder from a checkpoint dict, if present.
+
+        Forge vision SFT (`gui_forge_training.py`) writes two top-level keys
+        next to ``model_state_dict``:
+          - ``vision_encoder_state``: the encoder's state_dict
+          - ``vision_encoder_config``: dict suitable for VisionEncoderConfig(**d)
+
+        Volume policy (V-8):
+          • Both keys present + load OK → INFO once.
+          • Both keys present + load fails → RuntimeError (loud).
+          • State present but config missing → RuntimeError (loud).
+          • State present but model has no vision_projection → RuntimeError.
+          • Neither key present → silent (normal text-only checkpoint).
+        """
+        if not isinstance(raw_checkpoint, dict):
+            return
+        v_state = raw_checkpoint.get("vision_encoder_state")
+        v_cfg_dict = raw_checkpoint.get("vision_encoder_config")
+        if v_state is None and v_cfg_dict is None:
+            return  # silent: pure text-only checkpoint
+        if v_state is None:
+            # Config without state is meaningless — but unusual; warn and skip.
+            logger.warning(
+                "Checkpoint %s has vision_encoder_config but no "
+                "vision_encoder_state — ignoring.", model_file,
+            )
+            return
+        if v_cfg_dict is None:
+            raise RuntimeError(
+                f"Checkpoint {model_file} has vision_encoder_state but no "
+                f"vision_encoder_config — cannot reconstruct vision encoder."
+            )
+        proj = getattr(model, "vision_projection", None)
+        if proj is None:
+            raise RuntimeError(
+                f"Checkpoint {model_file} carries a vision encoder but the "
+                f"loaded model has no vision_projection layer — config "
+                f"mismatch. Use a vision-capable model preset."
+            )
+        try:
+            from .vision_encoder import VisionEncoder, VisionEncoderConfig
+            v_cfg = VisionEncoderConfig(**v_cfg_dict)
+            v_enc = VisionEncoder(v_cfg)
+            v_enc.load_state_dict(v_state)
+            v_enc.eval()
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to load vision encoder from {model_file}: {exc}"
+            ) from exc
+        self.vision_encoder = v_enc
+        logger.info(
+            "Vision encoder loaded from %s (image_size=%d, dim=%d, patches=%d)",
+            model_file.name, v_cfg.image_size, v_cfg.dim, v_cfg.num_patches,
+        )
 
     def _load_pytorch(
         self,
@@ -756,6 +839,14 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
                     f"Model architecture mismatch or corrupted weights.\n"
                     f"Train a new model or verify checkpoint integrity."
                 ) from e
+
+            # V-8: Restore vision encoder if checkpoint carries one. Forge's
+            # vision SFT writes vision_encoder_state + vision_encoder_config as
+            # top-level keys; without this read path image input is silently
+            # dropped at chat time.
+            self._load_vision_encoder_from_checkpoint(
+                raw_checkpoint, model, model_file,
+            )
 
             # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             # APPLY AUTO-QUANTIZATION IF NEEDED
@@ -943,6 +1034,7 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
         execute_tools: bool = None,
         max_tool_iterations: int = 5,
         min_p: float = 0.0,
+        json_schema: dict | None = None,
         max_tokens: int | None = None,  # Alias for max_gen (backward compatibility)
         max_new_tokens: int | None = None,  # Alias for max_gen (Forge model compatibility)
         max_length: int | None = None  # Alias for max_gen (common parameter name)
@@ -997,6 +1089,18 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
             use_cache: Use KV-cache for faster generation
             execute_tools: Execute AI tool calls (default: self.enable_tools)
             max_tool_iterations: Max times AI can call tools in one generation
+            json_schema: Optional JSON schema dict (must have
+                ``type='object'`` and ``properties``). When set, output
+                is constrained at the logit level to produce
+                schema-conforming JSON via :class:`JsonSchemaConstraint`.
+                Caveats: only works on native PyTorch models, NOT on
+                GGUF models (which use llama.cpp's own sampler). Pair
+                with ``execute_tools=False`` — tool execution would
+                feed re-generated text back through this path with the
+                constraint reset, breaking the structural guarantee.
+                The constraint is built once per ``generate()`` call and
+                pays a one-time vocab scan cost (~50K decode calls for
+                a 50K-token tokenizer).
 
         Returns:
             Generated text (including the prompt)
@@ -1018,6 +1122,23 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
         # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         if execute_tools is None:
             execute_tools = self.enable_tools
+
+        # Pass 156z7 (N-15c2): json_schema + execute_tools is mutually
+        # exclusive. The first generation IS schema-constrained, but on
+        # any tool-call detection ``_execute_tools_in_text`` re-enters
+        # ``_generate_text`` WITHOUT the schema, producing unconstrained
+        # continuation. The generate() docstring already names this as
+        # a caveat; the gate makes it loud instead of a silent
+        # correctness lie. Sibling-boundary site missed by Pass 156z6.
+        if json_schema is not None and execute_tools:
+            raise ValueError(
+                "json_schema cannot be combined with execute_tools=True. "
+                "Tool execution re-enters generation without the "
+                "constraint, producing unconstrained continuation that "
+                "would still be labelled as schema-conforming. Pass "
+                "execute_tools=False (or set enable_tools=False on the "
+                "engine) when using json_schema."
+            )
 
         # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         # STEP 2: Check if specialized routing should handle this
@@ -1055,7 +1176,8 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
             with self._generation_lock:
                 text = self._generate_text(
                     prompt, max_gen, temperature, top_k, top_p,
-                    repetition_penalty, stop_strings, use_cache, min_p
+                    repetition_penalty, stop_strings, use_cache, min_p,
+                    json_schema=json_schema,
                 )
 
                 if execute_tools and self._tool_executor:
@@ -1071,6 +1193,94 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
                 train_lock.release()
 
         return text
+
+    def generate_best_of_n(
+        self,
+        prompt: str,
+        n: int,
+        reward_fn: _Callable[[str, str], float],
+        *,
+        return_all: bool = False,
+        **gen_kwargs: Any,
+    ) -> Any:
+        """Generate ``n`` candidate responses and return the highest-scoring one.
+
+        Each candidate is produced by an independent call to :meth:`generate`
+        with the supplied ``gen_kwargs`` (so the caller controls temperature,
+        top-p, etc.). The candidate that scores highest under
+        ``reward_fn(prompt, response)`` is returned. Ties are broken by the
+        first occurrence so behaviour stays deterministic when scores collapse.
+
+        Args:
+            prompt: Input text shared across all N candidates.
+            n: Number of candidates to generate. Must be >= 1.
+            reward_fn: Scoring function ``(prompt, response) -> float``.
+                Higher is better. Caller is responsible for binding any extra
+                kwargs (e.g. ground_truth) via :func:`functools.partial`.
+            return_all: When True, return ``(best_response, [(resp, score), ...])``
+                in original generation order. When False (default), return only
+                the best response string.
+            **gen_kwargs: Forwarded unchanged to :meth:`generate` on every
+                candidate.
+
+        Returns:
+            ``best_response`` when ``return_all`` is False; otherwise
+            ``(best_response, scored_list)``.
+
+        Raises:
+            ValueError: If ``n < 1``.
+
+        Notes:
+            - ``temperature <= 0`` with ``n > 1`` produces identical
+              candidates and wastes compute. A WARNING is logged but
+              generation proceeds — the user may be probing the scorer.
+              Other deterministic-leaning configurations (``top_k=1``,
+              ``top_p`` near zero) are NOT detected here; if you rely on
+              varied candidates, set ``temperature`` away from 0 and
+              keep ``top_k``/``top_p`` permissive.
+            - A ``reward_fn`` that raises on a candidate is logged at WARNING
+              and that candidate is assigned ``-inf`` so it cannot win. The
+              batch still completes, returning the best of the surviving
+              candidates. Scorers that return non-numeric values (``None``,
+              strings) take the same path because ``float(...)`` will raise.
+        """
+        if not isinstance(n, int) or n < 1:
+            raise ValueError(
+                f"best-of-N requires n >= 1 (got n={n!r})")
+
+        # Loud-on-real-issue: deterministic sampling + n>1 = wasted compute.
+        # Don't error — user may be testing the reward path.
+        if n > 1:
+            temperature = gen_kwargs.get("temperature", None)
+            if temperature is not None and temperature <= 0.0:
+                logger.warning(
+                    "best-of-N with temperature=%s and n=%d will produce "
+                    "identical candidates (deterministic sampling). Pass "
+                    "temperature > 0 to get varied candidates.",
+                    temperature, n)
+
+        scored: list[tuple[str, float]] = []
+        for i in range(n):
+            response = self.generate(prompt, **gen_kwargs)
+            try:
+                score = float(reward_fn(prompt, response))
+            except Exception as exc:
+                logger.warning(
+                    "best-of-N: reward_fn raised on candidate %d/%d "
+                    "(%s) — assigning -inf so it cannot win",
+                    i + 1, n, type(exc).__name__)
+                score = float("-inf")
+            scored.append((response, score))
+
+        # max() returns the first tied element — deterministic tie-break.
+        best_response, best_score = max(scored, key=lambda c: c[1])
+        logger.info(
+            "best-of-N: scored %d candidate(s), best_score=%s",
+            n, best_score)
+
+        if return_all:
+            return best_response, scored
+        return best_response
 
     def stream(
         self,
@@ -1150,6 +1360,229 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
     # Cache & Token Utilities
     # =========================================================================
 
+    def apply_adapter(self, adapter_path: str | Path) -> None:
+        """Apply a PEFT LoRA adapter to the loaded base model.
+
+        Pass 156s (LoRA-1b foundation): hot-swap entry point. The
+        adapter directory must be PEFT-format (carries
+        ``adapter_config.json``); ``.pth`` files are not supported in
+        this path because they lack the rank/alpha/target_modules
+        metadata required to wrap the base.
+
+        First call wraps ``self.model`` with ``PeftModel.from_pretrained``
+        (loading the adapter as ``"default"``). Subsequent calls reuse
+        the wrapped model and load the new adapter via
+        ``model.load_adapter(adapter_path, adapter_name=<name>)`` then
+        ``model.set_adapter(<name>)``. KV cache is cleared on every
+        swap because the weights changed.
+
+        Base-model compatibility is enforced upstream by
+        :func:`enigma_engine.gui.scanners.scan_lora_adapters`, which
+        filters listings by base-model stem before the GUI surfaces
+        them. PEFT itself will raise on shape mismatch if a wrong
+        adapter ever reaches this method (e.g. via direct API call).
+
+        Args:
+            adapter_path: Path to a PEFT adapter directory.
+
+        Raises:
+            FileNotFoundError: ``adapter_path`` or its
+                ``adapter_config.json`` is missing.
+            ImportError: ``peft`` is not installed.
+        """
+        adapter_path = Path(adapter_path)
+        if not adapter_path.exists():
+            raise FileNotFoundError(
+                f"Adapter directory not found: {adapter_path}")
+        cfg_path = adapter_path / "adapter_config.json"
+        if not cfg_path.exists():
+            raise FileNotFoundError(
+                f"adapter_config.json missing in {adapter_path} — "
+                f"only PEFT-format adapters are supported")
+
+        try:
+            from peft import PeftModel
+        except ImportError as exc:
+            raise ImportError(
+                "peft package required to apply LoRA adapters. "
+                "Install with: pip install peft"
+            ) from exc
+
+        adapter_name = adapter_path.name
+        if not self._peft_model_active:
+            # First adapter — wrap base model.
+            self.model = PeftModel.from_pretrained(
+                self.model, str(adapter_path),
+                adapter_name=adapter_name)
+            self._peft_model_active = True
+        else:
+            # Already wrapped — load and switch.
+            if adapter_name not in getattr(self.model,
+                                           "peft_config", {}):
+                self.model.load_adapter(
+                    str(adapter_path), adapter_name=adapter_name)
+            self.model.set_adapter(adapter_name)
+
+        self.active_adapter = adapter_name
+        self.clear_kv_cache()
+        logger.info(f"Applied LoRA adapter: {adapter_name}")
+
+    def apply_adapter_stack(
+        self,
+        adapters: list[tuple[str | Path, float]],
+    ) -> None:
+        """Apply a weighted linear merge of multiple PEFT LoRA adapters.
+
+        Pass 156u-A (LoRA-1b stacking): merges N adapters into a single
+        active stack via PEFT's ``add_weighted_adapter`` (linear
+        combination). The merged stack is named ``_stack`` and is
+        rebuilt on every call so weight changes are just re-stacks.
+        KV cache is cleared because weights changed.
+
+        Args:
+            adapters: List of ``(path, weight)`` tuples. The merged
+                result is the linear sum ``Σ wᵢ · ΔWᵢ``. Each adapter
+                directory must carry ``adapter_config.json``.
+
+        Raises:
+            ValueError: ``adapters`` is empty, contains a non-finite
+                or non-numeric weight, or contains a duplicate path.
+            FileNotFoundError: An adapter directory or its
+                ``adapter_config.json`` is missing.
+            ImportError: ``peft`` is not installed.
+            RuntimeError: PEFT lacks ``add_weighted_adapter`` (very
+                old version) or ``delete_adapter`` when re-stacking.
+        """
+        import math
+
+        # Validate up front — fail loud BEFORE importing peft or
+        # touching self.model. Empty list is a programming error.
+        if not adapters:
+            raise ValueError(
+                "apply_adapter_stack requires a non-empty list of "
+                "adapters; use clear_adapter() to drop all adapters")
+
+        norm: list[tuple[Path, float]] = []
+        seen_paths: set[Path] = set()
+        for entry in adapters:
+            path, weight = entry
+            path = Path(path)
+            if not path.exists():
+                raise FileNotFoundError(
+                    f"Adapter directory not found: {path}")
+            if not (path / "adapter_config.json").exists():
+                raise FileNotFoundError(
+                    f"adapter_config.json missing in {path} — only "
+                    f"PEFT-format adapters can be stacked")
+            try:
+                w = float(weight)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"Adapter weight for {path.name} is not "
+                    f"numeric: {weight!r}") from exc
+            if not math.isfinite(w):
+                raise ValueError(
+                    f"Adapter weight for {path.name} is not "
+                    f"finite: {w!r} — NaN/Inf would silently "
+                    f"corrupt the merged stack")
+            if path in seen_paths:
+                raise ValueError(
+                    f"Duplicate adapter in stack: {path.name}")
+            seen_paths.add(path)
+            norm.append((path, w))
+
+        try:
+            from peft import PeftModel
+        except ImportError as exc:
+            raise ImportError(
+                "peft package required to apply LoRA adapters. "
+                "Install with: pip install peft"
+            ) from exc
+
+        # Wrap the base on first adapter use. PEFT needs at least one
+        # adapter when wrapping, so use the first stack member as the
+        # bootstrap; the others are loaded immediately after.
+        if not self._peft_model_active:
+            first_path, _ = norm[0]
+            self.model = PeftModel.from_pretrained(
+                self.model, str(first_path),
+                adapter_name=first_path.name)
+            self._peft_model_active = True
+
+        # Load any stack members not already on the wrapper.
+        for path, _ in norm:
+            if path.name not in getattr(
+                    self.model, "peft_config", {}):
+                self.model.load_adapter(
+                    str(path), adapter_name=path.name)
+
+        stack_name = "_stack"
+        # Drop any prior merged stack so weight changes rebuild
+        # deterministically. PEFT >=0.6 ships delete_adapter.
+        if stack_name in getattr(self.model, "peft_config", {}):
+            if not hasattr(self.model, "delete_adapter"):
+                raise RuntimeError(
+                    "PEFT wrapper lacks delete_adapter — cannot "
+                    "rebuild stack with new weights. Upgrade peft "
+                    "to >=0.6.0.")
+            self.model.delete_adapter(stack_name)
+
+        if not hasattr(self.model, "add_weighted_adapter"):
+            raise RuntimeError(
+                "PEFT wrapper lacks add_weighted_adapter — multi-"
+                "LoRA stacking unavailable. Upgrade peft to "
+                ">=0.4.0.")
+
+        names = [path.name for path, _ in norm]
+        weights = [w for _, w in norm]
+        self.model.add_weighted_adapter(
+            adapters=names,
+            weights=weights,
+            adapter_name=stack_name,
+            combination_type="linear",
+        )
+        self.model.set_adapter(stack_name)
+
+        self.active_adapter = stack_name
+        self.clear_kv_cache()
+        logger.info(
+            f"Applied LoRA adapter stack ({len(norm)}): "
+            + ", ".join(
+                f"{n}@{w:.2f}" for n, w in zip(names, weights)))
+
+    def clear_adapter(self) -> None:
+        """Clear the active LoRA adapter (return to base weights).
+
+        Pass 156s (LoRA-1b foundation): if a PEFT wrapper is active,
+        calls ``model.disable_adapters()`` (plural — the imperative
+        flag setter that disables all adapter layers globally). KV
+        cache is cleared because forward-pass behaviour changes.
+
+        Note: PEFT exposes two similar names that are NOT a
+        primary/fallback pair — ``disable_adapter`` (singular) is a
+        ``@contextmanager`` for scoped disabling and cannot be called
+        bare to clear globally. We require ``disable_adapters``
+        (plural, PEFT >=0.6.0).
+
+        Raises:
+            RuntimeError: PEFT wrapper is active but
+                ``disable_adapters`` is unavailable (PEFT < 0.6.0).
+        """
+        if not self._peft_model_active:
+            self.active_adapter = None
+            return
+
+        if not hasattr(self.model, "disable_adapters"):
+            raise RuntimeError(
+                "PEFT wrapper is active but model.disable_adapters() "
+                "is unavailable. Upgrade peft to >=0.6.0 to support "
+                "imperative adapter clearing.")
+
+        self.model.disable_adapters()
+        self.active_adapter = None
+        self.clear_kv_cache()
+        logger.info("Cleared active LoRA adapter (base weights restored)")
+
     def clear_kv_cache(self) -> None:
         """
         Clear the KV-cache to prevent hallucinations from stale context.
@@ -1207,8 +1640,13 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
             )
 
         if cache is not None:
-            # Cap cache at 4096 entries to prevent unbounded growth
-            if len(cache) >= 4096:
+            # Cap cache scaled to RAM via InferenceMemoryBudget (S803)
+            cap = getattr(self, "_token_cache_cap", None)
+            if cap is None:
+                from .hardware_detection import InferenceMemoryBudget
+                cap = InferenceMemoryBudget().token_count_cache_cap
+                self._token_cache_cap = cap
+            if len(cache) >= cap:
                 cache.clear()
             cache[text] = count
 

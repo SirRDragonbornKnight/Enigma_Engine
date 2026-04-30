@@ -187,8 +187,19 @@ class EnigmaGUI(
         self._router = None
         try:
             from enigma_engine.router import ModRouter
+            # Continuous-3b (Pass 156o): forward saved anchor override
+            # to the router so the BackgroundTrainer rehearsal layer
+            # uses the user's chosen file (or repo default when blank).
+            from enigma_engine.gui.scanners import _resolve_anchor_path
+            _saved_anchor = self._read_gui_str_setting(
+                "anchor_data_path", "")
+            _anchor_path = _resolve_anchor_path(_saved_anchor)
             self._router = ModRouter(
-                enable_training=self._chat_learning_enabled)
+                enable_training=self._chat_learning_enabled,
+                anchor_data_path=_anchor_path)
+            self._router.set_inference_idle_check(
+                lambda: not bool(getattr(self, "_is_generating", False))
+            )
             self._router.start()
         except Exception as e:
             import logging
@@ -241,6 +252,22 @@ class EnigmaGUI(
             data = json.loads(settings_path.read_text(encoding="utf-8"))
             value = data.get(key, default)
             if isinstance(value, bool):
+                return value
+        except Exception as exc:
+            logger.debug("Could not read setting %s: %s", key, exc)
+        return default
+
+    def _read_gui_str_setting(self, key: str, default: str) -> str:
+        """Read a string setting from gui_settings.json."""
+        import json
+
+        settings_path = DATA_DIR / "gui_settings.json"
+        if not settings_path.exists():
+            return default
+        try:
+            data = json.loads(settings_path.read_text(encoding="utf-8"))
+            value = data.get(key, default)
+            if isinstance(value, str):
                 return value
         except Exception as exc:
             logger.debug("Could not read setting %s: %s", key, exc)
@@ -414,6 +441,14 @@ class EnigmaGUI(
             except Exception as exc:
                 logger.debug("Voice stopper failed during shutdown: %s", exc)
         self._tts_shutdown()
+
+        # Save Forge training settings before widgets are destroyed
+        save_brief = getattr(self, '_save_training_brief', None)
+        if save_brief:
+            try:
+                save_brief()
+            except Exception as exc:
+                logger.debug("Training brief save failed during shutdown: %s", exc)
 
         self._save_window_geometry()
         self._save_config_overrides()

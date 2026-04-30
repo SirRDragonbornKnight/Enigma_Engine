@@ -83,7 +83,7 @@ def save_path_settings(paths: dict[str, str]) -> None:
 def get_path(key: str) -> Path:
     """Get the current path for a setting, respecting overrides."""
     overrides = load_path_settings()
-    if key in overrides and overrides[key]:
+    if overrides.get(key):
         return Path(overrides[key])
     _, default = PATH_SETTINGS.get(key, ("", PROJECT_ROOT))
     return default
@@ -446,6 +446,101 @@ def scan_models() -> list[dict[str, Any]]:
     return models
 
 
+def scan_lora_adapters(
+    base_model_path: str | Path | None = None,
+) -> list[dict[str, Any]]:
+    """Discover PEFT-format LoRA adapters under ``models/``.
+
+    Pass 156s (LoRA-1b foundation): scans for directories containing
+    an ``adapter_config.json`` (the PEFT canonical format). Each
+    adapter entry carries the metadata needed to apply it at chat time
+    without sidecar files: rank, alpha, target_modules, base model.
+
+    Args:
+        base_model_path: When provided, only adapters whose recorded
+            ``base_model_name_or_path`` matches the **stem** of this
+            path are returned. Pass ``None`` to list every adapter on
+            disk (used by the audit/migration view; the chat dropdown
+            should always pass the active base model so the user
+            cannot apply a mismatched adapter).
+
+    Returns:
+        List of dicts: ``{name, path, base, rank, alpha, target_modules, size_kb}``.
+
+    Notes:
+        - Searches ``models/checkpoints/`` and ``models/lora_adapters/``
+          one directory deep — adapter directories are flat.
+        - Skips directories whose ``adapter_config.json`` is missing,
+          unreadable, or malformed (logged at WARNING).
+        - ``base_model_name_or_path`` may be a path or a HuggingFace
+          repo id; we match by stem so both styles work.
+    """
+    adapters: list[dict[str, Any]] = []
+    if not MODELS_DIR.exists():
+        return adapters
+
+    search_roots = [
+        MODELS_DIR / "checkpoints",
+        MODELS_DIR / "lora_adapters",
+    ]
+
+    base_stem = (
+        Path(base_model_path).stem if base_model_path else None
+    )
+
+    for root in search_roots:
+        if not root.exists():
+            continue
+        for adapter_dir in root.iterdir():
+            if not adapter_dir.is_dir():
+                continue
+            cfg_path = adapter_dir / "adapter_config.json"
+            if not cfg_path.exists():
+                continue
+            try:
+                cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError) as e:
+                logger.warning(
+                    "Skipping malformed adapter at %s: %s",
+                    adapter_dir, e)
+                continue
+
+            recorded_base = cfg.get("base_model_name_or_path") or ""
+            if base_stem is not None:
+                if not recorded_base:
+                    # Adapter has no recorded base — refuse to match
+                    # any specific base; skip when filtering.
+                    continue
+                if Path(recorded_base).stem != base_stem:
+                    continue
+
+            # Sum bytes across the directory for the size column.
+            try:
+                total_bytes = sum(
+                    p.stat().st_size for p in adapter_dir.iterdir()
+                    if p.is_file())
+                size_kb = round(total_bytes / 1024, 1)
+            except OSError:
+                size_kb = 0.0
+
+            target_modules = cfg.get("target_modules") or []
+            if isinstance(target_modules, str):
+                target_modules = [target_modules]
+
+            adapters.append({
+                "name": adapter_dir.name,
+                "path": str(adapter_dir),
+                "base": recorded_base,
+                "rank": int(cfg.get("r", 0) or 0),
+                "alpha": int(cfg.get("lora_alpha", 0) or 0),
+                "target_modules": list(target_modules),
+                "size_kb": size_kb,
+            })
+
+    adapters.sort(key=lambda a: a["name"].lower())
+    return adapters
+
+
 def scan_training_data() -> list[dict[str, Any]]:
     """Discover training data files from data/ and one-level subdirectories."""
     files: list[dict[str, Any]] = []
@@ -477,6 +572,147 @@ def scan_training_data() -> list[dict[str, Any]]:
                 "size_kb": round(size_kb, 1),
             })
     return files
+
+
+def _pick_first_match(
+        files: list[dict[str, Any]],
+        preferred_tails: list[str]) -> str:
+    """Generic smart-default picker for FORGE data-file dropdowns.
+
+    D-11c (Pass 156l): generalises `_pick_default_training_file` so the
+    same "prefer collected output if present, else first-scanned"
+    pattern can be reused by other FORGE pickers (DPO pair-data,
+    pre-training data, vision data). Match is path-tail-suffix on a
+    forward-slash-normalised path so both Windows and POSIX path styles
+    resolve the same way. The order of `preferred_tails` is the
+    preference order — first hit wins.
+
+    Args:
+        files: list of dicts each containing "name" and "path" keys
+            (the shape `scan_*` helpers in this module emit).
+        preferred_tails: ordered list of path-tail suffixes (forward-
+            slash-separated) to prefer. First match wins.
+
+    Returns: the matched path, or `files[0]["path"]` when no preferred
+    tail matches, or "" when `files` is empty.
+    """
+    if not files:
+        return ""
+    for tail in preferred_tails:
+        for f in files:
+            name = f.get("name", "")
+            path = f.get("path", "")
+            normalised = path.replace("\\", "/")
+            if (name.replace("\\", "/").endswith(tail)
+                    or normalised.endswith(tail)):
+                return path
+    return files[0].get("path", "")
+
+
+def _pick_default_training_file(files: list[dict[str, Any]]) -> str:
+    """Pick the smartest default for the FORGE training-data picker.
+
+    D-11b (Pass 156i9): when the user has run `collect_finetuning_data.py`
+    and `data/finetune/combined_finetune.txt` is on disk, prefer it over
+    the placeholder `data/training.txt` — the user already opted into
+    reasoning data by running the collector, so surface it without
+    making them navigate the directory tree. Otherwise fall back to the
+    first scanned file (legacy behaviour). Empty list → "".
+
+    Pass 156l (D-11c): now a thin wrapper over `_pick_first_match` so
+    the same logic powers other FORGE pickers without duplication.
+    """
+    return _pick_first_match(
+        files, ["finetune/combined_finetune.txt"])
+
+
+def _pick_default_dpo_data_file(files: list[dict[str, Any]]) -> str:
+    """Pick the smartest default for the FORGE DPO/APO pair-data picker.
+
+    D-11c (Pass 156l): mirrors the training-data picker. When the user
+    has shipped curated preference pairs to `data/dpo/combined.jsonl`
+    (or `data/finetune/dpo_pairs.jsonl`), prefer those over scattered
+    scratch files. Same fall-back-to-first behaviour. Empty list → "".
+    """
+    return _pick_first_match(
+        files,
+        [
+            "dpo/combined.jsonl",
+            "finetune/dpo_pairs.jsonl",
+        ])
+
+
+def _pick_default_pretrain_file(files: list[dict[str, Any]]) -> str:
+    """Pick the smartest default for the FORGE pre-training data picker.
+
+    D-11c (Pass 156l): when `data/pretrain/combined.txt` exists (output
+    of `collect_pretraining_data.py --combine-only`), prefer it over
+    scattered scratch files. Same fall-back-to-first behaviour. Empty
+    list → "".
+    """
+    return _pick_first_match(
+        files,
+        [
+            "pretrain/combined.txt",
+            "pretrain/combined_pretrain.txt",
+        ])
+
+
+# D-11c-DPO (Pass 156q): modes that consume DPO/APO-style preference
+# pairs from the shared `train_data_var` picker. When the user switches
+# into one of these modes, the smart-default picker should prefer the
+# DPO file layout over the SFT corpus default. The set is the union of
+# alignment modes plus RLHF/Self-Play (which also expect JSONL
+# preference data via the same picker).
+_PREFERENCE_MODES: frozenset[str] = frozenset({
+    "RLHF", "Self-Play", "GRPO", "ReMax", "SimPO", "ORPO", "APO",
+})
+
+
+def _pick_default_train_data_for_mode(
+        files: list[dict[str, Any]], mode: str) -> str:
+    """Pick the smartest default for the shared FORGE data picker per mode.
+
+    D-11c-DPO (Pass 156q): the FORGE training-data picker is shared
+    across SFT modes (Basic/LoRA) and preference-pair modes
+    (RLHF/Self-Play/GRPO/ReMax/SimPO/ORPO/APO). Before this helper, the
+    picker always defaulted to the SFT default — switching into APO
+    surfaced an irrelevant text file rather than `data/dpo/combined.jsonl`.
+
+    This helper routes the lookup to the mode-appropriate picker:
+      - preference-pair modes → `_pick_default_dpo_data_file`
+      - everything else (Basic/LoRA/Distill/AI-Guided/etc.)
+        → `_pick_default_training_file`
+
+    The caller is responsible for deciding *whether* to apply the new
+    default (it should preserve any user-customised path); this helper
+    only computes what the default *would* be for the given mode.
+    """
+    if mode in _PREFERENCE_MODES:
+        return _pick_default_dpo_data_file(files)
+    return _pick_default_training_file(files)
+
+
+def _resolve_anchor_path(saved: str | None) -> Path | None:
+    """Resolve the anchor JSONL path to use for `BackgroundTrainer`.
+
+    Continuous-3b (Pass 156o): the GUI persists `anchor_data_path` in
+    `gui_settings.json` as either a non-empty path string (user
+    override) or empty/missing (use repo default). This helper
+    centralises the three-branch resolution so the desktop launcher
+    and the config-page status label agree:
+
+      - non-empty `saved` → return `Path(saved)` as-is, even if it
+        does not exist (status label flags missing files loudly,
+        rather than silently falling back to the default).
+      - empty/None → return the repo default
+        (`<project>/data/anchor_examples.jsonl`) when it exists,
+        else None (replay rehearses recent chat only).
+    """
+    if saved:
+        return Path(saved)
+    default = DATA_DIR / "anchor_examples.jsonl"
+    return default if default.exists() else None
 
 
 def scan_sessions() -> list[dict[str, Any]]:

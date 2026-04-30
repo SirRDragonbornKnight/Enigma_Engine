@@ -1116,41 +1116,53 @@ class LoraTrainer:
 
     def save_adapter(self, path: Optional[Union[str, Path]] = None) -> Path:
         """
-        Save LoRA adapter weights.
+        Save LoRA adapter as a PEFT directory.
+
+        Pass 156s (LoRA-1b): always emits the canonical PEFT directory
+        format (``adapter_config.json`` + ``adapter_model.safetensors``)
+        so adapter rank/alpha/target_modules travel with the weights
+        and inference can apply the adapter without sidecar metadata.
+        The previous manual-fallback ``.pth`` save path was unreachable
+        in normal flow (``LoraTrainer.__init__`` wraps via
+        ``create_lora_model`` / ``create_qlora_model`` which always
+        produce a PEFT model) and produced metadata-less files that
+        the chat engine could not safely apply. Removed.
 
         Args:
-            path: Output path (default: output_dir/adapter.pth)
+            path: Output path. The PEFT directory is written next to
+                this path using its stem (e.g. ``my_lora.pth`` →
+                ``my_lora/``). The ``.pth`` extension is accepted for
+                back-compat with older callers but the actual artefact
+                is always a directory.
 
         Returns:
-            Path where adapter was saved
+            Path to the saved PEFT directory.
 
         Example:
             trainer.save_adapter("my_coding_lora.pth")
+            # writes models/checkpoints/my_coding_lora/
         """
         if path is None:
-            path = self.output_dir / "adapter.pth"
+            path = self.output_dir / "adapter"
         else:
             path = Path(path)
 
-        path.parent.mkdir(parents=True, exist_ok=True)
+        # Strip any extension — PEFT writes a directory, not a file.
+        save_dir = path.parent / path.stem
+        save_dir.parent.mkdir(parents=True, exist_ok=True)
 
-        # Get only LoRA weights
-        if hasattr(self.model, 'save_pretrained'):
-            # PEFT model
-            self.model.save_pretrained(path.parent / path.stem)
-            logger.info(f"Saved PEFT adapter to: {path.parent / path.stem}")
-        else:
-            # Manual save - extract LoRA weights
-            lora_weights = {}
-            for name, param in self.model.named_parameters():
-                if param.requires_grad:
-                    lora_weights[name] = param.data.cpu()
+        if not hasattr(self.model, "save_pretrained"):
+            # Defensive: should never happen because __init__ always
+            # wraps with create_lora_model / create_qlora_model.
+            raise RuntimeError(
+                "LoraTrainer.model is not a PEFT model — cannot save "
+                "adapter. This is a bug; LoraTrainer should always "
+                "wrap with create_lora_model() in __init__."
+            )
 
-            from enigma_engine.core.safe_save import atomic_torch_save
-            atomic_torch_save(lora_weights, path)
-            logger.info(f"Saved LoRA weights to: {path}")
-
-        return path
+        self.model.save_pretrained(save_dir)
+        logger.info(f"Saved PEFT adapter to: {save_dir}")
+        return save_dir
 
 
 # =============================================================================

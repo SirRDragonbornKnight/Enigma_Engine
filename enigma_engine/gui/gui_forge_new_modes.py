@@ -177,6 +177,39 @@ class ForgeNewModesMixin:
         out_path = Path(student_path)
         safe_name = out_path.stem
 
+        # Check for stale heartbeat from a previously interrupted session.
+        # Heartbeat exists + status not clean + PID is dead = OOM/crash kill.
+        import json as _json_stale
+        _hb_check_path = Path("logs") / "training_heartbeat.json"
+        if _hb_check_path.exists():
+            try:
+                _hb_prev = _json_stale.loads(
+                    _hb_check_path.read_text(encoding="utf-8"))
+                if _hb_prev.get("status") not in ("complete", "stopped"):
+                    _hb_pid = _hb_prev.get("pid")
+                    _hb_dead = True
+                    if _hb_pid:
+                        try:
+                            import psutil as _psutil_hb
+                            _hb_dead = not _psutil_hb.pid_exists(_hb_pid)
+                        except ImportError:
+                            _hb_dead = False
+                    if _hb_dead:
+                        self._log(
+                            "\n[!] PREVIOUS SESSION WAS INTERRUPTED "
+                            "UNEXPECTEDLY\n"
+                            f"    Model : {_hb_prev.get('model', '?')}"
+                            f"  |  Phase: {_hb_prev.get('phase', '?')}"
+                            f"  |  Step: {_hb_prev.get('step', '?')}\n"
+                            f"    Last seen: "
+                            f"{_hb_prev.get('timestamp', '?')}\n"
+                            "    Likely cause: OS out-of-memory kill "
+                            "(no Python traceback).\n"
+                            "    Any saved checkpoint is intact in "
+                            "models/checkpoints/.\n")
+            except Exception:
+                pass
+
         self.training_active = True
         self.solo_train_btn.configure(state="disabled",
                                       text="PRE-TRAINING...")
@@ -198,6 +231,37 @@ class ForgeNewModesMixin:
 
         def _pretrain():
             losses = []
+            import math as _math
+            import os as _os_hb
+            import json as _json_hb
+            import datetime as _dt_hb
+            _hb_path = Path("logs") / "training_heartbeat.json"
+            _hb_path.parent.mkdir(exist_ok=True)
+            _last_hb_t = [0.0]
+
+            def _write_hb(phase="data_load", step=None,
+                          loss=None, status="running"):
+                """Write a heartbeat file so silent kills are detectable."""
+                try:
+                    hb = {
+                        "pid": _os_hb.getpid(),
+                        "status": status,
+                        "model": safe_name,
+                        "phase": phase,
+                        "timestamp": _dt_hb.datetime.now()
+                            .isoformat(timespec="seconds"),
+                    }
+                    if step is not None:
+                        hb["step"] = step
+                    if loss is not None:
+                        hb["loss"] = round(float(loss), 4)
+                    _hb_path.write_text(
+                        _json_hb.dumps(hb, indent=2),
+                        encoding="utf-8")
+                except Exception:
+                    pass  # never crash on heartbeat
+
+            _write_hb("data_load")
             try:
                 import torch
                 from enigma_engine.core.model import Enigma
@@ -229,6 +293,12 @@ class ForgeNewModesMixin:
                     self._log(
                         "Skipping tokenizer retraining (using "
                         "tokenizer from checkpoint)")
+                    self._log(
+                        "Training will continue from the saved "
+                        "step/epoch.")
+                    self.after(0, lambda:
+                        self.solo_train_btn.configure(
+                            text="RESUMING..."))
                     do_retrain_tok = False
                 elif not try_resume:
                     existing = Trainer._find_latest_checkpoint(
@@ -260,16 +330,46 @@ class ForgeNewModesMixin:
                         return ""
 
                 _phase_t0 = _time.monotonic()
+                _ram_warned = [False]
 
                 def _load_progress(pct, msg):
                     self._log(f"  [{pct:>3d}%] {msg}")
+                    # Warn once when RAM crosses 80% during load —
+                    # this is the window where OOM kills happen.
+                    if not _ram_warned[0] and pct >= 50:
+                        try:
+                            import psutil as _ps
+                            _m = _ps.virtual_memory()
+                            if _m.percent >= 80:
+                                _avail = _m.available / 1_073_741_824
+                                self._log(
+                                    f"\n[!] RAM WARNING: {_m.percent:.0f}%"
+                                    f" used ({_avail:.1f} GB free).\n"
+                                    f"    OS may kill the process during"
+                                    f" model init or torch.compile.\n"
+                                    f"    Close other apps now.")
+                                _ram_warned[0] = True
+                        except ImportError:
+                            pass
 
                 # ── Pass 1: scan for total chars + tok samples ──
+                self._log("")
+                self._log("=== Phase 1/5: Loading Data ===")
+                self._log("  Reading the full dataset into memory.")
+                self._log("  Large files (80+ GB) take 15-25 min.")
+                self._log("  RAM usage will climb — this is normal.")
+                self._log("")
                 total_chars = 0
                 calibration_sample = None
                 tok_samples: list[str] = []
                 _tok_sample_chars = 0
-                _TOK_SAMPLE_CAP = 2_000_000_000  # 2 GB
+                try:
+                    from enigma_engine.core.hardware_detection import (
+                        TrainingMemoryBudget,
+                    )
+                    _TOK_SAMPLE_CAP = TrainingMemoryBudget().tok_sample_cap
+                except Exception:
+                    _TOK_SAMPLE_CAP = 2_000_000_000  # 2 GB fallback
 
                 for chunk_text in iter_text_chunks(
                         data_source, text_key="text",
@@ -311,6 +411,22 @@ class ForgeNewModesMixin:
 
                 if do_retrain_tok:
                     _phase_t0 = _time.monotonic()
+                    self._log("")
+                    self._log("=== Phase 2/5: Training Tokenizer ===")
+                    _sample_mb = _tok_sample_chars // 1_000_000
+                    self._log(
+                        f"  Building {vocab_size:,}-token BPE "
+                        f"vocabulary from {_sample_mb:,} MB of text.")
+                    self._log(
+                        "  This is CPU-bound and can take "
+                        "1-6 hours depending on data size.")
+                    self._log(
+                        "  The GUI may feel sluggish — "
+                        "this is normal. Progress updates "
+                        "every 100 merges.")
+                    self._log(
+                        "  The GPU is idle during this phase.")
+                    self._log("")
                     self._log(
                         f"Training BPE tokenizer "
                         f"(vocab {vocab_size})...")
@@ -439,7 +555,18 @@ class ForgeNewModesMixin:
                         except Exception:
                             pass
                     if not tok_loaded:
-                        tokenizer = get_tokenizer("auto")
+                        from enigma_engine.gui.scanners import (
+                            MODELS_DIR as _MODELS_DIR)
+                        _bpe_path = _MODELS_DIR / "tokenizer.json"
+                        if _bpe_path.exists():
+                            try:
+                                from enigma_engine.core.bpe_tokenizer import BPETokenizer
+                                tokenizer = BPETokenizer(_bpe_path)
+                                tok_loaded = True
+                            except Exception:
+                                pass
+                        if not tok_loaded:
+                            tokenizer = get_tokenizer("auto")
                         self._log(
                             f"Tokenizer: "
                             f"{type(tokenizer).__name__} "
@@ -447,6 +574,12 @@ class ForgeNewModesMixin:
 
                 # Step 3: Load STUDENT model
                 _phase_t0 = _time.monotonic()
+                self._log("")
+                self._log("=== Phase 3/5: Loading Model ===")
+                self._log(
+                    "  Creating model architecture and loading "
+                    "weights. Quick (under 1 min).")
+                self._log("")
                 self._log(
                     f"Loading STUDENT model: "
                     f"{Path(student_path).stem}")
@@ -555,6 +688,18 @@ class ForgeNewModesMixin:
                 del calibration_sample
                 chars_per_chunk = max(
                     1000, int(max_seq * chars_per_token))
+                self._log("")
+                self._log("=== Phase 4/5: Streaming Sequences ===")
+                self._log(
+                    "  Splitting text into model-sized chunks "
+                    "and writing to disk.")
+                self._log(
+                    "  Re-reads the full dataset. "
+                    "Similar time to Phase 1.")
+                self._log(
+                    "  RAM stays stable — sequences go "
+                    "straight to disk.")
+                self._log("")
                 self._log(
                     f"Streaming pass 2: splitting into "
                     f"~{max_seq}-token sequences "
@@ -656,7 +801,7 @@ class ForgeNewModesMixin:
                     # Pack short sequences to eliminate padding
                     use_sequence_packing=True,
                     # Chunk CE to avoid huge logit tensors
-                    ce_chunk_size=4096,
+                    ce_chunk_size=forge_params["ce_chunk_size"],
                     use_compile=True,
                     rolling_best_k=forge_params["rolling_best_k"],
                     # WSD (warmup-stable-decay) is optimal for
@@ -668,12 +813,24 @@ class ForgeNewModesMixin:
                     val_split=forge_params["val_split"],
                     eval_every=max(100, _est_total // 20),
                     save_every=max(1, epochs // 5),
+                    save_every_steps=max(500, _est_total // 20),
                     checkpoint_dir=str(
                         out_path.parent / "checkpoints"
                         / out_path.stem),
                     use_amp=torch.cuda.is_available(),
                     run_evaluation=True)
 
+                self._log("")
+                self._log("=== Phase 5/5: Training ===")
+                self._log(
+                    f"  {_n_seqs:,} sequences, {epochs} epoch(s).")
+                self._log(
+                    "  GPU will be fully utilized. "
+                    "Loss chart updates each batch.")
+                self._log(
+                    "  Checkpoints save periodically — "
+                    "safe to stop anytime.")
+                self._log("")
                 self._log("--- Auto-Optimizations ---")
                 self._log(
                     "  GradCheckpoint: ON  |  SeqPacking: ON  "
@@ -685,7 +842,8 @@ class ForgeNewModesMixin:
                     f"  Warmup: {_warmup} steps (~1% of "
                     f"{_est_total})")
                 self._log(
-                    f"  SaveEvery: {train_config.save_every} epochs"
+                    f"  SaveEvery: "
+                    f"{train_config.save_every_steps} steps"
                     f"  |  EvalEvery: "
                     f"{train_config.eval_every} steps"
                     f"  |  Eval: ON")
@@ -724,10 +882,29 @@ class ForgeNewModesMixin:
                 _last_loss_t = [0.0]
 
                 def on_loss(loss: float):
+                    # Catch diverged training immediately
+                    if _math.isnan(loss) or _math.isinf(loss):
+                        label = "NaN" if _math.isnan(loss) else "Inf"
+                        self._log(
+                            f"\n[!] Loss is {label} — training has"
+                            f" diverged.\n"
+                            f"    Try: lower learning rate, check data"
+                            f" for corrupt sequences, reduce batch size.")
+                        _write_hb("training",
+                                  step=trainer.state.step,
+                                  status="crashed_nan")
+                        return
                     now = _time.monotonic()
                     if now - _last_loss_t[0] < 0.5:
                         return
                     _last_loss_t[0] = now
+                    # Heartbeat: write every 30s so a silent kill
+                    # leaves a record of the last known step.
+                    if now - _last_hb_t[0] >= 30.0:
+                        _last_hb_t[0] = now
+                        _write_hb("training",
+                                  step=trainer.state.step,
+                                  loss=loss)
                     tok_s = int(
                         _throughput_tokens[0]
                         / max(0.001, _throughput_time[0]))
@@ -794,7 +971,12 @@ class ForgeNewModesMixin:
                 try:
                     import psutil
                     mem = psutil.virtual_memory()
-                    if mem.available < 4 * 1073741824:
+                    # Warn when less than 10% of total RAM is free
+                    _low_ram_bytes = max(
+                        int(mem.total * 0.10),
+                        2 * 1073741824,  # at least 2 GB absolute floor
+                    )
+                    if mem.available < _low_ram_bytes:
                         avail_gb = mem.available / 1073741824
                         self._log(
                             f"[!] WARNING: Only {avail_gb:.1f} "
@@ -805,7 +987,9 @@ class ForgeNewModesMixin:
                 except ImportError:
                     pass
 
+                _write_hb("training", step=0)
                 self._log("Pre-training...\n")
+                self._active_trainer = trainer
                 state = trainer.train(
                     data_path=str(_seq_path),
                     data_offsets=_seq_offsets,
@@ -866,6 +1050,10 @@ class ForgeNewModesMixin:
                     }
                 atomic_torch_save(save_dict, out_path)
 
+                _write_hb("training",
+                          step=getattr(state, 'step', None),
+                          loss=state.best_loss,
+                          status="complete")
                 self._log("\n--- PRE-TRAINING COMPLETE ---")
                 self._log(f"Best loss : {state.best_loss:.4f}")
                 self._log(f"Saved to  : {out_path}")
@@ -886,6 +1074,7 @@ class ForgeNewModesMixin:
                 self._notify_training_complete()
 
             except KeyboardInterrupt:
+                _write_hb("training", status="stopped")
                 self._log("\n--- PRE-TRAINING STOPPED ---")
                 if losses:
                     self._display_loss_curve(losses)
@@ -894,6 +1083,7 @@ class ForgeNewModesMixin:
                 tb = traceback.format_exc()
                 msg = str(exc).lower()
                 if "out of memory" in msg or "cuda" in msg:
+                    _write_hb("training", status="crashed_oom")
                     self._log(
                         f"\n[!] GPU out of memory: {exc}\n"
                         "    Try: smaller model (lower Memory "
@@ -906,15 +1096,17 @@ class ForgeNewModesMixin:
             except Exception as exc:
                 import traceback
                 tb = traceback.format_exc()
+                _write_hb("training", status="crashed")
                 self._log(f"\n[!] Pre-training failed: {exc}")
                 self._log(tb)
             finally:
+                self._active_trainer = None
                 self.training_active = False
                 self._reset_forge_progress()
                 self.after(0, lambda: self.solo_train_btn.configure(
                     state="normal", text="TRAIN"))
                 self.after(0, lambda: self.stop_train_btn.configure(
-                    state="disabled"))
+                    state="disabled", text="STOP"))
                 self.after(0, lambda: self.status_bar.set_left(
                     "\u26a1 READY"))
 
@@ -936,7 +1128,8 @@ class ForgeNewModesMixin:
                 self._reset_forge_progress()
                 self.solo_train_btn.configure(
                     state="normal", text="TRAIN")
-                self.stop_train_btn.configure(state="disabled")
+                self.stop_train_btn.configure(
+                    state="disabled", text="STOP")
                 self.status_bar.set_left("\u26a1 READY")
             elif self.training_active:
                 self.after(5000, _check_pretrain_alive)
@@ -1175,7 +1368,29 @@ class ForgeNewModesMixin:
                     p.numel() for p in student.parameters())
                 self._log(f"Student : {s_params:,} params")
 
-                tokenizer = get_tokenizer("auto")
+                from enigma_engine.gui.scanners import (
+                    MODELS_DIR as _MODELS_DIR)
+                _bpe_path = _MODELS_DIR / "tokenizer.json"
+                if _bpe_path.exists():
+                    try:
+                        from enigma_engine.core.bpe_tokenizer import BPETokenizer
+                        tokenizer = BPETokenizer(_bpe_path)
+                    except Exception:
+                        tokenizer = get_tokenizer("auto")
+                else:
+                    tokenizer = get_tokenizer("auto")
+                if tokenizer.vocab_size != s_cfg.vocab_size:
+                    self._log(
+                        f"  [!] Tokenizer vocab ({tokenizer.vocab_size}) "
+                        f"!= model vocab ({s_cfg.vocab_size})")
+                    if tokenizer.vocab_size > s_cfg.vocab_size:
+                        raise ValueError(
+                            f"Tokenizer vocab ({tokenizer.vocab_size}) exceeds "
+                            f"model vocab ({s_cfg.vocab_size}) — token IDs "
+                            f"will be out of range. Use a matching tokenizer.")
+                self._log(
+                    f"Tokenizer: {type(tokenizer).__name__} "
+                    f"(vocab {tokenizer.vocab_size})")
 
                 # Get training brief for personality context
                 brief = ""
@@ -1259,26 +1474,26 @@ class ForgeNewModesMixin:
                                 max_tokens=max_tokens,
                                 temperature=0.8,
                             )
-                            if response and len(response.strip()) > 20:
+                            clean_response = response.strip() if response else ""
+                            if clean_response and len(clean_response) > 20:
                                 # Format as training data
                                 example = (
                                     f"User: {prompt}\n"
-                                    f"Assistant: {response.strip()}")
+                                    f"Assistant: {clean_response}")
                                 all_examples.append(example)
                                 generated += 1
 
-                                # Log periodically
-                                if generated % 10 == 0 or generated == 1:
-                                    preview = response.strip()
-                                    if len(preview) > 100:
-                                        preview = preview[:100] + "..."
-                                    self._log(
-                                        f"  [{generated}/{total_to_gen}] "
-                                        f"{preview}")
-                            else:
+                                # Log full accepted example so the
+                                # Forge panel shows both conversation sides.
                                 self._log(
                                     f"  [{generated}/{total_to_gen}] "
-                                    f"Skipped (too short)")
+                                    f"User: {prompt}\n"
+                                    f"Assistant: {clean_response}")
+                            else:
+                                short_len = len(clean_response)
+                                self._log(
+                                    f"  [{generated}/{total_to_gen}] "
+                                    f"Skipped (too short: {short_len} chars)")
 
                         except Exception as exc:
                             self._log(
@@ -1289,6 +1504,10 @@ class ForgeNewModesMixin:
                         self._update_forge_progress(
                             pct,
                             f"Generating {generated}/{total_to_gen}")
+
+                if not self.training_active:
+                    self._log("\n--- DISTILLATION STOPPED ---")
+                    return
 
                 if not all_examples:
                     self._log(
@@ -1321,7 +1540,7 @@ class ForgeNewModesMixin:
                     use_gradient_checkpointing=forge_params[
                         "use_gradient_checkpointing"],
                     use_sequence_packing=True,
-                    ce_chunk_size=4096,
+                    ce_chunk_size=forge_params["ce_chunk_size"],
                     use_compile=True,
                     rolling_best_k=forge_params["rolling_best_k"],
                     general_mix_ratio=0.0,  # Only distilled data
@@ -1366,6 +1585,7 @@ class ForgeNewModesMixin:
 
                 self._log(f"Training on {len(all_examples)} "
                           f"examples for {epochs} epochs...\n")
+                self._active_trainer = trainer
                 state = trainer.train(training_text)
 
                 # Check for failure
@@ -1416,12 +1636,13 @@ class ForgeNewModesMixin:
                 import traceback
                 self._log(traceback.format_exc())
             finally:
+                self._active_trainer = None
                 self.training_active = False
                 self._reset_forge_progress()
                 self.after(0, lambda: self.solo_train_btn.configure(
                     state="normal", text="TRAIN"))
                 self.after(0, lambda: self.stop_train_btn.configure(
-                    state="disabled"))
+                    state="disabled", text="STOP"))
                 self.after(0, lambda: self.status_bar.set_left(
                     "\u26a1 READY"))
 
@@ -1619,6 +1840,7 @@ class ForgeNewModesMixin:
                         _reward_last_t[0] = now
 
                 rlhf_trainer.on_progress = _rlhf_progress
+                self._active_trainer = rlhf_trainer
                 rl_result = rlhf_trainer.train(prompts)
 
                 self._log(f"\nFinal reward: {rl_result.get('final_reward', 0):.4f}")
@@ -1654,12 +1876,13 @@ class ForgeNewModesMixin:
                 import traceback
                 self._log(traceback.format_exc())
             finally:
+                self._active_trainer = None
                 self.training_active = False
                 self._reset_forge_progress()
                 self.after(0, lambda: self.solo_train_btn.configure(
                     state="normal", text="TRAIN"))
                 self.after(0, lambda: self.stop_train_btn.configure(
-                    state="disabled"))
+                    state="disabled", text="STOP"))
                 self.after(0, lambda: self.status_bar.set_left(
                     "\u26a1 READY"))
 
@@ -1800,6 +2023,7 @@ class ForgeNewModesMixin:
                         _sp_last_t[0] = now
 
                 sp_trainer.on_progress = _sp_progress
+                self._active_trainer = sp_trainer
                 result = sp_trainer.train(prompts)
 
                 self._log(
@@ -1833,17 +2057,20 @@ class ForgeNewModesMixin:
                 self.after(0, self._refresh_models)
                 self._notify_training_complete()
 
+            except KeyboardInterrupt:
+                self._log("\n--- SELF-PLAY STOPPED ---")
             except Exception as exc:
                 self._log(f"\n[!] Self-play failed: {exc}")
                 import traceback
                 self._log(traceback.format_exc())
             finally:
+                self._active_trainer = None
                 self.training_active = False
                 self._reset_forge_progress()
                 self.after(0, lambda: self.solo_train_btn.configure(
                     state="normal", text="TRAIN"))
                 self.after(0, lambda: self.stop_train_btn.configure(
-                    state="disabled"))
+                    state="disabled", text="STOP"))
                 self.after(0, lambda: self.status_bar.set_left(
                     "\u26a1 READY"))
 
@@ -1924,6 +2151,9 @@ class ForgeNewModesMixin:
                 from enigma_engine.core.rl_training import (
                     RewardModel, RewardTrainer, RewardTrainerConfig,
                 )
+                from enigma_engine.core.reward_functions import (
+                    reasoning_reward,
+                )
 
                 device = "cuda" if torch.cuda.is_available() else "cpu"
                 self._log(f"Device  : {device.upper()}")
@@ -1973,17 +2203,7 @@ class ForgeNewModesMixin:
 
                 self._log(f"Loaded {len(pref_data)} preference pairs")
 
-                # Phase 1: Train reward model
-                self._log(
-                    "\n--- Phase 1: Training Reward Model ---")
-                reward_model = RewardModel(
-                    model, freeze_base=True).to(device)
-                reward_cfg = RewardTrainerConfig(
-                    epochs=min(epochs, 5),
-                    learning_rate=lr * 10,
-                )
-                reward_trainer = RewardTrainer(
-                    reward_model, tokenizer, reward_cfg)
+                reward_model = None
 
                 import time as _time
                 _start = [_time.monotonic()]
@@ -2006,11 +2226,26 @@ class ForgeNewModesMixin:
                             p, f"{m}{eta}")
                         _last_t[0] = now
 
-                reward_trainer.on_progress = _reward_progress
-                result = reward_trainer.train(pref_data)
-                self._log(
-                    f"Reward model trained: "
-                    f"loss={result['final_loss']:.4f}")
+                if algo == "GRPO":
+                    self._log(
+                        "\n--- Phase 1: Rule-based Reward (no neural reward model) ---")
+                else:
+                    # Phase 1: Train reward model
+                    self._log(
+                        "\n--- Phase 1: Training Reward Model ---")
+                    reward_model = RewardModel(
+                        model, freeze_base=True).to(device)
+                    reward_cfg = RewardTrainerConfig(
+                        epochs=min(epochs, 5),
+                        learning_rate=lr * 10,
+                    )
+                    reward_trainer = RewardTrainer(
+                        reward_model, tokenizer, reward_cfg)
+                    reward_trainer.on_progress = _reward_progress
+                    result = reward_trainer.train(pref_data)
+                    self._log(
+                        f"Reward model trained: "
+                        f"loss={result['final_loss']:.4f}")
 
                 if self._forge_stop_requested():
                     return
@@ -2020,11 +2255,10 @@ class ForgeNewModesMixin:
                     f"\n--- Phase 2: {algo} Policy Training ---")
                 prompts = [item["prompt"] for item in pref_data]
 
-                def reward_fn(prompt, response):
-                    return reward_model.score(
-                        prompt, response, tokenizer, device)
-
                 if algo == "GRPO":
+                    def reward_fn(prompt, response):
+                        return reasoning_reward(prompt, response)
+
                     from enigma_engine.core.rl_training import (
                         GRPOTrainer, GRPOConfig)
                     rl_cfg = GRPOConfig(
@@ -2034,6 +2268,14 @@ class ForgeNewModesMixin:
                     rl_trainer = GRPOTrainer(
                         model, tokenizer, reward_fn, rl_cfg)
                 else:
+                    if reward_model is None:
+                        raise RuntimeError(
+                            "Reward model not initialized for ReMax training")
+
+                    def reward_fn(prompt, response):
+                        return reward_model.score(
+                            prompt, response, tokenizer, device)
+
                     from enigma_engine.core.rl_training import (
                         ReMaxTrainer, ReMaxConfig)
                     rl_cfg = ReMaxConfig(
@@ -2063,6 +2305,7 @@ class ForgeNewModesMixin:
                         _last_t[0] = now
 
                 rl_trainer.on_progress = _rl_progress
+                self._active_trainer = rl_trainer
                 rl_result = rl_trainer.train(prompts)
 
                 final_reward = rl_result.get('final_reward', 0)
@@ -2105,12 +2348,13 @@ class ForgeNewModesMixin:
                 import traceback
                 self._log(traceback.format_exc())
             finally:
+                self._active_trainer = None
                 self.training_active = False
                 self._reset_forge_progress()
                 self.after(0, lambda: self.solo_train_btn.configure(
                     state="normal", text="TRAIN"))
                 self.after(0, lambda: self.stop_train_btn.configure(
-                    state="disabled"))
+                    state="disabled", text="STOP"))
                 self.after(0, lambda: self.status_bar.set_left(
                     "\u26a1 READY"))
 
@@ -2247,10 +2491,10 @@ class ForgeNewModesMixin:
                     ce_chunk_size=forge_params["ce_chunk_size"],
                     use_compile=True,
                     rolling_best_k=forge_params["rolling_best_k"],
-                    save_every=forge_params["save_every"],
-                    checkpoint_dir=forge_params["checkpoint_dir"],
-                    use_amp=forge_params["use_amp"],
-                    run_evaluation=forge_params["run_evaluation"],
+                    save_every=max(1, epochs // 5),
+                    checkpoint_dir="models/checkpoints",
+                    use_amp=True,
+                    run_evaluation=True,
                 )
                 trainer = Trainer(model, tokenizer, train_config)
 
@@ -2290,6 +2534,7 @@ class ForgeNewModesMixin:
                 trainer.on_loss = on_loss
 
                 # Train
+                self._active_trainer = trainer
                 if algo == "SimPO":
                     state = trainer.train_simpo(pref_data)
                 else:
@@ -2336,12 +2581,13 @@ class ForgeNewModesMixin:
                 import traceback
                 self._log(traceback.format_exc())
             finally:
+                self._active_trainer = None
                 self.training_active = False
                 self._reset_forge_progress()
                 self.after(0, lambda: self.solo_train_btn.configure(
                     state="normal", text="TRAIN"))
                 self.after(0, lambda: self.stop_train_btn.configure(
-                    state="disabled"))
+                    state="disabled", text="STOP"))
                 self.after(0, lambda: self.status_bar.set_left(
                     "\u26a1 READY"))
 

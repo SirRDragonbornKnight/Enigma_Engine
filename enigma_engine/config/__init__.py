@@ -10,4 +10,4 @@ This package provides:
 
 from .defaults import CONFIG, get_config, save_config, update_config
 
-__all__ = ["CONFIG", "get_config", "update_config", "save_config"]
+__all__ = ["CONFIG", "get_config", "save_config", "update_config"]

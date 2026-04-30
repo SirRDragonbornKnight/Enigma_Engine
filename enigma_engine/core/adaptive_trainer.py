@@ -252,7 +252,7 @@ def _load_adaptive_prompts() -> dict:
     Returns the parsed dict, or an empty dict if the file is
     missing or malformed (caller falls back to defaults).
     """
-    global _cached_prompts, _cached_prompts_mtime  # noqa: PLW0603
+    global _cached_prompts, _cached_prompts_mtime
     with _cached_prompts_lock:
         try:
             if _ADAPTIVE_PROMPTS_FILE.exists():

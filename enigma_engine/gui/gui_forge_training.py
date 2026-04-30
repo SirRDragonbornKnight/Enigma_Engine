@@ -8,6 +8,7 @@ Split from gui_forge.py to keep files under 800 lines.
 from __future__ import annotations
 
 import logging
+import random
 import threading
 from pathlib import Path
 
@@ -234,6 +235,20 @@ class ForgeTrainingMixin:
                 tokenizer = None
                 if sp.is_dir():
                     tokenizer = _load_hf_tokenizer(sp, self._log)
+                # Try the project BPE tokenizer next (models/tokenizer.json)
+                if tokenizer is None:
+                    _bpe_path = MODELS_DIR / "tokenizer.json"
+                    if _bpe_path.exists():
+                        try:
+                            from enigma_engine.core.bpe_tokenizer import BPETokenizer
+                            tokenizer = BPETokenizer(_bpe_path)
+                            self._log(
+                                f"  Tokenizer: BPE from {_bpe_path.name} "
+                                f"(vocab {tokenizer.vocab_size})")
+                        except Exception as _tok_err:
+                            self._log(f"  [!] BPE tokenizer load failed: {_tok_err}")
+                            tokenizer = None
+                # Fall back to auto (tiktoken etc.) only if nothing else worked
                 if tokenizer is None:
                     tokenizer = get_tokenizer("auto")
                 if tokenizer.vocab_size != config.vocab_size:
@@ -263,7 +278,7 @@ class ForgeTrainingMixin:
                     max_grad_accumulation=forge_params["max_grad_accumulation"],
                     use_gradient_checkpointing=forge_params["use_gradient_checkpointing"],
                     use_sequence_packing=True,
-                    ce_chunk_size=4096,
+                    ce_chunk_size=forge_params["ce_chunk_size"],
                     use_compile=True,
                     rolling_best_k=forge_params["rolling_best_k"],
                     general_mix_ratio=forge_params["general_mix_ratio"],
@@ -421,6 +436,7 @@ class ForgeTrainingMixin:
                             "unchecked — starting fresh.")
 
                 self._log("Training...\n")
+                self._active_trainer = trainer
                 state = trainer.train(
                     text,
                     resume_from=str(resume_path)
@@ -497,12 +513,13 @@ class ForgeTrainingMixin:
                 self._log(f"\n[!] Solo training failed: {exc}")
                 self._log(tb)
             finally:
+                self._active_trainer = None
                 self.training_active = False
                 self._reset_forge_progress()
                 self.after(0, lambda: self.solo_train_btn.configure(
                     state="normal", text="TRAIN"))
                 self.after(0, lambda: self.stop_train_btn.configure(
-                    state="disabled"))
+                    state="disabled", text="STOP"))
                 self.after(0, lambda: self.status_bar.set_left(
                     "\u26a1 READY"))
 
@@ -512,14 +529,35 @@ class ForgeTrainingMixin:
     # DPO training (preference optimization)
     # ================================================================
 
-    def _start_dpo_training(self):
+    def _start_apo_training(self):
+        """Train STUDENT with Anchored Preference Optimization (zero).
+
+        D-9b (Pass 156k): thin wrapper that delegates to the shared
+        DPO training body with ``loss_type='apo_zero'``. Every other
+        knob (data format, beta, scheduler, eval) is identical to DPO
+        — only the loss math differs (chosen and rejected each
+        anchored independently to the reference policy).
+        """
+        self._start_dpo_training(loss_type="apo_zero")
+
+    def _start_dpo_training(self, loss_type: str = "dpo"):
         """Train STUDENT with Direct Preference Optimization.
 
         Requires a JSONL data file where each line has:
         {"prompt": "...", "chosen": "...", "rejected": "..."}
+
+        Args:
+            loss_type: ``"dpo"`` (default) or ``"apo_zero"``. Forwarded
+                to ``trainer.train_dpo`` which dispatches via
+                ``Trainer._resolve_preference_loss``. Pass 156k.
         """
         if self.training_active:
             return
+        # Display label for log/status — "DPO" or "APO-ZERO".
+        algo_label = "DPO" if loss_type == "dpo" else "APO-ZERO"
+        algo_summary_label = (
+            "DPO Training" if loss_type == "dpo"
+            else "APO-Zero Training")
 
         student_path = self.route_assignments.get("student")
         if not student_path or not Path(student_path).exists():
@@ -528,12 +566,12 @@ class ForgeTrainingMixin:
                 "    Go to ROUTER and assign the model to train.")
             return
 
-        # DPO requires a JSONL file with preference pairs
+        # DPO/APO require a JSONL file with preference pairs
         data_path = self.train_data_var.get()
         if not data_path:
             self._log(
                 "[!] No data file selected.\n"
-                "    DPO requires a JSONL file with:\n"
+                f"    {algo_label} requires a JSONL file with:\n"
                 '    {"prompt": "...", "chosen": "...", '
                 '"rejected": "..."}')
             return
@@ -564,10 +602,10 @@ class ForgeTrainingMixin:
         self.solo_train_btn.configure(state="disabled",
                                       text="TRAINING...")
         self.stop_train_btn.configure(state="normal")
-        self.status_bar.set_left("\u2692 DPO TRAINING...")
+        self.status_bar.set_left(f"\u2692 {algo_label} TRAINING...")
 
         self._log_training_summary(
-            "DPO Training",
+            algo_summary_label,
             Student=model_name,
             Data=Path(data_path).name,
             Epochs=epochs,
@@ -634,7 +672,15 @@ class ForgeTrainingMixin:
                 model.load_state_dict(state_dict)
                 model = model.to(device)
 
-                tokenizer = get_tokenizer("auto")
+                _bpe_path = MODELS_DIR / "tokenizer.json"
+                if _bpe_path.exists():
+                    try:
+                        from enigma_engine.core.bpe_tokenizer import BPETokenizer
+                        tokenizer = BPETokenizer(_bpe_path)
+                    except Exception:
+                        tokenizer = get_tokenizer("auto")
+                else:
+                    tokenizer = get_tokenizer("auto")
                 self._log(
                     f"Tokenizer: {type(tokenizer).__name__} "
                     f"(vocab {tokenizer.vocab_size})")
@@ -653,7 +699,7 @@ class ForgeTrainingMixin:
                     max_grad_accumulation=forge_params["max_grad_accumulation"],
                     use_gradient_checkpointing=forge_params["use_gradient_checkpointing"],
                     use_sequence_packing=True,
-                    ce_chunk_size=4096,
+                    ce_chunk_size=forge_params["ce_chunk_size"],
                     use_compile=True,
                     rolling_best_k=forge_params["rolling_best_k"],
                     general_mix_ratio=forge_params["general_mix_ratio"],
@@ -704,9 +750,11 @@ class ForgeTrainingMixin:
                 trainer.on_loss = on_loss
 
                 self._log(
-                    f"Starting DPO: {epochs} epochs, lr={lr}, "
-                    f"beta={beta_val}")
-                state = trainer.train_dpo(pref_data, beta=beta_val)
+                    f"Starting {algo_label}: {epochs} epochs, "
+                    f"lr={lr}, beta={beta_val}")
+                self._active_trainer = trainer
+                state = trainer.train_dpo(
+                    pref_data, beta=beta_val, loss_type=loss_type)
 
                 # Save updated model
                 from enigma_engine.core.safe_save import atomic_torch_save
@@ -721,31 +769,32 @@ class ForgeTrainingMixin:
                 self._log(f"Model saved to {Path(student_path).name}")
                 best = state.best_loss if hasattr(state, 'best_loss') else 0.0
                 self._log(
-                    f"DPO complete — best loss: {best:.4f}")
+                    f"{algo_label} complete — best loss: {best:.4f}")
                 total = _time.monotonic() - _dpo_start[0]
                 t_m, t_s = int(total // 60), int(total % 60)
                 self._log(f"Duration  : {t_m}m {t_s:02d}s")
                 self._update_forge_progress(100, "Complete")
                 self._save_training_run(
-                    "DPO", Path(student_path).stem,
+                    algo_label, Path(student_path).stem,
                     epochs, best)
                 self.after(0, lambda pc=pc: self._update_forge_param_count(pc))
                 self.after(0, self._refresh_models)
                 self._notify_training_complete()
 
             except KeyboardInterrupt:
-                self._log("\n--- DPO TRAINING STOPPED ---")
+                self._log(f"\n--- {algo_label} TRAINING STOPPED ---")
             except Exception as e:
-                self._log(f"[ERROR] DPO training failed: {e}")
+                self._log(f"[ERROR] {algo_label} training failed: {e}")
                 import traceback
                 self._log(traceback.format_exc())
             finally:
+                self._active_trainer = None
                 self.training_active = False
                 self._reset_forge_progress()
                 self.after(0, lambda: self.solo_train_btn.configure(
                     state="normal", text="TRAIN"))
                 self.after(0, lambda: self.stop_train_btn.configure(
-                    state="disabled"))
+                    state="disabled", text="STOP"))
                 self.after(0, lambda: self.status_bar.set_left(
                     "\u26a1 READY"))
 
@@ -807,6 +856,65 @@ class ForgeTrainingMixin:
         preset = preset_var.get() if preset_var else "small"
         preset = preset.split(" - ", 1)[0]
 
+        # Code-6b (Pass 156r): unfreeze last N text layers (LLaVA
+        # Stage-2 knob). Default 0 = projection-only Stage-1.
+        # Range-clamp + bad-input guard mirror the LoRA rank parsing
+        # pattern from `_start_lora_training`.
+        unfreeze_var = getattr(self, "forge_vision_unfreeze_var", None)
+        try:
+            raw_unfreeze = unfreeze_var.get().strip() if unfreeze_var else ""
+            unfreeze_text_layers = int(raw_unfreeze) if raw_unfreeze else 0
+            if unfreeze_text_layers < 0:
+                self._log(
+                    f"[!] Unfreeze layers '{raw_unfreeze}' negative, "
+                    f"using 0")
+                unfreeze_text_layers = 0
+            if unfreeze_text_layers > 64:
+                self._log(
+                    f"[!] Unfreeze layers '{raw_unfreeze}' "
+                    f"unreasonably large, clamping to 64")
+                unfreeze_text_layers = 64
+        except (ValueError, TypeError):
+            if unfreeze_var and unfreeze_var.get().strip():
+                self._log(
+                    f"[!] Unfreeze layers '{unfreeze_var.get().strip()}' "
+                    f"not a number, using 0")
+            unfreeze_text_layers = 0
+
+        # V-4: Check for stale heartbeat from a previously interrupted
+        # session. Heartbeat exists + status not clean + PID is dead =
+        # OS OOM kill / crash with no traceback.
+        import json as _json_stale
+        _hb_check_path = Path("logs") / "training_heartbeat.json"
+        if _hb_check_path.exists():
+            try:
+                _hb_prev = _json_stale.loads(
+                    _hb_check_path.read_text(encoding="utf-8"))
+                if _hb_prev.get("status") not in ("complete", "stopped"):
+                    _hb_pid = _hb_prev.get("pid")
+                    _hb_dead = True
+                    if _hb_pid:
+                        try:
+                            import psutil as _psutil_hb
+                            _hb_dead = not _psutil_hb.pid_exists(_hb_pid)
+                        except ImportError:
+                            _hb_dead = False
+                    if _hb_dead:
+                        self._log(
+                            "\n[!] PREVIOUS VISION SESSION WAS "
+                            "INTERRUPTED UNEXPECTEDLY\n"
+                            f"    Model : {_hb_prev.get('model', '?')}"
+                            f"  |  Phase: {_hb_prev.get('phase', '?')}"
+                            f"  |  Step: {_hb_prev.get('step', '?')}\n"
+                            f"    Last seen: "
+                            f"{_hb_prev.get('timestamp', '?')}\n"
+                            "    Likely cause: OS out-of-memory kill "
+                            "(no Python traceback).\n"
+                            "    Any saved checkpoint is intact in "
+                            "models/checkpoints/.\n")
+            except Exception:
+                pass
+
         self.training_active = True
         self.solo_train_btn.configure(state="disabled",
                                       text="TRAINING...")
@@ -818,6 +926,9 @@ class ForgeTrainingMixin:
             "Data dir": vision_dir,
             "Pairs": str(len(pairs)),
             "Encoder": preset,
+            "Unfreeze": (f"{unfreeze_text_layers} text layers"
+                         if unfreeze_text_layers > 0
+                         else "projection only (Stage-1)"),
             "Epochs": epochs,
             "LR": lr,
         }
@@ -827,6 +938,37 @@ class ForgeTrainingMixin:
 
         def _vision_train():
             losses: list[float] = []
+            # V-4: heartbeat for silent-kill / OOM detection.
+            import os as _os_hb
+            import json as _json_hb
+            import datetime as _dt_hb
+            _hb_path = Path("logs") / "training_heartbeat.json"
+            _hb_path.parent.mkdir(exist_ok=True)
+            _safe_name = Path(student_path).stem
+
+            def _write_hb(phase="data_load", step=None,
+                          loss=None, status="running"):
+                """Write heartbeat so silent kills are detectable."""
+                try:
+                    hb = {
+                        "pid": _os_hb.getpid(),
+                        "status": status,
+                        "model": _safe_name,
+                        "phase": phase,
+                        "timestamp": _dt_hb.datetime.now()
+                            .isoformat(timespec="seconds"),
+                    }
+                    if step is not None:
+                        hb["step"] = step
+                    if loss is not None:
+                        hb["loss"] = round(float(loss), 4)
+                    _hb_path.write_text(
+                        _json_hb.dumps(hb, indent=2),
+                        encoding="utf-8")
+                except Exception:
+                    pass  # never crash on heartbeat
+
+            _write_hb("data_load")
             try:
                 import torch
                 from enigma_engine.core.model import Enigma
@@ -865,7 +1007,15 @@ class ForgeTrainingMixin:
                 model.load_state_dict(state_dict, strict=False)
                 model = model.to(device)
 
-                tokenizer = get_tokenizer("auto")
+                _bpe_path = MODELS_DIR / "tokenizer.json"
+                if _bpe_path.exists():
+                    try:
+                        from enigma_engine.core.bpe_tokenizer import BPETokenizer
+                        tokenizer = BPETokenizer(_bpe_path)
+                    except Exception:
+                        tokenizer = get_tokenizer("auto")
+                else:
+                    tokenizer = get_tokenizer("auto")
                 self._log(
                     f"Tokenizer: {type(tokenizer).__name__} "
                     f"(vocab {tokenizer.vocab_size})")
@@ -894,7 +1044,7 @@ class ForgeTrainingMixin:
                     max_grad_accumulation=forge_params["max_grad_accumulation"],
                     use_gradient_checkpointing=forge_params["use_gradient_checkpointing"],
                     use_sequence_packing=True,
-                    ce_chunk_size=4096,
+                    ce_chunk_size=forge_params["ce_chunk_size"],
                     use_compile=True,
                     rolling_best_k=forge_params["rolling_best_k"],
                     general_mix_ratio=forge_params["general_mix_ratio"],
@@ -919,11 +1069,15 @@ class ForgeTrainingMixin:
                     if now - _last_vis_t[0] >= 1.0:
                         self._update_forge_progress(pct, msg)
                         _last_vis_t[0] = now
+                        # V-4: piggyback heartbeat on the same throttle.
+                        _write_hb("training", step=pct)
 
                 def on_epoch(epoch, loss):
                     if not self.training_active:
                         raise KeyboardInterrupt("Stopped")
                     losses.append(loss)
+                    # V-4: per-epoch heartbeat with step + loss.
+                    _write_hb("training", step=epoch, loss=loss)
                     pct = int(epoch / epochs * 100)
                     self._update_forge_progress(
                         pct, f"Epoch {epoch}/{epochs}")
@@ -950,9 +1104,46 @@ class ForgeTrainingMixin:
                 trainer.on_epoch_complete = on_epoch
 
                 self._log("Training vision encoder...\n")
+                self._active_trainer = trainer
+
+                # V-6b: honor train_config.val_split for vision training.
+                # train_vision() backend gained val_data in V-6 (Pass 156g);
+                # plumb the GUI-controlled fraction through here. Small
+                # datasets fall back to no-val gracefully (need >=2 pairs
+                # to leave at least one each side).
+                #
+                # Pass 156g audit (Bug A): seed the shuffle from
+                # train_config.seed when set so the held-out partition
+                # is reproducible across runs. Without this, checkpoint
+                # resume compares val_loss against a baseline computed
+                # on a *different* val partition — the comparison is
+                # noise. Falls back to an unseeded local Random when no
+                # seed is configured (matches train_vision()'s own
+                # per-epoch shuffle policy).
+                val_split_frac = float(
+                    getattr(train_config, "val_split", 0.0) or 0.0)
+                val_pairs_data = None
+                train_pairs_data = vision_data
+                if val_split_frac > 0 and len(vision_data) >= 2:
+                    seed = getattr(train_config, "seed", None)
+                    rng = random.Random(seed) if seed is not None else random.Random()
+                    _shuffled = list(vision_data)
+                    rng.shuffle(_shuffled)
+                    n_val = max(1, int(len(_shuffled) * val_split_frac))
+                    n_val = min(n_val, len(_shuffled) - 1)
+                    val_pairs_data = _shuffled[:n_val]
+                    train_pairs_data = _shuffled[n_val:]
+                    self._log(
+                        f"Vision split: {len(train_pairs_data)} train / "
+                        f"{len(val_pairs_data)} val "
+                        f"(val_split={val_split_frac:.2f}, "
+                        f"seed={seed})\n")
+
                 state = trainer.train_vision(
                     vision_encoder=v_encoder,
-                    data=vision_data)
+                    data=train_pairs_data,
+                    val_data=val_pairs_data,
+                    unfreeze_text_layers=unfreeze_text_layers)
 
                 # Save model with vision projection weights
                 from enigma_engine.core.safe_save import atomic_torch_save
@@ -983,22 +1174,47 @@ class ForgeTrainingMixin:
                     self._display_loss_curve(losses)
                 self.after(0, self._refresh_models)
                 self._notify_training_complete()
+                # V-4: clean exit — heartbeat marked complete.
+                _write_hb("training", step=state.epoch,
+                          loss=state.best_loss, status="complete")
 
             except KeyboardInterrupt:
                 self._log("\n--- VISION TRAINING STOPPED ---")
                 if losses:
                     self._display_loss_curve(losses)
+                # V-4: user stop — heartbeat marked stopped.
+                _write_hb("training", status="stopped")
+            except RuntimeError as exc:
+                # V-4 audit fix: split RuntimeError from generic
+                # Exception so OOM-friendly user advice does not fire
+                # on PIL/NumPy errors that happen to mention 'memory'.
+                # Taxonomy matches gui_forge_new_modes.py reference.
+                import traceback
+                tb = traceback.format_exc()
+                msg = str(exc).lower()
+                if "out of memory" in msg or "cuda" in msg:
+                    _write_hb("training", status="crashed_oom")
+                    self._log(
+                        f"\n[!] GPU out of memory: {exc}\n"
+                        "    Try: smaller vision encoder preset, "
+                        "fewer epochs, or smaller image size.")
+                else:
+                    _write_hb("training", status="crashed")
+                    self._log(f"\n[!] Vision training failed: {exc}")
+                self._log(tb)
             except Exception as exc:
                 self._log(f"\n[!] Vision training failed: {exc}")
                 import traceback
                 self._log(traceback.format_exc())
+                _write_hb("training", status="crashed")
             finally:
+                self._active_trainer = None
                 self.training_active = False
                 self._reset_forge_progress()
                 self.after(0, lambda: self.solo_train_btn.configure(
                     state="normal", text="TRAIN"))
                 self.after(0, lambda: self.stop_train_btn.configure(
-                    state="disabled"))
+                    state="disabled", text="STOP"))
                 self.after(0, lambda: self.status_bar.set_left(
                     "\u26a1 READY"))
 
@@ -1137,7 +1353,15 @@ class ForgeTrainingMixin:
                 if sp.is_dir():
                     tokenizer = _load_hf_tokenizer(sp, self._log)
                 if tokenizer is None:
-                    tokenizer = get_tokenizer("auto")
+                    _bpe_path = MODELS_DIR / "tokenizer.json"
+                    if _bpe_path.exists():
+                        try:
+                            from enigma_engine.core.bpe_tokenizer import BPETokenizer
+                            tokenizer = BPETokenizer(_bpe_path)
+                        except Exception:
+                            tokenizer = get_tokenizer("auto")
+                    else:
+                        tokenizer = get_tokenizer("auto")
                 pc = sum(p.numel() for p in model.parameters())
                 self._log(f"Params  : {pc:,}")
 
@@ -1190,6 +1414,7 @@ class ForgeTrainingMixin:
 
                     lora_trainer.on_epoch_complete = on_epoch
                     self._log("Training LoRA adapters...\n")
+                    self._active_trainer = lora_trainer
                     lora_trainer.train(text)
 
                     # Save adapter weights alongside model
@@ -1236,7 +1461,7 @@ class ForgeTrainingMixin:
                         max_grad_accumulation=forge_params["max_grad_accumulation"],
                         use_gradient_checkpointing=forge_params["use_gradient_checkpointing"],
                         use_sequence_packing=True,
-                        ce_chunk_size=4096,
+                        ce_chunk_size=forge_params["ce_chunk_size"],
                         use_compile=True,
                         rolling_best_k=forge_params["rolling_best_k"],
                         general_mix_ratio=forge_params["general_mix_ratio"],
@@ -1274,6 +1499,7 @@ class ForgeTrainingMixin:
                     trainer.on_epoch_complete = on_epoch
 
                     self._log("Training (partial freeze)...\n")
+                    self._active_trainer = trainer
                     state = trainer.train(text)
 
                     # Log evaluation results if available
@@ -1335,12 +1561,13 @@ class ForgeTrainingMixin:
                 import traceback
                 self._log(traceback.format_exc())
             finally:
+                self._active_trainer = None
                 self.training_active = False
                 self._reset_forge_progress()
                 self.after(0, lambda: self.solo_train_btn.configure(
                     state="normal", text="TRAIN"))
                 self.after(0, lambda: self.stop_train_btn.configure(
-                    state="disabled"))
+                    state="disabled", text="STOP"))
                 self.after(0, lambda: self.status_bar.set_left(
                     "\u26a1 READY"))
 

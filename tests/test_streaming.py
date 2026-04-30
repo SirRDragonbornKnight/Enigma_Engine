@@ -1,9 +1,7 @@
 """Tests for streaming system: TokenBuffer, StreamingResponse, TokenStreamer, CallbackStreamer."""
 import sys
-import time
 from pathlib import Path
 
-import pytest
 
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -322,7 +320,7 @@ class TestTokenStreamer:
         streamer = TokenStreamer()
         resp = streamer.stream(bad_gen())
         # Consume to trigger the error
-        text = resp.get_text()
+        resp.get_text()
         assert resp.has_error
 
 
@@ -404,3 +402,25 @@ class TestStreamEvent:
         expected = {"token", "chunk", "start", "end", "error", "metadata"}
         actual = {e.value for e in StreamEvent}
         assert expected == actual
+
+
+class TestAsyncQueueUnbounded:
+    """S825: Async queue must be unbounded to prevent token drops."""
+
+    def test_async_queue_maxsize_zero(self):
+        """StreamResponse.__aiter__ creates queue with maxsize=0 (unbounded).
+
+        Structural test — async iteration requires running event loop.
+        Verifies the queue is created unbounded, not capped.
+        """
+        import inspect
+        from enigma_engine.core.streaming import StreamingResponse
+        src = inspect.getsource(StreamingResponse.__aiter__)
+        assert "maxsize=0" in src, (
+            "Async queue must use maxsize=0 (unbounded) to prevent "
+            "token drops under backpressure"
+        )
+        assert "maxsize=1000" not in src, (
+            "Old maxsize=1000 cap still present — tokens can be "
+            "silently dropped"
+        )

@@ -284,7 +284,9 @@ _CONFIG_TYPES: dict[str, type] = {}
 
 def _build_type_map() -> None:
     """Populate _CONFIG_TYPES from the current CONFIG defaults."""
-    for key, value in CONFIG.items():
+    # Use dict.items() to bypass _LazyConfig proxy — this may be
+    # called during initialization while _init_lock is held.
+    for key, value in dict.items(CONFIG):
         if value is None:
             continue
         if isinstance(value, bool):
@@ -359,7 +361,9 @@ def _load_user_config() -> None:
                     logger.warning(f"Config in {path} is not a dictionary, skipping")
                     continue
                 user_config = _validate_config_types(user_config)
-                CONFIG.update(user_config)
+                # Bypass _LazyConfig.update() to avoid deadlock —
+                # we are called from inside _init_lock.
+                dict.update(CONFIG, user_config)
                 logger.info(f"Loaded config from {path}")
                 return
             except json.JSONDecodeError as e:
@@ -409,7 +413,8 @@ def _load_env_config() -> None:
                 except ValueError:
                     logger.warning(f"Invalid port value {value}, using default")
                     continue
-            CONFIG[config_key] = value
+            # Bypass _LazyConfig proxy — called from inside _init_lock.
+            dict.__setitem__(CONFIG, config_key, value)
 
 
 # =============================================================================
@@ -489,13 +494,19 @@ def _ensure_initialized() -> None:
     with _init_lock:
         if _initialized:
             return
+
+        # Use dict.__getitem__ to bypass _LazyConfig proxy —
+        # the proxy calls _ensure_initialized() which would deadlock
+        # on the non-reentrant _init_lock we already hold.
+        _raw_get = dict.__getitem__
+        for dir_key in ["data_dir", "models_dir", "memory_dir", "logs_dir"]:
+            try:
+                Path(_raw_get(CONFIG, dir_key)).mkdir(parents=True, exist_ok=True)
+            except (OSError, PermissionError) as e:
+                logger.warning(
+                    f"Could not create directory "
+                    f"{_raw_get(CONFIG, dir_key)}: {e}")
+
+        _load_user_config()
+        _load_env_config()
         _initialized = True
-
-    for dir_key in ["data_dir", "models_dir", "memory_dir", "logs_dir"]:
-        try:
-            Path(CONFIG[dir_key]).mkdir(parents=True, exist_ok=True)
-        except (OSError, PermissionError) as e:
-            logger.warning(f"Could not create directory {CONFIG[dir_key]}: {e}")
-
-    _load_user_config()
-    _load_env_config()

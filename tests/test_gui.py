@@ -105,6 +105,1689 @@ class TestScanners:
             assert "path" in f
             assert "size_kb" in f
 
+    # ── D-11b (Pass 156i9): default training file picks reasoning corpus ──
+
+    def test_pick_default_prefers_combined_finetune_when_present(self):
+        """When `data/finetune/combined_finetune.txt` is on disk, the
+        FORGE training-data default should pick it over the placeholder
+        `data/training.txt`. Closes D-11b — Pass 156i8 ships the
+        reasoning corpus end-to-end, this passes the user's eyes onto
+        it without manual file-tree navigation."""
+        from enigma_engine.gui.scanners import _pick_default_training_file
+        files = [
+            {"name": "training.txt",
+             "path": "data/training.txt", "size_kb": 1.0},
+            {"name": "finetune/combined_finetune.txt",
+             "path": "data/finetune/combined_finetune.txt",
+             "size_kb": 60000.0},
+        ]
+        chosen = _pick_default_training_file(files)
+        assert chosen == "data/finetune/combined_finetune.txt"
+
+    def test_pick_default_falls_back_to_first_when_no_combined(self):
+        """Without a finetune corpus on disk, return the first scanned
+        file (legacy behaviour)."""
+        from enigma_engine.gui.scanners import _pick_default_training_file
+        files = [
+            {"name": "training.txt",
+             "path": "data/training.txt", "size_kb": 1.0},
+            {"name": "smoke.txt",
+             "path": "data/smoke.txt", "size_kb": 0.5},
+        ]
+        assert _pick_default_training_file(files) == "data/training.txt"
+
+    def test_pick_default_empty_list_returns_empty_string(self):
+        """No training files → empty string (matches the legacy
+        `train_data_var` initial-value contract: empty if nothing
+        found)."""
+        from enigma_engine.gui.scanners import _pick_default_training_file
+        assert _pick_default_training_file([]) == ""
+
+    def test_pick_default_combined_in_arbitrary_position(self):
+        """Helper does not depend on glob order — finds the corpus
+        wherever it appears in the list."""
+        from enigma_engine.gui.scanners import _pick_default_training_file
+        files = [
+            {"name": "smoke.txt",
+             "path": "data/smoke.txt", "size_kb": 0.5},
+            {"name": "training.txt",
+             "path": "data/training.txt", "size_kb": 1.0},
+            {"name": "finetune/combined_finetune.txt",
+             "path": "data/finetune/combined_finetune.txt",
+             "size_kb": 60000.0},
+            {"name": "pretrain/combined.txt",
+             "path": "data/pretrain/combined.txt",
+             "size_kb": 100000.0},
+        ]
+        chosen = _pick_default_training_file(files)
+        assert chosen == "data/finetune/combined_finetune.txt"
+
+    # ── D-11c (Pass 156l): generalised picker for other FORGE pickers ──
+
+    def test_pick_first_match_first_tail_wins_over_later_tails(self):
+        """`_pick_first_match` is preference-ordered — the first tail
+        in the list wins even if a later tail also matches a file in
+        the directory. Adversarial ordering: the SECOND tail's match
+        appears EARLIER in `files` than the FIRST tail's match, so a
+        naive `for f in files` outer loop would return the wrong one.
+        This proves the helper is preference-first, not file-order-
+        first."""
+        from enigma_engine.gui.scanners import _pick_first_match
+        files = [
+            {"name": "dpo_pairs.jsonl",
+             "path": "data/finetune/dpo_pairs.jsonl",
+             "size_kb": 5.0},
+            {"name": "combined.jsonl",
+             "path": "data/dpo/combined.jsonl",
+             "size_kb": 10.0},
+        ]
+        # First tail = dpo/combined.jsonl. Even though dpo_pairs is
+        # listed first, dpo/combined wins on preference order.
+        chosen = _pick_first_match(
+            files,
+            ["dpo/combined.jsonl", "finetune/dpo_pairs.jsonl"])
+        assert chosen == "data/dpo/combined.jsonl"
+
+    def test_pick_default_dpo_data_file_prefers_dpo_combined(self):
+        """When `data/dpo/combined.jsonl` is present, the DPO/APO pair-
+        data picker should default to it. Closes D-11c — same UX win
+        as D-11b but for the alignment training data rather than SFT."""
+        from enigma_engine.gui.scanners import (
+            _pick_default_dpo_data_file)
+        files = [
+            {"name": "dpo_smoke.jsonl",
+             "path": "data/dpo_smoke.jsonl", "size_kb": 1.0},
+            {"name": "combined.jsonl",
+             "path": "data/dpo/combined.jsonl", "size_kb": 50.0},
+        ]
+        assert _pick_default_dpo_data_file(files) == (
+            "data/dpo/combined.jsonl")
+
+    def test_pick_default_train_data_for_mode_routes_preference_modes_to_dpo(self):
+        """D-11c-DPO (Pass 156q): the mode-aware default helper must
+        route preference-pair modes (DPO/APO/SimPO/ORPO/GRPO/ReMax/
+        RLHF/Self-Play) to the DPO picker, and route SFT modes
+        (Basic/LoRA) to the SFT picker. Catches regression where
+        someone removes a mode from `_PREFERENCE_MODES` and the GUI
+        silently surfaces SFT data when the user picked APO."""
+        from enigma_engine.gui.scanners import (
+            _pick_default_train_data_for_mode)
+        files = [
+            {"name": "combined_finetune.txt",
+             "path": "data/finetune/combined_finetune.txt",
+             "size_kb": 5000.0},
+            {"name": "combined.jsonl",
+             "path": "data/dpo/combined.jsonl",
+             "size_kb": 50.0},
+        ]
+        # Preference-pair modes must pick the DPO file.
+        for mode in ("RLHF", "Self-Play", "GRPO", "ReMax",
+                     "SimPO", "ORPO", "APO"):
+            assert _pick_default_train_data_for_mode(files, mode) == (
+                "data/dpo/combined.jsonl"), (
+                f"mode {mode!r} should route to DPO default")
+        # SFT modes must pick the fine-tune corpus.
+        for mode in ("Basic", "LoRA", "Distill", "AI-Guided",
+                     "Dialogue", "Image", "Pre-Train"):
+            assert _pick_default_train_data_for_mode(files, mode) == (
+                "data/finetune/combined_finetune.txt"), (
+                f"mode {mode!r} should route to SFT default")
+
+    def test_pick_default_pretrain_file_prefers_combined_pretrain(self):
+        """When `data/pretrain/combined.txt` is present (output of
+        `collect_pretraining_data.py --combine-only`), the pre-training
+        picker should default to it. D-11c."""
+        from enigma_engine.gui.scanners import (
+            _pick_default_pretrain_file)
+        files = [
+            {"name": "scratch.txt",
+             "path": "data/scratch.txt", "size_kb": 1.0},
+            {"name": "pretrain/combined.txt",
+             "path": "data/pretrain/combined.txt",
+             "size_kb": 90000.0},
+        ]
+        assert _pick_default_pretrain_file(files) == (
+            "data/pretrain/combined.txt")
+
+    def test_forge_pretrain_data_var_uses_smart_default(self):
+        """Pass 156m: FORGE pretrain `pretrain_data_var` must be
+        initialised via `_pick_default_pretrain_file(...)`, not as
+        empty `value=""`. Catches regression where someone reverts
+        the StringVar to a hardcoded empty default and the smart
+        helper becomes orphaned infrastructure."""
+        import inspect
+
+        from enigma_engine.gui import gui_pages_forge
+        src = inspect.getsource(gui_pages_forge)
+        # Wiring assertion: pretrain_data_var construction must
+        # call the helper, not hardcode "".
+        assert "_pick_default_pretrain_file" in src, (
+            "pretrain picker not wired to smart-default helper")
+        assert 'self.pretrain_data_var = ctk.StringVar(value="")' not in src, (
+            "pretrain_data_var still defaults to empty string; "
+            "smart helper is orphaned")
+
+    def test_resolve_anchor_path_user_override_returned_as_is(
+            self, tmp_path):
+        """Continuous-3b (Pass 156o): a non-empty saved path returns
+        Path(saved) as-is, even if missing — the GUI status label
+        shows 'file missing' rather than silently swapping in the
+        default."""
+        from enigma_engine.gui.scanners import _resolve_anchor_path
+        custom = tmp_path / "my_anchor.jsonl"
+        result = _resolve_anchor_path(str(custom))
+        assert result == custom
+
+    def test_resolve_anchor_path_empty_returns_default_when_present(
+            self, tmp_path, monkeypatch):
+        """Empty saved → repo default `data/anchor_examples.jsonl`
+        when that file exists."""
+        from enigma_engine.gui import scanners
+        fake_default = tmp_path / "anchor_examples.jsonl"
+        fake_default.write_text("{}\n", encoding="utf-8")
+        monkeypatch.setattr(scanners, "DATA_DIR", tmp_path)
+        assert scanners._resolve_anchor_path("") == fake_default
+
+    def test_resolve_anchor_path_empty_returns_none_when_missing(
+            self, tmp_path, monkeypatch):
+        """Empty saved + no default file → None (recent-only replay,
+        no log noise)."""
+        from enigma_engine.gui import scanners
+        monkeypatch.setattr(scanners, "DATA_DIR", tmp_path)
+        assert scanners._resolve_anchor_path("") is None
+
+    def test_resolve_anchor_path_none_arg_treated_as_empty(
+            self, tmp_path, monkeypatch):
+        """Saved=None should behave the same as saved=''."""
+        from enigma_engine.gui import scanners
+        monkeypatch.setattr(scanners, "DATA_DIR", tmp_path)
+        assert scanners._resolve_anchor_path(None) is None
+
+    def test_config_page_wires_anchor_widget(self):
+        """Continuous-3b (Pass 156o): the CONFIG page must construct
+        the anchor widget — calls `_resolve_anchor_path`, builds an
+        anchor StringVar, and exposes browse / reset handlers."""
+        import inspect
+        from enigma_engine.gui import gui_pages_config
+        src = inspect.getsource(gui_pages_config)
+        assert "_resolve_anchor_path" in src, (
+            "config page does not call _resolve_anchor_path")
+        assert "_anchor_path_var" in src, (
+            "config page does not build _anchor_path_var")
+        assert "_browse_anchor_file" in src, (
+            "config page is missing browse handler")
+        assert "_reset_anchor_file" in src, (
+            "config page is missing reset handler")
+
+    def test_desktop_forwards_anchor_path_to_router(self):
+        """Continuous-3b (Pass 156o): the desktop launcher must pass
+        the resolved anchor path into `ModRouter(...)` so the
+        BackgroundTrainer rehearsal layer honours the user's saved
+        override (or repo default when blank)."""
+        import inspect
+        from enigma_engine.gui import desktop
+        src = inspect.getsource(desktop)
+        assert "anchor_data_path=" in src, (
+            "desktop does not forward anchor_data_path kwarg")
+        assert "_resolve_anchor_path" in src, (
+            "desktop does not resolve the saved anchor override")
+
+    def test_forge_lora_mode_card_present(self):
+        """LoRA-1 (Pass 156p): explicit `LoRA` foundation mode card
+        must exist in the FORGE training-method list so users can
+        force adapter training on any model size (not just >7B
+        auto-detected by Basic mode)."""
+        import inspect
+        from enigma_engine.gui import gui_pages_forge
+        src = inspect.getsource(gui_pages_forge)
+        assert '("LoRA",' in src, (
+            "LoRA mode card not in foundation_modes list")
+
+    def test_forge_lora_dispatcher_calls_lora_training(self):
+        """LoRA-1 (Pass 156p): selecting `LoRA` mode must dispatch
+        directly to `_start_lora_training()`. Pairs with the mode-
+        card test to gate end-to-end wiring of the new mode."""
+        import inspect
+        from enigma_engine.gui import gui_forge
+        src = inspect.getsource(gui_forge)
+        # The dispatcher branch.
+        assert 'mode_name == "LoRA"' in src, (
+            "LoRA dispatch branch missing")
+        # Description entry for status/log labels.
+        assert '"LoRA": (' in src, (
+            "LoRA description missing from _TRAINING_MODE_DESCRIPTIONS")
+        # Display→key registry.
+        assert '"LoRA": "LoRA"' in src, (
+            "LoRA missing from _MODE_DISPLAY_TO_KEY")
+
+    def test_forge_mode_change_swaps_train_data_default(self):
+        """D-11c-DPO (Pass 156q): `_on_training_mode_changed` must call
+        `_pick_default_train_data_for_mode` and swap the picker default
+        only when the user has not customised the path. Catches
+        regression where someone removes the swap logic and switching
+        from Basic to APO leaves the irrelevant SFT default in the
+        picker."""
+        import inspect
+        from enigma_engine.gui import gui_forge
+        src = inspect.getsource(gui_forge.ForgeMixin._on_training_mode_changed)
+        assert "_pick_default_train_data_for_mode" in src, (
+            "Mode-change handler does not consult the mode-aware default helper")
+        assert "_train_data_smart_default" in src, (
+            "Mode-change handler does not gate swap on the smart-default tracker")
+
+    def test_forge_user_browse_clears_smart_default_tracker(self):
+        """D-11c-DPO (Pass 156q): when the user clicks Browse to pick a
+        training file, the smart-default tracker must be cleared so a
+        later mode change does not silently overwrite the user choice.
+        Pairs with the mode-change test \u2014 together they prove the swap
+        only fires on default-state pickers."""
+        import inspect
+        from enigma_engine.gui import gui_forge
+        browse_src = inspect.getsource(
+            gui_forge.ForgeMixin._browse_training_data)
+        select_src = inspect.getsource(
+            gui_forge.ForgeMixin._on_data_selected)
+        assert "_train_data_smart_default = None" in browse_src, (
+            "Browse handler does not clear the smart-default tracker")
+        assert "_train_data_smart_default = None" in select_src, (
+            "Quick-select handler does not clear the smart-default tracker")
+
+    def test_forge_image_mode_exposes_unfreeze_text_layers(self):
+        """Code-6b (Pass 156r): the Image foundation mode must expose
+        an `unfreeze_text_layers` numeric input so users can switch
+        between LLaVA Stage-1 (projection-only, default 0) and Stage-2
+        (last N text transformer layers also fine-tuned). Catches
+        regression where the widget is removed but the trainer still
+        accepts the kwarg \u2014 leaving Stage-2 unreachable from the GUI."""
+        import inspect
+        from enigma_engine.gui import gui_pages_forge
+        src = inspect.getsource(gui_pages_forge)
+        assert "forge_vision_unfreeze_var" in src, (
+            "Unfreeze-text-layers widget missing from Image mode")
+
+    def test_forge_vision_training_forwards_unfreeze_to_trainer(self):
+        """Code-6b (Pass 156r): `_start_vision_training` must read the
+        `forge_vision_unfreeze_var` widget and forward the parsed value
+        to `Trainer.train_vision(unfreeze_text_layers=...)`. The literal
+        kwarg gate catches the regression where someone reads the
+        widget into a local but drops it from the call \u2014 the GUI knob\n        would silently revert to the default 0 (Stage-1) for everyone."""
+        import inspect
+        from enigma_engine.gui import gui_forge_training
+        src = inspect.getsource(
+            gui_forge_training.ForgeTrainingMixin._start_vision_training)
+        assert "forge_vision_unfreeze_var" in src, (
+            "Vision training does not read the unfreeze widget")
+        assert "unfreeze_text_layers=unfreeze_text_layers" in src, (
+            "Vision training does not forward unfreeze_text_layers "
+            "kwarg to train_vision()")
+
+    # =========================================================================
+    # LoRA-1b (Pass 156s): adapter scanner + engine apply path
+    # =========================================================================
+
+    def test_scan_lora_adapters_finds_peft_directory(self, tmp_path,
+                                                     monkeypatch):
+        """A directory with `adapter_config.json` in checkpoints/ or
+        lora_adapters/ should be picked up; metadata fields populated
+        from the JSON."""
+        from enigma_engine.gui import scanners as sc
+        ckpt = tmp_path / "checkpoints"
+        ckpt.mkdir()
+        adapter = ckpt / "coding_v2"
+        adapter.mkdir()
+        (adapter / "adapter_config.json").write_text(json.dumps({
+            "base_model_name_or_path": "models/enigma_small.pth",
+            "r": 16,
+            "lora_alpha": 32,
+            "target_modules": ["q_proj", "v_proj"],
+        }), encoding="utf-8")
+        (adapter / "adapter_model.safetensors").write_bytes(b"x" * 1024)
+
+        monkeypatch.setattr(sc, "MODELS_DIR", tmp_path)
+        result = sc.scan_lora_adapters()
+        assert len(result) == 1
+        entry = result[0]
+        assert entry["name"] == "coding_v2"
+        assert entry["rank"] == 16
+        assert entry["alpha"] == 32
+        assert entry["target_modules"] == ["q_proj", "v_proj"]
+
+    def test_scan_lora_adapters_filters_by_base_model_stem(
+            self, tmp_path, monkeypatch):
+        """When `base_model_path` is given, only adapters whose
+        `base_model_name_or_path` stem matches are returned. Catches
+        the regression where a coding-base adapter would surface in
+        the dropdown for a math-base load."""
+        from enigma_engine.gui import scanners as sc
+        ckpt = tmp_path / "checkpoints"
+        ckpt.mkdir()
+        for name, base in [("matches", "models/enigma_small.pth"),
+                           ("foreign", "models/other_model.pth")]:
+            d = ckpt / name
+            d.mkdir()
+            (d / "adapter_config.json").write_text(json.dumps({
+                "base_model_name_or_path": base,
+                "r": 8, "lora_alpha": 16,
+                "target_modules": ["q_proj"],
+            }), encoding="utf-8")
+
+        monkeypatch.setattr(sc, "MODELS_DIR", tmp_path)
+        result = sc.scan_lora_adapters(
+            base_model_path="models/enigma_small.pth")
+        assert len(result) == 1
+        assert result[0]["name"] == "matches"
+
+    def test_scan_lora_adapters_skips_directory_without_config(
+            self, tmp_path, monkeypatch):
+        """Directories under checkpoints/ without `adapter_config.json`
+        (e.g. plain training checkpoints) must NOT appear in the
+        adapter list — they are not adapters."""
+        from enigma_engine.gui import scanners as sc
+        ckpt = tmp_path / "checkpoints"
+        ckpt.mkdir()
+        (ckpt / "regular_training_run").mkdir()
+        (ckpt / "regular_training_run" / "model.pth").write_bytes(b"x")
+
+        monkeypatch.setattr(sc, "MODELS_DIR", tmp_path)
+        assert sc.scan_lora_adapters() == []
+
+    def test_engine_exposes_apply_and_clear_adapter(self):
+        """LoRA-1b foundation: `EnigmaEngine` must expose the runtime
+        adapter API. Structural test (engine __init__ requires GPU/
+        weights, can't instantiate in CI). Catches accidental method
+        renames or removals that would silently revert the chat layer
+        to base-only."""
+        import inspect
+        from enigma_engine.core.inference import EnigmaEngine
+        assert hasattr(EnigmaEngine, "apply_adapter"), (
+            "EnigmaEngine missing apply_adapter")
+        assert hasattr(EnigmaEngine, "clear_adapter"), (
+            "EnigmaEngine missing clear_adapter")
+        apply_src = inspect.getsource(EnigmaEngine.apply_adapter)
+        assert "PeftModel.from_pretrained" in apply_src, (
+            "apply_adapter does not wrap with PeftModel — would be a "
+            "silent no-op on a vanilla base model")
+        assert "clear_kv_cache" in apply_src, (
+            "apply_adapter does not clear KV cache — stale cache "
+            "from base weights would corrupt next generation")
+
+        # Pass 156s2 (audit-fix): clear_adapter must use the imperative
+        # `disable_adapters` (plural). The singular `disable_adapter`
+        # is a @contextmanager in PEFT — calling it bare returns the
+        # CM and discards it, leaving the adapter active. Catches a
+        # regression that re-introduces the broken fallback chain.
+        clear_src = inspect.getsource(EnigmaEngine.clear_adapter)
+        assert "disable_adapters" in clear_src, (
+            "clear_adapter does not call disable_adapters() — "
+            "adapter would stay active after 'clear'")
+        assert "disable_adapter(" not in clear_src.replace(
+            "disable_adapters(", ""), (
+            "clear_adapter calls singular disable_adapter() — that is "
+            "a context manager, calling it bare is a silent no-op")
+
+        # Pass 156s2 (audit-fix): apply_adapter docstring must not
+        # promise a base-mismatch RuntimeError that the body never
+        # raises. The check lives upstream in scan_lora_adapters.
+        assert "RuntimeError: The adapter's recorded base" not in (
+            EnigmaEngine.apply_adapter.__doc__ or ""), (
+            "apply_adapter docstring promises a base-mismatch "
+            "RuntimeError that the code never raises")
+
+    def test_save_adapter_writes_peft_directory_only(self):
+        """LoRA-1b foundation: `LoraTrainer.save_adapter` must always
+        emit a PEFT directory; the manual-fallback `.pth` save path
+        was deleted in Pass 156s. Structural gate: the deleted
+        ``param.requires_grad`` extraction loop must NOT reappear.
+        Without this, a regression that re-introduces the manual save
+        would silently produce metadata-less files that the chat
+        engine cannot apply."""
+        import inspect
+        from enigma_engine.core.lora_utils import LoraTrainer
+        src = inspect.getsource(LoraTrainer.save_adapter)
+        assert "save_pretrained" in src, (
+            "save_adapter does not call save_pretrained")
+        assert "param.requires_grad" not in src, (
+            "Manual-fallback .pth save path resurrected — adapter "
+            "files would lack rank/alpha/target_modules metadata")
+        assert "atomic_torch_save" not in src, (
+            "save_adapter regressed to atomic_torch_save fallback")
+
+    def test_gui_logic_wires_adapter_auto_restore(self):
+        """LoRA-1b foundation: `_on_model_loaded` must call
+        `_restore_lora_adapter_for_base` so the user's previous
+        adapter choice survives a model reload. Structural gate
+        catches the regression where the call is removed but the
+        helper still exists (silent loss of adapter persistence)."""
+        import inspect
+        from enigma_engine.gui import gui_logic
+        # The auto-restore lives inside the on-load callback on the
+        # composed LogicMixin (LogicChatMixin + LogicMediaMixin).
+        src = inspect.getsource(gui_logic.LogicMixin._on_model_loaded)
+        assert "_restore_lora_adapter_for_base" in src, (
+            "Model-load callback does not auto-restore adapter — "
+            "user's saved adapter choice will be silently dropped")
+
+    # ================================================================
+    # Pass 156t — LoRA-1b UX surfaces
+    # ================================================================
+
+    def test_models_page_renders_lora_section_per_card(self):
+        """LoRA-1b UX: every model card calls
+        `_build_lora_section_for_card`. Structural gate — the GUI
+        cannot be instantiated in CI but the wiring must be present
+        in the card builder. Without this call, the user has no
+        surface to apply or clear adapters from the MODELS page."""
+        import inspect
+        from enigma_engine.gui import gui_pages
+        # _populate_model_cards must invoke the section builder.
+        src = inspect.getsource(
+            gui_pages.PagesMixin._populate_model_cards)
+        assert "_build_lora_section_for_card" in src, (
+            "MODELS-page card builder does not invoke the LoRA "
+            "section — user cannot apply adapters from the GUI")
+        # Section builder must call scan_lora_adapters with the
+        # model's path so per-base filtering kicks in (otherwise
+        # math-base adapters could leak onto coding-base cards).
+        section_src = inspect.getsource(
+            gui_pages.PagesMixin._build_lora_section_for_card)
+        assert "scan_lora_adapters" in section_src, (
+            "LoRA section does not call scan_lora_adapters — "
+            "would render an empty list")
+        assert "model[\"path\"]" in section_src or (
+                "model['path']" in section_src), (
+            "LoRA section does not pass model path to scanner — "
+            "would surface adapters for the wrong base")
+
+    def test_lora_apply_guards_against_inactive_base(self):
+        """LoRA-1b UX: clicking Apply on a card whose base is NOT
+        currently loaded must surface a chat hint instead of
+        attempting a cross-base apply (PEFT would raise on shape
+        mismatch, but the friendlier path is to tell the user to
+        load the base first). Structural gate on the load-first
+        check in `_on_lora_apply`."""
+        import inspect
+        from enigma_engine.gui import gui_pages
+        src = inspect.getsource(gui_pages.PagesMixin._on_lora_apply)
+        assert "model_path" in src, (
+            "_on_lora_apply does not check the active model_path — "
+            "would attempt to apply across mismatched bases")
+        assert "_set_chat_adapter" in src, (
+            "_on_lora_apply does not delegate to _set_chat_adapter "
+            "— would skip persistence and engine call")
+
+    def test_profile_adapter_field_drives_engine_apply(self):
+        """LoRA-1b UX: a profile with an `adapter` field must call
+        `engine.apply_adapter`; a profile with NO adapter (or empty
+        string / None) must call `engine.clear_adapter`. The clear
+        case is critical — switching to a profile that doesn't
+        specify an adapter must NOT silently inherit the previous
+        profile's adapter."""
+        from enigma_engine.core.ai_profile import (
+            AIProfile, apply_profile_to_engine,
+        )
+
+        class FakeEngine:
+            def __init__(self):
+                self.applied: list[str] = []
+                self.cleared: int = 0
+                self.system_prompt = ""
+                self.temperature = 0.0
+                self.top_p = 0.0
+                self.top_k = 0
+                self.max_tokens = 0
+
+            def apply_adapter(self, path):
+                self.applied.append(str(path))
+
+            def clear_adapter(self):
+                self.cleared += 1
+
+        # Profile with adapter → apply called.
+        eng = FakeEngine()
+        prof_with = AIProfile(name="P1", adapter="models/checkpoints/foo")
+        apply_profile_to_engine(prof_with, eng)
+        assert eng.applied == ["models/checkpoints/foo"]
+        assert eng.cleared == 0, (
+            "apply_profile_to_engine called clear_adapter when "
+            "profile pinned an adapter")
+
+        # Profile without adapter → clear called (boundary discipline).
+        eng2 = FakeEngine()
+        prof_without = AIProfile(name="P2")  # adapter defaults to None
+        apply_profile_to_engine(prof_without, eng2)
+        assert eng2.applied == []
+        assert eng2.cleared == 1, (
+            "apply_profile_to_engine did not clear adapter when "
+            "profile has no adapter field — silent inheritance bug")
+
+        # Empty-string adapter is also "no adapter" (treated as None).
+        eng3 = FakeEngine()
+        prof_empty = AIProfile(name="P3", adapter="")
+        apply_profile_to_engine(prof_empty, eng3)
+        assert eng3.applied == []
+        assert eng3.cleared == 1, (
+            "Empty adapter string did not trigger clear — should "
+            "behave the same as None per profile boundary discipline")
+
+    def test_profile_adapter_field_round_trips_through_dict(self):
+        """LoRA-1b UX: AIProfile.from_dict / to_dict must preserve
+        the `adapter` field. Without this round-trip, profile JSON
+        files cannot pin an adapter."""
+        from enigma_engine.core.ai_profile import AIProfile
+        prof = AIProfile(name="X", adapter="models/checkpoints/bar")
+        data = prof.to_dict()
+        assert data["adapter"] == "models/checkpoints/bar"
+        rebuilt = AIProfile.from_dict(data)
+        assert rebuilt.adapter == "models/checkpoints/bar"
+
+        # Old profile JSONs without the field must still parse.
+        old_data = {"name": "Old", "id": "old"}
+        old_prof = AIProfile.from_dict(old_data)
+        assert old_prof.adapter is None, (
+            "Old profiles without adapter field must default to "
+            "None for backward compatibility")
+
+    def test_legacy_lora_migration_moves_pth_files(self, tmp_path,
+                                                   monkeypatch):
+        """LoRA-1b UX: legacy `.pth` LoRA files must be moved to
+        `models/checkpoints/legacy_lora_pth/` with a NOTICE.txt.
+        Behavioural test on the migrate() function — exercises the
+        full move + notice + idempotence flow."""
+        import migrate_legacy_lora as mig
+
+        models_dir = tmp_path / "models"
+        (models_dir / "lora_adapters").mkdir(parents=True)
+        (models_dir / "checkpoints").mkdir(parents=True)
+
+        # Three legacy files: one in lora_adapters/, one matching
+        # *_lora.pth in checkpoints/, one un-matching in
+        # checkpoints/ (must NOT be moved).
+        loose = models_dir / "lora_adapters" / "old.pth"
+        loose.write_bytes(b"fake-weights-1")
+        named = models_dir / "checkpoints" / "model_v2_lora.pth"
+        named.write_bytes(b"fake-weights-2")
+        innocent = models_dir / "checkpoints" / "training_state.pth"
+        innocent.write_bytes(b"NOT-a-lora-file")
+
+        monkeypatch.setattr(mig, "MODELS_DIR", models_dir)
+        monkeypatch.setattr(
+            mig, "QUARANTINE_DIR",
+            models_dir / "checkpoints" / "legacy_lora_pth")
+
+        # Dry-run: nothing moved, files still in place.
+        result_dry = mig.migrate(apply=False)
+        assert len(result_dry["found"]) == 2, (
+            "Dry-run did not detect both legacy files (only "
+            "*_lora.pth in checkpoints/ + loose .pth in "
+            "lora_adapters/)")
+        assert loose.exists()
+        assert named.exists()
+        assert result_dry["moved"] == []
+
+        # Apply: both legacy files moved, innocent one untouched,
+        # NOTICE.txt written.
+        result = mig.migrate(apply=True)
+        assert len(result["moved"]) == 2
+        assert not loose.exists()
+        assert not named.exists()
+        assert innocent.exists(), (
+            "Migration moved a non-LoRA .pth file — would lose "
+            "training state")
+        quar = models_dir / "checkpoints" / "legacy_lora_pth"
+        assert (quar / "old.pth").exists()
+        assert (quar / "model_v2_lora.pth").exists()
+        notice = quar / "NOTICE.txt"
+        assert notice.exists()
+        notice_text = notice.read_text(encoding="utf-8")
+        assert "PEFT" in notice_text, (
+            "NOTICE.txt does not explain the PEFT-format change")
+
+        # Idempotence: re-running with --apply on the same tree is
+        # a no-op (no new files found, no moves).
+        result_again = mig.migrate(apply=True)
+        assert result_again["found"] == [], (
+            "Migration is not idempotent — second run found legacy "
+            "files that were already quarantined")
+
+    def test_legacy_lora_migration_handles_filename_collision(
+            self, tmp_path, monkeypatch):
+        """LoRA-1b UX: if a quarantine file with the same name
+        already exists (e.g. from a previous training run that was
+        already migrated), the second migration must not clobber it
+        — append a numeric suffix instead. Adversarial test on the
+        rename logic; without it a duplicate name silently overwrites
+        and we lose data."""
+        import migrate_legacy_lora as mig
+
+        models_dir = tmp_path / "models"
+        (models_dir / "lora_adapters").mkdir(parents=True)
+        quar = models_dir / "checkpoints" / "legacy_lora_pth"
+        quar.mkdir(parents=True)
+        # Pre-existing quarantine file with the same name.
+        (quar / "old.pth").write_bytes(b"PRE-EXISTING")
+        # New legacy file with the same basename in lora_adapters/.
+        new_loose = models_dir / "lora_adapters" / "old.pth"
+        new_loose.write_bytes(b"NEW-CONTENT")
+
+        monkeypatch.setattr(mig, "MODELS_DIR", models_dir)
+        monkeypatch.setattr(mig, "QUARANTINE_DIR", quar)
+
+        mig.migrate(apply=True)
+
+        # Original quarantine file untouched.
+        assert (quar / "old.pth").read_bytes() == b"PRE-EXISTING"
+        # New file landed under a suffixed name.
+        assert (quar / "old_1.pth").exists()
+        assert (quar / "old_1.pth").read_bytes() == b"NEW-CONTENT"
+
+    # ================================================================
+    # Pass 156u-A — LoRA stacking (engine + persistence)
+    # ================================================================
+
+    def test_engine_exposes_apply_adapter_stack(self):
+        """LoRA-1b stacking: `EnigmaEngine.apply_adapter_stack` must
+        merge multiple PEFT adapters via ``add_weighted_adapter``
+        (linear combination), set the merged stack as active, and
+        clear the KV cache. Structural gate — engine __init__ needs
+        weights, can't instantiate in CI."""
+        import inspect
+        from enigma_engine.core.inference import EnigmaEngine
+        assert hasattr(EnigmaEngine, "apply_adapter_stack"), (
+            "EnigmaEngine missing apply_adapter_stack — multi-LoRA "
+            "stacking entry point is absent")
+        src = inspect.getsource(EnigmaEngine.apply_adapter_stack)
+        assert "add_weighted_adapter" in src, (
+            "apply_adapter_stack does not call "
+            "model.add_weighted_adapter — would not actually merge "
+            "the adapters")
+        assert "set_adapter" in src, (
+            "apply_adapter_stack does not activate the merged stack "
+            "via set_adapter — silent no-op")
+        assert "clear_kv_cache" in src, (
+            "apply_adapter_stack does not clear KV cache — stale "
+            "cache from prior weights would corrupt next generation")
+        # Validation gates BEFORE any heavy work (no peft import yet).
+        assert "ValueError" in src or "raise" in src, (
+            "apply_adapter_stack does not raise on bad input — "
+            "would silently no-op or crash deep in PEFT")
+
+    def test_apply_adapter_stack_rejects_empty_list(self):
+        """LoRA-1b stacking: an empty adapter list is a programming
+        error from the caller — must raise ValueError BEFORE touching
+        ``self.model`` or importing peft. Behavioural test via unbound
+        call so we don't need a real EnigmaEngine instance."""
+        import pytest
+        from enigma_engine.core.inference import EnigmaEngine
+
+        class _FakeSelf:
+            """Minimal stand-in — if validation accidentally accesses
+            anything else, AttributeError makes the failure loud."""
+
+        with pytest.raises(ValueError, match="empty"):
+            EnigmaEngine.apply_adapter_stack(_FakeSelf(), [])
+
+    def test_apply_adapter_stack_rejects_non_finite_weight(
+            self, tmp_path):
+        """LoRA-1b stacking: NaN / Inf weights silently corrupt the
+        merged adapter. Must raise ValueError before
+        ``add_weighted_adapter`` is called."""
+        import math
+        import pytest
+        from enigma_engine.core.inference import EnigmaEngine
+
+        # Build a real-looking adapter dir so the path-existence
+        # check passes and we get to the weight validation.
+        ad = tmp_path / "ad"
+        ad.mkdir()
+        (ad / "adapter_config.json").write_text("{}")
+
+        class _FakeSelf:
+            pass
+
+        with pytest.raises(ValueError, match="finite|NaN|weight"):
+            EnigmaEngine.apply_adapter_stack(
+                _FakeSelf(), [(ad, math.nan)])
+        with pytest.raises(ValueError, match="finite|inf|weight"):
+            EnigmaEngine.apply_adapter_stack(
+                _FakeSelf(), [(ad, math.inf)])
+
+    def test_apply_adapter_stack_rejects_missing_adapter_dir(
+            self, tmp_path):
+        """LoRA-1b stacking: a missing adapter path must surface a
+        FileNotFoundError immediately, not deep inside PEFT. Mirrors
+        the validation in single-adapter ``apply_adapter``."""
+        import pytest
+        from enigma_engine.core.inference import EnigmaEngine
+        missing = tmp_path / "nope"
+
+        class _FakeSelf:
+            pass
+
+        with pytest.raises(FileNotFoundError):
+            EnigmaEngine.apply_adapter_stack(
+                _FakeSelf(), [(missing, 1.0)])
+
+    def test_gui_logic_set_chat_adapter_stack_persists_to_stack_key(
+            self):
+        """LoRA-1b stacking: `_set_chat_adapter_stack` must write to
+        the per-base ``chat_adapter_stack:<stem>`` key (NOT the
+        single-adapter ``chat_adapter:<stem>`` key) and must clear
+        the single key for mutual exclusion. Structural gate — the
+        full GUI mixin can't be instantiated in CI."""
+        import inspect
+        from enigma_engine.gui import gui_logic
+        assert hasattr(
+            gui_logic.LogicMixin, "_set_chat_adapter_stack"), (
+            "gui_logic missing _set_chat_adapter_stack — no GUI "
+            "entry point for multi-LoRA")
+        src = inspect.getsource(
+            gui_logic.LogicMixin._set_chat_adapter_stack)
+        assert "chat_adapter_stack:" in src, (
+            "_set_chat_adapter_stack does not write to the "
+            "chat_adapter_stack: route key — stack would not "
+            "persist across model reloads")
+        assert "apply_adapter_stack" in src, (
+            "_set_chat_adapter_stack does not call "
+            "engine.apply_adapter_stack — silent no-op")
+        # Mutual exclusion: writing a stack must remove the lingering
+        # single-adapter key for the same base, otherwise restore
+        # could pick up either at random.
+        assert "chat_adapter:" in src and ".pop(" in src, (
+            "_set_chat_adapter_stack does not clear the single "
+            "chat_adapter: key — mutual-exclusion violation, "
+            "restore order becomes ambiguous")
+
+    def test_gui_logic_set_chat_adapter_single_clears_stack_key(self):
+        """LoRA-1b stacking: applying or clearing a single adapter
+        must remove any lingering ``chat_adapter_stack:<stem>`` entry.
+        Otherwise switching from a stack back to a single adapter
+        would leave the stack in route_assignments and the next
+        restore would resurrect it."""
+        import inspect
+        from enigma_engine.gui import gui_logic
+        src = inspect.getsource(
+            gui_logic.LogicMixin._set_chat_adapter)
+        assert "chat_adapter_stack:" in src, (
+            "_set_chat_adapter does not touch the stack key — "
+            "switching single→stack→single would silently retain "
+            "the old stack for the next reload")
+
+    def test_gui_logic_restore_prefers_stack_over_single(self):
+        """LoRA-1b stacking: when both keys exist for a base
+        (shouldn't happen post-156u, but defend against legacy data),
+        restore must prefer the stack key. Stack is the more recent
+        and more specific intent."""
+        import inspect
+        from enigma_engine.gui import gui_logic
+        src = inspect.getsource(
+            gui_logic.LogicMixin._restore_lora_adapter_for_base)
+        assert "chat_adapter_stack:" in src, (
+            "_restore_lora_adapter_for_base does not check the "
+            "stack key — saved stacks would be ignored on reload")
+        assert "apply_adapter_stack" in src, (
+            "_restore_lora_adapter_for_base does not call "
+            "engine.apply_adapter_stack — restore would silently "
+            "skip stacks even if the route key is present")
+
+    def test_apply_adapter_stack_rejects_duplicate_path(self, tmp_path):
+        """LoRA-1b stacking (156u-A2): duplicate adapter paths in the
+        same stack must raise ``ValueError``. The docstring promises
+        this; without a test the promise is a Pass 156s2 anti-pattern
+        (claim without proof). PEFT's ``add_weighted_adapter`` would
+        also reject duplicate names, but raising up front is friendlier
+        and avoids the wasted base-wrap on an invalid call."""
+        import pytest
+        from enigma_engine.core.inference import EnigmaEngine
+
+        ad = tmp_path / "ad"
+        ad.mkdir()
+        (ad / "adapter_config.json").write_text("{}")
+
+        class _FakeSelf:
+            pass
+
+        with pytest.raises(ValueError, match="[Dd]uplicate"):
+            EnigmaEngine.apply_adapter_stack(
+                _FakeSelf(), [(ad, 0.5), (ad, 0.5)])
+
+    def test_restore_lora_stack_survives_corrupted_entries(
+            self, tmp_path, monkeypatch):
+        """LoRA-1b stacking (156u-A2): if ``route_assignments.json``
+        gets corrupted (hand-edited, older format, partial write) so
+        that a stack entry is not a ``{path, weight}`` dict OR the
+        weight is non-numeric, the restore path must NOT propagate
+        AttributeError / TypeError / ValueError up through model
+        load. It must drop the orphan key, surface a chat warning,
+        and return cleanly so the user can keep using the base model.
+
+        Author's-lens behavioural test — the existing except clause
+        only wraps ``engine.apply_adapter_stack(...)``. Bugs in the
+        list-comprehension that builds the entries list (e.g.
+        ``item.get`` on a non-dict, or ``float("abc")``) escape the
+        guard and crash the whole load."""
+        from enigma_engine.gui.gui_logic import LogicMixin
+
+        # Build a valid adapter dir so path-existence isn't the
+        # signal we're testing — the failure must come from the
+        # corrupted shape, not from a missing file.
+        ad = tmp_path / "ad"
+        ad.mkdir()
+        (ad / "adapter_config.json").write_text("{}")
+
+        # FakeEngine pretending to support stacking. Should NEVER be
+        # called because we abort before reaching it.
+        class FakeEngine:
+            def __init__(self):
+                self.stack_calls = 0
+
+            def apply_adapter(self, *_a, **_kw):
+                pass
+
+            def apply_adapter_stack(self, *_a, **_kw):
+                self.stack_calls += 1
+
+        # Minimal harness — only the attributes the restore method
+        # actually reaches for.
+        class Harness:
+            _adapter_route_key = LogicMixin._adapter_route_key
+            _adapter_stack_route_key = (
+                LogicMixin._adapter_stack_route_key)
+            _restore_lora_adapter_for_base = (
+                LogicMixin._restore_lora_adapter_for_base)
+
+            def __init__(self):
+                self.engine = FakeEngine()
+                self.route_assignments = {}
+                self.system_msgs: list[str] = []
+                self.error_msgs: list[str] = []
+
+            def _chat_system(self, m):
+                self.system_msgs.append(m)
+
+            def _chat_error(self, m):
+                self.error_msgs.append(m)
+
+        # Monkeypatch the persistence helper so the test doesn't
+        # touch real disk.
+        from enigma_engine.gui import gui_logic as gl
+        saved_writes: list[dict] = []
+        monkeypatch.setattr(
+            gl, "save_route_assignments",
+            lambda d: saved_writes.append(dict(d)))
+
+        base = "models/test_base.pth"
+        stack_key = f"chat_adapter_stack:{Path(base).stem}"
+
+        # Case 1: stack entry is not a dict (corrupted JSON).
+        h1 = Harness()
+        h1.route_assignments = {stack_key: [1, 2, 3]}
+        h1._restore_lora_adapter_for_base(base)
+        assert h1.engine.stack_calls == 0, (
+            "Corrupted-shape stack made it through to "
+            "engine.apply_adapter_stack — restore must drop the "
+            "key BEFORE attempting apply")
+        assert stack_key not in h1.route_assignments, (
+            "Corrupted stack key was not purged — next reload "
+            "would hit the same crash")
+        assert h1.system_msgs or h1.error_msgs, (
+            "Corrupted stack was silently dropped — user got no "
+            "indication that their saved stack is gone")
+
+        # Case 2: weight is non-numeric (string that can't float).
+        h2 = Harness()
+        h2.route_assignments = {
+            stack_key: [{"path": str(ad), "weight": "not-a-number"}]}
+        h2._restore_lora_adapter_for_base(base)
+        assert h2.engine.stack_calls == 0
+        assert stack_key not in h2.route_assignments, (
+            "Non-numeric weight in saved stack was not purged")
+        assert h2.system_msgs or h2.error_msgs, (
+            "Non-numeric weight was silently dropped — user got "
+            "no indication that their saved stack is gone")
+
+    # ================================================================
+    # Pass 156u-B — LoRA stacking UI (parse + dispatch)
+    # ================================================================
+
+    def test_parse_lora_stack_inputs_empty_defaults_to_one(self):
+        """Pass 156u-B: empty / whitespace-only weight strings must
+        default to 1.0 (the user's intent when they tick a row but
+        don't type a custom weight). Both '' and '  ' must produce
+        1.0, not a parse error."""
+        from enigma_engine.gui.gui_logic import (
+            _parse_lora_stack_inputs)
+
+        pairs, errors = _parse_lora_stack_inputs([
+            ("models/checkpoints/foo", ""),
+            ("models/checkpoints/bar", "   "),
+        ])
+        assert errors == []
+        assert pairs == [
+            ("models/checkpoints/foo", 1.0),
+            ("models/checkpoints/bar", 1.0),
+        ]
+
+    def test_parse_lora_stack_inputs_rejects_non_numeric(self):
+        """Pass 156u-B: non-numeric weight strings must produce a
+        parse error naming the offending adapter (so the user can
+        fix the right row). The engine layer would also catch this
+        as ValueError but the GUI layer must surface a friendlier
+        message that points at the bad row."""
+        from enigma_engine.gui.gui_logic import (
+            _parse_lora_stack_inputs)
+
+        pairs, errors = _parse_lora_stack_inputs([
+            ("models/checkpoints/good", "0.7"),
+            ("models/checkpoints/bad", "abc"),
+        ])
+        assert pairs == [], (
+            "Parser returned partial pairs on error — must be "
+            "all-or-nothing so the engine never sees a partial "
+            "stack")
+        assert len(errors) == 1
+        assert "bad" in errors[0], (
+            f"Error message {errors[0]!r} does not name the bad "
+            "adapter — user can't tell which row to fix")
+
+    def test_parse_lora_stack_inputs_rejects_nan_and_inf(self):
+        """Pass 156u-B: NaN and Inf must be rejected at the GUI
+        layer with a clear message. The engine validation would
+        also reject these but a generic ValueError is less helpful
+        than 'NaN weight on adapter X'."""
+        from enigma_engine.gui.gui_logic import (
+            _parse_lora_stack_inputs)
+
+        pairs_nan, errors_nan = _parse_lora_stack_inputs(
+            [("models/checkpoints/foo", "nan")])
+        assert pairs_nan == []
+        assert any("foo" in e for e in errors_nan)
+
+        pairs_inf, errors_inf = _parse_lora_stack_inputs(
+            [("models/checkpoints/foo", "inf")])
+        assert pairs_inf == []
+        assert any("foo" in e for e in errors_inf)
+
+    def test_parse_lora_stack_inputs_accepts_negative(self):
+        """Pass 156u-B: negative weights are LEGITIMATE — they
+        subtract the adapter's contribution from the merged stack
+        (e.g. an "anti-coding" adapter). Parser must NOT reject
+        them — the engine's `add_weighted_adapter` accepts
+        negatives. This is a discipline test against an over-eager
+        'sanitize input' instinct."""
+        from enigma_engine.gui.gui_logic import (
+            _parse_lora_stack_inputs)
+
+        pairs, errors = _parse_lora_stack_inputs([
+            ("models/checkpoints/foo", "-0.5"),
+            ("models/checkpoints/bar", "1.5"),
+        ])
+        assert errors == []
+        assert pairs == [
+            ("models/checkpoints/foo", -0.5),
+            ("models/checkpoints/bar", 1.5),
+        ]
+
+    def test_parse_lora_stack_inputs_collects_all_errors(self):
+        """Pass 156u-B: when multiple rows have bad weights, the
+        parser must report ALL errors, not just the first. Otherwise
+        the user fixes one, retries, hits the next, fixes it,
+        retries, hits the next — N round-trips for N typos."""
+        from enigma_engine.gui.gui_logic import (
+            _parse_lora_stack_inputs)
+
+        pairs, errors = _parse_lora_stack_inputs([
+            ("models/checkpoints/a", "abc"),
+            ("models/checkpoints/b", "1.0"),
+            ("models/checkpoints/c", "xyz"),
+        ])
+        assert pairs == []
+        assert len(errors) == 2, (
+            "Parser stopped at first error — user must fix typos "
+            "one round-trip per typo")
+        assert any("a" in e for e in errors)
+        assert any("c" in e for e in errors)
+
+    def test_on_lora_apply_stack_load_first_guard(self):
+        """Pass 156u-B: clicking Apply Stack on a card whose base is
+        NOT currently loaded must surface a chat hint and NOT call
+        the engine. Same load-first discipline as `_on_lora_apply`."""
+        from enigma_engine.gui import gui_pages
+
+        class Harness:
+            _on_lora_apply_stack = (
+                gui_pages.PagesMixin._on_lora_apply_stack)
+
+            def __init__(self):
+                self.model_path = "models/A.pth"
+                self.system_msgs: list[str] = []
+                self.error_msgs: list[str] = []
+                self.set_stack_calls: list = []
+                self.set_single_calls: list = []
+
+            def _chat_system(self, m):
+                self.system_msgs.append(m)
+
+            def _chat_error(self, m):
+                self.error_msgs.append(m)
+
+            def _set_chat_adapter_stack(self, base, adapters):
+                self.set_stack_calls.append((base, adapters))
+
+            def _set_chat_adapter(self, base, adapter):
+                self.set_single_calls.append((base, adapter))
+
+            def _refresh_model_cards(self):
+                pass
+
+        h = Harness()
+        # Trying to apply on a DIFFERENT model than what's loaded.
+        h._on_lora_apply_stack(
+            {"path": "models/B.pth", "name": "Other"},
+            [("models/checkpoints/foo", "1.0")])
+        assert h.set_stack_calls == []
+        assert h.set_single_calls == []
+        assert any("Other" in m for m in h.system_msgs), (
+            "Load-first hint did not name the model the user "
+            "needs to load")
+
+    def test_on_lora_apply_stack_empty_selection_is_chat_hint(self):
+        """Pass 156u-B: zero selections is a UX state, not a
+        programming error. Surface a chat hint, do NOT call the
+        engine (which would raise ValueError on empty list).
+        Without this guard the user gets a cryptic 'requires a
+        non-empty list' chat error from the engine."""
+        from enigma_engine.gui import gui_pages
+
+        class Harness:
+            _on_lora_apply_stack = (
+                gui_pages.PagesMixin._on_lora_apply_stack)
+
+            def __init__(self):
+                self.model_path = "models/A.pth"
+                self.system_msgs: list[str] = []
+                self.error_msgs: list[str] = []
+                self.set_stack_calls: list = []
+                self.set_single_calls: list = []
+
+            def _chat_system(self, m):
+                self.system_msgs.append(m)
+
+            def _chat_error(self, m):
+                self.error_msgs.append(m)
+
+            def _set_chat_adapter_stack(self, base, adapters):
+                self.set_stack_calls.append((base, adapters))
+
+            def _set_chat_adapter(self, base, adapter):
+                self.set_single_calls.append((base, adapter))
+
+            def _refresh_model_cards(self):
+                pass
+
+        h = Harness()
+        h._on_lora_apply_stack(
+            {"path": "models/A.pth", "name": "A"}, [])
+        assert h.set_stack_calls == []
+        assert h.set_single_calls == []
+        assert h.system_msgs, (
+            "Empty selection produced no chat hint — user gets "
+            "no feedback on a no-op click")
+
+    def test_on_lora_apply_stack_single_selection_uses_single_path(
+            self):
+        """Pass 156u-B: when the user selects exactly one adapter,
+        route through `_set_chat_adapter` (single-adapter path), NOT
+        `_set_chat_adapter_stack`. Avoids the `_stack` PEFT
+        indirection for the trivial case AND keeps mutual exclusion
+        clean (single-key wins). Also gates that
+        `_refresh_model_cards` is called on success so the active
+        highlight updates — silent no-refresh would make the user
+        think the click failed."""
+        from enigma_engine.gui import gui_pages
+
+        class Harness:
+            _on_lora_apply_stack = (
+                gui_pages.PagesMixin._on_lora_apply_stack)
+
+            def __init__(self):
+                self.model_path = "models/A.pth"
+                self.system_msgs: list[str] = []
+                self.error_msgs: list[str] = []
+                self.set_stack_calls: list = []
+                self.set_single_calls: list = []
+                self.refresh_count = 0
+
+            def _chat_system(self, m):
+                self.system_msgs.append(m)
+
+            def _chat_error(self, m):
+                self.error_msgs.append(m)
+
+            def _set_chat_adapter_stack(self, base, adapters):
+                self.set_stack_calls.append((base, adapters))
+
+            def _set_chat_adapter(self, base, adapter):
+                self.set_single_calls.append((base, adapter))
+
+            def _refresh_model_cards(self):
+                self.refresh_count += 1
+
+        h = Harness()
+        h._on_lora_apply_stack(
+            {"path": "models/A.pth", "name": "A"},
+            [("models/checkpoints/solo", "0.7")])
+        assert h.set_stack_calls == [], (
+            "Single selection routed through stack path — wastes "
+            "the _stack PEFT indirection on the trivial case")
+        assert h.set_single_calls == [
+            ("models/A.pth", "models/checkpoints/solo")
+        ], (
+            "Single selection did not delegate to "
+            "_set_chat_adapter — silent no-op")
+        assert h.refresh_count == 1, (
+            "_refresh_model_cards not called after single-path "
+            "stack apply — active-adapter highlight will not "
+            "update, user thinks click did nothing")
+
+    def test_on_lora_apply_stack_multi_calls_stack_path(self):
+        """Pass 156u-B: 2+ selections route through
+        `_set_chat_adapter_stack` with parsed weights. Behavioural
+        test gating the parse → stack-call wiring, the weight
+        forwarding, AND the post-success refresh."""
+        from enigma_engine.gui import gui_pages
+
+        class Harness:
+            _on_lora_apply_stack = (
+                gui_pages.PagesMixin._on_lora_apply_stack)
+
+            def __init__(self):
+                self.model_path = "models/A.pth"
+                self.system_msgs: list[str] = []
+                self.error_msgs: list[str] = []
+                self.set_stack_calls: list = []
+                self.set_single_calls: list = []
+                self.refresh_count = 0
+
+            def _chat_system(self, m):
+                self.system_msgs.append(m)
+
+            def _chat_error(self, m):
+                self.error_msgs.append(m)
+
+            def _set_chat_adapter_stack(self, base, adapters):
+                self.set_stack_calls.append((base, adapters))
+
+            def _set_chat_adapter(self, base, adapter):
+                self.set_single_calls.append((base, adapter))
+
+            def _refresh_model_cards(self):
+                self.refresh_count += 1
+
+        h = Harness()
+        h._on_lora_apply_stack(
+            {"path": "models/A.pth", "name": "A"},
+            [
+                ("models/checkpoints/foo", "0.7"),
+                ("models/checkpoints/bar", "0.3"),
+            ])
+        assert h.set_single_calls == []
+        assert h.set_stack_calls == [
+            ("models/A.pth",
+             [("models/checkpoints/foo", 0.7),
+              ("models/checkpoints/bar", 0.3)])
+        ]
+        assert h.refresh_count == 1, (
+            "_refresh_model_cards not called after stack apply — "
+            "active-adapter highlight will not update")
+
+    def test_on_lora_apply_stack_parse_error_aborts(self):
+        """Pass 156u-B: a parse error in any row must abort BEFORE
+        any engine call AND skip the post-apply refresh. The user
+        gets ALL parse errors (not just the first) via chat-error
+        and no partial stack reaches the persistence layer."""
+        from enigma_engine.gui import gui_pages
+
+        class Harness:
+            _on_lora_apply_stack = (
+                gui_pages.PagesMixin._on_lora_apply_stack)
+
+            def __init__(self):
+                self.model_path = "models/A.pth"
+                self.system_msgs: list[str] = []
+                self.error_msgs: list[str] = []
+                self.set_stack_calls: list = []
+                self.set_single_calls: list = []
+                self.refresh_count = 0
+
+            def _chat_system(self, m):
+                self.system_msgs.append(m)
+
+            def _chat_error(self, m):
+                self.error_msgs.append(m)
+
+            def _set_chat_adapter_stack(self, base, adapters):
+                self.set_stack_calls.append((base, adapters))
+
+            def _set_chat_adapter(self, base, adapter):
+                self.set_single_calls.append((base, adapter))
+
+            def _refresh_model_cards(self):
+                self.refresh_count += 1
+
+        h = Harness()
+        h._on_lora_apply_stack(
+            {"path": "models/A.pth", "name": "A"},
+            [
+                ("models/checkpoints/foo", "0.7"),
+                ("models/checkpoints/bar", "abc"),
+            ])
+        assert h.set_stack_calls == [], (
+            "Parse error did not abort the stack call — engine "
+            "would receive a partial or zero-weight stack")
+        assert h.set_single_calls == []
+        assert h.error_msgs, (
+            "Parse error produced no chat-error message — user "
+            "got silent failure")
+        assert h.refresh_count == 0, (
+            "_refresh_model_cards called on parse-error abort — "
+            "signals success when nothing was applied")
+
+    def test_models_page_renders_stacking_controls_per_row(self):
+        """Pass 156u-B: every adapter row in the LoRA section must
+        render a checkbox (for stack selection) AND a numeric weight
+        entry (CTkEntry, NOT a slider — per Dia rules). Structural
+        gate on the section builder; without it the stacking UI is
+        unreachable from the GUI."""
+        import inspect
+        from enigma_engine.gui import gui_pages
+
+        src = inspect.getsource(
+            gui_pages.PagesMixin._build_lora_section_for_card)
+        assert "CTkCheckBox" in src, (
+            "LoRA section does not render per-row checkboxes — "
+            "user has no way to select multiple adapters for a "
+            "stack")
+        # Weight entry must be the float-mode themed numeric entry
+        # (allows negatives + scientific notation), NOT a plain
+        # int-mode entry. The literal token "themed_numeric_entry"
+        # is what gates this; "mode=\"float\"" gates the float
+        # contract specifically (no NaN-by-typo from int mode
+        # rejecting decimals).
+        assert "themed_numeric_entry" in src, (
+            "LoRA section does not render per-row weight entries "
+            "— user has no way to specify weights")
+        assert 'mode="float"' in src, (
+            "LoRA weight entries are not in float mode — user "
+            "cannot type decimals, negatives, or scientific "
+            "notation")
+        assert "CTkSlider" not in src, (
+            "LoRA section uses CTkSlider — Dia rule: numeric "
+            "input only, no sliders")
+        assert "_on_lora_apply_stack" in src, (
+            "LoRA section does not wire the Apply Stack button "
+            "to _on_lora_apply_stack — button would be a no-op")
+
+    # ================================================================
+    # Pass 156v Step 1 — Session-1 unification (chat session marker)
+    # ================================================================
+
+    def test_chat_session_marker_helper_exists(self):
+        """Pass 156v: `LogicChatMixin._chat_session_marker` must
+        exist and write to the chat display via `_chat_append`. This
+        is the single source of truth for state-change dividers
+        (adapter swap, future model/profile/prompt swaps)."""
+        import inspect
+        from enigma_engine.gui import gui_logic_chat
+
+        assert hasattr(
+            gui_logic_chat.LogicChatMixin, "_chat_session_marker"), (
+            "LogicChatMixin missing _chat_session_marker — Pass "
+            "156v Session-1 helper not shipped")
+        src = inspect.getsource(
+            gui_logic_chat.LogicChatMixin._chat_session_marker)
+        assert "_chat_append" in src, (
+            "_chat_session_marker does not delegate to "
+            "_chat_append — divider would not appear in the chat "
+            "log")
+        assert "session_marker" in src, (
+            "_chat_session_marker does not use the "
+            "'session_marker' tag — divider style would inherit "
+            "from system_msg and look identical to system "
+            "messages")
+
+    def test_session_marker_tag_configured_on_chat_display(self):
+        """Pass 156v: chat display must configure the
+        `session_marker` tag so the new helper actually renders
+        with divider styling (centered, dim). Without this tag
+        config the marker would render in default text color and
+        be visually indistinguishable from regular text."""
+        import inspect
+        from enigma_engine.gui import gui_pages
+
+        # The chat display tag config lives in the page builder.
+        # Find it by scanning all PagesMixin methods for
+        # tag_configure of session_marker.
+        found = False
+        for name in dir(gui_pages.PagesMixin):
+            attr = getattr(gui_pages.PagesMixin, name)
+            if not callable(attr):
+                continue
+            try:
+                src = inspect.getsource(attr)
+            except (OSError, TypeError):
+                continue
+            if 'tag_configure("session_marker"' in src:
+                found = True
+                break
+        assert found, (
+            "No PagesMixin method configures the 'session_marker' "
+            "tag — _chat_session_marker would render with default "
+            "tk styling, defeating the divider UX")
+
+    def test_set_chat_adapter_apply_emits_session_marker(self):
+        """Pass 156v: applying a single LoRA adapter must surface
+        the change via `_chat_session_marker` (divider), NOT
+        `_chat_system` (regular system message). Without this
+        distinction the user can't visually locate the seam where
+        weights changed if quality regresses afterwards."""
+        from enigma_engine.gui import gui_logic
+
+        class FakeEngine:
+            def apply_adapter(self, p):
+                self.last = p
+
+        class Harness:
+            _set_chat_adapter = gui_logic.LogicMixin._set_chat_adapter
+            _adapter_route_key = (
+                gui_logic.LogicMixin._adapter_route_key)
+            _adapter_stack_route_key = (
+                gui_logic.LogicMixin._adapter_stack_route_key)
+
+            def __init__(self):
+                self.engine = FakeEngine()
+                self.route_assignments: dict = {}
+                self.system_msgs: list[str] = []
+                self.error_msgs: list[str] = []
+                self.marker_msgs: list[str] = []
+
+            def _chat_system(self, m):
+                self.system_msgs.append(m)
+
+            def _chat_error(self, m):
+                self.error_msgs.append(m)
+
+            def _chat_session_marker(self, m):
+                self.marker_msgs.append(m)
+
+        h = Harness()
+        # Patch save_route_assignments to no-op for the test —
+        # _set_chat_adapter calls it on success and we don't want
+        # to write to disk.
+        import enigma_engine.gui.gui_logic as logic_mod
+        orig_save = logic_mod.save_route_assignments
+        logic_mod.save_route_assignments = lambda *a, **kw: None
+        try:
+            h._set_chat_adapter(
+                "models/A.pth", "models/checkpoints/foo_lora")
+        finally:
+            logic_mod.save_route_assignments = orig_save
+
+        assert h.marker_msgs, (
+            "Successful adapter apply did not emit a session "
+            "marker — user has no visible divider in chat log to "
+            "locate the swap")
+        assert any("foo_lora" in m for m in h.marker_msgs), (
+            "Session marker does not name the adapter — user "
+            "sees a divider but can't tell what changed")
+        assert not h.system_msgs, (
+            "Successful apply still emitted a _chat_system "
+            "message — duplicate signal, divider is supposed to "
+            "REPLACE the regular system message")
+
+    def test_set_chat_adapter_clear_emits_session_marker(self):
+        """Pass 156v: clearing the LoRA adapter must also emit a
+        session marker, not a plain system message. Same UX
+        contract — the seam where the model reverted to base
+        weights must be visually locatable."""
+        from enigma_engine.gui import gui_logic
+
+        class FakeEngine:
+            def clear_adapter(self):
+                self.cleared = True
+
+        class Harness:
+            _set_chat_adapter = gui_logic.LogicMixin._set_chat_adapter
+            _adapter_route_key = (
+                gui_logic.LogicMixin._adapter_route_key)
+            _adapter_stack_route_key = (
+                gui_logic.LogicMixin._adapter_stack_route_key)
+
+            def __init__(self):
+                self.engine = FakeEngine()
+                self.route_assignments: dict = {
+                    "chat_adapter:A": "models/checkpoints/old"}
+                self.system_msgs: list[str] = []
+                self.error_msgs: list[str] = []
+                self.marker_msgs: list[str] = []
+
+            def _chat_system(self, m):
+                self.system_msgs.append(m)
+
+            def _chat_error(self, m):
+                self.error_msgs.append(m)
+
+            def _chat_session_marker(self, m):
+                self.marker_msgs.append(m)
+
+        h = Harness()
+        import enigma_engine.gui.gui_logic as logic_mod
+        orig_save = logic_mod.save_route_assignments
+        logic_mod.save_route_assignments = lambda *a, **kw: None
+        try:
+            h._set_chat_adapter("models/A.pth", None)
+        finally:
+            logic_mod.save_route_assignments = orig_save
+
+        assert h.marker_msgs, (
+            "Adapter clear did not emit a session marker — user "
+            "has no visible divider for the revert to base "
+            "weights")
+        assert not h.system_msgs, (
+            "Adapter clear emitted a _chat_system message in "
+            "addition to the marker — duplicate signal")
+
+    def test_set_chat_adapter_stack_apply_emits_session_marker(self):
+        """Pass 156v: applying a multi-LoRA stack must emit a
+        session marker that names the stack members + weights.
+        Same contract as single-adapter apply."""
+        from enigma_engine.gui import gui_logic
+
+        class FakeEngine:
+            def apply_adapter_stack(self, adapters):
+                self.last = adapters
+
+        class Harness:
+            _set_chat_adapter_stack = (
+                gui_logic.LogicMixin._set_chat_adapter_stack)
+            _adapter_route_key = (
+                gui_logic.LogicMixin._adapter_route_key)
+            _adapter_stack_route_key = (
+                gui_logic.LogicMixin._adapter_stack_route_key)
+
+            def __init__(self):
+                self.engine = FakeEngine()
+                self.route_assignments: dict = {}
+                self.system_msgs: list[str] = []
+                self.error_msgs: list[str] = []
+                self.marker_msgs: list[str] = []
+
+            def _chat_system(self, m):
+                self.system_msgs.append(m)
+
+            def _chat_error(self, m):
+                self.error_msgs.append(m)
+
+            def _chat_session_marker(self, m):
+                self.marker_msgs.append(m)
+
+        h = Harness()
+        import enigma_engine.gui.gui_logic as logic_mod
+        orig_save = logic_mod.save_route_assignments
+        logic_mod.save_route_assignments = lambda *a, **kw: None
+        try:
+            h._set_chat_adapter_stack(
+                "models/A.pth",
+                [("models/checkpoints/foo", 0.7),
+                 ("models/checkpoints/bar", 0.3)])
+        finally:
+            logic_mod.save_route_assignments = orig_save
+
+        assert h.marker_msgs, (
+            "Stack apply did not emit a session marker")
+        marker = h.marker_msgs[0]
+        assert "foo" in marker and "bar" in marker, (
+            f"Stack marker {marker!r} does not name both "
+            "adapters — user can't tell what's in the stack")
+        assert not h.system_msgs, (
+            "Stack apply emitted a _chat_system message in "
+            "addition to the marker — duplicate signal")
+
+    # -------------------------------------------------------------------------
+    # Pass 156v Step 2 (Session-1 unification — model + RAG seams)
+    # -------------------------------------------------------------------------
+    # Step 1 wired the marker for LoRA adapter swaps. Step 2 extends
+    # the same UX contract to the other genuine session-state-change
+    # surfaces that already exist in the GUI today: model load, model
+    # unload, RAG corpus enable, RAG corpus disable. Profile swap and
+    # system-prompt edit have no chat-page handlers yet (no GUI surface
+    # to swap them); they remain deferred until the surface lands.
+    #
+    # The model-load and RAG-enable paths are deeply entangled with Tk
+    # widgets, header status, route assignments, and `self.after()`
+    # main-thread bouncing — exercising the full path in a Harness is
+    # disproportionate. Structural tests via `inspect.getsource` gate
+    # the wiring claim (helper IS called from the entry point with a
+    # reason string that names the change). Behavioural coverage of
+    # the helper itself lives in the Step 1 tests above. RAG-disable is
+    # a 2-line method and is easy to test behaviourally; we do.
+
+    def test_on_model_loaded_emits_session_marker(self):
+        """Pass 156v Step 2: model-load success must surface the
+        change via `_chat_session_marker`, not `_chat_system`. The
+        seam where weights changed is exactly when the user needs
+        a visible divider — answers regress here far more often
+        than from any other state change.
+        """
+        import inspect
+        from enigma_engine.gui import gui_logic
+        src = inspect.getsource(gui_logic.LogicMixin._on_model_loaded)
+        assert "_chat_session_marker(" in src, (
+            "_on_model_loaded does not call _chat_session_marker "
+            "— the model-swap seam still uses a regular system "
+            "message and is not visually distinct in the chat log")
+
+    def test_on_model_loaded_marker_does_not_duplicate_system_message(
+        self,
+    ):
+        """Pass 156v Step 2: the OLD `_chat_system("Model online...`
+        line must be replaced by the marker, not run alongside it.
+        Otherwise the user sees a divider PLUS a regular system
+        message for the same event — duplicate signal, defeats the
+        scan-the-log UX."""
+        import inspect
+        from enigma_engine.gui import gui_logic
+        src = inspect.getsource(gui_logic.LogicMixin._on_model_loaded)
+        assert '_chat_system(\n            f"Model online' not in src \
+            and '_chat_system(f"Model online' not in src, (
+            "_on_model_loaded still emits the old `Model online` "
+            "_chat_system message in addition to the new session "
+            "marker — duplicate signal")
+
+    def test_unload_engine_emits_session_marker(self):
+        """Pass 156v Step 2: unloading the model is a genuine
+        session-state change (KV cache gone, weights gone) — must
+        emit the marker, not a plain system message."""
+        import inspect
+        from enigma_engine.gui import gui_logic
+        src = inspect.getsource(gui_logic.LogicMixin._unload_model)
+        assert "_chat_session_marker(" in src, (
+            "_unload_model does not call _chat_session_marker — "
+            "the unload event is not visually distinct in the log")
+        # Old `_chat_system("Model unloaded.")` must be gone
+        assert '_chat_system("Model unloaded.")' not in src, (
+            "_unload_model still emits the old `Model unloaded` "
+            "_chat_system message — duplicate signal alongside "
+            "the new marker")
+
+    def test_rag_disable_emits_session_marker(self):
+        """Pass 156v Step 2 (behavioural): RAG-off changes the
+        retrieval pipeline that feeds every subsequent answer —
+        same answer regression risk as a model swap. Marker, not
+        plain system message.
+        """
+        from enigma_engine.gui import gui_logic
+
+        class FakeEngine:
+            _rag_index = object()  # stand-in pre-toggle
+
+        class Harness:
+            _on_rag_toggle = gui_logic.LogicMixin._on_rag_toggle
+
+            def __init__(self):
+                self.engine = FakeEngine()
+                self._rag_index = object()
+                self.system_msgs: list[str] = []
+                self.marker_msgs: list[str] = []
+
+            def _chat_system(self, m):
+                self.system_msgs.append(m)
+
+            def _chat_session_marker(self, m):
+                self.marker_msgs.append(m)
+
+        h = Harness()
+        h._on_rag_toggle(False)
+
+        assert h.marker_msgs, (
+            "RAG disable did not emit a session marker — the "
+            "retrieval pipeline change is invisible in the log")
+        assert any("rag" in m.lower() or "document" in m.lower()
+                   for m in h.marker_msgs), (
+            f"RAG-disable marker does not name the subsystem; "
+            f"got {h.marker_msgs!r}")
+        assert not h.system_msgs, (
+            "RAG disable emitted a _chat_system message in "
+            "addition to the marker — duplicate signal")
+        # Engine + local index must still be cleared
+        assert h._rag_index is None
+        assert h.engine._rag_index is None
+
+    def test_rag_enable_success_emits_session_marker(self):
+        """Pass 156v Step 2: successful RAG index build emits the
+        marker (named with chunk + file counts so the user knows
+        what corpus is now feeding answers). Structural because
+        `_build_rag_index` does threaded `self.after(0, ...)`
+        bouncing and disk I/O — disproportionate to exercise."""
+        import inspect
+        from enigma_engine.gui import gui_logic
+        src = inspect.getsource(gui_logic.LogicMixin._build_rag_index)
+        assert "_chat_session_marker(" in src, (
+            "_build_rag_index does not call _chat_session_marker "
+            "on success — RAG-enabled is the same kind of state "
+            "change as RAG-disabled, must use the same UX")
+
+    def test_pick_first_match_falls_back_to_first_when_no_match(self):
+        """When NONE of the preferred tails match, fall back to the
+        first scanned file (legacy behaviour). Empty list → ""."""
+        from enigma_engine.gui.scanners import _pick_first_match
+        files = [
+            {"name": "scratch.txt",
+             "path": "data/scratch.txt", "size_kb": 1.0},
+        ]
+        assert _pick_first_match(files, ["foo/bar.txt"]) == (
+            "data/scratch.txt")
+        assert _pick_first_match([], ["foo/bar.txt"]) == ""
+
     def test_scan_sessions(self):
         from enigma_engine.gui.scanners import scan_sessions
         sessions = scan_sessions()
@@ -174,12 +1857,7 @@ class TestModuleStructure:
 
     def test_widget_module(self):
         from enigma_engine.gui.widgets import (
-            HUDFrame, GlowFrame, StatusDot, NavButton,
-            SectionLabel, ToggleButton, StatusBar,
-            CollapsiblePanel, SelectableTextbox, Tooltip,
-            C_BG, C_PANEL, C_ACCENT, C_TEXT, C_GREEN, C_RED,
-            C_CYAN, C_BORDER_ACCENT,
-            FONT_TITLE, FONT_SECTION, FONT_BODY, FONT_CMD)
+            HUDFrame, GlowFrame, C_BG, FONT_TITLE)
         assert GlowFrame is HUDFrame
         assert isinstance(C_BG, str)
         assert isinstance(FONT_TITLE, tuple)
@@ -195,8 +1873,8 @@ class TestModuleStructure:
 
     def test_backward_compat_imports(self):
         from enigma_engine.gui.desktop import (
-            scan_mods, scan_models, scan_docs,
-            INFO_DIR, clamp_config, CONFIG_LIMITS)
+            scan_mods, scan_docs,
+            INFO_DIR, CONFIG_LIMITS)
         assert callable(scan_mods)
         assert callable(scan_docs)
         assert isinstance(CONFIG_LIMITS, dict)
@@ -253,9 +1931,7 @@ class TestModelContext:
 
     def test_model_context_module(self):
         from enigma_engine.core.model_context import (
-            ModelContext, model_key_from_path,
-            load_model_context, list_model_contexts,
-            get_contexts_dir)
+            load_model_context, get_contexts_dir)
         assert callable(load_model_context)
         ctx_dir = get_contexts_dir()
         assert ctx_dir.name == "model_contexts"
@@ -492,10 +2168,12 @@ class TestForgeModeUI:
     """Test that FORGE training mode descriptions match the 8 radio buttons."""
 
     def test_descriptions_cover_all_modes(self):
-        """_TRAINING_MODE_DESCRIPTIONS has exactly the 8 GUI modes."""
+        """_TRAINING_MODE_DESCRIPTIONS has exactly the 9 GUI modes
+        (LoRA-1 Pass 156p added explicit LoRA mode card)."""
         from enigma_engine.gui.gui_forge import ForgeMixin
-        expected = {"Pre-Train", "Distill", "Basic", "AI-Guided",
-                    "Image", "Dialogue", "RLHF", "Self-Play"}
+        expected = {"Pre-Train", "Distill", "Basic", "LoRA",
+                    "AI-Guided", "Image", "Dialogue", "RLHF",
+                    "Self-Play"}
         assert set(ForgeMixin._TRAINING_MODE_DESCRIPTIONS.keys()) == expected
 
 
@@ -503,24 +2181,27 @@ class TestForgeNewModes:
     """Test new training modes wiring."""
 
     def test_display_name_mapping_covers_all_modes(self):
-        """_MODE_DISPLAY_TO_KEY maps all 8 display names to keys."""
+        """_MODE_DISPLAY_TO_KEY maps all 9 display names to keys
+        (LoRA-1 Pass 156p added explicit LoRA mode)."""
         from enigma_engine.gui.gui_forge import ForgeMixin
         mapping = ForgeMixin._MODE_DISPLAY_TO_KEY
-        assert len(mapping) == 8
+        assert len(mapping) == 9
         # Every display name resolves to a valid internal key
-        expected_keys = {"Pre-Train", "Distill", "Basic",
+        expected_keys = {"Pre-Train", "Distill", "Basic", "LoRA",
                          "AI-Guided", "Image", "Dialogue",
                          "RLHF", "Self-Play"}
         assert set(mapping.values()) == expected_keys
 
     def test_reverse_mapping_covers_all_keys(self):
-        """_MODE_KEY_TO_DISPLAY maps all 8 internal keys to display."""
+        """_MODE_KEY_TO_DISPLAY maps all 9 internal keys to display
+        (LoRA-1 Pass 156p added explicit LoRA mode)."""
         from enigma_engine.gui.gui_forge import ForgeMixin
         reverse = ForgeMixin._MODE_KEY_TO_DISPLAY
-        assert len(reverse) == 8
+        assert len(reverse) == 9
         # Display names match GUI radio button values
         assert reverse["Image"] == "Image"
         assert reverse["Basic"] == "Basic"
+        assert reverse["LoRA"] == "LoRA"
         assert reverse["AI-Guided"] == "AI-Guided"
         assert reverse["Dialogue"] == "Dialogue"
         assert reverse["RLHF"] == "RLHF"
@@ -551,6 +2232,131 @@ class TestForgeThreeModeConnections:
         for cls in (ForgeTrainingMixin, ForgeAdvancedMixin):
             source = inspect.getsource(cls)
             assert "forge_focus_field" not in source
+
+
+class TestVisionTrainingHeartbeat:
+    """V-4: vision training thread must write the same heartbeat as
+    pre-training so OS OOM kills are detectable post-mortem."""
+
+    def _vision_source(self):
+        from enigma_engine.gui.gui_forge_training import ForgeTrainingMixin
+        full = inspect.getsource(ForgeTrainingMixin)
+        # Slice to just _start_vision_training to keep assertions focused.
+        marker = "def _start_vision_training("
+        assert marker in full, "vision training method missing"
+        start = full.index(marker)
+        # Find next def at same indent or end-of-class.
+        end = full.find("\n    def ", start + len(marker))
+        return full[start:end] if end != -1 else full[start:]
+
+    def test_stale_heartbeat_check_present(self):
+        """Outer entry must read training_heartbeat.json before launching."""
+        src = self._vision_source()
+        assert "training_heartbeat.json" in src, (
+            "vision training must check for stale heartbeat on entry")
+        assert "pid_exists" in src, (
+            "stale check must verify previous PID via psutil")
+
+    def test_write_hb_helper_defined(self):
+        """Inner thread must define a _write_hb closure."""
+        src = self._vision_source()
+        assert "def _write_hb(" in src, (
+            "vision thread must define _write_hb heartbeat helper")
+
+    def test_write_hb_called_at_each_lifecycle_stage(self):
+        """Heartbeat must fire at data_load, training, complete, stopped,
+        and crash branches."""
+        src = self._vision_source()
+        # Phase markers
+        assert '_write_hb("data_load"' in src or \
+               "_write_hb('data_load'" in src, "missing data_load heartbeat"
+        # Status markers — one each for the four exit branches.
+        assert 'status="complete"' in src, "missing complete status"
+        assert 'status="stopped"' in src, "missing stopped status"
+        assert 'status="crashed' in src, "missing crashed status branch"
+
+    def test_write_hb_inside_progress_callback(self):
+        """Periodic heartbeat must fire inside the training loop callback,
+        not just at start/end — otherwise mid-run OOM is invisible."""
+        src = self._vision_source()
+        # Find on_epoch or on_progress block; verify _write_hb appears
+        # somewhere between callback def and the trainer assignment.
+        cb_start = src.find("def on_progress(")
+        cb_end = src.find("trainer.on_progress")
+        assert cb_start != -1 and cb_end != -1
+        cb_block = src[cb_start:cb_end]
+        assert "_write_hb(" in cb_block, (
+            "heartbeat must fire from on_progress/on_epoch — otherwise "
+            "long epochs hide silent kills")
+
+    def test_oom_taxonomy_matches_pretrain(self):
+        """V-4 audit: the same crash on the same hardware should land
+        the same heartbeat status across pre-training and vision modes.
+        Reference (gui_forge_new_modes.py) uses RuntimeError + simple
+        'out of memory' or 'cuda' check; vision mode must do the same."""
+        src = self._vision_source()
+        # RuntimeError must be caught separately so OOM-friendly user
+        # advice doesn't fire on PIL/NumPy errors that happen to mention
+        # 'memory'. Reference pattern at gui_forge_new_modes.py.
+        assert "except RuntimeError" in src, (
+            "vision crash branch must split RuntimeError from Exception "
+            "to match pre-training reference pattern")
+        # Verify the OOM check is the simple 'out of memory' or 'cuda'
+        # form, not a tighter cuda-AND-memory variant that diverges
+        # from the pre-training taxonomy.
+        rt_start = src.find("except RuntimeError")
+        rt_end = src.find("except Exception", rt_start)
+        if rt_end == -1:
+            rt_end = len(src)
+        rt_block = src[rt_start:rt_end]
+        assert ('"out of memory" in' in rt_block
+                or "'out of memory' in" in rt_block), (
+            "OOM detection must check 'out of memory' literal")
+        assert ('"cuda" in' in rt_block
+                or "'cuda' in" in rt_block), (
+            "OOM detection must treat any CUDA error as crashed_oom "
+            "(matches pre-training reference)")
+
+    def test_val_split_plumbed_to_train_vision(self):
+        """V-6b: the GUI must honor train_config.val_split for vision
+        training by splitting vision_data into train/val and passing
+        ``val_data=`` to ``trainer.train_vision()``. Without this the
+        backend V-6 hook is unreachable from the GUI."""
+        src = self._vision_source()
+        # Must read val_split from train_config and use it as a
+        # fraction to slice vision_data.
+        assert "val_split" in src, (
+            "vision GUI must reference val_split for V-6b plumbing")
+        # The trainer call must pass val_data, not just data.
+        call_idx = src.find("trainer.train_vision(")
+        assert call_idx != -1
+        # Capture the call site through the closing paren.
+        call_block = src[call_idx:call_idx + 400]
+        assert "val_data=" in call_block, (
+            "trainer.train_vision(...) must receive val_data when "
+            "val_split is non-zero (V-6b)")
+
+    def test_val_split_shuffle_is_seeded(self):
+        """Pass 156g audit (Bug A): the val partition must be
+        reproducible when ``train_config.seed`` is set. Without
+        seeding, two runs with the same data and val_split produce
+        different held-out partitions, breaking checkpoint resume
+        comparisons and the AA "deterministic infrastructure" rule."""
+        src = self._vision_source()
+        # Must use a seeded Random instance OR call seed() before
+        # shuffling. Reject the pre-fix global random.shuffle pattern.
+        shuffle_idx = src.find("shuffle(")
+        assert shuffle_idx != -1, "expected a shuffle call for val split"
+        # Look back ~400 chars for evidence of seeding.
+        window = src[max(0, shuffle_idx - 400):shuffle_idx + 50]
+        seeded = (
+            "Random(" in window
+            or ".seed(" in window
+            or "config.seed" in window
+        )
+        assert seeded, (
+            "val-split shuffle must be seeded from train_config.seed "
+            "so the held-out partition is reproducible across runs")
 
 
 # ================================================================
@@ -1042,6 +2848,40 @@ class TestTrainingBrief:
         assert "_lora_rank" in source
         assert "_train_data_path" in source
 
+    def test_save_training_brief_persists_distill_and_mode_vars(self):
+        """_save_training_brief covers distill, checkboxes, stage, replay, vision."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        source = inspect.getsource(ForgeMixin._save_training_brief)
+        for key in (
+            "_distill_num_examples", "_distill_max_tokens",
+            "_reasoning", "_evolutionary", "_auto_train", "_resume_training",
+            "_general_mix", "_training_stage",
+            "_replay_capacity", "_replay_ratio",
+        ):
+            assert key in source, f"_save_training_brief missing key: {key}"
+
+    def test_load_training_brief_restores_distill_and_mode_vars(self):
+        """_load_training_brief restores distill, checkboxes, stage, replay, vision."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        source = inspect.getsource(ForgeMixin._load_training_brief)
+        for key in (
+            "_distill_num_examples", "_distill_max_tokens",
+            "_reasoning", "_evolutionary", "_auto_train", "_resume_training",
+            "_general_mix", "_training_stage",
+            "_replay_capacity", "_replay_ratio",
+        ):
+            assert key in source, f"_load_training_brief missing key: {key}"
+
+    def test_on_close_calls_save_training_brief(self):
+        """desktop.EnigmaGUI._on_close must call _save_training_brief so Forge
+        settings are written even when no mode-switch triggered an earlier save."""
+        from enigma_engine.gui.desktop import EnigmaGUI
+        source = inspect.getsource(EnigmaGUI._on_close)
+        assert "_save_training_brief" in source, (
+            "_on_close does not call _save_training_brief — "
+            "Forge settings typed without a mode-switch will be lost on close"
+        )
+
 
 # ================================================================
 # FORGE: UI Polish
@@ -1428,7 +3268,7 @@ class TestGuiDeadImports:
                        and 'C_ACCENT_MUTED' not in l
                        and 'import' not in l]
         if not usage_lines:
-            import_lines = [l for l in source.split('\n')
+            [l for l in source.split('\n')
                             if re.search(r'\bC_ACCENT\b', l) and 'import' in l
                             and 'C_ACCENT_DIM' not in l.replace('C_ACCENT,', '')]
             # Check if C_ACCENT alone appears on import line
@@ -2397,8 +4237,7 @@ class TestThemePicker:
 
     def test_reload_theme_returns_color_map(self):
         """reload_theme returns a dict mapping old colours to new."""
-        from enigma_engine.gui.widgets import reload_theme, C_BG
-        old_bg = C_BG
+        from enigma_engine.gui.widgets import reload_theme
         color_map = reload_theme("midnight")
         assert isinstance(color_map, dict)
         # Should have mappings since dark != midnight
@@ -2519,28 +4358,28 @@ class TestForgePresets:
         assert "Custom" not in ForgeMixin._TRAINING_PRESETS
 
     def test_quick_preset_values(self):
-        """Quick preset: 3 epochs, lr=0.0001, batch=4."""
+        """Quick preset: 3 epochs, lr=0.0001, batch=auto."""
         from enigma_engine.gui.gui_forge import ForgeMixin
         epochs, lr, batch = ForgeMixin._TRAINING_PRESETS["Quick"]
         assert epochs == "3"
         assert lr == "0.0001"
-        assert batch == "4"
+        assert batch == "auto"
 
     def test_balanced_preset_values(self):
-        """Balanced preset: 10 epochs, lr=0.00005, batch=4."""
+        """Balanced preset: 10 epochs, lr=0.00005, batch=auto."""
         from enigma_engine.gui.gui_forge import ForgeMixin
         epochs, lr, batch = ForgeMixin._TRAINING_PRESETS["Balanced"]
         assert epochs == "10"
         assert lr == "0.00005"
-        assert batch == "4"
+        assert batch == "auto"
 
     def test_thorough_preset_values(self):
-        """Thorough preset: 30 epochs, lr=0.00002, batch=2."""
+        """Thorough preset: 30 epochs, lr=0.00002, batch=auto."""
         from enigma_engine.gui.gui_forge import ForgeMixin
         epochs, lr, batch = ForgeMixin._TRAINING_PRESETS["Thorough"]
         assert epochs == "30"
         assert lr == "0.00002"
-        assert batch == "2"
+        assert batch == "auto"
 
 
 class TestForgeTrainingHistory:
@@ -3147,7 +4986,6 @@ class TestButtonThemeConstants:
     def test_reload_theme_updates_new_constants(self):
         """reload_theme must propagate new C_* constants."""
         from enigma_engine.gui import widgets
-        old_red_dim = widgets.C_RED_DIM
         widgets.reload_theme("midnight")
         # Midnight has different colours
         assert isinstance(widgets.C_RED_DIM, str)
@@ -3390,3 +5228,198 @@ class TestTrainingConfigCrossWiring:
         assert '_total_training_steps' in src, (
             "Solo training handler missing batch-level ETA "
             "from _total_training_steps")
+
+
+class TestForgeAlignmentModeVisibility:
+    """S819: Alignment modes (GRPO/ReMax/SimPO/ORPO) show only basic section."""
+
+    def test_alignment_modes_visibility_logic(self):
+        """_on_training_mode_changed maps alignment modes to {basic} only.
+
+        Structural test — GUI widget show/hide requires tkinter runtime.
+        Verifies the if-branch exists and returns the correct set.
+        """
+        import inspect
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        src = inspect.getsource(ForgeMixin._on_training_mode_changed)
+        # The alignment branch must exist
+        assert '"GRPO"' in src or "'GRPO'" in src, (
+            "Missing GRPO in _on_training_mode_changed")
+        assert '"ReMax"' in src or "'ReMax'" in src, (
+            "Missing ReMax in _on_training_mode_changed")
+        assert '"SimPO"' in src or "'SimPO'" in src, (
+            "Missing SimPO in _on_training_mode_changed")
+        assert '"ORPO"' in src or "'ORPO'" in src, (
+            "Missing ORPO in _on_training_mode_changed")
+
+    def test_all_eight_modes_have_visibility_branch(self):
+        """Every training mode must have a visibility branch."""
+        import inspect
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        src = inspect.getsource(ForgeMixin._on_training_mode_changed)
+        for mode in ("Pre-Train", "Distill", "AI-Guided", "Image",
+                     "Dialogue", "RLHF", "Self-Play"):
+            assert f'"{mode}"' in src or f"'{mode}'" in src, (
+                f"Missing visibility branch for mode {mode}")
+
+
+class TestForgeAPOAlignmentMode:
+    """D-9b (Pass 156k): FORGE radio card for APO-zero alignment mode.
+
+    Pass 156j shipped the library-level loss + dispatch
+    (`train_dpo(loss_type='apo_zero')`); D-9b adds the FORGE GUI
+    surface so users can pick APO from the alignment row alongside
+    GRPO/ReMax/SimPO/ORPO.
+
+    Behavioural test that routing → APO loss already exists in
+    `TestAPOZeroLoss.test_train_dpo_apo_zero_actually_routes_to_apo_loss`
+    (Pass 156j); these structural tests close the GUI→trainer→loss
+    chain end-to-end.
+    """
+
+    def test_apo_in_alignment_modes_radio_card(self):
+        """APO must be listed as a radio card in the alignment row."""
+        import inspect
+        from enigma_engine.gui.gui_pages_forge import ForgePageMixin
+        src = inspect.getsource(ForgePageMixin._build_page_forge)
+        # alignment_modes list must include "APO"
+        assert '"APO"' in src or "'APO'" in src, (
+            "APO missing from alignment_modes radio cards in "
+            "_build_page_forge")
+
+    def test_apo_visibility_branch_basic_only(self):
+        """_on_training_mode_changed must treat APO same as
+        SimPO/ORPO/GRPO/ReMax — show only the basic section."""
+        import inspect
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        src = inspect.getsource(ForgeMixin._on_training_mode_changed)
+        assert '"APO"' in src or "'APO'" in src, (
+            "Missing APO visibility branch in _on_training_mode_changed")
+
+    def test_apo_dispatch_in_start_training_by_mode(self):
+        """_start_training_by_mode must dispatch APO →
+        _start_apo_training."""
+        import inspect
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        src = inspect.getsource(ForgeMixin._start_training_by_mode)
+        assert '"APO"' in src or "'APO'" in src, (
+            "Missing APO dispatch case in _start_training_by_mode")
+        assert "_start_apo_training" in src, (
+            "_start_training_by_mode must call _start_apo_training")
+
+    def test_start_apo_training_passes_apo_zero_loss_type(self):
+        """_start_apo_training must route through the DPO trainer with
+        loss_type='apo_zero' — the only thing that distinguishes APO
+        from DPO at the call boundary. Behavioural proof that this
+        actually changes the math comes from the Pass 156j test
+        TestAPOZeroLoss.test_train_dpo_apo_zero_actually_routes_to_apo_loss.
+        """
+        import inspect
+        from enigma_engine.gui.gui_forge_training import (
+            ForgeTrainingMixin)
+        # Method must exist
+        assert hasattr(ForgeTrainingMixin, "_start_apo_training"), (
+            "ForgeTrainingMixin missing _start_apo_training")
+        # Must reference apo_zero in its source (either directly or
+        # by delegating to _start_dpo_training with loss_type kwarg)
+        src = inspect.getsource(
+            ForgeTrainingMixin._start_apo_training)
+        assert "apo_zero" in src, (
+            "_start_apo_training must reference loss_type='apo_zero' "
+            "(directly or via delegation)")
+
+    def test_start_dpo_training_forwards_loss_type_to_trainer(self):
+        """The shared DPO/APO body must forward loss_type to
+        trainer.train_dpo so the kwarg actually reaches the loss
+        registry. Catches regression where loss_type is accepted at
+        the GUI but dropped before the trainer call."""
+        import inspect
+        from enigma_engine.gui.gui_forge_training import (
+            ForgeTrainingMixin)
+        src = inspect.getsource(
+            ForgeTrainingMixin._start_dpo_training)
+        assert "loss_type" in src, (
+            "_start_dpo_training must accept and forward loss_type")
+        # Must pass loss_type into train_dpo call
+        assert "train_dpo(" in src
+        # Either explicit kwarg in the call or stored in a variable
+        # then passed — both forms must include the literal token
+        assert "loss_type=" in src, (
+            "_start_dpo_training must pass loss_type= to train_dpo")
+
+    def test_start_dpo_training_user_facing_strings_use_algo_label(self):
+        """Pass 156k-audit: the SUGGESTIONS claim 'logs are accurate
+        per mode' requires that user-facing error strings also use the
+        parametrized `algo_label`, not hardcoded 'DPO'. A user who
+        clicks APO and forgets the data file should see 'APO-ZERO
+        requires a JSONL file', not 'DPO requires a JSONL file'.
+
+        Strategy: scan source body for word-boundary `\bDPO\b`
+        occurrences (catches bareword DPO inside larger f-strings,
+        which is what the original audit caught at
+        `--- DPO TRAINING STOPPED ---` and `DPO training failed`).
+        Allowlist exactly the two ternary-definition lines that
+        legitimately contain the literal label `"DPO"` /
+        `"DPO Training"` — anywhere else means a hardcoded
+        user-facing mention has drifted in.
+        """
+        import inspect
+        import re
+        from enigma_engine.gui.gui_forge_training import (
+            ForgeTrainingMixin)
+        src = inspect.getsource(
+            ForgeTrainingMixin._start_dpo_training)
+        # Strip the docstring (first triple-quoted block).
+        src_no_doc = re.sub(r'"""[\s\S]*?"""', "", src, count=1)
+        # Drop comment-only lines (whitespace + #).
+        src_lines = [
+            ln for ln in src_no_doc.splitlines()
+            if not ln.lstrip().startswith("#")
+        ]
+        # Word-boundary match: `\bDPO\b` catches both `"DPO"`
+        # and bareword `DPO` inside f-strings (e.g.
+        # `f"--- DPO TRAINING STOPPED ---"`).
+        offending = []
+        for ln in src_lines:
+            if not re.search(r'\bDPO\b', ln):
+                continue
+            # Allowlist the two ternary definition lines.
+            if 'algo_label = "DPO"' in ln:
+                continue
+            if '"DPO Training"' in ln and 'if loss_type ==' in ln:
+                continue
+            offending.append(ln.strip())
+        assert offending == [], (
+            "Hardcoded user-facing 'DPO' label found outside the "
+            "`algo_label` / `algo_summary_label` ternary lines. "
+            "User-facing strings (logs, status, errors) must use "
+            "`algo_label` so APO mode shows 'APO-ZERO', not 'DPO'.\n"
+            f"Offending lines: {offending}")
+
+class TestModelsPageMerging:
+    """N-21: MODELS page has merge controls wired to model_merging."""
+
+    def test_models_page_has_merge_controls(self):
+        """_build_page_models creates merge controls and button wiring."""
+        import inspect
+        from enigma_engine.gui.gui_pages import PagesMixin
+        src = inspect.getsource(PagesMixin._build_page_models)
+        assert "_merge_model_a_var" in src
+        assert "_merge_model_b_var" in src
+        assert "_merge_mode_var" in src
+        assert "_merge_t_var" in src
+        assert "_merge_density_var" in src
+        assert "_merge_output_entry" in src
+        assert "command=self._merge_models" in src
+
+    def test_merge_handler_dispatches_all_modes(self):
+        """_merge_models dispatches SLERP/LINEAR/TIES to core helpers."""
+        import inspect
+        from enigma_engine.gui.gui_forge_models import ForgeModelsMixin
+        src = inspect.getsource(ForgeModelsMixin._merge_models)
+        assert "slerp_merge" in src
+        assert "linear_merge" in src
+        assert "ties_merge" in src
+        assert 'mode == "SLERP"' in src
+        assert 'mode == "LINEAR"' in src
+        assert 'mode == "TIES"' in src

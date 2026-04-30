@@ -43,8 +43,53 @@ class JsonSchemaConstraint:
             ``vocab_size: int``.
     """
 
+    # Types the FSM knows how to constrain.  Anything outside this set
+    # falls through to ``_value_starters``'s "unknown type" branch and
+    # silently degrades to free generation.  Validating up-front turns
+    # that silent-degradation into a loud rejection at construction.
+    _SUPPORTED_TYPES: frozenset[str] = frozenset({
+        'string', 'number', 'integer', 'boolean', 'null',
+        'object', 'array',
+    })
+
     def __init__(self, schema: dict, tokenizer: object) -> None:
+        # --- boundary validation -------------------------------------
+        # Closes the "API accepts any dict" follow-up from Pass 156z3 /
+        # 156z4.  A malformed schema (missing ``properties``,
+        # ``type != "object"``, properties value not a dict) reached
+        # the FSM and silently produced degraded output that callers
+        # could not distinguish from a successful constrained
+        # generation.  Fail loud at the constructor instead.
+        if not isinstance(schema, dict):
+            raise ValueError(
+                f"json_schema must be a dict, got {type(schema).__name__}"
+            )
+        schema_type = schema.get('type', 'object')
+        if schema_type != 'object':
+            raise ValueError(
+                f"json_schema['type'] must be 'object' (FSM is "
+                f"object-only), got {schema_type!r}"
+            )
         props = schema.get('properties', {})
+        if not isinstance(props, dict):
+            raise ValueError(
+                f"json_schema['properties'] must be a dict, got "
+                f"{type(props).__name__}"
+            )
+        for key, spec in props.items():
+            if not isinstance(spec, dict):
+                raise ValueError(
+                    f"json_schema['properties'][{key!r}] must be a "
+                    f"dict, got {type(spec).__name__}"
+                )
+            ptype = spec.get('type', 'string')
+            if ptype not in self._SUPPORTED_TYPES:
+                raise ValueError(
+                    f"json_schema['properties'][{key!r}]['type'] = "
+                    f"{ptype!r} is not supported. Allowed: "
+                    f"{sorted(self._SUPPORTED_TYPES)}"
+                )
+
         self._n_keys = len(props)
         self._key_types = [
             v.get('type', 'string') for v in props.values()

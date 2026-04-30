@@ -52,6 +52,8 @@ class CharacterTokenizer:
             "<BOT>": 12,   # Bot turn
             "<think>": 13,  # Start of reasoning block
             "</think>": 14, # End of reasoning block
+            "<search>": 15,  # Stage B-1: inline search-query start
+            "</search>": 16, # Stage B-1: inline search-query end
         }
 
         self.pad_token = "<pad>"
@@ -65,6 +67,9 @@ class CharacterTokenizer:
         self.unk_token_id = 3
         self.think_start_id = self.special_tokens["<think>"]
         self.think_end_id = self.special_tokens["</think>"]
+        # Stage B-1: see bpe_tokenizer for None-on-legacy rationale.
+        self.search_start_id: int | None = self.special_tokens.get("<search>")
+        self.search_end_id: int | None = self.special_tokens.get("</search>")
 
         # Lock for thread-safe vocabulary mutation
         self._vocab_lock = threading.Lock()
@@ -267,6 +272,8 @@ class CharacterTokenizer:
         text = text.replace('\n', ' <nl> ').replace('\t', ' <tab> ')
         # Separate reasoning tags so they are matched as whole tokens
         text = text.replace('<think>', ' <think> ').replace('</think>', ' </think> ')
+        # Stage B-1: inline search-query tags also matched as whole tokens
+        text = text.replace('<search>', ' <search> ').replace('</search>', ' </search> ')
         # Use word-boundary match so "FAQ:" doesn't become "FA <Q> "
         # \w is Unicode-aware, so non-Latin chars (CJK, Arabic, etc.)
         # preceding these markers correctly prevent false matches.
@@ -393,6 +400,13 @@ class CharacterTokenizer:
         # Reload special tokens from file so encode() uses saved IDs
         if 'special_tokens' in data:
             self.special_tokens = data['special_tokens']
+
+        # Stage B-1: re-derive search-token IDs from the loaded vocab.
+        # Legacy files written before <search> existed must yield None
+        # so the generation hook (Stage B-2) detects "feature
+        # unavailable on this model" instead of aliasing a learned ID.
+        self.search_start_id = self.special_tokens.get('<search>')
+        self.search_end_id = self.special_tokens.get('</search>')
 
     def save_vocab(self, vocab_file: Path):
         """Save vocabulary to file."""

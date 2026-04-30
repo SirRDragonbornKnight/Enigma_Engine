@@ -185,6 +185,7 @@ class ForgePageMixin:
             ("Pre-Train", "Language pre-training from scratch on large text data"),
             ("Distill", "Teacher generates personality, reasoning, and knowledge data"),
             ("Basic", "Train on your own data (text files, JSONL). Auto-LoRA for large models"),
+            ("LoRA", "Force low-rank adapter training on any model size. 10-30 MB adapter"),
             ("Image", "Train on images or video. Teach visual understanding"),
         ]
 
@@ -202,6 +203,7 @@ class ForgePageMixin:
             ("ReMax", "REINFORCE with mean-reward baseline. Simpler than PPO"),
             ("SimPO", "Simple Preference Optimization. No reference model needed"),
             ("ORPO", "Odds Ratio Preference Optimization. SFT + alignment in one step"),
+            ("APO", "Anchored Preference Optimization (zero). Both sides anchored to reference independently"),
         ]
 
         # Collect description labels for dynamic wraplength
@@ -341,7 +343,12 @@ class ForgePageMixin:
 
         self._forge_label(self._forge_pretrain_section,
             "Pre-training data (required)")
-        self.pretrain_data_var = ctk.StringVar(value="")
+        # D-11c wiring (Pass 156m): prefer data/pretrain/combined.txt or
+        # combined_pretrain.txt when one of those has been collected, so
+        # the picker surfaces the real corpus without manual nav.
+        from enigma_engine.gui.scanners import _pick_default_pretrain_file
+        self.pretrain_data_var = ctk.StringVar(
+            value=_pick_default_pretrain_file(self.training_files))
         pt_data_row = ctk.CTkFrame(
             self._forge_pretrain_section, fg_color="transparent")
         pt_data_row.pack(fill="x", padx=10, pady=(0, 4))
@@ -479,9 +486,16 @@ class ForgePageMixin:
         self._forge_basic_section.pack(fill="x", padx=0, pady=(8, 0))
 
         self._forge_label(self._forge_basic_section, "Training data (required)")
-        self.train_data_var = ctk.StringVar(
-            value=self.training_files[0]["path"]
-            if self.training_files else "")
+        # D-11b (Pass 156i9): prefer data/finetune/combined_finetune.txt
+        # when a fine-tune corpus has been collected, so the FORGE picker
+        # surfaces the reasoning data without manual nav.
+        # D-11c-DPO (Pass 156q): track the last applied smart default so
+        # `_on_training_mode_changed` can swap it for preference-pair
+        # modes without clobbering user-customised paths.
+        from enigma_engine.gui.scanners import _pick_default_training_file
+        _initial_default = _pick_default_training_file(self.training_files)
+        self._train_data_smart_default = _initial_default
+        self.train_data_var = ctk.StringVar(value=_initial_default)
         data_opts = [
             f"{f['name']} ({f['size_kb'] / 1024:.1f} MB)"
             if f["size_kb"] >= 1024
@@ -634,6 +648,28 @@ class ForgePageMixin:
             variable=self.forge_vision_preset_var,
             width=240)
         vision_preset_dd.pack(anchor="w", padx=10, pady=(0, 6))
+
+        # Code-6b (Pass 156r): unfreeze last N text layers for LLaVA
+        # Stage-2 fine-tuning. Default 0 = Stage-1 (projection-only,
+        # text frozen). Larger values let the projection adapt the
+        # text layers to multimodal inputs at the cost of compute and
+        # storage (full fine-tune of those layers).
+        self._forge_label(self._forge_image_section,
+            "Unfreeze last N text layers (0 = Stage-1, projection only)")
+        self.forge_vision_unfreeze_var = ctk.StringVar(value="0")
+        unfreeze_entry = themed_entry(
+            self._forge_image_section,
+            textvariable=self.forge_vision_unfreeze_var,
+            width=80,
+            placeholder_text="0")
+        unfreeze_entry.pack(anchor="w", padx=10, pady=(0, 6))
+        Tooltip(unfreeze_entry,
+                "LLaVA Stage 2 knob. 0 = projection-only (LLaVA "
+                "Stage 1 default).\n"
+                "Set to e.g. 4 to also fine-tune the last 4 text "
+                "transformer layers.\n"
+                "Higher = better multimodal grounding but heavier "
+                "training and a larger checkpoint diff.")
 
         # === AI-GUIDED: TRAINING STAGES ===
         self._forge_stages_section = ctk.CTkFrame(
@@ -834,16 +870,16 @@ class ForgePageMixin:
         # resumes from the latest checkpoint if one exists.
         self.forge_resume_var = ctk.BooleanVar(value=True)
         resume_cb = ctk.CTkCheckBox(
-            btn_row, text="Resume",
+            btn_row, text="Resume from checkpoint",
             variable=self.forge_resume_var,
             font=FONT_TINY, text_color=C_TEXT_DIM,
             fg_color=C_GREEN_DIM, hover_color=C_ACCENT_DIM,
             border_color=C_ACCENT_DIM, corner_radius=2)
         resume_cb.pack(side="left", padx=(10, 0))
         Tooltip(resume_cb,
-                "When enabled, training resumes from the\n"
-                "latest checkpoint if one exists.\n"
-                "Uncheck to start training from scratch.")
+                "ON: Click TRAIN to continue from where\n"
+                "you left off (loads latest checkpoint).\n"
+                "OFF: Start training from scratch.")
 
         # Save button row (below train)
         save_row = ctk.CTkFrame(

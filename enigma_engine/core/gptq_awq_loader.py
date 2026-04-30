@@ -1003,15 +1003,15 @@ def get_quantized_registry(max_loaded: int = 2) -> QuantizedModelRegistry:
 
 # Export public API
 __all__ = [
-    'GPTQModel',
-    'AWQModel',
-    'QuantizationType',
-    'QuantConfig',
-    'ModelMetadata',
-    'load_quantized_model',
-    'detect_quantization_type',
-    'QuantizedModelRegistry',
-    'get_quantized_registry',
     'HAVE_AUTO_GPTQ',
     'HAVE_AWQ',
+    'AWQModel',
+    'GPTQModel',
+    'ModelMetadata',
+    'QuantConfig',
+    'QuantizationType',
+    'QuantizedModelRegistry',
+    'detect_quantization_type',
+    'get_quantized_registry',
+    'load_quantized_model',
 ]

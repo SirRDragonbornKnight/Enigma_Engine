@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 # Type hints for optional dependencies
 if TYPE_CHECKING:
     from transformers import AutoModelForCausalLM, AutoTokenizer
-    from enigma_engine.core.model import Enigma  # noqa: F401
+    from enigma_engine.core.model import Enigma
 
 # Deferred imports — loaded on first use to avoid ~90 MB RAM at startup
 _HAVE_TRANSFORMERS: bool | None = None  # None = not yet checked
@@ -174,8 +174,11 @@ def get_huggingface_model_info(model_id: str, timeout: float = 10.0) -> dict[str
         result["architecture"] = arch
 
     except Exception as e:
+        import traceback
         result["error"] = str(e)
-        logger.warning(f"Failed to get HuggingFace model info for {model_id}: {e}")
+        logger.warning(
+            "Failed to get HuggingFace model info for %s: %s\n%s",
+            model_id, e, traceback.format_exc())
 
     return result
 

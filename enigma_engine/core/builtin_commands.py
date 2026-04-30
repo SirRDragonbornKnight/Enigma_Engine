@@ -16,7 +16,7 @@ from .commands import CommandResult, CommandRegistry
 # With ``from __future__ import annotations`` the annotations are never
 # evaluated at runtime, so we only need the name available in the module
 # namespace for tools that *do* resolve annotations (e.g. get_type_hints).
-from typing import Dict  # noqa: F401
+from typing import Dict
 
 
 # ── Constants (extracted from inline magic numbers) ──────────────
@@ -1340,6 +1340,7 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
         forbidden = [
             "shutil.rmtree", "os.remove", "os.rmdir", "os.unlink",
             "os.system", "os.popen",
+            "os.exec", "os.spawn",
             "os.open(", "os.fdopen(", "os.rename(", "os.replace(",
             "__import__(", "subprocess.call",
             "subprocess.Popen", "subprocess.run",
@@ -1426,6 +1427,10 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
             return CommandResult(
                 False, "[ERROR] Code execution timed out (30s limit)")
         except Exception as e:
+            try:
+                Path(tmp_path).unlink()
+            except (OSError, NameError):
+                pass
             return CommandResult(
                 False, f"[ERROR] Failed to execute code: {e}")
 

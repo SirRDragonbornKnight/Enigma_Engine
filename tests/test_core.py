@@ -5,7 +5,6 @@ Run with: python -m pytest tests/ -v
 """
 
 import inspect
-import textwrap
 import pytest
 import sys
 import tempfile
@@ -32,6 +31,24 @@ class TestAIProfile:
 class TestRouter:
     """Test the router module."""
 
+    def test_background_trainer_inference_busy_guard(self):
+        """N-25: trainer should defer when inference is active."""
+        from enigma_engine.router import BackgroundTrainer
+
+        trainer = BackgroundTrainer()
+
+        trainer.inference_idle_check = lambda: False
+        assert trainer._inference_busy() is True
+
+        trainer.inference_idle_check = lambda: True
+        assert trainer._inference_busy() is False
+
+        trainer.inference_idle_check = (
+            lambda: (_ for _ in ()).throw(RuntimeError("boom"))
+        )
+        # Fail-open on callback errors so training does not deadlock.
+        assert trainer._inference_busy() is False
+
     def test_router_training_can_toggle_runtime(self, monkeypatch):
         """ModRouter can create and remove its trainer after init."""
         from enigma_engine import router as router_mod
@@ -39,7 +56,7 @@ class TestRouter:
         created = []
 
         class _DummyTrainer:
-            def __init__(self):
+            def __init__(self, **kwargs):
                 created.append(self)
                 self.started = False
                 self.stopped = False
@@ -86,7 +103,6 @@ class TestRouter:
         router.running = True
 
         # Rapid concurrent toggles should not orphan trainers
-        results = []
 
         def toggle():
             router.set_training_enabled(True)
@@ -101,8 +117,142 @@ class TestRouter:
         # After all toggles, trainer should be cleanly None
         assert router.trainer is None
 
+    def test_router_inference_idle_check_propagates_to_trainers(self, monkeypatch):
+        """N-25: idle callback should propagate to current and future trainer."""
+        from enigma_engine import router as router_mod
 
-class TestProjectPackaging:
+        class _DummyTrainer:
+            def __init__(self, **kwargs):
+                self.started = False
+                self.stopped = False
+                self.inference_idle_check = None
+
+            def start(self):
+                self.started = True
+
+            def stop(self):
+                self.stopped = True
+
+        monkeypatch.setattr(router_mod, "BackgroundTrainer", _DummyTrainer)
+        router = router_mod.ModRouter(enable_training=True)
+
+        def checker() -> bool:
+            return True
+
+        router.set_inference_idle_check(checker)
+        assert router.trainer is not None
+        assert router.trainer.inference_idle_check is checker
+
+        router.set_training_enabled(False)
+        router.set_training_enabled(True)
+        assert router.trainer is not None
+        assert router.trainer.inference_idle_check is checker
+
+    def test_router_passes_repo_anchor_file_to_trainer_when_present(
+        self, monkeypatch, tmp_path,
+    ):
+        """Continuous-3: ModRouter wires the curated anchor JSONL through.
+
+        When `data/anchor_examples.jsonl` exists in the repo, the boot
+        path constructs `BackgroundTrainer(anchor_data_path=<that path>)`
+        so anchor rehearsal is on by default — no hand-edit needed.
+        """
+        from enigma_engine import router as router_mod
+
+        captured: dict = {}
+
+        class _CapturingTrainer:
+            def __init__(self, **kwargs):
+                captured.update(kwargs)
+                self.inference_idle_check = None
+
+            def start(self):
+                pass
+
+            def stop(self):
+                pass
+
+        # Point the default at a temp file that exists
+        anchor_file = tmp_path / "anchor_examples.jsonl"
+        anchor_file.write_text('{"prompt": "x", "response": "y"}\n', encoding="utf-8")
+        monkeypatch.setattr(router_mod, "_DEFAULT_ANCHOR_PATH", anchor_file)
+        monkeypatch.setattr(router_mod, "BackgroundTrainer", _CapturingTrainer)
+
+        router_mod.ModRouter(enable_training=True)
+
+        assert captured.get("anchor_data_path") == anchor_file, (
+            f"Router must forward repo anchor file when it exists; "
+            f"got kwargs={captured!r}"
+        )
+
+    def test_router_passes_none_when_anchor_file_missing(
+        self, monkeypatch, tmp_path,
+    ):
+        """Continuous-3: missing anchor file → `None`, not a phantom path.
+
+        The user can ship without `data/anchor_examples.jsonl` and
+        `BackgroundTrainer` will fall back to recent-only replay
+        without WARNING noise on every boot.
+        """
+        from enigma_engine import router as router_mod
+
+        captured: dict = {}
+
+        class _CapturingTrainer:
+            def __init__(self, **kwargs):
+                captured.update(kwargs)
+                self.inference_idle_check = None
+
+            def start(self):
+                pass
+
+            def stop(self):
+                pass
+
+        missing = tmp_path / "does_not_exist.jsonl"
+        monkeypatch.setattr(router_mod, "_DEFAULT_ANCHOR_PATH", missing)
+        monkeypatch.setattr(router_mod, "BackgroundTrainer", _CapturingTrainer)
+
+        router_mod.ModRouter(enable_training=True)
+
+        assert captured.get("anchor_data_path") is None, (
+            f"Router must pass None when default anchor file is absent; "
+            f"got kwargs={captured!r}"
+        )
+
+    def test_router_explicit_anchor_path_overrides_default(
+        self, monkeypatch, tmp_path,
+    ):
+        """Continuous-3: caller-supplied anchor path wins over repo default."""
+        from enigma_engine import router as router_mod
+
+        captured: dict = {}
+
+        class _CapturingTrainer:
+            def __init__(self, **kwargs):
+                captured.update(kwargs)
+                self.inference_idle_check = None
+
+            def start(self):
+                pass
+
+            def stop(self):
+                pass
+
+        # Repo default exists, but user supplies a different path
+        repo_default = tmp_path / "repo_default.jsonl"
+        repo_default.write_text("{}\n", encoding="utf-8")
+        explicit = tmp_path / "user_choice.jsonl"
+        explicit.write_text("{}\n", encoding="utf-8")
+        monkeypatch.setattr(router_mod, "_DEFAULT_ANCHOR_PATH", repo_default)
+        monkeypatch.setattr(router_mod, "BackgroundTrainer", _CapturingTrainer)
+
+        router_mod.ModRouter(enable_training=True, anchor_data_path=str(explicit))
+
+        assert captured.get("anchor_data_path") == str(explicit), (
+            f"Explicit anchor_data_path must override repo default; "
+            f"got kwargs={captured!r}"
+        )
     """Test that packaging config is correct."""
 
     def test_no_setup_py(self):
@@ -141,7 +291,7 @@ class TestDeadImports:
         if result.returncode != 0 and result.stdout.strip():
             lines = result.stdout.strip().split("\n")
             pytest.fail(
-                f"Unused imports found in critical modules:\n"
+                "Unused imports found in critical modules:\n"
                 + "\n".join(lines)
             )
 
@@ -384,6 +534,106 @@ class TestAutoResearch:
         from enigma_engine.core.auto_research import auto_research
         assert auto_research("") == ""
         assert auto_research("ab") == ""
+
+    # ----------------------------------------------------------------
+    # AutoResearch-2 Stage A — post-generation uncertainty gate
+    # (R-UNPREDICT-1, Pass 146 spec → Pass 153 build)
+    # Signal-driven, deterministic — no RNG.
+    # ----------------------------------------------------------------
+
+    def test_score_uncertainty_confident_response(self):
+        """Confident factual response should score low."""
+        from enigma_engine.core.auto_research import score_uncertainty
+        r = score_uncertainty(
+            "what is the capital of France",
+            "The capital of France is Paris. It has been the "
+            "capital since the 10th century.",
+        )
+        assert r.score < 0.3
+
+    def test_score_uncertainty_hedge_phrases_drive_score_up(self):
+        """Multiple hedge phrases push score above retry threshold."""
+        from enigma_engine.core.auto_research import score_uncertainty
+        r = score_uncertainty(
+            "what is the population of Mars in 2026?",
+            "I'm not sure, but I think it might be around several "
+            "thousand. I don't know the exact number.",
+        )
+        assert r.score >= 0.55
+        assert any("hedge" in s for s in r.reasons)
+
+    def test_score_uncertainty_refusal_pattern(self):
+        """Apology / refusal phrases trigger a high score."""
+        from enigma_engine.core.auto_research import score_uncertainty
+        r = score_uncertainty(
+            "what are the latest quantum computing breakthroughs?",
+            "I apologize, I don't have information on that topic.",
+        )
+        assert r.score >= 0.55
+        assert any("refusal" in s for s in r.reasons)
+
+    def test_score_uncertainty_empty_response(self):
+        """Empty response is maximally uncertain."""
+        from enigma_engine.core.auto_research import score_uncertainty
+        r = score_uncertainty("a real question", "")
+        assert r.score == 1.0
+        assert "empty_response" in r.reasons
+
+    def test_score_uncertainty_short_response_long_query(self):
+        """Short reply to a substantive question contributes uncertainty."""
+        from enigma_engine.core.auto_research import score_uncertainty
+        r = score_uncertainty(
+            "Can you explain in detail how transformers handle "
+            "positional encoding for long contexts?",
+            "Yes.",
+        )
+        assert "short_response" in r.reasons
+
+    def test_score_uncertainty_deterministic(self):
+        """Same input must produce same score — no RNG."""
+        from enigma_engine.core.auto_research import score_uncertainty
+        args = ("what is X?", "I'm not sure, I think it might be Y.")
+        scores = [score_uncertainty(*args).score for _ in range(5)]
+        assert len(set(scores)) == 1
+
+    def test_should_retry_with_research_confident_skips(self):
+        """Confident response → no retry."""
+        from enigma_engine.core.auto_research import should_retry_with_research
+        assert not should_retry_with_research(
+            "what is 2 plus 2?",
+            "2 plus 2 equals 4. This is basic arithmetic.",
+        )
+
+    def test_should_retry_with_research_hedges_triggers(self):
+        """Hedge-heavy response → retry fires."""
+        from enigma_engine.core.auto_research import should_retry_with_research
+        assert should_retry_with_research(
+            "what was the Q3 2025 GDP figure?",
+            "I'm not sure, I don't know that. I think it might be "
+            "something but I cannot say for certain.",
+        )
+
+    def test_should_retry_with_research_off_switch(self):
+        """enabled=False suppresses retry even when score is high."""
+        from enigma_engine.core.auto_research import should_retry_with_research
+        assert not should_retry_with_research(
+            "x",
+            "I don't know. I'm not sure. I apologize, I'm unable.",
+            enabled=False,
+        )
+
+    def test_should_retry_with_research_threshold_configurable(self):
+        """Threshold tunable; same response straddles different cutoffs."""
+        from enigma_engine.core.auto_research import should_retry_with_research
+        response = (
+            "I think this might be correct but I'm not sure."
+        )
+        assert should_retry_with_research(
+            "explain it", response, threshold=0.4
+        )
+        assert not should_retry_with_research(
+            "explain it", response, threshold=0.9
+        )
 
 
 # ================================================================
@@ -1413,9 +1663,9 @@ class TestRecommendPresetForTokens:
         # 67M tokens is far too little for xl (742M).
         # Should pick the smallest possible preset.
         assert name != "xl", (
-            f"67M tokens should not recommend xl")
+            "67M tokens should not recommend xl")
         assert name != "large", (
-            f"67M tokens should not recommend large")
+            "67M tokens should not recommend large")
         # Should be one of the tiny presets
         small_presets = {"pi_zero", "pi_4", "pi_5", "nano", "micro",
                          "tiny", "mini"}
@@ -1443,8 +1693,7 @@ class TestRecommendPresetForTokens:
     def test_vram_constraint_limits_preset(self):
         """VRAM constraint should prevent picking too-large presets."""
         from enigma_engine.core.model_presets import (
-            recommend_preset_for_tokens, estimate_parameters,
-            estimate_training_vram, MODEL_PRESETS)
+            recommend_preset_for_tokens, estimate_training_vram, MODEL_PRESETS)
         import copy
         # 10B tokens, but only 2GB VRAM
         name, params = recommend_preset_for_tokens(
@@ -1485,14 +1734,19 @@ class TestEstimateParameters:
         assert params > 0
 
     def test_small_preset_range(self):
-        """Small preset should be roughly 50-100M params."""
+        """Small preset should be roughly 30-100M params.
+
+        MTP-2b: lower floor dropped from 50M to 30M when default
+        n_predict_heads flipped 2 to 0. The MTP heads were padding
+        the count without contributing to model capacity.
+        """
         import copy
         from enigma_engine.core.model_presets import (
             MODEL_PRESETS, estimate_parameters)
         cfg = copy.deepcopy(MODEL_PRESETS["small"])
         cfg.vocab_size = 32000
         params = estimate_parameters(cfg)
-        assert 50_000_000 <= params <= 100_000_000, f"small = {params:,}"
+        assert 30_000_000 <= params <= 100_000_000, f"small = {params:,}"
 
     def test_base_preset_range(self):
         """Base preset should be roughly 150-500M params."""
@@ -1587,7 +1841,7 @@ class TestGGUFParamEstimation:
 
     def test_estimate_uses_quant_type(self):
         """Q8 file should estimate ~2x fewer params than Q4."""
-        import tempfile, os
+        import os
         from enigma_engine.gui.gui_logic import _estimate_gguf_params
 
         class _FakeEngine:
@@ -1694,7 +1948,6 @@ class TestThroughputTelemetry:
         assert data["total_tokens"] == 512
 
     def test_finish_run_includes_throughput(self):
-        import tempfile
         from pathlib import Path
         from enigma_engine.core.training_monitor import TrainingMonitor
         with tempfile.TemporaryDirectory() as td:
@@ -1765,7 +2018,9 @@ class TestTokenizerMetrics:
         result = analyze_vocabulary(tok)
         assert result['vocab_size'] > 0
         assert result['num_special'] == len(tok.special_tokens)
-        assert result['use_utf8_bytes'] is False
+        # Tok-2: fresh BPETokenizer defaults to byte-level mode so any
+        # Unicode codepoint roundtrips without <unk>. Was False before.
+        assert result['use_utf8_bytes'] is True
 
     def test_evaluate_coverage_keys(self):
         from enigma_engine.core.tokenizer_metrics import evaluate_coverage
@@ -2116,7 +2371,7 @@ class TestMemoryEstimation:
         from enigma_engine.core.hardware_detection import estimate_memory_usage
         from enigma_engine.core.model_presets import MODEL_PRESETS
         for name in ("small", "medium", "large", "xl"):
-            cfg = MODEL_PRESETS[name]
+            MODEL_PRESETS[name]
             result = estimate_memory_usage(name)
             # KV cache scales with n_layers * dim — verify it reflects
             # the real preset, not stale hardcoded fallbacks.
@@ -2257,7 +2512,7 @@ class TestGGUFDequantExtended:
     def test_dequantize_q4_0_values(self):
         """Q4_0 dequantization produces non-zero values with non-zero scale."""
         import numpy as np
-        torch = pytest.importorskip("torch")
+        pytest.importorskip("torch")
         from enigma_engine.core.gguf_dequant import dequantize_q4_0
         # Build a block with scale=1.0 and non-zero data
         scale = np.float16(1.0)
@@ -2271,7 +2526,7 @@ class TestGGUFDequantExtended:
     def test_dequantize_q8_0_values(self):
         """Q8_0 dequantization produces expected values."""
         import numpy as np
-        torch = pytest.importorskip("torch")
+        pytest.importorskip("torch")
         from enigma_engine.core.gguf_dequant import dequantize_q8_0
         # Build a block with scale=2.0 and values = [1, 1, ..., 1]
         scale = np.float16(2.0)
@@ -2296,7 +2551,7 @@ class TestGGUFDequantExtended:
     def test_parse_gguf_tensors_validates_tensor_count(self):
         """parse_gguf_tensors rejects invalid tensor_count."""
         import io
-        torch = pytest.importorskip("torch")
+        pytest.importorskip("torch")
         from enigma_engine.core.gguf_dequant import parse_gguf_tensors
         f = io.BytesIO(b"")
         header = {"tensor_count": -1}
@@ -2306,7 +2561,7 @@ class TestGGUFDequantExtended:
     def test_parse_gguf_tensors_validates_large_count(self):
         """parse_gguf_tensors rejects unreasonably large tensor_count."""
         import io
-        torch = pytest.importorskip("torch")
+        pytest.importorskip("torch")
         from enigma_engine.core.gguf_dequant import parse_gguf_tensors
         f = io.BytesIO(b"")
         header = {"tensor_count": 200_000}
@@ -2322,7 +2577,7 @@ class TestSlidingWindowMask:
 
     def test_no_sliding_window_default(self):
         """Without sliding_window, mask is standard upper-triangular."""
-        torch = pytest.importorskip("torch")
+        pytest.importorskip("torch")
         from enigma_engine.core.model import Enigma
         from enigma_engine.core.model_presets import ForgeConfig
 
@@ -2335,7 +2590,7 @@ class TestSlidingWindowMask:
 
     def test_sliding_window_masks_distant_tokens(self):
         """With sliding_window=2, token 5 cannot attend to token 0."""
-        torch = pytest.importorskip("torch")
+        pytest.importorskip("torch")
         from enigma_engine.core.model import Enigma
         from enigma_engine.core.model_presets import ForgeConfig
 
@@ -2355,7 +2610,7 @@ class TestSlidingWindowMask:
 
     def test_sliding_window_still_causal(self):
         """Sliding window mask doesn't break causality (future still -inf)."""
-        torch = pytest.importorskip("torch")
+        pytest.importorskip("torch")
         from enigma_engine.core.model import Enigma
         from enigma_engine.core.model_presets import ForgeConfig
 
@@ -2576,6 +2831,184 @@ class TestAIProfileLifecycle:
         p = AIProfile(commands=[], disabled_commands=["system.exec"])
         assert p.can_use_command("system.exec") is False
         assert p.can_use_command("file.read") is True
+
+    # ------------------------------------------------------------------
+    # Personality-3 boundary fix (P1 row 10 — Personality-5 cluster)
+    #
+    # The `personality` dict is a ROLEPLAY OVERLAY, not a base-AI
+    # configuration. Base AI identity is weight-trained per
+    # Personality-5 spec (see SUGGESTIONS.md ARCH-GAP Personality-3
+    # and R-PERSONALITY-1). Default-constructed AIProfile must
+    # therefore have an EMPTY personality dict — anything else is
+    # the user inadvertently configuring the AI's character.
+    # ------------------------------------------------------------------
+
+    def test_default_profile_has_empty_personality(self):
+        """Base AIProfile() ships with empty personality dict.
+
+        Catches the regression where someone re-introduces the old
+        4-key default (tone/verbosity/formality/humor) which makes
+        every base profile look user-configured for personality
+        when the user never set anything.
+        """
+        from enigma_engine.core.ai_profile import AIProfile
+        assert AIProfile().personality == {}
+
+    def test_is_roleplay_false_on_base_profile(self):
+        """A profile with empty personality is NOT a roleplay overlay."""
+        from enigma_engine.core.ai_profile import AIProfile
+        assert AIProfile().is_roleplay() is False
+
+    def test_is_roleplay_true_when_personality_populated(self):
+        """A profile with any personality entry IS a roleplay overlay."""
+        from enigma_engine.core.ai_profile import AIProfile
+        p = AIProfile(personality={"tone": "snarky"})
+        assert p.is_roleplay() is True
+
+    def test_default_profile_roundtrip_preserves_empty_personality(self):
+        """to_dict -> from_dict on a default profile keeps personality empty.
+
+        Catches the regression where from_dict re-fills personality
+        with the old populated default when the JSON omits the field.
+        """
+        from enigma_engine.core.ai_profile import AIProfile
+        original = AIProfile()
+        d = original.to_dict()
+        # Sanity: serialised form has no personality knobs either.
+        assert d["personality"] == {}
+        restored = AIProfile.from_dict(d)
+        assert restored.personality == {}
+        assert restored.is_roleplay() is False
+
+    def test_personality_field_doc_marks_roleplay_only(self):
+        """AIProfile docstring or field doc names personality as roleplay-only.
+
+        Structural gate per AA Pass 156s2 (docstring lies anti-pattern):
+        the boundary semantics are easy to revert; docs must call out
+        the contract so the next maintainer can't silently re-default
+        to populated knobs.
+        """
+        import inspect
+        from enigma_engine.core.ai_profile import AIProfile
+        src = inspect.getsource(AIProfile)
+        assert "roleplay" in src.lower(), (
+            "AIProfile must document that personality is a roleplay "
+            "overlay, not base-AI configuration"
+        )
+
+    def test_canonical_assistant_disk_profile_is_not_roleplay(self):
+        """profiles/assistant.json on disk must satisfy the Personality-3
+        boundary contract.
+
+        Pass 156y-audit finding: the original Pass 156y only cleaned the
+        in-memory ``DEFAULT_PROFILES["assistant"]`` constant. The disk
+        file ``profiles/assistant.json`` (which is what the GUI / API
+        actually loads) kept its populated personality block — JSON wins
+        on load, so at runtime users got ``is_roleplay() == True`` on the
+        canonical base profile, contradicting the entire contract.
+
+        This test is the load-path counterpart to the in-memory tests
+        above. Catches the regression where someone re-adds knobs to the
+        JSON, AND would have caught the original disk-vs-library drift.
+        """
+        from pathlib import Path
+        from enigma_engine.core.ai_profile import load_profile
+        repo_root = Path(__file__).resolve().parent.parent
+        disk_profile = repo_root / "profiles" / "assistant.json"
+        if not disk_profile.exists():
+            pytest.skip("canonical assistant.json not present in this checkout")
+        loaded = load_profile(str(disk_profile))
+        assert loaded.is_roleplay() is False, (
+            "profiles/assistant.json must have an empty personality dict — "
+            "base AI identity is weight-trained per Personality-5, "
+            "personality is a roleplay overlay only"
+        )
+        assert loaded.personality == {}
+
+    @pytest.mark.parametrize("profile_id", ["coding_helper", "creative_writer", "researcher"])
+    def test_canonical_role_template_disk_profile_is_not_roleplay(self, profile_id):
+        """profiles/{coding_helper,creative_writer,researcher}.json must
+        satisfy the Personality-4 boundary contract.
+
+        Personality-4 design call: task-preset profiles steer behaviour
+        through ``system_prompt`` + generation knobs, NOT through
+        character/personality traits. Generic 4-knob blocks
+        (tone/verbosity/formality/humor) on these JSONs were decorative
+        legacy from before Pass 156y — they made every task profile
+        falsely satisfy ``is_roleplay() == True`` and would have
+        misrouted any future is_roleplay()-branching consumer.
+
+        Load-path test (mirror of the assistant.json gate): catches
+        the regression where someone re-adds knobs to any of the three
+        canonical role-template JSONs.
+        """
+        from pathlib import Path
+        from enigma_engine.core.ai_profile import load_profile
+        repo_root = Path(__file__).resolve().parent.parent
+        disk_profile = repo_root / "profiles" / f"{profile_id}.json"
+        if not disk_profile.exists():
+            pytest.skip(f"canonical {profile_id}.json not present in this checkout")
+        loaded = load_profile(str(disk_profile))
+        assert loaded.is_roleplay() is False, (
+            f"profiles/{profile_id}.json is a task overlay, not a "
+            f"roleplay character — personality dict must be empty per "
+            f"Personality-4. Found: {loaded.personality!r}"
+        )
+        assert loaded.personality == {}
+
+    def test_apply_profile_to_engine_logs_roleplay_branch(self, caplog):
+        """``apply_profile_to_engine`` is the production consumer for
+        ``is_roleplay()``: it logs different markers on the two
+        branches so the boundary is observable in ops logs.
+
+        Personality-4 wiring gate. Without an end-to-end consumer the
+        signal is dead infrastructure; this test catches the regression
+        where someone collapses the branched log back to a single line
+        (which would silently re-hide the boundary).
+        """
+        import logging
+        from enigma_engine.core.ai_profile import (
+            AIProfile, apply_profile_to_engine,
+        )
+
+        class _NullEngine:
+            """Engine stub with no optional attributes — exercises the
+            base-path through apply_profile_to_engine without touching
+            generation / adapter side-effects."""
+
+        # Roleplay branch: populated personality must produce a marker
+        # naming "roleplay" AND the populated keys (so log readers can
+        # see WHICH overlay was applied).
+        roleplay = AIProfile(
+            name="Test Character",
+            id="test_char",
+            personality={"tone": "snarky", "humor": "dry"},
+        )
+        with caplog.at_level(logging.INFO, logger="enigma_engine.core.ai_profile"):
+            caplog.clear()
+            apply_profile_to_engine(roleplay, _NullEngine())
+            roleplay_messages = [r.getMessage() for r in caplog.records]
+        assert any("roleplay" in m.lower() and "Test Character" in m
+                   for m in roleplay_messages), (
+            f"roleplay branch must log a roleplay marker; got {roleplay_messages!r}"
+        )
+        # Personality keys must appear in the log so audit can see overlay shape.
+        assert any("tone" in m and "humor" in m for m in roleplay_messages), (
+            f"roleplay log must surface personality keys; got {roleplay_messages!r}"
+        )
+
+        # Base/task branch: empty personality must NOT log "roleplay".
+        base = AIProfile(name="Base Profile", id="base", personality={})
+        with caplog.at_level(logging.INFO, logger="enigma_engine.core.ai_profile"):
+            caplog.clear()
+            apply_profile_to_engine(base, _NullEngine())
+            base_messages = [r.getMessage() for r in caplog.records]
+        assert any("Base Profile" in m for m in base_messages), (
+            f"base branch must still log the apply event; got {base_messages!r}"
+        )
+        assert not any("roleplay" in m.lower() for m in base_messages), (
+            f"base/task profile must NOT log roleplay marker; got {base_messages!r}"
+        )
 
     def test_save_and_load_roundtrip(self, tmp_path):
         """save_profile -> load_profile preserves data through disk."""
@@ -3080,7 +3513,7 @@ class TestAtomicSafetensorsSave:
 
         def mock_save_file(tensors, path, metadata=None):
             Path(path).write_text("partial", encoding="utf-8")
-            raise IOError("Disk full")
+            raise OSError("Disk full")
 
         if "safetensors" not in sys.modules:
             st = types.ModuleType("safetensors")
@@ -3458,7 +3891,6 @@ class TestWeightMappingSkipWarning:
 
     def test_high_skip_ratio_warns(self):
         """Mapping where >10% of weights are skipped should log a warning."""
-        import logging
         from enigma_engine.core.weight_mapping import WeightMapper
         mapper = WeightMapper()
         # 2 valid + 8 unmapped = 80% skip rate

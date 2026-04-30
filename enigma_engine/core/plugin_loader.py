@@ -55,7 +55,9 @@ _DANGEROUS_ATTRS: frozenset[str] = frozenset({
     "os.execvpe", "os.spawn", "os.spawnl", "os.spawnle",
     "subprocess.call", "subprocess.run", "subprocess.Popen",
     "subprocess.check_output", "subprocess.check_call",
+    "subprocess.getoutput", "subprocess.getstatusoutput",
     "shutil.rmtree",
+    "ctypes.cdll", "ctypes.windll", "ctypes.CDLL", "ctypes.WinDLL",
 })
 
 
@@ -127,7 +129,7 @@ def _ast_scan_dangers(source: str, filename: str) -> list[str]:
             elif node.module:
                 names = [node.module]
             for name in names:
-                if name in ("subprocess",):
+                if name in ("subprocess", "ctypes"):
                     flags.append(
                         f"line {node.lineno}: import {name} (flagged module)"
                     )

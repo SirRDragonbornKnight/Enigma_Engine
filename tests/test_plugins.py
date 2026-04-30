@@ -456,7 +456,8 @@ class TestModTools:
         from enigma_engine.core.commands import CommandRegistry, CommandResult
         registry = CommandRegistry()
         # Pre-register a command
-        sentinel = lambda a, c: CommandResult(True, "sentinel")
+        def sentinel(a, c):
+            return CommandResult(True, "sentinel")
         registry.register("imagegen.generate", sentinel, "test", "test")
         mods_dir = Path(__file__).parent.parent / "mods"
         register_mod_commands(registry, mods_dir)

@@ -6,8 +6,10 @@ Downloads and formats instruction-following datasets for fine-tuning.
 Sources (all require `pip install datasets`):
   - OASST1 (--oasst)        - Open Assistant conversations (~80K turns)
   - Dolly 15k (--dolly)     - Databricks instruction pairs (~15K)
-  - SlimOrca (--slimorca N)  - Instruction-following from Open-Orca (N = max samples)
-  - All sources (--all)      - Download everything
+  - SlimOrca (--slimorca N) - Instruction-following from Open-Orca (N = max samples)
+  - OpenThoughts3 (--openthoughts3 N) - Reasoning traces with <think> tags (D-4)
+  - SmolTalk2 (--smoltalk2 N --smoltalk2-config NAME [--smoltalk2-split NAME]) - SmolLM3 SFT data (D-11)
+  - All sources (--all)     - Download everything
 
 Output format:
   JSONL with {"prompt": "...", "completion": "..."} per line.
@@ -71,6 +73,36 @@ def _write_jsonl(pairs: list[dict], path: Path) -> int:
         for item in pairs:
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
     return len(pairs)
+
+
+def _write_combined_text(pairs: list[dict], path: Path) -> int:
+    """Write pairs as canonical 'User: ...\\n\\nAssistant: ...' blocks.
+
+    Matches the chat format used by `BackgroundTrainer` (router.py L315)
+    and the GUI chat path so the SFT trainer (which reads plain text via
+    `Path.read_text`) can consume the collected fine-tune data without
+    a JSONL-aware loader. Closes the D-11 consumer-side gap.
+
+    Empty prompts or completions are skipped — a malformed block like
+    'User: \\n\\nAssistant: foo' would teach the model that empty input
+    is a valid prefix.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    written = 0
+    with open(path, "w", encoding="utf-8") as f:
+        first = True
+        for item in pairs:
+            prompt = (item.get("prompt") or "").strip()
+            completion = (item.get("completion") or "").strip()
+            if not prompt or not completion:
+                continue
+            if not first:
+                # Blank line between blocks → "C1\n\n" + "\n" + "User: P2"
+                f.write("\n")
+            f.write(f"User: {prompt}\n\nAssistant: {completion}\n")
+            first = False
+            written += 1
+    return written
 
 
 def _clean_text(text: str) -> str:
@@ -270,6 +302,203 @@ def collect_slimorca(max_samples: int = 100000) -> list[dict]:
     return pairs
 
 
+# ── OpenThoughts3 (D-4) ────────────────────────────────────────────
+
+def collect_openthoughts3(max_samples: int = 100000) -> list[dict]:
+    """Download and format OpenThoughts3-1.2M reasoning data.
+
+    Source: `open-thoughts/OpenThoughts3-1.2M` (Apache-2.0).
+    Composition: 850K math + 250K code + 100K science = 1.2M rows.
+    Reasoning traces annotated by QwQ-32B and wrapped in
+    `<think>...</think>` tags inside the gpt turn.
+
+    Schema per Pass 139 verification:
+        {"difficulty": int, "source": str, "domain": str,
+         "conversations": [{"from": "human"/"gpt", "value": str}]}
+
+    The `<think>` / `</think>` tags MUST be preserved verbatim — they
+    align with our special token IDs (`<think>=4`, `</think>=5`) and
+    must not be collapsed by whitespace normalization.
+    """
+    if not _ensure_datasets():
+        return []
+
+    from datasets import load_dataset
+
+    logger.info(
+        f"Downloading OpenThoughts3-1.2M (max {max_samples:,} samples)...")
+    try:
+        ds = load_dataset(
+            "open-thoughts/OpenThoughts3-1.2M",
+            split="train",
+            streaming=True,
+        )
+    except Exception as exc:
+        logger.error("Failed to load OpenThoughts3: %s", exc)
+        return []
+
+    pairs: list[dict] = []
+    seen = 0
+    for item in ds:
+        if seen >= max_samples:
+            break
+        seen += 1
+
+        conversations = item.get("conversations") or []
+        human_turn = next(
+            (t for t in conversations if t.get("from") == "human"), None)
+        gpt_turn = next(
+            (t for t in conversations if t.get("from") == "gpt"), None)
+        if not human_turn or not gpt_turn:
+            continue
+
+        prompt = (human_turn.get("value") or "").strip()
+        # Verbatim — DO NOT pass through _clean_text(): tags need newlines.
+        completion = (gpt_turn.get("value") or "").strip()
+        if not prompt or not completion:
+            continue
+        if len(prompt) < 5 or len(completion) < 10:
+            continue
+
+        pairs.append({"prompt": prompt, "completion": completion})
+
+        if seen % 10000 == 0:
+            logger.info(
+                f"  OpenThoughts3: {seen:,} processed, "
+                f"{len(pairs):,} kept...")
+
+    pairs = _dedup_pairs(pairs)
+    logger.info(
+        f"OpenThoughts3: {len(pairs)} reasoning pairs extracted")
+    return pairs
+
+
+# ── SmolTalk2 (D-11) ───────────────────────────────────────────────
+
+def collect_smoltalk2(
+    max_samples: int = 100000,
+    config: str = "default",
+    split: str | None = None,
+) -> list[dict]:
+    """Download and format SmolTalk2 SFT data.
+
+    Source: `HuggingFaceTB/smoltalk2`. SmolTalk2 ships **many** configs
+    (`SFT`, `Mid`, `Preference`) and each config has many named splits
+    (e.g. `smoltalk_smollm3_smol_magpie_ultra_no_think`,
+    `OpenThoughts3_1.2M_think`) — there is no canonical "train" split.
+
+    On a missing config the HuggingFace loader raises ValueError
+    naming the available configs; on a missing split it raises
+    ValueError naming the available splits. Either way we log and
+    return [] (per learned principle: detect on first attempt, do
+    not loop).
+
+    When `split` is None, all splits in the config are concatenated
+    until `max_samples` is reached — useful for getting "all SFT data"
+    without picking one of 25 split names.
+
+    Schema: standard ChatML — `messages: [{role, content}]` where role
+    is "user" / "assistant" (and optionally "system").
+    """
+    if not _ensure_datasets():
+        return []
+
+    from datasets import get_dataset_split_names, load_dataset
+
+    logger.info(
+        f"Downloading SmolTalk2 (config={config!r}, "
+        f"split={split!r}, max {max_samples:,})...")
+
+    # Resolve splits to iterate.
+    if split is None:
+        try:
+            splits = list(get_dataset_split_names(
+                "HuggingFaceTB/smoltalk2", config))
+        except Exception as exc:
+            logger.error(
+                "Failed to enumerate SmolTalk2 splits "
+                "(config=%r): %s. Pick a valid config and "
+                "re-run with --smoltalk2-config NAME.",
+                config, exc,
+            )
+            return []
+        if not splits:
+            logger.error(
+                "SmolTalk2 config=%r has no splits.", config)
+            return []
+        logger.info(
+            f"  SmolTalk2 config={config!r} has "
+            f"{len(splits)} splits; iterating all.")
+    else:
+        splits = [split]
+
+    pairs: list[dict] = []
+    seen = 0
+    for split_name in splits:
+        if seen >= max_samples:
+            break
+        try:
+            ds = load_dataset(
+                "HuggingFaceTB/smoltalk2",
+                config,
+                split=split_name,
+                streaming=True,
+            )
+        except Exception as exc:
+            logger.error(
+                "Failed to load SmolTalk2 (config=%r, "
+                "split=%r): %s.",
+                config, split_name, exc,
+            )
+            continue
+
+        for item in ds:
+            if seen >= max_samples:
+                break
+            seen += 1
+
+            messages = item.get("messages") or []
+            # Optional system prompt, prepended to first user turn.
+            system = ""
+            prompt = ""
+            completion = ""
+            for turn in messages:
+                role = turn.get("role", "")
+                content = _clean_text(turn.get("content", ""))
+                if role == "system" and content and not system:
+                    system = content
+                elif role == "user" and content and not prompt:
+                    prompt = content
+                elif (role == "assistant" and content
+                      and not completion):
+                    completion = content
+                    # first assistant reply is enough for SFT pair
+                    break
+
+            if not prompt or not completion:
+                continue
+            if len(prompt) < 5 or len(completion) < 10:
+                continue
+
+            if system and system.lower() not in (
+                "you are an ai assistant.",
+                "you are a helpful assistant.",
+            ):
+                prompt = f"{system}\n\n{prompt}"
+
+            pairs.append({
+                "prompt": prompt, "completion": completion})
+
+            if seen % 10000 == 0:
+                logger.info(
+                    f"  SmolTalk2: {seen:,} processed, "
+                    f"{len(pairs):,} kept...")
+
+    pairs = _dedup_pairs(pairs)
+    logger.info(f"SmolTalk2: {len(pairs)} instruction pairs extracted")
+    return pairs
+
+
 # ── Combine & Stats ───────────────────────────────────────────────
 
 def combine_all(output_dir: Path) -> Path:
@@ -292,10 +521,31 @@ def combine_all(output_dir: Path) -> Path:
     all_pairs = _dedup_pairs(all_pairs)
     _write_jsonl(all_pairs, combined_path)
 
+    # D-11 wiring (Pass 156i8): also emit canonical-chat-format text so
+    # the existing SFT training path (plain-text reader) can consume the
+    # collected fine-tune data with zero training-side change.
+    text_path = combined_path.with_suffix(".txt")
+    text_count = _write_combined_text(all_pairs, text_path)
+
     size_mb = combined_path.stat().st_size / (1024 * 1024)
+    text_size_mb = text_path.stat().st_size / (1024 * 1024)
     logger.info(
         f"Combined: {len(all_pairs):,} pairs, {size_mb:.1f} MB "
         f"→ {combined_path}")
+    # D-11d (Pass 156l): file-present-zero-yield must be loud, not silent.
+    # If we have collected pairs but every one had empty prompt/completion,
+    # the .txt file is 0 bytes and the SFT path will silently train on
+    # nothing. Mirror the file-present-zero-yield WARNING pattern from
+    # Pass 156i6 anchor loader.
+    if text_count == 0 and len(all_pairs) > 0:
+        logger.warning(
+            "All %d combined pairs had empty prompt or completion — "
+            "text file is 0 bytes (%s). Check fetcher output.",
+            len(all_pairs), text_path)
+    else:
+        logger.info(
+            f"Combined text: {text_count:,} blocks, {text_size_mb:.1f} MB "
+            f"→ {text_path}")
     return combined_path
 
 
@@ -349,6 +599,23 @@ def main():
         "--slimorca", type=int, nargs="?", const=100000,
         help="Download SlimOrca (default: 100K samples)")
     parser.add_argument(
+        "--openthoughts3", type=int, nargs="?", const=100000,
+        help="Download OpenThoughts3-1.2M reasoning data "
+             "with <think> tags (default: 100K samples)")
+    parser.add_argument(
+        "--smoltalk2", type=int, nargs="?", const=100000,
+        help="Download SmolTalk2 SFT data "
+             "(default: 100K samples). Requires --smoltalk2-config.")
+    parser.add_argument(
+        "--smoltalk2-config", type=str, default="default",
+        help="SmolTalk2 config name (e.g. smol_magpie_ultra). "
+             "On a missing config the loader logs available choices.")
+    parser.add_argument(
+        "--smoltalk2-split", type=str, default=None,
+        help="SmolTalk2 split name within the chosen config. "
+             "If omitted, all splits in the config are concatenated "
+             "until --smoltalk2 max is reached.")
+    parser.add_argument(
         "--all", action="store_true",
         help="Download all sources")
     parser.add_argument(
@@ -373,7 +640,10 @@ def main():
         combine_all(output_dir)
         return
 
-    any_source = args.oasst or args.dolly or args.slimorca or args.all
+    any_source = (
+        args.oasst or args.dolly or args.slimorca
+        or args.openthoughts3 or args.smoltalk2 or args.all
+    )
     if not any_source:
         parser.print_help()
         return
@@ -405,6 +675,33 @@ def main():
             _write_jsonl(pairs, path)
             logger.info(f"Saved {len(pairs):,} pairs → {path}")
             collected.append(("SlimOrca", len(pairs)))
+
+    if args.openthoughts3 is not None or args.all:
+        max_n = (
+            args.openthoughts3 if args.openthoughts3 is not None
+            else 100000
+        )
+        pairs = collect_openthoughts3(max_samples=max_n)
+        if pairs:
+            path = output_dir / "openthoughts3.jsonl"
+            _write_jsonl(pairs, path)
+            logger.info(f"Saved {len(pairs):,} pairs → {path}")
+            collected.append(("OpenThoughts3", len(pairs)))
+
+    if args.smoltalk2 is not None or args.all:
+        max_n = (
+            args.smoltalk2 if args.smoltalk2 is not None else 100000
+        )
+        pairs = collect_smoltalk2(
+            max_samples=max_n,
+            config=args.smoltalk2_config,
+            split=args.smoltalk2_split,
+        )
+        if pairs:
+            path = output_dir / "smoltalk2.jsonl"
+            _write_jsonl(pairs, path)
+            logger.info(f"Saved {len(pairs):,} pairs → {path}")
+            collected.append(("SmolTalk2", len(pairs)))
 
     if collected:
         combine_all(output_dir)

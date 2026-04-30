@@ -1,5 +1,4 @@
 """Tests for safe model loading, SSRF protection, data validation, and thread safety."""
-import inspect
 import sys
 from pathlib import Path
 

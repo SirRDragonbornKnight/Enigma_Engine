@@ -90,7 +90,6 @@ class TestMultiGPU:
 
     def test_cleanup_removes_env_vars(self):
         """S692: cleanup() must remove MASTER_ADDR/MASTER_PORT env vars."""
-        import os
         import inspect
         from enigma_engine.core.multi_gpu import DistributedTrainer
         source = inspect.getsource(DistributedTrainer.cleanup)
@@ -556,6 +555,51 @@ class TestReplayBuffer:
         assert rb2.alpha == 0.7
         assert len(rb2) == 1
 
+    def test_replay_buffer_stores_full_ids(self):
+        """S813: ReplayBuffer stores full_ids/prompt_len for log-prob recomputation."""
+        import torch
+        from enigma_engine.core.rl_training import ReplayBuffer
+        rb = ReplayBuffer(capacity=10)
+        full_ids = torch.tensor([1, 2, 3, 4, 5])
+        ref_logps = torch.randn(3)
+        rb.add(
+            log_probs=torch.randn(3),
+            values=torch.randn(3),
+            rewards=torch.zeros(3),
+            response_mask=torch.ones(3),
+            reward_scalar=1.0,
+            full_ids=full_ids,
+            prompt_len=2,
+            ref_logps=ref_logps,
+        )
+        samples = rb.sample(1, device="cpu")
+        assert len(samples) == 1
+        s = samples[0]
+        assert "full_ids" in s
+        assert "prompt_len" in s
+        assert "ref_logps" in s
+        assert torch.equal(s["full_ids"], full_ids)
+        assert s["prompt_len"] == 2
+        assert s["ref_logps"].shape == ref_logps.shape
+
+    def test_replay_buffer_backward_compat_no_full_ids(self):
+        """S813: ReplayBuffer works without full_ids (backward compat)."""
+        import torch
+        from enigma_engine.core.rl_training import ReplayBuffer
+        rb = ReplayBuffer(capacity=10)
+        rb.add(
+            log_probs=torch.randn(3),
+            values=torch.randn(3),
+            rewards=torch.zeros(3),
+            response_mask=torch.ones(3),
+            reward_scalar=1.0,
+        )
+        samples = rb.sample(1, device="cpu")
+        s = samples[0]
+        # Without full_ids, sample should not include those keys
+        assert "full_ids" not in s
+        assert "prompt_len" not in s
+
 
 # ===================================================================
 # COMPLETION ITEM #1: memory.search respects disabled flag
@@ -740,7 +784,6 @@ class TestCachedMovingAverage:
 
     def test_moving_average_nan_does_not_leak_stale_values(self):
         """NaN in the window must not cause stale values to linger."""
-        import math
         from enigma_engine.core.training_monitor import TrainingMonitor
         m = TrainingMonitor(moving_avg_window=2)
         m.start_run()
@@ -782,7 +825,6 @@ class TestQueueLoadValidation:
 
     def test_wrong_types_dont_crash(self):
         """JSON with wrong field types doesn't crash."""
-        import json
         import tempfile
         from pathlib import Path
         from enigma_engine.core.training_queue import TrainingQueue
@@ -809,7 +851,6 @@ class TestQueueLoadValidation:
 
     def test_missing_jobs_key_returns_false(self):
         """JSON missing 'jobs' key doesn't crash."""
-        import json
         import tempfile
         from pathlib import Path
         from enigma_engine.core.training_queue import TrainingQueue
@@ -888,3 +929,119 @@ class TestEmotionalStateLock:
         ctx = ModelContext("test_emo_lock")
         assert hasattr(ctx, "_emotional_lock")
         assert isinstance(ctx._emotional_lock, type(threading.Lock()))
+
+
+# ===================================================================
+# S823 — PPO combined forward pass
+# ===================================================================
+
+
+class TestGetLogpsHiddenEntropy:
+    """_get_logps_hidden_entropy returns same values as the 3 separate calls it replaces."""
+
+    def _make_tiny_model(self, *, training: bool = False, neftune_alpha: float = 0.0):
+        """Build a minimal Enigma model on CPU for testing."""
+        from enigma_engine.core.model import Enigma, ForgeConfig
+        cfg = ForgeConfig(
+            dim=32,
+            n_layers=1,
+            n_heads=2,
+            vocab_size=64,
+            max_seq_len=32,
+            use_rope=True,
+            neftune_alpha=neftune_alpha,
+        )
+        model = Enigma(cfg)
+        if training:
+            model.train()
+        else:
+            model.eval()
+        return model
+
+    def test_logps_match_get_response_logps(self):
+        """logps from combined pass must match _get_response_logps."""
+        import torch
+        from enigma_engine.core.rl_training import (
+            _get_response_logps,
+            _get_logps_hidden_entropy,
+        )
+        model = self._make_tiny_model()
+        full_ids = torch.randint(0, 60, (1, 10))
+        prompt_len = 4
+        with torch.no_grad():
+            expected_logps = _get_response_logps(model, full_ids, prompt_len)
+            got_logps, _, _ = _get_logps_hidden_entropy(model, full_ids, prompt_len)
+        assert got_logps.shape == expected_logps.shape
+        assert torch.allclose(got_logps, expected_logps, atol=1e-5), (
+            f"logps mismatch: max diff {(got_logps - expected_logps).abs().max():.2e}"
+        )
+
+    def test_hidden_shape_matches_get_hidden_states(self):
+        """hidden states from combined pass have same shape as _get_hidden_states."""
+        import torch
+        from enigma_engine.core.rl_training import (
+            _get_logps_hidden_entropy,
+        )
+        model = self._make_tiny_model()
+        full_ids = torch.randint(0, 60, (1, 10))
+        prompt_len = 4
+        with torch.no_grad():
+            _, got_hidden, _ = _get_logps_hidden_entropy(model, full_ids, prompt_len)
+        # hidden: (1, resp_len, dim)
+        assert got_hidden.ndim == 3
+        assert got_hidden.shape[0] == 1
+        assert got_hidden.shape[2] == model.config.dim
+        resp_len = 10 - 1 - max(prompt_len - 1, 0)  # T - response_start
+        assert got_hidden.shape[1] == resp_len
+
+    def test_entropy_match_get_response_entropy(self):
+        """entropy from combined pass must match _get_response_entropy."""
+        import torch
+        from enigma_engine.core.rl_training import (
+            _get_response_entropy,
+            _get_logps_hidden_entropy,
+        )
+        model = self._make_tiny_model()
+        full_ids = torch.randint(0, 60, (1, 10))
+        prompt_len = 4
+        with torch.no_grad():
+            expected_ent = _get_response_entropy(model, full_ids, prompt_len)
+            _, _, got_ent = _get_logps_hidden_entropy(model, full_ids, prompt_len)
+        assert got_ent.shape == expected_ent.shape
+        assert torch.allclose(got_ent, expected_ent, atol=1e-5), (
+            f"entropy mismatch: max diff {(got_ent - expected_ent).abs().max():.2e}"
+        )
+
+    def test_train_mode_returns_finite_outputs(self):
+        """Combined helper should run in train mode and return sane tensors."""
+        import torch
+        from enigma_engine.core.rl_training import (
+            _get_logps_hidden_entropy,
+        )
+        model = self._make_tiny_model(training=True, neftune_alpha=5.0)
+        full_ids = torch.randint(0, 60, (1, 10))
+        prompt_len = 4
+        with torch.no_grad():
+            got_logps, got_hidden, got_ent = _get_logps_hidden_entropy(
+                model, full_ids, prompt_len)
+
+        assert got_logps.ndim == 1
+        assert got_ent.ndim == 1
+        assert got_hidden.ndim == 3
+        assert got_hidden.shape[0] == 1
+        assert got_hidden.shape[1] == got_logps.shape[0]
+        assert got_ent.shape[0] == got_logps.shape[0]
+        assert torch.isfinite(got_logps).all()
+        assert torch.isfinite(got_ent).all()
+        assert torch.isfinite(got_hidden).all()
+
+    def test_short_prompt_returns_empty(self):
+        """Combined pass gracefully handles prompt_len >= seq_len."""
+        import torch
+        from enigma_engine.core.rl_training import _get_logps_hidden_entropy
+        model = self._make_tiny_model()
+        full_ids = torch.randint(0, 60, (1, 5))
+        # prompt_len longer than sequence
+        logps, hidden, entropy = _get_logps_hidden_entropy(model, full_ids, prompt_len=100)
+        assert logps.shape[0] == 1  # returns zeros(1) sentinel
+        assert entropy.shape[0] == 1

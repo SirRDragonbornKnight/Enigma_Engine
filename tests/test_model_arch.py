@@ -557,6 +557,76 @@ class TestVisionWithTextModel:
         assert logits.shape == (1, vcfg.num_patches, padded_vocab)
 
 
+class TestVisionProjectionMLP:
+    """Vision-1b: projection upgraded from single Linear to LLaVA-1.5 2-layer MLP."""
+
+    def _make_model(self, vision_hidden=32, dim=64):
+        from enigma_engine.core.model import Enigma, ForgeConfig
+        tcfg = ForgeConfig(
+            vocab_size=100, dim=dim, n_layers=1, n_heads=2,
+            max_seq_len=64, vision_hidden_size=vision_hidden,
+        )
+        return Enigma(config=tcfg)
+
+    def test_vision_projection_is_sequential(self):
+        """Projection must be nn.Sequential, not a single Linear."""
+        import torch.nn as nn
+        model = self._make_model()
+        assert isinstance(model.vision_projection, nn.Sequential)
+        # 3 layers: Linear → GELU → Linear
+        assert len(model.vision_projection) == 3
+
+    def test_vision_projection_uses_gelu(self):
+        """Middle layer must be GELU per LLaVA-1.5."""
+        import torch.nn as nn
+        model = self._make_model()
+        assert isinstance(model.vision_projection[0], nn.Linear)
+        assert isinstance(model.vision_projection[1], nn.GELU)
+        assert isinstance(model.vision_projection[2], nn.Linear)
+
+    def test_vision_projection_dimensions(self):
+        """First Linear: vision_hidden→dim. Second Linear: dim→dim."""
+        model = self._make_model(vision_hidden=32, dim=64)
+        proj = model.vision_projection
+        assert proj[0].in_features == 32
+        assert proj[0].out_features == 64
+        assert proj[2].in_features == 64
+        assert proj[2].out_features == 64
+
+    def test_vision_projection_has_bias(self):
+        """LLaVA-1.5 reference impl uses bias=True on both Linears."""
+        model = self._make_model()
+        assert model.vision_projection[0].bias is not None
+        assert model.vision_projection[2].bias is not None
+
+    def test_vision_projection_forward_shape(self):
+        """Forward must preserve (batch, seq, dim) and project last dim."""
+        import torch
+        model = self._make_model(vision_hidden=32, dim=64)
+        x = torch.randn(2, 4, 32)
+        y = model.vision_projection(x)
+        assert y.shape == (2, 4, 64)
+
+    def test_vision_projection_callable_in_forward_multimodal(self):
+        """forward_multimodal still works end-to-end after the upgrade."""
+        import torch
+        from enigma_engine.core.vision_encoder import (
+            VisionEncoder, VisionEncoderConfig)
+
+        vcfg = VisionEncoderConfig(image_size=32, patch_size=8, dim=32,
+                                    n_layers=1, n_heads=2)
+        v_enc = VisionEncoder(vcfg)
+        model = self._make_model(vision_hidden=vcfg.dim, dim=64)
+
+        img = torch.randn(1, 3, 32, 32)
+        vfeat = v_enc(img)
+        text_ids = torch.randint(0, 100, (1, 5))
+        logits = model.forward_multimodal(
+            input_ids=text_ids, vision_features=vfeat)
+        padded_vocab = (100 + 63) & ~63
+        assert logits.shape == (1, vcfg.num_patches + 5, padded_vocab)
+
+
 # =============================================================================
 # VISION TRAINING TESTS
 # =============================================================================
@@ -746,7 +816,7 @@ class TestModelComponents:
 
     def test_precompute_rope_frequencies(self):
         """precompute_rope_frequencies returns correct shapes."""
-        torch = pytest.importorskip("torch")
+        pytest.importorskip("torch")
         from enigma_engine.core.model_components import precompute_rope_frequencies
         freqs = precompute_rope_frequencies(64, 128)
         assert freqs.shape[0] == 128  # seq_len
@@ -765,7 +835,7 @@ class TestModelComponents:
 
     def test_moe_feedforward_has_experts(self):
         """MoEFeedForward creates multiple expert modules."""
-        torch = pytest.importorskip("torch")
+        pytest.importorskip("torch")
         from enigma_engine.core.model_components import MoEFeedForward
         from enigma_engine.core.model_presets import ForgeConfig
         config = ForgeConfig(
@@ -821,7 +891,7 @@ class TestModelComponents:
 
     def test_layer_scale_creates_parameters(self):
         """TransformerBlock has ls_attn and ls_ffn when layer_scale enabled."""
-        torch = pytest.importorskip("torch")
+        pytest.importorskip("torch")
         from enigma_engine.core.model_components import TransformerBlock
         from enigma_engine.core.model_presets import ForgeConfig
         config = ForgeConfig(dim=64, hidden_dim=128, use_layer_scale=True)
@@ -833,7 +903,7 @@ class TestModelComponents:
 
     def test_layer_scale_init_small(self):
         """LayerScale parameters are initialized to a small value (1e-5)."""
-        torch = pytest.importorskip("torch")
+        pytest.importorskip("torch")
         from enigma_engine.core.model_components import TransformerBlock
         from enigma_engine.core.model_presets import ForgeConfig
         config = ForgeConfig(dim=64, hidden_dim=128, use_layer_scale=True)
@@ -881,7 +951,7 @@ class TestModelComponents:
 
     def test_drop_path_linearly_increasing(self):
         """Deeper layers get higher drop rates."""
-        torch = pytest.importorskip("torch")
+        pytest.importorskip("torch")
         from enigma_engine.core.model_components import TransformerBlock
         from enigma_engine.core.model_presets import ForgeConfig
         config = ForgeConfig(dim=64, hidden_dim=128, n_layers=4, drop_path_rate=0.2)
@@ -1360,7 +1430,7 @@ class TestWeightNormApplication:
 
     def test_weight_norm_skips_output_head(self):
         """Output head (tied with embeddings) should not get weight norm."""
-        torch = pytest.importorskip("torch")
+        pytest.importorskip("torch")
         from enigma_engine.core.model import Enigma
         from enigma_engine.core.model_presets import ForgeConfig
 
@@ -1387,7 +1457,7 @@ class TestWeightNormApplication:
         for module in model.modules():
             if isinstance(module, torch.nn.Linear):
                 assert not hasattr(module, "parametrizations"), \
-                    f"No parametrizations when weight_norm disabled"
+                    "No parametrizations when weight_norm disabled"
 
     def test_weight_norm_preserves_output_shape(self):
         """Model output shape unchanged with weight norm."""
@@ -1678,7 +1748,7 @@ class TestGradientCheckpointing:
     """Verify Enigma.gradient_checkpointing_enable/disable toggles layers."""
 
     def test_enable_sets_all_layers(self):
-        torch = pytest.importorskip("torch")
+        pytest.importorskip("torch")
         from enigma_engine.core.model_presets import ForgeConfig
         from enigma_engine.core.model import Enigma
         cfg = ForgeConfig(dim=64, n_layers=4, n_heads=4, n_kv_heads=2,
@@ -1689,7 +1759,7 @@ class TestGradientCheckpointing:
         assert all(layer.use_checkpoint for layer in model.layers)
 
     def test_disable_clears_all_layers(self):
-        torch = pytest.importorskip("torch")
+        pytest.importorskip("torch")
         from enigma_engine.core.model_presets import ForgeConfig
         from enigma_engine.core.model import Enigma
         cfg = ForgeConfig(dim=64, n_layers=4, n_heads=4, n_kv_heads=2,
@@ -1770,7 +1840,6 @@ class TestAttentionBaseline:
 
     def test_gqa_less_params_than_mha(self):
         """GQA (n_kv_heads < n_heads) should have fewer params than MHA."""
-        import torch
         from enigma_engine.core.model_components import Attention
         cfg_mha = self._make_config(n_heads=4, n_kv_heads=4)
         cfg_gqa = self._make_config(n_heads=4, n_kv_heads=2)

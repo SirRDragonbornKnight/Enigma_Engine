@@ -460,6 +460,51 @@ class ConfigPageMixin:
                 "background trainer so the AI improves over time.\n"
                 "Requires TRAINER route to be assigned.")
 
+        # Continuous-3b (Pass 156o): anchor file widget — display
+        # current path + row count, browse to a custom JSONL, reset
+        # to the repo default. Anchors are rehearsed every replay
+        # pass alongside the recent slice to mitigate forgetting of
+        # skills absent from current chat.
+        from enigma_engine.gui.scanners import _resolve_anchor_path
+        _anchor_saved = _cached_settings.get("anchor_data_path", "")
+        _anchor_resolved = _resolve_anchor_path(_anchor_saved)
+        self._anchor_path_var = ctk.StringVar(value=_anchor_saved)
+
+        anchor_label_row = ctk.CTkFrame(
+            train_inner, fg_color="transparent")
+        anchor_label_row.pack(fill="x", pady=(8, 2))
+        SelectableLabel(
+            anchor_label_row, text="Anchor rehearsal file",
+            font=FONT_SMALL, text_color=C_TEXT, anchor="w"
+        ).pack(side="left")
+
+        self._anchor_status_label = ctk.CTkLabel(
+            train_inner,
+            text=self._format_anchor_status(_anchor_resolved),
+            font=FONT_TINY, text_color=C_TEXT_DIM,
+            wraplength=500, anchor="w", justify="left",
+        )
+        self._anchor_status_label.pack(anchor="w", pady=(0, 4))
+
+        anchor_btn_row = ctk.CTkFrame(
+            train_inner, fg_color="transparent")
+        anchor_btn_row.pack(fill="x", pady=(0, 4))
+        themed_button(
+            anchor_btn_row, "BROWSE...", style="action",
+            width=110, height=28, font=FONT_SMALL,
+            command=self._browse_anchor_file
+        ).pack(side="left", padx=(0, 6))
+        themed_button(
+            anchor_btn_row, "USE DEFAULT", style="action",
+            width=130, height=28, font=FONT_SMALL,
+            command=self._reset_anchor_file
+        ).pack(side="left")
+        Tooltip(self._anchor_status_label,
+                "JSONL with rows like\n"
+                '{"prompt": "...", "response": "..."}\n'
+                "Rehearsed on every replay pass so general skills\n"
+                "stay sharp even when recent chat is narrow.")
+
         # --- Performance section ---
         perf_card = HUDFrame(scroll, glow_color=C_ACCENT_DIM)
         perf_card.pack(fill="x", padx=4, pady=(10, 4))
@@ -909,6 +954,78 @@ class ConfigPageMixin:
                 f"\u26a1 Learn while chatting {state}")
         except Exception as exc:
             logger.debug("Could not save learn_while_chatting: %s", exc)
+
+    # ------------------------------------------------------------------
+    # Anchor file (Continuous-3b, Pass 156o)
+    # ------------------------------------------------------------------
+
+    def _format_anchor_status(self, resolved_path) -> str:
+        """Human-readable line for the anchor status label.
+
+        Three branches:
+        - resolved=None             -> "no anchor file (recent-only)"
+        - resolved exists           -> "<path>  (N rows)"
+        - resolved set but missing  -> "<path>  (file missing)"
+        """
+        from pathlib import Path as _Path
+        if resolved_path is None:
+            return "(none — replay rehearses recent chat only)"
+        p = _Path(resolved_path)
+        if not p.exists():
+            return f"{p}  (file missing)"
+        try:
+            with p.open("r", encoding="utf-8") as fh:
+                count = sum(1 for line in fh if line.strip())
+        except Exception:
+            count = 0
+        return f"{p}  ({count} row{'s' if count != 1 else ''})"
+
+    def _save_anchor_data_path(self, value: str) -> None:
+        """Persist `anchor_data_path` to gui_settings.json."""
+        import json
+        settings_path = DATA_DIR / "gui_settings.json"
+        try:
+            settings: dict = {}
+            if settings_path.exists():
+                settings = json.loads(
+                    settings_path.read_text(encoding="utf-8"))
+            settings["anchor_data_path"] = value
+            from enigma_engine.core.safe_save import atomic_write_json
+            atomic_write_json(settings_path, settings)
+        except Exception as exc:
+            logger.debug("Could not save anchor_data_path: %s", exc)
+
+    def _refresh_anchor_status(self) -> None:
+        """Re-render the anchor status label from current saved path."""
+        from enigma_engine.gui.scanners import _resolve_anchor_path
+        saved = self._anchor_path_var.get()
+        resolved = _resolve_anchor_path(saved)
+        if hasattr(self, "_anchor_status_label"):
+            self._anchor_status_label.configure(
+                text=self._format_anchor_status(resolved))
+
+    def _browse_anchor_file(self) -> None:
+        """Pick a custom JSONL anchor file."""
+        from tkinter import filedialog
+        chosen = filedialog.askopenfilename(
+            title="Select anchor rehearsal file",
+            filetypes=[("JSONL files", "*.jsonl"), ("All files", "*.*")],
+        )
+        if not chosen:
+            return
+        self._anchor_path_var.set(chosen)
+        self._save_anchor_data_path(chosen)
+        self._refresh_anchor_status()
+        self.status_bar.set_left(
+            "\u26a1 Anchor file updated — restart to apply")
+
+    def _reset_anchor_file(self) -> None:
+        """Clear the saved override; fall back to repo default."""
+        self._anchor_path_var.set("")
+        self._save_anchor_data_path("")
+        self._refresh_anchor_status()
+        self.status_bar.set_left(
+            "\u26a1 Anchor file reset to default — restart to apply")
 
     def _toggle_auto_load_chat_model(self):
         """Save auto_load_chat_model setting to gui_settings.json."""

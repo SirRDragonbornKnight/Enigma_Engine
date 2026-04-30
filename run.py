@@ -137,16 +137,39 @@ Examples:
     parser.add_argument("--analyze-tokenizer", type=str, nargs="?", const="auto", default=None,
                         metavar="VOCAB_PATH",
                         help="Analyze a trained tokenizer on data (default: auto-discover)")
-    parser.add_argument("--benchmark", action="store_true",
-                        help="Run coherence benchmark on a loaded model")
+    parser.add_argument("--benchmark", nargs="?", const="coherence",
+                        default=None,
+                        choices=["coherence", "gsm8k"],
+                        help="Run a benchmark on a loaded model. "
+                             "Default 'coherence' (no arg). Use 'gsm8k' for the "
+                             "reasoning benchmark.")
+    parser.add_argument("--benchmark-data", type=str, default=None,
+                        metavar="PATH",
+                        help="Path to GSM8K JSONL test file "
+                             "(default: data/gsm8k_test.jsonl)")
+    parser.add_argument("--benchmark-limit", type=int, default=-1,
+                        help="Cap number of GSM8K examples (default: all 1319)")
+    parser.add_argument("--benchmark-shots", type=int, default=8,
+                        help="GSM8K few-shot CoT examples (0..8, default 8)")
     parser.add_argument("--resume", type=str, default=None, metavar="CHECKPOINT_PATH",
                         help="Resume training from a checkpoint file (e.g. models/checkpoints/best_model.pt)")
     parser.add_argument("--golden-eval", type=str, default=None, metavar="JSON_PATH",
                         help="Golden prompt regression eval file (JSON with prompt+expected pairs)")
     parser.add_argument("--seed", type=int, default=None,
                         help="Random seed for reproducible training")
+    parser.add_argument("--deterministic", action="store_true",
+                        help="Pin cuBLAS workspace + use_deterministic_algorithms "
+                             "for bitwise-reproducible GPU training (5-15%% "
+                             "throughput cost; requires --seed). Off by default.")
     
     args = parser.parse_args()
+
+    # DET-2: --deterministic without --seed is a silent no-op because
+    # set_training_seed (the gate that flips the deterministic switch)
+    # is only called when config.seed is not None. Fail loud instead.
+    if args.deterministic and args.seed is None:
+        parser.error("--deterministic requires --seed (e.g. --seed 42); "
+                     "without a seed the flag is silently ignored.")
 
     if args.train_tokenizer is not None:
         run_train_tokenizer(args.train_tokenizer, args.vocab_size,
@@ -155,7 +178,8 @@ Examples:
         run_analyze_tokenizer(args.analyze_tokenizer)
     elif args.train is not None:
         run_train(args.train, args.model, args.model_size, args.epochs, args.batch_size, args.lr,
-                  golden_eval=args.golden_eval, seed=args.seed, resume=args.resume)
+                  golden_eval=args.golden_eval, seed=args.seed,
+                  deterministic=args.deterministic, resume=args.resume)
     elif args.serve:
         cors = None
         if args.cors_origins:
@@ -168,13 +192,29 @@ Examples:
                 port = int(CONFIG.get("api_port", 8080))
             except Exception:
                 port = 8080
-        run_serve(args.model, port, args.host, args.api_key, cors)
+        # Resolve API key: CLI flag > CONFIG > None
+        key = args.api_key
+        if key is None:
+            try:
+                from enigma_engine import CONFIG as _cfg
+                key = _cfg.get("enigma_api_key")
+            except Exception:
+                pass
+        run_serve(args.model, port, args.host, key, cors)
     elif args.gui:
         run_gui_app(args.model)
     elif args.chat:
         run_chat(args.model, args.profile, args.temperature)
-    elif args.benchmark:
-        run_benchmark(args.model)
+    elif args.benchmark is not None:
+        if args.benchmark == "gsm8k":
+            run_gsm8k_benchmark_cli(
+                args.model,
+                data_path=args.benchmark_data,
+                limit=args.benchmark_limit,
+                num_shots=args.benchmark_shots,
+            )
+        else:
+            run_benchmark(args.model)
     else:
         show_info()
 
@@ -434,6 +474,7 @@ def run_train(data_path: str, model_path: str, model_size: str,
               epochs: int, batch_size: int, lr: float,
               golden_eval: str | None = None,
               seed: int | None = None,
+              deterministic: bool = False,
               resume: str | None = None):
     """Train a model on data."""
     print("\n" + "=" * 50)
@@ -533,6 +574,7 @@ def run_train(data_path: str, model_path: str, model_size: str,
             checkpoint_dir="models/checkpoints",
             use_amp=torch.cuda.is_available(),
             seed=seed,
+            deterministic=deterministic,
             golden_eval_path=golden_eval or "",
         )
         
@@ -651,6 +693,58 @@ def run_benchmark(model_path: str = None):
 
     except Exception as e:
         print(f"\n  [ERROR] Benchmark failed: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+
+def run_gsm8k_benchmark_cli(model_path: str = None,
+                             data_path: str = None,
+                             limit: int = -1,
+                             num_shots: int = 8):
+    """Run GSM8K reasoning benchmark on a loaded model (CLI)."""
+    print("\n" + "=" * 50)
+    print("  Enigma AI Engine - GSM8K Reasoning Benchmark")
+    print("=" * 50 + "\n")
+
+    if not model_path:
+        print("  [ERROR] --model is required for --benchmark gsm8k")
+        print("  Usage: python run.py --benchmark gsm8k --model models/my.pth")
+        sys.exit(1)
+
+    try:
+        from enigma_engine.core import EnigmaEngine
+        from enigma_engine.core.training_evaluation import (
+            load_gsm8k, run_gsm8k_benchmark)
+
+        print(f"  Loading {model_path}...")
+        engine = EnigmaEngine(model_path=model_path)
+
+        print("  Loading GSM8K test set...")
+        examples = load_gsm8k(data_path, n=limit)
+        print(f"  Loaded {len(examples)} examples. "
+              f"Few-shot: {num_shots}. Running...\n")
+
+        def _progress(idx, total, correct):
+            acc = correct / idx if idx else 0.0
+            print(f"  [{idx:>4d}/{total}]  correct={correct}  "
+                  f"acc={acc:.3f}")
+
+        result = run_gsm8k_benchmark(
+            engine, examples, num_shots=num_shots,
+            on_progress=_progress)
+
+        print(f"\n{'=' * 50}")
+        print(f"  Total    : {result['total']}")
+        print(f"  Correct  : {result['correct']}")
+        print(f"  Accuracy : {result['accuracy'] * 100:.2f}%")
+        print("=" * 50)
+
+    except FileNotFoundError as e:
+        print(f"\n  [ERROR] {e}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n  [ERROR] GSM8K benchmark failed: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

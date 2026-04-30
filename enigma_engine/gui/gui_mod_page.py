@@ -148,7 +148,7 @@ class ModPageMixin:
             for rule in rules[:6]:
                 ctk.CTkLabel(
                     info_inner,
-                    text=f"- {str(rule)}",
+                    text=f"- {rule!s}",
                     font=FONT_TINY,
                     text_color=C_TEXT_DIM,
                     wraplength=450,

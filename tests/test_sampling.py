@@ -23,7 +23,6 @@ class TestBatchSamplingVectorized:
     def test_sample_token_batch_returns_correct_shape(self):
         """_sample_token_batch should return [batch, 1]."""
         import torch
-        from enigma_engine.core.engine_generation import _GenerationMixin
 
         gen = FakeGen()
         batch, vocab = 4, 32
@@ -37,7 +36,6 @@ class TestBatchSamplingVectorized:
     def test_sample_token_batch_respects_top_k(self):
         """Only top-k tokens should get non-zero probability."""
         import torch
-        from enigma_engine.core.engine_generation import _GenerationMixin
 
         gen = FakeGen()
         # Create logits where token 0 is clearly the best
@@ -53,7 +51,6 @@ class TestBatchSamplingVectorized:
     def test_sample_token_batch_repetition_penalty(self):
         """Repetition penalty should reduce probability of repeated tokens."""
         import torch
-        from enigma_engine.core.engine_generation import _GenerationMixin
 
         gen = FakeGen()
         batch, vocab = 1, 10
@@ -407,7 +404,6 @@ class TestPresencePenalty:
     def test_seen_tokens_penalised_equally(self):
         """Presence penalty doesn't care about count — 1 or 10 appearances same penalty."""
         import torch
-        from enigma_engine.core.model_utils import apply_repetition_penalty
 
         gen = FakeGenAdvanced()
         vocab = 10

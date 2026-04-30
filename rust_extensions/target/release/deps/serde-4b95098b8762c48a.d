@@ -1,0 +1,14 @@
+C:\Users\SirKn\Enigma Engine\rust_extensions\target\release\deps\serde-4b95098b8762c48a.d: C:\Users\SirKn\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\lib.rs C:\Users\SirKn\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\integer128.rs C:\Users\SirKn\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\mod.rs C:\Users\SirKn\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\de.rs C:\Users\SirKn\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\ser.rs C:\Users\SirKn\Enigma\ Engine\rust_extensions\target\release\build\serde-f9acb8dec40aa5cf\out/private.rs
+
+C:\Users\SirKn\Enigma Engine\rust_extensions\target\release\deps\libserde-4b95098b8762c48a.rlib: C:\Users\SirKn\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\lib.rs C:\Users\SirKn\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\integer128.rs C:\Users\SirKn\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\mod.rs C:\Users\SirKn\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\de.rs C:\Users\SirKn\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\ser.rs C:\Users\SirKn\Enigma\ Engine\rust_extensions\target\release\build\serde-f9acb8dec40aa5cf\out/private.rs
+
+C:\Users\SirKn\Enigma Engine\rust_extensions\target\release\deps\libserde-4b95098b8762c48a.rmeta: C:\Users\SirKn\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\lib.rs C:\Users\SirKn\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\integer128.rs C:\Users\SirKn\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\mod.rs C:\Users\SirKn\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\de.rs C:\Users\SirKn\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\ser.rs C:\Users\SirKn\Enigma\ Engine\rust_extensions\target\release\build\serde-f9acb8dec40aa5cf\out/private.rs
+
+C:\Users\SirKn\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\lib.rs:
+C:\Users\SirKn\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\integer128.rs:
+C:\Users\SirKn\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\mod.rs:
+C:\Users\SirKn\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\de.rs:
+C:\Users\SirKn\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\ser.rs:
+C:\Users\SirKn\Enigma\ Engine\rust_extensions\target\release\build\serde-f9acb8dec40aa5cf\out/private.rs:
+
+# env-dep:OUT_DIR=C:\\Users\\SirKn\\Enigma Engine\\rust_extensions\\target\\release\\build\\serde-f9acb8dec40aa5cf\\out

@@ -799,15 +799,16 @@ class ForgeToolsMixin:
     def _save_forge_checkpoint(self):
         """Save the current STUDENT model as an auto-named checkpoint.
 
-        Uses the pattern: modelname_epoch_timestamp so no prompt
-        is needed.
+        Uses the pattern: modelname_timestamp so no prompt is needed.
+        When training is active, saves live model weights via the
+        trainer.  When idle, copies the on-disk model file (which
+        was updated at end of last training run).
         """
         student_path = self.route_assignments.get("student")
         if not student_path or not Path(student_path).exists():
             self._log("[!] No STUDENT model to checkpoint.")
             return
 
-        import shutil
         import time
 
         model_stem = Path(student_path).stem
@@ -823,7 +824,15 @@ class ForgeToolsMixin:
             return
 
         try:
-            shutil.copy2(student_path, str(dest))
+            trainer = getattr(self, "_active_trainer", None)
+            if trainer is not None and getattr(
+                    self, "training_active", False):
+                # Live training — save model + optimizer state
+                trainer._save_checkpoint(dest)
+            else:
+                # Not training — file on disk is up to date
+                import shutil
+                shutil.copy2(student_path, str(dest))
             size_mb = round(
                 dest.stat().st_size / (1024 * 1024), 1)
             self._log(
@@ -1019,9 +1028,9 @@ class ForgeToolsMixin:
 
     # Preset → (epochs, learning_rate, batch_size)
     _TRAINING_PRESETS = {
-        "Quick": ("3", "0.0001", "4"),
-        "Balanced": ("10", "0.00005", "4"),
-        "Thorough": ("30", "0.00002", "2"),
+        "Quick": ("3", "0.0001", "auto"),
+        "Balanced": ("10", "0.00005", "auto"),
+        "Thorough": ("30", "0.00002", "auto"),
     }
 
     def _on_preset_changed(self, choice: str):

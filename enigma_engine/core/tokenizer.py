@@ -308,6 +308,8 @@ class SimpleTokenizer:
             "<unk>": 3,   # Unknown - used for characters not in vocab
             "<think>": 4,  # Start of reasoning block
             "</think>": 5, # End of reasoning block
+            "<search>": 6,  # AutoResearch-2 Stage B-1: start of inline search query
+            "</search>": 7, # AutoResearch-2 Stage B-1: end of inline search query
         }
 
         # Convenient ID lookups
@@ -317,6 +319,11 @@ class SimpleTokenizer:
         self.unk_token_id = 3
         self.think_start_id = 4
         self.think_end_id = 5
+        # Stage B-1: search-token accessors. None for legacy vocabs that
+        # were saved before <search>/</search> existed; callers must
+        # check for None and treat as "feature unavailable on this model".
+        self.search_start_id: int | None = 6
+        self.search_end_id: int | None = 7
 
         # ─────────────────────────────────────────────────────────────────────
         # LOAD OR CREATE VOCABULARY
@@ -388,16 +395,26 @@ class SimpleTokenizer:
         self.unk_token_id = self.special_tokens.get("<unk>", 3)
         self.think_start_id = self.special_tokens.get("<think>", 4)
         self.think_end_id = self.special_tokens.get("</think>", 5)
+        # Stage B-1: None on legacy vocab (no fallback ID — would alias
+        # an unrelated token). Stage B-2 generation hook checks this.
+        self.search_start_id = self.special_tokens.get("<search>")
+        self.search_end_id = self.special_tokens.get("</search>")
 
     def _load_vocab(self, vocab_file: Path):
         """Load vocabulary from JSON file."""
         with open(vocab_file, encoding='utf-8') as f:
             self.token_to_id = json.load(f)
         self.id_to_token = {v: k for k, v in self.token_to_id.items()}
-        # Rebuild convenience IDs in case loaded vocab has different mappings
-        for tok, tok_id in self.special_tokens.items():
+        # Rebuild self.special_tokens from the loaded vocab: keep only
+        # tokens that actually exist on disk, with disk's IDs.  This
+        # prevents in-memory defaults (e.g. Stage B-1's <search>=6) from
+        # leaking into legacy vocabs that lack the token, which would
+        # alias an unrelated learned ID.
+        loaded_specials: dict[str, int] = {}
+        for tok in self.special_tokens:
             if tok in self.token_to_id:
-                self.special_tokens[tok] = self.token_to_id[tok]
+                loaded_specials[tok] = self.token_to_id[tok]
+        self.special_tokens = loaded_specials
         self._sync_special_ids()
 
     def save_vocab(self, vocab_file: Path) -> None:
