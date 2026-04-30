@@ -50,14 +50,25 @@ class GenerationConfig:
 
 @dataclass
 class MemoryConfig:
-    """Memory and context settings."""
-    max_history_messages: int = 20
-    max_context_tokens: int = 4096
-    save_conversations: bool = True
+    """Per-profile conversation storage location.
+
+    Pass 156z9g: trimmed from a 6-field grab-bag down to the single
+    field that has a real consumer (``list_profiles`` reads it to
+    surface a per-profile chat-log directory). The dead siblings
+    (``max_history_messages``, ``max_context_tokens``,
+    ``save_conversations``, ``enable_knowledge_base``,
+    ``knowledge_base_path``) round-tripped JSON for years without any
+    code branching on them — classic config-field-without-consumer
+    foot-gun: a user editing ``profile.json`` thought they were
+    configuring memory; runtime ignored every value. Removed rather
+    than parked because each one needs architectural wiring (history
+    trim, context budget, conversation persistence, RAG hot-swap)
+    that belongs in the slice that actually ships the consumer, not
+    in this dataclass. ``AIProfile.from_dict`` filters unknown JSON
+    keys, so legacy profile files on disk load silently after this
+    shrink.
+    """
     conversation_dir: str = "memory/conversations"
-    # Long-term memory (knowledge base)
-    enable_knowledge_base: bool = False
-    knowledge_base_path: str = "memory/knowledge"
 
 
 @dataclass
@@ -198,9 +209,11 @@ class AIProfile:
         profiles have an empty dict because base identity is
         weight-trained per Personality-5, not configured here.
 
-        Downstream consumers (system-prompt builders, identity guards,
-        future Personality-4 work) use this to decide whether to inject
-        roleplay framing or to leave the AI as itself.
+        Live consumer: ``apply_profile_to_engine`` (this module) reads
+        the predicate to emit a different log line per branch when a
+        profile is applied to the live engine. Reachable from
+        production via the ``POST /api/profiles/{id}/activate``
+        endpoint in ``api/server.py``.
         """
         return bool(self.personality)
 

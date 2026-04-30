@@ -20,12 +20,7 @@
     ]
   },
   "memory": {
-    "max_history_messages": 20,
-    "max_context_tokens": 4096,
-    "save_conversations": true,
-    "conversation_dir": "memory/conversations",
-    "enable_knowledge_base": false,
-    "knowledge_base_path": "memory/knowledge"
+    "conversation_dir": "memory/conversations"
   },
   "commands": [],
   "disabled_commands": [],

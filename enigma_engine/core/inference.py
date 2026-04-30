@@ -397,8 +397,6 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
         if device is not None:
             return torch.device(device)
 
-        # Check power mode settings (device selection)
-        # Power mode not yet implemented - use standard device detection
         if torch.cuda.is_available():
             # Apply GPU memory limit from config
             gpu_fraction = CONFIG.get("gpu_memory_fraction", 0.9)

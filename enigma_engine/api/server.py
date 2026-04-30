@@ -179,7 +179,8 @@ class AppState:
              top_p: float | None = None,
              top_k: int | None = None,
              repetition_penalty: float | None = None,
-             json_schema: dict[str, Any] | None = None) -> str:
+             json_schema: dict[str, Any] | None = None,
+             system_prompt: str | None = None) -> str:
         """Send a message to the engine and get a response.
 
         N-15b: ``json_schema`` is forwarded through engine.chat() into
@@ -187,6 +188,12 @@ class AppState:
         per token so the response is structurally valid JSON. GGUF
         models raise ``NotImplementedError`` (their sampler is
         in-process C++ and never sees our mask).
+
+        Pass 156z9g: ``system_prompt`` lets callers (the auto-research
+        wiring, primarily) inject per-request context without mutating
+        the engine's persistent ``system_prompt`` attribute. Forwarded
+        when the underlying ``engine.chat`` accepts it; falls through
+        the existing TypeError fallback otherwise.
         """
         if self.engine is None:
             raise RuntimeError("No model loaded")
@@ -207,6 +214,8 @@ class AppState:
             kwargs["repetition_penalty"] = repetition_penalty
         if json_schema is not None:
             kwargs["json_schema"] = json_schema
+        if system_prompt is not None:
+            kwargs["system_prompt"] = system_prompt
 
         # Try passing kwargs to engine.chat; fall back to no-kwargs if unsupported
         try:
@@ -284,6 +293,41 @@ MAX_PATH_LENGTH = 256
 # ---------------------------------------------------------------------------
 _inference_lock = threading.Lock()
 
+
+# ---------------------------------------------------------------------------
+# Auto-research helper (Pass 156z9g — AutoResearch-2 API parity)
+# ---------------------------------------------------------------------------
+
+def _maybe_research_context(message: str, web_access: bool) -> str:
+    """Return ``[WEB RESEARCH]`` context for ``message`` if appropriate.
+
+    Mirrors the GUI wiring in ``gui_logic_chat.py`` so /api/chat and
+    /api/chat/stream callers get the same Stage-A pre-gen behaviour as
+    the desktop UI. Off by default (``web_access=False``) for privacy;
+    callers must opt in per request.
+
+    Returns the empty string on every off-path (web_access=False, query
+    too short / trivial, web_utils unavailable, fetch failure, no
+    results) so the caller can unconditionally concatenate with
+    ``system_prompt`` without a None check.
+    """
+    if not web_access:
+        return ""
+    try:
+        from enigma_engine.core.auto_research import (
+            auto_research, should_auto_research,
+        )
+    except ImportError:
+        logger.debug("auto_research module unavailable; skipping")
+        return ""
+    try:
+        if not should_auto_research(message):
+            return ""
+        return auto_research(message, max_results=3) or ""
+    except Exception as exc:
+        logger.debug("Auto-research pre-gen failed: %s", exc)
+        return ""
+
 # ---------------------------------------------------------------------------
 # Request / Response Models
 # ---------------------------------------------------------------------------
@@ -302,6 +346,17 @@ class ChatRequest(BaseModel):
     # Native PyTorch only — GGUF backend rejects loud (llama.cpp uses
     # its own sampler).
     json_schema: dict[str, Any] | None = None
+    # Pass 156z9g AutoResearch-2 API parity: opt-in web research per
+    # request. Default False (privacy-safe). When True, the handler
+    # runs ``should_auto_research`` on the message; if it triggers,
+    # ``auto_research`` fetches DuckDuckGo results + fetches page
+    # text and prepends a ``[WEB RESEARCH]`` block to the system
+    # prompt before calling the engine. /api/chat additionally runs
+    # the post-gen ``should_retry_with_research`` gate (Stage A); the
+    # streaming endpoint runs pre-gen only because post-gen retry
+    # would require a second SSE stream the existing
+    # ``_inference_lock`` design doesn't support.
+    web_access: bool = False
 
 class ChatResponse(BaseModel):
     message: str
@@ -505,10 +560,43 @@ async def chat(req: ChatRequest):
             kw["repetition_penalty"] = req.repetition_penalty
         if req.json_schema is not None:
             kw["json_schema"] = req.json_schema
+
+        # Pass 156z9g: AutoResearch-2 pre-gen wiring. Empty string when
+        # off / not triggered / fetch failed — caller-side concat is
+        # always safe.
+        web_ctx = _maybe_research_context(req.message, req.web_access)
+        if web_ctx:
+            kw["system_prompt"] = web_ctx
+
         response = state.chat(
             req.message,
             **kw,
         )
+
+        # Stage A post-gen retry. Mirrors gui_logic_chat.py: if web
+        # access is on, no pre-gen research ran, and the visible reply
+        # scores >= threshold uncertain, retry once with research
+        # context. Skipped on the streaming path (would need a second
+        # SSE stream the inference lock model doesn't support).
+        if (req.web_access and not web_ctx
+                and isinstance(response, str)):
+            try:
+                from enigma_engine.core.auto_research import (
+                    auto_research as _ar_fetch,
+                    should_retry_with_research,
+                )
+                if should_retry_with_research(req.message, response):
+                    retry_ctx = _ar_fetch(req.message, max_results=3)
+                    if retry_ctx:
+                        retry_kw = dict(kw)
+                        retry_kw["system_prompt"] = retry_ctx
+                        logger.info(
+                            "AutoResearch-2: low-confidence reply on "
+                            "/api/chat, retrying with research context")
+                        response = state.chat(req.message, **retry_kw)
+            except Exception as exc:
+                logger.debug(
+                    "Auto-research post-gen retry failed: %s", exc)
         # Cap response length to prevent memory exhaustion
         truncated = False
         if isinstance(response, str) and len(response) > 500_000:
@@ -572,6 +660,16 @@ async def chat_stream(req: ChatRequest):
     # non-streaming /api/chat handler).
     if req.json_schema is not None:
         kwargs["json_schema"] = req.json_schema
+
+    # Pass 156z9g: AutoResearch-2 pre-gen wiring (streaming). Post-gen
+    # retry is intentionally NOT wired here — it would require ending
+    # the first stream and starting a second one inside the same
+    # request, which the SSE generator + ``_inference_lock`` model
+    # doesn't support. /api/chat (non-streaming) has the full Stage A
+    # gate; streaming callers only get pre-gen context.
+    web_ctx = _maybe_research_context(req.message, req.web_access)
+    if web_ctx:
+        kwargs["system_prompt"] = web_ctx
 
     def _sse_generator():
         """Yield SSE-formatted events from engine.stream_chat."""

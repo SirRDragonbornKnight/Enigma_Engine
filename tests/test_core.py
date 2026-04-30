@@ -2787,7 +2787,7 @@ class TestAIProfileLifecycle:
             system_prompt="Be helpful.",
             personality={"tone": "dry"},
             generation=GenerationConfig(temperature=0.5, top_k=20),
-            memory=MemoryConfig(max_history_messages=10),
+            memory=MemoryConfig(conversation_dir="memory/test_ai"),
             commands=["file.read"], disabled_commands=["system.exec"],
             author="tester", tags=["test"],
         )
@@ -2797,7 +2797,7 @@ class TestAIProfileLifecycle:
         assert restored.id == original.id
         assert restored.generation.temperature == 0.5
         assert restored.generation.top_k == 20
-        assert restored.memory.max_history_messages == 10
+        assert restored.memory.conversation_dir == "memory/test_ai"
         assert restored.commands == ["file.read"]
         assert restored.disabled_commands == ["system.exec"]
         assert restored.tags == ["test"]

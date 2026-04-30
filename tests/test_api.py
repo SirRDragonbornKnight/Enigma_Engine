@@ -161,6 +161,171 @@ class TestStreamChat:
 
 
 # ---------------------------------------------------------------------------
+# AutoResearch-2 API parity (Pass 156z9g)
+# ---------------------------------------------------------------------------
+
+class TestAutoResearchAPIParity:
+    """Pass 156z9g: /api/chat and /api/chat/stream honor ``web_access``.
+
+    Mirrors the GUI wiring at gui_logic_chat.py:239-302 so HTTP callers
+    get the same Stage-A behaviour as the desktop UI. Tests use mocked
+    ``auto_research`` / ``should_auto_research`` so no real network I/O
+    happens.
+    """
+
+    def test_chat_web_access_default_off_no_helper_call(
+            self, client, monkeypatch):
+        """web_access defaults to False; the helper must not run."""
+        from enigma_engine.api import server as srv
+
+        called = {"should": 0, "fetch": 0}
+        monkeypatch.setattr(
+            "enigma_engine.core.auto_research.should_auto_research",
+            lambda q: called.__setitem__("should", called["should"] + 1)
+            or True,
+        )
+        monkeypatch.setattr(
+            "enigma_engine.core.auto_research.auto_research",
+            lambda q, max_results=3: called.__setitem__(
+                "fetch", called["fetch"] + 1) or "[CTX]",
+        )
+
+        mock_engine = MagicMock()
+        mock_engine.chat = MagicMock(return_value="ok")
+        old_engine = srv.state.engine
+        srv.state.engine = mock_engine
+        try:
+            resp = client.post(
+                "/api/chat", json={"message": "what is the capital of France?"})
+            assert resp.status_code == 200
+        finally:
+            srv.state.engine = old_engine
+
+        assert called["should"] == 0, (
+            "should_auto_research must not be called when web_access=False")
+        assert called["fetch"] == 0, (
+            "auto_research must not be called when web_access=False")
+
+    def test_chat_web_access_on_pre_gen_injects_system_prompt(
+            self, client, monkeypatch):
+        """web_access=True + should_auto_research True forwards system_prompt."""
+        from enigma_engine.api import server as srv
+
+        monkeypatch.setattr(
+            "enigma_engine.core.auto_research.should_auto_research",
+            lambda q: True,
+        )
+        monkeypatch.setattr(
+            "enigma_engine.core.auto_research.auto_research",
+            lambda q, max_results=3: "[WEB RESEARCH] mock context [END]",
+        )
+
+        captured = {}
+        mock_engine = MagicMock()
+
+        def _chat(message, **kwargs):
+            captured.update(kwargs)
+            captured["message"] = message
+            return "answered"
+
+        mock_engine.chat = _chat
+        old_engine = srv.state.engine
+        srv.state.engine = mock_engine
+        try:
+            resp = client.post(
+                "/api/chat",
+                json={"message": "what is the capital of France?",
+                      "web_access": True},
+            )
+            assert resp.status_code == 200
+        finally:
+            srv.state.engine = old_engine
+
+        assert "system_prompt" in captured, (
+            "system_prompt must be forwarded to engine.chat when "
+            "research context is non-empty")
+        assert "WEB RESEARCH" in captured["system_prompt"]
+
+    def test_chat_web_access_on_pre_gen_skipped_for_trivial_query(
+            self, client, monkeypatch):
+        """When should_auto_research returns False, no context is fetched."""
+        from enigma_engine.api import server as srv
+
+        fetch_calls = []
+        monkeypatch.setattr(
+            "enigma_engine.core.auto_research.should_auto_research",
+            lambda q: False,
+        )
+        monkeypatch.setattr(
+            "enigma_engine.core.auto_research.auto_research",
+            lambda q, max_results=3: fetch_calls.append(q) or "[X]",
+        )
+
+        captured = {}
+        mock_engine = MagicMock()
+
+        def _chat(message, **kwargs):
+            captured.update(kwargs)
+            return "ok"
+
+        mock_engine.chat = _chat
+        old_engine = srv.state.engine
+        srv.state.engine = mock_engine
+        try:
+            resp = client.post(
+                "/api/chat", json={"message": "hi", "web_access": True})
+            assert resp.status_code == 200
+        finally:
+            srv.state.engine = old_engine
+
+        assert fetch_calls == [], (
+            "auto_research must not run when should_auto_research is False")
+        assert "system_prompt" not in captured, (
+            "system_prompt must be omitted when no context was fetched")
+
+    def test_stream_web_access_on_injects_system_prompt(
+            self, client, monkeypatch):
+        """Streaming endpoint also honors web_access (pre-gen only)."""
+        from enigma_engine.api import server as srv
+
+        monkeypatch.setattr(
+            "enigma_engine.core.auto_research.should_auto_research",
+            lambda q: True,
+        )
+        monkeypatch.setattr(
+            "enigma_engine.core.auto_research.auto_research",
+            lambda q, max_results=3: "[WEB RESEARCH] streaming ctx [END]",
+        )
+
+        captured = {}
+        mock_engine = MagicMock()
+
+        def _stream_chat(message, **kwargs):
+            captured.update(kwargs)
+            return iter(["a", "b"])
+
+        mock_engine.stream_chat = _stream_chat
+        old_engine = srv.state.engine
+        old_history = list(srv.state._history)
+        srv.state.engine = mock_engine
+        srv.state._history.clear()
+        try:
+            resp = client.post(
+                "/api/chat/stream",
+                json={"message": "what is the capital of France?",
+                      "web_access": True},
+            )
+            assert resp.status_code == 200
+            _ = resp.text  # drain SSE so the generator finishes
+        finally:
+            srv.state.engine = old_engine
+            srv.state._history[:] = old_history
+
+        assert "system_prompt" in captured
+        assert "WEB RESEARCH" in captured["system_prompt"]
+
+
+# ---------------------------------------------------------------------------
 # Training
 # ---------------------------------------------------------------------------
 
