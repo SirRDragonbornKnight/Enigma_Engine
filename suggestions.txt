@@ -1,0 +1,105 @@
+# suggestions.txt
+# Purpose: Single source of truth for what should be changed, fixed, added, and verified.
+# Scope: Consolidated everything we discussed (training, optimizer, scheduler, batching, tokenizer, eval, DX).
+# Updated: 2026-03-11
+
+Legend:
+- Priority: P0 (must), P1 (should), P2 (nice), P3 (later)
+- Risk: low/med/high
+
+================================================================================
+0) BASELINES (DO THIS BEFORE BIG CHANGES)
+================================================================================
+[ ] (P0, low) Create a reproducible baseline run
+    - Record seed, model preset + full config dump, tokenizer type/vocab/special IDs,
+      dataset snapshot (hash/count), hyperparams (lr/betas/wd/schedule/steps).
+    - Done when: rerunning twice gives similar loss curve.
+
+[ ] (P0, low) Add a tiny fixed regression eval set
+    - 200–2000 samples, never changes.
+    - Track: eval_loss, perplexity, and a few golden prompts.
+
+================================================================================
+PHASE 1 — TRAINING STABILITY (NUMERICAL + OPTIMIZER + LR)
+================================================================================
+[ ] (P0, low) RMSNorm fp32 upcast
+    Files:
+      - enigma_engine/core/model_components.py (RMSNorm)
+      - enigma_engine/core/vision_encoder.py (_RMSNorm)
+    Change:
+      - compute RMS in float32; cast back to original dtype.
+
+[ ] (P0, low) AdamW betas configurable (LM defaults)
+    Files:
+      - enigma_engine/core/training.py
+      - enigma_engine/core/lora_utils.py
+    Add config:
+      - adam_beta1=0.9, adam_beta2=0.95, adam_eps=1e-8
+
+[ ] (P0, low) Cosine schedule eta_min != 0
+    Files:
+      - enigma_engine/core/training.py
+    Change:
+      - eta_min = lr * 0.1 (or min_lr_ratio)
+
+[ ] (P0, low) Weight decay consistency
+    - Ensure bias and norm params are excluded from weight decay everywhere.
+
+================================================================================
+PHASE 2 — DATA PIPELINE + BATCHING (QUALITY + SPEED)
+================================================================================
+[ ] (P0, med) Sequence packing
+    Files:
+      - enigma_engine/core/training.py
+    Change:
+      - pack multiple short sequences into max_seq_len chunks separated by EOS.
+
+[ ] (P0, med) Pad masking correctness
+    - Loss ignore_index uses pad_token_id.
+    - Consider attention masking to avoid attending to pads.
+
+[ ] (P1, low) Standardize chat template / formatting
+    - Define canonical prompt format with BOS/EOS rules.
+
+[ ] (P1, low) Improved filtering + stats
+    - Report kept/removed, min/max/avg lengths, duplicates removed.
+
+================================================================================
+PHASE 3 — TOKENIZER (CAPACITY + CORRECTNESS)
+================================================================================
+[ ] (P0, low) Unify special token IDs across tokenizers
+
+[ ] (P0, high) True byte-level BPE
+    Files:
+      - enigma_engine/core/bpe_tokenizer.py
+
+[ ] (P1, med) Increase vocab size default (32k+ recommended)
+
+[ ] (P1, low) Tokenizer training tooling + metrics
+
+================================================================================
+PHASE 4 — EVALUATION + CHECKPOINTING
+================================================================================
+[ ] (P0, low) Validation loop
+    - Track val_loss + perplexity; save best by val_loss when available.
+
+[ ] (P1, low) Golden prompt regression suite
+
+[ ] (P1, med) Proper resume-from-checkpoint
+    - Restore optimizer, scheduler, scaler, step counters.
+
+================================================================================
+PHASE 5 — PERFORMANCE / DX
+================================================================================
+[ ] (P1, low) Throughput telemetry
+    - tokens/sec, step time, VRAM usage.
+
+[ ] (P1, low) One canonical training CLI entrypoint
+
+[ ] (P2, low) Fix encoding/mojibake artifacts (e.g., â€”)
+
+================================================================================
+REFERENCES / INSPIRATION
+================================================================================
+- Lightning-AI/litgpt, karpathy/nanoGPT: optimizer/schedule/packing best practices
+- HF transformers/trl/OpenRLHF: preference training patterns
