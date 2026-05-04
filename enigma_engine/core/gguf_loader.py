@@ -1017,7 +1017,15 @@ from .gguf_dequant import (  # noqa: F401
     parse_gguf_tensors,
     extract_config_from_metadata,
     dequantize_q4_0,
+    dequantize_q4_1,
+    dequantize_q5_0,
+    dequantize_q5_1,
     dequantize_q8_0,
+    dequantize_q2_K,
+    dequantize_q3_K,
+    dequantize_q4_K,
+    dequantize_q5_K,
+    dequantize_q6_K,
 )
 
 

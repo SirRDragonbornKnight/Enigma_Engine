@@ -111,6 +111,138 @@ class ConfigPageMixin:
                 lambda e, n=name: self._validate_config(n))
             self.config_entries[name] = entry
 
+        # --- Generation behavior section ---
+        # Stage B-2c (Pass 156z9w): expose the engine-level
+        # `inline_search_enabled` flag so users probing the
+        # `<search>` syntax can suppress the post-gen scan + WARNING
+        # without editing code.  Default True preserves Pass 156z9d
+        # always-on observability.
+        gen_card = HUDFrame(scroll, glow_color=C_BORDER)
+        gen_card.pack(fill="x", padx=4, pady=(10, 4))
+        gen_inner = ctk.CTkFrame(gen_card, fg_color="transparent")
+        gen_inner.pack(fill="x", padx=10, pady=8)
+
+        SelectableLabel(
+            gen_inner, text="GENERATION BEHAVIOR",
+            font=FONT_SECTION, text_color=C_TEXT_BRIGHT
+        ).pack(anchor="w")
+        ctk.CTkLabel(
+            gen_inner,
+            text="Engine-level toggles applied after each model load.",
+            font=FONT_TINY, text_color=C_TEXT_DIM, wraplength=500
+        ).pack(anchor="w", pady=(2, 6))
+
+        _inline_search = bool(
+            _cached_settings.get("inline_search_enabled", True))
+        self._inline_search_enabled_var = ctk.BooleanVar(
+            value=_inline_search)
+        self._inline_search_enabled_cb = ctk.CTkCheckBox(
+            gen_inner,
+            text="Record inline <search> emissions",
+            variable=self._inline_search_enabled_var,
+            font=FONT_SMALL, text_color=C_TEXT,
+            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
+            border_color=C_ACCENT_DIM, corner_radius=2,
+            command=self._toggle_inline_search_enabled)
+        self._inline_search_enabled_cb.pack(anchor="w", pady=(4, 0))
+        Tooltip(self._inline_search_enabled_cb,
+                "When enabled, the engine scans every reply for\n"
+                "<search>...</search> tags, records the queries on\n"
+                "engine.last_search_queries, and logs a WARNING for\n"
+                "each emission. Disable to silence the scan when\n"
+                "asking the AI about the <search> syntax itself.")
+
+        # B-3a: opt-in splice / auto-stop.  Default OFF so existing
+        # users see no change.  When ON, the native non-GGUF text
+        # generation path appends ``</search>`` to ``stop_strings``
+        # so the model halts cleanly at the closing tag instead of
+        # rambling past it.  Sibling generation paths (stream /
+        # vision / specul / medusa / lookahead / batch / GGUF) emit
+        # a one-shot WARNING when the flag is ON and queries land in
+        # ``last_search_queries`` — they don't yet honour the
+        # auto-stop or splice (B-3b/c/d will add real splice).
+        _inline_splice = bool(
+            _cached_settings.get("inline_search_splice_enabled", False))
+        self._inline_search_splice_enabled_var = ctk.BooleanVar(
+            value=_inline_splice)
+        self._inline_search_splice_enabled_cb = ctk.CTkCheckBox(
+            gen_inner,
+            text="Inline <search> auto-stop (B-3a, opt-in)",
+            variable=self._inline_search_splice_enabled_var,
+            font=FONT_SMALL, text_color=C_TEXT,
+            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
+            border_color=C_ACCENT_DIM, corner_radius=2,
+            command=self._toggle_inline_search_splice_enabled)
+        self._inline_search_splice_enabled_cb.pack(anchor="w", pady=(4, 0))
+        Tooltip(self._inline_search_splice_enabled_cb,
+                "When enabled, the native text generation path stops\n"
+                "as soon as the model emits </search>, instead of\n"
+                "rambling past it. Required for the upcoming RAG\n"
+                "splice feature (B-3b/c). Streaming, vision, GGUF,\n"
+                "and the speculative/medusa/lookahead paths log a\n"
+                "WARNING instead — auto-stop applies to native text\n"
+                "only in B-3a.")
+
+        # N-15b (Pass 156z9aa): GUI surface for `json_schema`
+        # constrained decoding.  The library + API endpoint already
+        # accept the field (Pass 156z3 + Pass 156z6); this is the
+        # last surface that prevented users from reaching the
+        # feature without writing Python.  Persist the RAW text so
+        # the user's editing state (incl. invalid drafts) survives
+        # restarts; parse on Apply, persist parsed dict to
+        # self.json_schema, log loud on parse failure.
+        SelectableLabel(
+            gen_inner, text="JSON SCHEMA (constrained decoding)",
+            font=FONT_TINY, text_color=C_TEXT_BRIGHT
+        ).pack(anchor="w", pady=(10, 0))
+        ctk.CTkLabel(
+            gen_inner,
+            text=(
+                "When non-empty and valid, the next chat reply is "
+                "constrained to JSON matching this schema.  Empty "
+                "= unconstrained.  GGUF backends raise an error "
+                "(constraint never reaches llama.cpp's sampler)."
+            ),
+            font=FONT_TINY, text_color=C_TEXT_DIM, wraplength=500,
+            justify="left"
+        ).pack(anchor="w", pady=(2, 4))
+        self._json_schema_textbox = ctk.CTkTextbox(
+            gen_inner,
+            height=100,
+            font=FONT_SMALL,
+            fg_color=C_SURFACE,
+            text_color=C_TEXT,
+            border_color=C_ACCENT_DIM,
+            border_width=1,
+            corner_radius=2,
+        )
+        # Pre-fill from persisted raw text (saved on prior Apply).
+        _persisted_schema_text = str(
+            _cached_settings.get("json_schema_text", ""))
+        if _persisted_schema_text:
+            self._json_schema_textbox.insert("1.0", _persisted_schema_text)
+        self._json_schema_textbox.pack(fill="x", pady=(0, 4))
+        Tooltip(self._json_schema_textbox,
+                "Paste a JSON Schema dict.  Apply parses it and\n"
+                "stores the result on self.json_schema; the next\n"
+                "chat send forwards it to engine.chat(json_schema=...).\n"
+                "Empty + Apply clears the constraint.")
+        btn_row = ctk.CTkFrame(gen_inner, fg_color="transparent")
+        btn_row.pack(fill="x", pady=(0, 4))
+        self._json_schema_apply_btn = themed_button(
+            btn_row, text="Apply",
+            command=self._apply_json_schema,
+            width=80,
+        )
+        self._json_schema_apply_btn.pack(side="left", padx=(0, 6))
+        self._json_schema_clear_btn = themed_button(
+            btn_row, text="Clear",
+            command=self._clear_json_schema,
+            width=80,
+            style="secondary",
+        )
+        self._json_schema_clear_btn.pack(side="left")
+
         # --- Display names section ---
         names_card = HUDFrame(scroll, glow_color=C_ACCENT_DIM)
         names_card.pack(fill="x", padx=4, pady=(10, 4))
@@ -887,6 +1019,219 @@ class ConfigPageMixin:
         state = "visible" if visible else "hidden"
         self.status_bar.set_left(
             f"\u26a1 Emotional state panel {state}")
+
+    # ------------------------------------------------------------------
+    # Inline <search> emissions toggle (Stage B-2c, Pass 156z9w)
+    # ------------------------------------------------------------------
+
+    def _toggle_inline_search_enabled(self):
+        """Persist `inline_search_enabled` to gui_settings.json AND
+        apply it to the live engine if one is loaded.
+
+        Mirrors the engine attribute set in `_init_common`.  If the
+        engine is loaded mid-session, the toggle takes effect on the
+        NEXT generation call (the helper reads the attribute via
+        `getattr(self, "inline_search_enabled", True)` on every call).
+        """
+        import json
+        enabled = self._inline_search_enabled_var.get()
+        settings_path = DATA_DIR / "gui_settings.json"
+        try:
+            settings: dict = {}
+            if settings_path.exists():
+                settings = json.loads(
+                    settings_path.read_text(encoding="utf-8"))
+            settings["inline_search_enabled"] = enabled
+            from enigma_engine.core.safe_save import atomic_write_json
+            atomic_write_json(settings_path, settings)
+        except Exception as exc:
+            logger.debug(
+                "Could not save inline_search_enabled: %s", exc)
+        # Update in-memory mirror used by `_on_model_loaded` to
+        # re-apply on subsequent loads.
+        self.inline_search_enabled = enabled
+        # Apply to live engine if loaded.
+        eng = getattr(self, "engine", None)
+        if eng is not None:
+            eng.inline_search_enabled = enabled
+        state = "enabled" if enabled else "disabled"
+        self.status_bar.set_left(
+            f"\u26a1 Inline <search> recording {state}")
+
+    # ------------------------------------------------------------------
+    # Inline <search> splice / auto-stop toggle (B-3a)
+    # ------------------------------------------------------------------
+
+    def _toggle_inline_search_splice_enabled(self):
+        """Persist `inline_search_splice_enabled` to gui_settings.json
+        AND apply it to the live engine if one is loaded.
+
+        Mirrors the engine attribute set in ``_init_common``.  When
+        True the native non-GGUF ``_generate_text`` path appends
+        ``</search>`` to ``stop_strings``; sibling paths log a
+        WARNING.  Default False — opt-in feature.
+        """
+        import json
+        enabled = self._inline_search_splice_enabled_var.get()
+        settings_path = DATA_DIR / "gui_settings.json"
+        try:
+            settings: dict = {}
+            if settings_path.exists():
+                settings = json.loads(
+                    settings_path.read_text(encoding="utf-8"))
+            settings["inline_search_splice_enabled"] = enabled
+            from enigma_engine.core.safe_save import atomic_write_json
+            atomic_write_json(settings_path, settings)
+        except Exception as exc:
+            logger.debug(
+                "Could not save inline_search_splice_enabled: %s",
+                exc)
+        self.inline_search_splice_enabled = enabled
+        eng = getattr(self, "engine", None)
+        if eng is not None:
+            eng.inline_search_splice_enabled = enabled
+        state = "enabled" if enabled else "disabled"
+        self.status_bar.set_left(
+            f"\u26a1 Inline <search> auto-stop {state}")
+
+    # ------------------------------------------------------------------
+    # JSON schema constrained decoding (N-15b, Pass 156z9aa)
+    # ------------------------------------------------------------------
+
+    def _apply_json_schema(self):
+        """Parse the textbox content as JSON and stage it for the
+        next chat call.  Behaviour matrix:
+        - Empty/whitespace text → clear ``self.json_schema = None``,
+          persist empty string.  Status: "JSON schema cleared".
+        - Valid JSON dict → set ``self.json_schema`` to the parsed
+          dict, persist raw text.  Status: "JSON schema applied
+          (N keys)".
+        - Valid JSON but not a dict (list, str, number, bool, null)
+          → leave ``self.json_schema`` unchanged, persist nothing,
+          status reports the type mismatch.  json_schema MUST be a
+          dict per the engine contract.
+        - Invalid JSON → leave ``self.json_schema`` unchanged,
+          persist nothing, status reports the parse error.
+
+        Persisting only on success means a user typing an invalid
+        draft, restarting, and re-typing won't be silently corrupted
+        by their last bad attempt — the textbox shows the LAST
+        SUCCESSFULLY APPLIED text on next boot.
+        """
+        import json
+        try:
+            raw = self._json_schema_textbox.get("1.0", "end").strip()
+        except Exception as exc:
+            logger.warning(
+                "Could not read json_schema textbox: %s", exc)
+            self.status_bar.set_left(
+                "[!] JSON schema: could not read textbox")
+            return
+
+        if not raw:
+            self.json_schema = None
+            ok = self._persist_json_schema_text("")
+            if ok:
+                self.status_bar.set_left("\u26a1 JSON schema cleared")
+            else:
+                self.status_bar.set_left(
+                    "[!] JSON schema cleared in memory but disk "
+                    "save failed (see log)")
+            return
+
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            self.status_bar.set_left(
+                f"[!] JSON schema parse error: {exc.msg} (line "
+                f"{exc.lineno}, col {exc.colno})")
+            return
+
+        if not isinstance(parsed, dict):
+            self.status_bar.set_left(
+                f"[!] JSON schema must be a dict, got "
+                f"{type(parsed).__name__}")
+            return
+
+        # Pass 156z9ad: structural shape validation at the boundary
+        # closest to the user.  Without this, a schema like
+        # {"type": "array"} or a malformed properties block passes
+        # Apply with "schema applied (N keys)" and only fails at
+        # send time deep inside JsonSchemaConstraint.__init__ —
+        # surfacing as a chat-system ValueError caught by Pass
+        # 156z9ab Finding 5.  Same don't-clobber semantics as the
+        # parse-error and non-dict branches above: attr and disk
+        # both stay at their last successfully-applied state.
+        from enigma_engine.core.json_schema_mask import (
+            validate_json_schema_shape,
+        )
+        try:
+            validate_json_schema_shape(parsed)
+        except ValueError as exc:
+            self.status_bar.set_left(
+                f"[!] JSON schema invalid: {exc}")
+            return
+
+        self.json_schema = parsed
+        ok = self._persist_json_schema_text(raw)
+        if ok:
+            self.status_bar.set_left(
+                f"\u26a1 JSON schema applied ({len(parsed)} keys)")
+        else:
+            self.status_bar.set_left(
+                f"[!] JSON schema applied in memory ({len(parsed)} "
+                "keys) but disk save failed (see log) — will not "
+                "survive restart")
+
+    def _clear_json_schema(self):
+        """Clear the textbox + persisted state + live attribute.
+        Equivalent to selecting all text, deleting, and clicking
+        Apply — but explicit so the user sees a dedicated control.
+        """
+        try:
+            self._json_schema_textbox.delete("1.0", "end")
+        except Exception as exc:
+            logger.debug(
+                "Could not clear json_schema textbox: %s", exc)
+        self.json_schema = None
+        ok = self._persist_json_schema_text("")
+        if ok:
+            self.status_bar.set_left("\u26a1 JSON schema cleared")
+        else:
+            self.status_bar.set_left(
+                "[!] JSON schema cleared in memory but disk save "
+                "failed (see log)")
+
+    def _persist_json_schema_text(self, text: str) -> bool:
+        """Atomic-write the raw textbox content to gui_settings.json
+        under key ``json_schema_text``.  Stored as raw text (NOT
+        the parsed dict) so the user's exact formatting / comments-
+        inside-strings / whitespace round-trip on restart.  Boot-
+        load re-parses on next start.
+
+        Returns True on success, False on disk failure (full disk,
+        permission denied, JSON corruption on prior settings file).
+        Caller is responsible for surfacing the failure — silently
+        swallowing the IOError would let ``_apply_json_schema``
+        post a misleading "schema applied" status while the schema
+        is gone on next boot.  Pass 156z9ab fix.
+        """
+        import json
+        settings_path = DATA_DIR / "gui_settings.json"
+        try:
+            settings: dict = {}
+            if settings_path.exists():
+                settings = json.loads(
+                    settings_path.read_text(encoding="utf-8"))
+            settings["json_schema_text"] = text
+            from enigma_engine.core.safe_save import atomic_write_json
+            atomic_write_json(settings_path, settings)
+            return True
+        except Exception as exc:
+            logger.warning(
+                "Could not save json_schema_text to %s: %s",
+                settings_path, exc)
+            return False
 
     # ------------------------------------------------------------------
     # History cap

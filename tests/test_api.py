@@ -1114,6 +1114,190 @@ class TestChatJsonSchemaWiring:
             state.engine = old
 
 
+class TestChatJsonSchemaBoundaryValidation:
+    """Pass 156z9ac: malformed json_schema must return HTTP 400 at the
+    boundary, NOT HTTP 500 wrapping a deep ValueError from inside
+    generation. Same shape as the GUI ValueError-catch slice
+    (Pass 156z9ab) applied to the API sibling boundary."""
+
+    def test_chat_returns_400_when_schema_not_dict(self, client):
+        from unittest.mock import MagicMock
+        from enigma_engine.api.server import state
+        mock_engine = MagicMock()
+        mock_engine.chat = MagicMock(return_value="should-not-be-called")
+        old = state.engine
+        state.engine = mock_engine
+        try:
+            resp = client.post(
+                "/api/chat",
+                json={"message": "hi", "json_schema": "not-a-dict"},
+            )
+            # Pydantic may catch the type mismatch first (422) OR our
+            # validator catches it (400). Both are acceptable
+            # boundary-rejection codes; assert a real engine call
+            # NEVER happened — that's the contract this test gates.
+            assert resp.status_code in (400, 422)
+            assert mock_engine.chat.call_count == 0, (
+                "engine.chat must NOT be called when schema is "
+                "structurally invalid")
+        finally:
+            state.engine = old
+
+    def test_chat_returns_400_when_type_not_object(self, client):
+        from unittest.mock import MagicMock
+        from enigma_engine.api.server import state
+        mock_engine = MagicMock()
+        mock_engine.chat = MagicMock(return_value="should-not-be-called")
+        old = state.engine
+        state.engine = mock_engine
+        try:
+            resp = client.post(
+                "/api/chat",
+                json={
+                    "message": "hi",
+                    "json_schema": {"type": "array", "items": {}},
+                },
+            )
+            assert resp.status_code == 400
+            body = resp.json()
+            assert "json_schema" in body.get("error", "").lower(), (
+                "400 body must name json_schema so the user can find "
+                "the offending field")
+            assert mock_engine.chat.call_count == 0, (
+                "engine.chat must NOT be called on validation failure")
+        finally:
+            state.engine = old
+
+    def test_chat_stream_returns_400_when_schema_malformed(self, client):
+        from unittest.mock import MagicMock
+        from enigma_engine.api.server import state
+        mock_engine = MagicMock()
+        mock_engine.stream_chat = MagicMock(
+            return_value=iter(["should-not-stream"]))
+        old = state.engine
+        state.engine = mock_engine
+        try:
+            resp = client.post(
+                "/api/chat/stream",
+                json={
+                    "message": "hi",
+                    "json_schema": {
+                        "type": "object",
+                        "properties": {
+                            "x": {"type": "no-such-type"},
+                        },
+                    },
+                },
+            )
+            assert resp.status_code == 400
+            assert mock_engine.stream_chat.call_count == 0, (
+                "engine.stream_chat must NOT be called on validation "
+                "failure — bad-schema requests must not block other "
+                "clients on the inference lock")
+        finally:
+            state.engine = old
+
+    def test_chat_400_on_bad_schema_does_not_acquire_inference_lock(
+            self, client):
+        """Pass 156z9ac contract: validation runs BEFORE the inference
+        lock is acquired. A bad-schema request must not block a
+        well-formed request that arrives microseconds later."""
+        from unittest.mock import MagicMock
+        from enigma_engine.api.server import state, _inference_lock
+        mock_engine = MagicMock()
+        mock_engine.chat = MagicMock(return_value="ok")
+        old = state.engine
+        state.engine = mock_engine
+        try:
+            # Send malformed schema
+            resp = client.post(
+                "/api/chat",
+                json={"message": "hi", "json_schema": {"type": "array"}},
+            )
+            assert resp.status_code == 400
+            # Lock must be available immediately (not held by the
+            # bad-schema request).  acquire(blocking=False) returns
+            # True iff the lock is free.
+            acquired = _inference_lock.acquire(blocking=False)
+            assert acquired, (
+                "inference lock must be free after a 400 — bad-schema "
+                "requests must not acquire it")
+            if acquired:
+                _inference_lock.release()
+        finally:
+            state.engine = old
+
+
+class TestValidateJsonSchemaShape:
+    """Pass 156z9ac: the extracted validator helper used by both the
+    constraint constructor and the FastAPI boundary."""
+
+    def test_accepts_minimal_object(self):
+        from enigma_engine.core.json_schema_mask import (
+            validate_json_schema_shape)
+        # Should not raise
+        validate_json_schema_shape({"type": "object", "properties": {}})
+
+    def test_accepts_object_with_supported_types(self):
+        from enigma_engine.core.json_schema_mask import (
+            validate_json_schema_shape)
+        validate_json_schema_shape({
+            "type": "object",
+            "properties": {
+                "a": {"type": "string"},
+                "b": {"type": "integer"},
+                "c": {"type": "boolean"},
+                "d": {"type": "array"},
+                "e": {"type": "null"},
+            },
+        })
+
+    def test_rejects_non_dict(self):
+        import pytest
+        from enigma_engine.core.json_schema_mask import (
+            validate_json_schema_shape)
+        with pytest.raises(ValueError, match="must be a dict"):
+            validate_json_schema_shape("not-a-dict")
+
+    def test_rejects_non_object_root(self):
+        import pytest
+        from enigma_engine.core.json_schema_mask import (
+            validate_json_schema_shape)
+        with pytest.raises(ValueError, match="object"):
+            validate_json_schema_shape(
+                {"type": "array", "items": {}})
+
+    def test_rejects_unsupported_property_type(self):
+        import pytest
+        from enigma_engine.core.json_schema_mask import (
+            validate_json_schema_shape)
+        with pytest.raises(ValueError, match="not supported"):
+            validate_json_schema_shape({
+                "type": "object",
+                "properties": {"x": {"type": "no-such-type"}},
+            })
+
+    def test_constraint_constructor_still_validates(self):
+        """Adversarial: deleting the validator call from
+        ``JsonSchemaConstraint.__init__`` must regress this test —
+        the constraint constructor MUST keep validating directly so
+        Python callers (engine.generate, engine.chat) bypassing the
+        API boundary still get the loud rejection.
+        """
+        import pytest
+        from enigma_engine.core.json_schema_mask import (
+            JsonSchemaConstraint)
+
+        class _StubTok:
+            vocab_size = 16
+
+            def decode(self, ids, skip_special_tokens=False):
+                return ""
+        with pytest.raises(ValueError, match="object"):
+            JsonSchemaConstraint(
+                {"type": "array"}, _StubTok())
+
+
 # ================================================================
 # CF-10: History cap — _history must not grow without bound
 # ================================================================

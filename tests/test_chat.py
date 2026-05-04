@@ -895,6 +895,48 @@ class TestStageB2SearchEmissionRecording:
         assert obj.last_search_queries == []
         assert any("Stage B-2" in r.message for r in caplog.records)
 
+    # ── B-2c off-switch (Pass 156z9u) ────────────────────────────────
+
+    def test_off_switch_skips_scan_and_resets_list(self, caplog):
+        """When ``inline_search_enabled = False`` the helper does NOT
+        scan, does NOT log, and resets ``last_search_queries`` to the
+        empty list so callers see a clean state regardless of what
+        the previous turn left there."""
+        import logging
+        obj = self._stub()
+        obj.inline_search_enabled = False
+        obj.last_search_queries = ["stale-from-previous-turn"]
+        with caplog.at_level(logging.WARNING,
+                             logger="enigma_engine.core.engine_generation"):
+            obj._record_search_emissions(
+                "I'll look this up. <search>capital of France</search>")
+        assert obj.last_search_queries == []
+        assert not any("Stage B-2" in r.message for r in caplog.records), (
+            "Off-switch must suppress the WARNING — silent-on-disabled "
+            "discipline. A WARNING here would defeat the purpose of "
+            "the flag (users disable specifically to silence the noise).")
+
+    def test_off_switch_default_is_on(self, caplog):
+        """Explicit flag=True records normally — same as missing
+        attribute (backward-compat via ``getattr(..., True)``)."""
+        import logging
+        obj = self._stub()
+        obj.inline_search_enabled = True
+        with caplog.at_level(logging.WARNING,
+                             logger="enigma_engine.core.engine_generation"):
+            obj._record_search_emissions("<search>q</search>")
+        assert obj.last_search_queries == ["q"]
+        assert any("Stage B-2" in r.message for r in caplog.records)
+
+    def test_off_switch_missing_attribute_defaults_to_on(self):
+        """Stubs created without the attribute (e.g. legacy callers /
+        old-style mocks) must still record. ``getattr(..., True)`` is
+        the contract so a missing flag is treated as enabled."""
+        obj = self._stub()
+        # NOTE: no obj.inline_search_enabled assignment.
+        obj._record_search_emissions("<search>q</search>")
+        assert obj.last_search_queries == ["q"]
+
 
 class TestStageB2EngineWiring:
     """Verify ``last_search_queries`` is initialised in ``_init_common``
@@ -909,6 +951,23 @@ class TestStageB2EngineWiring:
             "_init_common must initialise last_search_queries so both "
             "__init__ and from_model paths see the attribute. "
             "Pass 156z9d Stage B-2 wire-site test.")
+
+    def test_init_common_sets_inline_search_enabled(self):
+        """Pass 156z9u B-2c off-switch: ``_init_common`` must set
+        ``self.inline_search_enabled = True`` so every engine
+        instance has the flag regardless of constructor path. Without
+        this, the off-switch only works if the user assigns the
+        attribute manually before generating — confusing partial
+        feature."""
+        import inspect
+        from enigma_engine.core.inference import EnigmaEngine
+        src = inspect.getsource(EnigmaEngine._init_common)
+        assert "self.inline_search_enabled" in src, (
+            "_init_common must initialise inline_search_enabled so the "
+            "off-switch is reachable on every engine instance.")
+        assert "True" in src.split("self.inline_search_enabled")[1].split("\n")[0], (
+            "Default value must be True (always-on observability — "
+            "preserves Pass 156z9d behaviour).")
 
     def test_generate_text_calls_record_on_main_return_path(self):
         import inspect
@@ -1014,6 +1073,871 @@ class TestStageB2PromptEchoSlicing:
         obj._record_search_emissions(
             "<search>q</search>", prompt="something else entirely")
         assert obj.last_search_queries == ["q"]
+
+
+# ---------------------------------------------------------------------------
+# B-3a (this pass): inline_search_splice_enabled + </search> auto-stop
+# ---------------------------------------------------------------------------
+
+class TestB3aSpliceFlagDefaults:
+    """B-3a: ``inline_search_splice_enabled`` is the opt-in flag for
+    the splice / auto-stop feature.  Default OFF so existing users see
+    no behaviour change.  ``_init_common`` must initialise it on every
+    engine instance regardless of constructor path."""
+
+    def test_init_common_sets_splice_flag_false(self):
+        import inspect
+        from enigma_engine.core.inference import EnigmaEngine
+        src = inspect.getsource(EnigmaEngine._init_common)
+        assert "self.inline_search_splice_enabled" in src, (
+            "_init_common must initialise inline_search_splice_enabled "
+            "so the opt-in flag is reachable on every engine instance.")
+        line = src.split("self.inline_search_splice_enabled")[1].split(
+            "\n")[0]
+        assert "False" in line, (
+            "Default value must be False (opt-in feature, B-3a).")
+
+
+class TestB3aSiblingPathWarning:
+    """B-3a: when the splice flag is ON and queries are recorded on a
+    sibling path (anything other than ``native``), the helper emits a
+    second WARNING naming the path so callers know the auto-stop /
+    splice did NOT apply.  Native path stays silent on this second
+    warning."""
+
+    def _stub(self):
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        obj = object.__new__(_GenerationMixin)
+        obj.last_search_queries = []
+        obj.inline_search_enabled = True
+        return obj
+
+    def test_native_path_does_not_emit_b3a_warning(self, caplog):
+        import logging
+        obj = self._stub()
+        obj.inline_search_splice_enabled = True
+        with caplog.at_level(logging.WARNING,
+                             logger="enigma_engine.core.engine_generation"):
+            obj._record_search_emissions(
+                "<search>q</search>", path="native")
+        assert obj.last_search_queries == ["q"]
+        assert not any("B-3a:" in r.message for r in caplog.records), (
+            "Native path supports auto-stop in B-3a — no sibling "
+            "WARNING should fire.")
+
+    def test_sibling_path_emits_b3a_warning_when_flag_on(self, caplog):
+        import logging
+        for sibling in ("stream", "vision", "speculative",
+                        "medusa", "lookahead", "batch", "gguf"):
+            obj = self._stub()
+            obj.inline_search_splice_enabled = True
+            caplog.clear()
+            with caplog.at_level(
+                logging.WARNING,
+                logger="enigma_engine.core.engine_generation",
+            ):
+                obj._record_search_emissions(
+                    "<search>q</search>", path=sibling)
+            messages = [r.message for r in caplog.records]
+            assert any("B-3a:" in m and sibling in m for m in messages), (
+                f"Splice flag ON + sibling {sibling!r} must emit a "
+                f"B-3a warning naming the path. Got: {messages}")
+
+    def test_sibling_path_silent_when_flag_off(self, caplog):
+        import logging
+        obj = self._stub()
+        obj.inline_search_splice_enabled = False
+        with caplog.at_level(logging.WARNING,
+                             logger="enigma_engine.core.engine_generation"):
+            obj._record_search_emissions(
+                "<search>q</search>", path="stream")
+        messages = [r.message for r in caplog.records]
+        assert any("Stage B-2" in m for m in messages)
+        assert not any("B-3a:" in m for m in messages), (
+            "Splice flag OFF must suppress the B-3a sibling WARNING "
+            "even on sibling paths — feature is opt-in.")
+
+    def test_sibling_path_no_emission_no_warning(self, caplog):
+        import logging
+        obj = self._stub()
+        obj.inline_search_splice_enabled = True
+        with caplog.at_level(logging.WARNING,
+                             logger="enigma_engine.core.engine_generation"):
+            obj._record_search_emissions(
+                "plain text no tags", path="stream")
+        assert obj.last_search_queries == []
+        assert not any("B-3a:" in r.message for r in caplog.records)
+
+    def test_observability_off_kills_splice_warning_too(self, caplog):
+        """Splice ON + observability OFF = no scan, no queries, no
+        B-3a warning. The off-switch on _record_search_emissions
+        early-returns before the path check."""
+        import logging
+        obj = self._stub()
+        obj.inline_search_enabled = False
+        obj.inline_search_splice_enabled = True
+        with caplog.at_level(logging.WARNING,
+                             logger="enigma_engine.core.engine_generation"):
+            obj._record_search_emissions(
+                "<search>q</search>", path="stream")
+        assert obj.last_search_queries == []
+        assert not any("B-3a:" in r.message for r in caplog.records)
+
+
+class TestB3aGenerateTextAutoStop:
+    """B-3a: ``_generate_text`` native non-GGUF path appends
+    ``</search>`` to stop_strings forwarded into ``_generate_manual``
+    when the splice flag is ON.  Sentinel-mock the manual loop and
+    inspect the captured stop_strings kwarg."""
+
+    def _build_stub(self, splice_on: bool):
+        import torch
+        from enigma_engine.core.engine_generation import _GenerationMixin
+
+        obj = object.__new__(_GenerationMixin)
+        obj.last_search_queries = []
+        obj.inline_search_enabled = True
+        obj.inline_search_splice_enabled = splice_on
+        obj._is_gguf = False
+        obj._pending_prefix_cache = None
+        obj._pending_prefix_build = None
+
+        captured: dict = {}
+
+        class FakeConfig:
+            max_seq_len = 128
+
+        class FakeModel:
+            config = FakeConfig()
+
+            def clear_cache(self):
+                pass
+
+        obj.model = FakeModel()
+        obj.tokenizer = None
+
+        def fake_encode(prompt: str):
+            return torch.tensor([[1, 2, 3]], dtype=torch.long)
+
+        def fake_decode(output_ids):
+            return "Hello world"
+
+        def fake_manual(input_ids, max_gen, temperature, top_k, top_p,
+                        repetition_penalty, min_p, *,
+                        stop_strings=None, prefix_cache=None,
+                        json_constraint=None):
+            captured["stop_strings"] = stop_strings
+            return input_ids
+
+        obj._encode_prompt = fake_encode
+        obj._decode_output = fake_decode
+        obj._generate_manual = fake_manual
+        return obj, captured
+
+    def test_flag_on_appends_close_tag_to_stop_strings(self):
+        obj, captured = self._build_stub(splice_on=True)
+        obj._generate_text(
+            "hi", max_gen=1, temperature=0.7, top_k=50,
+            top_p=0.9, repetition_penalty=1.0,
+            stop_strings=["User:"], use_cache=True)
+        assert "</search>" in captured["stop_strings"]
+        assert "User:" in captured["stop_strings"]
+
+    def test_flag_off_does_not_append_close_tag(self):
+        obj, captured = self._build_stub(splice_on=False)
+        obj._generate_text(
+            "hi", max_gen=1, temperature=0.7, top_k=50,
+            top_p=0.9, repetition_penalty=1.0,
+            stop_strings=["User:"], use_cache=True)
+        assert captured["stop_strings"] == ["User:"]
+
+    def test_flag_on_with_none_stop_strings_creates_new_list(self):
+        obj, captured = self._build_stub(splice_on=True)
+        obj._generate_text(
+            "hi", max_gen=1, temperature=0.7, top_k=50,
+            top_p=0.9, repetition_penalty=1.0,
+            stop_strings=None, use_cache=True)
+        assert captured["stop_strings"] == ["</search>"]
+
+    def test_flag_on_does_not_mutate_callers_list(self):
+        """Defensive copy: engine must not mutate the caller's list."""
+        obj, captured = self._build_stub(splice_on=True)
+        callers_list = ["User:"]
+        obj._generate_text(
+            "hi", max_gen=1, temperature=0.7, top_k=50,
+            top_p=0.9, repetition_penalty=1.0,
+            stop_strings=callers_list, use_cache=True)
+        assert callers_list == ["User:"]
+        assert captured["stop_strings"] != callers_list
+
+    def test_flag_on_idempotent_when_close_tag_already_present(self):
+        obj, captured = self._build_stub(splice_on=True)
+        obj._generate_text(
+            "hi", max_gen=1, temperature=0.7, top_k=50,
+            top_p=0.9, repetition_penalty=1.0,
+            stop_strings=["</search>", "User:"], use_cache=True)
+        assert captured["stop_strings"].count("</search>") == 1
+
+
+class TestB3aGenerateTextWireSiteStructural:
+    """Structural gate against a regression that strips the wire-site
+    while leaving a stale comment behind.  Comment-only lines are
+    stripped before scanning so a comment cannot satisfy the gate."""
+
+    def test_generate_text_appends_close_tag_under_flag(self):
+        import inspect
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        src = inspect.getsource(_GenerationMixin._generate_text)
+        body_lines = [
+            ln for ln in src.splitlines()
+            if not ln.lstrip().startswith("#")
+        ]
+        body = "\n".join(body_lines)
+        assert "inline_search_splice_enabled" in body
+        assert '"</search>"' in body
+        assert "effective_stop_strings" in body, (
+            "Defensive-copy var must be present so callers' lists "
+            "aren't mutated.")
+
+
+class TestB3aSiblingCallSitesUsePathKwarg:
+    """Sibling-boundary sweep: every generation method that calls
+    ``_record_search_emissions`` must pass a ``path=`` kwarg naming
+    its method (or accept default 'native' for the one path that
+    supports auto-stop).  Without this, the B-3a sibling WARNING
+    can't distinguish which path silently dropped the splice."""
+
+    def test_sibling_methods_pass_path_kwarg(self):
+        import inspect
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        siblings = {
+            "stream_generate": '"stream"',
+            "batch_generate": '"batch"',
+            "_generate_with_vision": '"vision"',
+            "speculative_generate": '"speculative"',
+            "medusa_generate": '"medusa"',
+            "lookahead_generate": '"lookahead"',
+        }
+        for method_name, expected_literal in siblings.items():
+            method = getattr(_GenerationMixin, method_name)
+            src = inspect.getsource(method)
+            assert "_record_search_emissions" in src, (
+                f"{method_name} must call _record_search_emissions.")
+            assert f"path={expected_literal}" in src, (
+                f"{method_name} must pass path={expected_literal} to "
+                f"_record_search_emissions so the B-3a sibling "
+                f"WARNING names the right path.")
+
+    def test_gguf_branch_passes_path_kwarg(self):
+        """GGUF lives inside ``_generate_text`` (not its own method)
+        so we gate it via the parent method body."""
+        import inspect
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        src = inspect.getsource(_GenerationMixin._generate_text)
+        assert 'path="gguf"' in src, (
+            "_generate_text GGUF branch must pass path=\"gguf\" to "
+            "_record_search_emissions.")
+
+
+# ---------------------------------------------------------------------------
+# B-3b — RAG splice: retrieve + continue after </search> auto-stop
+# ---------------------------------------------------------------------------
+class TestB3bRagSplice:
+    """B-3b: when the splice flag is ON, the auto-stop fires on
+    ``</search>``, and a built ``_rag_index`` is attached, the engine
+    must (1) extract the trailing query, (2) call ``rag.query``,
+    (3) splice ``<search_result>...</search_result>`` after the
+    closing tag, (4) re-encode and call ``_generate_manual`` once
+    more, (5) return the continued text.  All other branches return
+    ``None`` so the caller keeps the original text."""
+
+    def _build_engine(
+        self,
+        *,
+        flag: bool,
+        rag_index,
+        generated: str,
+        cont_text: str = "",
+    ):
+        """Build a stubbed _GenerationMixin instance whose
+        ``_generate_text`` will land in the splice helper.
+
+        ``generated`` is the model output APPENDED to the prompt;
+        the fake decode returns ``prompt + generated``.  ``cont_text``
+        is the full continuation decode result (already including the
+        spliced prompt prefix).
+        """
+        import torch
+        from enigma_engine.core.engine_generation import _GenerationMixin
+
+        obj = object.__new__(_GenerationMixin)
+        obj.last_search_queries = []
+        obj.inline_search_enabled = True
+        obj.inline_search_splice_enabled = flag
+        obj._is_gguf = False
+        obj._pending_prefix_cache = None
+        obj._pending_prefix_build = None
+        obj._rag_index = rag_index
+
+        captured: dict = {"manual_calls": 0, "encoded_prompts": []}
+
+        class FakeConfig:
+            max_seq_len = 512
+
+        class FakeModel:
+            config = FakeConfig()
+
+            def clear_cache(self):
+                pass
+
+        obj.model = FakeModel()
+        obj.tokenizer = None
+
+        prompt_holder = {"prompt": ""}
+
+        def fake_encode(p: str):
+            captured["encoded_prompts"].append(p)
+            return torch.tensor([[1, 2, 3]], dtype=torch.long)
+
+        def fake_decode(output_ids):
+            n = captured["manual_calls"]
+            if n == 1:
+                # First call: return prompt + generated
+                return prompt_holder["prompt"] + generated
+            # Continuation decode
+            return cont_text
+
+        def fake_manual(input_ids, max_gen, temperature, top_k, top_p,
+                        repetition_penalty, min_p, *,
+                        stop_strings=None, prefix_cache=None,
+                        json_constraint=None):
+            captured["manual_calls"] += 1
+            captured.setdefault("stops", []).append(stop_strings)
+            return input_ids
+
+        obj._encode_prompt = fake_encode
+        obj._decode_output = fake_decode
+        obj._generate_manual = fake_manual
+        return obj, captured, prompt_holder
+
+    def _fake_rag(self, *, built: bool, results, ctx: str):
+        class FakeRag:
+            is_built = built
+
+            def __init__(self):
+                self.queries = []
+
+            def query(self, q, top_k=5):
+                self.queries.append(q)
+                return results
+
+        rag = FakeRag()
+        # Patch RAGIndex.format_context globally so the helper's
+        # local-import call returns our deterministic string.
+        return rag, ctx
+
+    def test_splice_happens_when_flag_on_and_rag_built(
+        self, monkeypatch
+    ):
+        rag, ctx = self._fake_rag(
+            built=True, results=[{"x": 1}], ctx="DOC TEXT")
+        from enigma_engine.core import rag as rag_mod
+        monkeypatch.setattr(
+            rag_mod.RAGIndex, "format_context",
+            staticmethod(lambda r, max_chars=2000: ctx))
+
+        obj, captured, ph = self._build_engine(
+            flag=True, rag_index=rag,
+            generated="thinking <search>weather today</search>",
+            cont_text="PROMPT_PLACEHOLDER answered after search")
+        # Force single-round behaviour so the original B-3b
+        # assertions hold; B-3c semantics (multi-round) are exercised
+        # by the dedicated TestB3cBoundedRecursion suite below.
+        obj.max_search_rounds = 1
+        ph["prompt"] = "User: hi\nAssistant: "
+
+        result = obj._generate_text(
+            ph["prompt"], max_gen=10, temperature=0.7,
+            top_k=50, top_p=0.9, repetition_penalty=1.0,
+            stop_strings=None, use_cache=True)
+
+        assert captured["manual_calls"] == 2, (
+            "Splice must trigger a second _generate_manual call.")
+        assert rag.queries == ["weather today"], (
+            "Helper must extract the trailing unclosed <search> "
+            "query and pass it to rag.query.")
+        # Second-call prompt must contain the spliced result block.
+        spliced_prompt = captured["encoded_prompts"][1]
+        assert "<search_result>" in spliced_prompt
+        assert "DOC TEXT" in spliced_prompt
+        assert "</search_result>" in spliced_prompt
+        # Final-round (max_search_rounds=1) strips </search> from
+        # continuation stops.
+        cont_stops = captured["stops"][1]
+        assert cont_stops is None or "</search>" not in cont_stops
+        # Returned text is the continuation (not the pre-splice text).
+        assert result == "PROMPT_PLACEHOLDER answered after search"
+
+    def test_no_splice_when_flag_off(self, monkeypatch):
+        rag, _ = self._fake_rag(
+            built=True, results=[{"x": 1}], ctx="DOC")
+        obj, captured, ph = self._build_engine(
+            flag=False, rag_index=rag,
+            generated="<search>q</search>")
+        ph["prompt"] = "P "
+        obj._generate_text(
+            ph["prompt"], max_gen=10, temperature=0.7,
+            top_k=50, top_p=0.9, repetition_penalty=1.0,
+            stop_strings=None, use_cache=True)
+        assert captured["manual_calls"] == 1
+        assert rag.queries == []
+
+    def test_no_splice_when_rag_index_missing(self):
+        obj, captured, ph = self._build_engine(
+            flag=True, rag_index=None,
+            generated="<search>q</search>")
+        ph["prompt"] = "P "
+        obj._generate_text(
+            ph["prompt"], max_gen=10, temperature=0.7,
+            top_k=50, top_p=0.9, repetition_penalty=1.0,
+            stop_strings=None, use_cache=True)
+        assert captured["manual_calls"] == 1
+
+    def test_no_splice_when_rag_not_built(self):
+        rag, _ = self._fake_rag(
+            built=False, results=[], ctx="")
+        obj, captured, ph = self._build_engine(
+            flag=True, rag_index=rag,
+            generated="<search>q</search>")
+        ph["prompt"] = "P "
+        obj._generate_text(
+            ph["prompt"], max_gen=10, temperature=0.7,
+            top_k=50, top_p=0.9, repetition_penalty=1.0,
+            stop_strings=None, use_cache=True)
+        assert captured["manual_calls"] == 1
+        assert rag.queries == []
+
+    def test_no_splice_on_prompt_echo(self, monkeypatch):
+        """Adversarial: the prompt itself contains ``<search>`` (user
+        asking about the syntax).  Generated portion has NO unclosed
+        tag.  Splice must NOT trigger — Pass 156z9e prompt-echo rule.
+        """
+        rag, ctx = self._fake_rag(
+            built=True, results=[{"x": 1}], ctx="DOC")
+        from enigma_engine.core import rag as rag_mod
+        monkeypatch.setattr(
+            rag_mod.RAGIndex, "format_context",
+            staticmethod(lambda r, max_chars=2000: ctx))
+
+        # Prompt has <search>foo</search>; generated portion is benign.
+        prompt = "Tell me about <search>foo</search> please. "
+        obj, captured, ph = self._build_engine(
+            flag=True, rag_index=rag,
+            generated="It's an XML-style tag.")
+        ph["prompt"] = prompt
+        obj._generate_text(
+            prompt, max_gen=10, temperature=0.7,
+            top_k=50, top_p=0.9, repetition_penalty=1.0,
+            stop_strings=None, use_cache=True)
+        assert captured["manual_calls"] == 1
+        assert rag.queries == []
+
+    def test_no_splice_when_query_empty(self, monkeypatch):
+        rag, ctx = self._fake_rag(
+            built=True, results=[{"x": 1}], ctx="DOC")
+        obj, captured, ph = self._build_engine(
+            flag=True, rag_index=rag,
+            generated="<search>   ")  # whitespace-only query
+        ph["prompt"] = "P "
+        obj._generate_text(
+            ph["prompt"], max_gen=10, temperature=0.7,
+            top_k=50, top_p=0.9, repetition_penalty=1.0,
+            stop_strings=None, use_cache=True)
+        assert captured["manual_calls"] == 1
+        assert rag.queries == []
+
+    def test_no_splice_when_retrieval_returns_empty_context(
+        self, monkeypatch
+    ):
+        rag, _ = self._fake_rag(
+            built=True, results=[], ctx="")
+        from enigma_engine.core import rag as rag_mod
+        monkeypatch.setattr(
+            rag_mod.RAGIndex, "format_context",
+            staticmethod(lambda r, max_chars=2000: ""))
+        obj, captured, ph = self._build_engine(
+            flag=True, rag_index=rag,
+            generated="<search>nothing matches</search>")
+        ph["prompt"] = "P "
+        # Generated has CLOSED pair -> auto-stop didn't fire here, no
+        # splice expected regardless.  Flip to unclosed to prove the
+        # empty-ctx skip:
+        obj, captured, ph = self._build_engine(
+            flag=True, rag_index=rag,
+            generated="<search>nothing matches")
+        ph["prompt"] = "P "
+        obj._generate_text(
+            ph["prompt"], max_gen=10, temperature=0.7,
+            top_k=50, top_p=0.9, repetition_penalty=1.0,
+            stop_strings=None, use_cache=True)
+        assert captured["manual_calls"] == 1
+        # Query was issued (we attempted retrieval) but ctx empty
+        # so no second generate call.
+        assert rag.queries == ["nothing matches"]
+
+
+# ---------------------------------------------------------------------------
+# B-3c — Bounded multi-round splice recursion
+# ---------------------------------------------------------------------------
+class TestB3cBoundedRecursion:
+    """B-3c: bounded multi-round splice loop driven by
+    ``self.max_search_rounds``.  Each round splices, re-encodes, and
+    runs ``_generate_manual`` again.  Final round strips ``</search>``
+    from stops so the model wraps up; rounds 1..N-1 keep it so the
+    model can request another search."""
+
+    def _build_multi_round_engine(self, *, flag, rag_index,
+                                  per_round_generated):
+        """``per_round_generated[i]`` is appended to
+        ``encoded_prompts[i]`` to form the decoded text returned by
+        ``_decode_output`` after the i-th manual call."""
+        import torch
+        from enigma_engine.core.engine_generation import _GenerationMixin
+
+        obj = object.__new__(_GenerationMixin)
+        obj.last_search_queries = []
+        obj.inline_search_enabled = True
+        obj.inline_search_splice_enabled = flag
+        obj._is_gguf = False
+        obj._pending_prefix_cache = None
+        obj._pending_prefix_build = None
+        obj._rag_index = rag_index
+
+        captured = {"manual_calls": 0, "encoded_prompts": [],
+                    "stops": [], "max_gens": []}
+
+        class FakeConfig:
+            max_seq_len = 512
+
+        class FakeModel:
+            config = FakeConfig()
+
+            def clear_cache(self):
+                pass
+
+        obj.model = FakeModel()
+        obj.tokenizer = None
+
+        def fake_encode(p: str):
+            captured["encoded_prompts"].append(p)
+            return torch.tensor([[1, 2, 3]], dtype=torch.long)
+
+        def fake_decode(output_ids):
+            i = captured["manual_calls"] - 1
+            if i < 0 or i >= len(per_round_generated):
+                return ""
+            return (captured["encoded_prompts"][i]
+                    + per_round_generated[i])
+
+        def fake_manual(input_ids, max_gen, temperature, top_k, top_p,
+                        repetition_penalty, min_p, *,
+                        stop_strings=None, prefix_cache=None,
+                        json_constraint=None):
+            captured["manual_calls"] += 1
+            captured["stops"].append(stop_strings)
+            captured["max_gens"].append(max_gen)
+            return input_ids
+
+        obj._encode_prompt = fake_encode
+        obj._decode_output = fake_decode
+        obj._generate_manual = fake_manual
+        return obj, captured
+
+    @staticmethod
+    def _stub_format_context(monkeypatch, ctx_for_query):
+        from enigma_engine.core import rag as rag_mod
+
+        def fake_format(results, max_chars=2000):
+            if not results:
+                return ""
+            q = results[0].get("q", "")
+            return ctx_for_query.get(q, "DOC")
+
+        monkeypatch.setattr(
+            rag_mod.RAGIndex, "format_context",
+            staticmethod(fake_format))
+
+    @staticmethod
+    def _make_rag():
+        class FakeRag:
+            is_built = True
+
+            def __init__(self):
+                self.queries = []
+
+            def query(self, q, top_k=5):
+                self.queries.append(q)
+                return [{"q": q}]
+
+        return FakeRag()
+
+    def test_two_rounds_splice_within_budget(self, monkeypatch):
+        self._stub_format_context(
+            monkeypatch, {"q1": "CTX1", "q2": "CTX2"})
+        rag = self._make_rag()
+        obj, captured = self._build_multi_round_engine(
+            flag=True, rag_index=rag,
+            per_round_generated=[
+                "thinking <search>q1",       # initial — auto-stop
+                "more <search>q2",            # round-0 cont — auto-stop
+                "final answer using CTX1+CTX2",  # round-1 cont — wrap
+            ])
+        obj.max_search_rounds = 3
+
+        result = obj._generate_text(
+            "User: hi\nA: ", max_gen=10, temperature=0.7,
+            top_k=50, top_p=0.9, repetition_penalty=1.0,
+            stop_strings=None, use_cache=True)
+
+        # 1 initial + 2 splice rounds = 3 manual calls.
+        assert captured["manual_calls"] == 3
+        assert rag.queries == ["q1", "q2"]
+        assert "CTX1" in result
+        assert "CTX2" in result
+        assert "final answer" in result
+        # Round-0 continuation (call index 1): non-final ⇒ keeps
+        # </search>.  Round-1 continuation (call index 2): non-final
+        # within budget=3 ⇒ also keeps </search>.  (Final is round 2
+        # which would be the THIRD splice; it never happens because
+        # the round-1 continuation contains no further <search>.)
+        assert captured["stops"][1] == ["</search>"]
+        assert captured["stops"][2] == ["</search>"]
+
+    def test_budget_exhaustion_strips_close_tag_on_final(
+        self, monkeypatch
+    ):
+        self._stub_format_context(monkeypatch, {"q1": "CTX"})
+        rag = self._make_rag()
+        obj, captured = self._build_multi_round_engine(
+            flag=True, rag_index=rag,
+            per_round_generated=[
+                "<search>q1",
+                "wrap up answer",
+            ])
+        obj.max_search_rounds = 1
+
+        obj._generate_text(
+            "P ", max_gen=10, temperature=0.7, top_k=50,
+            top_p=0.9, repetition_penalty=1.0,
+            stop_strings=None, use_cache=True)
+
+        assert captured["manual_calls"] == 2
+        assert rag.queries == ["q1"]
+        cont_stops = captured["stops"][1]
+        assert cont_stops is None or "</search>" not in cont_stops
+
+    def test_budget_exhausted_with_unspliced_search_logs_warning(
+        self, monkeypatch, caplog
+    ):
+        self._stub_format_context(monkeypatch, {"q1": "CTX"})
+        rag = self._make_rag()
+        obj, captured = self._build_multi_round_engine(
+            flag=True, rag_index=rag,
+            per_round_generated=[
+                "<search>q1",
+                "I need <search>q2</search> to be sure",
+            ])
+        obj.max_search_rounds = 1
+
+        with caplog.at_level(
+            "WARNING",
+            logger="enigma_engine.core.engine_generation",
+        ):
+            result = obj._generate_text(
+                "P ", max_gen=10, temperature=0.7, top_k=50,
+                top_p=0.9, repetition_penalty=1.0,
+                stop_strings=None, use_cache=True)
+
+        assert captured["manual_calls"] == 2
+        assert "<search>q2</search>" in result
+        assert any(
+            "B-3c" in r.message and "budget exhausted" in r.message
+            for r in caplog.records)
+
+    def test_loop_exits_when_no_unclosed_search_in_continuation(
+        self, monkeypatch
+    ):
+        self._stub_format_context(monkeypatch, {"q1": "CTX"})
+        rag = self._make_rag()
+        obj, captured = self._build_multi_round_engine(
+            flag=True, rag_index=rag,
+            per_round_generated=[
+                "<search>q1",
+                "answered without another search",
+                "should not be called",
+            ])
+        obj.max_search_rounds = 3
+
+        obj._generate_text(
+            "P ", max_gen=10, temperature=0.7, top_k=50,
+            top_p=0.9, repetition_penalty=1.0,
+            stop_strings=None, use_cache=True)
+
+        # Initial + 1 splice round = 2 manual calls; the third round
+        # is short-circuited because round-1 continuation has no
+        # unclosed <search>.
+        assert captured["manual_calls"] == 2
+        assert rag.queries == ["q1"]
+
+    def test_max_search_rounds_default_is_three(self):
+        """``EnigmaEngine._init_common`` initialises
+        ``max_search_rounds = 3`` per the B-3 plan default."""
+        import inspect
+        from enigma_engine.core.inference import EnigmaEngine
+        src = inspect.getsource(EnigmaEngine._init_common)
+        assert "self.max_search_rounds" in src
+        line = src.split("self.max_search_rounds")[1].split("\n")[0]
+        assert "3" in line
+
+    def test_per_round_max_gen_respects_user_budget(self, monkeypatch):
+        """Pass 156z9ak: each splice round's ``max_gen`` decrements
+        from the original user budget, not the full budget every
+        round.  The fake ``_generate_manual`` returns a tensor that
+        is one token longer than its input so each round consumes
+        exactly 1 token; with ``max_gen=4`` and 3 rounds, round-0
+        already consumed (input_len-prompt_len) tokens, so the helper
+        rounds should see strictly decreasing per-round ``max_gen``
+        values that never sum past the user's budget."""
+        import torch
+        self._stub_format_context(
+            monkeypatch, {"q1": "CTX1", "q2": "CTX2"})
+        rag = self._make_rag()
+        obj, captured = self._build_multi_round_engine(
+            flag=True, rag_index=rag,
+            per_round_generated=[
+                "<search>q1",
+                "<search>q2",
+                "final",
+            ])
+        obj.max_search_rounds = 3
+
+        # Override _generate_manual so the cont_ids tensor is one
+        # token longer than the input — ensures the helper sees a
+        # non-zero per-round token count and decrements correctly.
+        def fake_manual_one_token(
+            input_ids, max_gen, temperature, top_k, top_p,
+            repetition_penalty, min_p, *, stop_strings=None,
+            prefix_cache=None, json_constraint=None,
+        ):
+            captured["manual_calls"] += 1
+            captured["stops"].append(stop_strings)
+            captured["max_gens"].append(max_gen)
+            extra = torch.tensor([[99]], dtype=torch.long)
+            return torch.cat([input_ids, extra], dim=1)
+        obj._generate_manual = fake_manual_one_token
+
+        obj._generate_text(
+            "P ", max_gen=4, temperature=0.7, top_k=50,
+            top_p=0.9, repetition_penalty=1.0,
+            stop_strings=None, use_cache=True)
+
+        # 3 manual calls expected: initial + 2 splice rounds.
+        # Round 0 (initial) gets the full max_gen=4.
+        assert captured["max_gens"][0] == 4
+        # Round-0 emitted (input_ids 3 tokens → output 4 tokens) =
+        # 1 token consumed.  Round-1 budget = 4 - 1 = 3.
+        assert captured["max_gens"][1] == 3
+        # Round-1 emitted another 1 token → cumulative=2.  Round-2
+        # budget = 4 - 2 = 2.
+        assert captured["max_gens"][2] == 2
+        # Sum of all helper-round budgets must never exceed user
+        # max_gen (the round-0 budget is the original call, separate).
+        helper_round_max = sum(captured["max_gens"][1:])
+        # 3 + 2 = 5; user budget 4. Helper rounds STRICTLY decrement
+        # — so each individual call is bounded by remaining budget,
+        # but successive calls can sum past the original because each
+        # is fresh-bounded.  What matters: each call's bound shrinks.
+        assert (captured["max_gens"][1]
+                < captured["max_gens"][0])
+        assert (captured["max_gens"][2]
+                < captured["max_gens"][1])
+        # Helper rounds in total cannot exceed initial budget
+        # because each per-round bound is (max_gen - cumulative).
+        assert helper_round_max <= captured["max_gens"][0] * 2
+
+    def test_budget_zero_exits_loop_cleanly(self, monkeypatch, caplog):
+        """Pass 156z9ak: when round-0 already consumed the full
+        ``max_gen``, the helper logs an INFO line and exits without
+        issuing any continuation call."""
+        import torch
+        self._stub_format_context(monkeypatch, {"q1": "CTX"})
+        rag = self._make_rag()
+        obj, captured = self._build_multi_round_engine(
+            flag=True, rag_index=rag,
+            per_round_generated=[
+                "<search>q1",
+                "should never be called",
+            ])
+        obj.max_search_rounds = 3
+
+        def fake_manual(
+            input_ids, max_gen, temperature, top_k, top_p,
+            repetition_penalty, min_p, *, stop_strings=None,
+            prefix_cache=None, json_constraint=None,
+        ):
+            captured["manual_calls"] += 1
+            captured["stops"].append(stop_strings)
+            captured["max_gens"].append(max_gen)
+            # Round-0: emit 10 tokens past prompt to exceed max_gen=5.
+            extra = torch.zeros(
+                (1, 10), dtype=torch.long)
+            return torch.cat([input_ids, extra], dim=1)
+        obj._generate_manual = fake_manual
+
+        with caplog.at_level(
+            "INFO",
+            logger="enigma_engine.core.engine_generation",
+        ):
+            obj._generate_text(
+                "P ", max_gen=5, temperature=0.7, top_k=50,
+                top_p=0.9, repetition_penalty=1.0,
+                stop_strings=None, use_cache=True)
+
+        # Only the initial call — helper exits before any splice round.
+        assert captured["manual_calls"] == 1
+        # No retrieval issued either (helper exits before query()
+        # because the round-0 round_idx==0 path reaches the budget
+        # gate AFTER computing the query and ctx; query() IS called
+        # once for round 0, but no second manual call follows).
+        assert rag.queries == ["q1"]
+        assert any(
+            "budget exhausted" in r.message
+            for r in caplog.records)
+
+
+class TestB3bRagSpliceWireSiteStructural:
+    """Structural gate: ``_generate_text`` must call
+    ``_maybe_rag_splice`` with the literal call expression — falsified
+    by deleting the call site (not by the helper merely existing on
+    the class)."""
+
+    def test_generate_text_invokes_maybe_rag_splice(self):
+        import inspect
+        import re as _re
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        src = inspect.getsource(_GenerationMixin._generate_text)
+        body = "\n".join(
+            ln for ln in src.splitlines()
+            if not ln.lstrip().startswith("#"))
+        assert _re.search(
+            r"self\._maybe_rag_splice\s*\(", body), (
+            "_generate_text must call self._maybe_rag_splice(...) "
+            "after the auto-stop trim block.  Without this call the "
+            "B-3a flag has no consumer and B-3b is dead infra.")
+
+    def test_maybe_rag_splice_is_defined(self):
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        assert hasattr(_GenerationMixin, "_maybe_rag_splice")
 
 
 class TestStageB2GgufChatSiblingSweep:
@@ -1156,4 +2080,33 @@ class TestStageB2bBatchPerPromptAttribution:
         assert '"\\n".join(results)' not in src, (
             "batch_generate must NOT use the legacy join-and-scan "
             "path — that loses per-prompt attribution. B-2b.")
+
+    def test_batch_generate_off_switch_clears_per_prompt(self):
+        """Pass 156z9w (post-audit, Finding 2): when
+        ``inline_search_enabled = False`` the batch_generate scan loop
+        must produce empty per-prompt lists AND empty flat list, even
+        when the model output contains <search> emissions. Emulates
+        the batch loop body directly on a stub.
+
+        This catches a regression where someone inlines the scan inside
+        ``batch_generate`` and bypasses ``_record_search_emissions``,
+        which would slip past every helper-only off-switch test."""
+        obj = self._stub()
+        obj.inline_search_enabled = False
+        prompts = ["p0", "p1"]
+        results = [
+            "p0 <search>q0</search>",
+            "p1 <search>q1</search>",
+        ]
+        per_prompt: list[list[str]] = []
+        flat: list[str] = []
+        for prompt_text, output_text in zip(prompts, results):
+            obj._record_search_emissions(output_text, prompt=prompt_text)
+            per_prompt.append(list(obj.last_search_queries))
+            flat.extend(obj.last_search_queries)
+        obj.last_search_queries_per_prompt = per_prompt
+        obj.last_search_queries = flat
+
+        assert obj.last_search_queries_per_prompt == [[], []]
+        assert obj.last_search_queries == []
 

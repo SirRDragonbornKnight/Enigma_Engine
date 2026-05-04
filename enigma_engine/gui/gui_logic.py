@@ -722,6 +722,32 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
         # remains valid even when the saved adapter is missing.
         self._restore_lora_adapter_for_base(path)
 
+        # Stage B-2c (Pass 156z9w): apply the persisted
+        # `inline_search_enabled` flag to the freshly-loaded engine.
+        # Engine ships with default True via `_init_common`, but the
+        # user may have disabled it via the CONFIG checkbox between
+        # sessions — that choice is in `self.inline_search_enabled`
+        # (loaded at desktop boot) and must propagate on every new
+        # engine, not just the very first.
+        try:
+            self.engine.inline_search_enabled = bool(
+                getattr(self, "inline_search_enabled", True))
+        except Exception as exc:
+            logger.debug(
+                "Could not apply inline_search_enabled to engine: %s",
+                exc)
+
+        # B-3a: apply persisted ``inline_search_splice_enabled`` opt-in
+        # to the freshly-loaded engine.  Mirrors the inline_search
+        # block above; default False so existing users see no change.
+        try:
+            self.engine.inline_search_splice_enabled = bool(
+                getattr(self, "inline_search_splice_enabled", False))
+        except Exception as exc:
+            logger.debug(
+                "Could not apply inline_search_splice_enabled to "
+                "engine: %s", exc)
+
         # Update the chat route dropdown to show the loaded model
         route_menus = getattr(self, "_route_menus", {})
         chat_menu = route_menus.get("chat")

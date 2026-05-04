@@ -256,6 +256,17 @@ class LogicChatMixin:
                 if getattr(self, 'reasoning_enabled', False):
                     kwargs["reasoning"] = True
 
+                # N-15b (Pass 156z9aa): forward GUI-staged JSON
+                # schema constraint to engine.chat.  None = no
+                # constraint (the common case); non-None means the
+                # user pasted+Applied a schema on the CONFIG page.
+                # Engine validates the schema dict; GGUF backend
+                # raises NotImplementedError (constraint never
+                # reaches llama.cpp's sampler — Pass 156z3 contract).
+                _gui_json_schema = getattr(self, "json_schema", None)
+                if _gui_json_schema is not None:
+                    kwargs["json_schema"] = _gui_json_schema
+
                 # Log to CMD activity
                 ai = self._active_ai_name()
                 self._cmd_activity(
@@ -267,6 +278,33 @@ class LogicChatMixin:
                     resp = self.engine.chat(full_msg, **kwargs)
                 except TypeError:
                     resp = self.engine.chat(full_msg)
+                except ValueError as exc:
+                    # N-15b (Pass 156z9ab) — JsonSchemaConstraint
+                    # raises ValueError on unsupported schema shapes
+                    # (non-object root, missing properties, malformed
+                    # spec).  Surface a friendly status message and
+                    # ABORT — do NOT silently retry without the
+                    # constraint, that would generate unconstrained
+                    # output the user explicitly opted out of.
+                    schema_err = str(exc)
+                    logger.warning(
+                        "JSON schema rejected by engine: %s",
+                        schema_err)
+
+                    def _show_schema_err(
+                            m: str = schema_err) -> None:
+                        self._hide_thinking()
+                        self._chat_system(
+                            f"JSON schema rejected: {m}. "
+                            "Edit or Clear the schema on the CONFIG "
+                            "page, then resend."
+                        )
+                        if hasattr(self, "status_bar"):
+                            self.status_bar.set_left(
+                                f"[!] JSON schema rejected: {m[:80]}"
+                            )
+                    self.after(0, _show_schema_err)
+                    return
 
                 # Check if user hit STOP during generation
                 if getattr(self, '_stop_requested', False):

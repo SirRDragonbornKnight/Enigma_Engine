@@ -4515,6 +4515,755 @@ class TestLearnWhileChattingConfig:
         assert sync_calls == ["refresh", "sync"]
 
 
+class TestInlineSearchEnabledConfig:
+    """CONFIG-page checkbox for engine.inline_search_enabled.
+
+    Stage B-2c (Pass 156z9w): the engine ships with the flag default-on
+    in ``_init_common``; this checkbox is the user-facing off-switch.
+    Persistence lives at the top level of gui_settings.json (NOT inside
+    config_overrides — it is an engine attribute, not a chat kwarg).
+    """
+
+    def test_toggle_persists_and_applies_to_live_engine(
+            self, tmp_path, monkeypatch):
+        """Toggling OFF writes the flag to disk and updates a live engine."""
+        from enigma_engine.gui.gui_pages import PagesMixin
+        monkeypatch.setattr(
+            "enigma_engine.gui.gui_pages_config.DATA_DIR", tmp_path)
+        settings_file = tmp_path / "gui_settings.json"
+        settings_file.write_text("{}", encoding="utf-8")
+
+        class FakeEngine:
+            inline_search_enabled = True
+
+        obj = object.__new__(PagesMixin)
+        obj._inline_search_enabled_var = MockVar(initial=False)
+        obj.status_bar = MockStatusBar()
+        obj.engine = FakeEngine()
+        obj.inline_search_enabled = True
+
+        obj._toggle_inline_search_enabled()
+
+        data = json.loads(settings_file.read_text(encoding="utf-8"))
+        assert data["inline_search_enabled"] is False
+        assert obj.inline_search_enabled is False
+        assert obj.engine.inline_search_enabled is False
+
+    def test_toggle_with_no_engine_still_persists(
+            self, tmp_path, monkeypatch):
+        """Pre-load toggle persists; engine apply is a no-op when None."""
+        from enigma_engine.gui.gui_pages import PagesMixin
+        monkeypatch.setattr(
+            "enigma_engine.gui.gui_pages_config.DATA_DIR", tmp_path)
+        settings_file = tmp_path / "gui_settings.json"
+        settings_file.write_text("{}", encoding="utf-8")
+
+        obj = object.__new__(PagesMixin)
+        obj._inline_search_enabled_var = MockVar(initial=False)
+        obj.status_bar = MockStatusBar()
+        obj.engine = None
+        obj.inline_search_enabled = True
+
+        obj._toggle_inline_search_enabled()
+
+        data = json.loads(settings_file.read_text(encoding="utf-8"))
+        assert data["inline_search_enabled"] is False
+        assert obj.inline_search_enabled is False
+
+    def test_on_model_loaded_applies_persisted_flag(self):
+        """`_on_model_loaded` must propagate the GUI's saved flag to
+        the freshly-loaded engine — without this the engine ships with
+        its library default and the user's off-toggle silently reverts
+        on every model load (signal-without-consumer).
+        """
+        # Structural test: the apply line must be present in the
+        # method body. Behavioural coverage at the engine layer is
+        # provided by the off-switch tests in test_chat.py.
+        from enigma_engine.gui.gui_logic import LogicMixin
+        src = inspect.getsource(LogicMixin._on_model_loaded)
+        assert "engine.inline_search_enabled" in src, (
+            "_on_model_loaded must apply the persisted "
+            "inline_search_enabled flag to the loaded engine"
+        )
+
+    def test_boot_load_reads_persisted_off_value(
+            self, tmp_path, monkeypatch):
+        """Pass 156z9x Finding A — the boot-load step at desktop.py
+        L166-167 is what carries the user's saved-OFF preference from
+        disk into ``self.inline_search_enabled``.  Without this
+        regression gate, a deletion of that line would silently revert
+        every restart to library-default True and the off-toggle would
+        only survive within a single GUI session.
+
+        Calls ``_read_gui_bool_setting`` directly (the same helper
+        ``__init__`` uses) on a stub instance with monkeypatched
+        DATA_DIR + a pre-written settings file containing False.
+        """
+        import enigma_engine.gui.desktop as desktop_mod
+        from enigma_engine.gui.desktop import EnigmaGUI
+
+        monkeypatch.setattr(desktop_mod, "DATA_DIR", tmp_path)
+        settings_file = tmp_path / "gui_settings.json"
+        settings_file.write_text(
+            json.dumps({"inline_search_enabled": False}),
+            encoding="utf-8",
+        )
+
+        obj = object.__new__(EnigmaGUI)
+        result = obj._read_gui_bool_setting(
+            "inline_search_enabled", True)
+        assert result is False, (
+            "boot-load helper must return the persisted False "
+            "value, not the library default True"
+        )
+
+        # Sibling-parity: missing key falls back to default True so
+        # fresh installs keep observability on.
+        settings_file.write_text("{}", encoding="utf-8")
+        result_default = obj._read_gui_bool_setting(
+            "inline_search_enabled", True)
+        assert result_default is True
+
+    def test_boot_load_wire_site_present_in_init(self):
+        """Structural gate on the wire-site itself — the
+        ``EnigmaGUI.__init__`` body must call
+        ``_read_gui_bool_setting`` with the literal
+        ``inline_search_enabled`` key.  Without this assertion, a
+        regression that drops the boot-load assignment leaves the
+        helper-level test passing while every fresh GUI session
+        silently uses the library default.
+
+        Adversarial discipline: the assertion targets the literal
+        call expression ``_read_gui_bool_setting(...)`` paired with
+        the literal key — NOT the bare ``inline_search_enabled``
+        token, which also appears at the in-memory default line and
+        would mask a regression that deletes only the boot-load
+        line.  The regex tolerates the line-continuation whitespace
+        between ``(`` and the string literal that black/ruff produce.
+        """
+        import re
+        from enigma_engine.gui.desktop import EnigmaGUI
+        src = inspect.getsource(EnigmaGUI.__init__)
+        pattern = re.compile(
+            r'_read_gui_bool_setting\(\s*"inline_search_enabled"')
+        assert pattern.search(src), (
+            "__init__ must call _read_gui_bool_setting with the "
+            "literal 'inline_search_enabled' key — this is the "
+            "boot-load wire-site that carries the user's saved "
+            "off-toggle from disk into self.inline_search_enabled"
+        )
+
+
+class TestInlineSearchSpliceConfig:
+    """B-3a (this pass): CONFIG-page checkbox for
+    ``engine.inline_search_splice_enabled`` — the opt-in auto-stop /
+    splice flag.  Default OFF (engine library default + library GUI
+    default both False).  Persistence at top level of
+    gui_settings.json mirrors the observability flag's pattern.
+    """
+
+    def test_toggle_persists_and_applies_to_live_engine(
+            self, tmp_path, monkeypatch):
+        """Toggling ON writes the flag to disk and updates a live engine."""
+        from enigma_engine.gui.gui_pages import PagesMixin
+        monkeypatch.setattr(
+            "enigma_engine.gui.gui_pages_config.DATA_DIR", tmp_path)
+        settings_file = tmp_path / "gui_settings.json"
+        settings_file.write_text("{}", encoding="utf-8")
+
+        class FakeEngine:
+            inline_search_splice_enabled = False
+
+        obj = object.__new__(PagesMixin)
+        obj._inline_search_splice_enabled_var = MockVar(initial=True)
+        obj.status_bar = MockStatusBar()
+        obj.engine = FakeEngine()
+        obj.inline_search_splice_enabled = False
+
+        obj._toggle_inline_search_splice_enabled()
+
+        data = json.loads(settings_file.read_text(encoding="utf-8"))
+        assert data["inline_search_splice_enabled"] is True
+        assert obj.inline_search_splice_enabled is True
+        assert obj.engine.inline_search_splice_enabled is True
+
+    def test_toggle_with_no_engine_still_persists(
+            self, tmp_path, monkeypatch):
+        from enigma_engine.gui.gui_pages import PagesMixin
+        monkeypatch.setattr(
+            "enigma_engine.gui.gui_pages_config.DATA_DIR", tmp_path)
+        settings_file = tmp_path / "gui_settings.json"
+        settings_file.write_text("{}", encoding="utf-8")
+
+        obj = object.__new__(PagesMixin)
+        obj._inline_search_splice_enabled_var = MockVar(initial=True)
+        obj.status_bar = MockStatusBar()
+        obj.engine = None
+        obj.inline_search_splice_enabled = False
+
+        obj._toggle_inline_search_splice_enabled()
+
+        data = json.loads(settings_file.read_text(encoding="utf-8"))
+        assert data["inline_search_splice_enabled"] is True
+        assert obj.inline_search_splice_enabled is True
+
+    def test_on_model_loaded_applies_splice_flag(self):
+        """`_on_model_loaded` must propagate the GUI's saved splice
+        flag to the freshly-loaded engine — without this the user's
+        on-toggle silently reverts on every model load."""
+        from enigma_engine.gui.gui_logic import LogicMixin
+        src = inspect.getsource(LogicMixin._on_model_loaded)
+        assert "engine.inline_search_splice_enabled" in src, (
+            "_on_model_loaded must apply the persisted "
+            "inline_search_splice_enabled flag to the loaded engine"
+        )
+
+    def test_boot_load_reads_persisted_value(
+            self, tmp_path, monkeypatch):
+        import enigma_engine.gui.desktop as desktop_mod
+        from enigma_engine.gui.desktop import EnigmaGUI
+
+        monkeypatch.setattr(desktop_mod, "DATA_DIR", tmp_path)
+        settings_file = tmp_path / "gui_settings.json"
+        settings_file.write_text(
+            json.dumps({"inline_search_splice_enabled": True}),
+            encoding="utf-8",
+        )
+
+        obj = object.__new__(EnigmaGUI)
+        result = obj._read_gui_bool_setting(
+            "inline_search_splice_enabled", False)
+        assert result is True, (
+            "boot-load helper must return the persisted True "
+            "value, not the library default False"
+        )
+
+        # Missing key falls back to library default False so fresh
+        # installs keep the feature OFF (opt-in).
+        settings_file.write_text("{}", encoding="utf-8")
+        result_default = obj._read_gui_bool_setting(
+            "inline_search_splice_enabled", False)
+        assert result_default is False
+
+    def test_boot_load_wire_site_present_in_init(self):
+        """Structural gate: __init__ must call _read_gui_bool_setting
+        with the literal 'inline_search_splice_enabled' key."""
+        import re
+        from enigma_engine.gui.desktop import EnigmaGUI
+        src = inspect.getsource(EnigmaGUI.__init__)
+        pattern = re.compile(
+            r'_read_gui_bool_setting\(\s*"inline_search_splice_enabled"')
+        assert pattern.search(src), (
+            "__init__ must call _read_gui_bool_setting with the "
+            "literal 'inline_search_splice_enabled' key — boot-load "
+            "wire-site for B-3a opt-in flag"
+        )
+
+
+class _MockTextbox:
+    """Minimal CTkTextbox stub for json_schema tests.  Supports
+    `.get("1.0", "end")`, `.insert("1.0", text)`, `.delete(...)`."""
+
+    def __init__(self, initial: str = ""):
+        self._text = initial
+
+    def get(self, _start: str, _end: str) -> str:
+        return self._text
+
+    def insert(self, _index: str, text: str) -> None:
+        self._text += text
+
+    def delete(self, _start: str, _end: str) -> None:
+        self._text = ""
+
+
+class TestJsonSchemaConfig:
+    """N-15b (Pass 156z9aa) — CONFIG-page textbox + Apply/Clear
+    handlers + boot-load helper for ``EnigmaEngine.chat(json_schema=...)``.
+
+    Persistence: raw text under ``gui_settings.json["json_schema_text"]``;
+    runtime: parsed dict on ``self.json_schema``; chat send path
+    forwards as ``kwargs["json_schema"]`` when non-None.
+    """
+
+    def test_apply_valid_dict_persists_and_sets_attr(
+            self, tmp_path, monkeypatch):
+        """Valid JSON dict in textbox → parsed onto self.json_schema
+        AND raw text written to gui_settings.json["json_schema_text"].
+        Adversarially gates THREE post-conditions in one test: live
+        attr update, disk persistence, status_bar success message."""
+        from enigma_engine.gui.gui_pages import PagesMixin
+        monkeypatch.setattr(
+            "enigma_engine.gui.gui_pages_config.DATA_DIR", tmp_path)
+        settings_file = tmp_path / "gui_settings.json"
+        settings_file.write_text("{}", encoding="utf-8")
+
+        raw = '{"type": "object", "properties": {"x": {"type": "integer"}}}'
+        obj = object.__new__(PagesMixin)
+        obj._json_schema_textbox = _MockTextbox(initial=raw)
+        obj.status_bar = MockStatusBar()
+        obj.json_schema = None  # in-memory default
+
+        obj._apply_json_schema()
+
+        assert obj.json_schema == {
+            "type": "object",
+            "properties": {"x": {"type": "integer"}},
+        }
+        data = json.loads(settings_file.read_text(encoding="utf-8"))
+        assert data["json_schema_text"] == raw
+
+    def test_apply_invalid_json_does_not_clobber_attr(
+            self, tmp_path, monkeypatch):
+        """Invalid JSON → self.json_schema unchanged AND nothing
+        persisted to disk.  Locks the contract that a parse error
+        does not silently destroy a previously-valid live schema."""
+        from enigma_engine.gui.gui_pages import PagesMixin
+        monkeypatch.setattr(
+            "enigma_engine.gui.gui_pages_config.DATA_DIR", tmp_path)
+        settings_file = tmp_path / "gui_settings.json"
+        existing = {"json_schema_text": '{"keep": "me"}'}
+        settings_file.write_text(
+            json.dumps(existing), encoding="utf-8")
+
+        obj = object.__new__(PagesMixin)
+        obj._json_schema_textbox = _MockTextbox(
+            initial='{"broken": ')  # truncated JSON
+        obj.status_bar = MockStatusBar()
+        prev = {"keep": "me"}
+        obj.json_schema = prev
+
+        obj._apply_json_schema()
+
+        assert obj.json_schema is prev, (
+            "parse error must NOT clobber the live attribute"
+        )
+        data = json.loads(settings_file.read_text(encoding="utf-8"))
+        assert data["json_schema_text"] == '{"keep": "me"}', (
+            "parse error must NOT overwrite persisted text"
+        )
+
+    def test_apply_non_dict_rejected(self, tmp_path, monkeypatch):
+        """Valid JSON but a list (or any non-dict) is rejected —
+        the engine contract requires a dict.  Same don't-clobber
+        semantics as the parse-error case."""
+        from enigma_engine.gui.gui_pages import PagesMixin
+        monkeypatch.setattr(
+            "enigma_engine.gui.gui_pages_config.DATA_DIR", tmp_path)
+        settings_file = tmp_path / "gui_settings.json"
+        settings_file.write_text("{}", encoding="utf-8")
+
+        obj = object.__new__(PagesMixin)
+        obj._json_schema_textbox = _MockTextbox(initial='[1, 2, 3]')
+        obj.status_bar = MockStatusBar()
+        obj.json_schema = {"prior": True}
+
+        obj._apply_json_schema()
+
+        assert obj.json_schema == {"prior": True}
+        data = json.loads(settings_file.read_text(encoding="utf-8"))
+        assert "json_schema_text" not in data
+
+    def test_apply_invalid_shape_rejected_with_validator_message(
+            self, tmp_path, monkeypatch):
+        """Pass 156z9ad: valid JSON dict but the SHAPE is unsupported
+        (e.g. ``{"type": "array"}`` — FSM is object-only) MUST be
+        rejected at Apply time with the validator's exact message,
+        not silently accepted to fail at send time.
+
+        Don't-clobber: live attr + disk both stay at the last
+        successfully-applied state — same semantics as the parse-
+        error and non-dict branches.  Adversarial: status message
+        must NAME the type mismatch (string ``"object"``) so the
+        user knows what to fix; a generic "schema invalid" would
+        not be falsifiable against a regression that swallows the
+        validator and re-raises a stub message.
+        """
+        from enigma_engine.gui.gui_pages import PagesMixin
+        monkeypatch.setattr(
+            "enigma_engine.gui.gui_pages_config.DATA_DIR", tmp_path)
+        settings_file = tmp_path / "gui_settings.json"
+        existing = {"json_schema_text": '{"keep": "me"}'}
+        settings_file.write_text(
+            json.dumps(existing), encoding="utf-8")
+
+        class _RecordingStatusBar:
+            def __init__(self):
+                self.left_text = ""
+
+            def set_left(self, text):
+                self.left_text = text
+
+            def set_center(self, text):
+                pass
+
+            def set_right(self, text):
+                pass
+
+        obj = object.__new__(PagesMixin)
+        obj._json_schema_textbox = _MockTextbox(
+            initial='{"type": "array"}')
+        obj.status_bar = _RecordingStatusBar()
+        prev = {"keep": "me"}
+        obj.json_schema = prev
+
+        obj._apply_json_schema()
+
+        # Don't-clobber: live attr unchanged
+        assert obj.json_schema is prev, (
+            "shape rejection must NOT clobber the live attribute"
+        )
+        # Don't-clobber: persisted text unchanged
+        data = json.loads(settings_file.read_text(encoding="utf-8"))
+        assert data["json_schema_text"] == '{"keep": "me"}', (
+            "shape rejection must NOT overwrite persisted text"
+        )
+        # Status bar names the validator failure — adversarial:
+        # must mention 'object' (the required type) so the user
+        # knows what to fix, not just a generic "invalid"
+        msg = obj.status_bar.left_text.lower()
+        assert "object" in msg, (
+            f"status bar must name the validator failure with "
+            f"enough specificity to act on (expected 'object' in "
+            f"the message naming the required type); got: {msg!r}"
+        )
+
+    def test_apply_calls_validate_json_schema_shape(self):
+        """Structural gate on the wire-site: ``_apply_json_schema``
+        MUST import and call ``validate_json_schema_shape`` between
+        the ``isinstance(parsed, dict)`` check and the persist.
+        Without this gate the textbox accepts shape-invalid schemas
+        that only fail at send time (UX regression).
+
+        Adversarial-falsifiable: deleting the call from the body
+        flips this assertion to fail.  Strips comment-only lines
+        before scanning per the §4 "Label-tracking" rule — a stale
+        comment mentioning the validator must not satisfy the gate.
+        """
+        import re
+        import inspect as _inspect
+        from enigma_engine.gui.gui_pages_config import ConfigPageMixin
+        src = _inspect.getsource(ConfigPageMixin._apply_json_schema)
+        # Strip comment-only lines (rstrip + leading-# check) so a
+        # commented-out reference to validate_json_schema_shape
+        # cannot satisfy this gate
+        code_lines = [
+            ln for ln in src.splitlines()
+            if not ln.strip().startswith("#")
+        ]
+        code = "\n".join(code_lines)
+        # Must call the validator (real call expression, not docstring)
+        assert re.search(
+            r'validate_json_schema_shape\s*\(\s*parsed', code), (
+            "_apply_json_schema must call "
+            "validate_json_schema_shape(parsed) — without this "
+            "gate the GUI accepts shape-invalid schemas that only "
+            "surface at send time"
+        )
+        # Must catch ValueError from the validator (loud at the
+        # closest boundary to the user)
+        assert re.search(r'except\s+ValueError', code), (
+            "_apply_json_schema must catch ValueError from the "
+            "validator and surface it via status_bar"
+        )
+
+    def test_apply_empty_text_clears_attr(self, tmp_path, monkeypatch):
+        """Empty/whitespace textbox + Apply → clears live attr AND
+        persists empty string.  Adversarially distinguished from
+        the parse-error case: empty IS a valid intentional clear."""
+        from enigma_engine.gui.gui_pages import PagesMixin
+        monkeypatch.setattr(
+            "enigma_engine.gui.gui_pages_config.DATA_DIR", tmp_path)
+        settings_file = tmp_path / "gui_settings.json"
+        settings_file.write_text(
+            json.dumps({"json_schema_text": '{"x": 1}'}),
+            encoding="utf-8")
+
+        obj = object.__new__(PagesMixin)
+        obj._json_schema_textbox = _MockTextbox(initial="   \n  ")
+        obj.status_bar = MockStatusBar()
+        obj.json_schema = {"x": 1}
+
+        obj._apply_json_schema()
+
+        assert obj.json_schema is None
+        data = json.loads(settings_file.read_text(encoding="utf-8"))
+        assert data["json_schema_text"] == ""
+
+    def test_clear_button_resets_textbox_and_attr(
+            self, tmp_path, monkeypatch):
+        """Explicit Clear button: empties textbox + persisted text
+        + live attr in one call."""
+        from enigma_engine.gui.gui_pages import PagesMixin
+        monkeypatch.setattr(
+            "enigma_engine.gui.gui_pages_config.DATA_DIR", tmp_path)
+        settings_file = tmp_path / "gui_settings.json"
+        settings_file.write_text(
+            json.dumps({"json_schema_text": '{"x": 1}'}),
+            encoding="utf-8")
+
+        obj = object.__new__(PagesMixin)
+        textbox = _MockTextbox(initial='{"x": 1}')
+        obj._json_schema_textbox = textbox
+        obj.status_bar = MockStatusBar()
+        obj.json_schema = {"x": 1}
+
+        obj._clear_json_schema()
+
+        assert obj.json_schema is None
+        assert textbox.get("1.0", "end") == ""
+        data = json.loads(settings_file.read_text(encoding="utf-8"))
+        assert data["json_schema_text"] == ""
+
+    def test_boot_load_parses_persisted_dict(
+            self, tmp_path, monkeypatch):
+        """Helper ``_read_gui_json_schema_setting`` returns the
+        parsed dict when persisted text is valid JSON dict.  This
+        is the wire-site that carries the user's saved schema
+        across restarts; without it every fresh GUI session would
+        ship with no constraint until the user re-Applies."""
+        import enigma_engine.gui.desktop as desktop_mod
+        from enigma_engine.gui.desktop import EnigmaGUI
+
+        monkeypatch.setattr(desktop_mod, "DATA_DIR", tmp_path)
+        settings_file = tmp_path / "gui_settings.json"
+        raw = '{"type": "object"}'
+        settings_file.write_text(
+            json.dumps({"json_schema_text": raw}),
+            encoding="utf-8")
+
+        obj = object.__new__(EnigmaGUI)
+        result = obj._read_gui_json_schema_setting()
+        assert result == {"type": "object"}
+
+    def test_boot_load_invalid_json_returns_none_with_warning(
+            self, tmp_path, monkeypatch, caplog):
+        """Persisted text that fails to parse → boot-load returns
+        None AND logs a WARNING (loud-on-real-issue volume table).
+        Without the warning, a user with a hand-corrupted
+        gui_settings.json silently boots into no-constraint mode."""
+        import logging
+        import enigma_engine.gui.desktop as desktop_mod
+        from enigma_engine.gui.desktop import EnigmaGUI
+
+        monkeypatch.setattr(desktop_mod, "DATA_DIR", tmp_path)
+        settings_file = tmp_path / "gui_settings.json"
+        settings_file.write_text(
+            json.dumps({"json_schema_text": '{"broken": '}),
+            encoding="utf-8")
+
+        obj = object.__new__(EnigmaGUI)
+        with caplog.at_level(logging.WARNING):
+            result = obj._read_gui_json_schema_setting()
+        assert result is None
+        assert any(
+            "json_schema_text" in r.message and "invalid" in r.message
+            for r in caplog.records
+        ), "parse failure must log a WARNING naming json_schema_text"
+
+    def test_boot_load_empty_or_missing_returns_none_silent(
+            self, tmp_path, monkeypatch, caplog):
+        """Missing key + empty string → both return None silently
+        (the fresh-install / cleared-by-user normal path)."""
+        import logging
+        import enigma_engine.gui.desktop as desktop_mod
+        from enigma_engine.gui.desktop import EnigmaGUI
+
+        monkeypatch.setattr(desktop_mod, "DATA_DIR", tmp_path)
+        settings_file = tmp_path / "gui_settings.json"
+
+        obj = object.__new__(EnigmaGUI)
+
+        # Missing key
+        settings_file.write_text("{}", encoding="utf-8")
+        with caplog.at_level(logging.WARNING):
+            assert obj._read_gui_json_schema_setting() is None
+        # Empty string
+        settings_file.write_text(
+            json.dumps({"json_schema_text": ""}), encoding="utf-8")
+        with caplog.at_level(logging.WARNING):
+            assert obj._read_gui_json_schema_setting() is None
+        # Whitespace only
+        settings_file.write_text(
+            json.dumps({"json_schema_text": "   \n"}),
+            encoding="utf-8")
+        with caplog.at_level(logging.WARNING):
+            assert obj._read_gui_json_schema_setting() is None
+        # No WARNING records expected for any of the silent paths
+        assert not any(
+            "json_schema" in r.message
+            for r in caplog.records
+            if r.levelno >= logging.WARNING
+        )
+
+    def test_chat_send_path_forwards_json_schema_kwarg(self):
+        """Structural gate on the chat send wire-site: the
+        ``_send_message`` body MUST forward ``self.json_schema``
+        into the engine.chat kwargs dict when non-None.
+
+        Regex targets the literal call expression
+        ``kwargs["json_schema"] = ...`` paired with a guard that
+        consults ``json_schema`` — NOT the bare token, which also
+        appears in the comment block above and would mask a
+        regression that deletes only the kwargs assignment.
+        """
+        import re
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+        src = inspect.getsource(LogicChatMixin._send_message)
+        # Adversarial: must see BOTH the guard read AND the kwargs
+        # assignment in the body; either alone is shared with the
+        # comment block.
+        guard = re.compile(
+            r'getattr\(\s*self\s*,\s*"json_schema"')
+        assignment = re.compile(
+            r'kwargs\[\s*"json_schema"\s*\]\s*=')
+        assert guard.search(src), (
+            "_send_message must read self.json_schema via getattr "
+            "(handles legacy GUI sessions that pre-date the field)"
+        )
+        assert assignment.search(src), (
+            "_send_message must forward json_schema into kwargs "
+            "for engine.chat — without this the GUI textbox is dead"
+        )
+
+    def test_chat_send_path_catches_value_error_on_bad_schema(self):
+        """Pass 156z9ab Finding 5: ``JsonSchemaConstraint`` raises
+        ``ValueError`` on unsupported schema shapes (non-object
+        root, missing properties, malformed spec).  The send path
+        MUST catch that explicitly and surface a user-facing
+        message — silently retrying without the kwarg would
+        produce unconstrained output the user opted out of, and
+        propagating the exception unframed dumps a traceback into
+        the chat log.
+        """
+        import re
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+        src = inspect.getsource(LogicChatMixin._send_message)
+        # Must see an `except ValueError` clause in the body.
+        # Adversarial-falsifiable: deleting the clause reverts the
+        # exception to propagating up to the _gen thread top-level
+        # and this test fails immediately.
+        assert re.search(r'except\s+ValueError', src), (
+            "_send_message must explicitly catch ValueError so a "
+            "bad json_schema surfaces as a chat-system message, "
+            "not a raw traceback"
+        )
+        # And the catch handler must NOT call self.engine.chat
+        # again without the kwarg — that would silently bypass the
+        # user's constraint.  Gate by checking the handler region
+        # contains a `return` and references status_bar / chat.
+        assert re.search(
+            r'except\s+ValueError.*?return',
+            src, re.DOTALL,
+        ), (
+            "ValueError handler must abort the send (return), not "
+            "fall through and retry without the schema constraint"
+        )
+
+    def test_persist_returns_false_on_disk_failure(
+            self, tmp_path, monkeypatch, caplog):
+        """Pass 156z9ab Finding 2: ``_persist_json_schema_text``
+        must return False when ``atomic_write_json`` raises so
+        ``_apply_json_schema`` can post a non-misleading status.
+        Previously the IOError was swallowed at DEBUG and the
+        success branch fired regardless.
+        """
+        import logging
+        from enigma_engine.gui.gui_pages import PagesMixin
+        monkeypatch.setattr(
+            "enigma_engine.gui.gui_pages_config.DATA_DIR", tmp_path)
+        # Force atomic_write_json to fail
+        from enigma_engine.core import safe_save
+
+        def _explode(*_a, **_k):
+            raise OSError("simulated disk full")
+        monkeypatch.setattr(safe_save, "atomic_write_json", _explode)
+
+        obj = object.__new__(PagesMixin)
+        with caplog.at_level(logging.WARNING):
+            ok = obj._persist_json_schema_text('{"x": 1}')
+        assert ok is False
+        assert any(
+            "json_schema_text" in r.message
+            and r.levelno >= logging.WARNING
+            for r in caplog.records
+        ), "disk failure must log a WARNING (loud-on-real-issue)"
+
+    def test_apply_surfaces_disk_failure_in_status_bar(
+            self, tmp_path, monkeypatch):
+        """End-to-end: when persist fails, the Apply handler must
+        post a status message that names the disk failure — NOT a
+        plain 'JSON schema applied' message.  Regression guard
+        against a refactor that goes back to ignoring the bool
+        return."""
+        from enigma_engine.gui.gui_pages import PagesMixin
+        monkeypatch.setattr(
+            "enigma_engine.gui.gui_pages_config.DATA_DIR", tmp_path)
+        (tmp_path / "gui_settings.json").write_text(
+            "{}", encoding="utf-8")
+        from enigma_engine.core import safe_save
+        monkeypatch.setattr(
+            safe_save, "atomic_write_json",
+            lambda *_a, **_k: (_ for _ in ()).throw(
+                OSError("disk full")),
+        )
+
+        class _RecordingStatusBar:
+            def __init__(self):
+                self.left_text = ""
+
+            def set_left(self, text):
+                self.left_text = text
+
+            def set_center(self, text):
+                pass
+
+            def set_right(self, text):
+                pass
+
+        obj = object.__new__(PagesMixin)
+        obj._json_schema_textbox = _MockTextbox(initial='{"y": 2}')
+        obj.status_bar = _RecordingStatusBar()
+        obj.json_schema = None
+
+        obj._apply_json_schema()
+
+        # Live attr WAS updated (in-memory success)
+        assert obj.json_schema == {"y": 2}
+        # But status bar must name the disk failure, not the plain
+        # success path
+        msg = obj.status_bar.left_text
+        assert "disk save failed" in msg.lower(), (
+            f"status bar should name the disk failure; got: {msg!r}"
+        )
+
+    def test_cmd_page_does_not_forward_json_schema(self):
+        """Pass 156z9ab Finding 1 (sibling-boundary design call):
+        the CMD-page chat path INTENTIONALLY drops
+        ``json_schema`` from kwargs before calling engine.chat —
+        a user-staged schema would override the
+        ``[CMD]...[/CMD]`` policy and silently disable command
+        execution.  This test gates the explicit ``pop`` call so
+        a future refactor that "consolidates" kwargs handling
+        can't silently re-enable the wrong behaviour.
+        """
+        import re
+        import inspect as _inspect
+        # The CMD page method that calls engine.chat lives on the
+        # CMDPageMixin host; locate the source by reading the
+        # module body directly (the per-method scope helper is an
+        # inner function so getsource of the mixin class is the
+        # right granularity).
+        from enigma_engine.gui import gui_cmd_page
+        src = _inspect.getsource(gui_cmd_page)
+        assert re.search(
+            r'kwargs\.pop\(\s*"json_schema"', src), (
+            "CMD page must explicitly drop json_schema from "
+            "kwargs before engine.chat — see Pass 156z9ab "
+            "Finding 1 design rationale"
+        )
+
+
 class TestGamingModePreset:
     """Gaming preset should apply the full low-overhead profile."""
 
@@ -5423,3 +6172,573 @@ class TestModelsPageMerging:
         assert 'mode == "SLERP"' in src
         assert 'mode == "LINEAR"' in src
         assert 'mode == "TIES"' in src
+
+
+class TestForgeTeacherSubprocess:
+    """FORGE External Teacher (HTTP) subprocess wrapper around collect_distill_data.py."""
+
+    def test_build_teacher_argv_shape(self):
+        """argv carries every required flag in the expected order."""
+        from enigma_engine.gui.gui_forge_teacher import _build_teacher_argv
+        argv = _build_teacher_argv(
+            endpoint="http://localhost:11434/v1",
+            model="qwen3:8b",
+            magpie_n=500,
+            tag="external",
+            max_tokens=512,
+            python_exe="python",
+            script_path="collect_distill_data.py",
+        )
+        assert argv[0] == "python"
+        assert argv[1] == "collect_distill_data.py"
+        assert "--endpoint" in argv
+        assert argv[argv.index("--endpoint") + 1] == "http://localhost:11434/v1"
+        assert "--model" in argv
+        assert argv[argv.index("--model") + 1] == "qwen3:8b"
+        assert "--magpie" in argv
+        assert argv[argv.index("--magpie") + 1] == "500"
+        assert "--tag" in argv
+        assert argv[argv.index("--tag") + 1] == "external"
+        assert "--max-tokens" in argv
+        assert argv[argv.index("--max-tokens") + 1] == "512"
+        # Resume by default so re-clicks with same tag skip done prompts.
+        assert "--resume" in argv
+
+    def test_build_teacher_argv_coerces_int_kwargs(self):
+        """magpie_n / max_tokens accept int-coercible inputs."""
+        from enigma_engine.gui.gui_forge_teacher import _build_teacher_argv
+        argv = _build_teacher_argv(
+            endpoint="http://x/v1", model="m",
+            magpie_n=10, tag="t", max_tokens=64,
+            python_exe="python", script_path="s.py",
+        )
+        assert "10" in argv
+        assert "64" in argv
+
+    def test_build_teacher_argv_prompts_mode(self):
+        """Passing prompts_path emits --prompts <path> instead of --magpie N."""
+        from enigma_engine.gui.gui_forge_teacher import _build_teacher_argv
+        argv = _build_teacher_argv(
+            endpoint="http://x/v1", model="m",
+            magpie_n=999, tag="t", max_tokens=64,
+            python_exe="python", script_path="s.py",
+            prompts_path="data/prompts.txt",
+        )
+        assert "--prompts" in argv
+        assert argv[argv.index("--prompts") + 1] == "data/prompts.txt"
+        # Mutual exclusion: --magpie must NOT appear in prompts mode.
+        assert "--magpie" not in argv
+
+    def test_forge_mixin_inherits_teacher_mixin(self):
+        """ForgeMixin must compose ForgeTeacherMixin so the host gets
+        the start/stop/kill methods."""
+        from enigma_engine.gui.gui_forge import ForgeMixin
+        from enigma_engine.gui.gui_forge_teacher import ForgeTeacherMixin
+        assert issubclass(ForgeMixin, ForgeTeacherMixin)
+        for name in (
+            "_start_external_teacher_corpus",
+            "_stop_external_teacher_corpus",
+            "_kill_teacher_subprocess",
+        ):
+            assert hasattr(ForgeMixin, name), (
+                f"ForgeMixin missing {name}")
+
+    def test_forge_distill_section_has_teacher_widgets(self):
+        """`_build_page_forge` creates the External-teacher widgets so the
+        button is reachable from the Distill mode section."""
+        import inspect
+        from enigma_engine.gui.gui_pages_forge import ForgePageMixin
+        src = inspect.getsource(ForgePageMixin._build_page_forge)
+        for token in (
+            "teacher_endpoint_var",
+            "teacher_model_var",
+            "teacher_magpie_var",
+            "teacher_tag_var",
+            "teacher_start_btn",
+            "teacher_stop_btn",
+            "teacher_mode_var",
+            "teacher_prompts_path_var",
+            "_browse_teacher_prompts_file",
+            "_suggest_magpie_n_from_tag",
+            "_start_external_teacher_corpus",
+            "_stop_external_teacher_corpus",
+        ):
+            assert token in src, (
+                f"FORGE distill section missing {token!r}")
+
+    def test_kill_teacher_wired_in_on_close(self):
+        """`_on_close` must call `_kill_teacher_subprocess` so the
+        subprocess doesn't outlive the GUI."""
+        import inspect
+        from enigma_engine.gui.desktop import EnigmaGUI
+        src = inspect.getsource(EnigmaGUI._on_close)
+        assert "_kill_teacher_subprocess" in src
+
+    def test_start_validates_required_inputs(self, monkeypatch):
+        """Empty endpoint or model logs an error and does NOT spawn."""
+        from enigma_engine.gui.gui_forge_teacher import ForgeTeacherMixin
+
+        class _StubVar:
+            def __init__(self, v): self._v = v
+            def get(self): return self._v
+
+        class _Host(ForgeTeacherMixin):
+            def __init__(self, *, endpoint="", model="", magpie="500"):
+                self.teacher_endpoint_var = _StubVar(endpoint)
+                self.teacher_model_var = _StubVar(model)
+                self.teacher_magpie_var = _StubVar(magpie)
+                self.teacher_tag_var = _StubVar("t")
+                self.teacher_max_tokens_var = _StubVar("512")
+                self.logs: list[str] = []
+                self._teacher_proc = None
+            def _log(self, msg): self.logs.append(msg)
+            def after(self, ms, fn): fn()
+
+        spawn_called = {"n": 0}
+
+        def _fake_popen(*args, **kwargs):
+            spawn_called["n"] += 1
+            raise AssertionError("Popen must not be called on validation fail")
+
+        monkeypatch.setattr(
+            "enigma_engine.gui.gui_forge_teacher.subprocess.Popen",
+            _fake_popen)
+
+        # Missing endpoint
+        h = _Host(endpoint="", model="m")
+        h._start_external_teacher_corpus()
+        assert spawn_called["n"] == 0
+        assert any("endpoint" in m.lower() for m in h.logs)
+
+        # Missing model
+        h = _Host(endpoint="http://x", model="")
+        h._start_external_teacher_corpus()
+        assert spawn_called["n"] == 0
+        assert any("model" in m.lower() for m in h.logs)
+
+        # Non-integer magpie
+        h = _Host(endpoint="http://x", model="m", magpie="not-a-number")
+        h._start_external_teacher_corpus()
+        assert spawn_called["n"] == 0
+        assert any("magpie" in m.lower() for m in h.logs)
+
+    def test_stop_and_kill_idempotent_when_no_proc(self):
+        """Stop / kill are safe to call when nothing is running."""
+        from enigma_engine.gui.gui_forge_teacher import ForgeTeacherMixin
+
+        class _Host(ForgeTeacherMixin):
+            def __init__(self):
+                self._teacher_proc = None
+                self.logs: list[str] = []
+            def _log(self, msg): self.logs.append(msg)
+
+        h = _Host()
+        h._stop_external_teacher_corpus()  # should not raise
+        h._kill_teacher_subprocess()  # should not raise
+        assert h._teacher_proc is None
+
+    def test_prompts_mode_rejects_missing_file(self, monkeypatch, tmp_path):
+        """Mode=prompts with empty path AND with non-existent path both
+        bail before spawning. Mode=prompts with valid file spawns with
+        --prompts (not --magpie) in the argv."""
+        from enigma_engine.gui.gui_forge_teacher import ForgeTeacherMixin
+
+        class _StubVar:
+            def __init__(self, v): self._v = v
+            def get(self): return self._v
+
+        class _Host(ForgeTeacherMixin):
+            def __init__(self, *, mode="prompts", prompts=""):
+                self.teacher_endpoint_var = _StubVar("http://x")
+                self.teacher_model_var = _StubVar("m")
+                self.teacher_magpie_var = _StubVar("")  # empty OK in prompts mode
+                self.teacher_tag_var = _StubVar("t")
+                self.teacher_max_tokens_var = _StubVar("512")
+                self.teacher_mode_var = _StubVar(mode)
+                self.teacher_prompts_path_var = _StubVar(prompts)
+                self.logs: list[str] = []
+                self._teacher_proc = None
+            def _log(self, msg): self.logs.append(msg)
+            def after(self, ms, fn): fn()
+
+        # Empty path → bail
+        spawned = {"n": 0}
+        def _fake_popen_block(*a, **k):
+            spawned["n"] += 1
+            raise AssertionError("Popen must not be called when prompts path empty")
+        monkeypatch.setattr(
+            "enigma_engine.gui.gui_forge_teacher.subprocess.Popen",
+            _fake_popen_block)
+        h = _Host(prompts="")
+        h._start_external_teacher_corpus()
+        assert spawned["n"] == 0
+        assert any("prompts" in m.lower() for m in h.logs)
+
+        # Non-existent path → bail
+        h = _Host(prompts=str(tmp_path / "nope.txt"))
+        h._start_external_teacher_corpus()
+        assert spawned["n"] == 0
+
+        # Valid path → spawn with --prompts in argv
+        prompts_file = tmp_path / "prompts.txt"
+        prompts_file.write_text("Hello\nWorld\n", encoding="utf-8")
+        captured: dict = {}
+
+        class _FakeProc:
+            stdout = None
+            def wait(self, timeout=None): return 0
+            def terminate(self): pass
+
+        def _fake_popen_ok(argv, **kwargs):
+            captured["argv"] = argv
+            return _FakeProc()
+
+        monkeypatch.setattr(
+            "enigma_engine.gui.gui_forge_teacher.subprocess.Popen",
+            _fake_popen_ok)
+        # Health-check passes synchronously
+        monkeypatch.setattr(
+            "enigma_engine.gui.gui_forge_teacher._check_endpoint_reachable",
+            lambda endpoint, **kw: (True, "ok"))
+        # Don't actually spawn reader/health threads — invoke target inline
+        # so the test exercises the full chain (validate → health → spawn).
+        def _inline_thread(**kw):
+            target = kw.get("target")
+            args = kw.get("args", ())
+            class _T:
+                def start(self_inner):
+                    if target is not None:
+                        target(*args)
+            return _T()
+        monkeypatch.setattr(
+            "enigma_engine.gui.gui_forge_teacher.threading.Thread",
+            _inline_thread)
+        h = _Host(prompts=str(prompts_file))
+        h._start_external_teacher_corpus()
+        argv = captured.get("argv", [])
+        assert "--prompts" in argv, f"argv missing --prompts: {argv}"
+        assert "--magpie" not in argv, f"argv should not have --magpie: {argv}"
+        assert str(prompts_file) in argv
+
+    def test_endpoint_health_check_blocks_spawn_on_unreachable(
+        self, monkeypatch, tmp_path,
+    ):
+        """If `_check_endpoint_reachable` returns (False, ...), the spawn
+        path must NOT call subprocess.Popen — health-check is a hard gate,
+        not a warning."""
+        from enigma_engine.gui.gui_forge_teacher import ForgeTeacherMixin
+
+        class _StubVar:
+            def __init__(self, v): self._v = v
+            def get(self): return self._v
+
+        class _Host(ForgeTeacherMixin):
+            def __init__(self):
+                self.teacher_endpoint_var = _StubVar("http://nope:9999/v1")
+                self.teacher_model_var = _StubVar("m")
+                self.teacher_magpie_var = _StubVar("10")
+                self.teacher_tag_var = _StubVar("t")
+                self.teacher_max_tokens_var = _StubVar("512")
+                self.teacher_mode_var = _StubVar("magpie")
+                self.teacher_prompts_path_var = _StubVar("")
+                self.logs: list[str] = []
+                self._teacher_proc = None
+            def _log(self, msg): self.logs.append(msg)
+            def after(self, ms, fn): fn()
+
+        spawned = {"n": 0}
+        def _fake_popen_block(*a, **k):
+            spawned["n"] += 1
+            raise AssertionError("Popen must NOT be called when health-check fails")
+        monkeypatch.setattr(
+            "enigma_engine.gui.gui_forge_teacher.subprocess.Popen",
+            _fake_popen_block)
+        # Health-check fails (e.g. connection refused).
+        monkeypatch.setattr(
+            "enigma_engine.gui.gui_forge_teacher._check_endpoint_reachable",
+            lambda endpoint, **kw: (False, "Connection refused"))
+        # Health-check thread runs target inline.
+        def _inline_thread(**kw):
+            target = kw.get("target")
+            args = kw.get("args", ())
+            class _T:
+                def start(self_inner):
+                    if target is not None:
+                        target(*args)
+            return _T()
+        monkeypatch.setattr(
+            "enigma_engine.gui.gui_forge_teacher.threading.Thread",
+            _inline_thread)
+
+        h = _Host()
+        h._start_external_teacher_corpus()
+        assert spawned["n"] == 0
+        assert any("not reachable" in m.lower() for m in h.logs)
+
+    def test_check_endpoint_reachable_volume_table(self):
+        """Pure-helper unit test for the three branches of the health-check
+        volume table: 2xx silent, non-2xx best-effort, URLError hard fail."""
+        import urllib.error
+        from enigma_engine.gui.gui_forge_teacher import _check_endpoint_reachable
+
+        # 2xx → (True, "ok")
+        class _OK:
+            status = 200
+            def close(self): pass
+        ok, msg = _check_endpoint_reachable(
+            "http://x/v1", _opener=lambda url, timeout=2.0: _OK())
+        assert ok is True and msg == "ok"
+
+        # HTTPError 404 → (True, best-effort)
+        def _http_err(url, timeout=2.0):
+            raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+        ok, msg = _check_endpoint_reachable("http://x/v1", _opener=_http_err)
+        assert ok is True
+        assert "404" in msg
+
+        # URLError → (False, reason)
+        def _url_err(url, timeout=2.0):
+            raise urllib.error.URLError("Connection refused")
+        ok, msg = _check_endpoint_reachable("http://x/v1", _opener=_url_err)
+        assert ok is False
+        assert "refused" in msg.lower() or "connection" in msg.lower()
+
+    def test_stop_during_health_check_blocks_spawn(self, monkeypatch):
+        """STOP clicked during the health-check window must prevent the
+        subprocess from spawning even if the health-check succeeds.
+        Closes the boundary-signal-without-consumer race where STOP was
+        a no-op until _teacher_proc was set."""
+        from enigma_engine.gui.gui_forge_teacher import ForgeTeacherMixin
+
+        class _StubVar:
+            def __init__(self, v): self._v = v
+            def get(self): return self._v
+
+        class _Host(ForgeTeacherMixin):
+            def __init__(self):
+                self.teacher_endpoint_var = _StubVar("http://x/v1")
+                self.teacher_model_var = _StubVar("m")
+                self.teacher_magpie_var = _StubVar("10")
+                self.teacher_tag_var = _StubVar("t")
+                self.teacher_max_tokens_var = _StubVar("512")
+                self.teacher_mode_var = _StubVar("magpie")
+                self.teacher_prompts_path_var = _StubVar("")
+                self.logs: list[str] = []
+                self._teacher_proc = None
+                # Pending callbacks queued via after(); the test fires
+                # them only AFTER calling stop, simulating real timing.
+                self._pending: list = []
+            def _log(self, msg): self.logs.append(msg)
+            def after(self, ms, fn): self._pending.append(fn)
+
+        spawned = {"n": 0}
+        def _fake_popen_block(*a, **k):
+            spawned["n"] += 1
+            raise AssertionError("Popen must NOT spawn after STOP cancels health-check")
+        monkeypatch.setattr(
+            "enigma_engine.gui.gui_forge_teacher.subprocess.Popen",
+            _fake_popen_block)
+        # Health-check would succeed if we reached spawn.
+        monkeypatch.setattr(
+            "enigma_engine.gui.gui_forge_teacher._check_endpoint_reachable",
+            lambda endpoint, **kw: (True, "ok"))
+        # Health-check thread runs target inline.
+        def _inline_thread(**kw):
+            target = kw.get("target")
+            args = kw.get("args", ())
+            class _T:
+                def start(self_inner):
+                    if target is not None:
+                        target(*args)
+            return _T()
+        monkeypatch.setattr(
+            "enigma_engine.gui.gui_forge_teacher.threading.Thread",
+            _inline_thread)
+
+        h = _Host()
+        # START → health-check thread runs inline → queues spawn via after()
+        h._start_external_teacher_corpus()
+        assert h._teacher_health_in_flight is True
+        assert len(h._pending) == 1  # spawn callback is queued
+
+        # STOP fires before the queued spawn callback runs.
+        h._stop_external_teacher_corpus()
+        assert h._teacher_cancel_requested is True
+
+        # Now flush the queued spawn callback — it must observe the
+        # cancel flag and bail without invoking Popen.
+        for fn in h._pending:
+            fn()
+        assert spawned["n"] == 0
+        assert any("cancelled" in m.lower() for m in h.logs)
+
+    def test_double_start_during_health_check_is_rejected(self, monkeypatch):
+        """Clicking START twice during the health-check window must NOT
+        spawn two health-check threads. The second click should log a
+        message and bail."""
+        from enigma_engine.gui.gui_forge_teacher import ForgeTeacherMixin
+
+        class _StubVar:
+            def __init__(self, v): self._v = v
+            def get(self): return self._v
+
+        class _Host(ForgeTeacherMixin):
+            def __init__(self):
+                self.teacher_endpoint_var = _StubVar("http://x/v1")
+                self.teacher_model_var = _StubVar("m")
+                self.teacher_magpie_var = _StubVar("10")
+                self.teacher_tag_var = _StubVar("t")
+                self.teacher_max_tokens_var = _StubVar("512")
+                self.teacher_mode_var = _StubVar("magpie")
+                self.teacher_prompts_path_var = _StubVar("")
+                self.logs: list[str] = []
+                self._teacher_proc = None
+            def _log(self, msg): self.logs.append(msg)
+            def after(self, ms, fn): pass  # don't drain
+
+        threads_started = {"n": 0}
+        def _counting_thread(**kw):
+            threads_started["n"] += 1
+            class _T:
+                def start(self_inner): pass  # do NOT actually run target
+            return _T()
+        monkeypatch.setattr(
+            "enigma_engine.gui.gui_forge_teacher.threading.Thread",
+            _counting_thread)
+
+        h = _Host()
+        h._start_external_teacher_corpus()
+        assert threads_started["n"] == 1
+        assert h._teacher_health_in_flight is True
+
+        # Second click during health-check window → rejected, no new thread.
+        h._start_external_teacher_corpus()
+        assert threads_started["n"] == 1
+        assert any("already in progress" in m.lower() for m in h.logs)
+
+    def test_count_distill_jsonl_rows_volume_table(self, tmp_path):
+        """Pure-helper unit test for the three branches: missing → 0,
+        present-with-rows → N, malformed/empty → 0."""
+        from enigma_engine.gui.gui_forge_teacher import _count_distill_jsonl_rows
+
+        # Missing → 0
+        assert _count_distill_jsonl_rows("nope", base_dir=tmp_path) == 0
+
+        # Present with N rows → N (blank lines ignored)
+        f = tmp_path / "distill_t1.jsonl"
+        f.write_text(
+            '{"prompt":"a","response":"b"}\n'
+            '\n'  # blank line ignored
+            '{"prompt":"c","response":"d"}\n'
+            '{"prompt":"e","response":"f"}\n',
+            encoding="utf-8")
+        assert _count_distill_jsonl_rows("t1", base_dir=tmp_path) == 3
+
+        # Empty file → 0 (no rows, no crash)
+        (tmp_path / "distill_empty.jsonl").write_text("", encoding="utf-8")
+        assert _count_distill_jsonl_rows("empty", base_dir=tmp_path) == 0
+
+    def test_suggest_magpie_n_writes_existing_plus_500(self, monkeypatch, tmp_path):
+        """Click ↻ button → reads tag → counts rows → sets Magpie-N."""
+        from enigma_engine.gui.gui_forge_teacher import ForgeTeacherMixin
+
+        class _StubVar:
+            def __init__(self, v): self._v = v
+            def get(self): return self._v
+            def set(self, v): self._v = v
+
+        class _Host(ForgeTeacherMixin):
+            def __init__(self, tag):
+                self.teacher_tag_var = _StubVar(tag)
+                self.teacher_magpie_var = _StubVar("500")
+                self.logs: list[str] = []
+            def _log(self, msg): self.logs.append(msg)
+
+        # Tag with 200 existing rows → suggest 700.
+        f = tmp_path / "distill_qwen3.jsonl"
+        f.write_text("\n".join(['{"x":1}'] * 200) + "\n", encoding="utf-8")
+        monkeypatch.setattr(
+            "enigma_engine.gui.gui_forge_teacher._count_distill_jsonl_rows",
+            lambda tag, **kw: 200 if tag == "qwen3" else 0)
+        h = _Host("qwen3")
+        h._suggest_magpie_n_from_tag()
+        assert h.teacher_magpie_var.get() == "700"
+        assert any("200 existing" in m for m in h.logs)
+
+        # Fresh tag → 500.
+        h2 = _Host("brand_new")
+        h2._suggest_magpie_n_from_tag()
+        assert h2.teacher_magpie_var.get() == "500"
+        assert any("fresh" in m.lower() for m in h2.logs)
+
+    def test_parse_teacher_progress_volume_table(self):
+        """Pure-helper unit test for the four branches of the progress
+        regex: magpie line, prompts line, non-progress text, zero total."""
+        from enigma_engine.gui.gui_forge_teacher import _parse_teacher_progress
+
+        # Magpie line → (done, total)
+        assert _parse_teacher_progress(
+            "INFO:__main__:[10/500] ok=10 failed=0 duplicate=0 (1.23 rows/s)"
+        ) == (10, 500)
+
+        # Prompts line → (done, total)
+        assert _parse_teacher_progress(
+            "INFO:__main__:[3/100] ok=3 failed=0 skipped=0 (0.50 rows/s)"
+        ) == (3, 100)
+
+        # Non-progress lines → None
+        assert _parse_teacher_progress(
+            "INFO:__main__:loaded 500 prompt(s) from data/x.txt") is None
+        assert _parse_teacher_progress(
+            "INFO:__main__:resume: 200 prompt(s) already in x.jsonl") is None
+        # User-supplied content with [N/M] but no `ok=` → None
+        assert _parse_teacher_progress(
+            "[teacher] some user-supplied [1/5] text") is None
+
+        # Zero total → None (caller can't compute pct)
+        assert _parse_teacher_progress(
+            "INFO:__main__:[10/0] ok=10") is None
+
+    def test_reader_loop_drives_progress_bar(self, monkeypatch):
+        """`_teacher_reader_loop` parses `[N/M] ok=` lines from stdout
+        and forwards (pct, msg) to `_update_forge_progress`."""
+        import io
+        from enigma_engine.gui.gui_forge_teacher import ForgeTeacherMixin
+
+        class _FakeProc:
+            def __init__(self, lines):
+                self.stdout = io.StringIO("\n".join(lines) + "\n")
+            def wait(self, timeout=None): return 0
+
+        progress_calls: list = []
+
+        class _Host(ForgeTeacherMixin):
+            def __init__(self):
+                self._teacher_proc = None
+                self.logs: list[str] = []
+            def _log(self, msg): self.logs.append(msg)
+            def after(self, ms, fn): fn()  # run inline
+            def _update_forge_progress(self, pct, msg):
+                progress_calls.append((pct, msg))
+            def _reset_forge_progress(self): pass
+            def _teacher_finalize(self, rc, tag): pass
+
+        lines = [
+            "INFO:__main__:loaded 500 prompt(s) from data/x.txt",
+            "INFO:__main__:[10/500] ok=10 failed=0 duplicate=0 (1.0 rows/s)",
+            "INFO:__main__:[250/500] ok=250 failed=0 duplicate=0 (1.0 rows/s)",
+            "INFO:__main__:[500/500] ok=500 failed=0 duplicate=0 (1.0 rows/s)",
+        ]
+        h = _Host()
+        proc = _FakeProc(lines)
+        h._teacher_reader_loop(proc, "t")
+
+        # Three progress lines → three updates; the loaded-prompts line
+        # must NOT trigger a progress update.
+        assert progress_calls == [
+            (2, "teacher 10/500"),
+            (50, "teacher 250/500"),
+            (100, "teacher 500/500"),
+        ]
+
+

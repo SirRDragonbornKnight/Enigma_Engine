@@ -564,6 +564,18 @@ class CMDPageMixin:
                 else:
                     kwargs["system_prompt"] = cmd_policy
 
+                # N-15b sibling-boundary (Pass 156z9ab): CMD-page
+                # chat path INTENTIONALLY does NOT forward
+                # ``self.json_schema``.  CMD prompts ask the model
+                # to emit ``[CMD]...[/CMD]`` blocks per the policy
+                # above; a user-staged JSON schema would force the
+                # model into a constrained dict layout and silently
+                # disable command-execution semantics.  If the user
+                # wants schema-constrained CMD output in future,
+                # that's a new feature that needs its own design
+                # pass — not a free side-effect of forwarding.
+                kwargs.pop("json_schema", None)
+
                 try:
                     resp = self.engine.chat(question, **kwargs)
                 except TypeError:

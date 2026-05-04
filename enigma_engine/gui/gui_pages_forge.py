@@ -480,6 +480,156 @@ class ForgePageMixin:
                 "Max tokens per teacher response.\n"
                 "Longer = richer examples, shorter = faster.")
 
+        # --- External teacher (HTTP) — subprocess wrapper around
+        # collect_distill_data.py. Generates a corpus from an off-engine
+        # model (Ollama / vLLM / llama.cpp / OpenAI-compatible). On
+        # success the FORGE training-data picker auto-fills with the
+        # produced .txt path.
+        ext_section = ctk.CTkFrame(
+            self._forge_distill_section, fg_color="transparent")
+        ext_section.pack(fill="x", padx=10, pady=(6, 4))
+        SelectableLabel(
+            ext_section, text="External teacher (HTTP)",
+            font=FONT_TINY, text_color=C_TEXT_DIM
+        ).pack(anchor="w", pady=(0, 2))
+
+        # Endpoint URL row
+        ep_row = ctk.CTkFrame(ext_section, fg_color="transparent")
+        ep_row.pack(fill="x", pady=(0, 2))
+        SelectableLabel(
+            ep_row, text="Endpoint:", font=FONT_TINY,
+            text_color=C_TEXT_DIM, width=80
+        ).pack(side="left")
+        self.teacher_endpoint_var = ctk.StringVar(
+            value="http://localhost:11434/v1")
+        teacher_endpoint_entry = themed_entry(
+            ep_row, textvariable=self.teacher_endpoint_var,
+            placeholder_text="http://host:port/v1")
+        teacher_endpoint_entry.pack(side="left", fill="x", expand=True)
+        Tooltip(teacher_endpoint_entry,
+                "OpenAI-compatible chat-completions endpoint.\n"
+                "Examples: Ollama (http://localhost:11434/v1),\n"
+                "vLLM (http://localhost:8000/v1),\n"
+                "llama.cpp server (http://localhost:8080/v1).")
+
+        # Model name row
+        model_row = ctk.CTkFrame(ext_section, fg_color="transparent")
+        model_row.pack(fill="x", pady=(0, 2))
+        SelectableLabel(
+            model_row, text="Model:", font=FONT_TINY,
+            text_color=C_TEXT_DIM, width=80
+        ).pack(side="left")
+        self.teacher_model_var = ctk.StringVar(value="")
+        teacher_model_entry = themed_entry(
+            model_row, textvariable=self.teacher_model_var,
+            placeholder_text="e.g. qwen3:8b, llama3:8b-instruct")
+        teacher_model_entry.pack(side="left", fill="x", expand=True)
+        Tooltip(teacher_model_entry,
+                "Model name as the endpoint expects it.\n"
+                "Required — no default.")
+
+        # Mode radio: Magpie (synth) vs Prompts file
+        mode_row = ctk.CTkFrame(ext_section, fg_color="transparent")
+        mode_row.pack(fill="x", pady=(0, 2))
+        SelectableLabel(
+            mode_row, text="Mode:", font=FONT_TINY,
+            text_color=C_TEXT_DIM, width=80
+        ).pack(side="left")
+        self.teacher_mode_var = ctk.StringVar(value="magpie")
+        teacher_mode_magpie = ctk.CTkRadioButton(
+            mode_row, text="Magpie (synth)", value="magpie",
+            variable=self.teacher_mode_var)
+        teacher_mode_magpie.pack(side="left", padx=(0, 8))
+        teacher_mode_prompts = ctk.CTkRadioButton(
+            mode_row, text="Prompts file", value="prompts",
+            variable=self.teacher_mode_var)
+        teacher_mode_prompts.pack(side="left")
+        Tooltip(teacher_mode_magpie,
+                "Magpie: model invents BOTH the instruction AND the\n"
+                "answer. No input file needed. Best for fast bootstrap.")
+        Tooltip(teacher_mode_prompts,
+                "Prompts: read instructions from a .txt or .jsonl file,\n"
+                "let the teacher answer each one. Use when you have\n"
+                "curated questions. Path required below.")
+
+        # Prompts-file path row (only consulted when mode=Prompts).
+        pf_row = ctk.CTkFrame(ext_section, fg_color="transparent")
+        pf_row.pack(fill="x", pady=(0, 2))
+        SelectableLabel(
+            pf_row, text="Prompts:", font=FONT_TINY,
+            text_color=C_TEXT_DIM, width=80
+        ).pack(side="left")
+        self.teacher_prompts_path_var = ctk.StringVar(value="")
+        teacher_prompts_entry = themed_entry(
+            pf_row, textvariable=self.teacher_prompts_path_var,
+            placeholder_text="path/to/prompts.txt or .jsonl")
+        teacher_prompts_entry.pack(side="left", fill="x", expand=True)
+        Tooltip(teacher_prompts_entry,
+                "Path to .txt (one prompt per line) or .jsonl file\n"
+                "(JSON object per line with a 'prompt' / 'instruction'\n"
+                "/ 'question' field). Only used when Mode=Prompts file.")
+        teacher_browse_btn = themed_button(
+            pf_row, text="...", style="secondary", width=30,
+            command=self._browse_teacher_prompts_file)
+        teacher_browse_btn.pack(side="left", padx=(2, 0))
+
+        # Magpie N + tag row
+        mn_row = ctk.CTkFrame(ext_section, fg_color="transparent")
+        mn_row.pack(fill="x", pady=(0, 2))
+        SelectableLabel(
+            mn_row, text="Magpie N:", font=FONT_TINY,
+            text_color=C_TEXT_DIM, width=80
+        ).pack(side="left")
+        self.teacher_magpie_var = ctk.StringVar(value="500")
+        teacher_magpie_entry = themed_numeric_entry(
+            mn_row, mode="int",
+            textvariable=self.teacher_magpie_var, width=70)
+        teacher_magpie_entry.pack(side="left")
+        Tooltip(teacher_magpie_entry,
+                "Number of instruction/answer pairs to synthesize\n"
+                "via Magpie empty-prefix method (no input prompts\n"
+                "needed). 500 ≈ a few minutes on a fast endpoint.")
+        teacher_suggest_btn = themed_button(
+            mn_row, text="↻", style="secondary", width=28,
+            command=self._suggest_magpie_n_from_tag)
+        teacher_suggest_btn.pack(side="left", padx=(2, 0))
+        Tooltip(teacher_suggest_btn,
+                "Count existing pairs in data/finetune/distill_<tag>.jsonl\n"
+                "and suggest Magpie-N = existing + 500. Useful when\n"
+                "resuming a corpus you've already partially built.")
+        SelectableLabel(
+            mn_row, text="  Tag:", font=FONT_TINY,
+            text_color=C_TEXT_DIM
+        ).pack(side="left", padx=(6, 0))
+        self.teacher_tag_var = ctk.StringVar(value="external")
+        teacher_tag_entry = themed_entry(
+            mn_row, textvariable=self.teacher_tag_var, width=120)
+        teacher_tag_entry.pack(side="left", padx=(2, 0))
+        Tooltip(teacher_tag_entry,
+                "Output filename tag — writes\n"
+                "data/finetune/distill_<tag>.{jsonl,txt}.\n"
+                "Reused tag triggers --resume (skip done prompts).")
+
+        # Max-tokens (mirrors collect_distill_data.py default).
+        # Reuses the existing distill_max_tokens_var so the user only
+        # configures it once for both in-process and external flows.
+        self.teacher_max_tokens_var = self.distill_max_tokens_var
+
+        # Buttons row
+        btn_row = ctk.CTkFrame(ext_section, fg_color="transparent")
+        btn_row.pack(fill="x", pady=(2, 2))
+        self.teacher_start_btn = themed_button(
+            btn_row, text="GENERATE EXTERNAL TEACHER CORPUS",
+            style="primary",
+            command=self._start_external_teacher_corpus)
+        self.teacher_start_btn.pack(side="left", fill="x", expand=True)
+        self.teacher_stop_btn = themed_button(
+            btn_row, text="STOP", style="secondary",
+            width=70,
+            command=self._stop_external_teacher_corpus)
+        self.teacher_stop_btn.pack(side="left", padx=(4, 0))
+        self.teacher_stop_btn.configure(state="disabled")
+
         # === BASIC TRAINING OPTIONS ===
         self._forge_basic_section = ctk.CTkFrame(
             ctrl_scroll, fg_color="transparent")

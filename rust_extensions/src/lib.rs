@@ -863,7 +863,7 @@ impl RustBPETokenizer {
         self.cache.clear();
         self.cache_order.clear();
 
-        // Special tokens (IDs 0..12)
+        // Special tokens (IDs 0..13)
         for (i, &tok) in SPECIAL_TOKENS.iter().enumerate() {
             let id = i as i64;
             self.token_to_id.insert(tok.to_string(), id);

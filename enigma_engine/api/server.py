@@ -45,7 +45,7 @@ from fastapi.responses import StreamingResponse as FastAPIStreamingResponse
 from pydantic import BaseModel, Field, field_validator
 
 from enigma_engine import __version__
-
+from enigma_engine.core.json_schema_mask import validate_json_schema_shape
 logger = logging.getLogger(__name__)
 
 # Maximum chat history entries (user + assistant pairs).
@@ -541,6 +541,19 @@ async def chat(req: ChatRequest):
             status_code=503,
             content={"error": "No model loaded. Load a model first via /api/models/load."},
         )
+    # Pass 156z9ac: validate json_schema shape at the boundary so a
+    # malformed schema returns HTTP 400 with the validator message,
+    # not HTTP 500 wrapping a deep ValueError from inside generation.
+    # Lock is acquired AFTER validation — a bad-schema request must
+    # not block other clients waiting on the inference lock.
+    if req.json_schema is not None:
+        try:
+            validate_json_schema_shape(req.json_schema)
+        except ValueError as exc:
+            return JSONResponse(
+                status_code=400,
+                content={"error": f"Invalid json_schema: {exc}"},
+            )
     if not _inference_lock.acquire(blocking=False):
         return JSONResponse(
             status_code=429,
@@ -634,6 +647,18 @@ async def chat_stream(req: ChatRequest):
             status_code=503,
             content={"error": "No model loaded. Load a model first via /api/models/load."},
         )
+    # Pass 156z9ac: same boundary-validation as /api/chat (sibling
+    # boundary).  Validate BEFORE acquiring the inference lock so a
+    # bad-schema request returns 400 immediately without queueing
+    # behind a real generation.
+    if req.json_schema is not None:
+        try:
+            validate_json_schema_shape(req.json_schema)
+        except ValueError as exc:
+            return JSONResponse(
+                status_code=400,
+                content={"error": f"Invalid json_schema: {exc}"},
+            )
     if not _inference_lock.acquire(blocking=False):
         return JSONResponse(
             status_code=429,

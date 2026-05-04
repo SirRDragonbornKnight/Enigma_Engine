@@ -99,6 +99,24 @@ class EnigmaGUI(
         self.voice_enabled = False
         self.web_access = False
         self.reasoning_enabled = False
+        # Stage B-2c (Pass 156z9w): mirror engine-side default. The
+        # GUI checkbox on CONFIG page round-trips this through
+        # gui_settings.json and applies it to ``self.engine`` after
+        # every model load. Default True preserves Pass 156z9d's
+        # always-on observability.
+        self.inline_search_enabled = True
+        # B-3a: opt-in inline RAG-splice flag (default OFF).  Mirrors
+        # the engine attribute set in ``_init_common``; native
+        # non-GGUF generation appends ``</search>`` to the stop list
+        # when this is True.  CONFIG-page checkbox round-trips it
+        # through gui_settings.json.
+        self.inline_search_splice_enabled = False
+        # N-15b (Pass 156z9aa): in-memory mirror of the persisted
+        # JSON schema dict (parsed on boot from
+        # gui_settings.json["json_schema_text"]).  None = no
+        # constraint.  Forwarded to engine.chat(json_schema=...)
+        # by the chat send path when non-None.
+        self.json_schema: dict | None = None
         self.attached_file: str | None = None
         self._boot_time = time.time()
         self._thinking_active = False
@@ -160,6 +178,24 @@ class EnigmaGUI(
             "auto_unload_on_minimize", False)
         self._chat_learning_enabled = self._read_gui_bool_setting(
             "learn_while_chatting", False)
+        # Stage B-2c (Pass 156z9w): persisted off-switch overrides the
+        # in-memory default set in __init__.  Engine attribute is
+        # applied in ``_on_model_loaded`` once the engine exists.
+        self.inline_search_enabled = self._read_gui_bool_setting(
+            "inline_search_enabled", True)
+        # B-3a: persisted opt-in for the splice / auto-stop feature.
+        # Default False so users who haven't opted in keep the
+        # previous behaviour (queries recorded, no auto-stop).
+        self.inline_search_splice_enabled = self._read_gui_bool_setting(
+            "inline_search_splice_enabled", False)
+        # N-15b (Pass 156z9aa): boot-load the persisted JSON schema
+        # raw text and re-parse on startup.  Parse failure is loud
+        # (WARNING) but non-fatal — leaves self.json_schema as None
+        # so chat sends are unconstrained until the user re-Applies
+        # via the CONFIG page textbox.  Stored as raw text (not the
+        # parsed dict) so the user's editing state survives even if
+        # they saved a draft that doesn't validate yet.
+        self.json_schema = self._read_gui_json_schema_setting()
         self._refresh_performance_mode()
 
         # Build UI
@@ -273,6 +309,42 @@ class EnigmaGUI(
             logger.debug("Could not read setting %s: %s", key, exc)
         return default
 
+    def _read_gui_json_schema_setting(self) -> dict | None:
+        """Read and parse persisted ``json_schema_text`` from
+        gui_settings.json.  Returns the parsed dict on success,
+        ``None`` on missing key / empty string / parse error /
+        non-dict result.
+
+        Parse error is logged at WARNING (loud-on-real-issue per
+        the volume table for boot-time settings — a user who
+        previously Apply'd a valid schema and then hand-edited the
+        JSON file into invalid state should see a startup warning,
+        not a silent revert).  Empty/missing key is silent (the
+        common no-constraint default for fresh installs).
+        """
+        import json
+
+        raw = self._read_gui_str_setting("json_schema_text", "")
+        if not raw or not raw.strip():
+            return None
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            logger.warning(
+                "Persisted json_schema_text is invalid JSON "
+                "(line %d, col %d): %s. Boot defaulting to "
+                "no-constraint; re-Apply via CONFIG page to "
+                "restore.",
+                exc.lineno, exc.colno, exc.msg)
+            return None
+        if not isinstance(parsed, dict):
+            logger.warning(
+                "Persisted json_schema_text parses to %s, expected "
+                "dict.  Boot defaulting to no-constraint.",
+                type(parsed).__name__)
+            return None
+        return parsed
+
     def _refresh_performance_mode(self):
         """Derive live UI throttles from the low-memory gaming preset."""
         self._gaming_mode_active = (
@@ -381,6 +453,15 @@ class EnigmaGUI(
             try:
                 close_log()
             except (RuntimeError, AttributeError):
+                pass
+
+        # Kill any running external-teacher subprocess so it
+        # doesn't outlive the GUI.
+        kill_teacher = getattr(self, '_kill_teacher_subprocess', None)
+        if kill_teacher:
+            try:
+                kill_teacher()
+            except (RuntimeError, AttributeError, OSError):
                 pass
 
         # Hide the window immediately so it feels instant

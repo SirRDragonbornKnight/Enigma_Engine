@@ -249,6 +249,42 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
         # don't care about attribution.
         self.last_search_queries_per_prompt: list[list[str]] = []
 
+        # B-2c (Pass 156z9u): user-facing off-switch.  When False, the
+        # post-generation scanner skips entirely — no scan, no
+        # WARNING, ``last_search_queries`` reset to ``[]`` so callers
+        # see a clean state.  Default True (always-on observability)
+        # to preserve the Pass 156z9d behaviour for existing callers.
+        # Disable if the user is intentionally probing the
+        # ``<search>`` syntax (asking the model about it) and doesn't
+        # want the WARNING noise / accidental B-3 trigger when that
+        # ships.
+        self.inline_search_enabled: bool = True
+
+        # B-3a: opt-in flag for inline RAG-splice behaviour.  Default
+        # OFF — the feature is layered on top of the always-on
+        # observability above.  When True, the native non-GGUF
+        # ``_generate_text`` path appends ``</search>`` to
+        # ``stop_strings`` so generation halts cleanly on the closing
+        # tag (B-3a auto-stop).  Sibling generation paths
+        # (stream / vision / spec / medusa / lookahead / batch / GGUF)
+        # do NOT honour the flag in B-3a — they emit a one-shot
+        # WARNING via ``_record_search_emissions`` when the flag is
+        # ON and ``<search>`` queries land in the recorded list.
+        # B-3b will add the ``_perform_search_splice`` helper that
+        # actually replaces the trailing tag with retrieved context;
+        # B-3c adds bounded multi-round recursion; B-3d closes the
+        # streaming sibling.  Splice OFF + observability ON =
+        # today's behaviour.  Splice ON + observability OFF = no
+        # splice (the queries list is the input to splice and is
+        # gated to ``[]`` by the observability flag).
+        self.inline_search_splice_enabled: bool = False
+        # B-3c: bounded multi-round splice budget.  Each round costs a
+        # full prefill + decode pass, so the cap is hardware-bounded
+        # rather than philosophical.  3 is the default per the B-3
+        # plan (Pass 156z9af).  Honoured only when
+        # ``inline_search_splice_enabled`` is True.
+        self.max_search_rounds: int = 3
+
     def set_train_lock(self, lock: threading.Lock | None) -> None:
         """Set the training lock for inference/training coordination.
 

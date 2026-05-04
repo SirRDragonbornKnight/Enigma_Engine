@@ -28,6 +28,70 @@ import torch
 logger = logging.getLogger(__name__)
 
 
+_DEFAULT_SUPPORTED_TYPES: frozenset[str] = frozenset({
+    'string', 'number', 'integer', 'boolean', 'null',
+    'object', 'array',
+})
+
+
+def validate_json_schema_shape(
+    schema: object,
+    *,
+    supported_types: frozenset[str] = _DEFAULT_SUPPORTED_TYPES,
+) -> None:
+    """Validate the structural shape of a JSON schema dict.
+
+    Pass 156z9ac: extracted from ``JsonSchemaConstraint.__init__`` so
+    boundary callers (FastAPI handlers, GUI Apply button, CLI tools)
+    can validate at the boundary and surface a clean user-facing error
+    BEFORE the request reaches generation.  Without this split a
+    malformed schema raised ``ValueError`` deep inside the engine, the
+    FastAPI exception handler mapped it to HTTP 500, and the user saw
+    a generic "Internal Server Error" instead of the actionable
+    validator message naming what's wrong.
+
+    Raises:
+        ValueError: Schema is not a dict, ``type`` is not
+            ``"object"``, ``properties`` is not a dict, a property
+            spec is not a dict, or a property's ``type`` is outside
+            the supported set.
+
+    The check is deliberately structural-only — it does NOT validate
+    that the schema is a valid draft-2020-12 JSON Schema (no ``$ref``
+    resolution, no format checks, no required-array semantics).  Its
+    sole job is to gate the inputs the FSM can actually constrain.
+    """
+    if not isinstance(schema, dict):
+        raise ValueError(
+            f"json_schema must be a dict, got {type(schema).__name__}"
+        )
+    schema_type = schema.get('type', 'object')
+    if schema_type != 'object':
+        raise ValueError(
+            f"json_schema['type'] must be 'object' (FSM is "
+            f"object-only), got {schema_type!r}"
+        )
+    props = schema.get('properties', {})
+    if not isinstance(props, dict):
+        raise ValueError(
+            f"json_schema['properties'] must be a dict, got "
+            f"{type(props).__name__}"
+        )
+    for key, spec in props.items():
+        if not isinstance(spec, dict):
+            raise ValueError(
+                f"json_schema['properties'][{key!r}] must be a "
+                f"dict, got {type(spec).__name__}"
+            )
+        ptype = spec.get('type', 'string')
+        if ptype not in supported_types:
+            raise ValueError(
+                f"json_schema['properties'][{key!r}]['type'] = "
+                f"{ptype!r} is not supported. Allowed: "
+                f"{sorted(supported_types)}"
+            )
+
+
 class JsonSchemaConstraint:
     """FSM that constrains generation to produce schema-conforming JSON.
 
@@ -60,35 +124,16 @@ class JsonSchemaConstraint:
         # the FSM and silently produced degraded output that callers
         # could not distinguish from a successful constrained
         # generation.  Fail loud at the constructor instead.
-        if not isinstance(schema, dict):
-            raise ValueError(
-                f"json_schema must be a dict, got {type(schema).__name__}"
-            )
-        schema_type = schema.get('type', 'object')
-        if schema_type != 'object':
-            raise ValueError(
-                f"json_schema['type'] must be 'object' (FSM is "
-                f"object-only), got {schema_type!r}"
-            )
+        #
+        # Pass 156z9ac extracted the shape checks to
+        # ``validate_json_schema_shape`` so the FastAPI handlers can
+        # call them at the request boundary and return HTTP 400 with
+        # a helpful message — without that, a malformed schema raised
+        # ``ValueError`` deep inside generation, FastAPI mapped it to
+        # HTTP 500 with a stack trace, and the user saw "Internal
+        # Server Error" instead of "your schema is malformed".
+        validate_json_schema_shape(schema, supported_types=self._SUPPORTED_TYPES)
         props = schema.get('properties', {})
-        if not isinstance(props, dict):
-            raise ValueError(
-                f"json_schema['properties'] must be a dict, got "
-                f"{type(props).__name__}"
-            )
-        for key, spec in props.items():
-            if not isinstance(spec, dict):
-                raise ValueError(
-                    f"json_schema['properties'][{key!r}] must be a "
-                    f"dict, got {type(spec).__name__}"
-                )
-            ptype = spec.get('type', 'string')
-            if ptype not in self._SUPPORTED_TYPES:
-                raise ValueError(
-                    f"json_schema['properties'][{key!r}]['type'] = "
-                    f"{ptype!r} is not supported. Allowed: "
-                    f"{sorted(self._SUPPORTED_TYPES)}"
-                )
 
         self._n_keys = len(props)
         self._key_types = [

@@ -324,7 +324,11 @@ class _GenerationMixin:
         return text
 
     def _record_search_emissions(
-        self, text: str, prompt: str | None = None,
+        self,
+        text: str,
+        prompt: str | None = None,
+        *,
+        path: str = "native",
     ) -> None:
         """AutoResearch-2 Stage B-2: scan model-generated text for inline
         ``<search>...</search>`` blocks, store the decoded queries on
@@ -361,7 +365,18 @@ class _GenerationMixin:
         We don't gate on that here — the helper is purely text-side
         and works on the decoded string regardless of tokenizer
         registry state.  The two layers are decoupled by design.
+
+        Pass 156z9u (B-2c) off-switch: when
+        ``self.inline_search_enabled`` is False the scan is skipped
+        entirely and ``last_search_queries`` is reset to ``[]`` so
+        callers see a clean state.  The flag exists so users
+        intentionally probing the ``<search>`` syntax (e.g. asking
+        the model about it) can suppress the WARNING noise and the
+        future Stage B-3 RAG-splice trigger.
         """
+        if not getattr(self, "inline_search_enabled", True):
+            self.last_search_queries = []
+            return
         if prompt and isinstance(text, str) and text.startswith(prompt):
             scan_text = text[len(prompt):]
         else:
@@ -386,6 +401,26 @@ class _GenerationMixin:
                 "Stage B-3 RAG splice is not implemented; queries "
                 "recorded on engine.last_search_queries for inspection",
                 len(queries))
+            # B-3a sibling-boundary warning.  When the splice opt-in
+            # flag is ON, only the ``native`` path (non-GGUF
+            # ``_generate_text``) honours the ``</search>`` auto-stop.
+            # Every other generation method (stream / vision /
+            # speculative / medusa / lookahead / batch / GGUF) emits
+            # a one-shot WARNING per call so callers know the flag
+            # had no effect on this path.  B-3b will add the actual
+            # splice; B-3c adds multi-round recursion; B-3d closes
+            # streaming.  Until then this WARNING is the honest UX.
+            if (
+                getattr(self, "inline_search_splice_enabled", False)
+                and path != "native"
+            ):
+                logger.warning(
+                    "B-3a: inline_search_splice_enabled=True but the "
+                    "'%s' generation path does not yet support "
+                    "</search> auto-stop or splice; %d query(ies) "
+                    "recorded on engine.last_search_queries with no "
+                    "splice applied.",
+                    path, len(queries))
 
     def _generate_text(
         self,
@@ -468,7 +503,10 @@ class _GenerationMixin:
                     repeat_penalty=repetition_penalty,
                     stop=stop_strings
                 )
-                self._record_search_emissions(text)
+                # GGUF path: continuation-only text, sibling-boundary
+                # WARNING fires from inside the helper when the splice
+                # flag is ON.
+                self._record_search_emissions(text, path="gguf")
                 return text
             except Exception as e:
                 logger.error(f"GGUF generation failed: {e}")
@@ -526,10 +564,25 @@ class _GenerationMixin:
             from .json_schema_mask import JsonSchemaConstraint
             json_constraint = JsonSchemaConstraint(json_schema, self.tokenizer)
 
+        # B-3a: when ``inline_search_splice_enabled`` is True, append
+        # ``</search>`` to the stop list so the model halts cleanly on
+        # the closing tag instead of streaming past it into more text
+        # we'll discard later.  Defensive copy so we don't mutate the
+        # caller's list (some callers pass module-level constants).
+        # Native non-GGUF path only — sibling paths (stream / vision
+        # / speculative / medusa / lookahead / batch / GGUF) warn via
+        # ``_record_search_emissions(path=...)`` instead.
+        effective_stop_strings = stop_strings
+        if getattr(self, "inline_search_splice_enabled", False):
+            effective_stop_strings = list(stop_strings or [])
+            if "</search>" not in effective_stop_strings:
+                effective_stop_strings.append("</search>")
+
         with torch.no_grad():  # Disable gradient computation (inference only)
             output_ids = self._generate_manual(
                 input_ids, max_gen, temperature, top_k, top_p,
-                repetition_penalty, min_p, stop_strings=stop_strings,
+                repetition_penalty, min_p,
+                stop_strings=effective_stop_strings,
                 prefix_cache=prefix_cache,
                 json_constraint=json_constraint,
             )
@@ -568,17 +621,243 @@ class _GenerationMixin:
 
         # Apply stop strings - only check in generated part (after prompt)
         # This prevents cutting off at stop strings that exist in the prompt itself
-        if stop_strings:
+        # Use ``effective_stop_strings`` so the B-3a auto-stop on
+        # ``</search>`` also trims the decoded text (defence in depth
+        # if the manual loop yielded one extra token past the match).
+        if effective_stop_strings:
             prompt_len = len(prompt)
             generated_part = text[prompt_len:] if len(text) > prompt_len else text
-            for stop_str in stop_strings:
+            for stop_str in effective_stop_strings:
                 if stop_str in generated_part:
                     stop_pos = generated_part.find(stop_str)
                     text = text[:prompt_len + stop_pos]
                     break
 
+        # B-3b/B-3c: when the splice flag is ON, the auto-stop fired
+        # on ``</search>``, and a RAG index is attached, retrieve and
+        # splice ``<search_result>...</search_result>`` then continue
+        # generation.  Up to ``self.max_search_rounds`` rounds (default
+        # 3).  Returns ``None`` when any precondition fails so the
+        # caller keeps the original text.
+        # Pass the round-0 emitted-token count so the helper can budget
+        # remaining rounds against the original ``max_gen`` instead of
+        # multiplying it by N.
+        tokens_round0 = max(0, output_ids.shape[1] - input_ids.shape[1])
+        spliced = self._maybe_rag_splice(
+            text, prompt, max_gen, temperature, top_k, top_p,
+            repetition_penalty, min_p,
+            effective_stop_strings=effective_stop_strings,
+            json_constraint=json_constraint,
+            tokens_already_generated=tokens_round0,
+        )
+        if spliced is not None:
+            text = spliced
+
         self._record_search_emissions(text, prompt=prompt)
         return text
+
+    def _maybe_rag_splice(
+        self,
+        text: str,
+        prompt: str,
+        max_gen: int,
+        temperature: float,
+        top_k: int,
+        top_p: float,
+        repetition_penalty: float,
+        min_p: float,
+        *,
+        effective_stop_strings: list[str] | None,
+        json_constraint: object | None,
+        tokens_already_generated: int = 0,
+    ) -> str | None:
+        """B-3b/B-3c: retrieve + splice ``<search_result>`` after a
+        ``</search>`` auto-stop, then continue generation.  Bounded
+        multi-round recursion gated by
+        ``self.max_search_rounds`` (default 3, set in
+        :meth:`EnigmaEngine._init_common`).
+
+        Round budget semantics:
+
+        * Round 1..N-1: continuation calls KEEP ``</search>`` in
+          ``stop_strings`` so the model can request another search.
+          If it does, we splice and loop.
+        * Round N (budget exhausted): one final continuation call
+          with ``</search>`` STRIPPED from stops so the model wraps
+          up using the accumulated context.  Any further `<search>`
+          tags appear as plain text — no recursion past N.
+
+        Token budget (Pass 156z9ak): the caller passes the round-0
+        emitted-token count via ``tokens_already_generated``.  Each
+        helper round subtracts its own emitted-token delta from a
+        running cumulative; per-round ``max_gen`` is set to
+        ``max_gen - cumulative`` so the total user budget is
+        respected across all rounds instead of being multiplied by
+        N.  When the remaining budget hits zero, the loop exits
+        cleanly.
+
+        Preconditions for the FIRST splice (any failure returns
+        ``None`` and the caller keeps the original text):
+
+        * ``self.inline_search_splice_enabled`` is True.
+        * ``self._rag_index`` is attached and built.
+        * ``text`` starts with ``prompt`` (Pass 156z9e prompt-echo
+          discipline — generated portion only).
+        * Generated portion ends with an unclosed ``<search>``
+          carrying a non-empty query.
+        * Retrieval returns a non-empty formatted context.
+
+        Within the loop, the same preconditions are re-checked each
+        round before issuing another retrieval; any miss exits the
+        loop and returns the most recent text.
+        """
+        if not getattr(self, "inline_search_splice_enabled", False):
+            return None
+        rag_index = getattr(self, "_rag_index", None)
+        if rag_index is None or not getattr(rag_index, "is_built", False):
+            return None
+        if not isinstance(text, str) or not isinstance(prompt, str):
+            return None
+        if not text.startswith(prompt):
+            return None
+
+        max_rounds = max(1, int(getattr(self, "max_search_rounds", 3)))
+        current_text = text
+        current_prompt = prompt  # advances each round so prompt-echo
+        # discipline applies to the freshly-generated tail, not the
+        # cumulative spliced prompt.
+        spliced_any = False
+        # B-3c-2 (Pass 156z9ak): cumulative emitted-token count across
+        # round 0 (passed in by caller) plus all helper rounds, so each
+        # round's per-call ``max_gen`` is decremented from the original
+        # user budget instead of using the full budget every round.
+        cumulative_tokens = max(0, int(tokens_already_generated))
+
+        for round_idx in range(max_rounds):
+            generated = current_text[len(current_prompt):]
+            open_pos = generated.rfind("<search>")
+            if open_pos < 0:
+                break
+            after_open = generated[open_pos + len("<search>"):]
+            if "</search>" in after_open:
+                # Closed pair ⇒ auto-stop did not fire on this
+                # ``<search>``; nothing to splice.
+                break
+            query = after_open.strip()
+            if not query:
+                break
+            try:
+                from .rag import RAGIndex
+                results = rag_index.query(query, top_k=5)
+                ctx = RAGIndex.format_context(results, max_chars=2000)
+            except Exception:
+                logger.exception(
+                    "B-3b/c: RAG retrieval failed at round %d; "
+                    "exiting splice loop",
+                    round_idx + 1)
+                break
+            if not ctx:
+                break
+
+            splice_block = (
+                f"</search>\n<search_result>\n{ctx}\n"
+                f"</search_result>\n"
+            )
+            new_prompt = current_text + splice_block
+            logger.info(
+                "B-3b/c: round %d/%d spliced RAG result for query "
+                "'%s' (%d chars ctx)",
+                round_idx + 1, max_rounds, query[:60], len(ctx))
+            try:
+                new_input_ids = self._encode_prompt(new_prompt)
+            except Exception:
+                logger.exception(
+                    "B-3b/c: encode of spliced prompt failed at "
+                    "round %d; exiting splice loop",
+                    round_idx + 1)
+                break
+
+            # B-3c-2: respect remaining token budget.  If round 0 +
+            # prior splice rounds already consumed the user's full
+            # ``max_gen``, no continuation tokens left — exit cleanly
+            # instead of issuing another full-budget call.
+            remaining = max_gen - cumulative_tokens
+            if remaining <= 0:
+                logger.info(
+                    "B-3b/c: max_gen=%d budget exhausted before round "
+                    "%d (cumulative=%d); exiting splice loop",
+                    max_gen, round_idx + 1, cumulative_tokens)
+                break
+            round_max_gen = remaining
+
+            # Final round (budget exhaustion): strip ``</search>``
+            # from stops so the model wraps up rather than triggering
+            # another auto-stop we can't service.
+            is_final_round = (round_idx == max_rounds - 1)
+            if is_final_round:
+                round_stops = [
+                    s for s in (effective_stop_strings or [])
+                    if s != "</search>"
+                ] or None
+            else:
+                round_stops = effective_stop_strings or None
+
+            try:
+                with torch.no_grad():
+                    cont_ids = self._generate_manual(
+                        new_input_ids, round_max_gen, temperature, top_k,
+                        top_p, repetition_penalty, min_p,
+                        stop_strings=round_stops,
+                        prefix_cache=None,
+                        json_constraint=json_constraint,
+                    )
+            except Exception:
+                logger.exception(
+                    "B-3b/c: continuation generation failed at "
+                    "round %d; returning pre-round text",
+                    round_idx + 1)
+                break
+            # Account this round's emitted tokens against the user
+            # budget.  ``cont_ids`` includes the spliced prompt; the
+            # delta from ``new_input_ids`` is what the model actually
+            # produced this round.
+            try:
+                this_round_tokens = max(
+                    0,
+                    int(cont_ids.shape[1]) - int(new_input_ids.shape[1]),
+                )
+            except Exception:
+                this_round_tokens = 0
+            cumulative_tokens += this_round_tokens
+            cont_text = self._decode_output(cont_ids)
+            if round_stops:
+                cp_len = len(new_prompt)
+                cont_gen = (
+                    cont_text[cp_len:]
+                    if len(cont_text) > cp_len else cont_text
+                )
+                for s in round_stops:
+                    if s in cont_gen:
+                        pos = cont_gen.find(s)
+                        cont_text = cont_text[:cp_len + pos]
+                        break
+
+            current_text = cont_text
+            current_prompt = new_prompt
+            spliced_any = True
+
+            if is_final_round:
+                # Budget exhausted; loop terminates regardless of
+                # whether another <search> was emitted.
+                if "<search>" in current_text[len(current_prompt):]:
+                    logger.warning(
+                        "B-3c: max_search_rounds=%d budget exhausted "
+                        "but model emitted another <search> tag; "
+                        "left as plain text",
+                        max_rounds)
+                break
+
+        return current_text if spliced_any else None
 
     # How often (in tokens) to check for stop strings during generation.
     # Lower = catches sooner, higher = less decode overhead.
@@ -1267,7 +1546,8 @@ class _GenerationMixin:
                                     new_ids, skip_special_tokens=False)
                             except Exception:
                                 pass
-                    self._record_search_emissions(streamed_text)
+                    self._record_search_emissions(
+                        streamed_text, path="stream")
                 except Exception:
                     logger.exception(
                         "Stage B-2: stream scan crashed; "
@@ -1419,7 +1699,8 @@ class _GenerationMixin:
         per_prompt: list[list[str]] = []
         flat: list[str] = []
         for prompt_text, output_text in zip(prompts, results):
-            self._record_search_emissions(output_text, prompt=prompt_text)
+            self._record_search_emissions(
+                output_text, prompt=prompt_text, path="batch")
             per_prompt.append(list(self.last_search_queries))
             flat.extend(self.last_search_queries)
         self.last_search_queries_per_prompt = per_prompt
@@ -1580,7 +1861,7 @@ class _GenerationMixin:
         # Stage B-2 sibling sweep: vision path returns final text here.
         # Pass 156z9e: pass prompt= so user prompts containing literal
         # ``<search>foo</search>`` aren't falsely recorded as emissions.
-        self._record_search_emissions(text, prompt=prompt)
+        self._record_search_emissions(text, prompt=prompt, path="vision")
         return text
 
     # =========================================================================
@@ -1829,7 +2110,8 @@ class _GenerationMixin:
                     break
         # Stage B-2 sibling sweep: speculative decoding return path.
         # Pass 156z9e: prompt-slice so prompt-side <search> isn't recorded.
-        self._record_search_emissions(text, prompt=prompt)
+        self._record_search_emissions(
+            text, prompt=prompt, path="speculative")
         return text
 
     def medusa_generate(
@@ -2004,7 +2286,7 @@ class _GenerationMixin:
                     break
         # Stage B-2 sibling sweep: medusa decoding return path.
         # Pass 156z9e: prompt-slice so prompt-side <search> isn't recorded.
-        self._record_search_emissions(text, prompt=prompt)
+        self._record_search_emissions(text, prompt=prompt, path="medusa")
         return text
 
     # =========================================================================
@@ -2265,7 +2547,8 @@ class _GenerationMixin:
                     break
         # Stage B-2 sibling sweep: lookahead decoding return path.
         # Pass 156z9e: prompt-slice so prompt-side <search> isn't recorded.
-        self._record_search_emissions(text, prompt=prompt)
+        self._record_search_emissions(
+            text, prompt=prompt, path="lookahead")
         return text
 
     @staticmethod

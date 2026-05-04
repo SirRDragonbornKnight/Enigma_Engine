@@ -25,6 +25,7 @@ from enigma_engine.gui.gui_forge_tools import ForgeToolsMixin
 from enigma_engine.gui.gui_forge_models import ForgeModelsMixin
 from enigma_engine.gui.gui_forge_queue import ForgeQueueMixin
 from enigma_engine.gui.gui_forge_new_modes import ForgeNewModesMixin
+from enigma_engine.gui.gui_forge_teacher import ForgeTeacherMixin
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ class ForgeMixin(
         ForgeTrainingMixin, ForgeAdvancedMixin,
         ForgeAdaptiveMixin, ForgeNewModesMixin,
         ForgeToolsMixin, ForgeModelsMixin,
-        ForgeQueueMixin):
+        ForgeQueueMixin, ForgeTeacherMixin):
     """Mixin providing training, model management, and fine-tuning
     for EnigmaGUI.
 

@@ -2537,6 +2537,33 @@ class TestGGUFDequantExtended:
         # int8(1) * 2.0 = 2.0
         assert result[0].item() == pytest.approx(2.0, abs=0.1)
 
+    def test_dequantize_q8_0_zero_blocks(self):
+        """Q8_0 with empty input returns a zero tensor of the requested shape
+        AND dtype=float32 (parity with the Q4_0/Q4_1/Q5_0/Q5_1 zero-blocks
+        degeneracy gate — all five siblings must return float32 regardless
+        of torch's default dtype)."""
+        torch = pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q8_0
+        result = dequantize_q8_0(b"", (32,))
+        assert result.shape == (32,)
+        assert result.dtype == torch.float32
+        assert torch.all(result == 0)
+
+    def test_dequantize_q8_0_signed_values(self):
+        """Q8_0 treats qs as int8: 0xFF (255 unsigned) decodes to -1 signed."""
+        import numpy as np
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q8_0
+        # scale=1.0; byte 0 = 0xFF (= -1 as int8), byte 1 = 0x7F (= +127)
+        scale = np.float16(1.0)
+        qs = bytearray(32)
+        qs[0] = 0xFF
+        qs[1] = 0x7F
+        block = scale.tobytes() + bytes(qs)
+        result = dequantize_q8_0(block, (32,))
+        assert result[0].item() == pytest.approx(-1.0, abs=0.05)
+        assert result[1].item() == pytest.approx(127.0, abs=0.5)
+
     def test_dequantize_q4_0_zero_scale(self):
         """Q4_0 with zero scale produces all zeros."""
         import numpy as np
@@ -2547,6 +2574,149 @@ class TestGGUFDequantExtended:
         block = scale.tobytes() + data_bytes
         result = dequantize_q4_0(block, (32,))
         assert torch.all(result == 0)
+
+    def test_dequantize_q4_0_layout(self):
+        """Q4_0 layout matches ggml dequantize_row_q4_0:
+        byte j low-nibble → element j (low half), high-nibble → element j+16.
+        Both nibbles signed: q - 8.
+        """
+        import numpy as np
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q4_0
+        d = np.float16(1.0).tobytes()
+        # byte 0 = 0x91 → low=1, high=9 → element 0 = (1-8)*1 = -7, element 16 = (9-8)*1 = 1
+        # byte 5 = 0xC3 → low=3, high=12 → element 5 = (3-8)*1 = -5, element 21 = (12-8)*1 = 4
+        qs = bytearray(16)
+        qs[0] = 0x91
+        qs[5] = 0xC3
+        block = d + bytes(qs)
+        result = dequantize_q4_0(block, (32,))
+        assert result[0].item() == pytest.approx(-7.0, abs=0.05)
+        assert result[16].item() == pytest.approx(1.0, abs=0.05)
+        assert result[5].item() == pytest.approx(-5.0, abs=0.05)
+        assert result[21].item() == pytest.approx(4.0, abs=0.05)
+        # Untouched bytes are 0x00 → low=0, high=0 → -8 in both halves
+        assert result[1].item() == pytest.approx(-8.0, abs=0.05)
+        assert result[17].item() == pytest.approx(-8.0, abs=0.05)
+
+    def test_dequantize_q4_1_values(self):
+        """Q4_1 dequant: y = q*d + m. q=15 (all-Fs), d=2.0, m=1.0 → 31.0 every element."""
+        import numpy as np
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q4_1
+        d = np.float16(2.0).tobytes()
+        m = np.float16(1.0).tobytes()
+        qs = bytes([0xFF] * 16)  # all nibbles = 15
+        block = d + m + qs
+        result = dequantize_q4_1(block, (32,))
+        assert result.shape == (32,)
+        # 15 * 2.0 + 1.0 = 31.0
+        assert result[0].item() == pytest.approx(31.0, abs=0.05)
+        assert result[31].item() == pytest.approx(31.0, abs=0.05)
+
+    def test_dequantize_q4_1_layout(self):
+        """Q4_1 layout: byte j low-nibble → element j (low half), high-nibble → element j+16."""
+        import numpy as np
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q4_1
+        d = np.float16(1.0).tobytes()
+        m = np.float16(0.0).tobytes()
+        # byte 0 = 0x21 → low nib 1 (elem 0), high nib 2 (elem 16)
+        # byte 5 = 0x43 → low nib 3 (elem 5), high nib 4 (elem 21)
+        qs = bytearray([0] * 16)
+        qs[0] = 0x21
+        qs[5] = 0x43
+        block = d + m + bytes(qs)
+        result = dequantize_q4_1(block, (32,))
+        assert result[0].item() == pytest.approx(1.0, abs=0.01)
+        assert result[16].item() == pytest.approx(2.0, abs=0.01)
+        assert result[5].item() == pytest.approx(3.0, abs=0.01)
+        assert result[21].item() == pytest.approx(4.0, abs=0.01)
+
+    def test_dequantize_q5_0_values(self):
+        """Q5_0 dequant: y = (q - 16) * d. q=31 (all bits set), d=1.0 → 15.0 every element."""
+        import numpy as np
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q5_0
+        d = np.float16(1.0).tobytes()
+        qh = np.uint32(0xFFFFFFFF).tobytes()  # 5th bit set for every element
+        qs = bytes([0xFF] * 16)               # low nibble 0xF for every position
+        block = d + qh + qs
+        result = dequantize_q5_0(block, (32,))
+        assert result.shape == (32,)
+        # q = 0xF | (1 << 4) = 31; (31 - 16) * 1.0 = 15.0
+        assert result[0].item() == pytest.approx(15.0, abs=0.05)
+        assert result[31].item() == pytest.approx(15.0, abs=0.05)
+
+    def test_dequantize_q5_0_zero_q_gives_neg16(self):
+        """Q5_0 with q=0 dequants to -16 * d (signed shift)."""
+        import numpy as np
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q5_0
+        d = np.float16(1.0).tobytes()
+        qh = np.uint32(0).tobytes()
+        qs = bytes([0] * 16)
+        block = d + qh + qs
+        result = dequantize_q5_0(block, (32,))
+        assert result[0].item() == pytest.approx(-16.0, abs=0.05)
+
+    def test_dequantize_q5_0_qh_bit_routing(self):
+        """Q5_0 qh bit i must route to element i (NOT element 2i or 2i+1)."""
+        import numpy as np
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q5_0
+        d = np.float16(1.0).tobytes()
+        # Only bit 16 of qh set → only element 16 has the 5th bit
+        qh = np.uint32(1 << 16).tobytes()
+        qs = bytes([0] * 16)
+        block = d + qh + qs
+        result = dequantize_q5_0(block, (32,))
+        # element 16: q = 0 | (1<<4) = 16; (16 - 16) * 1.0 = 0.0
+        # every other element: q = 0; (0 - 16) * 1.0 = -16.0
+        assert result[16].item() == pytest.approx(0.0, abs=0.05)
+        assert result[0].item() == pytest.approx(-16.0, abs=0.05)
+        assert result[15].item() == pytest.approx(-16.0, abs=0.05)
+        assert result[17].item() == pytest.approx(-16.0, abs=0.05)
+
+    def test_dequantize_q5_1_values(self):
+        """Q5_1 dequant: y = q * d + m. q=31, d=2.0, m=1.0 → 63.0 every element."""
+        import numpy as np
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q5_1
+        d = np.float16(2.0).tobytes()
+        m = np.float16(1.0).tobytes()
+        qh = np.uint32(0xFFFFFFFF).tobytes()
+        qs = bytes([0xFF] * 16)
+        block = d + m + qh + qs
+        result = dequantize_q5_1(block, (32,))
+        assert result.shape == (32,)
+        # q = 31, 31 * 2.0 + 1.0 = 63.0
+        assert result[0].item() == pytest.approx(63.0, abs=0.1)
+
+    def test_dequantize_q5_1_layout(self):
+        """Q5_1 layout matches Q5_0: low nibble → low half, high nibble → high half."""
+        import numpy as np
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q5_1
+        d = np.float16(1.0).tobytes()
+        m = np.float16(0.0).tobytes()
+        qh = np.uint32(0).tobytes()
+        # byte 3 = 0x52 → low nib 2 (elem 3), high nib 5 (elem 19)
+        qs = bytearray([0] * 16)
+        qs[3] = 0x52
+        block = d + m + qh + bytes(qs)
+        result = dequantize_q5_1(block, (32,))
+        assert result[3].item() == pytest.approx(2.0, abs=0.05)
+        assert result[19].item() == pytest.approx(5.0, abs=0.05)
+        assert result[0].item() == pytest.approx(0.0, abs=0.05)
+
+    def test_dequantize_q4_1_zero_blocks(self):
+        """Q4_1 with empty input returns zero tensor of requested shape."""
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q4_1
+        result = dequantize_q4_1(b"", (8,))
+        assert result.shape == (8,)
+        assert result.abs().sum().item() == 0.0
 
     def test_parse_gguf_tensors_validates_tensor_count(self):
         """parse_gguf_tensors rejects invalid tensor_count."""
@@ -2567,6 +2737,814 @@ class TestGGUFDequantExtended:
         header = {"tensor_count": 200_000}
         result = parse_gguf_tensors(f, header)
         assert result == {}
+
+    # ── k-quants (Pass 156z9n: Q4_K + Q6_K) ──────────────────────
+
+    def test_get_scale_min_k4_low_j(self):
+        """j<4: d = scales[j] & 0x3F; m = scales[j+4] & 0x3F.
+
+        Tight unit test on the bit-packing helper — without this, a
+        regression that flips the j<4 / j>=4 branches passes every
+        downstream Q4_K test only when the chosen scales happen to
+        agree across both branches.
+        """
+        import numpy as np
+        from enigma_engine.core.gguf_dequant import _get_scale_min_k4
+        scales = np.array(
+            [[0x05, 0x12, 0x21, 0x37, 0x08, 0x14, 0x22, 0x36,
+              0x00, 0x00, 0x00, 0x00]],
+            dtype=np.uint8,
+        )
+        d, m = _get_scale_min_k4(0, scales)
+        assert int(d[0]) == 5
+        assert int(m[0]) == 8
+        d, m = _get_scale_min_k4(3, scales)
+        # 0x37 & 0x3F = 0x37 = 55
+        assert int(d[0]) == 0x37
+        # 0x36 & 0x3F = 0x36 = 54
+        assert int(m[0]) == 0x36
+
+    def test_get_scale_min_k4_high_j(self):
+        """j>=4: d = (scales[j+4] & 0xF) | ((scales[j-4] >> 6) << 4);
+                 m = (scales[j+4] >> 4)  | ((scales[j  ] >> 6) << 4).
+
+        Adversarial top-2-bits stitch: scales[0]=0xC5 (top bits 11),
+        scales[4]=0x88 (top bits 10), scales[8]=0xCD. For j=4:
+            d = (0xCD & 0xF) | ((0xC5 >> 6) << 4) = 0xD | (3<<4) = 0x3D
+            m = (0xCD >> 4)  | ((0x88 >> 6) << 4) = 0xC | (2<<4) = 0x2C
+        """
+        import numpy as np
+        from enigma_engine.core.gguf_dequant import _get_scale_min_k4
+        scales = np.zeros((1, 12), dtype=np.uint8)
+        scales[0, 0] = 0xC5
+        scales[0, 4] = 0x88
+        scales[0, 8] = 0xCD
+        d, m = _get_scale_min_k4(4, scales)
+        assert int(d[0]) == 0x3D
+        assert int(m[0]) == 0x2C
+
+    def test_dequantize_q4_K_zero_block(self):
+        """Q4_K with empty input returns float32 zeros of requested shape."""
+        torch = pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q4_K
+        result = dequantize_q4_K(b"", (256,))
+        assert result.shape == (256,)
+        assert result.dtype == torch.float32
+        assert torch.all(result == 0)
+
+    def test_dequantize_q4_K_handcrafted(self):
+        """Q4_K dequant: y = d*sc - dmin*m for each 32-element sub-block.
+
+        Block layout: 2 (d fp16) + 2 (dmin fp16) + 12 (scales) + 128 (qs).
+        Set d=1.0, dmin=0.0; sub-block 0 (j=0): sc=2, m=0; all other
+        sub-blocks: sc=0, m=0. qs byte 0 = 0x35 → low nib 5 (sub-block 0
+        elem 0), high nib 3 (sub-block 1 elem 0).
+
+        Expected:
+            out[0]  = 1.0 * 2 * 5 - 0.0 * 0 =  10.0   (sub-block 0)
+            out[32] = 1.0 * 0 * 3 - 0.0 * 0 =   0.0   (sub-block 1, sc=0)
+            out[1]  = 1.0 * 2 * 0 - 0.0 * 0 =   0.0   (sub-block 0, qs=0)
+        """
+        import numpy as np
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q4_K
+        d = np.float16(1.0).tobytes()
+        dmin = np.float16(0.0).tobytes()
+        scales = bytearray(12)
+        # j=0 → d=scales[0]&0x3F → set scales[0]=2 → sc_0=2
+        scales[0] = 0x02
+        # j=0 → m=scales[4]&0x3F → set scales[4]=0 → m_0=0  (already)
+        qs = bytearray(128)
+        qs[0] = 0x35
+        block = d + dmin + bytes(scales) + bytes(qs)
+        result = dequantize_q4_K(block, (256,))
+        assert result.shape == (256,)
+        assert result[0].item() == pytest.approx(10.0, abs=0.05)
+        assert result[32].item() == pytest.approx(0.0, abs=0.05)
+        assert result[1].item() == pytest.approx(0.0, abs=0.05)
+
+    def test_dequantize_q4_K_dmin_subtracts(self):
+        """Q4_K min term subtracts: with q=0 every element, dmin=1.0,
+        m=3, sc=0 → y = d*0*0 - 1.0*3 = -3.0 across the whole sub-block.
+        Catches sign-flip regressions on the ``-m`` branch.
+        """
+        import numpy as np
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q4_K
+        d = np.float16(1.0).tobytes()
+        dmin = np.float16(1.0).tobytes()
+        scales = bytearray(12)
+        # j=0: sc = scales[0]&0x3F = 0 (default); m = scales[4]&0x3F → 3
+        scales[4] = 0x03
+        qs = bytes(128)  # all q = 0
+        block = d + dmin + bytes(scales) + qs
+        result = dequantize_q4_K(block, (256,))
+        # sub-block 0 (out[0:32]) → y = 1.0 * 0 * 0 - 1.0 * 3 = -3.0
+        assert result[0].item() == pytest.approx(-3.0, abs=0.05)
+        assert result[31].item() == pytest.approx(-3.0, abs=0.05)
+        # sub-block 1 (out[32:64]) → m=scales[5]&0x3F = 0 → y = 0
+        assert result[32].item() == pytest.approx(0.0, abs=0.05)
+
+    def test_dequantize_q4_K_high_j_stitch_d(self):
+        """Adversarial gate on the j>=4 d-stitch (Pass 156z9s — sibling
+        gap from Pass 156z9n's Q4_K coverage). For j=4:
+            d = (scales[8] & 0x0F) | ((scales[0] >> 6) << 4)
+        Set scales[0]=0x80 → scales[0]>>6 = 2 (high-stitch source);
+        scales[0]&0x3F = 0 so j=0's sc stays 0 (clean). scales[8]=0x05
+        → low nibble = 5. Expected j=4 sc = 5 | (2<<4) = 37. With
+        d_outer=1, dmin=0, qs[64]=0x01 (q=1 at sub-block 4 elem 0):
+            out[128] = 1 * 37 * 1 - 0 = 37
+        Drop the stitch → sc=5 → out[128] = 5. Adversarial.
+        """
+        import numpy as np
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q4_K
+        d = np.float16(1.0).tobytes()
+        dmin = np.float16(0.0).tobytes()
+        scales = bytearray(12)
+        scales[0] = 0x80
+        scales[8] = 0x05
+        qs = bytearray(128)
+        qs[64] = 0x01            # sub-block 4 element 0 → q=1
+        block = d + dmin + bytes(scales) + bytes(qs)
+        result = dequantize_q4_K(block, (256,))
+        assert result[128].item() == pytest.approx(37.0, abs=0.05)
+
+    def test_dequantize_q4_K_high_j_stitch_m(self):
+        """Adversarial gate on the j>=4 m-stitch. For j=4:
+            m = ((scales[8] >> 4) & 0x0F) | ((scales[4] >> 6) << 4)
+        Note m's high-stitch source is scales[j]=scales[4], NOT
+        scales[0] like d's. Set scales[4]=0x80 (high-stitch=2, m for
+        j=0 stays 0 since &0x3F=0); scales[8]=0x20 (high nibble=2).
+        Expected j=4 m = 2 | (2<<4) = 34. With qs=0, d_outer=1,
+        dmin=1: out[128] = 1*sc*0 - 1*34 = -34. Drop stitch → m=2 →
+        out[128] = -2. Adversarial gate that the m-stitch source is
+        scales[4], not scales[0] (a regression that confuses d's and
+        m's stitch sources would produce wildly wrong output).
+        """
+        import numpy as np
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q4_K
+        d = np.float16(1.0).tobytes()
+        dmin = np.float16(1.0).tobytes()
+        scales = bytearray(12)
+        scales[4] = 0x80
+        scales[8] = 0x20
+        qs = bytes(128)
+        block = d + dmin + bytes(scales) + qs
+        result = dequantize_q4_K(block, (256,))
+        assert result[128].item() == pytest.approx(-34.0, abs=0.05)
+
+    def test_dequantize_q4_K_layout_routing(self):
+        """Adversarial gate: each sub-block reads its OWN qs slot
+        (low-nib for even sub-blocks, high-nib for odd) AND the j>=4
+        path strides correctly to qs[64..].
+
+        Pass 156z9w (post-audit hardening): the original Pass 156z9s
+        version was weak — it set ONLY sub-block 0's sc nonzero and
+        asserted out[32..256] == 0. A nibble-swap regression (sub-block
+        1 reads low-nib instead of high-nib) was structurally invisible
+        because sub-block 1's sc was zero, so out[32] stayed at 0
+        either way. The test docstring claimed to catch stride bugs
+        but couldn't.
+
+        New design: give sub-blocks 0, 1, and 4 each a distinct nonzero
+        sc and distinct nonzero q value, then assert each output
+        position matches its OWN sub-block's product. A nibble-swap on
+        the (0,1) pair flips out[0] and out[32]; a stride bug on the
+        j=4 path changes out[128].
+        """
+        import numpy as np
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q4_K
+        d = np.float16(1.0).tobytes()
+        dmin = np.float16(0.0).tobytes()
+        scales = bytearray(12)
+        # j=0: sc = scales[0] & 0x3F = 2
+        # j=1: sc = scales[1] & 0x3F = 3
+        # j=4: sc = (scales[8] & 0x0F) | ((scales[0] >> 6) << 4)
+        #        = 5 | (0 << 4) = 5  (scales[0]=0x02 → high-stitch=0)
+        scales[0] = 0x02
+        scales[1] = 0x03
+        scales[8] = 0x05
+        qs = bytearray(128)
+        # qs[0..32] is the (0,1) pair: low nib → sb0, high nib → sb1.
+        # Byte 0x91 → sb0 elem 0 = 1, sb1 elem 0 = 9 (distinct values
+        # that catch nibble-swap regressions).
+        qs[0] = 0x91
+        # qs[64..96] is the (4,5) pair. Byte 0x07 → sb4 elem 0 = 7,
+        # sb5 elem 0 = 0.  sb5 has sc=0 so its output stays 0.
+        qs[64] = 0x07
+        block = d + dmin + bytes(scales) + bytes(qs)
+        result = dequantize_q4_K(block, (256,))
+        # Sub-block 0 elem 0:  1.0 * 2 * 1 = 2.0
+        assert result[0].item() == pytest.approx(2.0, abs=0.05)
+        # Sub-block 1 elem 0:  1.0 * 3 * 9 = 27.0
+        # A nibble-swap would give sb1 elem 0 = 1*3*1 = 3.0 here AND
+        # sb0 elem 0 = 1*2*9 = 18.0 above — both assertions fail.
+        assert result[32].item() == pytest.approx(27.0, abs=0.05)
+        # Sub-block 4 elem 0 (j>=4 stitch path):  1.0 * 5 * 7 = 35.0
+        # A stride bug that misroutes the j=4 qs source changes this.
+        assert result[128].item() == pytest.approx(35.0, abs=0.05)
+        # Sub-blocks 2, 3, 5, 6, 7 still have sc=0 → their first
+        # elements stay at 0 (independence check).
+        for i in (64, 96, 160, 192, 224):
+            assert result[i].item() == pytest.approx(0.0, abs=0.05)
+
+    def test_dequantize_q6_K_zero_block(self):
+        """Q6_K with empty input returns float32 zeros of requested shape."""
+        torch = pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q6_K
+        result = dequantize_q6_K(b"", (256,))
+        assert result.shape == (256,)
+        assert result.dtype == torch.float32
+        assert torch.all(result == 0)
+
+    def test_dequantize_q6_K_signed_centering(self):
+        """Q6_K is signed 6-bit: q = raw - 32, raw in [0, 63].
+
+        With ql=0, qh=0 every byte → raw=0 → q=-32. d=1.0, scales[0]=1
+        → y[0..15] = 1 * 1 * (-32) = -32.0.
+        """
+        import numpy as np
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q6_K
+        ql = bytes(128)
+        qh = bytes(64)
+        scales = bytearray(16)
+        scales[0] = 1  # int8 +1 (covers l=0..15 of q1 path → out[0..15])
+        d = np.float16(1.0).tobytes()
+        block = bytes(ql) + bytes(qh) + bytes(scales) + d
+        result = dequantize_q6_K(block, (256,))
+        assert result.shape == (256,)
+        assert result[0].item() == pytest.approx(-32.0, abs=0.05)
+        assert result[15].item() == pytest.approx(-32.0, abs=0.05)
+
+    def test_dequantize_q6_K_zero_quant(self):
+        """Q6_K q=0 (raw=32) produces y=0 regardless of d and scale.
+
+        raw=32 = 0x20 = (low_nib=0) | (high_2bits=2 << 4). So set
+        ql[0]=0x00 (low nib=0) and qh[0]=0x02 (bits 0-1 = 0b10 = 2).
+        """
+        import numpy as np
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q6_K
+        ql = bytearray(128)
+        qh = bytearray(64)
+        qh[0] = 0x02
+        scales = bytearray(16)
+        scales[0] = 7   # arbitrary nonzero — output should still be 0
+        d = np.float16(2.5).tobytes()
+        block = bytes(ql) + bytes(qh) + bytes(scales) + d
+        result = dequantize_q6_K(block, (256,))
+        # element 0 = q1 path with l=0 → uses scales[0]=7. q = (0|(2<<4))-32 = 0
+        assert result[0].item() == pytest.approx(0.0, abs=0.05)
+
+    def test_dequantize_q6_K_scale_split_within_sub_block(self):
+        """Q6_K splits each 32-element output region into TWO 16-element
+        slabs with DIFFERENT scales. l=0..15 uses scales[is+0],
+        l=16..31 uses scales[is+1] (the +1 is critical — a regression
+        that drops the +1 split silently rescales half of every output
+        region). Catches the failure mode the author's-lens self-audit
+        caught mid-implementation.
+        """
+        import numpy as np
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q6_K
+        ql = bytearray(128)
+        qh = bytearray(64)
+        scales = bytearray(16)
+        # Different scales for l=0..15 vs l=16..31 of the q1 path:
+        scales[0] = 2   # covers out[0..15]
+        scales[1] = 5   # covers out[16..31]
+        # All ql=qh=0 → q=-32 everywhere.
+        d = np.float16(1.0).tobytes()
+        block = bytes(ql) + bytes(qh) + bytes(scales) + d
+        result = dequantize_q6_K(block, (256,))
+        # out[0..15] = d * scales[0] * (-32) = 1 * 2 * -32 = -64
+        # out[16..31] = d * scales[1] * (-32) = 1 * 5 * -32 = -160
+        assert result[0].item() == pytest.approx(-64.0, abs=0.05)
+        assert result[15].item() == pytest.approx(-64.0, abs=0.05)
+        assert result[16].item() == pytest.approx(-160.0, abs=0.05)
+        assert result[31].item() == pytest.approx(-160.0, abs=0.05)
+
+    def test_dequantize_q6_K_layout_routing(self):
+        """Q6_K element routing — q1 path takes ql_a low nibble + qh
+        bits 0-1, q2 takes ql_b low nibble + qh bits 2-3, q3 takes
+        ql_a high nibble + qh bits 4-5, q4 takes ql_b high nibble +
+        qh bits 6-7. l=5 of q1 lands at output[5]; l=5 of q2 lands at
+        output[37]; l=5 of q3 lands at output[69]; l=5 of q4 lands at
+        output[101]. d=1.0, scales[0..7]=1 (all q1..q4 paths in half=0
+        produce y = 1 * 1 * q).
+        """
+        import numpy as np
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q6_K
+        ql = bytearray(128)
+        qh = bytearray(64)
+        # ql[5] low=0xA (q1 elem 5), high=0xB (q3 elem 5)
+        ql[5] = 0xBA
+        # ql[37] low=0xC (q2 elem 5), high=0xD (q4 elem 5)
+        # (ql_b = ql[32:64], so ql_b[5] = ql[37])
+        ql[37] = 0xDC
+        # qh[5] bits: q1=3 (0b11), q2=2 (0b10), q3=1 (0b01), q4=0 (0b00)
+        # → 0b00_01_10_11 = 0x1B
+        qh[5] = 0x1B
+        scales = bytearray(16)
+        for i in range(8):
+            scales[i] = 1
+        d = np.float16(1.0).tobytes()
+        block = bytes(ql) + bytes(qh) + bytes(scales) + d
+        result = dequantize_q6_K(block, (256,))
+        # q1 elem 5: raw = 0xA | (3<<4) = 58 → q = 26 → y =  26
+        # q2 elem 5: raw = 0xC | (2<<4) = 44 → q = 12 → y =  12
+        # q3 elem 5: raw = 0xB | (1<<4) = 27 → q = -5 → y =  -5
+        # q4 elem 5: raw = 0xD | (0<<4) = 13 → q = -19 → y = -19
+        assert result[5].item() == pytest.approx(26.0, abs=0.05)
+        assert result[37].item() == pytest.approx(12.0, abs=0.05)
+        assert result[69].item() == pytest.approx(-5.0, abs=0.05)
+        assert result[101].item() == pytest.approx(-19.0, abs=0.05)
+
+    def test_dequantize_q6_K_second_half_independence(self):
+        """Q6_K processes the 256-element super-block as two 128-element
+        halves. The second half (out[128..256]) consumes ql[64..128],
+        qh[32..64], and scales[8..16]. Setting only second-half bytes
+        and verifying the FIRST half is untouched catches a regression
+        that would index the wrong half of any of the three buffers.
+        """
+        import numpy as np
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q6_K
+        ql = bytearray(128)
+        qh = bytearray(64)
+        scales = bytearray(16)
+        # Touch only the second half: ql[64], qh[32], scales[8].
+        scales[8] = 3   # second-half q1 path scale for l=0..15
+        # ql[64]=0, qh[32]=0 → q=-32 → y[128] = 1 * 3 * -32 = -96
+        d = np.float16(1.0).tobytes()
+        block = bytes(ql) + bytes(qh) + bytes(scales) + d
+        result = dequantize_q6_K(block, (256,))
+        # First half: scales[0..7]=0 → y[0..127] = 1 * 0 * q = 0
+        assert result[0].item() == pytest.approx(0.0, abs=0.05)
+        assert result[127].item() == pytest.approx(0.0, abs=0.05)
+        # Second half: y[128] = 1 * 3 * -32 = -96
+        assert result[128].item() == pytest.approx(-96.0, abs=0.05)
+        assert result[143].item() == pytest.approx(-96.0, abs=0.05)
+
+    # ── Q5_K (Pass 156z9o) ───────────────────────────────────────
+
+    def test_dequantize_q5_K_zero_block(self):
+        """Q5_K with empty input returns float32 zeros of requested shape."""
+        torch = pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q5_K
+        result = dequantize_q5_K(b"", (256,))
+        assert result.shape == (256,)
+        assert result.dtype == torch.float32
+        assert torch.all(result == 0)
+
+    def test_dequantize_q5_K_handcrafted(self):
+        """Q5_K dequant: y = d*sc*q - dmin*m, q = ql_nib | (qh_bit << 4).
+
+        Block layout: 2 (d fp16) + 2 (dmin fp16) + 12 (scales) + 32 (qh)
+        + 128 (qs) = 176 bytes. Set d=1.0, dmin=0.0; sub-block 0 (j=0):
+        sc=2, m=0; all other sub-blocks: sc=0, m=0. qs[0]=0x05 → low
+        nib 5 (sub-block 0, elem 0). qh all zeros → 5th bit clear → q=5.
+
+        Expected:
+            out[0]  = 1.0 * 2 * (5 + 0) - 0.0 * 0 = 10.0
+            out[1]  = 1.0 * 2 * 0          = 0.0
+            out[32] = 1.0 * 0 * (high nib of qs[0] = 0) = 0.0
+        """
+        import numpy as np
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q5_K
+        d = np.float16(1.0).tobytes()
+        dmin = np.float16(0.0).tobytes()
+        scales = bytearray(12)
+        scales[0] = 0x02   # sub_lo=0 → sc=2
+        qh = bytes(32)     # 5th bits all zero
+        qs = bytearray(128)
+        qs[0] = 0x05
+        block = d + dmin + bytes(scales) + qh + bytes(qs)
+        result = dequantize_q5_K(block, (256,))
+        assert result.shape == (256,)
+        assert result[0].item() == pytest.approx(10.0, abs=0.05)
+        assert result[1].item() == pytest.approx(0.0, abs=0.05)
+        assert result[32].item() == pytest.approx(0.0, abs=0.05)
+
+    def test_dequantize_q5_K_qh_bit_lifts_value(self):
+        """Q5_K 5th bit must lift q by 16. Set qs[0]=0x01 (low nib 1)
+        and qh[0]=0x01 (bit 0 set, which is the low-nibble path bit for
+        pair=0 → sub-block 0). With sc=1, dmin=0 → out[0] = 1*1*(1+16) = 17.
+
+        Adversarial gate against a regression that drops the qh bit OR
+        adds it to the wrong path (high-nibble bit_hi=1 instead of
+        bit_lo=0).
+        """
+        import numpy as np
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q5_K
+        d = np.float16(1.0).tobytes()
+        dmin = np.float16(0.0).tobytes()
+        scales = bytearray(12)
+        scales[0] = 0x01   # sub_lo=0 → sc=1
+        qh = bytearray(32)
+        qh[0] = 0x01       # bit 0 of qh[0] → low-nibble path of pair=0
+        qs = bytearray(128)
+        qs[0] = 0x01
+        block = d + dmin + bytes(scales) + bytes(qh) + bytes(qs)
+        result = dequantize_q5_K(block, (256,))
+        assert result[0].item() == pytest.approx(17.0, abs=0.05)
+        # elem 1: qs[1]=0, qh[1]=0 → q=0 → out=0
+        assert result[1].item() == pytest.approx(0.0, abs=0.05)
+
+    def test_dequantize_q5_K_qh_bit_routes_to_correct_pair(self):
+        """Q5_K bit `2*pair` of qh[l] feeds the LOW-nibble path of
+        pair P (output indices 64*P + l), bit `2*pair+1` feeds the
+        HIGH-nibble path of pair P (output indices 64*P + 32 + l).
+
+        Set qh[5]=0x04 (bit 2) ONLY → that's bit_lo for pair=1 → lifts
+        q at output index 64+5=69 by 16. With sc[pair=1 sub_lo=2]=1, qs
+        all zero, dmin=0 → out[69] = 1*1*(0+16) = 16. All other outputs
+        = 0. Catches a regression that uses the wrong shift on qh.
+        """
+        import numpy as np
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q5_K
+        d = np.float16(1.0).tobytes()
+        dmin = np.float16(0.0).tobytes()
+        scales = bytearray(12)
+        # sub_lo=2 (pair=1 low) → _get_scale_min_k4(2, scales): j<4 →
+        # d = scales[2] & 0x3F. Set scales[2]=1.
+        scales[2] = 0x01
+        qh = bytearray(32)
+        qh[5] = 0x04       # bit 2 → bit_lo for pair=1
+        qs = bytes(128)
+        block = d + dmin + bytes(scales) + bytes(qh) + qs
+        result = dequantize_q5_K(block, (256,))
+        # out[64+5] = 1 * 1 * (0 + 16) - 0 = 16
+        assert result[69].item() == pytest.approx(16.0, abs=0.05)
+        # out[5] (pair=0 low-nib) — qh[5] bit 0 is clear → q=0 → out=0
+        assert result[5].item() == pytest.approx(0.0, abs=0.05)
+        # out[64+32+5]=out[101] (pair=1 high-nib) — qh[5] bit 3 clear → q=0
+        assert result[101].item() == pytest.approx(0.0, abs=0.05)
+
+    def test_dequantize_q5_K_dmin_subtracts(self):
+        """Q5_K min term subtracts. q=0 (qs=0, qh=0 → ql_nib=0, 5th=0),
+        dmin=1.0, m=4, sc=0 → y = 1*0*0 - 1*4 = -4 across sub-block 0.
+        """
+        import numpy as np
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q5_K
+        d = np.float16(1.0).tobytes()
+        dmin = np.float16(1.0).tobytes()
+        scales = bytearray(12)
+        # j=0: m = scales[4] & 0x3F → 4
+        scales[4] = 0x04
+        qh = bytes(32)
+        qs = bytes(128)
+        block = d + dmin + bytes(scales) + qh + qs
+        result = dequantize_q5_K(block, (256,))
+        assert result[0].item() == pytest.approx(-4.0, abs=0.05)
+        assert result[31].item() == pytest.approx(-4.0, abs=0.05)
+        # sub-block 1 (out[32:64]) → m=scales[5]&0x3F=0 → y=0
+        assert result[32].item() == pytest.approx(0.0, abs=0.05)
+
+    # ── Q2_K (Pass 156z9q) ────────────────────────────────────────────
+
+    def test_dequantize_q2_K_zero_block(self):
+        """Empty input → float32 zeros, dtype check (sibling-parity gate)."""
+        pytest.importorskip("torch")
+        import torch
+        from enigma_engine.core.gguf_dequant import dequantize_q2_K
+        result = dequantize_q2_K(b"", (256,))
+        assert result.shape == (256,)
+        assert result.dtype == torch.float32
+        assert torch.all(result == 0.0)
+
+    def test_dequantize_q2_K_handcrafted(self):
+        """d=1, dmin=0; scales[0]=0x02 (sc=2, mn=0), qs[0]=0x01 → bits 0..1
+        of byte 0 = q=1; shift=0, sub-block 0 maps element 0 to qs[0].
+        Expected: out[0] = 1 * 2 * 1 - 0 = 2.0; out[1] uses qs[1] (=0).
+        """
+        import numpy as np
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q2_K
+        scales = bytearray(16)
+        scales[0] = 0x02                 # sc=2, mn=0
+        qs = bytearray(64)
+        qs[0] = 0x01                     # bits 0..1 = 1, all higher bits 0
+        d = np.float16(1.0).tobytes()
+        dmin = np.float16(0.0).tobytes()
+        block = bytes(scales) + bytes(qs) + d + dmin
+        result = dequantize_q2_K(block, (256,))
+        assert result[0].item() == pytest.approx(2.0, abs=0.05)
+        # element 1 reads qs[1]=0 → q=0 → y=0
+        assert result[1].item() == pytest.approx(0.0, abs=0.05)
+        # element 16 falls in sub-block 1 (scales[1]=0 → sc=0) → y=0
+        assert result[16].item() == pytest.approx(0.0, abs=0.05)
+
+    def test_dequantize_q2_K_dmin_subtracts(self):
+        """q=0 everywhere; dmin=1.0; scales[0]=0x30 (sc=0, mn=3) → y=-3
+        across sub-block 0 (out[0..16]). Sub-block 1 (scales[1]=0) → y=0.
+        Catches sign-flip on the ``-ml`` term.
+        """
+        import numpy as np
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q2_K
+        scales = bytearray(16)
+        scales[0] = 0x30                 # sc=0, mn=3
+        qs = bytes(64)
+        d = np.float16(1.0).tobytes()
+        dmin = np.float16(1.0).tobytes()
+        block = bytes(scales) + qs + d + dmin
+        result = dequantize_q2_K(block, (256,))
+        assert result[0].item() == pytest.approx(-3.0, abs=0.05)
+        assert result[15].item() == pytest.approx(-3.0, abs=0.05)
+        # Sub-block 1 starts at out[16]; scales[1]=0 → mn=0 → y=0
+        assert result[16].item() == pytest.approx(0.0, abs=0.05)
+
+    def test_dequantize_q2_K_shift_routing(self):
+        """Each sub-block uses a specific 2-bit shift of the same qs byte
+        when both belong to the same nibble_half. Set qs[0]=0xE4 (binary
+        ``11 10 01 00``) and put scale=1 only on the four sub-blocks that
+        consume qs[0..16] in half=0:
+          is=0 (j=0, shift=0): bits 0..1 = 0 → out[0] = 0
+          is=2 (j=1, shift=2): bits 2..3 = 1 → out[32] = 1
+          is=4 (j=2, shift=4): bits 4..5 = 2 → out[64] = 2
+          is=6 (j=3, shift=6): bits 6..7 = 3 → out[96] = 3
+        Catches a regression that swaps the shift mapping (e.g. uses
+        ``2*nibble_half`` instead of ``2*j``) — that bug would land all
+        four reads on the same shift and produce identical outputs.
+        """
+        import numpy as np
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q2_K
+        scales = bytearray(16)
+        for is_idx in (0, 2, 4, 6):
+            scales[is_idx] = 0x01        # sc=1, mn=0
+        qs = bytearray(64)
+        qs[0] = 0xE4                     # 11 10 01 00 — different value per shift
+        d = np.float16(1.0).tobytes()
+        dmin = np.float16(0.0).tobytes()
+        block = bytes(scales) + bytes(qs) + d + dmin
+        result = dequantize_q2_K(block, (256,))
+        assert result[0].item() == pytest.approx(0.0, abs=0.05)
+        assert result[32].item() == pytest.approx(1.0, abs=0.05)
+        assert result[64].item() == pytest.approx(2.0, abs=0.05)
+        assert result[96].item() == pytest.approx(3.0, abs=0.05)
+
+    def test_dequantize_q2_K_second_half_independence(self):
+        """Touch only second-half bytes (qs[32], scales[8]); assert
+        first half stays zero. Catches a regression that indexes the
+        wrong half of qs or scales (e.g. drops the ``half = is // 8``
+        offset and reads qs[0] for is=8).
+        """
+        import numpy as np
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q2_K
+        scales = bytearray(16)
+        scales[8] = 0x05                 # sub-block 8 (out[128..144]); sc=5
+        qs = bytearray(64)
+        qs[32] = 0x03                    # second half, byte 0, q=3 at shift=0
+        d = np.float16(1.0).tobytes()
+        dmin = np.float16(0.0).tobytes()
+        block = bytes(scales) + bytes(qs) + d + dmin
+        result = dequantize_q2_K(block, (256,))
+        # First half stays zero
+        assert result[0].item() == pytest.approx(0.0, abs=0.05)
+        assert result[127].item() == pytest.approx(0.0, abs=0.05)
+        # is=8: half=1, j=0, nibble_half=0 → out[128] uses qs[32]
+        assert result[128].item() == pytest.approx(15.0, abs=0.05)  # 1*5*3
+        # is=8 covers out[128..144]; out[144] is is=9 (scales[9]=0 → 0)
+        assert result[144].item() == pytest.approx(0.0, abs=0.05)
+
+    # ── Q3_K (Pass 156z9r) ────────────────────────────────────────────
+
+    def test_dequantize_q3_K_zero_block(self):
+        """Empty input → float32 zeros, dtype check (sibling-parity gate)."""
+        pytest.importorskip("torch")
+        import torch
+        from enigma_engine.core.gguf_dequant import dequantize_q3_K
+        result = dequantize_q3_K(b"", (256,))
+        assert result.shape == (256,)
+        assert result.dtype == torch.float32
+        assert torch.all(result == 0.0)
+
+    def _q3_K_block(self, scales, hmask, qs, d_val):
+        """Helper: assemble a 110-byte Q3_K block from per-buffer fragments."""
+        import numpy as np
+        assert len(scales) == 12 and len(hmask) == 32 and len(qs) == 64
+        return bytes(hmask) + bytes(qs) + bytes(scales) + np.float16(d_val).tobytes()
+
+    def test_dequantize_q3_K_signed_scale_zero(self):
+        """signed_scale = scale_packed - 32; with scale_packed=32 → dl=0,
+        output is zero across sub-block 0 regardless of qs/hmask values.
+        Set scales[0]=0x00 (low=0) and scales[8] bit 0..1 = 0x02 → high=2 →
+        scale_packed = 0 | (2<<4) = 32 → signed=0.
+        """
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q3_K
+        scales = bytearray(12)
+        scales[8] = 0x02
+        hmask = bytearray(32)
+        qs = bytearray([0xFF] * 64)        # arbitrary non-zero quants
+        block = self._q3_K_block(scales, hmask, qs, 1.0)
+        result = dequantize_q3_K(block, (256,))
+        for i in range(16):
+            assert result[i].item() == pytest.approx(0.0, abs=0.05)
+
+    def test_dequantize_q3_K_high_bit_centering(self):
+        """The hmask bit toggles the centering offset. Set d=1, scale_packed
+        = 33 → signed_scale = 1 → dl = 1. q_low = 0 throughout.
+          hmask bit clear → q_full = 0 - 4 = -4 → out = -4
+          hmask bit set   → q_full = 0 - 0 =  0 → out =  0
+        For is=0, hmask bit position = 0, hmask byte = hmask[0..16].
+        Set scales[0]=0x01, scales[8]=0x02 → scale_packed = 1 | (2<<4) = 33.
+        Set hmask[0]=0x00 (bit 0 clear) and hmask[1]=0x01 (bit 0 set).
+        """
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q3_K
+        scales = bytearray(12)
+        scales[0] = 0x01
+        scales[8] = 0x02
+        hmask = bytearray(32)
+        hmask[0] = 0x00
+        hmask[1] = 0x01
+        qs = bytearray(64)
+        block = self._q3_K_block(scales, hmask, qs, 1.0)
+        result = dequantize_q3_K(block, (256,))
+        assert result[0].item() == pytest.approx(-4.0, abs=0.05)
+        assert result[1].item() == pytest.approx(0.0, abs=0.05)
+
+    def test_dequantize_q3_K_scale_high_bit_stitch(self):
+        """The 6-bit scale is the stitch of a 4-bit low nibble and 2-bit
+        high pair. For is=4: low_byte_idx=4, low_shift=0, high_byte_idx=8,
+        high_shift=2. Set scales[4]=0x01 (low=1), scales[8]=0x08 (bit 3,2 =
+        0x02 after >>2&0x03) → scale_packed = 1 | (2<<4) = 33 → signed=1,
+        dl=1. With qs all zero and hmask all zero → q_full=-4 → out[64]=-4.
+        Adversarial gate: drop the 2-bit high stitch and scale_packed=1 →
+        signed=-31 → out[64] = +124, NOT -4. Catches a regression that
+        forgets to combine the two scale-byte sources.
+        """
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q3_K
+        scales = bytearray(12)
+        scales[4] = 0x01
+        scales[8] = 0x08
+        hmask = bytearray(32)
+        qs = bytearray(64)
+        block = self._q3_K_block(scales, hmask, qs, 1.0)
+        result = dequantize_q3_K(block, (256,))
+        # Sub-block 4 starts at out[64].
+        assert result[64].item() == pytest.approx(-4.0, abs=0.05)
+
+    def test_dequantize_q3_K_second_half_independence(self):
+        """Sub-block is=8 starts the second half. Verifies:
+          - low_byte_idx=0 with low_shift=4 → reads scales[0] HIGH nibble.
+          - high_byte_idx=8 with high_shift=4 → reads scales[8] bits 4..5.
+          - bit_pos=is//2=4 → reads hmask[0] bit 4 (NOT bit 0).
+        Set scales[0]=0x10 (high nibble=1), scales[8]=0x20 (bit 4..5 = 2
+        after >>4&0x03) → scale_packed = 1 | (2<<4) = 33 → signed=1, dl=1.
+        Toggle hmask[0] bit 4 between two blocks; out[128] flips from 0
+        (bit set → q_full=0) to -4 (bit clear → q_full=-4). The DELTA at
+        out[128] is the contract this test gates — adversarial against
+        any regression that drops the >>4 on either scale source or that
+        uses the wrong hmask bit position for the second half.
+        """
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import dequantize_q3_K
+        scales = bytearray(12)
+        scales[0] = 0x10                  # is=8 low nibble (high half) = 1
+        scales[8] = 0x20                  # is=8 high stitch bits = 2
+        # Branch A: hmask[0] bit 4 SET → q_full = 0 → out[128] = 0
+        hmask_a = bytearray(32)
+        hmask_a[0] = 0x10
+        qs = bytearray(64)
+        block_a = self._q3_K_block(scales, hmask_a, qs, 1.0)
+        result_a = dequantize_q3_K(block_a, (256,))
+        assert result_a[128].item() == pytest.approx(0.0, abs=0.05)
+        # Branch B: hmask[0] bit 4 CLEAR → q_full = -4 → out[128] = -4
+        hmask_b = bytearray(32)              # bit 4 clear
+        block_b = self._q3_K_block(scales, hmask_b, qs, 1.0)
+        result_b = dequantize_q3_K(block_b, (256,))
+        assert result_b[128].item() == pytest.approx(-4.0, abs=0.05)
+        # Sub-block 9 (out[144..160]) reads scales[1] high nibble (=0) and
+        # scales[9] bit 4..5 (=0) → scale_packed=0 → signed=-32; q_low=0,
+        # hmask[16] bit 4=0 → q_full=-4 → out[144] = -32 * -4 = 128 in
+        # both blocks. Verifies sub-block 9 is independent of sub-block 8.
+        assert result_a[144].item() == pytest.approx(128.0, abs=0.05)
+        assert result_b[144].item() == pytest.approx(128.0, abs=0.05)
+
+    # ── Dispatcher routing (Pass 156z9p, closes A2 from 156z9h-audit) ──
+
+    @pytest.mark.parametrize(
+        "tt_id,block_size,bytes_per_block,expected_fn",
+        [
+            (2,  32,  18,  "dequantize_q4_0"),
+            (3,  32,  20,  "dequantize_q4_1"),
+            (6,  32,  22,  "dequantize_q5_0"),
+            (7,  32,  24,  "dequantize_q5_1"),
+            (8,  32,  34,  "dequantize_q8_0"),
+            (10, 256, 84,  "dequantize_q2_K"),
+            (11, 256, 110, "dequantize_q3_K"),
+            (12, 256, 144, "dequantize_q4_K"),
+            (13, 256, 176, "dequantize_q5_K"),
+            (14, 256, 210, "dequantize_q6_K"),
+        ],
+    )
+    def test_parse_gguf_tensors_dispatch_routing(
+        self, tt_id, block_size, bytes_per_block, expected_fn,
+    ):
+        """Each quantized type ID routes to the correct dequantizer with
+        the correct bytes-per-block. Catches tuple swaps / off-by-one /
+        missing branches in the dispatch chain in `parse_gguf_tensors`.
+
+        Test shape: monkeypatch all 8 quantized dequant functions in the
+        gguf_dequant module with sentinel recorders, feed a synthetic
+        single-tensor GGUF body through `parse_gguf_tensors`, and assert
+        the right recorder fired exactly once with the right byte count
+        and shape.
+
+        F32 / F16 routing is excluded — those branches use `np.fromfile`
+        (incompatible with BytesIO) and have no conditional dispatch
+        worth testing (one-line `np.fromfile + reshape`).
+        """
+        import io
+        import struct
+        torch = pytest.importorskip("torch")
+        from enigma_engine.core import gguf_dequant as gd
+
+        all_fn_names = [
+            "dequantize_q4_0", "dequantize_q4_1", "dequantize_q5_0",
+            "dequantize_q5_1", "dequantize_q8_0", "dequantize_q2_K",
+            "dequantize_q3_K", "dequantize_q4_K", "dequantize_q5_K",
+            "dequantize_q6_K",
+        ]
+        calls = {}
+
+        def _make_recorder(name):
+            def _rec(data, shape):
+                calls[name] = (len(data), tuple(shape))
+                return torch.zeros(shape, dtype=torch.float32)
+            return _rec
+
+        # Build the byte stream parse_gguf_tensors reads after the header:
+        # name_len(Q) + b"x" + n_dims(I)=1 + dim(Q) + tensor_type(I) +
+        # offset(Q)=0 + 32-byte alignment + payload.
+        name = b"x"
+        body = b""
+        body += struct.pack("<Q", len(name))
+        body += name
+        body += struct.pack("<I", 1)
+        body += struct.pack("<Q", block_size)
+        body += struct.pack("<I", tt_id)
+        body += struct.pack("<Q", 0)
+        body += b"\x00" * ((32 - len(body) % 32) % 32)
+        body += b"\x00" * bytes_per_block
+
+        originals = {n: getattr(gd, n) for n in all_fn_names}
+        try:
+            for n in all_fn_names:
+                setattr(gd, n, _make_recorder(n))
+            tensors = gd.parse_gguf_tensors(
+                io.BytesIO(body), {"tensor_count": 1},
+            )
+        finally:
+            for n, fn in originals.items():
+                setattr(gd, n, fn)
+
+        assert len(calls) == 1, (
+            f"expected exactly one dequant call, got {list(calls.keys())}"
+        )
+        assert expected_fn in calls
+        data_len, shape = calls[expected_fn]
+        assert data_len == bytes_per_block
+        assert shape == (block_size,)
+        assert "x" in tensors
+
+    def test_parse_gguf_tensors_unknown_type_skipped(self):
+        """Unknown tensor type IDs hit the fall-through branch and are
+        skipped without raising. Uses type_id=99 (not in the ggml enum).
+        """
+        import io
+        import struct
+        pytest.importorskip("torch")
+        from enigma_engine.core.gguf_dequant import parse_gguf_tensors
+
+        body = b""
+        body += struct.pack("<Q", 1)            # name_len
+        body += b"x"
+        body += struct.pack("<I", 1)            # n_dims
+        body += struct.pack("<Q", 32)           # dim
+        body += struct.pack("<I", 99)           # unknown tensor_type
+        body += struct.pack("<Q", 0)            # offset
+        pad = (32 - len(body) % 32) % 32
+        body += b"\x00" * pad
+        body += b"\x00" * 64                    # arbitrary trailing payload
+
+        tensors = parse_gguf_tensors(io.BytesIO(body), {"tensor_count": 1})
+        assert tensors == {}
 
 
 # ── Pass 32 tests ─────────────────────────────────────────────────
