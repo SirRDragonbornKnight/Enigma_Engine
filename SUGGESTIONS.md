@@ -1,5 +1,46 @@
 ﻿# Suggestions
 
+**Last updated:** May 6, 2026 (Pass 156z9al — **B-3d streaming inline RAG splice.** User instruction "3,1, then 2" — checkpoint commit (3) shipped as `5005025`, this pass closes the parked B-3d sub-pass (1), backlog pick comes next (2).
+
+**Production call chain (Rule #20):** `POST /api/chat/stream` → FastAPI handler → `state.stream_chat` → `EnigmaEngine.stream_chat` → `_prepare_chat` → `EnigmaEngine.stream_generate` → **(NEW)** multi-round splice orchestrator → per-round `_stream_round_tokens` helper → `_sample_token` (with `json_constraint` if set) → token strings yielded to the SSE stream interleaved with `<search_result>...</search_result>\n` splice blocks.
+
+**Changes:**
+- `_GenerationMixin._stream_round_tokens` ([engine_generation.py](enigma_engine/core/engine_generation.py)) — NEW helper, ~120 lines. Yields token strings from the prompt; mutates a caller-supplied `state` dict with `emitted_count`, `emitted_text`, `terminated_on ∈ {"max", "eos", "search", "json_done"}`. Owns the per-round mechanics: KV cache clear+prefill, JSON FSM advance + `is_done` break, repetition penalty, exempt-tokens, EOS check, and `stop_on_close` early return when `</search>` lands in the joined emitted text. Caller responsibility: holding `self._generation_lock` and being inside `torch.no_grad()`.
+- `_GenerationMixin.stream_generate` body REPLACED with a round orchestrator. Computes `splice_enabled = inline_search_splice_enabled and rag_index is not None and rag_index.is_built`, `max_rounds = max(1, int(max_search_rounds)) if splice_enabled else 1`. Per round: `is_final_round = (round_idx == max_rounds - 1)`, `stop_on_close = splice_enabled and not is_final_round`, `remaining = max_gen - cumulative_tokens` (INFO log + break when ≤0). On `terminated_on == "search"`: `rfind` the search tag pair, query the RAG index, format context, yield a `\n<search_result>\n{ctx}\n</search_result>\n` splice block, build the next round's prompt as `current_prompt + emit_through_close + splice_block`. On any other termination: break (with WARNING `"B-3d: max_search_rounds=N budget exhausted but model emitted another <search> tag; left as plain text"` when final-round + `<search>` present in plain text). `finally:` calls `_record_search_emissions(full_emitted_text, path="stream")`. The full emitted text includes splice blocks — but those contain `<search_result>` not `<search>`, so the recorder does NOT spuriously log the inserted context as a model-emitted query.
+- `_GenerationMixin._record_search_emissions` sibling-WARNING gate narrowed from `path != "native"` to `path not in ("native", "stream")`. Comment block updated to reflect that streaming is no longer a sibling gap. Remaining sibling paths still on the WARNING: `vision`, `speculative`, `medusa`, `lookahead`, `batch`, `gguf`. (Future passes can collapse those one-by-one with the same shape.)
+
+**Tests added/updated** ([tests/test_chat.py](tests/test_chat.py)):
+- NEW class `TestB3dStreamingSplice` — 7 behavioural tests stubbing `_stream_round_tokens` to drive the orchestrator through every branch:
+  1. `test_no_splice_when_flag_off` — flag OFF: 1 round, `stop_on_close=False`, no RAG calls.
+  2. `test_no_splice_when_rag_index_missing` — flag ON but `_rag_index=None`: same single-round behaviour (defensive precondition).
+  3. `test_single_round_splice_yields_block_in_stream` — flag ON, round 0 emits `<search>q1</search>` and terminates on `"search"`: orchestrator yields a splice block as a stream chunk (consumer sees `<search_result>...DOC1...</search_result>` mid-stream), runs round 1 (final, `stop_on_close=False`) for wrap-up.
+  4. `test_natural_stop_no_splice` — flag ON but inner round terminates on `"max"`: no splice, no second round, no RAG calls.
+  5. `test_per_round_max_gen_respects_user_budget` — round-0 `max_gen=5`, after emitting 3 tokens the round-1 budget is `max_gen=2` (cumulative budget mirrors B-3c-2).
+  6. `test_budget_exhausted_with_unspliced_search_logs_warning` — `max_search_rounds=2`, final round emits a plain-text `<search>q2</search>`: B-3d WARNING fires.
+  7. `test_tail_record_runs_on_full_emitted_text` — spy on `_record_search_emissions`: invoked exactly once with `path="stream"`, text contains both the model emission and the spliced doc context.
+- UPDATED `TestB3aSiblingPathWarning::test_sibling_path_emits_b3a_warning_when_flag_on` — `"stream"` removed from sibling sweep (now silent on splice flag because streaming supports it).
+- NEW `TestB3aSiblingPathWarning::test_stream_path_silent_after_b3d_ships` — regression gate that `path="stream"` does NOT emit the B-3a sibling WARNING; Stage B-2 generic WARNING still fires.
+- UPDATED `TestExemptTokensCoverage::test_stream_generate_uses_helper` — retargeted to `_stream_round_tokens` (where the `_build_exempt_tokens` call moved during the refactor).
+- UPDATED `TestJsonSchemaConstraintWiring::test_stream_generate_builds_constraint_advances_and_breaks` — split into outer/inner halves: build of `JsonSchemaConstraint` and forward kwarg gated on `stream_generate` source; `json_constraint.advance()` and `json_constraint.is_done` gated on `_stream_round_tokens` source.
+
+**Validation:**
+- `ruff check enigma_engine/ tests/` — clean.
+- `pytest tests/ -q --tb=no` — **2781 passed, 9 skipped, 0 failed** (baseline 2773; +7 B-3d + 1 stream-silent regression gate, no other deltas).
+
+**Six-question self-audit (Rule #19):**
+1. *Would I write it this way from scratch?* Yes — single inner helper + outer orchestrator mirrors `_generate_text` + `_maybe_rag_splice` with the streaming twist that the splice block is itself a yielded chunk. The state-dict-via-kwarg pattern keeps the helper a real generator (not a tuple-returning function) so callers can yield-as-they-go.
+2. *What is this connected to?* Inputs: `inline_search_splice_enabled` + `max_search_rounds` (init in `_init_common`), `_rag_index` (set by `engine.attach_rag_index`), `_record_search_emissions` (Pass 156z9d observability). Outputs: yielded stream chunks consumed by `stream_chat` → SSE in `engine_chat.py`/`api/server.py`.
+3. *Could more connections be made?* Future: `rewind_cache(close_pos)` instead of `clear_cache()` per round (the parked KV-rewind optimisation). Today's clear+re-prefill is correct but O(seq_len) per splice; a follow-up sub-pass can swap to O(splice_block_len) via `model.rewind_cache(...)`. Logged as B-3d-followup.
+4. *Logic-eye on the doc claim.* Class doc/comments say streaming yields splice blocks mid-stream and runs multiple rounds — code does both, gated on the same precondition triple as the non-streaming helper. No over-promise.
+5. *Claim-vs-test.* Each behavioural test exercises a different branch of the orchestrator; together they prove flag-off / no-rag / single-splice / multi-round / budget-decrement / final-round-warning / tail-record paths. Structural-only test (`test_stream_generate_uses_helper` / `test_stream_generate_builds_constraint_advances_and_breaks`) is paired with the behavioural battery above, so the structural assertion is a regression gate not the proof.
+6. *Sibling-boundary sweep.* Same B-3a sibling family: `vision`, `speculative`, `medusa`, `lookahead`, `batch`, `gguf` chat. None of these are streaming, so B-3d does not apply directly — they remain on the B-3a WARNING gate awaiting per-path closure. Logged in the WARNING comment. Still parked, not regressed.
+
+**Parked / follow-ups:**
+- KV cache rewind for splice path (B-3d-followup) — replace `model.clear_cache()` per round with `model.rewind_cache(close_pos)` for O(splice_block_len) re-prefill instead of O(full_prompt_len). Low priority; correctness is unaffected.
+- Sibling B-3a closure for `vision` / `speculative` / `medusa` / `lookahead` / `batch` / `gguf` — each non-streaming variant needs its own splice helper or a shared adapter. Track as B-3e..B-3j.
+
+---
+
 **Last updated:** May 6, 2026 (Pass 156z9ak — **B-3c-2 token-budget fix.** Audit triggered by user "do an audit add update." Author's-lens scan of `_maybe_rag_splice` (the helper shipped Pass 156z9ai) found a real bug: every round was passing the original `max_gen` to `_generate_manual` unchanged, so a user requesting `max_tokens=512` with `max_search_rounds=3` could receive up to ~3×512 tokens.
 
 **Fix:**

@@ -644,9 +644,13 @@ class TestExemptTokensCoverage:
         assert '_build_exempt_tokens' in source
 
     def test_stream_generate_uses_helper(self):
-        """stream_generate calls _build_exempt_tokens."""
+        """stream_generate (via its `_stream_round_tokens` inner
+        helper, B-3d Pass 156z9al) calls `_build_exempt_tokens`.  The
+        exempt-token logic moved into the round helper when
+        `stream_generate` was refactored into a multi-round splice
+        orchestrator; the streaming path still uses the DRY helper."""
         from enigma_engine.core.engine_generation import _GenerationMixin
-        source = inspect.getsource(_GenerationMixin.stream_generate)
+        source = inspect.getsource(_GenerationMixin._stream_round_tokens)
         assert '_build_exempt_tokens' in source
 
     def test_vision_generate_uses_exempt_tokens(self):
@@ -1127,7 +1131,10 @@ class TestB3aSiblingPathWarning:
 
     def test_sibling_path_emits_b3a_warning_when_flag_on(self, caplog):
         import logging
-        for sibling in ("stream", "vision", "speculative",
+        # B-3d (Pass 156z9al) shipped streaming splice, so ``stream``
+        # joins ``native`` as a supported path that does NOT emit the
+        # B-3a sibling WARNING.  Remaining siblings still emit it.
+        for sibling in ("vision", "speculative",
                         "medusa", "lookahead", "batch", "gguf"):
             obj = self._stub()
             obj.inline_search_splice_enabled = True
@@ -1142,6 +1149,29 @@ class TestB3aSiblingPathWarning:
             assert any("B-3a:" in m and sibling in m for m in messages), (
                 f"Splice flag ON + sibling {sibling!r} must emit a "
                 f"B-3a warning naming the path. Got: {messages}")
+
+    def test_stream_path_silent_after_b3d_ships(self, caplog):
+        """Pass 156z9al regression gate: now that ``stream_generate``
+        runs the actual splice loop, ``path='stream'`` must NOT emit
+        the B-3a sibling WARNING (streaming is no longer a sibling
+        gap; it's a supported path)."""
+        import logging
+        obj = self._stub()
+        obj.inline_search_splice_enabled = True
+        with caplog.at_level(
+            logging.WARNING,
+            logger="enigma_engine.core.engine_generation",
+        ):
+            obj._record_search_emissions(
+                "<search>q</search>", path="stream")
+        messages = [r.message for r in caplog.records]
+        # Stage B-2 generic WARNING still fires (queries recorded).
+        assert any("Stage B-2" in m for m in messages)
+        # B-3a sibling WARNING must NOT fire for path='stream'.
+        assert not any("B-3a:" in m for m in messages), (
+            "B-3d closed streaming; path='stream' must not be in the "
+            "B-3a sibling-WARNING set anymore."
+        )
 
     def test_sibling_path_silent_when_flag_off(self, caplog):
         import logging
@@ -1913,6 +1943,288 @@ class TestB3cBoundedRecursion:
         assert any(
             "budget exhausted" in r.message
             for r in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# B-3d — Streaming inline splice + multi-round orchestration
+# ---------------------------------------------------------------------------
+class TestB3dStreamingSplice:
+    """B-3d: ``stream_generate`` honours ``inline_search_splice_enabled``
+    by orchestrating multi-round splice yields:
+
+    * Round 0: stream tokens from the prompt; stop early when the
+      inner round emits ``</search>`` (rounds 1..N-1 only).
+    * Splice: extract the query, retrieve via the engine's RAG index,
+      yield ``<search_result>...</search_result>\\n`` as a raw string
+      chunk to the consumer, build a new prompt, run another round.
+    * Final round (N-th) does NOT stop early on ``</search>`` — the
+      model wraps up using accumulated context.
+    * Cumulative token budget across rounds (mirrors B-3c-2).
+
+    Tests stub ``_stream_round_tokens`` so the behavioural contract is
+    gated without spinning up a real model.
+    """
+
+    def _build_stub(self, *, flag, rag_index, per_round):
+        """``per_round[i]`` is a tuple
+        ``(token_strs: list[str], terminated_on: str)`` describing
+        what the i-th call to ``_stream_round_tokens`` should yield
+        and which ``state['terminated_on']`` to set."""
+        import threading
+
+        from enigma_engine.core.engine_generation import _GenerationMixin
+
+        obj = object.__new__(_GenerationMixin)
+        obj.last_search_queries = []
+        obj.inline_search_enabled = True
+        obj.inline_search_splice_enabled = flag
+        obj._rag_index = rag_index
+        obj._generation_lock = threading.Lock()
+        obj.max_search_rounds = 3
+
+        class FakeConfig:
+            max_seq_len = 512
+
+        class FakeModel:
+            config = FakeConfig()
+
+            def clear_cache(self):
+                pass
+
+        obj.model = FakeModel()
+
+        # Tokenizer stub: encode/decode passthrough is irrelevant
+        # because we're stubbing _stream_round_tokens which is the
+        # only consumer of these.  Provide an eos_token_id for safety.
+        class FakeTok:
+            eos_token_id = -1
+        obj.tokenizer = FakeTok()
+
+        captured = {
+            "round_calls": 0,
+            "stop_on_close_per_round": [],
+            "max_gen_per_round": [],
+            "encoded_prompts": [],
+        }
+
+        def fake_encode(p):
+            import torch
+            captured["encoded_prompts"].append(p)
+            return torch.tensor([[1, 2, 3]], dtype=torch.long)
+        obj._encode_prompt = fake_encode
+
+        def fake_round(input_ids, max_gen, *args, **kwargs):
+            i = captured["round_calls"]
+            captured["round_calls"] += 1
+            captured["stop_on_close_per_round"].append(
+                kwargs.get("stop_on_close"))
+            captured["max_gen_per_round"].append(max_gen)
+            state = kwargs["state"]
+            tokens, term = per_round[i]
+            state["emitted_count"] = len(tokens)
+            state["emitted_text"] = "".join(tokens)
+            state["terminated_on"] = term
+            for tok in tokens:
+                yield tok
+        obj._stream_round_tokens = fake_round
+
+        return obj, captured
+
+    @staticmethod
+    def _stub_format_context(monkeypatch, ctx_for_query):
+        from enigma_engine.core import rag as rag_mod
+
+        def fake_format(results, max_chars=2000):
+            if not results:
+                return ""
+            q = results[0].get("q", "")
+            return ctx_for_query.get(q, "DOC")
+
+        monkeypatch.setattr(
+            rag_mod.RAGIndex, "format_context",
+            staticmethod(fake_format))
+
+    @staticmethod
+    def _make_rag():
+        class FakeRag:
+            is_built = True
+
+            def __init__(self):
+                self.queries = []
+
+            def query(self, q, top_k=5):
+                self.queries.append(q)
+                return [{"q": q}]
+
+        return FakeRag()
+
+    def test_no_splice_when_flag_off(self):
+        """Flag OFF: ``stream_generate`` runs exactly one round with
+        ``stop_on_close=False`` regardless of what the inner stream
+        emits.  No retrieval, no splice block in the yielded stream."""
+        rag = self._make_rag()
+        obj, captured = self._build_stub(
+            flag=False, rag_index=rag,
+            per_round=[(["hello", " world"], "max")])
+        chunks = list(obj.stream_generate(
+            "P ", max_gen=10, temperature=0.7, top_k=50,
+            top_p=0.9, repetition_penalty=1.0))
+        assert captured["round_calls"] == 1
+        assert captured["stop_on_close_per_round"] == [False]
+        assert chunks == ["hello", " world"]
+        assert rag.queries == []
+        # No splice block sentinel in output.
+        joined = "".join(chunks)
+        assert "<search_result>" not in joined
+
+    def test_no_splice_when_rag_index_missing(self):
+        """Flag ON but no RAG index attached: same single-round
+        behaviour as flag-off (defensive precondition)."""
+        obj, captured = self._build_stub(
+            flag=True, rag_index=None,
+            per_round=[(["hello"], "max")])
+        chunks = list(obj.stream_generate(
+            "P ", max_gen=10, temperature=0.7, top_k=50,
+            top_p=0.9, repetition_penalty=1.0))
+        assert captured["round_calls"] == 1
+        assert captured["stop_on_close_per_round"] == [False]
+        assert chunks == ["hello"]
+
+    def test_single_round_splice_yields_block_in_stream(
+        self, monkeypatch
+    ):
+        """Flag ON + inner round emits ``<search>q</search>`` and
+        terminates with ``terminated_on='search'``: orchestrator runs
+        RAG, yields a splice block as a stream chunk, then runs one
+        more round (the final, with ``stop_on_close=False``) for the
+        wrap-up answer."""
+        self._stub_format_context(monkeypatch, {"q1": "DOC1"})
+        rag = self._make_rag()
+        obj, captured = self._build_stub(
+            flag=True, rag_index=rag,
+            per_round=[
+                (["thinking <search>q1</search>"], "search"),
+                (["wrap-up answer"], "max"),
+            ])
+        obj.max_search_rounds = 2  # 1 splice + 1 final wrap-up
+
+        chunks = list(obj.stream_generate(
+            "P ", max_gen=10, temperature=0.7, top_k=50,
+            top_p=0.9, repetition_penalty=1.0))
+
+        assert captured["round_calls"] == 2
+        # Round 0: stop_on_close True (non-final).  Round 1: False
+        # (final, model wraps up).
+        assert captured["stop_on_close_per_round"] == [True, False]
+        assert rag.queries == ["q1"]
+        joined = "".join(chunks)
+        assert "thinking <search>q1</search>" in joined
+        assert "<search_result>" in joined
+        assert "DOC1" in joined
+        assert "</search_result>" in joined
+        assert "wrap-up answer" in joined
+
+    def test_natural_stop_no_splice(self, monkeypatch):
+        """Flag ON but inner round terminates on ``max`` (no
+        ``</search>`` emitted): orchestrator does NOT splice, stream
+        ends after one round."""
+        self._stub_format_context(monkeypatch, {})
+        rag = self._make_rag()
+        obj, captured = self._build_stub(
+            flag=True, rag_index=rag,
+            per_round=[
+                (["plain text answer"], "max"),
+                (["should not run"], "max"),
+            ])
+        chunks = list(obj.stream_generate(
+            "P ", max_gen=10, temperature=0.7, top_k=50,
+            top_p=0.9, repetition_penalty=1.0))
+        assert captured["round_calls"] == 1
+        assert chunks == ["plain text answer"]
+        assert rag.queries == []
+
+    def test_per_round_max_gen_respects_user_budget(self, monkeypatch):
+        """B-3c-2 budget rule applied to streaming: cumulative emitted
+        tokens decrement remaining budget across rounds."""
+        self._stub_format_context(monkeypatch, {"q1": "CTX"})
+        rag = self._make_rag()
+        obj, captured = self._build_stub(
+            flag=True, rag_index=rag,
+            per_round=[
+                # Round 0: emits 3 tokens including </search>.
+                (["a", "b", "<search>q1</search>"], "search"),
+                # Round 1 (final): wrap-up.
+                (["x"], "max"),
+            ])
+        obj.max_search_rounds = 2
+
+        list(obj.stream_generate(
+            "P ", max_gen=5, temperature=0.7, top_k=50,
+            top_p=0.9, repetition_penalty=1.0))
+
+        # Round 0 budget = full max_gen=5.
+        assert captured["max_gen_per_round"][0] == 5
+        # Round 1 budget = 5 - 3 (round-0 emits) = 2.
+        assert captured["max_gen_per_round"][1] == 2
+
+    def test_budget_exhausted_with_unspliced_search_logs_warning(
+        self, monkeypatch, caplog
+    ):
+        """Final round emits a ``<search>`` tag as plain text (no
+        further splice possible): orchestrator logs the B-3d budget
+        warning."""
+        import logging
+        self._stub_format_context(monkeypatch, {"q1": "CTX"})
+        rag = self._make_rag()
+        obj, captured = self._build_stub(
+            flag=True, rag_index=rag,
+            per_round=[
+                (["<search>q1</search>"], "search"),
+                # Final round emits another <search> as plain text.
+                (["I want <search>q2</search> too"], "max"),
+            ])
+        obj.max_search_rounds = 2
+
+        with caplog.at_level(
+            logging.WARNING,
+            logger="enigma_engine.core.engine_generation",
+        ):
+            list(obj.stream_generate(
+                "P ", max_gen=10, temperature=0.7, top_k=50,
+                top_p=0.9, repetition_penalty=1.0))
+        assert any(
+            "B-3d" in r.message and "budget exhausted" in r.message
+            for r in caplog.records)
+
+    def test_tail_record_runs_on_full_emitted_text(self, monkeypatch):
+        """Tail observability: ``_record_search_emissions`` is invoked
+        in the ``finally`` block with the full yielded stream
+        (model tokens + splice blocks)."""
+        self._stub_format_context(monkeypatch, {"q1": "DOC"})
+        rag = self._make_rag()
+        obj, captured = self._build_stub(
+            flag=True, rag_index=rag,
+            per_round=[
+                (["<search>q1</search>"], "search"),
+                (["done"], "max"),
+            ])
+        obj.max_search_rounds = 2
+
+        record_calls = []
+        original_record = obj.__class__._record_search_emissions
+
+        def spy_record(self, text, prompt=None, *, path="native"):
+            record_calls.append({"text": text, "path": path})
+            return original_record(self, text, prompt=prompt, path=path)
+        obj._record_search_emissions = spy_record.__get__(obj)
+
+        list(obj.stream_generate(
+            "P ", max_gen=10, temperature=0.7, top_k=50,
+            top_p=0.9, repetition_penalty=1.0))
+        assert len(record_calls) == 1
+        assert record_calls[0]["path"] == "stream"
+        assert "<search>q1</search>" in record_calls[0]["text"]
+        assert "DOC" in record_calls[0]["text"]
 
 
 class TestB3bRagSpliceWireSiteStructural:

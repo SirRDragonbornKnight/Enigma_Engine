@@ -1757,25 +1757,36 @@ class TestJsonSchemaConstraintWiring:
         for the constraint itself lives in ``TestJsonSchemaConstraint``.
         """
         from enigma_engine.core import engine_generation
-        src = inspect.getsource(engine_generation._GenerationMixin.stream_generate)
+        # Pass 156z9al (B-3d) split stream_generate into an outer
+        # multi-round splice orchestrator and an inner per-round
+        # helper ``_stream_round_tokens``. The constraint is BUILT in
+        # the outer (once per call, not per round) and ADVANCED in the
+        # inner (per token).  Check both halves.
+        outer = inspect.getsource(
+            engine_generation._GenerationMixin.stream_generate)
+        inner = inspect.getsource(
+            engine_generation._GenerationMixin._stream_round_tokens)
         assert "json_schema" in inspect.signature(
             engine_generation._GenerationMixin.stream_generate
         ).parameters, (
             "stream_generate must accept json_schema kwarg (N-15c)")
-        assert "JsonSchemaConstraint(json_schema, self.tokenizer)" in src, (
+        assert "JsonSchemaConstraint(json_schema, self.tokenizer)" in outer, (
             "stream_generate must build JsonSchemaConstraint — without "
             "this, the kwarg is silently dropped and streaming callers "
             "get unconstrained output labelled as schema-conforming")
-        assert "json_constraint=json_constraint" in src, (
-            "stream_generate must forward json_constraint to "
+        assert "json_constraint=json_constraint" in outer, (
+            "stream_generate must forward json_constraint to its "
+            "per-round helper")
+        assert "json_constraint=json_constraint" in inner, (
+            "_stream_round_tokens must forward json_constraint to "
             "_sample_token (the mask hook lives there)")
-        assert "json_constraint.advance(" in src, (
-            "stream_generate must advance the FSM each step — without "
-            "this the FSM stays in EXPECT_OPEN forever and every token "
-            "after the first '{' is masked to -inf")
-        assert "json_constraint.is_done" in src, (
-            "stream_generate must break on is_done — past DONE the "
-            "mask returns the empty allowed set and softmax NaNs")
+        assert "json_constraint.advance(" in inner, (
+            "_stream_round_tokens must advance the FSM each step — "
+            "without this the FSM stays in EXPECT_OPEN forever and "
+            "every token after the first '{' is masked to -inf")
+        assert "json_constraint.is_done" in inner, (
+            "_stream_round_tokens must break on is_done — past DONE "
+            "the mask returns the empty allowed set and softmax NaNs")
 
     def test_stream_chat_gguf_with_schema_raises_notimplemented(self):
         """Pass 156z6 (N-15c): the streaming GGUF path must reject

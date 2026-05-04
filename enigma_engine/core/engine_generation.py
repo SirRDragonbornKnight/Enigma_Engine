@@ -402,17 +402,15 @@ class _GenerationMixin:
                 "recorded on engine.last_search_queries for inspection",
                 len(queries))
             # B-3a sibling-boundary warning.  When the splice opt-in
-            # flag is ON, only the ``native`` path (non-GGUF
-            # ``_generate_text``) honours the ``</search>`` auto-stop.
-            # Every other generation method (stream / vision /
+            # flag is ON, ``native`` (`_generate_text`) and ``stream``
+            # (`stream_generate`, B-3d Pass 156z9al) honour the splice
+            # contract.  Every other generation method (vision /
             # speculative / medusa / lookahead / batch / GGUF) emits
             # a one-shot WARNING per call so callers know the flag
-            # had no effect on this path.  B-3b will add the actual
-            # splice; B-3c adds multi-round recursion; B-3d closes
-            # streaming.  Until then this WARNING is the honest UX.
+            # had no effect on this path.
             if (
                 getattr(self, "inline_search_splice_enabled", False)
-                and path != "native"
+                and path not in ("native", "stream")
             ):
                 logger.warning(
                     "B-3a: inline_search_splice_enabled=True but the "
@@ -1389,6 +1387,123 @@ class _GenerationMixin:
     # Streaming Generation
     # =========================================================================
 
+    def _stream_round_tokens(
+        self,
+        input_ids: torch.Tensor,
+        max_gen: int,
+        temperature: float,
+        top_k: int,
+        top_p: float,
+        repetition_penalty: float,
+        min_p: float,
+        *,
+        json_constraint: object | None,
+        stop_on_close: bool,
+        state: dict,
+    ) -> Generator[str]:
+        """B-3d (Pass 156z9al): inner streaming round.  Yields token
+        strings as they're produced.  Updates ``state`` dict so the
+        caller can decide whether to splice + start another round.
+
+        State keys written:
+
+        * ``emitted_count``: number of tokens this round produced.
+        * ``emitted_text``: concatenation of all yielded chunks.
+        * ``terminated_on``: one of ``"max"``, ``"eos"``, ``"search"``,
+          ``"json_done"``.
+
+        ``stop_on_close=True`` causes the loop to exit early as soon as
+        ``</search>`` appears in the joined emitted text — used by
+        rounds 1..N-1 of the splice loop.  Final round and
+        non-splice-enabled streams pass ``stop_on_close=False``.
+
+        Caller MUST hold ``self._generation_lock`` and be inside a
+        ``torch.no_grad()`` block — this helper does NOT acquire either.
+        Caller is responsible for clearing / repopulating the KV cache
+        between rounds (this helper clears + prefills on entry).
+        """
+        state["emitted_count"] = 0
+        state["emitted_text"] = ""
+        state["terminated_on"] = "max"
+
+        max_len = self.model.config.max_seq_len
+        has_cache = hasattr(self.model, 'clear_cache')
+        if has_cache:
+            self.model.clear_cache()
+        else:
+            logger.warning(
+                "Model lacks KV cache support — generation will use "
+                "O(n²) full-recompute fallback (slow for long "
+                "sequences)."
+            )
+
+        generated = input_ids
+        curr_input = input_ids
+        if curr_input.shape[1] > max_len:
+            curr_input = curr_input[:, -max_len:]
+        logits = self.model(curr_input, use_cache=has_cache)
+
+        exempt_tokens = self._build_exempt_tokens(
+            input_ids, repetition_penalty,
+        )
+
+        eos_id = getattr(self.tokenizer, 'eos_token_id', 2)
+
+        for _ in range(max_gen):
+            next_token = self._sample_token(
+                logits[:, -1, :],
+                generated,
+                temperature,
+                top_k,
+                top_p,
+                repetition_penalty,
+                min_p,
+                exempt_tokens=exempt_tokens,
+                json_constraint=json_constraint,
+            )
+
+            generated = torch.cat([generated, next_token], dim=1)
+
+            token_id = next_token[0, 0].item()
+
+            if hasattr(self.tokenizer, 'decode'):
+                token_str = self.tokenizer.decode(
+                    [token_id], skip_special_tokens=True)
+            else:
+                token_str = self.tokenizer.id_to_token.get(token_id, "")
+
+            state["emitted_count"] += 1
+            state["emitted_text"] += token_str
+            yield token_str
+
+            if token_id == eos_id:
+                state["terminated_on"] = "eos"
+                return
+
+            if json_constraint is not None:
+                json_constraint.advance(int(token_id))
+                if json_constraint.is_done:
+                    state["terminated_on"] = "json_done"
+                    return
+
+            # B-3d: rounds 1..N-1 stop early on </search> so the
+            # orchestrator can run RAG + splice + start the next round.
+            if stop_on_close and "</search>" in state["emitted_text"]:
+                state["terminated_on"] = "search"
+                return
+
+            if has_cache:
+                logits = self.model(
+                    next_token,
+                    use_cache=True,
+                    start_pos=generated.shape[1] - 1,
+                )
+            else:
+                curr_input = generated
+                if curr_input.shape[1] > max_len:
+                    curr_input = curr_input[:, -max_len:]
+                logits = self.model(curr_input)
+
     def stream_generate(
         self,
         prompt: str,
@@ -1442,112 +1557,138 @@ class _GenerationMixin:
             json_constraint = JsonSchemaConstraint(json_schema, self.tokenizer)
 
         input_ids = self._encode_prompt(prompt)
-        generated = input_ids
-        max_len = self.model.config.max_seq_len
-
         # Stage B-2 (Pass 156z9d): accumulate yielded token strings so
         # we can scan for ``<search>`` emissions on stream completion
         # (or generator cancellation via try/finally).  Same observability
         # contract as :meth:`_generate_text` non-streaming path.
-        emitted_chunks: list[str] = []
+        # B-3d (Pass 156z9al) extends this with multi-round splice
+        # orchestration when ``inline_search_splice_enabled`` is True
+        # and a built RAG index is attached.  Splice block strings
+        # yielded mid-stream are also appended to ``full_emitted_text``
+        # so the tail observability scan sees them.
+        full_emitted_text = ""
+
+        # B-3d: gate splice on the same preconditions as the
+        # non-streaming helper (`_maybe_rag_splice`).
+        rag_index = getattr(self, "_rag_index", None)
+        splice_enabled = (
+            getattr(self, "inline_search_splice_enabled", False)
+            and rag_index is not None
+            and getattr(rag_index, "is_built", False)
+        )
+        max_rounds = (
+            max(1, int(getattr(self, "max_search_rounds", 3)))
+            if splice_enabled else 1
+        )
+        cumulative_tokens = 0
+        current_prompt = prompt
+        last_terminated_on = "max"
+        last_emitted_text = ""
 
         # Acquire generation lock to protect KV-cache state
         with self._generation_lock, torch.no_grad():
-            has_cache = hasattr(self.model, 'clear_cache')
-            if has_cache:
-                self.model.clear_cache()
-            else:
-                logger.warning(
-                    "Model lacks KV cache support — generation will use "
-                    "O(n²) full-recompute fallback (slow for long "
-                    "sequences)."
-                )
-
-            # Prefill: process entire prompt at once
-            curr_input = input_ids
-            if curr_input.shape[1] > max_len:
-                curr_input = curr_input[:, -max_len:]
-            logits = self.model(curr_input, use_cache=has_cache)
-
-            # S781: Build rep-penalty exemption set (same as _generate_manual)
-            exempt_tokens = self._build_exempt_tokens(
-                input_ids, repetition_penalty,
-            )
-
             try:
-                for _ in range(max_gen):
-                    # Sample
-                    next_token = self._sample_token(
-                        logits[:, -1, :],
-                        generated,
-                        temperature,
-                        top_k,
-                        top_p,
-                        repetition_penalty,
-                        min_p,
-                        exempt_tokens=exempt_tokens,
-                        json_constraint=json_constraint,
-                    )
-
-                    generated = torch.cat([generated, next_token], dim=1)
-
-                    # Decode and yield
-                    token_id = next_token[0, 0].item()
-
-                    if hasattr(self.tokenizer, 'decode'):
-                        token_str = self.tokenizer.decode([token_id], skip_special_tokens=True)
-                    else:
-                        token_str = self.tokenizer.id_to_token.get(token_id, "")
-
-                    emitted_chunks.append(token_str)
-                    yield token_str
-
-                    # Check for EOS
-                    eos_id = getattr(self.tokenizer, 'eos_token_id', 2)
-                    if token_id == eos_id:
+                for round_idx in range(max_rounds):
+                    is_final_round = (round_idx == max_rounds - 1)
+                    stop_on_close = splice_enabled and not is_final_round
+                    remaining = max_gen - cumulative_tokens
+                    if remaining <= 0:
+                        logger.info(
+                            "B-3d: max_gen=%d budget exhausted before "
+                            "round %d (cumulative=%d); ending stream",
+                            max_gen, round_idx + 1, cumulative_tokens)
                         break
 
-                    # N-15c: advance FSM and early-stop on DONE. Without the
-                    # is_done break, the masker would return the empty allowed
-                    # set past DONE → all logits -inf → softmax NaN. Same
-                    # contract as _generate_manual.
-                    if json_constraint is not None:
-                        json_constraint.advance(int(next_token[0, 0].item()))
-                        if json_constraint.is_done:
-                            break
-
-                    # Decode step: only feed new token with start_pos
-                    if has_cache:
-                        logits = self.model(
-                            next_token,
-                            use_cache=True,
-                            start_pos=generated.shape[1] - 1,
-                        )
+                    if round_idx == 0:
+                        round_input_ids = input_ids
                     else:
-                        curr_input = generated
-                        if curr_input.shape[1] > max_len:
-                            curr_input = curr_input[:, -max_len:]
-                        logits = self.model(curr_input)
+                        round_input_ids = self._encode_prompt(current_prompt)
+
+                    state: dict = {}
+                    for tok_str in self._stream_round_tokens(
+                        round_input_ids, remaining, temperature, top_k,
+                        top_p, repetition_penalty, min_p,
+                        json_constraint=json_constraint,
+                        stop_on_close=stop_on_close,
+                        state=state,
+                    ):
+                        full_emitted_text += tok_str
+                        yield tok_str
+
+                    cumulative_tokens += int(state.get("emitted_count", 0))
+                    last_terminated_on = state.get("terminated_on", "max")
+                    last_emitted_text = state.get("emitted_text", "")
+
+                    if last_terminated_on != "search":
+                        # natural stop (eos / max / json_done) — no
+                        # splice path.  WARNING if final-round plain-text
+                        # ``<search>`` slipped through (mirrors B-3c).
+                        if (is_final_round and splice_enabled
+                                and "<search>" in last_emitted_text):
+                            logger.warning(
+                                "B-3d: max_search_rounds=%d budget "
+                                "exhausted but model emitted another "
+                                "<search> tag; left as plain text",
+                                max_rounds)
+                        break
+
+                    # Splice path: extract query, retrieve, yield block.
+                    open_pos = last_emitted_text.rfind("<search>")
+                    close_pos = last_emitted_text.rfind("</search>")
+                    if open_pos < 0 or open_pos > close_pos:
+                        # Malformed pair (close before open / no open):
+                        # exit splice loop.
+                        break
+                    query = last_emitted_text[
+                        open_pos + len("<search>"):close_pos
+                    ].strip()
+                    if not query:
+                        break
+                    try:
+                        from .rag import RAGIndex
+                        results = rag_index.query(query, top_k=5)
+                        ctx = RAGIndex.format_context(
+                            results, max_chars=2000)
+                    except Exception:
+                        logger.exception(
+                            "B-3d: RAG retrieval failed at round %d; "
+                            "ending stream",
+                            round_idx + 1)
+                        break
+                    if not ctx:
+                        break
+
+                    splice_block = (
+                        f"\n<search_result>\n{ctx}\n"
+                        f"</search_result>\n"
+                    )
+                    logger.info(
+                        "B-3d: round %d/%d spliced RAG result for "
+                        "query '%s' (%d chars ctx)",
+                        round_idx + 1, max_rounds, query[:60], len(ctx))
+                    full_emitted_text += splice_block
+                    yield splice_block
+
+                    # Build prompt for next round: original prompt
+                    # extended with this round's emit (up to and
+                    # including the closing tag) plus the splice block.
+                    emit_through_close = last_emitted_text[
+                        :close_pos + len("</search>")
+                    ]
+                    current_prompt = (
+                        current_prompt + emit_through_close + splice_block
+                    )
             finally:
-                # Stage B-2: scan emitted text for <search> blocks. Do
-                # both a chunk-join (catches byte-level emissions, the
-                # likely path before Stage B-4 SFT) and a full-decode
-                # without skip_special_tokens (catches direct
-                # special-token emissions once the model is trained).
-                # Runs on normal completion AND on generator
-                # cancellation (caller breaks early).
+                # Stage B-2 / B-3d tail scan: full_emitted_text already
+                # includes every yielded chunk (model tokens + splice
+                # blocks).  Splice blocks contain ``<search_result>`` not
+                # ``<search>`` so the recorder does NOT spuriously log
+                # them as model-emitted queries.  Runs on normal
+                # completion AND on generator cancellation (caller
+                # breaks early).
                 try:
-                    streamed_text = "".join(emitted_chunks)
-                    if generated.shape[1] > input_ids.shape[1]:
-                        new_ids = generated[0, input_ids.shape[1]:].tolist()
-                        if hasattr(self.tokenizer, 'decode'):
-                            try:
-                                streamed_text += self.tokenizer.decode(
-                                    new_ids, skip_special_tokens=False)
-                            except Exception:
-                                pass
                     self._record_search_emissions(
-                        streamed_text, path="stream")
+                        full_emitted_text, path="stream")
                 except Exception:
                     logger.exception(
                         "Stage B-2: stream scan crashed; "
