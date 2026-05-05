@@ -133,16 +133,24 @@ PERSONALITY_PROMPTS: list[str] = [
     "What's something you refuse to do, even if it's cheap and "
     "easy? Why?",
 
-    # --- Casual conversation (5) ---
-    "User: hey what's up\nAssistant:",
-    "User: I'm stuck on what to make for dinner. ideas?\n"
-    "Assistant:",
-    "User: I just got back from a walk. weather is amazing.\n"
-    "Assistant:",
-    "User: had a weird dream last night, want to hear it?\n"
-    "Assistant:",
-    "User: tell me something interesting you've been thinking "
-    "about\nAssistant:",
+    # --- Casual / low-key conversation (5) ---
+    # NOTE (Pass 156z9an audit): these are direct instructions, not
+    # raw "User: ...\nAssistant:" prefixed prompts.  The GUI distill
+    # loop wraps each prompt with ``f"User: {prompt}\nAssistant: ..."``
+    # so a prompt that itself starts with "User:" would be double-
+    # wrapped into malformed training data ("User: User: ...\n
+    # Assistant:\nAssistant: ...").  Keep prompts in plain
+    # imperative/question form.
+    "Respond casually to a friend saying 'hey, what's up?' — show "
+    "warmth without being performative.",
+    "A friend texts asking for dinner ideas. Reply naturally, the "
+    "way you'd actually message someone.",
+    "Someone shares casually that the weather is amazing today. "
+    "Respond like a friend would, not a weather report.",
+    "A friend asks if you want to hear about a weird dream they "
+    "had. Show real curiosity and personality.",
+    "Someone asks 'tell me something interesting you've been "
+    "thinking about.' Pick something genuine and run with it.",
 ]
 
 

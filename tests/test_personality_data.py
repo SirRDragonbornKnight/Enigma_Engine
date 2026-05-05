@@ -48,6 +48,27 @@ class TestPromptPool:
         assert len(set(prefixes)) == len(prefixes), (
             "duplicate 30-char prefixes in prompt pool")
 
+    def test_no_prompt_starts_with_user_prefix(self):
+        # P5-pre-1 audit (Pass 156z9an): the GUI distill loop wraps
+        # each prompt with ``f"User: {prompt}\nAssistant: {response}"``.
+        # A prompt that itself begins with "User:" gets double-wrapped
+        # into malformed training data ("User: User: ...\nAssistant:\n
+        # Assistant: ...").  Keep prompts in direct imperative form.
+        for p in PERSONALITY_PROMPTS:
+            head = p.lstrip().lower()
+            assert not head.startswith("user:"), (
+                f"prompt double-wraps in distill formatter: {p!r}")
+            assert not head.startswith("assistant:"), (
+                f"prompt would corrupt distill formatter: {p!r}")
+
+    def test_no_prompt_ends_with_assistant_suffix(self):
+        # Same audit: a prompt ending with "Assistant:" causes the
+        # GUI formatter to emit ``...Assistant:\nAssistant: <resp>``.
+        for p in PERSONALITY_PROMPTS:
+            tail = p.rstrip().lower()
+            assert not tail.endswith("assistant:"), (
+                f"prompt double-wraps in distill formatter: {p!r}")
+
 
 # =========================================================================
 # Identity filter
