@@ -1254,20 +1254,16 @@ class ForgeNewModesMixin:
         self._clear_forge_param_count()
         self._reset_forge_progress()
 
-        # Category-specific prompts for the teacher
+        # Category-specific prompts for the teacher.
+        # P5-pre-1 (Pass 156z9am): the ``personality`` pool moved to
+        # :mod:`enigma_engine.core.personality_data` (50 prompts across
+        # 10 themes) so it can be unit-tested without the GUI and so
+        # quality/identity filters can be applied to teacher outputs.
+        from enigma_engine.core.personality_data import (
+            PERSONALITY_PROMPTS as _PERSONALITY_PROMPTS,
+        )
         category_prompts = {
-            "personality": [
-                "Introduce yourself with a warm, unique personality. "
-                "Show character and genuine emotion in your response.",
-                "Someone just complimented you. Respond naturally "
-                "showing your personality.",
-                "Express a strong opinion about something you care "
-                "about. Be genuine and show feeling.",
-                "Tell a short personal anecdote that reveals "
-                "something about your character.",
-                "Someone is having a bad day. Respond with empathy "
-                "and your own emotional perspective.",
-            ],
+            "personality": list(_PERSONALITY_PROMPTS),
             "reasoning": [
                 "Solve this step by step: If a train travels 60 mph "
                 "for 2.5 hours, how far does it go?",
@@ -1439,6 +1435,17 @@ class ForgeNewModesMixin:
                 all_examples = []
                 total_to_gen = num_examples * len(categories)
                 generated = 0
+                # P5-pre-1: per-category reject counters for the
+                # personality filter (identity / quality / duplicate).
+                # Other categories don't filter today; counters stay 0.
+                personality_reject_counts = {
+                    "identity": 0,
+                    "quality": 0,
+                    "duplicate": 0,
+                }
+                # Track accepted personality responses for near-dup
+                # detection within this run.
+                personality_accepted_responses: list[str] = []
 
                 for cat in categories:
                     if not self.training_active:
@@ -1475,7 +1482,47 @@ class ForgeNewModesMixin:
                                 temperature=0.8,
                             )
                             clean_response = response.strip() if response else ""
-                            if clean_response and len(clean_response) > 20:
+                            # P5-pre-1: personality category gets
+                            # identity-leak + quality + dedup filters.
+                            # Other categories keep the legacy 20-char
+                            # minimum (out of scope this slice).
+                            if cat == "personality":
+                                from enigma_engine.core.personality_data import (
+                                    is_near_duplicate,
+                                    passes_identity_filter,
+                                    passes_quality_filter,
+                                )
+                                accept = bool(clean_response)
+                                reject_reason = ""
+                                if accept and not passes_identity_filter(
+                                        clean_response):
+                                    accept = False
+                                    reject_reason = "identity-leak"
+                                    personality_reject_counts[
+                                        "identity"] += 1
+                                if accept and not passes_quality_filter(
+                                        clean_response):
+                                    accept = False
+                                    reject_reason = "quality"
+                                    personality_reject_counts[
+                                        "quality"] += 1
+                                if accept and is_near_duplicate(
+                                        clean_response,
+                                        personality_accepted_responses):
+                                    accept = False
+                                    reject_reason = "duplicate"
+                                    personality_reject_counts[
+                                        "duplicate"] += 1
+                                if accept:
+                                    personality_accepted_responses.append(
+                                        clean_response)
+                            else:
+                                accept = bool(clean_response) and len(
+                                    clean_response) > 20
+                                reject_reason = (
+                                    "too-short" if not accept else "")
+
+                            if accept:
                                 # Format as training data
                                 example = (
                                     f"User: {prompt}\n"
@@ -1491,9 +1538,19 @@ class ForgeNewModesMixin:
                                     f"Assistant: {clean_response}")
                             else:
                                 short_len = len(clean_response)
-                                self._log(
-                                    f"  [{generated}/{total_to_gen}] "
-                                    f"Skipped (too short: {short_len} chars)")
+                                # P5-pre-1: surface filter reason in
+                                # log so the user can tell teacher
+                                # output drift apart from short noise.
+                                if reject_reason and reject_reason != "too-short":
+                                    self._log(
+                                        f"  [{generated}/{total_to_gen}] "
+                                        f"Skipped ({reject_reason}: "
+                                        f"{short_len} chars)")
+                                else:
+                                    self._log(
+                                        f"  [{generated}/{total_to_gen}] "
+                                        f"Skipped (too short: "
+                                        f"{short_len} chars)")
 
                         except Exception as exc:
                             self._log(
@@ -1518,6 +1575,20 @@ class ForgeNewModesMixin:
 
                 self._log(
                     f"\nGenerated {len(all_examples)} training examples")
+
+                # P5-pre-1: surface personality filter rejections so
+                # the user knows when teacher drift is high.
+                if "personality" in categories:
+                    pr = personality_reject_counts
+                    total_rejected = (
+                        pr["identity"] + pr["quality"] + pr["duplicate"])
+                    if total_rejected > 0:
+                        self._log(
+                            f"  Personality filters rejected "
+                            f"{total_rejected} response(s): "
+                            f"identity={pr['identity']}, "
+                            f"quality={pr['quality']}, "
+                            f"duplicate={pr['duplicate']}")
 
                 # Save generated data for reference
                 from enigma_engine.gui.scanners import (

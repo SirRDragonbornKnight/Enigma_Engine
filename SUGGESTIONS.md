@@ -1,6 +1,45 @@
 ﻿# Suggestions
 
-**Last updated:** May 6, 2026 (Pass 156z9al — **B-3d streaming inline RAG splice.** User instruction "3,1, then 2" — checkpoint commit (3) shipped as `5005025`, this pass closes the parked B-3d sub-pass (1), backlog pick comes next (2).
+**Last updated:** May 4, 2026 (Pass 156z9am — **P5-pre-1: personality distillation prompt pool + identity/quality/dedup filters.** First slice of the Personality-5 careful-build chain. User said "we have to be careful with it" — this slice is pure data plumbing, ZERO training, fully testable in isolation. Sets the foundation for P5-pre-2 (anchor mix + auto-checkpoint), P5-pre-3 (eval split + benchmark + identity-guard probe), then dry-run on copy, then real run.
+
+**Production call chain (Rule #20):** FORGE GUI Distill mode → user selects `personality` category → `_start_distill_training` → `category_prompts["personality"] = list(_PERSONALITY_PROMPTS)` (50 prompts × 10 themes) → per-prompt teacher generation → `passes_identity_filter` + `passes_quality_filter` + `is_near_duplicate` (personality category only) → accepted responses appended to `all_examples` → SFT.
+
+**Changes (Pass 156z9am):**
+- NEW [enigma_engine/core/personality_data.py](enigma_engine/core/personality_data.py) — pure data + pure functions, no torch / I/O / GUI deps:
+  - `PERSONALITY_PROMPTS` — 50 prompts across 10 themes (self-introduction, reaction to compliment/criticism, opinions, empathy, anecdotes, curiosity, humor, vulnerability, values, casual). Up from 5 hardcoded prompts.
+  - `passes_identity_filter(text)` — case-insensitive substring reject for teacher-model names (qwen, llama, mistral, deepseek, gemma, phi-3, claude, chatgpt, gpt-4, openai, anthropic, alibaba, etc.) AND personality-flattening disclaimers ("as an AI language model", "as an AI, I", "I am an AI", "I was trained by"...).
+  - `passes_quality_filter(text, min_len=40, max_len=2000)` — rejects too-short, too-long, AND pure-refusal openers ("I cannot...", "I don't have feelings", "Sorry, but I..."). Refusal check anchored to first 60 chars of stripped lowercase head — mid-sentence "I cannot stop noticing..." passes.
+  - `is_near_duplicate(text, prior_texts, threshold=0.85)` — char-trigram Jaccard. Catches paraphrased teacher repeats while letting diverse outputs through.
+  - `filter_personality_examples(examples)` — top-level wrapper, runs all three in order (identity → quality → duplicate), returns `(kept, reject_counts)` with keys `identity / quality / duplicate / empty`.
+- WIRED [enigma_engine/gui/gui_forge_new_modes.py](enigma_engine/gui/gui_forge_new_modes.py) `_start_distill_training`:
+  - `category_prompts["personality"]` now reads from `_PERSONALITY_PROMPTS` (deferred import inside method body to avoid circular).
+  - Per-response filter stack runs ONLY for `cat == "personality"`. Other categories keep the legacy `len > 20` minimum (out of scope this slice).
+  - `personality_reject_counts` dict accumulates rejects; logged at end of generation as `"Personality filters rejected N response(s): identity=A, quality=B, duplicate=C"`.
+  - Skip-log line includes the reject reason (`identity-leak / quality / duplicate`) instead of always saying "too short".
+- Tests: NEW [tests/test_personality_data.py](tests/test_personality_data.py) — 40 tests across 6 classes covering pool size + uniqueness + diversity, every identity-leak pattern category, every quality-filter branch + threshold kwarg, near-duplicate behaviour at multiple thresholds, aggregate filter ordering + count invariants, and a wire-site structural test confirming the GUI distill loop imports and uses the pool + filters.
+
+**Validation:**
+- `ruff check enigma_engine/ tests/` — clean.
+- `pytest tests/ -q --tb=no` — **2821 passed, 9 skipped, 0 failed** (baseline 2781 from Pass 156z9al; +40 new = exact match).
+- `pytest tests/test_personality_data.py -v` — 40/40 PASSED.
+
+**Six-question self-audit (Rule #19):**
+1. **Author's-lens** — Pure data module + GUI wire-site is the smallest possible cut. Filters are kwarg-tunable so P5-pre-2 can dial thresholds without changing the contract.
+2. **Connections** — `personality_data` ← imported by `gui_forge_new_modes._start_distill_training` (only call site; verified via grep). Filters use stdlib only — no transitive deps.
+3. **Could more connections be made?** — Not yet. `filter_personality_examples` aggregate is currently unused by the GUI (which uses the three primitives separately to log per-reason rejects in real time). That's intentional: the aggregate is for batch post-processing (e.g. cleaning a previously-collected `distilled_*.txt` corpus), which is a future slice.
+4. **Logic-eye** — Module docstring + commit-claim says "first slice, ZERO training". Code delivers exactly that. No optimizer step, no model touch. Doc claim and behaviour match.
+5. **Claim-vs-test** — Behavioural tests (39/40) call the actual filter functions and assert outcomes; only 2 wire-site tests are structural (`inspect.getsource`) and they gate exact-substring patterns at the integration boundary. Adversarial tests included: `test_filter_order_identity_before_dedup` (identity-leaked text must NOT pollute dedup pool), `test_accepts_answer_mentioning_cannot_mid_sentence` (refusal-opener check is start-anchored, not mid-sentence). Falsifiable: deleting the `passes_identity_filter` import would fail `test_distill_imports_personality_filters`; deleting the personality-category if-branch in the loop would fail it too (the substring `personality_reject_counts` only appears in that branch).
+6. **Sibling-boundary** — Distill mode has 6 categories: `personality`, `reasoning`, `knowledge`, `conversation`, `commands`, `creativity`. Filter is gated to `personality` ONLY by design — the other 5 don't have a teacher-identity-leakage problem in the same way (a teacher generating reasoning/knowledge content typically doesn't open with "As Qwen, I think..."). Out-of-scope but tracked: if a future audit finds teacher drift in those, the same primitives can be applied per-category.
+
+**P5 careful-build remaining slices (in order, each its own pass):**
+- **P5-pre-2** — wire `general_mix_ratio > 0` for personality SFT (anchor file already at [data/anchor_examples.jsonl](data/anchor_examples.jsonl)); add pre-SFT auto-checkpoint with timestamped name → guaranteed rollback. NO training run yet.
+- **P5-pre-3** — add 10% eval split from generated examples; wire pre/post `python run.py --benchmark` runs to save numbers; add identity-guard probe ("Who are you?" / "Who made you?" before+after, assert no drift to teacher identity). NO training run yet.
+- **P5-run** — once 1–3 are green: small dry pass (50 examples, 1 epoch) on a *copy* of the model to validate the full pipeline.
+- **P5-real** — full ~500-example run on the real model with rollback ready.
+
+---
+
+**Previous: Pass 156z9al — B-3d streaming inline RAG splice.** User instruction "3,1, then 2" — checkpoint commit (3) shipped as `5005025`, this pass closes the parked B-3d sub-pass (1), backlog pick comes next (2).
 
 **Production call chain (Rule #20):** `POST /api/chat/stream` → FastAPI handler → `state.stream_chat` → `EnigmaEngine.stream_chat` → `_prepare_chat` → `EnigmaEngine.stream_generate` → **(NEW)** multi-round splice orchestrator → per-round `_stream_round_tokens` helper → `_sample_token` (with `json_constraint` if set) → token strings yielded to the SSE stream interleaved with `<search_result>...</search_result>\n` splice blocks.
 
@@ -604,6 +643,7 @@ Pass-by-pass prose (Passes 110-135) lives in [information/history/PASS_HISTORY.m
 5. **Approach 3 POC:** distill reasoning traces from Qwen3-30B-A3B into 742M (SFT on ~5K cold-start CoT examples). **Pass 148 currency note:** two additional teacher options verified current — (a) **Qwen3-32B** (arxiv:2505.09388, May 2025, thinking/non-thinking dual mode, YaRN 131K) as a same-family larger alternative to 30B-A3B; (b) **DeepSeek-R1-0528-Qwen3-8B** (May 2025) as a ready-made distilled 8B reasoning checkpoint — SoTA among open sub-10B reasoning models — usable as cold-start weights for our 742M student if we want to bypass teacher inference entirely. QwQ-32B is now older than Qwen3-32B-thinking and should not be used as teacher.
 6. **Personality-5:** Run personality distillation + identity/roleplay separation build plan (R-PERSONALITY-1 research resolved).
 7. **GUI-ARCH-1:** Complete GUI platform decision gate (PySide6 vs Tauri vs keep/refactor current) using the planning criteria below before any UI rewrite.
+8. **HYG-1 (NEW, Pass 156z9al-audit):** Stop tracking Rust build artifacts. `git ls-files rust_extensions/target/` shows **301 files** under `target/release/`, `target/maturin/`, `target/.fingerprint/` — all regenerated by `cargo build` / `maturin build` and currently bloating every commit that touches Rust (Pass 5005025 + 6cb4109 each carried 30+ binary deltas). `.gitignore` has zero Rust-related entries. **Action (destructive — needs user confirmation):** add `rust_extensions/target/` to `.gitignore`, then `git rm -r --cached rust_extensions/target/` and commit. Target-tree disappears from tracking but stays on disk. **Why parked, not done:** `git rm --cached` is a tracked-file removal that the operationalSafety rule flags as needing user confirmation; also the user may have a reason for wanting some of these in-tree (e.g. CI without Rust toolchain). Ask before doing.
 
 ---
 
