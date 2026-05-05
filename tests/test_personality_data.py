@@ -69,6 +69,27 @@ class TestPromptPool:
             assert not tail.endswith("assistant:"), (
                 f"prompt double-wraps in distill formatter: {p!r}")
 
+    def test_distill_formatter_well_formed_for_every_prompt(self):
+        # Pass 156z9ao behavioural test (audit F-C): for every prompt
+        # in the pool, mimic the GUI wrapper
+        # ``f"User: {prompt}\nAssistant: {response}"`` with a fixed
+        # fake response and assert the result has EXACTLY one "User: "
+        # prefix and EXACTLY one "Assistant: " marker.  Catches the
+        # double-wrap regression structurally even if a future prompt
+        # uses uppercase "USER:" or trailing whitespace that slips
+        # past the start/end checks.
+        fake_response = "Honestly, that's a lovely question to land on."
+        for p in PERSONALITY_PROMPTS:
+            example = f"User: {p}\nAssistant: {fake_response}"
+            user_count = example.lower().count("user:")
+            assistant_count = example.lower().count("assistant:")
+            assert user_count == 1, (
+                f"{user_count} 'User:' markers in formatted "
+                f"example for prompt: {p!r}")
+            assert assistant_count == 1, (
+                f"{assistant_count} 'Assistant:' markers in "
+                f"formatted example for prompt: {p!r}")
+
 
 # =========================================================================
 # Identity filter

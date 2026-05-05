@@ -1284,15 +1284,21 @@ class ForgeNewModesMixin:
                 "Explain the basics of how the internet works.",
             ],
             "conversation": [
-                "User: Hey, what's up?\nAssistant:",
-                "User: I'm thinking about learning a new hobby. "
-                "Any suggestions?\nAssistant:",
-                "User: Tell me something interesting you've "
-                "learned recently.\nAssistant:",
-                "User: I just got a new puppy! I'm so excited!\n"
-                "Assistant:",
-                "User: Can you help me plan a weekend trip?\n"
-                "Assistant:",
+                # Pass 156z9ao audit (F-B): rewrote from raw
+                # ``User: ...\nAssistant:`` prefixed prompts to direct
+                # imperatives.  The distill loop wraps each prompt as
+                # ``f"User: {prompt}\nAssistant: {response}"`` so the
+                # old form double-wrapped into malformed training data
+                # (``User: User: Hey...\nAssistant:\nAssistant: ...``).
+                "Respond casually to a friend saying 'hey, what's up?'",
+                "A friend asks for ideas about a new hobby they "
+                "could pick up. Suggest something with personality.",
+                "Someone asks 'tell me something interesting you've "
+                "learned recently.' Pick something genuine.",
+                "A friend just got a new puppy and is excited. "
+                "Match their energy in the response.",
+                "A friend asks for help planning a weekend trip. "
+                "Reply naturally with two or three concrete ideas.",
             ],
             "commands": [
                 "The user wants to find all Python files in their "
@@ -1492,8 +1498,20 @@ class ForgeNewModesMixin:
                                     passes_identity_filter,
                                     passes_quality_filter,
                                 )
-                                accept = bool(clean_response)
+                                # Pass 156z9ao (F-A audit): empty
+                                # response buckets as ``quality``
+                                # rather than silently logging
+                                # "too short: 0 chars" with no
+                                # counter increment.  Keeps the
+                                # personality_reject_counts total
+                                # equal to the visible reject log.
+                                accept = True
                                 reject_reason = ""
+                                if not clean_response:
+                                    accept = False
+                                    reject_reason = "quality"
+                                    personality_reject_counts[
+                                        "quality"] += 1
                                 if accept and not passes_identity_filter(
                                         clean_response):
                                     accept = False
