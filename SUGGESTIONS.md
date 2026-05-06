@@ -1,6 +1,356 @@
 ﻿# Suggestions
 
-**Last updated:** May 4, 2026 (Pass 156z9ao — **P5-pre-1 audit fixes (F-A / F-B / F-C) + structural-vs-output-shape lesson.** Three findings logged in Pass 156z9an's "real audit" closed in this pass: **F-A** empty-response bucketing — the personality inline filter in `_start_distill_training` short-circuited on `bool(clean_response)` so empty teacher output was logged as "too short" without incrementing any reject counter, drifting the GUI counts away from `filter_personality_examples` aggregate behaviour; fixed by routing `not clean_response` through the `quality` bucket. **F-B** `conversation` category had the same `User: …\nAssistant:` double-wrap bug as the 5 personality prompts fixed in 156z9an — pre-existing, not introduced by P5, but the formatter is shared; rewrote 5 conversation prompts to direct imperatives. **F-C** added behavioural test `test_distill_formatter_well_formed_for_every_prompt` that runs every prompt through `f"User: {p}\nAssistant: {fake}"` and asserts exactly one `user:` and one `assistant:` marker — catches the double-wrap structurally even if a future prompt sneaks past the start/end string checks. **AA code maker.md §4 Testing** got the lesson: structural import-presence tests do NOT validate output shape of formatted artifacts; pair with a shape-invariant behavioural test. **Validation:** `2824 passed, 9 skipped` (+1 vs 156z9an for the new shape test). Lint clean. Commit `ee130d8`.
+## 🟡 RUNTIME TESTS PENDING (user-driven, not code work)
+
+These tests need a GPU + the real student model and cannot be executed by the code agent. **Do these LAST after the rest of the backlog is shipped.**
+
+- **P5-run** — small dry pass on a *copy* of the student (50 examples, 1 epoch) through FORGE Distill personality mode. Validates the full pre-probe → backup → anchor mix → train → post-probe → drift report pipeline runs end-to-end. No new code. Just exercise the GUI.
+- **P5-real** — full ~500-example personality SFT on the real student model. Rollback file (`models/checkpoints/{stem}_pre_distill_{ts}.pth`) is automatically created Pass 156z9ap. Watch the post-probe drift count — non-zero = roll back.
+- Any other "run the GUI / run training / validate output looks right" exercises that show up in future passes go here.
+
+---
+
+## 🔵 TEACH-1 — Teach-while-running (proposed, not started)
+
+**Status:** Logged May 6, 2026. Direction confirmed in Project Goal (`AA code maker.md`). NO CODE CHANGES authorised yet — this entry is the plan.
+
+**What already exists (do NOT rebuild):**
+- `RAGIndex` wired through `_prepare_chat()` — the AI can already look things up over `data/` and `information/`.
+- `BackgroundTrainer` (`router.py`) — daemon-mode trainer with NaN/finite guards, token-length cap, replay buffer.
+- Anchor-set rehearsal (`_load_anchor_examples`, `data/anchor_examples.jsonl`) — mitigates catastrophic forgetting.
+
+**Gap (the actual work):**
+1. **No persistent correction store.** When the user says "that's wrong, the answer is X," the correction lives in the chat log and disappears on session end. Nothing reaches `BackgroundTrainer`.
+2. **No vision-correction surface.** When image recognition mis-identifies an object, there is no GUI affordance for the user to label the right answer. The mod at `mods/vision/` reads screen pixels but cannot accept feedback.
+3. **No replay-into-preference path.** Even if (1) and (2) shipped, corrections would land as plain text, not as DPO/APO `(chosen, rejected)` pairs that actually shift weights toward the right answer over the wrong one.
+
+### Slice plan
+
+| Slice | What | Risk | Solves |
+|---|---|---|---|
+| **TEACH-1a** Correction store + chat-side widget | New `data/corrections.jsonl` (atomic append). New "this is wrong, here is right" button on each AI reply in CORE chat. Records `{prompt, wrong_response, right_response, timestamp, modality}`. | low | Persistent feedback exists. |
+| **TEACH-1b** Vision-correction surface | When image is attached and AI mis-identifies, user can edit the AI's reply with the right caption → stored as TEACH-1a row with `modality="vision"` + image path. | medium | Vision-specific correction exists. |
+| **TEACH-1c** Replay-into-DPO path | `BackgroundTrainer` reads `data/corrections.jsonl` on its replay tick, converts each row to a DPO pair (`chosen=right_response, rejected=wrong_response`), feeds into the same `train_dpo` path the FORGE button already uses. | high | Corrections actually move weights. |
+
+### Acceptance call-chain (Rule §1 #20)
+
+After TEACH-1c, the production call chain must be:
+- **Capture:** User clicks "this is wrong" in CORE chat → `LogicChatMixin._record_correction(prompt, wrong, right)` → atomic append to `data/corrections.jsonl`.
+- **Replay:** `BackgroundTrainer._tick` → `_load_corrections()` → `_corrections_to_dpo_pairs()` → `train_dpo(pairs)` → weight update.
+- **Verify:** Re-issue the original prompt → AI gives the right answer (eventually — anchor-set bound applies, see Pass 156i6).
+
+### Devil's advocate (Rule §1 #13)
+
+- **One bad correction can poison weights.** User typos, mis-clicks, or sarcastic "corrections" become DPO pairs the same as real ones. Mitigation: batch corrections ≥ N before training, surface a review list, never train single-shot.
+- **DPO on tiny correction batches is unstable.** A 5-row replay tick will swing weights wildly. Mitigation: defer training until `len(corrections) ≥ 50` OR mix corrections with the anchor set on every tick.
+- **Vision correction needs the image at training time.** If the user moves/deletes the source image between correction and replay, the vision row is dead. Mitigation: copy the image into `data/corrections/images/` on capture (small disk cost, predictable provenance).
+- **Overlap with `BackgroundTrainer` replay buffer.** That buffer already trains on recent chat — corrections risk being trained twice. Mitigation: corrections are a **separate stream** (DPO pairs), recent-chat replay stays SFT — different loss, no double-counting.
+
+### Recommended order
+
+1. **TEACH-1a** (correction store + button only). Smallest safest start. Validates the capture surface without touching training.
+2. Pause for user to actually use the button on a few real chats — confirm UX before building the replay path.
+3. **TEACH-1c** (replay path) before **1b** — text corrections give us the simpler training-side proof. Vision adds image-path provenance that is its own scope.
+4. **TEACH-1b** last — vision-correction widget plus image-archival.
+
+### Parked / open questions
+
+- **"Tell it how to do a task" (procedure capture)** — the user wanting to teach a procedure (e.g. "to summarize a PDF: do X, then Y") is not the same as correction. Procedures are RAG-indexable instruction documents, not preference pairs. Lean: write to `information/procedures/{name}.md`, RAG already picks them up. No new code needed for this half. Confirm with user before assuming.
+- **Interaction with ARCH-1c** — once daemon-side training lands, TEACH-1c moves to a daemon endpoint. Not blocking; ship TEACH-1 against today's in-process trainer.
+
+---
+
+## 🔵 ARCH-1 / ARCH-1.5 — Server-first refactor + training extraction (proposed, not started)
+
+**Status:** Logged May 6, 2026. Approved direction (option B = Ollama-shape daemon + thin clients) confirmed by user. User also authorised physically separating the AI core from the GUI and named the AI side **Enigma AI** (May 6, 2026). NO CODE CHANGES authorised yet — package layout still needs a pick (see open question below).
+
+**Naming:** **Enigma AI** = the daemon (model + training + inference + API). **GUI** = a thin client that talks to Enigma AI over HTTP. Throughout this entry, "daemon" / "core" = Enigma AI.
+
+**Problem on disk (measured):**
+- `enigma_engine/api/server.py` already ships 18 endpoints (health, chat, chat/stream SSE, batch, models load/unload, profiles, config, history, training/status, train) with `AppState` + `threading.Lock` + `127.0.0.1` default. **~80% of the daemon is built.**
+- `enigma_engine/gui/` directly imports `EnigmaEngine` and `Trainer` 20+ times across `gui_logic.py`, `gui_forge.py`, and 8 `gui_forge_*.py` mixins. **GUI bypasses the API entirely.** This is the architectural mistake.
+- File-size measurement (May 6, 2026):
+  - **Core training (already isolated, ~8.4k lines):** `core/training.py` 5915, `core/training_evaluation.py` 625, `core/training_monitor.py` 516, `core/training_queue.py` 681, `core/adaptive_trainer.py` 682.
+  - **GUI training-launcher mixins (the actual bloat, ~10.3k lines):** `gui_forge_new_modes.py` 2955, `gui_forge_tools.py` 1624, `gui_forge_training.py` 1604, `gui_forge_models.py` 1197, `gui_forge_advanced.py` 971, `gui_forge_adaptive.py` 963, `gui_forge_teacher.py` 519, `gui_forge_queue.py` 501.
+  - GUI training wiring is **bigger than the entire core training engine** because every mode duplicates the same 5-step shape (read widgets → build `TrainingConfig` → instantiate `Trainer(...)` → spawn thread → poll callbacks).
+
+**Honest framing of "pull training out":** core training is already extracted under `enigma_engine/core/`. The audit-readability win the user asked for lives in **collapsing the 20+ duplicated launcher paths in GUI behind a single dispatcher** — which then becomes the daemon-side endpoint after the server-first refactor.
+
+### ARCH-1.5 — Training extraction (do this BEFORE ARCH-1b/c)
+
+| Slice | What moves | Code shrink (gui/) | Risk | Solves |
+|---|---|---|---|---|
+| **1.5a** TrainingDispatcher + ModeRegistry (core, in-process) | New `enigma_engine/core/training_dispatcher.py`. Registry maps `mode_name → (TrainerClass, config_builder, run_method)`. `dispatcher.start(mode, config_dict, callbacks) → Job`. | none yet | low | Single canonical training entry-point. |
+| **1.5b** Migrate GUI mode-by-mode | One mode per pass: `dpo`, `apo`, `simpo`, `kto`, `orpo`, `grpo`, `remax`, `rlhf`, `self_play`, `vision`, `audio`, `dialogue`, `distill`, `evolutionary`, `lora`, `reward_model`, `advanced`, `adaptive`, `rest`, `dpo_simpo`. Per-mode shrink: ~200 GUI lines → ~30 (read widgets + `dispatcher.start`). | ~10.3k → ~3.5k | medium (20 modes to verify) | The actual audit-volume win. |
+| **1.5c** Move `core/training*.py` → `enigma_engine/training/` | Rename + import-path update across codebase. `core/` becomes inference + model + tokenizer only; `training/` becomes trainer base + modes + dispatcher + registry. | rename only | low (mechanical) | Clean separation of inference vs training package. |
+
+### ARCH-1 — Server-first refactor (after ARCH-1.5)
+
+| Slice | What | Risk | Solves |
+|---|---|---|---|
+| **1a** EnigmaClient lib + CLI client | New `enigma_engine/client.py` (HTTP + SSE wrapper around `/api/*`). New `run.py --client chat` / `--client train --mode dpo --config X.json` paths that POST to a running daemon instead of importing core in-process. | low | Proves daemon pattern, gives Dia a non-GUI test surface, doesn't touch GUI yet. |
+| **1b** GUI chat + model-loading uses client | `gui_logic.py` and `gui_forge.py` stop importing `EnigmaEngine`. `_load_model`, `chat`, `chat_stream`, `unload`, `list_models` all go through `EnigmaClient`. Daemon spawned as subprocess on GUI launch. | medium | Removes 2 of the 20+ direct core imports. Validates IPC under GUI load. |
+| **1c** Training over API + dispatcher exposed via `/api/train/{mode}` | Server expands `/api/train` to accept any mode the dispatcher knows. SSE `/api/training/metrics`. GUI training mixins POST to `/api/train/{mode}`. | high | Removes the remaining 18+ direct trainer imports. Training survives daemon restart-on-GUI-crash. |
+| **1d** Hardening | Lock-scope review on `/api/profiles/{id}/activate`. CORS opt-in already handled. Auth deferred until web/phone client (option D) lands. | low | Closes the security review for the localhost daemon. |
+
+### Acceptance call-chain (Rule §1 #20)
+
+After ARCH-1c, the production call chain must be:
+- **Chat:** `run.py --gui` → daemon spawned subprocess → GUI `EnigmaClient.chat(prompt)` → `POST /api/chat` → `AppState.engine.chat()` → response.
+- **Training:** GUI Forge button → `EnigmaClient.train(mode="dpo", config={...})` → `POST /api/train/dpo` → `TrainingDispatcher.start("dpo", config_dict, callbacks)` → `Trainer.train_dpo(...)` → SSE metrics back to GUI.
+- **CLI (no GUI):** `run.py --client chat` → daemon (auto-spawn or attach) → `EnigmaClient` → same `POST /api/chat`.
+
+If any chain breaks before reaching the inner code, the slice is parked, not finished.
+
+### Recommended order
+
+1. **ARCH-1.5a** (dispatcher + registry, core only — tests prove every mode resolves and tears down). **Smallest safest start.** Authorises ARCH-1.5b.
+2. **ARCH-1.5b** mode-by-mode (one mode per pass, 20 passes, each is small and isolated).
+3. **ARCH-1.5c** rename `core/training*.py` → `training/`.
+4. **ARCH-1a** EnigmaClient lib + CLI client. Daemon-spawn helper.
+5. **ARCH-1b** GUI chat over client.
+6. **ARCH-1c** GUI training over client (now trivial because dispatcher already exists from 1.5a).
+7. **ARCH-1d** hardening sweep.
+
+### Devil's advocate (Rule §1 #13)
+
+- **ARCH-1.5a alone doesn't fix training-blocks-chat** (still same process, same GIL). That's solved by ARCH-1c (training jobs run inside daemon, GUI stays responsive via SSE). Don't expect responsiveness improvement from 1.5a.
+- **ARCH-1.5b risks regressions across 20 modes** if dispatcher isn't a perfect drop-in. Mitigation: dispatcher behind a feature flag, migrate one mode per pass, keep old launcher path until each mode is verified end-to-end against a real training run.
+- **ARCH-1c is the largest pass** — `/api/train` currently only handles text-SFT. Expanding to 20 modes + SSE metrics + cancellation + checkpoint hooks is real work. Don't underestimate.
+- **GUI mixins also have non-training code** (model loading, queue UI, teacher chat, mod-page wiring). Named overhaul scope (Rule §1 #18) for ARCH-1.5b is **"GUI training-mode launcher → dispatcher migration"** only — do NOT touch model-loading, queue UI, teacher chat in the same passes.
+
+### Parked / open questions
+
+- **Package layout pick (BLOCKING — no code until user answers).** User said "give it its own file and just call it Enigma AI." Three sane interpretations:
+  - **A. Sibling package.** New top-level `enigma_ai/` (contains current `core/` + `api/` + tokenizer). `enigma_engine/gui/` stays put or renames to `enigma_gui/`. Two sibling packages, one repo. **Smallest import diff.**
+  - **B. Rename in place.** `enigma_engine/` → `enigma_ai/` wholesale; move `gui/` out into sibling `enigma_gui/`. **Cleanest naming, biggest import diff** (~hundreds of `from enigma_engine...` lines across tests + scripts + GUI mixins).
+  - **C. Two repos.** Hardest. Only worth it if user wants to publish Enigma AI standalone. Adds release-coordination cost, breaks single-pytest-suite invariant.
+  - **Lean: A.** Smallest blast radius, lets ARCH-1.5a / 1a land before any rename pressure. B can happen later as a single mechanical pass once the daemon is proven.
+- Continuous `BackgroundTrainer` (router.py) — does it move daemon-side in 1.5c, or stay where it is? **Lean: daemon-side**, but log a separate ARCH-2 slice for it because the mods/ system is GUI-coupled and migrating it is its own scope.
+- Mods/ system loads through GUI today. Post-ARCH-1, mods need a daemon-side load path. Logged as **ARCH-3 (mods over API)** — not in this plan.
+- Web UI / phone client (option D) — not on the roadmap; revisit after ARCH-1d ships and stays stable for a few months.
+
+---
+
+**Last updated:** May 5, 2026 (Pass 156z9au — **Cosine schedule floor `min_lr_ratio` is now config-driven, not hardcoded.** Promoted the literal `0.1` that was duplicated at 5 sites in `core/training.py` (Trainer.train WSD branch, Trainer.train cosine branch warm-restarts, Trainer.train cosine branch no-restarts, Trainer.train_dpo, Trainer.train_vision, Trainer.train_audio) plus 1 site in `core/lora_utils.py` (`LoraTrainer.train`) into a single `TrainingConfig.min_lr_ratio: float = 0.1` field with `[0.0, 1.0]` validation. `LoraTrainer.__init__` gains a matching `min_lr_ratio: float = 0.1` kwarg with the same validation. Fixes the suggestions.txt Phase-1 item "Cosine schedule eta_min != 0 → eta_min = lr * 0.1 (or min_lr_ratio)" — the **(or min_lr_ratio)** half was never landed because the value was inlined at every site instead of named on the config. Now a user who wants a deeper cosine floor (e.g. 0.0 = textbook to-zero, 0.05 = aggressive late-step squeeze, 0.2 = very conservative) can set it once on TrainingConfig and every scheduler in the pipeline picks it up.
+
+**Production call chain (Rule #20):**
+- CLI: `run.py --train data/X.txt --epochs 10` → `Trainer(model, tok, TrainingConfig(...))` → `Trainer.train()` → cosine scheduler reads `self.config.min_lr_ratio`
+- GUI: any FORGE training mode that constructs `TrainingConfig` (DPO, vision, audio, dialogue, distill, ...) → same chain via the matching `train_*` method
+- LoRA: `LoraTrainer(model, tok, ..., min_lr_ratio=0.05)` → `LoraTrainer.train()` → cosine scheduler reads `self.min_lr_ratio`
+
+**Changes (Pass 156z9au):**
+- `enigma_engine/core/training.py` — added `min_lr_ratio: float = 0.1` field to `TrainingConfig` with paragraph docstring explaining 0.0 vs 0.1 vs higher; added `[0.0, 1.0]` validation in `__post_init__`; added `"min_lr_ratio": self.min_lr_ratio` to `to_dict()`; replaced 5 `self.config.learning_rate * 0.1` literals with `self.config.learning_rate * self.config.min_lr_ratio`; replaced WSD-branch local `min_lr_ratio = 0.1` with `min_lr_ratio = self.config.min_lr_ratio`.
+- `enigma_engine/core/lora_utils.py` — added `min_lr_ratio: float = 0.1` kwarg to `LoraTrainer.__init__` with `[0.0, 1.0]` validation, stored as `self.min_lr_ratio`, used in the cosine scheduler at `LoraTrainer.train`. Updated docstring.
+- `tests/test_core.py` — extended `TestS554TrainingConfigValidateExpanded` with 5 new tests (below-zero rejection, above-one rejection, zero accepted as textbook cosine, default value 0.1, round-trips through `to_dict`).
+- `tests/test_training.py` — added new `TestMinLrRatioConfig` class with 6 tests: default value, custom round-trip through `to_dict`, **regression gate** that asserts `"learning_rate * 0.1"` does NOT appear anywhere in `core/training.py` (catches the re-introduction of the literal pattern), structural assertions that `Trainer.train` and `Trainer.train_dpo` source contains `self.config.min_lr_ratio`, and signature gate that `LoraTrainer.__init__` exposes the new kwarg with default `0.1`.
+
+**Validation:** `ruff check enigma_engine/ tests/` → "All checks passed!". `python -m pytest tests/ -q` → 2870 passed (2859 + 11 new), 2 skipped, ~23s.
+
+**Six-question audit (§1 #19):**
+1. Would I write it this way today? — Yes. Single config field, validated once, consumed at every scheduler site. Zero magic numbers.
+2. What is it connected to? — `TrainingConfig` (storage + validation + serialization), 4 cosine schedulers in `Trainer`, 1 cosine scheduler in `LoraTrainer`, the WSD branch's late-decay floor.
+3. Could more connections be made? — Yes, but parked: GUI surface for `min_lr_ratio` would let advanced users tune from CONFIG / FORGE pages. Today they hand-edit `TrainingConfig(...)`. Not in scope for this slice; logged below.
+4. **Logic-eye:** Does the code deliver what the docstring claims? — Yes. Default is 0.1 (matches the docstring's "LM-friendly default"); 0.0 reproduces textbook cosine (verified by validation accepting 0.0 and the math `lr * 0.0 = 0`); per-site replacement preserves the prior `* 0.1` semantics exactly when the user sticks with the default.
+5. **Claim-vs-test:** Does the test prove correctness? — Yes. Behavioural-side: validation tests construct rejected/accepted configs and call `validate()`; `to_dict` round-trip test asserts the value emerges intact. Structural-side: regression gate scans the *whole* `core/training.py` for the old literal pattern (catches a regression where someone re-inlines `* 0.1` at any site, including future new schedulers); per-method `inspect.getsource` tests gate the new pattern at the two most-trafficked methods (`Trainer.train`, `Trainer.train_dpo`). The whole-file scan is stronger than per-site `getsource` checks because it catches sites that don't yet exist.
+6. **Sibling-boundary sweep:** Did I grep every site that shares this contract? — Yes. Grep `eta_min=.*learning_rate.*0\.1` in `enigma_engine/**/*.py` returned 0 matches post-fix. The cosine `eta_min` family is closed. Sibling families NOT touched (intentionally): the WSD floor at the same value is the same family and was promoted; `cosine_restart_period` warm-restarts in the same branch share the same floor and were promoted in the same `multi_replace_string_in_file` block.
+
+**Finished:**
+- `TrainingConfig.min_lr_ratio` field shipped with default + validation + `to_dict` round-trip
+- 5 cosine `eta_min` sites in `core/training.py` now config-driven
+- 1 cosine `eta_min` site in `core/lora_utils.py` now config-driven (with new kwarg)
+- WSD decay-floor local var now config-driven
+- 11 new tests cover defaults, validation edges, serialization, and a whole-file regression gate against re-inlined literals
+
+**Parked (concrete next step):**
+- GUI surface for `min_lr_ratio` on the CONFIG / FORGE training pages — **next step**: add a numeric entry on the relevant page (CONFIG general training section), bind it to the `TrainingConfig(...)` constructor inside the matching `_start_*_training` handler, default value 0.1, range `[0.0, 1.0]`. Low priority because the field has a sane LM-friendly default and only deep-dive users tune it.
+
+---
+
+**Last updated:** May 5, 2026 (Pass 156z9at — **Vision Stage-2 pre-train auto-checkpoint.** Closes the parked Stage-2 follow-up from 156z9as. Vision training has two stages: projection-only (text backbone frozen, no rollback rail needed) and Stage-2 with `unfreeze_text_layers > 0` (text backbone mutates, same risk profile as full SFT). Helper call is gated on the Stage-2 condition so projection-only runs do NOT produce a redundant rollback file.
+
+**Production call chain (Rule #20):**
+FORGE Vision → `_start_vision_training` → text-data load → `unfreeze_text_layers` validate (clamped 0–64) → `Trainer(...)` → **`if unfreeze_text_layers > 0: pre_vision_backup_path = self._pre_training_backup(student_path, suffix="pre_vision_stage2")`** → `train_vision(...)` → `atomic_torch_save` → `Rollback: {name}` log when Stage-2 backup landed.
+
+**Changes:**
+- [enigma_engine/gui/gui_forge_training.py](enigma_engine/gui/gui_forge_training.py) `_start_vision_training` — added the gated helper call immediately after `Trainer(...)` init; completion log surfaces "Rollback: {name}" only when the Stage-2 backup ran.
+- Tests in [tests/test_personality_data.py](tests/test_personality_data.py) `TestPreTrainingBackupWireSites`:
+  - NEW `test_vision_stage2_uses_helper_gated` — gates on `_pre_training_backup(` + `suffix="pre_vision_stage2"` + the literal `if unfreeze_text_layers > 0` gate AND asserts the gate index precedes the helper-call index (ordered substring check). Falsifiable: removing the gate would drop the gate-index comparison; reordering the gate after the helper call would fail the same assertion.
+
+**Validation:**
+- `ruff check enigma_engine/ tests/` — clean.
+- `pytest tests/ -q` — **2859 passed, 2 skipped** (+1).
+
+**Six-question self-audit (Rule #19):**
+1. **Author's-lens** — Same one-line wire-site as the other handlers, plus a single-line `if` gate. The gate is the only thing that distinguishes vision from the other entry points; everything else (suffix, log shape, completion-block surface) follows the established pattern.
+2. **Connections** — Helper now reachable from 6 wire-sites: distill, dialogue, dpo (covers apo), rl_variant (covers grpo + remax), preference_variant (covers simpo + orpo), vision-stage2. All 8 user-facing full-weight modes covered. LoRA + projection-only-vision intentionally skipped (no full-weight mutation).
+3. **More connections** — Pretrain (`_start_training`) and general SFT remain open. Their in-run `checkpoint_dir` saves give step-based rollback granularity already; pre-train backup is duplicative there. Decision: leave open for now, document as a design choice in the parked entry rather than wire by reflex.
+4. **Logic-eye** — Gate semantics match the docstring: helper only runs when text weights will mutate. Completion log "Rollback" line is correctly conditional on `pre_vision_backup_path` truthiness, so projection-only runs never see a misleading "Rollback" hint pointing at a backup that does not exist.
+5. **Claim-vs-test** — Structural test gates the literal helper call expression, the literal suffix string, AND the literal gate string AND the ordered-substring relationship between them. A regression that drops the gate (always backup) OR drops the helper (never backup) OR swaps their order both fail. Adversarial: deleting the helper line fails the helper-call assertion; deleting the gate fails the gate assertion; swapping their order fails the ordered-index check.
+6. **Sibling-boundary sweep** — All FORGE entry points that mutate full text weights now have the rail. Pretrain + general SFT are the only outliers; they have step-based rollback via `checkpoint_dir` so the missing rail is by design, not by oversight. Documented in the Parked block below.
+
+**Finished / Killed / Parked (Rule #20):**
+- **Finished**: vision Stage-2 backup gated on `unfreeze_text_layers > 0`. Closes the second of two parked entries from 156z9as.
+- **Parked (concrete decision required, not work)**: pretrain (`_start_training` in gui_forge_training) and general SFT — the in-run `checkpoint_dir` saves are step-based and produce rolling checkpoints during the run, which is strictly better than a single pre-training snapshot. Adding a pre-training backup would be redundant for these paths. Decision: leave as-is unless the user reports a specific scenario where a single named pre-training snapshot would help (e.g. "rollback to the moment BEFORE pretrain started" rather than "rollback to step N of pretrain"). If that scenario emerges, the same one-line helper call can be added.
+
+---
+
+**Last updated:** May 5, 2026 (Pass 156z9as — **Sibling-extension of pre-training auto-checkpoint to all RL/preference-alignment entry points.** Continues 156z9ar by wiring the `_pre_training_backup` helper into the remaining full-weight FORGE entry points: DPO (and APO via the `loss_type="apo_zero"` wrapper that re-uses `_start_dpo_training`), GRPO + ReMax (via the shared `_start_rl_variant_training` handler), and SimPO + ORPO (via the shared `_start_preference_variant_training` handler). Five algorithms covered with three handler edits — exactly the kind of leverage the helper extraction was designed to enable.
+
+**Production call chains (Rule #20):**
+1. FORGE DPO → `_start_dpo_training(loss_type="dpo")` → ... → `Trainer(...)` → **`_pre_training_backup(student_path, suffix=f"pre_{loss_type}")`** → `pre_dpo_*.pth` → `train_dpo(loss_type="dpo")` → save → "Rollback".
+2. FORGE APO → `_start_apo_training()` → `_start_dpo_training(loss_type="apo_zero")` → same wire-site as above → `pre_apo_zero_*.pth` → `train_dpo(loss_type="apo_zero")` → save → "Rollback".
+3. FORGE GRPO → `_start_grpo_training()` → `_start_rl_variant_training("GRPO")` → reward+policy phases → **`_pre_training_backup(student_path, suffix=f"pre_{algo.lower()}")`** → `pre_grpo_*.pth` → save → "Rollback".
+4. FORGE ReMax → `_start_remax_training()` → `_start_rl_variant_training("ReMax")` → same wire-site → `pre_remax_*.pth` → save → "Rollback".
+5. FORGE SimPO → `_start_simpo_training()` → `_start_preference_variant_training("SimPO")` → **`_pre_training_backup(student_path, suffix=f"pre_{algo.lower()}")`** → `pre_simpo_*.pth` → `train_simpo(...)` → save → "Rollback".
+6. FORGE ORPO → `_start_orpo_training()` → `_start_preference_variant_training("ORPO")` → same wire-site → `pre_orpo_*.pth` → `train_orpo(...)` → save → "Rollback".
+
+**Changes (Pass 156z9as):**
+- [enigma_engine/gui/gui_forge_training.py](enigma_engine/gui/gui_forge_training.py) `_start_dpo_training` — added helper call after `Trainer(...)` init using `f"pre_{loss_type}"` suffix so DPO and APO produce distinguishable rollback names; "Rollback: {name}" line appended to completion log.
+- [enigma_engine/gui/gui_forge_new_modes.py](enigma_engine/gui/gui_forge_new_modes.py) `_start_rl_variant_training` (shared handler for GRPO + ReMax) — added helper call after preference-data load using `f"pre_{algo.lower()}"`; "Rollback" log in completion block.
+- `_start_preference_variant_training` (shared handler for SimPO + ORPO) — same shape, helper called immediately after `Trainer(...)` init.
+- Tests in [tests/test_personality_data.py](tests/test_personality_data.py) `TestPreTrainingBackupWireSites`:
+  - NEW `test_dpo_uses_helper` — gates on `_pre_training_backup(` + `f"pre_{loss_type}"` + `pre_dpo_backup_path` + `Rollback`. Implicitly covers APO since APO routes into the same method.
+  - NEW `test_rl_variant_uses_helper` — gates on `_pre_training_backup(` + `f"pre_{algo.lower()}"` + `pre_rl_backup_path` + `Rollback` in the shared GRPO/ReMax handler.
+  - NEW `test_simpo_orpo_uses_helper` — same shape against the shared SimPO/ORPO handler with `pre_pref_backup_path`.
+
+**Validation:**
+- `ruff check enigma_engine/ tests/` — clean.
+- `pytest tests/ -q` — **2858 passed, 2 skipped** (+3 vs 156z9ar baseline).
+
+**Six-question self-audit (Rule #19):**
+1. **Author's-lens** — Three handler-level edits cover five user-facing modes. The leverage comes from the existing wrapper pattern (DPO/APO share `_start_dpo_training`; GRPO/ReMax share `_start_rl_variant_training`; SimPO/ORPO share `_start_preference_variant_training`) that was already in place from prior alignment-mode work. Nothing new built; we're just placing the helper call at the one point in each handler where the model is in memory but training has not yet stepped weights.
+2. **Connections** — Helper lives on `ForgeNewModesMixin` (Pass 156z9ar) and is reachable from every FORGE entry point via mixin composition. Each new wire-site uses the canonical pattern: helper-call result captured in a `pre_*_backup_path` local, surfaced as `Rollback: {Path(...).name}` in the completion log when non-None. No new global state, no new module-level imports, no signature drift.
+3. **More connections** — Remaining full-weight entry points: `_start_vision_training` (Stage-2 only, `unfreeze_text_layers > 0`); `_start_kto_training` if/when it's wired (not present in current source). LoRA explicitly excluded (base weights untouched). Dialogue + distill closed in 156z9ar. Pretrain + general SFT (`_start_training` in gui_forge_training) — those use the explicit FORGE config with `checkpoint_dir` and produce step-based checkpoints during the run, so the rollback rail is less critical, but still worth a future pass for consistency. Logged for future review, not a regression.
+4. **Logic-eye** — Each call site captures the helper return into a local AND surfaces it in the completion log AND gates the log on truthiness. No false-promise paths. Suffix string differs per call site so DPO/APO rollback files cannot be confused with each other; same for GRPO/ReMax and SimPO/ORPO.
+5. **Claim-vs-test** — Three new structural tests gate the LITERAL helper call expression paired with the LITERAL suffix expression at each handler. A regression that drops the helper call but keeps the local variable, OR keeps the call but forgets to forward the algo-derived suffix, fails the test. The "no `shutil.copy2` left in entry point" assertion from 156z9ar still gates `_start_distill_training` against re-inlining; the new handlers never had inline backup bodies so there is no equivalent regression to catch.
+6. **Sibling-boundary sweep** — Walked the FORGE entry-point family. Closed in 156z9ar: distill, dialogue. Closed in 156z9as: dpo, apo (via dpo), grpo, remax, simpo, orpo. Remaining open: vision Stage-2, pretrain, general SFT. That's 8 of ~10 full-weight entry points covered; the remaining two are parked with concrete next steps below.
+
+**Finished / Killed / Parked (Rule #20):**
+- **Finished**: `_pre_training_backup` helper now called from `_start_distill_training` (156z9ar), `_start_dialogue_training` (156z9ar), `_start_dpo_training` (covers DPO+APO), `_start_rl_variant_training` (covers GRPO+ReMax), `_start_preference_variant_training` (covers SimPO+ORPO).
+- **Parked (concrete next step)**: (a) `_start_vision_training` Stage-2 — gate the helper call on `unfreeze_text_layers > 0` since projection-only training never mutates the text backbone; (b) `_start_training` (pretrain / general SFT) — the in-run `checkpoint_dir` saves are step-based and already give rollback granularity, so the pre-training backup is duplicative. Document this as the design decision OR add the rail anyway for consistency.
+
+---
+
+**Last updated:** May 5, 2026 (Pass 156z9ar — **Sibling-extension of pre-training auto-checkpoint to dialogue training + DRY refactor.** Carries forward the parked follow-up from Pass 156z9ap. The 30-line inline backup body in `_start_distill_training` is extracted into a reusable `_pre_training_backup(model_path, *, suffix)` helper on `ForgeNewModesMixin` (mixin composition makes it visible from every Forge*Mixin via the host class), and dialogue training (the next-highest-risk full-SFT entry point after distill) gets the same rollback rail.
+
+**Production call chains (Rule #20):**
+1. FORGE Distill → `_start_distill_training` → **`_pre_training_backup(student_path, suffix="pre_distill")`** → returns `models/checkpoints/{stem}_pre_distill_{ts}.pth` path → anchor mix gate → identity probe (P5-pre-3) → `Trainer(...)` → train → save → `Rollback: {name}` log.
+2. FORGE Dialogue → `_start_dialogue_training` → trainer/student route check → epochs/lr validate → forge_params → `TrainingConfig(...)` → **`_pre_training_backup(student_path, suffix="pre_dialogue")`** → returns `models/checkpoints/{stem}_pre_dialogue_{ts}.pth` path → `Trainer(...)` → train → save → `Rollback: {name}` log appended to DIALOGUE TRAINING COMPLETE block.
+
+**Changes (Pass 156z9ar):**
+- [enigma_engine/gui/gui_forge_new_modes.py](enigma_engine/gui/gui_forge_new_modes.py) `ForgeNewModesMixin._pre_training_backup` — NEW helper. Lazy-imports `MODELS_DIR` from `enigma_engine.gui.scanners` (matches the existing tokenizer-load pattern in the same mixin so the backup helper has zero new module-level imports). Branches: source missing → return None + INFO "skipped"; copy raises → return None + loud `[!]` "FAILED" log (non-fatal); success → return path string + INFO "backup: {name}". `suffix` kwarg parametrizes the filename so each call site produces self-explanatory rollback files (`{stem}_pre_distill_{ts}{ext}`, `{stem}_pre_dialogue_{ts}{ext}`, ...).
+- `_start_distill_training` — 30-line inline backup body deleted; replaced with single `pre_distill_backup_path = self._pre_training_backup(student_path, suffix="pre_distill")` call. Behaviour unchanged; DRY.
+- [enigma_engine/gui/gui_forge_advanced.py](enigma_engine/gui/gui_forge_advanced.py) `_start_dialogue_training` — added `pre_dialogue_backup_path = self._pre_training_backup(student_path, suffix="pre_dialogue")` immediately before the `Trainer(student_mdl, tokenizer2, train_config)` constructor. Completion block surfaces `Rollback: {name}` when the backup landed.
+- Tests (all in [tests/test_personality_data.py](tests/test_personality_data.py)):
+  - NEW `TestPreTrainingBackupHelper` (4 behavioural tests with `tmp_path` + `monkeypatch.setattr(scanners, "MODELS_DIR", tmp_path)`) — creates timestamped copy with bytes round-trip + source untouched; returns None on missing source with skip log; swallows `shutil.copy2` raise + emits loud `[!]` log; suffix parametrizes filename so `pre_dialogue` and `pre_distill` calls produce distinguishable names.
+  - NEW `TestPreTrainingBackupWireSites` (2 structural tests) — distill entry point uses `_pre_training_backup(` + `suffix="pre_distill"` AND no longer contains a raw `shutil.copy2` (the regression-against-re-inlining gate); dialogue entry point uses `_pre_training_backup(` + `suffix="pre_dialogue"` + binds to `pre_dialogue_backup_path` + emits `Rollback` in completion log.
+  - UPDATED `TestP5Pre2WireSite::test_pre_distill_backup_runs_before_trainer_init` to gate on `_pre_training_backup(` instead of the removed `_pre_distill_` substring; UPDATED `test_pre_distill_backup_uses_timestamp` to gate `strftime` against the helper source (single source of truth for timestamping) instead of the entry point.
+
+**Validation:**
+- `ruff check enigma_engine/ tests/` — clean.
+- `pytest tests/test_personality_data.py -q` — 65 passed (was 59).
+- `pytest tests/ -q` — **2855 passed, 2 skipped** (+6 vs 156z9aq baseline; all 6 are the new explicit assertions).
+
+**Six-question self-audit (Rule #19):**
+1. **Author's-lens** — Helper extraction is the textbook DRY refactor when a 30-line body is about to be repeated at 6+ sites. The `suffix` kwarg is the only parameter that varies between call sites; everything else (source-existence check, MODELS_DIR resolution, timestamp format, error handling) is identical. No abstraction over what's not actually shared. Defensible.
+2. **Connections** — Helper lives on `ForgeNewModesMixin` next to `_run_identity_probe` (P5-pre-3 sibling). Mixin composition (`ForgeMixin(ForgeTrainingMixin, ForgeAdvancedMixin, ForgeAdaptiveMixin, ForgeNewModesMixin, ...)`) makes the helper visible to every entry point in every sibling mixin via `self._pre_training_backup(...)`. Lazy `MODELS_DIR` import matches the canonical pattern (tokenizer-load at L559, vocab-init at L1480 — both in the same file). Tests patch `scanners.MODELS_DIR` (the lazy-imported source of truth) so future refactors that change which module re-exports it will fail the patch loudly.
+3. **More connections** — Five more sibling entry points (`_start_grpo_training`, `_start_remax_training`, `_start_simpo_training`, `_start_orpo_training`, `_start_dpo_training` — note `_start_apo_training` wraps DPO so it inherits the rail naturally) all overwrite weights in place and would benefit from the same call. The helper is ready; each site is a one-line addition. Parked as the next sibling-extension slice rather than bundled here to keep the slice tight. `_start_lora_training` does NOT need the rail (LoRA writes a separate adapter file, base weights untouched). `_start_vision_training` projection-only mode is similar to LoRA in that the text backbone is frozen — but Stage-2 (`unfreeze_text_layers > 0`) DOES mutate text weights and SHOULD have the rail; logged as part of the parked sibling-extension scope.
+4. **Logic-eye** — Helper docstring names every contract (path, return values for each branch, suffix purpose, MODELS_DIR location, non-fatal-on-failure semantics). The actual code matches: missing-source returns None + INFO log; copy-failure returns None + loud `[!]` log; success returns path string + INFO log. No aspirational language, no over-promised claims. Distill refactor preserves the pre-existing `pre_distill_backup_path` variable name so all downstream completion-log code keeps working without edits.
+5. **Claim-vs-test** — Behavioural tests cover all three branches of the helper with tmp_path isolation and the `monkeypatch.setattr` falsification pattern (patching `shutil.copy2` to raise proves the swallow-and-log path works against the actual exception rather than just the docstring claim). Structural tests on the two wire-sites use literal-substring gates that are paired with the suffix string so a regression that drops the helper call OR forgets to forward the suffix fails immediately. The "no `shutil.copy2` left behind in distill entry point" assertion is the regression-against-re-inlining gate that catches a future refactor that helpfully resurrects the inline body.
+6. **Sibling-boundary sweep** — Walked the FORGE entry-point family. 9 `_start_*_training` methods total: 7 mutate full weights (distill, dialogue, dpo, apo→dpo, simpo, orpo, grpo, remax — that's actually 8 because apo wraps dpo), 1 mutates LoRA-only (lora), 1 conditionally mutates (vision: projection-only is safe, Stage-2 is not). Pass 156z9ap closed distill; this pass closes dialogue. Six more full-weight sites + vision Stage-2 are parked under "Sibling-extension of pre-training backup" with the helper ready to call.
+
+**Finished / Killed / Parked (Rule #20):**
+- **Finished**: helper helper itself (production-reachable from `_start_distill_training` and `_start_dialogue_training`); distill refactor (zero behaviour change, same code path); dialogue wiring (new rollback rail surfaces in completion log).
+- **Parked (concrete next step)**: extend the helper call to the remaining 5 RL-alignment entry points (`_start_grpo_training`, `_start_remax_training`, `_start_simpo_training`, `_start_orpo_training`, `_start_dpo_training`) and to `_start_vision_training` Stage-2 (gated on `unfreeze_text_layers > 0`). Each is a one-line addition; tests are the same shape as the dialogue wire-site test in this pass. Held back to keep slice scope tight, not because the work is complex.
+
+---
+
+**Last updated:** May 5, 2026 (Pass 156z9aq — **P5-pre-3: identity-guard probe (pre+post) for personality distillation.** Third slice of the Personality-5 careful-build chain. Final safety rail before P5-run / P5-real: a deterministic in-memory probe that asks the student "Who are you?" / "What model are you?" / "Are you Qwen?" before AND after distillation, then reports drift.
+
+**Production call chain (Rule #20):** FORGE GUI Distill mode → user selects `personality` → `_start_distill_training` → teacher gen + filter (P5-pre-1) → pre-distill backup (P5-pre-2) → anchor mix gate (P5-pre-2) → **(NEW) pre-probe: encode `User: {prompt}\nAssistant:` for each `IDENTITY_PROBE_PROMPTS` entry, call `student.generate(...)` under `torch.no_grad()` + `student.eval()`, decode, store `{prompt: response}` in `pre_probe_responses`** → `Trainer(student, tokenizer, train_config)` → `trainer.train()` (in-memory weights updated) → **(NEW) post-probe: same loop on the now-trained student** → **(NEW) `summarize_identity_probe(pre, post)` returns `{pre_safe, post_safe, drifted, recovered, total}`** → log "Identity safety: K/N pre → J/N post" + per-prompt drift list + rollback hint pointing at the P5-pre-2 backup → `atomic_torch_save`.
+
+**Changes (Pass 156z9aq):**
+- [enigma_engine/core/personality_data.py](enigma_engine/core/personality_data.py) — added pure data + helper:
+  - `IDENTITY_PROBE_PROMPTS: list[str]` — 5 short, direct identity questions (`"Who are you?"`, `"Who made you?"`, `"What model are you?"`, `"Are you Qwen?"`, `"What is your name?"`). Pure module-level constant; no torch import.
+  - `summarize_identity_probe(pre, post) -> dict` — pure function comparing two `{prompt: response}` dicts via existing `passes_identity_filter`. Returns `pre_safe`, `post_safe`, `drifted` (safe→leak regression), `recovered` (leak→safe gain), `total`. Operates on the intersection of keys so out-of-band prompt sets cannot crash the summary.
+- [enigma_engine/gui/gui_forge_new_modes.py](enigma_engine/gui/gui_forge_new_modes.py):
+  - **NEW `_run_identity_probe(model, tokenizer, device, prompts, max_new_tokens=64)`** mixin method — encodes each prompt with `User: ...\nAssistant:`, runs `model.generate(..., temperature=0.7, top_k=50, top_p=0.9, repetition_penalty=1.1)` under `torch.no_grad()`, decodes the new tokens only (slices off the prompt), strips, returns `{prompt: response}`. Saves the prior `model.training` flag, switches to `eval()`, restores in `finally`. Per-prompt try/except so a single failed probe yields `""` and doesn't kill the run — observability is non-fatal.
+  - **`_start_distill_training` pre-probe** — gated on `"personality" in categories`, runs AFTER anchor-mix resolution and BEFORE `TrainingConfig(...)` construction. Stores `pre_probe_responses`. Surfaces baseline leak count so the user sees the starting point. Probe failure logs `[!]` and disables post-probe comparison for the run.
+  - **`_start_distill_training` post-probe** — runs AFTER `state = trainer.train(...)` returns and AFTER the abort-guard (so we don't probe a NaN-corrupted model), BEFORE `atomic_torch_save`. Calls `summarize_identity_probe`, logs `"Identity safety: K/N pre → J/N post"`, lists every drifted prompt, points the user at the P5-pre-2 rollback file when drift is non-zero (or warns when no rollback exists).
+- Tests (all in [tests/test_personality_data.py](tests/test_personality_data.py)):
+  - NEW `TestIdentityProbeData` (2 tests) — probe list non-empty, all strings, no duplicates.
+  - NEW `TestSummarizeIdentityProbe` (6 behavioural tests) — no-drift / safe→leak drift / leak→safe recovery / intersection-only counting / empty-input / sorted output.
+  - NEW `TestProbeWireSite` (4 structural tests) — pre-probe ordered before `trainer.train`; post-probe uses `summarize_identity_probe` + reads `summary["drifted"]`; gate `"personality" in categories` appears ≥2× (anchor mix + probe); helper exists with `model.eval()` + `model.train()` restoration + `no_grad()`.
+
+**Validation:**
+- `ruff check enigma_engine/ tests/` — clean.
+- `pytest tests/test_personality_data.py -q` — 59 passed (was 47).
+- `pytest tests/ -q` — **2849 passed, 2 skipped** (+12 vs 156z9ap baseline; all 12 are the new explicit assertions).
+
+**Six-question self-audit (Rule #19):**
+1. **Author's-lens** — Probe is the cheapest possible drift detector: no extra training, no second model load, no benchmark dataset, no neural reward. Just five strings, the existing `Enigma.generate` we already use, and the existing `passes_identity_filter` we use during data filtering. Reuse over rebuild. Defensible.
+2. **Connections** — `IDENTITY_PROBE_PROMPTS` and `summarize_identity_probe` live in `personality_data.py` so they're testable without torch (pure-data module discipline preserved). The probe loop calls `student.generate()` directly (no `EnigmaEngine` re-load — would double VRAM). Filter reuses `passes_identity_filter` so probe-failure semantics match data-filter semantics by construction. Rollback logs point at the P5-pre-2 backup, closing the safety loop end-to-end.
+3. **More connections** — Sibling FORGE training entry points (`_start_dialogue_training`, `_start_simple_sft`, `_start_lora_training`, `_start_dpo_training`) could ALL benefit from the probe + backup pattern when their data category is identity-relevant. Parked under "P5-pre-2/3 sibling-extension follow-up." Not done in this pass to keep slice scope tight.
+4. **Logic-eye** — The probe claims "drift detection." Code delivers: encodes prompt → runs same generation path the user will hit at chat time → checks identity-leak using the same filter we trust at data-filter time → flags any prompt that flipped safe→leak. No over-promised behaviour. The post-probe ALSO tests the regression direction (leak→safe `recovered`) which is rare but possible (fresh student before personality SFT may already leak Qwen-trained vocab; SFT may genuinely fix it).
+5. **Claim-vs-test** — Behavioural tests on `summarize_identity_probe` cover all four branches: safe→safe (no entry), safe→leak (`drifted`), leak→safe (`recovered`), leak→leak (no entry). Empty-input edge case included. Sorted-output gated explicitly (regression to insertion-order would be invisible without it). Wire-site tests are structural-only (a behavioural test would need a live student); each one falsified mentally by deleting the line it gates and confirming the assertion would fail.
+6. **Sibling-boundary sweep** — Three other distill modes touch student weights: dialogue-only, simple-SFT, LoRA. None currently run a probe. Same-family contract is "any training that updates student weights based on teacher signal could drift identity"; closing the family fully means extending the probe to those entry points. Logged as parked sibling-extension. Within this slice the gate is `"personality" in categories` because that's the ONLY category in `_start_distill_training` whose data carries the drift pressure — other categories train on math/code/reasoning where identity leak is a teacher-data filter problem (closed by P5-pre-1), not a probe problem.
+
+**Finished / Killed / Parked (Rule #20):**
+- **Finished**: Identity-guard probe is reachable from the production entry-point `_start_distill_training` via the `personality` category checkbox; pre+post probes both run; `summarize_identity_probe` is fully tested; logs surface drift count + rollback hint. End-to-end chain reaches into new code and back out to the user.
+- **Parked**:
+  - Pre/post benchmark integration with `run_gsm8k_benchmark` — heavy to wire mid-flow; logging the manual command pre and post would be the right minimal step. Not done.
+  - Sibling-extension of probe + backup to dialogue / simple-SFT / LoRA / DPO entry points.
+  - "Restore Backup" GUI button on MODELS page (rolls back `models/checkpoints/{stem}_pre_distill_{ts}.pth` → `models/{stem}.pth`).
+
+**Next slices in the P5 chain:**
+- **P5-run** — small dry pass on a *copy* of the student (50 examples, 1 epoch) to validate the end-to-end pipeline runs without errors. No new code; runtime exercise only.
+- **P5-real** — full ~500-example personality SFT on the real student model with rollback ready.
+
+---
+
+**Last updated:** May 5, 2026 (Pass 156z9ap — **P5-pre-2: anchor mix + pre-SFT auto-checkpoint for personality distillation.** Second slice of the Personality-5 careful-build chain. Two safety rails before the eventual personality SFT trigger:
+
+**Production call chain (Rule #20):** FORGE GUI Distill mode → user selects `personality` (any combo) → `_start_distill_training` → teacher-side data gen + per-response filter (P5-pre-1) → **(NEW) `shutil.copy2(student_path, models/checkpoints/{stem}_pre_distill_{ts}.pth)`** → **(NEW) `_resolve_anchor_path` resolves `data/anchor_examples.jsonl` → if `personality` in categories AND anchor exists, set `general_mix_ratio=0.3` + `general_data=str(anchor_path)`** → `Trainer(student, tokenizer, train_config)` → `Trainer.train()` mixes anchor sequences via existing `general_data` + `general_mix_ratio` infra → SFT → save → "Rollback: {backup_name}" surfaced in completion log.
+
+**Changes (Pass 156z9ap):**
+- [enigma_engine/core/training.py](enigma_engine/core/training.py) `_parse_training_data` — added `response` key fallback alongside `completion` / `answer` in BOTH the dict-list path AND the JSONL path. Anchor JSONL (`{"prompt": ..., "response": ..., "score": ...}`) now parses correctly through Trainer's `general_data` mix path. Without this, the JSONL parser silently yielded zero sequences, fell through to last-resort line-split, and landed raw `{...}` strings as training tokens — pure noise. Aligns with `BackgroundTrainer.add_example` ([router.py L383](enigma_engine/router.py#L383)) which already produces `response` keys.
+- [enigma_engine/gui/gui_forge_new_modes.py](enigma_engine/gui/gui_forge_new_modes.py) `_start_distill_training`:
+  - **Pre-distill auto-checkpoint** — before the `Trainer(student, ...)` constructor: `shutil.copy2(student_path, models/checkpoints/{stem}_pre_distill_{YYYYMMDD_HHMMSS}.pth)`. Skipped with INFO log when `student_path` does not yet exist on disk; loud `[!]` log on copy failure (non-fatal — run proceeds without the rail). Backup path surfaced in DISTILLATION COMPLETE block as `"Rollback: {name}"`.
+  - **Anchor mix gate** — only when `"personality" in categories`: read `gui_settings.json` key `anchor_data_path`, route through `scanners._resolve_anchor_path`, set `general_mix_ratio=0.3` + `general_data=str(anchor)` if the file resolves. Other distill categories keep `general_mix_ratio=0.0` (status quo). When personality is selected but no anchor file resolves, log a loud notice that catastrophic-forgetting risk is HIGHER for this run.
+  - `general_mix_ratio=0.0  # Only distilled data` literal removed; `TrainingConfig` is now constructed with the gated `_mix_ratio` and `_mix_data` locals.
+- Tests:
+  - NEW `TestParseTrainingDataJSONL.test_jsonl_response_key_alias` — behavioural: anchor-shape JSONL parses to `User: ... \nAssistant: ...` sequences.
+  - NEW `TestParseTrainingDataDictList.test_dict_list_response_key_alias` — behavioural: dict-list path also accepts `response` key.
+  - NEW `TestP5Pre2WireSite` (4 structural tests) — pre-distill backup runs BEFORE Trainer init (ordered substring); backup uses `strftime("%Y%m%d_%H%M%S")` and `pre_distill_backup_path` local; anchor mix gated on `"personality" in categories` AND uses `_resolve_anchor_path` AND forwards `general_mix_ratio=_mix_ratio` + `general_data=_mix_data`; default ratio is `0.3` (regression to `0` would re-introduce forgetting silently).
+
+**Validation:**
+- `ruff check enigma_engine/ tests/` — clean.
+- `pytest tests/test_personality_data.py tests/test_training.py -q` — 461 passed.
+- `pytest tests/ -q` — **2837 passed, 2 skipped** (+13 vs 156z9ao baseline; +6 explicit new + 7 pre-existing skip→pass shifts that are env-dependent and unrelated).
+
+**Six-question self-audit (Rule #19):**
+1. **Author's-lens** — Two small gates added at one entry point. The backup is unconditional (any distill category benefits from rollback). The anchor mix is gated specifically to `personality` because identity-drift pressure is unique to that category — other categories (reasoning/knowledge/code) don't pull the model toward teacher self-naming. Defensible.
+2. **Connections** — Reads `gui_settings.json` via existing `_read_gui_str_setting` mixin method; calls existing `scanners._resolve_anchor_path` (the same helper `desktop.py` uses to wire `BackgroundTrainer`). Writes to `models/checkpoints/` using `MODELS_DIR` already imported in scope. No new dependencies, no new modules.
+3. **Could more connections be made?** — The same anchor file is now shared by THREE consumers: `BackgroundTrainer._retrain_on_replay` (continuous), `BackgroundTrainer._retrain_on_replay` idle scheduler (Pass 156w), and now distill-mode personality SFT. All three resolve through the same `_resolve_anchor_path` helper, so a future user override in `gui_settings.json` propagates everywhere consistently. Good.
+4. **Logic-eye on doc claim** — Stamp claim: "anchor mix when personality is selected" + "pre-SFT auto-checkpoint with timestamped name → guaranteed rollback". Code delivers exactly: `if "personality" in categories: ... _mix_ratio = 0.3` (anchor mix gate); `_shutil.copy2(src, ckpt_dir / f"{stem}_pre_distill_{ts}{suffix}")` (timestamped backup before training). Backup is "guaranteed" only when student file exists at start — handled with INFO log when it doesn't (truthful: a fresh-construct student has nothing to back up).
+5. **Claim-vs-test** — Behavioural tests for the parser fix prove the anchor file END-TO-END: `Trainer._parse_training_data` on anchor-shape JSONL now yields proper `User: ... \nAssistant: ...` sequences (not raw `{...}` strings). Wire-site structural tests gate the four contract claims (backup ordering, timestamp helper, gating on category, forwarding ratio + data). Falsifiability: deleting the `_mix_ratio = 0.3` line OR moving it to `_mix_ratio = 0.0` would fail `test_anchor_mix_default_ratio_is_30_percent`; moving the `shutil.copy2` block AFTER `trainer = Trainer(...)` would fail `test_pre_distill_backup_runs_before_trainer_init`; dropping the `"personality" in categories` gate would fail `test_anchor_mix_gated_on_personality_category`.
+6. **Sibling-boundary** — `_start_dialogue_training`, `_start_simple_sft`, `_start_lora_training` and other FORGE training entry-points DO NOT make a pre-training backup. Distill is the riskiest entry-point (overwrites student with weights derived from a different model's distribution) so backup landed there first. Sibling extension is parked as a follow-up: same `shutil.copy2` block can land in any FORGE entry-point that overwrites the source model.
+
+**P5 careful-build remaining slices (in order):**
+- ~~**P5-pre-1**~~ — Done (Pass 156z9am, audit Pass 156z9an, fixes Pass 156z9ao).
+- ~~**P5-pre-2**~~ — Done (this pass).
+- **P5-pre-3** — add 10% eval split from generated examples; wire pre/post `python run.py --benchmark` runs; identity-guard probe ("Who are you?" / "Who made you?" before+after, assert no drift to teacher identity). NO training run yet.
+- **P5-run** — small dry pass (50 examples, 1 epoch) on a *copy* of the model to validate the full pipeline.
+- **P5-real** — full ~500-example run on the real model with rollback ready.
+
+**Parked / follow-ups:**
+- **Sibling backup extension** — extend `shutil.copy2` pre-training rail to `_start_dialogue_training` / `_start_simple_sft` / `_start_lora_training` / `_start_dpo_training` if the user requests broader rollback coverage. Distill is the highest-risk path so it landed first.
+- **P5-pre-2-followup** — surface the rollback path in a "Restore Backup" GUI button on the MODELS page so the user doesn't need to navigate the file system to revert. Small UX win, not blocking.
+
+---
+
+**Previous: Pass 156z9ao — **P5-pre-1 audit fixes (F-A / F-B / F-C) + structural-vs-output-shape lesson.** Three findings logged in Pass 156z9an's "real audit" closed in this pass: **F-A** empty-response bucketing — the personality inline filter in `_start_distill_training` short-circuited on `bool(clean_response)` so empty teacher output was logged as "too short" without incrementing any reject counter, drifting the GUI counts away from `filter_personality_examples` aggregate behaviour; fixed by routing `not clean_response` through the `quality` bucket. **F-B** `conversation` category had the same `User: …\nAssistant:` double-wrap bug as the 5 personality prompts fixed in 156z9an — pre-existing, not introduced by P5, but the formatter is shared; rewrote 5 conversation prompts to direct imperatives. **F-C** added behavioural test `test_distill_formatter_well_formed_for_every_prompt` that runs every prompt through `f"User: {p}\nAssistant: {fake}"` and asserts exactly one `user:` and one `assistant:` marker — catches the double-wrap structurally even if a future prompt sneaks past the start/end string checks. **AA code maker.md §4 Testing** got the lesson: structural import-presence tests do NOT validate output shape of formatted artifacts; pair with a shape-invariant behavioural test. **Validation:** `2824 passed, 9 skipped` (+1 vs 156z9an for the new shape test). Lint clean. Commit `ee130d8`.
 
 **Last updated:** May 4, 2026 (Pass 156z9am — **P5-pre-1: personality distillation prompt pool + identity/quality/dedup filters.** First slice of the Personality-5 careful-build chain. User said "we have to be careful with it" — this slice is pure data plumbing, ZERO training, fully testable in isolation. Sets the foundation for P5-pre-2 (anchor mix + auto-checkpoint), P5-pre-3 (eval split + benchmark + identity-guard probe), then dry-run on copy, then real run.
 
