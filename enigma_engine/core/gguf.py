@@ -191,9 +191,24 @@ class GGUFMetadata:
     #   error loading model hyperparameters: key not found in model:
     #   llama.attention.layer_norm_rms_epsilon
     attention_layer_norm_rms_epsilon: float = 1e-6
+    # Qwen3-arch only — per-head key/value dimension. Required by
+    # llama.cpp's `qwen3` arch (LLM_KV_ATTENTION_KEY_LENGTH /
+    # LLM_KV_ATTENTION_VALUE_LENGTH). Left as 0 for the `llama` arch,
+    # which doesn't read these keys. ARCH-V1d (May 6, 2026): set
+    # automatically by `_infer_metadata` when QK-norm tensors are
+    # detected in the state_dict.
+    attention_key_length: int = 0
+    attention_value_length: int = 0
 
     # Tokenizer
-    tokenizer_model: str = "llama"
+    # ARCH-V1e (May 6, 2026): default to `gpt2` (BPE) rather than
+    # `llama` (SentencePiece). llama.cpp's SentencePiece path expects
+    # piece scores + a curated vocabulary; an Enigma byte-level vocab
+    # has neither. The `gpt2` (BPE) path works with arbitrary token
+    # arrays + a (possibly empty) merges array, which is what our
+    # tokenizers actually export.
+    tokenizer_model: str = "gpt2"
+    tokenizer_pre: str = "default"
     vocab_size: int = 32000
     bos_token_id: int = 1
     eos_token_id: int = 2
@@ -201,7 +216,7 @@ class GGUFMetadata:
 
     def to_dict(self) -> dict[str, Any]:
         arch = self.general_architecture
-        return {
+        out: dict[str, Any] = {
             "general.architecture": arch,
             "general.name": self.general_name,
             "general.author": self.general_author,
@@ -220,10 +235,19 @@ class GGUFMetadata:
             f"{arch}.attention.layer_norm_rms_epsilon": self.attention_layer_norm_rms_epsilon,
             f"{arch}.vocab_size": self.vocab_size,
             "tokenizer.ggml.model": self.tokenizer_model,
+            "tokenizer.ggml.pre": self.tokenizer_pre,
             "tokenizer.ggml.bos_token_id": self.bos_token_id,
             "tokenizer.ggml.eos_token_id": self.eos_token_id,
             "tokenizer.ggml.padding_token_id": self.pad_token_id,
         }
+        # Qwen3-arch extras — only emitted when populated. llama.cpp's
+        # `qwen3` arch reads these as required keys; the `llama` arch
+        # ignores them.
+        if self.attention_key_length > 0:
+            out[f"{arch}.attention.key_length"] = self.attention_key_length
+        if self.attention_value_length > 0:
+            out[f"{arch}.attention.value_length"] = self.attention_value_length
+        return out
 
 
 # llama.cpp / GGUF spec: many integer keys are UINT32, not UINT64. Reading
@@ -241,6 +265,8 @@ _GGUF_UINT32_ARCH_SUFFIXES: tuple[str, ...] = (
     ".feed_forward_length",
     ".attention.head_count",
     ".attention.head_count_kv",
+    ".attention.key_length",
+    ".attention.value_length",
     ".rope.dimension_count",
     ".vocab_size",
     ".expert_count",
@@ -903,6 +929,13 @@ if HAS_NUMPY:
                 metadata = GGUFMetadata()
                 metadata = self._infer_metadata(model, metadata)
 
+            # ARCH-V1d (May 6, 2026): arch-vs-tensor-set consistency.
+            # Runs unconditionally — even when the caller supplied an
+            # explicit `metadata` — because picking the wrong arch for
+            # the tensor set produces a silently-broken file. This is a
+            # safety override, not a user choice.
+            metadata = self._apply_arch_consistency(model, metadata)
+
             for key, value in metadata.to_dict().items():
                 writer.add_metadata(key, value)
 
@@ -926,8 +959,22 @@ if HAS_NUMPY:
                 elif self.quantization == "q4_k" and self._should_quantize(gguf_name):
                     data, tensor_type = GGUFQuantizer.quantize_q4_k(data)
                 elif self.quantization == "f16":
-                    data = data.astype(np.float16)
-                    tensor_type = GGMLType.F16
+                    # ARCH-V1g (May 6, 2026): only cast non-norm/non-bias
+                    # tensors. llama.cpp's CPU + CUDA backends both
+                    # require RMSNorm scale weights and bias vectors to
+                    # be F32 (`GGML_ASSERT(src1->type == GGML_TYPE_F32)`
+                    # in ggml-cpu.c). Casting them to F16 produces a
+                    # file that loads cleanly but crashes at the first
+                    # forward pass. Mirror the `_should_quantize`
+                    # skip-list semantics (norm + bias) but allow
+                    # embeddings (`embd`) to be F16 — that's the
+                    # standard llama.cpp convention.
+                    name_lower = gguf_name.lower()
+                    if "norm" in name_lower or "bias" in name_lower:
+                        tensor_type = GGMLType.F32  # data is already F32
+                    else:
+                        data = data.astype(np.float16)
+                        tensor_type = GGMLType.F16
 
                 writer.add_tensor(gguf_name, data, tensor_type)
 
@@ -1005,6 +1052,76 @@ if HAS_NUMPY:
             except Exception:
                 pass
 
+            # ARCH-V1d (May 6, 2026): auto-detect Qwen3-style QK-norm.
+            # Moved to `_apply_arch_consistency` so it runs even when the
+            # user supplies an explicit metadata object.
+
+            return metadata
+
+        def _apply_arch_consistency(
+            self, model: Any, metadata: GGUFMetadata
+        ) -> GGUFMetadata:
+            """Force the architecture to match the tensor set.
+
+            Enigma defaults to ``use_qk_norm=True``, which produces
+            ``layers.{N}.attention.{q,k}_norm.weight`` tensors. llama.cpp's
+            ``llama`` arch has no slot for these and silently rejects them
+            (``done_getting_tensors: wrong number of tensors``). The fix
+            is to switch ``general.architecture`` to ``qwen3``, which DOES
+            define ``attn_q_norm`` / ``attn_k_norm`` and additionally
+            requires the per-head ``key_length`` / ``value_length`` keys.
+
+            Runs UNCONDITIONALLY (even when the caller supplies an
+            explicit metadata object) because picking the wrong arch for
+            the tensor set produces a silently-broken file. This is a
+            safety override, not a user choice. Logs an INFO line when it
+            takes effect so the user can see why the arch flipped.
+            """
+            try:
+                state_dict = model.state_dict() if hasattr(model, 'state_dict') else {}
+                has_qk_norm = any(
+                    'q_norm' in k or 'k_norm' in k
+                    for k in state_dict.keys()
+                )
+            except Exception:
+                return metadata
+
+            # 1) Arch flip (qwen3-only concern).
+            if has_qk_norm and metadata.general_architecture != "qwen3":
+                logger.info(
+                    "GGUF arch override: state_dict contains QK-norm "
+                    "tensors; switching general.architecture from %r to "
+                    "'qwen3' (llama.cpp's `llama` arch has no slot for "
+                    "these tensors).",
+                    metadata.general_architecture,
+                )
+                metadata.general_architecture = "qwen3"
+
+            # 2) Per-head dim derivation. Applies to ALL architectures —
+            # llama.cpp validates `n_rot == head_dim` at load time, and
+            # the GGUFMetadata default of 128 is wrong for any model
+            # whose head_dim != 128 (which is most small/test models).
+            # ARCH-V1e (May 6, 2026): moved out of the qwen3 branch
+            # because the llama arch needs this fix too — without it
+            # llama.cpp aborts with `invalid n_rot: 128, expected N`.
+            if (
+                metadata.attention_head_count > 0
+                and metadata.embedding_length > 0
+            ):
+                head_dim = (
+                    metadata.embedding_length // metadata.attention_head_count
+                )
+                # Only override if caller left the metadata default (128);
+                # otherwise respect their explicit choice.
+                if metadata.rope_dimension_count == 128:
+                    metadata.rope_dimension_count = head_dim
+                # qwen3-only per-head keys.
+                if metadata.general_architecture == "qwen3":
+                    if metadata.attention_key_length == 0:
+                        metadata.attention_key_length = head_dim
+                    if metadata.attention_value_length == 0:
+                        metadata.attention_value_length = head_dim
+
             return metadata
 
         def _add_tokenizer_metadata(self, writer: GGUFWriter, tokenizer: Any) -> None:
@@ -1014,8 +1131,17 @@ if HAS_NUMPY:
               tokenizer.ggml.tokens     -> ARRAY[STRING]
               tokenizer.ggml.scores     -> ARRAY[FLOAT32]
               tokenizer.ggml.token_type -> ARRAY[INT32]
+              tokenizer.ggml.merges     -> ARRAY[STRING]   (BPE only)
             Writing token_type as INT64 (the default for `int` lists)
             causes llama.cpp to reject the file.
+
+            ARCH-V1e (May 6, 2026): the `merges` array is REQUIRED by
+            llama.cpp's BPE tokenizer (`tokenizer.ggml.model="gpt2"`).
+            Without it, vocab construction fails and any subsequent
+            generate() call crashes. We pull merges from the tokenizer
+            if it exposes them, otherwise emit an empty list — which
+            is valid and means "each vocab entry is already its own
+            token" (correct behaviour for byte-level vocabs).
             """
             try:
                 if hasattr(tokenizer, 'get_vocab'):
@@ -1035,6 +1161,24 @@ if HAS_NUMPY:
                         "tokenizer.ggml.token_type",
                         [1] * len(tokens),  # 1 = LLAMA_TOKEN_TYPE_NORMAL
                         GGUFValueType.INT32,
+                    )
+
+                    # BPE merges — "left right" space-separated strings.
+                    # Always tagged STRING (even when empty) because
+                    # merges are spec'd as ARRAY[STRING]; the writer's
+                    # default empty-list inference picks UINT32, which
+                    # produces a malformed file.
+                    raw_merges = getattr(tokenizer, 'merges', None) or []
+                    merge_strs: list[str] = []
+                    for m in raw_merges:
+                        if isinstance(m, (list, tuple)) and len(m) == 2:
+                            merge_strs.append(f"{m[0]} {m[1]}")
+                        elif isinstance(m, str):
+                            merge_strs.append(m)
+                    writer.add_metadata_array(
+                        "tokenizer.ggml.merges",
+                        merge_strs,
+                        GGUFValueType.STRING,
                     )
             except Exception as e:
                 logger.warning(f"Could not add tokenizer metadata: {e}")

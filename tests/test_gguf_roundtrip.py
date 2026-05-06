@@ -80,7 +80,7 @@ skip_no_llama = pytest.mark.skipif(
 # Test fixtures.
 # ---------------------------------------------------------------------------
 
-def _build_tiny_model():
+def _build_tiny_model(use_qk_norm: bool = False):
     import torch
 
     from enigma_engine.core.model import Enigma
@@ -99,6 +99,12 @@ def _build_tiny_model():
         use_differential_attn=False,
         n_predict_heads=0,
         neftune_alpha=0.0,
+        # V1c metadata-type tests assume the `llama` arch. ARCH-V1d's
+        # arch-consistency override flips to `qwen3` whenever QK-norm
+        # tensors are detected, so V1c tests build the model without
+        # them. V1d tests pass `use_qk_norm=True` to exercise the
+        # override path.
+        use_qk_norm=use_qk_norm,
     )
     torch.manual_seed(0)
     return Enigma(cfg).eval(), cfg
@@ -113,10 +119,10 @@ def _build_tiny_tokenizer():
     return _ByteVocab()
 
 
-def _export_tiny(quantization: str, out_path: Path) -> str:
+def _export_tiny(quantization: str, out_path: Path, *, use_qk_norm: bool = False) -> str:
     from enigma_engine.core.gguf import GGUFExporter, GGUFMetadata
 
-    model, cfg = _build_tiny_model()
+    model, cfg = _build_tiny_model(use_qk_norm=use_qk_norm)
     meta = GGUFMetadata(
         general_name="enigma-test",
         context_length=cfg.max_seq_len,
@@ -315,6 +321,177 @@ class TestGgufMetadataTypes:
 
 
 # ---------------------------------------------------------------------------
+# 1c. ARCH-V1d arch-consistency audit. When the model's state_dict
+#     contains QK-norm tensors (Enigma's `use_qk_norm=True` default),
+#     `general.architecture` MUST be flipped to `qwen3` because
+#     llama.cpp's `llama` arch silently rejects `attn_q_norm` /
+#     `attn_k_norm` tensors. The override runs unconditionally — even
+#     when the caller supplies an explicit GGUFMetadata — because
+#     picking the wrong arch produces a silently-broken file.
+# ---------------------------------------------------------------------------
+
+class TestGgufArchConsistency:
+    UINT32, ARRAY = 4, 9
+
+    def test_llama_arch_when_no_qk_norm(self, tmp_path):
+        """No QK-norm tensors in state_dict → arch stays `llama` and
+        the Qwen3-only key_length/value_length keys are NOT emitted."""
+        meta = _parse_gguf_metadata(
+            _export_tiny("f16", tmp_path / "x.gguf", use_qk_norm=False)
+        )
+        kind, val = meta["general.architecture"]
+        assert val == "llama"
+        assert "qwen3.attention.key_length" not in meta
+        assert "qwen3.attention.value_length" not in meta
+        assert "llama.attention.key_length" not in meta
+
+    def test_qwen3_arch_when_qk_norm_present(self, tmp_path):
+        """QK-norm tensors in state_dict → arch flips to `qwen3` and
+        all metadata keys use the `qwen3.` prefix."""
+        meta = _parse_gguf_metadata(
+            _export_tiny("f16", tmp_path / "x.gguf", use_qk_norm=True)
+        )
+        kind, val = meta["general.architecture"]
+        assert val == "qwen3"
+        # Architecture-prefixed keys must follow the new arch.
+        assert "qwen3.context_length" in meta
+        assert "qwen3.attention.layer_norm_rms_epsilon" in meta
+        assert "qwen3.vocab_size" in meta
+        # And the old `llama.` prefix must not leak through.
+        assert "llama.context_length" not in meta
+
+    def test_qwen3_key_length_and_value_length_are_uint32(self, tmp_path):
+        """Qwen3 arch requires per-head key_length/value_length keys.
+        Both must be present and tagged UINT32 (not UINT64). For our
+        tiny test model: dim=64 / n_heads=4 → head_dim=16."""
+        meta = _parse_gguf_metadata(
+            _export_tiny("f16", tmp_path / "x.gguf", use_qk_norm=True)
+        )
+        for key in ("qwen3.attention.key_length", "qwen3.attention.value_length"):
+            assert key in meta, f"missing required Qwen3 key: {key}"
+            kind, val = meta[key]
+            assert kind == self.UINT32, (
+                f"{key}: expected UINT32 (4), got type tag {kind}"
+            )
+            assert val == 16  # head_dim = 64 / 4
+
+    def test_qwen3_override_runs_even_with_explicit_metadata(self, tmp_path):
+        """The override is a SAFETY check, not a user choice. Even when
+        the caller hands in a GGUFMetadata with `general_architecture="llama"`,
+        the export path must still flip to `qwen3` because the tensor
+        set is incompatible with the `llama` arch."""
+        from enigma_engine.core.gguf import GGUFExporter, GGUFMetadata
+
+        model, cfg = _build_tiny_model(use_qk_norm=True)
+        # Explicit "llama" — must be overridden.
+        meta = GGUFMetadata(
+            general_architecture="llama",
+            general_name="enigma-test",
+            context_length=cfg.max_seq_len,
+            embedding_length=cfg.dim,
+            block_count=cfg.n_layers,
+            feed_forward_length=cfg.hidden_dim,
+            attention_head_count=cfg.n_heads,
+            attention_head_count_kv=cfg.n_kv_heads,
+            rope_dimension_count=cfg.dim // cfg.n_heads,
+            rope_freq_base=cfg.rope_theta,
+            vocab_size=cfg.vocab_size,
+        )
+        out_path = tmp_path / "x.gguf"
+        GGUFExporter(quantization="f16").export(
+            model, str(out_path), meta, _build_tiny_tokenizer()
+        )
+        parsed = _parse_gguf_metadata(out_path)
+        _, arch = parsed["general.architecture"]
+        assert arch == "qwen3"
+
+
+# ---------------------------------------------------------------------------
+# 1d. ARCH-V1e tokenizer-encoding audit. llama.cpp's BPE tokenizer
+#     (`tokenizer.ggml.model="gpt2"`) requires a `tokenizer.ggml.merges`
+#     ARRAY[STRING] — even when empty (byte-level vocab). The legacy
+#     exporter emitted `tokenizer.ggml.model="llama"` (SentencePiece),
+#     which is wrong for our byte-level test vocab and crashes
+#     llama.cpp at generation time. These tests gate the writer-side
+#     fix; the actual round-trip test is parked on a llama-cpp-python
+#     upgrade (see TestGgufRoundTrip).
+# ---------------------------------------------------------------------------
+
+class TestGgufTokenizerEncoding:
+    STRING, ARRAY = 8, 9
+
+    def test_tokenizer_model_default_is_gpt2(self, tmp_path):
+        """SentencePiece (`llama`) requires curated piece scores we don't
+        have. BPE (`gpt2`) accepts arbitrary token arrays + a (possibly
+        empty) merges array."""
+        meta = _parse_gguf_metadata(_export_tiny("f16", tmp_path / "x.gguf"))
+        kind, val = meta["tokenizer.ggml.model"]
+        assert val == "gpt2"
+
+    def test_tokenizer_pre_is_emitted(self, tmp_path):
+        """`tokenizer.ggml.pre` selects the pre-tokenization regex.
+        Required by modern llama.cpp; without it BPE init logs a
+        warning and falls back to a generic regex that may fail."""
+        meta = _parse_gguf_metadata(_export_tiny("f16", tmp_path / "x.gguf"))
+        assert "tokenizer.ggml.pre" in meta
+        kind, val = meta["tokenizer.ggml.pre"]
+        assert val == "default"
+
+    def test_merges_array_is_string_typed_even_when_empty(self, tmp_path):
+        """An empty merges array MUST be tagged ARRAY[STRING], not
+        ARRAY[UINT32] (which is the writer's default empty-list
+        inference). llama.cpp expects STRING and refuses the file
+        otherwise. Byte-level tokenizers with no merges still need
+        the array present."""
+        meta = _parse_gguf_metadata(_export_tiny("f16", tmp_path / "x.gguf"))
+        assert "tokenizer.ggml.merges" in meta
+        kind, elem = meta["tokenizer.ggml.merges"]
+        assert kind == self.ARRAY
+        assert elem == self.STRING, (
+            f"empty merges array got elem_type {elem} instead of STRING (8); "
+            "this would have crashed llama.cpp at vocab init"
+        )
+
+    def test_real_merges_are_serialized_as_left_space_right(self, tmp_path):
+        """When the tokenizer exposes a `merges` attribute as
+        list[tuple[str, str]], each pair must be emitted as a single
+        `"left right"` string per the llama.cpp BPE spec."""
+        from enigma_engine.core.gguf import GGUFExporter, GGUFMetadata
+
+        class _BpeVocab:
+            def get_vocab(self):
+                return {chr(i): i for i in range(256)}
+            merges = [("a", "b"), ("c", "d")]
+
+        model, cfg = _build_tiny_model(use_qk_norm=False)
+        meta = GGUFMetadata(
+            general_name="enigma-test",
+            context_length=cfg.max_seq_len,
+            embedding_length=cfg.dim,
+            block_count=cfg.n_layers,
+            feed_forward_length=cfg.hidden_dim,
+            attention_head_count=cfg.n_heads,
+            attention_head_count_kv=cfg.n_kv_heads,
+            rope_dimension_count=cfg.dim // cfg.n_heads,
+            rope_freq_base=cfg.rope_theta,
+            vocab_size=cfg.vocab_size,
+        )
+        out_path = tmp_path / "x.gguf"
+        GGUFExporter(quantization="f16").export(
+            model, str(out_path), meta, _BpeVocab()
+        )
+
+        # Re-parse with full reader so we get the array contents.
+        from enigma_engine.core.gguf import (
+            parse_gguf_header, parse_gguf_metadata,
+        )
+        with open(out_path, "rb") as f:
+            header = parse_gguf_header(f)
+            full = parse_gguf_metadata(f, header)
+        assert full["tokenizer.ggml.merges"] == ["a b", "c d"]
+
+
+# ---------------------------------------------------------------------------
 # 2. Tensor-name audit — pins the LLAMA-CPP target names so the
 # substring-collision bug (fixed in ARCH-V1b, May 6, 2026) cannot regress.
 # ---------------------------------------------------------------------------
@@ -435,6 +612,7 @@ _ROUND_TRIP_DRIVER = textwrap.dedent('''
     quant = sys.argv[1]
     out_path = sys.argv[2]
     project_root = sys.argv[3]
+    use_qk_norm = sys.argv[4] == "1" if len(sys.argv) > 4 else True
     sys.path.insert(0, project_root)
     import torch
     import llama_cpp
@@ -450,6 +628,7 @@ _ROUND_TRIP_DRIVER = textwrap.dedent('''
         vocab_size=256, dim=64, n_layers=2, n_heads=4, n_kv_heads=2,
         hidden_dim=128, max_seq_len=64, dropout=0.0, use_moe=False,
         use_differential_attn=False, n_predict_heads=0, neftune_alpha=0.0,
+        use_qk_norm=use_qk_norm,
     )
     torch.manual_seed(0)
     model = Enigma(cfg).eval()
@@ -471,7 +650,9 @@ _ROUND_TRIP_DRIVER = textwrap.dedent('''
 ''')
 
 
-def _run_round_trip_subprocess(quant: str, out_path: Path) -> tuple[int, str, str]:
+def _run_round_trip_subprocess(
+    quant: str, out_path: Path, *, use_qk_norm: bool = True,
+) -> tuple[int, str, str]:
     env = dict(os.environ)
     torch_lib = os.path.join(sys.prefix, "Lib", "site-packages", "torch", "lib")
     if os.path.isdir(torch_lib):
@@ -480,6 +661,7 @@ def _run_round_trip_subprocess(quant: str, out_path: Path) -> tuple[int, str, st
         [
             sys.executable, "-c", _ROUND_TRIP_DRIVER,
             quant, str(out_path), str(PROJECT_ROOT),
+            "1" if use_qk_norm else "0",
         ],
         env=env,
         capture_output=True,
@@ -494,12 +676,18 @@ class TestGgufRoundTrip:
     @pytest.mark.xfail(
         strict=True,
         reason=(
-            "ARCH-V1d/V1e: file LOADS cleanly post-V1c (UINT32 metadata + "
-            "rms_norm_eps shipped). Round-trip still fails on (a) QK-norm "
-            "tensors not supported by llama.cpp's `llama` arch — needs "
-            "`general.architecture=qwen3` switch (V1d), and (b) byte-vocab "
-            "tokenizer model='llama' has no SentencePiece BPE merges so "
-            "generation crashes (V1e)."
+            "ARCH-V1f (open): writer-side V1c/V1d/V1e all shipped — "
+            "metadata types are correct, arch flips to qwen3 when "
+            "QK-norm is present, and tokenizer.ggml.merges is emitted "
+            "as ARRAY[STRING] for the gpt2 BPE path. Round-trip still "
+            "fails because the bundled llama-cpp-python 0.3.4 binary "
+            "predates qwen3 support in llama.cpp ("
+            "`error loading model architecture: unknown model "
+            "architecture: 'qwen3'`). Closing this xfail requires "
+            "`pip install --upgrade llama-cpp-python` to a version "
+            "with qwen3 support (>=0.3.5 or thereabouts). The export "
+            "side is correct — confirmed via byte-level structural "
+            "tests in TestGgufArchConsistency and TestGgufMetadataTypes."
         ),
     )
     def test_f16_round_trips(self, tmp_path):
@@ -510,7 +698,7 @@ class TestGgufRoundTrip:
 
     @pytest.mark.xfail(
         strict=True,
-        reason="ARCH-V1d/V1e: see test_f16_round_trips reason.",
+        reason="ARCH-V1f: see test_f16_round_trips reason (llama-cpp-python upgrade).",
     )
     def test_q8_0_round_trips(self, tmp_path):
         rc, stdout, _ = _run_round_trip_subprocess(
@@ -520,10 +708,68 @@ class TestGgufRoundTrip:
 
     @pytest.mark.xfail(
         strict=True,
-        reason="ARCH-V1d/V1e: see test_f16_round_trips reason.",
+        reason="ARCH-V1f: see test_f16_round_trips reason (llama-cpp-python upgrade).",
     )
     def test_q4_k_round_trips(self, tmp_path):
         rc, stdout, _ = _run_round_trip_subprocess(
             "q4_k", tmp_path / "tiny_q4k.gguf"
         )
         assert rc == 0 and "OK" in stdout
+
+
+@skip_no_llama
+class TestGgufRoundTripLlamaArch:
+    """End-to-end round-trip for the llama architecture path
+    (use_qk_norm=False). Proves the V1c metadata + V1e tokenizer +
+    V1g f16-norm-preservation fixes work together — a model goes
+    Enigma → GGUF → llama-cpp-python → generation, no asserts hit.
+
+    The qwen3 path (TestGgufRoundTrip above) stays xfailed pending
+    a llama-cpp-python upgrade (V1f), but the llama path SHOULD pass
+    on the currently-installed binding (0.3.4)."""
+
+    def test_f16_round_trips_llama_arch(self, tmp_path):
+        rc, stdout, stderr = _run_round_trip_subprocess(
+            "f16", tmp_path / "tiny_f16_llama.gguf", use_qk_norm=False,
+        )
+        assert rc == 0 and "OK" in stdout, (
+            f"llama-arch round-trip failed:\nrc={rc}\n"
+            f"STDOUT: {stdout}\nSTDERR: {stderr[-2000:]}"
+        )
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "ARCH-V1h (open): GGUFQuantizer.quantize_q8_0 crashes on "
+            "scalar-fp16 view conversion ("
+            "`ValueError: Changing the dtype of a 0d array is only "
+            "supported if the itemsize is unchanged`). Pre-existing "
+            "quantizer bug, separate slice from V1c/V1d/V1e/V1g. "
+            "Tracked as ARCH-V1h."
+        ),
+    )
+    def test_q8_0_round_trips_llama_arch(self, tmp_path):
+        rc, stdout, stderr = _run_round_trip_subprocess(
+            "q8_0", tmp_path / "tiny_q8_llama.gguf", use_qk_norm=False,
+        )
+        assert rc == 0 and "OK" in stdout, (
+            f"llama-arch q8_0 round-trip failed:\nrc={rc}\n"
+            f"STDOUT: {stdout}\nSTDERR: {stderr[-2000:]}"
+        )
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "ARCH-V1h (open): GGUFQuantizer.quantize_q4_k has the same "
+            "scalar-view bug as q8_0. Pre-existing quantizer issue, "
+            "separate slice from V1c/V1d/V1e/V1g."
+        ),
+    )
+    def test_q4_k_round_trips_llama_arch(self, tmp_path):
+        rc, stdout, stderr = _run_round_trip_subprocess(
+            "q4_k", tmp_path / "tiny_q4k_llama.gguf", use_qk_norm=False,
+        )
+        assert rc == 0 and "OK" in stdout, (
+            f"llama-arch q4_k round-trip failed:\nrc={rc}\n"
+            f"STDOUT: {stdout}\nSTDERR: {stderr[-2000:]}"
+        )
