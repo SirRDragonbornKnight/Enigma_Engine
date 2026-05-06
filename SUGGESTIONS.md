@@ -121,11 +121,7 @@ If any chain breaks before reaching the inner code, the slice is parked, not fin
 
 ### Parked / open questions
 
-- **Package layout pick (BLOCKING — no code until user answers).** User said "give it its own file and just call it Enigma AI." Three sane interpretations:
-  - **A. Sibling package.** New top-level `enigma_ai/` (contains current `core/` + `api/` + tokenizer). `enigma_engine/gui/` stays put or renames to `enigma_gui/`. Two sibling packages, one repo. **Smallest import diff.**
-  - **B. Rename in place.** `enigma_engine/` → `enigma_ai/` wholesale; move `gui/` out into sibling `enigma_gui/`. **Cleanest naming, biggest import diff** (~hundreds of `from enigma_engine...` lines across tests + scripts + GUI mixins).
-  - **C. Two repos.** Hardest. Only worth it if user wants to publish Enigma AI standalone. Adds release-coordination cost, breaks single-pytest-suite invariant.
-  - **Lean: A.** Smallest blast radius, lets ARCH-1.5a / 1a land before any rename pressure. B can happen later as a single mechanical pass once the daemon is proven.
+- **Package layout pick: A (sibling package), confirmed May 6, 2026.** Soft split: new top-level `enigma_ai/` (model + training + inference + API), GUI stays in `enigma_engine/gui/` (rename to `enigma_gui/` deferred to a later mechanical pass). One repo, one pytest suite, one branch per cross-cutting change. C (two repos) deferred — only revisit if/when publishing Enigma AI standalone becomes a real near-term goal. B (rename in place) folded into A's later "promote namespace" pass.
 - Continuous `BackgroundTrainer` (router.py) — does it move daemon-side in 1.5c, or stay where it is? **Lean: daemon-side**, but log a separate ARCH-2 slice for it because the mods/ system is GUI-coupled and migrating it is its own scope.
 - Mods/ system loads through GUI today. Post-ARCH-1, mods need a daemon-side load path. Logged as **ARCH-3 (mods over API)** — not in this plan.
 - Web UI / phone client (option D) — not on the roadmap; revisit after ARCH-1d ships and stays stable for a few months.
