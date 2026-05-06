@@ -60,94 +60,160 @@ After TEACH-1c, the production call chain must be:
 
 ---
 
-## 🔵 ARCH-1 / ARCH-1.5 — Server-first refactor + training extraction (proposed, not started)
+## 🔵 ARCH-1 — Server-first, CLI-first, YAML-driven training (revised May 6, 2026)
 
-**Status:** Logged May 6, 2026. Approved direction (option B = Ollama-shape daemon + thin clients) confirmed by user. User also authorised physically separating the AI core from the GUI and named the AI side **Enigma AI** (May 6, 2026). NO CODE CHANGES authorised yet — package layout still needs a pick (see open question below).
+**Status:** Logged May 6, 2026. **Revised same day** after a multi-turn audit that surfaced the original plan's flaws. NO CODE CHANGES authorised yet — verification slice (ARCH-V1) is the smallest first move.
 
-**Naming:** **Enigma AI** = the daemon (model + training + inference + API). **GUI** = a thin client that talks to Enigma AI over HTTP. Throughout this entry, "daemon" / "core" = Enigma AI.
+**Naming:** **Enigma AI** = the daemon (model + training + inference + API + CLI). **GUI** = a thin client that talks to Enigma AI over HTTP and edits YAML configs the CLI consumes.
 
-**Problem on disk (measured):**
-- `enigma_engine/api/server.py` already ships 18 endpoints (health, chat, chat/stream SSE, batch, models load/unload, profiles, config, history, training/status, train) with `AppState` + `threading.Lock` + `127.0.0.1` default. **~80% of the daemon is built.**
-- `enigma_engine/gui/` directly imports `EnigmaEngine` and `Trainer` 20+ times across `gui_logic.py`, `gui_forge.py`, and 8 `gui_forge_*.py` mixins. **GUI bypasses the API entirely.** This is the architectural mistake.
-- File-size measurement (May 6, 2026):
-  - **Core training (already isolated, ~8.4k lines):** `core/training.py` 5915, `core/training_evaluation.py` 625, `core/training_monitor.py` 516, `core/training_queue.py` 681, `core/adaptive_trainer.py` 682.
-  - **GUI training-launcher mixins (the actual bloat, ~10.3k lines):** `gui_forge_new_modes.py` 2955, `gui_forge_tools.py` 1624, `gui_forge_training.py` 1604, `gui_forge_models.py` 1197, `gui_forge_advanced.py` 971, `gui_forge_adaptive.py` 963, `gui_forge_teacher.py` 519, `gui_forge_queue.py` 501.
-  - GUI training wiring is **bigger than the entire core training engine** because every mode duplicates the same 5-step shape (read widgets → build `TrainingConfig` → instantiate `Trainer(...)` → spawn thread → poll callbacks).
+**Goal (one sentence):** match how real shops train — CLI + YAML config + JSONL data — instead of 10.3k lines of GUI launchers, six core trainers (not fifteen), nine experimental ones parked but kept, GGUF round-trip verified before any llama.cpp claim. GUI becomes a YAML editor + run button on top of the CLI, not a parallel implementation.
 
-**Honest framing of "pull training out":** core training is already extracted under `enigma_engine/core/`. The audit-readability win the user asked for lives in **collapsing the duplicated launcher paths in GUI behind a single dispatcher** — which then becomes the daemon-side endpoint after the server-first refactor.
+### Why the plan was rewritten (lessons from the audit, May 6, 2026)
 
-### Audit findings (May 6, 2026 — corrections to earlier counts)
+The first version of this entry inflated counts, picked the wrong abstraction, and skipped a verification step. Six audit findings:
 
-The initial ARCH-1 plan inflated several numbers and skipped a verification step. Source-of-truth audit ran today:
+1. **Trainer count was inflated.** Original plan said "20 modes." Real grep shows 8 Trainer methods + 7 sibling classes = 15 distinct trainer entry points. Several "GUI modes" (dialogue, distill, evolutionary, advanced, adaptive) are compositions of existing trainers, not new trainers. Real ARCH-1.5b is a 15-pass migration max, not 20.
+2. **15 is itself too many.** Modern shops ship 2-4 trainers (Hermes: SFT+DPO; DeepSeek-R1: SFT+GRPO; Llama-Instruct: SFT+DPO+PPO; Qwen-Instruct: SFT+DPO). We have 15 because we wrote one per algorithm instead of treating algorithms as flags. **Real "core" minimum: 6.** The other 9 stay in the codebase as `experimental=True` registry entries — callable from CLI for power users, no GUI surface, no API schema. See "Trainer minimum" section below.
+3. **`/api/train` ships ONE training shape, not a generic seam.** [api/server.py L997-L1011](enigma_engine/api/server.py#L997-L1011) `TrainRequest` accepts only `data_file`/`epochs`/`learning_rate`/`batch_size` and the handler hardcodes `Trainer(...).train()`. **Zero coverage for DPO/vision/audio/RLHF/GRPO/etc.** Same one-mode bug in `run.py --train`. Both surfaces need expansion.
+4. **GUI imports `EnigmaEngine` AND multiple Trainer classes directly.** 20+ direct instantiations across `gui_forge*`/`gui_logic*` mixins. Self-Play even spins up a SECOND `EnigmaEngine` as the trainer ([gui_forge_new_modes.py L2323](enigma_engine/gui/gui_forge_new_modes.py#L2323)).
+5. **GGUF export round-trip is UNVERIFIED.** [core/gguf.py L171](enigma_engine/core/gguf.py#L171) declares `general.architecture = "llama"` and the writer ships ([GGUFExporter.export](enigma_engine/core/gguf.py#L683)). Tests confirm bytes get written. **No test confirms the bytes load back through `llama.cpp` / `llama-cpp-python`.** "Path 1, we already export to llama.cpp" was based on the writer existing, not on round-trip proof. Could be silently broken — tensor-name mapping, Q4_K block layout, metadata key set are all places it could fail. New slice **ARCH-V1** verifies this BEFORE any user-facing llama.cpp claim.
+6. **Vision/audio do NOT collapse into SFT.** Earlier turn proposed collapsing them; verified at [training.py L4937 train_vision](enigma_engine/core/training.py#L4937) and [L5616 train_audio](enigma_engine/core/training.py#L5616) — both have method-specific architecture (distinct encoder argument, distinct freeze/unfreeze pattern, distinct preprocessing). Industry doesn't collapse them either: LLaVA has `LlavaTrainer`, Whisper has its own seq2seq trainer, CLIP has its own contrastive trainer. Multi-modal training is its own family. **Vision and audio stay as separate trainers.** That's why core minimum is 6, not 4.
 
-- **Mode count is ~15, not "20".** Trainer methods on `core/training.py`: `train`, `train_dpo`, `train_simpo`, `train_kto`, `train_orpo`, `train_vision`, `train_audio`, `train_rest` (8). Sibling trainer classes: `RewardTrainer`, `RLHFTrainer`, `SelfPlayTrainer`, `GRPOTrainer`, `ReMaxTrainer`, `LoraTrainer`, `AdaptiveTrainer` (7). **Real total: 15 distinct trainer entry points**, plus a few GUI-only meta-modes (dialogue, distill, evolutionary, advanced, adaptive) that compose these. ARCH-1.5b is a 15-pass migration, not 20.
-- **`/api/train` ships ONE training shape, not a generic dispatcher seam.** Confirmed: [api/server.py L997](enigma_engine/api/server.py#L997-L1011) `TrainRequest` accepts only `data_file`/`epochs`/`learning_rate`/`batch_size` and the handler hardcodes `Trainer(...).train()`. **Zero coverage for DPO/SimPO/KTO/ORPO/vision/audio/RLHF/GRPO/ReMax/SelfPlay/LoRA/Adaptive.** ARCH-1c is bigger than the original plan implied: each of 14 missing modes needs its own Pydantic request schema + dispatcher entry, not just "expand /api/train".
-- **GUI imports `EnigmaEngine` AND multiple Trainer classes directly.** Grep confirms 20+ direct instantiations across `gui_forge*`/`gui_logic*` mixins. Self-Play even spins up a SECOND `EnigmaEngine` as the trainer ([gui_forge_new_modes.py L2323](enigma_engine/gui/gui_forge_new_modes.py#L2323-L2323)) — ARCH-1b "GUI chat over client" doesn't cover this; it lives under ARCH-1c.
-- **GGUF export round-trip is UNVERIFIED.** [core/gguf.py L171](enigma_engine/core/gguf.py#L171) declares `general.architecture = "llama"` and the writer ships under [GGUFExporter.export](enigma_engine/core/gguf.py#L683). We have tests that bytes get written. **We have NO test that the resulting file loads back through `llama.cpp` or `llama-cpp-python`.** The whole "Path 1 — we already export to llama.cpp" answer was based on the writer existing, not on round-trip proof. Could be silently broken (tensor-name mapping, Q4_K block layout, metadata key set). New slice **ARCH-V1** tracks this verification — must run BEFORE any user-facing claim that Enigma AI is llama.cpp-compatible.
+### How real shops train (industry pattern)
 
-### ARCH-V1 — GGUF round-trip verification (smallest first slice)
+| Tool | Interface | Trainer count |
+|---|---|---|
+| HuggingFace TRL | `trl sft / dpo / grpo / ...` CLI subcommands, args via flags or YAML | ~6 (sft, dpo, grpo, kto, orpo, ppo) |
+| axolotl | `axolotl train config.yaml` — single command, YAML names trainer + data + hyperparams | ~5 trainer types switchable in YAML |
+| unsloth | Python script, ~30 lines, run `python train.py` | 1-3 (SFT, DPO via flag) |
+| Llama-Factory | GUI is a YAML editor that calls the CLI underneath | ~6 |
 
-**Goal:** prove the existing GGUF exporter produces files `llama-cpp-python` can load and generate from. No code changes — a test slice. If it fails, file the gap as ARCH-V1b and fix BEFORE any user-facing Hermes/llama.cpp claim.
+**Pattern is unanimous: CLI is the source of truth. YAML names the trainer + data + hyperparams. GUI (when it exists) edits the YAML.** Nobody has 15 GUI buttons. Our 10.3k lines of GUI launchers are doing the wrong job.
+
+### Trainer minimum (6 core, 9 experimental)
+
+**Core (full GUI + API + CLI surface, full test coverage):**
+
+| # | Mode | Trainer entry | Why core |
+|---|---|---|---|
+| 1 | `sft` | `Trainer.train` | Foundation. Pretraining + supervised fine-tuning. |
+| 2 | `dpo` | `Trainer.train_dpo` | Industry-default preference alignment. |
+| 3 | `grpo` | `GRPOTrainer` | Modern reasoning alignment (DeepSeek-R1 lineage). Replaces RLHF/PPO/ReMax for new work. |
+| 4 | `lora` | `LoraTrainer` | Different mechanism (low-rank adapters). Needed for low-VRAM users. |
+| 5 | `vision` | `Trainer.train_vision` | Capability goal (vision in Project Goal). Genuinely different architecture (encoder + projection + freeze pattern). |
+| 6 | `audio` | `Trainer.train_audio` | Capability goal (audio in Project Goal). Genuinely different architecture. |
+
+**Experimental (registry entry only — CLI-callable for power users, NO GUI button, NO API schema in ARCH-1c). Kept because the code already works and tests already pass; deletion is a separate decision later.**
+
+| Mode | Reason for experimental status |
+|---|---|
+| `simpo` | DPO variant (drops ref model). Memory win for big models, otherwise same use case as DPO. |
+| `kto` | DPO variant (single-signal, no pair). Niche: only useful with thumbs-up/down data. |
+| `orpo` | DPO variant (merges SFT+DPO into one loss). One-shot, but offers nothing GRPO doesn't for our use cases. |
+| `rest` | Reinforced Self-Training. Niche; SelfPlayTrainer overlaps. |
+| `reward_model` | Stage of RLHF; only useful as input to `rlhf`. |
+| `rlhf` | PPO-style RLHF. Largely superseded by GRPO. Llama-Instruct still uses; DeepSeek/Qwen-2.5 dropped it. |
+| `self_play` | Hard to make stable, narrow benefit. |
+| `remax` | Variance-reduced PG. Academic interest, no production wins over GRPO. |
+| `adaptive` | Meta-scheduler that calls other trainers. Not a trainer per the dispatcher contract — see open question below. |
+
+### Architecture (revised)
+
+**One CLI: `run.py --train --config path/to/config.yaml`** (or `enigma-ai train --config ...` once we add the console_scripts entry-point in ARCH-1a). The YAML names the mode, data, and hyperparams. Same shape every time:
+
+```yaml
+# Example: configs/sft_pretrain.yaml
+mode: sft               # or dpo / grpo / lora / vision / audio
+data: data/training.txt
+output: models/run_2026_05_06.pth
+epochs: 3
+lr: 5e-5
+batch_size: auto
+seed: 42                # optional; required for --deterministic
+deterministic: false
+# mode-specific blocks under their own keys:
+vision:                 # only required when mode == vision
+  encoder_preset: small
+  unfreeze_text_layers: 0
+```
+
+**One config schema, one validator, one entry point.** No duplicated launcher paths.
+
+**One API endpoint: `POST /api/train`** with the YAML body (or equivalent JSON). Server-side dispatcher resolves `mode` and runs the matching trainer in a background thread, streaming metrics over SSE on `GET /api/training/metrics`. Replaces the 14 per-mode endpoints the previous plan called for.
+
+**GUI becomes a YAML editor.** ~500 lines, not 10.3k. Load YAML → render fields with widget types matching the schema → save YAML → POST to `/api/train`. Same pattern Llama-Factory uses.
+
+### ARCH-V1 — GGUF round-trip verification (smallest first slice, do FIRST)
+
+**Goal:** prove the existing GGUF exporter produces files `llama-cpp-python` can load and generate from. Test slice only — no production code changes. If it fails, the gap becomes ARCH-V1b and gets fixed BEFORE any user-facing Hermes/llama.cpp claim.
 
 **Steps:**
 1. New test `tests/test_gguf_roundtrip.py` (skipped if `llama-cpp-python` not installed). Build a tiny ForgeConfig model (~1M params, 2 layers, vocab 256), random weights, run `GGUFExporter(quantization="f16").export(...)` to a tmp file.
-2. Load the exported file with `llama_cpp.Llama(model_path=...)`. If it raises, the exporter is broken — fail with the raised message.
-3. Generate one token via `llama.create_completion(prompt="a", max_tokens=1)`. If it raises or returns empty, the tensor mapping is broken — fail.
-4. Repeat for `quantization="q8_0"` and `quantization="q4_k"` so all three quant paths are gated.
+2. Load the exported file with `llama_cpp.Llama(model_path=...)`. Raise → exporter is broken; fail with the raised message.
+3. Generate one token via `llama.create_completion(prompt="a", max_tokens=1)`. Raise or empty → tensor mapping is broken; fail.
+4. Repeat for `q8_0` and `q4_k` so all three quant paths are gated.
 5. **Skip-with-WARNING** if `llama_cpp` isn't importable in CI; the test exists for the user's local machine where the runtime IS installed. Manual run command lands in `quick_commands.md`.
 
-**Risk:** Low effort, high information. Either confirms our story or surfaces the bug we've been carrying without knowing.
-
-### ARCH-1.5 — Training extraction (do this BEFORE ARCH-1b/c)
-
-| Slice | What moves | Code shrink (gui/) | Risk | Solves |
-|---|---|---|---|---|
-| **1.5a** TrainingDispatcher + ModeRegistry (core, in-process) | New `enigma_engine/core/training_dispatcher.py`. Registry maps `mode_name → (TrainerClass, config_builder, run_method)`. `dispatcher.start(mode, config_dict, callbacks) → Job`. Registry seeded with all 15 modes (8 Trainer methods + 7 sibling classes) so 1.5b has a complete map to migrate against. | none yet | low | Single canonical training entry-point. |
-| **1.5b** Migrate GUI mode-by-mode | One mode per pass. Real list (15): `text` (Trainer.train), `dpo`, `simpo`, `kto`, `orpo`, `vision`, `audio`, `rest` (Trainer methods); `reward_model` (RewardTrainer), `rlhf` (RLHFTrainer), `self_play` (SelfPlayTrainer), `grpo` (GRPOTrainer), `remax` (ReMaxTrainer), `lora` (LoraTrainer), `adaptive` (AdaptiveTrainer). Per-mode shrink: ~200 GUI lines → ~30 (read widgets + `dispatcher.start`). | ~10.3k → ~3.5k | medium (15 modes to verify) | The actual audit-volume win. |
-| **1.5c** Move `core/training*.py` → `enigma_engine/training/` | Rename + import-path update across codebase. `core/` becomes inference + model + tokenizer only; `training/` becomes trainer base + modes + dispatcher + registry. | rename only | low (mechanical) | Clean separation of inference vs training package. |
-
-### ARCH-1 — Server-first refactor (after ARCH-1.5)
+### ARCH-1 — slice plan (revised)
 
 | Slice | What | Risk | Solves |
 |---|---|---|---|
-| **1a** EnigmaClient lib + CLI client | New `enigma_engine/client.py` (HTTP + SSE wrapper around `/api/*`). New `run.py --client chat` / `--client train --mode dpo --config X.json` paths that POST to a running daemon instead of importing core in-process. | low | Proves daemon pattern, gives Dia a non-GUI test surface, doesn't touch GUI yet. |
-| **1b** GUI chat + model-loading uses client | `gui_logic.py` and `gui_forge.py` stop importing `EnigmaEngine`. `_load_model`, `chat`, `chat_stream`, `unload`, `list_models` all go through `EnigmaClient`. Daemon spawned as subprocess on GUI launch. | medium | Removes 2 of the 20+ direct core imports. Validates IPC under GUI load. |
-| **1c** Training over API + dispatcher exposed via `/api/train/{mode}` | Server expands `/api/train` from its current single-mode shape (text-SFT only, [api/server.py L997-L1011](enigma_engine/api/server.py#L997-L1011)) to accept any of the 15 dispatcher modes. **Real cost:** 14 new Pydantic request schemas (one per non-text mode), 14 dispatcher route handlers, SSE `/api/training/metrics`, cancellation hook, checkpoint hooks. Plus the Self-Play double-engine path ([gui_forge_new_modes.py L2323](enigma_engine/gui/gui_forge_new_modes.py#L2323)) that spins a second `EnigmaEngine` as trainer needs daemon-side handling. GUI training mixins POST to `/api/train/{mode}`. | high | Removes the remaining 18+ direct trainer imports + the GUI-side second-engine instantiation. Training survives daemon restart-on-GUI-crash. |
-| **1d** Hardening | Lock-scope review on `/api/profiles/{id}/activate`. CORS opt-in already handled. Auth deferred until web/phone client (option D) lands. | low | Closes the security review for the localhost daemon. |
+| **V1** GGUF round-trip test | New `tests/test_gguf_roundtrip.py` (above). | low | Verifies or refutes the llama.cpp interop claim. Prerequisite for any Hermes user-facing message. |
+| **1.5a** ConfigSchema + ModeRegistry + dispatcher entry-point | New `enigma_engine/training/schema.py` (Pydantic + YAML loader). New `training/registry.py` (mode → (TrainerClass, config_builder, run_method) for all 6 core + 9 experimental). New `training/dispatch.py` (single `run(config) → Job`). Behind `experimental=True` flag for the 9 parked modes. | low | The CLI's argparse → YAML → dispatcher seam. One canonical entry point. |
+| **1.5b** Wire `run.py --train --config` to the dispatcher | Existing `run.py --train data.txt` stays working (legacy text-SFT path). New `run.py --train --config path.yaml` calls the dispatcher. Add `enigma-ai` console_scripts entry-point in pyproject.toml. | low | CLI surface ships; one mode at a time can be migrated. |
+| **1.5c** Migrate 6 core modes to dispatcher | One mode per pass: `sft`, `dpo`, `grpo`, `lora`, `vision`, `audio`. GUI launcher for each becomes "build YAML dict → call dispatcher" (~30 lines, was ~200). | medium | Six passes. Each ends with the GUI button still working but going through the dispatcher. |
+| **1.5d** Move `core/training*.py` → `enigma_engine/training/` | Mechanical rename + import-path update. `core/` becomes inference/model/tokenizer; `training/` becomes trainer base + modes + dispatcher + registry. | low (mechanical) | Clean separation. |
+| **1a** API surface for `POST /api/train` (config-body) | Replace current single-mode `/api/train` with config-body endpoint that calls the dispatcher. SSE `/api/training/metrics`. Cancellation hook. **One** endpoint, not 14. | medium | Daemon can train any of the 6 core modes via a single API. |
+| **1b** EnigmaClient lib | New `enigma_engine/client.py` (HTTP + SSE wrapper). `EnigmaClient.chat / chat_stream / load_model / unload_model / train(config)`. CLI client option in `run.py --client chat`. | low | Non-GUI test surface; daemon-spawn helper. |
+| **1c** GUI chat over client | `gui_logic.py` and `gui_forge.py` stop importing `EnigmaEngine`. `_load_model`, `chat`, `chat_stream`, `unload`, `list_models` go through `EnigmaClient`. Daemon spawned as subprocess on GUI launch. | medium | Removes 2 of 20+ direct core imports. Validates IPC under GUI load. |
+| **1d** GUI training over client | GUI training mixins build YAML config → POST `/api/train`. Self-Play double-engine path migrates to daemon-side. **GUI becomes a YAML editor** for the 6 core modes. Experimental modes intentionally have NO GUI button. | high | Removes the remaining 18+ direct trainer imports. Training survives daemon restart-on-GUI-crash. The 10.3k → ~500 line GUI shrink lands here. |
+| **1e** Hardening | Lock-scope review on `/api/profiles/{id}/activate`. CORS opt-in already handled. Auth deferred until web/phone client lands. | low | Closes the security review for the localhost daemon. |
+| **1f** Sister-folder reshuffle | `enigma_engine/core/` + `api/` + `training/` → `enigma_ai/`. `gui/` → `enigma_gui/`. Pure rename. Easy because GUI no longer imports core. | low (mechanical) | Final namespace split. |
 
 ### Acceptance call-chain (Rule §1 #20)
 
-After ARCH-1c, the production call chain must be:
+After ARCH-1d, the production call chain must be:
 - **Chat:** `run.py --gui` → daemon spawned subprocess → GUI `EnigmaClient.chat(prompt)` → `POST /api/chat` → `AppState.engine.chat()` → response.
-- **Training:** GUI Forge button → `EnigmaClient.train(mode="dpo", config={...})` → `POST /api/train/dpo` → `TrainingDispatcher.start("dpo", config_dict, callbacks)` → `Trainer.train_dpo(...)` → SSE metrics back to GUI.
-- **CLI (no GUI):** `run.py --client chat` → daemon (auto-spawn or attach) → `EnigmaClient` → same `POST /api/chat`.
+- **Training:** GUI Forge button → build YAML dict → `EnigmaClient.train(config_dict)` → `POST /api/train` → `dispatch.run(config)` → matching trainer (e.g. `Trainer.train_dpo(...)`) → SSE metrics back to GUI.
+- **CLI (no GUI):** `run.py --train --config configs/dpo.yaml` → daemon (auto-spawn or attach) → same `dispatch.run(config)` path → progress on stdout.
 
 If any chain breaks before reaching the inner code, the slice is parked, not finished.
 
-### Recommended order
-
-0. **ARCH-V1** (GGUF round-trip test — confirms or refutes the "already exports to llama.cpp" claim). Tiny first slice, blocks any Hermes/llama.cpp user-facing claim until it passes.
-1. **ARCH-1.5a** (dispatcher + registry, core only — tests prove every mode resolves and tears down). **Smallest safest code slice.** Authorises ARCH-1.5b.
-2. **ARCH-1.5b** mode-by-mode (one mode per pass, 15 passes, each is small and isolated).
-3. **ARCH-1.5c** rename `core/training*.py` → `training/`.
-4. **ARCH-1a** EnigmaClient lib + CLI client. Daemon-spawn helper.
-5. **ARCH-1b** GUI chat over client.
-6. **ARCH-1c** GUI training over client (now trivial because dispatcher already exists from 1.5a; per-mode schemas land here).
-7. **ARCH-1d** hardening sweep.
-
 ### Devil's advocate (Rule §1 #13)
 
-- **ARCH-1.5a alone doesn't fix training-blocks-chat** (still same process, same GIL). That's solved by ARCH-1c (training jobs run inside daemon, GUI stays responsive via SSE). Don't expect responsiveness improvement from 1.5a.
-- **ARCH-1.5b risks regressions across 15 modes** if dispatcher isn't a perfect drop-in. Mitigation: dispatcher behind a feature flag, migrate one mode per pass, keep old launcher path until each mode is verified end-to-end against a real training run.
-- **ARCH-1c is the largest pass** — `/api/train` currently only handles text-SFT (audit-confirmed: hardcoded `Trainer(...).train()`, single request schema). Expanding to 14 more modes + SSE metrics + cancellation + checkpoint hooks + Self-Play's second-engine path is real work. Don't underestimate.
-- **GUI mixins also have non-training code** (model loading, queue UI, teacher chat, mod-page wiring). Named overhaul scope (Rule §1 #18) for ARCH-1.5b is **"GUI training-mode launcher → dispatcher migration"** only — do NOT touch model-loading, queue UI, teacher chat in the same passes.
+- **Six trainers might still be too many for what we ship.** SFT+DPO+LoRA covers 80% of real use cases. GRPO is recent and good but unproven for us. Vision/audio are capability goals but no user has trained either yet. Could ship with only SFT+DPO+LoRA core and bring vision/audio/GRPO in as they get used. **Lean: ship all 6** because vision/audio are explicit Project Goals and GRPO replaces three older trainers (RLHF/PPO/ReMax). But if the migration takes longer than expected, vision/audio can drop to experimental temporarily.
+- **YAML loads can carry RCE risks.** Use `yaml.safe_load`, not `yaml.load`. Never `eval`. Schema validation rejects unknown keys.
+- **Experimental trainers will bitrot.** No GUI button + no API schema = nobody runs them = test failures discovered late. Mitigation: experimental tests still run in the suite, just not exercised through the GUI. If a test breaks, fix or delete the trainer.
+- **GUI shrink from 10.3k to 500 lines means burning code.** The shrink is real but irreversible. Mitigation: each ARCH-1.5c migration pass deletes the old GUI launcher only AFTER the new YAML-editor path is verified end-to-end on a real training run.
+- **Adaptive trainer doesn't fit the dispatcher shape.** It's a meta-scheduler, not a trainer. Three options: (a) keep as experimental and document it's a special-case wrapper, (b) move to `enigma_engine/training/scheduler.py` outside the registry, (c) delete if no one uses it. **Open question — see below.**
+
+### Recommended order
+
+0. **ARCH-V1** (GGUF round-trip). Smallest slice, blocks llama.cpp claims.
+1. **ARCH-1.5a** (schema + registry + dispatcher). Tests prove every mode resolves and tears down.
+2. **ARCH-1.5b** (CLI wire-up, both legacy and YAML paths working).
+3. **ARCH-1.5c** (migrate 6 core modes — 6 passes).
+4. **ARCH-1.5d** (mechanical rename to `training/`).
+5. **ARCH-1a** (API endpoint).
+6. **ARCH-1b** (EnigmaClient lib).
+7. **ARCH-1c** (GUI chat over client).
+8. **ARCH-1d** (GUI training over client — the 10.3k → ~500 line GUI shrink).
+9. **ARCH-1e** (hardening).
+10. **ARCH-1f** (sister-folder split — final cosmetic move).
 
 ### Parked / open questions
 
-- **Package layout pick: A (sibling package), confirmed May 6, 2026.** Soft split: new top-level `enigma_ai/` (model + training + inference + API), GUI stays in `enigma_engine/gui/` (rename to `enigma_gui/` deferred to a later mechanical pass). One repo, one pytest suite, one branch per cross-cutting change. C (two repos) deferred — only revisit if/when publishing Enigma AI standalone becomes a real near-term goal. B (rename in place) folded into A's later "promote namespace" pass.
-- Continuous `BackgroundTrainer` (router.py) — does it move daemon-side in 1.5c, or stay where it is? **Lean: daemon-side**, but log a separate ARCH-2 slice for it because the mods/ system is GUI-coupled and migrating it is its own scope.
-- Mods/ system loads through GUI today. Post-ARCH-1, mods need a daemon-side load path. Logged as **ARCH-3 (mods over API)** — not in this plan.
-- Web UI / phone client (option D) — not on the roadmap; revisit after ARCH-1d ships and stays stable for a few months.
+- **AdaptiveTrainer fate** — keep as experimental, move outside the dispatcher, or delete? Deferred until ARCH-1.5a is shipped and we can grep for actual GUI callers.
+- **Package layout** — A confirmed (sibling package, soft split). C deferred. B folded into ARCH-1f.
+- **Continuous `BackgroundTrainer` (router.py)** — moves daemon-side in ARCH-1d, but mods/ system is GUI-coupled and migrating it is its own scope. Logged as **ARCH-2**.
+- **Mods/ system over API** — post-ARCH-1, mods need a daemon-side load path. Logged as **ARCH-3**.
+- **Web UI / phone client** — not on the roadmap; revisit after ARCH-1e ships and stays stable.
+- **Hermes-style behaviour** — separate from architecture. After ARCH-V1 confirms llama.cpp interop, the path is data + prompt template work (collect OpenHermes-2.5 / Capybara / Glaive datasets, train SFT+DPO on them with the existing pipeline). Logged as **ARCH-4 (Hermes-style finetune corpus)**, not in this plan.
+
+**Out of scope (do NOT do these as part of ARCH-1):**
+- Deleting any of the 9 experimental trainers. Separate decision after ARCH-1 stabilises.
+- Collapsing vision/audio into a "modality flag" on SFT. Audit confirmed they're genuinely different trainers — not a config-flag concern.
+- Touching the mods/ system, queue UI, teacher chat panes, mod-page wiring. ARCH-1's named overhaul scope (Rule §1 #18) is **"GUI training-mode launcher → CLI/YAML/dispatcher migration"** only.
 
 ---
 

@@ -37,7 +37,7 @@ A locally-trained AI capable of:
 - **Local only** — all training and inference run on the user's PC. No cloud dependencies, no external data leakage.
 - **Black box** — the model is a single artifact; users do not edit weights by hand.
 - **Personality from training, not the user** — the AI's voice, mood, and style are learned, not configured per-session.
-- **Enigma AI is the canonical name** for the model + training + inference daemon (the brain). The GUI is a separate client that talks to it. Physical split tracked as **ARCH-1** in SUGGESTIONS.md — package layout pending user pick (sibling package vs rename vs two repos).
+- **Enigma AI is the canonical name** for the model + training + inference daemon (the brain). The GUI is a separate client that talks to it. Layout pick: **A (sibling package)**, confirmed May 6, 2026 — `enigma_ai/` for model + training + inference + API, `enigma_gui/` for the client. One repo, one pytest suite. Slice plan tracked as **ARCH-1** in SUGGESTIONS.md.
 
 ### Teach-while-running (partial — see TEACH-1 in SUGGESTIONS.md)
 The user can guide the AI mid-session: tell it how to do a task, hand it a procedure, or correct it when it gets something wrong (e.g. image recognition mis-identifies an object → user points at the right answer). Corrections feed back into the model so the same mistake is less likely next time. Long-term direction is **less hand-holding over time** — the AI looks things up on its own, reasons from prior corrections, and figures new tasks out unaided. Real-time teaching is a scaffold, not a permanent crutch.
