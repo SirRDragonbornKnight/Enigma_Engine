@@ -2,23 +2,23 @@
 ARCH-V1 — GGUF round-trip verification.
 
 Goal: prove (or refute) that the existing GGUFExporter produces files
-llama-cpp-python can load and generate from. As of May 6, 2026 the answer
-is **NO**: the exporter writes Llama-style state-dict names (`attention.wq`,
-`feed_forward.w1`, `attention_norm`) but `WEIGHT_NAME_MAP` is HF-style
-(`q_proj`/`gate_proj`/`mlp`/`self_attn`). The naive `str.replace` map also
-substring-collides — `norm → output_norm` rewrites `attention_norm` into
-`attention_output_norm`. Result: every weight tensor lands under the wrong
-GGUF name and llama.cpp hard-aborts on load (C-level `abort()`, not a
-Python exception — kills the pytest process if loaded in-process).
+llama-cpp-python can load and generate from.
 
-This file is a **test slice only**. No production code changes. The fixes
-land in ARCH-V1b (rewrite `WEIGHT_NAME_MAP` + `convert_tensor_name` for
-Llama-style state dicts, audit tokenizer metadata, then unmark the xfail
-tests below).
+History:
+- May 6, 2026 — ARCH-V1 SHIPPED. Established baseline: tensor-name
+  mapping was HF-style, Enigma's state_dict was Llama-style, naive
+  str.replace also substring-collided (`norm -> output_norm` rewrote
+  `attention_norm`). End-to-end load aborts at the C-level.
+- May 6, 2026 — ARCH-V1b SHIPPED. Rewrote `convert_tensor_name` to a
+  regex pipeline; the 3 structural xfails came off and were extended
+  to 16 mapping tests covering all Llama-style + HF-style entries.
+- ARCH-V1c (open) — round-trip still fails because of GGUF metadata /
+  tokenizer gaps (BPE merges, RMS-norm epsilon, special-token markers).
+  Round-trip xfails below stay until that audit lands.
 
 Skip behavior:
-- llama-cpp-python may not be loadable in this env (Windows: needs torch's
-  CUDA DLL dir on PATH). Round-trip tests skip cleanly in that case.
+- llama-cpp-python may not be loadable in this env (Windows: needs
+  torch's CUDA DLL dir on PATH). Round-trip tests skip cleanly.
 - When llama.cpp IS available, round-trip tests run in a SUBPROCESS so
   llama.cpp's `abort()` cannot kill pytest itself.
 """
@@ -143,54 +143,104 @@ class TestGgufExportWritesFile:
 # ---------------------------------------------------------------------------
 
 class TestTensorNameMappingIsLlamaStyle:
-    """Enigma's state_dict uses Llama-style names. The current exporter map
-    is HF-style. These tests pin the LLAMA-CPP target names that ARCH-V1b
-    must produce."""
+    """Enigma's state_dict uses Llama-style names. ARCH-V1b (May 6, 2026)
+    rewrote `convert_tensor_name` to a regex pipeline that handles them
+    correctly. These tests pin the LLAMA-CPP target names and prevent
+    the substring-collision bug from coming back."""
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "ARCH-V1b: WEIGHT_NAME_MAP has no entry for Llama-style fused "
-            "wq -> expected attn_q. Current output: blk.N.attn.wq.weight."
-        ),
-    )
     def test_attn_q_name_is_blk_N_attn_q_weight(self):
         from enigma_engine.core.gguf import convert_tensor_name
         assert convert_tensor_name("layers.0.attention.wq.weight") == \
             "blk.0.attn_q.weight"
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "ARCH-V1b: feed_forward.w1 has no entry -> should be ffn_gate. "
-            "Current output: blk.N.feed_forward.w1.weight."
-        ),
-    )
+    def test_attn_k_name_is_blk_N_attn_k_weight(self):
+        from enigma_engine.core.gguf import convert_tensor_name
+        assert convert_tensor_name("layers.3.attention.wk.weight") == \
+            "blk.3.attn_k.weight"
+
+    def test_attn_v_name_is_blk_N_attn_v_weight(self):
+        from enigma_engine.core.gguf import convert_tensor_name
+        assert convert_tensor_name("layers.7.attention.wv.weight") == \
+            "blk.7.attn_v.weight"
+
+    def test_attn_output_name_is_blk_N_attn_output_weight(self):
+        from enigma_engine.core.gguf import convert_tensor_name
+        assert convert_tensor_name("layers.0.attention.wo.weight") == \
+            "blk.0.attn_output.weight"
+
+    def test_qk_norm_names(self):
+        """QK-norm tensors must map to attn_q_norm / attn_k_norm so
+        llama.cpp can detect QK-norm models (Qwen3 family)."""
+        from enigma_engine.core.gguf import convert_tensor_name
+        assert convert_tensor_name("layers.0.attention.q_norm.weight") == \
+            "blk.0.attn_q_norm.weight"
+        assert convert_tensor_name("layers.0.attention.k_norm.weight") == \
+            "blk.0.attn_k_norm.weight"
+
     def test_ffn_gate_name_is_blk_N_ffn_gate_weight(self):
+        """Llama convention: w1 = ffn_gate, w2 = ffn_down, w3 = ffn_up."""
         from enigma_engine.core.gguf import convert_tensor_name
         assert convert_tensor_name("layers.0.feed_forward.w1.weight") == \
             "blk.0.ffn_gate.weight"
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "ARCH-V1b: norm -> output_norm substring-collides inside "
-            "attention_norm, producing attn_output_norm. Replace naive "
-            "str.replace with a per-segment mapping."
-        ),
-    )
+    def test_ffn_down_name(self):
+        from enigma_engine.core.gguf import convert_tensor_name
+        assert convert_tensor_name("layers.0.feed_forward.w2.weight") == \
+            "blk.0.ffn_down.weight"
+
+    def test_ffn_up_name(self):
+        from enigma_engine.core.gguf import convert_tensor_name
+        assert convert_tensor_name("layers.0.feed_forward.w3.weight") == \
+            "blk.0.ffn_up.weight"
+
     def test_attn_norm_is_not_double_substituted(self):
+        """Regression gate: previous str.replace pipeline produced
+        `attn_output_norm` because `norm -> output_norm` rewrote the
+        inner `norm` of `attention_norm`. The new regex pipeline runs
+        a single full-string match per rule, so this can't happen
+        again."""
         from enigma_engine.core.gguf import convert_tensor_name
         assert convert_tensor_name("layers.0.attention_norm.weight") == \
             "blk.0.attn_norm.weight"
 
+    def test_ffn_norm_unchanged_block_form(self):
+        from enigma_engine.core.gguf import convert_tensor_name
+        assert convert_tensor_name("layers.0.ffn_norm.weight") == \
+            "blk.0.ffn_norm.weight"
+
+    def test_token_embd(self):
+        from enigma_engine.core.gguf import convert_tensor_name
+        assert convert_tensor_name("tok_embeddings.weight") == \
+            "token_embd.weight"
+
     def test_final_norm_is_output_norm(self):
-        """Currently passes -- the norm -> output_norm rule works for
-        names without a colliding substring. Kept as a regression gate
-        for ARCH-V1b: when the mapping is rewritten, this must still
-        produce output_norm.weight."""
         from enigma_engine.core.gguf import convert_tensor_name
         assert convert_tensor_name("norm.weight") == "output_norm.weight"
+
+    def test_output_unchanged(self):
+        from enigma_engine.core.gguf import convert_tensor_name
+        assert convert_tensor_name("output.weight") == "output.weight"
+
+    def test_unknown_name_passes_through_unchanged(self):
+        """Unknown names must NOT be silently mangled — propagate so
+        llama.cpp fails loudly on load instead of swallowing."""
+        from enigma_engine.core.gguf import convert_tensor_name
+        assert convert_tensor_name("some.unknown.tensor.weight") == \
+            "some.unknown.tensor.weight"
+
+    def test_hf_style_fallback_still_works(self):
+        """HF-style state_dicts also map correctly (q_proj, gate_proj
+        etc.). Kept so future HF model imports don't regress."""
+        from enigma_engine.core.gguf import convert_tensor_name
+        assert convert_tensor_name(
+            "model.layers.0.self_attn.q_proj.weight"
+        ) == "blk.0.attn_q.weight"
+        assert convert_tensor_name(
+            "model.layers.0.mlp.gate_proj.weight"
+        ) == "blk.0.ffn_gate.weight"
+        assert convert_tensor_name(
+            "model.layers.0.input_layernorm.weight"
+        ) == "blk.0.attn_norm.weight"
 
 
 # ---------------------------------------------------------------------------

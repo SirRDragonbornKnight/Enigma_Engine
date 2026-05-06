@@ -18,6 +18,7 @@ Note: This module consolidates gguf_export.py and gguf_exporter.py
 """
 
 import logging
+import re
 import struct
 from dataclasses import dataclass, field
 from enum import IntEnum
@@ -222,26 +223,101 @@ class GGUFMetadata:
 # =============================================================================
 # Weight Name Conversion
 # =============================================================================
+#
+# ARCH-V1b (May 6, 2026): Replaced naive str.replace dict with an ordered
+# regex pipeline. The previous dict had two structural bugs:
+#   1. It only knew HF-style names (q_proj/gate_proj/mlp/self_attn) but
+#      Enigma's state_dict is Llama-style (attention.wq, feed_forward.w1).
+#      Every weight tensor landed under the wrong GGUF name and llama.cpp
+#      hard-aborted on load.
+#   2. str.replace substring-collisions: `norm -> output_norm` rewrote
+#      the inner `norm` of `attention_norm`, producing `attn_output_norm`.
+#
+# Patterns are tried in order; first match wins. Each pattern uses a
+# single-pass `re.sub` so substrings can't collide with later rules.
+# Reference: https://github.com/ggml-org/llama.cpp/blob/master/src/llama-arch.cpp
+# (LLM_TENSOR_NAMES for the "llama" architecture).
 
+# Ordered list of (regex, replacement) for Llama-style state dicts.
+# Regex flags: ASCII match, no IGNORECASE — tensor names are case-sensitive.
+_TENSOR_NAME_RULES: list[tuple[str, str]] = [
+    # --- per-block tensors (Llama-style: layers.{i}....) ---
+    # Attention projections (must match BEFORE the bare `attention.` rule).
+    (r'^layers\.(\d+)\.attention\.wq\.weight$',     r'blk.\1.attn_q.weight'),
+    (r'^layers\.(\d+)\.attention\.wk\.weight$',     r'blk.\1.attn_k.weight'),
+    (r'^layers\.(\d+)\.attention\.wv\.weight$',     r'blk.\1.attn_v.weight'),
+    (r'^layers\.(\d+)\.attention\.wo\.weight$',     r'blk.\1.attn_output.weight'),
+    # QK-norm (used by Qwen3-style models; Enigma has it).
+    (r'^layers\.(\d+)\.attention\.q_norm\.weight$', r'blk.\1.attn_q_norm.weight'),
+    (r'^layers\.(\d+)\.attention\.k_norm\.weight$', r'blk.\1.attn_k_norm.weight'),
+    # FFN projections (Llama: w1 = gate, w2 = down, w3 = up).
+    (r'^layers\.(\d+)\.feed_forward\.w1\.weight$',  r'blk.\1.ffn_gate.weight'),
+    (r'^layers\.(\d+)\.feed_forward\.w2\.weight$',  r'blk.\1.ffn_down.weight'),
+    (r'^layers\.(\d+)\.feed_forward\.w3\.weight$',  r'blk.\1.ffn_up.weight'),
+    # Norms — `attention_norm` MUST match before any `norm` rule.
+    (r'^layers\.(\d+)\.attention_norm\.weight$',    r'blk.\1.attn_norm.weight'),
+    (r'^layers\.(\d+)\.ffn_norm\.weight$',          r'blk.\1.ffn_norm.weight'),
+
+    # --- HF-style fallback (kept so HF state-dicts still convert) ---
+    (r'^model\.layers\.(\d+)\.self_attn\.q_proj\.weight$',  r'blk.\1.attn_q.weight'),
+    (r'^model\.layers\.(\d+)\.self_attn\.k_proj\.weight$',  r'blk.\1.attn_k.weight'),
+    (r'^model\.layers\.(\d+)\.self_attn\.v_proj\.weight$',  r'blk.\1.attn_v.weight'),
+    (r'^model\.layers\.(\d+)\.self_attn\.o_proj\.weight$',  r'blk.\1.attn_output.weight'),
+    (r'^model\.layers\.(\d+)\.mlp\.gate_proj\.weight$',     r'blk.\1.ffn_gate.weight'),
+    (r'^model\.layers\.(\d+)\.mlp\.down_proj\.weight$',     r'blk.\1.ffn_down.weight'),
+    (r'^model\.layers\.(\d+)\.mlp\.up_proj\.weight$',       r'blk.\1.ffn_up.weight'),
+    (r'^model\.layers\.(\d+)\.input_layernorm\.weight$',    r'blk.\1.attn_norm.weight'),
+    (r'^model\.layers\.(\d+)\.post_attention_layernorm\.weight$',
+                                                            r'blk.\1.ffn_norm.weight'),
+
+    # --- top-level tensors ---
+    (r'^tok_embeddings\.weight$',       r'token_embd.weight'),
+    (r'^model\.embed_tokens\.weight$',  r'token_embd.weight'),
+    (r'^embedding\.weight$',            r'token_embd.weight'),
+    (r'^lm_head\.weight$',              r'output.weight'),
+    (r'^output\.weight$',               r'output.weight'),
+    (r'^model\.norm\.weight$',          r'output_norm.weight'),
+    (r'^norm\.weight$',                 r'output_norm.weight'),
+    (r'^ln_f\.weight$',                 r'output_norm.weight'),
+]
+
+# Pre-compile for the hot path (one re.compile per export, not per tensor).
+_TENSOR_NAME_RULES_COMPILED: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(pat), repl) for pat, repl in _TENSOR_NAME_RULES
+]
+
+# Legacy dict — kept as a back-compat re-export. NOT used by
+# convert_tensor_name anymore; consumers reading this dict would have
+# inherited the substring-collision bug. New code should rely on
+# convert_tensor_name (regex pipeline) instead.
 WEIGHT_NAME_MAP = {
+    'tok_embeddings': 'token_embd',
     'embed_tokens': 'token_embd',
     'embedding': 'token_embd',
-    'tok_embeddings': 'token_embd',
     'lm_head': 'output',
     'output': 'output',
     'norm': 'output_norm',
     'ln_f': 'output_norm',
     'layers': 'blk',
-    'self_attn': 'attn',
-    'attention': 'attn',
-    'q_proj': 'attn_q',
-    'k_proj': 'attn_k',
-    'v_proj': 'attn_v',
-    'o_proj': 'attn_output',
-    'mlp': 'ffn',
-    'gate_proj': 'ffn_gate',
-    'up_proj': 'ffn_up',
-    'down_proj': 'ffn_down',
+    'attention.wq': 'attn_q',
+    'attention.wk': 'attn_k',
+    'attention.wv': 'attn_v',
+    'attention.wo': 'attn_output',
+    'attention.q_norm': 'attn_q_norm',
+    'attention.k_norm': 'attn_k_norm',
+    'feed_forward.w1': 'ffn_gate',
+    'feed_forward.w2': 'ffn_down',
+    'feed_forward.w3': 'ffn_up',
+    'attention_norm': 'attn_norm',
+    'ffn_norm': 'ffn_norm',
+    # HF-style aliases
+    'self_attn.q_proj': 'attn_q',
+    'self_attn.k_proj': 'attn_k',
+    'self_attn.v_proj': 'attn_v',
+    'self_attn.o_proj': 'attn_output',
+    'mlp.gate_proj': 'ffn_gate',
+    'mlp.up_proj': 'ffn_up',
+    'mlp.down_proj': 'ffn_down',
     'input_layernorm': 'attn_norm',
     'post_attention_layernorm': 'ffn_norm',
 }
@@ -357,11 +433,27 @@ def parse_gguf_metadata(f: BinaryIO, header: dict[str, Any]) -> dict[str, Any]:
 # =============================================================================
 
 def convert_tensor_name(pytorch_name: str) -> str:
-    """Convert PyTorch tensor name to GGUF convention."""
-    name = pytorch_name
-    for old, new in WEIGHT_NAME_MAP.items():
-        name = name.replace(old, new)
-    return name
+    """Convert a PyTorch state_dict tensor name to GGUF / llama.cpp form.
+
+    Tries each rule in `_TENSOR_NAME_RULES` in order; the first regex
+    that fully matches wins. Returns the input unchanged if no rule
+    matches (so unknown names propagate to llama.cpp where they will
+    fail loudly, rather than being silently mangled).
+
+    Examples
+    --------
+    >>> convert_tensor_name('layers.0.attention.wq.weight')
+    'blk.0.attn_q.weight'
+    >>> convert_tensor_name('layers.0.attention_norm.weight')
+    'blk.0.attn_norm.weight'
+    >>> convert_tensor_name('tok_embeddings.weight')
+    'token_embd.weight'
+    """
+    for pattern, replacement in _TENSOR_NAME_RULES_COMPILED:
+        new, n = pattern.subn(replacement, pytorch_name)
+        if n:
+            return new
+    return pytorch_name
 
 
 # =============================================================================

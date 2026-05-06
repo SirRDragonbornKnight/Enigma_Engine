@@ -158,7 +158,9 @@ vision:                 # only required when mode == vision
 
 | Slice | What | Risk | Solves |
 |---|---|---|---|
-| **V1** GGUF round-trip test | New `tests/test_gguf_roundtrip.py` (above). | low | Verifies or refutes the llama.cpp interop claim. Prerequisite for any Hermes user-facing message. |
+| **V1** GGUF round-trip test | ✅ **SHIPPED May 6, 2026** (commit `61369fe`). New `tests/test_gguf_roundtrip.py` with 8 tests: 2 pass, 6 strict-xfail. Refutes the llama.cpp interop claim — round-trip is broken. See ARCH-V1b/V1c below for the fixes. | low | Verifies or refutes the llama.cpp interop claim. Prerequisite for any Hermes user-facing message. |
+| **V1b** Llama-style tensor-name mapping | Rewrite `WEIGHT_NAME_MAP` + `convert_tensor_name` in `enigma_engine/core/gguf.py`. Current map is HF-style (`q_proj/gate_proj/mlp/self_attn`); Enigma's state_dict is Llama-style (`attention.wq`, `feed_forward.w1`, `attention_norm`). Naive `str.replace` also substring-collides (`norm → output_norm` rewrites `attention_norm` → `attn_output_norm`). Replace with a regex-based per-segment mapping. Add entries for `wq/wk/wv/wo → attn_q/k/v/output`, `w1/w2/w3 → ffn_gate/down/up`, `q_norm/k_norm → attn_q_norm/k_norm` (QK-norm), `attention_norm → attn_norm`, `ffn_norm` (already correct), `tok_embeddings → token_embd`, `norm → output_norm`, `layers.N → blk.N`. Unmark the 3 structural xfails in `TestTensorNameMappingIsLlamaStyle`. | low | Tensor names match what llama.cpp expects for `general.architecture = llama`. |
+| **V1c** GGUF metadata + tokenizer audit | After V1b, the round-trip xfails likely STILL fail because llama.cpp also requires: `llama.attention.layer_norm_rms_epsilon`, BPE merges in `tokenizer.ggml.merges`, special-token role markers, `tokenizer.ggml.model = "gpt2"` or `"llama"` matching the actual tokenizer family, and quantization block layout for `q4_k`/`q8_0`. Audit each metadata key against [llama.cpp's llama-arch.cpp](https://github.com/ggml-org/llama.cpp/blob/master/src/llama-arch.cpp) and add what's missing. Subprocess driver is already in the test file. Unmark the 3 round-trip xfails when subprocess returns 0. | medium | End-to-end round-trip works; user-facing "exports llama.cpp models" claim becomes true. |
 | **1.5a** ConfigSchema + ModeRegistry + dispatcher entry-point | New `enigma_engine/training/schema.py` (Pydantic + YAML loader). New `training/registry.py` (mode → (TrainerClass, config_builder, run_method) for all 6 core + 9 experimental). New `training/dispatch.py` (single `run(config) → Job`). Behind `experimental=True` flag for the 9 parked modes. | low | The CLI's argparse → YAML → dispatcher seam. One canonical entry point. |
 | **1.5b** Wire `run.py --train --config` to the dispatcher | Existing `run.py --train data.txt` stays working (legacy text-SFT path). New `run.py --train --config path.yaml` calls the dispatcher. Add `enigma-ai` console_scripts entry-point in pyproject.toml. | low | CLI surface ships; one mode at a time can be migrated. |
 | **1.5c** Migrate 6 core modes to dispatcher | One mode per pass: `sft`, `dpo`, `grpo`, `lora`, `vision`, `audio`. GUI launcher for each becomes "build YAML dict → call dispatcher" (~30 lines, was ~200). | medium | Six passes. Each ends with the GUI button still working but going through the dispatcher. |
@@ -189,7 +191,9 @@ If any chain breaks before reaching the inner code, the slice is parked, not fin
 
 ### Recommended order
 
-0. **ARCH-V1** (GGUF round-trip). Smallest slice, blocks llama.cpp claims.
+0. ~~**ARCH-V1**~~ ✅ shipped (commit `61369fe`, May 6, 2026).
+0a. **ARCH-V1b** (Llama-style tensor-name mapping). Bounded fix; flips 3 of 6 xfails.
+0b. **ARCH-V1c** (GGUF metadata + tokenizer audit). Flips remaining 3 round-trip xfails.
 1. **ARCH-1.5a** (schema + registry + dispatcher). Tests prove every mode resolves and tears down.
 2. **ARCH-1.5b** (CLI wire-up, both legacy and YAML paths working).
 3. **ARCH-1.5c** (migrate 6 core modes — 6 passes).
