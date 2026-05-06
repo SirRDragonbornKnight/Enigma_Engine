@@ -192,8 +192,8 @@ If any chain breaks before reaching the inner code, the slice is parked, not fin
 ### Recommended order
 
 0. ~~**ARCH-V1**~~ ✅ shipped (commit `61369fe`, May 6, 2026).
-0a. **ARCH-V1b** (Llama-style tensor-name mapping). Bounded fix; flips 3 of 6 xfails.
-0b. **ARCH-V1c** (GGUF metadata + tokenizer audit). Flips remaining 3 round-trip xfails.
+0a. ~~**ARCH-V1b**~~ ✅ shipped (commit `e6eaf71`, May 6, 2026 — regex pipeline replaces naive `str.replace`; 3 of 6 xfails closed).
+0b. **ARCH-V1c** (GGUF metadata audit). Flips remaining 3 round-trip xfails. **Recon done (May 6, 2026):** llama-cpp-python 0.3.4 verbose load aborts inside `ggml.c:7085` with `GGML_ASSERT(ctx->kv[key_id].type == GGUF_TYPE_UINT32) failed` — one of the 23 KV pairs we write has the wrong scalar type (almost certainly a `uint64`/`int32` value where llama.cpp expects `uint32`; head_count, head_count_kv, block_count, vocab_size, context_length, embedding_length, feed_forward_length, rope_dimension_count are all read as `uint32`). Fix: audit each `_write_metadata` field, match it against the type llama.cpp's `llama_model_loader::get_arr_n` / `get_key` expects, then add structural unit tests on the metadata writer. Tokenizer KVs (`tokenizer.ggml.model`, `.tokens`, `.scores`, `.token_type`, `.merges`, BOS/EOS) come second — assert blocks in llama.cpp's tokenizer.cpp won't fire until we get past the model-arch assertion.
 1. **ARCH-1.5a** (schema + registry + dispatcher). Tests prove every mode resolves and tears down.
 2. **ARCH-1.5b** (CLI wire-up, both legacy and YAML paths working).
 3. **ARCH-1.5c** (migrate 6 core modes — 6 passes).
