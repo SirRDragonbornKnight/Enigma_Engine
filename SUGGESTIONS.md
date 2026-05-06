@@ -74,14 +74,36 @@ After TEACH-1c, the production call chain must be:
   - **GUI training-launcher mixins (the actual bloat, ~10.3k lines):** `gui_forge_new_modes.py` 2955, `gui_forge_tools.py` 1624, `gui_forge_training.py` 1604, `gui_forge_models.py` 1197, `gui_forge_advanced.py` 971, `gui_forge_adaptive.py` 963, `gui_forge_teacher.py` 519, `gui_forge_queue.py` 501.
   - GUI training wiring is **bigger than the entire core training engine** because every mode duplicates the same 5-step shape (read widgets → build `TrainingConfig` → instantiate `Trainer(...)` → spawn thread → poll callbacks).
 
-**Honest framing of "pull training out":** core training is already extracted under `enigma_engine/core/`. The audit-readability win the user asked for lives in **collapsing the 20+ duplicated launcher paths in GUI behind a single dispatcher** — which then becomes the daemon-side endpoint after the server-first refactor.
+**Honest framing of "pull training out":** core training is already extracted under `enigma_engine/core/`. The audit-readability win the user asked for lives in **collapsing the duplicated launcher paths in GUI behind a single dispatcher** — which then becomes the daemon-side endpoint after the server-first refactor.
+
+### Audit findings (May 6, 2026 — corrections to earlier counts)
+
+The initial ARCH-1 plan inflated several numbers and skipped a verification step. Source-of-truth audit ran today:
+
+- **Mode count is ~15, not "20".** Trainer methods on `core/training.py`: `train`, `train_dpo`, `train_simpo`, `train_kto`, `train_orpo`, `train_vision`, `train_audio`, `train_rest` (8). Sibling trainer classes: `RewardTrainer`, `RLHFTrainer`, `SelfPlayTrainer`, `GRPOTrainer`, `ReMaxTrainer`, `LoraTrainer`, `AdaptiveTrainer` (7). **Real total: 15 distinct trainer entry points**, plus a few GUI-only meta-modes (dialogue, distill, evolutionary, advanced, adaptive) that compose these. ARCH-1.5b is a 15-pass migration, not 20.
+- **`/api/train` ships ONE training shape, not a generic dispatcher seam.** Confirmed: [api/server.py L997](enigma_engine/api/server.py#L997-L1011) `TrainRequest` accepts only `data_file`/`epochs`/`learning_rate`/`batch_size` and the handler hardcodes `Trainer(...).train()`. **Zero coverage for DPO/SimPO/KTO/ORPO/vision/audio/RLHF/GRPO/ReMax/SelfPlay/LoRA/Adaptive.** ARCH-1c is bigger than the original plan implied: each of 14 missing modes needs its own Pydantic request schema + dispatcher entry, not just "expand /api/train".
+- **GUI imports `EnigmaEngine` AND multiple Trainer classes directly.** Grep confirms 20+ direct instantiations across `gui_forge*`/`gui_logic*` mixins. Self-Play even spins up a SECOND `EnigmaEngine` as the trainer ([gui_forge_new_modes.py L2323](enigma_engine/gui/gui_forge_new_modes.py#L2323-L2323)) — ARCH-1b "GUI chat over client" doesn't cover this; it lives under ARCH-1c.
+- **GGUF export round-trip is UNVERIFIED.** [core/gguf.py L171](enigma_engine/core/gguf.py#L171) declares `general.architecture = "llama"` and the writer ships under [GGUFExporter.export](enigma_engine/core/gguf.py#L683). We have tests that bytes get written. **We have NO test that the resulting file loads back through `llama.cpp` or `llama-cpp-python`.** The whole "Path 1 — we already export to llama.cpp" answer was based on the writer existing, not on round-trip proof. Could be silently broken (tensor-name mapping, Q4_K block layout, metadata key set). New slice **ARCH-V1** tracks this verification — must run BEFORE any user-facing claim that Enigma AI is llama.cpp-compatible.
+
+### ARCH-V1 — GGUF round-trip verification (smallest first slice)
+
+**Goal:** prove the existing GGUF exporter produces files `llama-cpp-python` can load and generate from. No code changes — a test slice. If it fails, file the gap as ARCH-V1b and fix BEFORE any user-facing Hermes/llama.cpp claim.
+
+**Steps:**
+1. New test `tests/test_gguf_roundtrip.py` (skipped if `llama-cpp-python` not installed). Build a tiny ForgeConfig model (~1M params, 2 layers, vocab 256), random weights, run `GGUFExporter(quantization="f16").export(...)` to a tmp file.
+2. Load the exported file with `llama_cpp.Llama(model_path=...)`. If it raises, the exporter is broken — fail with the raised message.
+3. Generate one token via `llama.create_completion(prompt="a", max_tokens=1)`. If it raises or returns empty, the tensor mapping is broken — fail.
+4. Repeat for `quantization="q8_0"` and `quantization="q4_k"` so all three quant paths are gated.
+5. **Skip-with-WARNING** if `llama_cpp` isn't importable in CI; the test exists for the user's local machine where the runtime IS installed. Manual run command lands in `quick_commands.md`.
+
+**Risk:** Low effort, high information. Either confirms our story or surfaces the bug we've been carrying without knowing.
 
 ### ARCH-1.5 — Training extraction (do this BEFORE ARCH-1b/c)
 
 | Slice | What moves | Code shrink (gui/) | Risk | Solves |
 |---|---|---|---|---|
-| **1.5a** TrainingDispatcher + ModeRegistry (core, in-process) | New `enigma_engine/core/training_dispatcher.py`. Registry maps `mode_name → (TrainerClass, config_builder, run_method)`. `dispatcher.start(mode, config_dict, callbacks) → Job`. | none yet | low | Single canonical training entry-point. |
-| **1.5b** Migrate GUI mode-by-mode | One mode per pass: `dpo`, `apo`, `simpo`, `kto`, `orpo`, `grpo`, `remax`, `rlhf`, `self_play`, `vision`, `audio`, `dialogue`, `distill`, `evolutionary`, `lora`, `reward_model`, `advanced`, `adaptive`, `rest`, `dpo_simpo`. Per-mode shrink: ~200 GUI lines → ~30 (read widgets + `dispatcher.start`). | ~10.3k → ~3.5k | medium (20 modes to verify) | The actual audit-volume win. |
+| **1.5a** TrainingDispatcher + ModeRegistry (core, in-process) | New `enigma_engine/core/training_dispatcher.py`. Registry maps `mode_name → (TrainerClass, config_builder, run_method)`. `dispatcher.start(mode, config_dict, callbacks) → Job`. Registry seeded with all 15 modes (8 Trainer methods + 7 sibling classes) so 1.5b has a complete map to migrate against. | none yet | low | Single canonical training entry-point. |
+| **1.5b** Migrate GUI mode-by-mode | One mode per pass. Real list (15): `text` (Trainer.train), `dpo`, `simpo`, `kto`, `orpo`, `vision`, `audio`, `rest` (Trainer methods); `reward_model` (RewardTrainer), `rlhf` (RLHFTrainer), `self_play` (SelfPlayTrainer), `grpo` (GRPOTrainer), `remax` (ReMaxTrainer), `lora` (LoraTrainer), `adaptive` (AdaptiveTrainer). Per-mode shrink: ~200 GUI lines → ~30 (read widgets + `dispatcher.start`). | ~10.3k → ~3.5k | medium (15 modes to verify) | The actual audit-volume win. |
 | **1.5c** Move `core/training*.py` → `enigma_engine/training/` | Rename + import-path update across codebase. `core/` becomes inference + model + tokenizer only; `training/` becomes trainer base + modes + dispatcher + registry. | rename only | low (mechanical) | Clean separation of inference vs training package. |
 
 ### ARCH-1 — Server-first refactor (after ARCH-1.5)
@@ -90,7 +112,7 @@ After TEACH-1c, the production call chain must be:
 |---|---|---|---|
 | **1a** EnigmaClient lib + CLI client | New `enigma_engine/client.py` (HTTP + SSE wrapper around `/api/*`). New `run.py --client chat` / `--client train --mode dpo --config X.json` paths that POST to a running daemon instead of importing core in-process. | low | Proves daemon pattern, gives Dia a non-GUI test surface, doesn't touch GUI yet. |
 | **1b** GUI chat + model-loading uses client | `gui_logic.py` and `gui_forge.py` stop importing `EnigmaEngine`. `_load_model`, `chat`, `chat_stream`, `unload`, `list_models` all go through `EnigmaClient`. Daemon spawned as subprocess on GUI launch. | medium | Removes 2 of the 20+ direct core imports. Validates IPC under GUI load. |
-| **1c** Training over API + dispatcher exposed via `/api/train/{mode}` | Server expands `/api/train` to accept any mode the dispatcher knows. SSE `/api/training/metrics`. GUI training mixins POST to `/api/train/{mode}`. | high | Removes the remaining 18+ direct trainer imports. Training survives daemon restart-on-GUI-crash. |
+| **1c** Training over API + dispatcher exposed via `/api/train/{mode}` | Server expands `/api/train` from its current single-mode shape (text-SFT only, [api/server.py L997-L1011](enigma_engine/api/server.py#L997-L1011)) to accept any of the 15 dispatcher modes. **Real cost:** 14 new Pydantic request schemas (one per non-text mode), 14 dispatcher route handlers, SSE `/api/training/metrics`, cancellation hook, checkpoint hooks. Plus the Self-Play double-engine path ([gui_forge_new_modes.py L2323](enigma_engine/gui/gui_forge_new_modes.py#L2323)) that spins a second `EnigmaEngine` as trainer needs daemon-side handling. GUI training mixins POST to `/api/train/{mode}`. | high | Removes the remaining 18+ direct trainer imports + the GUI-side second-engine instantiation. Training survives daemon restart-on-GUI-crash. |
 | **1d** Hardening | Lock-scope review on `/api/profiles/{id}/activate`. CORS opt-in already handled. Auth deferred until web/phone client (option D) lands. | low | Closes the security review for the localhost daemon. |
 
 ### Acceptance call-chain (Rule §1 #20)
@@ -104,19 +126,20 @@ If any chain breaks before reaching the inner code, the slice is parked, not fin
 
 ### Recommended order
 
-1. **ARCH-1.5a** (dispatcher + registry, core only — tests prove every mode resolves and tears down). **Smallest safest start.** Authorises ARCH-1.5b.
-2. **ARCH-1.5b** mode-by-mode (one mode per pass, 20 passes, each is small and isolated).
+0. **ARCH-V1** (GGUF round-trip test — confirms or refutes the "already exports to llama.cpp" claim). Tiny first slice, blocks any Hermes/llama.cpp user-facing claim until it passes.
+1. **ARCH-1.5a** (dispatcher + registry, core only — tests prove every mode resolves and tears down). **Smallest safest code slice.** Authorises ARCH-1.5b.
+2. **ARCH-1.5b** mode-by-mode (one mode per pass, 15 passes, each is small and isolated).
 3. **ARCH-1.5c** rename `core/training*.py` → `training/`.
 4. **ARCH-1a** EnigmaClient lib + CLI client. Daemon-spawn helper.
 5. **ARCH-1b** GUI chat over client.
-6. **ARCH-1c** GUI training over client (now trivial because dispatcher already exists from 1.5a).
+6. **ARCH-1c** GUI training over client (now trivial because dispatcher already exists from 1.5a; per-mode schemas land here).
 7. **ARCH-1d** hardening sweep.
 
 ### Devil's advocate (Rule §1 #13)
 
 - **ARCH-1.5a alone doesn't fix training-blocks-chat** (still same process, same GIL). That's solved by ARCH-1c (training jobs run inside daemon, GUI stays responsive via SSE). Don't expect responsiveness improvement from 1.5a.
-- **ARCH-1.5b risks regressions across 20 modes** if dispatcher isn't a perfect drop-in. Mitigation: dispatcher behind a feature flag, migrate one mode per pass, keep old launcher path until each mode is verified end-to-end against a real training run.
-- **ARCH-1c is the largest pass** — `/api/train` currently only handles text-SFT. Expanding to 20 modes + SSE metrics + cancellation + checkpoint hooks is real work. Don't underestimate.
+- **ARCH-1.5b risks regressions across 15 modes** if dispatcher isn't a perfect drop-in. Mitigation: dispatcher behind a feature flag, migrate one mode per pass, keep old launcher path until each mode is verified end-to-end against a real training run.
+- **ARCH-1c is the largest pass** — `/api/train` currently only handles text-SFT (audit-confirmed: hardcoded `Trainer(...).train()`, single request schema). Expanding to 14 more modes + SSE metrics + cancellation + checkpoint hooks + Self-Play's second-engine path is real work. Don't underestimate.
 - **GUI mixins also have non-training code** (model loading, queue UI, teacher chat, mod-page wiring). Named overhaul scope (Rule §1 #18) for ARCH-1.5b is **"GUI training-mode launcher → dispatcher migration"** only — do NOT touch model-loading, queue UI, teacher chat in the same passes.
 
 ### Parked / open questions
