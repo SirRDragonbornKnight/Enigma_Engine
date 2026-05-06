@@ -294,12 +294,29 @@ class TestGgufMetadataTypes:
         meta = _parse_gguf_metadata(_export_tiny("f16", tmp_path / "x.gguf"))
         assert "llama.vocab_size" in meta
 
+    def test_unknown_positive_int_falls_back_to_uint64(self, tmp_path):
+        """Keys NOT in the V1c spec table go through Python-type
+        inference. The documented fallback for a positive int is UINT64
+        (negative is INT64). This test gates the fallback path so a
+        future refactor of `_write_value` can't silently break unknown
+        custom keys callers pass via `add_metadata`."""
+        from enigma_engine.core.gguf import GGUFWriter
+
+        UINT64 = 10
+        path = tmp_path / "fallback.gguf"
+        w = GGUFWriter(path)
+        w.add_metadata("custom.unknown_positive_int", 42)
+        w.write()
+
+        meta = _parse_gguf_metadata(path)
+        kind, val = meta["custom.unknown_positive_int"]
+        assert kind == UINT64
+        assert val == 42
+
 
 # ---------------------------------------------------------------------------
-# 2. Tensor-name audit — these fail TODAY and document the bug location.
-# ARCH-V1b will fix `WEIGHT_NAME_MAP` + `convert_tensor_name` and the
-# `xfail` marks below come off. `strict=True` means a future xpass without
-# removing the marker errors loudly.
+# 2. Tensor-name audit — pins the LLAMA-CPP target names so the
+# substring-collision bug (fixed in ARCH-V1b, May 6, 2026) cannot regress.
 # ---------------------------------------------------------------------------
 
 class TestTensorNameMappingIsLlamaStyle:

@@ -358,42 +358,6 @@ _TENSOR_NAME_RULES_COMPILED: list[tuple[re.Pattern[str], str]] = [
     (re.compile(pat), repl) for pat, repl in _TENSOR_NAME_RULES
 ]
 
-# Legacy dict — kept as a back-compat re-export. NOT used by
-# convert_tensor_name anymore; consumers reading this dict would have
-# inherited the substring-collision bug. New code should rely on
-# convert_tensor_name (regex pipeline) instead.
-WEIGHT_NAME_MAP = {
-    'tok_embeddings': 'token_embd',
-    'embed_tokens': 'token_embd',
-    'embedding': 'token_embd',
-    'lm_head': 'output',
-    'output': 'output',
-    'norm': 'output_norm',
-    'ln_f': 'output_norm',
-    'layers': 'blk',
-    'attention.wq': 'attn_q',
-    'attention.wk': 'attn_k',
-    'attention.wv': 'attn_v',
-    'attention.wo': 'attn_output',
-    'attention.q_norm': 'attn_q_norm',
-    'attention.k_norm': 'attn_k_norm',
-    'feed_forward.w1': 'ffn_gate',
-    'feed_forward.w2': 'ffn_down',
-    'feed_forward.w3': 'ffn_up',
-    'attention_norm': 'attn_norm',
-    'ffn_norm': 'ffn_norm',
-    # HF-style aliases
-    'self_attn.q_proj': 'attn_q',
-    'self_attn.k_proj': 'attn_k',
-    'self_attn.v_proj': 'attn_v',
-    'self_attn.o_proj': 'attn_output',
-    'mlp.gate_proj': 'ffn_gate',
-    'mlp.up_proj': 'ffn_up',
-    'mlp.down_proj': 'ffn_down',
-    'input_layernorm': 'attn_norm',
-    'post_attention_layernorm': 'ffn_norm',
-}
-
 
 # =============================================================================
 # GGUF Reading / Parsing  (shared by gguf_loader.py & ollama_loader.py)
