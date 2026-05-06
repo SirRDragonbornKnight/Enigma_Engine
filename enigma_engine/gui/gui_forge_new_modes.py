@@ -1139,6 +1139,114 @@ class ForgeNewModesMixin:
     # DISTILLATION (Step 1b — Teacher → Student)
     # ================================================================
 
+    def _pre_training_backup(
+        self,
+        model_path: str,
+        *,
+        suffix: str = "pre_train",
+    ) -> str | None:
+        """P5-pre-2 helper (Pass 156z9ar): copy the on-disk model to
+        ``models/checkpoints/{stem}_{suffix}_{ts}{ext}`` BEFORE any
+        weight-mutating training begins, so the user has a one-step
+        rollback if training drifts identity, destroys reasoning,
+        or otherwise corrupts the model.
+
+        Returns the backup path as a string on success, or ``None``
+        when the source file does not exist yet (caller passed an
+        unsaved path) or when the copy itself fails (loud `[!]` log
+        but the run still proceeds — backup is a safety rail, not
+        a precondition).
+
+        ``suffix`` lets each entry point name its rollback files
+        distinctly (``pre_distill``, ``pre_dialogue``, ``pre_dpo``,
+        etc.) so a `models/checkpoints/` listing is self-explanatory.
+        """
+        try:
+            src_path = Path(model_path)
+            if not (src_path.exists() and src_path.is_file()):
+                self._log(
+                    f"Pre-{suffix} backup skipped: source file "
+                    f"does not exist yet.")
+                return None
+            from datetime import datetime as _dt
+            import shutil as _shutil
+            from enigma_engine.gui.scanners import (
+                MODELS_DIR as _MODELS_DIR)
+            _ts = _dt.now().strftime("%Y%m%d_%H%M%S")
+            ckpt_dir = _MODELS_DIR / "checkpoints"
+            ckpt_dir.mkdir(parents=True, exist_ok=True)
+            backup_name = (
+                f"{src_path.stem}_{suffix}_{_ts}{src_path.suffix}")
+            backup_path = ckpt_dir / backup_name
+            _shutil.copy2(src_path, backup_path)
+            self._log(f"Pre-{suffix} backup: {backup_path.name}")
+            return str(backup_path)
+        except Exception as backup_exc:
+            # Loud but non-fatal — the user knows the rollback rail
+            # is missing for this run.
+            self._log(
+                f"[!] Pre-{suffix} backup FAILED: "
+                f"{backup_exc}.  Run will proceed WITHOUT a "
+                f"rollback checkpoint.")
+            return None
+
+    def _run_identity_probe(
+        self,
+        model,
+        tokenizer,
+        device: str,
+        prompts: list[str],
+        *,
+        max_new_tokens: int = 64,
+    ) -> dict:
+        """P5-pre-3 (Pass 156z9aq): run identity-probe prompts against
+        the student model and return ``{prompt: response_text}``.
+
+        Used pre+post distillation to detect drift toward the teacher's
+        identity (e.g. responses to "Who are you?" leaking "I am Qwen").
+
+        Failure of any single probe is swallowed with an empty-string
+        response so the surrounding training run never crashes on a
+        diagnostic — the probe is observability, not flow control.
+        """
+        import torch as _torch
+        results: dict[str, str] = {}
+        was_training = model.training
+        model.eval()
+        try:
+            with _torch.no_grad():
+                for p in prompts:
+                    try:
+                        prompt_text = (
+                            f"User: {p}\nAssistant:")
+                        ids = tokenizer.encode(prompt_text)
+                        input_ids = _torch.tensor(
+                            [ids], dtype=_torch.long, device=device)
+                        out = model.generate(
+                            input_ids,
+                            max_new_tokens=max_new_tokens,
+                            temperature=0.7,
+                            top_k=50,
+                            top_p=0.9,
+                            repetition_penalty=1.1)
+                        # ``generate`` may return a tensor or
+                        # (tensor, logits) depending on flags; the
+                        # default path returns a bare tensor.
+                        gen_ids = (out[0] if isinstance(out, tuple)
+                                   else out)
+                        new_ids = gen_ids[0, input_ids.shape[1]:]
+                        text = tokenizer.decode(new_ids.tolist())
+                        results[p] = text.strip()
+                    except Exception as probe_exc:
+                        results[p] = ""
+                        self._log(
+                            f"  [!] Probe failed for "
+                            f"{p!r}: {probe_exc}")
+        finally:
+            if was_training:
+                model.train()
+        return results
+
     def _distill_validate_inputs(self) -> dict | None:
         """Validate inputs for distillation training.
 
@@ -1620,6 +1728,95 @@ class ForgeNewModesMixin:
                 # Step 3: Train student on distilled data
                 self._log("\n--- Training Student ---")
                 forge_params = self._read_forge_train_params()
+
+                # P5-pre-2: pre-SFT auto-checkpoint (Pass 156z9ap,
+                # refactored Pass 156z9ar to use the shared
+                # ``_pre_training_backup`` helper).  Distillation
+                # overwrites ``student_path`` in place; without a
+                # backup, drift toward teacher identity or loss of
+                # general capability has no rollback.
+                pre_distill_backup_path = self._pre_training_backup(
+                    student_path, suffix="pre_distill")
+
+                # P5-pre-2: anchor-mix gate.  When the personality
+                # category is selected we mix curated general
+                # examples (math/code/knowledge — see
+                # ``data/anchor_examples.jsonl``) into the SFT batch
+                # at a default 30% ratio to mitigate catastrophic
+                # forgetting of base skills.  Other distill
+                # categories keep ``general_mix_ratio=0`` (status
+                # quo); they don't have the same identity-drift
+                # pressure.  When the anchor file resolves to None
+                # (no override + no repo default) the mix is
+                # silently disabled and the user is informed.
+                _mix_ratio = 0.0
+                _mix_data: str | None = None
+                if "personality" in categories:
+                    try:
+                        from enigma_engine.gui.scanners import (
+                            _resolve_anchor_path,
+                        )
+                        _saved = self._read_gui_str_setting(
+                            "anchor_data_path", "")
+                        _anchor = _resolve_anchor_path(_saved)
+                        if _anchor is not None and _anchor.exists():
+                            _mix_ratio = 0.3
+                            _mix_data = str(_anchor)
+                            self._log(
+                                f"Personality anchor mix: "
+                                f"{_anchor.name} "
+                                f"(ratio {int(_mix_ratio*100)}%)")
+                        else:
+                            self._log(
+                                "Personality anchor mix: "
+                                "DISABLED (no anchor file). "
+                                "Catastrophic-forgetting risk "
+                                "is HIGHER for this run.")
+                    except Exception as anchor_exc:
+                        self._log(
+                            f"[!] Anchor mix resolution failed: "
+                            f"{anchor_exc}.  Continuing without "
+                            f"mix.")
+
+                # P5-pre-3: identity-guard probe (pre-training).
+                # Only fires when the personality category is in
+                # play — that's the only category that can drift
+                # student identity toward the teacher.  Stored for
+                # post-training comparison after `trainer.train`
+                # returns.  Probe failures are non-fatal.
+                pre_probe_responses: dict | None = None
+                if "personality" in categories:
+                    try:
+                        from enigma_engine.core.personality_data import (
+                            IDENTITY_PROBE_PROMPTS,
+                        )
+                        self._log(
+                            "Identity probe (pre-training)...")
+                        pre_probe_responses = (
+                            self._run_identity_probe(
+                                student, tokenizer, device,
+                                list(IDENTITY_PROBE_PROMPTS)))
+                        # Surface unsafe pre-probe lines so the user
+                        # knows the BASELINE leak rate before any
+                        # training has occurred.
+                        from enigma_engine.core.personality_data import (
+                            passes_identity_filter,
+                        )
+                        leaked_pre = [
+                            p for p, r in pre_probe_responses.items()
+                            if not passes_identity_filter(r)]
+                        if leaked_pre:
+                            self._log(
+                                f"  Pre-probe identity leaks: "
+                                f"{len(leaked_pre)}/"
+                                f"{len(pre_probe_responses)} prompts")
+                    except Exception as probe_exc:
+                        self._log(
+                            f"[!] Pre-probe failed: {probe_exc}.  "
+                            f"Post-probe drift comparison will be "
+                            f"skipped.")
+                        pre_probe_responses = None
+
                 train_config = TrainingConfig(
                     epochs=epochs,
                     batch_size=forge_params["batch_size"],
@@ -1632,7 +1829,8 @@ class ForgeNewModesMixin:
                     ce_chunk_size=forge_params["ce_chunk_size"],
                     use_compile=True,
                     rolling_best_k=forge_params["rolling_best_k"],
-                    general_mix_ratio=0.0,  # Only distilled data
+                    general_mix_ratio=_mix_ratio,
+                    general_data=_mix_data,
                     val_split=forge_params["val_split"],
                     save_every=max(1, epochs // 5),
                     checkpoint_dir=str(
@@ -1687,6 +1885,53 @@ class ForgeNewModesMixin:
                         "    Try reducing batch size.")
                     return
 
+                # P5-pre-3: identity-guard probe (post-training).
+                # Compare against `pre_probe_responses` and flag any
+                # prompts that drifted from safe → leaking.  This is
+                # the regression signal personality SFT must avoid.
+                if (pre_probe_responses is not None
+                        and "personality" in categories):
+                    try:
+                        from enigma_engine.core.personality_data import (
+                            IDENTITY_PROBE_PROMPTS,
+                            summarize_identity_probe,
+                        )
+                        self._log(
+                            "Identity probe (post-training)...")
+                        post_probe_responses = (
+                            self._run_identity_probe(
+                                student, tokenizer, device,
+                                list(IDENTITY_PROBE_PROMPTS)))
+                        summary = summarize_identity_probe(
+                            pre_probe_responses,
+                            post_probe_responses)
+                        self._log(
+                            f"  Identity safety: "
+                            f"{summary['pre_safe']}/{summary['total']} "
+                            f"pre  →  "
+                            f"{summary['post_safe']}/{summary['total']} "
+                            f"post")
+                        if summary["drifted"]:
+                            self._log(
+                                f"  [!] IDENTITY DRIFT on "
+                                f"{len(summary['drifted'])} prompt(s):")
+                            for p in summary["drifted"]:
+                                self._log(f"      - {p!r}")
+                            self._log(
+                                f"      Rollback available: "
+                                f"{Path(pre_distill_backup_path).name}"
+                                if pre_distill_backup_path else
+                                "      [!] NO rollback "
+                                "checkpoint exists for this run.")
+                        if summary["recovered"]:
+                            self._log(
+                                f"  Identity recovered on "
+                                f"{len(summary['recovered'])} "
+                                f"prompt(s)")
+                    except Exception as probe_exc:
+                        self._log(
+                            f"[!] Post-probe failed: {probe_exc}")
+
                 # Save model
                 from enigma_engine.core.safe_save import (
                     atomic_torch_save)
@@ -1703,6 +1948,10 @@ class ForgeNewModesMixin:
                 self._log(f"Best loss : {state.best_loss:.4f}")
                 self._log(f"Examples  : {len(all_examples)}")
                 self._log(f"Saved to  : {Path(student_path).name}")
+                if pre_distill_backup_path:
+                    self._log(
+                        f"Rollback  : "
+                        f"{Path(pre_distill_backup_path).name}")
                 total = _time_d.monotonic() - _distill_start[0]
                 t_m, t_s = int(total // 60), int(total % 60)
                 self._log(f"Duration  : {t_m}m {t_s:02d}s")
@@ -2292,6 +2541,14 @@ class ForgeNewModesMixin:
 
                 self._log(f"Loaded {len(pref_data)} preference pairs")
 
+                # Pass 156z9as: pre-RL auto-checkpoint.  ``algo`` is
+                # "GRPO" or "ReMax" and lower-cases into a sensible
+                # rollback suffix.
+                pre_rl_backup_path = (
+                    self._pre_training_backup(
+                        student_path,
+                        suffix=f"pre_{algo.lower()}"))
+
                 reward_model = None
 
                 import time as _time
@@ -2419,6 +2676,10 @@ class ForgeNewModesMixin:
                 total = _time.monotonic() - _start[0]
                 t_m, t_s = int(total // 60), int(total % 60)
                 self._log(f"Duration  : {t_m}m {t_s:02d}s")
+                if pre_rl_backup_path:
+                    self._log(
+                        f"Rollback  : "
+                        f"{Path(pre_rl_backup_path).name}")
                 self._update_forge_progress(100, "Complete")
                 self._save_training_run(
                     algo, model_name, epochs, final_reward)
@@ -2587,6 +2848,12 @@ class ForgeNewModesMixin:
                 )
                 trainer = Trainer(model, tokenizer, train_config)
 
+                # Pass 156z9as: pre-SimPO/ORPO auto-checkpoint.
+                pre_pref_backup_path = (
+                    self._pre_training_backup(
+                        student_path,
+                        suffix=f"pre_{algo.lower()}"))
+
                 # Progress callback
                 import time as _time
                 _start = [_time.monotonic()]
@@ -2652,6 +2919,10 @@ class ForgeNewModesMixin:
                 total = _time.monotonic() - _start[0]
                 t_m, t_s = int(total // 60), int(total % 60)
                 self._log(f"Duration  : {t_m}m {t_s:02d}s")
+                if pre_pref_backup_path:
+                    self._log(
+                        f"Rollback  : "
+                        f"{Path(pre_pref_backup_path).name}")
                 self._update_forge_progress(100, "Complete")
                 self._save_training_run(
                     algo, model_name, epochs, final_loss)

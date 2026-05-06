@@ -13,6 +13,7 @@ Pass 156z9am (P5-pre-1) — covers:
 from __future__ import annotations
 
 import inspect
+from pathlib import Path
 
 from enigma_engine.core.personality_data import (
     PERSONALITY_PROMPTS,
@@ -338,3 +339,433 @@ class TestGuiDistillWireSite:
         assert "is_near_duplicate(" in src
         # Reject counts surfaced to log.
         assert "personality_reject_counts" in src
+
+
+# =========================================================================
+# Wire-site structural tests (P5-pre-2 — anchor mix + pre-distill backup)
+# =========================================================================
+
+class TestP5Pre2WireSite:
+    """Pass 156z9ap (P5-pre-2): anchor mix gate + pre-SFT auto-checkpoint
+    in `_start_distill_training`. These are gated structurally because a
+    behavioural test would require a full GUI + teacher + student
+    checkpoint round-trip; the gates are paired with behavioural tests
+    in test_training.py for the parser response-key fallback that
+    enables the anchor mix end-to-end.
+    """
+
+    def _src(self):
+        from enigma_engine.gui.gui_forge_new_modes import (
+            ForgeNewModesMixin,
+        )
+        return inspect.getsource(
+            ForgeNewModesMixin._start_distill_training)
+
+    def test_pre_distill_backup_runs_before_trainer_init(self):
+        """Backup happens BEFORE ``Trainer(student, ...)`` constructs.
+
+        Falsifiable: moving the helper call to AFTER the Trainer
+        init (or removing it) makes the ordered substring check fail.
+        """
+        src = self._src()
+        backup_marker = "_pre_training_backup("
+        trainer_marker = "trainer = Trainer(student"
+        assert backup_marker in src
+        assert trainer_marker in src
+        assert src.index(backup_marker) < src.index(trainer_marker), (
+            "Pre-distill backup must run before Trainer init.")
+
+    def test_pre_distill_backup_uses_timestamp(self):
+        """Backup name carries a timestamp so successive distills do
+        not clobber each other.  Asserted at the helper level so the
+        single source of truth is the timestamping helper, not the
+        entry point."""
+        from enigma_engine.gui.gui_forge_new_modes import (
+            ForgeNewModesMixin,
+        )
+        helper_src = inspect.getsource(
+            ForgeNewModesMixin._pre_training_backup)
+        assert 'strftime("%Y%m%d_%H%M%S")' in helper_src
+        # And the entry point binds the helper return into its
+        # rollback variable.
+        src = self._src()
+        assert 'pre_distill_backup_path' in src
+
+    def test_anchor_mix_gated_on_personality_category(self):
+        """Anchor mix only fires when the user selected the
+        personality category. Other categories keep
+        ``general_mix_ratio=0`` (status quo)."""
+        src = self._src()
+        assert '"personality" in categories' in src
+        # Mix uses the centralised resolver.
+        assert "_resolve_anchor_path" in src
+        # Forwarded to TrainingConfig as both ratio and data path.
+        assert "general_mix_ratio=_mix_ratio" in src
+        assert "general_data=_mix_data" in src
+
+    def test_anchor_mix_default_ratio_is_30_percent(self):
+        """A regression that drops the ratio back to 0 (or a token
+        value like 0.01) silently re-introduces forgetting risk."""
+        src = self._src()
+        # 0.3 is the chosen default; allow either inline literal form.
+        assert "_mix_ratio = 0.3" in src or "_mix_ratio=0.3" in src
+
+
+# =========================================================================
+# Identity probe (P5-pre-3, Pass 156z9aq)
+# =========================================================================
+
+class TestIdentityProbeData:
+    """Pure-data assertions on the probe prompt list."""
+
+    def test_probe_prompts_nonempty(self):
+        from enigma_engine.core.personality_data import (
+            IDENTITY_PROBE_PROMPTS,
+        )
+        assert len(IDENTITY_PROBE_PROMPTS) >= 3
+        assert all(isinstance(p, str) and p.strip()
+                   for p in IDENTITY_PROBE_PROMPTS)
+
+    def test_probe_prompts_unique(self):
+        from enigma_engine.core.personality_data import (
+            IDENTITY_PROBE_PROMPTS,
+        )
+        assert len(set(IDENTITY_PROBE_PROMPTS)) == (
+            len(IDENTITY_PROBE_PROMPTS))
+
+
+class TestSummarizeIdentityProbe:
+    """:func:`summarize_identity_probe` is a pure function — full
+    behavioural coverage of every drift / recovery branch.
+    """
+
+    def _summary(self, pre, post):
+        from enigma_engine.core.personality_data import (
+            summarize_identity_probe,
+        )
+        return summarize_identity_probe(pre, post)
+
+    def test_no_drift_when_both_safe(self):
+        pre = {"Who are you?": "I'm a helpful assistant"}
+        post = {"Who are you?": "I'm here to help"}
+        s = self._summary(pre, post)
+        assert s["drifted"] == []
+        assert s["recovered"] == []
+        assert s["pre_safe"] == 1
+        assert s["post_safe"] == 1
+        assert s["total"] == 1
+
+    def test_drift_safe_to_leaking_is_flagged(self):
+        # Pre: safe.  Post: leaks teacher identity.  This is the
+        # regression signal personality SFT must avoid.
+        pre = {"Who are you?": "I'm an assistant focused on you."}
+        post = {"Who are you?": "I am Qwen, made by Alibaba."}
+        s = self._summary(pre, post)
+        assert s["drifted"] == ["Who are you?"]
+        assert s["recovered"] == []
+        assert s["pre_safe"] == 1
+        assert s["post_safe"] == 0
+
+    def test_recovered_leaking_to_safe(self):
+        pre = {"Who are you?": "As an AI language model, I cannot."}
+        post = {"Who are you?": "I'm a chat companion."}
+        s = self._summary(pre, post)
+        assert s["drifted"] == []
+        assert s["recovered"] == ["Who are you?"]
+        assert s["pre_safe"] == 0
+        assert s["post_safe"] == 1
+
+    def test_only_intersection_of_keys_counted(self):
+        pre = {"a": "safe one", "b": "safe two"}
+        post = {"a": "I am Qwen", "c": "unmatched"}
+        s = self._summary(pre, post)
+        # Only 'a' is in both dicts; 'b' and 'c' ignored.
+        assert s["total"] == 1
+        assert s["drifted"] == ["a"]
+
+    def test_empty_inputs(self):
+        s = self._summary({}, {})
+        assert s == {
+            "pre_safe": 0, "post_safe": 0,
+            "drifted": [], "recovered": [], "total": 0}
+
+    def test_drifted_list_is_sorted(self):
+        pre = {
+            "Z prompt": "safe",
+            "A prompt": "safe",
+            "M prompt": "safe",
+        }
+        post = {
+            "Z prompt": "I am Qwen",
+            "A prompt": "I am Qwen",
+            "M prompt": "I am Qwen",
+        }
+        s = self._summary(pre, post)
+        # Sorted alphabetically (set & sorted in implementation).
+        assert s["drifted"] == ["A prompt", "M prompt", "Z prompt"]
+
+
+class TestProbeWireSite:
+    """Wire-site structural tests for the pre+post identity probe in
+    `_start_distill_training`. Behavioural test would require a live
+    student model; structural gate prevents regression of the four
+    contract claims.
+    """
+
+    def _src(self):
+        from enigma_engine.gui.gui_forge_new_modes import (
+            ForgeNewModesMixin,
+        )
+        return inspect.getsource(
+            ForgeNewModesMixin._start_distill_training)
+
+    def test_pre_probe_runs_before_trainer_train(self):
+        src = self._src()
+        # Pre-probe assignment must precede the train call.
+        pre_marker = "pre_probe_responses = (\n"
+        train_marker = "trainer.train(training_text)"
+        assert pre_marker in src
+        assert train_marker in src
+        assert src.index(pre_marker) < src.index(train_marker)
+
+    def test_post_probe_uses_summarize_helper(self):
+        src = self._src()
+        assert "summarize_identity_probe(" in src
+        assert "summary[\"drifted\"]" in src
+
+    def test_probe_gated_on_personality_category(self):
+        src = self._src()
+        # Both pre and post probes are gated.
+        gate = '"personality" in categories'
+        # Gate appears at least twice (anchor mix + probe).
+        assert src.count(gate) >= 2
+
+    def test_run_identity_probe_helper_exists(self):
+        from enigma_engine.gui.gui_forge_new_modes import (
+            ForgeNewModesMixin,
+        )
+        assert hasattr(ForgeNewModesMixin, "_run_identity_probe")
+        helper_src = inspect.getsource(
+            ForgeNewModesMixin._run_identity_probe)
+        # Eval mode + restoration on exit are both required for
+        # a non-destructive probe.
+        assert "model.eval()" in helper_src
+        assert "model.train()" in helper_src
+        # No-grad block keeps the probe cheap.
+        assert "no_grad()" in helper_src
+
+
+# =========================================================================
+# Pre-training auto-checkpoint helper (Pass 156z9ar)
+# =========================================================================
+
+class TestPreTrainingBackupHelper:
+    """Behavioural tests for ``_pre_training_backup``.
+
+    Helper is a thin filesystem wrapper, so we exercise it directly
+    via a stub instance bound to ``ForgeNewModesMixin._pre_training_backup``
+    rather than spinning up a full GUI.
+    """
+
+    def _make_stub(self):
+        """Minimal stand-in: needs only a callable ``_log`` so the
+        helper's INFO/WARN log statements don't crash."""
+        class _Stub:
+            def __init__(self):
+                self.logs: list[str] = []
+
+            def _log(self, msg: str) -> None:
+                self.logs.append(msg)
+        return _Stub()
+
+    def test_backup_creates_timestamped_copy(self, tmp_path,
+                                             monkeypatch):
+        from enigma_engine.gui import scanners as _scanners
+        from enigma_engine.gui.gui_forge_new_modes import (
+            ForgeNewModesMixin,
+        )
+        # Redirect MODELS_DIR so the test never touches the real
+        # ``models/checkpoints/`` directory.  The helper imports
+        # MODELS_DIR lazily from ``enigma_engine.gui.scanners``.
+        monkeypatch.setattr(_scanners, "MODELS_DIR", tmp_path)
+        src = tmp_path / "student.pth"
+        src.write_bytes(b"fake-weights")
+        stub = self._make_stub()
+        result = ForgeNewModesMixin._pre_training_backup(
+            stub, str(src), suffix="pre_distill")
+        assert result is not None
+        backup = Path(result)
+        assert backup.exists()
+        assert backup.parent == tmp_path / "checkpoints"
+        # Stem carries the suffix and a timestamp; suffix preserved.
+        assert backup.name.startswith("student_pre_distill_")
+        assert backup.suffix == ".pth"
+        # Bytes round-trip — copy2 not move.
+        assert backup.read_bytes() == b"fake-weights"
+        assert src.exists()  # source untouched
+        # User-visible log surfaces the backup.
+        assert any("Pre-pre_distill backup:" in m for m in stub.logs)
+
+    def test_backup_returns_none_when_source_missing(
+            self, tmp_path, monkeypatch):
+        from enigma_engine.gui import scanners as _scanners
+        from enigma_engine.gui.gui_forge_new_modes import (
+            ForgeNewModesMixin,
+        )
+        monkeypatch.setattr(_scanners, "MODELS_DIR", tmp_path)
+        stub = self._make_stub()
+        result = ForgeNewModesMixin._pre_training_backup(
+            stub, str(tmp_path / "does_not_exist.pth"),
+            suffix="pre_dialogue")
+        assert result is None
+        # The skip is logged so the user knows the rail is absent.
+        assert any("skipped" in m.lower() for m in stub.logs)
+
+    def test_backup_swallows_copy_errors_non_fatal(
+            self, tmp_path, monkeypatch):
+        from enigma_engine.gui import scanners as _scanners
+        from enigma_engine.gui.gui_forge_new_modes import (
+            ForgeNewModesMixin,
+        )
+        monkeypatch.setattr(_scanners, "MODELS_DIR", tmp_path)
+        src = tmp_path / "student.pth"
+        src.write_bytes(b"x")
+        stub = self._make_stub()
+
+        # Patch shutil.copy2 to raise; helper must NOT propagate.
+        import shutil
+
+        def _boom(*a, **kw):
+            raise OSError("disk full (simulated)")
+        monkeypatch.setattr(shutil, "copy2", _boom)
+        result = ForgeNewModesMixin._pre_training_backup(
+            stub, str(src), suffix="pre_dpo")
+        assert result is None
+        # Loud `[!]` log must surface so the user sees the missing
+        # rail, even though the run will proceed.
+        assert any("FAILED" in m for m in stub.logs)
+        assert any(m.startswith("[!]") for m in stub.logs)
+
+    def test_suffix_is_parametrized_in_filename(self, tmp_path,
+                                                monkeypatch):
+        from enigma_engine.gui import scanners as _scanners
+        from enigma_engine.gui.gui_forge_new_modes import (
+            ForgeNewModesMixin,
+        )
+        monkeypatch.setattr(_scanners, "MODELS_DIR", tmp_path)
+        src = tmp_path / "m.pth"
+        src.write_bytes(b"y")
+        stub = self._make_stub()
+        # Different suffixes must produce distinguishable names.
+        r1 = ForgeNewModesMixin._pre_training_backup(
+            stub, str(src), suffix="pre_dialogue")
+        r2 = ForgeNewModesMixin._pre_training_backup(
+            stub, str(src), suffix="pre_distill")
+        assert r1 is not None and r2 is not None
+        assert "_pre_dialogue_" in Path(r1).name
+        assert "_pre_distill_" in Path(r2).name
+        assert Path(r1).name != Path(r2).name
+
+
+class TestPreTrainingBackupWireSites:
+    """Structural tests asserting the helper is called from each
+    weight-mutating training entry point covered by Pass 156z9ar.
+    """
+
+    def test_distill_uses_helper(self):
+        from enigma_engine.gui.gui_forge_new_modes import (
+            ForgeNewModesMixin,
+        )
+        src = inspect.getsource(
+            ForgeNewModesMixin._start_distill_training)
+        # Helper is called with the canonical suffix; the inline
+        # backup body deleted in this pass must not creep back.
+        assert (
+            "self._pre_training_backup(" in src
+            and 'suffix="pre_distill"' in src)
+        # The 30+ line inline body is gone — no shutil.copy2 in
+        # the entry point itself any more.
+        assert "shutil.copy2" not in src
+        assert "_shutil.copy2" not in src
+
+    def test_dialogue_uses_helper(self):
+        from enigma_engine.gui.gui_forge_advanced import (
+            ForgeAdvancedMixin,
+        )
+        src = inspect.getsource(
+            ForgeAdvancedMixin._start_dialogue_training)
+        assert (
+            "self._pre_training_backup(" in src
+            and 'suffix="pre_dialogue"' in src)
+        # Rollback path surfaces in the completion log.
+        assert "pre_dialogue_backup_path" in src
+        assert "Rollback" in src
+
+    def test_dpo_uses_helper(self):
+        """DPO entry point also covers APO (APO is a DPO wrapper with
+        ``loss_type="apo_zero"``).  Suffix is parametrised on
+        ``loss_type`` so the rollback file name distinguishes the
+        two algorithms."""
+        from enigma_engine.gui.gui_forge_training import (
+            ForgeTrainingMixin,
+        )
+        src = inspect.getsource(
+            ForgeTrainingMixin._start_dpo_training)
+        assert "self._pre_training_backup(" in src
+        # Suffix derives from loss_type so DPO and APO produce
+        # distinguishable rollback files.
+        assert 'f"pre_{loss_type}"' in src
+        assert "pre_dpo_backup_path" in src
+        assert "Rollback" in src
+
+    def test_rl_variant_uses_helper(self):
+        """Shared handler for GRPO and ReMax — ``algo`` is the live
+        variable that holds the algorithm name, suffix is built from
+        it so each variant gets its own rollback file."""
+        from enigma_engine.gui.gui_forge_new_modes import (
+            ForgeNewModesMixin,
+        )
+        src = inspect.getsource(
+            ForgeNewModesMixin._start_rl_variant_training)
+        assert "self._pre_training_backup(" in src
+        assert 'f"pre_{algo.lower()}"' in src
+        assert "pre_rl_backup_path" in src
+        assert "Rollback" in src
+
+    def test_simpo_orpo_uses_helper(self):
+        """SimPO and ORPO share ``_start_preference_variant_training``
+        dispatched on ``algo``; suffix is built from ``algo`` so each
+        variant gets its own rollback file."""
+        from enigma_engine.gui.gui_forge_new_modes import (
+            ForgeNewModesMixin,
+        )
+        src = inspect.getsource(
+            ForgeNewModesMixin._start_preference_variant_training)
+        assert "self._pre_training_backup(" in src
+        assert 'f"pre_{algo.lower()}"' in src
+        assert "pre_pref_backup_path" in src
+        assert "Rollback" in src
+
+    def test_vision_stage2_uses_helper_gated(self):
+        """Vision training only mutates text weights when
+        ``unfreeze_text_layers > 0`` (Stage-2).  Backup helper must
+        be gated on that condition so projection-only training does
+        not produce a redundant rollback file."""
+        from enigma_engine.gui.gui_forge_training import (
+            ForgeTrainingMixin,
+        )
+        src = inspect.getsource(
+            ForgeTrainingMixin._start_vision_training)
+        assert "self._pre_training_backup(" in src
+        assert 'suffix="pre_vision_stage2"' in src
+        # The gating condition must precede the helper call so
+        # projection-only runs skip the backup.
+        assert "if unfreeze_text_layers > 0" in src
+        gate_idx = src.index("if unfreeze_text_layers > 0")
+        helper_idx = src.index("self._pre_training_backup(")
+        assert gate_idx < helper_idx, (
+            "Vision pre-train backup must be gated on Stage-2 "
+            "(unfreeze_text_layers > 0); gate must precede the "
+            "helper call.")
+        assert "pre_vision_backup_path" in src
+        assert "Rollback" in src

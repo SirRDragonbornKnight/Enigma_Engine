@@ -3786,6 +3786,54 @@ class TestTrainingConfigAdamFields:
         assert d["adam_beta2"] == 0.95
 
 
+class TestMinLrRatioConfig:
+    """Pass 156z9au: cosine schedule floor is config-driven, not hardcoded."""
+
+    def test_default_is_one_tenth(self):
+        from enigma_engine.core.training import TrainingConfig
+        assert TrainingConfig().min_lr_ratio == 0.1
+
+    def test_custom_value_round_trips_through_to_dict(self):
+        from enigma_engine.core.training import TrainingConfig
+        cfg = TrainingConfig(min_lr_ratio=0.05)
+        assert cfg.to_dict()["min_lr_ratio"] == 0.05
+
+    def test_no_hardcoded_eta_min_in_training_module(self):
+        """Pass 156z9au: every cosine eta_min site must be config-driven.
+
+        Regression gate against re-introducing the literal
+        ``self.config.learning_rate * 0.1`` pattern that used to live at
+        five sites in core/training.py.  The audit lens for any new
+        scheduler block is "does it use ``self.config.min_lr_ratio``?",
+        not "does it use 0.1?".
+        """
+        from pathlib import Path
+        src = Path("enigma_engine/core/training.py").read_text(
+            encoding="utf-8")
+        assert "learning_rate * 0.1" not in src, (
+            "found hardcoded `learning_rate * 0.1` — use "
+            "`self.config.min_lr_ratio` instead"
+        )
+
+    def test_main_train_scheduler_uses_min_lr_ratio(self):
+        """Trainer.train cosine block must reference the config field."""
+        from enigma_engine.core.training import Trainer
+        src = inspect.getsource(Trainer.train)
+        assert "self.config.min_lr_ratio" in src
+
+    def test_train_dpo_scheduler_uses_min_lr_ratio(self):
+        from enigma_engine.core.training import Trainer
+        src = inspect.getsource(Trainer.train_dpo)
+        assert "self.config.min_lr_ratio" in src
+
+    def test_lora_trainer_exposes_min_lr_ratio(self):
+        """LoraTrainer.__init__ accepts and validates min_lr_ratio."""
+        from enigma_engine.core.lora_utils import LoraTrainer
+        sig = inspect.signature(LoraTrainer.__init__)
+        assert "min_lr_ratio" in sig.parameters
+        assert sig.parameters["min_lr_ratio"].default == 0.1
+
+
 class TestAutoLRConfig:
     """I-3: auto_lr field in TrainingConfig."""
 
@@ -5755,6 +5803,27 @@ class TestParseTrainingDataJSONL:
         # Should still produce some output (paragraph fallback)
         assert len(result) >= 0
 
+    def test_jsonl_response_key_alias(self):
+        """P5-pre-2: ``response`` is accepted alongside completion/answer.
+
+        Anchor JSONL (data/anchor_examples.jsonl) ships with
+        ``{prompt, response, score}`` rows.  Without this fallback the
+        parser yields zero sequences from anchor data and the personality
+        anchor mix becomes a silent no-op.
+        """
+        import json
+        trainer = _make_bare_trainer()
+        data = (
+            json.dumps({"prompt": "what is 2+2", "response": "4"}) + "\n"
+            + json.dumps({"prompt": "sqrt 81", "response": "9", "score": 1.0})
+        )
+        result = trainer._parse_training_data(data)
+        assert len(result) == 2
+        assert "User: what is 2+2" in result[0]
+        assert "Assistant: 4" in result[0]
+        assert "User: sqrt 81" in result[1]
+        assert "Assistant: 9" in result[1]
+
 
 class TestParseTrainingDataDialogue:
     """_parse_training_data detects User/AI dialogue format (TC-3)."""
@@ -5803,6 +5872,15 @@ class TestParseTrainingDataDictList:
         result = trainer._parse_training_data(data)
         assert len(result) == 1
         assert "User: x" in result[0]
+
+    def test_dict_list_response_key_alias(self):
+        """P5-pre-2: dict-list path also accepts ``response`` key."""
+        trainer = _make_bare_trainer()
+        data = [{"prompt": "ping", "response": "pong"}]
+        result = trainer._parse_training_data(data)
+        assert len(result) == 1
+        assert "User: ping" in result[0]
+        assert "Assistant: pong" in result[0]
 
 
 class TestParseTrainingDataFallback:

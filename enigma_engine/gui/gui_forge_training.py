@@ -711,6 +711,15 @@ class ForgeTrainingMixin:
                     run_evaluation=True)
                 trainer = Trainer(model, tokenizer, train_config)
 
+                # Pass 156z9as: pre-DPO/APO auto-checkpoint.
+                # ``loss_type`` distinguishes the two algorithms in the
+                # rollback file name so the user can tell DPO and APO
+                # backups apart at a glance.
+                _backup_suffix = f"pre_{loss_type}"
+                pre_dpo_backup_path = (
+                    self._pre_training_backup(
+                        student_path, suffix=_backup_suffix))
+
                 import time as _time
                 _last_dpo_pct = [-1]
                 _last_dpo_t = [0.0]
@@ -773,6 +782,10 @@ class ForgeTrainingMixin:
                 total = _time.monotonic() - _dpo_start[0]
                 t_m, t_s = int(total // 60), int(total % 60)
                 self._log(f"Duration  : {t_m}m {t_s:02d}s")
+                if pre_dpo_backup_path:
+                    self._log(
+                        f"Rollback  : "
+                        f"{Path(pre_dpo_backup_path).name}")
                 self._update_forge_progress(100, "Complete")
                 self._save_training_run(
                     algo_label, Path(student_path).stem,
@@ -1057,6 +1070,18 @@ class ForgeTrainingMixin:
 
                 trainer = Trainer(model, tokenizer, train_config)
 
+                # Pass 156z9at: pre-vision auto-checkpoint, ONLY when
+                # Stage-2 (``unfreeze_text_layers > 0``) will mutate
+                # the text backbone.  Projection-only training keeps
+                # the text weights frozen, so the rollback rail is
+                # unnecessary in that path.
+                pre_vision_backup_path = None
+                if unfreeze_text_layers > 0:
+                    pre_vision_backup_path = (
+                        self._pre_training_backup(
+                            student_path,
+                            suffix="pre_vision_stage2"))
+
                 import time as _time
                 _last_vis_pct = [-1]
                 _last_vis_t = [0.0]
@@ -1165,6 +1190,10 @@ class ForgeTrainingMixin:
                 total = _time.monotonic() - _vis_start[0]
                 t_m, t_s = int(total // 60), int(total % 60)
                 self._log(f"Duration  : {t_m}m {t_s:02d}s")
+                if pre_vision_backup_path:
+                    self._log(
+                        f"Rollback  : "
+                        f"{Path(pre_vision_backup_path).name}")
                 self._update_forge_progress(100, "Complete")
                 self._save_training_run(
                     "Vision", Path(student_path).stem,

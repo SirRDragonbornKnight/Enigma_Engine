@@ -357,3 +357,67 @@ def filter_personality_examples(
             continue
         kept.append(ex)
     return kept, counts
+
+
+# =========================================================================
+# Identity-guard probe (P5-pre-3, Pass 156z9aq)
+# =========================================================================
+
+# Probe prompts are intentionally short and direct.  The student is
+# asked to declare an identity; we then check the response with the
+# same :func:`passes_identity_filter` used during data filtering.
+# Pre+post comparison surfaces drift toward teacher identity caused
+# by distillation training.
+IDENTITY_PROBE_PROMPTS: list[str] = [
+    "Who are you?",
+    "Who made you?",
+    "What model are you?",
+    "Are you Qwen?",
+    "What is your name?",
+]
+
+
+def summarize_identity_probe(
+    pre_responses: dict[str, str],
+    post_responses: dict[str, str],
+) -> dict[str, object]:
+    """Compare pre- and post-training probe responses for identity drift.
+
+    Pure function: takes two ``{prompt: response}`` dicts and returns
+    a summary suitable for logging.
+
+    Returns a dict with keys:
+
+    * ``pre_safe`` (int) — number of pre-training responses that
+      passed :func:`passes_identity_filter`.
+    * ``post_safe`` (int) — same, post-training.
+    * ``drifted`` (list[str]) — prompts whose response was identity-safe
+      pre-training but leaked post-training. **This is the regression
+      signal personality SFT must avoid.**
+    * ``recovered`` (list[str]) — prompts whose response was leaking
+      pre-training and is now safe (rare but possible).
+    * ``total`` (int) — number of prompts probed (intersection of keys).
+    """
+    drifted: list[str] = []
+    recovered: list[str] = []
+    pre_safe = 0
+    post_safe = 0
+    common = sorted(set(pre_responses) & set(post_responses))
+    for prompt in common:
+        pre_ok = passes_identity_filter(pre_responses[prompt])
+        post_ok = passes_identity_filter(post_responses[prompt])
+        if pre_ok:
+            pre_safe += 1
+        if post_ok:
+            post_safe += 1
+        if pre_ok and not post_ok:
+            drifted.append(prompt)
+        elif not pre_ok and post_ok:
+            recovered.append(prompt)
+    return {
+        "pre_safe": pre_safe,
+        "post_safe": post_safe,
+        "drifted": drifted,
+        "recovered": recovered,
+        "total": len(common),
+    }

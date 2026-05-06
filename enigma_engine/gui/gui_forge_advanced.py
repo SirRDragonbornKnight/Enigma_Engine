@@ -495,6 +495,16 @@ class ForgeAdvancedMixin:
                         torch.cuda.is_available()),
                     run_evaluation=True)
 
+                # Pass 156z9ar: pre-dialogue auto-checkpoint.
+                # Dialogue training overwrites ``student_path``
+                # in place at the end of the run.  The backup
+                # is the only rollback path if the corrections
+                # the trainer fed in drift the student.
+                pre_dialogue_backup_path = (
+                    self._pre_training_backup(
+                        student_path,
+                        suffix="pre_dialogue"))
+
                 trainer_obj = Trainer(
                     student_mdl, tokenizer2,
                     train_config)
@@ -564,6 +574,10 @@ class ForgeAdvancedMixin:
                 self._log(
                     "Run again to continue building "
                     "on what the student learned.")
+                if pre_dialogue_backup_path:
+                    self._log(
+                        f"Rollback  : "
+                        f"{Path(pre_dialogue_backup_path).name}")
                 if transcript_name:
                     self._log(
                         f"Review transcript: "

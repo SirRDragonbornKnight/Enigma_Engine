@@ -721,6 +721,7 @@ class LoraTrainer:
         adam_beta1: float = 0.9,
         adam_beta2: float = 0.95,
         adam_eps: float = 1e-8,
+        min_lr_ratio: float = 0.1,
     ):
         """
         Initialize LoRA trainer.
@@ -739,6 +740,8 @@ class LoraTrainer:
             adam_beta1: AdamW beta1
             adam_beta2: AdamW beta2 (0.95 = LM-friendly default)
             adam_eps: AdamW epsilon
+            min_lr_ratio: Cosine schedule floor as fraction of peak LR
+                (default 0.1 = decay to 10% of peak; Pass 156z9au).
         """
         self.tokenizer = tokenizer
         self.lora_config = lora_config or LoraConfig()
@@ -759,6 +762,10 @@ class LoraTrainer:
         self.adam_beta1 = adam_beta1
         self.adam_beta2 = adam_beta2
         self.adam_eps = adam_eps
+        if not 0.0 <= min_lr_ratio <= 1.0:
+            raise ValueError(
+                f"min_lr_ratio must be in [0.0, 1.0], got {min_lr_ratio}")
+        self.min_lr_ratio = min_lr_ratio
 
         # Apply LoRA to model
         if isinstance(self.lora_config, QLoraConfig):
@@ -879,7 +886,7 @@ class LoraTrainer:
         scheduler = CosineAnnealingLR(
             optimizer,
             T_max=max(1, total_steps),
-            eta_min=self.learning_rate * 0.1)
+            eta_min=self.learning_rate * self.min_lr_ratio)
 
         # Training loop
         total_loss = 0.0

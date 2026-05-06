@@ -398,6 +398,14 @@ class TrainingConfig:
     adam_beta2: float = 0.95
     adam_eps: float = 1e-8
 
+    # Cosine schedule floor (Pass 156z9au).  ``eta_min`` is computed
+    # as ``learning_rate * min_lr_ratio`` so the LR never decays
+    # below this fraction of peak.  0.1 = decay to 10% of peak (sane
+    # LM default).  0.0 reproduces the textbook cosine schedule that
+    # crashes the LR to zero, which is rarely what you want for LM
+    # training because the very last steps then contribute nothing.
+    min_lr_ratio: float = 0.1
+
     # Reasoning-weighted loss (CoT-E)
     # Weight multiplier for tokens inside <think>...</think> blocks.
     # 1.0 = normal (no extra weight), 2.0 = double weight on reasoning tokens.
@@ -576,6 +584,11 @@ class TrainingConfig:
         if not 0.0 < self.adam_beta2 < 1.0:
             raise ValueError(
                 f"adam_beta2 must be in (0, 1), got {self.adam_beta2}")
+        # min_lr_ratio in [0, 1] — Pass 156z9au.
+        if not 0.0 <= self.min_lr_ratio <= 1.0:
+            raise ValueError(
+                f"min_lr_ratio must be in [0.0, 1.0], "
+                f"got {self.min_lr_ratio}")
         # EMA decay in [0, 1)
         if not 0.0 <= self.ema_decay < 1.0:
             raise ValueError(
@@ -642,6 +655,7 @@ class TrainingConfig:
             "adam_beta1": self.adam_beta1,
             "adam_beta2": self.adam_beta2,
             "adam_eps": self.adam_eps,
+            "min_lr_ratio": self.min_lr_ratio,
             "rolling_best_k": self.rolling_best_k,
             "early_stopping_patience": self.early_stopping_patience,
             "max_loss": self.max_loss,
@@ -1877,7 +1891,16 @@ class Trainer:
             for item in data:
                 if isinstance(item, dict):
                     prompt = item.get("prompt", item.get("question", ""))
-                    completion = item.get("completion", item.get("answer", ""))
+                    # P5-pre-2: ``response`` accepted alongside
+                    # ``completion`` / ``answer`` so anchor JSONL
+                    # (router.py-style ``{prompt, response, score}``)
+                    # parses through the general-data mix path. Without
+                    # this fallback the JSONL silently produced empty
+                    # sequences and the parser landed in last-resort
+                    # line-split (raw ``{...}`` strings as training).
+                    completion = item.get(
+                        "completion",
+                        item.get("answer", item.get("response", "")))
                     thinking = item.get("thinking", item.get("reasoning", ""))
                     if prompt and completion:
                         # Wrap thinking in <think> tags if provided
@@ -1902,7 +1925,11 @@ class Trainer:
                 try:
                     item = json.loads(line)
                     prompt = item.get("prompt", item.get("question", ""))
-                    completion = item.get("completion", item.get("answer", ""))
+                    # P5-pre-2: ``response`` accepted alongside
+                    # ``completion`` / ``answer`` (matches anchor JSONL).
+                    completion = item.get(
+                        "completion",
+                        item.get("answer", item.get("response", "")))
                     thinking = item.get("thinking", item.get("reasoning", ""))
                     if prompt and completion:
                         if thinking:
@@ -2810,7 +2837,7 @@ class Trainer:
             # 2) stable at peak LR
             # 3) linear decay in the last wsd_decay_fraction of steps
             wsd_frac = self.config.wsd_decay_fraction
-            min_lr_ratio = 0.1  # decay to 10% of peak
+            min_lr_ratio = self.config.min_lr_ratio
             _decay_steps = decay_steps  # capture for lambda
             _wsd_frac = wsd_frac
 
@@ -2833,12 +2860,16 @@ class Trainer:
                 post_warmup_scheduler = CosineAnnealingWarmRestarts(
                     self.optimizer,
                     T_0=restart_t0,
-                    eta_min=self.config.learning_rate * 0.1)
+                    eta_min=(
+                        self.config.learning_rate
+                        * self.config.min_lr_ratio))
             else:
                 post_warmup_scheduler = CosineAnnealingLR(
                     self.optimizer,
                     T_max=decay_steps,
-                    eta_min=self.config.learning_rate * 0.1)
+                    eta_min=(
+                        self.config.learning_rate
+                        * self.config.min_lr_ratio))
 
         self.scheduler = SequentialLR(
             self.optimizer,
@@ -4161,7 +4192,8 @@ class Trainer:
         cosine_sched = CosineAnnealingLR(
             self.optimizer,
             T_max=decay_steps,
-            eta_min=self.config.learning_rate * 0.1)
+            eta_min=(
+                self.config.learning_rate * self.config.min_lr_ratio))
         self.scheduler = SequentialLR(
             self.optimizer,
             schedulers=[warmup_sched, cosine_sched],
@@ -5029,7 +5061,8 @@ class Trainer:
             lr_lambda=lambda step: min(1.0, (step + 1) / warmup))
         cosine_scheduler = CosineAnnealingLR(
             optimizer, T_max=decay_steps,
-            eta_min=self.config.learning_rate * 0.1)
+            eta_min=(
+                self.config.learning_rate * self.config.min_lr_ratio))
         scheduler = SequentialLR(
             optimizer,
             schedulers=[warmup_scheduler, cosine_scheduler],
@@ -5686,7 +5719,8 @@ class Trainer:
             lr_lambda=lambda step: min(1.0, (step + 1) / warmup))
         cosine_scheduler = CosineAnnealingLR(
             optimizer, T_max=decay_steps,
-            eta_min=self.config.learning_rate * 0.1)
+            eta_min=(
+                self.config.learning_rate * self.config.min_lr_ratio))
         scheduler = SequentialLR(
             optimizer,
             schedulers=[warmup_scheduler, cosine_scheduler],

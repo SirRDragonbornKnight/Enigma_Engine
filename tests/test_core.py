@@ -2149,6 +2149,38 @@ class TestS554TrainingConfigValidateExpanded:
         with pytest.raises(ValueError):
             cfg.validate()
 
+    def test_validate_rejects_min_lr_ratio_below_zero(self):
+        """Pass 156z9au: min_lr_ratio in [0, 1]."""
+        from enigma_engine.core.training import TrainingConfig
+        cfg = TrainingConfig(min_lr_ratio=-0.01)
+        with pytest.raises(ValueError, match="min_lr_ratio"):
+            cfg.validate()
+
+    def test_validate_rejects_min_lr_ratio_above_one(self):
+        """Pass 156z9au: ratio > 1 makes the floor higher than peak."""
+        from enigma_engine.core.training import TrainingConfig
+        cfg = TrainingConfig(min_lr_ratio=1.01)
+        with pytest.raises(ValueError, match="min_lr_ratio"):
+            cfg.validate()
+
+    def test_validate_accepts_min_lr_ratio_zero(self):
+        """Pass 156z9au: 0.0 reproduces textbook cosine to-zero schedule."""
+        from enigma_engine.core.training import TrainingConfig
+        cfg = TrainingConfig(min_lr_ratio=0.0)
+        cfg.validate()
+
+    def test_min_lr_ratio_default_is_one_tenth(self):
+        """Pass 156z9au: default LM-friendly floor."""
+        from enigma_engine.core.training import TrainingConfig
+        cfg = TrainingConfig()
+        assert cfg.min_lr_ratio == 0.1
+
+    def test_min_lr_ratio_appears_in_to_dict(self):
+        """Pass 156z9au: must round-trip through serialization."""
+        from enigma_engine.core.training import TrainingConfig
+        cfg = TrainingConfig(min_lr_ratio=0.05)
+        assert cfg.to_dict()["min_lr_ratio"] == 0.05
+
     def test_validate_accepts_good_defaults(self):
         """Default config must pass validation."""
         from enigma_engine.core.training import TrainingConfig
