@@ -186,6 +186,11 @@ class GGUFMetadata:
     attention_head_count_kv: int = 32
     rope_dimension_count: int = 128
     rope_freq_base: float = 10000.0
+    # RMSNorm epsilon — REQUIRED by llama.cpp for the "llama" arch.
+    # Loading without this key fails with:
+    #   error loading model hyperparameters: key not found in model:
+    #   llama.attention.layer_norm_rms_epsilon
+    attention_layer_norm_rms_epsilon: float = 1e-6
 
     # Tokenizer
     tokenizer_model: str = "llama"
@@ -212,12 +217,79 @@ class GGUFMetadata:
             f"{arch}.attention.head_count_kv": self.attention_head_count_kv,
             f"{arch}.rope.dimension_count": self.rope_dimension_count,
             f"{arch}.rope.freq_base": self.rope_freq_base,
+            f"{arch}.attention.layer_norm_rms_epsilon": self.attention_layer_norm_rms_epsilon,
+            f"{arch}.vocab_size": self.vocab_size,
             "tokenizer.ggml.model": self.tokenizer_model,
-            "tokenizer.ggml.vocab_size": self.vocab_size,
             "tokenizer.ggml.bos_token_id": self.bos_token_id,
             "tokenizer.ggml.eos_token_id": self.eos_token_id,
             "tokenizer.ggml.padding_token_id": self.pad_token_id,
         }
+
+
+# llama.cpp / GGUF spec: many integer keys are UINT32, not UINT64. Reading
+# them as the wrong type triggers `GGML_ASSERT(ctx->kv[key_id].type ==
+# GGUF_TYPE_UINT32) failed` in `ggml.c` and aborts the host process.
+# Reference: llama.cpp's src/llama-arch.cpp (LLM_KV_* table).
+#
+# Architecture-prefixed keys (e.g. "llama.context_length") are stored
+# without the prefix; the lookup adds the prefix at call time. Plain
+# top-level keys (e.g. "general.file_type") are stored as-is.
+_GGUF_UINT32_ARCH_SUFFIXES: tuple[str, ...] = (
+    ".context_length",
+    ".embedding_length",
+    ".block_count",
+    ".feed_forward_length",
+    ".attention.head_count",
+    ".attention.head_count_kv",
+    ".rope.dimension_count",
+    ".vocab_size",
+    ".expert_count",
+    ".expert_used_count",
+)
+_GGUF_UINT32_TOP_LEVEL_KEYS: frozenset[str] = frozenset({
+    "general.file_type",
+    "general.quantization_version",
+    "tokenizer.ggml.bos_token_id",
+    "tokenizer.ggml.eos_token_id",
+    "tokenizer.ggml.padding_token_id",
+    "tokenizer.ggml.unknown_token_id",
+    "tokenizer.ggml.separator_token_id",
+})
+_GGUF_FLOAT32_ARCH_SUFFIXES: tuple[str, ...] = (
+    ".rope.freq_base",
+    ".rope.scaling.factor",
+    ".attention.layer_norm_epsilon",
+    ".attention.layer_norm_rms_epsilon",
+)
+
+
+def _gguf_scalar_type(key: str) -> Optional["GGUFValueType"]:
+    """Return the GGUFValueType the spec requires for `key`, or None if
+    the value type can be inferred from the Python value."""
+    if key in _GGUF_UINT32_TOP_LEVEL_KEYS:
+        return GGUFValueType.UINT32
+    # Architecture-prefixed: split on first '.'.
+    if "." in key:
+        suffix = key[key.index("."):]
+        for s in _GGUF_UINT32_ARCH_SUFFIXES:
+            if suffix == s:
+                return GGUFValueType.UINT32
+        for s in _GGUF_FLOAT32_ARCH_SUFFIXES:
+            if suffix == s:
+                return GGUFValueType.FLOAT32
+    return None
+
+
+@dataclass
+class _GGUFTypedArray:
+    """Internal marker for an array value with an explicit GGUF element type.
+
+    Used by `GGUFWriter.add_metadata_array` to override the writer's
+    Python-type inference (which would otherwise pick INT64 / FLOAT32
+    by default and produce arrays llama.cpp refuses).
+    """
+    values: Any
+    element_type: "GGUFValueType"
 
 
 # =============================================================================
@@ -616,6 +688,20 @@ if HAS_NUMPY:
             """Add metadata key-value pair."""
             self.metadata[key] = value
 
+        def add_metadata_array(
+            self,
+            key: str,
+            values: Any,
+            elem_type: "GGUFValueType",
+        ) -> None:
+            """Add an array-valued metadata entry with explicit element type.
+
+            Use this when the GGUF spec requires a specific array element
+            type (e.g. `tokenizer.ggml.token_type` is INT32, not the
+            INT64 that bare `int` lists would default to).
+            """
+            self.metadata[key] = _GGUFTypedArray(values, elem_type)
+
         def add_tensor(
             self,
             name: str,
@@ -653,10 +739,16 @@ if HAS_NUMPY:
             self._file.write(struct.pack('<Q', len(self.metadata)))
 
         def _write_metadata(self) -> None:
-            """Write metadata key-value pairs."""
+            """Write metadata key-value pairs.
+
+            Looks up the spec-required scalar type for each key via
+            `_gguf_scalar_type`. Falls back to Python-type inference
+            when the key is not in the table (custom / unknown keys).
+            """
             for key, value in self.metadata.items():
                 self._write_string(key)
-                self._write_value(value)
+                forced = _gguf_scalar_type(key)
+                self._write_value(value, forced_type=forced)
 
         def _write_tensors_info(self) -> None:
             """Write tensor information."""
@@ -713,8 +805,33 @@ if HAS_NUMPY:
             self._file.write(struct.pack('<Q', len(encoded)))
             self._file.write(encoded)
 
-        def _write_value(self, value: Any) -> None:
-            """Write a typed metadata value."""
+        def _write_value(
+            self,
+            value: Any,
+            forced_type: Optional[GGUFValueType] = None,
+        ) -> None:
+            """Write a typed metadata value.
+
+            When `forced_type` is supplied (typically because the key
+            is in the GGUF spec's UINT32/FLOAT32 list), it overrides
+            Python-type inference. Without this, every positive int
+            falls through to UINT64, and llama.cpp aborts when reading
+            keys it expects as UINT32 (e.g. `llama.context_length`).
+            """
+            # Forced scalar types — bypass Python isinstance dispatch.
+            if forced_type is GGUFValueType.UINT32:
+                self._file.write(struct.pack('<I', GGUFValueType.UINT32.value))
+                self._file.write(struct.pack('<I', int(value)))
+                return
+            if forced_type is GGUFValueType.INT32:
+                self._file.write(struct.pack('<I', GGUFValueType.INT32.value))
+                self._file.write(struct.pack('<i', int(value)))
+                return
+            if forced_type is GGUFValueType.FLOAT32:
+                self._file.write(struct.pack('<I', GGUFValueType.FLOAT32.value))
+                self._file.write(struct.pack('<f', float(value)))
+                return
+
             if isinstance(value, bool):
                 self._file.write(struct.pack('<I', GGUFValueType.BOOL.value))
                 self._file.write(struct.pack('<?', value))
@@ -731,33 +848,56 @@ if HAS_NUMPY:
             elif isinstance(value, str):
                 self._file.write(struct.pack('<I', GGUFValueType.STRING.value))
                 self._write_string(value)
+            elif isinstance(value, _GGUFTypedArray):
+                self._write_array(value.values, value.element_type)
             elif isinstance(value, (list, tuple)):
-                self._file.write(struct.pack('<I', GGUFValueType.ARRAY.value))
-
+                # Default array element type inference (legacy path).
                 if len(value) == 0:
-                    self._file.write(struct.pack('<I', GGUFValueType.UINT32.value))
-                    self._file.write(struct.pack('<Q', 0))
+                    elem_type = GGUFValueType.UINT32
+                elif isinstance(value[0], str):
+                    elem_type = GGUFValueType.STRING
+                elif isinstance(value[0], int):
+                    elem_type = GGUFValueType.INT32
+                elif isinstance(value[0], float):
+                    elem_type = GGUFValueType.FLOAT32
                 else:
-                    # Determine element type
-                    if isinstance(value[0], str):
-                        elem_type = GGUFValueType.STRING
-                    elif isinstance(value[0], int):
-                        elem_type = GGUFValueType.INT64
-                    elif isinstance(value[0], float):
-                        elem_type = GGUFValueType.FLOAT32
-                    else:
-                        elem_type = GGUFValueType.UINT32
+                    elem_type = GGUFValueType.UINT32
+                self._write_array(value, elem_type)
 
-                    self._file.write(struct.pack('<I', elem_type.value))
-                    self._file.write(struct.pack('<Q', len(value)))
+        def _write_array(
+            self,
+            values: Any,
+            elem_type: GGUFValueType,
+        ) -> None:
+            """Write a typed array value.
 
-                    for item in value:
-                        if elem_type == GGUFValueType.STRING:
-                            self._write_string(item)
-                        elif elem_type == GGUFValueType.INT64:
-                            self._file.write(struct.pack('<q', item))
-                        elif elem_type == GGUFValueType.FLOAT32:
-                            self._file.write(struct.pack('<f', item))
+            llama.cpp reads `tokenizer.ggml.token_type` as INT32 and
+            `tokenizer.ggml.scores` as FLOAT32; the legacy code wrote
+            ints as INT64 here, which causes llama.cpp to refuse load
+            even after the UINT32 scalar fix above.
+            """
+            self._file.write(struct.pack('<I', GGUFValueType.ARRAY.value))
+            self._file.write(struct.pack('<I', elem_type.value))
+            self._file.write(struct.pack('<Q', len(values)))
+            for item in values:
+                if elem_type == GGUFValueType.STRING:
+                    self._write_string(item)
+                elif elem_type == GGUFValueType.INT32:
+                    self._file.write(struct.pack('<i', int(item)))
+                elif elem_type == GGUFValueType.UINT32:
+                    self._file.write(struct.pack('<I', int(item)))
+                elif elem_type == GGUFValueType.INT64:
+                    self._file.write(struct.pack('<q', int(item)))
+                elif elem_type == GGUFValueType.UINT64:
+                    self._file.write(struct.pack('<Q', int(item)))
+                elif elem_type == GGUFValueType.FLOAT32:
+                    self._file.write(struct.pack('<f', float(item)))
+                elif elem_type == GGUFValueType.FLOAT64:
+                    self._file.write(struct.pack('<d', float(item)))
+                else:
+                    raise ValueError(
+                        f"Unsupported GGUF array element type: {elem_type!r}"
+                    )
 
 
     class GGUFExporter:
@@ -890,10 +1030,29 @@ if HAS_NUMPY:
                 if hasattr(config, 'rope_theta') and config.rope_theta:
                     metadata.rope_freq_base = config.rope_theta
 
+            # RMSNorm epsilon — read from the actual final-norm module
+            # if present, otherwise leave the default. llama.cpp requires
+            # this key for the "llama" arch.
+            try:
+                final_norm = getattr(model, 'norm', None)
+                eps = getattr(final_norm, 'eps', None)
+                if isinstance(eps, (int, float)) and eps > 0:
+                    metadata.attention_layer_norm_rms_epsilon = float(eps)
+            except Exception:
+                pass
+
             return metadata
 
         def _add_tokenizer_metadata(self, writer: GGUFWriter, tokenizer: Any) -> None:
-            """Add tokenizer vocabulary to metadata."""
+            """Add tokenizer vocabulary to metadata.
+
+            llama.cpp reads:
+              tokenizer.ggml.tokens     -> ARRAY[STRING]
+              tokenizer.ggml.scores     -> ARRAY[FLOAT32]
+              tokenizer.ggml.token_type -> ARRAY[INT32]
+            Writing token_type as INT64 (the default for `int` lists)
+            causes llama.cpp to reject the file.
+            """
             try:
                 if hasattr(tokenizer, 'get_vocab'):
                     vocab = tokenizer.get_vocab()
@@ -903,8 +1062,16 @@ if HAS_NUMPY:
                             tokens[idx] = token
 
                     writer.add_metadata("tokenizer.ggml.tokens", tokens)
-                    writer.add_metadata("tokenizer.ggml.scores", [0.0] * len(tokens))
-                    writer.add_metadata("tokenizer.ggml.token_type", [0] * len(tokens))
+                    writer.add_metadata_array(
+                        "tokenizer.ggml.scores",
+                        [0.0] * len(tokens),
+                        GGUFValueType.FLOAT32,
+                    )
+                    writer.add_metadata_array(
+                        "tokenizer.ggml.token_type",
+                        [1] * len(tokens),  # 1 = LLAMA_TOKEN_TYPE_NORMAL
+                        GGUFValueType.INT32,
+                    )
             except Exception as e:
                 logger.warning(f"Could not add tokenizer metadata: {e}")
 

@@ -12,9 +12,21 @@ History:
 - May 6, 2026 — ARCH-V1b SHIPPED. Rewrote `convert_tensor_name` to a
   regex pipeline; the 3 structural xfails came off and were extended
   to 16 mapping tests covering all Llama-style + HF-style entries.
-- ARCH-V1c (open) — round-trip still fails because of GGUF metadata /
-  tokenizer gaps (BPE merges, RMS-norm epsilon, special-token markers).
-  Round-trip xfails below stay until that audit lands.
+- May 6, 2026 — ARCH-V1c SHIPPED. Fixed metadata value-types in
+  `GGUFWriter._write_value`: per-key UINT32/FLOAT32 lookup table,
+  typed-array path for `tokenizer.ggml.token_type` (INT32) and
+  `tokenizer.ggml.scores` (FLOAT32), added missing
+  `{arch}.vocab_size` and `{arch}.attention.layer_norm_rms_epsilon`
+  keys. File now LOADS cleanly in llama.cpp; abort gone.
+- ARCH-V1d (open) — Enigma defaults to `use_qk_norm=True` (Qwen3-style).
+  llama.cpp's `llama` arch silently rejects the 4 QK-norm tensors per
+  layer, producing `done_getting_tensors: wrong number of tensors`.
+  Fix: detect QK-norm and emit `general.architecture=qwen3` plus the
+  Qwen3-specific metadata schema.
+- ARCH-V1e (open) — byte-vocab tokenizer with `tokenizer.ggml.model=llama`
+  has no SentencePiece BPE merges so llama.cpp's tokenizer chokes at
+  generation time. Fix: emit a real BPE merges array OR set tokenizer
+  model to a no-vocab variant for byte-level models.
 
 Skip behavior:
 - llama-cpp-python may not be loadable in this env (Windows: needs
@@ -133,6 +145,154 @@ class TestGgufExportWritesFile:
         assert p.exists() and p.stat().st_size > 0
         with open(p, "rb") as f:
             assert f.read(4) == b"GGUF"
+
+
+# ---------------------------------------------------------------------------
+# 1b. ARCH-V1c metadata-type audit. llama.cpp aborts with
+#     `GGML_ASSERT(ctx->kv[key_id].type == GGUF_TYPE_UINT32)` when an
+#     architecture key like `llama.context_length` is written as UINT64
+#     (the legacy default for any positive Python int). These tests
+#     parse the GGUF file at the byte level and assert each spec key
+#     was emitted with the correct GGUFValueType tag — independent of
+#     whether llama.cpp is installed.
+# ---------------------------------------------------------------------------
+
+import struct
+
+
+def _parse_gguf_metadata(path) -> dict:
+    """Tiny stdlib GGUF parser. Returns {key: (type_int, value_or_None)}.
+
+    Only parses the header + metadata section; tensors are ignored. Used
+    to verify scalar / array type tags without depending on gguf-py or
+    llama-cpp-python.
+    """
+    out: dict = {}
+    with open(path, "rb") as f:
+        magic = f.read(4)
+        assert magic == b"GGUF", f"bad magic: {magic!r}"
+        version = struct.unpack("<I", f.read(4))[0]
+        assert version >= 3, f"GGUF version {version} not supported by parser"
+        _ = struct.unpack("<Q", f.read(8))[0]  # tensor count
+        kv_count = struct.unpack("<Q", f.read(8))[0]
+
+        # GGUFValueType ids (from enigma_engine/core/gguf.py).
+        UINT32, INT32, FLOAT32, BOOL, STRING, ARRAY, UINT64, INT64, FLOAT64 = (
+            4, 5, 6, 7, 8, 9, 10, 11, 12
+        )
+
+        def _read_str() -> str:
+            n = struct.unpack("<Q", f.read(8))[0]
+            return f.read(n).decode("utf-8")
+
+        def _read_scalar(t: int):
+            if t == UINT32:
+                return struct.unpack("<I", f.read(4))[0]
+            if t == INT32:
+                return struct.unpack("<i", f.read(4))[0]
+            if t == UINT64:
+                return struct.unpack("<Q", f.read(8))[0]
+            if t == INT64:
+                return struct.unpack("<q", f.read(8))[0]
+            if t == FLOAT32:
+                return struct.unpack("<f", f.read(4))[0]
+            if t == FLOAT64:
+                return struct.unpack("<d", f.read(8))[0]
+            if t == BOOL:
+                return struct.unpack("<?", f.read(1))[0]
+            if t == STRING:
+                return _read_str()
+            raise ValueError(f"unsupported scalar type {t}")
+
+        for _ in range(kv_count):
+            key = _read_str()
+            value_type = struct.unpack("<I", f.read(4))[0]
+            if value_type == ARRAY:
+                elem_type = struct.unpack("<I", f.read(4))[0]
+                n = struct.unpack("<Q", f.read(8))[0]
+                # Skip array contents — type tag is what we audit.
+                for _ in range(n):
+                    _read_scalar(elem_type)
+                out[key] = (value_type, elem_type)
+            else:
+                out[key] = (value_type, _read_scalar(value_type))
+    return out
+
+
+class TestGgufMetadataTypes:
+    """ARCH-V1c: every GGUF spec key must carry the correct value-type
+    tag. Without these, llama.cpp aborts at C-level with the famous
+    `GGML_ASSERT` against `GGUF_TYPE_UINT32`."""
+
+    UINT32, INT32, FLOAT32, ARRAY = 4, 5, 6, 9
+
+    def test_arch_keys_are_uint32(self, tmp_path):
+        meta = _parse_gguf_metadata(_export_tiny("f16", tmp_path / "x.gguf"))
+        for key in (
+            "llama.context_length",
+            "llama.embedding_length",
+            "llama.block_count",
+            "llama.feed_forward_length",
+            "llama.attention.head_count",
+            "llama.attention.head_count_kv",
+            "llama.rope.dimension_count",
+            "llama.vocab_size",
+        ):
+            assert key in meta, f"missing required arch key: {key}"
+            assert meta[key][0] == self.UINT32, \
+                f"{key} type tag {meta[key][0]} != UINT32 ({self.UINT32})"
+
+    def test_general_file_type_is_uint32(self, tmp_path):
+        meta = _parse_gguf_metadata(_export_tiny("f16", tmp_path / "x.gguf"))
+        assert meta["general.file_type"][0] == self.UINT32
+
+    def test_special_token_ids_are_uint32(self, tmp_path):
+        meta = _parse_gguf_metadata(_export_tiny("f16", tmp_path / "x.gguf"))
+        for key in (
+            "tokenizer.ggml.bos_token_id",
+            "tokenizer.ggml.eos_token_id",
+            "tokenizer.ggml.padding_token_id",
+        ):
+            assert key in meta, f"missing required tokenizer key: {key}"
+            assert meta[key][0] == self.UINT32, \
+                f"{key} type tag {meta[key][0]} != UINT32"
+
+    def test_rope_freq_base_is_float32(self, tmp_path):
+        meta = _parse_gguf_metadata(_export_tiny("f16", tmp_path / "x.gguf"))
+        assert meta["llama.rope.freq_base"][0] == self.FLOAT32
+
+    def test_rms_norm_eps_present_and_float32(self, tmp_path):
+        """llama.cpp REQUIRES `llama.attention.layer_norm_rms_epsilon` for
+        the llama arch; loading without it errors with `key not found in
+        model: llama.attention.layer_norm_rms_epsilon`."""
+        meta = _parse_gguf_metadata(_export_tiny("f16", tmp_path / "x.gguf"))
+        key = "llama.attention.layer_norm_rms_epsilon"
+        assert key in meta, f"missing required hyperparam: {key}"
+        assert meta[key][0] == self.FLOAT32
+
+    def test_token_type_array_is_int32(self, tmp_path):
+        """llama.cpp reads `tokenizer.ggml.token_type` as ARRAY[INT32].
+        The legacy writer emitted bare-int lists as ARRAY[INT64], which
+        causes load to fail."""
+        meta = _parse_gguf_metadata(_export_tiny("f16", tmp_path / "x.gguf"))
+        kind, elem = meta["tokenizer.ggml.token_type"]
+        assert kind == self.ARRAY
+        assert elem == self.INT32, f"token_type elem type {elem} != INT32"
+
+    def test_scores_array_is_float32(self, tmp_path):
+        meta = _parse_gguf_metadata(_export_tiny("f16", tmp_path / "x.gguf"))
+        kind, elem = meta["tokenizer.ggml.scores"]
+        assert kind == self.ARRAY
+        assert elem == self.FLOAT32
+
+    def test_arch_vocab_size_present(self, tmp_path):
+        """The legacy exporter emitted only `tokenizer.ggml.vocab_size`,
+        but llama.cpp reads the architecture-prefixed `{arch}.vocab_size`
+        (here `llama.vocab_size`). Without it, llama.cpp falls back to
+        counting tokenizer.ggml.tokens — fine when the tokenizer is
+        present, but the spec key is the canonical source."""
+        meta = _parse_gguf_metadata(_export_tiny("f16", tmp_path / "x.gguf"))
+        assert "llama.vocab_size" in meta
 
 
 # ---------------------------------------------------------------------------
@@ -316,7 +476,14 @@ def _run_round_trip_subprocess(quant: str, out_path: Path) -> tuple[int, str, st
 class TestGgufRoundTrip:
     @pytest.mark.xfail(
         strict=True,
-        reason="ARCH-V1b: tensor-name mapping broken; llama.cpp aborts on load.",
+        reason=(
+            "ARCH-V1d/V1e: file LOADS cleanly post-V1c (UINT32 metadata + "
+            "rms_norm_eps shipped). Round-trip still fails on (a) QK-norm "
+            "tensors not supported by llama.cpp's `llama` arch — needs "
+            "`general.architecture=qwen3` switch (V1d), and (b) byte-vocab "
+            "tokenizer model='llama' has no SentencePiece BPE merges so "
+            "generation crashes (V1e)."
+        ),
     )
     def test_f16_round_trips(self, tmp_path):
         rc, stdout, _ = _run_round_trip_subprocess(
@@ -326,7 +493,7 @@ class TestGgufRoundTrip:
 
     @pytest.mark.xfail(
         strict=True,
-        reason="ARCH-V1b: tensor-name mapping broken; llama.cpp aborts on load.",
+        reason="ARCH-V1d/V1e: see test_f16_round_trips reason.",
     )
     def test_q8_0_round_trips(self, tmp_path):
         rc, stdout, _ = _run_round_trip_subprocess(
@@ -336,7 +503,7 @@ class TestGgufRoundTrip:
 
     @pytest.mark.xfail(
         strict=True,
-        reason="ARCH-V1b: tensor-name mapping broken; llama.cpp aborts on load.",
+        reason="ARCH-V1d/V1e: see test_f16_round_trips reason.",
     )
     def test_q4_k_round_trips(self, tmp_path):
         rc, stdout, _ = _run_round_trip_subprocess(
