@@ -6114,10 +6114,11 @@ class TestForgeAPOAlignmentMode:
             "(directly or via delegation)")
 
     def test_start_dpo_training_forwards_loss_type_to_trainer(self):
-        """The shared DPO/APO body must forward loss_type to
-        trainer.train_dpo so the kwarg actually reaches the loss
-        registry. Catches regression where loss_type is accepted at
-        the GUI but dropped before the trainer call."""
+        """The shared DPO/APO body must forward loss_type through the
+        dispatcher config so the kwarg reaches train_dpo in
+        enigma_engine.training.dispatch. Catches regression where
+        loss_type is accepted at the GUI but dropped before
+        run_training(...)."""
         import inspect
         from enigma_engine.gui.gui_forge_training import (
             ForgeTrainingMixin)
@@ -6125,12 +6126,10 @@ class TestForgeAPOAlignmentMode:
             ForgeTrainingMixin._start_dpo_training)
         assert "loss_type" in src, (
             "_start_dpo_training must accept and forward loss_type")
-        # Must pass loss_type into train_dpo call
-        assert "train_dpo(" in src
-        # Either explicit kwarg in the call or stored in a variable
-        # then passed — both forms must include the literal token
-        assert "loss_type=" in src, (
-            "_start_dpo_training must pass loss_type= to train_dpo")
+        assert "run_training(" in src
+        assert '"mode": "dpo"' in src
+        assert '"loss_type": loss_type' in src, (
+            "_start_dpo_training must pass loss_type through dpo config")
 
     def test_start_dpo_training_user_facing_strings_use_algo_label(self):
         """Pass 156k-audit: the SUGGESTIONS claim 'logs are accurate

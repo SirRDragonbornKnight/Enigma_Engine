@@ -707,28 +707,7 @@ class ForgeTrainingMixin:
                 pc = sum(p.numel() for p in model.parameters())
                 self._log(f"Params  : {pc:,}")
 
-                # Create trainer
-                from enigma_engine.core.training import (
-                    Trainer, TrainingConfig)
                 forge_params = self._read_forge_train_params()
-                train_config = TrainingConfig(
-                    epochs=epochs,
-                    learning_rate=lr,
-                    batch_size=forge_params["batch_size"],
-                    max_grad_accumulation=forge_params["max_grad_accumulation"],
-                    use_gradient_checkpointing=forge_params["use_gradient_checkpointing"],
-                    use_sequence_packing=True,
-                    ce_chunk_size=forge_params["ce_chunk_size"],
-                    use_compile=True,
-                    rolling_best_k=forge_params["rolling_best_k"],
-                    general_mix_ratio=forge_params["general_mix_ratio"],
-                    general_data=forge_params["general_data"],
-                    val_split=forge_params["val_split"],
-                    save_every=max(1, epochs // 5),
-                    checkpoint_dir=str(MODELS_DIR / "checkpoints"),
-                    use_amp=torch.cuda.is_available(),
-                    run_evaluation=True)
-                trainer = Trainer(model, tokenizer, train_config)
 
                 # Pass 156z9as: pre-DPO/APO auto-checkpoint.
                 # ``loss_type`` distinguishes the two algorithms in the
@@ -762,27 +741,70 @@ class ForgeTrainingMixin:
                         _last_dpo_t[0] = now
 
                 _last_dpo_loss_t = [0.0]
+                _trainer_ref: list = []
 
                 def on_loss(loss: float):
                     now = _time.monotonic()
                     if now - _last_dpo_loss_t[0] < 0.5:
                         return
                     _last_dpo_loss_t[0] = now
-                    step = trainer.state.step
-                    lr = trainer.optimizer.param_groups[0]['lr']
+                    t = _trainer_ref[0] if _trainer_ref else None
+                    step = t.state.step if t else 0
+                    lr_now = (
+                        t.optimizer.param_groups[0]['lr']
+                        if t else 0.0)
                     self._log(
                         f"  Step {step:>5d} | loss {loss:.4f}"
-                        f" | lr {lr:.2e}")
+                        f" | lr {lr_now:.2e}")
 
-                trainer.on_progress = on_progress
-                trainer.on_loss = on_loss
+                def on_trainer_ready(t) -> None:
+                    _trainer_ref.append(t)
+                    self._active_trainer = t
 
                 self._log(
                     f"Starting {algo_label}: {epochs} epochs, "
                     f"lr={lr}, beta={beta_val}")
-                self._active_trainer = trainer
-                state = trainer.train_dpo(
-                    pref_data, beta=beta_val, loss_type=loss_type)
+                from enigma_engine.training.dispatch import (
+                    build_dispatch_context, run_training)
+                ctx = build_dispatch_context(
+                    model=model,
+                    tokenizer=tokenizer,
+                    on_progress=on_progress,
+                    on_loss=on_loss,
+                    on_trainer_ready=on_trainer_ready,
+                )
+                config_dict = {
+                    "mode": "dpo",
+                    "data": pref_data,
+                    "training": {
+                        "epochs": epochs,
+                        "learning_rate": lr,
+                        "batch_size": forge_params["batch_size"],
+                        "max_grad_accumulation": forge_params[
+                            "max_grad_accumulation"],
+                        "use_gradient_checkpointing": forge_params[
+                            "use_gradient_checkpointing"],
+                        "use_sequence_packing": True,
+                        "ce_chunk_size": forge_params["ce_chunk_size"],
+                        "use_compile": True,
+                        "rolling_best_k": forge_params["rolling_best_k"],
+                        "general_mix_ratio": forge_params[
+                            "general_mix_ratio"],
+                        "general_data": (
+                            forge_params["general_data"] or ""),
+                        "val_split": forge_params["val_split"],
+                        "save_every": max(1, epochs // 5),
+                        "checkpoint_dir": str(
+                            MODELS_DIR / "checkpoints"),
+                        "use_amp": torch.cuda.is_available(),
+                        "run_evaluation": True,
+                    },
+                    "dpo": {
+                        "beta": beta_val,
+                        "loss_type": loss_type,
+                    },
+                }
+                state = run_training(config_dict, ctx)
 
                 # Save updated model
                 from enigma_engine.core.safe_save import atomic_torch_save
