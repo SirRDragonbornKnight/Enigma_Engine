@@ -195,8 +195,6 @@ class ForgeTrainingMixin:
             try:
                 import torch
                 from enigma_engine.core.model import Enigma
-                from enigma_engine.core.training import (
-                    Trainer, TrainingConfig)
                 from enigma_engine.core.tokenizer import get_tokenizer
 
                 device = ("cuda"
@@ -271,31 +269,9 @@ class ForgeTrainingMixin:
                 self._log(f"Data    : {len(text):,} chars loaded")
 
                 forge_params = self._read_forge_train_params()
-                train_config = TrainingConfig(
-                    epochs=epochs,
-                    batch_size=forge_params["batch_size"],
-                    learning_rate=lr,
-                    max_grad_accumulation=forge_params["max_grad_accumulation"],
-                    use_gradient_checkpointing=forge_params["use_gradient_checkpointing"],
-                    use_sequence_packing=True,
-                    ce_chunk_size=forge_params["ce_chunk_size"],
-                    use_compile=True,
-                    rolling_best_k=forge_params["rolling_best_k"],
-                    general_mix_ratio=forge_params["general_mix_ratio"],
-                    general_data=forge_params["general_data"],
-                    val_split=forge_params["val_split"],
-                    save_every=max(1, epochs // 5),
-                    checkpoint_dir=str(MODELS_DIR / "checkpoints"),
-                    use_amp=torch.cuda.is_available(),
-                    run_evaluation=True)
-
                 if forge_params["general_data"]:
                     self._log(
                         f"General : {forge_params['general_mix_ratio']:.0%} mix")
-
-                trainer = Trainer(
-                    model, tokenizer, train_config)
-                self._log(f"Batch   : {trainer.config.batch_size}")
 
                 # --- Live training callbacks ---
                 # Throttle: only log+update when percentage
@@ -313,7 +289,6 @@ class ForgeTrainingMixin:
                         _last_progress_t[0] = now
                     if pct != _last_pct[0]:
                         _last_pct[0] = pct
-                trainer.on_progress = on_progress
 
                 # Throughput: accumulate tokens for speed calc
                 _throughput_tokens = [0]
@@ -322,11 +297,15 @@ class ForgeTrainingMixin:
                 def on_throughput(tokens: int, step_time: float):
                     _throughput_tokens[0] += tokens
                     _throughput_time[0] += step_time
-                trainer.on_throughput = on_throughput
 
                 # Loss: compact step line with loss + tok/s + VRAM
                 # Throttled to 2 updates/sec to prevent GUI freeze.
                 _last_loss_t = [0.0]
+                _train_start = [_time.monotonic()]
+                # Mutable holder populated by on_trainer_ready before
+                # training starts — on_loss/on_epoch access trainer
+                # internals through this reference.
+                _trainer_ref: list = []
 
                 def on_loss(loss: float):
                     now = _time.monotonic()
@@ -349,12 +328,15 @@ class ForgeTrainingMixin:
                             .total_memory / 1e9)
                         vram = (f" | {used_gb:.1f}/"
                                 f"{total_gb:.0f} GB")
-                    step = trainer.state.step
-                    lr = trainer.optimizer.param_groups[0]['lr']
+                    t = _trainer_ref[0] if _trainer_ref else None
+                    step = t.state.step if t else 0
+                    lr_val = (t.optimizer.param_groups[0]['lr']
+                              if t else 0.0)
                     # Batch-level ETA from total_steps
                     eta_str = ""
-                    total = getattr(
-                        trainer, '_total_training_steps', 0)
+                    total = (
+                        getattr(t, '_total_training_steps', 0)
+                        if t else 0)
                     if total > 0 and step > 0:
                         elapsed = now - _train_start[0]
                         remaining = (elapsed / step) * (
@@ -369,7 +351,7 @@ class ForgeTrainingMixin:
                             eta_str = f" | ETA {m}m {s:02d}s"
                     self._log(
                         f"  Step {step:>5d}/{total} | loss {loss:.4f}"
-                        f" | lr {lr:.2e}"
+                        f" | lr {lr_val:.2e}"
                         f" | {tok_s:,} tok/s{vram}{eta_str}")
                     # Update progress bar at step-level
                     if total > 0 and step > 0:
@@ -377,9 +359,6 @@ class ForgeTrainingMixin:
                         self._update_forge_progress(
                             step_pct,
                             f"Step {step:,}/{total:,}")
-                trainer.on_loss = on_loss
-
-                _train_start = [_time.monotonic()]
 
                 def on_epoch(epoch, loss):
                     if not self.training_active:
@@ -403,7 +382,8 @@ class ForgeTrainingMixin:
                         r_m = int(remaining // 60)
                         r_s = int(remaining % 60)
                         eta = f"  |  ETA {r_m}m {r_s:02d}s"
-                    best = trainer.state.best_loss
+                    t = _trainer_ref[0] if _trainer_ref else None
+                    best = t.state.best_loss if t else float("inf")
                     import math as _math
                     best_str = (f"  |  best {best:.4f}"
                                 if not _math.isinf(best) else "")
@@ -411,13 +391,10 @@ class ForgeTrainingMixin:
                         f"  Epoch {epoch:>3d}/{epochs}  |  "
                         f"loss {loss:.4f}{trend}{best_str}  |  "
                         f"{mins}m {secs:02d}s{eta}")
-                trainer.on_epoch_complete = on_epoch
 
                 # I-14: Check for checkpoint resume
                 from enigma_engine.core.training import Trainer as _T
-                ckpt_dir = Path(
-                    train_config.checkpoint_dir or
-                    str(MODELS_DIR / "checkpoints"))
+                ckpt_dir = Path(str(MODELS_DIR / "checkpoints"))
                 resume_enabled = getattr(
                     self, 'forge_resume_var', None)
                 try_resume = (resume_enabled is None
@@ -435,12 +412,54 @@ class ForgeTrainingMixin:
                             "[i] Checkpoint exists but Resume is "
                             "unchecked — starting fresh.")
 
+                def on_trainer_ready(t) -> None:
+                    _trainer_ref.append(t)
+                    self._log(f"Batch   : {t.config.batch_size}")
+                    self._active_trainer = t
+
+                from enigma_engine.training.dispatch import (
+                    build_dispatch_context, run_training)
+                ctx = build_dispatch_context(
+                    model=model,
+                    tokenizer=tokenizer,
+                    on_progress=on_progress,
+                    on_epoch_complete=on_epoch,
+                    on_loss=on_loss,
+                    on_throughput=on_throughput,
+                    on_trainer_ready=on_trainer_ready,
+                )
+                config_dict = {
+                    "mode": "sft",
+                    "data": text,
+                    "resume_from": (str(resume_path)
+                                    if resume_path is not None
+                                    else None),
+                    "training": {
+                        "epochs": epochs,
+                        "batch_size": forge_params["batch_size"],
+                        "learning_rate": lr,
+                        "max_grad_accumulation": forge_params[
+                            "max_grad_accumulation"],
+                        "use_gradient_checkpointing": forge_params[
+                            "use_gradient_checkpointing"],
+                        "use_sequence_packing": True,
+                        "ce_chunk_size": forge_params["ce_chunk_size"],
+                        "use_compile": True,
+                        "rolling_best_k": forge_params["rolling_best_k"],
+                        "general_mix_ratio": forge_params[
+                            "general_mix_ratio"],
+                        "general_data": (
+                            forge_params["general_data"] or ""),
+                        "val_split": forge_params["val_split"],
+                        "save_every": max(1, epochs // 5),
+                        "checkpoint_dir": str(
+                            MODELS_DIR / "checkpoints"),
+                        "use_amp": torch.cuda.is_available(),
+                        "run_evaluation": True,
+                    },
+                }
                 self._log("Training...\n")
-                self._active_trainer = trainer
-                state = trainer.train(
-                    text,
-                    resume_from=str(resume_path)
-                    if resume_path is not None else None)
+                state = run_training(config_dict, ctx)
 
                 # Check for early termination (OOM / NaN / Inf)
                 import math

@@ -79,6 +79,7 @@ dev = [
 # --- Entry Points ---
 [project.scripts]
 enigma = "run:main"
+enigma-ai = "run:main"
 
 # --- Packaging ---
 [tool.setuptools.packages.find]

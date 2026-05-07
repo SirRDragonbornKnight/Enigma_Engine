@@ -399,3 +399,112 @@ def test_run_training_lora_saves_adapter(monkeypatch: pytest.MonkeyPatch, tmp_pa
     assert calls.get("save_path") is not None
     assert result["train_result"] == {"ok": True}
     assert "adapter_" in Path(result["adapter_path"]).name
+
+
+def test_on_trainer_ready_called_with_trainer_instance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """on_trainer_ready must be called with the Trainer instance after callbacks
+    are wired but before .train() is invoked (ARCH-1.5c contract)."""
+    from enigma_engine.training.dispatch import build_dispatch_context
+
+    ready_calls: list = []
+    train_called: list = []
+
+    class FakeTrainer:
+        def __init__(self, model, tokenizer, config):
+            self.on_progress = None
+            self.on_epoch_complete = None
+            self.on_loss = None
+            self.on_throughput = None
+
+        def train(self, data, resume_from=None):
+            # on_trainer_ready must have been called before we get here
+            train_called.append(True)
+            return "done"
+
+    monkeypatch.setattr("enigma_engine.training.dispatch.Trainer", FakeTrainer)
+
+    def on_ready(t):
+        ready_calls.append(t)
+
+    ctx = build_dispatch_context(
+        model=object(),
+        tokenizer=object(),
+        on_trainer_ready=on_ready,
+    )
+    result = run_training({"mode": "sft", "data": "hello"}, ctx)
+
+    assert result == "done"
+    assert len(ready_calls) == 1, "on_trainer_ready must be called exactly once"
+    assert isinstance(ready_calls[0], FakeTrainer)
+    assert train_called, "train() must be called after on_trainer_ready"
+
+
+def test_on_throughput_forwarded_to_trainer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """on_throughput from DispatchContext must be set on the trainer."""
+    from enigma_engine.training.dispatch import build_dispatch_context
+
+    wired: list = []
+
+    class FakeTrainer:
+        def __init__(self, model, tokenizer, config):
+            self.on_progress = None
+            self.on_epoch_complete = None
+            self.on_loss = None
+            self.on_throughput = None
+
+        def train(self, data, resume_from=None):
+            wired.append(self.on_throughput)
+            return "done"
+
+    monkeypatch.setattr("enigma_engine.training.dispatch.Trainer", FakeTrainer)
+
+    def throughput_cb(tokens: int, step_time: float) -> None:
+        pass
+
+    ctx = build_dispatch_context(
+        model=object(),
+        tokenizer=object(),
+        on_throughput=throughput_cb,
+    )
+    run_training({"mode": "sft", "data": "hello"}, ctx)
+
+    assert len(wired) == 1
+    assert wired[0] is throughput_cb
+
+
+def test_training_overrides_accepts_sft_knobs() -> None:
+    """TrainingOverrides must accept all SFT-specific fields added in ARCH-1.5c."""
+    job = TrainingJobConfig.model_validate(
+        {
+            "mode": "sft",
+            "data": "some text",
+            "training": {
+                "epochs": 2,
+                "use_gradient_checkpointing": False,
+                "use_sequence_packing": True,
+                "ce_chunk_size": 512,
+                "use_compile": True,
+                "rolling_best_k": 3,
+                "general_mix_ratio": 0.1,
+                "general_data": "data/general.txt",
+                "val_split": 0.05,
+                "save_every": 2,
+                "run_evaluation": True,
+            },
+        }
+    )
+    t = job.training
+    assert t.use_gradient_checkpointing is False
+    assert t.use_sequence_packing is True
+    assert t.ce_chunk_size == 512
+    assert t.use_compile is True
+    assert t.rolling_best_k == 3
+    assert t.general_mix_ratio == pytest.approx(0.1)
+    assert t.general_data == "data/general.txt"
+    assert t.val_split == pytest.approx(0.05)
+    assert t.save_every == 2
+    assert t.run_evaluation is True

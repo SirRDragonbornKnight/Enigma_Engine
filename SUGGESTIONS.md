@@ -310,8 +310,8 @@ If any chain breaks before reaching the inner code, the slice is parked, not fin
   **Validation:** `TestGgufRoundTripLlamaArch::test_q4_k_round_trips_llama_arch` xfail removed and now PASSES. At this pass point, `tests/test_gguf_roundtrip.py` was **37 passed / 3 xfailed**; that was later superseded by ARCH-V1f closure (qwen3 binding upgrade + xfail cleanup) to 40 passed. Narrow static check on touched files clean.
 
   **Production call chain (Rule #20):** `GGUFExporter(quantization='q4_k').export(...)` → per-tensor `logical_shape = data.shape` capture → `_can_quantize_q4_k(logical_shape)` gate → compatible rows: `GGUFQuantizer.quantize_q4_k(data)` with 144-byte super-blocks; incompatible rows: F16 fallback → `writer.add_tensor(..., shape=logical_shape)` → file loads + generates in llama-cpp-python on llama-arch fixtures.
-1. **ARCH-1.5a** (schema + registry + dispatcher). Tests prove every mode resolves and tears down.
-2. **ARCH-1.5b** (CLI wire-up, both legacy and YAML paths working).
+1. ~~**ARCH-1.5a**~~ ✅ shipped (commit `d02b856`, May 6, 2026 — `enigma_engine/training/` package: `schema.py` Pydantic config, `registry.py` mode→trainer map, `dispatch.py` single `run_training()` entry-point. 20 tests in `test_training_dispatch.py`, all green).
+2. ~~**ARCH-1.5b**~~ ✅ shipped (commit `bc78a4d`, May 6, 2026 — `run.py --train --config path.yaml` wired to `run_training()`. `enigma-ai` console_scripts entry added to `pyproject.toml`).
 3. **ARCH-1.5c** (migrate 6 core modes — 6 passes).
 4. **ARCH-1.5d** (mechanical rename to `training/`).
 5. **ARCH-1a** (API endpoint).

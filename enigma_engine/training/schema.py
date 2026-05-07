@@ -45,6 +45,17 @@ class TrainingOverrides(BaseModel):
     min_lr_ratio: float = Field(default=0.1, ge=0.0, le=1.0)
     seed: int | None = None
     deterministic: bool = False
+    # SFT-specific knobs (mirror TrainingConfig defaults)
+    use_gradient_checkpointing: bool = True
+    use_sequence_packing: bool = False
+    ce_chunk_size: int = Field(default=0, ge=0)
+    use_compile: bool = False
+    rolling_best_k: int = Field(default=0, ge=0)
+    general_mix_ratio: float = Field(default=0.2, ge=0.0, le=1.0)
+    general_data: str = ""
+    val_split: float = Field(default=0.1, ge=0.0, le=0.5)
+    save_every: int = Field(default=0, ge=0)
+    run_evaluation: bool = False
 
 
 class DPOSettings(BaseModel):

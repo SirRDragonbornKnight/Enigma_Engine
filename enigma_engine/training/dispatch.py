@@ -41,6 +41,8 @@ class DispatchContext:
     on_progress: Callable[[int, str], None] | None = None
     on_epoch_complete: Callable[[int, float], None] | None = None
     on_loss: Callable[[float], None] | None = None
+    on_throughput: Callable[[int, float], None] | None = None
+    on_trainer_ready: Callable[[Any], None] | None = None
 
 
 def _core_training_config(job: TrainingJobConfig) -> TrainingConfig:
@@ -54,6 +56,10 @@ def _apply_callbacks(trainer: Any, ctx: DispatchContext) -> None:
         trainer.on_epoch_complete = ctx.on_epoch_complete
     if hasattr(trainer, "on_loss"):
         trainer.on_loss = ctx.on_loss
+    if hasattr(trainer, "on_throughput") and ctx.on_throughput is not None:
+        trainer.on_throughput = ctx.on_throughput
+    if ctx.on_trainer_ready is not None:
+        ctx.on_trainer_ready(trainer)
 
 
 def build_dispatch_context(
@@ -68,6 +74,8 @@ def build_dispatch_context(
     on_progress: Callable[[int, str], None] | None = None,
     on_epoch_complete: Callable[[int, float], None] | None = None,
     on_loss: Callable[[float], None] | None = None,
+    on_throughput: Callable[[int, float], None] | None = None,
+    on_trainer_ready: Callable[[Any], None] | None = None,
 ) -> DispatchContext:
     """Build a DispatchContext from a loaded engine or raw model+tokenizer.
 
@@ -96,6 +104,8 @@ def build_dispatch_context(
         on_progress=on_progress,
         on_epoch_complete=on_epoch_complete,
         on_loss=on_loss,
+        on_throughput=on_throughput,
+        on_trainer_ready=on_trainer_ready,
     )
 
 
