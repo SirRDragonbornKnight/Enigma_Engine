@@ -1,5 +1,98 @@
 ﻿# Suggestions
 
+## 🟢 AUDIT SNAPSHOT (May 7, 2026)
+
+Verified local baseline after audit:
+
+- `ruff check enigma_engine/ tests/` → pass
+- `python -m pytest tests/ -q` → **2973 passed, 3 skipped**
+
+Test-hygiene micro-pass shipped (Pass 156z9bl):
+
+- Consolidated repeated `_init_common` structural scaffolding in `tests/test_chat.py` by introducing a shared helper `_get_init_common_source()` and reusing it across five wire-site tests (`last_search_queries`, `inline_search_enabled`, `inline_search_splice_enabled`, `max_search_rounds`, `last_search_queries_per_prompt`).
+- Consolidated repeated `combine_all_sources` structural scaffolding in `tests/test_functional.py` (`TestPretrainingDataCollector`) via a shared helper `_cpd_module_and_combine_source()` reused across both S789 dedup-contract tests.
+- No contract assertions were removed; this is a duplication-reduction pass only.
+- Validation: `python -m pytest tests/test_chat.py -q` → **131 passed**; latest full suite run is **2973 passed, 3 skipped**.
+
+TEACH-1d shipped (Pass 156z9bk):
+
+- `BackgroundTrainer.ingest_corrections_file()` now captures DPO pairs when `wrong_response` exists: `{prompt, chosen=right_response, rejected=wrong_response}` appended to `self.dpo_pairs`.
+- New `BackgroundTrainer._maybe_train_dpo_pairs()` runs thresholded preference replay (`dpo_min_pairs`, default 50) and calls `Trainer.train_dpo(...)` under the same `train_lock` used by background SFT, with one-epoch replay config.
+- New `_create_dpo_trainer()` centralizes the lightweight replay DPO trainer build and is monkeypatchable in tests.
+- `_retrain_on_replay()` now runs both correction ingestion and DPO replay, closing the previously parked wrong-vs-right preference path.
+- Failure path re-queues pairs to avoid silent data loss; success consumes the trained batch.
+- Tests **+6** in `tests/test_training.py::TestCorrectionsIngestion` cover: DPO-pair capture, missing-`wrong_response` skip, below-threshold no-op, successful consume path (beta + loss_type forwarding), failure requeue, and `_retrain_on_replay()` wire-site gate for `_maybe_train_dpo_pairs()`.
+- Validation: `ruff check enigma_engine/ tests/` clean; `python -m pytest tests/ -q` → **2972 passed, 4 skipped**.
+
+TEACH-1c shipped (Pass 156z9bj):
+
+- `BackgroundTrainer.ingest_corrections_file()` reads new rows from `data/corrections.jsonl` (written by the GUI FIX button) and feeds each row's `right_response` as a positive `TrainingExample(score=1.0, source="correction")` through the existing `add_example()` path → replay buffer + queue → `_train_batch()` / `_retrain_on_replay()` → weights.
+- Idempotent within a process via an in-memory byte-offset cursor; truncation/replacement of the file is detected and resets the cursor so a hand-cleared store does not stay invisible.
+- Wired at the entry of `_retrain_on_replay()` so corrections written since the last tick land in THIS pass, not the next.
+- `ModRouter._create_trainer` auto-resolves the new module-level `_DEFAULT_CORRECTIONS_PATH` (mirrors the anchor boot pattern); library default stays `None` for test isolation.
+- Production chain: GUI FIX → `_record_correction_for_last_exchange` → `corrections.jsonl` → `BackgroundTrainer.run()` → `_retrain_on_replay()` → `ingest_corrections_file()` → `add_example()` → `_train_batch()` → weights.
+- The DPO-flavoured variant from this pass is now closed in Pass 156z9bk (TEACH-1d).
+- Tests **+10** in `tests/test_training.py::TestCorrectionsIngestion` cover: no-path / missing-file no-ops, behavioural ingest with right_response landing as response and wrong_response staying out, idempotent re-call, append picks up new row, truncation resets offset, malformed-row skip with valid kept, structural wire-site gate on `_retrain_on_replay`, and ModRouter boot-site auto-resolve (file-present + file-absent).
+- Validation: `ruff check enigma_engine/ tests/` clean; `python -m pytest tests/ -q` → **2967 passed, 3 skipped**.
+
+Latest docs-sync audit refresh (Pass 156z9bi, May 7, 2026):
+
+- Re-ran the full baseline before editing docs to avoid stale counters in tracker files.
+- `python -m pytest tests/test_gui_logic_chat.py -q` remains green.
+- `ruff check "SUGGESTIONS.md" "CODE_REVIEW.md" "AA code maker.md" "GUI_REFERENCE.md"` + `python -m pytest tests/ --collect-only -q` both pass.
+
+TEACH-1a shipped (Pass 156z9bf):
+
+- CORE toolbar now has a **FIX** button wired to `LogicChatMixin._save_last_correction_from_input`.
+- User flow: latest assistant reply is the "wrong" answer; user types the corrected answer in the normal chat input; clicking FIX records one JSONL row to `data/corrections.jsonl`.
+- Stored row shape: `{prompt, wrong_response, right_response, timestamp, modality, model_path, session_path}` with `modality="text"` for this slice.
+- Persistence path uses newline-safe bounded append behavior (tail-byte newline check + append write).
+- Tests +6 in `tests/test_gui_logic_chat.py` cover JSONL create/append, last-pair capture, rejection on missing pair, input-clear-on-success, and structural CORE button wiring.
+- Validation: `ruff check enigma_engine/ tests/` clean; `python -m pytest tests/ -q` → **2952 passed, 3 skipped**.
+
+TEACH-1b shipped (Pass 156z9bg):
+
+- Image attachment path now carries correction provenance into the next exchange: `LogicMediaMixin._attach_image` stores `self._pending_correction_image_path`.
+- `LogicChatMixin._send_message` captures that pending path once per exchange and records `_last_exchange_prompt`, `_last_exchange_wrong_response`, and `_last_exchange_image_path` after the assistant reply is appended.
+- `LogicChatMixin._record_correction_for_last_exchange` now tags corrections as `modality="vision"` and includes `image_path` when the corrected exchange matches the tracked image-backed exchange; otherwise it remains `modality="text"`.
+- New-chat resets clear correction provenance state (`_pending_correction_image_path`, `_last_exchange_*`) to avoid stale carryover.
+- Tests +3 in `tests/test_gui_logic_chat.py`: vision-modality row capture, text fallback without image context, and `_attach_image` wire-site gate for pending image provenance.
+- Validation: `python -m pytest tests/test_gui_logic_chat.py -q` → **32 passed**; `ruff check enigma_engine/ tests/` clean; `python -m pytest tests/ -q` → **2954 passed, 4 skipped**.
+
+TEACH-1 hardening shipped (Pass 156z9bh):
+
+- `_append_correction_jsonl` no longer rewrites the whole store on each save. It now performs O(1) append I/O (tail-byte newline fix + append write), removing O(n^2) growth risk as `corrections.jsonl` grows.
+- Added regression tests in `tests/test_gui_logic_chat.py` for missing-newline append recovery and `_new_chat` provenance reset (`_pending_correction_image_path`, `_last_exchange_*`).
+- TEACH-1 acceptance call-chain was corrected to the real production methods (`_save_last_correction_from_input` → `_record_correction_for_last_exchange`).
+- Validation: `python -m pytest tests/test_gui_logic_chat.py -q` → **34 passed**; `ruff check enigma_engine/gui/gui_logic_chat.py tests/test_gui_logic_chat.py SUGGESTIONS.md` clean; `python -m pytest tests/ -q` → **2956 passed, 4 skipped**.
+
+Audit pass + test hygiene (Pass 156z9be):
+
+- **Six-question author's-lens sweep on the dispatcher seam (ARCH-1a/1a-followups).** No new dead infra found. `build_dispatch_context` has 2 production callers (`run.py::run_train_config`, `enigma_engine/api/server.py::start_training`); `materialize_dispatch_payload` has 3 (`run_training` raw-dict path, `load_training_config` file path, `start_training` pre-thread validation). Lazy `__getattr__` exports verified — schema-only imports skip dispatch.py.
+- **Known parked (re-confirmed): GUI bypasses dispatcher.** 40+ direct `Trainer(...)` / `RewardTrainer(...)` / `RLHFTrainer(...)` / `SelfPlayTrainer(...)` / `LoraTrainer(...)` / `GRPOTrainer(...)` / `ReMaxTrainer(...)` instantiations remain across `gui_forge_advanced.py`, `gui_forge_new_modes.py`, `gui_forge_queue.py`, `gui_forge_adaptive.py`, `gui_forge_training.py`. Explicitly outside the ARCH-1a named scope; will be addressed in ARCH-1.5b. Not a new finding.
+- **Test hygiene: density audit on the three named files.** `inspect.getsource` densities — `test_gui.py` 89, `test_chat.py` 26, `test_functional.py` 4. Spot-checked ~20 wire-site assertions across the high-density file. Most gate either unique helper names (e.g. `_record_search_emissions`, `_resolve_anchor_path`) or full regex per the Pass 156z9y rule (e.g. `r"_read_gui_bool_setting\(\s*\"inline_search_enabled\""`). Mass consolidation **rejected** — would dilute per-test docstrings and sentinel coverage. One concrete redundancy fixed: `test_init_common_sets_inline_search_enabled` had three asserts probing the same `inline_search_enabled : bool = True` regex (two identical regex calls + one weaker substring). Collapsed to a single regex with the consolidated docstring.
+
+Audit finding closed this pass:
+
+- Full-suite red state was caused by an environment-gated assertion in `tests/test_gguf.py::TestGpuSupport::test_llama_cpp_gpu_offload` (hard-failed when `llama-cpp-python` was installed without GPU offload support).
+- Test now **skips** when CUDA is unavailable or `llama_supports_gpu_offload()` is false, preserving the signal without blocking unrelated code validation.
+- CLI config training no longer validates file-backed dispatcher payloads too early. `run_train_config()` now reads the raw YAML/JSON mapping first, rejects unsupported CLI-only modes before schema coercion, materializes `data:` file paths via `_load_dispatch_payload()`, then runs `TrainingJobConfig.model_validate(...)`. Regression coverage added for both DPO JSONL and GRPO text payloads.
+- Sibling-boundary sweep on the file-backed payload contract: `materialize_dispatch_payload(data, mode)` now lives in `enigma_engine/training/schema.py` and is invoked by (a) `run_training()` on its raw-dict path before validation, (b) `load_training_config()` after raw read, and (c) `run.py::_load_dispatch_payload` (now a thin delegate). All three dispatcher consumers honour the same `data: <path>` contract. Two regression tests added at the dispatcher seam (`test_run_training_materializes_jsonl_data_path`, `test_run_training_materializes_prompt_text_path`).
+- **ARCH-1a slice — `/api/train` migrated to dispatcher.** `enigma_engine/training/build_dispatch_context(engine=…, on_progress=…, on_epoch_complete=…)` is now the single seam used by both `run.py::run_train_config` and `enigma_engine/api/server.py::start_training`. The endpoint accepts two request shapes: legacy `data_file` requests (no `mode`) are mapped to dispatcher mode `sft` with the file body inlined as `data` and `epochs`/`learning_rate`/`batch_size` lifted into a `training` block, with the path-traversal guard preserved (resolve under `data/`, `relative_to` check, 403/404 on miss); config-body requests (with `mode`) forward `data`/`training`/`dpo`/`grpo`/`lora`/`simpo`/`kto`/`orpo`/`rest`/`reward_model`/`vision`/`audio`/`self_play`/`rlhf`/`remax`/`adaptive`/`resume_from`/`allow_experimental` verbatim into the dispatcher dict. Response now includes `"mode"`. Tests: `test_build_dispatch_context_from_engine_object`, `test_build_dispatch_context_accepts_explicit_model_and_tokenizer`, `test_build_dispatch_context_requires_model_and_tokenizer` at the dispatcher seam; `test_train_dispatcher_routes_dpo_config`, `test_train_legacy_data_file_routes_to_sft` at the API surface (sentinel-mock on `enigma_engine.training.run_training`, synchronous `_SyncThread` patch). All existing API tests (no-model 503, path-traversal 403, max_length 422) preserved.
+- **ARCH-1a follow-up — `/api/train` request-shape boundary hardened.** The first dispatcher migration left one logic hole: `start_training()` only branched on `req.mode is None`, so requests containing both `mode` and `data_file` were silently accepted, and invalid config-body requests could return `200 {"status":"started"}` before failing inside the background thread. Fixed in two places. First, the HTTP boundary now enforces **exactly one** of `mode` or `data_file` and raises 422 on both-or-neither. Second, the endpoint materializes `data` via `materialize_dispatch_payload(...)` and runs `TrainingJobConfig.model_validate(...)` **before** spawning the worker thread, so bad dispatcher payloads fail at the API boundary instead of becoming delayed background errors. Progress/response metadata now reads `job.training.epochs` from the validated config rather than the legacy top-level `req.epochs`, so config-body requests report the real epoch count. Tests added at the API surface: `test_train_rejects_both_mode_and_data_file`, `test_train_rejects_neither_mode_nor_data_file`, `test_train_rejects_invalid_dispatch_config_before_thread_start`.
+- **ARCH-1a package-seam hardening — `enigma_engine.training` exports are now lazy.** The pre-thread validation fix exposed a packaging bug: importing `enigma_engine.training.schema` still executed `enigma_engine/training/__init__.py`, which eagerly imported `dispatch.py`, which eagerly imported `core/lora_utils.py`, which eagerly imported `bitsandbytes`. Result: a schema-only caller paid the full LoRA/runtime dependency cost just to validate a job. `enigma_engine/training/__init__.py` now exports `DispatchContext`, `build_dispatch_context`, and `run_training` via `__getattr__` instead of eager imports, while schema/registry symbols stay light. This keeps API/CLI schema-only paths import-safe without weakening the dispatcher surface. Validation: targeted dispatcher/API slice green, full suite green.
+
+Return-to-work quick start:
+
+1. Run `python -m pytest tests/ -q` once to confirm the same green baseline.
+2. Run `python run.py --gui` and execute **P5-run** from the Runtime Tests Pending section (copy-model dry pass first).
+3. If P5-run is clean, proceed to **P5-real**.
+
+Test-suite hygiene note:
+
+- Combine compatible tests into parametrized/shared blocks when they cover the same contract family. Keep signal high, but do not let the suite sprawl into a pile of tiny near-duplicate tests.
+- Next execution slice (May 7, 2026): audit structural-test families in `tests/test_gui.py`, `tests/test_chat.py`, and `tests/test_functional.py`; consolidate near-duplicates into shared/parametrized tests while preserving at least one behavioural sentinel per contract family.
+
 ## 🟡 RUNTIME TESTS PENDING (user-driven, not code work)
 
 These tests need a GPU + the real student model and cannot be executed by the code agent. **Do these LAST after the rest of the backlog is shipped.**
@@ -10,9 +103,9 @@ These tests need a GPU + the real student model and cannot be executed by the co
 
 ---
 
-## 🔵 TEACH-1 — Teach-while-running (proposed, not started)
+## 🔵 TEACH-1 — Teach-while-running (closed)
 
-**Status:** Logged May 6, 2026. Direction confirmed in Project Goal (`AA code maker.md`). NO CODE CHANGES authorised yet — this entry is the plan.
+**Status:** Logged May 6, 2026. TEACH-1a shipped May 7, 2026 (Pass 156z9bf). TEACH-1b shipped May 7, 2026 (Pass 156z9bg). TEACH-1c shipped May 7, 2026 (Pass 156z9bj). TEACH-1d shipped May 7, 2026 (Pass 156z9bk). Core teach-while-running loop is now live end-to-end.
 
 **What already exists (do NOT rebuild):**
 - `RAGIndex` wired through `_prepare_chat()` — the AI can already look things up over `data/` and `information/`.
@@ -28,15 +121,16 @@ These tests need a GPU + the real student model and cannot be executed by the co
 
 | Slice | What | Risk | Solves |
 |---|---|---|---|
-| **TEACH-1a** Correction store + chat-side widget | New `data/corrections.jsonl` (atomic append). New "this is wrong, here is right" button on each AI reply in CORE chat. Records `{prompt, wrong_response, right_response, timestamp, modality}`. | low | Persistent feedback exists. |
-| **TEACH-1b** Vision-correction surface | When image is attached and AI mis-identifies, user can edit the AI's reply with the right caption → stored as TEACH-1a row with `modality="vision"` + image path. | medium | Vision-specific correction exists. |
-| **TEACH-1c** Replay-into-DPO path | `BackgroundTrainer` reads `data/corrections.jsonl` on its replay tick, converts each row to a DPO pair (`chosen=right_response, rejected=wrong_response`), feeds into the same `train_dpo` path the FORGE button already uses. | high | Corrections actually move weights. |
+| ~~**TEACH-1a**~~ Correction store + chat-side widget | **DONE (Pass 156z9bf).** New `data/corrections.jsonl` with atomic append semantics via `LogicChatMixin._append_correction_jsonl`. New CORE toolbar **FIX** button (`_correct_btn`) wired to `_save_last_correction_from_input`. Current UX is inline (no popup): user types corrected answer in chat input, clicks FIX to store `{prompt, wrong_response, right_response, timestamp, modality, model_path, session_path}`. `modality="text"` in this slice. | low | Persistent feedback exists. |
+| ~~**TEACH-1b**~~ Vision-correction surface | **DONE (Pass 156z9bg).** `LogicMediaMixin._attach_image` now stages `self._pending_correction_image_path`; `LogicChatMixin._send_message` binds that path to the next user/assistant exchange; `_record_correction_for_last_exchange` emits `modality="vision"` + `image_path` when the corrected exchange matches the staged image context. Non-image exchanges remain `modality="text"`. | medium | Vision-specific correction exists. |
+| ~~**TEACH-1c**~~ Corrections-as-SFT replay | **DONE (Pass 156z9bj).** `BackgroundTrainer.ingest_corrections_file()` reads `data/corrections.jsonl` on replay ticks and feeds `right_response` into the existing SFT replay path as `TrainingExample(source="correction")`. | medium | Corrections become immediate replay examples. |
+| ~~**TEACH-1d**~~ Replay-into-DPO path | **DONE (Pass 156z9bk).** Same ingestion pass now emits DPO pairs (`chosen=right_response, rejected=wrong_response`) into `dpo_pairs`; `_maybe_train_dpo_pairs()` threshold-gates and dispatches `Trainer.train_dpo(...)` from the background replay loop. | high | Corrections move weights on explicit preference signal. |
 
 ### Acceptance call-chain (Rule §1 #20)
 
-After TEACH-1c, the production call chain must be:
-- **Capture:** User clicks "this is wrong" in CORE chat → `LogicChatMixin._record_correction(prompt, wrong, right)` → atomic append to `data/corrections.jsonl`.
-- **Replay:** `BackgroundTrainer._tick` → `_load_corrections()` → `_corrections_to_dpo_pairs()` → `train_dpo(pairs)` → weight update.
+After TEACH-1d, the production call chain is:
+- **Capture:** User clicks FIX in CORE chat after entering corrected answer → `LogicChatMixin._save_last_correction_from_input()` → `LogicChatMixin._record_correction_for_last_exchange(right_response)` → append to `data/corrections.jsonl`.
+- **Replay:** `BackgroundTrainer.run()` → `_retrain_on_replay()` → `ingest_corrections_file()` → `_maybe_train_dpo_pairs()` → `Trainer.train_dpo(pairs)` → weight update.
 - **Verify:** Re-issue the original prompt → AI gives the right answer (eventually — anchor-set bound applies, see Pass 156i6).
 
 ### Devil's advocate (Rule §1 #13)
@@ -48,10 +142,10 @@ After TEACH-1c, the production call chain must be:
 
 ### Recommended order
 
-1. **TEACH-1a** (correction store + button only). Smallest safest start. Validates the capture surface without touching training.
-2. Pause for user to actually use the button on a few real chats — confirm UX before building the replay path.
-3. **TEACH-1c** (replay path) before **1b** — text corrections give us the simpler training-side proof. Vision adds image-path provenance that is its own scope.
-4. **TEACH-1b** last — vision-correction widget plus image-archival.
+1. ~~**TEACH-1a**~~ DONE Pass 156z9bf.
+2. ~~**TEACH-1b**~~ DONE Pass 156z9bg.
+3. ~~**TEACH-1c**~~ DONE Pass 156z9bj.
+4. ~~**TEACH-1d**~~ DONE Pass 156z9bk.
 
 ### Parked / open questions
 
@@ -198,12 +292,24 @@ If any chain breaks before reaching the inner code, the slice is parked, not fin
 0d. ~~**ARCH-V1e**~~ ✅ shipped (May 6, 2026 — real BPE tokenizer encoding. Default `tokenizer.ggml.model` flipped from `llama` (SentencePiece, requires curated piece scores we don't have) to `gpt2` (BPE, accepts arbitrary token arrays + a possibly-empty merges array). `tokenizer.ggml.merges` always emitted as `ARRAY[STRING]` via the typed-array path — the writer's empty-list inference picks UINT32 which is malformed. `tokenizer.ggml.pre` defaults to `"default"`. Also fixed the unconditional rope-dim derivation: `rope_dimension_count` is now derived from `embedding_length / attention_head_count` for ALL architectures, not just qwen3 — without this fix llama.cpp aborts with `invalid n_rot: 128, expected N`. 4 byte-level structural tests in `TestGgufTokenizerEncoding`).
 0e. ~~**ARCH-V1g**~~ ✅ shipped (May 6, 2026 — RMSNorm scale weights and biases stay F32 in the `f16` quantization path. llama.cpp's CPU + CUDA backends both `GGML_ASSERT(src1->type == GGML_TYPE_F32)` on RMSNorm — casting these weights to F16 produces a file that loads cleanly but crashes at the first forward pass. Mirror the `_should_quantize` skip-list semantics (norm + bias) but allow embeddings to be F16. Caught by running `verbose=True` against the byte-vocab probe; symptom was `GGML_ASSERT failed` mid-generation).
 
-**End-to-end round-trip is now PROVEN for the llama-arch path:** new `TestGgufRoundTripLlamaArch::test_f16_round_trips_llama_arch` runs Enigma → GGUF → llama-cpp-python → `create_completion()` and asserts the subprocess exits 0. q8_0 and q4_k still xfailed in the new class on a pre-existing scalar-view bug in `GGUFQuantizer.quantize_q8_0` and `quantize_q4_k` — separate slice tracked as ARCH-V1h.
+**End-to-end round-trip is now PROVEN for both architecture paths:** `TestGgufRoundTripLlamaArch` passes for `f16`, `q8_0`, `q4_0`, and `q4_k`, and `TestGgufRoundTrip` (qwen3 path) now passes for `f16`, `q8_0`, and `q4_k` after the binding upgrade below.
 
-The original 3 round-trip xfails (`TestGgufRoundTrip`, qwen3 path) stay xfailed pending a llama-cpp-python upgrade — see ARCH-V1f.
+0f. ~~**ARCH-V1f**~~ ✅ shipped (May 6, 2026 — llama-cpp-python upgrade and qwen3 path closure). `llama-cpp-python` upgraded from `0.3.4` to `0.3.22` using the project wheel index (`--extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu`) on system Python, avoiding local C++ build requirements. Re-ran qwen3 round-trip tests with `--runxfail`: `TestGgufRoundTrip::{f16,q8_0,q4_k}` all return rc=0 and generate successfully. Removed the three stale strict xfails in `tests/test_gguf_roundtrip.py` so normal runs no longer fail with XPASS(strict). No exporter logic changes were needed; this was purely the runtime binding gate.
+0g. ~~**ARCH-V1h**~~ ✅ shipped (May 6, 2026 — q8_0 round-trip now PROVEN end-to-end). Two bugs found, both fixed:
+   - **Scalar-view bug** at [gguf.py L568+L602](enigma_engine/core/gguf.py#L568): `scales_fp16[i].view(np.uint8)` raised `ValueError: Changing the dtype of a 0d array is only supported if the itemsize is unchanged`. Fix: `scales_fp16[i:i+1].view(np.uint8)` — length-1 slice keeps the array 1-D so `.view()` can change itemsize. Identical fix at both q4_0 and q8_0 sites.
+   - **Logical-shape loss** at [gguf.py `add_tensor`](enigma_engine/core/gguf.py): quantizers flatten the tensor to a 1-D uint8 buffer before `add_tensor` is called, so the writer recorded `(byte_count,)` as the tensor's logical shape. llama.cpp computes file offsets via `ne[0] * ggml_type_size / ggml_blck_size` from the LOGICAL shape, so the offsets it computed disagreed with what we wrote → `tensor 'output.weight' data is not within the file bounds`. Fix: `add_tensor(name, data, type, *, shape=None)` accepts a logical-shape override; the export loop captures `logical_shape = tuple(data.shape)` before quantizing and forwards it. Caught only because the scalar-view fix unblocked the load path enough for llama.cpp to surface the offset error — second bug was hiding behind the first.
 
-0f. **ARCH-V1f** (llama-cpp-python upgrade, parked). Installed binding `llama-cpp-python==0.3.4` predates Qwen3 architecture support in upstream llama.cpp. Verbose-load capture confirms our writer emits a structurally valid file (28 KV pairs read cleanly, 25 tensors recognized) — it errors at `llama_model_load: error loading model architecture: unknown model architecture: 'qwen3'`. **Resolution path:** `pip install --upgrade llama-cpp-python` (latest is 0.3.22; minimum probably 0.3.5+). Verify on the release notes that `LLM_ARCH_QWEN3` is in the bundled binary. Closing this flips the 3 `TestGgufRoundTrip` xfails to passing without further code changes. Out of scope for ARCH-1's named overhaul (touching the venv is a separate user decision).
-0g. **ARCH-V1h** (q8_0 / q4_k quantizer scalar-view bug, parked). `GGUFQuantizer.quantize_q8_0` line 602: `output[offset:offset+2] = scales_fp16[i].view(np.uint8)` raises `ValueError: Changing the dtype of a 0d array is only supported if the itemsize is unchanged`. Same pattern in `quantize_q4_k`. Pre-existing bug, unrelated to V1c-V1g metadata work. Probably an indexing slip — `scales_fp16[i]` becomes 0-d when `scales_fp16` is itself 1-d; need `.reshape(1).view(np.uint8)` or equivalent. Tracked as ARCH-V1h; tests in `TestGgufRoundTripLlamaArch` (`test_q8_0_round_trips_llama_arch`, `test_q4_k_round_trips_llama_arch`) gate the fix when it lands.
+  **Validation:** `TestGgufRoundTripLlamaArch::test_q8_0_round_trips_llama_arch` now PASSES. Post-ship audit found the sibling-coverage gap: q4_0 had the same scalar-view fix but no behavioural gate. Closed immediately with `TestGgufRoundTripLlamaArch::test_q4_0_round_trips_llama_arch`, which also passes. Full chain now verified for BOTH scalar-view fix sites: Enigma → q4_0/q8_0 GGUF → llama-cpp-python load → `create_completion()` → rc=0. `tests/test_gguf_roundtrip.py`: 36 passed / 4 xfailed.
+
+   **Production call chain (Rule #20):** `GGUFExporter(quantization='q8_0').export(...)` → per-tensor `logical_shape = data.shape` capture → `GGUFQuantizer.quantize_q8_0(data)` (now uses length-1 slice on scales) → `writer.add_tensor(gguf_name, data, tensor_type, shape=logical_shape)` → file loads + generates in llama-cpp-python.
+
+0h. ~~**ARCH-V1h2**~~ ✅ shipped (May 6, 2026 — q4_k llama-arch round-trip now PROVEN end-to-end). Two bugs had to close together:
+  - **Super-block payload bug:** `GGUFQuantizer.quantize_q4_k` wrote 148 bytes per block (`2 + 2 + 8 + 8 + 128`) instead of ggml's 144-byte `block_q4_K` (`2 + 2 + 12 + 128`). Fixed by porting the q4_k reference quantization flow from `ggml-quants.c`: per-32-element `make_qkx2` stage, block-level `make_qp` stage for the 8 scales + 8 mins, and the 12-byte packed 6-bit interleave that `_get_scale_min_k4` / `dequantize_q4_K` already expected locally.
+  - **Row-compatibility bug:** the new payload was valid, but the tiny llama-arch fixture still hard-crashed because every quantizable matrix in the test model is 64- or 128-wide. K-quants are row-wise formats: ggml computes tensor byte size from `ne[0]`, and for q4_k that row width must be a multiple of 256. Our writer stores dims reversed, so the compatibility check lives on the LAST logical tensor dimension before write. Fix: `GGUFExporter` now quantizes to q4_k only when `shape[-1] % 256 == 0`; otherwise it falls back to F16 for that tensor. This keeps the file loadable instead of emitting a tensor whose logical shape and q4_k byte count disagree.
+
+  **Validation:** `TestGgufRoundTripLlamaArch::test_q4_k_round_trips_llama_arch` xfail removed and now PASSES. At this pass point, `tests/test_gguf_roundtrip.py` was **37 passed / 3 xfailed**; that was later superseded by ARCH-V1f closure (qwen3 binding upgrade + xfail cleanup) to 40 passed. Narrow static check on touched files clean.
+
+  **Production call chain (Rule #20):** `GGUFExporter(quantization='q4_k').export(...)` → per-tensor `logical_shape = data.shape` capture → `_can_quantize_q4_k(logical_shape)` gate → compatible rows: `GGUFQuantizer.quantize_q4_k(data)` with 144-byte super-blocks; incompatible rows: F16 fallback → `writer.add_tensor(..., shape=logical_shape)` → file loads + generates in llama-cpp-python on llama-arch fixtures.
 1. **ARCH-1.5a** (schema + registry + dispatcher). Tests prove every mode resolves and tears down.
 2. **ARCH-1.5b** (CLI wire-up, both legacy and YAML paths working).
 3. **ARCH-1.5c** (migrate 6 core modes — 6 passes).
@@ -231,11 +337,11 @@ The original 3 round-trip xfails (`TestGgufRoundTrip`, qwen3 path) stay xfailed 
 
 ---
 
-**Last updated:** May 6, 2026 (Pass — **ARCH-V1d / V1e / V1g all shipped; llama-arch f16 round-trip now PROVEN end-to-end.** Three exporter-side fixes landed in one session: V1d added `_apply_arch_consistency` (auto-flip `llama` → `qwen3` when QK-norm tensors are present + emit `qwen3.attention.{key,value}_length`); V1e flipped the default tokenizer model from `llama` (SentencePiece) to `gpt2` (BPE) and forced `tokenizer.ggml.merges` through the typed-array path as `ARRAY[STRING]` (the writer's empty-list inference picks UINT32 which is malformed); V1g preserves RMSNorm scale weights and biases as F32 in the `f16` quantization path because llama.cpp asserts F32 on those tensors. Also lifted the rope-dim derivation out of the qwen3-only branch so the llama path gets it too — without that fix llama.cpp aborts with `invalid n_rot: 128, expected N`. New `TestGgufRoundTripLlamaArch::test_f16_round_trips_llama_arch` runs the full Enigma → GGUF → llama-cpp-python → `create_completion()` chain in a subprocess and asserts rc==0; this is the FIRST round-trip test that actually passes (was 25 passed / 3 xfailed before this session, now 34 passed / 5 xfailed in `test_gguf_roundtrip.py`). Two new xfails are q8_0/q4_k pre-existing scalar-view bug parked as ARCH-V1h. Three original qwen3-path xfails parked on ARCH-V1f (llama-cpp-python upgrade — installed 0.3.4 predates qwen3 support; verbose-load capture confirms our file is structurally valid and only the bundled binary needs to advance). Full suite: 2897 passed / 9 skipped / 5 xfailed; lint clean.
+**Last updated:** May 7, 2026 (Pass — **ARCH-V1f shipped; ARCH-V1 family fully closed on test coverage.** Upgraded `llama-cpp-python` to 0.3.22 on system Python via wheel index and validated qwen3 round-trip under normal runtime conditions. Removed 3 stale strict xfails in `tests/test_gguf_roundtrip.py`; file now runs green at **40 passed** on system Python. ARCH-V1 family now has both llama-arch and qwen3-arch end-to-end round-trip proof across `f16`/`q8_0`/`q4_k` (plus `q4_0` on llama-arch). Follow-up maintenance this pass: rebuilt and force-reinstalled `enigma_bpe` (`maturin build --release` + pip reinstall) and revalidated Rust tokenizer coverage with `tests/test_tokenizer.py -k "RustBPETrain or rust_train"` → **9 passed**.)
 
 **Production call chain (Rule #20):** programmatic export — `GGUFExporter(quantization='f16').export(model, path, metadata, tokenizer)` → `_apply_arch_consistency(model, metadata)` (V1d unconditional arch flip + rope-dim derivation) → per-tensor cast loop with norm/bias F32 preservation (V1g) → `_add_tokenizer_metadata` emits `tokenizer.ggml.model='gpt2'` + `pre='default'` + STRING-typed merges (V1e) → file is loadable + generatable by llama-cpp-python on the llama-arch path. Qwen3-arch path identical except the architecture flip happens at `_apply_arch_consistency` and is gated behind the upgraded binding.
 
-**Remaining open work in ARCH-V1 family:** ARCH-V1f (llama-cpp-python upgrade, user-side venv decision) closes the 3 qwen3 round-trip xfails. ARCH-V1h (quantizer scalar-view bug) closes the 2 q8_0/q4_k xfails. Both are bounded, well-tested, and out of ARCH-1's named overhaul scope.
+**Remaining open work in ARCH-V1 family:** none.
 - LoRA: `LoraTrainer(model, tok, ..., min_lr_ratio=0.05)` → `LoraTrainer.train()` → cosine scheduler reads `self.min_lr_ratio`
 
 **Changes (Pass 156z9au):**
@@ -328,6 +434,35 @@ FORGE Vision → `_start_vision_training` → text-data load → `unfreeze_text_
 **Finished / Killed / Parked (Rule #20):**
 - **Finished**: `_pre_training_backup` helper now called from `_start_distill_training` (156z9ar), `_start_dialogue_training` (156z9ar), `_start_dpo_training` (covers DPO+APO), `_start_rl_variant_training` (covers GRPO+ReMax), `_start_preference_variant_training` (covers SimPO+ORPO).
 - **Parked (concrete next step)**: (a) `_start_vision_training` Stage-2 — gate the helper call on `unfreeze_text_layers > 0` since projection-only training never mutates the text backbone; (b) `_start_training` (pretrain / general SFT) — the in-run `checkpoint_dir` saves are step-based and already give rollback granularity, so the pre-training backup is duplicative. Document this as the design decision OR add the rail anyway for consistency.
+
+---
+
+**Last updated:** May 7, 2026 (Pass 156z9ba — **Personality-5 BUILD: profile consistency anchors on the real distill path.** The local gap after P5-pre-3 was no longer “personality data generation is missing” — that part already existed. The real missing consumer was narrower: FORGE quick-profile fields (`Personality`, `Tone`, `Expertise`, `Response style`, `Example phrases`) shaped the *teacher* system prompt, but they never became direct student training examples. That made the selected profile an indirect hint rather than a real profile-scoped regularizer. This pass closes the smallest honest slice on the production path: deterministic auxiliary SFT examples built from the quick-profile fields and appended only when the `personality` category is selected.
+
+**Production call chain (Rule #20):** FORGE Distill → `_start_distill_training` → teacher-side personality data gen + filter (P5-pre-1) → pre-backup + anchor mix + pre-probe (P5-pre-2/3) → **(NEW) read `_brief_field_entries` quick-profile values → `build_profile_consistency_examples(profile_fields, student_name)` → append deterministic `User: ...\nAssistant: ...` examples to `all_examples`** → `training_text = "\n\n".join(all_examples)` → `Trainer(student, tokenizer, train_config)` → train → post-probe → save.
+
+**Changes (Pass 156z9ba):**
+- [enigma_engine/core/personality_data.py](enigma_engine/core/personality_data.py) — NEW pure helper `build_profile_consistency_examples(profile_fields, *, student_name="") -> list[str]`. Input keys are the FORGE quick-profile labels. Output is a deterministic auxiliary example set on the canonical SFT format (`User: ...\nAssistant: ...`). Unknown/blank fields are ignored; empty profile returns `[]`. Examples cover intro/voice, expertise, response style, example phrases, and casual-conversation voice. This is a **profile-scoped regularizer on the existing SFT path**, not a new trainer loss.
+- [enigma_engine/gui/gui_forge_new_modes.py](enigma_engine/gui/gui_forge_new_modes.py) `_start_distill_training` — NEW wire-site after personality reject logging and before `training_text` is built. When `"personality" in categories`, gather populated quick-profile fields from `brief_fields`, call `build_profile_consistency_examples(..., student_name=student_name)`, append the returned examples to `all_examples`, and log `Personality profile anchors: +N example(s)`. Other categories are untouched.
+- [tests/test_personality_data.py](tests/test_personality_data.py):
+  - NEW behavioural tests for `build_profile_consistency_examples` — empty profile yields `[]`; populated profile yields >=4 well-formed `User:/Assistant:` examples containing the selected fields and student name; same input is deterministic.
+  - UPDATED wire-site structural coverage — `_start_distill_training` source now must contain `build_profile_consistency_examples` so a regression that drops the append point fails immediately.
+
+**Validation:**
+- `pytest tests/test_personality_data.py -q` — **73 passed**.
+- `get_errors` on touched files (`personality_data.py`, `gui_forge_new_modes.py`, `test_personality_data.py`) — no errors.
+
+**Six-question self-audit (Rule #19):**
+1. **Author's-lens** — The honest gap was not “invent a trainer-side style loss now”; it was “the selected profile never reaches the student's training text directly.” Deterministic auxiliary examples are the smallest production-facing fix and reuse the existing SFT path without opening a second optimization contract.
+2. **Connections** — Reuses the existing FORGE quick-profile UI (`_brief_field_entries`), existing student name from route assignment, existing distill `all_examples` accumulator, and existing canonical plain-text training format. No new config fields, no new GUI widgets, no trainer signature churn.
+3. **More connections** — The same helper can be reused by future external-teacher or CLI distill flows if they surface the same quick-profile structure. Not wired yet; current production consumer is the FORGE Distill path only.
+4. **Logic-eye** — Claim is “profile-scoped regularizer,” not “full consistency loss.” Code delivers exactly that: deterministic examples appended on the actual student-training path. The larger trainer-side consistency-loss idea remains open and is no longer falsely described as the only missing piece.
+5. **Claim-vs-test** — Behavioural tests prove the helper output shape/content; structural wire-site test proves the GUI path actually calls the helper. Without the wire-site test, the helper could exist unused. Without the behavioural tests, a structural-only test could pass while the examples were malformed.
+6. **Sibling-boundary sweep** — Checked adjacent personality-distill rails: P5-pre-1 filters, P5-pre-2 anchor mix, P5-pre-3 identity probes all still execute on the same path. No sibling FORGE training entry point currently consumes these quick-profile fields, so no additional same-family wire-sites were left half-done in this slice.
+
+**Finished / Killed / Parked (Rule #20):**
+- **Finished**: profile-scoped regularizer on the real distill path via deterministic quick-profile examples.
+- **Parked (concrete next step)**: trainer-side consistency loss / metric (Row G's original stronger version). That is a separate slice requiring a defined consistency target and a behavioural eval beyond the helper-level output-shape tests.
 
 ---
 
@@ -778,7 +913,7 @@ FORGE Vision → `_start_vision_training` → text-data load → `unfreeze_text_
   - ~~API schema validation at boundary~~ CLOSED Pass 156z9ac.
   - ~~GUI Apply-button schema validation~~ CLOSED Pass 156z9ad.
   - ~~Rust `lib.rs` rebuild~~ CLOSED Pass 156z9ad — rebuilt + reinstalled, 2 tests green, suite at 2745/0/2.
-  - **B-3 RAG splice** still open (multi-pass).  First sub-pass: token-level `<search>` early-stop hook reusing `_record_search_emissions` as the detection helper. Subsequent sub-passes wire (a) `rag.py` retrieval call, (b) `<search_result>...</search_result>` context surgery, (c) generation resume via KV cache rewind + re-prefill. Each sub-pass needs a real consumer in the same slice or it's dead infra (per Rule #20).
+  - ~~B-3 RAG splice~~ (historical note at this pass) — later CLOSED across Passes 156z9ag..156z9al (B-3a through B-3d).
   - ~~GUI "Generate Teacher Corpus" button~~ CLOSED Pass 156z9ae (stale Park, feature shipped via sibling pass; 17 GUI tests + 42 CLI tests green).
   - **Schema meta-validation on Apply** (parked future-park; deferred until a user trips a non-structural schema-shape error — at that point a vendored `jsonschema`-style check would land on top of the structural validator, not replace it).
   - ~~**Rust `lib.rs` rebuild**~~ CLOSED Pass 156z9ad (see above).
@@ -812,11 +947,11 @@ FORGE Vision → `_start_vision_training` → text-data load → `unfreeze_text_
   - ~~N-15b GUI surface for `json_schema`~~ CLOSED Pass 156z9aa.
   - ~~F1-F5 audit findings on Pass 156z9aa~~ CLOSED Pass 156z9ab.
   - ~~API schema validation at boundary~~ CLOSED Pass 156z9ac.
-  - **B-3 RAG splice** still open (multi-pass). First sub-pass remains: token-level `<search>` early-stop hook reusing `_record_search_emissions` as the detection helper. Subsequent sub-passes wire (a) `rag.py` retrieval call, (b) `<search_result>...</search_result>` context surgery, (c) generation resume via KV cache rewind + re-prefill. **Each sub-pass needs a real consumer in the same slice or it's dead infra** (per Rule #19). The early-stop hook alone (without retrieval) would be a UX regression — model emits `<search>` and stops mid-response with no answer. So sub-passes (a) + early-stop must ship together, OR the early-stop must be gated behind a default-False flag with the consumer named in SUGGESTIONS as the immediate next slice.
-  - **GUI Apply-button schema validation** (small, new).  Use the now-extracted `validate_json_schema_shape` helper on Apply so the status bar surfaces the exact validator message (e.g. "json_schema['type'] must be 'object'") instead of the generic "JSON schema applied (1 keys)" followed by a send-time ValueError. Same pattern as the F2 fix from Pass 156z9ab — surface real failures at the closest boundary to the user.
-  - **GUI "Generate Teacher Corpus" button** still open (medium, GUI). Spawn `collect_distill_data.py` as a subprocess, stream progress, auto-fill the Distill mode's data-path field. Now needs a Magpie-mode toggle alongside the prompts-file picker.
+  - ~~B-3 RAG splice~~ (historical note at this pass) — later CLOSED across Passes 156z9ag..156z9al (B-3a through B-3d).
+  - ~~GUI Apply-button schema validation~~ CLOSED Pass 156z9ad.
+  - ~~GUI "Generate Teacher Corpus" button~~ (historical note at this pass) — later CLOSED Pass 156z9ae (stale Park audit-close).
   - **Schema meta-validation on Apply** (parked future-park; deferred until a user trips a non-structural schema-shape error).
-  - **Rust `lib.rs` rebuild** still pending — uncommitted local edit means 2 Rust BPE tests fail against the stale installed `.pyd`. Run `maturin build --release` + `pip install target/wheels/*.whl --force-reinstall --no-deps` from `rust_extensions/` to resync.
+  - ~~Rust `lib.rs` rebuild~~ (historical note at this pass) — later CLOSED Pass 156z9ad, and revalidated again in Pass 156z9az.
   - **IQ-series GGUF dequant** still parked.
 
 ---
@@ -891,9 +1026,9 @@ FORGE Vision → `_start_vision_training` → text-data load → `unfreeze_text_
   - ~~A1 — Q8_0 vectorization~~ CLOSED Pass 156z9z.
   - ~~B-4 training data emitter~~ CLOSED Pass 156z9aa.
   - ~~N-15b GUI surface for `json_schema`~~ CLOSED Pass 156z9aa.
-  - **B-3 RAG splice** (still open, multi-pass effort). First concrete sub-pass identified: **token-level `<search>` early-stop hook in the generation loop**, reusing the existing `_record_search_emissions` infrastructure as the detection helper. After early-stop fires, the next sub-passes wire (a) `rag.py` retrieval call with the captured query string, (b) `<search_result>...</search_result>` context surgery into the conversation buffer, (c) generation-resume via re-prefill of only the new tokens (KV cache rewind to pre-search-emit position, append the result block, prefill, continue sampling). Each of (a)/(b)/(c) is its own slice with its own tests; do not attempt them in one pass. With B-4 now shipped, the model has training signal for *when* to emit `<search>` — B-3 closes the loop on *what happens after*.
+  - ~~B-3 RAG splice~~ (historical note at this pass) — later CLOSED across Passes 156z9ag..156z9al (B-3a through B-3d).
   - **Schema meta-validation on Apply** (small future-park). Current N-15b validates `isinstance(parsed, dict)` and trusts the engine layer to fail if the dict isn't a valid JSON Schema. A draft-2020-12 meta-schema validator inside `_apply_json_schema` would surface schema-shape errors at Apply-time instead of mid-generation. Stdlib-only is non-trivial here (would need a vendored mini-validator); deferred until a user actually trips a schema-shape error in production.
-  - **Rust `lib.rs` rebuild** still pending — uncommitted local edit to [rust_extensions/src/lib.rs](rust_extensions/src/lib.rs) from a prior session means 2 Rust BPE tests fail against the stale installed `.pyd`. Run `maturin build --release` + `pip install target/wheels/*.whl --force-reinstall --no-deps` from `rust_extensions/` to resync. Not blocking GUI/data-collector work but blocks the Rust BPE test slice.
+  - ~~Rust `lib.rs` rebuild~~ (historical note at this pass) — later CLOSED Pass 156z9ad, and revalidated again in Pass 156z9az.
   - **IQ-series GGUF dequant** still parked.
 
 ---
@@ -917,9 +1052,9 @@ FORGE Vision → `_start_vision_training` → text-data load → `unfreeze_text_
 
 - **Open follow-ups updated:**
   - **A1 — Q8_0 vectorization** CLOSED Pass 156z9z (stale Park, code already vectorized + 3 tests green).
-  - **B-3 RAG splice** still open (multi-pass effort: token-level early-stop + KV-cache splice + generation-resume).
-  - **B-4 training data emitter** still open (synthetic `<search>` corpus — capability gate for B-3).
-  - **N-15b GUI surface for `json_schema`** still open (server.py + `ChatRequest` already accept the field per Pass 156z6; only the GUI textarea/checkbox is missing — small slice, not blocked on anything).
+  - ~~B-3 RAG splice~~ (historical note at this pass) — later CLOSED across Passes 156z9ag..156z9al (B-3a through B-3d).
+  - ~~B-4 training data emitter~~ CLOSED Pass 156z9aa.
+  - ~~N-15b GUI surface for `json_schema`~~ CLOSED Pass 156z9aa.
   - **IQ-series GGUF dequant** (`IQ2_XXS`/`IQ2_XS`/`IQ2_S`/`IQ3_XXS`/`IQ3_S`/`IQ4_NL`/`IQ4_XS`/`IQ1_S`/`IQ1_M`) still parked — non-linear lookup-grid quants, each needs a 256-entry codebook ported from `ggml-quants.c`. No on-disk model the user has needs them today.
 
 ---
@@ -1094,7 +1229,7 @@ Pass-by-pass prose (Passes 110-135) lives in [information/history/PASS_HISTORY.m
 5. **Approach 3 POC:** distill reasoning traces from Qwen3-30B-A3B into 742M (SFT on ~5K cold-start CoT examples). **Pass 148 currency note:** two additional teacher options verified current — (a) **Qwen3-32B** (arxiv:2505.09388, May 2025, thinking/non-thinking dual mode, YaRN 131K) as a same-family larger alternative to 30B-A3B; (b) **DeepSeek-R1-0528-Qwen3-8B** (May 2025) as a ready-made distilled 8B reasoning checkpoint — SoTA among open sub-10B reasoning models — usable as cold-start weights for our 742M student if we want to bypass teacher inference entirely. QwQ-32B is now older than Qwen3-32B-thinking and should not be used as teacher.
 6. **Personality-5:** Run personality distillation + identity/roleplay separation build plan (R-PERSONALITY-1 research resolved).
 7. **GUI-ARCH-1:** Complete GUI platform decision gate (PySide6 vs Tauri vs keep/refactor current) using the planning criteria below before any UI rewrite.
-8. **HYG-1 (NEW, Pass 156z9al-audit):** Stop tracking Rust build artifacts. `git ls-files rust_extensions/target/` shows **301 files** under `target/release/`, `target/maturin/`, `target/.fingerprint/` — all regenerated by `cargo build` / `maturin build` and currently bloating every commit that touches Rust (Pass 5005025 + 6cb4109 each carried 30+ binary deltas). `.gitignore` has zero Rust-related entries. **Action (destructive — needs user confirmation):** add `rust_extensions/target/` to `.gitignore`, then `git rm -r --cached rust_extensions/target/` and commit. Target-tree disappears from tracking but stays on disk. **Why parked, not done:** `git rm --cached` is a tracked-file removal that the operationalSafety rule flags as needing user confirmation; also the user may have a reason for wanting some of these in-tree (e.g. CI without Rust toolchain). Ask before doing.
+8. **HYG-1 (NEW, Pass 156z9al-audit):** Stop tracking Rust build artifacts. `git ls-files rust_extensions/target/` showed **301 files** under `target/release/`, `target/maturin/`, `target/.fingerprint/` — all regenerated by `cargo build` / `maturin build` and bloating every commit that touched Rust (Pass 5005025 + 6cb4109 each carried 30+ binary deltas). **Status:** completed in the working tree — `.gitignore` includes `rust_extensions/target/`, `git rm -r --cached rust_extensions/target/` has been applied, and `git ls-files rust_extensions/target/**` now returns `0`. The cleanup is staged for the next commit while the files remain on disk.
 
 ---
 
@@ -1245,7 +1380,7 @@ All candidates below are ready to implement — spec is written, code locations 
 | ~~D~~ | ~~**Vision-1b** projection upgrade~~ | ~~[enigma_engine/core/model.py](enigma_engine/core/model.py) `self.vision_projection = nn.Linear(...)` → `nn.Sequential(nn.Linear, nn.GELU, nn.Linear)` per LLaVA-1.5 (arxiv:2310.03744). Keep input/output dims identical.~~ | **DONE (Pass 151).** `nn.Sequential(Linear(vh,d,bias=True), GELU, Linear(d,d,bias=True))` per HF `LlavaMultiModalProjector`. State-dict keys changed; safe (no vision checkpoints exist). 6 tests. | — | — |
 | ~~E~~ | ~~**MTP-2a** reduce `n_predict_heads` 2→1 + weight-tie~~ | ~~[enigma_engine/core/model_presets.py L129](enigma_engine/core/model_presets.py#L129)~~ | **SUPERSEDED — took MTP-2b path Pass 149.** Default flipped to 0 entirely (Medusa retired in favor of EAGLE-2). | — | — |
 | F | **Code-6** FORGE vision-projection training mode | New FORGE mode wired in [enigma_engine/gui/gui_forge_new_modes.py](enigma_engine/gui/gui_forge_new_modes.py) + [enigma_engine/gui/gui_pages_forge.py](enigma_engine/gui/gui_pages_forge.py). Freeze transformer, train only `vision_projection` + CLIP-side adapter on LLaVA-Pretrain (558K) → LLaVA-Instruct-150K (665K). | Vision specialist pipeline. Projection is wired but untrainable. | Fail test: after 1 training step, `vision_projection.weight.grad` is not None and transformer weights `.grad` are None. | Large — new mode + data loader + GUI radio-card entry. Depends on D (Vision-1b) for best parity. |
-| G | **Personality-5** personality injection wiring | [enigma_engine/gui/gui_forge_new_modes.py L1259](enigma_engine/gui/gui_forge_new_modes.py#L1259) — category exists, data generation exists, but no consistency loss or per-profile regularizer. Gate behind user opt-in (profile-scoped, not global). | R-PERSONALITY-1. | Fail test: two generations with same profile + temperature=0 produce consistent first-person pronoun + stated-value alignment. | Medium — needs consistency metric before loss wiring. |
+| G | **Personality-5** personality injection wiring | [enigma_engine/gui/gui_forge_new_modes.py L1259](enigma_engine/gui/gui_forge_new_modes.py#L1259) — **PARTIAL.** Category exists, data generation exists, and Pass 156z9ba added a profile-scoped regularizer on the real SFT path via deterministic quick-profile auxiliary examples. Still open: stronger trainer-side consistency loss / metric. | R-PERSONALITY-1. | Fail test: two generations with same profile + temperature=0 produce consistent first-person pronoun + stated-value alignment. | Medium — helper path shipped; consistency metric/loss still open. |
 | H | ~~**EWC-1** wire `core/ewc.py` into FORGE SFT/dialogue~~ | **CLOSED Pass 156i3 — WONTFIX (superseded by LoRA-per-specialist path).** [ewc.py](enigma_engine/core/ewc.py) library stays for rare-case future use; LoRA freezes base weights so forgetting is physically impossible. See **LoRA-1** (P2) for the replacement work. | — | — | — |
 | ~~DET-2~~ | ~~**DET-2** full bitwise GPU reproducibility~~ | **DONE Pass 156i3.** `set_training_seed(seed, deterministic=False)` gained opt-in `deterministic` kwarg (sets `CUBLAS_WORKSPACE_CONFIG=:4096:8` + `torch.use_deterministic_algorithms(True, warn_only=True)`). `TrainingConfig.deterministic` field default False; all 8 train_* siblings forward the flag. `warn_only=True` keeps MoE `index_add_` from crashing. 4 new tests; suite 2379/9. **Out of scope:** DataLoader worker_init_fn (Enigma single-threaded), `Trainer.__init__` DRY refactor (separate design row). | — | — | — |
 
@@ -1279,7 +1414,7 @@ yet possible) are grouped at the bottom of P2/P3.
 | ~~8b~~ | ~~**D-11b** — FORGE file picker default for finetune data~~ | **DONE Pass 156i9.** New `scanners._pick_default_training_file()` helper prefers `data/finetune/combined_finetune.txt` over `data/training.txt`. Wired into FORGE Basic page `train_data_var` init. 4 new tests including adversarial-ordering. |
 | ~~9~~ | ~~**Code-6** — FORGE training mode for vision projection (frozen transformer)~~ | **DONE (closed Pass 156q, work landed across Pass 151-156).** `Image` mode card → `_start_vision_training` → `Trainer.train_vision()` with LLaVA Stage-1 defaults (`freeze_backbone=True`, `unfreeze_text_layers=0` — projection-only). Sub-rows V-1 through V-8 all closed: Vision-1b 2-layer MLP+GELU projection (Pass 151), V-4 OOM/crash heuristics, V-5 `collect_vision_data.py` LLaVA-Pretrain fetcher (Pass 156c), V-7 abort-summary, V-8 vision-encoder load path in inference (Pass 156b). Stage-2 unfreeze-last-N-text-layers knob is in the trainer but not yet exposed in the GUI — opened as **Code-6b** below. |
 | ~~9b~~ | ~~**Code-6b** — Expose `unfreeze_text_layers` in FORGE Image mode~~ | **DONE Pass 156r.** New numeric input under the vision-encoder-size dropdown (default 0 = LLaVA Stage-1 projection-only). `_start_vision_training` reads with try/except validation (negative → 0, >64 → 64, bad input → 0, all warned), forwards as `trainer.train_vision(unfreeze_text_layers=N, ...)`, logs in summary as `"N text layers"` or `"projection only (Stage-1)"`. Two structural tests gate the var presence + literal kwarg forward. |
-| 10 | **Personality-5 cluster** — Implement personality-in-weights plan + identity/roleplay separation | **PARTIAL.** Personality-3 boundary fix DONE Pass 156y (`AIProfile.personality` reframed as roleplay-only, `is_roleplay()` signal, `assistant` base cleaned). Personality-3b (canonical role-template cleanup) + Personality-4 (identity-vs-roleplay design call + first end-to-end consumer) DONE Pass 156z (3 disk JSONs + DEFAULT_PROFILES cleaned, `apply_profile_to_engine` logs roleplay branch, design call: empty personality = base/task overlay, populated = roleplay character). Open: Personality-3b for legacy user profile `not_for_you_hahaha.json` (deferred — user-driven migration), Personality-5 BUILD (operational — run FORGE distillation), Row G (consistency loss). |
+| 10 | **Personality-5 cluster** — Implement personality-in-weights plan + identity/roleplay separation | **PARTIAL.** Personality-3 boundary fix DONE Pass 156y (`AIProfile.personality` reframed as roleplay-only, `is_roleplay()` signal, `assistant` base cleaned). Personality-3b (canonical role-template cleanup) + Personality-4 (identity-vs-roleplay design call + first end-to-end consumer) DONE Pass 156z (3 disk JSONs + DEFAULT_PROFILES cleaned, `apply_profile_to_engine` logs roleplay branch, design call: empty personality = base/task overlay, populated = roleplay character). P5-pre-1/2/3 safety rails DONE Passes 156z9am/ap/aq. Pass 156z9ba added deterministic quick-profile anchors on the distill training path. Open: Personality-3b for legacy user profile `not_for_you_hahaha.json` (deferred — user-driven migration), Personality-5 BUILD (operational — run FORGE distillation), Row G's remaining stronger piece (consistency metric/loss). |
 | 11 | **AutoResearch-2** — Self-initiated research (`<search>` tag OR uncertainty post-check) | Model currently cannot say "I don't know, let me look it up." Linked to GRPO-4. |
 
 ### 🟡 P2 — MEDIUM (standard backlog, no blocking order)
@@ -1650,7 +1785,7 @@ yet possible) are grouped at the bottom of P2/P3.
 - D-14 (QK-Norm): ~~Action needed~~ → **ALREADY DONE** (`use_qk_norm=True` is the default, wired)
 - D-15 (MTP): ~~Verify scaffold~~ → **ALREADY DONE** (loss wired in model.py, λ=1/n_heads)
 - D-7 (intra-doc masking): ~~Verify~~ → **ALREADY DONE** (`build_packing_masks()` exists + is called)
-- D-8 (embed weight decay): **STILL OPEN** — training.py line 1337 checks `'bias' in name or 'norm' in name` but NOT `'embed'`. Embeddings and the output head get weight_decay when they should not. 5-line fix.
+- D-8 (embed weight decay): ~~STILL OPEN~~ → **ALREADY DONE**. Current optimizer grouping in [training.py](enigma_engine/core/training.py) excludes embeddings in BOTH paths: `_setup_optimizer()` uses `if 'bias' in name or 'norm' in name or 'embed' in name:` and `_build_llrd_param_groups()` uses the same `is_no_decay` rule. The old "5-line fix" note is stale.
 
 **Removed from checklist (wrong scope for this project):**
 - DDP/FSDP/torch.distributed — single GPU system; multi-GPU is future work with no near-term value

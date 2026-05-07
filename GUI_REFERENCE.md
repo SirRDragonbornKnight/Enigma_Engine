@@ -5,7 +5,7 @@ what it is, where it lives in code, and what it does.
 
 Use this to decide what to change, move, remove, or redesign.
 
-**Last synced:** April 28, 2026 (Pass 156k). **GUI change:** APO added as a 13th alignment-row radio card on FORGE — fifth alignment mode alongside GRPO/ReMax/SimPO/ORPO. Selecting APO routes through the same DPO training body with `loss_type="apo_zero"` so chosen and rejected are anchored independently to the reference (avoids the DPO "degrade-rejected" failure mode). Status bar / log lines / training-history label show "APO-ZERO" when the mode is active. **Earlier sync:** Pass 156i3 — DET-2 CLI-only, no widgets touched. Pass 148 — no GUI changes in Passes 137-148.
+**Last synced:** May 7, 2026 (Pass 156z9bi docs sync). **GUI changes this pass:** No new visible controls or layout changes. This was an audit-refresh/docs-only pass; TEACH-1 UI behavior is unchanged (inline CORE **FIX** workflow remains as shipped in Passes 156z9bf/156z9bg/156z9bh).
 
 Per-pass GUI notes (Passes 119-135) are archived in [information/history/PASS_HISTORY.md](information/history/PASS_HISTORY.md). New GUI work gets a one-line entry below and a full entry in the archive.
 
