@@ -42,7 +42,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.responses import StreamingResponse as FastAPIStreamingResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from enigma_engine import __version__
 from enigma_engine.core.json_schema_mask import validate_json_schema_shape
@@ -995,10 +995,32 @@ _training_state: dict[str, Any] = {
 
 
 class TrainRequest(BaseModel):
-    data_file: str = Field(..., max_length=MAX_PATH_LENGTH)
+    # Legacy SFT-only fields (kept for backward compatibility).
+    data_file: str | None = Field(default=None, max_length=MAX_PATH_LENGTH)
     epochs: int = Field(default=5, ge=1, le=1000)
     learning_rate: float = Field(default=0.00005, gt=0.0, le=1.0)
     batch_size: int = Field(default=4, ge=1, le=256)
+
+    # Dispatcher fields (forwarded verbatim to TrainingJobConfig).
+    mode: str | None = None
+    data: Any = None
+    training: dict[str, Any] | None = None
+    dpo: dict[str, Any] | None = None
+    grpo: dict[str, Any] | None = None
+    lora: dict[str, Any] | None = None
+    simpo: dict[str, Any] | None = None
+    kto: dict[str, Any] | None = None
+    orpo: dict[str, Any] | None = None
+    rest: dict[str, Any] | None = None
+    reward_model: dict[str, Any] | None = None
+    vision: dict[str, Any] | None = None
+    audio: dict[str, Any] | None = None
+    self_play: dict[str, Any] | None = None
+    rlhf: dict[str, Any] | None = None
+    remax: dict[str, Any] | None = None
+    adaptive: dict[str, Any] | None = None
+    allow_experimental: bool = False
+    resume_from: str | None = None
 
 
 @app.get("/api/training/status")
@@ -1012,8 +1034,12 @@ async def training_status():
 async def start_training(req: TrainRequest):
     """Start a training run in the background.
 
-    Requires a model to be loaded. Training data must exist in
-    the data/ directory.
+    Requires a model to be loaded. Two request shapes are supported:
+
+    1. Legacy SFT: pass `data_file` (resolved under data/) plus optional
+       epochs/learning_rate/batch_size. Routes to dispatcher mode 'sft'.
+    2. Config-body: pass `mode` plus dispatcher fields (data, training, dpo,
+       grpo, lora, ...). Forwarded verbatim to TrainingJobConfig.
     """
     if state.engine is None:
         return JSONResponse(
@@ -1027,15 +1053,65 @@ async def start_training(req: TrainRequest):
                 content={"error": "Training already in progress."},
             )
 
-    # Resolve data file path safely
-    data_dir = PROJECT_ROOT / "data"
-    data_path = (data_dir / req.data_file).resolve()
+    has_mode = req.mode is not None
+    has_data_file = req.data_file is not None
+    if has_mode == has_data_file:
+        raise HTTPException(
+            422,
+            "Provide exactly one of 'mode' or 'data_file'",
+        )
+
+    # Build dispatcher payload.
+    is_legacy = not has_mode
+
+    if is_legacy:
+        # Legacy SFT path: data_file required, resolved under data/.
+        if not req.data_file:
+            raise HTTPException(422, "data_file is required when mode is not set")
+        data_dir = PROJECT_ROOT / "data"
+        data_path = (data_dir / req.data_file).resolve()
+        try:
+            data_path.relative_to(data_dir.resolve())
+        except ValueError:
+            raise HTTPException(403, "Data file must be inside the data directory") from None
+        if not data_path.exists():
+            raise HTTPException(404, f"Data file not found: {req.data_file}")
+        dispatch_dict: dict[str, Any] = {
+            "mode": "sft",
+            "data": data_path.read_text(encoding="utf-8"),
+            "training": {
+                "epochs": req.epochs,
+                "learning_rate": req.learning_rate,
+                "batch_size": req.batch_size,
+            },
+        }
+    else:
+        # Config-body path: forward dispatcher fields directly.
+        dispatch_dict = {"mode": req.mode}
+        if req.data is not None:
+            dispatch_dict["data"] = req.data
+        for field in (
+            "training", "dpo", "grpo", "lora", "simpo", "kto", "orpo",
+            "rest", "reward_model", "vision", "audio", "self_play",
+            "rlhf", "remax", "adaptive", "resume_from",
+        ):
+            value = getattr(req, field, None)
+            if value is not None:
+                dispatch_dict[field] = value
+        if req.allow_experimental:
+            dispatch_dict["allow_experimental"] = True
+
+    from enigma_engine.training.schema import TrainingJobConfig, materialize_dispatch_payload
+
+    validated_payload = dict(dispatch_dict)
+    validated_payload["data"] = materialize_dispatch_payload(
+        validated_payload.get("data"),
+        validated_payload.get("mode"),
+    )
     try:
-        data_path.relative_to(data_dir.resolve())
-    except ValueError:
-        raise HTTPException(403, "Data file must be inside the data directory") from None
-    if not data_path.exists():
-        raise HTTPException(404, f"Data file not found: {req.data_file}")
+        job = TrainingJobConfig.model_validate(validated_payload)
+    except ValidationError as exc:
+        raise HTTPException(422, str(exc)) from exc
 
     import threading
 
@@ -1048,23 +1124,15 @@ async def start_training(req: TrainRequest):
                     "progress": 0,
                     "message": "Initializing...",
                     "epoch": 0,
-                    "total_epochs": req.epochs,
+                    "total_epochs": job.training.epochs,
                     "loss": 0.0,
                 })
 
-            from enigma_engine.core.training import Trainer, TrainingConfig
-
-            config = TrainingConfig(
-                epochs=req.epochs,
-                learning_rate=req.learning_rate,
-                batch_size=req.batch_size,
+            from enigma_engine.training import (
+                build_dispatch_context,
+                run_training,
             )
 
-            model = state.engine.model
-            tokenizer = state.engine.tokenizer
-            trainer = Trainer(model, tokenizer, config)
-
-            # Wire progress callback
             def on_progress(pct: int, msg: str):
                 with _training_lock:
                     _training_state["progress"] = pct
@@ -1075,11 +1143,13 @@ async def start_training(req: TrainRequest):
                     _training_state["epoch"] = epoch + 1
                     _training_state["loss"] = loss
 
-            trainer.on_progress = on_progress
-            trainer.on_epoch_complete = on_epoch_complete
+            ctx = build_dispatch_context(
+                engine=state.engine,
+                on_progress=on_progress,
+                on_epoch_complete=on_epoch_complete,
+            )
 
-            data = data_path.read_text(encoding="utf-8")
-            trainer.train(data)
+            run_training(job, ctx)
 
             with _training_lock:
                 _training_state.update({
@@ -1101,8 +1171,9 @@ async def start_training(req: TrainRequest):
 
     return {
         "status": "started",
+        "mode": job.mode,
         "data_file": req.data_file,
-        "epochs": req.epochs,
+        "epochs": job.training.epochs,
     }
 
 

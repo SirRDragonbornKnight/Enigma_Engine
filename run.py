@@ -12,6 +12,7 @@ Commands:
 
 import argparse
 import copy
+import json
 import os
 import subprocess
 import sys
@@ -97,6 +98,7 @@ Examples:
   python run.py --chat                            CLI chat (requires trained model)
   python run.py --chat --model models/my.pth      Chat with specific model
   python run.py --train data/training.txt         Train model on text data
+    python run.py --config train.yaml               Train using dispatcher config
   python run.py --train data/qa.jsonl --epochs 20 Train with custom epochs
   python run.py --train-tokenizer data/training.txt  Train BPE tokenizer first
   python run.py --train-tokenizer data/ --utf8-bytes Train byte-level BPE
@@ -121,6 +123,9 @@ Examples:
                         help="Generation temperature for --chat (e.g. 0.7)")
     parser.add_argument("--train", type=str, nargs="?", const="auto", default=None,
                         metavar="DATA_PATH", help="Train model (path to .txt or .jsonl)")
+    parser.add_argument("--config", type=str, default=None,
+                        help="Training config file (.yaml/.yml/.json) for dispatcher-based training"
+                             " (can be used standalone or with --train)")
     parser.add_argument("--train-tokenizer", type=str, nargs="?", const="auto", default=None,
                         metavar="DATA_PATH", help="Train BPE tokenizer on data")
     parser.add_argument("--model", type=str, default=None, help="Path to model file")
@@ -177,9 +182,14 @@ Examples:
     elif args.analyze_tokenizer is not None:
         run_analyze_tokenizer(args.analyze_tokenizer)
     elif args.train is not None:
-        run_train(args.train, args.model, args.model_size, args.epochs, args.batch_size, args.lr,
-                  golden_eval=args.golden_eval, seed=args.seed,
-                  deterministic=args.deterministic, resume=args.resume)
+        if args.config:
+            run_train_config(args.config, args.model, args.model_size, args.resume)
+        else:
+            run_train(args.train, args.model, args.model_size, args.epochs, args.batch_size, args.lr,
+                      golden_eval=args.golden_eval, seed=args.seed,
+                      deterministic=args.deterministic, resume=args.resume)
+    elif args.config:
+        run_train_config(args.config, args.model, args.model_size, args.resume)
     elif args.serve:
         cors = None
         if args.cors_origins:
@@ -645,6 +655,140 @@ def run_train(data_path: str, model_path: str, model_size: str,
         
     except Exception as e:
         print(f"\n  [ERROR] Training failed: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+
+def _load_dispatch_payload(data: object, mode: str) -> object:
+    """Thin wrapper around the shared dispatcher payload helper."""
+    from enigma_engine.training import materialize_dispatch_payload
+
+    return materialize_dispatch_payload(data, mode)
+
+
+def run_train_config(
+    config_path: str,
+    model_path: str | None,
+    model_size: str,
+    resume: str | None = None,
+):
+    """Run training via the unified training dispatcher config."""
+    print("\n" + "=" * 50)
+    print("  Enigma AI Engine - Train Model (Config)")
+    print("=" * 50 + "\n")
+
+    try:
+        import torch
+        from enigma_engine.core.model import MODEL_PRESETS
+        from enigma_engine.core.model_registry import safe_load_weights
+        from enigma_engine.core.reward_functions import reasoning_reward
+        from enigma_engine.core.safe_save import atomic_torch_save
+        from enigma_engine.core.tokenizer import get_tokenizer
+        from enigma_engine.training import (
+            TrainingJobConfig,
+            build_dispatch_context,
+            load_training_config_raw,
+            run_training,
+        )
+
+        raw_job = load_training_config_raw(config_path)
+        mode = raw_job.get("mode")
+        if resume and raw_job.get("resume_from") is None:
+            raw_job["resume_from"] = resume
+
+        # CLI config path currently does not construct the extra runtime
+        # objects required by these modes.
+        if mode in {"vision", "audio", "rlhf", "self_play", "adaptive"}:
+            raise ValueError(
+                f"Mode '{mode}' is not supported from run.py --config yet. "
+                "Use API/GUI wiring for this mode until dispatcher context "
+                "construction is completed."
+            )
+
+        # Load payload from file path when config.data points to a local file.
+        raw_job["data"] = _load_dispatch_payload(raw_job.get("data"), str(mode))
+        job = TrainingJobConfig.model_validate(raw_job)
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        print(f"  Mode: {job.mode}")
+        print(f"  Device: {device}")
+
+        print("\n  Loading tokenizer...")
+        tokenizer = get_tokenizer("auto")
+        print(f"  Tokenizer: {type(tokenizer).__name__} (vocab: {tokenizer.vocab_size})")
+
+        # Create or load model
+        if model_path and Path(model_path).exists():
+            print(f"\n  Loading existing model from {model_path}...")
+            checkpoint = safe_load_weights(model_path, map_location=device)
+            if "config" in checkpoint:
+                from enigma_engine.core.model import ForgeConfig
+                config_dict = checkpoint["config"]
+                model_config = ForgeConfig(**{k: v for k, v in config_dict.items()
+                                              if k in ForgeConfig.__dataclass_fields__})
+            else:
+                model_config = MODEL_PRESETS.get(model_size, MODEL_PRESETS["small"])
+
+            from enigma_engine.core.model import Enigma
+            model = Enigma(config=model_config)
+            state_dict = checkpoint.get("model_state_dict") or checkpoint.get("state_dict")
+            if state_dict is None:
+                raise ValueError("Checkpoint missing 'model_state_dict' or 'state_dict' key")
+            model.load_state_dict(state_dict, strict=False)
+        else:
+            print(f"\n  Creating new '{model_size}' model...")
+            preset = copy.deepcopy(MODEL_PRESETS.get(model_size, MODEL_PRESETS["small"]))
+            if not tokenizer.vocab_size or tokenizer.vocab_size < 1:
+                raise ValueError(f"Tokenizer returned invalid vocab_size: {tokenizer.vocab_size}")
+            preset.vocab_size = tokenizer.vocab_size
+            from enigma_engine.core.model import Enigma
+            model = Enigma(config=preset)
+
+        model = model.to(device)
+
+        context = build_dispatch_context(
+            model=model,
+            tokenizer=tokenizer,
+            # GRPO/ReMax/ReST require a reward signal; this default keeps
+            # config-run parity with the existing reasoning alignment flow.
+            reward_fn=reasoning_reward,
+        )
+
+        result = run_training(job, context)
+
+        if job.mode == "lora":
+            print("\n  LoRA training complete!")
+            print(f"  Adapter saved: {result.get('adapter_path', 'unknown')}")
+            print(f"  Result: {result.get('train_result', result)}")
+            return
+
+        output_path = Path("models") / f"enigma_{model_size}_{job.mode}.pth"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        save_data = {
+            "model_state_dict": model.state_dict(),
+            "config": {
+                "vocab_size": model.config.vocab_size,
+                "dim": model.config.dim,
+                "n_layers": model.config.n_layers,
+                "n_heads": model.config.n_heads,
+                "n_kv_heads": model.config.n_kv_heads,
+                "hidden_dim": model.config.hidden_dim,
+                "max_seq_len": model.config.max_seq_len,
+                "dropout": model.config.dropout,
+                "use_rope": model.config.use_rope,
+                "use_rms_norm": model.config.use_rms_norm,
+                "use_swiglu": model.config.use_swiglu,
+            },
+            "dispatcher_mode": job.mode,
+        }
+        atomic_torch_save(save_data, output_path)
+        print("\n  Config training complete!")
+        print(f"  Model saved: {output_path}")
+        print(f"  Result: {result}")
+
+    except Exception as e:
+        print(f"\n  [ERROR] Config training failed: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

@@ -332,6 +332,19 @@ class TestAutoResearchAPIParity:
 class TestTraining:
     """Test training status and trigger endpoints."""
 
+    @staticmethod
+    def _install_mock_engine():
+        from enigma_engine.api.server import _training_state, state
+
+        mock_engine = MagicMock()
+        mock_engine.model = object()
+        mock_engine.tokenizer = object()
+        old_engine = state.engine
+        old_active = _training_state.get("active")
+        state.engine = mock_engine
+        _training_state["active"] = False
+        return state, _training_state, old_engine, old_active
+
     def test_training_status_idle(self, client):
         """Training status when no training is active."""
         resp = client.get("/api/training/status")
@@ -349,6 +362,180 @@ class TestTraining:
         assert resp.status_code == 503
         data = resp.json()
         assert "error" in data
+
+    def test_train_rejects_both_mode_and_data_file(self, client):
+        """The API contract exposes two mutually exclusive request shapes."""
+        state, training_state, old_engine, old_active = self._install_mock_engine()
+        try:
+            resp = client.post(
+                "/api/train",
+                json={
+                    "mode": "dpo",
+                    "data_file": "training.txt",
+                    "data": [{"prompt": "p", "chosen": "c", "rejected": "r"}],
+                },
+            )
+            assert resp.status_code == 422
+            assert "data_file" in resp.text and "mode" in resp.text
+        finally:
+            state.engine = old_engine
+            training_state["active"] = old_active or False
+
+    def test_train_rejects_neither_mode_nor_data_file(self, client):
+        state, training_state, old_engine, old_active = self._install_mock_engine()
+        try:
+            resp = client.post("/api/train", json={})
+            assert resp.status_code == 422
+            assert "data_file" in resp.text and "mode" in resp.text
+        finally:
+            state.engine = old_engine
+            training_state["active"] = old_active or False
+
+    def test_train_rejects_invalid_dispatch_config_before_thread_start(
+        self,
+        client,
+        monkeypatch,
+    ):
+        """Bad config-body requests should fail at the HTTP boundary, not after 200 started."""
+        state, training_state, old_engine, old_active = self._install_mock_engine()
+        thread_started = {"value": False}
+
+        class _SentinelThread:
+            def __init__(self, target=None, daemon=True, *args, **kwargs):
+                self._target = target
+
+            def start(self):
+                thread_started["value"] = True
+                if self._target is not None:
+                    self._target()
+
+        monkeypatch.setattr("threading.Thread", _SentinelThread)
+        try:
+            resp = client.post(
+                "/api/train",
+                json={
+                    "mode": "dpo",
+                },
+            )
+            assert resp.status_code == 422
+            assert thread_started["value"] is False
+            assert "non-empty list of preference rows" in resp.text
+        finally:
+            state.engine = old_engine
+            training_state["active"] = old_active or False
+
+    def test_train_dispatcher_routes_dpo_config(self, client, monkeypatch):
+        """Config-body with mode=dpo should reach the dispatcher."""
+        from enigma_engine.api.server import _training_state, state
+        captured: dict = {}
+
+        def fake_run_training(config, ctx):
+            captured["config"] = config
+            captured["ctx"] = ctx
+            return {"ok": True}
+
+        # Drive the threaded path synchronously so the test sees the call.
+        class _SyncThread:
+            def __init__(self, target, daemon=True):
+                self._target = target
+
+            def start(self):
+                self._target()
+
+        monkeypatch.setattr(
+            "enigma_engine.training.run_training", fake_run_training
+        )
+        monkeypatch.setattr("threading.Thread", _SyncThread)
+
+        mock_engine = MagicMock()
+        mock_engine.model = object()
+        mock_engine.tokenizer = object()
+        old_engine = state.engine
+        old_active = _training_state.get("active")
+        state.engine = mock_engine
+        _training_state["active"] = False
+        try:
+            resp = client.post(
+                "/api/train",
+                json={
+                    "mode": "dpo",
+                    "data": [
+                        {"prompt": "p", "chosen": "c", "rejected": "r"}
+                    ],
+                    "training": {"epochs": 1},
+                },
+            )
+            assert resp.status_code == 200, resp.text
+            body = resp.json()
+            assert body["status"] == "started"
+            assert body["mode"] == "dpo"
+            assert captured["config"].mode == "dpo"
+            assert captured["config"].data == [
+                {"prompt": "p", "chosen": "c", "rejected": "r"}
+            ]
+        finally:
+            state.engine = old_engine
+            _training_state["active"] = old_active or False
+
+    def test_train_legacy_data_file_routes_to_sft(self, tmp_path, client, monkeypatch):
+        """Legacy data_file path should route through dispatcher with mode='sft'."""
+        from enigma_engine.api.server import (
+            PROJECT_ROOT,
+            _training_state,
+            state,
+        )
+        captured: dict = {}
+
+        def fake_run_training(config, ctx):
+            captured["config"] = config
+            return {"ok": True}
+
+        class _SyncThread:
+            def __init__(self, target, daemon=True):
+                self._target = target
+
+            def start(self):
+                self._target()
+
+        # Stage a fake training file under data/.
+        data_dir = PROJECT_ROOT / "data"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        fake_data = data_dir / "_test_legacy_routing.txt"
+        fake_data.write_text("hello world", encoding="utf-8")
+
+        monkeypatch.setattr(
+            "enigma_engine.training.run_training", fake_run_training
+        )
+        monkeypatch.setattr("threading.Thread", _SyncThread)
+
+        mock_engine = MagicMock()
+        mock_engine.model = object()
+        mock_engine.tokenizer = object()
+        old_engine = state.engine
+        old_active = _training_state.get("active")
+        state.engine = mock_engine
+        _training_state["active"] = False
+        try:
+            resp = client.post(
+                "/api/train",
+                json={
+                    "data_file": "_test_legacy_routing.txt",
+                    "epochs": 2,
+                },
+            )
+            assert resp.status_code == 200, resp.text
+            body = resp.json()
+            assert body["mode"] == "sft"
+            assert captured["config"].mode == "sft"
+            assert captured["config"].data == "hello world"
+            assert captured["config"].training.epochs == 2
+        finally:
+            state.engine = old_engine
+            _training_state["active"] = old_active or False
+            try:
+                fake_data.unlink()
+            except OSError:
+                pass
 
 
 # ---------------------------------------------------------------------------
