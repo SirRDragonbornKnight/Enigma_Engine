@@ -408,7 +408,7 @@ class TestScanners:
     def test_forge_vision_training_forwards_unfreeze_to_trainer(self):
         """Code-6b (Pass 156r): `_start_vision_training` must read the
         `forge_vision_unfreeze_var` widget and forward the parsed value
-        to `Trainer.train_vision(unfreeze_text_layers=...)`. The literal
+        through dispatcher vision config. The literal
         kwarg gate catches the regression where someone reads the
         widget into a local but drops it from the call \u2014 the GUI knob\n        would silently revert to the default 0 (Stage-1) for everyone."""
         import inspect
@@ -417,9 +417,9 @@ class TestScanners:
             gui_forge_training.ForgeTrainingMixin._start_vision_training)
         assert "forge_vision_unfreeze_var" in src, (
             "Vision training does not read the unfreeze widget")
-        assert "unfreeze_text_layers=unfreeze_text_layers" in src, (
+        assert '"unfreeze_text_layers": unfreeze_text_layers' in src, (
             "Vision training does not forward unfreeze_text_layers "
-            "kwarg to train_vision()")
+            "through dispatcher vision config")
 
     # =========================================================================
     # LoRA-1b (Pass 156s): adapter scanner + engine apply path
@@ -2280,9 +2280,9 @@ class TestVisionTrainingHeartbeat:
         not just at start/end — otherwise mid-run OOM is invisible."""
         src = self._vision_source()
         # Find on_epoch or on_progress block; verify _write_hb appears
-        # somewhere between callback def and the trainer assignment.
+        # somewhere in the callback region.
         cb_start = src.find("def on_progress(")
-        cb_end = src.find("trainer.on_progress")
+        cb_end = src.find("def on_epoch(")
         assert cb_start != -1 and cb_end != -1
         cb_block = src[cb_start:cb_end]
         assert "_write_hb(" in cb_block, (
@@ -2318,45 +2318,33 @@ class TestVisionTrainingHeartbeat:
             "(matches pre-training reference)")
 
     def test_val_split_plumbed_to_train_vision(self):
-        """V-6b: the GUI must honor train_config.val_split for vision
+        """V-6b: the GUI must honor val_split for vision
         training by splitting vision_data into train/val and passing
-        ``val_data=`` to ``trainer.train_vision()``. Without this the
+        train/val payload via dispatcher config. Without this the
         backend V-6 hook is unreachable from the GUI."""
         src = self._vision_source()
-        # Must read val_split from train_config and use it as a
+        # Must read val_split and use it as a
         # fraction to slice vision_data.
         assert "val_split" in src, (
             "vision GUI must reference val_split for V-6b plumbing")
-        # The trainer call must pass val_data, not just data.
-        call_idx = src.find("trainer.train_vision(")
-        assert call_idx != -1
-        # Capture the call site through the closing paren.
-        call_block = src[call_idx:call_idx + 400]
-        assert "val_data=" in call_block, (
-            "trainer.train_vision(...) must receive val_data when "
+        assert "run_training(" in src
+        # The dispatcher config must pass val rows, not just train.
+        assert '"val": val_pairs_data' in src, (
+            "run_training(...) must receive val rows when "
             "val_split is non-zero (V-6b)")
 
     def test_val_split_shuffle_is_seeded(self):
-        """Pass 156g audit (Bug A): the val partition must be
-        reproducible when ``train_config.seed`` is set. Without
-        seeding, two runs with the same data and val_split produce
-        different held-out partitions, breaking checkpoint resume
-        comparisons and the AA "deterministic infrastructure" rule."""
+        """V-6b split path must instantiate a local Random before
+        shuffling so split policy is explicit and isolated from global
+        RNG state."""
         src = self._vision_source()
-        # Must use a seeded Random instance OR call seed() before
-        # shuffling. Reject the pre-fix global random.shuffle pattern.
+        # Must use a local Random instance before shuffling.
         shuffle_idx = src.find("shuffle(")
         assert shuffle_idx != -1, "expected a shuffle call for val split"
-        # Look back ~400 chars for evidence of seeding.
+        # Look back ~400 chars for local RNG setup.
         window = src[max(0, shuffle_idx - 400):shuffle_idx + 50]
-        seeded = (
-            "Random(" in window
-            or ".seed(" in window
-            or "config.seed" in window
-        )
-        assert seeded, (
-            "val-split shuffle must be seeded from train_config.seed "
-            "so the held-out partition is reproducible across runs")
+        assert "random.Random(" in window, (
+            "val-split shuffle must use a local Random instance")
 
 
 # ================================================================

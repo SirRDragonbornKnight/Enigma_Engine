@@ -189,9 +189,15 @@ def run_training(config: TrainingJobConfig | dict[str, Any], ctx: DispatchContex
             raise ValueError("vision mode requires DispatchContext.vision_encoder")
         trainer = Trainer(ctx.model, ctx.tokenizer, train_cfg)
         _apply_callbacks(trainer, ctx)
+        vision_data = job.data
+        val_data = None
+        if isinstance(vision_data, dict):
+            val_data = vision_data.get("val")
+            vision_data = vision_data.get("train", [])
         return trainer.train_vision(
             vision_encoder=ctx.vision_encoder,
-            data=job.data,
+            data=vision_data,
+            val_data=val_data,
             unfreeze_text_layers=job.vision.unfreeze_text_layers,
         )
 

@@ -1028,8 +1028,6 @@ class ForgeTrainingMixin:
                 from enigma_engine.core.model import Enigma
                 from enigma_engine.core.model_presets import ForgeConfig
                 from enigma_engine.core.tokenizer import get_tokenizer
-                from enigma_engine.core.training import (
-                    Trainer, TrainingConfig)
                 from enigma_engine.core.vision_encoder import (
                     VisionEncoder, VISION_PRESETS)
 
@@ -1091,25 +1089,7 @@ class ForgeTrainingMixin:
                 ]
 
                 forge_params = self._read_forge_train_params()
-                train_config = TrainingConfig(
-                    epochs=epochs,
-                    batch_size=1,  # Vision trains per-pair
-                    learning_rate=lr,
-                    max_grad_accumulation=forge_params["max_grad_accumulation"],
-                    use_gradient_checkpointing=forge_params["use_gradient_checkpointing"],
-                    use_sequence_packing=True,
-                    ce_chunk_size=forge_params["ce_chunk_size"],
-                    use_compile=True,
-                    rolling_best_k=forge_params["rolling_best_k"],
-                    general_mix_ratio=forge_params["general_mix_ratio"],
-                    general_data=forge_params["general_data"],
-                    val_split=forge_params["val_split"],
-                    save_every=max(1, epochs // 5),
-                    checkpoint_dir=str(MODELS_DIR / "checkpoints"),
-                    use_amp=torch.cuda.is_available(),
-                    run_evaluation=True)
-
-                trainer = Trainer(model, tokenizer, train_config)
+                _trainer_ref: list = []
 
                 # Pass 156z9at: pre-vision auto-checkpoint, ONLY when
                 # Stage-2 (``unfreeze_text_layers > 0``) will mutate
@@ -1157,7 +1137,8 @@ class ForgeTrainingMixin:
                         r_m = int(remaining // 60)
                         r_s = int(remaining % 60)
                         eta = f"  |  ETA {r_m}m {r_s:02d}s"
-                    best = trainer.state.best_loss
+                    t = _trainer_ref[0] if _trainer_ref else None
+                    best = t.state.best_loss if t else float("inf")
                     import math as _math
                     best_str = (f"  |  best {best:.4f}"
                                 if not _math.isinf(best) else "")
@@ -1166,32 +1147,28 @@ class ForgeTrainingMixin:
                         f"loss {loss:.4f}{best_str}  |  "
                         f"{mins}m {secs:02d}s{eta}")
 
-                trainer.on_progress = on_progress
-                trainer.on_epoch_complete = on_epoch
+                def on_trainer_ready(t) -> None:
+                    _trainer_ref.append(t)
+                    self._active_trainer = t
 
                 self._log("Training vision encoder...\n")
-                self._active_trainer = trainer
 
-                # V-6b: honor train_config.val_split for vision training.
+                # V-6b: honor Forge val_split for vision training.
                 # train_vision() backend gained val_data in V-6 (Pass 156g);
                 # plumb the GUI-controlled fraction through here. Small
                 # datasets fall back to no-val gracefully (need >=2 pairs
                 # to leave at least one each side).
                 #
-                # Pass 156g audit (Bug A): seed the shuffle from
-                # train_config.seed when set so the held-out partition
-                # is reproducible across runs. Without this, checkpoint
-                # resume compares val_loss against a baseline computed
-                # on a *different* val partition — the comparison is
-                # noise. Falls back to an unseeded local Random when no
-                # seed is configured (matches train_vision()'s own
-                # per-epoch shuffle policy).
+                # Seed is currently not exposed in the Forge vision UI,
+                # so hold-out split uses an unseeded local Random here.
+                # This matches train_vision()'s own per-epoch shuffle
+                # policy when no config seed is set.
                 val_split_frac = float(
-                    getattr(train_config, "val_split", 0.0) or 0.0)
+                    forge_params["val_split"] or 0.0)
                 val_pairs_data = None
                 train_pairs_data = vision_data
                 if val_split_frac > 0 and len(vision_data) >= 2:
-                    seed = getattr(train_config, "seed", None)
+                    seed = None
                     rng = random.Random(seed) if seed is not None else random.Random()
                     _shuffled = list(vision_data)
                     rng.shuffle(_shuffled)
@@ -1205,11 +1182,50 @@ class ForgeTrainingMixin:
                         f"(val_split={val_split_frac:.2f}, "
                         f"seed={seed})\n")
 
-                state = trainer.train_vision(
+                from enigma_engine.training.dispatch import (
+                    build_dispatch_context, run_training)
+                ctx = build_dispatch_context(
+                    model=model,
+                    tokenizer=tokenizer,
                     vision_encoder=v_encoder,
-                    data=train_pairs_data,
-                    val_data=val_pairs_data,
-                    unfreeze_text_layers=unfreeze_text_layers)
+                    on_progress=on_progress,
+                    on_epoch_complete=on_epoch,
+                    on_trainer_ready=on_trainer_ready,
+                )
+                config_dict = {
+                    "mode": "vision",
+                    "data": {
+                        "train": train_pairs_data,
+                        "val": val_pairs_data,
+                    },
+                    "training": {
+                        "epochs": epochs,
+                        "batch_size": 1,
+                        "learning_rate": lr,
+                        "max_grad_accumulation": forge_params[
+                            "max_grad_accumulation"],
+                        "use_gradient_checkpointing": forge_params[
+                            "use_gradient_checkpointing"],
+                        "use_sequence_packing": True,
+                        "ce_chunk_size": forge_params["ce_chunk_size"],
+                        "use_compile": True,
+                        "rolling_best_k": forge_params["rolling_best_k"],
+                        "general_mix_ratio": forge_params[
+                            "general_mix_ratio"],
+                        "general_data": (
+                            forge_params["general_data"] or ""),
+                        "val_split": forge_params["val_split"],
+                        "save_every": max(1, epochs // 5),
+                        "checkpoint_dir": str(
+                            MODELS_DIR / "checkpoints"),
+                        "use_amp": torch.cuda.is_available(),
+                        "run_evaluation": True,
+                    },
+                    "vision": {
+                        "unfreeze_text_layers": unfreeze_text_layers,
+                    },
+                }
+                state = run_training(config_dict, ctx)
 
                 # Save model with vision projection weights
                 from enigma_engine.core.safe_save import atomic_torch_save

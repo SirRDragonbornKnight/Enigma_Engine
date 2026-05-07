@@ -181,6 +181,20 @@ class TrainingJobConfig(BaseModel):
             cls._require_non_empty_string(row.get("chosen", ""), mode, "chosen")
             cls._require_non_empty_string(row.get("rejected", ""), mode, "rejected")
 
+    @classmethod
+    def _validate_multimodal_rows(
+        cls, mode: str, rows: Any, field_name: str = "data"
+    ) -> None:
+        if not isinstance(rows, list) or not rows:
+            raise ValueError(
+                f"mode '{mode}' expects '{field_name}' to be a non-empty list of rows"
+            )
+        for row in rows:
+            if not isinstance(row, dict):
+                raise ValueError(
+                    f"mode '{mode}' rows must be dict objects"
+                )
+
     @model_validator(mode="after")
     def _validate_mode_data(self) -> "TrainingJobConfig":
         if self.mode == "sft":
@@ -201,15 +215,17 @@ class TrainingJobConfig(BaseModel):
                     )
 
         if self.mode in {"vision", "audio"}:
-            if not isinstance(self.data, list) or not self.data:
-                raise ValueError(
-                    f"mode '{self.mode}' expects 'data' to be a non-empty list of rows"
-                )
-            for row in self.data:
-                if not isinstance(row, dict):
+            if isinstance(self.data, dict):
+                train_rows = self.data.get("train")
+                self._validate_multimodal_rows(
+                    self.mode, train_rows, field_name="data.train")
+                val_rows = self.data.get("val")
+                if val_rows is not None and not isinstance(val_rows, list):
                     raise ValueError(
-                        f"mode '{self.mode}' rows must be dict objects"
+                        f"mode '{self.mode}' expects 'data.val' to be a list when provided"
                     )
+            else:
+                self._validate_multimodal_rows(self.mode, self.data)
 
         if self.mode == "lora":
             if isinstance(self.data, str):

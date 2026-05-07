@@ -213,6 +213,66 @@ def test_run_training_vision_requires_encoder() -> None:
         )
 
 
+def test_run_training_vision_accepts_train_val_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeTrainer:
+        def __init__(self, model, tokenizer, config):
+            self.on_progress = None
+            self.on_epoch_complete = None
+            self.on_loss = None
+
+        def train_vision(
+            self,
+            vision_encoder,
+            data,
+            unfreeze_text_layers,
+            val_data=None,
+        ):
+            captured["data"] = data
+            captured["val_data"] = val_data
+            captured["unfreeze"] = unfreeze_text_layers
+            return {"ok": True}
+
+    monkeypatch.setattr("enigma_engine.training.dispatch.Trainer", FakeTrainer)
+
+    result = run_training(
+        {
+            "mode": "vision",
+            "data": {
+                "train": [{"image": "a.png", "text": "x"}],
+                "val": [{"image": "b.png", "text": "y"}],
+            },
+            "vision": {"unfreeze_text_layers": 2},
+        },
+        DispatchContext(
+            model=object(),
+            tokenizer=object(),
+            vision_encoder=object(),
+        ),
+    )
+
+    assert result == {"ok": True}
+    assert captured["data"] == [{"image": "a.png", "text": "x"}]
+    assert captured["val_data"] == [{"image": "b.png", "text": "y"}]
+    assert captured["unfreeze"] == 2
+
+
+def test_training_job_config_vision_rejects_non_list_val() -> None:
+    with pytest.raises(ValueError, match="data.val"):
+        TrainingJobConfig.model_validate(
+            {
+                "mode": "vision",
+                "data": {
+                    "train": [{"image": "a.png", "text": "x"}],
+                    "val": "bad",
+                },
+            }
+        )
+
+
 def test_run_training_experimental_requires_opt_in() -> None:
     with pytest.raises(ValueError, match="experimental"):
         run_training(
