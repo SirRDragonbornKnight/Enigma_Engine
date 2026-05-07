@@ -2636,15 +2636,6 @@ class ForgeNewModesMixin:
                         return reward_model.score(
                             prompt, response, tokenizer, device)
 
-                    from enigma_engine.core.rl_training import (
-                        ReMaxTrainer, ReMaxConfig)
-                    rl_cfg = ReMaxConfig(
-                        epochs=epochs,
-                        learning_rate=lr,
-                    )
-                    rl_trainer = ReMaxTrainer(
-                        model, tokenizer, reward_fn, rl_cfg)
-
                 _phase2_start = [_time.monotonic()]
 
                 def _rl_progress(p, m):
@@ -2664,33 +2655,29 @@ class ForgeNewModesMixin:
                             p, f"{algo} {p}%{eta}")
                         _last_t[0] = now
 
-                if algo == "GRPO":
-                    def on_trainer_ready(t) -> None:
-                        self._active_trainer = t
+                def on_trainer_ready(t) -> None:
+                    self._active_trainer = t
 
-                    from enigma_engine.training.dispatch import (
-                        build_dispatch_context, run_training)
-                    ctx = build_dispatch_context(
-                        model=model,
-                        tokenizer=tokenizer,
-                        reward_fn=reward_fn,
-                        on_progress=_rl_progress,
-                        on_trainer_ready=on_trainer_ready,
-                    )
-                    config_dict = {
-                        "mode": "grpo",
-                        "data": prompts,
-                        "training": {
-                            "epochs": epochs,
-                            "learning_rate": lr,
-                            "use_amp": torch.cuda.is_available(),
-                        },
-                    }
-                    rl_result = run_training(config_dict, ctx)
-                else:
-                    rl_trainer.on_progress = _rl_progress
-                    self._active_trainer = rl_trainer
-                    rl_result = rl_trainer.train(prompts)
+                from enigma_engine.training.dispatch import (
+                    build_dispatch_context, run_training)
+                ctx = build_dispatch_context(
+                    model=model,
+                    tokenizer=tokenizer,
+                    reward_fn=reward_fn,
+                    on_progress=_rl_progress,
+                    on_trainer_ready=on_trainer_ready,
+                )
+                mode_name = "grpo" if algo == "GRPO" else "remax"
+                config_dict = {
+                    "mode": mode_name,
+                    "data": prompts,
+                    "training": {
+                        "epochs": epochs,
+                        "learning_rate": lr,
+                        "use_amp": torch.cuda.is_available(),
+                    },
+                }
+                rl_result = run_training(config_dict, ctx)
 
                 final_reward = rl_result.get('final_reward', 0)
                 self._log(

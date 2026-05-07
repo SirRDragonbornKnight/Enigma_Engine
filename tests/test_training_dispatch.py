@@ -296,6 +296,58 @@ def test_run_training_grpo_requires_reward_fn() -> None:
         )
 
 
+def test_run_training_remax_requires_reward_fn() -> None:
+    with pytest.raises(ValueError, match="requires DispatchContext.reward_fn"):
+        run_training(
+            {
+                "mode": "remax",
+                "allow_experimental": True,
+                "data": ["prompt"],
+            },
+            DispatchContext(model=object(), tokenizer=object()),
+        )
+
+
+def test_run_training_remax_routes_to_trainer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeReMaxTrainer:
+        def __init__(self, model, tokenizer, reward_fn, config):
+            self.on_progress = None
+            self.on_epoch_complete = None
+            self.on_loss = None
+            captured["reward_fn"] = reward_fn
+            captured["n_responses"] = config.n_responses
+
+        def train(self, prompts):
+            captured["prompts"] = prompts
+            return {"ok": True}
+
+    monkeypatch.setattr("enigma_engine.training.dispatch.ReMaxTrainer", FakeReMaxTrainer)
+
+    result = run_training(
+        {
+            "mode": "remax",
+            "allow_experimental": True,
+            "data": ["prompt-a", "prompt-b"],
+            "remax": {
+                "n_responses": 5,
+            },
+        },
+        DispatchContext(
+            model=object(),
+            tokenizer=object(),
+            reward_fn=lambda p, r: 0.0,
+        ),
+    )
+
+    assert result == {"ok": True}
+    assert captured["prompts"] == ["prompt-a", "prompt-b"]
+    assert captured["n_responses"] == 5
+
+
 def test_run_training_materializes_jsonl_data_path(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
