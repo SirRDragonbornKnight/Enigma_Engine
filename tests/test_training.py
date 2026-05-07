@@ -2583,6 +2583,291 @@ class TestSmartBackgroundTrainer:
             "quiet periods")
 
 
+# =============================================================================
+# TEACH-1c (Pass 156z9bj): corrections-as-SFT ingestion
+# =============================================================================
+
+class TestCorrectionsIngestion:
+    """`BackgroundTrainer.ingest_corrections_file` reads GUI-FIX rows
+    as positive SFT examples through the existing replay path."""
+
+    @staticmethod
+    def _write_jsonl(path, rows):
+        import json
+        with path.open("w", encoding="utf-8") as fh:
+            for row in rows:
+                fh.write(json.dumps(row) + "\n")
+
+    def test_no_path_returns_zero(self, tmp_path):
+        from enigma_engine.router import BackgroundTrainer
+        bt = BackgroundTrainer()
+        assert bt.corrections_path is None
+        assert bt.ingest_corrections_file() == 0
+        assert len(bt.replay_buffer) == 0
+
+    def test_missing_file_returns_zero(self, tmp_path):
+        from enigma_engine.router import BackgroundTrainer
+        bt = BackgroundTrainer(corrections_path=tmp_path / "nope.jsonl")
+        assert bt.ingest_corrections_file() == 0
+        assert len(bt.replay_buffer) == 0
+
+    def test_ingests_right_response_as_positive_example(self, tmp_path):
+        from enigma_engine.router import BackgroundTrainer
+        path = tmp_path / "corrections.jsonl"
+        self._write_jsonl(path, [
+            {"prompt": "what is 2+2", "wrong_response": "5",
+             "right_response": "4", "modality": "text"},
+            {"prompt": "capital of france", "wrong_response": "London",
+             "right_response": "Paris", "modality": "text"},
+        ])
+        bt = BackgroundTrainer(corrections_path=path)
+        added = bt.ingest_corrections_file()
+        assert added == 2
+        assert len(bt.replay_buffer) == 2
+        # The correction's right_response is the example response —
+        # wrong_response must NOT leak in. Behaviour, not structure.
+        responses = {ex.response for ex in bt.replay_buffer}
+        assert responses == {"4", "Paris"}
+        assert all(ex.source == "correction" for ex in bt.replay_buffer)
+        assert all(ex.score == 1.0 for ex in bt.replay_buffer)
+
+    def test_re_ingest_is_idempotent(self, tmp_path):
+        from enigma_engine.router import BackgroundTrainer
+        path = tmp_path / "corrections.jsonl"
+        self._write_jsonl(path, [
+            {"prompt": "p", "wrong_response": "w", "right_response": "r"},
+        ])
+        bt = BackgroundTrainer(corrections_path=path)
+        assert bt.ingest_corrections_file() == 1
+        # Second call with no new rows must add nothing.
+        assert bt.ingest_corrections_file() == 0
+        assert len(bt.replay_buffer) == 1
+
+    def test_appended_row_is_picked_up_on_next_call(self, tmp_path):
+        import json
+        from enigma_engine.router import BackgroundTrainer
+        path = tmp_path / "corrections.jsonl"
+        self._write_jsonl(path, [
+            {"prompt": "a", "wrong_response": "x", "right_response": "1"},
+        ])
+        bt = BackgroundTrainer(corrections_path=path)
+        assert bt.ingest_corrections_file() == 1
+        # Append a new row (simulates user clicking FIX again).
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(
+                {"prompt": "b", "wrong_response": "y", "right_response": "2"}
+            ) + "\n")
+        assert bt.ingest_corrections_file() == 1
+        assert len(bt.replay_buffer) == 2
+        assert {ex.response for ex in bt.replay_buffer} == {"1", "2"}
+
+    def test_truncated_file_resets_offset(self, tmp_path):
+        from enigma_engine.router import BackgroundTrainer
+        path = tmp_path / "corrections.jsonl"
+        self._write_jsonl(path, [
+            {"prompt": "a", "wrong_response": "x", "right_response": "1"},
+            {"prompt": "b", "wrong_response": "y", "right_response": "2"},
+        ])
+        bt = BackgroundTrainer(corrections_path=path)
+        assert bt.ingest_corrections_file() == 2
+        # User clears the file and starts fresh.
+        self._write_jsonl(path, [
+            {"prompt": "c", "wrong_response": "z", "right_response": "3"},
+        ])
+        # Smaller file → offset must reset; new row gets ingested.
+        assert bt.ingest_corrections_file() == 1
+        # Latest example present.
+        assert any(ex.response == "3" for ex in bt.replay_buffer)
+
+    def test_malformed_rows_skipped_valid_kept(self, tmp_path):
+        from enigma_engine.router import BackgroundTrainer
+        path = tmp_path / "corrections.jsonl"
+        # Mix of: missing right_response, bad JSON, blank, valid, valid.
+        with path.open("w", encoding="utf-8") as fh:
+            fh.write('{"prompt": "p1", "right_response": ""}\n')
+            fh.write('not json at all\n')
+            fh.write('\n')
+            fh.write('{"prompt": "p2", "right_response": "good"}\n')
+            fh.write('{"prompt": "", "right_response": "missing prompt"}\n')
+            fh.write('{"prompt": "p3", "right_response": "also good"}\n')
+        bt = BackgroundTrainer(corrections_path=path)
+        added = bt.ingest_corrections_file()
+        assert added == 2
+        responses = {ex.response for ex in bt.replay_buffer}
+        assert responses == {"good", "also good"}
+
+    def test_ingest_collects_dpo_pairs_from_corrections(self, tmp_path):
+        from enigma_engine.router import BackgroundTrainer
+        path = tmp_path / "corrections.jsonl"
+        self._write_jsonl(path, [
+            {
+                "prompt": "what is 2+2",
+                "wrong_response": "5",
+                "right_response": "4",
+            },
+            {
+                "prompt": "capital of france",
+                "wrong_response": "London",
+                "right_response": "Paris",
+            },
+        ])
+        bt = BackgroundTrainer(corrections_path=path)
+        assert bt.ingest_corrections_file() == 2
+        assert len(bt.dpo_pairs) == 2
+        assert bt.dpo_pairs[0] == {
+            "prompt": "what is 2+2",
+            "chosen": "4",
+            "rejected": "5",
+        }
+
+    def test_ingest_skips_dpo_pair_when_wrong_missing(self, tmp_path):
+        from enigma_engine.router import BackgroundTrainer
+        path = tmp_path / "corrections.jsonl"
+        self._write_jsonl(path, [
+            {
+                "prompt": "p1",
+                "right_response": "r1",
+            },
+            {
+                "prompt": "p2",
+                "wrong_response": "w2",
+                "right_response": "r2",
+            },
+        ])
+        bt = BackgroundTrainer(corrections_path=path)
+        assert bt.ingest_corrections_file() == 2
+        assert bt.dpo_pairs == [{
+            "prompt": "p2",
+            "chosen": "r2",
+            "rejected": "w2",
+        }]
+
+    def test_maybe_train_dpo_pairs_noop_below_threshold(self):
+        from enigma_engine.router import BackgroundTrainer
+
+        bt = BackgroundTrainer(dpo_min_pairs=2)
+        bt.dpo_pairs.append({
+            "prompt": "p",
+            "chosen": "c",
+            "rejected": "r",
+        })
+
+        class _ShouldNotConstruct:
+            def __init__(self):
+                raise AssertionError("_create_dpo_trainer should not run")
+
+        bt._create_dpo_trainer = _ShouldNotConstruct  # type: ignore[method-assign]
+        assert bt._maybe_train_dpo_pairs() == 0
+        assert len(bt.dpo_pairs) == 1
+
+    def test_maybe_train_dpo_pairs_runs_and_consumes_pairs(self):
+        from types import SimpleNamespace
+        from enigma_engine.router import BackgroundTrainer
+
+        called = {}
+
+        class _FakeTrainer:
+            def train_dpo(self, pairs, beta=0.1, loss_type="dpo"):
+                called["pairs"] = list(pairs)
+                called["beta"] = beta
+                called["loss_type"] = loss_type
+                return SimpleNamespace()
+
+        bt = BackgroundTrainer(dpo_min_pairs=2, dpo_beta=0.25, dpo_loss_type="apo_zero")
+        bt.model = object()  # non-None gate
+        bt.tokenizer = object()  # non-None gate
+        bt.dpo_pairs.extend([
+            {"prompt": "p1", "chosen": "c1", "rejected": "r1"},
+            {"prompt": "p2", "chosen": "c2", "rejected": "r2"},
+        ])
+        bt._create_dpo_trainer = lambda: _FakeTrainer()  # type: ignore[method-assign]
+
+        trained = bt._maybe_train_dpo_pairs()
+        assert trained == 2
+        assert called["pairs"] == [
+            {"prompt": "p1", "chosen": "c1", "rejected": "r1"},
+            {"prompt": "p2", "chosen": "c2", "rejected": "r2"},
+        ]
+        assert called["beta"] == 0.25
+        assert called["loss_type"] == "apo_zero"
+        assert bt.dpo_pairs == []
+
+    def test_maybe_train_dpo_pairs_requeues_on_failure(self):
+        from enigma_engine.router import BackgroundTrainer
+
+        class _BoomTrainer:
+            def train_dpo(self, pairs, beta=0.1, loss_type="dpo"):
+                raise RuntimeError("boom")
+
+        bt = BackgroundTrainer(dpo_min_pairs=2)
+        bt.model = object()  # non-None gate
+        bt.tokenizer = object()  # non-None gate
+        original = [
+            {"prompt": "p1", "chosen": "c1", "rejected": "r1"},
+            {"prompt": "p2", "chosen": "c2", "rejected": "r2"},
+        ]
+        bt.dpo_pairs.extend(original)
+        bt._create_dpo_trainer = lambda: _BoomTrainer()  # type: ignore[method-assign]
+
+        assert bt._maybe_train_dpo_pairs() == 0
+        assert bt.dpo_pairs == original
+
+    def test_retrain_on_replay_calls_ingest(self):
+        """Wire-site gate: `_retrain_on_replay` must invoke
+        `ingest_corrections_file()` so corrections written since the
+        last tick land in the replay buffer for THIS pass, not next.
+        Structural — exercising the live retrain loop requires a real
+        model + optimizer; behavioural coverage of the helper itself
+        is in the tests above.
+        """
+        import inspect
+        from enigma_engine.router import BackgroundTrainer
+        src = inspect.getsource(BackgroundTrainer._retrain_on_replay)
+        assert "ingest_corrections_file" in src, (
+            "_retrain_on_replay does not call ingest_corrections_file — "
+            "GUI FIX corrections never reach the replay buffer")
+
+    def test_retrain_on_replay_calls_maybe_train_dpo_pairs(self):
+        """Wire-site gate for TEACH-1d: replay tick must invoke
+        `_maybe_train_dpo_pairs()` after ingestion so correction rows
+        with wrong/right pairs can reach `Trainer.train_dpo(...)`.
+        Structural — behavioural DPO replay coverage lives in tests
+        above.
+        """
+        import inspect
+        from enigma_engine.router import BackgroundTrainer
+        src = inspect.getsource(BackgroundTrainer._retrain_on_replay)
+        assert "_maybe_train_dpo_pairs" in src, (
+            "_retrain_on_replay does not call _maybe_train_dpo_pairs — "
+            "DPO correction pairs stay dead infrastructure")
+
+    def test_router_create_trainer_wires_default_corrections_path(self, tmp_path, monkeypatch):
+        """`ModRouter._create_trainer` must auto-resolve the repo-default
+        corrections path when the file exists, mirroring the anchor
+        boot pattern. Library default stays None for test isolation."""
+        from enigma_engine import router as router_mod
+        # Point default at a tmp file that exists.
+        fake_path = tmp_path / "corrections.jsonl"
+        fake_path.write_text("", encoding="utf-8")
+        monkeypatch.setattr(router_mod, "_DEFAULT_CORRECTIONS_PATH", fake_path)
+        r = router_mod.ModRouter(enable_training=True)
+        try:
+            assert r.trainer is not None
+            assert r.trainer.corrections_path == fake_path
+        finally:
+            # No need to start/stop — we only constructed.
+            pass
+
+    def test_router_create_trainer_skips_when_file_absent(self, tmp_path, monkeypatch):
+        from enigma_engine import router as router_mod
+        # Point default at a non-existent path.
+        fake_path = tmp_path / "does_not_exist.jsonl"
+        monkeypatch.setattr(router_mod, "_DEFAULT_CORRECTIONS_PATH", fake_path)
+        r = router_mod.ModRouter(enable_training=True)
+        assert r.trainer is not None
+        assert r.trainer.corrections_path is None
+
+
 class TestCurriculumSeparators:
     """Curriculum examples are properly separated for parsing."""
 

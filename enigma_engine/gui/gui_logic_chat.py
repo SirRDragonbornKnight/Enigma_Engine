@@ -15,6 +15,7 @@ import os
 import threading
 import time
 import traceback
+from datetime import datetime, timezone
 from pathlib import Path
 from tkinter import filedialog
 from typing import Any
@@ -226,6 +227,9 @@ class LogicChatMixin:
         gui_ctx = self._build_gui_context()
         _msg_for_research = msg
         _web_access_on = getattr(self, "web_access", False)
+        _pending_exchange_image_path = str(
+            getattr(self, "_pending_correction_image_path", "") or ""
+        ).strip()
 
         def _gen():
             try:
@@ -377,6 +381,10 @@ class LogicChatMixin:
                     {"role": "user", "content": msg})
                 self.history.append(
                     {"role": "assistant", "content": clean_text})
+                self._last_exchange_prompt = msg
+                self._last_exchange_wrong_response = clean_text
+                self._last_exchange_image_path = _pending_exchange_image_path
+                self._pending_correction_image_path = ""
 
                 # Trim history to prevent unbounded RAM growth
                 self._trim_chat_history()
@@ -561,6 +569,94 @@ class LogicChatMixin:
         self._save_model_context()
         self._auto_save_session()
 
+    def _append_correction_jsonl(
+            self,
+            row: dict[str, Any],
+            target_path: Path | None = None) -> None:
+        """Append one correction row to corrections.jsonl.
+
+        Uses bounded I/O (tail-byte check + append) so repeated saves
+        stay O(1) per row instead of rewriting the full file each time.
+        """
+        path = target_path or (DATA_DIR / "corrections.jsonl")
+        line = json.dumps(row, ensure_ascii=False) + "\n"
+        encoded = line.encode("utf-8")
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("ab+") as handle:
+                handle.seek(0, os.SEEK_END)
+                size = handle.tell()
+                if size > 0:
+                    handle.seek(-1, os.SEEK_END)
+                    if handle.read(1) != b"\n":
+                        handle.write(b"\n")
+                handle.write(encoded)
+        except OSError as exc:
+            raise OSError(f"failed writing correction store: {exc}") from exc
+
+    def _record_correction_for_last_exchange(self, right_response: str) -> bool:
+        """Store a correction for the most recent user/assistant exchange."""
+        corrected = (right_response or "").strip()
+        if not corrected:
+            self._chat_system("Enter a corrected answer first.")
+            return False
+        if len(self.history) < 2:
+            self._chat_system("No assistant reply available to correct yet.")
+            return False
+        if not (
+            self.history[-1].get("role") == "assistant"
+            and self.history[-2].get("role") == "user"
+        ):
+            self._chat_system("Last exchange is not a user/assistant pair.")
+            return False
+
+        prompt = str(self.history[-2].get("content", "")).strip()
+        wrong_response = str(self.history[-1].get("content", "")).strip()
+        if not prompt or not wrong_response:
+            self._chat_system("Cannot save correction for an empty exchange.")
+            return False
+
+        exchange_image_path = ""
+        if (
+            getattr(self, "_last_exchange_prompt", "") == prompt
+            and getattr(self, "_last_exchange_wrong_response", "") == wrong_response
+        ):
+            exchange_image_path = str(
+                getattr(self, "_last_exchange_image_path", "") or ""
+            ).strip()
+        modality = "vision" if exchange_image_path else "text"
+
+        row = {
+            "prompt": prompt,
+            "wrong_response": wrong_response,
+            "right_response": corrected,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "modality": modality,
+            "model_path": getattr(self, "model_path", ""),
+            "session_path": getattr(self, "_current_session_path", ""),
+        }
+        if exchange_image_path:
+            row["image_path"] = exchange_image_path
+        try:
+            self._append_correction_jsonl(row)
+        except OSError as exc:
+            self._chat_error(str(exc))
+            return False
+
+        self._chat_system("Correction saved to data/corrections.jsonl")
+        return True
+
+    def _save_last_correction_from_input(self):
+        """Capture correction text from chat input for the last assistant reply."""
+        try:
+            corrected = self.chat_input.get("1.0", "end").strip()
+        except Exception:
+            corrected = ""
+        if not self._record_correction_for_last_exchange(corrected):
+            return
+        self.chat_input.delete("1.0", "end")
+        self._auto_resize_input()
+
     def _chat_append(self, *tag_text_pairs):
         """Append multiple (tag, text) pairs to chat display."""
         if len(tag_text_pairs) % 2 != 0:
@@ -713,6 +809,10 @@ class LogicChatMixin:
             self._stop_generation()
         self._reset_display()
         self.history.clear()
+        self._pending_correction_image_path = ""
+        self._last_exchange_image_path = ""
+        self._last_exchange_prompt = ""
+        self._last_exchange_wrong_response = ""
         self._update_token_counter()
         # Create a new session path with counter for uniqueness
         MEMORY_DIR.mkdir(parents=True, exist_ok=True)

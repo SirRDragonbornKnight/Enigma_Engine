@@ -20,6 +20,10 @@ This module is consumed by the FORGE Distill mode (GUI) when the
 * :func:`filter_personality_examples` — convenience wrapper that runs
   all three filters and returns kept examples + reject counts per
   reason. Caller decides what to do with the counts (log, fail, etc.).
+* :func:`build_profile_consistency_examples` — deterministic auxiliary
+    SFT examples built from the FORGE quick-profile fields. These give
+    the student a direct, profile-scoped training signal instead of
+    relying only on teacher generations to carry the requested voice.
 
 The thresholds are intentionally tunable via kwargs so future passes
 (P5-pre-2, P5-pre-3) can dial them in without changing the contract.
@@ -357,6 +361,103 @@ def filter_personality_examples(
             continue
         kept.append(ex)
     return kept, counts
+
+
+# =========================================================================
+# Profile consistency examples — deterministic auxiliary SFT examples.
+# =========================================================================
+
+def build_profile_consistency_examples(
+    profile_fields: dict[str, str],
+    *,
+    student_name: str = "",
+) -> list[str]:
+    """Build deterministic training examples from quick-profile fields.
+
+    Personality distillation already uses the quick-profile inputs to
+    steer the *teacher* system prompt, but without direct student-side
+    examples the requested voice lives only indirectly inside teacher
+    generations. This helper turns the user-selected profile fields
+    into a small set of stable SFT examples that regularize the run
+    toward the requested identity/voice.
+
+    Input keys are the FORGE quick-profile labels ("Personality",
+    "Tone", "Expertise", "Response style", "Example phrases").
+    Unknown or blank keys are ignored. Returns [] when no substantive
+    fields are provided.
+    """
+    normalized = {
+        key: (value or "").strip()
+        for key, value in profile_fields.items()
+        if (value or "").strip()
+    }
+    if not normalized:
+        return []
+
+    personality = normalized.get("Personality", "")
+    tone = normalized.get("Tone", "")
+    expertise = normalized.get("Expertise", "")
+    response_style = normalized.get("Response style", "")
+    example_phrases = normalized.get("Example phrases", "")
+
+    assistant_name = student_name.strip() or "this assistant"
+    examples: list[str] = []
+
+    intro_parts = []
+    if personality:
+        intro_parts.append(f"comes across as {personality}")
+    if tone:
+        intro_parts.append(f"sounds {tone}")
+    if response_style:
+        intro_parts.append(f"answers in a {response_style} way")
+    if intro_parts:
+        intro_resp = (
+            f"{assistant_name} {' and '.join(intro_parts)}. "
+            "The voice should feel intentional and human rather than "
+            "flat or generic."
+        )
+        examples.append(
+            "User: Describe the kind of assistant you are in two or three sentences.\n"
+            f"Assistant: {intro_resp}"
+        )
+
+    if expertise:
+        examples.append(
+            "User: What kinds of things are you especially good at helping with?\n"
+            f"Assistant: {assistant_name} is especially strong on {expertise}. "
+            "When those topics come up, the reply should feel confident, "
+            "specific, and practically useful."
+        )
+
+    if response_style:
+        examples.append(
+            "User: How do you usually structure your replies?\n"
+            f"Assistant: The default response style is {response_style}. "
+            "That means giving concrete substance first and avoiding vague, "
+            "template-like filler."
+        )
+
+    if example_phrases:
+        examples.append(
+            "User: What phrases naturally fit your voice?\n"
+            f"Assistant: Phrases that fit this voice include: {example_phrases}. "
+            "Use them naturally when they fit, not as forced catchphrases in every reply."
+        )
+
+    if personality or tone:
+        style_parts = []
+        if personality:
+            style_parts.append(personality)
+        if tone:
+            style_parts.append(tone)
+        style_text = " and ".join(style_parts)
+        examples.append(
+            "User: How should you sound when talking to someone casually?\n"
+            f"Assistant: In casual conversation, {assistant_name} should sound {style_text}. "
+            "Keep the voice recognizable across replies instead of drifting back to a neutral assistant script."
+        )
+
+    return examples
 
 
 # =========================================================================

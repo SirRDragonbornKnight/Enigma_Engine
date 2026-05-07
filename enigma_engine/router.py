@@ -32,6 +32,17 @@ _DEFAULT_ANCHOR_PATH = (
     Path(__file__).resolve().parent.parent / "data" / "anchor_examples.jsonl"
 )
 
+# TEACH-1c (Pass 156z9bj): repo-default corrections JSONL path written
+# by the GUI FIX button (`_record_correction_for_last_exchange` in
+# gui_logic_chat.py). BackgroundTrainer ingests new rows from this file
+# on every replay tick and feeds the user-authored `right_response` as
+# a positive SFT example through the existing replay path. Same boot
+# pattern as anchors: ModRouter auto-resolves the path when the file
+# exists, otherwise None keeps the feature off without warn noise.
+_DEFAULT_CORRECTIONS_PATH = (
+    Path(__file__).resolve().parent.parent / "data" / "corrections.jsonl"
+)
+
 # Deferred torch import — loaded on first use to avoid 540 MB idle RAM
 _torch = None
 _torch_lock = threading.Lock()
@@ -113,6 +124,10 @@ class BackgroundTrainer(threading.Thread):
         max_token_length: int = 4096,
         anchor_data_path: str | Path | None = None,
         anchor_idle_interval_seconds: float | None = None,
+        corrections_path: str | Path | None = None,
+        dpo_min_pairs: int = 50,
+        dpo_beta: float = 0.1,
+        dpo_loss_type: str = "dpo",
     ):
         super().__init__(daemon=True)
         self.model = model
@@ -168,6 +183,9 @@ class BackgroundTrainer(threading.Thread):
         # DPO preference pairs: (rejected_example, chosen_response)
         # Can be populated externally for preference training.
         self.dpo_pairs: list[dict[str, str]] = []
+        self.dpo_min_pairs: int = max(1, int(dpo_min_pairs))
+        self.dpo_beta: float = float(dpo_beta)
+        self.dpo_loss_type: str = str(dpo_loss_type)
 
         # Retrain on replay buffer every N examples processed
         self.retrain_interval: int = retrain_interval
@@ -201,6 +219,26 @@ class BackgroundTrainer(threading.Thread):
             else None
         )
         self._last_anchor_replay_at: float = time.monotonic()
+
+        # TEACH-1c (Pass 156z9bj): corrections-as-SFT ingestion. The
+        # GUI FIX button writes one row per correction to the file at
+        # `corrections_path`; `ingest_corrections_file()` reads new
+        # rows on each replay tick and feeds the `right_response` as
+        # a positive `TrainingExample(source="correction")` through
+        # the existing `add_example()` path. Idempotent within a
+        # process via a byte-offset cursor — restart re-ingests, which
+        # is bounded by `replay_buffer_size`.
+        #
+        # TEACH-1d (Pass 156z9bk): when wrong_response is present, the
+        # same ingestion pass also appends one DPO pair
+        # {prompt, chosen=right_response, rejected=wrong_response} to
+        # `self.dpo_pairs`. `_maybe_train_dpo_pairs()` consumes this
+        # list in thresholded batches and calls Trainer.train_dpo().
+        # None disables file ingestion.
+        self.corrections_path: Path | None = (
+            Path(corrections_path) if corrections_path else None
+        )
+        self._corrections_offset: int = 0
 
         # Ensure checkpoint directory exists
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
@@ -556,6 +594,162 @@ class BackgroundTrainer(threading.Thread):
         self._anchor_examples = examples
         return examples
 
+    def ingest_corrections_file(
+        self,
+        path: Path | None = None,
+    ) -> int:
+        """TEACH-1c: read new correction rows as positive SFT examples.
+
+        Reads the JSONL file at *path* (or ``self.corrections_path``)
+        starting from the byte offset where the last call left off,
+        parses each row, and queues a ``TrainingExample`` with
+        ``response = right_response`` and ``source="correction"`` via
+        the existing :meth:`add_example` path. The wrong_response is
+        intentionally NOT used here — surfacing it as a DPO "rejected"
+        example needs a reference model + beta + KL term and lives
+        in :func:`Trainer.train_dpo`; that variant is parked as TEACH-1d.
+
+        Idempotent within a process via the in-memory byte offset.
+        Restart re-ingests every row, which is bounded by
+        ``replay_buffer_size`` and acceptable for v1.
+
+        Returns the number of new examples ingested. Missing file,
+        empty file, or all-rows-malformed return 0 silently (no
+        warn noise — this is a steady-state read, not a config error).
+        """
+        target = Path(path) if path is not None else self.corrections_path
+        if target is None or not target.exists():
+            return 0
+
+        added = 0
+        dpo_added = 0
+        bad_rows = 0
+        try:
+            file_size = target.stat().st_size
+            if file_size <= self._corrections_offset:
+                # File was truncated/replaced — reset and re-read from start
+                # so a hand-cleared corrections.jsonl does not stay invisible.
+                if file_size < self._corrections_offset:
+                    self._corrections_offset = 0
+                else:
+                    return 0
+
+            with target.open("rb") as fh:
+                fh.seek(self._corrections_offset)
+                payload = fh.read()
+                new_offset = self._corrections_offset + len(payload)
+
+            text = payload.decode("utf-8", errors="replace")
+            for raw_line in text.splitlines():
+                line = raw_line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    bad_rows += 1
+                    continue
+                if not isinstance(row, dict):
+                    bad_rows += 1
+                    continue
+                prompt = str(row.get("prompt", "")).strip()
+                right = str(row.get("right_response", "")).strip()
+                if not prompt or not right:
+                    bad_rows += 1
+                    continue
+                self.add_example(
+                    prompt=prompt,
+                    response=right,
+                    score=1.0,
+                    source="correction",
+                )
+                wrong = str(row.get("wrong_response", "")).strip()
+                if wrong:
+                    with self._replay_lock:
+                        self.dpo_pairs.append({
+                            "prompt": prompt,
+                            "chosen": right,
+                            "rejected": wrong,
+                        })
+                    dpo_added += 1
+                added += 1
+
+            self._corrections_offset = new_offset
+        except OSError as exc:
+            logger.warning(
+                "BackgroundTrainer: corrections file %s unreadable (%s)",
+                target, exc,
+            )
+            return 0
+
+        if added:
+            logger.info(
+                "BackgroundTrainer: ingested %d correction(s) + %d "
+                "DPO pair(s) from %s (skipped %d malformed)",
+                added, dpo_added, target, bad_rows,
+            )
+        elif bad_rows:
+            logger.warning(
+                "BackgroundTrainer: %d malformed row(s) in %s, no "
+                "valid corrections ingested this tick",
+                bad_rows, target,
+            )
+        return added
+
+    def _create_dpo_trainer(self):
+        """Build a one-epoch Trainer instance for DPO replay batches."""
+        from enigma_engine.core.training import Trainer, TrainingConfig
+
+        # Keep replay DPO small and stable by design: one epoch over the
+        # queued correction pairs, no periodic checkpoints.
+        cfg = TrainingConfig(
+            epochs=1,
+            batch_size=max(1, min(self.batch_size, len(self.dpo_pairs))),
+            learning_rate=self.learning_rate,
+            save_every=0,
+            save_every_steps=0,
+        )
+        return Trainer(self.model, self.tokenizer, cfg)
+
+    def _maybe_train_dpo_pairs(self) -> int:
+        """Run correction-derived DPO training when threshold is met.
+
+        Returns number of pairs consumed (0 when skipped or failed).
+        """
+        if self.model is None or self.tokenizer is None:
+            return 0
+
+        with self._replay_lock:
+            if len(self.dpo_pairs) < self.dpo_min_pairs:
+                return 0
+            pairs = list(self.dpo_pairs)
+            self.dpo_pairs.clear()
+
+        try:
+            with self._train_lock:
+                trainer = self._create_dpo_trainer()
+                trainer.train_dpo(
+                    pairs,
+                    beta=self.dpo_beta,
+                    loss_type=self.dpo_loss_type,
+                )
+            logger.info(
+                "BackgroundTrainer: DPO replay consumed %d pair(s)",
+                len(pairs),
+            )
+            return len(pairs)
+        except Exception as exc:
+            with self._replay_lock:
+                # Put pairs back at the front so we do not silently lose
+                # user corrections on transient training failures.
+                self.dpo_pairs = pairs + self.dpo_pairs
+            logger.error(
+                "BackgroundTrainer: DPO replay failed (%s)\n%s",
+                exc,
+                traceback.format_exc(),
+            )
+            return 0
+
     def _retrain_on_replay(self) -> None:
         """Retrain on the best examples in the replay buffer (BT-D).
 
@@ -567,6 +761,24 @@ class BackgroundTrainer(threading.Thread):
         """
         if self.model is None or self.optimizer is None:
             return
+
+        # TEACH-1c (Pass 156z9bj): pull any new GUI-FIX corrections
+        # into the replay buffer BEFORE the timestamp reset and the
+        # batch snapshot below, so corrections written since the last
+        # tick are eligible to train on this tick (not the next one).
+        # No-op when corrections_path is None or the file does not
+        # exist; offset-based so re-call is idempotent within process.
+        try:
+            self.ingest_corrections_file()
+        except Exception as exc:
+            logger.warning(
+                "BackgroundTrainer: ingest_corrections_file failed: %s", exc,
+            )
+
+        # TEACH-1d (Pass 156z9bk): correction-derived DPO replay.
+        # Thresholded by `dpo_min_pairs` so tiny correction batches do
+        # not produce unstable preference updates every tick.
+        self._maybe_train_dpo_pairs()
 
         # Continuous-3c audit (Pass 156x2): reset the idle scheduler's
         # cooldown clock at function ENTRY, not on the success path.
@@ -859,7 +1071,19 @@ class ModRouter:
 
     def _create_trainer(self) -> BackgroundTrainer:
         """Create a trainer configured with current router callbacks."""
-        trainer = BackgroundTrainer(anchor_data_path=self.anchor_data_path)
+        # TEACH-1c (Pass 156z9bj): forward repo-default corrections path
+        # when the file exists. Same boot pattern as anchor_data_path —
+        # library default stays None (test isolation, explicit opt-in)
+        # while the production boot site auto-resolves.
+        corrections_path = (
+            _DEFAULT_CORRECTIONS_PATH
+            if _DEFAULT_CORRECTIONS_PATH.exists()
+            else None
+        )
+        trainer = BackgroundTrainer(
+            anchor_data_path=self.anchor_data_path,
+            corrections_path=corrections_path,
+        )
         trainer.inference_idle_check = self._inference_idle_check
         return trainer
 

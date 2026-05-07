@@ -401,6 +401,9 @@ class LogicMediaMixin:
                 ])
             if not path:
                 return
+        # TEACH-1b: carry image provenance into the next user/assistant
+        # exchange so correction capture can tag modality=vision.
+        self._pending_correction_image_path = str(path)
         ext = Path(path).suffix.lower()
         name = Path(path).name
         ts = time.strftime("%H:%M")

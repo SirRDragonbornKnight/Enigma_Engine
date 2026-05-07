@@ -17,6 +17,7 @@ from pathlib import Path
 
 from enigma_engine.core.personality_data import (
     PERSONALITY_PROMPTS,
+    build_profile_consistency_examples,
     filter_personality_examples,
     is_near_duplicate,
     passes_identity_filter,
@@ -307,6 +308,48 @@ class TestFilterPersonalityExamples:
 
 
 # =========================================================================
+# Profile consistency examples (Personality-5 BUILD)
+# =========================================================================
+
+class TestBuildProfileConsistencyExamples:
+    def test_empty_profile_fields_return_no_examples(self):
+        assert build_profile_consistency_examples({}) == []
+        assert build_profile_consistency_examples({"Tone": "   "}) == []
+
+    def test_builds_examples_from_populated_profile_fields(self):
+        examples = build_profile_consistency_examples(
+            {
+                "Personality": "curious, warm, a little dry",
+                "Tone": "casual but direct",
+                "Expertise": "coding and debugging",
+                "Response style": "concise with concrete steps",
+                "Example phrases": "lets cut to it; here is the sharp edge",
+            },
+            student_name="Enigma",
+        )
+
+        assert len(examples) >= 4
+        joined = "\n\n".join(examples)
+        assert "Enigma" in joined
+        assert "curious, warm, a little dry" in joined
+        assert "coding and debugging" in joined
+        assert "lets cut to it" in joined
+        for example in examples:
+            assert example.lower().count("user:") == 1
+            assert example.lower().count("assistant:") == 1
+
+    def test_examples_are_deterministic_for_same_profile(self):
+        fields = {
+            "Personality": "calm and thoughtful",
+            "Tone": "professional",
+            "Expertise": "systems design",
+        }
+        a = build_profile_consistency_examples(fields, student_name="Enigma")
+        b = build_profile_consistency_examples(fields, student_name="Enigma")
+        assert a == b
+
+
+# =========================================================================
 # Wire-site structural test (P5-pre-1)
 # =========================================================================
 
@@ -339,6 +382,14 @@ class TestGuiDistillWireSite:
         assert "is_near_duplicate(" in src
         # Reject counts surfaced to log.
         assert "personality_reject_counts" in src
+
+    def test_distill_builds_profile_consistency_examples(self):
+        from enigma_engine.gui.gui_forge_new_modes import (
+            ForgeNewModesMixin,
+        )
+        src = inspect.getsource(
+            ForgeNewModesMixin._start_distill_training)
+        assert "build_profile_consistency_examples" in src
 
 
 # =========================================================================

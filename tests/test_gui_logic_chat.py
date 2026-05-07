@@ -300,3 +300,272 @@ class TestAutoResearch2Wiring:
         # The post-gen block is wrapped in try/except so a failure falls
         # back to the original `resp`.
         assert "AutoResearch-2 retry failed" in src
+
+
+class TestTeach1aCorrectionStore:
+    """TEACH-1a: persistent correction capture from CORE chat."""
+
+    def test_append_correction_jsonl_creates_file(self, tmp_path, monkeypatch):
+        import enigma_engine.gui.gui_logic_chat as mod
+        monkeypatch.setattr(mod, "DATA_DIR", tmp_path)
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+
+        host = _make_stub_host()
+        host._chat_system = lambda _msg: None
+        host._chat_error = lambda _msg: None
+
+        row = {
+            "prompt": "p",
+            "wrong_response": "w",
+            "right_response": "r",
+            "timestamp": "2026-05-07T00:00:00+00:00",
+            "modality": "text",
+            "model_path": "",
+            "session_path": "",
+        }
+        target = tmp_path / "corrections.jsonl"
+        LogicChatMixin._append_correction_jsonl(host, row, target)
+        lines = target.read_text(encoding="utf-8").splitlines()
+        assert len(lines) == 1
+        assert json.loads(lines[0])["right_response"] == "r"
+
+    def test_append_correction_jsonl_preserves_existing_rows(
+            self, tmp_path, monkeypatch):
+        import enigma_engine.gui.gui_logic_chat as mod
+        monkeypatch.setattr(mod, "DATA_DIR", tmp_path)
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+
+        host = _make_stub_host()
+        host._chat_system = lambda _msg: None
+        host._chat_error = lambda _msg: None
+
+        target = tmp_path / "corrections.jsonl"
+        first = {
+            "prompt": "p1",
+            "wrong_response": "w1",
+            "right_response": "r1",
+            "timestamp": "2026-05-07T00:00:00+00:00",
+            "modality": "text",
+            "model_path": "",
+            "session_path": "",
+        }
+        second = {
+            "prompt": "p2",
+            "wrong_response": "w2",
+            "right_response": "r2",
+            "timestamp": "2026-05-07T00:00:01+00:00",
+            "modality": "text",
+            "model_path": "",
+            "session_path": "",
+        }
+        LogicChatMixin._append_correction_jsonl(host, first, target)
+        LogicChatMixin._append_correction_jsonl(host, second, target)
+
+        rows = [json.loads(x) for x in target.read_text(
+            encoding="utf-8").splitlines()]
+        assert [r["prompt"] for r in rows] == ["p1", "p2"]
+
+    def test_append_correction_jsonl_inserts_missing_newline(
+            self, tmp_path, monkeypatch):
+        import enigma_engine.gui.gui_logic_chat as mod
+        monkeypatch.setattr(mod, "DATA_DIR", tmp_path)
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+
+        host = _make_stub_host()
+        host._chat_system = lambda _msg: None
+        host._chat_error = lambda _msg: None
+
+        target = tmp_path / "corrections.jsonl"
+        target.write_text('{"prompt":"legacy"}', encoding="utf-8")
+        row = {
+            "prompt": "p2",
+            "wrong_response": "w2",
+            "right_response": "r2",
+            "timestamp": "2026-05-07T00:00:01+00:00",
+            "modality": "text",
+            "model_path": "",
+            "session_path": "",
+        }
+
+        LogicChatMixin._append_correction_jsonl(host, row, target)
+        lines = target.read_text(encoding="utf-8").splitlines()
+        assert len(lines) == 2
+        assert json.loads(lines[0])["prompt"] == "legacy"
+        assert json.loads(lines[1])["prompt"] == "p2"
+
+    def test_record_correction_uses_latest_user_assistant_pair(
+            self, tmp_path, monkeypatch):
+        import enigma_engine.gui.gui_logic_chat as mod
+        monkeypatch.setattr(mod, "DATA_DIR", tmp_path)
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+
+        host = _make_stub_host(history=[
+            {"role": "user", "content": "What is 2+2?"},
+            {"role": "assistant", "content": "5"},
+        ])
+        host.model_path = "models/smoke.pth"
+        host._current_session_path = "memory/session_x.json"
+        host._chat_msgs = []
+        host._chat_errs = []
+        host._chat_system = lambda m: host._chat_msgs.append(m)
+        host._chat_error = lambda m: host._chat_errs.append(m)
+        host._append_correction_jsonl = (
+            lambda row, target_path=None:
+            LogicChatMixin._append_correction_jsonl(
+                host, row, target_path))
+
+        ok = LogicChatMixin._record_correction_for_last_exchange(host, "4")
+        assert ok is True
+        assert not host._chat_errs
+        target = tmp_path / "corrections.jsonl"
+        rows = [json.loads(x) for x in target.read_text(
+            encoding="utf-8").splitlines()]
+        assert len(rows) == 1
+        assert rows[0]["prompt"] == "What is 2+2?"
+        assert rows[0]["wrong_response"] == "5"
+        assert rows[0]["right_response"] == "4"
+        assert rows[0]["modality"] == "text"
+
+    def test_record_correction_rejects_missing_pair(self):
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+
+        host = _make_stub_host(history=[])
+        host._chat_msgs = []
+        host._chat_system = lambda m: host._chat_msgs.append(m)
+        host._chat_error = lambda _m: None
+
+        ok = LogicChatMixin._record_correction_for_last_exchange(host, "4")
+        assert ok is False
+        assert any("No assistant reply" in m for m in host._chat_msgs)
+
+    def test_record_correction_marks_vision_with_image_path(
+            self, tmp_path, monkeypatch):
+        import enigma_engine.gui.gui_logic_chat as mod
+        monkeypatch.setattr(mod, "DATA_DIR", tmp_path)
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+
+        host = _make_stub_host(history=[
+            {"role": "user", "content": "what is in this image?"},
+            {"role": "assistant", "content": "it is a cat"},
+        ])
+        host._chat_system = lambda _m: None
+        host._chat_error = lambda _m: None
+        host._last_exchange_prompt = "what is in this image?"
+        host._last_exchange_wrong_response = "it is a cat"
+        host._last_exchange_image_path = "C:/tmp/frame.png"
+        host._append_correction_jsonl = (
+            lambda row, target_path=None:
+            LogicChatMixin._append_correction_jsonl(
+                host, row, target_path))
+
+        ok = LogicChatMixin._record_correction_for_last_exchange(
+            host, "it is a dog")
+        assert ok is True
+        rows = [json.loads(x) for x in (tmp_path / "corrections.jsonl").read_text(
+            encoding="utf-8").splitlines()]
+        assert rows[0]["modality"] == "vision"
+        assert rows[0]["image_path"] == "C:/tmp/frame.png"
+
+    def test_record_correction_uses_text_modality_without_image_context(
+            self, tmp_path, monkeypatch):
+        import enigma_engine.gui.gui_logic_chat as mod
+        monkeypatch.setattr(mod, "DATA_DIR", tmp_path)
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+
+        host = _make_stub_host(history=[
+            {"role": "user", "content": "hello"},
+            {"role": "assistant", "content": "hi"},
+        ])
+        host._chat_system = lambda _m: None
+        host._chat_error = lambda _m: None
+        host._append_correction_jsonl = (
+            lambda row, target_path=None:
+            LogicChatMixin._append_correction_jsonl(
+                host, row, target_path))
+
+        ok = LogicChatMixin._record_correction_for_last_exchange(host, "hey")
+        assert ok is True
+        rows = [json.loads(x) for x in (tmp_path / "corrections.jsonl").read_text(
+            encoding="utf-8").splitlines()]
+        assert rows[0]["modality"] == "text"
+        assert "image_path" not in rows[0]
+
+    def test_save_from_input_clears_box_on_success(self, tmp_path, monkeypatch):
+        import enigma_engine.gui.gui_logic_chat as mod
+        monkeypatch.setattr(mod, "DATA_DIR", tmp_path)
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+
+        class _InputStub:
+            def __init__(self, text):
+                self.text = text
+                self.deleted = False
+
+            def get(self, _a, _b):
+                return self.text
+
+            def delete(self, _a, _b):
+                self.deleted = True
+                self.text = ""
+
+        host = _make_stub_host(history=[
+            {"role": "user", "content": "Q"},
+            {"role": "assistant", "content": "wrong"},
+        ])
+        host.chat_input = _InputStub("right")
+        host._chat_system = lambda _m: None
+        host._chat_error = lambda _m: None
+        host._auto_resize_input = lambda: None
+        host._append_correction_jsonl = (
+            lambda row, target_path=None:
+            LogicChatMixin._append_correction_jsonl(
+                host, row, target_path))
+        host._record_correction_for_last_exchange = (
+            lambda text:
+            LogicChatMixin._record_correction_for_last_exchange(
+                host, text))
+
+        LogicChatMixin._save_last_correction_from_input(host)
+        assert host.chat_input.deleted is True
+
+    def test_core_page_wires_fix_button(self):
+        """Structural gate: CORE toolbar must wire FIX to
+        `_save_last_correction_from_input`."""
+        import inspect
+        from enigma_engine.gui import gui_pages
+        src = inspect.getsource(gui_pages.PagesMixin._build_page_core)
+        assert "_correct_btn" in src
+        assert "_save_last_correction_from_input" in src
+
+    def test_attach_image_sets_pending_correction_image_path(self):
+        """TEACH-1b wire-site: attaching media must persist a pending
+        image path so the next correction can tag modality=vision."""
+        import inspect
+        from enigma_engine.gui.gui_logic_media import LogicMediaMixin
+
+        src = inspect.getsource(LogicMediaMixin._attach_image)
+        assert "_pending_correction_image_path" in src
+
+    def test_new_chat_clears_correction_provenance(self, tmp_path, monkeypatch):
+        """New chat must clear pending/last-exchange correction state."""
+        import enigma_engine.gui.gui_logic_chat as mod
+        monkeypatch.setattr(mod, "MEMORY_DIR", tmp_path)
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+
+        host = _make_stub_host(history=[{"role": "user", "content": "q"}])
+        host._pending_correction_image_path = "C:/tmp/pending.png"
+        host._last_exchange_image_path = "C:/tmp/last.png"
+        host._last_exchange_prompt = "q"
+        host._last_exchange_wrong_response = "wrong"
+        host._reset_display = lambda: None
+        host._update_token_counter = lambda: None
+        host._save_model_context = lambda: None
+        host._refresh_history_list = lambda: None
+        host._chat_system = lambda _m: None
+        host.engine = None
+
+        LogicChatMixin._new_chat(host)
+
+        assert host._pending_correction_image_path == ""
+        assert host._last_exchange_image_path == ""
+        assert host._last_exchange_prompt == ""
+        assert host._last_exchange_wrong_response == ""

@@ -309,6 +309,13 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
             command=self._edit_last_message)
         self._edit_btn.pack(side="left", padx=(4, 0))
 
+        self._correct_btn = themed_button(
+            toolbar, "FIX", style="secondary",
+            width=54, height=32,
+            font=FONT_TINY,
+            command=self._save_last_correction_from_input)
+        self._correct_btn.pack(side="left", padx=(4, 0))
+
         # Right side: voice output + mic input
         self.mic_btn = themed_button(
             toolbar, "\U0001f3a4", style="icon",
@@ -339,6 +346,9 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
         Tooltip(self._reasoning_btn, "Chain-of-thought reasoning on/off")
         Tooltip(self._rag_btn, "Document Q&A — index files for context")
         Tooltip(self._edit_btn, "Edit last message")
+        Tooltip(
+            self._correct_btn,
+            "Save input as correction for the last AI reply")
         Tooltip(self._sidebar_toggle_btn, "Toggle sidebar")
 
         # Exit fullscreen button (hidden by default)
