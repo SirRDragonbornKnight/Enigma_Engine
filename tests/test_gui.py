@@ -3154,8 +3154,19 @@ class TestWindowClose:
         """_on_close should log failures instead of using bare except-pass."""
         from enigma_engine.gui.desktop import EnigmaGUI
         source = inspect.getsource(EnigmaGUI._on_close)
-        assert "except Exception:\n                    pass" not in source
-        assert "except Exception:\n                pass" not in source
+        lines = source.splitlines()
+        for i, line in enumerate(lines[:-1]):
+            if line.strip().startswith("except Exception"):
+                j = i + 1
+                while j < len(lines):
+                    stripped = lines[j].strip()
+                    if stripped and not stripped.startswith("#"):
+                        break
+                    j += 1
+                assert j == len(lines) or lines[j].strip() != "pass", (
+                    "_on_close uses bare `except Exception: pass` and "
+                    "silently drops shutdown failures"
+                )
 
 
 class TestForgeUsesModelsDirConstant:
@@ -3193,18 +3204,33 @@ class TestRouterPortDynamic:
         """mod_start command shows actual router port."""
         from enigma_engine.core import builtin_commands
         source = inspect.getsource(builtin_commands)
-        assert "port 9900" not in source
+        assert 'f"[OK] Router started on port {router.port}"' in source, (
+            "mod.start must format the success message from router.port so "
+            "the reported port stays dynamic."
+        )
 
 
 class TestRouterStartupLogging:
     """Verify router startup failures are logged, not silently swallowed."""
 
     def test_desktop_router_not_bare_pass(self):
-        """Router startup does not use bare except: pass."""
+        """Router startup must log failures, not silently swallow them."""
         from enigma_engine.gui.desktop import EnigmaGUI
         source = inspect.getsource(EnigmaGUI.__init__)
-        # The old pattern was 'except Exception:\n            pass'
-        assert "pass  # Router optional" not in source
+
+        # Guard against `except Exception: pass` with or without comments,
+        # indentation variations, or wrapped formatting.
+        lines = source.splitlines()
+        for i, line in enumerate(lines[:-1]):
+            if line.strip().startswith("except Exception"):
+                assert lines[i + 1].strip() != "pass", (
+                    "Router startup uses bare `except Exception: pass` and "
+                    "silently drops failures"
+                )
+
+        assert "Router startup failed (optional)" in source, (
+            "Router startup exception path must emit a warning log"
+        )
 
 
 class TestExpandingChatDisplay:
@@ -4579,9 +4605,14 @@ class TestInlineSearchEnabledConfig:
         # Structural test: the apply line must be present in the
         # method body. Behavioural coverage at the engine layer is
         # provided by the off-switch tests in test_chat.py.
+        import re
         from enigma_engine.gui.gui_logic import LogicMixin
         src = inspect.getsource(LogicMixin._on_model_loaded)
-        assert "engine.inline_search_enabled" in src, (
+        assert re.search(
+            r'self\.engine\.inline_search_enabled\s*=\s*bool\(\s*'
+            r'getattr\(self,\s*"inline_search_enabled",\s*True\)\s*\)',
+            src,
+        ), (
             "_on_model_loaded must apply the persisted "
             "inline_search_enabled flag to the loaded engine"
         )
@@ -4711,9 +4742,14 @@ class TestInlineSearchSpliceConfig:
         """`_on_model_loaded` must propagate the GUI's saved splice
         flag to the freshly-loaded engine — without this the user's
         on-toggle silently reverts on every model load."""
+        import re
         from enigma_engine.gui.gui_logic import LogicMixin
         src = inspect.getsource(LogicMixin._on_model_loaded)
-        assert "engine.inline_search_splice_enabled" in src, (
+        assert re.search(
+            r'self\.engine\.inline_search_splice_enabled\s*=\s*bool\(\s*'
+            r'getattr\(self,\s*"inline_search_splice_enabled",\s*False\)\s*\)',
+            src,
+        ), (
             "_on_model_loaded must apply the persisted "
             "inline_search_splice_enabled flag to the loaded engine"
         )

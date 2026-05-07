@@ -769,11 +769,280 @@ class TestCLIFlags:
         """run_serve must default to 127.0.0.1, not 0.0.0.0."""
         import inspect
         import importlib
+        import re
         run = importlib.import_module("run")
         source = inspect.getsource(run.run_serve)
-        # Must NOT have host="0.0.0.0" as the default
-        assert 'host="0.0.0.0"' not in source, (
-            "run_serve must not default to 0.0.0.0 — exposes API to network")
+        assert re.search(
+            r'host\s*:\s*str\s*=\s*"127\.0\.0\.1"',
+            source,
+        ), (
+            "run_serve must default host to 127.0.0.1 in its signature — "
+            "absence of one forbidden literal is not enough to prove the "
+            "localhost default.")
+
+    def test_main_routes_standalone_config_to_run_train_config(self, monkeypatch):
+        import importlib
+        run = importlib.import_module("run")
+
+        calls = {}
+
+        def fake_run_train_config(config_path, model_path, model_size, resume):
+            calls["config_path"] = config_path
+            calls["model_path"] = model_path
+            calls["model_size"] = model_size
+            calls["resume"] = resume
+
+        def fail_run_train(*_args, **_kwargs):
+            pytest.fail("run_train should not be called for standalone --config")
+
+        monkeypatch.setattr(run, "run_train_config", fake_run_train_config)
+        monkeypatch.setattr(run, "run_train", fail_run_train)
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["run.py", "--config", "train.yaml", "--model-size", "tiny"],
+        )
+
+        run.main()
+
+        assert calls["config_path"] == "train.yaml"
+        assert calls["model_size"] == "tiny"
+
+    def test_main_prefers_run_train_config_when_train_and_config_both_set(self, monkeypatch):
+        import importlib
+        run = importlib.import_module("run")
+
+        called = {"config": False, "train": False}
+
+        def fake_run_train_config(config_path, model_path, model_size, resume):
+            called["config"] = True
+            assert config_path == "job.yaml"
+
+        def fake_run_train(*_args, **_kwargs):
+            called["train"] = True
+
+        monkeypatch.setattr(run, "run_train_config", fake_run_train_config)
+        monkeypatch.setattr(run, "run_train", fake_run_train)
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["run.py", "--train", "data/training.txt", "--config", "job.yaml"],
+        )
+
+        run.main()
+
+        assert called["config"] is True
+        assert called["train"] is False
+
+    def test_run_train_config_rejects_modes_missing_cli_context(self, tmp_path, capsys):
+        import importlib
+        run = importlib.import_module("run")
+
+        cfg = tmp_path / "job.yaml"
+        cfg.write_text(
+            "\n".join(
+                [
+                    "mode: rlhf",
+                    "allow_experimental: true",
+                    "data:",
+                    "  - test prompt",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        with pytest.raises(SystemExit):
+            run.run_train_config(str(cfg), None, "tiny", None)
+
+        captured = capsys.readouterr()
+        assert "not supported from run.py --config yet" in captured.out
+
+    @pytest.mark.parametrize(
+        "mode,data_lines",
+        [
+            ("vision", ["data:", "  - image: sample.png", "    text: test prompt"]),
+            ("audio", ["data:", "  - audio: sample.wav", "    text: test prompt"]),
+            ("adaptive", ["data:", "  - test prompt"]),
+        ],
+    )
+    def test_run_train_config_rejects_modes_not_yet_wired_in_cli(
+        self,
+        mode,
+        data_lines,
+        tmp_path,
+        capsys,
+    ):
+        import importlib
+        run = importlib.import_module("run")
+
+        cfg = tmp_path / "job.yaml"
+        cfg.write_text(
+            "\n".join(
+                [
+                    f"mode: {mode}",
+                    "allow_experimental: true",
+                    *data_lines,
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        with pytest.raises(SystemExit):
+            run.run_train_config(str(cfg), None, "tiny", None)
+
+        captured = capsys.readouterr()
+        assert "not supported from run.py --config yet" in captured.out
+
+    def test_run_train_config_loads_dpo_jsonl_payload_before_validation(
+        self,
+        tmp_path,
+        monkeypatch,
+    ):
+        import importlib
+        import types
+
+        import torch
+
+        run = importlib.import_module("run")
+
+        data_path = tmp_path / "prefs.jsonl"
+        data_path.write_text(
+            '{"prompt": "p", "chosen": "c", "rejected": "r"}\n',
+            encoding="utf-8",
+        )
+        cfg = tmp_path / "job.yaml"
+        cfg.write_text(
+            "\n".join(
+                [
+                    "mode: dpo",
+                    f"data: {data_path.as_posix()}",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        captured = {}
+
+        class FakeTokenizer:
+            vocab_size = 32
+
+        class FakeModel:
+            def __init__(self, config):
+                self.config = config
+
+            def to(self, _device):
+                return self
+
+            def state_dict(self):
+                return {}
+
+        preset = types.SimpleNamespace(
+            vocab_size=32,
+            dim=8,
+            n_layers=1,
+            n_heads=1,
+            n_kv_heads=1,
+            hidden_dim=16,
+            max_seq_len=32,
+            dropout=0.0,
+            use_rope=True,
+            use_rms_norm=True,
+            use_swiglu=True,
+        )
+
+        def fake_run_training(job, _ctx):
+            captured["data"] = job.data
+            captured["mode"] = job.mode
+            return {"ok": True}
+
+        monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+        monkeypatch.setattr(
+            "enigma_engine.core.model.MODEL_PRESETS",
+            {"tiny": preset, "small": preset},
+        )
+        monkeypatch.setattr("enigma_engine.core.model.Enigma", FakeModel)
+        monkeypatch.setattr("enigma_engine.core.tokenizer.get_tokenizer", lambda _arg: FakeTokenizer())
+        monkeypatch.setattr("enigma_engine.core.safe_save.atomic_torch_save", lambda *_a, **_k: None)
+        monkeypatch.setattr("enigma_engine.training.run_training", fake_run_training)
+
+        run.run_train_config(str(cfg), None, "tiny", None)
+
+        assert captured["mode"] == "dpo"
+        assert captured["data"] == [{"prompt": "p", "chosen": "c", "rejected": "r"}]
+
+    def test_run_train_config_loads_grpo_text_payload_before_validation(
+        self,
+        tmp_path,
+        monkeypatch,
+    ):
+        import importlib
+        import types
+
+        import torch
+
+        run = importlib.import_module("run")
+
+        data_path = tmp_path / "prompts.txt"
+        data_path.write_text("first prompt\n\nsecond prompt\n", encoding="utf-8")
+        cfg = tmp_path / "job.yaml"
+        cfg.write_text(
+            "\n".join(
+                [
+                    "mode: grpo",
+                    f"data: {data_path.as_posix()}",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        captured = {}
+
+        class FakeTokenizer:
+            vocab_size = 32
+
+        class FakeModel:
+            def __init__(self, config):
+                self.config = config
+
+            def to(self, _device):
+                return self
+
+            def state_dict(self):
+                return {}
+
+        preset = types.SimpleNamespace(
+            vocab_size=32,
+            dim=8,
+            n_layers=1,
+            n_heads=1,
+            n_kv_heads=1,
+            hidden_dim=16,
+            max_seq_len=32,
+            dropout=0.0,
+            use_rope=True,
+            use_rms_norm=True,
+            use_swiglu=True,
+        )
+
+        def fake_run_training(job, _ctx):
+            captured["data"] = job.data
+            captured["mode"] = job.mode
+            return {"ok": True}
+
+        monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+        monkeypatch.setattr(
+            "enigma_engine.core.model.MODEL_PRESETS",
+            {"tiny": preset, "small": preset},
+        )
+        monkeypatch.setattr("enigma_engine.core.model.Enigma", FakeModel)
+        monkeypatch.setattr("enigma_engine.core.tokenizer.get_tokenizer", lambda _arg: FakeTokenizer())
+        monkeypatch.setattr("enigma_engine.core.safe_save.atomic_torch_save", lambda *_a, **_k: None)
+        monkeypatch.setattr("enigma_engine.training.run_training", fake_run_training)
+
+        run.run_train_config(str(cfg), None, "tiny", None)
+
+        assert captured["mode"] == "grpo"
+        assert captured["data"] == ["first prompt", "second prompt"]
 
 
 # ── CPU benchmarks (from test_benchmark.py) ──────────────────────────────────
@@ -1025,12 +1294,16 @@ class TestEndToEnd:
 class TestPretrainingDataCollector:
     """Structural tests for collect_pretraining_data.py audit findings."""
 
-    def test_combine_dedup_uses_compact_hash(self):
-        """S789: combine_all_sources must use raw digest bytes, not hex strings."""
+    @staticmethod
+    def _cpd_module_and_combine_source():
         import inspect
         sys.path.insert(0, str(PROJECT_ROOT))
         import collect_pretraining_data as cpd
-        source = inspect.getsource(cpd.combine_all_sources)
+        return cpd, inspect.getsource(cpd.combine_all_sources)
+
+    def test_combine_dedup_uses_compact_hash(self):
+        """S789: combine_all_sources must use raw digest bytes, not hex strings."""
+        _cpd, source = self._cpd_module_and_combine_source()
         # Must use .digest() (compact bytes) not .hexdigest() (2x larger strings)
         assert '.digest()' in source, (
             "S789: combine_all_sources uses hexdigest — switch to digest "
@@ -1038,10 +1311,7 @@ class TestPretrainingDataCollector:
 
     def test_combine_dedup_has_capacity_limit(self):
         """S789: dedup hash set must have a capacity limit to prevent OOM."""
-        import inspect
-        sys.path.insert(0, str(PROJECT_ROOT))
-        import collect_pretraining_data as cpd
-        source = inspect.getsource(cpd.combine_all_sources)
+        _cpd, source = self._cpd_module_and_combine_source()
         assert 'MAX_DEDUP' in source or 'max_dedup' in source, (
             "S789: combine_all_sources has no dedup capacity limit — "
             "will OOM at scale")

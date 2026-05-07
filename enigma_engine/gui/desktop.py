@@ -549,8 +549,8 @@ class EnigmaGUI(
             import torch
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("GC/CUDA cleanup failed during shutdown: %s", exc)
 
         # Release single-instance lock so re-opening works immediately
         _release_instance_lock()

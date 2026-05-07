@@ -24,6 +24,12 @@ def _make_mixin(**overrides):
     obj._history_summary = ""
     return obj
 
+
+def _get_init_common_source() -> str:
+    """Shared structural helper for EnigmaEngine._init_common checks."""
+    from enigma_engine.core.inference import EnigmaEngine
+    return inspect.getsource(EnigmaEngine._init_common)
+
 class TestStreamChatProperties:
     """Verify fundamental stream_chat properties."""
 
@@ -948,9 +954,7 @@ class TestStageB2EngineWiring:
     constructor path created it (``__init__`` vs ``from_model``)."""
 
     def test_init_common_sets_last_search_queries_attribute(self):
-        import inspect
-        from enigma_engine.core.inference import EnigmaEngine
-        src = inspect.getsource(EnigmaEngine._init_common)
+        src = _get_init_common_source()
         assert "self.last_search_queries" in src, (
             "_init_common must initialise last_search_queries so both "
             "__init__ and from_model paths see the attribute. "
@@ -963,22 +967,31 @@ class TestStageB2EngineWiring:
         this, the off-switch only works if the user assigns the
         attribute manually before generating — confusing partial
         feature."""
-        import inspect
-        from enigma_engine.core.inference import EnigmaEngine
-        src = inspect.getsource(EnigmaEngine._init_common)
-        assert "self.inline_search_enabled" in src, (
-            "_init_common must initialise inline_search_enabled so the "
-            "off-switch is reachable on every engine instance.")
-        assert "True" in src.split("self.inline_search_enabled")[1].split("\n")[0], (
-            "Default value must be True (always-on observability — "
-            "preserves Pass 156z9d behaviour).")
+        import re
+        src = _get_init_common_source()
+        # Single regex gate is sufficient: it pins both the attribute
+        # name AND the exact default-on assignment shape. Earlier
+        # versions of this test repeated the same regex twice plus a
+        # weaker substring check — pure noise (Pass 156z9be hygiene).
+        assert re.search(
+            r"self\.inline_search_enabled\s*:\s*bool\s*=\s*True",
+            src,
+        ), (
+            "_init_common must initialise inline_search_enabled with "
+            "an exact default-on assignment so the off-switch is "
+            "reachable on every engine instance (always-on "
+            "observability — preserves Pass 156z9d behaviour).")
 
     def test_generate_text_calls_record_on_main_return_path(self):
         import inspect
+        import re
         from enigma_engine.core.engine_generation import _GenerationMixin
         src = inspect.getsource(_GenerationMixin._generate_text)
         # Native PyTorch return path
-        assert "_record_search_emissions" in src, (
+        assert re.search(
+            r'self\._record_search_emissions\(\s*text\s*,\s*prompt=prompt\s*\)',
+            src,
+        ), (
             "_generate_text must call _record_search_emissions on its "
             "native return path. Pass 156z9d Stage B-2 wire-site test.")
 
@@ -1090,9 +1103,7 @@ class TestB3aSpliceFlagDefaults:
     engine instance regardless of constructor path."""
 
     def test_init_common_sets_splice_flag_false(self):
-        import inspect
-        from enigma_engine.core.inference import EnigmaEngine
-        src = inspect.getsource(EnigmaEngine._init_common)
+        src = _get_init_common_source()
         assert "self.inline_search_splice_enabled" in src, (
             "_init_common must initialise inline_search_splice_enabled "
             "so the opt-in flag is reachable on every engine instance.")
@@ -1822,9 +1833,7 @@ class TestB3cBoundedRecursion:
     def test_max_search_rounds_default_is_three(self):
         """``EnigmaEngine._init_common`` initialises
         ``max_search_rounds = 3`` per the B-3 plan default."""
-        import inspect
-        from enigma_engine.core.inference import EnigmaEngine
-        src = inspect.getsource(EnigmaEngine._init_common)
+        src = _get_init_common_source()
         assert "self.max_search_rounds" in src
         line = src.split("self.max_search_rounds")[1].split("\n")[0]
         assert "3" in line
@@ -2369,9 +2378,7 @@ class TestStageB2bBatchPerPromptAttribution:
         """Engine constructors must initialise the attribute so callers
         can read it without an AttributeError before the first
         ``batch_generate`` call."""
-        import inspect
-        from enigma_engine.core.inference import EnigmaEngine
-        src = inspect.getsource(EnigmaEngine._init_common)
+        src = _get_init_common_source()
         assert "self.last_search_queries_per_prompt" in src, (
             "_init_common must initialise last_search_queries_per_prompt "
             "so every engine has the attribute regardless of "

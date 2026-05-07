@@ -1716,6 +1716,29 @@ class ForgeNewModesMixin:
                             f"quality={pr['quality']}, "
                             f"duplicate={pr['duplicate']}")
 
+                # Personality-5 BUILD: quick-profile fields already
+                # steer the teacher prompt, but without direct student
+                # examples the requested voice survives only indirectly
+                # through teacher generations. Add a small deterministic
+                # profile-scoped example set on the same SFT path.
+                if "personality" in categories:
+                    from enigma_engine.core.personality_data import (
+                        build_profile_consistency_examples,
+                    )
+                    profile_fields = {}
+                    for label, entry in brief_fields.items():
+                        value = entry.get().strip() if hasattr(entry, "get") else ""
+                        if value:
+                            profile_fields[label] = value
+                    profile_examples = build_profile_consistency_examples(
+                        profile_fields,
+                        student_name=student_name,
+                    )
+                    if profile_examples:
+                        all_examples.extend(profile_examples)
+                        self._log(
+                            f"  Personality profile anchors: +{len(profile_examples)} example(s)")
+
                 # Save generated data for reference
                 from enigma_engine.gui.scanners import (
                     DATA_DIR, MODELS_DIR)
