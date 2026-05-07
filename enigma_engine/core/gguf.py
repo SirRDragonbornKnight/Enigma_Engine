@@ -565,7 +565,7 @@ if HAS_NUMPY:
 
             for i in range(n_blocks):
                 offset = i * (2 + block_size // 2)
-                output[offset:offset+2] = scales_fp16[i].view(np.uint8)
+                output[offset:offset+2] = scales_fp16[i:i+1].view(np.uint8)
                 output[offset+2:offset+2+block_size//2] = packed[i]
 
             return output, GGMLType.Q4_0
@@ -599,7 +599,7 @@ if HAS_NUMPY:
 
             for i in range(n_blocks):
                 offset = i * (2 + block_size)
-                output[offset:offset+2] = scales_fp16[i].view(np.uint8)
+                output[offset:offset+2] = scales_fp16[i:i+1].view(np.uint8)
                 output[offset+2:offset+2+block_size] = quantized[i].view(np.uint8)
 
             return output, GGMLType.Q8_0
@@ -607,6 +607,152 @@ if HAS_NUMPY:
         @classmethod
         def quantize_q4_k(cls, data: np.ndarray) -> tuple[np.ndarray, GGMLType]:
             """Quantize to Q4_K format (super blocks with multiple scales)."""
+
+            def _nearest_int(value: float) -> int:
+                return int(np.rint(value))
+
+            def _make_qkx2_quants(
+                values: np.ndarray,
+                weights: np.ndarray,
+            ) -> tuple[float, np.ndarray, float]:
+                levels = np.zeros(32, dtype=np.uint8)
+                aux_levels = np.zeros(32, dtype=np.uint8)
+
+                min_value = float(values.min())
+                max_value = float(values.max())
+                sum_w = float(weights.sum())
+                sum_x = float(np.dot(weights, values))
+
+                if min_value > 0.0:
+                    min_value = 0.0
+                if max_value <= min_value:
+                    return 0.0, levels, -min_value
+
+                iscale = 15.0 / (max_value - min_value)
+                scale = 1.0 / iscale
+                best_error = 0.0
+
+                for index in range(32):
+                    level = _nearest_int(iscale * (float(values[index]) - min_value))
+                    level = max(0, min(15, level))
+                    levels[index] = level
+                    diff = scale * level + min_value - float(values[index])
+                    best_error += float(weights[index]) * diff * diff
+
+                for step in range(21):
+                    iscale = (-1.0 + 0.1 * step + 15.0) / (max_value - min_value)
+                    sum_l = 0.0
+                    sum_l2 = 0.0
+                    sum_xl = 0.0
+                    for index in range(32):
+                        level = _nearest_int(iscale * (float(values[index]) - min_value))
+                        level = max(0, min(15, level))
+                        aux_levels[index] = level
+                        weight = float(weights[index])
+                        sum_l += weight * level
+                        sum_l2 += weight * level * level
+                        sum_xl += weight * level * float(values[index])
+
+                    denom = sum_w * sum_l2 - sum_l * sum_l
+                    if denom <= 0.0:
+                        continue
+
+                    this_scale = (sum_w * sum_xl - sum_x * sum_l) / denom
+                    this_min = (sum_l2 * sum_x - sum_l * sum_xl) / denom
+                    if this_min > 0.0:
+                        this_min = 0.0
+                        this_scale = sum_xl / sum_l2 if sum_l2 > 0.0 else 0.0
+
+                    current_error = 0.0
+                    for index in range(32):
+                        diff = this_scale * int(aux_levels[index]) + this_min - float(values[index])
+                        current_error += float(weights[index]) * diff * diff
+
+                    if current_error < best_error:
+                        levels[:] = aux_levels
+                        best_error = current_error
+                        scale = this_scale
+                        min_value = this_min
+
+                return scale, levels, -min_value
+
+            def _make_qp_quants(
+                values: np.ndarray,
+                weights: np.ndarray,
+            ) -> tuple[float, np.ndarray]:
+                levels = np.zeros(len(values), dtype=np.uint8)
+                max_value = float(values.max(initial=0.0))
+                if max_value < 1e-15:
+                    return 0.0, levels
+
+                iscale = 63.0 / max_value
+                best_mse = 0.0
+                for index in range(len(values)):
+                    level = _nearest_int(iscale * float(values[index]))
+                    level = max(0, min(63, level))
+                    levels[index] = level
+                    diff = float(values[index]) - (level / iscale)
+                    best_mse += float(weights[index]) * diff * diff
+
+                for step in range(-4, 5):
+                    if step == 0:
+                        continue
+                    iscale_candidate = (63.0 + 0.1 * step) / max_value
+                    scale_candidate = 1.0 / iscale_candidate
+                    mse = 0.0
+                    for index in range(len(values)):
+                        level = _nearest_int(iscale_candidate * float(values[index]))
+                        level = max(0, min(63, level))
+                        diff = float(values[index]) - scale_candidate * level
+                        mse += float(weights[index]) * diff * diff
+                    if mse < best_mse:
+                        best_mse = mse
+                        iscale = iscale_candidate
+
+                sum_lx = 0.0
+                sum_l2 = 0.0
+                for index in range(len(values)):
+                    level = _nearest_int(iscale * float(values[index]))
+                    level = max(0, min(63, level))
+                    levels[index] = level
+                    weight = float(weights[index])
+                    sum_lx += weight * float(values[index]) * level
+                    sum_l2 += weight * level * level
+
+                for _ in range(5):
+                    changed = False
+                    for index in range(len(values)):
+                        weight = float(weights[index])
+                        sum_lx_without = sum_lx - weight * float(values[index]) * int(levels[index])
+                        sum_l2_without = sum_l2 - weight * int(levels[index]) * int(levels[index])
+                        if sum_lx_without <= 0.0 or sum_l2_without <= 0.0:
+                            continue
+                        new_level = _nearest_int(float(values[index]) * sum_l2_without / sum_lx_without)
+                        new_level = max(0, min(63, new_level))
+                        if new_level == int(levels[index]):
+                            continue
+                        candidate_lx = sum_lx_without + weight * float(values[index]) * new_level
+                        candidate_l2 = sum_l2_without + weight * new_level * new_level
+                        if candidate_lx * candidate_lx * sum_l2 > sum_lx * sum_lx * candidate_l2:
+                            levels[index] = new_level
+                            sum_lx = candidate_lx
+                            sum_l2 = candidate_l2
+                            changed = True
+                    if not changed:
+                        break
+
+                return (sum_lx / sum_l2) if sum_l2 > 0.0 else 0.0, levels
+
+            def _get_scale_min_k4(scales: bytearray, sub_block_index: int) -> tuple[int, int]:
+                if sub_block_index < 4:
+                    return scales[sub_block_index] & 0x3F, scales[sub_block_index + 4] & 0x3F
+                return (
+                    (scales[sub_block_index + 4] & 0x0F)
+                    | ((scales[sub_block_index - 4] >> 6) << 4),
+                    (scales[sub_block_index + 4] >> 4)
+                    | ((scales[sub_block_index] >> 6) << 4),
+                )
+
             data = data.flatten().astype(np.float32)
             block_size = 256
 
@@ -622,45 +768,59 @@ if HAS_NUMPY:
             for i in range(n_blocks):
                 block = data[i * block_size:(i + 1) * block_size]
 
-                # Split into 8 sub-blocks of 32
-                sub_scales = []
-                sub_mins = []
+                levels = np.zeros(block_size, dtype=np.uint8)
+                mins = np.zeros(8, dtype=np.float32)
+                scales = np.zeros(8, dtype=np.float32)
+                weights_sum = np.zeros(8, dtype=np.float32)
 
                 for j in range(8):
                     sub_block = block[j * 32:(j + 1) * 32]
-                    sub_max = sub_block.max()
-                    sub_min = sub_block.min()
-                    scale = (sub_max - sub_min) / 15.0 if sub_max != sub_min else 1.0
-                    sub_scales.append(scale)
-                    sub_mins.append(sub_min)
+                    avg_abs = np.sqrt(np.dot(sub_block, sub_block) / 32.0)
+                    weights = avg_abs + np.abs(sub_block)
+                    weights_sum[j] = float(weights.sum())
+                    scale, sub_levels, min_value = _make_qkx2_quants(sub_block, weights)
+                    scales[j] = scale
+                    mins[j] = min_value
+                    levels[j * 32:(j + 1) * 32] = sub_levels
 
-                # Super block scale and min
-                d = max(sub_scales) if max(sub_scales) > 0 else 1.0
-                dmin = min(sub_mins)
+                d_block, scale_levels = _make_qp_quants(scales, weights_sum)
+                m_block, min_levels = _make_qp_quants(mins, weights_sum)
 
-                # Write header
-                output.extend(np.float16(d).tobytes())
-                output.extend(np.float16(dmin).tobytes())
-
-                # Pack sub-block scales/mins
-                for s in sub_scales:
-                    output.append(int(np.round(s / d * 63)) & 0x3F)
-                for m in sub_mins:
-                    output.append(int(np.round((m - dmin) / d * 63)) & 0x3F)
-
-                # Quantize data
-                packed = bytearray(128)
+                packed_scales = bytearray(12)
                 for j in range(8):
+                    scale_level = min(63, int(scale_levels[j]))
+                    min_level = min(63, int(min_levels[j]))
+                    if j < 4:
+                        packed_scales[j] = scale_level
+                        packed_scales[j + 4] = min_level
+                    else:
+                        packed_scales[j + 4] = (scale_level & 0x0F) | ((min_level & 0x0F) << 4)
+                        packed_scales[j - 4] |= (scale_level >> 4) << 6
+                        packed_scales[j] |= (min_level >> 4) << 6
+
+                d_value = float(np.float16(d_block))
+                dmin_value = float(np.float16(m_block))
+
+                for j in range(8):
+                    scale_level, min_level = _get_scale_min_k4(packed_scales, j)
+                    sub_scale = d_value * scale_level
+                    if sub_scale == 0.0:
+                        continue
+                    sub_min = dmin_value * min_level
                     sub_block = block[j * 32:(j + 1) * 32]
-                    scale = sub_scales[j]
-                    min_val = sub_mins[j]
+                    for ii in range(32):
+                        level = _nearest_int((float(sub_block[ii]) + sub_min) / sub_scale)
+                        levels[j * 32 + ii] = max(0, min(15, level))
 
-                    for k in range(16):
-                        low = int(np.round((sub_block[k * 2] - min_val) / scale)) & 0xF
-                        high = int(np.round((sub_block[k * 2 + 1] - min_val) / scale)) & 0xF
-                        packed[j * 16 + k] = low | (high << 4)
+                packed_quants = bytearray(128)
+                for j in range(0, block_size, 64):
+                    for l in range(32):
+                        packed_quants[j // 2 + l] = int(levels[j + l]) | (int(levels[j + l + 32]) << 4)
 
-                output.extend(packed)
+                output.extend(np.float16(d_block).tobytes())
+                output.extend(np.float16(m_block).tobytes())
+                output.extend(packed_scales)
+                output.extend(packed_quants)
 
             return np.frombuffer(bytes(output), dtype=np.uint8), GGMLType.Q4_K
 
@@ -696,18 +856,33 @@ if HAS_NUMPY:
             self,
             name: str,
             data: Union[np.ndarray, Any],
-            tensor_type: GGMLType = GGMLType.F32
+            tensor_type: GGMLType = GGMLType.F32,
+            *,
+            shape: Optional[tuple[int, ...]] = None,
         ) -> None:
-            """Add tensor to be written."""
+            """Add tensor to be written.
+
+            ``shape`` overrides the data's array shape. Required for
+            quantized tensors where ``data`` is a 1-D uint8 buffer but
+            llama.cpp needs the LOGICAL shape (rows × cols × …) so it
+            can compute byte sizes via
+            ``ne[0] * ggml_type_size / ggml_blck_size``. Without this
+            override the tensor info advertises ``(byte_count,)`` and
+            llama.cpp computes the wrong file offset for every
+            subsequent tensor (“data is not within the file bounds”).
+            """
             # Convert torch tensor if needed
             if HAS_TORCH and isinstance(data, torch.Tensor):
                 data = data.detach().cpu().numpy()
+
+            if shape is None:
+                shape = data.shape if hasattr(data, 'shape') else ()
 
             self.tensors.append(GGUFTensor(
                 name=name,
                 data=data,
                 type=tensor_type,
-                shape=data.shape if hasattr(data, 'shape') else ()
+                shape=tuple(shape),
             ))
 
         def write(self) -> None:
@@ -950,6 +1125,12 @@ if HAS_NUMPY:
                 gguf_name = convert_tensor_name(name)
                 data = tensor.detach().cpu().numpy()
                 tensor_type = GGMLType.F32
+                # Capture LOGICAL shape before any quantization
+                # flattens to a 1-D uint8 buffer. llama.cpp needs the
+                # original (rows × cols) shape on the tensor-info
+                # record so its quantized-byte-size math lines up with
+                # what we actually wrote.
+                logical_shape = tuple(data.shape)
 
                 # Quantize if needed
                 if self.quantization == "q4_0" and self._should_quantize(gguf_name):
@@ -957,7 +1138,19 @@ if HAS_NUMPY:
                 elif self.quantization == "q8_0" and self._should_quantize(gguf_name):
                     data, tensor_type = GGUFQuantizer.quantize_q8_0(data)
                 elif self.quantization == "q4_k" and self._should_quantize(gguf_name):
-                    data, tensor_type = GGUFQuantizer.quantize_q4_k(data)
+                    if self._can_quantize_q4_k(logical_shape):
+                        data, tensor_type = GGUFQuantizer.quantize_q4_k(data)
+                    else:
+                        # ggml K-quants are row-wise: ne[0] must be a multiple of
+                        # the 256-element super-block size. Our tensor-info writer
+                        # reverses the Python shape, so ne[0] is the LAST logical
+                        # dimension here. Small test models (and some edge tensors)
+                        # often have 64/128-wide rows; forcing Q4_K on them yields a
+                        # file whose tensor byte count disagrees with its logical
+                        # shape and llama.cpp crashes during load. Keep the tensor
+                        # loadable by falling back to F16 for the incompatible cases.
+                        data = data.astype(np.float16)
+                        tensor_type = GGMLType.F16
                 elif self.quantization == "f16":
                     # ARCH-V1g (May 6, 2026): only cast non-norm/non-bias
                     # tensors. llama.cpp's CPU + CUDA backends both
@@ -976,7 +1169,7 @@ if HAS_NUMPY:
                         data = data.astype(np.float16)
                         tensor_type = GGMLType.F16
 
-                writer.add_tensor(gguf_name, data, tensor_type)
+                writer.add_tensor(gguf_name, data, tensor_type, shape=logical_shape)
 
             writer.write()
             logger.info(f"Exported model to {output_path}")
@@ -987,6 +1180,14 @@ if HAS_NUMPY:
             """Check if tensor should be quantized."""
             skip_patterns = ["embd", "norm", "bias"]
             return not any(p in name.lower() for p in skip_patterns)
+
+        def _can_quantize_q4_k(self, shape: tuple[int, ...]) -> bool:
+            """Q4_K is a row-wise 256-element super-block format.
+
+            GGUF tensor-info stores dimensions reversed, so ggml's ``ne[0]`` is the
+            last logical dimension of the NumPy tensor we are exporting.
+            """
+            return bool(shape) and shape[-1] % 256 == 0
 
         def _infer_metadata(self, model: Any, metadata: GGUFMetadata) -> GGUFMetadata:
             """Infer metadata from model config.

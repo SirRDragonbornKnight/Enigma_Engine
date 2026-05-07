@@ -18,12 +18,14 @@ History:
   `tokenizer.ggml.scores` (FLOAT32), added missing
   `{arch}.vocab_size` and `{arch}.attention.layer_norm_rms_epsilon`
   keys. File now LOADS cleanly in llama.cpp; abort gone.
-- ARCH-V1d (open) — Enigma defaults to `use_qk_norm=True` (Qwen3-style).
+- May 6, 2026 — ARCH-V1d SHIPPED. Enigma defaults to
+    `use_qk_norm=True` (Qwen3-style).
   llama.cpp's `llama` arch silently rejects the 4 QK-norm tensors per
   layer, producing `done_getting_tensors: wrong number of tensors`.
   Fix: detect QK-norm and emit `general.architecture=qwen3` plus the
   Qwen3-specific metadata schema.
-- ARCH-V1e (open) — byte-vocab tokenizer with `tokenizer.ggml.model=llama`
+- May 6, 2026 — ARCH-V1e SHIPPED. Byte-vocab tokenizer with
+    `tokenizer.ggml.model=llama`
   has no SentencePiece BPE merges so llama.cpp's tokenizer chokes at
   generation time. Fix: emit a real BPE merges array OR set tokenizer
   model to a no-vocab variant for byte-level models.
@@ -413,8 +415,8 @@ class TestGgufArchConsistency:
 #     exporter emitted `tokenizer.ggml.model="llama"` (SentencePiece),
 #     which is wrong for our byte-level test vocab and crashes
 #     llama.cpp at generation time. These tests gate the writer-side
-#     fix; the actual round-trip test is parked on a llama-cpp-python
-#     upgrade (see TestGgufRoundTrip).
+#     fix; round-trip is now covered by TestGgufRoundTrip and
+#     TestGgufRoundTripLlamaArch.
 # ---------------------------------------------------------------------------
 
 class TestGgufTokenizerEncoding:
@@ -600,8 +602,7 @@ class TestTensorNameMappingIsLlamaStyle:
 # ---------------------------------------------------------------------------
 # 3. Round-trip through llama.cpp -- runs in a subprocess so the C-level
 # abort() triggered by malformed GGUF can't take pytest down with it.
-# Currently expected to FAIL (subprocess returns non-zero) -- strict=True
-# xfail marks come off once ARCH-V1b lands and the round-trip works.
+# Runs in subprocess to isolate any C-level aborts from llama.cpp.
 # ---------------------------------------------------------------------------
 
 _ROUND_TRIP_DRIVER = textwrap.dedent('''
@@ -673,43 +674,18 @@ def _run_round_trip_subprocess(
 
 @skip_no_llama
 class TestGgufRoundTrip:
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "ARCH-V1f (open): writer-side V1c/V1d/V1e all shipped — "
-            "metadata types are correct, arch flips to qwen3 when "
-            "QK-norm is present, and tokenizer.ggml.merges is emitted "
-            "as ARRAY[STRING] for the gpt2 BPE path. Round-trip still "
-            "fails because the bundled llama-cpp-python 0.3.4 binary "
-            "predates qwen3 support in llama.cpp ("
-            "`error loading model architecture: unknown model "
-            "architecture: 'qwen3'`). Closing this xfail requires "
-            "`pip install --upgrade llama-cpp-python` to a version "
-            "with qwen3 support (>=0.3.5 or thereabouts). The export "
-            "side is correct — confirmed via byte-level structural "
-            "tests in TestGgufArchConsistency and TestGgufMetadataTypes."
-        ),
-    )
     def test_f16_round_trips(self, tmp_path):
         rc, stdout, _ = _run_round_trip_subprocess(
             "f16", tmp_path / "tiny_f16.gguf"
         )
         assert rc == 0 and "OK" in stdout
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="ARCH-V1f: see test_f16_round_trips reason (llama-cpp-python upgrade).",
-    )
     def test_q8_0_round_trips(self, tmp_path):
         rc, stdout, _ = _run_round_trip_subprocess(
             "q8_0", tmp_path / "tiny_q8.gguf"
         )
         assert rc == 0 and "OK" in stdout
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="ARCH-V1f: see test_f16_round_trips reason (llama-cpp-python upgrade).",
-    )
     def test_q4_k_round_trips(self, tmp_path):
         rc, stdout, _ = _run_round_trip_subprocess(
             "q4_k", tmp_path / "tiny_q4k.gguf"
@@ -724,9 +700,9 @@ class TestGgufRoundTripLlamaArch:
     V1g f16-norm-preservation fixes work together — a model goes
     Enigma → GGUF → llama-cpp-python → generation, no asserts hit.
 
-    The qwen3 path (TestGgufRoundTrip above) stays xfailed pending
-    a llama-cpp-python upgrade (V1f), but the llama path SHOULD pass
-    on the currently-installed binding (0.3.4)."""
+    The qwen3 path (TestGgufRoundTrip above) is now passing after
+    the ARCH-V1f binding upgrade; this class remains a dedicated
+    llama-arch path gate."""
 
     def test_f16_round_trips_llama_arch(self, tmp_path):
         rc, stdout, stderr = _run_round_trip_subprocess(
@@ -737,17 +713,6 @@ class TestGgufRoundTripLlamaArch:
             f"STDOUT: {stdout}\nSTDERR: {stderr[-2000:]}"
         )
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "ARCH-V1h (open): GGUFQuantizer.quantize_q8_0 crashes on "
-            "scalar-fp16 view conversion ("
-            "`ValueError: Changing the dtype of a 0d array is only "
-            "supported if the itemsize is unchanged`). Pre-existing "
-            "quantizer bug, separate slice from V1c/V1d/V1e/V1g. "
-            "Tracked as ARCH-V1h."
-        ),
-    )
     def test_q8_0_round_trips_llama_arch(self, tmp_path):
         rc, stdout, stderr = _run_round_trip_subprocess(
             "q8_0", tmp_path / "tiny_q8_llama.gguf", use_qk_norm=False,
@@ -757,14 +722,24 @@ class TestGgufRoundTripLlamaArch:
             f"STDOUT: {stdout}\nSTDERR: {stderr[-2000:]}"
         )
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "ARCH-V1h (open): GGUFQuantizer.quantize_q4_k has the same "
-            "scalar-view bug as q8_0. Pre-existing quantizer issue, "
-            "separate slice from V1c/V1d/V1e/V1g."
-        ),
-    )
+    def test_q4_0_round_trips_llama_arch(self, tmp_path):
+        """Behavioural gate for the q4_0 scalar-view fix shipped under
+        ARCH-V1h alongside q8_0. q4_0 had the identical
+        `scales_fp16[i].view(np.uint8)` bug at L568 of gguf.py — fix is
+        the same length-1-slice idiom. Without this test the q4_0 leg
+        of the V1h fix is structurally validated by the q8_0 test only;
+        a regression that re-introduces the 0-d view on q4_0 would
+        slip through. Probed manually post-ship: q4_0 file produces
+        124 KB output and llama_cpp.create_completion returns a valid
+        choice."""
+        rc, stdout, stderr = _run_round_trip_subprocess(
+            "q4_0", tmp_path / "tiny_q4_0_llama.gguf", use_qk_norm=False,
+        )
+        assert rc == 0 and "OK" in stdout, (
+            f"llama-arch q4_0 round-trip failed:\nrc={rc}\n"
+            f"STDOUT: {stdout}\nSTDERR: {stderr[-2000:]}"
+        )
+
     def test_q4_k_round_trips_llama_arch(self, tmp_path):
         rc, stdout, stderr = _run_round_trip_subprocess(
             "q4_k", tmp_path / "tiny_q4k_llama.gguf", use_qk_norm=False,
