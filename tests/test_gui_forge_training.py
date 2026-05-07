@@ -34,3 +34,10 @@ def test_vision_training_routes_through_dispatcher() -> None:
 
     assert "run_training(" in src
     assert re.search(r'"mode"\s*:\s*"vision"', src)
+
+
+def test_lora_training_routes_primary_path_through_dispatcher() -> None:
+    src = inspect.getsource(ForgeTrainingMixin._start_lora_training)
+
+    assert "run_training(" in src
+    assert re.search(r'"mode"\s*:\s*"lora"', src)

@@ -1455,62 +1455,56 @@ class ForgeTrainingMixin:
                 ppl_after = None
                 import time as _time
                 _lora_start_common = [_time.monotonic()]
+                forge_params = self._read_forge_train_params()
                 # Try PEFT LoRA first, fall back to manual
                 try:
-                    from enigma_engine.core.lora_utils import (
-                        LoraConfig as EngineLoraConfig,
-                        LoraTrainer)
-                    lora_cfg = EngineLoraConfig(
-                        rank=lora_rank, alpha=lora_alpha)
-                    lora_trainer = LoraTrainer(
-                        model, tokenizer, lora_config=lora_cfg)
-                    lora_trainer.config.epochs = epochs
-                    lora_trainer.config.learning_rate = lr
-
                     text = Path(data_path).read_text(encoding="utf-8")
                     self._log(f"Data    : {len(text):,} chars loaded")
 
-                    trainable = sum(
-                        p.numel() for p in model.parameters()
-                        if p.requires_grad)
-                    self._log(f"LoRA trainable params: {trainable:,}")
-
-                    def on_epoch(epoch, loss):
+                    def on_loss(loss: float) -> None:
                         if not self.training_active:
                             raise KeyboardInterrupt("Stopped")
                         losses.append(loss)
-                        elapsed = _time.monotonic() - _lora_start_common[0]
-                        mins = int(elapsed // 60)
-                        secs = int(elapsed % 60)
-                        eta = ""
-                        if epoch > 0:
-                            remaining = (elapsed / epoch) * (
-                                epochs - epoch)
-                            r_m = int(remaining // 60)
-                            r_s = int(remaining % 60)
-                            eta = f"  |  ETA {r_m}m {r_s:02d}s"
-                        best = lora_trainer.state.best_loss
-                        import math as _math
-                        best_str = (f"  |  best {best:.4f}"
-                                    if not _math.isinf(best) else "")
-                        self._log(
-                            f"  Epoch {epoch:>3d}/{epochs}  |  "
-                            f"loss {loss:.4f}{best_str}  |  "
-                            f"{mins}m {secs:02d}s{eta}")
 
-                    lora_trainer.on_epoch_complete = on_epoch
+                    def on_trainer_ready(t) -> None:
+                        self._active_trainer = t
+
+                    from enigma_engine.training.dispatch import (
+                        build_dispatch_context, run_training)
+                    ctx = build_dispatch_context(
+                        model=model,
+                        tokenizer=tokenizer,
+                        on_loss=on_loss,
+                        on_trainer_ready=on_trainer_ready,
+                    )
+                    lora_batch_size = forge_params["batch_size"]
+                    if lora_batch_size <= 0:
+                        lora_batch_size = 4
+
+                    config_dict = {
+                        "mode": "lora",
+                        "data": text,
+                        "lora": {
+                            "rank": lora_rank,
+                            "alpha": lora_alpha,
+                            "output_dir": str(MODELS_DIR / "checkpoints"),
+                            "learning_rate": lr,
+                            "batch_size": lora_batch_size,
+                            "epochs": epochs,
+                            "gradient_accumulation_steps": forge_params[
+                                "max_grad_accumulation"],
+                            "max_length": 512,
+                        },
+                    }
+
                     self._log("Training LoRA adapters...\n")
-                    self._active_trainer = lora_trainer
-                    lora_trainer.train(text)
-
-                    # Save adapter weights alongside model
-                    adapter_path = (MODELS_DIR / "checkpoints"
-                                    / f"{model_name}_lora.pth")
-                    adapter_path.parent.mkdir(
-                        parents=True, exist_ok=True)
-                    lora_trainer.save_adapter(str(adapter_path))
-                    self._log(
-                        f"Adapter saved: {adapter_path.name}")
+                    lora_result = run_training(config_dict, ctx)
+                    adapter_path_raw = str(
+                        lora_result.get("adapter_path", ""))
+                    if adapter_path_raw:
+                        adapter_path = Path(adapter_path_raw)
+                        self._log(
+                            f"Adapter saved: {adapter_path.name}")
 
                 except ImportError:
                     # Fall back to standard fine-tuning with frozen layers
@@ -1539,7 +1533,6 @@ class ForgeTrainingMixin:
                     text = Path(data_path).read_text(encoding="utf-8")
                     self._log(f"Data    : {len(text):,} chars loaded")
 
-                    forge_params = self._read_forge_train_params()
                     train_config = TrainingConfig(
                         epochs=epochs,
                         batch_size=forge_params["batch_size"],

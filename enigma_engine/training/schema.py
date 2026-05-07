@@ -112,6 +112,8 @@ class AudioSettings(BaseModel):
 class LoraSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    rank: int = Field(default=8, ge=1, le=128)
+    alpha: int = Field(default=16, ge=1, le=256)
     output_dir: str = "models/lora_adapters"
     learning_rate: float = Field(default=1e-4, gt=0)
     batch_size: int = Field(default=4, ge=1)

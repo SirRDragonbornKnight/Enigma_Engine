@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
-from enigma_engine.core.lora_utils import LoraTrainer
+from enigma_engine.core.lora_utils import LoraConfig, LoraTrainer
 from enigma_engine.core.rl_training import (
     GRPOConfig,
     GRPOTrainer,
@@ -213,9 +213,14 @@ def run_training(config: TrainingJobConfig | dict[str, Any], ctx: DispatchContex
         )
 
     if job.mode == "lora":
+        lora_config = LoraConfig(
+            rank=job.lora.rank,
+            alpha=job.lora.alpha,
+        )
         lora_trainer = LoraTrainer(
             model=ctx.model,
             tokenizer=ctx.tokenizer,
+            lora_config=lora_config,
             output_dir=job.lora.output_dir,
             learning_rate=job.lora.learning_rate,
             batch_size=job.lora.batch_size,

@@ -469,6 +469,7 @@ def test_run_training_lora_saves_adapter(monkeypatch: pytest.MonkeyPatch, tmp_pa
             self,
             model,
             tokenizer,
+            lora_config,
             output_dir,
             learning_rate,
             batch_size,
@@ -477,6 +478,8 @@ def test_run_training_lora_saves_adapter(monkeypatch: pytest.MonkeyPatch, tmp_pa
             min_lr_ratio,
         ):
             calls["output_dir"] = output_dir
+            calls["rank"] = lora_config.rank
+            calls["alpha"] = lora_config.alpha
             self.on_progress = None
             self.on_epoch_complete = None
             self.on_loss = None
@@ -500,6 +503,8 @@ def test_run_training_lora_saves_adapter(monkeypatch: pytest.MonkeyPatch, tmp_pa
             "mode": "lora",
             "data": [{"prompt": "p", "completion": "c"}],
             "lora": {
+                "rank": 12,
+                "alpha": 24,
                 "output_dir": str(tmp_path),
                 "max_length": 256,
             },
@@ -509,6 +514,8 @@ def test_run_training_lora_saves_adapter(monkeypatch: pytest.MonkeyPatch, tmp_pa
 
     assert calls.get("save_called") is True
     assert calls.get("save_path") is not None
+    assert calls["rank"] == 12
+    assert calls["alpha"] == 24
     assert result["train_result"] == {"ok": True}
     assert "adapter_" in Path(result["adapter_path"]).name
 
