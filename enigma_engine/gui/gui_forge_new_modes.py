@@ -2627,15 +2627,6 @@ class ForgeNewModesMixin:
                 if algo == "GRPO":
                     def reward_fn(prompt, response):
                         return reasoning_reward(prompt, response)
-
-                    from enigma_engine.core.rl_training import (
-                        GRPOTrainer, GRPOConfig)
-                    rl_cfg = GRPOConfig(
-                        epochs=epochs,
-                        learning_rate=lr,
-                    )
-                    rl_trainer = GRPOTrainer(
-                        model, tokenizer, reward_fn, rl_cfg)
                 else:
                     if reward_model is None:
                         raise RuntimeError(
@@ -2673,9 +2664,33 @@ class ForgeNewModesMixin:
                             p, f"{algo} {p}%{eta}")
                         _last_t[0] = now
 
-                rl_trainer.on_progress = _rl_progress
-                self._active_trainer = rl_trainer
-                rl_result = rl_trainer.train(prompts)
+                if algo == "GRPO":
+                    def on_trainer_ready(t) -> None:
+                        self._active_trainer = t
+
+                    from enigma_engine.training.dispatch import (
+                        build_dispatch_context, run_training)
+                    ctx = build_dispatch_context(
+                        model=model,
+                        tokenizer=tokenizer,
+                        reward_fn=reward_fn,
+                        on_progress=_rl_progress,
+                        on_trainer_ready=on_trainer_ready,
+                    )
+                    config_dict = {
+                        "mode": "grpo",
+                        "data": prompts,
+                        "training": {
+                            "epochs": epochs,
+                            "learning_rate": lr,
+                            "use_amp": torch.cuda.is_available(),
+                        },
+                    }
+                    rl_result = run_training(config_dict, ctx)
+                else:
+                    rl_trainer.on_progress = _rl_progress
+                    self._active_trainer = rl_trainer
+                    rl_result = rl_trainer.train(prompts)
 
                 final_reward = rl_result.get('final_reward', 0)
                 self._log(
