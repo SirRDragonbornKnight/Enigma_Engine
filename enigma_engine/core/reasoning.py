@@ -220,7 +220,7 @@ def format_reasoning_example(
 
 
 # =============================================================================
-# � INLINE SEARCH (AutoResearch-2 Stage B-1)
+# INLINE SEARCH (AutoResearch-2 Stage B-1)
 # =============================================================================
 
 def extract_search_queries(text: str) -> list[str]:
@@ -271,7 +271,7 @@ def has_search_request(text: str) -> bool:
 
 
 # =============================================================================
-# �🔀 MULTI-STEP REASONING (CoT-D)
+# MULTI-STEP REASONING (CoT-D)
 # =============================================================================
 
 def extract_all_reasoning(text: str) -> list[tuple[str, str]]:

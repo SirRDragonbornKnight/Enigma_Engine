@@ -289,14 +289,14 @@ class TestTrainingConfig:
 
     def test_valid_config(self):
         """Default config should validate without error."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
 
         config = TrainingConfig()
         config.validate()  # Should not raise
 
     def test_bad_epochs(self):
         """epochs < 1 should raise ValueError."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
 
         config = TrainingConfig(epochs=0)
         with pytest.raises(ValueError, match="epochs"):
@@ -304,7 +304,7 @@ class TestTrainingConfig:
 
     def test_bad_learning_rate(self):
         """learning_rate <= 0 should raise ValueError."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
 
         config = TrainingConfig(learning_rate=-1e-4)
         with pytest.raises(ValueError, match="learning_rate"):
@@ -312,7 +312,7 @@ class TestTrainingConfig:
 
     def test_bad_batch_size(self):
         """batch_size < 0 should raise ValueError (0 = auto is valid)."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
 
         config = TrainingConfig(batch_size=-1)
         with pytest.raises(ValueError, match="batch_size"):
@@ -324,7 +324,7 @@ class TestTrainingConfig:
 
     def test_to_dict_has_new_fields(self):
         """to_dict() should include early_stopping and max_loss fields."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
 
         d = TrainingConfig().to_dict()
         assert "early_stopping_patience" in d
@@ -1177,7 +1177,7 @@ class TestEndToEnd:
 
     def test_train_one_epoch(self, tiny_model_dir):
         """Model should train for 1 epoch without error."""
-        from enigma_engine.core.training import Trainer, TrainingConfig
+        from enigma_engine.training.training import Trainer, TrainingConfig
 
         model = tiny_model_dir["model"]
         tok = tiny_model_dir["tokenizer"]
@@ -1243,7 +1243,7 @@ class TestEndToEnd:
 
     def test_full_pipeline(self, tiny_model_dir):
         """Full pipeline: train → save → reload → infer produces output."""
-        from enigma_engine.core.training import Trainer, TrainingConfig
+        from enigma_engine.training.training import Trainer, TrainingConfig
         from enigma_engine.core.safe_save import atomic_torch_save
         from enigma_engine.core.model import Enigma
 

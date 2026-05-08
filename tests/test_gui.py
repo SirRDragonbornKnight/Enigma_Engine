@@ -4098,8 +4098,8 @@ class TestAtomicSaves:
         modules = [
             "enigma_engine/core/memory.py",
             "enigma_engine/core/curated_dataset.py",
-            "enigma_engine/core/training_queue.py",
-            "enigma_engine/core/training_monitor.py",
+            "enigma_engine/training/training_queue.py",
+            "enigma_engine/training/training_monitor.py",
             "enigma_engine/core/model_context.py",
             "enigma_engine/core/model_registry.py",
             "enigma_engine/core/ai_profile.py",
@@ -4202,14 +4202,14 @@ class TestGradientCheckpointing:
 
     def test_training_config_has_gradient_checkpointing(self):
         """TrainingConfig must have use_gradient_checkpointing field."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig()
         assert hasattr(cfg, "use_gradient_checkpointing")
         assert cfg.use_gradient_checkpointing is True
 
     def test_gradient_checkpointing_in_to_dict(self):
         """use_gradient_checkpointing must appear in to_dict output."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig(use_gradient_checkpointing=True)
         d = cfg.to_dict()
         assert "use_gradient_checkpointing" in d
@@ -4670,6 +4670,98 @@ class TestInlineSearchEnabledConfig:
             "literal 'inline_search_enabled' key — this is the "
             "boot-load wire-site that carries the user's saved "
             "off-toggle from disk into self.inline_search_enabled"
+        )
+
+
+class TestApiChatConfig:
+    """CONFIG-page controls for API-routed CORE chat."""
+
+    def test_toggle_use_api_chat_persists_and_updates_state(
+            self, tmp_path, monkeypatch):
+        from enigma_engine.gui.gui_pages import PagesMixin
+        monkeypatch.setattr(
+            "enigma_engine.gui.gui_pages_config.DATA_DIR", tmp_path)
+        settings_file = tmp_path / "gui_settings.json"
+        settings_file.write_text("{}", encoding="utf-8")
+
+        obj = object.__new__(PagesMixin)
+        obj._use_api_chat_var = MockVar(initial=True)
+        obj.status_bar = MockStatusBar()
+        obj.use_api_chat = False
+        obj._api_chat_client = object()
+
+        obj._toggle_use_api_chat()
+
+        data = json.loads(settings_file.read_text(encoding="utf-8"))
+        assert data["use_api_chat"] is True
+        assert obj.use_api_chat is True
+
+    def test_toggle_use_api_chat_off_clears_cached_client(
+            self, tmp_path, monkeypatch):
+        from enigma_engine.gui.gui_pages import PagesMixin
+        monkeypatch.setattr(
+            "enigma_engine.gui.gui_pages_config.DATA_DIR", tmp_path)
+        settings_file = tmp_path / "gui_settings.json"
+        settings_file.write_text("{}", encoding="utf-8")
+
+        obj = object.__new__(PagesMixin)
+        obj._use_api_chat_var = MockVar(initial=False)
+        obj.status_bar = MockStatusBar()
+        obj.use_api_chat = True
+        obj._api_chat_client = object()
+
+        obj._toggle_use_api_chat()
+
+        data = json.loads(settings_file.read_text(encoding="utf-8"))
+        assert data["use_api_chat"] is False
+        assert obj.use_api_chat is False
+        assert obj._api_chat_client is None
+
+    def test_save_api_base_url_persists_and_resets_client(
+            self, tmp_path, monkeypatch):
+        from enigma_engine.gui.gui_pages import PagesMixin
+        monkeypatch.setattr(
+            "enigma_engine.gui.gui_pages_config.DATA_DIR", tmp_path)
+        settings_file = tmp_path / "gui_settings.json"
+        settings_file.write_text("{}", encoding="utf-8")
+
+        class _Entry:
+            def get(self):
+                return "http://127.0.0.1:9090"
+
+        obj = object.__new__(PagesMixin)
+        obj._api_base_url_entry = _Entry()
+        obj.status_bar = MockStatusBar()
+        obj.api_base_url = "http://127.0.0.1:8080"
+        obj._api_chat_client = object()
+
+        obj._save_api_base_url()
+
+        data = json.loads(settings_file.read_text(encoding="utf-8"))
+        assert data["api_base_url"] == "http://127.0.0.1:9090"
+        assert obj.api_base_url == "http://127.0.0.1:9090"
+        assert obj._api_chat_client is None
+
+    def test_boot_load_use_api_chat_wire_site_present(self):
+        import re
+        from enigma_engine.gui.desktop import EnigmaGUI
+
+        src = inspect.getsource(EnigmaGUI.__init__)
+        pattern = re.compile(
+            r'_read_gui_bool_setting\(\s*"use_api_chat"')
+        assert pattern.search(src), (
+            "__init__ must boot-load the persisted use_api_chat flag"
+        )
+
+    def test_boot_load_api_base_url_wire_site_present(self):
+        import re
+        from enigma_engine.gui.desktop import EnigmaGUI
+
+        src = inspect.getsource(EnigmaGUI.__init__)
+        pattern = re.compile(
+            r'_read_gui_str_setting\(\s*"api_base_url"')
+        assert pattern.search(src), (
+            "__init__ must boot-load the persisted api_base_url setting"
         )
 
 

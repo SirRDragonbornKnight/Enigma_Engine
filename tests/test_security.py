@@ -37,14 +37,14 @@ class TestThreadSafety:
     def test_training_monitor_has_lock(self):
         """TrainingMonitor must have a threading.Lock."""
         import threading
-        from enigma_engine.core.training_monitor import TrainingMonitor
+        from enigma_engine.training.training_monitor import TrainingMonitor
         m = TrainingMonitor()
         assert hasattr(m, "_lock")
         assert isinstance(m._lock, type(threading.Lock()))
 
     def test_training_monitor_losses_snapshot(self):
         """losses property must return a copy, not internal list."""
-        from enigma_engine.core.training_monitor import TrainingMonitor
+        from enigma_engine.training.training_monitor import TrainingMonitor
         m = TrainingMonitor()
         m.start_run()
         m.record_loss(1.0)
@@ -54,7 +54,7 @@ class TestThreadSafety:
 
     def test_training_monitor_chart_data_snapshot(self):
         """get_chart_data must return copies under the lock."""
-        from enigma_engine.core.training_monitor import TrainingMonitor
+        from enigma_engine.training.training_monitor import TrainingMonitor
         m = TrainingMonitor()
         m.start_run()
         m.record_loss(2.0)
@@ -112,7 +112,7 @@ class TestDataValidation:
 
     def test_valid_data(self):
         """Normal training text passes validation."""
-        from enigma_engine.core.training import validate_training_data
+        from enigma_engine.training.training import validate_training_data
 
         result = validate_training_data(
             "Hello world this is a test.\nAnother line of training data.")
@@ -122,7 +122,7 @@ class TestDataValidation:
 
     def test_empty_data(self):
         """Empty string produces an error."""
-        from enigma_engine.core.training import validate_training_data
+        from enigma_engine.training.training import validate_training_data
 
         result = validate_training_data("")
         assert result.is_valid is False
@@ -130,7 +130,7 @@ class TestDataValidation:
 
     def test_short_sequences_warning(self):
         """Very short lines generate warnings."""
-        from enigma_engine.core.training import validate_training_data
+        from enigma_engine.training.training import validate_training_data
 
         result = validate_training_data("a\nb\nc\nd\ne\nf\n")
         # short sequences should produce warnings
@@ -138,7 +138,7 @@ class TestDataValidation:
 
     def test_duplicate_detection(self):
         """Duplicate lines are counted in stats."""
-        from enigma_engine.core.training import validate_training_data
+        from enigma_engine.training.training import validate_training_data
 
         text = "same line\n" * 10
         result = validate_training_data(text)
@@ -146,7 +146,7 @@ class TestDataValidation:
 
     def test_stats_populated(self):
         """Stats dict contains expected keys."""
-        from enigma_engine.core.training import validate_training_data
+        from enigma_engine.training.training import validate_training_data
 
         result = validate_training_data(
             "Line one is long enough.\nLine two is also long enough.")
@@ -157,7 +157,7 @@ class TestDataValidation:
 
     def test_null_bytes_warning(self):
         """Data with null bytes produces a warning."""
-        from enigma_engine.core.training import validate_training_data
+        from enigma_engine.training.training import validate_training_data
 
         result = validate_training_data("Hello\x00World this is enough text")
         has_null_warning = any(
@@ -166,7 +166,7 @@ class TestDataValidation:
 
     def test_result_dataclass_fields(self):
         """DataValidationResult has the expected fields."""
-        from enigma_engine.core.training import DataValidationResult
+        from enigma_engine.training.training import DataValidationResult
 
         r = DataValidationResult(
             is_valid=True,

@@ -583,7 +583,7 @@ class ForgeAdaptiveMixin:
             device):
         """Phase 2: Train student on generated curriculum."""
         import torch
-        from enigma_engine.core.training import (
+        from enigma_engine.training.training import (
             Trainer, TrainingConfig)
         from enigma_engine.core.safe_save import (
             atomic_torch_save)

@@ -98,7 +98,7 @@ def _check_imports():
         ("torch", "import torch"),
         ("model", "from enigma_engine.core.model import Enigma"),
         ("presets", "from enigma_engine.core.model_presets import get_preset, ForgeConfig"),
-        ("training", "from enigma_engine.core.training import Trainer, TrainingConfig"),
+        ("training", "from enigma_engine.training.training import Trainer, TrainingConfig"),
         ("tokenizer", "from enigma_engine.core.tokenizer import get_tokenizer"),
         ("dataset", "from enigma_engine.core.dataset import process_text_corpus, estimate_token_count"),
         ("safe_save", "from enigma_engine.core.safe_save import atomic_torch_save"),
@@ -209,7 +209,7 @@ def _test_pretrain(device: str, pretrain_files: list[Path],
     import torch
     from enigma_engine.core.model import Enigma
     from enigma_engine.core.model_presets import get_preset
-    from enigma_engine.core.training import Trainer, TrainingConfig
+    from enigma_engine.training.training import Trainer, TrainingConfig
     from enigma_engine.core.dataset import process_text_corpus
 
     # Use a small sample of pretrain data — cap at ~200K chars for speed
@@ -385,7 +385,7 @@ def _test_finetune(device: str, data_file: Path, tokenizer,
     import torch
     from enigma_engine.core.model import Enigma
     from enigma_engine.core.model_presets import get_preset
-    from enigma_engine.core.training import Trainer, TrainingConfig
+    from enigma_engine.training.training import Trainer, TrainingConfig
 
     text = data_file.read_text(encoding="utf-8")
     if len(text) > 200_000:
@@ -502,7 +502,7 @@ def _test_gui_callbacks():
     import torch
     from enigma_engine.core.model import Enigma
     from enigma_engine.core.model_presets import get_preset
-    from enigma_engine.core.training import Trainer, TrainingConfig
+    from enigma_engine.training.training import Trainer, TrainingConfig
     from enigma_engine.core.tokenizer import get_tokenizer
 
     tokenizer = get_tokenizer("auto")

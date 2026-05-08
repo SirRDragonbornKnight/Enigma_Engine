@@ -1384,7 +1384,7 @@ class Enigma(nn.Module):
             logger.info(f"Merged LoRA adapter: {adapter_name}")
 
     # =========================================================================
-    # � MODEL EXPORT METHODS
+    # MODEL EXPORT METHODS
     # =========================================================================
 
     def export_to_safetensors(self, path: Union[str, Path]) -> None:
@@ -1560,7 +1560,7 @@ class Enigma(nn.Module):
         )
 
     # =========================================================================
-    # �🚀 SPECULATIVE DECODING
+    # SPECULATIVE DECODING
     # =========================================================================
 
     def enable_speculative_decoding(

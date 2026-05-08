@@ -975,13 +975,13 @@ class TestModelComponents:
 
     def test_ema_config_default_off(self):
         """ema_decay defaults to 0.0 (disabled) in TrainingConfig."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         config = TrainingConfig()
         assert config.ema_decay == 0.0
 
     def test_ema_in_to_dict(self):
         """ema_decay is serialized in TrainingConfig.to_dict()."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         config = TrainingConfig(ema_decay=0.999)
         d = config.to_dict()
         assert "ema_decay" in d
@@ -990,7 +990,7 @@ class TestModelComponents:
     def test_ema_tracks_weights(self):
         """EMAWeightAverager maintains shadow copies of parameters."""
         torch = pytest.importorskip("torch")
-        from enigma_engine.core.training import EMAWeightAverager
+        from enigma_engine.training.training import EMAWeightAverager
         model = torch.nn.Linear(4, 4)
         ema = EMAWeightAverager(model, decay=0.99)
         # Shadow should exist for each parameter
@@ -999,7 +999,7 @@ class TestModelComponents:
     def test_ema_update_moves_shadow(self):
         """EMAWeightAverager.update() moves shadow toward current weights."""
         torch = pytest.importorskip("torch")
-        from enigma_engine.core.training import EMAWeightAverager
+        from enigma_engine.training.training import EMAWeightAverager
         model = torch.nn.Linear(4, 4, bias=False)
         ema = EMAWeightAverager(model, decay=0.99)
         old_shadow = ema.shadow[0].clone()
@@ -1016,7 +1016,7 @@ class TestModelComponents:
 
     def test_compile_config_default_off(self):
         """use_compile defaults to False in TrainingConfig."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         config = TrainingConfig()
         assert config.use_compile is False
 

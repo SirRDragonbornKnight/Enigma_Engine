@@ -99,6 +99,9 @@ class EnigmaGUI(
         self.voice_enabled = False
         self.web_access = False
         self.reasoning_enabled = False
+        self.use_api_chat = False
+        self.api_base_url = "http://127.0.0.1:8080"
+        self._api_chat_client = None
         # Stage B-2c (Pass 156z9w): mirror engine-side default. The
         # GUI checkbox on CONFIG page round-trips this through
         # gui_settings.json and applies it to ``self.engine`` after
@@ -178,6 +181,10 @@ class EnigmaGUI(
             "auto_unload_on_minimize", False)
         self._chat_learning_enabled = self._read_gui_bool_setting(
             "learn_while_chatting", False)
+        self.use_api_chat = self._read_gui_bool_setting(
+            "use_api_chat", False)
+        self.api_base_url = self._read_gui_str_setting(
+            "api_base_url", "http://127.0.0.1:8080")
         # Stage B-2c (Pass 156z9w): persisted off-switch overrides the
         # in-memory default set in __init__.  Engine attribute is
         # applied in ``_on_model_loaded`` once the engine exists.

@@ -406,7 +406,7 @@ class ForgeToolsMixin:
 
                 # Tool/command usage evaluation
                 try:
-                    from enigma_engine.core.training_evaluation import (
+                    from enigma_engine.training.training_evaluation import (
                         evaluate_tool_usage,
                         DEFAULT_TOOL_TEST_CASES,
                     )

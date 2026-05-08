@@ -17,7 +17,7 @@ class TestDPOTraining:
     def test_dpo_loss_computes(self):
         """_dpo_loss should return a scalar tensor."""
         import torch
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         # Simulate log-probs
         pc = torch.tensor([0.0])
         pr = torch.tensor([0.0])
@@ -47,7 +47,7 @@ class TestAPOZeroLoss:
     def test_apo_zero_loss_zero_logratios_returns_one(self):
         """Both logratios = 0 → sigmoid(0) + sigmoid(0) = 1.0 exactly."""
         import torch
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         pc = torch.tensor([0.0])
         pr = torch.tensor([0.0])
         rc = torch.tensor([0.0])
@@ -60,7 +60,7 @@ class TestAPOZeroLoss:
         """Big positive chosen logratio + big negative rejected
         logratio (the ideal optimization target) drives loss → 0."""
         import torch
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         # chosen pushed up, rejected pushed down — ref unchanged
         pc = torch.tensor([10.0])
         pr = torch.tensor([-10.0])
@@ -76,7 +76,7 @@ class TestAPOZeroLoss:
         contribution must stay constant. (DPO fails this — its loss
         couples the two via the difference.)"""
         import torch
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         pc = torch.tensor([0.0])
         rc = torch.tensor([0.0])
         # Two different rejected configurations
@@ -103,7 +103,7 @@ class TestAPOZeroLoss:
         alone, APO-zero loss bottoms out at the chosen-side floor when
         rejected is fully suppressed."""
         import torch
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         pc = torch.tensor([0.0])  # chosen unchanged from ref
         rc = torch.tensor([0.0])
         # Rejected fully suppressed
@@ -118,7 +118,7 @@ class TestAPOZeroLoss:
         """Non-finite policy logps must not produce NaN loss
         (matches `_dpo_loss` defensive zeroing)."""
         import torch
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         pc = torch.tensor([float("nan")])
         pr = torch.tensor([0.0])
         rc = torch.tensor([0.0])
@@ -132,7 +132,7 @@ class TestAPOZeroLoss:
         inspection — the loop must call the variant resolver, not
         hardcode `_dpo_loss`."""
         import inspect
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         source = inspect.getsource(Trainer.train_dpo)
         # Signature must accept loss_type
         assert "loss_type" in source
@@ -144,7 +144,7 @@ class TestAPOZeroLoss:
     def test_train_dpo_loss_type_invalid_raises(self):
         """Unknown loss_type must fail loud, not fall through to DPO."""
         import pytest
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         # Stand-alone helper is the right boundary — no need to spin
         # up a full Trainer. The variant resolver must reject anything
         # other than {"dpo", "apo_zero"}.
@@ -163,7 +163,7 @@ class TestAPOZeroLoss:
         import unittest.mock as _mock
         from enigma_engine.core.model import Enigma, ForgeConfig
         from enigma_engine.core.tokenizer import SimpleTokenizer
-        from enigma_engine.core.training import Trainer, TrainingConfig
+        from enigma_engine.training.training import Trainer, TrainingConfig
 
         class _StopAtFirstLoss(Exception):
             pass
@@ -232,7 +232,7 @@ class TestDPOMaskFix:
     def test_sequence_log_probs_mask_uses_neg100(self):
         """_get_sequence_logps source must use '!= -100', not '> 0'."""
         import inspect
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         # The method may be named _get_sequence_logps or _sequence_log_probs
         for name in ("_get_sequence_logps", "_sequence_log_probs"):
             if hasattr(Trainer, name):
@@ -266,7 +266,7 @@ class TestVisionTraining:
         import torch
         from enigma_engine.core.model import Enigma, ForgeConfig
         from enigma_engine.core.vision_encoder import VisionEncoder, VisionEncoderConfig
-        from enigma_engine.core.training import Trainer, TrainingConfig
+        from enigma_engine.training.training import Trainer, TrainingConfig
         from enigma_engine.core.tokenizer import SimpleTokenizer
 
         # Tiny model setup
@@ -310,7 +310,7 @@ class TestVisionTraining:
         """train_vision should return TrainingState."""
         from enigma_engine.core.model import Enigma, ForgeConfig
         from enigma_engine.core.vision_encoder import VisionEncoder, VisionEncoderConfig
-        from enigma_engine.core.training import Trainer, TrainingConfig, TrainingState
+        from enigma_engine.training.training import Trainer, TrainingConfig, TrainingState
         from enigma_engine.core.tokenizer import SimpleTokenizer
 
         try:
@@ -339,7 +339,7 @@ class TestVisionTraining:
         """Loss should generally decrease over epochs (small model, enough data)."""
         from enigma_engine.core.model import Enigma, ForgeConfig
         from enigma_engine.core.vision_encoder import VisionEncoder, VisionEncoderConfig
-        from enigma_engine.core.training import Trainer, TrainingConfig
+        from enigma_engine.training.training import Trainer, TrainingConfig
         from enigma_engine.core.tokenizer import SimpleTokenizer
 
         try:
@@ -373,7 +373,7 @@ class TestVisionTraining:
         """train_vision should fire progress and loss callbacks."""
         from enigma_engine.core.model import Enigma, ForgeConfig
         from enigma_engine.core.vision_encoder import VisionEncoder, VisionEncoderConfig
-        from enigma_engine.core.training import Trainer, TrainingConfig
+        from enigma_engine.training.training import Trainer, TrainingConfig
         from enigma_engine.core.tokenizer import SimpleTokenizer
 
         try:
@@ -409,7 +409,7 @@ class TestVisionTraining:
         """train_vision should respect request_stop()."""
         from enigma_engine.core.model import Enigma, ForgeConfig
         from enigma_engine.core.vision_encoder import VisionEncoder, VisionEncoderConfig
-        from enigma_engine.core.training import Trainer, TrainingConfig
+        from enigma_engine.training.training import Trainer, TrainingConfig
         from enigma_engine.core.tokenizer import SimpleTokenizer
 
         try:
@@ -449,7 +449,7 @@ class TestVisionDataParsing:
         """train_vision should raise if model lacks vision_projection."""
         from enigma_engine.core.model import Enigma, ForgeConfig
         from enigma_engine.core.vision_encoder import VisionEncoder, VisionEncoderConfig
-        from enigma_engine.core.training import Trainer, TrainingConfig
+        from enigma_engine.training.training import Trainer, TrainingConfig
         from enigma_engine.core.tokenizer import SimpleTokenizer
 
         try:
@@ -483,7 +483,7 @@ class TestVisionDataParsing:
 
         from enigma_engine.core.model import Enigma, ForgeConfig
         from enigma_engine.core.tokenizer import SimpleTokenizer
-        from enigma_engine.core.training import Trainer, TrainingConfig
+        from enigma_engine.training.training import Trainer, TrainingConfig
         from enigma_engine.core.vision_encoder import (
             VisionEncoder, VisionEncoderConfig)
 
@@ -520,7 +520,7 @@ class TestVisionDataParsing:
             trainer = Trainer(model, tok, config)
 
             with caplog.at_level(logging.WARNING,
-                                 logger="enigma_engine.core.training"):
+                                 logger="enigma_engine.training.training"):
                 trainer.train_vision(vision_encoder=v_enc, data=data)
         finally:
             tok.encode = original_encode  # type: ignore[assignment]
@@ -546,7 +546,7 @@ class TestVisionDataParsing:
 
         from enigma_engine.core.model import Enigma, ForgeConfig
         from enigma_engine.core.tokenizer import SimpleTokenizer
-        from enigma_engine.core.training import Trainer, TrainingConfig
+        from enigma_engine.training.training import Trainer, TrainingConfig
         from enigma_engine.core.vision_encoder import (
             VisionEncoder, VisionEncoderConfig)
 
@@ -599,7 +599,7 @@ class TestVisionDataParsing:
         _F.cross_entropy = _nan_ce
         try:
             with caplog.at_level(logging.WARNING,
-                                 logger="enigma_engine.core.training"):
+                                 logger="enigma_engine.training.training"):
                 trainer.train_vision(vision_encoder=v_enc, data=data)
         finally:
             _F.cross_entropy = _orig_ce
@@ -618,7 +618,7 @@ class TestVisionDataParsing:
         not 4 (one per sample). End-of-epoch remainder must also flush."""
         from enigma_engine.core.model import Enigma, ForgeConfig
         from enigma_engine.core.tokenizer import SimpleTokenizer
-        from enigma_engine.core.training import Trainer, TrainingConfig
+        from enigma_engine.training.training import Trainer, TrainingConfig
         from enigma_engine.core.vision_encoder import (
             VisionEncoder, VisionEncoderConfig)
 
@@ -687,7 +687,7 @@ class TestVisionDataParsing:
         sample's gradient would be discarded next epoch by zero_grad."""
         from enigma_engine.core.model import Enigma, ForgeConfig
         from enigma_engine.core.tokenizer import SimpleTokenizer
-        from enigma_engine.core.training import Trainer, TrainingConfig
+        from enigma_engine.training.training import Trainer, TrainingConfig
         from enigma_engine.core.vision_encoder import (
             VisionEncoder, VisionEncoderConfig)
 
@@ -757,7 +757,7 @@ class TestVisionDataParsing:
         0 times because the step loop never executes."""
         from enigma_engine.core.model import Enigma, ForgeConfig
         from enigma_engine.core.tokenizer import SimpleTokenizer
-        from enigma_engine.core.training import Trainer, TrainingConfig
+        from enigma_engine.training.training import Trainer, TrainingConfig
         from enigma_engine.core.vision_encoder import (
             VisionEncoder, VisionEncoderConfig)
 
@@ -825,7 +825,7 @@ class TestVisionDataParsing:
         this, vision was the gap."""
         from enigma_engine.core.model import Enigma, ForgeConfig
         from enigma_engine.core.tokenizer import SimpleTokenizer
-        from enigma_engine.core.training import Trainer, TrainingConfig
+        from enigma_engine.training.training import Trainer, TrainingConfig
         from enigma_engine.core.vision_encoder import (
             VisionEncoder, VisionEncoderConfig)
 
@@ -879,7 +879,7 @@ class TestVisionDataParsing:
         — ``state.validation_losses`` stays empty, no extra eval pass."""
         from enigma_engine.core.model import Enigma, ForgeConfig
         from enigma_engine.core.tokenizer import SimpleTokenizer
-        from enigma_engine.core.training import Trainer, TrainingConfig
+        from enigma_engine.training.training import Trainer, TrainingConfig
         from enigma_engine.core.vision_encoder import (
             VisionEncoder, VisionEncoderConfig)
 
@@ -920,7 +920,7 @@ class TestVisionDataParsing:
         ignore the user's STOP press for minutes."""
         from enigma_engine.core.model import Enigma, ForgeConfig
         from enigma_engine.core.tokenizer import SimpleTokenizer
-        from enigma_engine.core.training import Trainer, TrainingConfig
+        from enigma_engine.training.training import Trainer, TrainingConfig
         from enigma_engine.core.vision_encoder import (
             VisionEncoder, VisionEncoderConfig)
 
@@ -1015,7 +1015,7 @@ class TestVisionDataParsing:
         rule and breaks resume comparisons of training_losses."""
         from enigma_engine.core.model import Enigma, ForgeConfig
         from enigma_engine.core.tokenizer import SimpleTokenizer
-        from enigma_engine.core.training import Trainer, TrainingConfig
+        from enigma_engine.training.training import Trainer, TrainingConfig
         from enigma_engine.core.vision_encoder import (
             VisionEncoder, VisionEncoderConfig)
 
@@ -1088,7 +1088,7 @@ class TestVisionDataParsing:
         method's source. Behavioural per-method tests exist already
         for train()/train_vision(); this gates the rest from regressing."""
         import inspect
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
 
         methods = [
             "train", "train_dpo", "train_simpo", "train_kto",
@@ -1126,7 +1126,7 @@ class TestVisionDataParsing:
         import unittest.mock as _mock
         from enigma_engine.core.model import Enigma, ForgeConfig
         from enigma_engine.core.tokenizer import SimpleTokenizer
-        from enigma_engine.core.training import Trainer, TrainingConfig
+        from enigma_engine.training.training import Trainer, TrainingConfig
 
         class _StopAtShuffle(Exception):
             """Sentinel — stop train_dpo at first shuffle; we only
@@ -3062,21 +3062,21 @@ class TestRollingBestCheckpoints:
 
     def test_config_has_rolling_best_k(self):
         """TrainingConfig has rolling_best_k field."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         config = TrainingConfig()
         assert hasattr(config, "rolling_best_k")
         assert config.rolling_best_k == 0  # disabled by default
 
     def test_config_to_dict_includes_rolling(self):
         """to_dict includes rolling_best_k."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         config = TrainingConfig(rolling_best_k=3)
         d = config.to_dict()
         assert d["rolling_best_k"] == 3
 
     def test_rolling_best_k_zero_is_noop(self):
         """rolling_best_k=0 means no rolling checkpoints saved."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         config = TrainingConfig(rolling_best_k=0)
         assert config.rolling_best_k == 0
         d = config.to_dict()
@@ -3084,26 +3084,26 @@ class TestRollingBestCheckpoints:
 
     def test_save_every_default_disabled(self):
         """save_every defaults to 0 (disabled)."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         config = TrainingConfig()
         assert config.save_every == 0
 
     def test_save_every_steps_default_disabled(self):
         """save_every_steps defaults to 0 (disabled)."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         config = TrainingConfig()
         assert config.save_every_steps == 0
 
     def test_save_every_steps_in_to_dict(self):
         """save_every_steps appears in to_dict output."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         config = TrainingConfig(save_every_steps=500)
         d = config.to_dict()
         assert d["save_every_steps"] == 500
 
     def test_save_every_steps_validation(self):
         """save_every_steps must be >= 0."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         config = TrainingConfig(save_every_steps=-1)
         with pytest.raises(ValueError, match="save_every_steps"):
             config.validate()
@@ -3111,7 +3111,7 @@ class TestRollingBestCheckpoints:
     def test_step_based_save_in_training_loop(self):
         """Training loop calls _save_checkpoint at step intervals when save_every_steps > 0."""
         import inspect
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         src = inspect.getsource(Trainer.train)
         # Must check save_every_steps in the step loop
         assert "save_every_steps" in src
@@ -3119,7 +3119,7 @@ class TestRollingBestCheckpoints:
 
     def test_step_checkpoint_cleanup(self):
         """Step-based checkpoints are cleaned up, keeping only recent ones."""
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         with tempfile.TemporaryDirectory() as td:
             td_path = Path(td)
             # Create 6 fake step checkpoint files
@@ -3138,7 +3138,7 @@ class TestRollingBestCheckpoints:
 
     def test_cleanup_periodic_checkpoints_keeps_recent(self):
         """_cleanup_periodic_checkpoints keeps only the N most recent files."""
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         with tempfile.TemporaryDirectory() as td:
             td_path = Path(td)
             # Create 6 fake checkpoint files
@@ -3156,7 +3156,7 @@ class TestRollingBestCheckpoints:
 
     def test_cleanup_periodic_noop_when_few(self):
         """_cleanup_periodic_checkpoints does nothing when files <= keep."""
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         with tempfile.TemporaryDirectory() as td:
             td_path = Path(td)
             for i in range(1, 3):
@@ -3176,7 +3176,7 @@ class TestTrainingQueue:
 
     def test_create_job(self):
         """TrainingJob has correct defaults."""
-        from enigma_engine.core.training_queue import TrainingJob
+        from enigma_engine.training.training_queue import TrainingJob
         job = TrainingJob(mode="Solo", model_path="models/test.pth")
         assert job.status == "pending"
         assert job.progress == 0
@@ -3184,7 +3184,7 @@ class TestTrainingQueue:
 
     def test_job_round_trip(self):
         """TrainingJob to_dict / from_dict round-trips."""
-        from enigma_engine.core.training_queue import TrainingJob
+        from enigma_engine.training.training_queue import TrainingJob
         job = TrainingJob(
             mode="DPO", model_path="m.pth",
             data_path="d.jsonl", epochs=20)
@@ -3196,7 +3196,7 @@ class TestTrainingQueue:
 
     def test_add_job(self):
         """Adding a job assigns an ID."""
-        from enigma_engine.core.training_queue import (
+        from enigma_engine.training.training_queue import (
             TrainingQueue, TrainingJob)
         q = TrainingQueue()
         job = q.add_job(TrainingJob(mode="Solo"))
@@ -3208,7 +3208,7 @@ class TestTrainingQueue:
 
     def test_remove_job(self):
         """Remove a pending job."""
-        from enigma_engine.core.training_queue import (
+        from enigma_engine.training.training_queue import (
             TrainingQueue, TrainingJob)
         q = TrainingQueue()
         job = q.add_job(TrainingJob(mode="Solo"))
@@ -3217,7 +3217,7 @@ class TestTrainingQueue:
 
     def test_cancel_job(self):
         """Cancel a pending job."""
-        from enigma_engine.core.training_queue import (
+        from enigma_engine.training.training_queue import (
             TrainingQueue, TrainingJob)
         q = TrainingQueue()
         job = q.add_job(TrainingJob(mode="Solo"))
@@ -3227,7 +3227,7 @@ class TestTrainingQueue:
 
     def test_clear_completed(self):
         """clear_completed removes done/failed/cancelled jobs."""
-        from enigma_engine.core.training_queue import (
+        from enigma_engine.training.training_queue import (
             TrainingQueue, TrainingJob)
         q = TrainingQueue()
         j1 = q.add_job(TrainingJob(mode="Solo"))
@@ -3243,7 +3243,7 @@ class TestTrainingQueue:
 
     def test_queue_executes_jobs_sequentially(self):
         """Queue runs jobs in order via executor."""
-        from enigma_engine.core.training_queue import (
+        from enigma_engine.training.training_queue import (
             TrainingQueue, TrainingJob)
         import time
 
@@ -3270,7 +3270,7 @@ class TestTrainingQueue:
 
     def test_queue_handles_failed_job(self):
         """Queue marks failed jobs but continues."""
-        from enigma_engine.core.training_queue import (
+        from enigma_engine.training.training_queue import (
             TrainingQueue, TrainingJob)
         import time
 
@@ -3301,7 +3301,7 @@ class TestTrainingQueue:
 
     def test_queue_save_and_load(self, tmp_path):
         """Queue state round-trips through save/load."""
-        from enigma_engine.core.training_queue import (
+        from enigma_engine.training.training_queue import (
             TrainingQueue, TrainingJob)
         path = tmp_path / "queue.json"
         q = TrainingQueue(save_path=path)
@@ -3320,7 +3320,7 @@ class TestTrainingQueue:
 
     def test_interrupted_job_resets_to_pending(self, tmp_path):
         """Running jobs reset to pending on load."""
-        from enigma_engine.core.training_queue import (
+        from enigma_engine.training.training_queue import (
             TrainingQueue, TrainingJob)
         path = tmp_path / "queue.json"
         q = TrainingQueue(save_path=path)
@@ -3334,7 +3334,7 @@ class TestTrainingQueue:
 
     def test_queue_summary(self):
         """summary() returns readable text."""
-        from enigma_engine.core.training_queue import (
+        from enigma_engine.training.training_queue import (
             TrainingQueue, TrainingJob)
         q = TrainingQueue()
         q.add_job(TrainingJob(mode="Solo"))
@@ -3346,7 +3346,7 @@ class TestTrainingQueue:
 
     def test_queue_callbacks(self):
         """Queue fires callbacks on job events."""
-        from enigma_engine.core.training_queue import (
+        from enigma_engine.training.training_queue import (
             TrainingQueue, TrainingJob)
         import time
 
@@ -3373,7 +3373,7 @@ class TestTrainingQueue:
 
     def test_pause_and_resume(self):
         """Pause stops processing, resume continues."""
-        from enigma_engine.core.training_queue import (
+        from enigma_engine.training.training_queue import (
             TrainingQueue)
         q = TrainingQueue()
         q.pause()
@@ -3383,7 +3383,7 @@ class TestTrainingQueue:
 
     def test_reorder_job_with_running_job(self):
         """reorder_job must not break when a running job is in the list."""
-        from enigma_engine.core.training_queue import (
+        from enigma_engine.training.training_queue import (
             TrainingQueue, TrainingJob)
         q = TrainingQueue()
         j1 = q.add_job(TrainingJob(mode="Solo"))
@@ -3410,7 +3410,7 @@ class TestTrainingQueue:
 
     def test_reorder_preserves_non_pending_jobs(self):
         """reorder_job must not affect completed/failed/running jobs."""
-        from enigma_engine.core.training_queue import (
+        from enigma_engine.training.training_queue import (
             TrainingQueue, TrainingJob)
         q = TrainingQueue()
         j1 = q.add_job(TrainingJob(mode="Solo"))
@@ -3446,7 +3446,7 @@ class TestOvernightPlan:
 
     def test_create_plan(self):
         """OvernightPlan has correct defaults."""
-        from enigma_engine.core.training_queue import OvernightPlan
+        from enigma_engine.training.training_queue import OvernightPlan
         plan = OvernightPlan(name="Test Plan")
         assert plan.status == "pending"
         assert plan.total_jobs == 0
@@ -3455,7 +3455,7 @@ class TestOvernightPlan:
 
     def test_add_job_config(self):
         """add_job_config adds jobs to the plan."""
-        from enigma_engine.core.training_queue import OvernightPlan
+        from enigma_engine.training.training_queue import OvernightPlan
         plan = OvernightPlan()
         plan.add_job_config(
             mode="Solo", model_path="m.pth",
@@ -3469,7 +3469,7 @@ class TestOvernightPlan:
 
     def test_record_result(self):
         """record_result tracks completed jobs."""
-        from enigma_engine.core.training_queue import OvernightPlan
+        from enigma_engine.training.training_queue import OvernightPlan
         plan = OvernightPlan()
         plan.add_job_config(mode="Solo", model_path="m.pth")
         plan.add_job_config(mode="DPO", model_path="m.pth")
@@ -3484,7 +3484,7 @@ class TestOvernightPlan:
 
     def test_record_failed_result(self):
         """Failed jobs are tracked in results."""
-        from enigma_engine.core.training_queue import OvernightPlan
+        from enigma_engine.training.training_queue import OvernightPlan
         plan = OvernightPlan()
         plan.add_job_config(mode="Solo", model_path="m.pth")
         plan.record_result(
@@ -3494,7 +3494,7 @@ class TestOvernightPlan:
 
     def test_save_and_load(self, tmp_path):
         """OvernightPlan round-trips through JSON."""
-        from enigma_engine.core.training_queue import OvernightPlan
+        from enigma_engine.training.training_queue import OvernightPlan
         path = tmp_path / "plan.json"
         plan = OvernightPlan(name="Overnight")
         plan.add_job_config(
@@ -3512,7 +3512,7 @@ class TestOvernightPlan:
 
     def test_summary(self):
         """summary() returns readable text."""
-        from enigma_engine.core.training_queue import OvernightPlan
+        from enigma_engine.training.training_queue import OvernightPlan
         plan = OvernightPlan(name="Test")
         plan.add_job_config(mode="Solo", model_path="m.pth")
         text = plan.summary()
@@ -3521,7 +3521,7 @@ class TestOvernightPlan:
 
     def test_to_queue_jobs(self):
         """to_queue_jobs converts remaining jobs to TrainingJob instances."""
-        from enigma_engine.core.training_queue import OvernightPlan
+        from enigma_engine.training.training_queue import OvernightPlan
         plan = OvernightPlan()
         plan.add_job_config(
             mode="Solo", model_path="m.pth", epochs=5)
@@ -3537,7 +3537,7 @@ class TestOvernightPlan:
 
     def test_to_queue_jobs_all_pending(self):
         """to_queue_jobs converts all jobs when none completed."""
-        from enigma_engine.core.training_queue import OvernightPlan
+        from enigma_engine.training.training_queue import OvernightPlan
         plan = OvernightPlan()
         plan.add_job_config(mode="Solo", model_path="m.pth")
         plan.add_job_config(mode="LoRA", model_path="m.pth")
@@ -3548,7 +3548,7 @@ class TestOvernightPlan:
 
     def test_plan_is_complete_when_all_done(self):
         """Plan marks completed after all jobs recorded."""
-        from enigma_engine.core.training_queue import OvernightPlan
+        from enigma_engine.training.training_queue import OvernightPlan
         plan = OvernightPlan()
         plan.add_job_config(mode="Solo", model_path="m.pth")
         plan.record_result(plan.jobs[0], "completed")
@@ -3791,7 +3791,7 @@ class TestTrainingMonitor:
 
     def test_record_loss(self):
         """record_loss stores values and computes best."""
-        from enigma_engine.core.training_monitor import TrainingMonitor
+        from enigma_engine.training.training_monitor import TrainingMonitor
 
         m = TrainingMonitor()
         m.start_run()
@@ -3805,7 +3805,7 @@ class TestTrainingMonitor:
 
     def test_moving_average(self):
         """moving_average produces correct-length output."""
-        from enigma_engine.core.training_monitor import TrainingMonitor
+        from enigma_engine.training.training_monitor import TrainingMonitor
 
         m = TrainingMonitor(moving_avg_window=3)
         m.start_run()
@@ -3821,7 +3821,7 @@ class TestTrainingMonitor:
 
     def test_get_chart_data(self):
         """get_chart_data returns structured dict."""
-        from enigma_engine.core.training_monitor import TrainingMonitor
+        from enigma_engine.training.training_monitor import TrainingMonitor
 
         m = TrainingMonitor()
         m.start_run()
@@ -3837,7 +3837,7 @@ class TestTrainingMonitor:
 
     def test_epoch_loss_tracking(self):
         """record_epoch_loss stores per-epoch values."""
-        from enigma_engine.core.training_monitor import TrainingMonitor
+        from enigma_engine.training.training_monitor import TrainingMonitor
 
         m = TrainingMonitor()
         m.start_run()
@@ -3848,7 +3848,7 @@ class TestTrainingMonitor:
 
     def test_epoch_perplexities_tracking(self):
         """record_epoch_loss auto-computes perplexity from loss."""
-        from enigma_engine.core.training_monitor import TrainingMonitor
+        from enigma_engine.training.training_monitor import TrainingMonitor
 
         m = TrainingMonitor()
         m.start_run()
@@ -3862,7 +3862,7 @@ class TestTrainingMonitor:
 
     def test_perplexity_in_chart_data(self):
         """get_chart_data includes epoch_perplexities key."""
-        from enigma_engine.core.training_monitor import TrainingMonitor
+        from enigma_engine.training.training_monitor import TrainingMonitor
 
         m = TrainingMonitor()
         m.start_run()
@@ -3875,7 +3875,7 @@ class TestTrainingMonitor:
 
     def test_finish_run_includes_perplexity(self, tmp_path):
         """finish_run extra dict has final_perplexity and best_perplexity."""
-        from enigma_engine.core.training_monitor import TrainingMonitor
+        from enigma_engine.training.training_monitor import TrainingMonitor
 
         hist_path = tmp_path / "hist.json"
         m = TrainingMonitor(history_path=hist_path)
@@ -3891,7 +3891,7 @@ class TestTrainingMonitor:
 
     def test_perplexity_reset_on_start_run(self):
         """start_run resets epoch_perplexities list."""
-        from enigma_engine.core.training_monitor import TrainingMonitor
+        from enigma_engine.training.training_monitor import TrainingMonitor
 
         m = TrainingMonitor()
         m.start_run()
@@ -3903,7 +3903,7 @@ class TestTrainingMonitor:
 
     def test_training_run_serialization(self):
         """TrainingRun round-trips through dict."""
-        from enigma_engine.core.training_monitor import TrainingRun
+        from enigma_engine.training.training_monitor import TrainingRun
 
         run = TrainingRun(
             run_id="test_1",
@@ -3922,7 +3922,7 @@ class TestTrainingMonitor:
 
     def test_finish_run_saves_history(self, tmp_path):
         """finish_run persists to history file."""
-        from enigma_engine.core.training_monitor import TrainingMonitor
+        from enigma_engine.training.training_monitor import TrainingMonitor
 
         hist_path = tmp_path / "history.json"
         m = TrainingMonitor(history_path=hist_path)
@@ -3944,7 +3944,7 @@ class TestTrainingMonitor:
 
     def test_history_multiple_runs(self, tmp_path):
         """Multiple runs append to the history."""
-        from enigma_engine.core.training_monitor import TrainingMonitor
+        from enigma_engine.training.training_monitor import TrainingMonitor
 
         hist_path = tmp_path / "history.json"
         m = TrainingMonitor(history_path=hist_path)
@@ -3964,7 +3964,7 @@ class TestTrainingMonitor:
 
     def test_history_filter_by_mode(self, tmp_path):
         """get_history can filter by training mode."""
-        from enigma_engine.core.training_monitor import TrainingMonitor
+        from enigma_engine.training.training_monitor import TrainingMonitor
 
         hist_path = tmp_path / "history.json"
         m = TrainingMonitor(history_path=hist_path)
@@ -3983,7 +3983,7 @@ class TestTrainingMonitor:
 
     def test_clear_history(self, tmp_path):
         """clear_history removes the file."""
-        from enigma_engine.core.training_monitor import TrainingMonitor
+        from enigma_engine.training.training_monitor import TrainingMonitor
 
         hist_path = tmp_path / "history.json"
         m = TrainingMonitor(history_path=hist_path)
@@ -3997,7 +3997,7 @@ class TestTrainingMonitor:
 
     def test_losses_list_capped(self):
         """_losses list must not grow unbounded — capped at MAX_LOSSES."""
-        from enigma_engine.core.training_monitor import TrainingMonitor
+        from enigma_engine.training.training_monitor import TrainingMonitor
         m = TrainingMonitor()
         m.start_run()
         # Record more losses than the cap
@@ -4008,7 +4008,7 @@ class TestTrainingMonitor:
 
     def test_steps_list_stays_in_sync_with_losses(self):
         """steps and losses must have the same length after cap."""
-        from enigma_engine.core.training_monitor import TrainingMonitor
+        from enigma_engine.training.training_monitor import TrainingMonitor
         m = TrainingMonitor()
         m.start_run()
         for i in range(110_000):
@@ -4018,7 +4018,7 @@ class TestTrainingMonitor:
     def test_get_chart_data_nan_inf_guarded(self):
         """get_chart_data moving_avg handles NaN/inf without corruption."""
         import math
-        from enigma_engine.core.training_monitor import TrainingMonitor
+        from enigma_engine.training.training_monitor import TrainingMonitor
 
         m = TrainingMonitor(moving_avg_window=3)
         m.start_run()
@@ -4046,7 +4046,7 @@ class TestTrainingConfigAdamFields:
 
     def test_default_betas(self):
         """adam_beta1/beta2 default to LM-friendly values."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig()
         assert cfg.adam_beta1 == 0.9
         assert cfg.adam_beta2 == 0.95
@@ -4054,7 +4054,7 @@ class TestTrainingConfigAdamFields:
 
     def test_custom_betas(self):
         """adam_beta1/beta2 can be overridden."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig(adam_beta1=0.85, adam_beta2=0.999, adam_eps=1e-6)
         assert cfg.adam_beta1 == 0.85
         assert cfg.adam_beta2 == 0.999
@@ -4062,7 +4062,7 @@ class TestTrainingConfigAdamFields:
 
     def test_to_dict_includes_adam_fields(self):
         """to_dict() must include all three Adam fields."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         d = TrainingConfig().to_dict()
         assert "adam_beta1" in d
         assert "adam_beta2" in d
@@ -4075,11 +4075,11 @@ class TestMinLrRatioConfig:
     """Pass 156z9au: cosine schedule floor is config-driven, not hardcoded."""
 
     def test_default_is_one_tenth(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         assert TrainingConfig().min_lr_ratio == 0.1
 
     def test_custom_value_round_trips_through_to_dict(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig(min_lr_ratio=0.05)
         assert cfg.to_dict()["min_lr_ratio"] == 0.05
 
@@ -4088,12 +4088,12 @@ class TestMinLrRatioConfig:
 
         Regression gate against re-introducing the literal
         ``self.config.learning_rate * 0.1`` pattern that used to live at
-        five sites in core/training.py.  The audit lens for any new
+        five sites in training/training.py.  The audit lens for any new
         scheduler block is "does it use ``self.config.min_lr_ratio``?",
         not "does it use 0.1?".
         """
         from pathlib import Path
-        src = Path("enigma_engine/core/training.py").read_text(
+        src = Path("enigma_engine/training/training.py").read_text(
             encoding="utf-8")
         assert "learning_rate * 0.1" not in src, (
             "found hardcoded `learning_rate * 0.1` — use "
@@ -4102,12 +4102,12 @@ class TestMinLrRatioConfig:
 
     def test_main_train_scheduler_uses_min_lr_ratio(self):
         """Trainer.train cosine block must reference the config field."""
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         src = inspect.getsource(Trainer.train)
         assert "self.config.min_lr_ratio" in src
 
     def test_train_dpo_scheduler_uses_min_lr_ratio(self):
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         src = inspect.getsource(Trainer.train_dpo)
         assert "self.config.min_lr_ratio" in src
 
@@ -4129,7 +4129,7 @@ class TestAutoLRConfig:
         but forgotten in to_dict(). Catches the S837 class of bug.
         """
         import dataclasses
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig()
         d = cfg.to_dict()
         dataclass_fields = {f.name for f in dataclasses.fields(cfg)}
@@ -4141,27 +4141,27 @@ class TestAutoLRConfig:
 
     def test_auto_lr_default_false(self):
         """auto_lr defaults to False."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig()
         assert cfg.auto_lr is False
 
     def test_auto_lr_in_to_dict(self):
         """to_dict() includes auto_lr."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         d = TrainingConfig(auto_lr=True).to_dict()
         assert "auto_lr" in d
         assert d["auto_lr"] is True
 
     def test_lr_find_method_exists(self):
         """Trainer has _lr_find method."""
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         assert hasattr(Trainer, "_lr_find")
 
     def test_lr_find_signature(self):
         """_lr_find accepts batches and returns a float."""
         sig = inspect.signature(
             __import__(
-                "enigma_engine.core.training", fromlist=["Trainer"]
+                "enigma_engine.training.training", fromlist=["Trainer"]
             ).Trainer._lr_find
         )
         params = list(sig.parameters.keys())
@@ -4171,7 +4171,7 @@ class TestAutoLRConfig:
 
     def test_lr_find_restores_state(self):
         """_lr_find source must save and restore model+optimizer state."""
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         source = inspect.getsource(Trainer._lr_find)
         assert "deepcopy" in source, "must snapshot state"
         assert "load_state_dict" in source, "must restore state"
@@ -4182,14 +4182,14 @@ class TestAutoBPEDropout:
 
     def test_auto_bpe_dropout_source_check(self):
         """train() checks epochs and tokens-per-param for auto BPE-dropout."""
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         source = inspect.getsource(Trainer.train)
         assert "bpe_dropout" in source
         assert "tokens_per_param" in source
 
     def test_auto_bpe_dropout_conditions(self):
         """Auto BPE-dropout requires epochs > 3 and bpe_dropout == 0."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         # Default bpe_dropout is 0.1 — auto should NOT override user setting
         cfg = TrainingConfig(epochs=10, bpe_dropout=0.1)
         assert cfg.bpe_dropout == 0.1  # already set, skip auto
@@ -4400,8 +4400,8 @@ class TestForgeDistillRuntime:
                 "enigma_engine.core.tokenizer",
                 get_tokenizer=mocks["get_tokenizer"],
             ),
-            "enigma_engine.core.training": _fake_mod(
-                "enigma_engine.core.training",
+            "enigma_engine.training.training": _fake_mod(
+                "enigma_engine.training.training",
                 Trainer=mocks["trainer_cls"],
                 TrainingConfig=MagicMock(),
             ),
@@ -4847,7 +4847,7 @@ class TestTrainingRandomImportFix:
     def test_no_local_random_import_in_train(self):
         """train() must not have a local 'import random' that shadows module-level."""
         import ast
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         source = inspect.getsource(Trainer.train)
         tree = ast.parse(textwrap.dedent(source))
         for node in ast.walk(tree):
@@ -5006,7 +5006,7 @@ class TestLossMetricTokenCount:
     def test_train_uses_non_pad_count(self):
         """Training loop epoch_loss weights by non-padding token count."""
         import inspect
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         src = inspect.getsource(Trainer.train)
         assert "non_pad" in src
         assert "batch_loss * non_pad" in src
@@ -5014,7 +5014,7 @@ class TestLossMetricTokenCount:
     def test_validate_uses_non_pad_count(self):
         """Validation loop weights by non-padding token count."""
         import inspect
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         src = inspect.getsource(Trainer._validate)
         assert "non_pad" in src
         assert "loss.item() * non_pad" in src
@@ -5332,18 +5332,18 @@ class TestTrainingConfigValSplit:
     """TrainingConfig val_split field."""
 
     def test_default_val_split(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig()
         assert cfg.val_split == 0.1  # 10% held out by default
 
     def test_to_dict_includes_val_split(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         d = TrainingConfig(val_split=0.1).to_dict()
         assert d["val_split"] == 0.1
 
     def test_validate_rejects_bad_val_split(self):
         import pytest
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig(val_split=1.0)
         with pytest.raises(ValueError, match="val_split"):
             cfg.validate()
@@ -5352,7 +5352,7 @@ class TestTrainingConfigValSplit:
             cfg2.validate()
 
     def test_validate_accepts_valid_val_split(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         TrainingConfig(val_split=0.0).validate()
         TrainingConfig(val_split=0.2).validate()
 
@@ -5366,35 +5366,35 @@ class TestGeneralDataMixing:
     """TrainingConfig general_mix_ratio and general_data fields."""
 
     def test_default_ratio(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig()
         assert cfg.general_mix_ratio == 0.2
 
     def test_default_general_data_empty(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig()
         assert cfg.general_data == ""
 
     def test_custom_ratio_and_path(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig(
             general_mix_ratio=0.3, general_data="/some/file.txt")
         assert cfg.general_mix_ratio == 0.3
         assert cfg.general_data == "/some/file.txt"
 
     def test_zero_ratio_disables_mixing(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig(
             general_mix_ratio=0.0, general_data="some data")
         assert cfg.general_mix_ratio == 0.0
 
     def test_default_label_smoothing(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig()
         assert cfg.label_smoothing == 0.05
 
     def test_default_early_stopping(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig()
         assert cfg.early_stopping_patience == 5
 
@@ -5404,7 +5404,7 @@ class TestValidationLoop:
 
     def test_validation_losses_populated(self):
         """state.validation_losses filled when val_split > 0."""
-        from enigma_engine.core.training import TrainingState
+        from enigma_engine.training.training import TrainingState
         s = TrainingState()
         assert s.validation_losses == []
         s.validation_losses.append(1.5)
@@ -5412,13 +5412,13 @@ class TestValidationLoop:
 
     def test_abort_reason_default_empty(self):
         """abort_reason defaults to empty string."""
-        from enigma_engine.core.training import TrainingState
+        from enigma_engine.training.training import TrainingState
         s = TrainingState()
         assert s.abort_reason == ""
 
     def test_abort_reason_set_round_trip(self):
         """abort_reason can be set and read back."""
-        from enigma_engine.core.training import TrainingState
+        from enigma_engine.training.training import TrainingState
         s = TrainingState()
         s.abort_reason = "NaN/Inf loss detected"
         assert s.abort_reason == "NaN/Inf loss detected"
@@ -5426,7 +5426,7 @@ class TestValidationLoop:
     def test_abort_reason_in_all_abort_paths(self):
         """All abort early-returns set self.state.abort_reason."""
         import inspect
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         # Check train() method — every 'return self.state' preceded
         # by an abort logger.error should also set abort_reason
         src = inspect.getsource(Trainer.train)
@@ -5448,7 +5448,7 @@ class TestReproducibleBaseline:
 
     def test_dataset_fingerprint_deterministic(self):
         """Same data must produce same fingerprint."""
-        from enigma_engine.core.training import dataset_fingerprint
+        from enigma_engine.training.training import dataset_fingerprint
         fp1 = dataset_fingerprint("hello world")
         fp2 = dataset_fingerprint("hello world")
         assert fp1 == fp2
@@ -5456,28 +5456,28 @@ class TestReproducibleBaseline:
 
     def test_dataset_fingerprint_varies(self):
         """Different data must produce different fingerprint."""
-        from enigma_engine.core.training import dataset_fingerprint
+        from enigma_engine.training.training import dataset_fingerprint
         fp1 = dataset_fingerprint("hello")
         fp2 = dataset_fingerprint("world")
         assert fp1 != fp2
 
     def test_config_has_seed_field(self):
         """TrainingConfig must have seed field."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig()
         assert hasattr(cfg, "seed")
         assert cfg.seed is None  # default is None
 
     def test_config_has_golden_eval_path(self):
         """TrainingConfig must have golden_eval_path field."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig()
         assert hasattr(cfg, "golden_eval_path")
         assert cfg.golden_eval_path == ""
 
     def test_seed_in_to_dict(self):
         """seed must appear in config.to_dict()."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig(seed=42)
         d = cfg.to_dict()
         assert d["seed"] == 42
@@ -5492,7 +5492,7 @@ class TestGoldenPromptEval:
 
     def test_golden_eval_missing_file(self):
         """Returns empty results for non-existent file."""
-        from enigma_engine.core.training_evaluation import run_golden_eval
+        from enigma_engine.training.training_evaluation import run_golden_eval
         import unittest.mock as mock
         model = mock.MagicMock()
         tokenizer = mock.MagicMock()
@@ -5506,7 +5506,7 @@ class TestGoldenPromptEval:
         import json
         import tempfile
         from pathlib import Path
-        from enigma_engine.core.training_evaluation import run_golden_eval
+        from enigma_engine.training.training_evaluation import run_golden_eval
         import unittest.mock as mock
         model = mock.MagicMock()
         tokenizer = mock.MagicMock()
@@ -5530,7 +5530,7 @@ class TestToolEvalWiring:
 
     def test_default_tool_test_cases_exist(self):
         """DEFAULT_TOOL_TEST_CASES must be importable and non-empty."""
-        from enigma_engine.core.training_evaluation import (
+        from enigma_engine.training.training_evaluation import (
             DEFAULT_TOOL_TEST_CASES,
         )
         assert isinstance(DEFAULT_TOOL_TEST_CASES, list)
@@ -5538,7 +5538,7 @@ class TestToolEvalWiring:
 
     def test_tool_test_case_structure(self):
         """Each case must have prompt and expected_command."""
-        from enigma_engine.core.training_evaluation import (
+        from enigma_engine.training.training_evaluation import (
             DEFAULT_TOOL_TEST_CASES,
         )
         for case in DEFAULT_TOOL_TEST_CASES:
@@ -5561,13 +5561,13 @@ class TestSequencePacking:
 
     def test_packing_config_default_off(self):
         """use_sequence_packing defaults to False."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         config = TrainingConfig()
         assert config.use_sequence_packing is False
 
     def test_packing_config_in_to_dict(self):
         """use_sequence_packing appears in to_dict()."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         config = TrainingConfig(use_sequence_packing=True)
         d = config.to_dict()
         assert "use_sequence_packing" in d
@@ -5576,7 +5576,7 @@ class TestSequencePacking:
     def test_pack_sequences_packs_short_seqs(self):
         """Short sequences get combined into one row."""
         pytest.importorskip("torch")
-        from enigma_engine.core.training import pack_sequences
+        from enigma_engine.training.training import pack_sequences
         # Three short sequences, max_len=20
         seqs = [[1, 2, 3], [4, 5], [6, 7, 8, 9]]
         packed, masks = pack_sequences(seqs, max_length=20, eos_id=2, pad_id=0)
@@ -5587,7 +5587,7 @@ class TestSequencePacking:
     def test_pack_sequences_mask_is_4d(self):
         """Packing produces a 4D attention mask (B, 1, T, T)."""
         pytest.importorskip("torch")
-        from enigma_engine.core.training import pack_sequences
+        from enigma_engine.training.training import pack_sequences
         seqs = [[1, 2, 3], [4, 5]]
         packed, masks = pack_sequences(seqs, max_length=16, eos_id=2, pad_id=0)
         assert masks.ndim == 4
@@ -5597,7 +5597,7 @@ class TestSequencePacking:
     def test_pack_sequences_cross_boundary_blocked(self):
         """Tokens in different documents cannot attend to each other."""
         pytest.importorskip("torch")
-        from enigma_engine.core.training import pack_sequences
+        from enigma_engine.training.training import pack_sequences
         # Two sequences: [10, 11] and [20, 21]
         seqs = [[10, 11], [20, 21]]
         packed, masks = pack_sequences(seqs, max_length=16, eos_id=2, pad_id=0)
@@ -5611,7 +5611,7 @@ class TestSequencePacking:
     def test_pack_sequences_causal_within_doc(self):
         """Within a document, future tokens are still masked (causal)."""
         pytest.importorskip("torch")
-        from enigma_engine.core.training import pack_sequences
+        from enigma_engine.training.training import pack_sequences
         seqs = [[10, 11, 12]]
         packed, masks = pack_sequences(seqs, max_length=16, eos_id=2, pad_id=0)
         # Position 0 should NOT attend to position 1 (future within same doc)
@@ -5620,7 +5620,7 @@ class TestSequencePacking:
     def test_pack_sequences_long_seq_gets_own_row(self):
         """A sequence that fills max_length goes into its own row."""
         pytest.importorskip("torch")
-        from enigma_engine.core.training import pack_sequences
+        from enigma_engine.training.training import pack_sequences
         long_seq = list(range(1, 16))  # 15 tokens
         short_seq = [100, 101]
         packed, masks = pack_sequences(
@@ -5632,7 +5632,7 @@ class TestSequencePacking:
     def test_pack_sequences_pad_positions_masked(self):
         """Padding positions at the end of packed rows are masked out."""
         pytest.importorskip("torch")
-        from enigma_engine.core.training import pack_sequences
+        from enigma_engine.training.training import pack_sequences
         seqs = [[10, 11]]
         packed, masks = pack_sequences(seqs, max_length=8, eos_id=2, pad_id=0)
         # Row: [10, 11, EOS, 0, 0, 0, 0, 0]
@@ -5649,7 +5649,7 @@ class TestStreamingDiskIO:
 
     def test_write_and_read_sequences(self, tmp_path):
         """Sequences survive a write→read round-trip via JSONL."""
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         sequences = [
             "Hello world",
             "Line with\nnewline inside",
@@ -5667,7 +5667,7 @@ class TestStreamingDiskIO:
 
     def test_read_subset_in_order(self, tmp_path):
         """Reading a subset returns sequences in the requested order."""
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         sequences = [f"seq_{i}" for i in range(20)]
         path = tmp_path / "seqs.jsonl"
         offsets = Trainer._write_sequences_to_disk(sequences, path)
@@ -5679,7 +5679,7 @@ class TestStreamingDiskIO:
 
     def test_read_empty_indices(self, tmp_path):
         """Reading with empty indices returns empty list."""
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         sequences = ["a", "b", "c"]
         path = tmp_path / "seqs.jsonl"
         offsets = Trainer._write_sequences_to_disk(sequences, path)
@@ -5693,7 +5693,7 @@ class TestStreamingThreshold:
     def test_minhash_skipped_for_large_datasets(self):
         """MinHash dedup is guarded by _MINHASH_LIMIT in train()."""
         import inspect
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         source = inspect.getsource(Trainer.train)
         assert "_MINHASH_LIMIT" in source
         assert "minhash_dedup" in source
@@ -5701,32 +5701,32 @@ class TestStreamingThreshold:
     def test_curriculum_skipped_for_large_datasets(self):
         """Curriculum sorting is guarded by _CURRICULUM_LIMIT in train()."""
         import inspect
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         source = inspect.getsource(Trainer.train)
         assert "_CURRICULUM_LIMIT" in source
 
     def test_streaming_threshold_exists(self):
         """Trainer has the streaming threshold constant."""
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         assert hasattr(Trainer, "_STREAMING_THRESHOLD")
         assert Trainer._STREAMING_THRESHOLD > 0
 
     def test_streaming_window_exists(self):
         """Trainer has the streaming window constant."""
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         assert hasattr(Trainer, "_STREAMING_WINDOW")
         assert Trainer._STREAMING_WINDOW > 0
 
     def test_stream_batches_is_generator(self):
         """_stream_batches should be a generator (yields batches)."""
         import inspect
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         assert inspect.isgeneratorfunction(Trainer._stream_batches)
 
     def test_train_has_streaming_path(self):
         """train() branches on use_streaming for large datasets."""
         import inspect
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         source = inspect.getsource(Trainer.train)
         assert "use_streaming" in source
         assert "streaming_threshold" in source
@@ -5736,7 +5736,7 @@ class TestStreamingThreshold:
     def test_cleanup_in_all_return_paths(self):
         """Every return from train() calls _cleanup_temp_files."""
         import inspect
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         source = inspect.getsource(Trainer.train)
         # Count returns and cleanups in train()
         returns = source.count("return self.state")
@@ -5748,7 +5748,7 @@ class TestStreamingThreshold:
     def test_train_has_disk_backed_path(self):
         """train() accepts data_path/data_offsets for disk-backed mode."""
         import inspect
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         sig = inspect.signature(Trainer.train)
         assert "data_path" in sig.parameters
         assert "data_offsets" in sig.parameters
@@ -5759,7 +5759,7 @@ class TestStreamingThreshold:
     def test_eval_every_wired_in_train_loop(self):
         """eval_every triggers step-based validation in train loop."""
         import inspect
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         source = inspect.getsource(Trainer.train)
         assert "eval_every" in source, (
             "eval_every not consumed in train()")
@@ -5774,7 +5774,7 @@ class TestDiskBackedTraining:
         import json
         import torch
         from enigma_engine.core.model import Enigma, ForgeConfig
-        from enigma_engine.core.training import Trainer, TrainingConfig
+        from enigma_engine.training.training import Trainer, TrainingConfig
         from enigma_engine.core.tokenizer import SimpleTokenizer
 
         tok = SimpleTokenizer()
@@ -5823,7 +5823,7 @@ class TestDiskBackedTraining:
         """Disk-backed path correctly splits train/val offsets."""
         import json
         from enigma_engine.core.model import Enigma, ForgeConfig
-        from enigma_engine.core.training import Trainer, TrainingConfig
+        from enigma_engine.training.training import Trainer, TrainingConfig
         from enigma_engine.core.tokenizer import SimpleTokenizer
 
         tok = SimpleTokenizer()
@@ -5856,7 +5856,7 @@ class TestDiskBackedTraining:
     def test_disk_backed_rejects_empty_offsets(self, tmp_path):
         """Raises ValueError when data_offsets is empty."""
         from enigma_engine.core.model import Enigma, ForgeConfig
-        from enigma_engine.core.training import Trainer, TrainingConfig
+        from enigma_engine.training.training import Trainer, TrainingConfig
         from enigma_engine.core.tokenizer import SimpleTokenizer
 
         tok = SimpleTokenizer()
@@ -5876,7 +5876,7 @@ class TestDiskBackedTraining:
     def test_disk_backed_rejects_missing_file(self, tmp_path):
         """Raises FileNotFoundError when data_path doesn't exist."""
         from enigma_engine.core.model import Enigma, ForgeConfig
-        from enigma_engine.core.training import Trainer, TrainingConfig
+        from enigma_engine.training.training import Trainer, TrainingConfig
         from enigma_engine.core.tokenizer import SimpleTokenizer
 
         tok = SimpleTokenizer()
@@ -5901,7 +5901,7 @@ class TestFindLatestCheckpoint:
 
     def test_finds_highest_epoch(self, tmp_path):
         """Returns the checkpoint with the largest epoch number."""
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         for i in [1, 5, 3, 10, 7]:
             (tmp_path / f"checkpoint_epoch_{i}.pt").write_text("x")
         result = Trainer._find_latest_checkpoint(tmp_path)
@@ -5910,24 +5910,24 @@ class TestFindLatestCheckpoint:
 
     def test_returns_none_when_empty(self, tmp_path):
         """Returns None when no checkpoints exist."""
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         assert Trainer._find_latest_checkpoint(tmp_path) is None
 
     def test_returns_none_for_nonexistent_dir(self, tmp_path):
         """Returns None when directory doesn't exist."""
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         assert Trainer._find_latest_checkpoint(
             tmp_path / "nonexistent") is None
 
     def test_ignores_non_checkpoint_files(self, tmp_path):
         """Non-checkpoint .pt files are ignored unless best/final."""
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         (tmp_path / "rolling_best_e5_loss0.1234.pt").write_text("x")
         assert Trainer._find_latest_checkpoint(tmp_path) is None
 
     def test_falls_back_to_best_model(self, tmp_path):
         """best_model.pt is returned when no periodic checkpoints exist."""
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         (tmp_path / "best_model.pt").write_text("x")
         result = Trainer._find_latest_checkpoint(tmp_path)
         assert result is not None
@@ -5935,7 +5935,7 @@ class TestFindLatestCheckpoint:
 
     def test_periodic_preferred_over_best(self, tmp_path):
         """Periodic checkpoint is preferred when both exist."""
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         (tmp_path / "checkpoint_epoch_5.pt").write_text("x")
         (tmp_path / "best_model.pt").write_text("x")
         result = Trainer._find_latest_checkpoint(tmp_path)
@@ -5944,7 +5944,7 @@ class TestFindLatestCheckpoint:
 
     def test_falls_back_to_final_model(self, tmp_path):
         """final_model.pt is returned as last resort."""
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         (tmp_path / "final_model.pt").write_text("x")
         result = Trainer._find_latest_checkpoint(tmp_path)
         assert result is not None
@@ -5952,7 +5952,7 @@ class TestFindLatestCheckpoint:
 
     def test_new_naming_format(self, tmp_path):
         """New {stem}_checkpoint{N}.pt naming is recognized."""
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         # Simulate dir named after model (GUI sets checkpoint_dir
         # to models/checkpoints/{model_stem})
         ckpt_dir = tmp_path / "mymodel"
@@ -5965,7 +5965,7 @@ class TestFindLatestCheckpoint:
 
     def test_new_best_final_naming(self, tmp_path):
         """New {stem}_best.pt and {stem}_final.pt are recognized."""
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         ckpt_dir = tmp_path / "mymodel"
         ckpt_dir.mkdir()
         (ckpt_dir / "mymodel_best.pt").write_text("x")
@@ -5975,7 +5975,7 @@ class TestFindLatestCheckpoint:
 
     def test_new_preferred_over_legacy(self, tmp_path):
         """New format periodic checkpoint preferred over legacy best."""
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         ckpt_dir = tmp_path / "mymodel"
         ckpt_dir.mkdir()
         (ckpt_dir / "mymodel_checkpoint2.pt").write_text("x")
@@ -5990,7 +5990,7 @@ class TestCleanupKeepMarker:
 
     def test_keeps_protected_checkpoints(self, tmp_path):
         """Checkpoints with .keep marker are not deleted."""
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         for i in range(1, 6):
             (tmp_path / f"m_checkpoint{i}.pt").write_text("x")
         # Protect checkpoint 1
@@ -6017,7 +6017,7 @@ def _make_bare_trainer():
 
     _parse_training_data only uses self for method dispatch, no model/tokenizer.
     """
-    from enigma_engine.core.training import Trainer
+    from enigma_engine.training.training import Trainer
     return object.__new__(Trainer)
 
 
@@ -6218,7 +6218,7 @@ class TestSWACheckpoint:
     def test_save_checkpoint_includes_swa(self, tmp_path):
         """_save_checkpoint saves swa_state_dict when SWA is active."""
         import torch
-        from enigma_engine.core.training import SWAWeightAverager
+        from enigma_engine.training.training import SWAWeightAverager
 
         # Build a minimal Trainer-like object with SWA
         model = torch.nn.Linear(4, 4)
@@ -6226,7 +6226,7 @@ class TestSWACheckpoint:
         swa.update(model, step=0)  # n_averaged = 1
 
         # Save checkpoint and verify swa_state_dict is present
-        from enigma_engine.core.training import Trainer, TrainingConfig
+        from enigma_engine.training.training import Trainer, TrainingConfig
         from unittest.mock import MagicMock
 
         tokenizer = MagicMock()
@@ -6248,7 +6248,7 @@ class TestSWACheckpoint:
     def test_load_checkpoint_restores_swa(self, tmp_path):
         """load_checkpoint restores swa_state_dict when SWA is active."""
         import torch
-        from enigma_engine.core.training import (
+        from enigma_engine.training.training import (
             Trainer, TrainingConfig,
         )
         from unittest.mock import MagicMock
@@ -6291,11 +6291,11 @@ class TestQueueLockConsistency:
     def test_summary_uses_lock(self, tmp_path):
         """summary() should not crash when called concurrently."""
         import threading
-        from enigma_engine.core.training_queue import TrainingQueue
+        from enigma_engine.training.training_queue import TrainingQueue
 
         q = TrainingQueue(save_path=tmp_path / "q.json")
         q.executor = lambda j: 0.0
-        from enigma_engine.core.training_queue import TrainingJob
+        from enigma_engine.training.training_queue import TrainingJob
         q.add_job(TrainingJob(mode="solo"))
 
         # Call summary from multiple threads — should not crash
@@ -6391,21 +6391,21 @@ class TestOnWarningCallback:
     def test_trainer_has_on_warning(self):
         """Trainer.__init__ defines on_warning callback attribute."""
         import inspect
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         src = inspect.getsource(Trainer.__init__)
         assert "on_warning" in src
 
     def test_emit_warning_exists(self):
         """Trainer._emit_warning method exists and calls on_warning."""
         import inspect
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         src = inspect.getsource(Trainer._emit_warning)
         assert "on_warning" in src
 
     def test_save_checkpoint_emits_warning_on_failure(self):
         """_save_checkpoint calls _emit_warning on exception."""
         import inspect
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         src = inspect.getsource(Trainer._save_checkpoint)
         assert "_emit_warning" in src
 
@@ -6586,8 +6586,8 @@ class TestBPETokenizerPreference:
                 "enigma_engine.core.bpe_tokenizer",
                 BPETokenizer=fake_BPETokenizer,
             ),
-            "enigma_engine.core.training": _fake_mod(
-                "enigma_engine.core.training",
+            "enigma_engine.training.training": _fake_mod(
+                "enigma_engine.training.training",
                 Trainer=mock_trainer_cls,
                 TrainingConfig=MagicMock(),
             ),
@@ -6704,8 +6704,8 @@ class TestBPETokenizerPreference:
                 "enigma_engine.core.bpe_tokenizer",
                 BPETokenizer=fake_BPETokenizer,
             ),
-            "enigma_engine.core.training": _fake_mod(
-                "enigma_engine.core.training",
+            "enigma_engine.training.training": _fake_mod(
+                "enigma_engine.training.training",
                 Trainer=MagicMock(return_value=mock_trainer_instance),
                 TrainingConfig=MagicMock(),
             ),
@@ -6755,43 +6755,43 @@ class TestEffectiveWarmup:
     """
 
     def test_short_run_cap_50_total(self):
-        from enigma_engine.core.training import _effective_warmup
+        from enigma_engine.training.training import _effective_warmup
         # 50 total + default 100 warmup -> 10 (20% cap)
         assert _effective_warmup(100, 50) == 10
 
     def test_short_run_cap_200_total(self):
-        from enigma_engine.core.training import _effective_warmup
+        from enigma_engine.training.training import _effective_warmup
         # 200 total + default 100 warmup -> 40 (was 100 = 50% under old logic)
         assert _effective_warmup(100, 200) == 40
 
     def test_medium_run_cap_inactive(self):
-        from enigma_engine.core.training import _effective_warmup
+        from enigma_engine.training.training import _effective_warmup
         # 1000 total + 100 warmup -> 100 (cap = 200, not triggered)
         assert _effective_warmup(100, 1000) == 100
 
     def test_long_run_cap_inactive(self):
-        from enigma_engine.core.training import _effective_warmup
+        from enigma_engine.training.training import _effective_warmup
         # 10000 total + 100 warmup -> 100 (cap = 2000, not triggered)
         assert _effective_warmup(100, 10000) == 100
 
     def test_total_zero_returns_floor(self):
-        from enigma_engine.core.training import _effective_warmup
+        from enigma_engine.training.training import _effective_warmup
         # Edge: total_steps=0 must not divide-by-zero or return 0
         assert _effective_warmup(100, 0) == 100
         assert _effective_warmup(0, 0) == 1
 
     def test_total_one_returns_one(self):
-        from enigma_engine.core.training import _effective_warmup
+        from enigma_engine.training.training import _effective_warmup
         # Edge: total=1, cap = 0, but floor of 1 wins
         assert _effective_warmup(100, 1) == 1
 
     def test_explicit_high_warmup_respected(self):
-        from enigma_engine.core.training import _effective_warmup
+        from enigma_engine.training.training import _effective_warmup
         # User explicit 2000 + total 10000 -> 2000 (cap = 2000, exactly at limit)
         assert _effective_warmup(2000, 10000) == 2000
 
     def test_explicit_excessive_warmup_capped(self):
-        from enigma_engine.core.training import _effective_warmup
+        from enigma_engine.training.training import _effective_warmup
         # User explicit 5000 + total 10000 -> 2000 (50% capped to 20%)
         assert _effective_warmup(5000, 10000) == 2000
 
@@ -6813,7 +6813,7 @@ class TestDeterministicFlag:
         the common case where bitwise reproducibility is not required."""
         import os
         import torch
-        from enigma_engine.core.training import set_training_seed
+        from enigma_engine.training.training import set_training_seed
 
         # Snapshot env, scrub the var so we can detect a write.
         monkeypatch.delenv("CUBLAS_WORKSPACE_CONFIG", raising=False)
@@ -6834,7 +6834,7 @@ class TestDeterministicFlag:
         crash there would block every MoE training run."""
         import os
         import torch
-        from enigma_engine.core.training import set_training_seed
+        from enigma_engine.training.training import set_training_seed
 
         monkeypatch.delenv("CUBLAS_WORKSPACE_CONFIG", raising=False)
         captured = {"args": None, "kwargs": None}
@@ -6852,7 +6852,7 @@ class TestDeterministicFlag:
     def test_training_config_default_deterministic_false(self):
         """Backward compat: TrainingConfig.deterministic must default to
         False so existing callers see no behaviour change."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
 
         cfg = TrainingConfig()
         assert cfg.deterministic is False
@@ -6862,7 +6862,7 @@ class TestDeterministicFlag:
         helper, not call the helper bare. Structural check across all 8
         sibling methods — guards the wiring shipped Pass 156i3."""
         import inspect
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
 
         methods = [
             "train", "train_dpo", "train_simpo", "train_kto",

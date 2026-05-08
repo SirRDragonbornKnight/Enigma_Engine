@@ -21,7 +21,7 @@ from enigma_engine.core.rl_training import (
     SelfPlayConfig,
     SelfPlayTrainer,
 )
-from enigma_engine.core.training import Trainer, TrainingConfig
+from enigma_engine.training.training import Trainer, TrainingConfig
 
 from .registry import get_mode_registry
 from .schema import TrainingJobConfig, materialize_dispatch_payload

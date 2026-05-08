@@ -58,7 +58,7 @@ class _ChatMixin:
     """Chat and tool-aware generation methods mixed into EnigmaEngine."""
 
     # =========================================================================
-    # �️ Vision Encoding for Chat
+    # Vision Encoding for Chat
     # =========================================================================
 
     def _encode_images_for_chat(
@@ -123,7 +123,7 @@ class _ChatMixin:
         return torch.cat(features_list, dim=1)
 
     # =========================================================================
-    # �💬 Chat Interface
+    # Chat Interface
     # =========================================================================
     @staticmethod
     def _summarize_dropped_history(

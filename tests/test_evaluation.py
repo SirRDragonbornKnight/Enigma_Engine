@@ -7,7 +7,7 @@ class TestTrainingEvaluation:
 
     def test_evaluate_model_returns_dict(self):
         """evaluate_model returns dict with expected keys."""
-        from enigma_engine.core.training_evaluation import evaluate_model
+        from enigma_engine.training.training_evaluation import evaluate_model
         result = evaluate_model(None, None, [], device="cpu")
         assert isinstance(result, dict)
         assert "perplexity" in result
@@ -16,21 +16,21 @@ class TestTrainingEvaluation:
 
     def test_default_test_prompts_exist(self):
         """DEFAULT_TEST_PROMPTS is available and populated."""
-        from enigma_engine.core.training_evaluation import DEFAULT_TEST_PROMPTS
+        from enigma_engine.training.training_evaluation import DEFAULT_TEST_PROMPTS
         assert isinstance(DEFAULT_TEST_PROMPTS, list)
         assert len(DEFAULT_TEST_PROMPTS) > 0
         assert all(isinstance(p, str) for p in DEFAULT_TEST_PROMPTS)
 
     def test_training_config_evaluation_defaults(self):
         """TrainingConfig has evaluation fields with correct defaults."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         config = TrainingConfig()
         assert isinstance(config.run_evaluation, bool)
         assert hasattr(config, "eval_test_prompts")
 
     def test_evaluate_tool_usage_returns_dict(self):
         """evaluate_tool_usage returns dict with success metrics."""
-        from enigma_engine.core.training_evaluation import evaluate_tool_usage
+        from enigma_engine.training.training_evaluation import evaluate_tool_usage
         result = evaluate_tool_usage(None, None, None, [], device="cpu")
         assert isinstance(result, dict)
         assert "success_rate" in result
@@ -55,7 +55,7 @@ class TestEvalModelModeRestore:
 
     def test_evaluate_model_restores_train_mode(self):
         """evaluate_model restores model.train() after running."""
-        from enigma_engine.core.training_evaluation import evaluate_model
+        from enigma_engine.training.training_evaluation import evaluate_model
 
         model, tok = self._make_model_and_tokenizer()
         model.train()
@@ -67,7 +67,7 @@ class TestEvalModelModeRestore:
 
     def test_evaluate_model_preserves_eval_mode(self):
         """evaluate_model leaves model in eval mode if it started that way."""
-        from enigma_engine.core.training_evaluation import evaluate_model
+        from enigma_engine.training.training_evaluation import evaluate_model
 
         model, tok = self._make_model_and_tokenizer()
         model.eval()
@@ -78,7 +78,7 @@ class TestEvalModelModeRestore:
 
     def test_evaluate_tool_usage_restores_train_mode(self):
         """evaluate_tool_usage restores model.train() after running."""
-        from enigma_engine.core.training_evaluation import evaluate_tool_usage
+        from enigma_engine.training.training_evaluation import evaluate_tool_usage
 
         model, _ = self._make_model_and_tokenizer()
         model.train()
@@ -93,7 +93,7 @@ class TestEvalModelModeRestore:
     def test_run_golden_eval_restores_train_mode(self, tmp_path):
         """run_golden_eval restores model.train() after running."""
         import json
-        from enigma_engine.core.training_evaluation import run_golden_eval
+        from enigma_engine.training.training_evaluation import run_golden_eval
 
         model, tok = self._make_model_and_tokenizer()
         model.train()
@@ -114,7 +114,7 @@ class TestEvalBugFixes:
     def test_num_prompts_excludes_skipped(self):
         """S730: num_prompts should only count actually evaluated prompts."""
         import torch
-        from enigma_engine.core.training_evaluation import evaluate_model
+        from enigma_engine.training.training_evaluation import evaluate_model
 
         # Model that returns valid logits for any input
         model = MagicMock()
@@ -136,7 +136,7 @@ class TestEvalBugFixes:
     def test_golden_eval_skips_empty_expected(self, tmp_path):
         """S731: Cases with empty 'expected' should be skipped entirely."""
         import json
-        from enigma_engine.core.training_evaluation import run_golden_eval
+        from enigma_engine.training.training_evaluation import run_golden_eval
         import torch.nn as nn
 
         model = nn.Linear(4, 4)
@@ -162,44 +162,44 @@ class TestGSM8KBenchmark:
 
     def test_parse_final_number_gold_format(self):
         """`#### N` is the canonical GSM8K answer marker."""
-        from enigma_engine.core.training_evaluation import parse_final_number
+        from enigma_engine.training.training_evaluation import parse_final_number
         assert parse_final_number("Janet has 3 ducks ... #### 18") == 18.0
 
     def test_parse_final_number_with_commas(self):
         """Numbers with thousand separators must parse."""
-        from enigma_engine.core.training_evaluation import parse_final_number
+        from enigma_engine.training.training_evaluation import parse_final_number
         assert parse_final_number("total #### 1,234") == 1234.0
 
     def test_parse_final_number_negative(self):
         """Negative numbers must parse."""
-        from enigma_engine.core.training_evaluation import parse_final_number
+        from enigma_engine.training.training_evaluation import parse_final_number
         assert parse_final_number("loss #### -42") == -42.0
 
     def test_parse_final_number_decimal(self):
         """Decimal numbers must parse."""
-        from enigma_engine.core.training_evaluation import parse_final_number
+        from enigma_engine.training.training_evaluation import parse_final_number
         assert parse_final_number("price #### 3.5") == 3.5
 
     def test_parse_final_number_fallback_last_number(self):
         """No `####` → fall back to last number in text."""
-        from enigma_engine.core.training_evaluation import parse_final_number
+        from enigma_engine.training.training_evaluation import parse_final_number
         assert parse_final_number("the answer is 42") == 42.0
 
     def test_parse_final_number_returns_none_no_number(self):
         """No number anywhere → None."""
-        from enigma_engine.core.training_evaluation import parse_final_number
+        from enigma_engine.training.training_evaluation import parse_final_number
         assert parse_final_number("I don't know") is None
 
     def test_parse_final_number_empty_string(self):
         """Empty input → None."""
-        from enigma_engine.core.training_evaluation import parse_final_number
+        from enigma_engine.training.training_evaluation import parse_final_number
         assert parse_final_number("") is None
 
     # ---- load_gsm8k ----
 
     def test_load_gsm8k_missing_file_raises_clear_error(self, tmp_path):
         """Missing JSONL → FileNotFoundError mentioning recovery command."""
-        from enigma_engine.core.training_evaluation import load_gsm8k
+        from enigma_engine.training.training_evaluation import load_gsm8k
 
         missing = tmp_path / "no_such.jsonl"
         try:
@@ -214,7 +214,7 @@ class TestGSM8KBenchmark:
     def test_load_gsm8k_reads_jsonl(self, tmp_path):
         """Read items from a JSONL file."""
         import json
-        from enigma_engine.core.training_evaluation import load_gsm8k
+        from enigma_engine.training.training_evaluation import load_gsm8k
 
         path = tmp_path / "g.jsonl"
         items = [
@@ -234,7 +234,7 @@ class TestGSM8KBenchmark:
     def test_load_gsm8k_caps_n(self, tmp_path):
         """Positive `n` caps the number of returned items."""
         import json
-        from enigma_engine.core.training_evaluation import load_gsm8k
+        from enigma_engine.training.training_evaluation import load_gsm8k
 
         path = tmp_path / "g.jsonl"
         items = [{"question": f"q{i}", "answer": f"#### {i}"} for i in range(5)]
@@ -249,7 +249,7 @@ class TestGSM8KBenchmark:
 
     def test_run_gsm8k_benchmark_with_mock_engine(self):
         """Engine that always answers 18 → correct on items whose gold is 18."""
-        from enigma_engine.core.training_evaluation import run_gsm8k_benchmark
+        from enigma_engine.training.training_evaluation import run_gsm8k_benchmark
 
         engine = MagicMock()
         engine.generate.return_value = "thinking ... #### 18"
@@ -268,7 +268,7 @@ class TestGSM8KBenchmark:
 
     def test_run_gsm8k_benchmark_handles_unparseable_output(self):
         """Engine output with no number → counted incorrect, no crash."""
-        from enigma_engine.core.training_evaluation import run_gsm8k_benchmark
+        from enigma_engine.training.training_evaluation import run_gsm8k_benchmark
 
         engine = MagicMock()
         engine.generate.return_value = "i dunno"
@@ -282,7 +282,7 @@ class TestGSM8KBenchmark:
 
     def test_run_gsm8k_benchmark_floating_point_tolerance(self):
         """3.0 vs 3.00 must compare equal (numeric, not string)."""
-        from enigma_engine.core.training_evaluation import run_gsm8k_benchmark
+        from enigma_engine.training.training_evaluation import run_gsm8k_benchmark
 
         engine = MagicMock()
         engine.generate.return_value = "#### 3.00"
@@ -294,7 +294,7 @@ class TestGSM8KBenchmark:
 
     def test_run_gsm8k_benchmark_empty_returns_zero_total(self):
         """No examples → total=0, accuracy=0.0, no crash."""
-        from enigma_engine.core.training_evaluation import run_gsm8k_benchmark
+        from enigma_engine.training.training_evaluation import run_gsm8k_benchmark
 
         engine = MagicMock()
         result = run_gsm8k_benchmark(engine, [], num_shots=0, max_gen=32)

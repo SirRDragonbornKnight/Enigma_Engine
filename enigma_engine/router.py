@@ -698,7 +698,7 @@ class BackgroundTrainer(threading.Thread):
 
     def _create_dpo_trainer(self):
         """Build a one-epoch Trainer instance for DPO replay batches."""
-        from enigma_engine.core.training import Trainer, TrainingConfig
+        from enigma_engine.training.training import Trainer, TrainingConfig
 
         # Keep replay DPO small and stable by design: one epoch over the
         # queued correction pairs, no periodic checkpoints.

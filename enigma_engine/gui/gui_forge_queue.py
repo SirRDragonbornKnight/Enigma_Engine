@@ -41,7 +41,7 @@ class ForgeQueueMixin:
         """Return the shared TrainingQueue singleton (lazy init)."""
         queue = getattr(self, "_training_queue", None)
         if queue is None:
-            from enigma_engine.core.training_queue import TrainingQueue
+            from enigma_engine.training.training_queue import TrainingQueue
             queue = TrainingQueue(save_path=_QUEUE_PATH)
             queue.load_state()
             queue.on_progress = self._on_queue_progress
@@ -71,7 +71,7 @@ class ForgeQueueMixin:
 
     def _add_to_training_queue(self):
         """Add the current FORGE settings as a job to the queue."""
-        from enigma_engine.core.training_queue import TrainingJob
+        from enigma_engine.training.training_queue import TrainingJob
 
         student_path = self.route_assignments.get("student", "")
         if not student_path or not Path(student_path).exists():
@@ -190,7 +190,7 @@ class ForgeQueueMixin:
         from enigma_engine.core.model_registry import (
             get_state_dict, safe_load_weights)
         from enigma_engine.core.tokenizer import get_tokenizer
-        from enigma_engine.core.training import Trainer, TrainingConfig
+        from enigma_engine.training.training import Trainer, TrainingConfig
 
         # Load student model
         self._log(f"\n[Queue] Running job #{job.job_id}: "
@@ -321,7 +321,7 @@ class ForgeQueueMixin:
 
     def _save_overnight_plan(self):
         """Save the current queue contents as an overnight plan."""
-        from enigma_engine.core.training_queue import OvernightPlan
+        from enigma_engine.training.training_queue import OvernightPlan
 
         queue = self._get_training_queue()
         jobs = queue.jobs
@@ -376,7 +376,7 @@ class ForgeQueueMixin:
 
     def _load_overnight_plan(self):
         """Load an overnight plan and populate the queue."""
-        from enigma_engine.core.training_queue import OvernightPlan
+        from enigma_engine.training.training_queue import OvernightPlan
 
         plan_dir = DATA_DIR
         src = filedialog.askopenfilename(

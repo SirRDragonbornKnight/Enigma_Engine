@@ -201,13 +201,13 @@ class TestLabelSmoothing:
     """Verify label smoothing config and model forward integration."""
 
     def test_training_config_has_label_smoothing(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         config = TrainingConfig()
         assert hasattr(config, "label_smoothing")
         assert config.label_smoothing == 0.05  # Default: mild smoothing
 
     def test_label_smoothing_in_to_dict(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         config = TrainingConfig(label_smoothing=0.1)
         d = config.to_dict()
         assert d["label_smoothing"] == 0.1
@@ -769,7 +769,7 @@ class TestCachedMovingAverage:
 
     def test_moving_average_correctness(self):
         """Cached moving average matches naive computation."""
-        from enigma_engine.core.training_monitor import TrainingMonitor
+        from enigma_engine.training.training_monitor import TrainingMonitor
         m = TrainingMonitor(moving_avg_window=3)
         m.start_run()
         for v in [10.0, 20.0, 30.0, 40.0, 50.0]:
@@ -784,7 +784,7 @@ class TestCachedMovingAverage:
 
     def test_moving_average_nan_does_not_leak_stale_values(self):
         """NaN in the window must not cause stale values to linger."""
-        from enigma_engine.core.training_monitor import TrainingMonitor
+        from enigma_engine.training.training_monitor import TrainingMonitor
         m = TrainingMonitor(moving_avg_window=2)
         m.start_run()
         for v in [1.0, 2.0, float("nan"), 3.0, 4.0]:
@@ -811,7 +811,7 @@ class TestQueueLoadValidation:
         """Completely invalid JSON returns False, not crash."""
         import tempfile
         from pathlib import Path
-        from enigma_engine.core.training_queue import TrainingQueue
+        from enigma_engine.training.training_queue import TrainingQueue
         with tempfile.NamedTemporaryFile(
                 mode="w", suffix=".json", delete=False,
                 encoding="utf-8") as f:
@@ -827,7 +827,7 @@ class TestQueueLoadValidation:
         """JSON with wrong field types doesn't crash."""
         import tempfile
         from pathlib import Path
-        from enigma_engine.core.training_queue import TrainingQueue
+        from enigma_engine.training.training_queue import TrainingQueue
         bad_data = {
             "next_id": "not_an_int",
             "jobs": [
@@ -853,7 +853,7 @@ class TestQueueLoadValidation:
         """JSON missing 'jobs' key doesn't crash."""
         import tempfile
         from pathlib import Path
-        from enigma_engine.core.training_queue import TrainingQueue
+        from enigma_engine.training.training_queue import TrainingQueue
         with tempfile.NamedTemporaryFile(
                 mode="w", suffix=".json", delete=False,
                 encoding="utf-8") as f:

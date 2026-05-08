@@ -274,7 +274,7 @@ class TestDeadImports:
         "enigma_engine/core/engine_chat.py",
         "enigma_engine/core/engine_generation.py",
         "enigma_engine/core/commands.py",
-        "enigma_engine/core/training.py",
+        "enigma_engine/training/training.py",
         "enigma_engine/core/inference.py",
         "enigma_engine/api/server.py",
     ]
@@ -294,6 +294,24 @@ class TestDeadImports:
                 "Unused imports found in critical modules:\n"
                 + "\n".join(lines)
             )
+
+
+class TestSourceEncodingHygiene:
+    """Guard against replacement-character mojibake in source files."""
+
+    def test_no_replacement_character_in_engine_sources(self):
+        """Engine Python files should not contain U+FFFD replacement chars."""
+        root = PROJECT_ROOT / "enigma_engine"
+        bad_paths: list[str] = []
+        for file_path in root.rglob("*.py"):
+            text = file_path.read_text(encoding="utf-8")
+            if "\ufffd" in text:
+                bad_paths.append(str(file_path.relative_to(PROJECT_ROOT)))
+
+        assert not bad_paths, (
+            "Found replacement-character mojibake in source files: "
+            + ", ".join(sorted(bad_paths))
+        )
 
 
 class TestImageGenIntegration:
@@ -1925,7 +1943,7 @@ class TestThroughputTelemetry:
     """Throughput telemetry in TrainingMonitor."""
 
     def test_record_throughput(self):
-        from enigma_engine.core.training_monitor import TrainingMonitor
+        from enigma_engine.training.training_monitor import TrainingMonitor
         mon = TrainingMonitor()
         mon.start_run()
         mon.record_throughput(1024, 0.5)
@@ -1935,7 +1953,7 @@ class TestThroughputTelemetry:
         assert mon.avg_step_time > 0
 
     def test_chart_data_includes_throughput(self):
-        from enigma_engine.core.training_monitor import TrainingMonitor
+        from enigma_engine.training.training_monitor import TrainingMonitor
         mon = TrainingMonitor()
         mon.start_run()
         mon.record_loss(1.0)
@@ -1949,7 +1967,7 @@ class TestThroughputTelemetry:
 
     def test_finish_run_includes_throughput(self):
         from pathlib import Path
-        from enigma_engine.core.training_monitor import TrainingMonitor
+        from enigma_engine.training.training_monitor import TrainingMonitor
         with tempfile.TemporaryDirectory() as td:
             mon = TrainingMonitor(history_path=Path(td) / "history.json")
             mon.start_run()
@@ -2096,94 +2114,94 @@ class TestS554TrainingConfigValidateExpanded:
     """S554: TrainingConfig.validate() must check more fields."""
 
     def test_validate_rejects_bad_adam_beta1(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig(adam_beta1=0.0)
         with pytest.raises(ValueError):
             cfg.validate()
 
     def test_validate_rejects_bad_adam_beta2(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig(adam_beta2=1.0)
         with pytest.raises(ValueError):
             cfg.validate()
 
     def test_validate_rejects_negative_ema_decay(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig(ema_decay=-0.1)
         with pytest.raises(ValueError):
             cfg.validate()
 
     def test_validate_rejects_label_smoothing_ge_1(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig(label_smoothing=1.0)
         with pytest.raises(ValueError):
             cfg.validate()
 
     def test_validate_rejects_negative_z_loss(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig(z_loss_weight=-1.0)
         with pytest.raises(ValueError):
             cfg.validate()
 
     def test_validate_rejects_zero_reasoning_weight(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig(reasoning_loss_weight=0.0)
         with pytest.raises(ValueError):
             cfg.validate()
 
     def test_validate_rejects_mix_ratio_out_of_range(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig(general_mix_ratio=1.5)
         with pytest.raises(ValueError):
             cfg.validate()
 
     def test_validate_rejects_negative_rolling_k(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig(rolling_best_k=-1)
         with pytest.raises(ValueError):
             cfg.validate()
 
     def test_validate_rejects_negative_gradient_noise_gamma(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig(gradient_noise_gamma=-0.5)
         with pytest.raises(ValueError):
             cfg.validate()
 
     def test_validate_rejects_min_lr_ratio_below_zero(self):
         """Pass 156z9au: min_lr_ratio in [0, 1]."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig(min_lr_ratio=-0.01)
         with pytest.raises(ValueError, match="min_lr_ratio"):
             cfg.validate()
 
     def test_validate_rejects_min_lr_ratio_above_one(self):
         """Pass 156z9au: ratio > 1 makes the floor higher than peak."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig(min_lr_ratio=1.01)
         with pytest.raises(ValueError, match="min_lr_ratio"):
             cfg.validate()
 
     def test_validate_accepts_min_lr_ratio_zero(self):
         """Pass 156z9au: 0.0 reproduces textbook cosine to-zero schedule."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig(min_lr_ratio=0.0)
         cfg.validate()
 
     def test_min_lr_ratio_default_is_one_tenth(self):
         """Pass 156z9au: default LM-friendly floor."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig()
         assert cfg.min_lr_ratio == 0.1
 
     def test_min_lr_ratio_appears_in_to_dict(self):
         """Pass 156z9au: must round-trip through serialization."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig(min_lr_ratio=0.05)
         assert cfg.to_dict()["min_lr_ratio"] == 0.05
 
     def test_validate_accepts_good_defaults(self):
         """Default config must pass validation."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig()
         cfg.validate()  # Should not raise
 
@@ -3688,13 +3706,13 @@ class TestBPEDropout:
 
     def test_training_config_has_bpe_dropout(self):
         """TrainingConfig has bpe_dropout field defaulting to 0.1."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig()
         assert cfg.bpe_dropout == 0.1
 
     def test_training_config_validates_bpe_dropout(self):
         """bpe_dropout must be in [0, 1)."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         bad = TrainingConfig(bpe_dropout=1.0)
         with pytest.raises(ValueError, match="bpe_dropout"):
             bad.validate()
@@ -4768,7 +4786,7 @@ class TestEvaluateModelEmptyPrompts:
 
     def test_empty_prompts_returns_inf(self):
         """Empty prompt list should return infinite perplexity, not 0."""
-        from enigma_engine.core.training_evaluation import evaluate_model
+        from enigma_engine.training.training_evaluation import evaluate_model
         result = evaluate_model(None, None, [])
         assert result["perplexity"] == float("inf")
         assert result["loss"] == float("inf")

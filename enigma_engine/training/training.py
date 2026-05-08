@@ -6,7 +6,7 @@ Provides:
 - Trainer: Basic fine-tuning with progress callbacks
 
 Usage:
-    from enigma_engine.core.training import Trainer, TrainingConfig
+    from enigma_engine.training.training import Trainer, TrainingConfig
 
     config = TrainingConfig(epochs=10, batch_size=4, learning_rate=1e-4)
     trainer = Trainer(model, tokenizer, config)
@@ -314,7 +314,7 @@ def set_training_seed(seed: int = 42, deterministic: bool = False) -> None:
     When ``deterministic=True`` (DET-2 opt-in), additionally pins GPU kernel
     selection by setting ``CUBLAS_WORKSPACE_CONFIG=:4096:8`` and calling
     ``torch.use_deterministic_algorithms(True, warn_only=True)``. This is
-    required for bitwise reproducibility on CUDA — same seed alone leaves
+    required for bitwise reproducibility on CUDA - same seed alone leaves
     cuBLAS/cuDNN free to pick different kernels per launch. Costs ~5-15%
     throughput per the PyTorch reproducibility docs. ``warn_only=True``
     keeps non-deterministic ops (e.g. ``index_add_`` used by MoE scatter)
@@ -423,7 +423,7 @@ class TrainingConfig:
     run_evaluation: bool = False  # Evaluate before and after training
     eval_test_prompts: list[str] = None  # Custom test prompts (None = use defaults)
 
-    # Label smoothing (fairseq pattern â€” reduces overconfidence)
+    # Label smoothing (fairseq pattern — reduces overconfidence)
     label_smoothing: float = 0.05  # Reduces overconfidence, preserves generality
 
     # Validation split
@@ -467,7 +467,7 @@ class TrainingConfig:
 
     # BPE-Dropout (Provilkov et al.): randomly skip BPE merges during
     # training for subword regularization.  0.0 = disabled.  0.1 = skip
-    # 10% of merges (recommended).  Acts as free data augmentation —
+    # 10% of merges (recommended).  Acts as free data augmentation -
     # each epoch sees different tokenizations of the same text.
     bpe_dropout: float = 0.1
 
@@ -477,7 +477,7 @@ class TrainingConfig:
     # pass cost.  0.0 = disabled.  1.0 typical.
     r_drop_alpha: float = 0.0
 
-    # General data mixing — prevents catastrophic forgetting.
+    # General data mixing - prevents catastrophic forgetting.
     # When focused training data is provided alongside general data,
     # this ratio controls how much general data is mixed into each epoch.
     # 0.0 = no mixing (only focused), 1.0 = only general.
@@ -490,14 +490,14 @@ class TrainingConfig:
     # 0.0 = disabled. 1e-4 typical for large models.
     z_loss_weight: float = 0.0
 
-    # T3-6: Cut cross-entropy — chunk size for vocab-chunked CE loss.
+    # T3-6: Cut cross-entropy - chunk size for vocab-chunked CE loss.
     # When > 0, avoids materializing the full [B*T, V] logit tensor
     # during training. Memory drops from O(B*T*V) to O(chunk*V).
     # Disabled when R-Drop/Z-Loss/reasoning weighting need full logits.
     # 0 = disabled (default). 4096 = good starting value.
     ce_chunk_size: int = 0
 
-    # LISA (Pan et al. 2024) — Layerwise Importance Sampled AdamW
+    # LISA (Pan et al. 2024) - Layerwise Importance Sampled AdamW
     # Always trains embed+head+first+last layer, randomly samples K
     # middle layers each step. Outperforms LoRA at same memory.
     use_lisa: bool = False
@@ -513,7 +513,7 @@ class TrainingConfig:
     # stable across runs. Costs ~5-15% throughput; off by default.
     deterministic: bool = False
 
-    # Golden prompt regression eval — JSON file with prompt+expected pairs.
+    # Golden prompt regression eval - JSON file with prompt+expected pairs.
     # Run before and after training to detect regressions.
     # Empty string = disabled.
     golden_eval_path: str = ""
@@ -536,7 +536,7 @@ class TrainingConfig:
     # 0.0 = disabled (uniform LR). 0.7-0.95 typical for fine-tuning.
     llrd_decay: float = 0.0
 
-    # T4-2: Curriculum learning — order training sequences by difficulty.
+    # T4-2: Curriculum learning - order training sequences by difficulty.
     # "none" = random shuffle (default).  "easy_first" = score each
     # sequence by loss on the current model, train easy half first.
     curriculum: str = "none"
@@ -584,7 +584,7 @@ class TrainingConfig:
         if not 0.0 < self.adam_beta2 < 1.0:
             raise ValueError(
                 f"adam_beta2 must be in (0, 1), got {self.adam_beta2}")
-        # min_lr_ratio in [0, 1] — Pass 156z9au.
+        # min_lr_ratio in [0, 1] - Pass 156z9au.
         if not 0.0 <= self.min_lr_ratio <= 1.0:
             raise ValueError(
                 f"min_lr_ratio must be in [0.0, 1.0], "
@@ -760,7 +760,7 @@ class SWAWeightAverager:
 
     Maintains a running arithmetic mean of model weights collected
     at fixed intervals.  Unlike EMA, all snapshots contribute
-    equally — this averages over the loss landscape rather than
+    equally - this averages over the loss landscape rather than
     decaying toward the latest weights.
 
     Call ``update()`` every ``update_interval`` optimizer steps
@@ -835,7 +835,7 @@ def pack_sequences(
     rows, boundaries = pack_sequences_lazy(
         encoded_seqs, max_length, eos_id, pad_id)
 
-    # Pad rows → tensor
+    # Pad rows ? tensor
     packed = []
     for row in rows:
         pad_len = max_length - len(row)
@@ -945,7 +945,7 @@ def build_packing_masks(
         masks.append(mask)
 
     # Clamp -inf to a large finite negative so padded positions (where all
-    # attention keys are blocked) produce softmax([-1e9,...]) ≈ 0 instead of
+    # attention keys are blocked) produce softmax([-1e9,...]) - 0 instead of
     # softmax([-inf,...]) = NaN.  This NaN propagates through the residual
     # stream under torch.compile's compiled kernels and kills training.
     # Valid causal masking is unaffected: -1e9 is effectively zero after exp().
@@ -967,17 +967,17 @@ def minhash_dedup(
 
     Two-pass dedup:
     1. Exact duplicates via hash set (keep first occurrence).
-    2. MinHash with *num_hashes* hash functions — texts with estimated
+    2. MinHash with *num_hashes* hash functions - texts with estimated
        Jaccard similarity > *threshold* are near-duplicates.  The longest
        text in each near-duplicate cluster is kept.
 
-    Pure Python — no external dependencies.
+    Pure Python - no external dependencies.
 
     Args:
         texts: Input text list.
         threshold: Jaccard similarity threshold for near-duplicate
             detection.  Default 0.75 matches the FineWeb / DCLM / SmolLM3
-            industry standard (FineWeb tech report arxiv:2406.17557 §3.4:
+            industry standard (FineWeb tech report arxiv:2406.17557 section 3.4:
             "targeting documents that are at least 75% similar").
         num_hashes: Number of MinHash permutations (more = more accurate,
             slower).  128 is a good tradeoff.
@@ -1031,7 +1031,7 @@ def minhash_dedup(
     def _minhash_sig(shings: set[str]) -> list[int]:
         sig = [_LARGE_PRIME] * num_hashes
         for s in shings:
-            # Deterministic hash — Python's hash() is randomised per-process
+            # Deterministic hash - Python's hash() is randomised per-process
             h = int.from_bytes(
                 hashlib.sha256(s.encode("utf-8")).digest()[:8], "big"
             )
@@ -1057,7 +1057,7 @@ def minhash_dedup(
     for i in range(n):
         if i in removed:
             continue
-        # Yield GIL periodically during O(n²) pairwise comparison
+        # Yield GIL periodically during O(n^2) pairwise comparison
         if i % 100 == 0:
             import time
             time.sleep(0)
@@ -1142,11 +1142,11 @@ def validate_training_data(
     null_count = data.count("\x00")
     if null_count > 0:
         result.warnings.append(
-            f"Data contains {null_count} null bytes â€” "
+            f"Data contains {null_count} null bytes — "
             f"may indicate encoding corruption.")
 
     # Count non-printable control characters (exclude newline, tab, CR)
-    # Use regex instead of character-by-character Python loop — the C
+    # Use regex instead of character-by-character Python loop - the C
     # regex engine is orders of magnitude faster on multi-GB strings.
     ctrl_count = len(re.findall(
         r'[\x01-\x08\x0b\x0c\x0e-\x1f\x7f]', data[:5_000_000]))
@@ -1183,16 +1183,16 @@ def validate_training_data(
         pct = short_count / len(lines) * 100
         result.warnings.append(
             f"{short_count} sequences ({pct:.0f}%) shorter than "
-            f"{min_length} chars â€” may not provide useful signal.")
+            f"{min_length} chars — may not provide useful signal.")
 
     if long_count > 0:
         result.warnings.append(
-            f"{long_count} sequences exceed {max_length:,} chars â€” "
+            f"{long_count} sequences exceed {max_length:,} chars — "
             f"will be truncated to model max_seq_len.")
 
     if empty_count > 5:
         result.warnings.append(
-            f"{empty_count} runs of 3+ empty lines â€” "
+            f"{empty_count} runs of 3+ empty lines — "
             f"consider cleaning whitespace.")
 
     # Check for duplicates
@@ -1269,10 +1269,10 @@ class Trainer:
         self.config = config or TrainingConfig()
         self.state = TrainingState()
 
-        # Device — needed before validate for auto batch size
+        # Device - needed before validate for auto batch size
         self.device = next(model.parameters()).device
 
-        # Gradient checkpointing — trades compute for VRAM savings.
+        # Gradient checkpointing - trades compute for VRAM savings.
         # Must be enabled BEFORE _estimate_batch_size() so the auto-batch
         # trial runs with the same memory profile as real training.
         if self.config.use_gradient_checkpointing:
@@ -1290,9 +1290,9 @@ class Trainer:
 
         self.config.validate()  # fail-fast on bad config
 
-        # Build memory budget — scales all RAM/VRAM-sensitive constants
+        # Build memory budget - scales all RAM/VRAM-sensitive constants
         # to the actual hardware.  Explicit override via config field.
-        from .hardware_detection import TrainingMemoryBudget
+        from enigma_engine.core.hardware_detection import TrainingMemoryBudget
         self._budget = TrainingMemoryBudget(
             ram_gb=self.config.training_memory_gb,  # 0 = auto
             vram_gb=0.0,  # always auto-detect VRAM from device
@@ -1315,13 +1315,13 @@ class Trainer:
         # Resolve AMP dtype (BF16 on Blackwell / Ampere+, FP16 otherwise)
         self._amp_dtype = self._resolve_amp_dtype()
 
-        # Mixed precision scaler — disabled for BF16 (no loss scaling needed)
+        # Mixed precision scaler - disabled for BF16 (no loss scaling needed)
         self.scaler = None
         if self.config.use_amp and torch.cuda.is_available():
             if self._amp_dtype != torch.bfloat16:
                 self.scaler = torch.amp.GradScaler('cuda')
 
-        # Resolve pad token ID from the tokenizer â€” used for
+        # Resolve pad token ID from the tokenizer — used for
         # padding batches and as ignore_index in cross-entropy loss.
         # Built-in tokenizer uses 0, tiktoken uses base+0.
         self.pad_token_id: int = getattr(
@@ -1352,7 +1352,7 @@ class Trainer:
             n_layers = getattr(
                 getattr(self.model, 'config', None), 'n_layers', 0)
             if n_layers >= 3:
-                from .progressive_growing import LISAScheduler
+                from enigma_engine.core.progressive_growing import LISAScheduler
                 self.lisa = LISAScheduler(
                     self.model, n_layers,
                     self.config.lisa_activated_layers)
@@ -1374,7 +1374,7 @@ class Trainer:
                 import triton  # noqa: F401
             except ImportError:
                 logger.warning(
-                    "torch.compile requested but Triton is not installed — "
+                    "torch.compile requested but Triton is not installed - "
                     "skipping (Inductor C++ fallback is too RAM-hungry). "
                     "Install with: pip install triton")
             else:
@@ -1541,7 +1541,7 @@ class Trainer:
         Returns:
             Power-of-2 batch size clamped to [1, batch_size_cap].
         """
-        from .hardware_detection import TrainingMemoryBudget
+        from enigma_engine.core.hardware_detection import TrainingMemoryBudget
         budget = TrainingMemoryBudget(
             ram_gb=self.config.training_memory_gb)
 
@@ -1578,7 +1578,7 @@ class Trainer:
         try:
             use_amp = self.config.use_amp and torch.cuda.is_available()
             # Resolve AMP dtype for the trial (same logic as training)
-            from .rl_training import _resolve_amp_dtype as _amp_dt
+            from enigma_engine.core.rl_training import _resolve_amp_dtype as _amp_dt
             amp_dtype = _amp_dt(self.config.amp_dtype)
 
             with torch.amp.autocast(
@@ -1597,7 +1597,7 @@ class Trainer:
         except RuntimeError as exc:
             if "out of memory" not in str(exc).lower():
                 raise  # Re-raise non-OOM errors (shape mismatch, etc.)
-            # OOM with batch=2 — model barely fits; free everything
+            # OOM with batch=2 - model barely fits; free everything
             dummy_ids = logits = shift_logits = shift_labels = loss = None
             for p in self.model.parameters():
                 if p.grad is not None:
@@ -1622,7 +1622,7 @@ class Trainer:
         activation_mem = max(1, peak_mem - baseline_mem - grad_mem)
         per_sample = max(1, activation_mem // trial_bs)
 
-        # Cleanup — release tensors so VRAM is free for real training
+        # Cleanup - release tensors so VRAM is free for real training
         dummy_ids = logits = shift_logits = shift_labels = loss = None
         # Zero gradients so they don't persist into real training
         for p in self.model.parameters():
@@ -1655,7 +1655,7 @@ class Trainer:
             return 1
 
         max_batch = usable_vram // per_sample
-        # Cap scales with VRAM — larger GPUs can use bigger batches
+        # Cap scales with VRAM - larger GPUs can use bigger batches
         max_batch = max(1, min(max_batch, budget.batch_size_cap))
 
         # Round down to nearest power of 2 for GPU efficiency
@@ -1754,7 +1754,7 @@ class Trainer:
                 )
 
             if torch.isnan(loss) or torch.isinf(loss):
-                break  # Diverged — stop sweep
+                break  # Diverged - stop sweep
 
             loss_val = loss.item()
             # Exponential moving average of loss
@@ -1823,7 +1823,7 @@ class Trainer:
         and falls back to FP16 otherwise.  BF16 has better numeric range
         which avoids many loss-scaling headaches.
         """
-        from .rl_training import _resolve_amp_dtype
+        from enigma_engine.core.rl_training import _resolve_amp_dtype
         return _resolve_amp_dtype(self.config.amp_dtype)
 
     def _emit_progress(self, percent: int, message: str) -> None:
@@ -1905,7 +1905,7 @@ class Trainer:
                     if prompt and completion:
                         # Wrap thinking in <think> tags if provided
                         if thinking:
-                            from .reasoning import wrap_reasoning
+                            from enigma_engine.core.reasoning import wrap_reasoning
                             completion = wrap_reasoning(thinking, completion)
                         sequences.append(
                             f"User: {prompt}\nAssistant: {completion}")
@@ -1933,7 +1933,7 @@ class Trainer:
                     thinking = item.get("thinking", item.get("reasoning", ""))
                     if prompt and completion:
                         if thinking:
-                            from .reasoning import wrap_reasoning
+                            from enigma_engine.core.reasoning import wrap_reasoning
                             completion = wrap_reasoning(thinking, completion)
                         sequences.append(
                             f"User: {prompt}\nAssistant: {completion}")
@@ -1942,7 +1942,7 @@ class Trainer:
             if sequences:
                 return sequences
 
-        # Try Q&A format — normalise to User/Assistant to match
+        # Try Q&A format - normalise to User/Assistant to match
         # the chat inference prompt format.
         qa_pattern = re.compile(r'Q:\s*(.+?)\s*A:\s*(.+?)(?=Q:|$)', re.DOTALL)
         matches = qa_pattern.findall(data)
@@ -1952,7 +1952,7 @@ class Trainer:
                     f"User: {q.strip()}\nAssistant: {a.strip()}")
             return sequences
 
-        # Try User/AI dialogue format — normalise role labels
+        # Try User/AI dialogue format - normalise role labels
         dialogue_pattern = re.compile(
             r'(?:User|Human):\s*(.+?)\s*(?:AI|Assistant):\s*(.+?)(?=(?:User|Human):|$)',
             re.DOTALL | re.IGNORECASE)
@@ -2044,7 +2044,7 @@ class Trainer:
     ):
         """Pack encoded sequences into dense rows with 4D masks.
 
-        Generator — yields one ``(packed_tensor, mask_4d)`` tuple per
+        Generator - yields one ``(packed_tensor, mask_4d)`` tuple per
         batch so peak memory stays at ``batch_size * T * T * 4`` bytes
         instead of ``num_rows * T * T * 4``.
 
@@ -2061,7 +2061,7 @@ class Trainer:
         )
 
         # Pad rows and build tensors + masks per-batch to stay memory-safe.
-        # Keep on CPU — callers move to device just before the forward pass
+        # Keep on CPU - callers move to device just before the forward pass
         # so only one batch lives on GPU at a time.
         batch_size = self.config.batch_size
         for i in range(0, len(rows), batch_size):
@@ -2125,7 +2125,7 @@ class Trainer:
     # Streaming batch generation for large datasets
     # =================================================================
 
-    # Legacy class-level defaults — used by tests and as fallbacks
+    # Legacy class-level defaults - used by tests and as fallbacks
     # when _budget is not available.  Actual values come from
     # self._budget (TrainingMemoryBudget) which scales to hardware.
     _STREAMING_THRESHOLD = 50_000
@@ -2208,7 +2208,7 @@ class Trainer:
     ):
         """Create batches from sequences.
 
-        Generator — yields ``(batch_tensor, attention_mask)`` tuples
+        Generator - yields ``(batch_tensor, attention_mask)`` tuples
         one at a time.  Wrap with ``list()`` when random access or
         ``len()`` is needed (small datasets / LR finder).
 
@@ -2292,7 +2292,7 @@ class Trainer:
         Train the model on data.
 
         Args:
-            data: Training data — text string, list of dicts
+            data: Training data - text string, list of dicts
                 (prompt/completion), or list of pre-chunked strings.
                 Mutually exclusive with data_path/data_offsets.
             resume_from: Path to checkpoint file to resume from.
@@ -2324,7 +2324,7 @@ class Trainer:
                        f"epoch {self.state.epoch}")
             else:
                 logger.warning(
-                    "Checkpoint not found: %s — training from scratch",
+                    "Checkpoint not found: %s - training from scratch",
                     ckpt_path)
 
         self.model.train()
@@ -2338,7 +2338,7 @@ class Trainer:
         self._emit_progress(0, "Preparing training data...")
         logger.info("Starting training")
 
-        # ── Disk-backed path: sequences already written to JSONL ──
+        # -- Disk-backed path: sequences already written to JSONL --
         # When data_path + data_offsets are provided (from streaming
         # pre-train pipeline), skip in-memory parsing entirely and
         # jump straight to the streaming training loop.
@@ -2350,14 +2350,14 @@ class Trainer:
             n_sequences = len(data_offsets)
             if n_sequences == 0:
                 raise ValueError(
-                    "data_offsets is empty — no sequences to train on")
+                    "data_offsets is empty - no sequences to train on")
             logger.info(
                 "Disk-backed training: %d sequences from %s",
                 n_sequences, data_path)
             self._dataset_fingerprint = hashlib.sha256(
                 str(data_path).encode()).hexdigest()[:16]
 
-            # Val split from disk offsets — train and val sequences
+            # Val split from disk offsets - train and val sequences
             # are in the same file, distinguished by offset lists.
             val_sequences: list[str] = []
             val_offsets: list[int] = []
@@ -2389,7 +2389,7 @@ class Trainer:
                 self._emit_progress(
                     3, "Evaluating model (before training)...")
                 try:
-                    from enigma_engine.core.training_evaluation import (
+                    from enigma_engine.training.training_evaluation import (
                         evaluate_model, DEFAULT_TEST_PROMPTS)
                     test_prompts = (
                         self.config.eval_test_prompts
@@ -2410,7 +2410,7 @@ class Trainer:
             golden_before = None
             if self.config.golden_eval_path:
                 try:
-                    from enigma_engine.core.training_evaluation import (
+                    from enigma_engine.training.training_evaluation import (
                         run_golden_eval)
                     device = next(self.model.parameters()).device
                     golden_before = run_golden_eval(
@@ -2436,7 +2436,7 @@ class Trainer:
             # LR finder on sample window
             if self.config.auto_lr:
                 self._emit_progress(6, "Running LR range test...")
-                # Cap to 200 sequences — LR finder only needs ~100 batches
+                # Cap to 200 sequences - LR finder only needs ~100 batches
                 lr_cap = 100 * max(1, self.config.batch_size)
                 sample_n = min(lr_cap, n_sequences)
                 sample_indices = list(range(sample_n))
@@ -2463,7 +2463,7 @@ class Trainer:
             checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
             # Skip to scheduler setup (shared with normal path)
-            # — jumps past data parsing, dedup, curriculum, etc.
+            # - jumps past data parsing, dedup, curriculum, etc.
             _disk_backed = True
 
         else:
@@ -2564,7 +2564,7 @@ class Trainer:
                     logger.warning(
                         f"Could not mix general data: {exc}")
 
-            # Deduplicate while preserving order â€” prevents the model
+            # Deduplicate while preserving order — prevents the model
             # from over-fitting on repeated examples.
             pre_dedup = len(sequences)
             self._emit_progress(2, f"Deduplicating {len(sequences):,} sequences...")
@@ -2578,8 +2578,8 @@ class Trainer:
             # T4-1: Near-duplicate detection via MinHash.
             # Removes sequences with Jaccard similarity > 0.75 (keeps longest).
             # 0.75 matches FineWeb / DCLM / SmolLM3 industry standard
-            # (FineWeb tech report arxiv:2406.17557 §3.4).
-            # Skip for large pre-training corpora: the O(n²)
+            # (FineWeb tech report arxiv:2406.17557 section 3.4).
+            # Skip for large pre-training corpora: the O(n^2)
             # pairwise loop + shingle sets scale with RAM.
             _MINHASH_LIMIT = self._budget.minhash_limit
             if 1 < len(sequences) <= _MINHASH_LIMIT:
@@ -2602,7 +2602,7 @@ class Trainer:
             val_sequences: list[str] = []
             if self.config.val_split > 0 and len(sequences) > 1:
                 n_val = max(1, int(len(sequences) * self.config.val_split))
-                # Random stratified split — avoids bias from data ordering
+                # Random stratified split - avoids bias from data ordering
                 indices = list(range(len(sequences)))
                 random.Random(42).shuffle(indices)  # deterministic seed for reproducibility
                 val_indices = set(indices[:n_val])
@@ -2618,7 +2618,7 @@ class Trainer:
             if self.config.run_evaluation:
                 self._emit_progress(3, "Evaluating model (before training)...")
                 try:
-                    from enigma_engine.core.training_evaluation import (
+                    from enigma_engine.training.training_evaluation import (
                         evaluate_model, DEFAULT_TEST_PROMPTS,
                     )
                     test_prompts = (
@@ -2639,7 +2639,7 @@ class Trainer:
             golden_before = None
             if self.config.golden_eval_path:
                 try:
-                    from enigma_engine.core.training_evaluation import (
+                    from enigma_engine.training.training_evaluation import (
                         run_golden_eval,
                     )
                     device = next(self.model.parameters()).device
@@ -2653,7 +2653,7 @@ class Trainer:
                 except Exception as exc:
                     logger.warning("Golden eval (before) failed: %s", exc)
 
-            # T4-2: Curriculum learning — sort sequences by difficulty.
+            # T4-2: Curriculum learning - sort sequences by difficulty.
             # "easy_first" scores each sequence by model loss, then sorts
             # so the model learns fundamentals before tackling hard examples.
             # Skip for large datasets: scoring many sequences = many forward
@@ -2694,7 +2694,7 @@ class Trainer:
             #   3) bpe_dropout is currently 0 (user hasn't set it)
             if (self.config.bpe_dropout == 0.0
                     and self.config.epochs > 3):
-                # Rough token estimate: avg 4 chars/token × total chars
+                # Rough token estimate: avg 4 chars/token - total chars
                 total_chars = sum(len(s) for s in sequences)
                 est_tokens = total_chars / 4
                 total_params = sum(
@@ -2707,7 +2707,7 @@ class Trainer:
                         "%.1f tokens/param < 5.0",
                         self.config.epochs, tokens_per_param)
 
-            # ── Streaming vs eager batch creation ──
+            # -- Streaming vs eager batch creation --
             # For large datasets (>50K sequences), writing sequences to
             # disk and streaming batches in windows prevents OOM.  The
             # raw strings are freed after writing; only byte-offset
@@ -2756,7 +2756,7 @@ class Trainer:
                 # LR finder: build sample batches from first window
                 if self.config.auto_lr:
                     self._emit_progress(6, "Running LR range test...")
-                    # Cap to 200 sequences — LR finder only needs ~100 batches
+                    # Cap to 200 sequences - LR finder only needs ~100 batches
                     lr_cap = 100 * max(1, self.config.batch_size)
                     sample_n = min(lr_cap, n_sequences)
                     sample_indices = list(range(sample_n))
@@ -2780,7 +2780,7 @@ class Trainer:
                 val_batches: list[tuple[torch.Tensor, torch.Tensor]] = []
 
             else:
-                # ── Eager path (small datasets) ──
+                # -- Eager path (small datasets) --
                 n_sequences = len(sequences)
                 seq_offsets = []
                 n_val_sequences = 0
@@ -3097,7 +3097,7 @@ class Trainer:
                 # Step-based checkpoint save (save_every_steps > 0).
                 # Critical for long single-epoch pre-training runs
                 # where epoch-end saves would never fire until the
-                # very end — potentially months of lost progress.
+                # very end - potentially months of lost progress.
                 if (
                     self.config.save_every_steps > 0
                     and self.state.step % self.config.save_every_steps == 0
@@ -3185,7 +3185,7 @@ class Trainer:
                     break
 
         # Apply SWA averaged weights before final save (Izmailov et al.)
-        # SWA weights are the whole point — they should be the saved model.
+        # SWA weights are the whole point - they should be the saved model.
         if self.swa is not None and self.swa.n_averaged > 0:
             logger.info(
                 "Applying SWA averaged weights (%d snapshots) for "
@@ -3202,7 +3202,7 @@ class Trainer:
         if self.config.run_evaluation:
             self._emit_progress(97, "Evaluating model (after training)...")
             try:
-                from enigma_engine.core.training_evaluation import (
+                from enigma_engine.training.training_evaluation import (
                     evaluate_model, DEFAULT_TEST_PROMPTS,
                 )
                 test_prompts = (
@@ -3229,7 +3229,7 @@ class Trainer:
         golden_after = None
         if self.config.golden_eval_path:
             try:
-                from enigma_engine.core.training_evaluation import (
+                from enigma_engine.training.training_evaluation import (
                     run_golden_eval,
                 )
                 device = next(self.model.parameters()).device
@@ -3325,7 +3325,7 @@ class Trainer:
                     attention_mask=attn_mask,
                     chunked_ce=_ce_chunk)
 
-            # T2-4: R-Drop regularization — second forward pass with
+            # T2-4: R-Drop regularization - second forward pass with
             # different dropout masks, plus KL-divergence penalty.
             if self.config.r_drop_alpha > 0 and loss is not None:
                 if is_packed:
@@ -3420,7 +3420,7 @@ class Trainer:
 
             self.optimizer.zero_grad()
 
-            # S560: AdEMAMix alpha annealing — decay alpha from initial
+            # S560: AdEMAMix alpha annealing - decay alpha from initial
             # to final over the first warmup fraction of training.
             if (self.config.optimizer == 'ademamix'
                     and self.config.ademamix_alpha_initial != self.config.ademamix_alpha):
@@ -3444,7 +3444,7 @@ class Trainer:
 
             # SWA: collect weight snapshot at intervals (R13)
             # Also force a snapshot at cosine restart boundaries (T1-4)
-            # where the model is at a local minimum — ideal for averaging.
+            # where the model is at a local minimum - ideal for averaging.
             if self.swa is not None:
                 step = self.state.step
                 self.swa.update(self.model, step)
@@ -3458,7 +3458,7 @@ class Trainer:
                             and step_in_cosine % restart_t0 == 0
                             and step % self.swa.update_interval != 0):
                         # Restart boundary that wasn't already an
-                        # interval boundary — force extra snapshot
+                        # interval boundary - force extra snapshot
                         self.swa.n_averaged += 1
                         for avg, param in zip(
                                 self.swa.avg, self.model.parameters()):
@@ -3542,7 +3542,7 @@ class Trainer:
         cache so the retry has the best chance of succeeding.
         """
         logger.warning(
-            "CUDA out of memory â€” clearing cache and enabling "
+            "CUDA out of memory — clearing cache and enabling "
             "gradient checkpointing for retry: %s", exc)
         self.optimizer.zero_grad(set_to_none=True)
         if torch.cuda.is_available():
@@ -3585,7 +3585,7 @@ class Trainer:
 
         GUI sets checkpoint_dir to ``models/checkpoints/{model_stem}``,
         so ``Path(checkpoint_dir).name`` is the model stem.  CLI uses
-        ``models/checkpoints`` (name="checkpoints") — fall back to
+        ``models/checkpoints`` (name="checkpoints") - fall back to
         "model".
         """
         name = Path(self.config.checkpoint_dir).name
@@ -3795,7 +3795,7 @@ class Trainer:
             from enigma_engine.core.model_registry import safe_load_weights
             checkpoint = safe_load_weights(path, map_location=self.device)
 
-            # Unwrap state dict â€” handles both flat and wrapped formats
+            # Unwrap state dict — handles both flat and wrapped formats
             state_dict = checkpoint.get('model_state_dict') or checkpoint.get('state_dict') or checkpoint.get('model')
             if state_dict is None:
                 # Assume the whole checkpoint is a bare state dict
@@ -3845,7 +3845,7 @@ class Trainer:
             raise
 
     # -----------------------------------------------------------------
-    # DPO â€” Direct Preference Optimization
+    # DPO — Direct Preference Optimization
     # -----------------------------------------------------------------
 
     @staticmethod
@@ -3880,13 +3880,13 @@ class Trainer:
         ref_rejected_logps: "torch.Tensor",
         beta: float = 0.1,
     ) -> "torch.Tensor":
-        """Anchored Preference Optimization, zero variant — D-9 / Pass 156j.
+        """Anchored Preference Optimization, zero variant - D-9 / Pass 156j.
 
         APO-zero (D'Oosterlinck et al., 2024) anchors *both sides
         independently* to the reference policy: chosen is pushed above
-        ref, rejected is pushed below ref. Unlike DPO — which couples
+        ref, rejected is pushed below ref. Unlike DPO - which couples
         the two via the reward difference and can be satisfied by
-        degrading the rejected response without improving chosen —
+        degrading the rejected response without improving chosen -
         APO-zero is satisfied only when the chosen actually rises above
         ref and the rejected actually falls below it.
 
@@ -3957,7 +3957,7 @@ class Trainer:
         per_token = log_probs.gather(
             2, targets.unsqueeze(-1)).squeeze(-1)
 
-        # Mask out padding â€” labels use -100 for ignored positions,
+        # Mask out padding — labels use -100 for ignored positions,
         # 0 is a valid token ID (pad_token) that should still be masked.
         mask = (targets != -100).float()
         return (per_token * mask).sum(dim=-1) / mask.sum(dim=-1).clamp(min=1)
@@ -4153,7 +4153,7 @@ class Trainer:
         ref_model = None
         if hasattr(self.model, 'disable_adapter_layers'):
             use_lora_ref = True
-            logger.info("DPO: using LoRA disable — frozen base weights "
+            logger.info("DPO: using LoRA disable - frozen base weights "
                         "serve as reference policy (no extra VRAM)")
         else:
             ref_model = copy.deepcopy(self.model)
@@ -4180,7 +4180,7 @@ class Trainer:
         # Gradient accumulation: batch N pairs before optimizer step
         accum_steps = max(1, self.config.max_grad_accumulation)
 
-        # Setup scheduler: SequentialLR(warmup â†’ cosine decay)
+        # Setup scheduler: SequentialLR(warmup → cosine decay)
         steps_per_epoch = max(1, len(pairs) // accum_steps)
         total_steps = steps_per_epoch * self.config.epochs
         warmup = _effective_warmup(self.config.warmup_steps, total_steps)
@@ -4288,7 +4288,7 @@ class Trainer:
                         self.scheduler.step()
                     self.state.step += 1
 
-                    # T2-5: Online DPO — generate fresh pairs periodically
+                    # T2-5: Online DPO - generate fresh pairs periodically
                     if (reward_fn is not None
                             and dpo_online_interval > 0
                             and self.state.step % dpo_online_interval == 0):
@@ -4346,9 +4346,9 @@ class Trainer:
             del ref_model
         return self.state
 
-    # ─────────────────────────────────────────────────────────────────────
-    # SimPO — Reference-Free DPO (R14)
-    # ─────────────────────────────────────────────────────────────────────
+    # ---------------------------------------------------------------------
+    # SimPO - Reference-Free DPO (R14)
+    # ---------------------------------------------------------------------
 
     def train_simpo(
         self,
@@ -4358,7 +4358,7 @@ class Trainer:
     ) -> TrainingState:
         """Train with Simple Preference Optimization (SimPO, R14).
 
-        SimPO eliminates the frozen reference model — halving VRAM
+        SimPO eliminates the frozen reference model - halving VRAM
         during preference training.  It uses the average log-prob of
         a response as its implicit reward:
 
@@ -4523,9 +4523,9 @@ class Trainer:
         self.model.eval()
         return self.state
 
-    # ─────────────────────────────────────────────────────────────────────
-    # KTO — Kahneman-Tversky Optimization (R15)
-    # ─────────────────────────────────────────────────────────────────────
+    # ---------------------------------------------------------------------
+    # KTO - Kahneman-Tversky Optimization (R15)
+    # ---------------------------------------------------------------------
 
     def train_kto(
         self,
@@ -4536,7 +4536,7 @@ class Trainer:
     ) -> TrainingState:
         """Train with Kahneman-Tversky Optimization (KTO, R15).
 
-        Unlike DPO, KTO works with *unpaired* feedback — each sample
+        Unlike DPO, KTO works with *unpaired* feedback - each sample
         is independently labeled as desirable or undesirable (no need
         for matched chosen/rejected pairs).
 
@@ -4731,9 +4731,9 @@ class Trainer:
             del ref_model
         return self.state
 
-    # ─────────────────────────────────────────────────────────────────────
-    # ORPO — Odds Ratio Preference Optimization (R32)
-    # ─────────────────────────────────────────────────────────────────────
+    # ---------------------------------------------------------------------
+    # ORPO - Odds Ratio Preference Optimization (R32)
+    # ---------------------------------------------------------------------
 
     def train_orpo(
         self,
@@ -4742,7 +4742,7 @@ class Trainer:
     ) -> TrainingState:
         """Train with Odds Ratio Preference Optimization (ORPO, R32).
 
-        ORPO combines SFT and alignment in a single stage — no reference
+        ORPO combines SFT and alignment in a single stage - no reference
         model needed.  The loss is:
 
             L = L_SFT(chosen) + beta * L_OR
@@ -4872,7 +4872,7 @@ class Trainer:
                     resp_mask_r[max(0, prompt_len - 1):] = True
                     rejected_resp_logps = rejected_logps[0][resp_mask_r]
 
-                    # Average log-probs → log-odds
+                    # Average log-probs ? log-odds
                     avg_logp_c = chosen_resp_logps.mean()
                     avg_logp_r = rejected_resp_logps.mean()
 
@@ -4930,9 +4930,9 @@ class Trainer:
         self.model.eval()
         return self.state
 
-    # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    # VISION TRAINING â€” image-text pair training
-    # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ─────────────────────────────────────────────────────────────────────
+    # VISION TRAINING — image-text pair training
+    # ─────────────────────────────────────────────────────────────────────
 
     def train_vision(
         self,
@@ -4972,9 +4972,9 @@ class Trainer:
         Raises:
             ValueError: If model lacks vision_projection or data is empty.
         """
-        from .vision_encoder import augment_vision_tensor, preprocess_image
+        from enigma_engine.core.vision_encoder import augment_vision_tensor, preprocess_image
 
-        # â”€â”€ Validation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # ── Validation ──────────────────────────────────────────────────
         if not hasattr(self.model, "vision_projection") or self.model.vision_projection is None:
             raise ValueError(
                 "Model does not have a vision projection layer. "
@@ -4986,7 +4986,7 @@ class Trainer:
         # Pass 156h: seed RNGs from config.seed when set, mirroring
         # train(). Without this the per-epoch random.shuffle(pairs)
         # below uses un-seeded global state, so two runs with the same
-        # data + same seed process samples in different orders —
+        # data + same seed process samples in different orders -
         # violates the AA "deterministic in infrastructure" rule.
         if self.config.seed is not None:
             set_training_seed(self.config.seed, deterministic=self.config.deterministic)
@@ -4998,7 +4998,7 @@ class Trainer:
 
         self._emit_progress(0, "Preparing vision training data...")
 
-        # â”€â”€ Freeze / unfreeze layers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # ── Freeze / unfreeze layers ────────────────────────────────────
         # Freeze all text model parameters
         for param in self.model.parameters():
             param.requires_grad = False
@@ -5071,8 +5071,8 @@ class Trainer:
         image_size = getattr(getattr(vision_encoder, 'config', None), 'image_size', 224)
         use_imagenet = getattr(getattr(vision_encoder, 'config', None), "use_pretrained", False)
         # V-2: lazy preprocess. Store image refs (paths or PIL objects)
-        # only — never preprocess/.to(device) eagerly. At LLaVA-Pretrain
-        # scale (558K × 600 KB tensors) eager prep would OOM the GPU
+        # only - never preprocess/.to(device) eagerly. At LLaVA-Pretrain
+        # scale (558K - 600 KB tensors) eager prep would OOM the GPU
         # immediately on a 16 GB VRAM budget. Tensors are built per-step
         # below and freed after backward.
         pairs: list[tuple[object, list[int]]] = []
@@ -5086,7 +5086,7 @@ class Trainer:
 
             # V-2: lightweight readability probe for path inputs so bad
             # files surface here instead of mid-training. PIL `verify()`
-            # parses the header without decoding pixels — cheap.
+            # parses the header without decoding pixels - cheap.
             if isinstance(image, (str, Path)):
                 try:
                     from PIL import Image as _PILImage
@@ -5110,7 +5110,7 @@ class Trainer:
         # readability probe as train; same lazy-preprocess discipline
         # (no .to(device) until inside the eval pass). Pairs whose
         # caption is <2 tokens are skipped silently because the
-        # next-token loss can't be computed on them — matches the
+        # next-token loss can't be computed on them - matches the
         # train-loop drop policy at min_len < 1.
         val_pairs: list[tuple[object, list[int]]] = []
         if val_data:
@@ -5141,7 +5141,7 @@ class Trainer:
         self._emit_progress(5, f"Prepared {len(pairs)} image-text pairs")
         logger.info(f"Vision training: {len(pairs)} pairs, {self.config.epochs} epochs")
 
-        # â”€â”€ Training loop â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # ── Training loop ───────────────────────────────────────────────
         vision_encoder.train()
         self.model.train()
 
@@ -5277,7 +5277,7 @@ class Trainer:
                 if self._should_stop():
                     break
 
-                # V-2: lazy preprocess — build tensor here so each one
+                # V-2: lazy preprocess - build tensor here so each one
                 # is freed after backward instead of accumulating across
                 # the full dataset. Per-image preprocess errors skip
                 # the sample (already validated by header probe in prep,
@@ -5423,7 +5423,7 @@ class Trainer:
                 total_steps = len(pairs) * self.config.epochs
                 done_steps = epoch * len(pairs) + step + 1
                 pct = min(int(done_steps / max(total_steps, 1) * 95) + 5, 99)
-                self._emit_progress(pct, f"Epoch {epoch + 1}/{self.config.epochs} â€” loss: {loss_val:.4f}")
+                self._emit_progress(pct, f"Epoch {epoch + 1}/{self.config.epochs} — loss: {loss_val:.4f}")
 
             # V-1: end-of-epoch remainder flush. If samples don't divide
             # evenly into accum_steps, the trailing micro-batches have
@@ -5495,7 +5495,7 @@ class Trainer:
                 self._cleanup_periodic_checkpoints(
                     checkpoint_dir, f"{stem}_vision", keep=3)
 
-        # â”€â”€ Cleanup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # ── Cleanup ─────────────────────────────────────────────────────
         self._emit_progress(100, "Vision training complete!")
         self.model.eval()
         vision_encoder.eval()
@@ -5527,7 +5527,7 @@ class Trainer:
         Automated self-improvement cycle:
         1. Generate *n_samples* responses per prompt.
         2. Score each response with *reward_fn*.
-        3. Best → chosen, worst → rejected → DPO pair.
+        3. Best ? chosen, worst ? rejected ? DPO pair.
         4. Train one DPO epoch on generated pairs.
         5. Repeat for *rounds*.
 
@@ -5537,7 +5537,7 @@ class Trainer:
         Args:
             prompts: Seed prompts to generate responses for.
             reward_fn: ``(prompt, response) -> float`` scoring function.
-            rounds: Number of generate→train cycles.
+            rounds: Number of generate?train cycles.
             n_samples: Responses per prompt per round.
             beta: DPO temperature (lower = stronger signal).
             max_new_tokens: Max tokens per generated response.
@@ -5559,8 +5559,8 @@ class Trainer:
         # state as round-1 DPO, but operates on different `pairs`
         # (regenerated from the updated model). The actual sample
         # order differs because the data differs; the RNG draws are
-        # identical streams across rounds. This is intentional —
-        # reproducibility is the goal — but a user expecting "fresh
+        # identical streams across rounds. This is intentional -
+        # reproducibility is the goal - but a user expecting "fresh
         # randomness per round" should derive a per-round seed
         # (config.seed + rnd) outside this method.
         if self.config.seed is not None:
@@ -5643,7 +5643,7 @@ class Trainer:
         Raises:
             ValueError: If model lacks audio_projection or data is empty.
         """
-        from .audio_encoder import preprocess_audio, spec_augment
+        from enigma_engine.core.audio_encoder import preprocess_audio, spec_augment
 
         # -- Validation --
         if not hasattr(self.model, "audio_projection") or self.model.audio_projection is None:
@@ -5913,3 +5913,4 @@ class Trainer:
             param.requires_grad = True
 
         return self.state
+

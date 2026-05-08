@@ -132,6 +132,52 @@ class ConfigPageMixin:
             font=FONT_TINY, text_color=C_TEXT_DIM, wraplength=500
         ).pack(anchor="w", pady=(2, 6))
 
+        _api_chat_enabled = bool(
+            _cached_settings.get("use_api_chat", False))
+        self._use_api_chat_var = ctk.BooleanVar(value=_api_chat_enabled)
+        self._use_api_chat_cb = ctk.CTkCheckBox(
+            gen_inner,
+            text="Use API client for CORE chat send path",
+            variable=self._use_api_chat_var,
+            font=FONT_SMALL, text_color=C_TEXT,
+            fg_color=C_SURFACE, hover_color=C_ACCENT_DIM,
+            border_color=C_ACCENT_DIM, corner_radius=2,
+            command=self._toggle_use_api_chat)
+        self._use_api_chat_cb.pack(anchor="w", pady=(4, 0))
+        Tooltip(self._use_api_chat_cb,
+                "When enabled, CORE chat requests route through\n"
+                "EnigmaClient over HTTP instead of direct local\n"
+                "engine.chat calls. If API request fails, GUI\n"
+                "falls back to local engine when available.")
+
+        api_url_row = ctk.CTkFrame(gen_inner, fg_color="transparent")
+        api_url_row.pack(fill="x", pady=(6, 0))
+        SelectableLabel(
+            api_url_row,
+            text="API URL:",
+            font=FONT_TINY,
+            text_color=C_TEXT_DIM,
+        ).pack(side="left", padx=(0, 6))
+        _api_url = str(
+            _cached_settings.get("api_base_url", "http://127.0.0.1:8080")
+            or "http://127.0.0.1:8080"
+        )
+        self._api_base_url_entry = themed_entry(
+            api_url_row, width=280, height=30, font=FONT_SMALL)
+        self._api_base_url_entry.pack(side="left", padx=(0, 6))
+        self._api_base_url_entry.insert(0, _api_url)
+        self._api_base_url_save_btn = themed_button(
+            api_url_row,
+            text="Save URL",
+            command=self._save_api_base_url,
+            width=90,
+            style="secondary",
+        )
+        self._api_base_url_save_btn.pack(side="left")
+        Tooltip(self._api_base_url_entry,
+                "Base URL for API chat mode, e.g.\n"
+                "http://127.0.0.1:8080")
+
         _inline_search = bool(
             _cached_settings.get("inline_search_enabled", True))
         self._inline_search_enabled_var = ctk.BooleanVar(
@@ -1019,6 +1065,61 @@ class ConfigPageMixin:
         state = "visible" if visible else "hidden"
         self.status_bar.set_left(
             f"\u26a1 Emotional state panel {state}")
+
+    # ------------------------------------------------------------------
+    # API chat mode controls (ARCH-1c bridge)
+    # ------------------------------------------------------------------
+
+    def _toggle_use_api_chat(self):
+        """Persist ``use_api_chat`` and update live in-memory state."""
+        import json
+
+        enabled = bool(self._use_api_chat_var.get())
+        settings_path = DATA_DIR / "gui_settings.json"
+        try:
+            settings: dict = {}
+            if settings_path.exists():
+                settings = json.loads(
+                    settings_path.read_text(encoding="utf-8"))
+            settings["use_api_chat"] = enabled
+            from enigma_engine.core.safe_save import atomic_write_json
+            atomic_write_json(settings_path, settings)
+        except Exception as exc:
+            logger.debug("Could not save use_api_chat: %s", exc)
+
+        self.use_api_chat = enabled
+        if not enabled:
+            self._api_chat_client = None
+
+        state = "enabled" if enabled else "disabled"
+        self.status_bar.set_left(f"[API] CORE chat routing {state}")
+
+    def _save_api_base_url(self):
+        """Persist API base URL and reset cached client instance."""
+        import json
+
+        raw = ""
+        try:
+            raw = self._api_base_url_entry.get().strip()
+        except Exception:
+            raw = ""
+        base_url = raw or "http://127.0.0.1:8080"
+
+        settings_path = DATA_DIR / "gui_settings.json"
+        try:
+            settings: dict = {}
+            if settings_path.exists():
+                settings = json.loads(
+                    settings_path.read_text(encoding="utf-8"))
+            settings["api_base_url"] = base_url
+            from enigma_engine.core.safe_save import atomic_write_json
+            atomic_write_json(settings_path, settings)
+        except Exception as exc:
+            logger.debug("Could not save api_base_url: %s", exc)
+
+        self.api_base_url = base_url
+        self._api_chat_client = None
+        self.status_bar.set_left(f"[API] URL saved: {base_url}")
 
     # ------------------------------------------------------------------
     # Inline <search> emissions toggle (Stage B-2c, Pass 156z9w)

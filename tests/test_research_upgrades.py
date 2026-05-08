@@ -214,7 +214,7 @@ class TestFFDPacking:
 
     def test_multipack_tighter_packing(self):
         """Multipack packs tighter than naive FFD on adversarial input."""
-        from enigma_engine.core.training import pack_sequences
+        from enigma_engine.training.training import pack_sequences
         # Sequences designed to pack better with best-fit:
         # max_length=20, seqs: [9, 9, 5, 5, 5, 5]
         # FFD: row1=[9+eos, 9+eos]=20, row2=[5+eos, 5+eos, 5+eos]=18, row3=[5+eos]=6 → 3 rows
@@ -238,7 +238,7 @@ class TestGradientNoise:
     """R5: Gradient noise in TrainingConfig."""
 
     def test_config_has_noise_fields(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig()
         assert hasattr(cfg, "gradient_noise_eta")
         assert hasattr(cfg, "gradient_noise_gamma")
@@ -247,7 +247,7 @@ class TestGradientNoise:
 
     def test_config_has_noise_envelope_fields(self):
         """T2-3: Noise warmup/decay fractions exist with defaults."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig()
         assert cfg.noise_warmup_fraction == 0.05
         assert cfg.noise_decay_fraction == 0.2
@@ -288,7 +288,7 @@ class TestCosineWarmRestarts:
     """R8: Cosine restart period in TrainingConfig."""
 
     def test_config_has_restart_period(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig()
         assert hasattr(cfg, "cosine_restart_period")
         assert cfg.cosine_restart_period == 0  # disabled
@@ -338,13 +338,13 @@ class TestRDrop:
     """T2-4: R-Drop regularization in training.py."""
 
     def test_config_has_r_drop_alpha(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig()
         assert hasattr(cfg, 'r_drop_alpha')
         assert cfg.r_drop_alpha == 0.0  # disabled by default
 
     def test_r_drop_in_serialization(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig(r_drop_alpha=1.0)
         d = cfg.to_dict()
         assert d['r_drop_alpha'] == 1.0
@@ -363,13 +363,13 @@ class TestWSDSchedule:
     """T2-6: Warmup-Stable-Decay schedule in training.py."""
 
     def test_config_has_schedule_type(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig()
         assert cfg.schedule_type == 'wsd'
         assert cfg.wsd_decay_fraction == 0.1
 
     def test_schedule_type_in_serialization(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig(schedule_type='cosine')
         d = cfg.to_dict()
         assert d['schedule_type'] == 'cosine'
@@ -383,7 +383,7 @@ class TestSWA:
     """R13: SWA in training.py."""
 
     def test_config_has_swa_interval(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig()
         assert hasattr(cfg, "swa_update_interval")
         assert cfg.swa_update_interval == 0  # disabled
@@ -398,7 +398,7 @@ class TestSimPO:
 
     def test_simpo_source_no_ref_model(self):
         """SimPO should NOT create a reference model."""
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         src = inspect.getsource(Trainer.train_simpo)
         assert "ref_model" not in src or "no ref model" in src.lower()
 
@@ -1083,7 +1083,7 @@ class TestLISA:
     """R26: Layerwise Importance Sampled AdamW in progressive_growing.py."""
 
     def test_config_fields_exist(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig()
         assert hasattr(cfg, "use_lisa")
         assert cfg.use_lisa is False
@@ -1188,7 +1188,7 @@ class TestZLoss:
     """R28: Z-Loss auxiliary loss in training.py."""
 
     def test_config_field_exists(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig()
         assert hasattr(cfg, "z_loss_weight")
         assert cfg.z_loss_weight == 0.0
@@ -1212,7 +1212,7 @@ class TestAdEMAMix:
     """R30: AdEMAMix dual-EMA optimizer in training.py."""
 
     def test_config_has_optimizer_field(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig()
         assert hasattr(cfg, "optimizer")
         assert cfg.optimizer == "adamw"
@@ -1222,13 +1222,13 @@ class TestAdEMAMix:
         assert cfg.ademamix_alpha == 5.0
 
     def test_config_optimizer_validates(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig(optimizer="invalid")
         with pytest.raises(ValueError, match="optimizer"):
             cfg.validate()
 
     def test_to_dict_includes_optimizer_fields(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig(optimizer="ademamix")
         d = cfg.to_dict()
         assert d["optimizer"] == "ademamix"
@@ -1238,7 +1238,7 @@ class TestAdEMAMix:
     def test_ademamix_step(self):
         """AdEMAMix optimizer runs a step without error."""
         import torch
-        from enigma_engine.core.training import AdEMAMix
+        from enigma_engine.training.training import AdEMAMix
 
         model = torch.nn.Linear(8, 4)
         opt = AdEMAMix(model.parameters(), lr=1e-3, betas=(0.9, 0.95),
@@ -1252,7 +1252,7 @@ class TestAdEMAMix:
     def test_ademamix_two_emas(self):
         """Verify AdEMAMix maintains fast and slow EMA buffers."""
         import torch
-        from enigma_engine.core.training import AdEMAMix
+        from enigma_engine.training.training import AdEMAMix
 
         model = torch.nn.Linear(4, 2)
         opt = AdEMAMix(model.parameters(), lr=1e-3)
@@ -1271,7 +1271,7 @@ class TestAdEMAMix:
     def test_ademamix_reduces_loss(self):
         """AdEMAMix should reduce loss over multiple steps."""
         import torch
-        from enigma_engine.core.training import AdEMAMix
+        from enigma_engine.training.training import AdEMAMix
 
         torch.manual_seed(42)
         model = torch.nn.Linear(4, 2, bias=False)
@@ -1329,7 +1329,7 @@ class TestAdEMAMixAlphaScheduling:
     """S560: Alpha annealing from initial to final during warmup."""
 
     def test_config_has_alpha_scheduling_fields(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig()
         assert hasattr(cfg, 'ademamix_alpha_initial')
         assert cfg.ademamix_alpha_initial == 10.0
@@ -1337,7 +1337,7 @@ class TestAdEMAMixAlphaScheduling:
         assert cfg.ademamix_alpha_warmup == 0.1
 
     def test_to_dict_includes_alpha_scheduling(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig(optimizer="ademamix")
         d = cfg.to_dict()
         assert "ademamix_alpha_initial" in d
@@ -1414,13 +1414,13 @@ class TestChunkedCrossEntropy:
 
     def test_config_has_ce_chunk_size(self):
         """TrainingConfig should have ce_chunk_size field."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig()
         assert hasattr(cfg, 'ce_chunk_size')
         assert cfg.ce_chunk_size == 0  # Default disabled
 
     def test_to_dict_includes_ce_chunk_size(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         d = TrainingConfig(ce_chunk_size=4096).to_dict()
         assert d['ce_chunk_size'] == 4096
 
@@ -1950,7 +1950,7 @@ class TestAdEMAMixValidation:
     def test_ademamix_invalid_params(self):
         """Invalid hyperparameters should raise ValueError."""
         import torch
-        from enigma_engine.core.training import AdEMAMix
+        from enigma_engine.training.training import AdEMAMix
 
         model = torch.nn.Linear(4, 2)
         with pytest.raises(ValueError, match="beta1"):
@@ -2069,7 +2069,7 @@ class TestORPO:
     def test_orpo_empty_data_raises(self):
         """Empty preference data should raise ValueError."""
         from unittest.mock import MagicMock
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         trainer = MagicMock(spec=Trainer)
         trainer.train_orpo = Trainer.train_orpo.__get__(trainer, Trainer)
         with pytest.raises(ValueError, match="No preference data"):
@@ -2077,7 +2077,7 @@ class TestORPO:
 
     def test_orpo_no_reference_model(self):
         """ORPO should not create a reference model (unlike DPO)."""
-        from enigma_engine.core.training import Trainer
+        from enigma_engine.training.training import Trainer
         src = inspect.getsource(Trainer.train_orpo)
         assert "deepcopy" not in src
         assert "ref_model" not in src
@@ -2123,7 +2123,7 @@ class TestMuon:
     def test_muon_step(self):
         """Muon optimizer runs a step without error."""
         import torch
-        from enigma_engine.core.training import Muon
+        from enigma_engine.training.training import Muon
 
         model = torch.nn.Linear(8, 4)
         opt = Muon(model.parameters(), lr=0.01, momentum=0.95, ns_steps=3)
@@ -2136,7 +2136,7 @@ class TestMuon:
     def test_muon_reduces_loss(self):
         """Muon should reduce loss over multiple steps."""
         import torch
-        from enigma_engine.core.training import Muon
+        from enigma_engine.training.training import Muon
 
         torch.manual_seed(42)
         model = torch.nn.Linear(4, 2, bias=False)
@@ -2158,7 +2158,7 @@ class TestMuon:
     def test_newton_schulz_produces_orthogonal(self):
         """Newton-Schulz should produce approximately orthogonal output."""
         import torch
-        from enigma_engine.core.training import Muon
+        from enigma_engine.training.training import Muon
 
         G = torch.randn(4, 4)
         Q = Muon._newton_schulz(G, steps=10)
@@ -2170,7 +2170,7 @@ class TestMuon:
     def test_muon_handles_1d_params(self):
         """1D params (bias) should use plain momentum, not Newton-Schulz."""
         import torch
-        from enigma_engine.core.training import Muon
+        from enigma_engine.training.training import Muon
 
         model = torch.nn.Linear(4, 2, bias=True)
         opt = Muon(model.parameters(), lr=0.01)
@@ -2182,7 +2182,7 @@ class TestMuon:
     def test_muon_invalid_ns_steps(self):
         """ns_steps < 1 should raise ValueError."""
         import torch
-        from enigma_engine.core.training import Muon
+        from enigma_engine.training.training import Muon
 
         model = torch.nn.Linear(4, 2)
         with pytest.raises(ValueError, match="ns_steps"):
@@ -2660,14 +2660,14 @@ class TestMinHashDedup:
     """T4-1: MinHash near-duplicate detection in training.py."""
 
     def test_exact_duplicates_removed(self):
-        from enigma_engine.core.training import minhash_dedup
+        from enigma_engine.training.training import minhash_dedup
         texts = ["hello world", "hello world", "something else"]
         result = minhash_dedup(texts, threshold=0.8)
         # Exact duplicates should be removed
         assert len(result) == 2
 
     def test_near_duplicates_removed(self):
-        from enigma_engine.core.training import minhash_dedup
+        from enigma_engine.training.training import minhash_dedup
         # These two are very similar — only one word different
         texts = [
             "the quick brown fox jumps over the lazy dog",
@@ -2679,7 +2679,7 @@ class TestMinHashDedup:
         assert len(result) == 2
 
     def test_dissimilar_kept(self):
-        from enigma_engine.core.training import minhash_dedup
+        from enigma_engine.training.training import minhash_dedup
         texts = [
             "machine learning is about algorithms",
             "cooking recipes for pasta dishes",
@@ -2689,16 +2689,16 @@ class TestMinHashDedup:
         assert len(result) == 3
 
     def test_empty_input(self):
-        from enigma_engine.core.training import minhash_dedup
+        from enigma_engine.training.training import minhash_dedup
         assert minhash_dedup([], threshold=0.8) == []
 
     def test_single_input(self):
-        from enigma_engine.core.training import minhash_dedup
+        from enigma_engine.training.training import minhash_dedup
         result = minhash_dedup(["one text"], threshold=0.8)
         assert len(result) == 1
 
     def test_keeps_longest_near_duplicate(self):
-        from enigma_engine.core.training import minhash_dedup
+        from enigma_engine.training.training import minhash_dedup
         short = "the quick brown fox"
         long = "the quick brown fox jumps over the lazy dog in the park"
         texts = [short, long]
@@ -2708,7 +2708,7 @@ class TestMinHashDedup:
             assert result[0] == long
 
     def test_threshold_1_keeps_all(self):
-        from enigma_engine.core.training import minhash_dedup
+        from enigma_engine.training.training import minhash_dedup
         texts = [
             "the quick brown fox jumps over the lazy dog",
             "the quick brown fox jumps over the lazy cat",
@@ -2725,7 +2725,7 @@ class TestMinHashDedup:
         than industry practice and disagreed with the cited research.
         """
         import inspect
-        from enigma_engine.core.training import minhash_dedup
+        from enigma_engine.training.training import minhash_dedup
         sig = inspect.signature(minhash_dedup)
         assert sig.parameters["threshold"].default == 0.75
 
@@ -2738,25 +2738,25 @@ class TestCurriculumLearning:
     """T4-2: Curriculum learning config and ordering."""
 
     def test_config_field_exists(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         config = TrainingConfig()
         assert hasattr(config, 'curriculum')
         assert config.curriculum == "none"
 
     def test_valid_curriculum_values(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         for val in ("none", "easy_first"):
             config = TrainingConfig(curriculum=val)
             config.validate()
 
     def test_invalid_curriculum_rejected(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         config = TrainingConfig(curriculum="invalid")
         with pytest.raises(ValueError, match="curriculum"):
             config.validate()
 
     def test_to_dict_includes_curriculum(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         config = TrainingConfig(curriculum="easy_first")
         d = config.to_dict()
         assert "curriculum" in d
@@ -2943,13 +2943,13 @@ class TestLLRD:
     """T5-7: Exponentially decaying LR per transformer layer."""
 
     def test_config_has_llrd_decay(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         config = TrainingConfig()
         assert hasattr(config, 'llrd_decay')
         assert config.llrd_decay == 0.0
 
     def test_llrd_decay_in_to_dict(self):
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         config = TrainingConfig(llrd_decay=0.8)
         d = config.to_dict()
         assert 'llrd_decay' in d
@@ -2957,7 +2957,7 @@ class TestLLRD:
 
     def test_llrd_decay_validation(self):
         """llrd_decay must be in [0.0, 1.0)."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         with pytest.raises(ValueError):
             TrainingConfig(llrd_decay=1.0).validate()
         with pytest.raises(ValueError):
@@ -3000,14 +3000,14 @@ class TestAutoBatchSize:
 
     def test_config_allows_zero_batch_size(self):
         """TrainingConfig should accept batch_size=0 (auto) without error."""
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig(batch_size=0)
         cfg.validate()  # should not raise
 
     def test_config_rejects_negative_batch_size(self):
         """TrainingConfig should reject batch_size < 0."""
         import pytest
-        from enigma_engine.core.training import TrainingConfig
+        from enigma_engine.training.training import TrainingConfig
         cfg = TrainingConfig(batch_size=-1)
         with pytest.raises(ValueError):
             cfg.validate()

@@ -13,7 +13,7 @@ be attached to any Trainer via its ``on_loss`` / ``on_progress``
 callbacks.
 
 Usage:
-    from enigma_engine.core.training_monitor import (
+    from enigma_engine.training.training_monitor import (
         TrainingMonitor, TrainingRun,
     )
 

@@ -393,7 +393,7 @@ class ForgeTrainingMixin:
                         f"{mins}m {secs:02d}s{eta}")
 
                 # I-14: Check for checkpoint resume
-                from enigma_engine.core.training import Trainer as _T
+                from enigma_engine.training.training import Trainer as _T
                 ckpt_dir = Path(str(MODELS_DIR / "checkpoints"))
                 resume_enabled = getattr(
                     self, 'forge_resume_var', None)
@@ -1402,7 +1402,7 @@ class ForgeTrainingMixin:
                 from enigma_engine.core.model import Enigma
                 from enigma_engine.core.model_presets import ForgeConfig
                 from enigma_engine.core.tokenizer import get_tokenizer
-                from enigma_engine.core.training import (
+                from enigma_engine.training.training import (
                     Trainer, TrainingConfig)
 
                 device = ("cuda"

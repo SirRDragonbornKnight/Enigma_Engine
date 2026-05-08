@@ -1,4 +1,4 @@
-﻿"""
+"""
 Enigma Engine - Forge New Training Modes
 ==========================================
 
@@ -94,7 +94,7 @@ class ForgeNewModesMixin:
         if self.training_active:
             return None
 
-        # STUDENT model is required — create in Models tab first
+        # STUDENT model is required - create in Models tab first
         student_path = self.route_assignments.get("student")
         if not student_path or not Path(student_path).exists():
             self._log(
@@ -265,7 +265,7 @@ class ForgeNewModesMixin:
             try:
                 import torch
                 from enigma_engine.core.model import Enigma
-                from enigma_engine.core.training import (
+                from enigma_engine.training.training import (
                     Trainer, TrainingConfig)
                 from enigma_engine.core.tokenizer import get_tokenizer
                 from enigma_engine.core.dataset import (
@@ -306,7 +306,7 @@ class ForgeNewModesMixin:
                     if existing is not None:
                         self._log(
                             "[i] Checkpoint exists but Resume is "
-                            "unchecked — starting fresh.")
+                            "unchecked - starting fresh.")
 
                 # Step 1: Process pre-training data (streaming)
                 #
@@ -334,7 +334,7 @@ class ForgeNewModesMixin:
 
                 def _load_progress(pct, msg):
                     self._log(f"  [{pct:>3d}%] {msg}")
-                    # Warn once when RAM crosses 80% during load —
+                    # Warn once when RAM crosses 80% during load -
                     # this is the window where OOM kills happen.
                     if not _ram_warned[0] and pct >= 50:
                         try:
@@ -352,12 +352,12 @@ class ForgeNewModesMixin:
                         except ImportError:
                             pass
 
-                # ── Pass 1: scan for total chars + tok samples ──
+                # -- Pass 1: scan for total chars + tok samples --
                 self._log("")
                 self._log("=== Phase 1/5: Loading Data ===")
                 self._log("  Reading the full dataset into memory.")
                 self._log("  Large files (80+ GB) take 15-25 min.")
-                self._log("  RAM usage will climb — this is normal.")
+                self._log("  RAM usage will climb - this is normal.")
                 self._log("")
                 total_chars = 0
                 calibration_sample = None
@@ -397,7 +397,7 @@ class ForgeNewModesMixin:
                     f"[{_elapsed:.1f}s]")
                 self._log(f"          {_ram_str()}")
 
-                # ── C-2: Warn before tokenizer retrain destroys
+                # -- C-2: Warn before tokenizer retrain destroys
                 # existing weights (vocab size change makes all
                 # embedding/output weights incompatible).
                 if do_retrain_tok:
@@ -421,7 +421,7 @@ class ForgeNewModesMixin:
                         "  This is CPU-bound and can take "
                         "1-6 hours depending on data size.")
                     self._log(
-                        "  The GUI may feel sluggish — "
+                        "  The GUI may feel sluggish - "
                         "this is normal. Progress updates "
                         "every 100 merges.")
                     self._log(
@@ -488,7 +488,7 @@ class ForgeNewModesMixin:
                         f"{tokenizer.vocab_size} tokens "
                         f"[{_time.monotonic() - _phase_t0:.1f}s]")
                 else:
-                    # Not retraining — free the tok samples
+                    # Not retraining - free the tok samples
                     del tok_samples
                     # Try to load tokenizer from checkpoint dir
                     # first (resume), then bundled in student
@@ -628,7 +628,7 @@ class ForgeNewModesMixin:
                     f"seq={config.max_seq_len}")
                 self._log(f"          {_ram_str()}")
 
-                # ── C-1: Data/model ratio guard.
+                # -- C-1: Data/model ratio guard.
                 # Chinchilla scaling: need ~20 tokens per param.
                 # Warn when data is insufficient and recommend a
                 # preset that fits the available data.
@@ -654,7 +654,7 @@ class ForgeNewModesMixin:
                         f"rather than learn language.\n"
                         f"    Recommended size for your data: "
                         f"'{rec_name}' (~{rec_params:,} params"
-                        f") — {rec_desc}\n"
+                        f") - {rec_desc}\n"
                         f"    Create a smaller model in the "
                         f"MODELS tab, or collect more data "
                         f"with: python "
@@ -672,7 +672,7 @@ class ForgeNewModesMixin:
                 # Peak RAM: one ~200 MB chunk at a time.
                 max_seq = config.max_seq_len
 
-                # ── C-4: Calibrate chars_per_token from the
+                # -- C-4: Calibrate chars_per_token from the
                 # actual tokenizer instead of guessing.
                 if calibration_sample:
                     sample_ids = tokenizer.encode(
@@ -697,7 +697,7 @@ class ForgeNewModesMixin:
                     "  Re-reads the full dataset. "
                     "Similar time to Phase 1.")
                 self._log(
-                    "  RAM stays stable — sequences go "
+                    "  RAM stays stable - sequences go "
                     "straight to disk.")
                 self._log("")
                 self._log(
@@ -769,7 +769,7 @@ class ForgeNewModesMixin:
                     if mix_w is not None:
                         self.after(0, lambda: mix_w.set("10"))
                     self._log(
-                        "[!] General mix was 0% — raised to 10% "
+                        "[!] General mix was 0% - raised to 10% "
                         "to prevent catastrophic forgetting")
                 self._log(
                     f"General data mix: {mix:.0%} "
@@ -777,7 +777,7 @@ class ForgeNewModesMixin:
                 general_mix = mix
                 general_data = forge_params["general_data"]
 
-                # ── C-3: Auto-enable pre-training optimizations.
+                # -- C-3: Auto-enable pre-training optimizations.
                 # These have no downsides for pre-training and
                 # significantly improve memory/throughput.
 
@@ -805,7 +805,7 @@ class ForgeNewModesMixin:
                     use_compile=True,
                     rolling_best_k=forge_params["rolling_best_k"],
                     # WSD (warmup-stable-decay) is optimal for
-                    # pre-training — cosine wastes LR budget
+                    # pre-training - cosine wastes LR budget
                     schedule_type="wsd",
                     warmup_steps=_warmup,
                     general_mix_ratio=general_mix,
@@ -828,7 +828,7 @@ class ForgeNewModesMixin:
                     "  GPU will be fully utilized. "
                     "Loss chart updates each batch.")
                 self._log(
-                    "  Checkpoints save periodically — "
+                    "  Checkpoints save periodically - "
                     "safe to stop anytime.")
                 self._log("")
                 self._log("--- Auto-Optimizations ---")
@@ -886,7 +886,7 @@ class ForgeNewModesMixin:
                     if _math.isnan(loss) or _math.isinf(loss):
                         label = "NaN" if _math.isnan(loss) else "Inf"
                         self._log(
-                            f"\n[!] Loss is {label} — training has"
+                            f"\n[!] Loss is {label} - training has"
                             f" diverged.\n"
                             f"    Try: lower learning rate, check data"
                             f" for corrupt sequences, reduce batch size.")
@@ -966,7 +966,7 @@ class ForgeNewModesMixin:
                     self._log(f"[!] WARNING: {msg}")
                 trainer.on_warning = on_warning
 
-                # ── Resource check: warn if system RAM is low
+                # -- Resource check: warn if system RAM is low
                 # (silent OS kills leave no traceback)
                 try:
                     import psutil
@@ -1002,7 +1002,7 @@ class ForgeNewModesMixin:
                     reason = getattr(state, 'abort_reason', '') or (
                         "likely OOM or NaN loss")
                     self._log(
-                        f"\n[!] Pre-training aborted — {reason}.\n"
+                        f"\n[!] Pre-training aborted - {reason}.\n"
                         "    Try a smaller model (lower Memory "
                         "GB in MODELS tab) or reduce "
                         "batch size.")
@@ -1026,7 +1026,7 @@ class ForgeNewModesMixin:
                 from enigma_engine.core.safe_save import (
                     atomic_torch_save)
 
-                # ── C-5: Bundle tokenizer data in the checkpoint
+                # -- C-5: Bundle tokenizer data in the checkpoint
                 # so the model is self-contained. If the tokenizer
                 # file is moved or the vocab_model dir cleared,
                 # the checkpoint can reconstruct it.
@@ -1136,7 +1136,7 @@ class ForgeNewModesMixin:
         self.after(10000, _check_pretrain_alive)
 
     # ================================================================
-    # DISTILLATION (Step 1b — Teacher → Student)
+    # DISTILLATION (Step 1b - Teacher -> Student)
     # ================================================================
 
     def _pre_training_backup(
@@ -1154,7 +1154,7 @@ class ForgeNewModesMixin:
         Returns the backup path as a string on success, or ``None``
         when the source file does not exist yet (caller passed an
         unsaved path) or when the copy itself fails (loud `[!]` log
-        but the run still proceeds — backup is a safety rail, not
+        but the run still proceeds - backup is a safety rail, not
         a precondition).
 
         ``suffix`` lets each entry point name its rollback files
@@ -1182,7 +1182,7 @@ class ForgeNewModesMixin:
             self._log(f"Pre-{suffix} backup: {backup_path.name}")
             return str(backup_path)
         except Exception as backup_exc:
-            # Loud but non-fatal — the user knows the rollback rail
+            # Loud but non-fatal - the user knows the rollback rail
             # is missing for this run.
             self._log(
                 f"[!] Pre-{suffix} backup FAILED: "
@@ -1207,7 +1207,7 @@ class ForgeNewModesMixin:
 
         Failure of any single probe is swallowed with an empty-string
         response so the surrounding training run never crashes on a
-        diagnostic — the probe is observability, not flow control.
+        diagnostic - the probe is observability, not flow control.
         """
         import torch as _torch
         results: dict[str, str] = {}
@@ -1431,7 +1431,7 @@ class ForgeNewModesMixin:
                 "Write a brief dialogue between a cat and a dog "
                 "who are unlikely friends.",
                 "Invent a creative name and description for a "
-                "fictional café that serves unusual drinks.",
+                "fictional cafe that serves unusual drinks.",
             ],
         }
 
@@ -1444,7 +1444,7 @@ class ForgeNewModesMixin:
                 from enigma_engine.core.model_registry import (
                     get_state_dict, safe_load_weights)
                 from enigma_engine.core.tokenizer import get_tokenizer
-                from enigma_engine.core.training import (
+                from enigma_engine.training.training import (
                     Trainer, TrainingConfig)
 
                 device = ("cuda"
@@ -1496,7 +1496,7 @@ class ForgeNewModesMixin:
                     if tokenizer.vocab_size > s_cfg.vocab_size:
                         raise ValueError(
                             f"Tokenizer vocab ({tokenizer.vocab_size}) exceeds "
-                            f"model vocab ({s_cfg.vocab_size}) — token IDs "
+                            f"model vocab ({s_cfg.vocab_size}) - token IDs "
                             f"will be out of range. Use a matching tokenizer.")
                 self._log(
                     f"Tokenizer: {type(tokenizer).__name__} "
@@ -1763,7 +1763,7 @@ class ForgeNewModesMixin:
 
                 # P5-pre-2: anchor-mix gate.  When the personality
                 # category is selected we mix curated general
-                # examples (math/code/knowledge — see
+                # examples (math/code/knowledge - see
                 # ``data/anchor_examples.jsonl``) into the SFT batch
                 # at a default 30% ratio to mitigate catastrophic
                 # forgetting of base skills.  Other distill
@@ -1803,7 +1803,7 @@ class ForgeNewModesMixin:
 
                 # P5-pre-3: identity-guard probe (pre-training).
                 # Only fires when the personality category is in
-                # play — that's the only category that can drift
+                # play - that's the only category that can drift
                 # student identity toward the teacher.  Stored for
                 # post-training comparison after `trainer.train`
                 # returns.  Probe failures are non-fatal.
@@ -1904,13 +1904,13 @@ class ForgeNewModesMixin:
                     reason = getattr(state, 'abort_reason', '') or (
                         "likely OOM or NaN loss")
                     self._log(
-                        f"\n[!] Training aborted — {reason}.\n"
+                        f"\n[!] Training aborted - {reason}.\n"
                         "    Try reducing batch size.")
                     return
 
                 # P5-pre-3: identity-guard probe (post-training).
                 # Compare against `pre_probe_responses` and flag any
-                # prompts that drifted from safe → leaking.  This is
+                # prompts that drifted from safe ? leaking.  This is
                 # the regression signal personality SFT must avoid.
                 if (pre_probe_responses is not None
                         and "personality" in categories):
@@ -1931,7 +1931,7 @@ class ForgeNewModesMixin:
                         self._log(
                             f"  Identity safety: "
                             f"{summary['pre_safe']}/{summary['total']} "
-                            f"pre  →  "
+                            f"pre  ?  "
                             f"{summary['post_safe']}/{summary['total']} "
                             f"post")
                         if summary["drifted"]:
@@ -2803,7 +2803,7 @@ class ForgeNewModesMixin:
                 from enigma_engine.core.model_registry import (
                     get_state_dict, safe_load_weights)
                 from enigma_engine.core.tokenizer import get_tokenizer
-                from enigma_engine.core.training import (
+                from enigma_engine.training.training import (
                     Trainer, TrainingConfig)
 
                 device = (

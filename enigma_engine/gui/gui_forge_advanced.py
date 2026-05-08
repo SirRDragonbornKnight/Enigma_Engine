@@ -428,7 +428,7 @@ class ForgeAdvancedMixin:
                 # ============================================
                 # Train STUDENT on corrections
                 # ============================================
-                from enigma_engine.core.training import (
+                from enigma_engine.training.training import (
                     Trainer, TrainingConfig)
                 from enigma_engine.core.tokenizer import (
                     get_tokenizer as get_tok)
@@ -689,7 +689,7 @@ class ForgeAdvancedMixin:
                     get_tokenizer)
                 from enigma_engine.core.model_presets import (
                     ForgeConfig)
-                from enigma_engine.core.training import (
+                from enigma_engine.training.training import (
                     Trainer, TrainingConfig)
                 from enigma_engine.core.safe_save import (
                     atomic_torch_save)

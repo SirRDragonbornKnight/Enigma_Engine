@@ -95,6 +95,8 @@ Examples:
   python run.py --gui --model models/my.pth       Desktop GUI with model pre-loaded
   python run.py --serve                           Start API server on port 8080
   python run.py --serve --model models/my.pth     API server with model pre-loaded
+    python run.py --client-chat                     CLI chat over API client
+    python run.py --client-chat --api-url http://127.0.0.1:8080
   python run.py --chat                            CLI chat (requires trained model)
   python run.py --chat --model models/my.pth      Chat with specific model
   python run.py --train data/training.txt         Train model on text data
@@ -117,6 +119,10 @@ Examples:
                         help="Comma-separated CORS origins (e.g. http://localhost:3000). "
                              "CORS is disabled when omitted")
     parser.add_argument("--chat", action="store_true", help="Simple CLI chat")
+    parser.add_argument("--client-chat", action="store_true",
+                        help="CLI chat over HTTP API (ARCH-1b/1c bridge)")
+    parser.add_argument("--api-url", type=str, default="http://127.0.0.1:8080",
+                        help="Base URL for --client-chat (default: http://127.0.0.1:8080)")
     parser.add_argument("--profile", type=str, default=None,
                         help="AI profile to load for --chat (e.g. assistant, creative_writer)")
     parser.add_argument("--temperature", type=float, default=None,
@@ -213,6 +219,13 @@ Examples:
         run_serve(args.model, port, args.host, key, cors)
     elif args.gui:
         run_gui_app(args.model)
+    elif args.client_chat:
+        run_chat_client(
+            api_url=args.api_url,
+            model_path=args.model,
+            profile=args.profile,
+            temperature=args.temperature,
+        )
     elif args.chat:
         run_chat(args.model, args.profile, args.temperature)
     elif args.benchmark is not None:
@@ -496,7 +509,7 @@ def run_train(data_path: str, model_path: str, model_size: str,
     try:
         import torch
         from enigma_engine.core.model import MODEL_PRESETS
-        from enigma_engine.core.training import Trainer, TrainingConfig
+        from enigma_engine.training.training import Trainer, TrainingConfig
         from enigma_engine.core.tokenizer import get_tokenizer
         
         # Show hardware info
@@ -858,7 +871,7 @@ def run_gsm8k_benchmark_cli(model_path: str = None,
 
     try:
         from enigma_engine.core import EnigmaEngine
-        from enigma_engine.core.training_evaluation import (
+        from enigma_engine.training.training_evaluation import (
             load_gsm8k, run_gsm8k_benchmark)
 
         print(f"  Loading {model_path}...")
@@ -984,6 +997,81 @@ def run_chat(model_path: str = None, profile: str = None,
     except Exception as e:
         print(f"\nError loading model: {e}")
         print("Make sure you have trained a model or specified a valid model path.")
+
+
+def run_chat_client(api_url: str, model_path: str = None,
+                    profile: str = None, temperature: float = None):
+    """CLI chat interface that talks to a running API server."""
+    import sys
+
+    print("\n" + "=" * 50)
+    print("  Enigma AI Engine - Client Chat")
+    print("  Type 'quit' to exit")
+    print("=" * 50 + "\n")
+
+    try:
+        from enigma_engine import EnigmaClient
+
+        client = EnigmaClient(api_url)
+        health = client.health()
+        if health.get("status") != "ok":
+            raise RuntimeError(f"server health check failed: {health}")
+        print(f"Connected: {api_url}")
+
+        if model_path:
+            print("Loading model via API...")
+            client.load_model(model_path)
+            print("Model loaded!")
+
+        if profile:
+            try:
+                client.activate_profile(profile)
+                print(f"Profile: {profile}")
+            except Exception as exc:
+                print(f"  [WARN] Could not activate profile '{profile}': {exc}")
+
+        print()
+
+        while True:
+            try:
+                user_input = input("You: ").strip()
+                if user_input.lower() in ("quit", "exit", "q"):
+                    print("Goodbye!")
+                    break
+                if not user_input:
+                    continue
+
+                sys.stdout.write("AI: ")
+                sys.stdout.flush()
+
+                stream_kwargs: dict = {}
+                if temperature is not None:
+                    stream_kwargs["temperature"] = temperature
+
+                emitted = False
+                for token in client.chat_stream(user_input, **stream_kwargs):
+                    emitted = True
+                    sys.stdout.write(token)
+                    sys.stdout.flush()
+
+                if not emitted:
+                    # Fallback for servers/proxies that buffer SSE responses.
+                    response = client.chat(user_input, **stream_kwargs)
+                    sys.stdout.write(response)
+                    sys.stdout.flush()
+
+                sys.stdout.write("\n\n")
+                sys.stdout.flush()
+
+            except KeyboardInterrupt:
+                print("\nGoodbye!")
+                break
+            except Exception as exc:
+                print(f"\n  [ERROR] Request failed: {exc}\n")
+
+    except Exception as exc:
+        print(f"\nError connecting to API server: {exc}")
+        print("Start the server first: python run.py --serve")
 
 
 if __name__ == "__main__":

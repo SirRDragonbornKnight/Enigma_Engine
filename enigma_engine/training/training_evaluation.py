@@ -10,7 +10,7 @@ Features:
 - Track tool use success rates (command execution accuracy)
 
 Usage:
-    from enigma_engine.core.training_evaluation import evaluate_model
+    from enigma_engine.training.training_evaluation import evaluate_model
 
     before_metrics = evaluate_model(model, tokenizer, test_prompts)
     # ... train model ...
