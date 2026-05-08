@@ -1,7 +1,11 @@
 ﻿# Code Review Tracker
 
 **Started:** March 24, 2026
-**Last pass:** Pass 156z9bx (May 8, 2026) — **ARCH-1c streamed parity hardening.**
+**Last pass:** Pass 156z9by (May 8, 2026) — **ARCH-1.5c RLHF/Self-Play dispatcher migration.**
+
+---
+
+**Pass 156z9by (May 8, 2026) — ARCH-1.5c RLHF/Self-Play dispatcher migration:** Targeted follow-up from the launcher/dispatcher audit. [enigma_engine/gui/gui_forge_new_modes.py](enigma_engine/gui/gui_forge_new_modes.py) `ForgeNewModesMixin._start_rlhf_training` and `_start_selfplay_training` now route phase-2 policy training through [enigma_engine/training/dispatch.py](enigma_engine/training/dispatch.py) (`build_dispatch_context(...)` + `run_training(...)`) instead of directly instantiating `RLHFTrainer` / `SelfPlayTrainer`. `RLHF` keeps the existing explicit reward-model phase (`RewardTrainer`) and then dispatches `"mode": "rlhf"`; self-play dispatches `"mode": "self_play"` with `trainer_engine` in dispatch context. Added structural seam guards in [tests/test_gui.py](tests/test_gui.py) (`TestForgeDispatcherRouting`) asserting both launcher methods call dispatcher and pass the expected mode literals. Validation: targeted `python -m pytest tests/test_gui.py -k "ForgeDispatcherRouting" -q --no-header` → **2 passed**; full suite `python -m pytest tests/ -q -rs --no-header` → **3017 passed, 3 skipped**.
 
 ---
 

@@ -5,12 +5,12 @@
 Verified local baseline after audit:
 
 - `ruff check enigma_engine/ tests/` → pass
-- `python -m pytest tests/ -q` → **3013 passed, 3 skipped**
+- `python -m pytest tests/ -q` → **3017 passed, 3 skipped**
 
 ARCH-1.5c migration status (code verified):
 
-- Forge launchers now dispatcher-backed for `sft` (`018c8f9`), `dpo` (`22ae19a`), `grpo` (`3e61f4b`), `remax` (`0c7cc0b`), `vision` (`388050e`), `lora` (`fbf2976`).
-- ARCH-1.5c decision gate is closed for currently exposed Forge launchers. Audio launcher work is explicitly scoped to ARCH-1d because no Forge audio training launcher/button exists in current GUI sources.
+- Forge launchers now dispatcher-backed for `sft` (`018c8f9`), `dpo` (`22ae19a`), `grpo` (`3e61f4b`), `remax` (`0c7cc0b`), `vision` (`388050e`), `lora` (`fbf2976`), `rlhf` (`9bf88b9`), and `self_play` (`9bf88b9`).
+- ARCH-1.5c remains open for Forge meta-mode launchers (`AI-Guided`, `Dialogue`, queue/adaptive scheduler paths) that still instantiate trainers directly. Audio launcher work remains scoped to ARCH-1d because no Forge audio training launcher/button exists in current GUI sources.
 
 ARCH-1.5d stabilization status (post-move, targeted verification):
 
@@ -35,6 +35,7 @@ ARCH-1b/1c bridge status (new this pass):
 - **Pass 156z9bv (May 8, 2026):** Mojibake cleanup pass on the unrelated-change audit findings. Replaced all replacement-character artifacts (`�`) in production Python sources (`enigma_engine/gui/gui_forge_new_modes.py`, `enigma_engine/core/engine_chat.py`, `enigma_engine/core/model.py`, `enigma_engine/core/reasoning.py`, and `enigma_engine/training/training.py`). Changes are text-only (comments/log/help strings), no logic-path edits. Added regression guard `tests/test_core.py::TestSourceEncodingHygiene::test_no_replacement_character_in_engine_sources` so future `�` artifacts fail CI immediately. Verification: `grep "�"` across `enigma_engine/**/*.py` now returns zero matches; `ruff check enigma_engine/ tests/` passes; full suite `python -m pytest tests/ -q -rs --no-header` → **3006 passed, 3 skipped**.
 - **Pass 156z9bw (May 8, 2026):** Continued ARCH-1c by shipping true live token-by-token rendering in GUI API chat mode. `LogicChatMixin._send_message` now tries `self._chat_request_stream(...)` first and appends incoming chunks directly to the assistant transcript in real time via `_append_stream_chunk(...)`; if stream setup fails or yields no chunks, it falls back to `_chat_request(..., prefer_stream=False)` (non-stream API/local behavior unchanged). Added `LogicChatMixin._chat_request_stream(...)` helper and `prefer_stream` switch on `_chat_request(...)` to avoid duplicate stream retries after an attempted stream path. Added +3 routing tests in `tests/test_gui_logic_chat.py::TestChatRequestRouting` for stream helper iterator behavior, stream-helper disabled behavior, and explicit non-stream path selection (`prefer_stream=False`). Verification: `ruff check enigma_engine/gui/gui_logic_chat.py tests/test_gui_logic_chat.py` pass; `python -m pytest tests/test_gui_logic_chat.py -q --no-header` → **41 passed**; full suite `python -m pytest tests/ -q -rs --no-header` → **3009 passed, 3 skipped**.
 - **Pass 156z9bx (May 8, 2026):** ARCH-1c streamed-branch parity hardening pass. Added shared `LogicChatMixin._postprocess_response_text(...)` so both streamed and non-stream responses feed the same normalization path for command parsing/history/TTS (extract complete `<think>...</think>`, strip incomplete `<think>`). Kept live streamed display unchanged on-screen; parity applies to downstream handling only. Refactored duplicate API payload construction into `LogicChatMixin._build_api_chat_payload(...)` and wired both `_chat_request_stream(...)` and `_chat_request(...)` through it to prevent drift. Added +4 tests in `tests/test_gui_logic_chat.py`: two behavioral postprocess helper tests and two API payload builder tests (system-prompt wrapping + kwarg filtering, no-system passthrough). Verification: `ruff check enigma_engine/gui/gui_logic_chat.py tests/test_gui_logic_chat.py` pass; focused `python -m pytest tests/test_gui_logic_chat.py -k "ChatRequestRouting or ResponsePostprocessing" -q --no-header` → **11 passed**; full suite `python -m pytest tests/ -q -rs --no-header` → **3013 passed, 3 skipped**.
+- **Pass 156z9by (May 8, 2026):** ARCH-1.5c launcher migration follow-up from audit: `RLHF` and `Self-Play` Forge launchers now route through dispatcher seam instead of direct `RLHFTrainer` / `SelfPlayTrainer` instantiation. Updated `ForgeNewModesMixin._start_rlhf_training` and `_start_selfplay_training` in `enigma_engine/gui/gui_forge_new_modes.py` to use `build_dispatch_context(...)` + `run_training(...)` with mode payloads (`"mode": "rlhf"`, `"mode": "self_play"`) while preserving existing two-phase RLHF flow (reward-model phase remains explicit) and progress callbacks. Added structural guards in `tests/test_gui.py::TestForgeDispatcherRouting` for both launchers. Verification: targeted `python -m pytest tests/test_gui.py -k "ForgeDispatcherRouting" -q --no-header` → **2 passed**; full suite `python -m pytest tests/ -q -rs --no-header` → **3017 passed, 3 skipped**.
 
 Test-hygiene micro-pass shipped (Pass 156z9bl):
 
@@ -113,9 +114,9 @@ Audit finding closed this pass:
 
 Return-to-work quick start:
 
-1. Run `python -m pytest tests/ -q` once and confirm baseline still matches **3013 passed, 3 skipped**.
-2. ARCH-1.5c audio decision gate is closed (Option B): audio launcher is scoped to ARCH-1d (client/API phase), and 1.5c is closed for currently exposed launchers.
-3. ARCH-1c live stream rendering is now shipped. Next ARCH-1c polish is behavioral parity on the streamed branch (post-processing features like `<think>` stripping/reasoning section formatting and AutoResearch retry currently remain on the non-stream path by design).
+1. Run `python -m pytest tests/ -q` once and confirm baseline still matches **3017 passed, 3 skipped**.
+2. Continue ARCH-1.5c on remaining direct-launcher/meta-mode paths (`AI-Guided`, `Dialogue`, queue/adaptive scheduler) so exposed GUI modes use one dispatch seam.
+3. ARCH-1c live stream rendering and parity hardening are shipped; remaining streamed-branch policy decisions are UX-level (retry/replace strategy), not missing transport plumbing.
 
 Test-suite hygiene note:
 
