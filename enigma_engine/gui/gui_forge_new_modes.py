@@ -2817,8 +2817,7 @@ class ForgeNewModesMixin:
                 from enigma_engine.core.model_registry import (
                     get_state_dict, safe_load_weights)
                 from enigma_engine.core.tokenizer import get_tokenizer
-                from enigma_engine.training.training import (
-                    Trainer, TrainingConfig)
+                from enigma_engine.gui.scanners import MODELS_DIR
 
                 device = (
                     "cuda" if torch.cuda.is_available()
@@ -2870,23 +2869,6 @@ class ForgeNewModesMixin:
 
                 self._log(f"Loaded {len(pref_data)} preference pairs")
 
-                # Create trainer
-                train_config = TrainingConfig(
-                    epochs=epochs,
-                    batch_size=forge_params["batch_size"],
-                    learning_rate=lr,
-                    use_gradient_checkpointing=forge_params[
-                        "use_gradient_checkpointing"],
-                    ce_chunk_size=forge_params["ce_chunk_size"],
-                    use_compile=True,
-                    rolling_best_k=forge_params["rolling_best_k"],
-                    save_every=max(1, epochs // 5),
-                    checkpoint_dir="models/checkpoints",
-                    use_amp=True,
-                    run_evaluation=True,
-                )
-                trainer = Trainer(model, tokenizer, train_config)
-
                 # Pass 156z9as: pre-SimPO/ORPO auto-checkpoint.
                 pre_pref_backup_path = (
                     self._pre_training_backup(
@@ -2897,6 +2879,7 @@ class ForgeNewModesMixin:
                 import time as _time
                 _start = [_time.monotonic()]
                 _last_t = [0.0]
+                _trainer_ref: list = []
 
                 def on_progress(p, m):
                     if not self.training_active:
@@ -2915,25 +2898,52 @@ class ForgeNewModesMixin:
                             p, f"{m}{eta}")
                         _last_t[0] = now
 
-                trainer.on_progress = on_progress
-
                 def on_loss(loss):
                     now = _time.monotonic()
                     if now - _last_t[0] < 0.5:
                         return
                     _last_t[0] = now
-                    step = trainer.state.step
+                    step = (
+                        _trainer_ref[0].state.step
+                        if _trainer_ref else 0)
                     self._log(
                         f"  Step {step:>5d} | loss {loss:.4f}")
 
-                trainer.on_loss = on_loss
+                def on_trainer_ready(t) -> None:
+                    _trainer_ref.append(t)
+                    self._active_trainer = t
 
-                # Train
-                self._active_trainer = trainer
-                if algo == "SimPO":
-                    state = trainer.train_simpo(pref_data)
-                else:
-                    state = trainer.train_orpo(pref_data)
+                # ARCH-1.5c: route SimPO/ORPO through dispatcher.
+                from enigma_engine.training.dispatch import (
+                    build_dispatch_context, run_training)
+                ctx = build_dispatch_context(
+                    model=model,
+                    tokenizer=tokenizer,
+                    on_progress=on_progress,
+                    on_loss=on_loss,
+                    on_trainer_ready=on_trainer_ready,
+                )
+                mode_name = "simpo" if algo == "SimPO" else "orpo"
+                config_dict: dict = {
+                    "mode": mode_name,
+                    "data": pref_data,
+                    "training": {
+                        "epochs": epochs,
+                        "learning_rate": lr,
+                        "batch_size": forge_params["batch_size"],
+                        "use_gradient_checkpointing": forge_params[
+                            "use_gradient_checkpointing"],
+                        "ce_chunk_size": forge_params["ce_chunk_size"],
+                        "use_compile": True,
+                        "rolling_best_k": forge_params["rolling_best_k"],
+                        "save_every": max(1, epochs // 5),
+                        "checkpoint_dir": str(
+                            MODELS_DIR / "checkpoints"),
+                        "use_amp": True,
+                        "run_evaluation": True,
+                    },
+                }
+                state = run_training(config_dict, ctx)
 
                 final_loss = state.best_loss
                 self._log(

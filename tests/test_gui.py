@@ -6283,6 +6283,48 @@ class TestForgeDispatcherRouting:
         assert "run_training(" in src
         assert '"mode": "self_play"' in src
 
+    def test_start_preference_variant_routes_through_dispatcher(self):
+        """SimPO and ORPO preference launchers route through dispatcher.
+
+        ARCH-1.5c: `_start_preference_variant_training` wraps SimPO and
+        ORPO. Both modes are first-class in the dispatcher registry, so
+        the launcher must build a dispatch context and call
+        `run_training` with the matching mode literal — not instantiate
+        `Trainer(...)` directly.
+
+        Asserts the literal call expression is present (not just the
+        mode token), so a regression that drops the actual call but
+        leaves the mode string in a comment or log line still fails.
+        """
+        import inspect
+        import re
+        from enigma_engine.gui.gui_forge_new_modes import (
+            ForgeNewModesMixin)
+
+        src = inspect.getsource(
+            ForgeNewModesMixin._start_preference_variant_training)
+        assert "build_dispatch_context(" in src
+        assert "run_training(" in src
+        # Both branches must be wired through the dispatcher mode key.
+        assert re.search(r'"mode":\s*\(?\s*"simpo"', src) or (
+            '"simpo"' in src and '"mode": mode_name' in src), (
+            "SimPO mode literal not wired into dispatch payload")
+        assert re.search(r'"mode":\s*\(?\s*"orpo"', src) or (
+            '"orpo"' in src and '"mode": mode_name' in src), (
+            "ORPO mode literal not wired into dispatch payload")
+        # Direct Trainer(...) construction must be gone.
+        assert "trainer = Trainer(" not in src, (
+            "Direct Trainer(...) construction still present in "
+            "_start_preference_variant_training; "
+            "should route through run_training(...)")
+        # train_simpo / train_orpo must NOT be called directly anymore.
+        assert "trainer.train_simpo(" not in src, (
+            "Direct trainer.train_simpo(...) call still present; "
+            "dispatcher should route via mode='simpo'")
+        assert "trainer.train_orpo(" not in src, (
+            "Direct trainer.train_orpo(...) call still present; "
+            "dispatcher should route via mode='orpo'")
+
 class TestModelsPageMerging:
     """N-21: MODELS page has merge controls wired to model_merging."""
 

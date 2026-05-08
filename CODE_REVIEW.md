@@ -1,7 +1,11 @@
 ﻿# Code Review Tracker
 
 **Started:** March 24, 2026
-**Last pass:** Pass 156z9by (May 8, 2026) — **ARCH-1.5c RLHF/Self-Play dispatcher migration.**
+**Last pass:** Pass 156z9bz (May 8, 2026) — **ARCH-1.5c SimPO/ORPO dispatcher migration.**
+
+---
+
+**Pass 156z9bz (May 8, 2026) — ARCH-1.5c SimPO/ORPO dispatcher migration:** Continued ARCH-1.5c launcher migration per the audit ranking. [enigma_engine/gui/gui_forge_new_modes.py](enigma_engine/gui/gui_forge_new_modes.py) `ForgeNewModesMixin._start_preference_variant_training` (the shared handler for the `_start_simpo_training` / `_start_orpo_training` thin wrappers) previously instantiated `Trainer(model, tokenizer, train_config)` directly and dispatched on `algo` to call `trainer.train_simpo(...)` or `trainer.train_orpo(...)`. Both modes are first-class in the dispatcher registry/schema (`SimPOSettings`, `ORPOSettings`, `mode in {"simpo", "orpo"}`); only the launcher was off the seam. Migrated to `build_dispatch_context(model=, tokenizer=, on_progress=, on_loss=, on_trainer_ready=)` + `run_training({"mode": mode_name, "data": pref_data, "training": {...}}, ctx)`, mirroring the DPO/APO migration shape (`22ae19a`). The `on_trainer_ready` callback captures the trainer for `self._active_trainer` and the `on_loss` step display. Removed the now-unused `Trainer, TrainingConfig` import; added the canonical `MODELS_DIR` import for `checkpoint_dir`. Added wire-site guard `tests/test_gui.py::TestForgeDispatcherRouting::test_start_preference_variant_routes_through_dispatcher` with positive-presence checks (`build_dispatch_context(`, `run_training(`, both mode literals reachable through `mode_name`) AND negative-presence checks (`trainer = Trainer(`, `trainer.train_simpo(`, `trainer.train_orpo(` all absent) so a regression that re-introduces the bypass fails loud. Validation: `ruff check enigma_engine/ tests/` clean; targeted `python -m pytest tests/test_gui.py -k "ForgeDispatcherRouting" -q --no-header` → **3 passed**; full suite `python -m pytest tests/ -q --no-header` → **3018 passed, 3 skipped**.
 
 ---
 
