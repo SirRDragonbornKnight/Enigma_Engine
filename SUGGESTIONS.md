@@ -5,12 +5,36 @@
 Verified local baseline after audit:
 
 - `ruff check enigma_engine/ tests/` → pass
-- `python -m pytest tests/ -q` → **2986 passed, 4 skipped**
+- `python -m pytest tests/ -q` → **3013 passed, 3 skipped**
 
 ARCH-1.5c migration status (code verified):
 
 - Forge launchers now dispatcher-backed for `sft` (`018c8f9`), `dpo` (`22ae19a`), `grpo` (`3e61f4b`), `remax` (`0c7cc0b`), `vision` (`388050e`), `lora` (`fbf2976`).
-- Audio remains the only open ARCH-1.5c launcher gap: no Forge audio training launcher/button exists in current GUI sources.
+- ARCH-1.5c decision gate is closed for currently exposed Forge launchers. Audio launcher work is explicitly scoped to ARCH-1d because no Forge audio training launcher/button exists in current GUI sources.
+
+ARCH-1.5d stabilization status (post-move, targeted verification):
+
+- Fixed two broken relative imports in `enigma_engine/training/training.py` introduced by the `core/` -> `training/` move: vision/audio trainer paths now import from `enigma_engine.core.vision_encoder` and `enigma_engine.core.audio_encoder`.
+- Updated structural test path assumptions that still referenced `enigma_engine/core/training.py`:
+  - `tests/test_training.py` (`Path("enigma_engine/training/training.py")`)
+  - `tests/test_core.py` dead-import critical module list.
+- Validation after fixes:
+  - `ruff check enigma_engine/ tests/` -> pass
+  - `python -m pytest tests/test_training.py -q` -> **436 passed**
+  - `python -m pytest tests/test_evaluation.py -q` -> **24 passed**
+  - `python -m pytest tests/test_core.py -k "DeadImports" -q` -> **1 passed**
+- **Pass 156z9bp audit (May 8, 2026):** Full-suite rerun surfaced one missed sibling-boundary site — `tests/test_gui.py::TestAtomicSaves::test_no_direct_writes_in_critical_modules` still listed `enigma_engine/core/training_queue.py` and `enigma_engine/core/training_monitor.py` in `_CRITICAL_MODULES`. Read failed with `FileNotFoundError`. Updated to `enigma_engine/training/training_queue.py` and `enigma_engine/training/training_monitor.py`. Re-ran: `ruff check enigma_engine/ tests/` → pass; `python -m pytest tests/ -q` → **2987 passed, 3 skipped**. ARCH-1.5d post-move sibling sweep is now complete; no other production-code references to the old `enigma_engine/core/training*` paths remain (historical SUGGESTIONS / CODE_REVIEW prose entries left untouched as they document past passes).
+
+ARCH-1b/1c bridge status (new this pass):
+
+- **Pass 156z9bq (May 8, 2026):** Added new stdlib HTTP client at `enigma_engine/client.py` with the core ARCH-1b surface: `health()`, `list_models()`, `model_status()`, `load_model()`, `unload_model()`, `chat()`, `chat_stream()`, `train()`, and `training_status()`. Added regression suite `tests/test_client.py` covering request contracts, HTTP error handling, stream token parsing, and stream error propagation.
+- **Pass 156z9br (May 8, 2026):** Added `EnigmaClient.activate_profile()` and ARCH-1c bridge entrypoint in `run.py`: new `--client-chat` mode + `--api-url` flag route CLI chat through HTTP (`EnigmaClient.chat_stream`) instead of direct `EnigmaEngine` imports. Optional `--model` triggers `/api/models/load`; optional `--profile` triggers `/api/profiles/{id}/activate`. Added client URL-encoding regression test for profile IDs in `tests/test_client.py`. Validation: `python -m pytest tests/test_client.py -q` → **9 passed**; full suite `python -m pytest tests/ -q` → **2996 passed, 3 skipped**.
+- **Pass 156z9bs (May 8, 2026):** Migrated one production GUI chat send path to client-aware routing with local fallback. `LogicChatMixin._send_message` now routes through new helper `LogicChatMixin._chat_request(...)`, which uses `EnigmaClient.chat(...)` when `use_api_chat=True` and falls back to local `self.engine.chat(...)` on API failure. Added cached client builder/getter (`_build_api_chat_client`, `_get_api_chat_client`) and persisted GUI boot settings in `desktop.py` (`use_api_chat`, `api_base_url`). This closes the planned "one GUI chat send path" ARCH-1c slice without removing local-engine mode. Tests +2 in `tests/test_gui_logic_chat.py::TestChatRequestRouting` gate API path + fallback path behavior. Validation: `python -m pytest tests/test_gui_logic_chat.py -q` → **36 passed**; full suite `python -m pytest tests/ -q` → **2998 passed, 3 skipped**.
+- **Pass 156z9bt (May 8, 2026):** Added visible CONFIG controls for the new ARCH-1c chat routing mode in `gui_pages_config.py`: checkbox `use_api_chat` + URL field `api_base_url` with explicit Save button. Added handlers `_toggle_use_api_chat()` and `_save_api_base_url()` that persist to `gui_settings.json`, update live in-memory state, and clear cached client instances when needed. Added GUI regression coverage in `tests/test_gui.py::TestApiChatConfig` (5 tests): toggle persistence, cached-client clear-on-disable, URL persistence + cache reset, and structural boot-load wire-site checks in `EnigmaGUI.__init__` for both keys. Validation: targeted `test_gui.py` selection **15 passed**; full suite `python -m pytest tests/ -q` → **3003 passed, 3 skipped**.
+- **Pass 156z9bu (May 8, 2026):** Continued ARCH-1c chat bridging by making GUI API mode prefer the streaming endpoint. `LogicChatMixin._chat_request(...)` in `gui_logic_chat.py` now calls `EnigmaClient.chat_stream(...)` first and joins token chunks into one response string; if streaming fails, it falls back to `EnigmaClient.chat(...)`; if API mode fails entirely, it keeps the existing local-engine fallback (`self.engine.chat(...)`). This closes the previously parked "streaming GUI path" transport gap at the API seam without changing the visible UI flow. Added tests +2 in `tests/test_gui_logic_chat.py::TestChatRequestRouting`: stream-preferred token join behavior and stream->chat fallback behavior. Validation: `ruff check enigma_engine/gui/gui_logic_chat.py tests/test_gui_logic_chat.py` pass; `python -m pytest tests/test_gui_logic_chat.py -k "ChatRequestRouting" -q` → **4 passed**; full suite `python -m pytest tests/ -q` → **3004 passed, 4 skipped**.
+- **Pass 156z9bv (May 8, 2026):** Mojibake cleanup pass on the unrelated-change audit findings. Replaced all replacement-character artifacts (`�`) in production Python sources (`enigma_engine/gui/gui_forge_new_modes.py`, `enigma_engine/core/engine_chat.py`, `enigma_engine/core/model.py`, `enigma_engine/core/reasoning.py`, and `enigma_engine/training/training.py`). Changes are text-only (comments/log/help strings), no logic-path edits. Added regression guard `tests/test_core.py::TestSourceEncodingHygiene::test_no_replacement_character_in_engine_sources` so future `�` artifacts fail CI immediately. Verification: `grep "�"` across `enigma_engine/**/*.py` now returns zero matches; `ruff check enigma_engine/ tests/` passes; full suite `python -m pytest tests/ -q -rs --no-header` → **3006 passed, 3 skipped**.
+- **Pass 156z9bw (May 8, 2026):** Continued ARCH-1c by shipping true live token-by-token rendering in GUI API chat mode. `LogicChatMixin._send_message` now tries `self._chat_request_stream(...)` first and appends incoming chunks directly to the assistant transcript in real time via `_append_stream_chunk(...)`; if stream setup fails or yields no chunks, it falls back to `_chat_request(..., prefer_stream=False)` (non-stream API/local behavior unchanged). Added `LogicChatMixin._chat_request_stream(...)` helper and `prefer_stream` switch on `_chat_request(...)` to avoid duplicate stream retries after an attempted stream path. Added +3 routing tests in `tests/test_gui_logic_chat.py::TestChatRequestRouting` for stream helper iterator behavior, stream-helper disabled behavior, and explicit non-stream path selection (`prefer_stream=False`). Verification: `ruff check enigma_engine/gui/gui_logic_chat.py tests/test_gui_logic_chat.py` pass; `python -m pytest tests/test_gui_logic_chat.py -q --no-header` → **41 passed**; full suite `python -m pytest tests/ -q -rs --no-header` → **3009 passed, 3 skipped**.
+- **Pass 156z9bx (May 8, 2026):** ARCH-1c streamed-branch parity hardening pass. Added shared `LogicChatMixin._postprocess_response_text(...)` so both streamed and non-stream responses feed the same normalization path for command parsing/history/TTS (extract complete `<think>...</think>`, strip incomplete `<think>`). Kept live streamed display unchanged on-screen; parity applies to downstream handling only. Refactored duplicate API payload construction into `LogicChatMixin._build_api_chat_payload(...)` and wired both `_chat_request_stream(...)` and `_chat_request(...)` through it to prevent drift. Added +4 tests in `tests/test_gui_logic_chat.py`: two behavioral postprocess helper tests and two API payload builder tests (system-prompt wrapping + kwarg filtering, no-system passthrough). Verification: `ruff check enigma_engine/gui/gui_logic_chat.py tests/test_gui_logic_chat.py` pass; focused `python -m pytest tests/test_gui_logic_chat.py -k "ChatRequestRouting or ResponsePostprocessing" -q --no-header` → **11 passed**; full suite `python -m pytest tests/ -q -rs --no-header` → **3013 passed, 3 skipped**.
 
 Test-hygiene micro-pass shipped (Pass 156z9bl):
 
@@ -89,16 +113,14 @@ Audit finding closed this pass:
 
 Return-to-work quick start:
 
-1. Run `python -m pytest tests/ -q` once and confirm baseline still matches **2986 passed, 4 skipped**.
-2. Close the ARCH-1.5c audio decision gate:
-  - Option A: add a Forge audio launcher and migrate it through dispatcher now.
-  - Option B: explicitly scope audio launcher to ARCH-1d (client/API phase) and close 1.5c for currently exposed launchers.
-3. Execute the chosen path end-to-end with tests, then update ARCH-1 recommended order and open-questions text in this file in the same pass.
+1. Run `python -m pytest tests/ -q` once and confirm baseline still matches **3013 passed, 3 skipped**.
+2. ARCH-1.5c audio decision gate is closed (Option B): audio launcher is scoped to ARCH-1d (client/API phase), and 1.5c is closed for currently exposed launchers.
+3. ARCH-1c live stream rendering is now shipped. Next ARCH-1c polish is behavioral parity on the streamed branch (post-processing features like `<think>` stripping/reasoning section formatting and AutoResearch retry currently remain on the non-stream path by design).
 
 Test-suite hygiene note:
 
 - Combine compatible tests into parametrized/shared blocks when they cover the same contract family. Keep signal high, but do not let the suite sprawl into a pile of tiny near-duplicate tests.
-- Next execution slice (May 7, 2026): audit structural-test families in `tests/test_gui.py`, `tests/test_chat.py`, and `tests/test_functional.py`; consolidate near-duplicates into shared/parametrized tests while preserving at least one behavioural sentinel per contract family.
+- Structural-family cleanup pass is completed (Pass 156z9bl); keep future consolidations scoped and contract-preserving.
 
 ## 🟡 RUNTIME TESTS PENDING (user-driven, not code work)
 
@@ -264,7 +286,7 @@ vision:                 # only required when mode == vision
 | **V1c** GGUF metadata + tokenizer audit | After V1b, the round-trip xfails likely STILL fail because llama.cpp also requires: `llama.attention.layer_norm_rms_epsilon`, BPE merges in `tokenizer.ggml.merges`, special-token role markers, `tokenizer.ggml.model = "gpt2"` or `"llama"` matching the actual tokenizer family, and quantization block layout for `q4_k`/`q8_0`. Audit each metadata key against [llama.cpp's llama-arch.cpp](https://github.com/ggml-org/llama.cpp/blob/master/src/llama-arch.cpp) and add what's missing. Subprocess driver is already in the test file. Unmark the 3 round-trip xfails when subprocess returns 0. | medium | End-to-end round-trip works; user-facing "exports llama.cpp models" claim becomes true. |
 | **1.5a** ConfigSchema + ModeRegistry + dispatcher entry-point | New `enigma_engine/training/schema.py` (Pydantic + YAML loader). New `training/registry.py` (mode → (TrainerClass, config_builder, run_method) for all 6 core + 9 experimental). New `training/dispatch.py` (single `run(config) → Job`). Behind `experimental=True` flag for the 9 parked modes. | low | The CLI's argparse → YAML → dispatcher seam. One canonical entry point. |
 | **1.5b** Wire `run.py --train --config` to the dispatcher | Existing `run.py --train data.txt` stays working (legacy text-SFT path). New `run.py --train --config path.yaml` calls the dispatcher. Add `enigma-ai` console_scripts entry-point in pyproject.toml. | low | CLI surface ships; one mode at a time can be migrated. |
-| **1.5c** Migrate 6 core modes to dispatcher | ✅ In progress. Shipped launcher migrations: `sft` (`018c8f9`), `dpo` (`22ae19a`), `grpo` (`3e61f4b`), `remax` (`0c7cc0b`), `vision` (`388050e`), `lora` (`fbf2976`). Remaining: `audio` Forge launcher (currently not present in GUI codebase). | medium | Dispatcher-first GUI launcher path for all existing core mode buttons; final closure needs an audio launcher surface to migrate. |
+| **1.5c** Migrate 6 core modes to dispatcher | ✅ Closed for currently exposed Forge launchers. Shipped launcher migrations: `sft` (`018c8f9`), `dpo` (`22ae19a`), `grpo` (`3e61f4b`), `remax` (`0c7cc0b`), `vision` (`388050e`), `lora` (`fbf2976`). Audio launcher is deferred to ARCH-1d because no Forge audio launcher/button exists in GUI today. | medium | Dispatcher-first GUI launcher path is complete for current launcher surface; audio launcher is a client-surface addition, not a 1.5c migration blocker. |
 | **1.5d** Move `core/training*.py` → `enigma_engine/training/` | Mechanical rename + import-path update. `core/` becomes inference/model/tokenizer; `training/` becomes trainer base + modes + dispatcher + registry. | low (mechanical) | Clean separation. |
 | **1a** API surface for `POST /api/train` (config-body) | Replace current single-mode `/api/train` with config-body endpoint that calls the dispatcher. SSE `/api/training/metrics`. Cancellation hook. **One** endpoint, not 14. | medium | Daemon can train any of the 6 core modes via a single API. |
 | **1b** EnigmaClient lib | New `enigma_engine/client.py` (HTTP + SSE wrapper). `EnigmaClient.chat / chat_stream / load_model / unload_model / train(config)`. CLI client option in `run.py --client chat`. | low | Non-GUI test surface; daemon-spawn helper. |
@@ -319,18 +341,18 @@ If any chain breaks before reaching the inner code, the slice is parked, not fin
   **Production call chain (Rule #20):** `GGUFExporter(quantization='q4_k').export(...)` → per-tensor `logical_shape = data.shape` capture → `_can_quantize_q4_k(logical_shape)` gate → compatible rows: `GGUFQuantizer.quantize_q4_k(data)` with 144-byte super-blocks; incompatible rows: F16 fallback → `writer.add_tensor(..., shape=logical_shape)` → file loads + generates in llama-cpp-python on llama-arch fixtures.
 1. ~~**ARCH-1.5a**~~ ✅ shipped (commit `d02b856`, May 6, 2026 — `enigma_engine/training/` package: `schema.py` Pydantic config, `registry.py` mode→trainer map, `dispatch.py` single `run_training()` entry-point. 20 tests in `test_training_dispatch.py`, all green).
 2. ~~**ARCH-1.5b**~~ ✅ shipped (commit `bc78a4d`, May 6, 2026 — `run.py --train --config path.yaml` wired to `run_training()`. `enigma-ai` console_scripts entry added to `pyproject.toml`).
-3. **ARCH-1.5c** (launcher migrations in progress; all current Forge core-mode launchers now dispatcher-backed. Audio launcher not present yet).
-4. **ARCH-1.5d** (mechanical rename to `training/`).
-5. **ARCH-1a** (API endpoint).
-6. **ARCH-1b** (EnigmaClient lib).
-7. **ARCH-1c** (GUI chat over client).
+3. ~~**ARCH-1.5c**~~ ✅ closed for currently exposed launchers (audio launcher explicitly deferred to ARCH-1d).
+4. ~~**ARCH-1.5d**~~ ✅ closed (core/training* mechanical move and sibling-boundary sweep complete, Passes 156z9bo + 156z9bp).
+5. ~~**ARCH-1a**~~ ✅ shipped (`/api/train` dispatcher migration + request-shape hardening, Passes 156z9bc/156z9bd).
+6. ~~**ARCH-1b**~~ ✅ shipped (`enigma_engine/client.py` + `tests/test_client.py`, Pass 156z9bq).
+7. **ARCH-1c** (GUI chat over client) — in progress (`run.py --client-chat`, GUI CORE send-path routing, CONFIG controls for `use_api_chat` / `api_base_url`, and stream-preferred API transport in `_chat_request` shipped).
 8. **ARCH-1d** (GUI training over client — the 10.3k → ~500 line GUI shrink).
 9. **ARCH-1e** (hardening).
 10. **ARCH-1f** (sister-folder split — final cosmetic move).
 
 ### Parked / open questions
 
-- **ARCH-1.5c audio launcher gap** — `Trainer.train_audio` exists in core/dispatcher, but there is currently no Forge audio training launcher/button to migrate. Next step: either (a) add a Forge audio mode and route it through dispatcher, or (b) explicitly scope audio launcher to ARCH-1d client/API stage and mark 1.5c closed for currently exposed launchers.
+- **ARCH-1d audio launcher surface** — `Trainer.train_audio` exists in core/dispatcher, but no Forge audio launcher/button exists in the current GUI. Audio launcher addition remains deferred to the client/API migration stage.
 - **AdaptiveTrainer fate** — keep as experimental, move outside the dispatcher, or delete? Deferred until ARCH-1.5a is shipped and we can grep for actual GUI callers.
 - **Package layout** — A confirmed (sibling package, soft split). C deferred. B folded into ARCH-1f.
 - **Continuous `BackgroundTrainer` (router.py)** — moves daemon-side in ARCH-1d, but mods/ system is GUI-coupled and migrating it is its own scope. Logged as **ARCH-2**.
