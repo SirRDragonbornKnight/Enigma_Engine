@@ -5,7 +5,7 @@ what it is, where it lives in code, and what it does.
 
 Use this to decide what to change, move, remove, or redesign.
 
-**Last synced:** May 7, 2026 (Pass 156z9bi docs sync). **GUI changes this pass:** No new visible controls or layout changes. This was an audit-refresh/docs-only pass; TEACH-1 UI behavior is unchanged (inline CORE **FIX** workflow remains as shipped in Passes 156z9bf/156z9bg/156z9bh).
+**Last synced:** May 8, 2026 (Pass 156z9bm docs sync). **GUI changes this pass:** No new visible controls or layout changes. Forge launcher internals for `sft`/`dpo`/`grpo`/`remax`/`vision`/`lora` are now dispatcher-backed, but the page surface is unchanged; TEACH-1 UI behavior remains inline CORE **FIX**.
 
 Per-pass GUI notes (Passes 119-135) are archived in [information/history/PASS_HISTORY.md](information/history/PASS_HISTORY.md). New GUI work gets a one-line entry below and a full entry in the archive.
 

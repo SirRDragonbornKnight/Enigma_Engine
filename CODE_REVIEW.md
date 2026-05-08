@@ -1,7 +1,11 @@
 ﻿# Code Review Tracker
 
 **Started:** March 24, 2026
-**Last pass:** Pass 156z9bl (May 7, 2026) — **test-hygiene structural dedupe in test_chat.**
+**Last pass:** Pass 156z9bm (May 8, 2026) — **readiness audit + tracker sync for next-session execution.**
+
+---
+
+**Pass 156z9bm (May 8, 2026) — readiness audit + tracker sync:** Full audit pass requested before next execution slice. Re-ran authoritative suite baseline on current HEAD: `python -m pytest tests/ -q` → **2986 passed, 4 skipped** (2990 collected). Verified working tree clean and commit trail for ARCH-1.5c migration chain (`sft`/`dpo`/`grpo`/`remax`/`vision`/`lora`) present on `main`. Sibling-boundary grep across GUI confirmed no Forge audio training launcher entry-point exists yet (`_start_*audio` / `train_audio` absent in Forge GUI modules), matching the parked ARCH-1.5c audio-gap claim. Closed doc drift where top-level snapshot/quick-start text still pointed at older baseline and P5 runtime work as the immediate next action. Synced [SUGGESTIONS.md](SUGGESTIONS.md) and [GUI_REFERENCE.md](GUI_REFERENCE.md) to the fresh baseline and current migration reality. No product-code changes.
 
 ---
 

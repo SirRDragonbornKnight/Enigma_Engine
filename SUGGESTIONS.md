@@ -1,11 +1,16 @@
 ﻿# Suggestions
 
-## 🟢 AUDIT SNAPSHOT (May 7, 2026)
+## 🟢 AUDIT SNAPSHOT (May 8, 2026)
 
 Verified local baseline after audit:
 
 - `ruff check enigma_engine/ tests/` → pass
-- `python -m pytest tests/ -q` → **2973 passed, 3 skipped**
+- `python -m pytest tests/ -q` → **2986 passed, 4 skipped**
+
+ARCH-1.5c migration status (code verified):
+
+- Forge launchers now dispatcher-backed for `sft` (`018c8f9`), `dpo` (`22ae19a`), `grpo` (`3e61f4b`), `remax` (`0c7cc0b`), `vision` (`388050e`), `lora` (`fbf2976`).
+- Audio remains the only open ARCH-1.5c launcher gap: no Forge audio training launcher/button exists in current GUI sources.
 
 Test-hygiene micro-pass shipped (Pass 156z9bl):
 
@@ -84,9 +89,11 @@ Audit finding closed this pass:
 
 Return-to-work quick start:
 
-1. Run `python -m pytest tests/ -q` once to confirm the same green baseline.
-2. Run `python run.py --gui` and execute **P5-run** from the Runtime Tests Pending section (copy-model dry pass first).
-3. If P5-run is clean, proceed to **P5-real**.
+1. Run `python -m pytest tests/ -q` once and confirm baseline still matches **2986 passed, 4 skipped**.
+2. Close the ARCH-1.5c audio decision gate:
+  - Option A: add a Forge audio launcher and migrate it through dispatcher now.
+  - Option B: explicitly scope audio launcher to ARCH-1d (client/API phase) and close 1.5c for currently exposed launchers.
+3. Execute the chosen path end-to-end with tests, then update ARCH-1 recommended order and open-questions text in this file in the same pass.
 
 Test-suite hygiene note:
 
