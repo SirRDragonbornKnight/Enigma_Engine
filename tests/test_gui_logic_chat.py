@@ -1,6 +1,7 @@
 """Tests for gui_logic_chat.py pure-logic methods (no tkinter required)."""
 import json
 import sys
+import types
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -300,6 +301,399 @@ class TestAutoResearch2Wiring:
         # The post-gen block is wrapped in try/except so a failure falls
         # back to the original `resp`.
         assert "AutoResearch-2 retry failed" in src
+
+
+class TestChatRequestRouting:
+    """ARCH-1c bridge: GUI chat request routing via API client fallback."""
+
+    def test_build_api_chat_payload_wraps_system_prompt_and_filters_kwargs(self):
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+
+        host = _make_stub_host()
+        api_message, api_kwargs = LogicChatMixin._build_api_chat_payload(
+            host,
+            "hello",
+            {
+                "system_prompt": "ctx",
+                "temperature": 0.7,
+                "history": [{"role": "user", "content": "x"}],
+            },
+        )
+
+        assert "[SYSTEM PROMPT]" in api_message
+        assert "ctx" in api_message
+        assert api_message.endswith("hello")
+        assert api_kwargs == {"temperature": 0.7}
+
+    def test_build_api_chat_payload_no_system_prompt_keeps_message(self):
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+
+        host = _make_stub_host()
+        api_message, api_kwargs = LogicChatMixin._build_api_chat_payload(
+            host,
+            "hello",
+            {"top_k": 12},
+        )
+
+        assert api_message == "hello"
+        assert api_kwargs == {"top_k": 12}
+
+    def test_chat_request_prefers_api_stream_and_joins_tokens(self):
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+
+        seen = {}
+
+        class _FakeClient:
+            def chat_stream(self, message, **kwargs):
+                seen["message"] = message
+                seen["kwargs"] = dict(kwargs)
+                for token in ("api", "-", "stream"):
+                    yield token
+
+            def chat(self, _message, **_kwargs):
+                raise AssertionError("chat() should not be called when stream succeeds")
+
+        host = _make_stub_host()
+        host.use_api_chat = True
+        host.engine = None
+        host._get_api_chat_client = lambda: _FakeClient()
+
+        out = LogicChatMixin._chat_request(
+            host,
+            "hello",
+            {
+                "system_prompt": "ctx",
+                "temperature": 0.6,
+                "history": [{"role": "user", "content": "x"}],
+            },
+        )
+
+        assert out == "api-stream"
+        assert seen["kwargs"]["temperature"] == 0.6
+        assert seen["kwargs"]["web_access"] is False
+        assert "[SYSTEM PROMPT]" in seen["message"]
+        assert "ctx" in seen["message"]
+        assert seen["message"].endswith("hello")
+
+    def test_chat_request_stream_returns_iterator_when_enabled(self):
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+
+        seen = {}
+
+        class _FakeClient:
+            def chat_stream(self, message, **kwargs):
+                seen["message"] = message
+                seen["kwargs"] = dict(kwargs)
+                for token in ("a", "b"):
+                    yield token
+
+        host = _make_stub_host()
+        host.use_api_chat = True
+        host._get_api_chat_client = lambda: _FakeClient()
+
+        it = LogicChatMixin._chat_request_stream(
+            host,
+            "hello",
+            {"system_prompt": "ctx", "temperature": 0.5},
+        )
+
+        assert list(it) == ["a", "b"]
+        assert seen["kwargs"]["temperature"] == 0.5
+        assert seen["kwargs"]["web_access"] is False
+        assert "[SYSTEM PROMPT]" in seen["message"]
+
+    def test_chat_request_stream_returns_none_when_disabled(self):
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+
+        host = _make_stub_host()
+        host.use_api_chat = False
+
+        out = LogicChatMixin._chat_request_stream(host, "hello", {})
+        assert out is None
+
+    def test_chat_request_prefer_stream_false_skips_stream_call(self):
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+
+        class _FakeClient:
+            def chat_stream(self, *_args, **_kwargs):
+                raise AssertionError("stream path must be skipped")
+
+            def chat(self, _message, **_kwargs):
+                return "api-chat"
+
+        host = _make_stub_host()
+        host.use_api_chat = True
+        host.engine = None
+        host._get_api_chat_client = lambda: _FakeClient()
+
+        out = LogicChatMixin._chat_request(
+            host,
+            "hello",
+            {"temperature": 0.4},
+            prefer_stream=False,
+        )
+
+        assert out == "api-chat"
+
+    def test_chat_request_falls_back_to_api_chat_when_stream_fails(self):
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+
+        seen = {}
+
+        class _FakeClient:
+            def chat_stream(self, _message, **_kwargs):
+                raise RuntimeError("stream unavailable")
+
+            def chat(self, message, **kwargs):
+                seen["message"] = message
+                seen["kwargs"] = dict(kwargs)
+                return "api-chat"
+
+        host = _make_stub_host()
+        host.use_api_chat = True
+        host.engine = None
+        host._get_api_chat_client = lambda: _FakeClient()
+
+        out = LogicChatMixin._chat_request(
+            host,
+            "hello",
+            {
+                "system_prompt": "ctx",
+                "top_k": 12,
+            },
+        )
+
+        assert out == "api-chat"
+        assert seen["kwargs"]["top_k"] == 12
+        assert seen["kwargs"]["web_access"] is False
+        assert "ctx" in seen["message"]
+
+    def test_chat_request_uses_api_client_when_enabled(self):
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+
+        calls = {}
+
+        class _FakeClient:
+            def chat(self, message, **kwargs):
+                calls["message"] = message
+                calls["kwargs"] = dict(kwargs)
+                return "api-ok"
+
+        host = _make_stub_host()
+        host.use_api_chat = True
+        host.engine = None
+        host._get_api_chat_client = lambda: _FakeClient()
+
+        out = LogicChatMixin._chat_request(
+            host,
+            "hello",
+            {
+                "system_prompt": "ctx",
+                "temperature": 0.6,
+                "history": [{"role": "user", "content": "x"}],
+            },
+        )
+
+        assert out == "api-ok"
+        assert calls["kwargs"]["temperature"] == 0.6
+        assert calls["kwargs"]["web_access"] is False
+        assert "[SYSTEM PROMPT]" in calls["message"]
+        assert "ctx" in calls["message"]
+        assert calls["message"].endswith("hello")
+
+    def test_chat_request_falls_back_to_local_on_api_failure(self):
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+
+        class _BrokenClient:
+            def chat(self, _message, **_kwargs):
+                raise RuntimeError("api down")
+
+        seen = {}
+
+        class _LocalEngine:
+            def chat(self, message, **kwargs):
+                seen["message"] = message
+                seen["kwargs"] = dict(kwargs)
+                return "local-ok"
+
+        host = _make_stub_host()
+        host.use_api_chat = True
+        host._get_api_chat_client = lambda: _BrokenClient()
+        host.engine = _LocalEngine()
+
+        out = LogicChatMixin._chat_request(
+            host,
+            "hello",
+            {"top_k": 42},
+        )
+
+        assert out == "local-ok"
+        assert seen["message"] == "hello"
+        assert seen["kwargs"]["top_k"] == 42
+
+
+class TestResponsePostprocessing:
+    """Response normalization helper contracts for streamed/non-stream paths."""
+
+    def test_postprocess_extracts_reasoning_block(self):
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+
+        host = _make_stub_host()
+        thinking, clean = LogicChatMixin._postprocess_response_text(
+            host,
+            "<think>step by step</think>final answer",
+        )
+
+        assert "step by step" in thinking
+        assert clean == "final answer"
+
+    def test_postprocess_strips_incomplete_think(self):
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+
+        host = _make_stub_host()
+        thinking, clean = LogicChatMixin._postprocess_response_text(
+            host,
+            "prefix <think>unfinished",
+        )
+
+        assert thinking == ""
+        assert clean == "prefix"
+
+
+class TestSendMessageStreamBehavior:
+    """Behavioral coverage for streamed _send_message branch contracts."""
+
+    @staticmethod
+    def _make_button_stub():
+        return SimpleNamespace(
+            configure=lambda **_kwargs: None,
+            grid=lambda **_kwargs: None,
+            grid_forget=lambda: None,
+        )
+
+    @staticmethod
+    def _make_input_stub(text):
+        return SimpleNamespace(
+            get=lambda _a, _b: text,
+            delete=lambda _a, _b: None,
+        )
+
+    def _make_stream_host(self, stream_tokens, *, web_access=True):
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+
+        host = _make_stub_host(history=[])
+        host.chat_input = self._make_input_stub("hello")
+        host.prompt_editor = self._make_input_stub("")
+        host.user_name = "User"
+        host.use_api_chat = True
+        host._INPUT_HISTORY_MAX = 200
+        host._input_history = []
+        host._input_hist_idx = -1
+        host._session_counter = 0
+        host._cmd_image_paths = []
+        host._cmd_file_paths = []
+        host.send_btn = self._make_button_stub()
+        host.stop_btn = self._make_button_stub()
+        host.web_access = web_access
+        host.reasoning_enabled = False
+        host.attached_file = None
+        host._pending_correction_image_path = ""
+        host._chat_append_calls = []
+        host._stream_chunks = []
+
+        host.after = lambda _delay, cb: cb()
+        host._auto_resize_input = lambda: None
+        host._init_input_history = (
+            lambda: LogicChatMixin._init_input_history(host)
+        )
+        host._chat_append = lambda *args: host._chat_append_calls.append(args)
+        host._process_media_in_text = lambda _msg, _role: None
+        host._show_thinking = lambda: None
+        host._hide_thinking = lambda: None
+        host._build_gui_context = lambda: "GUICTX"
+        host._active_ai_name = lambda: "Enigma"
+        host._cmd_activity = lambda *_args: None
+        host._chat_request_stream = lambda _msg, _kwargs: iter(stream_tokens)
+        host._chat_request = lambda _msg, _kwargs, prefer_stream=True: ""
+        host._append_stream_chunk = lambda chunk: host._stream_chunks.append(chunk)
+        host._postprocess_response_text = (
+            lambda resp: LogicChatMixin._postprocess_response_text(host, resp)
+        )
+        host._trim_chat_history = lambda: None
+        host._get_memory_mode = lambda: "disabled"
+        host._save_model_context = lambda: None
+        host._auto_save_session = lambda: None
+        host._generate_session_title = lambda _u, _a: None
+        host._feed_background_trainer = lambda _u, _a: None
+        host._update_token_counter = lambda: None
+        host._tts_speak = lambda _text: None
+        host._cmd_execute_ai_commands = lambda _cmds: ""
+        host._insert_media = lambda _path, _kind: None
+        host._insert_file_link = lambda _path: None
+        host._chat_system = lambda _msg: None
+        host._chat_error = lambda _msg: None
+
+        return host
+
+    def test_stream_path_appends_each_chunk(self, monkeypatch):
+        import enigma_engine.gui.gui_logic_chat as mod
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+
+        class _ImmediateThread:
+            def __init__(self, target=None, daemon=None):
+                self._target = target
+
+            def start(self):
+                if self._target is not None:
+                    self._target()
+
+        monkeypatch.setattr(mod.threading, "Thread", _ImmediateThread)
+        host = self._make_stream_host(["A", "B", "C"], web_access=False)
+
+        LogicChatMixin._send_message(host)
+
+        assert host._stream_chunks == ["A", "B", "C"]
+        assert any(
+            call[0] == "assistant"
+            for call in host._chat_append_calls
+        )
+
+    def test_stream_path_skips_postgen_retry_gate(self, monkeypatch):
+        import enigma_engine.gui.gui_logic_chat as mod
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+
+        class _ImmediateThread:
+            def __init__(self, target=None, daemon=None):
+                self._target = target
+
+            def start(self):
+                if self._target is not None:
+                    self._target()
+
+        retry_calls = {"count": 0}
+
+        fake_ar = types.ModuleType("enigma_engine.core.auto_research")
+        fake_ar.should_auto_research = lambda _msg: False
+        fake_ar.auto_research = lambda _msg, max_results=3: ""
+
+        def _should_retry_with_research(_msg, _resp):
+            retry_calls["count"] += 1
+            return False
+
+        fake_ar.should_retry_with_research = _should_retry_with_research
+
+        monkeypatch.setitem(
+            sys.modules,
+            "enigma_engine.core.auto_research",
+            fake_ar,
+        )
+        monkeypatch.setattr(mod.threading, "Thread", _ImmediateThread)
+        host = self._make_stream_host(["tok1", "tok2"], web_access=True)
+
+        LogicChatMixin._send_message(host)
+
+        assert host._stream_chunks == ["tok1", "tok2"]
+        assert retry_calls["count"] == 0
 
 
 class TestTeach1aCorrectionStore:

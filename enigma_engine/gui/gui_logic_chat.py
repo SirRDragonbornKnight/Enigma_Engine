@@ -122,6 +122,154 @@ class LogicChatMixin:
                       min(num_lines * 28, self._INPUT_MAX_H))
         self.chat_input.configure(height=desired)
 
+    def _build_api_chat_client(self):
+        """Create an EnigmaClient for GUI chat-over-API mode."""
+        from enigma_engine import EnigmaClient
+
+        base_url = str(
+            getattr(self, "api_base_url", "http://127.0.0.1:8080")
+            or "http://127.0.0.1:8080"
+        ).strip()
+        return EnigmaClient(base_url)
+
+    def _get_api_chat_client(self):
+        """Return a cached EnigmaClient instance."""
+        client = getattr(self, "_api_chat_client", None)
+        if client is None:
+            client = self._build_api_chat_client()
+            self._api_chat_client = client
+        return client
+
+    def _build_api_chat_payload(
+            self,
+            message: str,
+            kwargs: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+        """Build API-facing message and kwargs from GUI chat kwargs."""
+        api_kwargs: dict[str, Any] = {}
+        for key in (
+            "temperature",
+            "max_tokens",
+            "top_p",
+            "top_k",
+            "repetition_penalty",
+            "json_schema",
+        ):
+            if key in kwargs and kwargs[key] is not None:
+                api_kwargs[key] = kwargs[key]
+
+        system_prompt = str(kwargs.get("system_prompt", "") or "").strip()
+        api_message = message
+        if system_prompt:
+            api_message = (
+                "[SYSTEM PROMPT]\n"
+                f"{system_prompt}\n"
+                "[/SYSTEM PROMPT]\n\n"
+                f"{message}"
+            )
+
+        return api_message, api_kwargs
+
+    def _chat_request_stream(
+            self,
+            message: str,
+            kwargs: dict[str, Any]):
+        """Return an API stream iterator when API mode is enabled.
+
+        Returns ``None`` when API mode is disabled or stream setup fails.
+        """
+        use_api_chat = bool(getattr(self, "use_api_chat", False))
+        if not use_api_chat:
+            return None
+
+        client = self._get_api_chat_client()
+        api_message, api_kwargs = LogicChatMixin._build_api_chat_payload(
+            self, message, kwargs)
+
+        try:
+            return client.chat_stream(
+                api_message,
+                web_access=False,
+                **api_kwargs,
+            )
+        except Exception as exc:
+            logger.info(
+                "API stream chat failed; falling back to non-stream chat: %s",
+                exc,
+            )
+            return None
+
+    def _chat_request(
+            self,
+            message: str,
+            kwargs: dict[str, Any],
+            *,
+            prefer_stream: bool = True) -> str:
+        """Route one chat request via API client or local engine.
+
+        API mode is opt-in via ``self.use_api_chat``. On API failure,
+        we fall back to local engine mode when available.
+        """
+        use_api_chat = bool(getattr(self, "use_api_chat", False))
+
+        if use_api_chat:
+            try:
+                client = self._get_api_chat_client()
+                api_message, api_kwargs = LogicChatMixin._build_api_chat_payload(
+                    self, message, kwargs)
+
+                if prefer_stream:
+                    try:
+                        chunks = list(client.chat_stream(
+                            api_message,
+                            web_access=False,
+                            **api_kwargs,
+                        ))
+                        if chunks:
+                            return "".join(chunks)
+                    except Exception as stream_exc:
+                        logger.info(
+                            "API stream chat failed; trying non-stream chat: %s",
+                            stream_exc,
+                        )
+
+                return client.chat(
+                    api_message,
+                    web_access=False,
+                    **api_kwargs,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "API chat failed; falling back to local engine: %s",
+                    exc,
+                )
+
+        if self.engine is None:
+            raise RuntimeError(
+                "No local model loaded and API chat unavailable. "
+                "Load a model or disable API chat mode."
+            )
+        try:
+            return self.engine.chat(message, **kwargs)
+        except TypeError:
+            return self.engine.chat(message)
+
+    def _postprocess_response_text(self, response: str) -> tuple[str, str]:
+        """Normalize response text for downstream processing.
+
+        Returns ``(thinking_text, clean_response)`` where incomplete
+        reasoning tags are removed and complete ``<think>`` blocks are
+        extracted from the answer text.
+        """
+        from enigma_engine.core.reasoning import (
+            extract_reasoning,
+            has_reasoning,
+            strip_incomplete_think,
+        )
+
+        if has_reasoning(response):
+            return extract_reasoning(response)
+        return "", strip_incomplete_think(response)
+
     def _send_message(self):
         # Guard against double-send while generation is running
         if getattr(self, '_is_generating', False):
@@ -139,7 +287,8 @@ class LogicChatMixin:
             if len(hist) > self._INPUT_HISTORY_MAX:
                 hist.pop(0)
         self._input_hist_idx = -1
-        if self.engine is None:
+        use_api_chat = bool(getattr(self, "use_api_chat", False))
+        if self.engine is None and not use_api_chat:
             self._chat_system(
                 "No model loaded. Go to ROUTER and load one first.")
             return
@@ -279,9 +428,44 @@ class LogicChatMixin:
                     else f"[{ai}] Processing: {msg}\n")
 
                 try:
-                    resp = self.engine.chat(full_msg, **kwargs)
-                except TypeError:
-                    resp = self.engine.chat(full_msg)
+                    stream_iter = self._chat_request_stream(full_msg, kwargs)
+                    resp = ""
+                    streamed_live = False
+                    if stream_iter is not None:
+                        stream_chunks: list[str] = []
+                        ts = time.strftime("%H:%M")
+                        for chunk in stream_iter:
+                            if getattr(self, '_stop_requested', False):
+                                break
+                            if not chunk:
+                                continue
+                            if not streamed_live:
+                                streamed_live = True
+
+                                def _show_stream_header(
+                                        t: str = ts):
+                                    self._hide_thinking()
+                                    ai_name = self._active_ai_name()
+                                    self._chat_append(
+                                        "timestamp", f"\n  {t} ",
+                                        "assistant_prefix",
+                                        f"{ai_name}  ")
+
+                                self.after(0, _show_stream_header)
+
+                            stream_chunks.append(chunk)
+                            self.after(
+                                0,
+                                lambda c=chunk: self._append_stream_chunk(c),
+                            )
+
+                        resp = "".join(stream_chunks)
+
+                    if not resp:
+                        # Either no stream path or stream produced no tokens.
+                        # Fall back to one-shot chat without retrying stream.
+                        resp = self._chat_request(
+                            full_msg, kwargs, prefer_stream=False)
                 except ValueError as exc:
                     # N-15b (Pass 156z9ab) — JsonSchemaConstraint
                     # raises ValueError on unsupported schema shapes
@@ -318,55 +502,48 @@ class LogicChatMixin:
                     self.after(0, _stopped)
                     return
 
-                # Extract reasoning if present (Qwen3 outputs <think>
-                # blocks by default even without the reasoning toggle)
-                from enigma_engine.core.reasoning import (
-                    extract_reasoning, has_reasoning,
-                    strip_incomplete_think)
-                thinking_text = ""
-                if has_reasoning(resp):
-                    thinking_text, resp = extract_reasoning(resp)
-                else:
-                    # Strip truncated <think> from token-limited output
-                    resp = strip_incomplete_think(resp)
+                # Normalize assistant text for command parsing/history/TTS.
+                # In stream mode the visible transcript already contains the
+                # raw chunk text; this post-process path only affects internal
+                # handling (stored history, command parsing, TTS payload).
+                thinking_text, resp = self._postprocess_response_text(resp)
 
-                # AutoResearch-2 Stage A wiring (Pass 154):
-                # Post-generation uncertainty gate. If web access is on,
-                # no pre-gen research ran, and the visible reply scores
-                # >= threshold uncertain, retry once with research context.
-                if (_web_access_on
-                        and not web_research_ctx
-                        and not getattr(self, '_stop_requested', False)):
-                    try:
-                        from enigma_engine.core.auto_research import (
-                            auto_research as _ar_fetch,
-                            should_retry_with_research)
-                        if should_retry_with_research(
-                                _msg_for_research, resp):
-                            retry_ctx = _ar_fetch(
-                                _msg_for_research, max_results=3)
-                            if retry_ctx:
-                                retry_kwargs = dict(kwargs)
-                                retry_kwargs["system_prompt"] = (
-                                    f"{combined_prompt}\n\n{retry_ctx}")
-                                logger.info(
-                                    "AutoResearch-2: low-confidence "
-                                    "reply, retrying with research "
-                                    "context")
-                                try:
-                                    resp = self.engine.chat(
-                                        full_msg, **retry_kwargs)
-                                except TypeError:
-                                    resp = self.engine.chat(full_msg)
-                                # Re-extract reasoning from retry output
-                                if has_reasoning(resp):
+                if not streamed_live:
+                    # AutoResearch-2 Stage A wiring (Pass 154):
+                    # Post-generation uncertainty gate. If web access is on,
+                    # no pre-gen research ran, and the visible reply scores
+                    # >= threshold uncertain, retry once with research context.
+                    # Streamed path intentionally skips this: once chunks are
+                    # already visible in the transcript, we do not replace the
+                    # answer with a second hidden retry response.
+                    if (_web_access_on
+                            and not web_research_ctx
+                            and not getattr(self, '_stop_requested', False)):
+                        try:
+                            from enigma_engine.core.auto_research import (
+                                auto_research as _ar_fetch,
+                                should_retry_with_research)
+                            if should_retry_with_research(
+                                    _msg_for_research, resp):
+                                retry_ctx = _ar_fetch(
+                                    _msg_for_research, max_results=3)
+                                if retry_ctx:
+                                    retry_kwargs = dict(kwargs)
+                                    retry_kwargs["system_prompt"] = (
+                                        f"{combined_prompt}\n\n{retry_ctx}")
+                                    logger.info(
+                                        "AutoResearch-2: low-confidence "
+                                        "reply, retrying with research "
+                                        "context")
+                                    resp = self._chat_request(
+                                        full_msg,
+                                        retry_kwargs,
+                                        prefer_stream=False)
                                     thinking_text, resp = (
-                                        extract_reasoning(resp))
-                                else:
-                                    resp = strip_incomplete_think(resp)
-                    except Exception as exc:
-                        logger.debug(
-                            "AutoResearch-2 retry failed: %s", exc)
+                                        self._postprocess_response_text(resp))
+                        except Exception as exc:
+                            logger.debug(
+                                "AutoResearch-2 retry failed: %s", exc)
 
                 # Parse and execute [CMD] blocks from response
                 from enigma_engine.core.commands import (
@@ -439,33 +616,56 @@ class LogicChatMixin:
                     getattr(self, "_cmd_file_paths", []))
                 self._cmd_file_paths = []
                 ts = time.strftime("%H:%M")
-                def _show(r=clean_text, t=ts, co=cmd_output,
-                          think=thinking_text,
-                          imgs=cmd_images,
-                          files=cmd_files):
-                    self._hide_thinking()
-                    ai = self._active_ai_name()
-                    self._chat_append(
-                        "timestamp", f"\n  {t} ",
-                        "assistant_prefix", f"{ai}  ")
-                    # Show reasoning section if present
-                    if think:
+                if streamed_live:
+                    def _finish_streamed(r=clean_text, co=cmd_output,
+                                         imgs=cmd_images,
+                                         files=cmd_files):
+                        ai = self._active_ai_name()
+                        self._hide_thinking()
+                        self._chat_append("assistant", "\n")
+                        if co:
+                            self._chat_system(co)
+                        for img_path in imgs:
+                            self._insert_media(img_path, "file")
+                        for file_path in files:
+                            self._insert_file_link(file_path)
+                        self._cmd_activity(
+                            "info",
+                            f"[{ai}] Response delivered "
+                            f"({len(r)} chars)\n")
+                        self._cmd_activity("divider", "\n")
+                        self._update_token_counter()
+                        self._tts_speak(r)
+
+                    self.after(0, _finish_streamed)
+                else:
+                    def _show(r=clean_text, t=ts, co=cmd_output,
+                              think=thinking_text,
+                              imgs=cmd_images,
+                              files=cmd_files):
+                        self._hide_thinking()
+                        ai = self._active_ai_name()
                         self._chat_append(
-                            "reasoning_label",
-                            "\n  \U0001f9e0 Reasoning:\n",
-                            "reasoning",
-                            think + "\n")
-                    # Store deferred output to show after typewriter finishes
-                    self._deferred_cmd_output = co
-                    self._deferred_cmd_images = imgs
-                    self._deferred_cmd_files = files
-                    self._deferred_ai_name = ai
-                    self._typewriter("assistant", r + "\n")
-                    # Speak only the answer (not the reasoning)
-                    self._tts_speak(r)
-                    # Command output and images are now deferred until
-                    # after typewriter finishes
-                self.after(0, _show)
+                            "timestamp", f"\n  {t} ",
+                            "assistant_prefix", f"{ai}  ")
+                        # Show reasoning section if present
+                        if think:
+                            self._chat_append(
+                                "reasoning_label",
+                                "\n  \U0001f9e0 Reasoning:\n",
+                                "reasoning",
+                                think + "\n")
+                        # Store deferred output to show after typewriter finishes
+                        self._deferred_cmd_output = co
+                        self._deferred_cmd_images = imgs
+                        self._deferred_cmd_files = files
+                        self._deferred_ai_name = ai
+                        self._typewriter("assistant", r + "\n")
+                        # Speak only the answer (not the reasoning)
+                        self._tts_speak(r)
+                        # Command output and images are now deferred until
+                        # after typewriter finishes
+                    self.after(0, _show)
             except Exception as exc:
                 tb = traceback.format_exc()
                 logger.error("Chat generation failed:\n%s", tb)
@@ -982,6 +1182,18 @@ class LogicChatMixin:
     # ================================================================
     # Logic - Typewriter effect
     # ================================================================
+
+    def _append_stream_chunk(self, chunk: str):
+        """Append one streamed text chunk to the assistant transcript."""
+        if not chunk:
+            return
+        try:
+            self.chat_display._textbox.insert("end", chunk, "assistant")
+        except Exception:
+            return
+        if "\n" in chunk or len(chunk) >= 6:
+            self._auto_resize_chat()
+            self._scroll_chat_to_bottom()
 
     def _typewriter(self, tag: str, text: str, idx: int = 0):
         """Insert text into chat with inline media rendering.
