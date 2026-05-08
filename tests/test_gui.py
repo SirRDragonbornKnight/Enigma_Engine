@@ -6260,6 +6260,29 @@ class TestForgeAPOAlignmentMode:
             "`algo_label` so APO mode shows 'APO-ZERO', not 'DPO'.\n"
             f"Offending lines: {offending}")
 
+class TestForgeDispatcherRouting:
+    """ARCH-1.5c launcher wiring guards for dispatcher seam."""
+
+    def test_start_rlhf_training_routes_through_dispatcher(self):
+        import inspect
+        from enigma_engine.gui.gui_forge_new_modes import (
+            ForgeNewModesMixin)
+
+        src = inspect.getsource(ForgeNewModesMixin._start_rlhf_training)
+        assert "build_dispatch_context(" in src
+        assert "run_training(" in src
+        assert '"mode": "rlhf"' in src
+
+    def test_start_selfplay_training_routes_through_dispatcher(self):
+        import inspect
+        from enigma_engine.gui.gui_forge_new_modes import (
+            ForgeNewModesMixin)
+
+        src = inspect.getsource(ForgeNewModesMixin._start_selfplay_training)
+        assert "build_dispatch_context(" in src
+        assert "run_training(" in src
+        assert '"mode": "self_play"' in src
+
 class TestModelsPageMerging:
     """N-21: MODELS page has merge controls wired to model_merging."""
 

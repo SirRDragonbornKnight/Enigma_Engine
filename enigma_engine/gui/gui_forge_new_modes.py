@@ -2080,7 +2080,6 @@ class ForgeNewModesMixin:
                 from enigma_engine.core.tokenizer import get_tokenizer
                 from enigma_engine.core.rl_training import (
                     RewardModel, RewardTrainer, RewardTrainerConfig,
-                    RLHFTrainer, RLHFConfig,
                 )
 
                 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -2172,16 +2171,6 @@ class ForgeNewModesMixin:
                 self._log("\n--- Phase 2: RLHF Policy Training ---")
                 prompts = [item["prompt"] for item in pref_data]
 
-                rl_params = self._read_forge_rl_params()
-                rlhf_cfg = RLHFConfig(
-                    epochs=epochs,
-                    learning_rate=lr,
-                    replay_capacity=rl_params.get("replay_capacity", 256),
-                    replay_ratio=rl_params.get("replay_ratio", 0.25),
-                )
-                rlhf_trainer = RLHFTrainer(
-                    model, tokenizer, reward_model, rlhf_cfg)
-
                 _rlhf_phase2_start = [_time.monotonic()]
 
                 def _rlhf_progress(p, m):
@@ -2200,9 +2189,28 @@ class ForgeNewModesMixin:
                             p, f"RLHF {p}%{eta}")
                         _reward_last_t[0] = now
 
-                rlhf_trainer.on_progress = _rlhf_progress
-                self._active_trainer = rlhf_trainer
-                rl_result = rlhf_trainer.train(prompts)
+                def on_trainer_ready(t) -> None:
+                    self._active_trainer = t
+
+                from enigma_engine.training.dispatch import (
+                    build_dispatch_context, run_training)
+                ctx = build_dispatch_context(
+                    model=model,
+                    tokenizer=tokenizer,
+                    reward_model=reward_model,
+                    on_progress=_rlhf_progress,
+                    on_trainer_ready=on_trainer_ready,
+                )
+                config_dict = {
+                    "mode": "rlhf",
+                    "data": prompts,
+                    "training": {
+                        "epochs": epochs,
+                        "learning_rate": lr,
+                        "use_amp": torch.cuda.is_available(),
+                    },
+                }
+                rl_result = run_training(config_dict, ctx)
 
                 self._log(f"\nFinal reward: {rl_result.get('final_reward', 0):.4f}")
 
@@ -2316,9 +2324,6 @@ class ForgeNewModesMixin:
                 from enigma_engine.core.model_registry import get_state_dict
                 from enigma_engine.core.tokenizer import get_tokenizer
                 from enigma_engine.core.inference import EnigmaEngine
-                from enigma_engine.core.rl_training import (
-                    SelfPlayTrainer, SelfPlayConfig,
-                )
 
                 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -2353,16 +2358,6 @@ class ForgeNewModesMixin:
                 prompts = [p.strip() for p in prompts if p.strip()]
                 self._log(f"Prompts : {len(prompts)}")
 
-                sp_rl_params = self._read_forge_rl_params()
-                sp_cfg = SelfPlayConfig(
-                    epochs=epochs,
-                    learning_rate=lr,
-                    replay_capacity=sp_rl_params.get("replay_capacity", 256),
-                    replay_ratio=sp_rl_params.get("replay_ratio", 0.25),
-                )
-                sp_trainer = SelfPlayTrainer(
-                    student, tokenizer, trainer_engine, sp_cfg)
-
                 import time as _time
                 _sp_last_t = [0.0]
                 _sp_start = [_time.monotonic()]
@@ -2383,9 +2378,28 @@ class ForgeNewModesMixin:
                             p, f"Self-play {p}%{eta}")
                         _sp_last_t[0] = now
 
-                sp_trainer.on_progress = _sp_progress
-                self._active_trainer = sp_trainer
-                result = sp_trainer.train(prompts)
+                def on_trainer_ready(t) -> None:
+                    self._active_trainer = t
+
+                from enigma_engine.training.dispatch import (
+                    build_dispatch_context, run_training)
+                ctx = build_dispatch_context(
+                    model=student,
+                    tokenizer=tokenizer,
+                    trainer_engine=trainer_engine,
+                    on_progress=_sp_progress,
+                    on_trainer_ready=on_trainer_ready,
+                )
+                config_dict = {
+                    "mode": "self_play",
+                    "data": prompts,
+                    "training": {
+                        "epochs": epochs,
+                        "learning_rate": lr,
+                        "use_amp": torch.cuda.is_available(),
+                    },
+                }
+                result = run_training(config_dict, ctx)
 
                 self._log(
                     f"\nFinal score: "
