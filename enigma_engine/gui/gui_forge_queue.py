@@ -21,6 +21,46 @@ logger = logging.getLogger(__name__)
 _QUEUE_PATH = DATA_DIR / "training_queue.json"
 _DATASET_PATH = DATA_DIR / "curated_dataset.jsonl"
 
+# Maps GUI display-mode names to dispatcher mode keys.
+# Modes not listed here AND not in _QUEUE_UNSUPPORTED_MODES raise ValueError.
+_QUEUE_MODE_MAP: dict[str, str] = {
+    "Basic": "sft",
+    "Pre-Train": "sft",
+    "DPO": "dpo",
+    "APO": "dpo",
+    "Image": "vision",
+    "GRPO": "grpo",
+    "ReMax": "remax",
+    "SimPO": "simpo",
+    "ORPO": "orpo",
+    "RLHF": "rlhf",
+    "Self-Play": "self_play",
+    "LoRA": "lora",
+}
+
+# GUI modes that use their own training paths and cannot be queued.
+_QUEUE_UNSUPPORTED_MODES: frozenset[str] = frozenset({
+    "Distill",
+    "AI-Guided",
+    "Dialogue",
+})
+
+# Queue display names that route through DPO must preserve algorithm choice.
+_QUEUE_DPO_LOSS_TYPE_MAP: dict[str, str] = {
+    "DPO": "dpo",
+    "APO": "apo_zero",
+}
+
+# Modes that require preference-pair JSONL data (prompt/chosen/rejected).
+_PREFERENCE_MODES = {"dpo", "simpo", "orpo", "reward_model"}
+# Modes that require plain prompt lists.
+_PROMPT_LIST_MODES = {"grpo", "remax", "rlhf", "self_play"}
+# Experimental dispatcher modes that need allow_experimental=True.
+_EXPERIMENTAL_MODES = {
+    "simpo", "kto", "orpo", "rest", "reward_model",
+    "rlhf", "self_play", "remax", "adaptive",
+}
+
 
 class ForgeQueueMixin:
     """Queue, overnight plan, and curated dataset GUI callbacks.
@@ -178,8 +218,9 @@ class ForgeQueueMixin:
     def _execute_queue_job(self, job):
         """Execute a single training job (called by the queue thread).
 
-        This bridges the TrainingQueue executor to the existing
-        training infrastructure. Runs synchronously — the queue
+        Routes every job through ``build_dispatch_context`` +
+        ``run_training`` so the queue honours all training modes
+        supported by the dispatcher.  Runs synchronously — the queue
         thread blocks until this returns.
 
         Returns the best loss achieved.
@@ -190,47 +231,44 @@ class ForgeQueueMixin:
         from enigma_engine.core.model_registry import (
             get_state_dict, safe_load_weights)
         from enigma_engine.core.tokenizer import get_tokenizer
-        from enigma_engine.training.training import Trainer, TrainingConfig
+        from enigma_engine.training.dispatch import (
+            build_dispatch_context, run_training)
 
-        # Load student model
+        # Resolve dispatcher mode key from display name.
+        dispatch_mode = _QUEUE_MODE_MAP.get(job.mode)
+        if dispatch_mode is None:
+            if job.mode in _QUEUE_UNSUPPORTED_MODES:
+                raise ValueError(
+                    f"Mode '{job.mode}' cannot be run through the training "
+                    "queue. Use the FORGE training page directly."
+                )
+            raise ValueError(
+                f"Unknown training mode for queue: '{job.mode}'. "
+                f"Known modes: {sorted(_QUEUE_MODE_MAP)}"
+            )
+
         self._log(f"\n[Queue] Running job #{job.job_id}: "
-                  f"{job.mode} ({job.epochs} epochs)")
+                  f"{job.mode} ({dispatch_mode}) "
+                  f"({job.epochs} epochs)")
 
         student_path = job.model_path
         if not student_path or not Path(student_path).exists():
             raise FileNotFoundError(
                 f"Student model not found: {student_path}")
 
-        # Load/parse training data
-        data_text = ""
-        if job.data_path and Path(job.data_path).exists():
-            data_text = Path(job.data_path).read_text(
-                encoding="utf-8")
-
+        # Load training data.
+        if not job.data_path:
+            raise ValueError("No training data path configured for this job")
+        if not Path(job.data_path).exists():
+            raise FileNotFoundError(
+                f"Training data file not found: {job.data_path}")
+        data_text = Path(job.data_path).read_text(encoding="utf-8")
         if not data_text.strip():
-            raise ValueError("No training data provided")
+            raise ValueError(f"Training data file is empty: {job.data_path}")
 
-        # Build config
-        config = TrainingConfig(
-            epochs=job.epochs,
-            learning_rate=job.learning_rate,
-            batch_size=job.batch_size,
-            rolling_best_k=job.extra_config.get(
-                "rolling_best_k", 0),
-            use_gradient_checkpointing=job.extra_config.get(
-                "use_gradient_checkpointing", False),
-            max_grad_accumulation=job.extra_config.get(
-                "max_grad_accumulation", 1),
-            val_split=job.extra_config.get(
-                "val_split", 0.1),
-            checkpoint_dir=str(MODELS_DIR / "checkpoints"),
-            use_amp=torch.cuda.is_available(),
-        )
-
-        # Load model + tokenizer (same pattern as solo training)
+        # Load model + tokenizer.
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        checkpoint = safe_load_weights(
-            student_path, map_location=device)
+        checkpoint = safe_load_weights(student_path, map_location=device)
         cfg_dict = (checkpoint.get("model_config")
                     or checkpoint.get("config", {}))
         if isinstance(cfg_dict, dict) and "epochs" in cfg_dict:
@@ -253,37 +291,90 @@ class ForgeQueueMixin:
         else:
             tokenizer = get_tokenizer("auto")
 
-        # Create trainer with correct signature
-        trainer = Trainer(model, tokenizer, config)
-
-        # Progress callback for the queue
+        # Progress callback.
         def on_epoch(epoch, loss):
-            pct = int((epoch / job.epochs) * 100)
+            pct = int((epoch / max(job.epochs, 1)) * 100)
             job.progress = pct
             job.message = (
                 f"Epoch {epoch}/{job.epochs} "
                 f"loss={loss:.4f}")
-            if self._get_training_queue().on_progress:
-                self._get_training_queue().on_progress(
-                    job, pct, job.message)
+            q = self._get_training_queue()
+            if q.on_progress:
+                q.on_progress(job, pct, job.message)
 
-        trainer.on_epoch_complete = on_epoch
+        ctx = build_dispatch_context(
+            model=model,
+            tokenizer=tokenizer,
+            on_epoch_complete=on_epoch,
+        )
 
-        # Train — pass raw text, Trainer handles parsing
-        self._log(f"  Training on {len(data_text):,} chars...")
-        state = trainer.train(data_text)
+        # Build dispatcher payload.
+        payload: dict = {
+            "mode": dispatch_mode,
+            "training": {
+                "epochs": job.epochs,
+                "learning_rate": job.learning_rate,
+                "batch_size": job.batch_size,
+                "gradient_clip": job.extra_config.get("gradient_clip", 1.0),
+                "use_amp": torch.cuda.is_available(),
+                "rolling_best_k": job.extra_config.get("rolling_best_k", 0),
+                "use_gradient_checkpointing": job.extra_config.get(
+                    "use_gradient_checkpointing", False),
+                "max_grad_accumulation": job.extra_config.get(
+                    "max_grad_accumulation", 1),
+                "val_split": job.extra_config.get("val_split", 0.1),
+                "checkpoint_dir": str(MODELS_DIR / "checkpoints"),
+            },
+        }
+        if dispatch_mode in _EXPERIMENTAL_MODES:
+            payload["allow_experimental"] = True
 
-        # Save model
+        if dispatch_mode == "dpo":
+            payload["dpo"] = {
+                "loss_type": _QUEUE_DPO_LOSS_TYPE_MAP.get(job.mode, "dpo"),
+            }
+
+        # Attach data under the key the dispatcher expects.
+        if dispatch_mode in _PREFERENCE_MODES:
+            import json
+
+            pref_rows = []
+            for line in data_text.splitlines():
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                pref_rows.append(json.loads(stripped))
+            payload["data"] = pref_rows
+        elif dispatch_mode in _PROMPT_LIST_MODES:
+            payload["data"] = [ln.strip() for ln in data_text.splitlines() if ln.strip()]
+        else:
+            payload["data"] = data_text
+
+        self._log(f"  Routing to dispatcher mode={dispatch_mode!r}...")
+        result = run_training(payload, ctx)
+
+        # Persist trained weights back to the original student checkpoint.
         from enigma_engine.core.safe_save import atomic_torch_save
         save_data = {
             "model_state_dict": model.state_dict(),
-            "model_config": self._model_config_dict(model),
+            "model_config": cfg_dict,
         }
         atomic_torch_save(save_data, student_path)
-        self._log(
-            f"  Saved model (loss={state.best_loss:.4f})")
+        self._log(f"  Saved trained model → {Path(student_path).name}")
 
-        return state.best_loss
+        # Extract best_loss — result shape varies by mode.
+        if hasattr(result, "best_loss"):
+            best_loss = result.best_loss
+        elif isinstance(result, dict):
+            best_loss = (
+                result.get("best_loss")
+                or result.get("final_loss", float("inf"))
+            )
+        else:
+            raise TypeError(
+                f"run_training returned unexpected result type: {type(result).__name__}")
+        self._log(f"  Completed (loss={best_loss:.4f})")
+        return best_loss
 
     # Queue callbacks (called from background thread)
 

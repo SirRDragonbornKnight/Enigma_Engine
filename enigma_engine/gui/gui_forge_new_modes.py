@@ -2079,7 +2079,7 @@ class ForgeNewModesMixin:
                 from enigma_engine.core.model_registry import get_state_dict
                 from enigma_engine.core.tokenizer import get_tokenizer
                 from enigma_engine.core.rl_training import (
-                    RewardModel, RewardTrainer, RewardTrainerConfig,
+                    RewardModel,
                 )
 
                 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -2134,13 +2134,6 @@ class ForgeNewModesMixin:
                 # Phase 1: Train reward model
                 self._log("\n--- Phase 1: Training Reward Model ---")
                 reward_model = RewardModel(model, freeze_base=True).to(device)
-                reward_cfg = RewardTrainerConfig(
-                    epochs=min(epochs, 5),
-                    learning_rate=lr * 10,
-                )
-                reward_trainer = RewardTrainer(
-                    reward_model, tokenizer, reward_cfg)
-
                 import time as _time
                 _rlhf_start = [_time.monotonic()]
                 _reward_last_t = [0.0]
@@ -2159,9 +2152,29 @@ class ForgeNewModesMixin:
                         self._update_forge_progress(
                             p, f"{m}{eta}")
                         _reward_last_t[0] = now
-                reward_trainer.on_progress = _reward_progress
+                def on_reward_trainer_ready(t) -> None:
+                    self._active_trainer = t
 
-                result = reward_trainer.train(pref_data)
+                from enigma_engine.training.dispatch import (
+                    build_dispatch_context, run_training)
+                reward_ctx = build_dispatch_context(
+                    model=model,
+                    tokenizer=tokenizer,
+                    reward_model=reward_model,
+                    on_progress=_reward_progress,
+                    on_trainer_ready=on_reward_trainer_ready,
+                )
+                reward_config = {
+                    "mode": "reward_model",
+                    "allow_experimental": True,
+                    "data": pref_data,
+                    "training": {
+                        "epochs": min(epochs, 5),
+                        "learning_rate": lr * 10,
+                        "use_amp": torch.cuda.is_available(),
+                    },
+                }
+                result = run_training(reward_config, reward_ctx)
                 self._log(f"Reward model trained: loss={result['final_loss']:.4f}")
 
                 if self._forge_stop_requested():
@@ -2192,8 +2205,6 @@ class ForgeNewModesMixin:
                 def on_trainer_ready(t) -> None:
                     self._active_trainer = t
 
-                from enigma_engine.training.dispatch import (
-                    build_dispatch_context, run_training)
                 ctx = build_dispatch_context(
                     model=model,
                     tokenizer=tokenizer,
@@ -2203,6 +2214,7 @@ class ForgeNewModesMixin:
                 )
                 config_dict = {
                     "mode": "rlhf",
+                    "allow_experimental": True,
                     "data": prompts,
                     "training": {
                         "epochs": epochs,
@@ -2392,6 +2404,7 @@ class ForgeNewModesMixin:
                 )
                 config_dict = {
                     "mode": "self_play",
+                    "allow_experimental": True,
                     "data": prompts,
                     "training": {
                         "epochs": epochs,
@@ -2524,7 +2537,7 @@ class ForgeNewModesMixin:
                     get_state_dict, safe_load_weights)
                 from enigma_engine.core.tokenizer import get_tokenizer
                 from enigma_engine.core.rl_training import (
-                    RewardModel, RewardTrainer, RewardTrainerConfig,
+                    RewardModel,
                 )
                 from enigma_engine.core.reward_functions import (
                     reasoning_reward,
@@ -2618,14 +2631,29 @@ class ForgeNewModesMixin:
                         "\n--- Phase 1: Training Reward Model ---")
                     reward_model = RewardModel(
                         model, freeze_base=True).to(device)
-                    reward_cfg = RewardTrainerConfig(
-                        epochs=min(epochs, 5),
-                        learning_rate=lr * 10,
+                    def on_reward_trainer_ready(t) -> None:
+                        self._active_trainer = t
+
+                    from enigma_engine.training.dispatch import (
+                        build_dispatch_context, run_training)
+                    reward_ctx = build_dispatch_context(
+                        model=model,
+                        tokenizer=tokenizer,
+                        reward_model=reward_model,
+                        on_progress=_reward_progress,
+                        on_trainer_ready=on_reward_trainer_ready,
                     )
-                    reward_trainer = RewardTrainer(
-                        reward_model, tokenizer, reward_cfg)
-                    reward_trainer.on_progress = _reward_progress
-                    result = reward_trainer.train(pref_data)
+                    reward_config = {
+                        "mode": "reward_model",
+                        "allow_experimental": True,
+                        "data": pref_data,
+                        "training": {
+                            "epochs": min(epochs, 5),
+                            "learning_rate": lr * 10,
+                            "use_amp": torch.cuda.is_available(),
+                        },
+                    }
+                    result = run_training(reward_config, reward_ctx)
                     self._log(
                         f"Reward model trained: "
                         f"loss={result['final_loss']:.4f}")
@@ -2684,6 +2712,7 @@ class ForgeNewModesMixin:
                 mode_name = "grpo" if algo == "GRPO" else "remax"
                 config_dict = {
                     "mode": mode_name,
+                    "allow_experimental": algo == "ReMax",
                     "data": prompts,
                     "training": {
                         "epochs": epochs,
@@ -2926,6 +2955,7 @@ class ForgeNewModesMixin:
                 mode_name = "simpo" if algo == "SimPO" else "orpo"
                 config_dict: dict = {
                     "mode": mode_name,
+                    "allow_experimental": True,
                     "data": pref_data,
                     "training": {
                         "epochs": epochs,

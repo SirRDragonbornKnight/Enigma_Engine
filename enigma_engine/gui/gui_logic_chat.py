@@ -1028,6 +1028,14 @@ class LogicChatMixin:
             ctx.increment_sessions()
         # Save cleared history to model context
         self._save_model_context()
+        use_api_chat = bool(getattr(self, "use_api_chat", False))
+        if use_api_chat:
+            get_client = getattr(self, "_get_api_chat_client", None)
+            if callable(get_client):
+                try:
+                    get_client().clear_history()
+                except Exception as exc:
+                    logger.warning("API clear history failed: %s", exc)
         if self.engine:
             if hasattr(self.engine, "clear_history"):
                 self.engine.clear_history()

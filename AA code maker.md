@@ -506,6 +506,7 @@ Command: `python -m pytest tests/ -v`
 - Delete test files that test removed features
 - **Tests specify WHAT, not HOW** — test intended behavior (output, side effects, errors), not implementation details (source patterns, function calls, variable names). A test that passes when the code is wrong is worse than no test.
 - **Structural tests (`inspect.getsource`) are a last resort** — only use when behavioral testing requires hardware not available in CI (GPU, GUI). Annotate with a comment explaining why structural is necessary.
+- **Strict schema boundaries (`extra="forbid"`) need at least one behavioral payload-validation test** — source-presence tests can pass while runtime `model_validate(...)` fails on wrong key shape.
 - When 3+ tests inspect the same target method, use one shared source helper (e.g. `_get_init_common_source()`) instead of repeating local imports/extraction in every test — keeps structural assertions focused on contracts and reduces copy-drift noise.
 - **Write tests from the spec, not from the code** — ask "what should this do?" before reading how it does it. If you read the code first, you'll test what it does, not what it should do.
 

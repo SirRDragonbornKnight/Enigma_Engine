@@ -1921,6 +1921,20 @@ class TestCMDPage:
         result = registry.execute("config.list")
         assert result.success
 
+    def test_cmd_ask_ai_routes_through_shared_chat_router(self):
+        """ARCH-1c: CMD ask-ai path should use shared chat routing.
+
+        Guards against direct ``self.engine.chat(...)`` calls so API chat
+        mode can work even when no local model is loaded.
+        """
+        import inspect
+        from enigma_engine.gui.gui_cmd_page import CMDPageMixin
+
+        src = inspect.getsource(CMDPageMixin._cmd_ask_ai)
+        assert "self._chat_request(" in src
+        assert "prefer_stream=False" in src
+        assert "self.engine is None and not use_api_chat" in src
+
 
 # ================================================================
 # Per-model context
@@ -4764,6 +4778,116 @@ class TestApiChatConfig:
             "__init__ must boot-load the persisted api_base_url setting"
         )
 
+    def test_logic_load_model_has_api_client_branch(self):
+        """ARCH-1c: Logic load path should support API-mode model load."""
+        from enigma_engine.gui.gui_logic import LogicMixin
+
+        src = inspect.getsource(LogicMixin._load_model)
+        assert "if use_api_chat:" in src
+        assert "client.load_model(path)" in src
+        assert "self._on_remote_model_loaded(path)" in src
+
+    def test_logic_unload_model_has_api_client_branch(self):
+        """ARCH-1c: Logic unload path should call API unload in API mode."""
+        from enigma_engine.gui.gui_logic import LogicMixin
+
+        src = inspect.getsource(LogicMixin._unload_model)
+        assert "use_api_chat" in src
+        assert "unload_model()" in src
+        # Bug B: model_path must be cleared after API unload
+        assert "self.model_path = None" in src
+
+    def test_logic_unload_clears_model_path_on_api_path(self):
+        """Bug-B regression: model_path must be set to None after API unload
+        so re-entering _load_model does not trigger a redundant second unload.
+        """
+        import types
+        from unittest.mock import MagicMock, patch
+
+        from enigma_engine.gui.gui_logic import LogicMixin
+
+        mock_client = MagicMock()
+        mock_client.unload_model.return_value = None
+
+        host = types.SimpleNamespace(
+            engine=None,
+            model_path="models/old.pth",
+            use_api_chat=True,
+            model_context=None,
+            _model_display_name=None,
+            _model_suspended_by_minimize=False,
+            _suspended_model_path=None,
+            route_assignments={"chat": "models/old.pth"},
+            _route_menus={},
+        )
+        # Wire required methods
+        host._save_model_context = lambda: None
+        host._get_api_chat_client = lambda: mock_client
+        host._release_loaded_engine = lambda: None
+        host._set_header_status = lambda *a, **kw: None
+        host.header_dot = MagicMock()
+        host.unload_btn = MagicMock()
+        host.suspend_btn = None
+        host._chat_session_marker = lambda *a: None
+        host.status_bar = MagicMock()
+
+        def fake_save_routes(d):
+            pass
+
+        with patch(
+            "enigma_engine.gui.gui_logic.save_route_assignments"
+        ):
+            host._update_route_status = lambda: None
+            LogicMixin._unload_model(host)
+
+        mock_client.unload_model.assert_called_once()
+        assert host.model_path is None, "model_path must be None after API unload"
+
+    def test_logic_remote_model_loaded_updates_header_to_api(self):
+        """Remote model-load callback should surface API status in header."""
+        from enigma_engine.gui.gui_logic import LogicMixin
+
+        src = inspect.getsource(LogicMixin._on_remote_model_loaded)
+        assert "// API" in src
+        assert "LOADED (API)" in src
+
+    def test_logic_remote_model_loaded_sets_route_and_enables_send(self):
+        """Bug-D regression: _on_remote_model_loaded must persist route
+        assignment and enable send_btn so the GUI is ready for chat.
+        """
+        import types
+        from unittest.mock import MagicMock, patch
+
+        from enigma_engine.gui.gui_logic import LogicMixin
+
+        host = types.SimpleNamespace(
+            engine=None,
+            model_path=None,
+            _model_loading=True,
+            route_assignments={},
+            models_data=[{"path": "models/foo.pth", "name": "Foo"}],
+            _route_menus={},
+            model_context=None,
+        )
+        host._set_header_status = lambda *a, **kw: None
+        host.header_dot = MagicMock()
+        host.send_btn = MagicMock()
+        host.unload_btn = MagicMock()
+        host.suspend_btn = None
+        host.status_bar = MagicMock()
+        host._load_model_display_name = lambda *a: None
+        host._load_model_context = lambda *a: None
+        host._chat_session_marker = lambda *a: None
+        host._update_route_status = lambda: None
+        host._show_journal_greeting = lambda: None
+
+        with patch("enigma_engine.gui.gui_logic.save_route_assignments"):
+            LogicMixin._on_remote_model_loaded(host, "models/foo.pth")
+        assert host.route_assignments.get("chat") == "models/foo.pth"
+        assert host.model_path == "models/foo.pth"
+        assert host._model_loading is False
+        host.send_btn.configure.assert_called_with(state="normal")
+
 
 class TestInlineSearchSpliceConfig:
     """B-3a (this pass): CONFIG-page checkbox for
@@ -6324,6 +6448,246 @@ class TestForgeDispatcherRouting:
         assert "trainer.train_orpo(" not in src, (
             "Direct trainer.train_orpo(...) call still present; "
             "dispatcher should route via mode='orpo'")
+
+    def test_rlhf_and_remax_phase1_reward_model_routes_through_dispatcher(self):
+        """ARCH-1.5c sibling-boundary guard: reward-model phase-1 in
+        RLHF/ReMax paths must route through dispatcher mode
+        `reward_model`, not direct `RewardTrainer(...)`.
+        """
+        import inspect
+        from enigma_engine.gui.gui_forge_new_modes import (
+            ForgeNewModesMixin)
+
+        rlhf_src = inspect.getsource(ForgeNewModesMixin._start_rlhf_training)
+        assert '"mode": "reward_model"' in rlhf_src
+        assert "reward_trainer = RewardTrainer(" not in rlhf_src
+
+        rl_variant_src = inspect.getsource(
+            ForgeNewModesMixin._start_rl_variant_training)
+        assert '"mode": "reward_model"' in rl_variant_src
+        assert "reward_trainer = RewardTrainer(" not in rl_variant_src
+
+    def test_experimental_dispatch_modes_explicitly_allow_experimental(self):
+        """ARCH-1.5c: GUI launchers using experimental dispatcher modes
+        must set `allow_experimental=True` (or equivalent conditional
+        expression) in payloads, otherwise run_training(...) rejects.
+        """
+        import inspect
+        from enigma_engine.gui.gui_forge_new_modes import (
+            ForgeNewModesMixin)
+
+        rlhf_src = inspect.getsource(ForgeNewModesMixin._start_rlhf_training)
+        assert '"mode": "rlhf"' in rlhf_src
+        assert '"allow_experimental": True' in rlhf_src
+
+        selfplay_src = inspect.getsource(
+            ForgeNewModesMixin._start_selfplay_training)
+        assert '"mode": "self_play"' in selfplay_src
+        assert '"allow_experimental": True' in selfplay_src
+
+        pref_src = inspect.getsource(
+            ForgeNewModesMixin._start_preference_variant_training)
+        assert '"allow_experimental": True' in pref_src
+
+        rl_variant_src = inspect.getsource(
+            ForgeNewModesMixin._start_rl_variant_training)
+        assert '"mode": mode_name' in rl_variant_src
+        assert '"allow_experimental": algo == "ReMax"' in rl_variant_src
+
+class TestForgeQueueExecutor:
+    """ARCH-1.5c: queue executor routes through dispatcher."""
+
+    def test_execute_queue_job_routes_through_dispatcher(self):
+        """Queue executor must use build_dispatch_context + run_training
+        instead of direct Trainer(...) instantiation.
+        """
+        import inspect
+        from enigma_engine.gui.gui_forge_queue import ForgeQueueMixin
+
+        src = inspect.getsource(ForgeQueueMixin._execute_queue_job)
+        assert "build_dispatch_context(" in src
+        assert "run_training(" in src
+        assert "trainer = Trainer(" not in src, (
+            "Direct Trainer(...) still present in _execute_queue_job; "
+            "should route through dispatcher")
+
+    def test_queue_executor_maps_mode_to_dispatcher_key(self):
+        """_QUEUE_MODE_MAP must be present and map display names to
+        dispatcher mode strings for SFT, DPO, LoRA and GRPO at minimum.
+        """
+        import inspect
+        from enigma_engine.gui.gui_forge_queue import ForgeQueueMixin
+
+        src = inspect.getsource(ForgeQueueMixin._execute_queue_job)
+        assert '"sft"' in src or '_QUEUE_MODE_MAP' in src, (
+            "sft dispatcher key must appear in executor body or mode map")
+        assert '"dpo"' in src or '_QUEUE_MODE_MAP' in src, (
+            "dpo dispatcher key must appear in executor body or mode map")
+
+    def test_execute_queue_job_saves_model_after_training(self, tmp_path, monkeypatch):
+        """_execute_queue_job must call atomic_torch_save with the
+        student_path AFTER run_training returns.  This is the
+        regression gate for the missing-save bug found in audit Pass 156z9cf.
+        """
+        import types, dataclasses
+        import enigma_engine.gui.gui_forge_queue as q_mod
+
+        # --- fake job -------------------------------------------------
+        class FakeJob:
+            job_id = 1
+            mode = "Basic"
+            epochs = 1
+            learning_rate = 1e-4
+            batch_size = 2
+            model_path = str(tmp_path / "student.pth")
+            data_path = str(tmp_path / "train.txt")
+            extra_config: dict = dataclasses.field(default_factory=dict)
+            progress = 0
+            message = ""
+        job = FakeJob()
+        job.extra_config = {}
+        (tmp_path / "train.txt").write_text("User: hi\nAssistant: hello\n" * 20)
+
+        # --- fake checkpoint on disk ---------------------------------
+        fake_state = {"model_state_dict": {}, "model_config": {}}
+        import torch
+        torch.save(fake_state, job.model_path)
+
+        # --- monkeypatches -------------------------------------------
+        saved_calls: list[tuple] = []
+
+        def fake_safe_load(path, map_location="cpu"):
+            return fake_state
+
+        def fake_get_state_dict(ckpt):
+            return {}
+
+        def fake_run_training(payload, ctx):
+            # Return a TrainingState-like object with best_loss
+            result = types.SimpleNamespace(best_loss=0.42)
+            return result
+
+        def fake_atomic_torch_save(data, path):
+            saved_calls.append((data, path))
+
+        monkeypatch.setattr(q_mod, "safe_load_weights", fake_safe_load, raising=False)
+        # Patch the imports inside _execute_queue_job via sys.modules
+        import sys
+        fake_registry = types.ModuleType("enigma_engine.core.model_registry")
+        fake_registry.safe_load_weights = fake_safe_load
+        fake_registry.get_state_dict = fake_get_state_dict
+        monkeypatch.setitem(sys.modules, "enigma_engine.core.model_registry", fake_registry)
+
+        fake_dispatch = types.ModuleType("enigma_engine.training.dispatch")
+        fake_dispatch.build_dispatch_context = lambda **kw: types.SimpleNamespace(**kw)
+        fake_dispatch.run_training = fake_run_training
+        monkeypatch.setitem(sys.modules, "enigma_engine.training.dispatch", fake_dispatch)
+
+        fake_safe_save = types.ModuleType("enigma_engine.core.safe_save")
+        fake_safe_save.atomic_torch_save = fake_atomic_torch_save
+        monkeypatch.setitem(sys.modules, "enigma_engine.core.safe_save", fake_safe_save)
+
+        # Minimal ForgeConfig stub
+        import dataclasses as _dc
+
+        @_dc.dataclass
+        class _FakeForgeConfig:
+            pass
+
+        fake_presets = types.ModuleType("enigma_engine.core.model_presets")
+        fake_presets.ForgeConfig = _FakeForgeConfig
+        monkeypatch.setitem(sys.modules, "enigma_engine.core.model_presets", fake_presets)
+
+        # Minimal Enigma stub
+        class _FakeEnigma:
+            def __init__(self, config=None): pass
+            def load_state_dict(self, sd): pass
+            def to(self, device): return self
+            def state_dict(self): return {}
+
+        fake_model_mod = types.ModuleType("enigma_engine.core.model")
+        fake_model_mod.Enigma = _FakeEnigma
+        monkeypatch.setitem(sys.modules, "enigma_engine.core.model", fake_model_mod)
+
+        # BPE tokenizer path won't exist → fall back to get_tokenizer("auto")
+        fake_tok_mod = types.ModuleType("enigma_engine.core.tokenizer")
+        fake_tok_mod.get_tokenizer = lambda *a, **kw: object()
+        monkeypatch.setitem(sys.modules, "enigma_engine.core.tokenizer", fake_tok_mod)
+
+        # --- host stub ------------------------------------------------
+        from enigma_engine.gui.gui_forge_queue import ForgeQueueMixin
+
+        class _Host(ForgeQueueMixin):
+            MODELS_DIR = tmp_path / "models"
+            _logs: list[str] = []
+            def _log(self, msg): self._logs.append(msg)
+            def _get_training_queue(self):
+                q = types.SimpleNamespace(on_progress=None)
+                return q
+
+        host = _Host()
+
+        # --- execute --------------------------------------------------
+        best = host._execute_queue_job(job)
+
+        # atomic_torch_save must have been called exactly once with student_path
+        assert len(saved_calls) == 1, (
+            f"atomic_torch_save called {len(saved_calls)} times; expected 1 "
+            "(missing save = trained weights lost)")
+        _, saved_path = saved_calls[0]
+        assert str(saved_path) == job.model_path, (
+            f"atomic_torch_save path {saved_path!r} != student_path {job.model_path!r}")
+        assert best == pytest.approx(0.42)
+
+    def test_execute_queue_job_loud_on_unmapped_mode(self, tmp_path):
+        """Unmapped modes must raise ValueError, not silently fall through."""
+        import dataclasses, types
+        from enigma_engine.gui.gui_forge_queue import ForgeQueueMixin
+
+        class FakeJob:
+            job_id = 99
+            mode = "Distill"
+            epochs = 1
+            learning_rate = 1e-4
+            batch_size = 2
+            model_path = str(tmp_path / "m.pth")
+            data_path = str(tmp_path / "d.txt")
+            extra_config: dict = dataclasses.field(default_factory=dict)
+
+        job = FakeJob()
+        job.extra_config = {}
+
+        class _Host(ForgeQueueMixin):
+            def _log(self, msg): pass
+            def _get_training_queue(self):
+                return types.SimpleNamespace(on_progress=None)
+
+        host = _Host()
+        with pytest.raises(ValueError, match="cannot be run through the training queue"):
+            host._execute_queue_job(job)
+
+
+class TestLoraFallbackDispatcher:
+    """ARCH-1.5c: LoRA non-PEFT fallback routes through SFT dispatcher."""
+
+    def test_lora_fallback_routes_through_dispatcher(self):
+        """The ImportError fallback in _start_lora_training must use
+        build_dispatch_context + run_training('sft') instead of
+        direct Trainer(...) instantiation.
+        """
+        import inspect
+        from enigma_engine.gui.gui_forge_training import ForgeTrainingMixin
+
+        src = inspect.getsource(ForgeTrainingMixin._start_lora_training)
+        # The fallback (except ImportError) must route to dispatcher
+        assert "build_dispatch_context(" in src
+        assert "run_training(" in src
+        # Direct Trainer instantiation should not remain in the fallback
+        # (the lora primary path goes through LoraTrainer, not Trainer)
+        assert "trainer = Trainer(" not in src, (
+            "Direct Trainer(...) still present in _start_lora_training; "
+            "non-PEFT fallback should route through SFT dispatcher")
+
 
 class TestModelsPageMerging:
     """N-21: MODELS page has merge controls wired to model_merging."""

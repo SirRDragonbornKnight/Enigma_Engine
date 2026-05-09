@@ -6556,7 +6556,6 @@ class TestBPETokenizerPreference:
         mock_trainer_state.best_loss = 0.5
         mock_trainer_instance = MagicMock()
         mock_trainer_instance.train.return_value = mock_trainer_state
-        mock_trainer_cls = MagicMock(return_value=mock_trainer_instance)
 
         mock_checkpoint = {"model_config": {}, "model_state_dict": {}}
 
@@ -6586,10 +6585,11 @@ class TestBPETokenizerPreference:
                 "enigma_engine.core.bpe_tokenizer",
                 BPETokenizer=fake_BPETokenizer,
             ),
-            "enigma_engine.training.training": _fake_mod(
-                "enigma_engine.training.training",
-                Trainer=mock_trainer_cls,
-                TrainingConfig=MagicMock(),
+            "enigma_engine.training.dispatch": _fake_mod(
+                "enigma_engine.training.dispatch",
+                build_dispatch_context=MagicMock(return_value=MagicMock()),
+                run_training=MagicMock(
+                    return_value=MagicMock(best_loss=0.5)),
             ),
             "enigma_engine.core.safe_save": _fake_mod(
                 "enigma_engine.core.safe_save",
@@ -6605,6 +6605,7 @@ class TestBPETokenizerPreference:
 
         # Build a fake job
         job = MagicMock()
+        job.mode = "Basic"  # valid map entry so mode resolution doesn't raise
         job.model_path = str(model_file)
         job.data_path = str(data_file)
         job.epochs = 1
@@ -6704,10 +6705,11 @@ class TestBPETokenizerPreference:
                 "enigma_engine.core.bpe_tokenizer",
                 BPETokenizer=fake_BPETokenizer,
             ),
-            "enigma_engine.training.training": _fake_mod(
-                "enigma_engine.training.training",
-                Trainer=MagicMock(return_value=mock_trainer_instance),
-                TrainingConfig=MagicMock(),
+            "enigma_engine.training.dispatch": _fake_mod(
+                "enigma_engine.training.dispatch",
+                build_dispatch_context=MagicMock(return_value=MagicMock()),
+                run_training=MagicMock(
+                    return_value=MagicMock(best_loss=0.5)),
             ),
             "enigma_engine.core.safe_save": _fake_mod(
                 "enigma_engine.core.safe_save",
@@ -6721,6 +6723,7 @@ class TestBPETokenizerPreference:
         stub._model_config_dict.return_value = {}
 
         job = MagicMock()
+        job.mode = "Basic"  # valid map entry so mode resolution doesn't raise
         job.model_path = str(model_file)
         job.data_path = str(data_file)
         job.epochs = 1
@@ -6741,11 +6744,349 @@ class TestBPETokenizerPreference:
             "get_tokenizer('auto') must be called when BPETokenizer raises")
 
 
+class TestQueueDispatcherPayloadContract:
+    """Behavioral contract tests for queue -> dispatcher payload wiring."""
 
+    def _run_queue_job_and_capture_payload(
+        self,
+        tmp_path,
+        *,
+        mode: str,
+        data_text: str,
+    ) -> dict:
+        import sys
+        import types
+        from unittest.mock import MagicMock, patch
 
-# -----------------------------------------------------------------------------
-# Sched-2: warmup cap for short runs (Pass 152)
-# -----------------------------------------------------------------------------
+        from enigma_engine.gui.gui_forge_queue import ForgeQueueMixin
+
+        model_file = tmp_path / "student.pth"
+        model_file.write_text("fake")
+        data_file = tmp_path / "train.txt"
+        data_file.write_text(data_text)
+
+        captured_payload: dict = {}
+
+        mock_torch = MagicMock()
+        mock_torch.cuda.is_available.return_value = False
+
+        mock_forge_config_cls = MagicMock()
+        mock_forge_config_cls.__dataclass_fields__ = {}
+        mock_cfg = MagicMock()
+        mock_forge_config_cls.return_value = mock_cfg
+
+        mock_model = MagicMock()
+        mock_model.to.return_value = mock_model
+        mock_model.parameters.return_value = []
+        mock_enigma_cls = MagicMock(return_value=mock_model)
+
+        mock_tokenizer = MagicMock()
+        mock_tokenizer.vocab_size = 32000
+
+        mock_checkpoint = {"model_config": {}, "model_state_dict": {}}
+
+        def fake_run_training(payload, _ctx):
+            captured_payload.clear()
+            captured_payload.update(payload)
+            return MagicMock(best_loss=0.5)
+
+        def _fake_mod(name, **attrs):
+            m = types.ModuleType(name)
+            for k, v in attrs.items():
+                setattr(m, k, v)
+            return m
+
+        fake_sys_modules = {
+            "torch": mock_torch,
+            "enigma_engine.core.model": _fake_mod(
+                "enigma_engine.core.model",
+                Enigma=mock_enigma_cls,
+            ),
+            "enigma_engine.core.model_presets": _fake_mod(
+                "enigma_engine.core.model_presets",
+                ForgeConfig=mock_forge_config_cls,
+            ),
+            "enigma_engine.core.model_registry": _fake_mod(
+                "enigma_engine.core.model_registry",
+                safe_load_weights=MagicMock(return_value=mock_checkpoint),
+                get_state_dict=MagicMock(return_value={}),
+            ),
+            "enigma_engine.core.tokenizer": _fake_mod(
+                "enigma_engine.core.tokenizer",
+                get_tokenizer=MagicMock(return_value=mock_tokenizer),
+            ),
+            "enigma_engine.core.safe_save": _fake_mod(
+                "enigma_engine.core.safe_save",
+                atomic_torch_save=MagicMock(),
+            ),
+            "enigma_engine.training.dispatch": _fake_mod(
+                "enigma_engine.training.dispatch",
+                build_dispatch_context=MagicMock(return_value=MagicMock()),
+                run_training=MagicMock(side_effect=fake_run_training),
+            ),
+        }
+
+        stub = MagicMock()
+        stub._log.side_effect = lambda _m: None
+        queue = MagicMock()
+        queue.on_progress = None
+        stub._get_training_queue.return_value = queue
+
+        job = MagicMock()
+        job.job_id = 1
+        job.mode = mode
+        job.model_path = str(model_file)
+        job.data_path = str(data_file)
+        job.epochs = 1
+        job.learning_rate = 1e-4
+        job.batch_size = 1
+        job.extra_config = {
+            "rolling_best_k": 0,
+            "use_gradient_checkpointing": False,
+            "max_grad_accumulation": 1,
+            "val_split": 0.1,
+        }
+
+        with patch.dict(sys.modules, fake_sys_modules), \
+             patch("enigma_engine.gui.gui_forge_queue.MODELS_DIR", tmp_path):
+            ForgeQueueMixin._execute_queue_job(stub, job)
+
+        return dict(captured_payload)
+
+    def test_queue_sft_payload_is_schema_valid(self, tmp_path):
+        """Queue must emit the strict dispatcher shape (mode/data/training)."""
+        from enigma_engine.training.schema import TrainingJobConfig
+
+        payload = self._run_queue_job_and_capture_payload(
+            tmp_path,
+            mode="Basic",
+            data_text="hello queue world",
+        )
+
+        assert payload["mode"] == "sft"
+        assert isinstance(payload.get("training"), dict)
+        assert payload.get("data") == "hello queue world"
+        assert "data_text" not in payload
+        assert "epochs" not in payload
+
+        TrainingJobConfig.model_validate(payload)
+
+    def test_queue_apo_payload_forwards_apo_zero(self, tmp_path):
+        """APO queue mode must map to DPO mode with apo_zero loss type."""
+        from enigma_engine.training.schema import TrainingJobConfig
+
+        jsonl = (
+            '{"prompt":"p","chosen":"c","rejected":"r"}\n'
+        )
+        payload = self._run_queue_job_and_capture_payload(
+            tmp_path,
+            mode="APO",
+            data_text=jsonl,
+        )
+
+        assert payload["mode"] == "dpo"
+        assert payload.get("dpo", {}).get("loss_type") == "apo_zero"
+        assert isinstance(payload.get("data"), list)
+        assert payload["data"] and isinstance(payload["data"][0], dict)
+
+        TrainingJobConfig.model_validate(payload)
+
+    def test_queue_unmapped_mode_raises_value_error(self, tmp_path):
+        """Bug-A regression: unmapped queue mode must raise ValueError, not
+        silently fall back to SFT.
+        """
+        import sys
+        import types
+        from unittest.mock import MagicMock, patch
+
+        from enigma_engine.gui.gui_forge_queue import ForgeQueueMixin
+
+        model_file = tmp_path / "student.pth"
+        model_file.write_text("fake")
+        data_file = tmp_path / "train.txt"
+        data_file.write_text("data")
+
+        mock_torch = MagicMock()
+        mock_torch.cuda.is_available.return_value = False
+
+        mock_forge_config_cls = MagicMock()
+        mock_forge_config_cls.__dataclass_fields__ = {}
+        mock_forge_config_cls.return_value = MagicMock()
+
+        mock_model = MagicMock()
+        mock_model.to.return_value = mock_model
+        mock_model.parameters.return_value = []
+
+        mock_tokenizer = MagicMock()
+
+        def _fake_mod(name, **attrs):
+            m = types.ModuleType(name)
+            for k, v in attrs.items():
+                setattr(m, k, v)
+            return m
+
+        fake_sys_modules = {
+            "torch": mock_torch,
+            "enigma_engine.core.model": _fake_mod(
+                "enigma_engine.core.model",
+                Enigma=MagicMock(return_value=mock_model),
+            ),
+            "enigma_engine.core.model_presets": _fake_mod(
+                "enigma_engine.core.model_presets",
+                ForgeConfig=mock_forge_config_cls,
+            ),
+            "enigma_engine.core.model_registry": _fake_mod(
+                "enigma_engine.core.model_registry",
+                safe_load_weights=MagicMock(
+                    return_value={"model_config": {}, "model_state_dict": {}}),
+                get_state_dict=MagicMock(return_value={}),
+            ),
+            "enigma_engine.core.tokenizer": _fake_mod(
+                "enigma_engine.core.tokenizer",
+                get_tokenizer=MagicMock(return_value=mock_tokenizer),
+            ),
+            "enigma_engine.training.dispatch": _fake_mod(
+                "enigma_engine.training.dispatch",
+                build_dispatch_context=MagicMock(return_value=MagicMock()),
+                run_training=MagicMock(return_value=MagicMock(best_loss=0.5)),
+            ),
+        }
+
+        stub = MagicMock()
+        stub._log.side_effect = lambda _m: None
+        stub._get_training_queue.return_value = MagicMock(on_progress=None)
+
+        job = MagicMock()
+        job.job_id = 1
+        job.mode = "Dialogue"  # unsupported, not in _QUEUE_MODE_MAP
+        job.model_path = str(model_file)
+        job.data_path = str(data_file)
+        job.epochs = 1
+        job.learning_rate = 1e-4
+        job.batch_size = 1
+        job.extra_config = {
+            "rolling_best_k": 0,
+            "use_gradient_checkpointing": False,
+            "max_grad_accumulation": 1,
+            "val_split": 0.1,
+        }
+
+        import pytest
+        with patch.dict(sys.modules, fake_sys_modules), \
+             patch("enigma_engine.gui.gui_forge_queue.MODELS_DIR", tmp_path), \
+             pytest.raises(ValueError, match="cannot be run through the training queue"):
+            ForgeQueueMixin._execute_queue_job(stub, job)
+
+    def test_queue_truly_unknown_mode_raises_value_error(self, tmp_path):
+        """Truly unknown modes (typos, future modes) must raise ValueError
+        naming the known modes, not silently run SFT.
+        """
+        import sys
+        import types
+        from unittest.mock import MagicMock, patch
+
+        from enigma_engine.gui.gui_forge_queue import ForgeQueueMixin
+
+        model_file = tmp_path / "student.pth"
+        model_file.write_text("fake")
+        data_file = tmp_path / "train.txt"
+        data_file.write_text("data")
+
+        mock_torch = MagicMock()
+        mock_torch.cuda.is_available.return_value = False
+
+        mock_forge_config_cls = MagicMock()
+        mock_forge_config_cls.__dataclass_fields__ = {}
+        mock_forge_config_cls.return_value = MagicMock()
+        mock_model = MagicMock()
+        mock_model.to.return_value = mock_model
+        mock_model.parameters.return_value = []
+
+        def _fake_mod(name, **attrs):
+            m = types.ModuleType(name)
+            for k, v in attrs.items():
+                setattr(m, k, v)
+            return m
+
+        fake_sys_modules = {
+            "torch": mock_torch,
+            "enigma_engine.core.model": _fake_mod(
+                "enigma_engine.core.model",
+                Enigma=MagicMock(return_value=mock_model),
+            ),
+            "enigma_engine.core.model_presets": _fake_mod(
+                "enigma_engine.core.model_presets",
+                ForgeConfig=mock_forge_config_cls,
+            ),
+            "enigma_engine.core.model_registry": _fake_mod(
+                "enigma_engine.core.model_registry",
+                safe_load_weights=MagicMock(
+                    return_value={"model_config": {}, "model_state_dict": {}}),
+                get_state_dict=MagicMock(return_value={}),
+            ),
+            "enigma_engine.core.tokenizer": _fake_mod(
+                "enigma_engine.core.tokenizer",
+                get_tokenizer=MagicMock(return_value=MagicMock()),
+            ),
+            "enigma_engine.training.dispatch": _fake_mod(
+                "enigma_engine.training.dispatch",
+                build_dispatch_context=MagicMock(return_value=MagicMock()),
+                run_training=MagicMock(return_value=MagicMock(best_loss=0.5)),
+            ),
+        }
+
+        stub = MagicMock()
+        stub._log.side_effect = lambda _m: None
+        stub._get_training_queue.return_value = MagicMock(on_progress=None)
+
+        job = MagicMock()
+        job.job_id = 2
+        job.mode = "Typo Mode XYZ"
+        job.model_path = str(model_file)
+        job.data_path = str(data_file)
+        job.epochs = 1
+        job.learning_rate = 1e-4
+        job.batch_size = 1
+        job.extra_config = {
+            "rolling_best_k": 0,
+            "use_gradient_checkpointing": False,
+            "max_grad_accumulation": 1,
+            "val_split": 0.1,
+        }
+
+        import pytest
+        with patch.dict(sys.modules, fake_sys_modules), \
+             patch("enigma_engine.gui.gui_forge_queue.MODELS_DIR", tmp_path), \
+             pytest.raises(ValueError, match="Unknown training mode for queue"):
+            ForgeQueueMixin._execute_queue_job(stub, job)
+
+    def test_queue_mode_map_covers_all_gui_mode_cards(self):
+        """Bug-A structural regression: every GUI mode card name must be
+        in _QUEUE_MODE_MAP or _QUEUE_UNSUPPORTED_MODES — no silent SFT
+        fallback when a new card is added without updating the map.
+        """
+        from enigma_engine.gui.gui_forge_queue import (
+            _QUEUE_MODE_MAP,
+            _QUEUE_UNSUPPORTED_MODES,
+        )
+
+        # Mode cards extracted from gui_pages_forge.py mode lists.
+        # Update this set whenever a new card is added to any mode group.
+        gui_mode_cards = {
+            # Foundation
+            "Pre-Train", "Distill", "Basic", "LoRA", "Image",
+            # Advanced
+            "AI-Guided", "Dialogue", "RLHF", "Self-Play",
+            # Alignment
+            "GRPO", "ReMax", "SimPO", "ORPO", "APO",
+        }
+
+        all_covered = _QUEUE_MODE_MAP.keys() | _QUEUE_UNSUPPORTED_MODES
+        missing = gui_mode_cards - all_covered
+        assert not missing, (
+            f"These GUI mode card names have no queue routing: {missing}. "
+            "Add them to _QUEUE_MODE_MAP or _QUEUE_UNSUPPORTED_MODES."
+        )
 
 class TestEffectiveWarmup:
     """_effective_warmup caps warmup at 20% of total to fix short-run waste.

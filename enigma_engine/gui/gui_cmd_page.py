@@ -532,7 +532,8 @@ class CMDPageMixin:
             self._cmd_write("error", "[!] Usage: ask <question>\n")
             return
 
-        if self.engine is None:
+        use_api_chat = bool(getattr(self, "use_api_chat", False))
+        if self.engine is None and not use_api_chat:
             self._cmd_write(
                 "error",
                 "[!] No model loaded. Load one from ROUTER.\n")
@@ -576,10 +577,17 @@ class CMDPageMixin:
                 # pass — not a free side-effect of forwarding.
                 kwargs.pop("json_schema", None)
 
-                try:
-                    resp = self.engine.chat(question, **kwargs)
-                except TypeError:
-                    resp = self.engine.chat(question)
+                if hasattr(self, "_chat_request"):
+                    resp = self._chat_request(
+                        question,
+                        kwargs,
+                        prefer_stream=False,
+                    )
+                else:
+                    try:
+                        resp = self.engine.chat(question, **kwargs)
+                    except TypeError:
+                        resp = self.engine.chat(question)
 
                 from enigma_engine.core.commands import (
                     parse_commands, get_registry)

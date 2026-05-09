@@ -855,7 +855,15 @@ async def clear_history():
     with state._lock:
         state._history.clear()
     if state.engine is not None and hasattr(state.engine, "clear_history"):
-        state.engine.clear_history()
+        try:
+            state.engine.clear_history()
+        except Exception as exc:
+            logger.warning("Engine clear_history raised: %s", exc)
+    if state.engine is not None and hasattr(state.engine, "clear_kv_cache"):
+        try:
+            state.engine.clear_kv_cache()
+        except Exception as exc:
+            logger.warning("Engine clear_kv_cache raised: %s", exc)
     return {"status": "ok"}
 
 

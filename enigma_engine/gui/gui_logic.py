@@ -602,13 +602,14 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
 
     def _load_model(self, path: str):
         """Load a model file in a background thread and update the UI."""
+        use_api_chat = bool(getattr(self, "use_api_chat", False))
         if getattr(self, '_model_loading', False):
             self._chat_system("Model already loading. Please wait.")
             return
         if getattr(self, '_is_generating', False):
             self._chat_system("Cannot load model while generating. Stop generation first.")
             return
-        if self.engine is not None:
+        if self.engine is not None or (use_api_chat and self.model_path):
             self._unload_model()
 
         self._model_loading = True
@@ -616,9 +617,23 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
         self.header_dot.set_color(C_ORANGE)
         self._chat_system(f"Loading {Path(path).name}...")
         self.send_btn.configure(state="disabled")
-
         def _load():
             try:
+                if use_api_chat:
+                    get_client = getattr(self, "_get_api_chat_client", None)
+                    if callable(get_client):
+                        client = get_client()
+                    else:
+                        from enigma_engine import EnigmaClient
+                        base_url = str(
+                            getattr(self, "api_base_url", "http://127.0.0.1:8080")
+                            or "http://127.0.0.1:8080"
+                        ).strip()
+                        client = EnigmaClient(base_url)
+                    client.load_model(path)
+                    self.after(0, lambda: self._on_remote_model_loaded(path))
+                    return
+
                 from enigma_engine.core import EnigmaEngine
                 self.engine = EnigmaEngine(model_path=path)
                 self.model_path = path
@@ -638,6 +653,45 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
                 self.after(0, lambda m=msg: self._on_model_error(m))
 
         threading.Thread(target=_load, daemon=True).start()
+
+    def _on_remote_model_loaded(self, path: str):
+        """Handle successful API-mode model load without local engine state."""
+        self._model_loading = False
+        self.engine = None
+        self.model_path = path
+
+        name = Path(path).stem
+        self._set_header_status(f"{name.upper()} // API", C_GREEN)
+        self.header_dot.set_color(C_GREEN)
+        self.send_btn.configure(state="normal")
+        self.unload_btn.configure(state="normal")
+        suspend_btn = getattr(self, "suspend_btn", None)
+        if suspend_btn:
+            suspend_btn.configure(
+                state="disabled",
+                text="SUSPEND",
+                command=self._suspend_model_memory)
+        self.status_bar.set_left(f"\u26a1 {name.upper()} LOADED (API)")
+
+        self._load_model_display_name(path)
+        self._load_model_context(path)
+        self._chat_session_marker(f"Model: {name.upper()} (API)")
+
+        self.route_assignments["chat"] = path
+        save_route_assignments(self.route_assignments)
+
+        route_menus = getattr(self, "_route_menus", {})
+        chat_menu = route_menus.get("chat")
+        if chat_menu:
+            display = "None"
+            for m in self.models_data:
+                if m["path"] == path:
+                    display = m["name"]
+                    break
+            chat_menu.set(display)
+
+        self._update_route_status()
+        self._show_journal_greeting()
 
     def _on_model_loaded(self, path: str, param_count: int):
         """Handle successful model load — update header, routes, and context."""
@@ -1102,6 +1156,15 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
         self._model_display_name = None
         self._model_suspended_by_minimize = False
         self._suspended_model_path = None
+        use_api_chat = bool(getattr(self, "use_api_chat", False))
+        if self.engine is None and use_api_chat and self.model_path:
+            try:
+                get_client = getattr(self, "_get_api_chat_client", None)
+                if callable(get_client):
+                    get_client().unload_model()
+            except Exception as exc:
+                logger.warning("API unload failed: %s", exc)
+            self.model_path = None
         if self.engine is not None:
             self._release_loaded_engine()
         self._set_header_status("NO MODEL", C_TEXT_DIM)

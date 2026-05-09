@@ -1402,8 +1402,6 @@ class ForgeTrainingMixin:
                 from enigma_engine.core.model import Enigma
                 from enigma_engine.core.model_presets import ForgeConfig
                 from enigma_engine.core.tokenizer import get_tokenizer
-                from enigma_engine.training.training import (
-                    Trainer, TrainingConfig)
 
                 device = ("cuda"
                           if torch.cuda.is_available() else "cpu")
@@ -1533,30 +1531,21 @@ class ForgeTrainingMixin:
                     text = Path(data_path).read_text(encoding="utf-8")
                     self._log(f"Data    : {len(text):,} chars loaded")
 
-                    train_config = TrainingConfig(
-                        epochs=epochs,
-                        batch_size=forge_params["batch_size"],
-                        learning_rate=lr,
-                        max_grad_accumulation=forge_params["max_grad_accumulation"],
-                        use_gradient_checkpointing=forge_params["use_gradient_checkpointing"],
-                        use_sequence_packing=True,
-                        ce_chunk_size=forge_params["ce_chunk_size"],
-                        use_compile=True,
-                        rolling_best_k=forge_params["rolling_best_k"],
-                        general_mix_ratio=forge_params["general_mix_ratio"],
-                        general_data=forge_params["general_data"],
-                        val_split=forge_params["val_split"],
-                        save_every=max(1, epochs // 5),
-                        checkpoint_dir=str(MODELS_DIR / "checkpoints"),
-                        use_amp=torch.cuda.is_available(),
-                        run_evaluation=True)
+                    _best_track: list[float] = []
 
-                    trainer = Trainer(model, tokenizer, train_config)
-
-                    def on_epoch(epoch, loss):
+                    def on_loss_fallback(loss: float) -> None:
                         if not self.training_active:
                             raise KeyboardInterrupt("Stopped")
                         losses.append(loss)
+                        if not _best_track or loss < _best_track[0]:
+                            if _best_track:
+                                _best_track[0] = loss
+                            else:
+                                _best_track.append(loss)
+
+                    def on_epoch_fallback(epoch, loss):
+                        if not self.training_active:
+                            raise KeyboardInterrupt("Stopped")
                         elapsed = _time.monotonic() - _lora_start_common[0]
                         mins = int(elapsed // 60)
                         secs = int(elapsed % 60)
@@ -1567,19 +1556,52 @@ class ForgeTrainingMixin:
                             r_m = int(remaining // 60)
                             r_s = int(remaining % 60)
                             eta = f"  |  ETA {r_m}m {r_s:02d}s"
-                        best = trainer.state.best_loss
                         import math as _math
+                        best = _best_track[0] if _best_track else loss
                         best_str = (f"  |  best {best:.4f}"
                                     if not _math.isinf(best) else "")
                         self._log(
                             f"  Epoch {epoch:>3d}/{epochs}  |  "
                             f"loss {loss:.4f}{best_str}  |  "
                             f"{mins}m {secs:02d}s{eta}")
-                    trainer.on_epoch_complete = on_epoch
 
+                    def on_trainer_ready_fallback(t) -> None:
+                        self._active_trainer = t
+
+                    from enigma_engine.training.dispatch import (
+                        build_dispatch_context as _bdc,
+                        run_training as _rt)
+                    _fb_ctx = _bdc(
+                        model=model,
+                        tokenizer=tokenizer,
+                        on_loss=on_loss_fallback,
+                        on_epoch_complete=on_epoch_fallback,
+                        on_trainer_ready=on_trainer_ready_fallback,
+                    )
+                    _fb_payload = {
+                        "mode": "sft",
+                        "data": text,
+                        "training": {
+                            "epochs": epochs,
+                            "batch_size": forge_params["batch_size"],
+                            "learning_rate": lr,
+                            "max_grad_accumulation": forge_params["max_grad_accumulation"],
+                            "use_gradient_checkpointing": forge_params["use_gradient_checkpointing"],
+                            "use_sequence_packing": True,
+                            "ce_chunk_size": forge_params["ce_chunk_size"],
+                            "use_compile": True,
+                            "rolling_best_k": forge_params["rolling_best_k"],
+                            "general_mix_ratio": forge_params["general_mix_ratio"],
+                            "general_data": forge_params["general_data"],
+                            "val_split": forge_params["val_split"],
+                            "save_every": max(1, epochs // 5),
+                            "checkpoint_dir": str(MODELS_DIR / "checkpoints"),
+                            "use_amp": torch.cuda.is_available(),
+                            "run_evaluation": True,
+                        },
+                    }
                     self._log("Training (partial freeze)...\n")
-                    self._active_trainer = trainer
-                    state = trainer.train(text)
+                    state = _rt(_fb_payload, _fb_ctx)
 
                     # Log evaluation results if available
                     if hasattr(state, "before_eval") and hasattr(state, "after_eval"):

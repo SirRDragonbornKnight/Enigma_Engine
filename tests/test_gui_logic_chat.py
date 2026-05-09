@@ -963,3 +963,86 @@ class TestTeach1aCorrectionStore:
         assert host._last_exchange_image_path == ""
         assert host._last_exchange_prompt == ""
         assert host._last_exchange_wrong_response == ""
+
+    def test_new_chat_clears_api_history_when_api_mode_enabled(
+            self, tmp_path, monkeypatch):
+        """API mode should clear daemon-side history on new chat."""
+        import enigma_engine.gui.gui_logic_chat as mod
+        monkeypatch.setattr(mod, "MEMORY_DIR", tmp_path)
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+
+        host = _make_stub_host(history=[{"role": "user", "content": "q"}])
+        host.use_api_chat = True
+        host.engine = None
+        host._pending_correction_image_path = ""
+        host._last_exchange_image_path = ""
+        host._last_exchange_prompt = ""
+        host._last_exchange_wrong_response = ""
+        host._reset_display = lambda: None
+        host._update_token_counter = lambda: None
+        host._save_model_context = lambda: None
+        host._refresh_history_list = lambda: None
+        host._chat_system = lambda _m: None
+
+        class _Client:
+            def __init__(self):
+                self.cleared = False
+
+            def clear_history(self):
+                self.cleared = True
+                return {"status": "ok"}
+
+        client = _Client()
+        host._get_api_chat_client = lambda: client
+
+        LogicChatMixin._new_chat(host)
+
+        assert client.cleared is True
+
+    def test_new_chat_clears_api_and_local_when_both_present(
+            self, tmp_path, monkeypatch):
+        """Mixed state: API mode on + local engine present clears both."""
+        import enigma_engine.gui.gui_logic_chat as mod
+        monkeypatch.setattr(mod, "MEMORY_DIR", tmp_path)
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+
+        host = _make_stub_host(history=[{"role": "user", "content": "q"}])
+        host.use_api_chat = True
+        host._pending_correction_image_path = ""
+        host._last_exchange_image_path = ""
+        host._last_exchange_prompt = ""
+        host._last_exchange_wrong_response = ""
+        host._reset_display = lambda: None
+        host._update_token_counter = lambda: None
+        host._save_model_context = lambda: None
+        host._refresh_history_list = lambda: None
+        host._chat_system = lambda _m: None
+
+        class _Engine:
+            def __init__(self):
+                self.local_cleared = False
+                self.kv_cleared = False
+
+            def clear_history(self):
+                self.local_cleared = True
+
+            def clear_kv_cache(self):
+                self.kv_cleared = True
+
+        class _Client:
+            def __init__(self):
+                self.api_cleared = False
+
+            def clear_history(self):
+                self.api_cleared = True
+                return {"status": "ok"}
+
+        host.engine = _Engine()
+        client = _Client()
+        host._get_api_chat_client = lambda: client
+
+        LogicChatMixin._new_chat(host)
+
+        assert client.api_cleared is True
+        assert host.engine.local_cleared is True
+        assert host.engine.kv_cleared is True

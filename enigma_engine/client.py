@@ -124,6 +124,9 @@ class EnigmaClient:
     def training_status(self) -> dict[str, Any]:
         return self._request("GET", "/api/training/status")
 
+    def clear_history(self) -> dict[str, Any]:
+        return self._request("DELETE", "/api/history")
+
     def chat_stream(
         self,
         message: str,

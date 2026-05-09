@@ -1512,3 +1512,29 @@ class TestHistoryCap:
         assert len(s._history) <= MAX_HISTORY
         # Most recent entry should still be present
         assert s._history[-1]["content"] == f"reply-{MAX_HISTORY + 19}"
+
+
+class TestHistoryEndpoints:
+    """Behavioral tests for /api/history endpoints."""
+
+    def test_delete_history_clears_engine_history_and_kv_cache(self, client):
+        from enigma_engine.api.server import state
+
+        mock_engine = MagicMock()
+        mock_engine.clear_history = MagicMock()
+        mock_engine.clear_kv_cache = MagicMock()
+
+        old_engine = state.engine
+        old_history = list(state._history)
+        state.engine = mock_engine
+        state._history[:] = [{"role": "user", "content": "x"}]
+        try:
+            resp = client.delete("/api/history")
+            assert resp.status_code == 200
+            assert resp.json().get("status") == "ok"
+            assert state._history == []
+            mock_engine.clear_history.assert_called_once()
+            mock_engine.clear_kv_cache.assert_called_once()
+        finally:
+            state.engine = old_engine
+            state._history[:] = old_history

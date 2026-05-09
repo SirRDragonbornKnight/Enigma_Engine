@@ -41,3 +41,17 @@ def test_lora_training_routes_primary_path_through_dispatcher() -> None:
 
     assert "run_training(" in src
     assert re.search(r'"mode"\s*:\s*"lora"', src)
+
+
+def test_lora_fallback_uses_strict_dispatcher_payload_shape() -> None:
+    """ImportError fallback must emit mode/data/training payload shape.
+
+    This guards against flat keys like data_text/epochs that fail
+    TrainingJobConfig(extra='forbid') validation.
+    """
+    src = inspect.getsource(ForgeTrainingMixin._start_lora_training)
+
+    assert re.search(r'"mode"\s*:\s*"sft"', src)
+    assert re.search(r'"data"\s*:\s*text', src)
+    assert re.search(r'"training"\s*:\s*\{', src)
+    assert '"data_text"' not in src
