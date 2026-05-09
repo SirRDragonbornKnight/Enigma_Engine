@@ -992,6 +992,7 @@ async def update_config(req: ConfigUpdate):
 
 # Module-level training state for the API
 _training_lock = threading.Lock()
+_active_training_trainer: Any = None
 _training_state: dict[str, Any] = {
     "active": False,
     "progress": 0,
@@ -999,6 +1000,13 @@ _training_state: dict[str, Any] = {
     "epoch": 0,
     "total_epochs": 0,
     "loss": 0.0,
+    "best_loss": None,
+    "step": 0,
+    "total_steps": 0,
+    "lr": 0.0,
+    "tok_s": 0,
+    "output_path": "",
+    "abort_reason": "",
 }
 
 
@@ -1036,6 +1044,23 @@ async def training_status():
     """Get the current training status."""
     with _training_lock:
         return dict(_training_state)
+
+
+@app.delete("/api/training/cancel")
+async def cancel_training():
+    """Request cancellation for the active training run."""
+    trainer = None
+    with _training_lock:
+        if not _training_state["active"]:
+            return {"status": "idle", "message": "No training in progress."}
+        trainer = _active_training_trainer
+        _training_state["message"] = "Cancel requested"
+        _training_state["abort_reason"] = "cancel_requested"
+
+    if trainer is not None and hasattr(trainer, "request_stop"):
+        trainer.request_stop()
+
+    return {"status": "cancelling"}
 
 
 @app.post("/api/train")
@@ -1125,6 +1150,7 @@ async def start_training(req: TrainRequest):
 
     def _run_training():
         """Background training thread."""
+        global _active_training_trainer
         try:
             with _training_lock:
                 _training_state.update({
@@ -1134,12 +1160,23 @@ async def start_training(req: TrainRequest):
                     "epoch": 0,
                     "total_epochs": job.training.epochs,
                     "loss": 0.0,
+                    "best_loss": None,
+                    "step": 0,
+                    "total_steps": 0,
+                    "lr": 0.0,
+                    "tok_s": 0,
+                    "output_path": "",
+                    "abort_reason": "",
                 })
 
             from enigma_engine.training import (
                 build_dispatch_context,
                 run_training,
             )
+
+            _trainer_ref: list = []
+            _throughput_tokens = [0]
+            _throughput_time = [0.0]
 
             def on_progress(pct: int, msg: str):
                 with _training_lock:
@@ -1151,19 +1188,98 @@ async def start_training(req: TrainRequest):
                     _training_state["epoch"] = epoch + 1
                     _training_state["loss"] = loss
 
+            def on_loss(loss: float):
+                t = _trainer_ref[0] if _trainer_ref else None
+                step = getattr(getattr(t, "state", None), "step", 0) if t else 0
+                total = getattr(t, "_total_training_steps", 0) if t else 0
+                lr_val = 0.0
+                if t and hasattr(t, "optimizer") and t.optimizer.param_groups:
+                    lr_val = float(t.optimizer.param_groups[0]["lr"])
+                tok_s = 0
+                if _throughput_time[0] > 0:
+                    tok_s = int(_throughput_tokens[0]
+                                / max(0.001, _throughput_time[0]))
+                _throughput_tokens[0] = 0
+                _throughput_time[0] = 0.0
+                with _training_lock:
+                    _training_state["loss"] = loss
+                    _training_state["step"] = step
+                    _training_state["total_steps"] = total
+                    _training_state["lr"] = lr_val
+                    _training_state["tok_s"] = tok_s
+
+            def on_throughput(tokens: int, step_time: float):
+                _throughput_tokens[0] += tokens
+                _throughput_time[0] += step_time
+
+            def on_trainer_ready(t) -> None:
+                global _active_training_trainer
+                _trainer_ref.append(t)
+                with _training_lock:
+                    _active_training_trainer = t
+                    _training_state["total_steps"] = getattr(
+                        t, "_total_training_steps", 0)
+
             ctx = build_dispatch_context(
                 engine=state.engine,
                 on_progress=on_progress,
                 on_epoch_complete=on_epoch_complete,
+                on_loss=on_loss,
+                on_throughput=on_throughput,
+                on_trainer_ready=on_trainer_ready,
             )
 
-            run_training(job, ctx)
+            result = run_training(job, ctx)
 
+            # Persist trained weights back to the loaded model file.
+            # Only .pth checkpoints can be re-saved this way; GGUF files
+            # are read-only from Python so we skip them.
+            # Gate: do not save if training was cancelled or failed.
+            saved_path = ""
+            model_path = state.model_path or ""
+            abort_reason = ""
+            with _training_lock:
+                abort_reason = _training_state.get("abort_reason", "")
+            if (not abort_reason  # Only save on success (no abort_reason)
+                    and model_path.endswith(".pth")
+                    and state.engine is not None
+                    and hasattr(state.engine, "model")
+                    and state.engine.model is not None):
+                from enigma_engine.core.safe_save import atomic_torch_save
+                import dataclasses
+                import math
+                m = state.engine.model
+                cfg = getattr(m, "config", None)
+                cfg_dict = (
+                    dataclasses.asdict(cfg)
+                    if cfg is not None and dataclasses.is_dataclass(cfg)
+                    else {}
+                )
+                atomic_torch_save(
+                    {
+                        "model_state_dict": m.state_dict(),
+                        "model_config": cfg_dict,
+                        "training_state": {
+                            "epochs": getattr(result, "epoch", 0),
+                            "best_loss": getattr(result, "best_loss",
+                                                 float("inf")),
+                        },
+                    },
+                    model_path,
+                )
+                saved_path = Path(model_path).name  # Use basename only (M1 fix)
+                logger.info("Training complete — model saved to %s", saved_path)
+
+            best = getattr(result, "best_loss", float("inf"))
+            import math
             with _training_lock:
                 _training_state.update({
                     "active": False,
                     "progress": 100,
                     "message": "Training complete",
+                    "best_loss": None if (best is None or math.isnan(best) or math.isinf(best)) else best,
+                    "output_path": saved_path,
+                    "abort_reason": "",
                 })
         except Exception as exc:
             logger.exception("Training error")
@@ -1172,7 +1288,11 @@ async def start_training(req: TrainRequest):
                     "active": False,
                     "progress": 0,
                     "message": f"Training failed: {exc}",
+                    "abort_reason": str(exc),
                 })
+        finally:
+            with _training_lock:
+                _active_training_trainer = None
 
     thread = threading.Thread(target=_run_training, daemon=True)
     thread.start()

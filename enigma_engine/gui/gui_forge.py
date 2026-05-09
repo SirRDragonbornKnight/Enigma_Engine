@@ -1416,6 +1416,16 @@ class ForgeMixin(
         threading.Thread(target=_train_tok, daemon=True).start()
 
     def _stop_training(self):
+        if bool(getattr(self, "use_api_chat", False)):
+            get_client_fn = getattr(self, "_get_api_chat_client", None)
+            client = (get_client_fn() if callable(get_client_fn) else None)
+            if client is not None:
+                try:
+                    client.cancel_training()
+                    self._log("Cancel requested on API server...")
+                except Exception as exc:
+                    self._log(f"[!] API cancel failed: {exc}")
+
         self.training_active = False
         # Signal the Trainer's own stop flag so _should_stop()
         # triggers at the next batch boundary (before the batch
@@ -1739,6 +1749,8 @@ class ForgeMixin(
         Auto-selects LoRA if the student model is > 7B parameters.
         Otherwise uses full fine-tuning (Solo mode).
         """
+        if bool(getattr(self, "use_api_chat", False)):
+            self._log("[!] API routing not yet implemented for Basic training — running locally on this machine.\n")
         # Check for data
         data_path = self.train_data_var.get()
         if not data_path or data_path == "(none)" or not Path(data_path).exists():
@@ -1788,6 +1800,8 @@ class ForgeMixin(
         Checks for training topic/goal. If empty, prompts user to provide one.
         If provided, uses adaptive trainer to generate curriculum and train.
         """
+        if bool(getattr(self, "use_api_chat", False)):
+            self._log("[!] API routing not yet implemented for AI-Guided training — running locally on this machine.\n")
         # Check for TRAINER and STUDENT models
         trainer_path = self.route_assignments.get("trainer")
         student_path = self.route_assignments.get("student")

@@ -163,6 +163,8 @@ class ForgeNewModesMixin:
         Pre-training uses higher LR, no general mix (this IS the
         general knowledge), and longer warmup than fine-tuning.
         """
+        if bool(getattr(self, "use_api_chat", False)):
+            self._log("[!] API routing not yet implemented for Pre-Train mode — running locally on this machine.\n")
         params = self._pretrain_validate_inputs()
         if params is None:
             return
@@ -1328,6 +1330,8 @@ class ForgeNewModesMixin:
         teacher (Qwen3-8B) generates personality, reasoning,
         conversation styles that the student then learns.
         """
+        if bool(getattr(self, "use_api_chat", False)):
+            self._log("[!] API routing not yet implemented for Distill mode — running locally on this machine.\n")
         params = self._distill_validate_inputs()
         if params is None:
             return
@@ -2022,6 +2026,8 @@ class ForgeNewModesMixin:
         3. Use the reward model to score STUDENT responses
         4. Policy gradient to improve STUDENT
         """
+        if bool(getattr(self, "use_api_chat", False)):
+            self._log("[!] API routing not yet implemented for RLHF mode — running locally on this machine.\n")
         if self.training_active:
             return
 
@@ -2275,6 +2281,8 @@ class ForgeNewModesMixin:
 
     def _start_selfplay_training(self):
         """Train STUDENT via self-play: TRAINER scores responses."""
+        if bool(getattr(self, "use_api_chat", False)):
+            self._log("[!] API routing not yet implemented for Self-Play mode — running locally on this machine.\n")
         if self.training_active:
             return
 
@@ -2470,6 +2478,8 @@ class ForgeNewModesMixin:
 
     def _start_grpo_training(self):
         """Train STUDENT with Group Relative Policy Optimization."""
+        if bool(getattr(self, "use_api_chat", False)):
+            self._log("[!] API routing not yet implemented for GRPO mode — running locally on this machine.\n")
         self._start_rl_variant_training("GRPO")
 
     # ================================================================
@@ -2478,6 +2488,8 @@ class ForgeNewModesMixin:
 
     def _start_remax_training(self):
         """Train STUDENT with ReMax (REINFORCE + mean baseline)."""
+        if bool(getattr(self, "use_api_chat", False)):
+            self._log("[!] API routing not yet implemented for ReMax mode — running locally on this machine.\n")
         self._start_rl_variant_training("ReMax")
 
     def _start_rl_variant_training(self, algo: str):
@@ -2784,6 +2796,8 @@ class ForgeNewModesMixin:
 
     def _start_simpo_training(self):
         """Train with Simple Preference Optimization (no ref model)."""
+        if bool(getattr(self, "use_api_chat", False)):
+            self._log("[!] API routing not yet implemented for SimPO mode — running locally on this machine.\n")
         self._start_preference_variant_training("SimPO")
 
     # ================================================================
@@ -2792,6 +2806,8 @@ class ForgeNewModesMixin:
 
     def _start_orpo_training(self):
         """Train with Odds Ratio Preference Optimization."""
+        if bool(getattr(self, "use_api_chat", False)):
+            self._log("[!] API routing not yet implemented for ORPO mode — running locally on this machine.\n")
         self._start_preference_variant_training("ORPO")
 
     def _start_preference_variant_training(self, algo: str):

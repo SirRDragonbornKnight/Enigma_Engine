@@ -353,6 +353,40 @@ class TestTraining:
         assert "active" in data
         assert data["active"] is False
 
+    def test_cancel_training_idle(self, client):
+        from enigma_engine.api.server import _training_state
+
+        old_active = _training_state.get("active")
+        _training_state["active"] = False
+        try:
+            resp = client.delete("/api/training/cancel")
+            assert resp.status_code == 200
+            assert resp.json().get("status") == "idle"
+        finally:
+            _training_state["active"] = old_active or False
+
+    def test_cancel_training_active_requests_stop(self, client):
+        from enigma_engine.api import server as srv
+
+        trainer = MagicMock()
+        old_active = srv._training_state.get("active")
+        old_msg = srv._training_state.get("message", "")
+        old_trainer = srv._active_training_trainer
+
+        srv._training_state["active"] = True
+        srv._training_state["message"] = "Training..."
+        srv._active_training_trainer = trainer
+        try:
+            resp = client.delete("/api/training/cancel")
+            assert resp.status_code == 200
+            assert resp.json().get("status") == "cancelling"
+            trainer.request_stop.assert_called_once()
+            assert srv._training_state["message"] == "Cancel requested"
+        finally:
+            srv._training_state["active"] = old_active or False
+            srv._training_state["message"] = old_msg
+            srv._active_training_trainer = old_trainer
+
     def test_train_no_model(self, client):
         """Triggering training without a model should fail."""
         resp = client.post(
@@ -1538,3 +1572,124 @@ class TestHistoryEndpoints:
         finally:
             state.engine = old_engine
             state._history[:] = old_history
+
+class TestTrainingModelSave:
+    """ARCH-1d: server saves model to state.model_path after training (.pth only)."""
+
+    def test_train_saves_pth_model_after_completion(self, client, monkeypatch, tmp_path):
+        """After SFT training on a .pth model, atomic_torch_save is called."""
+        from enigma_engine.api.server import _training_state, state
+
+        saved: dict = {}
+
+        def fake_run_training(config, ctx):
+            return type("R", (), {"epoch": 1, "best_loss": 0.5})()
+
+        def fake_atomic_save(data, path):
+            saved["data"] = data
+            saved["path"] = path
+
+        class _SyncThread:
+            def __init__(self, target, daemon=True):
+                self._target = target
+            def start(self):
+                self._target()
+
+        model_file = tmp_path / "my_model.pth"
+        model_file.write_bytes(b"")
+
+        mock_model = MagicMock()
+        mock_model.state_dict.return_value = {}
+        cfg = MagicMock()
+        cfg.__class__ = type("ForgeConfig", (), {
+            "__dataclass_fields__": {}
+        })
+        mock_model.config = cfg
+        mock_engine = MagicMock()
+        mock_engine.model = mock_model
+        mock_engine.tokenizer = MagicMock()
+
+        monkeypatch.setattr("enigma_engine.training.run_training", fake_run_training)
+        monkeypatch.setattr("threading.Thread", _SyncThread)
+        # atomic_torch_save is imported inline inside _run_training — patch the source module.
+        monkeypatch.setattr("enigma_engine.core.safe_save.atomic_torch_save", fake_atomic_save)
+
+        old_engine = state.engine
+        old_path = state.model_path
+        old_active = _training_state.get("active")
+        state.engine = mock_engine
+        state.model_path = str(model_file)
+        _training_state["active"] = False
+        try:
+            resp = client.post(
+                "/api/train",
+                json={"mode": "sft", "data": "hello", "training": {"epochs": 1}},
+            )
+            assert resp.status_code == 200, resp.text
+        finally:
+            state.engine = old_engine
+            state.model_path = old_path
+            _training_state["active"] = old_active or False
+
+        assert saved, "atomic_torch_save should have been called"
+        assert saved["path"] == str(model_file)
+        assert "model_state_dict" in saved["data"]
+
+    def test_train_skips_save_for_gguf_model(self, client, monkeypatch, tmp_path):
+        """Server must NOT call atomic_torch_save when model_path is a .gguf file."""
+        from enigma_engine.api.server import _training_state, state
+
+        saved: list = []
+
+        def fake_run_training(config, ctx):
+            return type("R", (), {"epoch": 1, "best_loss": 0.5})()
+
+        def fake_atomic_save(data, path):
+            saved.append(path)
+
+        class _SyncThread:
+            def __init__(self, target, daemon=True):
+                self._target = target
+            def start(self):
+                self._target()
+
+        gguf_file = tmp_path / "my_model.gguf"
+        gguf_file.write_bytes(b"GGUF")
+
+        mock_engine = MagicMock()
+        mock_engine.model = MagicMock()
+        mock_engine.tokenizer = MagicMock()
+
+        monkeypatch.setattr("enigma_engine.training.run_training", fake_run_training)
+        monkeypatch.setattr("threading.Thread", _SyncThread)
+        monkeypatch.setattr("enigma_engine.core.safe_save.atomic_torch_save", fake_atomic_save)
+
+        old_engine = state.engine
+        old_path = state.model_path
+        old_active = _training_state.get("active")
+        state.engine = mock_engine
+        state.model_path = str(gguf_file)
+        _training_state["active"] = False
+        try:
+            resp = client.post(
+                "/api/train",
+                json={"mode": "sft", "data": "hello", "training": {"epochs": 1}},
+            )
+            assert resp.status_code == 200, resp.text
+        finally:
+            state.engine = old_engine
+            state.model_path = old_path
+            _training_state["active"] = old_active or False
+
+        assert saved == [], "atomic_torch_save must not be called for GGUF models"
+
+    def test_training_status_includes_step_fields(self, client, monkeypatch):
+        """GET /api/training/status must expose step-level fields added in ARCH-1d."""
+
+        resp = client.get("/api/training/status")
+        assert resp.status_code == 200
+        body = resp.json()
+        for field in ("step", "total_steps", "lr", "tok_s", "best_loss",
+                      "output_path", "abort_reason"):
+            assert field in body, f"Missing field in training status: {field}"
+

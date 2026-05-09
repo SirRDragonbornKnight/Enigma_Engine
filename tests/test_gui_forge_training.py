@@ -55,3 +55,51 @@ def test_lora_fallback_uses_strict_dispatcher_payload_shape() -> None:
     assert re.search(r'"data"\s*:\s*text', src)
     assert re.search(r'"training"\s*:\s*\{', src)
     assert '"data_text"' not in src
+
+
+# ---------------------------------------------------------------------------
+# ARCH-1d: API-routing branch wiring tests
+# ---------------------------------------------------------------------------
+
+def test_solo_training_has_api_routing_branch() -> None:
+    """_start_solo_training must contain the ARCH-1d API-routing gate.
+
+    Guards against a regression where use_api_chat check or the client.train
+    call is accidentally removed.
+    """
+    src = inspect.getsource(ForgeTrainingMixin._start_solo_training)
+
+    assert "use_api_chat" in src, "API routing gate missing"
+    # The code uses getattr(self, "_get_api_chat_client", None) —
+    # gate the string literal form which is the canonical pattern.
+    assert '"_get_api_chat_client"' in src, (
+        "_get_api_chat_client reference missing in solo training")
+    assert re.search(r'client\.train\(', src), (
+        "client.train( call missing in solo training")
+    assert re.search(r'_poll_api_training_status\(', src), (
+        "_poll_api_training_status( call missing in solo training")
+
+
+def test_poll_api_training_status_helper_gates_right_calls() -> None:
+    """_poll_api_training_status must call training_status() and update progress."""
+    src = inspect.getsource(ForgeTrainingMixin._poll_api_training_status)
+
+    assert re.search(r'client\.training_status\(\)', src), (
+        "training_status() call missing in polling helper")
+    assert re.search(r'_update_forge_progress\(', src), (
+        "_update_forge_progress( call missing in polling helper")
+    assert re.search(r'_refresh_models', src), (
+        "_refresh_models call missing in polling helper")
+    assert re.search(r'training_active', src), (
+        "training_active loop guard missing in polling helper")
+
+
+def test_lora_training_has_api_routing_branch() -> None:
+    """_start_lora_training must include API routing and polling calls."""
+    src = inspect.getsource(ForgeTrainingMixin._start_lora_training)
+
+    assert "use_api_chat" in src
+    assert '"_get_api_chat_client"' in src
+    assert re.search(r'client\.train\(', src)
+    assert re.search(r'_poll_api_training_status\(', src)
+    assert re.search(r'mode_label\s*=\s*"LoRA"', src)

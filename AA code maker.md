@@ -445,6 +445,7 @@ One-line rules distilled from ~400 implementations. Grouped by theme.
 - Guard patterns must be consistent across ALL sites — grep for pattern, fix all occurrences
 - Config validation must cover all numeric fields (denominators, ranges, sign constraints)
 - Return sentinels that mean the right thing — `float("inf")` not `0.0` for "couldn't measure"
+- Numeric status fields must not use `value = status.get("field") or default` when `0`/`0.0` is valid — this silently rewrites real zero into fallback. Use explicit `is None` checks for optional metrics (e.g., `best_loss`).
 - Verify variable names match local scope — `getattr(config_obj)` vs `dict.get()`
 - Verify features end-to-end lifecycle: init → update → apply → use → restore
 - Callbacks defined but never wired are invisible failures — grep all constructors

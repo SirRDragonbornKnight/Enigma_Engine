@@ -124,6 +124,9 @@ class EnigmaClient:
     def training_status(self) -> dict[str, Any]:
         return self._request("GET", "/api/training/status")
 
+    def cancel_training(self) -> dict[str, Any]:
+        return self._request("DELETE", "/api/training/cancel")
+
     def clear_history(self) -> dict[str, Any]:
         return self._request("DELETE", "/api/history")
 

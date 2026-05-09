@@ -148,6 +148,23 @@ def test_clear_history_uses_delete_endpoint(monkeypatch: pytest.MonkeyPatch) -> 
     assert seen["method"] == "DELETE"
 
 
+def test_cancel_training_uses_delete_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen = {}
+
+    def _fake_urlopen(req, timeout=0):
+        seen["url"] = req.full_url
+        seen["method"] = req.get_method()
+        return _Resp(json.dumps({"status": "cancelling"}))
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+    client = EnigmaClient()
+    out = client.cancel_training()
+
+    assert out["status"] == "cancelling"
+    assert seen["url"].endswith("/api/training/cancel")
+    assert seen["method"] == "DELETE"
+
+
 def test_chat_stream_yields_only_token_events(monkeypatch: pytest.MonkeyPatch) -> None:
     sse = (
         "event: start\n"

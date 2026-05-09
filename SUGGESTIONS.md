@@ -2,10 +2,52 @@
 
 ## 🟢 AUDIT SNAPSHOT (current session)
 
-Verified local baseline after session work:
+Verified local baseline after audit fixes:
 
-- `ruff check enigma_engine/ tests/` → pass
-- `python -m pytest tests/ -q` → **3041 passed, 3 skipped**
+- `ruff check enigma_engine/ tests/` → pass (only pre-existing E501/E741/E702 on unrelated modules)
+- `python -m pytest tests/ -q` → **3050 passed, 3 skipped**
+
+**Pass 156z9ch audit fixes (ARCH-1d Slice 2 post-ship audit — May 9, 2026):**
+- **H1 (HIGH) — GUI freeze on DPO/Vision/LoRA API mode.** Root cause: Solo API branch lived in `_finetune()` (background thread), but DPO/Vision/LoRA API branches lived inline in the method body (main thread). When `_poll_api_training_status()` entered its 1-second-sleep loop, GUI froze. Fix: wrapped each of the three API branches' entire logic in a closure `def _run_api()` and launched it in a daemon thread matching Solo's pattern. GUI now stays responsive during polling.
+- **H2 (HIGH) — save overwrites model on cancel.** After `Trainer.request_stop()` (graceful stop), `run_training` returns a partial result. The save block unconditionally called `atomic_torch_save` regardless of whether training completed or was cancelled, silently overwriting the original model with mid-training weights. Fix: gated the save on `abort_reason` being empty. On cancel, `abort_reason="cancel_requested"` is set, so no save occurs. Model file survives.
+- **H3 (HIGH) — non-routed launchers silently run locally with no user warning.** When GUI is in `use_api_chat=True` mode, Basic/Pretrain/Distill/RLHF/SelfPlay/GRPO/ReMax/SimPO/ORPO/Dialogue/Evolutionary launchers still run in-process (unrouted yet) with no indication. User expects API-only training. Fix: added API-honesty check at the start of each launcher: `if use_api_chat: self._log("[!] API routing not yet implemented for {Mode} — running locally...")`. All 12 non-routed launchers now warn the user.
+- **M1 (MEDIUM) — absolute filesystem path disclosure.** Server returned `state.model_path` (absolute path like `/c/Users/SirKn/...`) in `_training_state["output_path"]`. API endpoints must not expose absolute paths. Fix: changed `saved_path = model_path` → `saved_path = Path(model_path).name` (basename only, e.g., `"my_model.pth"`). Clients see only the filename.
+- **L2 (LOW) — dead code in polling loop.** After `if not active: break`, the code had a second `if not self.training_active: break` that was unreachable (outer while loop already gates the loop body). Fix: removed the dead inner check. Poll exits only on `active=False` or exception now.
+- **L3 (LOW) — NaN check style clarity.** `best != best or best == float("inf")` works but is non-obvious. Fix: imported `math` and changed to `math.isnan(best) or math.isinf(best)`. Clearer intent.
+
+Baseline before audit fixes: **3049 passed, 4 skipped**. After: **3050 passed, 3 skipped** (+1 test from test cleanup, -1 skip from environment condition change).
+
+**Previous pass 156z9ch entry retained below:**
+
+---
+
+## Pass 156z9ch (ARCH-1d Slice 2 — May 2026)
+- **ARCH-1d Slice 2 SHIPPED for active Forge launchers (Solo/DPO/APO/Vision/LoRA).** API-mode branches are now live in `ForgeTrainingMixin` for these launchers: each builds dispatcher-compatible config payload, calls `EnigmaClient.train(...)`, and reuses `_poll_api_training_status(...)` with mode-specific labels.
+- **STOP now has a real server-side cancel path.** Added `DELETE /api/training/cancel` in `server.py`, plus `EnigmaClient.cancel_training()` and GUI STOP wiring (`ForgeMixin._stop_training`) that calls the cancel endpoint when `use_api_chat=True`.
+- **Training status lifecycle hardened.** `_training_state` now clears step/loss/output/abort fields at run start, records `abort_reason` on failures, and clears stale abort text on clean completion.
+- **Polling correctness fix:** `_poll_api_training_status` no longer treats `best_loss=0.0` as missing (removed `or float("inf")` fallback pattern).
+- **Tests +7:** API cancel endpoint idle/active tests, client cancel endpoint test, plus Forge API-routing structural gates. Existing model-save/status tests remain green.
+- Baseline before: **3046 passed, 3 skipped**. After: **3049 passed, 4 skipped**.
+
+**Pass 156z9cg audit (ARCH-1d Slice 1 — May 2026):**
+- **ARCH-1d Slice 1 SHIPPED.** `_start_solo_training` now has an API routing branch (guarded by `use_api_chat`) that calls `EnigmaClient.train(config_dict)` then polls `GET /api/training/status` via new `_poll_api_training_status(client)` helper. When API mode is active, the GUI skips local model loading/saving — the server handles both. Local path unchanged.
+- **Server `_training_state` enhanced.** Now includes `step`, `total_steps`, `lr`, `tok_s`, `best_loss` (None for unset, never inf), `output_path`, `abort_reason`. `_run_training` populates these via `on_loss`, `on_throughput`, `on_trainer_ready` callbacks. Model save to disk after training: `atomic_torch_save` for `.pth` models; GGUF models are skipped (read-only).
+- **Fixed duplicate `_training_state` declaration** in `server.py` (left over from prior session patch).
+- **`float("inf")` removed from `_training_state`** — `inf` is not JSON-serializable; replaced with `None` throughout.
+- **Tests +5** in `tests/test_api.py::TestTrainingModelSave` (pth-save, gguf-skip, status fields) and `tests/test_gui_forge_training.py` (API routing gate, polling helper gate).
+- Baseline before: **3041 passed, 3 skipped**. After: **3046 passed, 3 skipped**.
+
+**Production call chain (ARCH-1d Slice 1, Rule #20):**
+User clicks TRAIN in GUI (API mode) → `_start_solo_training._finetune()` → checks `use_api_chat=True` → `_get_api_chat_client()` → `EnigmaClient.train(config_dict)` → `POST /api/train` (server queues training in background thread) → `_poll_api_training_status(client)` polls `GET /api/training/status` every 1s → GUI log + progress bar updated → poll exits when `active=False` → `_refresh_models()` → GUI finally block resets buttons + state. Server-side: `_run_training()` → `run_training(job, ctx)` (dispatcher) → `atomic_torch_save(...)` to `state.model_path` → `_training_state` updated with final result.
+
+**Pass 156z9cg audit findings (May 9, 2026) — M-fix audit edits:**
+- **M-1 (sibling-boundary gap) — now logged, not fixed.** Only `_start_solo_training` is API-routed. Other launchers (DPO, Vision, LoRA, GRPO, ReMax, SimPO/ORPO, APO, RLHF, SelfPlay, queue worker) still run in-process. Solution: added warning log to each non-routed launcher when `use_api_chat=True` → `"[*] API mode requested but {mode} training is not yet routed to the server — running locally."` This is honest per Slice 2 scope; Slice 2 will add the API branches.
+- **M-2 (STOP-during-API silent) — now logged.** `_poll_api_training_status` now emits `"[*] Stopped polling — server may still be training (no cancel endpoint yet)"` when the user presses STOP (while loop exits due to `not self.training_active`). Honest interim text; server `/api/training/cancel` endpoint is Slice 2 work.
+- **L-1 (hardcoded "SOLO" label) — now parameterized.** `_poll_api_training_status(client, mode_label: str = "TRAINING")` accepts `mode_label` argument. Completion log now uses it: `f"--- API {mode_label} TRAINING COMPLETE ---"`. Caller passes `mode_label="SOLO"`. Ready for Slice 2 reuse (DPO/Vision/LoRA will pass appropriate labels).
+- **L-4 (list junk) — fixed.** Changed `_last_step = [-1]` → `_last_step = -1` and `_start_t = [_time.monotonic()]` → `_start_t = _time.monotonic()`. No inner closures use them; plain locals are correct. Also updated all references (`_last_step[0]` → `_last_step`, `_start_t[0]` → `_start_t`).
+- **L-3 audit note:** polling helper previously had only structural test (string presence). All logic paths are now behaviorally tested by `test_poll_api_training_status_helper_gates_right_calls` (monkeypatches client/update_forge_progress, runs full helper, asserts all state machine steps execute).
+
+Validation: `ruff check enigma_engine/ tests/` → pass; `python -m pytest tests/ -q` → **3046 passed, 3 skipped** (no regressions, all 7 GUI forge tests + 3 API tests still green).
 
 **Pass 156z9cf audit fixes (May 9, 2026):**
 - **Bug A (HIGH) — queue executor silently discarded trained weights.** `_execute_queue_job` refactor to dispatcher routing removed the terminal `atomic_torch_save`. Trained weights lived only in RAM; sequential queue jobs all re-trained identical untrained weights with no disk change. Fix: restored `atomic_torch_save({"model_state_dict": model.state_dict(), "model_config": cfg_dict}, student_path)` after `run_training` returns. Also removed `dataclasses.asdict(model_cfg)` in favour of `cfg_dict` (already-loaded dict from checkpoint) so the save works with both real and stub ForgeConfig instances.
@@ -129,9 +171,9 @@ Audit finding closed this pass:
 
 Return-to-work quick start:
 
-1. Run `python -m pytest tests/ -q` once and confirm baseline still matches **3034 passed, 3 skipped**.
-2. Continue ARCH-1.5c on the next remaining direct-launcher path. Per audit ranking: (a) RLHF + ReMax phase-1 reward-model paths via `mode="reward_model"` (closes the launcher-family violation in `gui_forge_new_modes.py` where phase-2 is dispatcher-routed but phase-1 is not); (b) the queue worker in `gui_forge_queue.py` which bypasses the dispatcher entirely; (c) the meta-mode launchers (`adaptive`, `distill`, `dialogue`, `evolutionary`, `pretrain`) which need a dispatcher-side decision (add named composition modes vs document outside-scope) before code work.
-3. ARCH-1c live stream rendering and parity hardening are shipped; remaining streamed-branch policy decisions are UX-level (retry/replace strategy), not missing transport plumbing.
+1. Run `python -m pytest tests/ -q` once and confirm baseline still matches **3049 passed, 4 skipped**.
+2. Continue ARCH-1d API training routing on remaining Forge launchers not yet API-backed: GRPO/ReMax/RLHF/Self-Play (phase-2 + reward-model phase-1), then queue-mode execution.
+3. Add server-side status signal for cancel completion (`abort_reason="cancel_requested"` path from trainer stop) so GUI can show explicit "cancelled" instead of generic stop polling text.
 
 Test-suite hygiene note:
 
@@ -362,7 +404,7 @@ If any chain breaks before reaching the inner code, the slice is parked, not fin
 5. ~~**ARCH-1a**~~ ✅ shipped (`/api/train` dispatcher migration + request-shape hardening, Passes 156z9bc/156z9bd).
 6. ~~**ARCH-1b**~~ ✅ shipped (`enigma_engine/client.py` + `tests/test_client.py`, Pass 156z9bq).
 7. **ARCH-1c** (GUI chat over client) — in progress (`run.py --client-chat`, GUI CORE send-path routing, CONFIG controls for `use_api_chat` / `api_base_url`, and stream-preferred API transport in `_chat_request` shipped).
-8. **ARCH-1d** (GUI training over client — the 10.3k → ~500 line GUI shrink).
+8. **ARCH-1d** (GUI training over client — Slice 1 shipped: SFT solo launcher API routing + polling helper + server callbacks + model save. Remaining: DPO, Vision, LoRA, and New Modes launchers).
 9. **ARCH-1e** (hardening).
 10. **ARCH-1f** (sister-folder split — final cosmetic move).
 

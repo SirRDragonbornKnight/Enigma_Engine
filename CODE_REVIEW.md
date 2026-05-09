@@ -1,7 +1,11 @@
 ﻿# Code Review Tracker
 
 **Started:** March 24, 2026
-**Last pass:** Pass 156z9bz (May 8, 2026) — **ARCH-1.5c SimPO/ORPO dispatcher migration.**
+**Last pass:** Pass 156z9ch (May 9, 2026) — **ARCH-1d Slice 2 API-routing + cancel endpoint.**
+
+---
+
+**Pass 156z9ch (May 9, 2026) — ARCH-1d Slice 2 API training routing + cancel path:** Continued the ARCH-1d GUI->daemon training migration. In [enigma_engine/gui/gui_forge_training.py](enigma_engine/gui/gui_forge_training.py), added API-mode branches for `_start_dpo_training` (covers DPO + APO via `loss_type`), `_start_vision_training`, and `_start_lora_training`, matching the existing solo-training branch: each serializes data, builds dispatcher-compatible payloads, calls `EnigmaClient.train(...)`, and polls status via `_poll_api_training_status(..., mode_label=...)`. In [enigma_engine/gui/gui_forge.py](enigma_engine/gui/gui_forge.py), STOP now calls `EnigmaClient.cancel_training()` when `use_api_chat=True` before local stop-flag handling. Server support added in [enigma_engine/api/server.py](enigma_engine/api/server.py): new `DELETE /api/training/cancel` endpoint wired to active trainer `request_stop()`. Also hardened training-status lifecycle in `_run_training`: clear stale extended fields at run start, set `abort_reason` on failures/cancel requests, clear `abort_reason` on clean completion. Poll helper fix in [enigma_engine/gui/gui_forge_training.py](enigma_engine/gui/gui_forge_training.py): preserve `best_loss=0.0` (removed `or float("inf")` fallback). Tests: API cancel endpoint tests (`idle` + `active` request_stop) in [tests/test_api.py](tests/test_api.py), client cancel contract test in [tests/test_client.py](tests/test_client.py), and API-routing structural gates in [tests/test_gui_forge_training.py](tests/test_gui_forge_training.py). Validation: `ruff check enigma_engine/ tests/` pass; full suite `python -m pytest tests/ -q` → **3049 passed, 4 skipped**.
 
 ---
 

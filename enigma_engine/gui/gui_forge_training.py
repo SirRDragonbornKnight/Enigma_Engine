@@ -196,6 +196,60 @@ class ForgeTrainingMixin:
                 import torch
                 from enigma_engine.core.model import Enigma
                 from enigma_engine.core.tokenizer import get_tokenizer
+                # ARCH-1d: when the GUI is in API-chat mode, route training
+                # through the daemon via EnigmaClient instead of running it
+                # in-process.  The server loads the model, trains, and saves
+                # back to its model file.  The GUI just ships the config dict
+                # and polls status until done.
+                if bool(getattr(self, "use_api_chat", False)):
+                    get_client_fn = getattr(
+                        self, "_get_api_chat_client", None)
+                    client = (get_client_fn()
+                              if callable(get_client_fn) else None)
+                    if client is not None:
+                        try:
+                            text = Path(data_path).read_text(
+                                encoding="utf-8")
+                            forge_params = self._read_forge_train_params()
+                            api_config = {
+                                "mode": "sft",
+                                "data": text,
+                                "training": {
+                                    "epochs": epochs,
+                                    "batch_size":
+                                        forge_params["batch_size"],
+                                    "learning_rate": lr,
+                                    "max_grad_accumulation":
+                                        forge_params[
+                                            "max_grad_accumulation"],
+                                    "use_gradient_checkpointing":
+                                        forge_params[
+                                            "use_gradient_checkpointing"],
+                                    "use_sequence_packing": True,
+                                    "ce_chunk_size":
+                                        forge_params["ce_chunk_size"],
+                                    "use_compile": True,
+                                    "rolling_best_k":
+                                        forge_params["rolling_best_k"],
+                                    "general_mix_ratio":
+                                        forge_params["general_mix_ratio"],
+                                    "general_data":
+                                        forge_params["general_data"] or "",
+                                    "val_split":
+                                        forge_params["val_split"],
+                                    "save_every": max(1, epochs // 5),
+                                    "run_evaluation": True,
+                                },
+                            }
+                            self._log("Sending to API server...\n")
+                            client.train(api_config)
+                            self._poll_api_training_status(client, mode_label="SOLO")
+                        except Exception as exc:
+                            import traceback
+                            self._log(
+                                f"\n[!] API training failed: {exc}")
+                            self._log(traceback.format_exc())
+                        return  # finally block handles GUI cleanup
 
                 device = ("cuda"
                           if torch.cuda.is_available() else "cpu")
@@ -548,6 +602,77 @@ class ForgeTrainingMixin:
     # DPO training (preference optimization)
     # ================================================================
 
+    def _poll_api_training_status(self, client, mode_label: str = "TRAINING") -> None:
+        """Poll GET /api/training/status until complete, updating the forge log.
+
+        Called from a background thread by the ARCH-1d API-routing branch of
+        _start_solo_training (and future API-routing launchers).  Blocks until
+        the server reports ``active=False`` or ``self.training_active`` is
+        cleared by the STOP button.
+
+        Args:
+            mode_label: Used in completion log (e.g., "SOLO", "DPO").
+        """
+        import math
+        import time as _time
+
+        _last_step = -1
+        _start_t = _time.monotonic()
+
+        while self.training_active:
+            try:
+                status = client.training_status()
+            except Exception as exc:
+                self._log(f"[!] API status error: {exc}")
+                _time.sleep(2.0)
+                continue
+
+            step = status.get("step", 0)
+            total_steps = status.get("total_steps", 0)
+            loss = status.get("loss", 0.0)
+            lr_val = status.get("lr", 0.0)
+            tok_s = status.get("tok_s", 0)
+            pct = status.get("progress", 0)
+            msg = status.get("message", "Training...")
+            active = status.get("active", True)
+            best = status.get("best_loss")
+            if best is None:
+                best = float("inf")
+            abort_reason = status.get("abort_reason", "")
+            output_path = status.get("output_path", "")
+
+            # Log on each new step
+            if step != _last_step and step > 0:
+                _last_step = step
+                tok_str = f" | {tok_s:,} tok/s" if tok_s > 0 else ""
+                self._log(
+                    f"  Step {step:>5d}/{total_steps}"
+                    f" | loss {loss:.4f}"
+                    f" | lr {lr_val:.2e}{tok_str}")
+
+            self._update_forge_progress(pct, msg)
+
+            if not active:
+                elapsed = _time.monotonic() - _start_t
+                t_m, t_s = int(elapsed // 60), int(elapsed % 60)
+                if abort_reason:
+                    self._log(f"\n[!] Training aborted: {abort_reason}")
+                elif "failed" in msg.lower():
+                    self._log(f"\n[!] Training failed: {msg}")
+                else:
+                    self._log(f"\n--- API {mode_label} TRAINING COMPLETE ---")
+                    if not math.isinf(best):
+                        self._log(f"Best loss : {best:.4f}")
+                    if output_path:
+                        self._log(f"Saved to  : {output_path}")
+                    self._log(f"Duration  : {t_m}m {t_s:02d}s")
+                    self._update_forge_progress(100, "Complete")
+                self.after(0, self._refresh_models)
+                self._notify_training_complete()
+                break
+
+            _time.sleep(1.0)
+
     def _start_apo_training(self):
         """Train STUDENT with Anchored Preference Optimization (zero).
 
@@ -617,6 +742,71 @@ class ForgeTrainingMixin:
         beta_val = 0.1
 
         model_name = Path(student_path).stem
+
+        # ARCH-1d Slice 2: API routing for preference training
+        if bool(getattr(self, "use_api_chat", False)):
+            get_client_fn = getattr(self, "_get_api_chat_client", None)
+            client = (get_client_fn() if callable(get_client_fn) else None)
+            if client is not None:
+                def _run_api():
+                    try:
+                        pref_data = Path(data_path).read_text(encoding="utf-8")
+                        forge_params = self._read_forge_train_params()
+                        api_config = {
+                            "mode": "dpo",
+                            "data": pref_data,
+                            "training": {
+                                "epochs": epochs,
+                                "batch_size": forge_params["batch_size"],
+                                "learning_rate": lr,
+                                "max_grad_accumulation":
+                                    forge_params["max_grad_accumulation"],
+                                "use_gradient_checkpointing":
+                                    forge_params["use_gradient_checkpointing"],
+                                "use_sequence_packing": True,
+                                "ce_chunk_size": forge_params["ce_chunk_size"],
+                                "use_compile": True,
+                                "rolling_best_k": forge_params["rolling_best_k"],
+                                "general_mix_ratio":
+                                    forge_params["general_mix_ratio"],
+                                "general_data":
+                                    forge_params["general_data"] or "",
+                                "val_split": forge_params["val_split"],
+                                "save_every": max(1, epochs // 5),
+                                "run_evaluation": True,
+                            },
+                            "dpo": {
+                                "beta": beta_val,
+                                "loss_type": loss_type,
+                            },
+                        }
+                        self._log("Sending preference training to API server...\n")
+                        self.training_active = True
+                        self.solo_train_btn.configure(state="disabled",
+                                                      text="TRAINING...")
+                        self.stop_train_btn.configure(state="normal")
+                        self.status_bar.set_left(
+                            f"\u2692 {algo_label} TRAINING...")
+                        client.train(api_config)
+                        self._poll_api_training_status(
+                            client,
+                            mode_label=algo_label)
+                    except Exception as exc:
+                        import traceback
+                        self._log(f"\n[!] API training failed: {exc}")
+                        self._log(traceback.format_exc())
+                    finally:
+                        self.training_active = False
+                        self.after(0, lambda: self.solo_train_btn.configure(
+                            state="normal", text="TRAIN"))
+                        self.after(0, lambda: self.stop_train_btn.configure(
+                            state="disabled", text="STOP"))
+                        self.after(0, lambda: self.status_bar.set_left(
+                            "\u26a1 READY"))
+                import threading
+                threading.Thread(target=_run_api, daemon=True).start()
+                return
+
         self.training_active = True
         self.solo_train_btn.configure(state="disabled",
                                       text="TRAINING...")
@@ -968,6 +1158,72 @@ class ForgeTrainingMixin:
                             "models/checkpoints/.\n")
             except Exception:
                 pass
+
+        # ARCH-1d Slice 2: API routing for vision training
+        if bool(getattr(self, "use_api_chat", False)):
+            get_client_fn = getattr(self, "_get_api_chat_client", None)
+            client = (get_client_fn() if callable(get_client_fn) else None)
+            if client is not None:
+                def _run_api():
+                    try:
+                        # Serialize vision pairs to JSONL-like format for API
+                        import json as _json_vision
+                        pairs_data = "\n".join(
+                            _json_vision.dumps(p) for p in pairs)
+                        forge_params = self._read_forge_train_params()
+                        api_config = {
+                            "mode": "vision",
+                            "data": pairs_data,
+                            "training": {
+                                "epochs": epochs,
+                                "batch_size": forge_params["batch_size"],
+                                "learning_rate": lr,
+                                "max_grad_accumulation":
+                                    forge_params["max_grad_accumulation"],
+                                "use_gradient_checkpointing":
+                                    forge_params["use_gradient_checkpointing"],
+                                "use_sequence_packing": True,
+                                "ce_chunk_size": forge_params["ce_chunk_size"],
+                                "use_compile": True,
+                                "rolling_best_k": forge_params["rolling_best_k"],
+                                "general_mix_ratio":
+                                    forge_params["general_mix_ratio"],
+                                "general_data":
+                                    forge_params["general_data"] or "",
+                                "val_split": forge_params["val_split"],
+                                "save_every": max(1, epochs // 5),
+                                "run_evaluation": True,
+                            },
+                            "vision": {
+                                "preset": preset,
+                                "unfreeze_text_layers": unfreeze_text_layers,
+                            },
+                        }
+                        self._log("Sending vision training to API server...\n")
+                        self.training_active = True
+                        self.solo_train_btn.configure(state="disabled",
+                                                      text="TRAINING...")
+                        self.stop_train_btn.configure(state="normal")
+                        self.status_bar.set_left("\u2692 VISION TRAINING...")
+                        client.train(api_config)
+                        self._poll_api_training_status(
+                            client,
+                            mode_label="VISION")
+                    except Exception as exc:
+                        import traceback
+                        self._log(f"\n[!] API training failed: {exc}")
+                        self._log(traceback.format_exc())
+                    finally:
+                        self.training_active = False
+                        self.after(0, lambda: self.solo_train_btn.configure(
+                            state="normal", text="TRAIN"))
+                        self.after(0, lambda: self.stop_train_btn.configure(
+                            state="disabled", text="STOP"))
+                        self.after(0, lambda: self.status_bar.set_left(
+                            "\u26a1 READY"))
+                import threading
+                threading.Thread(target=_run_api, daemon=True).start()
+                return
 
         self.training_active = True
         self.solo_train_btn.configure(state="disabled",
@@ -1375,6 +1631,67 @@ class ForgeTrainingMixin:
                 self._log(f"[!] LoRA alpha '{alpha_var.get().strip()}'"
                           f" not a number, using 16")
             lora_alpha = 16
+
+        # ARCH-1d Slice 2: API routing for LoRA training.
+        if bool(getattr(self, "use_api_chat", False)):
+            get_client_fn = getattr(self, "_get_api_chat_client", None)
+            client = (get_client_fn() if callable(get_client_fn) else None)
+            if client is not None:
+                def _run_api():
+                    try:
+                        train_data = Path(data_path).read_text(encoding="utf-8")
+                        forge_params = self._read_forge_train_params()
+                        api_config = {
+                            "mode": "lora",
+                            "data": train_data,
+                            "training": {
+                                "epochs": epochs,
+                                "batch_size": forge_params["batch_size"],
+                                "learning_rate": lr,
+                                "max_grad_accumulation":
+                                    forge_params["max_grad_accumulation"],
+                                "use_gradient_checkpointing":
+                                    forge_params["use_gradient_checkpointing"],
+                                "use_sequence_packing": True,
+                                "ce_chunk_size": forge_params["ce_chunk_size"],
+                                "use_compile": True,
+                                "rolling_best_k": forge_params["rolling_best_k"],
+                                "general_mix_ratio":
+                                    forge_params["general_mix_ratio"],
+                                "general_data":
+                                    forge_params["general_data"] or "",
+                                "val_split": forge_params["val_split"],
+                                "save_every": max(1, epochs // 5),
+                                "run_evaluation": True,
+                            },
+                            "lora": {
+                                "rank": lora_rank,
+                                "alpha": lora_alpha,
+                            },
+                        }
+                        self._log("Sending LoRA training to API server...\n")
+                        self.training_active = True
+                        self.solo_train_btn.configure(state="disabled",
+                                                      text="TRAINING...")
+                        self.stop_train_btn.configure(state="normal")
+                        self.status_bar.set_left("\u2692 LoRA TRAINING...")
+                        client.train(api_config)
+                        self._poll_api_training_status(client, mode_label="LoRA")
+                    except Exception as exc:
+                        import traceback
+                        self._log(f"\n[!] API training failed: {exc}")
+                        self._log(traceback.format_exc())
+                    finally:
+                        self.training_active = False
+                        self.after(0, lambda: self.solo_train_btn.configure(
+                            state="normal", text="TRAIN"))
+                        self.after(0, lambda: self.stop_train_btn.configure(
+                            state="disabled", text="STOP"))
+                        self.after(0, lambda: self.status_bar.set_left(
+                            "\u26a1 READY"))
+                import threading
+                threading.Thread(target=_run_api, daemon=True).start()
+                return
 
         self.training_active = True
         self.solo_train_btn.configure(state="disabled",

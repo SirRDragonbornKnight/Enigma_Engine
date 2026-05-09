@@ -50,6 +50,8 @@ class ForgeAdvancedMixin:
         the STUDENT actually says and tailors its teaching to the
         STUDENT's real weaknesses.
         """
+        if bool(getattr(self, "use_api_chat", False)):
+            self._log("[!] API routing not yet implemented for Dialogue mode — running locally on this machine.\n")
         if self.training_active:
             return
 
@@ -641,6 +643,8 @@ class ForgeAdvancedMixin:
 
         Needs: STUDENT model + task file.
         """
+        if bool(getattr(self, "use_api_chat", False)):
+            self._log("[!] API routing not yet implemented for Evolutionary mode — running locally on this machine.\n")
         if self.training_active:
             return
 

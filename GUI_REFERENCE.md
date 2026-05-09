@@ -5,7 +5,7 @@ what it is, where it lives in code, and what it does.
 
 Use this to decide what to change, move, remove, or redesign.
 
-**Last synced:** May 8, 2026 (Pass 156z9bz ARCH-1.5c SimPO/ORPO dispatcher migration). **GUI changes this pass:** No new controls/layout. Forge SimPO + ORPO launchers now route through the dispatcher seam (`build_dispatch_context` + `run_training`) instead of instantiating `Trainer` directly; visible UI flow is unchanged.
+**Last synced:** May 9, 2026 (Pass 156z9ch ARCH-1d Slice 2 API-routing + cancel endpoint). **GUI changes this pass:** No new controls/layout. In API-chat mode, Forge launchers for Solo/DPO/APO/Vision/LoRA now route training through `EnigmaClient.train(...)` and poll `/api/training/status`; STOP now sends `/api/training/cancel` before local stop handling.
 
 Per-pass GUI notes (Passes 119-135) are archived in [information/history/PASS_HISTORY.md](information/history/PASS_HISTORY.md). New GUI work gets a one-line entry below and a full entry in the archive.
 
