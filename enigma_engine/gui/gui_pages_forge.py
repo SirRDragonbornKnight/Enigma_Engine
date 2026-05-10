@@ -1222,6 +1222,26 @@ class ForgePageMixin:
                 "Fraction of training data held out for validation.\n"
                 "0.0 = no validation, 0.1 = 10%. Default: 0.1")
 
+        # Min LR ratio
+        min_lr_row = ctk.CTkFrame(
+            advanced_inner, fg_color="transparent")
+        min_lr_row.pack(fill="x", padx=10, pady=(2, 4))
+
+        SelectableLabel(
+            min_lr_row, text="Min LR ratio", font=FONT_TINY,
+            text_color=C_TEXT_DIM, width=90, anchor="w"
+        ).pack(side="left", padx=(0, 4))
+        self.forge_min_lr_ratio_var = ctk.StringVar(value="0.1")
+        self.forge_min_lr_ratio_entry = themed_numeric_entry(
+            min_lr_row, mode="float",
+            textvariable=self.forge_min_lr_ratio_var,
+            width=60)
+        self.forge_min_lr_ratio_entry.pack(side="left", padx=(0, 4))
+        Tooltip(self.forge_min_lr_ratio_entry,
+                "Minimum LR as a fraction of peak LR at end of schedule.\n"
+                "0.1 = LR decays to 10% of its starting value. "
+                "Range: 0.0-1.0. Default: 0.1")
+
         # --- Tools section (collapsed by default) ---
         tools_panel = CollapsiblePanel(
             ctrl_scroll, title="TOOLS", start_expanded=False)

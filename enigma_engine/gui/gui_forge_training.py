@@ -241,6 +241,7 @@ class ForgeTrainingMixin:
                                     "run_evaluation": True,
                                 },
                             }
+                            api_config["training"]["min_lr_ratio"] = forge_params["min_lr_ratio"]
                             self._log("Sending to API server...\n")
                             client.train(api_config)
                             self._poll_api_training_status(client, mode_label="SOLO")
@@ -512,6 +513,7 @@ class ForgeTrainingMixin:
                         "run_evaluation": True,
                     },
                 }
+                config_dict["training"]["min_lr_ratio"] = forge_params["min_lr_ratio"]
                 self._log("Training...\n")
                 state = run_training(config_dict, ctx)
 
@@ -780,6 +782,7 @@ class ForgeTrainingMixin:
                                 "loss_type": loss_type,
                             },
                         }
+                        api_config["training"]["min_lr_ratio"] = forge_params["min_lr_ratio"]
                         self._log("Sending preference training to API server...\n")
                         self.training_active = True
                         self.solo_train_btn.configure(state="disabled",
@@ -994,6 +997,7 @@ class ForgeTrainingMixin:
                         "loss_type": loss_type,
                     },
                 }
+                config_dict["training"]["min_lr_ratio"] = forge_params["min_lr_ratio"]
                 state = run_training(config_dict, ctx)
 
                 # Save updated model
@@ -1199,6 +1203,7 @@ class ForgeTrainingMixin:
                                 "unfreeze_text_layers": unfreeze_text_layers,
                             },
                         }
+                        api_config["training"]["min_lr_ratio"] = forge_params["min_lr_ratio"]
                         self._log("Sending vision training to API server...\n")
                         self.training_active = True
                         self.solo_train_btn.configure(state="disabled",
@@ -1481,6 +1486,7 @@ class ForgeTrainingMixin:
                         "unfreeze_text_layers": unfreeze_text_layers,
                     },
                 }
+                config_dict["training"]["min_lr_ratio"] = forge_params["min_lr_ratio"]
                 state = run_training(config_dict, ctx)
 
                 # Save model with vision projection weights
@@ -1669,6 +1675,7 @@ class ForgeTrainingMixin:
                                 "alpha": lora_alpha,
                             },
                         }
+                        api_config["training"]["min_lr_ratio"] = forge_params["min_lr_ratio"]
                         self._log("Sending LoRA training to API server...\n")
                         self.training_active = True
                         self.solo_train_btn.configure(state="disabled",
@@ -1917,6 +1924,7 @@ class ForgeTrainingMixin:
                             "run_evaluation": True,
                         },
                     }
+                    _fb_payload["training"]["min_lr_ratio"] = forge_params["min_lr_ratio"]
                     self._log("Training (partial freeze)...\n")
                     state = _rt(_fb_payload, _fb_ctx)
 

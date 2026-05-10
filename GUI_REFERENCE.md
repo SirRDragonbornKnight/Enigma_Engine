@@ -5,7 +5,7 @@ what it is, where it lives in code, and what it does.
 
 Use this to decide what to change, move, remove, or redesign.
 
-**Last synced:** May 9, 2026 (Pass 156z9cj ARCH-1d queue-mode API execution routing). **GUI changes this pass:** No new controls/layout. In API-chat mode, Forge queue worker now executes each queued job via daemon API (load job model -> `EnigmaClient.train(...)` -> poll `/api/training/status`) instead of always training locally. Launchers for GRPO, ReMax, RLHF, Self-Play, SimPO, ORPO remain API-routed from Pass 156z9ci. H3 warnings remain on Pretrain/Distill (deliberately parked outside API scope per architecture).
+**Last synced:** May 10, 2026 (Pass 156z9cn FORGE min_lr_ratio wiring). **GUI changes this pass:** Added FORGE ADVANCED control `Min LR ratio` (`forge_min_lr_ratio_entry`, default `0.1`, float input) in [enigma_engine/gui/gui_pages_forge.py](enigma_engine/gui/gui_pages_forge.py). Value is now read/validated in [enigma_engine/gui/gui_forge.py](enigma_engine/gui/gui_forge.py) and forwarded across all active training launcher families (solo, DPO/APO, vision, LoRA, pretrain, distill, RLHF, self-play, GRPO/ReMax, SimPO/ORPO, dialogue, evolutionary, adaptive).
 
 Per-pass GUI notes (Passes 119-135) are archived in [information/history/PASS_HISTORY.md](information/history/PASS_HISTORY.md). New GUI work gets a one-line entry below and a full entry in the archive.
 

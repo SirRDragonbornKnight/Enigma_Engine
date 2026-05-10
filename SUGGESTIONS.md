@@ -2,43 +2,39 @@
 
 ## 🟢 AUDIT SNAPSHOT (current session)
 
-Pass 156z9cm (ARCH-1c engine flags config-push — May 2026):
+Pass 156z9cn (FORGE min_lr_ratio end-to-end wiring — May 2026):
 
 - `ruff check enigma_engine/ tests/` → **pass**
-- `python -m pytest tests/test_api.py tests/test_client.py -q` → **104 passed** (+5 new)
+- `python -m pytest tests/test_gui.py -k "min_lr_ratio or forge_params_fields" -v` → **3 passed**
 
-**Pass 156z9cm SHIPPED: daemon engine flags pushed on API model load**
+**Pass 156z9cn SHIPPED: FORGE min_lr_ratio surfaced from GUI to all active training launchers**
 
-Closed ARCH-1c config-push gap for `inline_search_enabled` /
-`inline_search_splice_enabled`. Previously, loading a model in API mode left
-the daemon's engine using its built-in defaults for these flags regardless of
-the user's GUI settings.
+Closed the config-surface gap for `TrainingConfig.min_lr_ratio` (default `0.1`,
+range `[0.0, 1.0]`) by wiring it from FORGE controls into every active
+launcher family.
 
 What changed:
-- `POST /api/config/engine-flags` (new `EngineFlagsUpdate` model): sets boolean
-  attributes directly on the live engine; returns `{"status": "no-engine"}` if
-  no model loaded (caller must re-push after load).
-- `EnigmaClient.set_engine_flags(*, inline_search_enabled, inline_search_splice_enabled)`:
-  no-op (returns `{}`) when no kwargs provided; single POST otherwise.
-- `gui_logic._load()` API branch: calls `client.set_engine_flags(...)` in the
-  same background thread, right after `client.load_model()` succeeds and before
-  scheduling `_on_remote_model_loaded`. Failure is DEBUG-logged, not fatal.
+- New FORGE ADVANCED control in `gui_pages_forge.py`: `forge_min_lr_ratio_entry`
+  (`themed_numeric_entry(mode="float")`) with tooltip and default `0.1`.
+- `_read_forge_train_params()` in `gui_forge.py` now parses and validates
+  `forge_min_lr_ratio_entry` with loud fallback logging for invalid values,
+  and forwards `"min_lr_ratio"` in `forge_params`.
+- Forwarded `min_lr_ratio` at all active launcher families:
+  `gui_forge_training.py`, `gui_forge_new_modes.py`,
+  `gui_forge_advanced.py`, and `gui_forge_adaptive.py`.
 
 **Production call chain (Rule #20):**
-`_load() bg thread` → `client.load_model(path)` → `client.set_engine_flags(...)` →
-`POST /api/config/engine-flags` → `state.engine.inline_search_enabled = ...`
+FORGE ADVANCED input → `_read_forge_train_params()` → launcher config payload
+(`training.min_lr_ratio` / `TrainingConfig(min_lr_ratio=...)`) → dispatcher /
+trainer schedule floor.
 
-**New tests (5):**
-- `test_api.py::TestConfig::test_update_engine_flags_no_engine_returns_no_engine`
-- `test_api.py::TestConfig::test_update_engine_flags_applies_to_engine`
-- `test_client.py::test_set_engine_flags_posts_payload`
-- `test_client.py::test_set_engine_flags_both_flags`
-- `test_client.py::test_set_engine_flags_no_args_returns_empty`
+**New tests (2):**
+- `tests/test_gui.py::TestTrainingConfigCrossWiring::test_forge_min_lr_ratio_widget_present`
+- `tests/test_gui.py::TestTrainingConfigCrossWiring::test_forge_min_lr_ratio_wired_in_start_training`
 
-**ARCH-1c closure note:** LoRA adapter config-push remains parked (no
-`/api/models/adapter` endpoint exists). That gap requires: (a) an adapter-load
-API endpoint, (b) GUI restore-path calling it, (c) daemon-side adapter file
-access. Lower value than engine-flag push — parked.
+**Scope note:** This pass closes GUI/config launcher wiring only. Full-suite
+baseline run timed out late in execution during this session; no failures were
+observed before timeout.
 
 ---
 
@@ -307,9 +303,9 @@ Audit finding closed this pass:
 
 Return-to-work quick start:
 
-1. Run `python -m pytest tests/test_gui.py -k "TestForgeQueueExecutor" -q` to re-verify queue API path + local fallback gates.
-2. Continue ARCH-1d follow-up: add queue STOP integration for API mode (per-job `cancel_training()` handoff), then add explicit queue-side cancelled status text.
-3. Evaluate ARCH-1d deferred surface: add Forge audio launcher/button (dispatcher `audio` mode already exists), or park with concrete UX reason if not shipping this cycle.
+1. Run a fresh full baseline (`python -m pytest tests/ -q`) and stamp the final pass/skip counts into the snapshot.
+2. Continue with the current top backlog item: **D-4** reasoning mid-training phase (OpenThoughts3).
+3. If postponing D-4, run the next concrete architecture slice: **ARCH-V1c** GGUF metadata/tokenizer audit to close remaining round-trip xfails.
 
 Test-suite hygiene note:
 

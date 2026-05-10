@@ -317,6 +317,25 @@ class ForgeMixin(
         except AttributeError:
             pass
 
+        min_lr_ratio = 0.1
+        try:
+            raw = getattr(
+                self, "forge_min_lr_ratio_entry", None).get().strip()
+            val = float(raw)
+            if 0.0 <= val <= 1.0:
+                min_lr_ratio = val
+            else:
+                self._log(f"[!] Min LR ratio '{raw}' out of range "
+                          f"(must be 0.0-1.0), using 0.1")
+        except (ValueError, TypeError):
+            raw_w = getattr(self, "forge_min_lr_ratio_entry", None)
+            raw = raw_w.get().strip() if raw_w else ""
+            if raw:
+                self._log(f"[!] Min LR ratio '{raw}' not a number, "
+                          f"using 0.1")
+        except AttributeError:
+            pass
+
         # Knowledge preservation settings
         general_mix_ratio = 0.0
         try:
@@ -350,6 +369,7 @@ class ForgeMixin(
             "use_gradient_checkpointing": grad_ckpt,
             "rolling_best_k": rolling_best_k,
             "val_split": val_split,
+            "min_lr_ratio": min_lr_ratio,
             "general_mix_ratio": general_mix_ratio,
             "general_data": general_data,
             "ce_chunk_size": self._get_ce_chunk_size(),

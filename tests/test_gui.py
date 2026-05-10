@@ -6209,6 +6209,22 @@ class TestTrainingConfigCrossWiring:
             "training mode uses:\n"
             + "\n".join(f"  - {f}" for f in unused))
 
+    def test_forge_min_lr_ratio_widget_present(self):
+        """FORGE page must expose the min_lr_ratio widget."""
+        import inspect
+        import enigma_engine.gui.gui_pages_forge as mod_pages
+
+        src = inspect.getsource(mod_pages)
+        assert "forge_min_lr_ratio_entry" in src
+
+    def test_forge_min_lr_ratio_wired_in_start_training(self):
+        """Main FORGE training path must forward min_lr_ratio from forge_params."""
+        import inspect
+        import enigma_engine.gui.gui_forge_training as mod_train
+
+        src = inspect.getsource(mod_train.ForgeTrainingMixin._start_solo_training)
+        assert 'forge_params["min_lr_ratio"]' in src
+
     def test_solo_training_shows_batch_eta(self):
         """Batch-level ETA must appear in the solo training on_loss handler."""
         import inspect

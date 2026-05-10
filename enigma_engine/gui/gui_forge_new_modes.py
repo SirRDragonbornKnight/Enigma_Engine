@@ -813,6 +813,7 @@ class ForgeNewModesMixin:
                     general_mix_ratio=general_mix,
                     general_data=general_data,
                     val_split=forge_params["val_split"],
+                    min_lr_ratio=forge_params["min_lr_ratio"],
                     eval_every=max(100, _est_total // 20),
                     save_every=max(1, epochs // 5),
                     save_every_steps=max(500, _est_total // 20),
@@ -1859,6 +1860,7 @@ class ForgeNewModesMixin:
                     general_mix_ratio=_mix_ratio,
                     general_data=_mix_data,
                     val_split=forge_params["val_split"],
+                    min_lr_ratio=forge_params["min_lr_ratio"],
                     save_every=max(1, epochs // 5),
                     checkpoint_dir=str(
                         MODELS_DIR / "checkpoints"),
@@ -2102,6 +2104,7 @@ class ForgeNewModesMixin:
                             "run_evaluation": True,
                         },
                     }
+                    api_config["training"]["min_lr_ratio"] = forge_params["min_lr_ratio"]
                     self._log("Sending RLHF training to API server...\n")
                     self.training_active = True
                     self.solo_train_btn.configure(state="disabled",
@@ -2281,6 +2284,7 @@ class ForgeNewModesMixin:
                         "use_amp": torch.cuda.is_available(),
                     },
                 }
+                config_dict["training"]["min_lr_ratio"] = self._read_forge_train_params()["min_lr_ratio"]
                 rl_result = run_training(config_dict, ctx)
 
                 self._log(f"\nFinal reward: {rl_result.get('final_reward', 0):.4f}")
@@ -2419,6 +2423,7 @@ class ForgeNewModesMixin:
                             "trainer_path": trainer_path,
                         },
                     }
+                    api_config["training"]["min_lr_ratio"] = forge_params["min_lr_ratio"]
                     self._log("Sending Self-Play training to API server...\n")
                     self.training_active = True
                     self.solo_train_btn.configure(state="disabled",
@@ -2530,6 +2535,7 @@ class ForgeNewModesMixin:
                         "use_amp": torch.cuda.is_available(),
                     },
                 }
+                config_dict["training"]["min_lr_ratio"] = self._read_forge_train_params()["min_lr_ratio"]
                 result = run_training(config_dict, ctx)
 
                 self._log(
@@ -2674,6 +2680,7 @@ class ForgeNewModesMixin:
                             "run_evaluation": True,
                         },
                     }
+                    api_config["training"]["min_lr_ratio"] = forge_params["min_lr_ratio"]
                     self._log(f"Sending {algo} training to API server...\n")
                     self.training_active = True
                     self.solo_train_btn.configure(state="disabled",
@@ -2894,6 +2901,7 @@ class ForgeNewModesMixin:
                         "use_amp": torch.cuda.is_available(),
                     },
                 }
+                config_dict["training"]["min_lr_ratio"] = self._read_forge_train_params()["min_lr_ratio"]
                 rl_result = run_training(config_dict, ctx)
 
                 final_reward = rl_result.get('final_reward', 0)
@@ -3034,6 +3042,7 @@ class ForgeNewModesMixin:
                             "use_compile": True,
                             "rolling_best_k": forge_params["rolling_best_k"],
                             "val_split": forge_params["val_split"],
+                            "min_lr_ratio": forge_params["min_lr_ratio"],
                             "save_every": max(1, epochs // 5),
                             "run_evaluation": True,
                         },
@@ -3203,6 +3212,7 @@ class ForgeNewModesMixin:
                         "run_evaluation": True,
                     },
                 }
+                config_dict["training"]["min_lr_ratio"] = forge_params["min_lr_ratio"]
                 state = run_training(config_dict, ctx)
 
                 final_loss = state.best_loss

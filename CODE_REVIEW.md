@@ -1,7 +1,11 @@
 ﻿# Code Review Tracker
 
 **Started:** March 24, 2026
-**Last pass:** Pass 156z9cm (May 2026) — **ARCH-1c engine flags config-push on API model load. ARCH-1d Queue STOP propagation. ARCH-1e lock-scope hardening.**
+**Last pass:** Pass 156z9cn (May 2026) — **FORGE min_lr_ratio surfaced end-to-end from GUI to TrainingConfig across all active launchers.**
+
+---
+
+**Pass 156z9cn (May 2026) — FORGE min_lr_ratio surface closure:** Completed the GUI-to-config wiring for `TrainingConfig.min_lr_ratio` (default `0.1`, valid range `[0.0, 1.0]`) across all active FORGE launcher families. Added ADVANCED panel control in [enigma_engine/gui/gui_pages_forge.py](enigma_engine/gui/gui_pages_forge.py): `forge_min_lr_ratio_entry` (`themed_numeric_entry(mode="float")`) with explicit tooltip and default `0.1`. Added parsing/validation in [enigma_engine/gui/gui_forge.py](enigma_engine/gui/gui_forge.py) `_read_forge_train_params()` with loud fallback logging for out-of-range/non-numeric values and forwarding in returned `forge_params`. Wired forward-path usage in all launcher groups: [enigma_engine/gui/gui_forge_training.py](enigma_engine/gui/gui_forge_training.py) (solo/DPO-APO/vision/LoRA API+local paths), [enigma_engine/gui/gui_forge_new_modes.py](enigma_engine/gui/gui_forge_new_modes.py) (pretrain/distill/RLHF/self-play/GRPO-ReMax/SimPO-ORPO), [enigma_engine/gui/gui_forge_advanced.py](enigma_engine/gui/gui_forge_advanced.py) (dialogue/evolutionary), and [enigma_engine/gui/gui_forge_adaptive.py](enigma_engine/gui/gui_forge_adaptive.py). Added structural gates in [tests/test_gui.py](tests/test_gui.py): widget presence and main training-path forwarding (`ForgeTrainingMixin._start_solo_training`). Validation: `ruff check enigma_engine/ tests/` pass; focused GUI regression selection `python -m pytest tests/test_gui.py -k "min_lr_ratio or forge_params_fields" -v` -> **3 passed**.
 
 ---
 

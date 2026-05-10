@@ -604,6 +604,7 @@ class ForgeAdaptiveMixin:
             general_mix_ratio=forge_params["general_mix_ratio"],
             general_data=forge_params["general_data"],
             val_split=forge_params["val_split"],
+            min_lr_ratio=forge_params["min_lr_ratio"],
             save_every=max(1, epochs // 5),
             checkpoint_dir=str(
                 MODELS_DIR / "checkpoints"),
