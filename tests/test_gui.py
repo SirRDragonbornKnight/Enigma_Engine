@@ -6666,6 +6666,90 @@ class TestForgeQueueExecutor:
         with pytest.raises(ValueError, match="cannot be run through the training queue"):
             host._execute_queue_job(job)
 
+    def test_execute_queue_job_routes_through_api_client_when_enabled(self, tmp_path):
+        """Queue executor should use EnigmaClient path when API chat mode is on.
+
+        Contract: per-job execution must load the student's model on the daemon,
+        submit dispatcher payload with inline data, poll status until inactive,
+        and return best_loss from status.
+        """
+        import dataclasses
+        import types
+
+        class FakeJob:
+            job_id = 7
+            mode = "Basic"
+            epochs = 2
+            learning_rate = 2e-4
+            batch_size = 4
+            model_path = str(tmp_path / "api_student.pth")
+            data_path = str(tmp_path / "api_train.txt")
+            extra_config: dict = dataclasses.field(default_factory=dict)
+            progress = 0
+            message = ""
+
+        job = FakeJob()
+        job.extra_config = {
+            "rolling_best_k": 0,
+            "use_gradient_checkpointing": False,
+            "max_grad_accumulation": 1,
+            "val_split": 0.1,
+        }
+        (tmp_path / "api_student.pth").write_bytes(b"stub")
+        (tmp_path / "api_train.txt").write_text(
+            "User: hi\nAssistant: hello\n" * 5,
+            encoding="utf-8",
+        )
+
+        calls: list[tuple[str, object]] = []
+
+        class _FakeClient:
+            def load_model(self, path):
+                calls.append(("load_model", path))
+                return {"status": "ok"}
+
+            def train(self, payload):
+                calls.append(("train", payload))
+                return {"status": "started"}
+
+            def training_status(self):
+                # one active tick then done
+                status = {
+                    "active": len([c for c in calls if c[0] == "status"]) == 0,
+                    "progress": 100,
+                    "message": "done",
+                    "best_loss": 0.321,
+                    "abort_reason": "",
+                }
+                calls.append(("status", status["active"]))
+                return status
+
+        from enigma_engine.gui.gui_forge_queue import ForgeQueueMixin
+
+        class _Host(ForgeQueueMixin):
+            use_api_chat = True
+
+            def _log(self, msg):
+                pass
+
+            def _get_training_queue(self):
+                return types.SimpleNamespace(on_progress=None)
+
+            def _get_api_chat_client(self):
+                return _FakeClient()
+
+        host = _Host()
+        best = host._execute_queue_job(job)
+
+        assert best == pytest.approx(0.321)
+        assert calls[0] == ("load_model", job.model_path)
+        train_calls = [c for c in calls if c[0] == "train"]
+        assert len(train_calls) == 1
+        payload = train_calls[0][1]
+        assert payload["mode"] == "sft"
+        assert payload["training"]["epochs"] == 2
+        assert "User: hi" in payload["data"]
+
 
 class TestLoraFallbackDispatcher:
     """ARCH-1.5c: LoRA non-PEFT fallback routes through SFT dispatcher."""

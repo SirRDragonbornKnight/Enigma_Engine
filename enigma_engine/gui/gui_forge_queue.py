@@ -225,15 +225,6 @@ class ForgeQueueMixin:
 
         Returns the best loss achieved.
         """
-        import torch
-        from enigma_engine.core.model import Enigma
-        from enigma_engine.core.model_presets import ForgeConfig
-        from enigma_engine.core.model_registry import (
-            get_state_dict, safe_load_weights)
-        from enigma_engine.core.tokenizer import get_tokenizer
-        from enigma_engine.training.dispatch import (
-            build_dispatch_context, run_training)
-
         # Resolve dispatcher mode key from display name.
         dispatch_mode = _QUEUE_MODE_MAP.get(job.mode)
         if dispatch_mode is None:
@@ -265,6 +256,99 @@ class ForgeQueueMixin:
         data_text = Path(job.data_path).read_text(encoding="utf-8")
         if not data_text.strip():
             raise ValueError(f"Training data file is empty: {job.data_path}")
+
+        # API-mode queue execution: load model on daemon, submit one job,
+        # then poll daemon status until completion.
+        get_client = getattr(self, "_get_api_chat_client", None)
+        client = None
+        if bool(getattr(self, "use_api_chat", False)) and callable(get_client):
+            client = get_client()
+
+        if client is not None:
+            import json
+            import time
+
+            self._log("  API mode enabled — loading model on daemon...")
+            client.load_model(student_path)
+
+            payload: dict = {
+                "mode": dispatch_mode,
+                "training": {
+                    "epochs": job.epochs,
+                    "learning_rate": job.learning_rate,
+                    "batch_size": job.batch_size,
+                    "gradient_clip": job.extra_config.get("gradient_clip", 1.0),
+                    "use_amp": False,
+                    "rolling_best_k": job.extra_config.get("rolling_best_k", 0),
+                    "use_gradient_checkpointing": job.extra_config.get(
+                        "use_gradient_checkpointing", False),
+                    "max_grad_accumulation": job.extra_config.get(
+                        "max_grad_accumulation", 1),
+                    "val_split": job.extra_config.get("val_split", 0.1),
+                    "checkpoint_dir": str(MODELS_DIR / "checkpoints"),
+                },
+            }
+            if dispatch_mode in _EXPERIMENTAL_MODES:
+                payload["allow_experimental"] = True
+            if dispatch_mode == "dpo":
+                payload["dpo"] = {
+                    "loss_type": _QUEUE_DPO_LOSS_TYPE_MAP.get(job.mode, "dpo"),
+                }
+
+            if dispatch_mode in _PREFERENCE_MODES:
+                pref_rows = []
+                for line in data_text.splitlines():
+                    stripped = line.strip()
+                    if not stripped:
+                        continue
+                    pref_rows.append(json.loads(stripped))
+                payload["data"] = pref_rows
+            elif dispatch_mode in _PROMPT_LIST_MODES:
+                payload["data"] = [
+                    ln.strip() for ln in data_text.splitlines() if ln.strip()]
+            else:
+                payload["data"] = data_text
+
+            self._log(f"  API queue submit mode={dispatch_mode!r}...")
+            client.train(payload)
+
+            best_loss = float("inf")
+            while True:
+                status = client.training_status()
+                pct = int(status.get("progress", 0) or 0)
+                msg = str(status.get("message", ""))
+                best = status.get("best_loss")
+                if best is not None:
+                    try:
+                        best_loss = float(best)
+                    except (TypeError, ValueError):
+                        pass
+
+                job.progress = pct
+                job.message = msg
+                q = self._get_training_queue()
+                if q.on_progress:
+                    q.on_progress(job, pct, msg)
+
+                if not bool(status.get("active", False)):
+                    abort_reason = str(status.get("abort_reason", "") or "")
+                    if abort_reason:
+                        raise RuntimeError(
+                            f"API queue job aborted: {abort_reason}")
+                    break
+                time.sleep(1.0)
+
+            self._log(f"  Completed (loss={best_loss:.4f})")
+            return best_loss
+
+        import torch
+        from enigma_engine.core.model import Enigma
+        from enigma_engine.core.model_presets import ForgeConfig
+        from enigma_engine.core.model_registry import (
+            get_state_dict, safe_load_weights)
+        from enigma_engine.core.tokenizer import get_tokenizer
+        from enigma_engine.training.dispatch import (
+            build_dispatch_context, run_training)
 
         # Load model + tokenizer.
         device = "cuda" if torch.cuda.is_available() else "cpu"
