@@ -5,7 +5,7 @@ what it is, where it lives in code, and what it does.
 
 Use this to decide what to change, move, remove, or redesign.
 
-**Last synced:** May 9, 2026 (Pass 156z9ch ARCH-1d Slice 2 API-routing + cancel endpoint). **GUI changes this pass:** No new controls/layout. In API-chat mode, Forge launchers for Solo/DPO/APO/Vision/LoRA now route training through `EnigmaClient.train(...)` and poll `/api/training/status`; STOP now sends `/api/training/cancel` before local stop handling.
+**Last synced:** May 9, 2026 (Pass 156z9ci ARCH-1d Slice 3 API routing for GRPO/ReMax/RLHF/Self-Play/SimPO/ORPO). **GUI changes this pass:** No new controls/layout. In API-chat mode, Forge launchers for GRPO, ReMax, RLHF, Self-Play, SimPO, ORPO now route training through `EnigmaClient.train(...)` and poll `/api/training/status`. All six modes removed user honesty warnings since API routes are now live. H3 warnings remain on Pretrain/Distill (deliberately parked outside API scope per architecture).
 
 Per-pass GUI notes (Passes 119-135) are archived in [information/history/PASS_HISTORY.md](information/history/PASS_HISTORY.md). New GUI work gets a one-line entry below and a full entry in the archive.
 

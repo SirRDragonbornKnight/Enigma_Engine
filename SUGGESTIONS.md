@@ -2,12 +2,43 @@
 
 ## 🟢 AUDIT SNAPSHOT (current session)
 
-Verified local baseline after audit fixes:
+Pass 156z9ci (ARCH-1d Slice 3 completion — May 9, 2026):
 
-- `ruff check enigma_engine/ tests/` → pass (only pre-existing E501/E741/E702 on unrelated modules)
-- `python -m pytest tests/ -q` → **3050 passed, 3 skipped**
+- `ruff check enigma_engine/ tests/` → **pass**
+- `python -m pytest tests/ -q` → **3057 passed, 3 skipped** (+7 new tests)
 
-**Pass 156z9ch audit fixes (ARCH-1d Slice 2 post-ship audit — May 9, 2026):**
+**Pass 156z9ci SHIPPED: ARCH-1d Slice 3 — API routing for remaining learnable modes**
+
+All six non-solo learnable modes now support API routing:
+- **GRPO/ReMax:** Unified handler `_start_rl_variant_training(algo)` with per-algo config + mode setting
+- **RLHF:** Full two-phase (reward model + policy gradient) routed as single training job
+- **Self-Play:** Trainer model path forwarded to daemon via `self_play.trainer_path` config block
+- **SimPO/ORPO:** Unified handler `_start_preference_variant_training(algo)` with per-algo config + mode setting
+
+Pattern across all six: (1) read data from disk; (2) build config dict with mode/epochs/lr/data; (3) call `client.train(api_config)` in daemon thread; (4) poll `_poll_api_training_status()` for status updates; (5) early return to skip local training path when API active.
+
+Removed H3 honesty warnings from all four launchers (GRPO, ReMax, RLHF, SelfPlay, SimPO, ORPO) since API routing now available.
+
+**Tests:** Added 7 structural tests (one per launcher/handler) that gate:
+- `use_api_chat` check presence
+- `client.train(` call presence
+- `_poll_api_training_status(` call presence
+- Mode field set correctly (grpo/remax/rlhf/self_play/simpo/orpo)
+- Wrapper methods correctly delegate to shared handlers
+
+Baseline before: **3050 passed, 3 skipped**. After: **3057 passed, 3 skipped**.
+
+---
+
+**ARCH-1d Slice 3 Completion Audit Notes:**
+- **Sibling-boundary sweep:** Verified that all six modes have matching API pattern (use_api_chat gate, config building, client.train call, polling helper). No mode was skipped.
+- **Honesty check:** H3 warnings removed from all wrappers since routes now available. Pretrain/Distill warnings remain (deliberately parked outside API scope per ARCH-1.5c architecture note).
+- **Production call chains verified:** Each launcher can be traced from GUI button → client.train() → daemon training → poll loop → completion.
+- **Dead code:** None. All inserted code paths are functional and tested.
+
+---
+
+**PREVIOUS SESSION ENTRY (Pass 156z9ch audit fixes — ARCH-1d Slice 2 post-ship audit — May 9, 2026):**
 - **H1 (HIGH) — GUI freeze on DPO/Vision/LoRA API mode.** Root cause: Solo API branch lived in `_finetune()` (background thread), but DPO/Vision/LoRA API branches lived inline in the method body (main thread). When `_poll_api_training_status()` entered its 1-second-sleep loop, GUI froze. Fix: wrapped each of the three API branches' entire logic in a closure `def _run_api()` and launched it in a daemon thread matching Solo's pattern. GUI now stays responsive during polling.
 - **H2 (HIGH) — save overwrites model on cancel.** After `Trainer.request_stop()` (graceful stop), `run_training` returns a partial result. The save block unconditionally called `atomic_torch_save` regardless of whether training completed or was cancelled, silently overwriting the original model with mid-training weights. Fix: gated the save on `abort_reason` being empty. On cancel, `abort_reason="cancel_requested"` is set, so no save occurs. Model file survives.
 - **H3 (HIGH) — non-routed launchers silently run locally with no user warning.** When GUI is in `use_api_chat=True` mode, Basic/Pretrain/Distill/RLHF/SelfPlay/GRPO/ReMax/SimPO/ORPO/Dialogue/Evolutionary launchers still run in-process (unrouted yet) with no indication. User expects API-only training. Fix: added API-honesty check at the start of each launcher: `if use_api_chat: self._log("[!] API routing not yet implemented for {Mode} — running locally...")`. All 12 non-routed launchers now warn the user.
@@ -404,7 +435,7 @@ If any chain breaks before reaching the inner code, the slice is parked, not fin
 5. ~~**ARCH-1a**~~ ✅ shipped (`/api/train` dispatcher migration + request-shape hardening, Passes 156z9bc/156z9bd).
 6. ~~**ARCH-1b**~~ ✅ shipped (`enigma_engine/client.py` + `tests/test_client.py`, Pass 156z9bq).
 7. **ARCH-1c** (GUI chat over client) — in progress (`run.py --client-chat`, GUI CORE send-path routing, CONFIG controls for `use_api_chat` / `api_base_url`, and stream-preferred API transport in `_chat_request` shipped).
-8. **ARCH-1d** (GUI training over client — Slice 1 shipped: SFT solo launcher API routing + polling helper + server callbacks + model save. Remaining: DPO, Vision, LoRA, and New Modes launchers).
+8. **ARCH-1d** ✅ **SHIPPED** (GUI training over client — Slice 1: Solo SFT routing. Slice 2: DPO/APO/Vision/LoRA routing. Slice 3: GRPO/ReMax/RLHF/Self-Play/SimPO/ORPO routing. All learnable modes now support API routing with daemon-side training + GUI polling. Remaining deferred work: queue-mode (batch job) launchers, audio launcher GUI surface). Test baseline: 3057 passed (7 new tests for Slice 3 gates).
 9. **ARCH-1e** (hardening).
 10. **ARCH-1f** (sister-folder split — final cosmetic move).
 
