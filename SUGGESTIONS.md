@@ -2,6 +2,75 @@
 
 ## 🟢 AUDIT SNAPSHOT (current session)
 
+Pass 156z9cm (ARCH-1c engine flags config-push — May 2026):
+
+- `ruff check enigma_engine/ tests/` → **pass**
+- `python -m pytest tests/test_api.py tests/test_client.py -q` → **104 passed** (+5 new)
+
+**Pass 156z9cm SHIPPED: daemon engine flags pushed on API model load**
+
+Closed ARCH-1c config-push gap for `inline_search_enabled` /
+`inline_search_splice_enabled`. Previously, loading a model in API mode left
+the daemon's engine using its built-in defaults for these flags regardless of
+the user's GUI settings.
+
+What changed:
+- `POST /api/config/engine-flags` (new `EngineFlagsUpdate` model): sets boolean
+  attributes directly on the live engine; returns `{"status": "no-engine"}` if
+  no model loaded (caller must re-push after load).
+- `EnigmaClient.set_engine_flags(*, inline_search_enabled, inline_search_splice_enabled)`:
+  no-op (returns `{}`) when no kwargs provided; single POST otherwise.
+- `gui_logic._load()` API branch: calls `client.set_engine_flags(...)` in the
+  same background thread, right after `client.load_model()` succeeds and before
+  scheduling `_on_remote_model_loaded`. Failure is DEBUG-logged, not fatal.
+
+**Production call chain (Rule #20):**
+`_load() bg thread` → `client.load_model(path)` → `client.set_engine_flags(...)` →
+`POST /api/config/engine-flags` → `state.engine.inline_search_enabled = ...`
+
+**New tests (5):**
+- `test_api.py::TestConfig::test_update_engine_flags_no_engine_returns_no_engine`
+- `test_api.py::TestConfig::test_update_engine_flags_applies_to_engine`
+- `test_client.py::test_set_engine_flags_posts_payload`
+- `test_client.py::test_set_engine_flags_both_flags`
+- `test_client.py::test_set_engine_flags_no_args_returns_empty`
+
+**ARCH-1c closure note:** LoRA adapter config-push remains parked (no
+`/api/models/adapter` endpoint exists). That gap requires: (a) an adapter-load
+API endpoint, (b) GUI restore-path calling it, (c) daemon-side adapter file
+access. Lower value than engine-flag push — parked.
+
+---
+
+Pass 156z9ck (ARCH-1d Queue STOP + ARCH-1e lock-scope — May 2026):
+
+- `ruff check enigma_engine/ tests/` → **pass**
+- `python -m pytest tests/test_api.py -q` → **90 passed**; `tests/test_gui.py` → queue executor: **7 passed**
+
+**Pass 156z9ck SHIPPED: Queue STOP propagates to daemon + lock-scope hardening**
+
+Two fixes shipped together (commit 16c0770):
+
+1. **Queue STOP in API mode** — `queue.pause()` was stopping new jobs but not
+   the active polling loop. Fixed by tracking `_active_queue_api_client` on the
+   host before the poll loop; `_run_training_queue()` pause handler reads it and
+   calls `client.cancel_training()`. The `cancel_requested` abort reason now
+   breaks cleanly instead of raising `RuntimeError`.
+
+2. **Lock-scope violations in `server.py`** — `activate_profile` and
+   `update_config` were mutating shared `AppState` fields outside `state._lock`.
+   Both now wrap mutations in `with state._lock:`; `apply_profile_to_engine()`
+   called outside lock (heavy op must not block chat callers). Matches
+   `AppState.load_model()` pattern.
+
+**Production call chain (Queue STOP):**
+`STOP button` → `queue.pause()` + `_active_queue_api_client.cancel_training()` →
+`DELETE /api/training/cancel` → daemon stops training → polling loop breaks cleanly
+
+**Tests added:** 4 (2 queue executor + 2 API lock-scope)
+
+---
+
 Pass 156z9cj (ARCH-1d queue-mode API execution — May 9, 2026):
 
 - `ruff check enigma_engine/gui/gui_forge_queue.py tests/test_gui.py` → **pass**
@@ -470,10 +539,10 @@ If any chain breaks before reaching the inner code, the slice is parked, not fin
 4. ~~**ARCH-1.5d**~~ ✅ closed (core/training* mechanical move and sibling-boundary sweep complete, Passes 156z9bo + 156z9bp).
 5. ~~**ARCH-1a**~~ ✅ shipped (`/api/train` dispatcher migration + request-shape hardening, Passes 156z9bc/156z9bd).
 6. ~~**ARCH-1b**~~ ✅ shipped (`enigma_engine/client.py` + `tests/test_client.py`, Pass 156z9bq).
-7. **ARCH-1c** (GUI chat over client) — in progress (`run.py --client-chat`, GUI CORE send-path routing, CONFIG controls for `use_api_chat` / `api_base_url`, and stream-preferred API transport in `_chat_request` shipped).
-8. **ARCH-1d** ✅ **SHIPPED** (GUI training over client — Slice 1: Solo SFT routing. Slice 2: DPO/APO/Vision/LoRA routing. Slice 3: GRPO/ReMax/RLHF/Self-Play/SimPO/ORPO routing. Queue-mode execution now also supports API routing. Remaining deferred work: audio launcher GUI surface). Test baseline at Slice 3 close: 3057 passed (7 new tests for Slice 3 gates).
-9. **ARCH-1e** (hardening).
-10. **ARCH-1f** (sister-folder split — final cosmetic move).
+7. **ARCH-1c** (GUI chat over client) — substantially shipped (`run.py --client-chat`, GUI CORE send-path routing, CONFIG controls, stream-preferred API transport, model load/unload routing, new-chat parity, CMD-page parity, engine flags config-push on model load all shipped). Remaining open gap: LoRA adapter auto-restore in API mode (parked — requires `/api/models/adapter` endpoint and daemon-side adapter file access).
+8. **ARCH-1d** ✅ **SHIPPED** (GUI training over client — Slice 1: Solo SFT routing. Slice 2: DPO/APO/Vision/LoRA routing. Slice 3: GRPO/ReMax/RLHF/Self-Play/SimPO/ORPO routing. Queue-mode execution now also supports API routing. Queue STOP propagated to daemon via `cancel_training()`. Remaining deferred work: audio launcher GUI surface).
+9. **ARCH-1e** ✅ **SHIPPED** (lock-scope hardening — `activate_profile` and `update_config` now hold `state._lock` during mutation).
+10. **ARCH-1f** ⚠️ **BLOCKED** (sister-folder split) — the ARCH-1 description said "Easy because GUI no longer imports core." That was written when only training imports were planned for removal. The GUI still has 20+ direct imports from `enigma_engine.core` for utility modules: `hardware_detection`, `safe_save`, `document_readers`, `inference` (EnigmaEngine), `bpe_tokenizer`, `model`, `model_presets`, `model_registry`, `monologue`, `commands`, `download_progress`, `model_merging`. These are NOT training imports — they're inference/utility/model-management code that the local-engine mode still needs. **Parked.** Concrete next step: decide whether to (a) route each remaining utility through API endpoints (adds ~12 new endpoints, medium effort), (b) keep `enigma_engine` as a permanent shared bridge (accepted architecture, ARCH-1f just becomes "rename the folder when we're ready"), or (c) accept hybrid: GUI imports from `enigma_engine.core` for local-mode operations and uses `EnigmaClient` for remote-mode operations. Option (c) is the current de-facto reality and is probably the right call given the "fully local" constraint.
 
 ### Parked / open questions
 

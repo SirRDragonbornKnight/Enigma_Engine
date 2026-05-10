@@ -1,7 +1,15 @@
 ﻿# Code Review Tracker
 
 **Started:** March 24, 2026
-**Last pass:** Pass 156z9cj (May 9, 2026) — **ARCH-1d queue-mode API execution routing.**
+**Last pass:** Pass 156z9cm (May 2026) — **ARCH-1c engine flags config-push on API model load. ARCH-1d Queue STOP propagation. ARCH-1e lock-scope hardening.**
+
+---
+
+**Pass 156z9cm (May 2026) — ARCH-1c engine flags config-push:** Closed the config-push gap for engine-level boolean flags in API mode. Previously, loading a model in API mode left the daemon's engine using its defaults for `inline_search_enabled` (True) and `inline_search_splice_enabled` (False) regardless of the user's GUI settings. Added `EngineFlagsUpdate` Pydantic model + `POST /api/config/engine-flags` endpoint to [enigma_engine/api/server.py](enigma_engine/api/server.py): acquires `state._lock` to read engine ref, then sets `engine.inline_search_enabled` / `engine.inline_search_splice_enabled` via `setattr`; returns `{"status": "no-engine"}` when no model is loaded. Added `EnigmaClient.set_engine_flags(*, inline_search_enabled, inline_search_splice_enabled)` to [enigma_engine/client.py](enigma_engine/client.py): no-op when no kwargs provided, single POST otherwise. Wired in [enigma_engine/gui/gui_logic.py](enigma_engine/gui/gui_logic.py) `_load()` API branch: `client.set_engine_flags(...)` called in the background thread right after `client.load_model()` succeeds and before `_on_remote_model_loaded` is scheduled; failure is DEBUG-logged, not fatal. Remaining gap (LoRA adapter auto-restore in API mode) parked — requires `/api/models/adapter` endpoint. 5 new tests (2 API + 3 client). Commit `65420dc`.
+
+---
+
+**Pass 156z9ck (May 2026) — ARCH-1d Queue STOP + ARCH-1e lock-scope hardening:** Two fixes in one commit (`16c0770`). (1) **Queue STOP propagation:** `queue.pause()` was stopping new jobs from starting but not the active polling loop. Fixed in [enigma_engine/gui/gui_forge_queue.py](enigma_engine/gui/gui_forge_queue.py): `_execute_queue_job` API branch now sets `self._active_queue_api_client = client` before polling, clears it after. `_run_training_queue()` pause handler reads `_active_queue_api_client` and calls `cancel_training()`. `abort_reason == "cancel_requested"` now breaks cleanly instead of raising `RuntimeError`. (2) **Lock-scope hardening:** `activate_profile` and `update_config` in [enigma_engine/api/server.py](enigma_engine/api/server.py) were mutating `AppState.active_profile`, `AppState.config_overrides` outside `state._lock`. Both now wrap mutations in `with state._lock:`; `apply_profile_to_engine()` called outside lock (heavy op must not block chat callers). 4 new tests (2 queue executor + 2 API lock-scope). Full suite after this pass: 3061 passed (3057 pre-pass + 4 new).
 
 ---
 
