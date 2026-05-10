@@ -2026,8 +2026,6 @@ class ForgeNewModesMixin:
         3. Use the reward model to score STUDENT responses
         4. Policy gradient to improve STUDENT
         """
-        if bool(getattr(self, "use_api_chat", False)):
-            self._log("[!] API routing not yet implemented for RLHF mode — running locally on this machine.\n")
         if self.training_active:
             return
 
@@ -2075,6 +2073,61 @@ class ForgeNewModesMixin:
         )
         self._clear_forge_param_count()
         self._reset_forge_progress()
+
+        # ARCH-1d Slice 3: API routing for RLHF
+        client = self._get_api_chat_client() if bool(getattr(self, "use_api_chat", False)) else None
+        if client is not None:
+            def _run_api():
+                try:
+                    pref_data = Path(data_path).read_text(encoding="utf-8")
+                    forge_params = self._read_forge_train_params()
+                    api_config = {
+                        "mode": "rlhf",
+                        "allow_experimental": True,
+                        "data": pref_data,
+                        "training": {
+                            "epochs": epochs,
+                            "batch_size": forge_params["batch_size"],
+                            "learning_rate": lr,
+                            "max_grad_accumulation":
+                                forge_params["max_grad_accumulation"],
+                            "use_gradient_checkpointing":
+                                forge_params["use_gradient_checkpointing"],
+                            "use_sequence_packing": True,
+                            "ce_chunk_size": forge_params["ce_chunk_size"],
+                            "use_compile": True,
+                            "rolling_best_k": forge_params["rolling_best_k"],
+                            "val_split": forge_params["val_split"],
+                            "save_every": max(1, epochs // 5),
+                            "run_evaluation": True,
+                        },
+                    }
+                    self._log("Sending RLHF training to API server...\n")
+                    self.training_active = True
+                    self.solo_train_btn.configure(state="disabled",
+                                                  text="TRAINING...")
+                    self.stop_train_btn.configure(state="normal")
+                    self.status_bar.set_left(
+                        "\u2692 RLHF TRAINING...")
+                    client.train(api_config)
+                    self._poll_api_training_status(
+                        client,
+                        mode_label="RLHF")
+                except Exception as exc:
+                    import traceback
+                    self._log(f"\n[!] API training failed: {exc}")
+                    self._log(traceback.format_exc())
+                finally:
+                    self.training_active = False
+                    self.after(0, lambda: self.solo_train_btn.configure(
+                        state="normal", text="TRAIN"))
+                    self.after(0, lambda: self.stop_train_btn.configure(
+                        state="disabled", text="STOP"))
+                    self.after(0, lambda: self.status_bar.set_left(
+                        "\u26a1 READY"))
+            import threading
+            threading.Thread(target=_run_api, daemon=True).start()
+            return
 
         def _rlhf_train():
             try:
@@ -2281,8 +2334,6 @@ class ForgeNewModesMixin:
 
     def _start_selfplay_training(self):
         """Train STUDENT via self-play: TRAINER scores responses."""
-        if bool(getattr(self, "use_api_chat", False)):
-            self._log("[!] API routing not yet implemented for Self-Play mode — running locally on this machine.\n")
         if self.training_active:
             return
 
@@ -2335,6 +2386,65 @@ class ForgeNewModesMixin:
         )
         self._clear_forge_param_count()
         self._reset_forge_progress()
+
+        # ARCH-1d Slice 3: API routing for Self-Play
+        client = self._get_api_chat_client() if bool(getattr(self, "use_api_chat", False)) else None
+        if client is not None:
+            def _run_api():
+                try:
+                    # Read prompt data from text file
+                    prompt_data = Path(data_path).read_text(encoding="utf-8")
+                    forge_params = self._read_forge_train_params()
+                    api_config = {
+                        "mode": "self_play",
+                        "allow_experimental": True,
+                        "data": prompt_data,
+                        "training": {
+                            "epochs": epochs,
+                            "batch_size": forge_params["batch_size"],
+                            "learning_rate": lr,
+                            "max_grad_accumulation":
+                                forge_params["max_grad_accumulation"],
+                            "use_gradient_checkpointing":
+                                forge_params["use_gradient_checkpointing"],
+                            "use_sequence_packing": True,
+                            "ce_chunk_size": forge_params["ce_chunk_size"],
+                            "use_compile": True,
+                            "rolling_best_k": forge_params["rolling_best_k"],
+                            "val_split": forge_params["val_split"],
+                            "save_every": max(1, epochs // 5),
+                            "run_evaluation": True,
+                        },
+                        "self_play": {
+                            "trainer_path": trainer_path,
+                        },
+                    }
+                    self._log("Sending Self-Play training to API server...\n")
+                    self.training_active = True
+                    self.solo_train_btn.configure(state="disabled",
+                                                  text="TRAINING...")
+                    self.stop_train_btn.configure(state="normal")
+                    self.status_bar.set_left(
+                        "\u2692 SELF-PLAY TRAINING...")
+                    client.train(api_config)
+                    self._poll_api_training_status(
+                        client,
+                        mode_label="SELF-PLAY")
+                except Exception as exc:
+                    import traceback
+                    self._log(f"\n[!] API training failed: {exc}")
+                    self._log(traceback.format_exc())
+                finally:
+                    self.training_active = False
+                    self.after(0, lambda: self.solo_train_btn.configure(
+                        state="normal", text="TRAIN"))
+                    self.after(0, lambda: self.stop_train_btn.configure(
+                        state="disabled", text="STOP"))
+                    self.after(0, lambda: self.status_bar.set_left(
+                        "\u26a1 READY"))
+            import threading
+            threading.Thread(target=_run_api, daemon=True).start()
+            return
 
         def _selfplay_train():
             try:
@@ -2478,8 +2588,6 @@ class ForgeNewModesMixin:
 
     def _start_grpo_training(self):
         """Train STUDENT with Group Relative Policy Optimization."""
-        if bool(getattr(self, "use_api_chat", False)):
-            self._log("[!] API routing not yet implemented for GRPO mode — running locally on this machine.\n")
         self._start_rl_variant_training("GRPO")
 
     # ================================================================
@@ -2488,8 +2596,6 @@ class ForgeNewModesMixin:
 
     def _start_remax_training(self):
         """Train STUDENT with ReMax (REINFORCE + mean baseline)."""
-        if bool(getattr(self, "use_api_chat", False)):
-            self._log("[!] API routing not yet implemented for ReMax mode — running locally on this machine.\n")
         self._start_rl_variant_training("ReMax")
 
     def _start_rl_variant_training(self, algo: str):
@@ -2538,6 +2644,62 @@ class ForgeNewModesMixin:
         )
         self._clear_forge_param_count()
         self._reset_forge_progress()
+
+        # ARCH-1d Slice 3: API routing for GRPO/ReMax
+        client = self._get_api_chat_client() if bool(getattr(self, "use_api_chat", False)) else None
+        if client is not None:
+            def _run_api():
+                try:
+                    pref_data = Path(data_path).read_text(encoding="utf-8")
+                    forge_params = self._read_forge_train_params()
+                    algo_lower = algo.lower()
+                    api_config = {
+                        "mode": algo_lower,
+                        "allow_experimental": True,
+                        "data": pref_data,
+                        "training": {
+                            "epochs": epochs,
+                            "batch_size": forge_params["batch_size"],
+                            "learning_rate": lr,
+                            "max_grad_accumulation":
+                                forge_params["max_grad_accumulation"],
+                            "use_gradient_checkpointing":
+                                forge_params["use_gradient_checkpointing"],
+                            "use_sequence_packing": True,
+                            "ce_chunk_size": forge_params["ce_chunk_size"],
+                            "use_compile": True,
+                            "rolling_best_k": forge_params["rolling_best_k"],
+                            "val_split": forge_params["val_split"],
+                            "save_every": max(1, epochs // 5),
+                            "run_evaluation": True,
+                        },
+                    }
+                    self._log(f"Sending {algo} training to API server...\n")
+                    self.training_active = True
+                    self.solo_train_btn.configure(state="disabled",
+                                                  text="TRAINING...")
+                    self.stop_train_btn.configure(state="normal")
+                    self.status_bar.set_left(
+                        f"\u2692 {algo.upper()} TRAINING...")
+                    client.train(api_config)
+                    self._poll_api_training_status(
+                        client,
+                        mode_label=algo.upper())
+                except Exception as exc:
+                    import traceback
+                    self._log(f"\n[!] API training failed: {exc}")
+                    self._log(traceback.format_exc())
+                finally:
+                    self.training_active = False
+                    self.after(0, lambda: self.solo_train_btn.configure(
+                        state="normal", text="TRAIN"))
+                    self.after(0, lambda: self.stop_train_btn.configure(
+                        state="disabled", text="STOP"))
+                    self.after(0, lambda: self.status_bar.set_left(
+                        "\u26a1 READY"))
+            import threading
+            threading.Thread(target=_run_api, daemon=True).start()
+            return
 
         def _rl_train():
             try:
@@ -2796,8 +2958,6 @@ class ForgeNewModesMixin:
 
     def _start_simpo_training(self):
         """Train with Simple Preference Optimization (no ref model)."""
-        if bool(getattr(self, "use_api_chat", False)):
-            self._log("[!] API routing not yet implemented for SimPO mode — running locally on this machine.\n")
         self._start_preference_variant_training("SimPO")
 
     # ================================================================
@@ -2806,8 +2966,6 @@ class ForgeNewModesMixin:
 
     def _start_orpo_training(self):
         """Train with Odds Ratio Preference Optimization."""
-        if bool(getattr(self, "use_api_chat", False)):
-            self._log("[!] API routing not yet implemented for ORPO mode — running locally on this machine.\n")
         self._start_preference_variant_training("ORPO")
 
     def _start_preference_variant_training(self, algo: str):
@@ -2850,6 +3008,62 @@ class ForgeNewModesMixin:
         )
         self._clear_forge_param_count()
         self._reset_forge_progress()
+
+        # ARCH-1d Slice 3: API routing for SimPO/ORPO
+        client = self._get_api_chat_client() if bool(getattr(self, "use_api_chat", False)) else None
+        if client is not None:
+            def _run_api():
+                try:
+                    pref_data = Path(data_path).read_text(encoding="utf-8")
+                    forge_params = self._read_forge_train_params()
+                    algo_lower = algo.lower()
+                    api_config = {
+                        "mode": algo_lower,
+                        "allow_experimental": True,
+                        "data": pref_data,
+                        "training": {
+                            "epochs": epochs,
+                            "batch_size": forge_params["batch_size"],
+                            "learning_rate": lr,
+                            "max_grad_accumulation":
+                                forge_params["max_grad_accumulation"],
+                            "use_gradient_checkpointing":
+                                forge_params["use_gradient_checkpointing"],
+                            "use_sequence_packing": True,
+                            "ce_chunk_size": forge_params["ce_chunk_size"],
+                            "use_compile": True,
+                            "rolling_best_k": forge_params["rolling_best_k"],
+                            "val_split": forge_params["val_split"],
+                            "save_every": max(1, epochs // 5),
+                            "run_evaluation": True,
+                        },
+                    }
+                    self._log(f"Sending {algo} training to API server...\n")
+                    self.training_active = True
+                    self.solo_train_btn.configure(state="disabled",
+                                                  text="TRAINING...")
+                    self.stop_train_btn.configure(state="normal")
+                    self.status_bar.set_left(
+                        f"\u2692 {algo.upper()} TRAINING...")
+                    client.train(api_config)
+                    self._poll_api_training_status(
+                        client,
+                        mode_label=algo.upper())
+                except Exception as exc:
+                    import traceback
+                    self._log(f"\n[!] API training failed: {exc}")
+                    self._log(traceback.format_exc())
+                finally:
+                    self.training_active = False
+                    self.after(0, lambda: self.solo_train_btn.configure(
+                        state="normal", text="TRAIN"))
+                    self.after(0, lambda: self.stop_train_btn.configure(
+                        state="disabled", text="STOP"))
+                    self.after(0, lambda: self.status_bar.set_left(
+                        "\u26a1 READY"))
+            import threading
+            threading.Thread(target=_run_api, daemon=True).start()
+            return
 
         forge_params = self._read_forge_train_params()
 

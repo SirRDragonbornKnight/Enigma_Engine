@@ -103,3 +103,89 @@ def test_lora_training_has_api_routing_branch() -> None:
     assert re.search(r'client\.train\(', src)
     assert re.search(r'_poll_api_training_status\(', src)
     assert re.search(r'mode_label\s*=\s*"LoRA"', src)
+
+
+# ================================================================
+# ARCH-1d Slice 3: RL/Preference Mode API Routing Tests
+# ================================================================
+
+def test_grpo_training_has_api_routing_branch() -> None:
+    """_start_grpo_training must route through API when enabled."""
+    from enigma_engine.gui.gui_forge_new_modes import (
+        ForgeNewModesMixin)
+    src = inspect.getsource(ForgeNewModesMixin._start_rl_variant_training)
+
+    assert "use_api_chat" in src
+    assert re.search(r'client\.train\(', src)
+    assert re.search(r'_poll_api_training_status\(', src)
+    assert re.search(r'mode_label\s*=\s*algo\.upper\(\)', src)
+
+
+def test_remax_training_uses_shared_rl_handler() -> None:
+    """_start_remax_training calls _start_rl_variant_training."""
+    from enigma_engine.gui.gui_forge_new_modes import (
+        ForgeNewModesMixin)
+    src = inspect.getsource(ForgeNewModesMixin._start_remax_training)
+
+    assert "_start_rl_variant_training" in src
+    assert '"ReMax"' in src
+
+
+def test_rlhf_training_has_api_routing_branch() -> None:
+    """_start_rlhf_training must route through API when enabled."""
+    from enigma_engine.gui.gui_forge_new_modes import (
+        ForgeNewModesMixin)
+    src = inspect.getsource(ForgeNewModesMixin._start_rlhf_training)
+
+    assert "use_api_chat" in src
+    assert re.search(r'client\.train\(', src)
+    assert re.search(r'_poll_api_training_status\(', src)
+    assert re.search(r'mode_label\s*=\s*"RLHF"', src)
+    assert re.search(r'"mode"\s*:\s*"rlhf"', src)
+
+
+def test_selfplay_training_has_api_routing_branch() -> None:
+    """_start_selfplay_training must route through API when enabled."""
+    from enigma_engine.gui.gui_forge_new_modes import (
+        ForgeNewModesMixin)
+    src = inspect.getsource(ForgeNewModesMixin._start_selfplay_training)
+
+    assert "use_api_chat" in src
+    assert re.search(r'client\.train\(', src)
+    assert re.search(r'_poll_api_training_status\(', src)
+    assert re.search(r'mode_label\s*=\s*"SELF-PLAY"', src)
+    assert re.search(r'"mode"\s*:\s*"self_play"', src)
+
+
+def test_simpo_training_uses_shared_pref_handler() -> None:
+    """_start_simpo_training calls _start_preference_variant_training."""
+    from enigma_engine.gui.gui_forge_new_modes import (
+        ForgeNewModesMixin)
+    src = inspect.getsource(ForgeNewModesMixin._start_simpo_training)
+
+    assert "_start_preference_variant_training" in src
+    assert '"SimPO"' in src
+
+
+def test_orpo_training_uses_shared_pref_handler() -> None:
+    """_start_orpo_training calls _start_preference_variant_training."""
+    from enigma_engine.gui.gui_forge_new_modes import (
+        ForgeNewModesMixin)
+    src = inspect.getsource(ForgeNewModesMixin._start_orpo_training)
+
+    assert "_start_preference_variant_training" in src
+    assert '"ORPO"' in src
+
+
+def test_preference_variant_handler_has_api_routing() -> None:
+    """_start_preference_variant_training (SimPO/ORPO) routes through API."""
+    from enigma_engine.gui.gui_forge_new_modes import (
+        ForgeNewModesMixin)
+    src = inspect.getsource(
+        ForgeNewModesMixin._start_preference_variant_training)
+
+    assert "use_api_chat" in src
+    assert re.search(r'client\.train\(', src)
+    assert re.search(r'_poll_api_training_status\(', src)
+    assert re.search(r'algo\.upper\(\)', src)
+    assert re.search(r'algo\.lower\(\)', src)
