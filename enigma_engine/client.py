@@ -78,6 +78,28 @@ class EnigmaClient:
     def unload_model(self) -> dict[str, Any]:
         return self._request("POST", "/api/models/unload")
 
+    def set_engine_flags(
+        self,
+        *,
+        inline_search_enabled: bool | None = None,
+        inline_search_splice_enabled: bool | None = None,
+    ) -> dict[str, Any]:
+        """Push engine-level boolean flags to the daemon.
+
+        Returns the server response, or ``{}`` when no flags are provided.
+        A ``{"status": "no-engine"}`` response means no model is loaded on
+        the daemon — the caller should re-push after model load completes.
+        """
+        payload: dict[str, Any] = {}
+        if inline_search_enabled is not None:
+            payload["inline_search_enabled"] = bool(inline_search_enabled)
+        if inline_search_splice_enabled is not None:
+            payload["inline_search_splice_enabled"] = bool(
+                inline_search_splice_enabled)
+        if not payload:
+            return {}
+        return self._request("POST", "/api/config/engine-flags", payload)
+
     def activate_profile(self, profile_id: str) -> dict[str, Any]:
         safe = urllib.parse.quote(profile_id, safe="")
         return self._request("POST", f"/api/profiles/{safe}/activate")

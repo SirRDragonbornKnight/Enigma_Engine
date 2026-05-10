@@ -365,6 +365,11 @@ class ChatResponse(BaseModel):
 class ModelLoadRequest(BaseModel):
     path: str = Field(..., max_length=MAX_PATH_LENGTH)
 
+class EngineFlagsUpdate(BaseModel):
+    inline_search_enabled: bool | None = None
+    inline_search_splice_enabled: bool | None = None
+
+
 class ConfigUpdate(BaseModel):
     temperature: float | None = None
     top_p: float | None = None
@@ -994,6 +999,31 @@ async def update_config(req: ConfigUpdate):
     with state._lock:
         state.config_overrides.update(updates)
     return {"status": "ok", "config": {**await get_config()}}
+
+
+@app.post("/api/config/engine-flags")
+async def update_engine_flags(req: EngineFlagsUpdate):
+    """Push engine-level boolean flags to the live engine.
+
+    Returns ``{"status": "no-engine"}`` when no model is loaded (flags are
+    silently dropped — caller must re-push after model load).
+    """
+    with state._lock:
+        engine = state.engine
+    if engine is None:
+        return {"status": "no-engine", "applied": {}}
+    applied: dict[str, bool] = {}
+    for flag, val in [
+        ("inline_search_enabled", req.inline_search_enabled),
+        ("inline_search_splice_enabled", req.inline_search_splice_enabled),
+    ]:
+        if val is not None:
+            try:
+                setattr(engine, flag, bool(val))
+                applied[flag] = bool(val)
+            except Exception:
+                pass
+    return {"status": "ok", "applied": applied}
 
 
 # ---------------------------------------------------------------------------

@@ -195,3 +195,53 @@ def test_chat_stream_raises_on_error_event(monkeypatch: pytest.MonkeyPatch) -> N
     client = EnigmaClient()
     with pytest.raises(RuntimeError, match="stream error: boom"):
         list(client.chat_stream("hi"))
+
+
+def test_set_engine_flags_posts_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen = {}
+
+    def _fake_urlopen(req, timeout=0):
+        seen["url"] = req.full_url
+        seen["method"] = req.get_method()
+        seen["body"] = json.loads(req.data.decode("utf-8"))
+        return _Resp(json.dumps({"status": "ok", "applied": {
+            "inline_search_enabled": False,
+        }}))
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+    client = EnigmaClient("http://localhost:8080")
+    out = client.set_engine_flags(inline_search_enabled=False)
+
+    assert out["status"] == "ok"
+    assert seen["url"] == "http://localhost:8080/api/config/engine-flags"
+    assert seen["method"] == "POST"
+    assert seen["body"] == {"inline_search_enabled": False}
+
+
+def test_set_engine_flags_both_flags(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen = {}
+
+    def _fake_urlopen(req, timeout=0):
+        seen["body"] = json.loads(req.data.decode("utf-8"))
+        return _Resp(json.dumps({"status": "ok", "applied": {}}))
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+    client = EnigmaClient()
+    client.set_engine_flags(
+        inline_search_enabled=True,
+        inline_search_splice_enabled=False,
+    )
+    assert seen["body"] == {
+        "inline_search_enabled": True,
+        "inline_search_splice_enabled": False,
+    }
+
+
+def test_set_engine_flags_no_args_returns_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    called = []
+    monkeypatch.setattr("urllib.request.urlopen", lambda *a, **kw: called.append(1))
+    client = EnigmaClient()
+    out = client.set_engine_flags()
+    assert out == {}
+    assert not called  # No HTTP call when nothing to send
+

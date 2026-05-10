@@ -743,6 +743,48 @@ class TestConfig:
         data = resp.json()
         assert data.get("status") == "ok" or "temperature" in str(data)
 
+    def test_update_engine_flags_no_engine_returns_no_engine(self, client):
+        """POST /api/config/engine-flags with no model loaded → no-engine status."""
+        from enigma_engine.api.server import state
+        old = state.engine
+        state.engine = None
+        try:
+            resp = client.post(
+                "/api/config/engine-flags",
+                json={"inline_search_enabled": False},
+            )
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["status"] == "no-engine"
+            assert data["applied"] == {}
+        finally:
+            state.engine = old
+
+    def test_update_engine_flags_applies_to_engine(self, client):
+        """POST /api/config/engine-flags sets attributes on the live engine."""
+        from enigma_engine.api.server import state
+        mock_engine = MagicMock()
+        old = state.engine
+        state.engine = mock_engine
+        try:
+            resp = client.post(
+                "/api/config/engine-flags",
+                json={
+                    "inline_search_enabled": False,
+                    "inline_search_splice_enabled": True,
+                },
+            )
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["status"] == "ok"
+            assert data["applied"]["inline_search_enabled"] is False
+            assert data["applied"]["inline_search_splice_enabled"] is True
+            # Verify setattr actually fired on the engine object
+            assert mock_engine.inline_search_enabled is False
+            assert mock_engine.inline_search_splice_enabled is True
+        finally:
+            state.engine = old
+
 
 # ---------------------------------------------------------------------------
 # Batch Inference

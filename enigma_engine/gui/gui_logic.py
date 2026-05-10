@@ -631,6 +631,20 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
                         ).strip()
                         client = EnigmaClient(base_url)
                     client.load_model(path)
+                    # ARCH-1c: push GUI engine flags to the daemon so the
+                    # loaded engine respects the user's inline-search setting.
+                    try:
+                        client.set_engine_flags(
+                            inline_search_enabled=bool(
+                                getattr(self, "inline_search_enabled", True)),
+                            inline_search_splice_enabled=bool(
+                                getattr(self, "inline_search_splice_enabled",
+                                        False)),
+                        )
+                    except Exception as _flags_exc:
+                        logger.debug(
+                            "Engine flags push to daemon failed: %s",
+                            _flags_exc)
                     self.after(0, lambda: self._on_remote_model_loaded(path))
                     return
 
