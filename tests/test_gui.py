@@ -6750,6 +6750,119 @@ class TestForgeQueueExecutor:
         assert payload["training"]["epochs"] == 2
         assert "User: hi" in payload["data"]
 
+    def test_run_training_queue_pause_cancels_api_job(self):
+        """Pausing the queue while an API job is active must call
+        cancel_training() on the stored client reference.
+
+        Contract: _run_training_queue detects queue.is_running, calls
+        queue.pause(), then calls _active_queue_api_client.cancel_training()
+        if the attribute is set.
+        """
+        import types
+        from enigma_engine.gui.gui_forge_queue import ForgeQueueMixin
+
+        cancel_calls: list[str] = []
+
+        class _FakeClient:
+            def cancel_training(self):
+                cancel_calls.append("cancelled")
+
+        class _Host(ForgeQueueMixin):
+            use_api_chat = True
+
+            def _log(self, msg):
+                pass
+
+            def after(self, _ms, _cb):
+                pass  # suppress tkinter
+
+            def _get_training_queue(self):
+                return types.SimpleNamespace(
+                    is_running=True,
+                    is_paused=False,
+                    pause=lambda: None,
+                    pending_count=1,
+                )
+
+        host = _Host()
+        # Simulate: a job is currently running via API
+        host._active_queue_api_client = _FakeClient()
+        host._run_training_queue()
+
+        assert cancel_calls == ["cancelled"], (
+            "_run_training_queue did not call cancel_training() on the "
+            "active API client when pausing the queue"
+        )
+        assert getattr(host, "_active_queue_api_client", "missing") is None or \
+               cancel_calls == ["cancelled"], (
+            "_active_queue_api_client should have been accessed during pause"
+        )
+
+    def test_execute_queue_job_api_cancel_requested_returns_cleanly(
+            self, tmp_path):
+        """abort_reason='cancel_requested' must cause a clean break (not
+        RuntimeError) when the daemon is stopped by the user mid-job.
+        """
+        import dataclasses
+        import types
+
+        class FakeJob:
+            job_id = 8
+            mode = "Basic"
+            epochs = 1
+            learning_rate = 1e-4
+            batch_size = 2
+            model_path = str(tmp_path / "s.pth")
+            data_path = str(tmp_path / "d.txt")
+            extra_config: dict = dataclasses.field(default_factory=dict)
+            progress = 0
+            message = ""
+
+        job = FakeJob()
+        job.extra_config = {}
+        (tmp_path / "s.pth").write_bytes(b"stub")
+        (tmp_path / "d.txt").write_text("User: hi\nAssistant: ok\n" * 3,
+                                        encoding="utf-8")
+
+        class _FakeClient:
+            def load_model(self, path):
+                pass
+
+            def train(self, payload):
+                pass
+
+            def training_status(self):
+                # Report inactive with cancel_requested abort reason
+                return {
+                    "active": False,
+                    "progress": 50,
+                    "message": "cancelled",
+                    "best_loss": 1.23,
+                    "abort_reason": "cancel_requested",
+                }
+
+        from enigma_engine.gui.gui_forge_queue import ForgeQueueMixin
+
+        class _Host(ForgeQueueMixin):
+            use_api_chat = True
+
+            def _log(self, msg):
+                pass
+
+            def _get_training_queue(self):
+                return types.SimpleNamespace(on_progress=None)
+
+            def _get_api_chat_client(self):
+                return _FakeClient()
+
+        host = _Host()
+        # Must NOT raise RuntimeError for cancel_requested
+        best = host._execute_queue_job(job)
+        # best_loss should be whatever was last recorded (1.23)
+        assert best == pytest.approx(1.23)
+        # _active_queue_api_client must be cleared after job ends
+        assert getattr(host, "_active_queue_api_client", "unset") is None
+
 
 class TestLoraFallbackDispatcher:
     """ARCH-1.5c: LoRA non-PEFT fallback routes through SFT dispatcher."""

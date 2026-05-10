@@ -925,16 +925,25 @@ async def activate_profile(profile_id: str):
         data = json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError, UnicodeDecodeError):
         raise HTTPException(500, f"Corrupt profile: {profile_id}") from None
-    state.active_profile = profile_id
 
-    # Apply generation settings from profile (validated)
+    # Validate generation settings BEFORE acquiring lock (no I/O under lock).
     gen = data.get("generation", {})
+    validated: dict = {}
     if gen:
         validated = ConfigUpdate(**{
             k: v for k, v in gen.items()
             if k in ConfigUpdate.__annotations__
         }).validated()
-        state.config_overrides.update(validated)
+
+    # Atomically update shared state under the AppState lock so concurrent
+    # chat calls always observe a consistent (active_profile, config_overrides)
+    # pair.  Capture the engine reference inside the lock; apply the profile
+    # to it outside the lock (heavy engine op must not block chat callers).
+    with state._lock:
+        state.active_profile = profile_id
+        if validated:
+            state.config_overrides.update(validated)
+        engine = state.engine
 
     # Apply remaining profile fields (system_prompt, adapter, roleplay
     # boundary log marker) to the live engine when one is loaded. Pass
@@ -948,11 +957,11 @@ async def activate_profile(profile_id: str):
     # safe. Engine-not-loaded path is a no-op (profile id still saved
     # on state), preserving the existing UX where users set the active
     # profile before loading a model.
-    if state.engine is not None:
+    if engine is not None:
         from enigma_engine.core.ai_profile import (
             AIProfile, apply_profile_to_engine,
         )
-        apply_profile_to_engine(AIProfile.from_dict(data), state.engine)
+        apply_profile_to_engine(AIProfile.from_dict(data), engine)
 
     return {"status": "ok", "active": profile_id, "settings": gen}
 
@@ -982,7 +991,8 @@ async def get_config():
 async def update_config(req: ConfigUpdate):
     """Update generation config (values clamped to valid ranges)."""
     updates = req.validated()
-    state.config_overrides.update(updates)
+    with state._lock:
+        state.config_overrides.update(updates)
     return {"status": "ok", "config": {**await get_config()}}
 
 

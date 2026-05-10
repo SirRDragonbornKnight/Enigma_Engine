@@ -192,6 +192,14 @@ class ForgeQueueMixin:
             # Already running — offer pause
             queue.pause()
             self._log("[Queue] Paused. Click RUN to resume.")
+            # Propagate cancel to the daemon if a job is running via API.
+            api_client = getattr(self, "_active_queue_api_client", None)
+            if api_client is not None:
+                try:
+                    api_client.cancel_training()
+                    self._log("[Queue] Sent cancel signal to daemon.")
+                except Exception:
+                    pass
             self.after(0, lambda: getattr(
                 self, "_forge_run_queue_btn", None) and
                 self._forge_run_queue_btn.configure(text="RUN"))
@@ -271,6 +279,10 @@ class ForgeQueueMixin:
             self._log("  API mode enabled — loading model on daemon...")
             client.load_model(student_path)
 
+            # Track active client so _run_training_queue can cancel the
+            # daemon when the user pauses/stops the queue mid-job.
+            self._active_queue_api_client = client
+
             payload: dict = {
                 "mode": dispatch_mode,
                 "training": {
@@ -332,12 +344,17 @@ class ForgeQueueMixin:
 
                 if not bool(status.get("active", False)):
                     abort_reason = str(status.get("abort_reason", "") or "")
-                    if abort_reason:
+                    if abort_reason == "cancel_requested":
+                        # User-initiated stop — clean exit, not an error.
+                        self._log("  Cancelled by user.")
+                    elif abort_reason:
+                        self._active_queue_api_client = None
                         raise RuntimeError(
                             f"API queue job aborted: {abort_reason}")
                     break
                 time.sleep(1.0)
 
+            self._active_queue_api_client = None
             self._log(f"  Completed (loss={best_loss:.4f})")
             return best_loss
 

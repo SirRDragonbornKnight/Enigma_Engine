@@ -674,6 +674,54 @@ class TestProfiles:
             server.state.engine = orig_engine
             server.PROFILES_DIR = orig_dir
 
+    def test_activate_profile_updates_state_under_lock(self, client, tmp_path):
+        """ARCH-1e lock-scope: activate_profile must update active_profile and
+        config_overrides while holding state._lock so concurrent chat calls
+        see consistent state.
+
+        Contract: after a successful activate POST, both state.active_profile
+        and state.config_overrides reflect the new profile atomically.
+        """
+        from enigma_engine.api import server
+
+        orig_dir = server.PROFILES_DIR
+        orig_active = server.state.active_profile
+        orig_overrides = dict(server.state.config_overrides)
+        server.PROFILES_DIR = tmp_path
+        try:
+            (tmp_path / "locktest.json").write_text(
+                '{"name": "LockTest", "generation": {"temperature": 0.77}}',
+                encoding="utf-8",
+            )
+            resp = client.post("/api/profiles/locktest/activate")
+            assert resp.status_code == 200
+            # Both fields must be updated by the same call
+            assert server.state.active_profile == "locktest"
+            assert server.state.config_overrides.get("temperature") == pytest.approx(0.77)
+        finally:
+            server.state.active_profile = orig_active
+            server.state.config_overrides.clear()
+            server.state.config_overrides.update(orig_overrides)
+            server.PROFILES_DIR = orig_dir
+
+    def test_activate_profile_lock_scope_structural(self):
+        """ARCH-1e: state._lock must be acquired before mutating
+        state.active_profile and state.config_overrides.
+        """
+        import inspect
+        from enigma_engine.api.server import activate_profile
+
+        src = inspect.getsource(activate_profile)
+        # The lock acquisition must appear BEFORE the active_profile assignment
+        lock_pos = src.find("state._lock")
+        profile_assign_pos = src.find("state.active_profile")
+        assert lock_pos != -1, "state._lock not acquired in activate_profile"
+        assert profile_assign_pos != -1, \
+            "state.active_profile not set in activate_profile"
+        assert lock_pos < profile_assign_pos, (
+            "state._lock must be acquired before state.active_profile is assigned"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Config
