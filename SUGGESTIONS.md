@@ -2,6 +2,42 @@
 
 ## 🟢 AUDIT SNAPSHOT (current session)
 
+Pass 156z9cj (ARCH-1d queue-mode API execution — May 9, 2026):
+
+- `ruff check enigma_engine/gui/gui_forge_queue.py tests/test_gui.py` → **pass**
+- Queue executor targeted tests → **4 passed** (`TestForgeQueueExecutor` subset)
+- Tail suites after the visible 97% boundary → **45 passed**
+  (`tests/test_training_dispatch.py`, `tests/test_weight_mapping.py`)
+
+**Pass 156z9cj SHIPPED: queue worker now supports daemon/API execution**
+
+Closed the remaining ARCH-1d queue-mode execution gap by adding an API
+branch to `ForgeQueueMixin._execute_queue_job`.
+
+What changed:
+- Queue job execution now checks `use_api_chat` + `_get_api_chat_client()`.
+- In API mode, each queued job now:
+  1. Loads the job's student model on daemon (`client.load_model(student_path)`)
+  2. Builds dispatcher payload from queue job fields (`mode`, `training`, `data`)
+  3. Calls `client.train(payload)`
+  4. Polls `client.training_status()` until inactive
+  5. Returns `best_loss` to queue worker
+- If daemon reports `abort_reason`, queue job now fails loud with
+  `RuntimeError("API queue job aborted: ...")`.
+
+**Critical correctness point:** API queue path explicitly loads the model per
+job before submit. Without that, queue jobs can train whichever model was
+already active on the daemon, silently violating per-job model selection.
+
+**New behavioural test:**
+- `tests/test_gui.py::TestForgeQueueExecutor::test_execute_queue_job_routes_through_api_client_when_enabled`
+  - proves API path is taken
+  - proves model load happens before train
+  - proves payload mode/data/epochs are forwarded
+  - proves returned `best_loss` comes from API status polling
+
+---
+
 Pass 156z9ci (ARCH-1d Slice 3 completion — May 9, 2026):
 
 - `ruff check enigma_engine/ tests/` → **pass**
@@ -202,9 +238,9 @@ Audit finding closed this pass:
 
 Return-to-work quick start:
 
-1. Run `python -m pytest tests/ -q` once and confirm baseline still matches **3049 passed, 4 skipped**.
-2. Continue ARCH-1d API training routing on remaining Forge launchers not yet API-backed: GRPO/ReMax/RLHF/Self-Play (phase-2 + reward-model phase-1), then queue-mode execution.
-3. Add server-side status signal for cancel completion (`abort_reason="cancel_requested"` path from trainer stop) so GUI can show explicit "cancelled" instead of generic stop polling text.
+1. Run `python -m pytest tests/test_gui.py -k "TestForgeQueueExecutor" -q` to re-verify queue API path + local fallback gates.
+2. Continue ARCH-1d follow-up: add queue STOP integration for API mode (per-job `cancel_training()` handoff), then add explicit queue-side cancelled status text.
+3. Evaluate ARCH-1d deferred surface: add Forge audio launcher/button (dispatcher `audio` mode already exists), or park with concrete UX reason if not shipping this cycle.
 
 Test-suite hygiene note:
 
@@ -435,7 +471,7 @@ If any chain breaks before reaching the inner code, the slice is parked, not fin
 5. ~~**ARCH-1a**~~ ✅ shipped (`/api/train` dispatcher migration + request-shape hardening, Passes 156z9bc/156z9bd).
 6. ~~**ARCH-1b**~~ ✅ shipped (`enigma_engine/client.py` + `tests/test_client.py`, Pass 156z9bq).
 7. **ARCH-1c** (GUI chat over client) — in progress (`run.py --client-chat`, GUI CORE send-path routing, CONFIG controls for `use_api_chat` / `api_base_url`, and stream-preferred API transport in `_chat_request` shipped).
-8. **ARCH-1d** ✅ **SHIPPED** (GUI training over client — Slice 1: Solo SFT routing. Slice 2: DPO/APO/Vision/LoRA routing. Slice 3: GRPO/ReMax/RLHF/Self-Play/SimPO/ORPO routing. All learnable modes now support API routing with daemon-side training + GUI polling. Remaining deferred work: queue-mode (batch job) launchers, audio launcher GUI surface). Test baseline: 3057 passed (7 new tests for Slice 3 gates).
+8. **ARCH-1d** ✅ **SHIPPED** (GUI training over client — Slice 1: Solo SFT routing. Slice 2: DPO/APO/Vision/LoRA routing. Slice 3: GRPO/ReMax/RLHF/Self-Play/SimPO/ORPO routing. Queue-mode execution now also supports API routing. Remaining deferred work: audio launcher GUI surface). Test baseline at Slice 3 close: 3057 passed (7 new tests for Slice 3 gates).
 9. **ARCH-1e** (hardening).
 10. **ARCH-1f** (sister-folder split — final cosmetic move).
 

@@ -1,7 +1,11 @@
 ﻿# Code Review Tracker
 
 **Started:** March 24, 2026
-**Last pass:** Pass 156z9ci (May 9, 2026) — **ARCH-1d Slice 3 API routing for GRPO/ReMax/RLHF/Self-Play/SimPO/ORPO.**
+**Last pass:** Pass 156z9cj (May 9, 2026) — **ARCH-1d queue-mode API execution routing.**
+
+---
+
+**Pass 156z9cj (May 9, 2026) — ARCH-1d queue-mode API execution routing:** Closed the remaining queue execution gap for ARCH-1d. In [enigma_engine/gui/gui_forge_queue.py](enigma_engine/gui/gui_forge_queue.py), `ForgeQueueMixin._execute_queue_job` now has an API branch guarded by `use_api_chat` + `_get_api_chat_client()`. When active, each queue job now loads the job-specific student model on daemon (`client.load_model(student_path)`), builds dispatcher-compatible payload (`mode`, `training`, `data`, optional `allow_experimental`, optional `dpo.loss_type` for APO/DPO), submits via `client.train(payload)`, polls `client.training_status()` until inactive, and returns `best_loss` to the queue worker. If daemon reports `abort_reason`, the job now fails loud (`RuntimeError`) instead of silently continuing. Local dispatcher path remains unchanged for non-API mode. Added behavioural regression gate in [tests/test_gui.py](tests/test_gui.py): `TestForgeQueueExecutor::test_execute_queue_job_routes_through_api_client_when_enabled`, which verifies model-load-before-train ordering, payload forwarding, polling path, and returned best loss. Validation: `ruff check enigma_engine/gui/gui_forge_queue.py tests/test_gui.py` pass; queue executor subset `python -m pytest tests/test_gui.py -k "TestForgeQueueExecutor and (api_client_when_enabled or routes_through_dispatcher or saves_model_after_training or loud_on_unmapped_mode)" -q --tb=short` → **4 passed**; tail suites `python -m pytest tests/test_training_dispatch.py tests/test_weight_mapping.py -q --tb=no` → **45 passed**.
 
 ---
 

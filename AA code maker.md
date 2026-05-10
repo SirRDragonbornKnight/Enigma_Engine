@@ -214,6 +214,7 @@ One-line rules distilled from ~400 implementations. Grouped by theme.
 
 ### GUI & Code Matching
 - GUI client-routing for chat should prefer `EnigmaClient.chat_stream(...)` and degrade to `EnigmaClient.chat(...)` before local-engine fallback — this keeps one API seam alive across servers that differ on SSE support while preserving existing GUI behavior.
+- Queue jobs routed through API must load the job's student model on the daemon before `client.train(...)`; otherwise queued jobs silently train whichever model is currently active server-side.
 - When a dispatcher mode already exists (`run_training` supports it), GUI launchers for that same mode must call the dispatcher seam (`build_dispatch_context` + `run_training`) instead of instantiating trainer classes directly — mixed routing creates sibling drift and blocks centralized validation/callback policy.
 - CONFIG page has temperature/top_p/top_k/max_tokens/repetition_penalty → consumed via `config_overrides` in chat kwargs
 - FORGE hardcoded temperatures (0.3/0.7/0.8/0.9) across dialogue/adaptive/distill/evolutionary — no GUI control
