@@ -1,4 +1,4 @@
-"""
+﻿"""
 Tests for Enigma Engine core functionality.
 
 Run with: python -m pytest tests/ -v
@@ -155,7 +155,7 @@ class TestRouter:
 
         When `data/anchor_examples.jsonl` exists in the repo, the boot
         path constructs `BackgroundTrainer(anchor_data_path=<that path>)`
-        so anchor rehearsal is on by default — no hand-edit needed.
+        so anchor rehearsal is on by default â€” no hand-edit needed.
         """
         from enigma_engine import router as router_mod
 
@@ -188,7 +188,7 @@ class TestRouter:
     def test_router_passes_none_when_anchor_file_missing(
         self, monkeypatch, tmp_path,
     ):
-        """Continuous-3: missing anchor file → `None`, not a phantom path.
+        """Continuous-3: missing anchor file â†’ `None`, not a phantom path.
 
         The user can ship without `data/anchor_examples.jsonl` and
         `BackgroundTrainer` will fall back to recent-only replay
@@ -256,7 +256,7 @@ class TestRouter:
     """Test that packaging config is correct."""
 
     def test_no_setup_py(self):
-        """setup.py should be deleted — pyproject.toml is the single source."""
+        """setup.py should be deleted â€” pyproject.toml is the single source."""
         assert not (PROJECT_ROOT / "setup.py").exists()
 
 
@@ -265,7 +265,7 @@ class TestDeadImports:
     """Verify dead imports have been removed.
 
     Uses ruff F401 (unused imports) rule on critical modules.
-    This is more robust than string-matching source lines — ruff
+    This is more robust than string-matching source lines â€” ruff
     understands Python scoping, __all__ re-exports, and type-only
     usage.
     """
@@ -380,7 +380,7 @@ class TestModelPresetsValidate:
         config = ForgeConfig(
             vocab_size=100, dim=64, n_layers=2,
             n_heads=2, max_seq_len=128)
-        # Frozen dataclass — any assignment would raise FrozenInstanceError
+        # Frozen dataclass â€” any assignment would raise FrozenInstanceError
         result = config.validate()
         assert result is True
 
@@ -404,7 +404,7 @@ class TestPolishAuditCore:
         assert hasattr(profile, 'hardware_type'), (
             "HardwareProfile must have hardware_type attribute")
         assert not hasattr(profile, 'cpu_model'), (
-            "HardwareProfile should not have cpu_model — use hardware_type")
+            "HardwareProfile should not have cpu_model â€” use hardware_type")
 
     def test_hardware_profile_has_to_dict(self):
         """HardwareProfile should have a to_dict() method."""
@@ -453,7 +453,7 @@ class TestAIProfileFromDictMutation:
 
 
 # =========================================================================
-# Item 17 — Mixed Async/Sync Mods (standardised on threading)
+# Item 17 â€” Mixed Async/Sync Mods (standardised on threading)
 # =========================================================================
 
 
@@ -554,9 +554,9 @@ class TestAutoResearch:
         assert auto_research("ab") == ""
 
     # ----------------------------------------------------------------
-    # AutoResearch-2 Stage A — post-generation uncertainty gate
-    # (R-UNPREDICT-1, Pass 146 spec → Pass 153 build)
-    # Signal-driven, deterministic — no RNG.
+    # AutoResearch-2 Stage A â€” post-generation uncertainty gate
+    # (R-UNPREDICT-1, Pass 146 spec â†’ Pass 153 build)
+    # Signal-driven, deterministic â€” no RNG.
     # ----------------------------------------------------------------
 
     def test_score_uncertainty_confident_response(self):
@@ -608,14 +608,14 @@ class TestAutoResearch:
         assert "short_response" in r.reasons
 
     def test_score_uncertainty_deterministic(self):
-        """Same input must produce same score — no RNG."""
+        """Same input must produce same score â€” no RNG."""
         from enigma_engine.core.auto_research import score_uncertainty
         args = ("what is X?", "I'm not sure, I think it might be Y.")
         scores = [score_uncertainty(*args).score for _ in range(5)]
         assert len(set(scores)) == 1
 
     def test_should_retry_with_research_confident_skips(self):
-        """Confident response → no retry."""
+        """Confident response â†’ no retry."""
         from enigma_engine.core.auto_research import should_retry_with_research
         assert not should_retry_with_research(
             "what is 2 plus 2?",
@@ -623,7 +623,7 @@ class TestAutoResearch:
         )
 
     def test_should_retry_with_research_hedges_triggers(self):
-        """Hedge-heavy response → retry fires."""
+        """Hedge-heavy response â†’ retry fires."""
         from enigma_engine.core.auto_research import should_retry_with_research
         assert should_retry_with_research(
             "what was the Q3 2025 GDP figure?",
@@ -760,7 +760,7 @@ class TestAutoResearchCache:
             auto_research._cache_put("a", "1")
             auto_research._cache_put("b", "2")
             auto_research._cache_put("c", "3")
-            # Cache is full — inserting "d" should evict "a"
+            # Cache is full â€” inserting "d" should evict "a"
             auto_research._cache_put("d", "4")
             assert auto_research._cache_get("a") is None
             assert auto_research._cache_get("d") == "4"
@@ -910,7 +910,7 @@ def test_memory_search_case_insensitive():
 
 
 # ================================================================
-# Audio Encoder — Whisper-style Conv1d + Transformer encoder
+# Audio Encoder â€” Whisper-style Conv1d + Transformer encoder
 # ================================================================
 
 
@@ -1285,7 +1285,7 @@ class TestModulateGenerationParams:
 
 
 # ====================================================================
-# Dataset utility — process_text_corpus, clean_text, etc.
+# Dataset utility â€” process_text_corpus, clean_text, etc.
 # ====================================================================
 
 class TestProcessTextCorpus:
@@ -1491,7 +1491,7 @@ class TestComputeEngagementScore:
         assert 0.9 <= score <= 1.1
 
     def test_high_engagement_boosts_score(self):
-        """High engagement + trust → weight > 1.0."""
+        """High engagement + trust â†’ weight > 1.0."""
         from enigma_engine.core.sentiment import compute_engagement_score
         state = {
             "valence": 0.6, "arousal": 0.5,
@@ -1501,7 +1501,7 @@ class TestComputeEngagementScore:
         assert score > 1.0
 
     def test_high_frustration_lowers_score(self):
-        """High frustration → weight < 1.0."""
+        """High frustration â†’ weight < 1.0."""
         from enigma_engine.core.sentiment import compute_engagement_score
         state = {
             "valence": -0.3, "arousal": 0.6,
@@ -1619,13 +1619,13 @@ class TestRecommendPresetForVram:
     """recommend_preset_for_vram picks the largest fitting preset."""
 
     def test_32gb_picks_large_or_above(self):
-        """32 GB VRAM should pick xl (11.7 GB) — xxl needs ~34 GB."""
+        """32 GB VRAM should pick xl (11.7 GB) â€” xxl needs ~34 GB."""
         from enigma_engine.core.model_presets import recommend_preset_for_vram
         result = recommend_preset_for_vram(32.0)
         assert result == "xl", f"32 GB got {result}, expected xl"
 
     def test_8gb_picks_large_or_smaller(self):
-        """8 GB should pick large (6.3 GB) — xl needs ~11.7 GB."""
+        """8 GB should pick large (6.3 GB) â€” xl needs ~11.7 GB."""
         from enigma_engine.core.model_presets import recommend_preset_for_vram
         result = recommend_preset_for_vram(8.0)
         ok_presets = {"small", "medium", "base", "large", "mini", "tiny",
@@ -1666,9 +1666,9 @@ class TestRecommendPresetForVram:
             prev_vram_needed = needed
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# recommend_preset_for_tokens — Chinchilla-optimal preset selection
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# recommend_preset_for_tokens â€” Chinchilla-optimal preset selection
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class TestRecommendPresetForTokens:
     """recommend_preset_for_tokens picks the right preset for data size."""
@@ -1695,7 +1695,7 @@ class TestRecommendPresetForTokens:
         from enigma_engine.core.model_presets import (
             recommend_preset_for_tokens)
         name, params = recommend_preset_for_tokens(2_000_000_000)
-        # 2B tokens / 20 = 100M params — should pick medium or base
+        # 2B tokens / 20 = 100M params â€” should pick medium or base
         assert params >= 10_000_000, (
             f"2B tokens recommended '{name}' with only {params:,} params")
         assert params <= 2_000_000_000 / 20 * 1.1
@@ -1736,9 +1736,9 @@ class TestRecommendPresetForTokens:
             prev_params = params
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# TC-2: estimate_parameters — verify param counts for known presets
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# TC-2: estimate_parameters â€” verify param counts for known presets
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class TestEstimateParameters:
     """estimate_parameters returns plausible counts for known configs (TC-2)."""
@@ -1823,9 +1823,9 @@ class TestEstimateParameters:
         assert estimate_parameters(with_mtp) > estimate_parameters(no_mtp)
 
 
-# ════════════════════════════════════════════════════════════════════
-# S547  – GGUF param estimation with quant-type detection
-# ════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# S547  â€“ GGUF param estimation with quant-type detection
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 
 class TestGGUFParamEstimation:
@@ -1883,9 +1883,9 @@ class TestGGUFParamEstimation:
             assert q4_params > q8_params
 
 
-# ════════════════════════════════════════════════════════════════════
-# S550  – Shell metacharacter args rejected
-# ════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# S550  â€“ Shell metacharacter args rejected
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 
 class TestSanitizeArgsRejection:
@@ -1907,19 +1907,19 @@ class TestSanitizeArgsRejection:
         assert result == ["hello", "world"]
 
 
-# ════════════════════════════════════════════════════════════════════
-# S551  – File permissions preserved in atomic writes
-# ════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# S551  â€“ File permissions preserved in atomic writes
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 
-# ════════════════════════════════════════════════════════════════════
-# S546  – GPU caching for reference model
-# ════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# S546  â€“ GPU caching for reference model
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 
-# ════════════════════════════════════════════════════════════════════
-# AI Image Search — search.images command
-# ════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# AI Image Search â€” search.images command
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 
 class TestImageSearchCommand:
@@ -1934,9 +1934,9 @@ class TestImageSearchCommand:
             "search.images must be registered in builtin commands")
 
 
-# ════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # Throughput Telemetry
-# ════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 
 class TestThroughputTelemetry:
@@ -2106,7 +2106,7 @@ class TestTokenizerMetrics:
 
 
 # =====================================================================
-# PASS 29: Training pipeline fixes (S553–S557)
+# PASS 29: Training pipeline fixes (S553â€“S557)
 # =====================================================================
 
 
@@ -2207,7 +2207,7 @@ class TestS554TrainingConfigValidateExpanded:
 
 
 # ================================================================
-# MODEL UTILS — Registry, Sampling, Hardware Estimation
+# MODEL UTILS â€” Registry, Sampling, Hardware Estimation
 # ================================================================
 
 class TestModelRegistryUtils:
@@ -2423,20 +2423,20 @@ class TestMemoryEstimation:
         for name in ("small", "medium", "large", "xl"):
             MODEL_PRESETS[name]
             result = estimate_memory_usage(name)
-            # KV cache scales with n_layers * dim — verify it reflects
+            # KV cache scales with n_layers * dim â€” verify it reflects
             # the real preset, not stale hardcoded fallbacks.
             result2 = estimate_memory_usage(name, seq_len=1024)
             # Doubling seq_len should roughly double KV cache
             ratio = result2["kv_cache"] / max(result["kv_cache"], 1e-12)
             assert 1.9 < ratio < 2.1, (
                 f"{name}: KV cache ratio {ratio:.2f} when doubling "
-                f"seq_len — expected ~2.0")
+                f"seq_len â€” expected ~2.0")
             assert result["model_memory"] > 0
             assert result["total"] > result["model_memory"]
 
 
 # ================================================================
-# WEIGHT MAPPING — Extended Edge Cases
+# WEIGHT MAPPING â€” Extended Edge Cases
 # ================================================================
 
 class TestWeightMappingExtended:
@@ -2539,7 +2539,7 @@ class TestWeightMappingExtended:
 
 
 # ================================================================
-# GGUF DEQUANT — Extended Validation Tests
+# GGUF DEQUANT â€” Extended Validation Tests
 # ================================================================
 
 class TestGGUFDequantExtended:
@@ -2566,7 +2566,7 @@ class TestGGUFDequantExtended:
         from enigma_engine.core.gguf_dequant import dequantize_q4_0
         # Build a block with scale=1.0 and non-zero data
         scale = np.float16(1.0)
-        data_bytes = bytes([0xFF] * 16)  # all nibbles = 0xF → high=7, low=7
+        data_bytes = bytes([0xFF] * 16)  # all nibbles = 0xF â†’ high=7, low=7
         block = scale.tobytes() + data_bytes
         result = dequantize_q4_0(block, (32,))
         assert result.shape == (32,)
@@ -2590,7 +2590,7 @@ class TestGGUFDequantExtended:
     def test_dequantize_q8_0_zero_blocks(self):
         """Q8_0 with empty input returns a zero tensor of the requested shape
         AND dtype=float32 (parity with the Q4_0/Q4_1/Q5_0/Q5_1 zero-blocks
-        degeneracy gate — all five siblings must return float32 regardless
+        degeneracy gate â€” all five siblings must return float32 regardless
         of torch's default dtype)."""
         torch = pytest.importorskip("torch")
         from enigma_engine.core.gguf_dequant import dequantize_q8_0
@@ -2627,15 +2627,15 @@ class TestGGUFDequantExtended:
 
     def test_dequantize_q4_0_layout(self):
         """Q4_0 layout matches ggml dequantize_row_q4_0:
-        byte j low-nibble → element j (low half), high-nibble → element j+16.
+        byte j low-nibble â†’ element j (low half), high-nibble â†’ element j+16.
         Both nibbles signed: q - 8.
         """
         import numpy as np
         pytest.importorskip("torch")
         from enigma_engine.core.gguf_dequant import dequantize_q4_0
         d = np.float16(1.0).tobytes()
-        # byte 0 = 0x91 → low=1, high=9 → element 0 = (1-8)*1 = -7, element 16 = (9-8)*1 = 1
-        # byte 5 = 0xC3 → low=3, high=12 → element 5 = (3-8)*1 = -5, element 21 = (12-8)*1 = 4
+        # byte 0 = 0x91 â†’ low=1, high=9 â†’ element 0 = (1-8)*1 = -7, element 16 = (9-8)*1 = 1
+        # byte 5 = 0xC3 â†’ low=3, high=12 â†’ element 5 = (3-8)*1 = -5, element 21 = (12-8)*1 = 4
         qs = bytearray(16)
         qs[0] = 0x91
         qs[5] = 0xC3
@@ -2645,12 +2645,12 @@ class TestGGUFDequantExtended:
         assert result[16].item() == pytest.approx(1.0, abs=0.05)
         assert result[5].item() == pytest.approx(-5.0, abs=0.05)
         assert result[21].item() == pytest.approx(4.0, abs=0.05)
-        # Untouched bytes are 0x00 → low=0, high=0 → -8 in both halves
+        # Untouched bytes are 0x00 â†’ low=0, high=0 â†’ -8 in both halves
         assert result[1].item() == pytest.approx(-8.0, abs=0.05)
         assert result[17].item() == pytest.approx(-8.0, abs=0.05)
 
     def test_dequantize_q4_1_values(self):
-        """Q4_1 dequant: y = q*d + m. q=15 (all-Fs), d=2.0, m=1.0 → 31.0 every element."""
+        """Q4_1 dequant: y = q*d + m. q=15 (all-Fs), d=2.0, m=1.0 â†’ 31.0 every element."""
         import numpy as np
         pytest.importorskip("torch")
         from enigma_engine.core.gguf_dequant import dequantize_q4_1
@@ -2665,14 +2665,14 @@ class TestGGUFDequantExtended:
         assert result[31].item() == pytest.approx(31.0, abs=0.05)
 
     def test_dequantize_q4_1_layout(self):
-        """Q4_1 layout: byte j low-nibble → element j (low half), high-nibble → element j+16."""
+        """Q4_1 layout: byte j low-nibble â†’ element j (low half), high-nibble â†’ element j+16."""
         import numpy as np
         pytest.importorskip("torch")
         from enigma_engine.core.gguf_dequant import dequantize_q4_1
         d = np.float16(1.0).tobytes()
         m = np.float16(0.0).tobytes()
-        # byte 0 = 0x21 → low nib 1 (elem 0), high nib 2 (elem 16)
-        # byte 5 = 0x43 → low nib 3 (elem 5), high nib 4 (elem 21)
+        # byte 0 = 0x21 â†’ low nib 1 (elem 0), high nib 2 (elem 16)
+        # byte 5 = 0x43 â†’ low nib 3 (elem 5), high nib 4 (elem 21)
         qs = bytearray([0] * 16)
         qs[0] = 0x21
         qs[5] = 0x43
@@ -2684,7 +2684,7 @@ class TestGGUFDequantExtended:
         assert result[21].item() == pytest.approx(4.0, abs=0.01)
 
     def test_dequantize_q5_0_values(self):
-        """Q5_0 dequant: y = (q - 16) * d. q=31 (all bits set), d=1.0 → 15.0 every element."""
+        """Q5_0 dequant: y = (q - 16) * d. q=31 (all bits set), d=1.0 â†’ 15.0 every element."""
         import numpy as np
         pytest.importorskip("torch")
         from enigma_engine.core.gguf_dequant import dequantize_q5_0
@@ -2716,7 +2716,7 @@ class TestGGUFDequantExtended:
         pytest.importorskip("torch")
         from enigma_engine.core.gguf_dequant import dequantize_q5_0
         d = np.float16(1.0).tobytes()
-        # Only bit 16 of qh set → only element 16 has the 5th bit
+        # Only bit 16 of qh set â†’ only element 16 has the 5th bit
         qh = np.uint32(1 << 16).tobytes()
         qs = bytes([0] * 16)
         block = d + qh + qs
@@ -2729,7 +2729,7 @@ class TestGGUFDequantExtended:
         assert result[17].item() == pytest.approx(-16.0, abs=0.05)
 
     def test_dequantize_q5_1_values(self):
-        """Q5_1 dequant: y = q * d + m. q=31, d=2.0, m=1.0 → 63.0 every element."""
+        """Q5_1 dequant: y = q * d + m. q=31, d=2.0, m=1.0 â†’ 63.0 every element."""
         import numpy as np
         pytest.importorskip("torch")
         from enigma_engine.core.gguf_dequant import dequantize_q5_1
@@ -2744,14 +2744,14 @@ class TestGGUFDequantExtended:
         assert result[0].item() == pytest.approx(63.0, abs=0.1)
 
     def test_dequantize_q5_1_layout(self):
-        """Q5_1 layout matches Q5_0: low nibble → low half, high nibble → high half."""
+        """Q5_1 layout matches Q5_0: low nibble â†’ low half, high nibble â†’ high half."""
         import numpy as np
         pytest.importorskip("torch")
         from enigma_engine.core.gguf_dequant import dequantize_q5_1
         d = np.float16(1.0).tobytes()
         m = np.float16(0.0).tobytes()
         qh = np.uint32(0).tobytes()
-        # byte 3 = 0x52 → low nib 2 (elem 3), high nib 5 (elem 19)
+        # byte 3 = 0x52 â†’ low nib 2 (elem 3), high nib 5 (elem 19)
         qs = bytearray([0] * 16)
         qs[3] = 0x52
         block = d + m + qh + bytes(qs)
@@ -2788,12 +2788,12 @@ class TestGGUFDequantExtended:
         result = parse_gguf_tensors(f, header)
         assert result == {}
 
-    # ── k-quants (Pass 156z9n: Q4_K + Q6_K) ──────────────────────
+    # â”€â”€ k-quants (Pass 156z9n: Q4_K + Q6_K) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     def test_get_scale_min_k4_low_j(self):
         """j<4: d = scales[j] & 0x3F; m = scales[j+4] & 0x3F.
 
-        Tight unit test on the bit-packing helper — without this, a
+        Tight unit test on the bit-packing helper â€” without this, a
         regression that flips the j<4 / j>=4 branches passes every
         downstream Q4_K test only when the chosen scales happen to
         agree across both branches.
@@ -2847,7 +2847,7 @@ class TestGGUFDequantExtended:
 
         Block layout: 2 (d fp16) + 2 (dmin fp16) + 12 (scales) + 128 (qs).
         Set d=1.0, dmin=0.0; sub-block 0 (j=0): sc=2, m=0; all other
-        sub-blocks: sc=0, m=0. qs byte 0 = 0x35 → low nib 5 (sub-block 0
+        sub-blocks: sc=0, m=0. qs byte 0 = 0x35 â†’ low nib 5 (sub-block 0
         elem 0), high nib 3 (sub-block 1 elem 0).
 
         Expected:
@@ -2861,9 +2861,9 @@ class TestGGUFDequantExtended:
         d = np.float16(1.0).tobytes()
         dmin = np.float16(0.0).tobytes()
         scales = bytearray(12)
-        # j=0 → d=scales[0]&0x3F → set scales[0]=2 → sc_0=2
+        # j=0 â†’ d=scales[0]&0x3F â†’ set scales[0]=2 â†’ sc_0=2
         scales[0] = 0x02
-        # j=0 → m=scales[4]&0x3F → set scales[4]=0 → m_0=0  (already)
+        # j=0 â†’ m=scales[4]&0x3F â†’ set scales[4]=0 â†’ m_0=0  (already)
         qs = bytearray(128)
         qs[0] = 0x35
         block = d + dmin + bytes(scales) + bytes(qs)
@@ -2875,7 +2875,7 @@ class TestGGUFDequantExtended:
 
     def test_dequantize_q4_K_dmin_subtracts(self):
         """Q4_K min term subtracts: with q=0 every element, dmin=1.0,
-        m=3, sc=0 → y = d*0*0 - 1.0*3 = -3.0 across the whole sub-block.
+        m=3, sc=0 â†’ y = d*0*0 - 1.0*3 = -3.0 across the whole sub-block.
         Catches sign-flip regressions on the ``-m`` branch.
         """
         import numpy as np
@@ -2884,27 +2884,27 @@ class TestGGUFDequantExtended:
         d = np.float16(1.0).tobytes()
         dmin = np.float16(1.0).tobytes()
         scales = bytearray(12)
-        # j=0: sc = scales[0]&0x3F = 0 (default); m = scales[4]&0x3F → 3
+        # j=0: sc = scales[0]&0x3F = 0 (default); m = scales[4]&0x3F â†’ 3
         scales[4] = 0x03
         qs = bytes(128)  # all q = 0
         block = d + dmin + bytes(scales) + qs
         result = dequantize_q4_K(block, (256,))
-        # sub-block 0 (out[0:32]) → y = 1.0 * 0 * 0 - 1.0 * 3 = -3.0
+        # sub-block 0 (out[0:32]) â†’ y = 1.0 * 0 * 0 - 1.0 * 3 = -3.0
         assert result[0].item() == pytest.approx(-3.0, abs=0.05)
         assert result[31].item() == pytest.approx(-3.0, abs=0.05)
-        # sub-block 1 (out[32:64]) → m=scales[5]&0x3F = 0 → y = 0
+        # sub-block 1 (out[32:64]) â†’ m=scales[5]&0x3F = 0 â†’ y = 0
         assert result[32].item() == pytest.approx(0.0, abs=0.05)
 
     def test_dequantize_q4_K_high_j_stitch_d(self):
-        """Adversarial gate on the j>=4 d-stitch (Pass 156z9s — sibling
+        """Adversarial gate on the j>=4 d-stitch (Pass 156z9s â€” sibling
         gap from Pass 156z9n's Q4_K coverage). For j=4:
             d = (scales[8] & 0x0F) | ((scales[0] >> 6) << 4)
-        Set scales[0]=0x80 → scales[0]>>6 = 2 (high-stitch source);
+        Set scales[0]=0x80 â†’ scales[0]>>6 = 2 (high-stitch source);
         scales[0]&0x3F = 0 so j=0's sc stays 0 (clean). scales[8]=0x05
-        → low nibble = 5. Expected j=4 sc = 5 | (2<<4) = 37. With
+        â†’ low nibble = 5. Expected j=4 sc = 5 | (2<<4) = 37. With
         d_outer=1, dmin=0, qs[64]=0x01 (q=1 at sub-block 4 elem 0):
             out[128] = 1 * 37 * 1 - 0 = 37
-        Drop the stitch → sc=5 → out[128] = 5. Adversarial.
+        Drop the stitch â†’ sc=5 â†’ out[128] = 5. Adversarial.
         """
         import numpy as np
         pytest.importorskip("torch")
@@ -2915,7 +2915,7 @@ class TestGGUFDequantExtended:
         scales[0] = 0x80
         scales[8] = 0x05
         qs = bytearray(128)
-        qs[64] = 0x01            # sub-block 4 element 0 → q=1
+        qs[64] = 0x01            # sub-block 4 element 0 â†’ q=1
         block = d + dmin + bytes(scales) + bytes(qs)
         result = dequantize_q4_K(block, (256,))
         assert result[128].item() == pytest.approx(37.0, abs=0.05)
@@ -2927,7 +2927,7 @@ class TestGGUFDequantExtended:
         scales[0] like d's. Set scales[4]=0x80 (high-stitch=2, m for
         j=0 stays 0 since &0x3F=0); scales[8]=0x20 (high nibble=2).
         Expected j=4 m = 2 | (2<<4) = 34. With qs=0, d_outer=1,
-        dmin=1: out[128] = 1*sc*0 - 1*34 = -34. Drop stitch → m=2 →
+        dmin=1: out[128] = 1*sc*0 - 1*34 = -34. Drop stitch â†’ m=2 â†’
         out[128] = -2. Adversarial gate that the m-stitch source is
         scales[4], not scales[0] (a regression that confuses d's and
         m's stitch sources would produce wildly wrong output).
@@ -2951,7 +2951,7 @@ class TestGGUFDequantExtended:
         path strides correctly to qs[64..].
 
         Pass 156z9w (post-audit hardening): the original Pass 156z9s
-        version was weak — it set ONLY sub-block 0's sc nonzero and
+        version was weak â€” it set ONLY sub-block 0's sc nonzero and
         asserted out[32..256] == 0. A nibble-swap regression (sub-block
         1 reads low-nib instead of high-nib) was structurally invisible
         because sub-block 1's sc was zero, so out[32] stayed at 0
@@ -2973,16 +2973,16 @@ class TestGGUFDequantExtended:
         # j=0: sc = scales[0] & 0x3F = 2
         # j=1: sc = scales[1] & 0x3F = 3
         # j=4: sc = (scales[8] & 0x0F) | ((scales[0] >> 6) << 4)
-        #        = 5 | (0 << 4) = 5  (scales[0]=0x02 → high-stitch=0)
+        #        = 5 | (0 << 4) = 5  (scales[0]=0x02 â†’ high-stitch=0)
         scales[0] = 0x02
         scales[1] = 0x03
         scales[8] = 0x05
         qs = bytearray(128)
-        # qs[0..32] is the (0,1) pair: low nib → sb0, high nib → sb1.
-        # Byte 0x91 → sb0 elem 0 = 1, sb1 elem 0 = 9 (distinct values
+        # qs[0..32] is the (0,1) pair: low nib â†’ sb0, high nib â†’ sb1.
+        # Byte 0x91 â†’ sb0 elem 0 = 1, sb1 elem 0 = 9 (distinct values
         # that catch nibble-swap regressions).
         qs[0] = 0x91
-        # qs[64..96] is the (4,5) pair. Byte 0x07 → sb4 elem 0 = 7,
+        # qs[64..96] is the (4,5) pair. Byte 0x07 â†’ sb4 elem 0 = 7,
         # sb5 elem 0 = 0.  sb5 has sc=0 so its output stays 0.
         qs[64] = 0x07
         block = d + dmin + bytes(scales) + bytes(qs)
@@ -2991,12 +2991,12 @@ class TestGGUFDequantExtended:
         assert result[0].item() == pytest.approx(2.0, abs=0.05)
         # Sub-block 1 elem 0:  1.0 * 3 * 9 = 27.0
         # A nibble-swap would give sb1 elem 0 = 1*3*1 = 3.0 here AND
-        # sb0 elem 0 = 1*2*9 = 18.0 above — both assertions fail.
+        # sb0 elem 0 = 1*2*9 = 18.0 above â€” both assertions fail.
         assert result[32].item() == pytest.approx(27.0, abs=0.05)
         # Sub-block 4 elem 0 (j>=4 stitch path):  1.0 * 5 * 7 = 35.0
         # A stride bug that misroutes the j=4 qs source changes this.
         assert result[128].item() == pytest.approx(35.0, abs=0.05)
-        # Sub-blocks 2, 3, 5, 6, 7 still have sc=0 → their first
+        # Sub-blocks 2, 3, 5, 6, 7 still have sc=0 â†’ their first
         # elements stay at 0 (independence check).
         for i in (64, 96, 160, 192, 224):
             assert result[i].item() == pytest.approx(0.0, abs=0.05)
@@ -3013,8 +3013,8 @@ class TestGGUFDequantExtended:
     def test_dequantize_q6_K_signed_centering(self):
         """Q6_K is signed 6-bit: q = raw - 32, raw in [0, 63].
 
-        With ql=0, qh=0 every byte → raw=0 → q=-32. d=1.0, scales[0]=1
-        → y[0..15] = 1 * 1 * (-32) = -32.0.
+        With ql=0, qh=0 every byte â†’ raw=0 â†’ q=-32. d=1.0, scales[0]=1
+        â†’ y[0..15] = 1 * 1 * (-32) = -32.0.
         """
         import numpy as np
         pytest.importorskip("torch")
@@ -3022,7 +3022,7 @@ class TestGGUFDequantExtended:
         ql = bytes(128)
         qh = bytes(64)
         scales = bytearray(16)
-        scales[0] = 1  # int8 +1 (covers l=0..15 of q1 path → out[0..15])
+        scales[0] = 1  # int8 +1 (covers l=0..15 of q1 path â†’ out[0..15])
         d = np.float16(1.0).tobytes()
         block = bytes(ql) + bytes(qh) + bytes(scales) + d
         result = dequantize_q6_K(block, (256,))
@@ -3043,17 +3043,17 @@ class TestGGUFDequantExtended:
         qh = bytearray(64)
         qh[0] = 0x02
         scales = bytearray(16)
-        scales[0] = 7   # arbitrary nonzero — output should still be 0
+        scales[0] = 7   # arbitrary nonzero â€” output should still be 0
         d = np.float16(2.5).tobytes()
         block = bytes(ql) + bytes(qh) + bytes(scales) + d
         result = dequantize_q6_K(block, (256,))
-        # element 0 = q1 path with l=0 → uses scales[0]=7. q = (0|(2<<4))-32 = 0
+        # element 0 = q1 path with l=0 â†’ uses scales[0]=7. q = (0|(2<<4))-32 = 0
         assert result[0].item() == pytest.approx(0.0, abs=0.05)
 
     def test_dequantize_q6_K_scale_split_within_sub_block(self):
         """Q6_K splits each 32-element output region into TWO 16-element
         slabs with DIFFERENT scales. l=0..15 uses scales[is+0],
-        l=16..31 uses scales[is+1] (the +1 is critical — a regression
+        l=16..31 uses scales[is+1] (the +1 is critical â€” a regression
         that drops the +1 split silently rescales half of every output
         region). Catches the failure mode the author's-lens self-audit
         caught mid-implementation.
@@ -3067,7 +3067,7 @@ class TestGGUFDequantExtended:
         # Different scales for l=0..15 vs l=16..31 of the q1 path:
         scales[0] = 2   # covers out[0..15]
         scales[1] = 5   # covers out[16..31]
-        # All ql=qh=0 → q=-32 everywhere.
+        # All ql=qh=0 â†’ q=-32 everywhere.
         d = np.float16(1.0).tobytes()
         block = bytes(ql) + bytes(qh) + bytes(scales) + d
         result = dequantize_q6_K(block, (256,))
@@ -3079,7 +3079,7 @@ class TestGGUFDequantExtended:
         assert result[31].item() == pytest.approx(-160.0, abs=0.05)
 
     def test_dequantize_q6_K_layout_routing(self):
-        """Q6_K element routing — q1 path takes ql_a low nibble + qh
+        """Q6_K element routing â€” q1 path takes ql_a low nibble + qh
         bits 0-1, q2 takes ql_b low nibble + qh bits 2-3, q3 takes
         ql_a high nibble + qh bits 4-5, q4 takes ql_b high nibble +
         qh bits 6-7. l=5 of q1 lands at output[5]; l=5 of q2 lands at
@@ -3098,7 +3098,7 @@ class TestGGUFDequantExtended:
         # (ql_b = ql[32:64], so ql_b[5] = ql[37])
         ql[37] = 0xDC
         # qh[5] bits: q1=3 (0b11), q2=2 (0b10), q3=1 (0b01), q4=0 (0b00)
-        # → 0b00_01_10_11 = 0x1B
+        # â†’ 0b00_01_10_11 = 0x1B
         qh[5] = 0x1B
         scales = bytearray(16)
         for i in range(8):
@@ -3106,10 +3106,10 @@ class TestGGUFDequantExtended:
         d = np.float16(1.0).tobytes()
         block = bytes(ql) + bytes(qh) + bytes(scales) + d
         result = dequantize_q6_K(block, (256,))
-        # q1 elem 5: raw = 0xA | (3<<4) = 58 → q = 26 → y =  26
-        # q2 elem 5: raw = 0xC | (2<<4) = 44 → q = 12 → y =  12
-        # q3 elem 5: raw = 0xB | (1<<4) = 27 → q = -5 → y =  -5
-        # q4 elem 5: raw = 0xD | (0<<4) = 13 → q = -19 → y = -19
+        # q1 elem 5: raw = 0xA | (3<<4) = 58 â†’ q = 26 â†’ y =  26
+        # q2 elem 5: raw = 0xC | (2<<4) = 44 â†’ q = 12 â†’ y =  12
+        # q3 elem 5: raw = 0xB | (1<<4) = 27 â†’ q = -5 â†’ y =  -5
+        # q4 elem 5: raw = 0xD | (0<<4) = 13 â†’ q = -19 â†’ y = -19
         assert result[5].item() == pytest.approx(26.0, abs=0.05)
         assert result[37].item() == pytest.approx(12.0, abs=0.05)
         assert result[69].item() == pytest.approx(-5.0, abs=0.05)
@@ -3130,18 +3130,18 @@ class TestGGUFDequantExtended:
         scales = bytearray(16)
         # Touch only the second half: ql[64], qh[32], scales[8].
         scales[8] = 3   # second-half q1 path scale for l=0..15
-        # ql[64]=0, qh[32]=0 → q=-32 → y[128] = 1 * 3 * -32 = -96
+        # ql[64]=0, qh[32]=0 â†’ q=-32 â†’ y[128] = 1 * 3 * -32 = -96
         d = np.float16(1.0).tobytes()
         block = bytes(ql) + bytes(qh) + bytes(scales) + d
         result = dequantize_q6_K(block, (256,))
-        # First half: scales[0..7]=0 → y[0..127] = 1 * 0 * q = 0
+        # First half: scales[0..7]=0 â†’ y[0..127] = 1 * 0 * q = 0
         assert result[0].item() == pytest.approx(0.0, abs=0.05)
         assert result[127].item() == pytest.approx(0.0, abs=0.05)
         # Second half: y[128] = 1 * 3 * -32 = -96
         assert result[128].item() == pytest.approx(-96.0, abs=0.05)
         assert result[143].item() == pytest.approx(-96.0, abs=0.05)
 
-    # ── Q5_K (Pass 156z9o) ───────────────────────────────────────
+    # â”€â”€ Q5_K (Pass 156z9o) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     def test_dequantize_q5_K_zero_block(self):
         """Q5_K with empty input returns float32 zeros of requested shape."""
@@ -3157,8 +3157,8 @@ class TestGGUFDequantExtended:
 
         Block layout: 2 (d fp16) + 2 (dmin fp16) + 12 (scales) + 32 (qh)
         + 128 (qs) = 176 bytes. Set d=1.0, dmin=0.0; sub-block 0 (j=0):
-        sc=2, m=0; all other sub-blocks: sc=0, m=0. qs[0]=0x05 → low
-        nib 5 (sub-block 0, elem 0). qh all zeros → 5th bit clear → q=5.
+        sc=2, m=0; all other sub-blocks: sc=0, m=0. qs[0]=0x05 â†’ low
+        nib 5 (sub-block 0, elem 0). qh all zeros â†’ 5th bit clear â†’ q=5.
 
         Expected:
             out[0]  = 1.0 * 2 * (5 + 0) - 0.0 * 0 = 10.0
@@ -3171,7 +3171,7 @@ class TestGGUFDequantExtended:
         d = np.float16(1.0).tobytes()
         dmin = np.float16(0.0).tobytes()
         scales = bytearray(12)
-        scales[0] = 0x02   # sub_lo=0 → sc=2
+        scales[0] = 0x02   # sub_lo=0 â†’ sc=2
         qh = bytes(32)     # 5th bits all zero
         qs = bytearray(128)
         qs[0] = 0x05
@@ -3185,7 +3185,7 @@ class TestGGUFDequantExtended:
     def test_dequantize_q5_K_qh_bit_lifts_value(self):
         """Q5_K 5th bit must lift q by 16. Set qs[0]=0x01 (low nib 1)
         and qh[0]=0x01 (bit 0 set, which is the low-nibble path bit for
-        pair=0 → sub-block 0). With sc=1, dmin=0 → out[0] = 1*1*(1+16) = 17.
+        pair=0 â†’ sub-block 0). With sc=1, dmin=0 â†’ out[0] = 1*1*(1+16) = 17.
 
         Adversarial gate against a regression that drops the qh bit OR
         adds it to the wrong path (high-nibble bit_hi=1 instead of
@@ -3197,15 +3197,15 @@ class TestGGUFDequantExtended:
         d = np.float16(1.0).tobytes()
         dmin = np.float16(0.0).tobytes()
         scales = bytearray(12)
-        scales[0] = 0x01   # sub_lo=0 → sc=1
+        scales[0] = 0x01   # sub_lo=0 â†’ sc=1
         qh = bytearray(32)
-        qh[0] = 0x01       # bit 0 of qh[0] → low-nibble path of pair=0
+        qh[0] = 0x01       # bit 0 of qh[0] â†’ low-nibble path of pair=0
         qs = bytearray(128)
         qs[0] = 0x01
         block = d + dmin + bytes(scales) + bytes(qh) + bytes(qs)
         result = dequantize_q5_K(block, (256,))
         assert result[0].item() == pytest.approx(17.0, abs=0.05)
-        # elem 1: qs[1]=0, qh[1]=0 → q=0 → out=0
+        # elem 1: qs[1]=0, qh[1]=0 â†’ q=0 â†’ out=0
         assert result[1].item() == pytest.approx(0.0, abs=0.05)
 
     def test_dequantize_q5_K_qh_bit_routes_to_correct_pair(self):
@@ -3213,9 +3213,9 @@ class TestGGUFDequantExtended:
         pair P (output indices 64*P + l), bit `2*pair+1` feeds the
         HIGH-nibble path of pair P (output indices 64*P + 32 + l).
 
-        Set qh[5]=0x04 (bit 2) ONLY → that's bit_lo for pair=1 → lifts
+        Set qh[5]=0x04 (bit 2) ONLY â†’ that's bit_lo for pair=1 â†’ lifts
         q at output index 64+5=69 by 16. With sc[pair=1 sub_lo=2]=1, qs
-        all zero, dmin=0 → out[69] = 1*1*(0+16) = 16. All other outputs
+        all zero, dmin=0 â†’ out[69] = 1*1*(0+16) = 16. All other outputs
         = 0. Catches a regression that uses the wrong shift on qh.
         """
         import numpy as np
@@ -3224,24 +3224,24 @@ class TestGGUFDequantExtended:
         d = np.float16(1.0).tobytes()
         dmin = np.float16(0.0).tobytes()
         scales = bytearray(12)
-        # sub_lo=2 (pair=1 low) → _get_scale_min_k4(2, scales): j<4 →
+        # sub_lo=2 (pair=1 low) â†’ _get_scale_min_k4(2, scales): j<4 â†’
         # d = scales[2] & 0x3F. Set scales[2]=1.
         scales[2] = 0x01
         qh = bytearray(32)
-        qh[5] = 0x04       # bit 2 → bit_lo for pair=1
+        qh[5] = 0x04       # bit 2 â†’ bit_lo for pair=1
         qs = bytes(128)
         block = d + dmin + bytes(scales) + bytes(qh) + qs
         result = dequantize_q5_K(block, (256,))
         # out[64+5] = 1 * 1 * (0 + 16) - 0 = 16
         assert result[69].item() == pytest.approx(16.0, abs=0.05)
-        # out[5] (pair=0 low-nib) — qh[5] bit 0 is clear → q=0 → out=0
+        # out[5] (pair=0 low-nib) â€” qh[5] bit 0 is clear â†’ q=0 â†’ out=0
         assert result[5].item() == pytest.approx(0.0, abs=0.05)
-        # out[64+32+5]=out[101] (pair=1 high-nib) — qh[5] bit 3 clear → q=0
+        # out[64+32+5]=out[101] (pair=1 high-nib) â€” qh[5] bit 3 clear â†’ q=0
         assert result[101].item() == pytest.approx(0.0, abs=0.05)
 
     def test_dequantize_q5_K_dmin_subtracts(self):
-        """Q5_K min term subtracts. q=0 (qs=0, qh=0 → ql_nib=0, 5th=0),
-        dmin=1.0, m=4, sc=0 → y = 1*0*0 - 1*4 = -4 across sub-block 0.
+        """Q5_K min term subtracts. q=0 (qs=0, qh=0 â†’ ql_nib=0, 5th=0),
+        dmin=1.0, m=4, sc=0 â†’ y = 1*0*0 - 1*4 = -4 across sub-block 0.
         """
         import numpy as np
         pytest.importorskip("torch")
@@ -3249,7 +3249,7 @@ class TestGGUFDequantExtended:
         d = np.float16(1.0).tobytes()
         dmin = np.float16(1.0).tobytes()
         scales = bytearray(12)
-        # j=0: m = scales[4] & 0x3F → 4
+        # j=0: m = scales[4] & 0x3F â†’ 4
         scales[4] = 0x04
         qh = bytes(32)
         qs = bytes(128)
@@ -3257,13 +3257,13 @@ class TestGGUFDequantExtended:
         result = dequantize_q5_K(block, (256,))
         assert result[0].item() == pytest.approx(-4.0, abs=0.05)
         assert result[31].item() == pytest.approx(-4.0, abs=0.05)
-        # sub-block 1 (out[32:64]) → m=scales[5]&0x3F=0 → y=0
+        # sub-block 1 (out[32:64]) â†’ m=scales[5]&0x3F=0 â†’ y=0
         assert result[32].item() == pytest.approx(0.0, abs=0.05)
 
-    # ── Q2_K (Pass 156z9q) ────────────────────────────────────────────
+    # â”€â”€ Q2_K (Pass 156z9q) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     def test_dequantize_q2_K_zero_block(self):
-        """Empty input → float32 zeros, dtype check (sibling-parity gate)."""
+        """Empty input â†’ float32 zeros, dtype check (sibling-parity gate)."""
         pytest.importorskip("torch")
         import torch
         from enigma_engine.core.gguf_dequant import dequantize_q2_K
@@ -3273,7 +3273,7 @@ class TestGGUFDequantExtended:
         assert torch.all(result == 0.0)
 
     def test_dequantize_q2_K_handcrafted(self):
-        """d=1, dmin=0; scales[0]=0x02 (sc=2, mn=0), qs[0]=0x01 → bits 0..1
+        """d=1, dmin=0; scales[0]=0x02 (sc=2, mn=0), qs[0]=0x01 â†’ bits 0..1
         of byte 0 = q=1; shift=0, sub-block 0 maps element 0 to qs[0].
         Expected: out[0] = 1 * 2 * 1 - 0 = 2.0; out[1] uses qs[1] (=0).
         """
@@ -3289,14 +3289,14 @@ class TestGGUFDequantExtended:
         block = bytes(scales) + bytes(qs) + d + dmin
         result = dequantize_q2_K(block, (256,))
         assert result[0].item() == pytest.approx(2.0, abs=0.05)
-        # element 1 reads qs[1]=0 → q=0 → y=0
+        # element 1 reads qs[1]=0 â†’ q=0 â†’ y=0
         assert result[1].item() == pytest.approx(0.0, abs=0.05)
-        # element 16 falls in sub-block 1 (scales[1]=0 → sc=0) → y=0
+        # element 16 falls in sub-block 1 (scales[1]=0 â†’ sc=0) â†’ y=0
         assert result[16].item() == pytest.approx(0.0, abs=0.05)
 
     def test_dequantize_q2_K_dmin_subtracts(self):
-        """q=0 everywhere; dmin=1.0; scales[0]=0x30 (sc=0, mn=3) → y=-3
-        across sub-block 0 (out[0..16]). Sub-block 1 (scales[1]=0) → y=0.
+        """q=0 everywhere; dmin=1.0; scales[0]=0x30 (sc=0, mn=3) â†’ y=-3
+        across sub-block 0 (out[0..16]). Sub-block 1 (scales[1]=0) â†’ y=0.
         Catches sign-flip on the ``-ml`` term.
         """
         import numpy as np
@@ -3311,7 +3311,7 @@ class TestGGUFDequantExtended:
         result = dequantize_q2_K(block, (256,))
         assert result[0].item() == pytest.approx(-3.0, abs=0.05)
         assert result[15].item() == pytest.approx(-3.0, abs=0.05)
-        # Sub-block 1 starts at out[16]; scales[1]=0 → mn=0 → y=0
+        # Sub-block 1 starts at out[16]; scales[1]=0 â†’ mn=0 â†’ y=0
         assert result[16].item() == pytest.approx(0.0, abs=0.05)
 
     def test_dequantize_q2_K_shift_routing(self):
@@ -3319,12 +3319,12 @@ class TestGGUFDequantExtended:
         when both belong to the same nibble_half. Set qs[0]=0xE4 (binary
         ``11 10 01 00``) and put scale=1 only on the four sub-blocks that
         consume qs[0..16] in half=0:
-          is=0 (j=0, shift=0): bits 0..1 = 0 → out[0] = 0
-          is=2 (j=1, shift=2): bits 2..3 = 1 → out[32] = 1
-          is=4 (j=2, shift=4): bits 4..5 = 2 → out[64] = 2
-          is=6 (j=3, shift=6): bits 6..7 = 3 → out[96] = 3
+          is=0 (j=0, shift=0): bits 0..1 = 0 â†’ out[0] = 0
+          is=2 (j=1, shift=2): bits 2..3 = 1 â†’ out[32] = 1
+          is=4 (j=2, shift=4): bits 4..5 = 2 â†’ out[64] = 2
+          is=6 (j=3, shift=6): bits 6..7 = 3 â†’ out[96] = 3
         Catches a regression that swaps the shift mapping (e.g. uses
-        ``2*nibble_half`` instead of ``2*j``) — that bug would land all
+        ``2*nibble_half`` instead of ``2*j``) â€” that bug would land all
         four reads on the same shift and produce identical outputs.
         """
         import numpy as np
@@ -3334,7 +3334,7 @@ class TestGGUFDequantExtended:
         for is_idx in (0, 2, 4, 6):
             scales[is_idx] = 0x01        # sc=1, mn=0
         qs = bytearray(64)
-        qs[0] = 0xE4                     # 11 10 01 00 — different value per shift
+        qs[0] = 0xE4                     # 11 10 01 00 â€” different value per shift
         d = np.float16(1.0).tobytes()
         dmin = np.float16(0.0).tobytes()
         block = bytes(scales) + bytes(qs) + d + dmin
@@ -3364,15 +3364,15 @@ class TestGGUFDequantExtended:
         # First half stays zero
         assert result[0].item() == pytest.approx(0.0, abs=0.05)
         assert result[127].item() == pytest.approx(0.0, abs=0.05)
-        # is=8: half=1, j=0, nibble_half=0 → out[128] uses qs[32]
+        # is=8: half=1, j=0, nibble_half=0 â†’ out[128] uses qs[32]
         assert result[128].item() == pytest.approx(15.0, abs=0.05)  # 1*5*3
-        # is=8 covers out[128..144]; out[144] is is=9 (scales[9]=0 → 0)
+        # is=8 covers out[128..144]; out[144] is is=9 (scales[9]=0 â†’ 0)
         assert result[144].item() == pytest.approx(0.0, abs=0.05)
 
-    # ── Q3_K (Pass 156z9r) ────────────────────────────────────────────
+    # â”€â”€ Q3_K (Pass 156z9r) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     def test_dequantize_q3_K_zero_block(self):
-        """Empty input → float32 zeros, dtype check (sibling-parity gate)."""
+        """Empty input â†’ float32 zeros, dtype check (sibling-parity gate)."""
         pytest.importorskip("torch")
         import torch
         from enigma_engine.core.gguf_dequant import dequantize_q3_K
@@ -3388,10 +3388,10 @@ class TestGGUFDequantExtended:
         return bytes(hmask) + bytes(qs) + bytes(scales) + np.float16(d_val).tobytes()
 
     def test_dequantize_q3_K_signed_scale_zero(self):
-        """signed_scale = scale_packed - 32; with scale_packed=32 → dl=0,
+        """signed_scale = scale_packed - 32; with scale_packed=32 â†’ dl=0,
         output is zero across sub-block 0 regardless of qs/hmask values.
-        Set scales[0]=0x00 (low=0) and scales[8] bit 0..1 = 0x02 → high=2 →
-        scale_packed = 0 | (2<<4) = 32 → signed=0.
+        Set scales[0]=0x00 (low=0) and scales[8] bit 0..1 = 0x02 â†’ high=2 â†’
+        scale_packed = 0 | (2<<4) = 32 â†’ signed=0.
         """
         pytest.importorskip("torch")
         from enigma_engine.core.gguf_dequant import dequantize_q3_K
@@ -3406,11 +3406,11 @@ class TestGGUFDequantExtended:
 
     def test_dequantize_q3_K_high_bit_centering(self):
         """The hmask bit toggles the centering offset. Set d=1, scale_packed
-        = 33 → signed_scale = 1 → dl = 1. q_low = 0 throughout.
-          hmask bit clear → q_full = 0 - 4 = -4 → out = -4
-          hmask bit set   → q_full = 0 - 0 =  0 → out =  0
+        = 33 â†’ signed_scale = 1 â†’ dl = 1. q_low = 0 throughout.
+          hmask bit clear â†’ q_full = 0 - 4 = -4 â†’ out = -4
+          hmask bit set   â†’ q_full = 0 - 0 =  0 â†’ out =  0
         For is=0, hmask bit position = 0, hmask byte = hmask[0..16].
-        Set scales[0]=0x01, scales[8]=0x02 → scale_packed = 1 | (2<<4) = 33.
+        Set scales[0]=0x01, scales[8]=0x02 â†’ scale_packed = 1 | (2<<4) = 33.
         Set hmask[0]=0x00 (bit 0 clear) and hmask[1]=0x01 (bit 0 set).
         """
         pytest.importorskip("torch")
@@ -3431,10 +3431,10 @@ class TestGGUFDequantExtended:
         """The 6-bit scale is the stitch of a 4-bit low nibble and 2-bit
         high pair. For is=4: low_byte_idx=4, low_shift=0, high_byte_idx=8,
         high_shift=2. Set scales[4]=0x01 (low=1), scales[8]=0x08 (bit 3,2 =
-        0x02 after >>2&0x03) → scale_packed = 1 | (2<<4) = 33 → signed=1,
-        dl=1. With qs all zero and hmask all zero → q_full=-4 → out[64]=-4.
-        Adversarial gate: drop the 2-bit high stitch and scale_packed=1 →
-        signed=-31 → out[64] = +124, NOT -4. Catches a regression that
+        0x02 after >>2&0x03) â†’ scale_packed = 1 | (2<<4) = 33 â†’ signed=1,
+        dl=1. With qs all zero and hmask all zero â†’ q_full=-4 â†’ out[64]=-4.
+        Adversarial gate: drop the 2-bit high stitch and scale_packed=1 â†’
+        signed=-31 â†’ out[64] = +124, NOT -4. Catches a regression that
         forgets to combine the two scale-byte sources.
         """
         pytest.importorskip("torch")
@@ -3451,14 +3451,14 @@ class TestGGUFDequantExtended:
 
     def test_dequantize_q3_K_second_half_independence(self):
         """Sub-block is=8 starts the second half. Verifies:
-          - low_byte_idx=0 with low_shift=4 → reads scales[0] HIGH nibble.
-          - high_byte_idx=8 with high_shift=4 → reads scales[8] bits 4..5.
-          - bit_pos=is//2=4 → reads hmask[0] bit 4 (NOT bit 0).
+          - low_byte_idx=0 with low_shift=4 â†’ reads scales[0] HIGH nibble.
+          - high_byte_idx=8 with high_shift=4 â†’ reads scales[8] bits 4..5.
+          - bit_pos=is//2=4 â†’ reads hmask[0] bit 4 (NOT bit 0).
         Set scales[0]=0x10 (high nibble=1), scales[8]=0x20 (bit 4..5 = 2
-        after >>4&0x03) → scale_packed = 1 | (2<<4) = 33 → signed=1, dl=1.
+        after >>4&0x03) â†’ scale_packed = 1 | (2<<4) = 33 â†’ signed=1, dl=1.
         Toggle hmask[0] bit 4 between two blocks; out[128] flips from 0
-        (bit set → q_full=0) to -4 (bit clear → q_full=-4). The DELTA at
-        out[128] is the contract this test gates — adversarial against
+        (bit set â†’ q_full=0) to -4 (bit clear â†’ q_full=-4). The DELTA at
+        out[128] is the contract this test gates â€” adversarial against
         any regression that drops the >>4 on either scale source or that
         uses the wrong hmask bit position for the second half.
         """
@@ -3467,26 +3467,26 @@ class TestGGUFDequantExtended:
         scales = bytearray(12)
         scales[0] = 0x10                  # is=8 low nibble (high half) = 1
         scales[8] = 0x20                  # is=8 high stitch bits = 2
-        # Branch A: hmask[0] bit 4 SET → q_full = 0 → out[128] = 0
+        # Branch A: hmask[0] bit 4 SET â†’ q_full = 0 â†’ out[128] = 0
         hmask_a = bytearray(32)
         hmask_a[0] = 0x10
         qs = bytearray(64)
         block_a = self._q3_K_block(scales, hmask_a, qs, 1.0)
         result_a = dequantize_q3_K(block_a, (256,))
         assert result_a[128].item() == pytest.approx(0.0, abs=0.05)
-        # Branch B: hmask[0] bit 4 CLEAR → q_full = -4 → out[128] = -4
+        # Branch B: hmask[0] bit 4 CLEAR â†’ q_full = -4 â†’ out[128] = -4
         hmask_b = bytearray(32)              # bit 4 clear
         block_b = self._q3_K_block(scales, hmask_b, qs, 1.0)
         result_b = dequantize_q3_K(block_b, (256,))
         assert result_b[128].item() == pytest.approx(-4.0, abs=0.05)
         # Sub-block 9 (out[144..160]) reads scales[1] high nibble (=0) and
-        # scales[9] bit 4..5 (=0) → scale_packed=0 → signed=-32; q_low=0,
-        # hmask[16] bit 4=0 → q_full=-4 → out[144] = -32 * -4 = 128 in
+        # scales[9] bit 4..5 (=0) â†’ scale_packed=0 â†’ signed=-32; q_low=0,
+        # hmask[16] bit 4=0 â†’ q_full=-4 â†’ out[144] = -32 * -4 = 128 in
         # both blocks. Verifies sub-block 9 is independent of sub-block 8.
         assert result_a[144].item() == pytest.approx(128.0, abs=0.05)
         assert result_b[144].item() == pytest.approx(128.0, abs=0.05)
 
-    # ── Dispatcher routing (Pass 156z9p, closes A2 from 156z9h-audit) ──
+    # â”€â”€ Dispatcher routing (Pass 156z9p, closes A2 from 156z9h-audit) â”€â”€
 
     @pytest.mark.parametrize(
         "tt_id,block_size,bytes_per_block,expected_fn",
@@ -3516,7 +3516,7 @@ class TestGGUFDequantExtended:
         the right recorder fired exactly once with the right byte count
         and shape.
 
-        F32 / F16 routing is excluded — those branches use `np.fromfile`
+        F32 / F16 routing is excluded â€” those branches use `np.fromfile`
         (incompatible with BytesIO) and have no conditional dispatch
         worth testing (one-line `np.fromfile + reshape`).
         """
@@ -3597,7 +3597,7 @@ class TestGGUFDequantExtended:
         assert tensors == {}
 
 
-# ── Pass 32 tests ─────────────────────────────────────────────────
+# â”€â”€ Pass 32 tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
 class TestSlidingWindowMask:
@@ -3613,7 +3613,7 @@ class TestSlidingWindowMask:
                           vocab_size=100, max_seq_len=32)
         model = Enigma(config=cfg)
         mask = model._get_causal_mask(6)
-        # Position (5, 0) should be 0.0 — token 5 can attend to token 0
+        # Position (5, 0) should be 0.0 â€” token 5 can attend to token 0
         assert mask[5, 0] == 0.0
 
     def test_sliding_window_masks_distant_tokens(self):
@@ -3669,7 +3669,7 @@ class TestBPEDropout:
         tok.token_to_id = {
             'h': 10, 'e': 11, 'l': 12, 'o': 13, '</w>': 14,
             'he': 15, 'hel': 16, 'hell': 17, 'hello': 18,
-            # 'hello</w>' deliberately omitted — forces merge path
+            # 'hello</w>' deliberately omitted â€” forces merge path
         }
         tok.id_to_token = {v: k for k, v in tok.token_to_id.items()}
         # Canonical (no dropout) should always give the same result
@@ -3732,9 +3732,9 @@ class TestMinPSampling:
 
         # Create logits where one token dominates heavily
         logits = torch.full((1, 100), -10.0)
-        logits[0, 42] = 5.0   # Very high — this is the max prob token
-        logits[0, 7] = 4.9    # Close to max — should survive min_p
-        logits[0, 99] = -5.0  # Much lower — should be filtered by min_p
+        logits[0, 42] = 5.0   # Very high â€” this is the max prob token
+        logits[0, 7] = 4.9    # Close to max â€” should survive min_p
+        logits[0, 99] = -5.0  # Much lower â€” should be filtered by min_p
 
         generated = torch.tensor([[42]])  # dummy history
 
@@ -3767,7 +3767,7 @@ class TestRAGVocabCap:
 
 
 # ================================================================
-# Pass 40 — S572, S573, S575
+# Pass 40 â€” S572, S573, S575
 # ================================================================
 
 class TestStreamFinishWithoutStart:
@@ -3797,7 +3797,7 @@ class TestStreamFinishWithoutStart:
 
 
 # ================================================================
-# AI Profile — Load / Save / List / Manager lifecycle
+# AI Profile â€” Load / Save / List / Manager lifecycle
 # ================================================================
 
 class TestAIProfileLifecycle:
@@ -3813,7 +3813,6 @@ class TestAIProfileLifecycle:
             description="A test profile",
             model_path="models/test.pth", model_type="pytorch",
             system_prompt="Be helpful.",
-            personality={"tone": "dry"},
             generation=GenerationConfig(temperature=0.5, top_k=20),
             memory=MemoryConfig(conversation_dir="memory/test_ai"),
             commands=["file.read"], disabled_commands=["system.exec"],
@@ -3859,184 +3858,6 @@ class TestAIProfileLifecycle:
         p = AIProfile(commands=[], disabled_commands=["system.exec"])
         assert p.can_use_command("system.exec") is False
         assert p.can_use_command("file.read") is True
-
-    # ------------------------------------------------------------------
-    # Personality-3 boundary fix (P1 row 10 — Personality-5 cluster)
-    #
-    # The `personality` dict is a ROLEPLAY OVERLAY, not a base-AI
-    # configuration. Base AI identity is weight-trained per
-    # Personality-5 spec (see SUGGESTIONS.md ARCH-GAP Personality-3
-    # and R-PERSONALITY-1). Default-constructed AIProfile must
-    # therefore have an EMPTY personality dict — anything else is
-    # the user inadvertently configuring the AI's character.
-    # ------------------------------------------------------------------
-
-    def test_default_profile_has_empty_personality(self):
-        """Base AIProfile() ships with empty personality dict.
-
-        Catches the regression where someone re-introduces the old
-        4-key default (tone/verbosity/formality/humor) which makes
-        every base profile look user-configured for personality
-        when the user never set anything.
-        """
-        from enigma_engine.core.ai_profile import AIProfile
-        assert AIProfile().personality == {}
-
-    def test_is_roleplay_false_on_base_profile(self):
-        """A profile with empty personality is NOT a roleplay overlay."""
-        from enigma_engine.core.ai_profile import AIProfile
-        assert AIProfile().is_roleplay() is False
-
-    def test_is_roleplay_true_when_personality_populated(self):
-        """A profile with any personality entry IS a roleplay overlay."""
-        from enigma_engine.core.ai_profile import AIProfile
-        p = AIProfile(personality={"tone": "snarky"})
-        assert p.is_roleplay() is True
-
-    def test_default_profile_roundtrip_preserves_empty_personality(self):
-        """to_dict -> from_dict on a default profile keeps personality empty.
-
-        Catches the regression where from_dict re-fills personality
-        with the old populated default when the JSON omits the field.
-        """
-        from enigma_engine.core.ai_profile import AIProfile
-        original = AIProfile()
-        d = original.to_dict()
-        # Sanity: serialised form has no personality knobs either.
-        assert d["personality"] == {}
-        restored = AIProfile.from_dict(d)
-        assert restored.personality == {}
-        assert restored.is_roleplay() is False
-
-    def test_personality_field_doc_marks_roleplay_only(self):
-        """AIProfile docstring or field doc names personality as roleplay-only.
-
-        Structural gate per AA Pass 156s2 (docstring lies anti-pattern):
-        the boundary semantics are easy to revert; docs must call out
-        the contract so the next maintainer can't silently re-default
-        to populated knobs.
-        """
-        import inspect
-        from enigma_engine.core.ai_profile import AIProfile
-        src = inspect.getsource(AIProfile)
-        assert "roleplay" in src.lower(), (
-            "AIProfile must document that personality is a roleplay "
-            "overlay, not base-AI configuration"
-        )
-
-    def test_canonical_assistant_disk_profile_is_not_roleplay(self):
-        """profiles/assistant.json on disk must satisfy the Personality-3
-        boundary contract.
-
-        Pass 156y-audit finding: the original Pass 156y only cleaned the
-        in-memory ``DEFAULT_PROFILES["assistant"]`` constant. The disk
-        file ``profiles/assistant.json`` (which is what the GUI / API
-        actually loads) kept its populated personality block — JSON wins
-        on load, so at runtime users got ``is_roleplay() == True`` on the
-        canonical base profile, contradicting the entire contract.
-
-        This test is the load-path counterpart to the in-memory tests
-        above. Catches the regression where someone re-adds knobs to the
-        JSON, AND would have caught the original disk-vs-library drift.
-        """
-        from pathlib import Path
-        from enigma_engine.core.ai_profile import load_profile
-        repo_root = Path(__file__).resolve().parent.parent
-        disk_profile = repo_root / "profiles" / "assistant.json"
-        if not disk_profile.exists():
-            pytest.skip("canonical assistant.json not present in this checkout")
-        loaded = load_profile(str(disk_profile))
-        assert loaded.is_roleplay() is False, (
-            "profiles/assistant.json must have an empty personality dict — "
-            "base AI identity is weight-trained per Personality-5, "
-            "personality is a roleplay overlay only"
-        )
-        assert loaded.personality == {}
-
-    @pytest.mark.parametrize("profile_id", ["coding_helper", "creative_writer", "researcher"])
-    def test_canonical_role_template_disk_profile_is_not_roleplay(self, profile_id):
-        """profiles/{coding_helper,creative_writer,researcher}.json must
-        satisfy the Personality-4 boundary contract.
-
-        Personality-4 design call: task-preset profiles steer behaviour
-        through ``system_prompt`` + generation knobs, NOT through
-        character/personality traits. Generic 4-knob blocks
-        (tone/verbosity/formality/humor) on these JSONs were decorative
-        legacy from before Pass 156y — they made every task profile
-        falsely satisfy ``is_roleplay() == True`` and would have
-        misrouted any future is_roleplay()-branching consumer.
-
-        Load-path test (mirror of the assistant.json gate): catches
-        the regression where someone re-adds knobs to any of the three
-        canonical role-template JSONs.
-        """
-        from pathlib import Path
-        from enigma_engine.core.ai_profile import load_profile
-        repo_root = Path(__file__).resolve().parent.parent
-        disk_profile = repo_root / "profiles" / f"{profile_id}.json"
-        if not disk_profile.exists():
-            pytest.skip(f"canonical {profile_id}.json not present in this checkout")
-        loaded = load_profile(str(disk_profile))
-        assert loaded.is_roleplay() is False, (
-            f"profiles/{profile_id}.json is a task overlay, not a "
-            f"roleplay character — personality dict must be empty per "
-            f"Personality-4. Found: {loaded.personality!r}"
-        )
-        assert loaded.personality == {}
-
-    def test_apply_profile_to_engine_logs_roleplay_branch(self, caplog):
-        """``apply_profile_to_engine`` is the production consumer for
-        ``is_roleplay()``: it logs different markers on the two
-        branches so the boundary is observable in ops logs.
-
-        Personality-4 wiring gate. Without an end-to-end consumer the
-        signal is dead infrastructure; this test catches the regression
-        where someone collapses the branched log back to a single line
-        (which would silently re-hide the boundary).
-        """
-        import logging
-        from enigma_engine.core.ai_profile import (
-            AIProfile, apply_profile_to_engine,
-        )
-
-        class _NullEngine:
-            """Engine stub with no optional attributes — exercises the
-            base-path through apply_profile_to_engine without touching
-            generation / adapter side-effects."""
-
-        # Roleplay branch: populated personality must produce a marker
-        # naming "roleplay" AND the populated keys (so log readers can
-        # see WHICH overlay was applied).
-        roleplay = AIProfile(
-            name="Test Character",
-            id="test_char",
-            personality={"tone": "snarky", "humor": "dry"},
-        )
-        with caplog.at_level(logging.INFO, logger="enigma_engine.core.ai_profile"):
-            caplog.clear()
-            apply_profile_to_engine(roleplay, _NullEngine())
-            roleplay_messages = [r.getMessage() for r in caplog.records]
-        assert any("roleplay" in m.lower() and "Test Character" in m
-                   for m in roleplay_messages), (
-            f"roleplay branch must log a roleplay marker; got {roleplay_messages!r}"
-        )
-        # Personality keys must appear in the log so audit can see overlay shape.
-        assert any("tone" in m and "humor" in m for m in roleplay_messages), (
-            f"roleplay log must surface personality keys; got {roleplay_messages!r}"
-        )
-
-        # Base/task branch: empty personality must NOT log "roleplay".
-        base = AIProfile(name="Base Profile", id="base", personality={})
-        with caplog.at_level(logging.INFO, logger="enigma_engine.core.ai_profile"):
-            caplog.clear()
-            apply_profile_to_engine(base, _NullEngine())
-            base_messages = [r.getMessage() for r in caplog.records]
-        assert any("Base Profile" in m for m in base_messages), (
-            f"base branch must still log the apply event; got {base_messages!r}"
-        )
-        assert not any("roleplay" in m.lower() for m in base_messages), (
-            f"base/task profile must NOT log roleplay marker; got {base_messages!r}"
-        )
 
     def test_save_and_load_roundtrip(self, tmp_path):
         """save_profile -> load_profile preserves data through disk."""
@@ -4168,7 +3989,7 @@ class TestAIProfileLifecycle:
 
 
 # ================================================================
-# Config defaults — get/update/save/load/env persistence
+# Config defaults â€” get/update/save/load/env persistence
 # ================================================================
 
 class TestConfigPersistence:
@@ -4321,7 +4142,7 @@ class TestConfigPersistence:
 
 
 # ================================================================
-# Auto Research — auto_research() function tests
+# Auto Research â€” auto_research() function tests
 # ================================================================
 
 class TestAutoResearchFunction:
@@ -4407,7 +4228,7 @@ class TestAutoResearchFunction:
         old_time = ar_mod._last_search_time
         try:
             ar_mod._search_cache.clear()
-            # Set last search to now — next call should be rate-limited
+            # Set last search to now â€” next call should be rate-limited
             ar_mod._last_search_time = time.monotonic()
 
             result = ar_mod.auto_research("should be rate limited query")
@@ -4495,7 +4316,7 @@ class TestAutoResearchFunction:
 
 
 # ================================================================
-# Safe Save — atomic_safetensors_save
+# Safe Save â€” atomic_safetensors_save
 # ================================================================
 
 class TestAtomicSafetensorsSave:
@@ -4635,7 +4456,7 @@ class TestLoRAAcceleratorNoDeadDataLoader:
 
 
 # ================================================================
-# Pass 41 — S576, S577, S578
+# Pass 41 â€” S576, S577, S578
 # ================================================================
 
 class TestCuratedDatasetLoadSafety:
@@ -4714,7 +4535,7 @@ class TestYaRNDivByZero:
 
 
 # ================================================================
-# Pass 43 — S584, S590, S591, S592, S599, S607, S610, S611, S612, S616
+# Pass 43 â€” S584, S590, S591, S592, S599, S607, S610, S611, S612, S616
 # ================================================================
 
 class TestGetStateDictNested:
@@ -4742,7 +4563,7 @@ class TestGetStateDictNested:
                 result["layer.0.weight"], torch.tensor([1.0, 2.0, 3.0]))
 
     def test_raw_state_dict_still_works(self):
-        """When no known keys found—not single-key—returns as-is."""
+        """When no known keys foundâ€”not single-keyâ€”returns as-is."""
         import torch
         from enigma_engine.core.model_registry import get_state_dict
         sd = {"w1": torch.ones(4), "w2": torch.zeros(4)}
@@ -4805,7 +4626,7 @@ class TestModelRegistryCRUD:
     """
 
     def test_register_then_get_returns_info(self, tmp_path):
-        """register_model → get_model must return the stored info.
+        """register_model â†’ get_model must return the stored info.
 
         DIAGNOSES: In-memory dict write/read broken.
         """
@@ -4849,9 +4670,9 @@ class TestModelRegistryCRUD:
         reg.remove_model("does_not_exist")  # Should not raise
 
     def test_persist_to_disk_and_reload(self, tmp_path):
-        """Data must survive save → new instance load from same dir.
+        """Data must survive save â†’ new instance load from same dir.
 
-        DIAGNOSES: _save_registry or _load_registry broken — narrows
+        DIAGNOSES: _save_registry or _load_registry broken â€” narrows
         to disk I/O vs in-memory.
         """
         from enigma_engine.core.model_registry import ModelRegistry
@@ -4868,7 +4689,7 @@ class TestModelRegistryCRUD:
     def test_corrupted_json_recovers_gracefully(self, tmp_path):
         """Invalid JSON in registry.json must not crash init.
 
-        DIAGNOSES: _load_registry exception handler broken —
+        DIAGNOSES: _load_registry exception handler broken â€”
         corrupt file kills the entire registry.
         """
         from enigma_engine.core.model_registry import ModelRegistry
@@ -4882,7 +4703,7 @@ class TestModelRegistryCRUD:
     def test_missing_models_key_recovers(self, tmp_path):
         """registry.json with no 'models' key must not crash.
 
-        DIAGNOSES: Guard on line 48 of model_registry.py broken —
+        DIAGNOSES: Guard on line 48 of model_registry.py broken â€”
         missing key cascades to KeyError in every operation.
         """
         import json
@@ -4896,9 +4717,9 @@ class TestModelRegistryCRUD:
         assert isinstance(models, dict), "list_models crashed on missing key"
 
     def test_get_model_returns_copy(self, tmp_path):
-        """get_model must return a copy — mutations must not leak back.
+        """get_model must return a copy â€” mutations must not leak back.
 
-        DIAGNOSES: Returning internal dict reference → external code
+        DIAGNOSES: Returning internal dict reference â†’ external code
         can silently corrupt registry state.
         """
         from enigma_engine.core.model_registry import ModelRegistry
@@ -5165,135 +4986,4 @@ class TestModelMerging:
 
         with pytest.raises(ValueError, match="density"):
             ties_merge([path_a, path_b], density=0.0)
-
-
-# ---------------------------------------------------------------------------
-# EWC continual learning (N-18)
-# ---------------------------------------------------------------------------
-
-class TestEWC:
-    """Tests for Elastic Weight Consolidation."""
-
-    @staticmethod
-    def _make_tiny_model():
-        """Create a tiny model for EWC tests."""
-        import torch.nn as nn
-        model = nn.Sequential(
-            nn.Embedding(32, 16),
-            nn.Linear(16, 32),
-        )
-        return model
-
-    def test_penalty_is_zero_at_anchor(self):
-        """Penalty should be ~0 when model hasn't changed."""
-        import torch
-        from enigma_engine.core.ewc import EWC
-
-        model = self._make_tiny_model()
-        batches = [torch.randint(0, 32, (2, 8)) for _ in range(5)]
-        ewc = EWC(model, batches, device="cpu", n_samples=5, lam=1000)
-
-        penalty = ewc.penalty(model)
-        assert penalty.item() < 1e-6
-
-    def test_penalty_increases_after_change(self):
-        """Penalty should increase when parameters change."""
-        import torch
-        from enigma_engine.core.ewc import EWC
-
-        model = self._make_tiny_model()
-        batches = [torch.randint(0, 32, (2, 8)) for _ in range(5)]
-        ewc = EWC(model, batches, device="cpu", n_samples=5, lam=1000)
-
-        # Modify model parameters
-        with torch.no_grad():
-            for p in model.parameters():
-                p.add_(torch.randn_like(p) * 0.1)
-
-        penalty = ewc.penalty(model)
-        assert penalty.item() > 0.0
-
-    def test_penalty_has_gradient(self):
-        """Penalty tensor should be differentiable."""
-        import torch
-        from enigma_engine.core.ewc import EWC
-
-        model = self._make_tiny_model()
-        batches = [torch.randint(0, 32, (2, 8)) for _ in range(5)]
-        ewc = EWC(model, batches, device="cpu", n_samples=5, lam=1000)
-
-        # Nudge params so penalty > 0
-        with torch.no_grad():
-            for p in model.parameters():
-                p.add_(torch.randn_like(p) * 0.01)
-
-        penalty = ewc.penalty(model)
-        penalty.backward()
-
-        grads = [p.grad for p in model.parameters()
-                 if p.grad is not None]
-        assert len(grads) > 0
-
-    def test_higher_lambda_stronger_penalty(self):
-        """Higher lambda should give larger penalty."""
-        import torch
-        from enigma_engine.core.ewc import EWC
-
-        model = self._make_tiny_model()
-        batches = [torch.randint(0, 32, (2, 8)) for _ in range(5)]
-
-        ewc_low = EWC(model, batches, device="cpu",
-                       n_samples=5, lam=100)
-        ewc_high = EWC(model, batches, device="cpu",
-                        n_samples=5, lam=10000)
-
-        # Same parameter shift
-        with torch.no_grad():
-            for p in model.parameters():
-                p.add_(torch.randn_like(p) * 0.1)
-
-        pen_low = ewc_low.penalty(model).item()
-        pen_high = ewc_high.penalty(model).item()
-        assert pen_high > pen_low
-
-    def test_save_and_load_roundtrip(self, tmp_path):
-        """EWC state should survive save/load cycle."""
-        import torch
-        from enigma_engine.core.ewc import EWC
-
-        model = self._make_tiny_model()
-        batches = [torch.randint(0, 32, (2, 8)) for _ in range(5)]
-        ewc = EWC(model, batches, device="cpu", n_samples=5, lam=500)
-
-        # Nudge and compute penalty
-        with torch.no_grad():
-            for p in model.parameters():
-                p.add_(torch.randn_like(p) * 0.05)
-
-        original_penalty = ewc.penalty(model).item()
-
-        # Save and reload
-        save_path = tmp_path / "ewc_state.pth"
-        ewc.save(save_path)
-        assert save_path.exists()
-
-        loaded_ewc = EWC.load(save_path, device="cpu")
-        loaded_penalty = loaded_ewc.penalty(model).item()
-
-        assert abs(original_penalty - loaded_penalty) < 1e-5
-
-    def test_callable_data_source(self):
-        """EWC should accept a callable that yields batches."""
-        import torch
-        from enigma_engine.core.ewc import EWC
-
-        model = self._make_tiny_model()
-
-        def batch_gen():
-            return torch.randint(0, 32, (2, 8))
-
-        ewc = EWC(model, batch_gen, device="cpu",
-                   n_samples=5, lam=1000)
-        penalty = ewc.penalty(model)
-        assert penalty.item() < 1e-6
 

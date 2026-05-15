@@ -2182,12 +2182,12 @@ class TestForgeModeUI:
     """Test that FORGE training mode descriptions match the 8 radio buttons."""
 
     def test_descriptions_cover_all_modes(self):
-        """_TRAINING_MODE_DESCRIPTIONS has exactly the 9 GUI modes
-        (LoRA-1 Pass 156p added explicit LoRA mode card)."""
+        """_TRAINING_MODE_DESCRIPTIONS has exactly the 10 GUI modes
+        (ARCH-1d Pass 156z9eb added explicit Audio mode card)."""
         from enigma_engine.gui.gui_forge import ForgeMixin
         expected = {"Pre-Train", "Distill", "Basic", "LoRA",
-                    "AI-Guided", "Image", "Dialogue", "RLHF",
-                    "Self-Play"}
+                    "AI-Guided", "Image", "Audio", "Dialogue",
+                    "RLHF", "Self-Play"}
         assert set(ForgeMixin._TRAINING_MODE_DESCRIPTIONS.keys()) == expected
 
 
@@ -2195,25 +2195,26 @@ class TestForgeNewModes:
     """Test new training modes wiring."""
 
     def test_display_name_mapping_covers_all_modes(self):
-        """_MODE_DISPLAY_TO_KEY maps all 9 display names to keys
-        (LoRA-1 Pass 156p added explicit LoRA mode)."""
+        """_MODE_DISPLAY_TO_KEY maps all 10 display names to keys
+        (ARCH-1d Pass 156z9eb added explicit Audio mode)."""
         from enigma_engine.gui.gui_forge import ForgeMixin
         mapping = ForgeMixin._MODE_DISPLAY_TO_KEY
-        assert len(mapping) == 9
+        assert len(mapping) == 10
         # Every display name resolves to a valid internal key
         expected_keys = {"Pre-Train", "Distill", "Basic", "LoRA",
-                         "AI-Guided", "Image", "Dialogue",
+                         "AI-Guided", "Image", "Audio", "Dialogue",
                          "RLHF", "Self-Play"}
         assert set(mapping.values()) == expected_keys
 
     def test_reverse_mapping_covers_all_keys(self):
-        """_MODE_KEY_TO_DISPLAY maps all 9 internal keys to display
-        (LoRA-1 Pass 156p added explicit LoRA mode)."""
+        """_MODE_KEY_TO_DISPLAY maps all 10 internal keys to display
+        (ARCH-1d Pass 156z9eb added explicit Audio mode)."""
         from enigma_engine.gui.gui_forge import ForgeMixin
         reverse = ForgeMixin._MODE_KEY_TO_DISPLAY
-        assert len(reverse) == 9
+        assert len(reverse) == 10
         # Display names match GUI radio button values
         assert reverse["Image"] == "Image"
+        assert reverse["Audio"] == "Audio"
         assert reverse["Basic"] == "Basic"
         assert reverse["LoRA"] == "LoRA"
         assert reverse["AI-Guided"] == "AI-Guided"
@@ -4104,6 +4105,95 @@ class TestAtomicSaves:
         assert bak.exists(), ".bak file should exist for JSON overwrite"
         assert json.loads(bak.read_text(encoding="utf-8")) == {"version": 1}
         assert json.loads(target.read_text(encoding="utf-8")) == {"version": 2}
+
+    # ── unlink_with_backup ──────────────────────────────────────────────
+
+    def test_unlink_with_backup_removes_both(self, tmp_path):
+        """unlink_with_backup must delete primary and .bak together."""
+        from enigma_engine.core.safe_save import (
+            atomic_write_json,
+            unlink_with_backup,
+        )
+        target = tmp_path / "session.json"
+        atomic_write_json(target, {"v": 1})
+        atomic_write_json(target, {"v": 2})  # creates .bak
+        bak = target.with_suffix(".json.bak")
+        assert target.exists() and bak.exists(), "precondition"
+        unlink_with_backup(target)
+        assert not target.exists(), "primary must be deleted"
+        assert not bak.exists(), ".bak orphan must be deleted"
+
+    def test_unlink_with_backup_missing_primary_is_noop(self, tmp_path):
+        """unlink_with_backup is idempotent — missing primary must not raise."""
+        from enigma_engine.core.safe_save import unlink_with_backup
+        target = tmp_path / "ghost.json"
+        # No file exists. Must not raise.
+        unlink_with_backup(target)
+        assert not target.exists()
+
+    def test_unlink_with_backup_removes_bak_only_when_primary_gone(
+            self, tmp_path):
+        """If only .bak exists (primary already gone), helper cleans the orphan."""
+        from enigma_engine.core.safe_save import unlink_with_backup
+        target = tmp_path / "session.json"
+        bak = target.with_suffix(".json.bak")
+        bak.write_text("orphaned", encoding="utf-8")
+        assert bak.exists() and not target.exists(), "precondition"
+        unlink_with_backup(target)
+        assert not bak.exists(), "orphan .bak must be removed"
+
+    # ── Wire-site gates for deletion paths ──────────────────────────────
+
+    def test_confirm_delete_session_uses_unlink_with_backup(self):
+        """Structural gate: ``_confirm_delete_session`` MUST use
+        ``unlink_with_backup`` rather than bare ``path.unlink()``.
+
+        Sessions persisted via ``atomic_write_json`` leave a
+        ``<session>.json.bak`` sibling on the second save. Bare
+        ``unlink`` deletes only the primary, orphaning the backup
+        forever — invisible to the user but visible on disk.
+
+        Adversarial regex matches the literal call expression with
+        the named import token, so a regression that drops the
+        import or reverts to ``path.unlink()`` falsifies the test.
+        """
+        import inspect
+        import re
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+        src = inspect.getsource(LogicChatMixin._confirm_delete_session)
+        assert re.search(r'\bunlink_with_backup\s*\(\s*path\b', src), (
+            "_confirm_delete_session must call unlink_with_backup(path) "
+            "— bare path.unlink() leaves .bak orphans on disk"
+        )
+
+    def test_confirm_delete_model_cleans_model_context(self):
+        """Structural gate: ``_confirm_delete_model`` MUST clean up
+        the per-model ``data/model_contexts/<key>/`` directory when
+        the model file is deleted. Otherwise the context directory
+        outlives the model forever, accumulating orphans every
+        time a model is replaced.
+
+        Gates the ``ModelContext(model_key_from_path(...)).delete()``
+        call expression — falsifiable by deleting either symbol.
+        """
+        import inspect
+        import re
+        from enigma_engine.gui.gui_forge_models import ForgeModelsMixin
+        src = inspect.getsource(ForgeModelsMixin._confirm_delete_model)
+        # Both symbols must appear AND the .delete() call must run.
+        assert re.search(r'\bmodel_key_from_path\b', src), (
+            "_confirm_delete_model must import model_key_from_path "
+            "to derive the context key from the model file path"
+        )
+        # Allow nested parens on the single chained call line
+        # (e.g. ``ModelContext(model_key_from_path(str(path))).delete()``)
+        # by anchoring the search on ``[^\n]*`` instead of ``[^)]*``.
+        assert re.search(
+            r'ModelContext\s*\([^\n]*\)\.delete\s*\(\s*\)', src,
+        ), (
+            "_confirm_delete_model must call ModelContext(...).delete() "
+            "so the per-model context dir is removed with the model"
+        )
 
     def test_no_direct_writes_in_critical_modules(self):
         """Critical data modules must use atomic_write_text/json, not raw writes."""

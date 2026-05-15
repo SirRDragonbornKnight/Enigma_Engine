@@ -1142,11 +1142,14 @@ class TestB3aSiblingPathWarning:
 
     def test_sibling_path_emits_b3a_warning_when_flag_on(self, caplog):
         import logging
-        # B-3d (Pass 156z9al) shipped streaming splice, so ``stream``
-        # joins ``native`` as a supported path that does NOT emit the
-        # B-3a sibling WARNING.  Remaining siblings still emit it.
-        for sibling in ("vision", "speculative",
-                        "medusa", "lookahead", "batch", "gguf"):
+        # B-3d (Pass 156z9al) shipped streaming splice, Pass 156z9cp
+        # shipped speculative / medusa / lookahead splice, Pass
+        # 156z9do shipped vision splice, and Pass 156z9dp shipped
+        # batch splice, so those seven paths join ``native`` as
+        # supported paths that do NOT emit the B-3a sibling WARNING.
+        # Only ``gguf`` remains WARNING-only (no per-token logits hook
+        # in the installed llama-cpp-python).
+        for sibling in ("gguf",):
             obj = self._stub()
             obj.inline_search_splice_enabled = True
             caplog.clear()
@@ -2261,6 +2264,292 @@ class TestB3bRagSpliceWireSiteStructural:
         assert hasattr(_GenerationMixin, "_maybe_rag_splice")
 
 
+class TestB3SpeculativeSiblingClosure:
+    """Pass 156z9cp B-3 sibling closure for the three structurally-aligned
+    decoding paths: ``speculative_generate``, ``medusa_generate``,
+    ``lookahead_generate``.
+
+    Each path mirrors the wire-site pattern from :meth:`_generate_text`:
+
+    1. **Stop-string augmentation.** When ``inline_search_splice_enabled``
+       is True, defensively copy ``stop_strings`` into
+       ``effective_stop_strings`` and append ``"</search>"``.  Falsified
+       by deleting either side.
+    2. **Wire-site.** Call ``self._maybe_rag_splice(...)`` with the
+       literal ``tokens_already_generated=tokens_generated`` forward so
+       the round budget is respected.  Falsified by deleting the call
+       OR dropping the budget kwarg.
+    3. **WARNING gate update.** ``path="speculative"`` / ``"medusa"`` /
+       ``"lookahead"`` must NOT trigger the B-3a sibling WARNING; this
+       is a behavioural regression gate on
+       :meth:`_record_search_emissions`.
+    """
+
+    @pytest.mark.parametrize("method_name", [
+        "speculative_generate", "medusa_generate", "lookahead_generate",
+    ])
+    def test_path_augments_stop_strings_with_close_tag(self, method_name):
+        import inspect
+        import re as _re
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        method = getattr(_GenerationMixin, method_name)
+        src = inspect.getsource(method)
+        body = "\n".join(
+            ln for ln in src.splitlines()
+            if not ln.lstrip().startswith("#"))
+        assert _re.search(
+            r'effective_stop_strings\s*=\s*list\(stop_strings\s+or\s+\[\]\)',
+            body), (
+            f"{method_name} must defensively copy stop_strings into "
+            "effective_stop_strings when the splice flag is on.")
+        assert _re.search(
+            r'effective_stop_strings\.append\(\s*"</search>"\s*\)',
+            body), (
+            f'{method_name} must append "</search>" to '
+            "effective_stop_strings — the auto-stop is the precondition "
+            "for the splice helper.")
+
+    @pytest.mark.parametrize("method_name", [
+        "speculative_generate", "medusa_generate", "lookahead_generate",
+    ])
+    def test_path_invokes_maybe_rag_splice(self, method_name):
+        import inspect
+        import re as _re
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        method = getattr(_GenerationMixin, method_name)
+        src = inspect.getsource(method)
+        body = "\n".join(
+            ln for ln in src.splitlines()
+            if not ln.lstrip().startswith("#"))
+        assert _re.search(
+            r"self\._maybe_rag_splice\s*\(", body), (
+            f"{method_name} must call self._maybe_rag_splice(...) "
+            "after the post-decode trim block.  Without this call the "
+            "B-3a flag has no splice consumer on this path.")
+        assert _re.search(
+            r"tokens_already_generated\s*=\s*tokens_generated",
+            body), (
+            f"{method_name} must forward "
+            "tokens_already_generated=tokens_generated to "
+            "_maybe_rag_splice so the round budget is honoured.")
+
+    @pytest.mark.parametrize("path", ["speculative", "medusa", "lookahead"])
+    def test_path_no_longer_emits_b3a_warning(self, caplog, path):
+        """Behavioural regression gate paired with the WARNING-gate
+        update in ``_record_search_emissions``: the three Pass 156z9cp
+        closed paths must record queries silently (Stage B-2 WARNING
+        still fires) but must NOT emit the B-3a sibling WARNING."""
+        import logging
+        from enigma_engine.core.engine_generation import _GenerationMixin
+
+        obj = object.__new__(_GenerationMixin)
+        obj.last_search_queries = []
+        obj.inline_search_enabled = True
+        obj.inline_search_splice_enabled = True
+        with caplog.at_level(
+            logging.WARNING,
+            logger="enigma_engine.core.engine_generation",
+        ):
+            obj._record_search_emissions(
+                "<search>q</search>", path=path)
+        messages = [r.message for r in caplog.records]
+        assert any("Stage B-2" in m for m in messages), (
+            "Generic Stage B-2 WARNING must still fire — queries are "
+            "still recorded on every path.")
+        assert not any("B-3a:" in m for m in messages), (
+            f"Pass 156z9cp closed {path!r}; this path must not be in "
+            "the B-3a sibling-WARNING set anymore.")
+
+
+class TestB3VisionSiblingClosure:
+    """Pass 156z9do B-3 sibling closure for ``_generate_with_vision``.
+    Mirrors the wire-site pattern from the speculative siblings:
+
+    1. **Stop-string augmentation.** When ``inline_search_splice_enabled``
+       is True, defensively copy ``stop_strings`` into
+       ``effective_stop_strings`` and append ``"</search>"``.
+    2. **Wire-site.** Call ``self._maybe_rag_splice(...)`` with the
+       literal ``tokens_already_generated=tokens_round0`` forward so
+       the round budget is respected.  Falsified by deleting either.
+    3. **WARNING gate update.** ``path="vision"`` must NOT trigger the
+       B-3a sibling WARNING; this is the behavioural regression gate
+       on :meth:`_record_search_emissions`.
+
+    Documented degradation: continuation rounds run through
+    ``_generate_manual`` (text-only) so the model loses image grounding
+    on splice rounds.  Accepted because the splice exists to inject
+    retrieved text knowledge; image content the model needed was
+    already in the emission up to ``</search>``.
+    """
+
+    def test_vision_augments_stop_strings_with_close_tag(self):
+        import inspect
+        import re as _re
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        src = inspect.getsource(_GenerationMixin._generate_with_vision)
+        body = "\n".join(
+            ln for ln in src.splitlines()
+            if not ln.lstrip().startswith("#"))
+        assert _re.search(
+            r'effective_stop_strings\s*=\s*list\(stop_strings\s+or\s+\[\]\)',
+            body), (
+            "_generate_with_vision must defensively copy stop_strings "
+            "into effective_stop_strings when the splice flag is on.")
+        assert _re.search(
+            r'effective_stop_strings\.append\(\s*"</search>"\s*\)',
+            body), (
+            '_generate_with_vision must append "</search>" to '
+            "effective_stop_strings — the auto-stop is the precondition "
+            "for the splice helper.")
+
+    def test_vision_invokes_maybe_rag_splice(self):
+        import inspect
+        import re as _re
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        src = inspect.getsource(_GenerationMixin._generate_with_vision)
+        body = "\n".join(
+            ln for ln in src.splitlines()
+            if not ln.lstrip().startswith("#"))
+        assert _re.search(
+            r"self\._maybe_rag_splice\s*\(", body), (
+            "_generate_with_vision must call self._maybe_rag_splice(...) "
+            "after the post-decode trim block.  Without this call the "
+            "B-3a flag has no splice consumer on the vision path.")
+        assert _re.search(
+            r"tokens_already_generated\s*=\s*tokens_round0",
+            body), (
+            "_generate_with_vision must forward "
+            "tokens_already_generated=tokens_round0 to "
+            "_maybe_rag_splice so the round budget is honoured.")
+
+    def test_vision_path_no_longer_emits_b3a_warning(self, caplog):
+        """Behavioural regression gate paired with the WARNING-gate
+        update in ``_record_search_emissions``: ``path='vision'`` must
+        record queries silently (Stage B-2 WARNING still fires) but
+        must NOT emit the B-3a sibling WARNING."""
+        import logging
+        from enigma_engine.core.engine_generation import _GenerationMixin
+
+        obj = object.__new__(_GenerationMixin)
+        obj.last_search_queries = []
+        obj.inline_search_enabled = True
+        obj.inline_search_splice_enabled = True
+        with caplog.at_level(
+            logging.WARNING,
+            logger="enigma_engine.core.engine_generation",
+        ):
+            obj._record_search_emissions(
+                "<search>q</search>", path="vision")
+        messages = [r.message for r in caplog.records]
+        assert any("Stage B-2" in m for m in messages), (
+            "Generic Stage B-2 WARNING must still fire — queries are "
+            "still recorded on every path.")
+        assert not any("B-3a:" in m for m in messages), (
+            "Pass 156z9do closed 'vision'; this path must not be in "
+            "the B-3a sibling-WARNING set anymore.")
+
+
+class TestB3BatchSiblingClosure:
+    """Pass 156z9dp B-3 sibling closure for ``batch_generate``.
+
+    The batch path runs the autoregressive loop in vectorised form
+    (one forward per step, all rows together) so per-sequence
+    ``</search>`` stop-detection in the loop is impractical — rows
+    desync the moment one emits the close tag while others are still
+    generating.  Instead the splice runs **post-decode, per-prompt**:
+
+    1. Decode the batch normally for ``max_gen`` steps (or until all
+       rows EOS).
+    2. For each output, trim at ``</search>`` and call
+       ``_maybe_rag_splice(...)`` independently with that row's own
+       round-0 token budget (``generated.shape[1] - len(encoded[i])``).
+    3. Drop ``"batch"`` from the B-3a WARNING allow-list — the flag is
+       now a real consumer for batch callers too.
+
+    Trade-off: splice rounds run serially per prompt via
+    ``_generate_manual`` (text-only single-sequence), so the batch
+    efficiency advantage applies only to round 0.  Acceptable because
+    splice triggers on a minority of rows in typical batched calls
+    (and the alternative — desynced in-loop stop-and-resume — is
+    significantly more code for marginal speedup).
+    """
+
+    def test_batch_trims_per_sequence_at_close_tag_when_flag_on(self):
+        import inspect
+        import re as _re
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        src = inspect.getsource(_GenerationMixin.batch_generate)
+        body = "\n".join(
+            ln for ln in src.splitlines()
+            if not ln.lstrip().startswith("#"))
+        assert _re.search(
+            r'splice_enabled\s*=\s*getattr\(\s*self\s*,\s*'
+            r'"inline_search_splice_enabled"',
+            body), (
+            "batch_generate must read inline_search_splice_enabled "
+            "via getattr so unflagged stubs do not crash.")
+        assert _re.search(
+            r'generated_part\.find\(\s*"</search>"\s*\)',
+            body), (
+            "batch_generate must per-sequence trim at the first "
+            "</search> in the post-prompt portion of each row.")
+
+    def test_batch_invokes_maybe_rag_splice_per_prompt(self):
+        import inspect
+        import re as _re
+        from enigma_engine.core.engine_generation import _GenerationMixin
+        src = inspect.getsource(_GenerationMixin.batch_generate)
+        body = "\n".join(
+            ln for ln in src.splitlines()
+            if not ln.lstrip().startswith("#"))
+        assert _re.search(
+            r"self\._maybe_rag_splice\s*\(", body), (
+            "batch_generate must call self._maybe_rag_splice(...) "
+            "per prompt after the per-sequence trim.")
+        # tokens_already_generated must use the per-sequence round-0
+        # count, not the padded max_input_len — a wrong budget here
+        # would either over-charge or under-charge each row.
+        assert _re.search(
+            r"tokens_already_generated\s*=\s*tokens_round0",
+            body), (
+            "batch_generate must forward "
+            "tokens_already_generated=tokens_round0 (per-row count) "
+            "to _maybe_rag_splice.")
+        assert _re.search(
+            r"tokens_round0\s*=\s*max\(\s*0\s*,\s*generated\.shape\[1\]"
+            r"\s*-\s*len\(\s*encoded\[\s*i\s*\]\s*\)\s*\)",
+            body), (
+            "tokens_round0 must subtract the per-row original input "
+            "length (``len(encoded[i])``) from the padded generated "
+            "length — otherwise padding tokens count as 'generated'.")
+
+    def test_batch_path_no_longer_emits_b3a_warning(self, caplog):
+        """Behavioural regression gate paired with the WARNING-gate
+        update in ``_record_search_emissions``: ``path='batch'`` must
+        record queries silently (Stage B-2 WARNING still fires) but
+        must NOT emit the B-3a sibling WARNING."""
+        import logging
+        from enigma_engine.core.engine_generation import _GenerationMixin
+
+        obj = object.__new__(_GenerationMixin)
+        obj.last_search_queries = []
+        obj.inline_search_enabled = True
+        obj.inline_search_splice_enabled = True
+        with caplog.at_level(
+            logging.WARNING,
+            logger="enigma_engine.core.engine_generation",
+        ):
+            obj._record_search_emissions(
+                "<search>q</search>", path="batch")
+        messages = [r.message for r in caplog.records]
+        assert any("Stage B-2" in m for m in messages), (
+            "Generic Stage B-2 WARNING must still fire — queries are "
+            "still recorded on every path.")
+        assert not any("B-3a:" in m for m in messages), (
+            "Pass 156z9dp closed 'batch'; this path must not be in "
+            "the B-3a sibling-WARNING set anymore.")
+
+
 class TestStageB2GgufChatSiblingSweep:
     """Pass 156z9e sibling-boundary-sweep audit on Pass 156z9d: the
     chat() and stream_chat() GGUF branches in ``engine_chat.py`` call
@@ -2310,9 +2599,14 @@ class TestStageB2GgufChatSiblingSweep:
         import inspect
         from enigma_engine.core.engine_chat import _ChatMixin
         src = inspect.getsource(_ChatMixin.stream_chat)
-        # llama-cpp-python in-process streaming branch
+        # llama-cpp-python in-process streaming branch.
+        # NB: ``create_chat_completion`` also appears in the docstring
+        # ("Works with ... GGUF models (via create_chat_completion ...)")
+        # so use ``rfind`` to anchor on the actual call site in the body,
+        # not the prose reference.  Otherwise the window slides off the
+        # call when the docstring grows.
         llamacpp_marker = "create_chat_completion"
-        idx = src.find(llamacpp_marker)
+        idx = src.rfind(llamacpp_marker)
         assert idx != -1, (
             "GGUF llama-cpp streaming branch not found in stream_chat()")
         # Window covers the try/finally that wraps the chunk loop
@@ -2324,6 +2618,280 @@ class TestStageB2GgufChatSiblingSweep:
         assert "finally" in window, (
             "stream_chat() GGUF llama-cpp branch must wrap its yield "
             "loop in try/finally so the scan survives early break.")
+
+    @pytest.mark.parametrize("method_name,window_start_marker", [
+        ("chat", "if ctx.is_gguf and hasattr(self.model"),
+        ("stream_chat", "if ctx.has_server_backend"),
+        ("stream_chat", "create_chat_completion"),
+    ])
+    def test_gguf_chat_path_forwards_path_kwarg(
+        self, method_name, window_start_marker,
+    ):
+        """Pass 156z9cq sibling-boundary closure: each of the three
+        GGUF chat-path ``_record_search_emissions`` call sites must
+        forward ``path="gguf"`` so the helper's B-3a sibling WARNING
+        fires when ``inline_search_splice_enabled`` is True.
+
+        Without this forward, the default ``path="native"`` is used
+        and the WARNING is silently suppressed (native is in the
+        helper's supported allow-list), giving the user a feature
+        labelled "splice on" with no observable behaviour or warning
+        on GGUF chat paths."""
+        import inspect
+        import re as _re
+        from enigma_engine.core.engine_chat import _ChatMixin
+        method = getattr(_ChatMixin, method_name)
+        src = inspect.getsource(method)
+        idx = src.find(window_start_marker)
+        assert idx != -1, (
+            f"{method_name}: marker {window_start_marker!r} not found"
+        )
+        # Window large enough to span the full branch body
+        window = src[idx:idx + 4000]
+        # Literal regex on the call expression — gates the forward, not
+        # just the kwarg's presence somewhere in the method body.
+        assert _re.search(
+            r"_record_search_emissions\([^)]*path\s*=\s*[\"']gguf[\"']",
+            window,
+            flags=_re.DOTALL,
+        ), (
+            f"{method_name} GGUF branch (marker={window_start_marker!r}) "
+            "must call _record_search_emissions(... path=\"gguf\") so "
+            "the B-3a sibling WARNING fires when the splice flag is on."
+        )
+
+
+class TestChatDocstringHonesty:
+    """Doc-vs-code lens: the ``Raises:`` clauses on ``chat()`` and
+    ``stream_chat()`` must enumerate only exceptions the code actually
+    raises, and must enumerate every exception that IS raised at the
+    public boundary.  Pass 156s anti-pattern: a docstring promising
+    behaviour the code does not perform (e.g. ``RuntimeError: If the
+    model is not loaded``) misleads callers into writing
+    ``try/except RuntimeError`` that silently misses the real
+    ``AttributeError`` the code throws."""
+
+    def test_chat_docstring_does_not_promise_unraised_runtime_error(self):
+        import inspect
+        from enigma_engine.core.engine_chat import _ChatMixin
+        doc = inspect.getdoc(_ChatMixin.chat) or ""
+        # The original (Pass 156s anti-pattern) phrasing was:
+        #   "RuntimeError: If the underlying model is not loaded ..."
+        # The current chat() body has no `if self.model is None: raise
+        # RuntimeError(...)` guard, so the doc must not promise it.
+        assert "If the underlying model is not loaded" not in doc, (
+            "chat() docstring promises RuntimeError on missing model "
+            "but the code never raises it. Either implement the guard "
+            "or drop the promise (Pass 156s rule)."
+        )
+
+    def test_chat_docstring_documents_json_schema_gguf_rejection(self):
+        import inspect
+        from enigma_engine.core.engine_chat import _ChatMixin
+        doc = inspect.getdoc(_ChatMixin.chat) or ""
+        assert "NotImplementedError" in doc, (
+            "chat() raises NotImplementedError when json_schema is "
+            "passed on a GGUF model (Pass 156z7 N-15c2). The docstring "
+            "must document this — undocumented raises are a smaller "
+            "lie than overpromised raises but still violate the rule."
+        )
+        assert "json_schema" in doc and "GGUF" in doc, (
+            "chat() docstring's NotImplementedError clause must name "
+            "the trigger (json_schema) and the gated path (GGUF) so "
+            "callers can write the right except clause."
+        )
+
+    def test_stream_chat_docstring_documents_json_schema_gguf_rejection(self):
+        import inspect
+        from enigma_engine.core.engine_chat import _ChatMixin
+        doc = inspect.getdoc(_ChatMixin.stream_chat) or ""
+        assert "NotImplementedError" in doc, (
+            "stream_chat() raises NotImplementedError when json_schema "
+            "is passed on a GGUF model (Pass 156z6 N-15c). The "
+            "docstring must document this raise."
+        )
+        assert "json_schema" in doc and "GGUF" in doc, (
+            "stream_chat() docstring's NotImplementedError clause must "
+            "name the trigger (json_schema) and the gated path (GGUF)."
+        )
+
+
+class TestInferenceDocstringHonesty:
+    """Pass 156z9cs continuation of the docstring-honesty sweep beyond
+    `_ChatMixin`.  Three sibling sites in `core/inference.py`,
+    `core/model.py`, and `core/huggingface_loader.py` had `Raises:`
+    clauses that lied about either the trigger condition or the
+    coverage.  Same Pass 156s lens applied; gates pinned in place so
+    a regression that drops the validation guard OR walks the doc
+    back to a vague claim fails the test.
+    """
+
+    def test_generate_typeerror_guard_is_real_and_documented(self):
+        """`EnigmaEngine.generate()` claimed `TypeError: If prompt is
+        not a string` but had no `isinstance(prompt, str)` guard \u2014
+        callers hit an opaque tokenizer error instead.  Pass 156z9cs
+        added the guard; this test pins both the doc claim AND the
+        live behaviour so a regression in either direction fails."""
+        import inspect
+
+        from enigma_engine.core.inference import EnigmaEngine
+        doc = inspect.getdoc(EnigmaEngine.generate) or ""
+        assert "TypeError" in doc and "prompt" in doc, (
+            "generate() docstring must enumerate the TypeError "
+            "trigger explicitly."
+        )
+
+        # Behavioural gate: the guard must raise TypeError synchronously
+        # without touching the model. Build a near-empty stub engine
+        # that would otherwise blow up; the type check fires first.
+        engine = EnigmaEngine.__new__(EnigmaEngine)
+        with pytest.raises(TypeError, match="prompt must be a string"):
+            engine.generate(prompt=None)  # type: ignore[arg-type]
+        with pytest.raises(TypeError, match="prompt must be a string"):
+            engine.generate(prompt=["not", "a", "string"])  # type: ignore[arg-type]
+
+    def test_generate_documents_json_schema_execute_tools_value_error(self):
+        """Pass 156z7 (N-15c2) added a real ValueError gate for
+        `json_schema + execute_tools`.  The pre-156z9cs docstring's
+        `ValueError: If parameters are out of valid range` was vague
+        enough to technically cover this, but did not let a caller
+        write a useful `except` clause.  Pin the specific trigger."""
+        import inspect
+
+        from enigma_engine.core.inference import EnigmaEngine
+        doc = inspect.getdoc(EnigmaEngine.generate) or ""
+        assert "json_schema" in doc and "execute_tools" in doc, (
+            "generate() docstring must name the json_schema + "
+            "execute_tools mutual-exclusion gate as a specific "
+            "ValueError trigger."
+        )
+
+    def test_generate_documents_all_numeric_range_value_errors(self):
+        """Pass 156z9ct audit on Pass 156z9cs: the 156z9cs cleanup
+        narrowed the `Raises:` clause to the json_schema gate but
+        dropped coverage of the FIVE pre-existing numeric-range
+        triggers that propagate from ``_generate_text`` and are
+        gated by ``tests/test_inference.py::TestGenerateValidation``
+        (max_gen, temperature, top_k, top_p, repetition_penalty).
+        Document them so callers can write the right ``except``."""
+        import inspect
+
+        from enigma_engine.core.inference import EnigmaEngine
+        doc = inspect.getdoc(EnigmaEngine.generate) or ""
+        for marker in (
+            "max_gen", "temperature", "top_k", "top_p", "repetition_penalty"
+        ):
+            assert marker in doc, (
+                f"generate() Raises clause must name {marker!r} as a "
+                "ValueError trigger after Pass 156z9ct restoration."
+            )
+
+    def test_model_generate_enumerates_all_three_value_error_triggers(self):
+        """`Enigma.generate()` (the core forward-loop variant in
+        `core/model.py`) raises ValueError on three distinct
+        conditions: temperature, input_ids shape, device mismatch.
+        The pre-156z9cs docstring listed only one.  Pin all three."""
+        import inspect
+
+        from enigma_engine.core.model import Enigma
+        doc = inspect.getdoc(Enigma.generate) or ""
+        # Substrings that must appear in the expanded clause
+        for marker in ("temperature", "input_ids", "device"):
+            assert marker in doc, (
+                f"Enigma.generate() Raises clause must name {marker!r} "
+                "as a ValueError trigger after Pass 156z9cs."
+            )
+
+    def test_convert_hf_config_to_forge_documents_real_value_error_trigger(self):
+        """`convert_hf_config_to_forge` claimed `ValueError: If model
+        type not supported` but actually raises ValueError on missing
+        dim / layers / heads fields.  Pin the corrected wording so a
+        future regression doesn't walk the doc back to the old lie."""
+        import inspect
+
+        from enigma_engine.core.huggingface_loader import convert_hf_config_to_forge
+        doc = inspect.getdoc(convert_hf_config_to_forge) or ""
+        # Negative: the false old trigger must not return
+        assert "model type not supported" not in doc, (
+            "convert_hf_config_to_forge docstring must not promise "
+            "the unraised 'model type not supported' trigger."
+        )
+        # Positive: at least one of the real triggers must be named
+        assert ("dimension" in doc
+                or "hidden_size" in doc
+                or "layer count" in doc
+                or "attention-head" in doc), (
+            "convert_hf_config_to_forge Raises clause must name one "
+            "of the real missing-field triggers (dimension / layer "
+            "count / attention-head count)."
+        )
+
+    def test_parse_gguf_tensors_does_not_promise_notimplementederror(self):
+        """Pass 156z9cu: `parse_gguf_tensors` claimed `NotImplementedError`
+        but the body has zero `raise NotImplementedError` statements —
+        unknown tensor types are SKIPPED with a WARNING log, and the
+        only real raise is `RuntimeError` when torch is missing.
+        Pass 156s anti-pattern (documents what the code never raises)."""
+        import inspect
+
+        from enigma_engine.core.gguf_dequant import parse_gguf_tensors
+        doc = inspect.getdoc(parse_gguf_tensors) or ""
+        # Negative: the false promise must not appear in the Raises clause.
+        # NB: the body of the docstring still describes the format ("F32
+        # and F16 load directly", "Pass 156s anti-pattern" note) — we
+        # gate on the LITERAL Raises-clause shape `NotImplementedError:`
+        # (colon-terminated, as Sphinx Raises-block syntax) to allow
+        # narrative reference to the old wording in the explanation.
+        import re as _re
+        assert not _re.search(
+            r"^\s*NotImplementedError\s*:", doc, _re.MULTILINE
+        ), (
+            "parse_gguf_tensors Raises clause must not promise the "
+            "unraised NotImplementedError trigger."
+        )
+        # Positive: the real RuntimeError trigger must be documented.
+        assert _re.search(r"^\s*RuntimeError\s*:", doc, _re.MULTILINE), (
+            "parse_gguf_tensors Raises clause must document the real "
+            "RuntimeError trigger (torch missing)."
+        )
+
+    def test_validate_loaded_model_documents_only_runtime_error(self):
+        """Pass 156z9cu: `validate_loaded_model` documented separate
+        `RuntimeError` AND `ValueError` triggers, but the body wraps
+        every internal raise in `try/except Exception → raise
+        RuntimeError(...) from e`.  The documented ValueError cannot
+        escape — it gets converted to RuntimeError with the ValueError
+        as `__cause__`.  Same Pass 156s anti-pattern."""
+        import inspect
+        import re as _re
+
+        from enigma_engine.core.onnx_loader import validate_loaded_model
+        doc = inspect.getdoc(validate_loaded_model) or ""
+        # Negative: the standalone ValueError Raises-clause line must
+        # not appear. Allow narrative reference ("the inner raise
+        # ValueError(...) is caught by the outer guard") in the
+        # explanation text — gate on the Sphinx Raises-block shape
+        # only (colon-terminated class name at line start).
+        # Specifically: ValueError must not appear as its own Raises
+        # line. The current honest text mentions it as "the inner
+        # raise ValueError(...)" — narrative, not promise.
+        lines = doc.splitlines()
+        for line in lines:
+            stripped = line.lstrip()
+            # A Sphinx Raises entry starts with the class name and a
+            # colon, immediately followed by a description.
+            if _re.match(r"^ValueError\s*:\s+\w", stripped):
+                raise AssertionError(
+                    f"validate_loaded_model Raises clause must not "
+                    f"promise ValueError as a top-level trigger — it "
+                    f"is caught and converted to RuntimeError. Found: "
+                    f"{stripped!r}"
+                )
+        # Positive: the real RuntimeError trigger must be documented.
+        assert _re.search(r"^\s*RuntimeError\s*:", doc, _re.MULTILINE), (
+            "validate_loaded_model Raises clause must document the "
+            "real RuntimeError trigger."
+        )
 
 
 # ---------------------------------------------------------------------------

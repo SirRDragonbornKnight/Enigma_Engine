@@ -723,6 +723,55 @@ class TestPreTrainingBackupWireSites:
     weight-mutating training entry point covered by Pass 156z9ar.
     """
 
+    @staticmethod
+    def _assert_rollback_in_finally(src: str, label: str) -> None:
+        """Assert the ``Rollback`` log line lives in the ``finally``
+        block — proves failure-path reach (Pass 156z9du, hardened
+        Pass 156z9dy).
+
+        A pre-fix layout placed the log only inside the success
+        block, so KeyboardInterrupt / OOM / generic Exception
+        branches printed STOPPED / FAILED / traceback without ever
+        telling the user where the rollback file lived.  The
+        ``finally`` block runs on every exit path, so a Rollback
+        log line must sit AFTER the last ``finally:`` keyword in
+        the method body.
+
+        Two checks:
+
+        1. ``rollback_idx > last_except`` — rollback is below every
+           ``except`` clause (rules out "inside except body").
+        2. ``rollback_idx > last_finally`` — rollback is below the
+           ``finally:`` keyword itself (rules out the pre-156z9dy
+           blind spot where a regression placing the log inside
+           ``except Exception as exc:`` would satisfy check 1 alone).
+
+        Together they sandwich the log into the ``finally:`` block.
+        """
+        last_except = src.rfind("            except ")
+        last_finally = src.rfind("            finally:")
+        rollback_idx = src.rfind('f"Rollback  : "')
+        assert last_except != -1, (
+            f"{label}: no 'except' clause found in source")
+        assert last_finally != -1, (
+            f"{label}: no 'finally:' keyword found in source")
+        assert rollback_idx != -1, (
+            f"{label}: no 'Rollback  :' log line found")
+        assert rollback_idx > last_except, (
+            f"{label}: Rollback log at idx {rollback_idx} is BEFORE "
+            f"the last except clause at idx {last_except}.  This "
+            "means the log only runs on the success path; failure "
+            "branches (STOP / OOM / crash) will not surface the "
+            "rollback file.  Move the log into the ``finally`` "
+            "block so every exit path reaches it.")
+        assert rollback_idx > last_finally, (
+            f"{label}: Rollback log at idx {rollback_idx} is BEFORE "
+            f"the last 'finally:' keyword at idx {last_finally}.  "
+            "This means the log sits inside an ``except`` body "
+            "rather than the ``finally`` block; a non-matching "
+            "exception class would skip it.  Move the log into "
+            "``finally:`` so every exit path reaches it.")
+
     def test_distill_uses_helper(self):
         from enigma_engine.gui.gui_forge_new_modes import (
             ForgeNewModesMixin,
@@ -738,6 +787,7 @@ class TestPreTrainingBackupWireSites:
         # the entry point itself any more.
         assert "shutil.copy2" not in src
         assert "_shutil.copy2" not in src
+        self._assert_rollback_in_finally(src, "distill")
 
     def test_dialogue_uses_helper(self):
         from enigma_engine.gui.gui_forge_advanced import (
@@ -751,6 +801,7 @@ class TestPreTrainingBackupWireSites:
         # Rollback path surfaces in the completion log.
         assert "pre_dialogue_backup_path" in src
         assert "Rollback" in src
+        self._assert_rollback_in_finally(src, "dialogue")
 
     def test_dpo_uses_helper(self):
         """DPO entry point also covers APO (APO is a DPO wrapper with
@@ -768,6 +819,7 @@ class TestPreTrainingBackupWireSites:
         assert 'f"pre_{loss_type}"' in src
         assert "pre_dpo_backup_path" in src
         assert "Rollback" in src
+        self._assert_rollback_in_finally(src, "dpo/apo")
 
     def test_rl_variant_uses_helper(self):
         """Shared handler for GRPO and ReMax — ``algo`` is the live
@@ -782,6 +834,7 @@ class TestPreTrainingBackupWireSites:
         assert 'f"pre_{algo.lower()}"' in src
         assert "pre_rl_backup_path" in src
         assert "Rollback" in src
+        self._assert_rollback_in_finally(src, "rl_variant")
 
     def test_simpo_orpo_uses_helper(self):
         """SimPO and ORPO share ``_start_preference_variant_training``
@@ -796,6 +849,7 @@ class TestPreTrainingBackupWireSites:
         assert 'f"pre_{algo.lower()}"' in src
         assert "pre_pref_backup_path" in src
         assert "Rollback" in src
+        self._assert_rollback_in_finally(src, "simpo/orpo")
 
     def test_vision_stage2_uses_helper_gated(self):
         """Vision training only mutates text weights when
@@ -818,5 +872,165 @@ class TestPreTrainingBackupWireSites:
             "Vision pre-train backup must be gated on Stage-2 "
             "(unfreeze_text_layers > 0); gate must precede the "
             "helper call.")
-        assert "pre_vision_backup_path" in src
+        self._assert_rollback_in_finally(src, "vision_stage2")
+
+    def test_audio_stage2_uses_helper_gated(self):
+        """Audio training (ARCH-1d) mirrors the vision Stage-2
+        contract: pre-training backup only fires when
+        ``unfreeze_text_layers > 0`` mutates the text backbone."""
+        from enigma_engine.gui.gui_forge_training import (
+            ForgeTrainingMixin,
+        )
+        src = inspect.getsource(
+            ForgeTrainingMixin._start_audio_training)
+        assert "self._pre_training_backup(" in src
+        assert 'suffix="pre_audio_stage2"' in src
+        assert "if unfreeze_text_layers > 0" in src
+        gate_idx = src.index("if unfreeze_text_layers > 0")
+        helper_idx = src.index("self._pre_training_backup(")
+        assert gate_idx < helper_idx, (
+            "Audio pre-train backup must be gated on Stage-2 "
+            "(unfreeze_text_layers > 0); gate must precede the "
+            "helper call.")
+        self._assert_rollback_in_finally(src, "audio_stage2")
+
+    def test_pretrain_uses_helper(self):
+        """Pre-training overwrites the student .pth in place at the
+        end of the run.  Step-based checkpoints inside the run only
+        protect against mid-run failure; the pre-train backup is the
+        rollback rail for the window before the first step-save
+        fires (Pass 156i4 NaN-at-step-1 risk).
+        """
+        from enigma_engine.gui.gui_forge_new_modes import (
+            ForgeNewModesMixin,
+        )
+        src = inspect.getsource(
+            ForgeNewModesMixin._start_pretrain_training)
+        assert (
+            "self._pre_training_backup(" in src
+            and 'suffix="pre_pretrain"' in src)
+        assert "pre_pretrain_backup_path" in src
+        # Rollback path surfaces in the completion log.
         assert "Rollback" in src
+        # Backup must be called BEFORE the Trainer is constructed
+        # so a constructor failure or step-1 NaN cannot poison the
+        # only on-disk copy.
+        helper_idx = src.index("self._pre_training_backup(")
+        trainer_idx = src.index(
+            "trainer = Trainer(model, tokenizer, train_config)")
+        assert helper_idx < trainer_idx, (
+            "Pre-train backup must run before Trainer construction; "
+            "otherwise a step-1 failure has no rollback target.")
+        self._assert_rollback_in_finally(src, "pretrain")
+
+    # ------------------------------------------------------------
+    # Pass 156z9dv: extend rail to 5 more entry points missed by
+    # Pass 156z9dt's sibling-sweep claim.  ``_start_basic_training``
+    # and ``_start_ai_guided_training`` are dispatchers that
+    # delegate to solo / lora / adaptive — rail coverage is
+    # transitive through the destination, so they are intentionally
+    # NOT wired here.
+    # ------------------------------------------------------------
+
+    def test_solo_uses_helper(self):
+        from enigma_engine.gui.gui_forge_training import (
+            ForgeTrainingMixin,
+        )
+        src = inspect.getsource(
+            ForgeTrainingMixin._start_solo_training)
+        assert (
+            "self._pre_training_backup(" in src
+            and 'suffix="pre_solo"' in src)
+        assert "pre_solo_backup_path" in src
+        assert "Rollback" in src
+        self._assert_rollback_in_finally(src, "solo")
+
+    def test_adaptive_uses_helper(self):
+        """Adaptive pipeline saves per-stage inside
+        ``_adaptive_phase2_train`` — backup at pipeline start is
+        the rollback target for the WHOLE pipeline (pre-stage-1).
+        """
+        from enigma_engine.gui.gui_forge_adaptive import (
+            ForgeAdaptiveMixin,
+        )
+        src = inspect.getsource(
+            ForgeAdaptiveMixin._start_adaptive_training)
+        assert (
+            "self._pre_training_backup(" in src
+            and 'suffix="pre_adaptive"' in src)
+        assert "pre_adaptive_backup_path" in src
+        assert "Rollback" in src
+        self._assert_rollback_in_finally(src, "adaptive")
+
+    def test_evolutionary_uses_helper(self):
+        from enigma_engine.gui.gui_forge_advanced import (
+            ForgeAdvancedMixin,
+        )
+        src = inspect.getsource(
+            ForgeAdvancedMixin._start_evolutionary_training)
+        assert (
+            "self._pre_training_backup(" in src
+            and 'suffix="pre_evolutionary"' in src)
+        assert "pre_evolutionary_backup_path" in src
+        assert "Rollback" in src
+        self._assert_rollback_in_finally(src, "evolutionary")
+
+    def test_rlhf_uses_helper(self):
+        """RLHF entry point has two workers: the API-routing
+        ``_run_api`` (daemon-managed; weights live server-side)
+        and the in-process ``_rlhf_train``.  Only the in-process
+        path needs a local rollback — the API path's rollback
+        target lives on the server.
+        """
+        from enigma_engine.gui.gui_forge_new_modes import (
+            ForgeNewModesMixin,
+        )
+        src = inspect.getsource(
+            ForgeNewModesMixin._start_rlhf_training)
+        assert (
+            "self._pre_training_backup(" in src
+            and 'suffix="pre_rlhf"' in src)
+        assert "pre_rlhf_backup_path" in src
+        assert "Rollback" in src
+        self._assert_rollback_in_finally(src, "rlhf")
+
+    def test_selfplay_uses_helper(self):
+        """Self-play entry point has two workers: API and
+        in-process.  Only the in-process path needs a local
+        rollback — see ``test_rlhf_uses_helper`` for the
+        rationale.
+        """
+        from enigma_engine.gui.gui_forge_new_modes import (
+            ForgeNewModesMixin,
+        )
+        src = inspect.getsource(
+            ForgeNewModesMixin._start_selfplay_training)
+        assert (
+            "self._pre_training_backup(" in src
+            and 'suffix="pre_selfplay"' in src)
+        assert "pre_selfplay_backup_path" in src
+        assert "Rollback" in src
+        self._assert_rollback_in_finally(src, "selfplay")
+
+    def test_solo_backup_runs_after_api_dispatch(self):
+        """Pass 156z9dz (AUDIT 156z9dv-A Finding A).  The local
+        rollback snapshot must NOT fire on the API-chat branch:
+        the daemon owns the weights server-side, so a local
+        backup is a misleading rollback target.  Mirrors the
+        RLHF/Self-Play structure where ``_run_api`` returns
+        before ``_pre_training_backup`` is called.
+        """
+        from enigma_engine.gui.gui_forge_training import (
+            ForgeTrainingMixin,
+        )
+        src = inspect.getsource(
+            ForgeTrainingMixin._start_solo_training)
+        api_idx = src.find('use_api_chat')
+        backup_idx = src.find('self._pre_training_backup(')
+        assert api_idx != -1, "API-mode dispatch missing in solo"
+        assert backup_idx != -1, "Backup call missing in solo"
+        assert backup_idx > api_idx, (
+            "Solo's _pre_training_backup must run AFTER the "
+            "use_api_chat dispatch block so API-mode skips the "
+            "local backup (daemon-managed); otherwise the user "
+            "gets a Rollback log pointing at a stale local file.")

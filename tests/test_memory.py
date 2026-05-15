@@ -206,6 +206,288 @@ class TestRAG:
                     for r in caplog.records)
 
 
+class TestDenseRAGIndex:
+    """Pass 156z9dr (N-14): DenseRAGIndex drop-in alternative to RAGIndex.
+
+    Tests inject fake ``sentence_transformers`` + ``faiss`` modules via
+    ``sys.modules`` so the slice is fully testable without requiring
+    the heavy real deps to be installed.  The fake embedder maps each
+    chunk to a deterministic small vector (hash-of-text → coordinates)
+    so similarity reflects token overlap.
+    """
+
+    @staticmethod
+    def _install_fakes(monkeypatch):
+        """Inject fake sentence-transformers + faiss into sys.modules.
+
+        Returns the rag_dense module after re-importing so the fakes
+        take effect at module scope.
+        """
+        import sys
+        import types
+
+        import numpy as np
+
+        # --- Fake sentence_transformers ------------------------------------
+        st_mod = types.ModuleType("sentence_transformers")
+
+        class FakeST:
+            def __init__(self, model_name):
+                self.model_name = model_name
+
+            def encode(self, texts, normalize_embeddings=False,
+                       show_progress_bar=False):
+                # Deterministic 4-dim "embedding": presence of 4 marker
+                # tokens.  Real semantics are irrelevant; we just need
+                # query("python") to hit chunks containing "python".
+                markers = ["python", "cats", "machine", "garden"]
+                vecs = []
+                for t in texts:
+                    low = t.lower()
+                    v = np.array([1.0 if m in low else 0.0
+                                  for m in markers], dtype=np.float32)
+                    if normalize_embeddings:
+                        n = float(np.linalg.norm(v))
+                        if n > 0:
+                            v = v / n
+                    vecs.append(v)
+                return np.asarray(vecs, dtype=np.float32)
+
+        st_mod.SentenceTransformer = FakeST
+        monkeypatch.setitem(sys.modules, "sentence_transformers", st_mod)
+
+        # --- Fake faiss ---------------------------------------------------
+        faiss_mod = types.ModuleType("faiss")
+
+        class FakeIndexFlatIP:
+            def __init__(self, dim):
+                self.dim = dim
+                self.vectors = np.zeros((0, dim), dtype=np.float32)
+
+            def add(self, emb):
+                self.vectors = np.vstack([self.vectors, emb])
+
+            def search(self, q, k):
+                # Inner product similarity, return top-k.
+                if self.vectors.shape[0] == 0 or q.shape[0] == 0:
+                    return (
+                        np.zeros((q.shape[0], k), dtype=np.float32),
+                        -np.ones((q.shape[0], k), dtype=np.int64),
+                    )
+                sims = q @ self.vectors.T  # (n_queries, n_chunks)
+                n_chunks = sims.shape[1]
+                k_eff = min(k, n_chunks)
+                idx = np.argsort(-sims, axis=1)[:, :k_eff]
+                # Pad to width k with -1 / 0
+                if k_eff < k:
+                    pad_idx = -np.ones((q.shape[0], k - k_eff),
+                                       dtype=np.int64)
+                    pad_score = np.zeros((q.shape[0], k - k_eff),
+                                         dtype=np.float32)
+                    score = np.take_along_axis(sims, idx, axis=1)
+                    return (
+                        np.concatenate([score, pad_score], axis=1)
+                        .astype(np.float32),
+                        np.concatenate([idx.astype(np.int64), pad_idx],
+                                       axis=1),
+                    )
+                score = np.take_along_axis(sims, idx, axis=1)
+                return score.astype(np.float32), idx.astype(np.int64)
+
+        faiss_mod.IndexFlatIP = FakeIndexFlatIP
+        monkeypatch.setitem(sys.modules, "faiss", faiss_mod)
+
+        # --- Re-import rag_dense so module-scope soft-imports pick up
+        # the fakes.
+        if "enigma_engine.core.rag_dense" in sys.modules:
+            del sys.modules["enigma_engine.core.rag_dense"]
+        import enigma_engine.core.rag_dense as rag_dense_mod
+        return rag_dense_mod
+
+    # ── Module-level guards ───────────────────────────────────────────
+
+    def test_is_available_false_without_deps(self):
+        """is_available() returns False when sentence-transformers/faiss
+        modules are absent; structural check on the module flags."""
+        import enigma_engine.core.rag_dense as rd
+        # When the real deps aren't installed in CI, both flags are
+        # False.  When they ARE installed, both are True.  The
+        # contract is just that is_available() reflects the AND of
+        # the two module-scope flags — verifiable without forcing
+        # either branch.
+        assert rd.is_available() is (rd._HAS_ST and rd._HAS_FAISS)
+
+    def test_constructor_raises_when_deps_missing(self, monkeypatch):
+        """RuntimeError on direct construction when deps absent (loud-fail)."""
+        import enigma_engine.core.rag_dense as rd
+        monkeypatch.setattr(rd, "_HAS_ST", False)
+        monkeypatch.setattr(rd, "_HAS_FAISS", False)
+        import pytest
+        with pytest.raises(RuntimeError, match="sentence-transformers"):
+            rd.DenseRAGIndex()
+
+    # ── Build + query end-to-end with fakes ───────────────────────────
+
+    def test_build_and_query_with_fakes(self, monkeypatch):
+        """End-to-end: add docs → build → query returns top match."""
+        rd = self._install_fakes(monkeypatch)
+        index = rd.DenseRAGIndex()
+        index.add_document("py.txt", "Python is a programming language.")
+        index.add_document("cat.txt", "Cats and dogs are pets.")
+        index.build()
+        assert index.is_built
+        assert index.chunk_count == 2
+
+        results = index.query("python", top_k=2)
+        assert len(results) >= 1
+        # Top match must be the python doc (fake embedder marks
+        # "python" presence as the python axis).
+        assert results[0]["source"] == "py.txt"
+        # Result shape must match RAGIndex.query contract.
+        assert set(results[0].keys()) == {"chunk", "source", "score", "index"}
+
+    def test_query_returns_empty_when_unbuilt(self, monkeypatch):
+        """Querying before build() returns []; matches BM25 contract."""
+        rd = self._install_fakes(monkeypatch)
+        index = rd.DenseRAGIndex()
+        assert index.query("anything") == []
+
+    def test_save_and_load_round_trip(self, monkeypatch, tmp_path):
+        """Persisted index reloads with identical chunks/sources/scores."""
+        rd = self._install_fakes(monkeypatch)
+        index = rd.DenseRAGIndex()
+        index.add_document("a.txt", "Python beats cats at machine learning.")
+        index.add_document("b.txt", "Garden gnomes do not code Python.")
+        index.build()
+
+        path = tmp_path / "dense_idx.json"
+        index.save(path)
+        assert path.exists()
+        assert (tmp_path / "dense_idx.json.npy").exists()
+
+        loaded = rd.DenseRAGIndex.load(path)
+        assert loaded.is_built
+        assert loaded.chunks == index.chunks
+        assert loaded.sources == index.sources
+
+        results_orig = index.query("python", top_k=2)
+        results_loaded = loaded.query("python", top_k=2)
+        assert [r["source"] for r in results_orig] == \
+            [r["source"] for r in results_loaded]
+
+    def test_format_context_is_rag_index_method(self):
+        """DenseRAGIndex.format_context is RAGIndex.format_context
+        (same output formatting, no consumer branching)."""
+        from enigma_engine.core.rag import RAGIndex
+        from enigma_engine.core.rag_dense import DenseRAGIndex
+        # Compare the underlying function objects (both wrapped in
+        # staticmethod by their respective classes).
+        assert DenseRAGIndex.format_context is RAGIndex.format_context
+
+    # ── Factory wiring ────────────────────────────────────────────────
+
+    def test_factory_default_returns_bm25(self):
+        """make_rag_index() with no args / default CONFIG returns RAGIndex."""
+        from enigma_engine.core.rag import make_rag_index, RAGIndex
+        idx = make_rag_index(backend="bm25")
+        assert isinstance(idx, RAGIndex)
+
+    def test_factory_dense_falls_back_when_deps_missing(self, caplog):
+        """make_rag_index('dense') without deps logs WARNING + returns BM25."""
+        import logging
+        import enigma_engine.core.rag_dense as rd
+        # Force is_available() False without actually mutating
+        # sys.modules — patch the module-scope flags.
+        old_st, old_faiss = rd._HAS_ST, rd._HAS_FAISS
+        try:
+            rd._HAS_ST = False
+            rd._HAS_FAISS = False
+            from enigma_engine.core.rag import make_rag_index, RAGIndex
+            with caplog.at_level(logging.WARNING):
+                idx = make_rag_index(backend="dense")
+            assert isinstance(idx, RAGIndex)
+            assert any(
+                "rag_backend" in r.message and "BM25" in r.message
+                for r in caplog.records
+            )
+        finally:
+            rd._HAS_ST = old_st
+            rd._HAS_FAISS = old_faiss
+
+    def test_factory_unknown_backend_falls_back_to_bm25(self, caplog):
+        """Unknown backend string → WARNING + BM25."""
+        import logging
+        from enigma_engine.core.rag import make_rag_index, RAGIndex
+        with caplog.at_level(logging.WARNING):
+            idx = make_rag_index(backend="hyperbolic-quantum")
+        assert isinstance(idx, RAGIndex)
+        assert any("hyperbolic-quantum" in r.message
+                   for r in caplog.records)
+
+    def test_gui_toggle_callback_persists_choice(self, monkeypatch):
+        """`ConfigPageMixin._set_rag_backend` writes the dropdown
+        value to CONFIG and triggers `save_config()`.
+
+        Pass 156z9ds: verify the GUI surface for `rag_backend` round-
+        trips through the same `update_config` + `save_config` path
+        documented in the dropdown's docstring.  Uses an unbound
+        mixin call against a SimpleNamespace host (per §4 — Unbound
+        mixin tests need explicit sibling-method wiring).
+        """
+        from types import SimpleNamespace
+        from enigma_engine.gui.gui_pages_config import ConfigPageMixin
+        import enigma_engine.config as cfg_mod
+
+        # Snapshot CONFIG so the test does not leak state.
+        original = cfg_mod.CONFIG.get("rag_backend", "bm25")
+        saved: list[bool] = []
+
+        def fake_save_config(path=None):
+            saved.append(True)
+
+        monkeypatch.setattr(cfg_mod, "save_config", fake_save_config)
+        # ConfigPageMixin imports save_config/update_config locally;
+        # the import target is `enigma_engine.config`, so patching
+        # there is sufficient.
+
+        class _Var:
+            def __init__(self, val):
+                self._val = val
+
+            def get(self):
+                return self._val
+
+            def set(self, val):
+                self._val = val
+
+        class _Status:
+            def __init__(self):
+                self.left = ""
+
+            def set_left(self, msg):
+                self.left = msg
+
+        host = SimpleNamespace(
+            _rag_backend_var=_Var("dense"),
+            status_bar=_Status(),
+        )
+        try:
+            ConfigPageMixin._set_rag_backend(host)
+            assert cfg_mod.CONFIG.get("rag_backend") == "dense"
+            assert saved == [True]
+            assert "dense" in host.status_bar.left
+
+            # Unknown value snaps to bm25 + still persists.
+            host._rag_backend_var.set("not-a-backend")
+            saved.clear()
+            ConfigPageMixin._set_rag_backend(host)
+            assert cfg_mod.CONFIG.get("rag_backend") == "bm25"
+            assert host._rag_backend_var.get() == "bm25"
+            assert saved == [True]
+        finally:
+            cfg_mod.CONFIG["rag_backend"] = original
+
+
 class TestPersistentMemory:
     """Tests for enigma_engine.core.memory module."""
 

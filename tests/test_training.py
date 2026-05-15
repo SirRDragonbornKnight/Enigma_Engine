@@ -1187,7 +1187,110 @@ class TestVisionDataParsing:
         )
 
 
-class TestScanVisionData:
+class TestAudioTraining:
+    """Pass 156z9ec: Trainer.train_audio val_data behavioural gates.
+    Mirrors V-6 vision val_data tests so that audio val_loss can drive
+    best-checkpoint + early-stopping like every other train_* path."""
+
+    def _build_audio_fixture(self):
+        """Construct a tiny audio-capable model + encoder + tokenizer.
+        Returns (trainer_factory, audio_encoder, tokenizer, train_data,
+        val_data). The factory closes over a small TrainingConfig so
+        individual tests can swap epochs/learning_rate."""
+        import torch
+        from enigma_engine.core.audio_encoder import (
+            AudioEncoder, AudioEncoderConfig)
+        from enigma_engine.core.model import Enigma, ForgeConfig
+        from enigma_engine.core.tokenizer import SimpleTokenizer
+        from enigma_engine.training.training import Trainer, TrainingConfig
+
+        acfg = AudioEncoderConfig(
+            n_mels=80, dim=32, n_layers=1, n_heads=2,
+            max_audio_len=64, sample_rate=16000,
+            n_fft=64, hop_length=32,
+        )
+        a_enc = AudioEncoder(acfg)
+        tok = SimpleTokenizer()
+        tcfg = ForgeConfig(
+            vocab_size=tok.vocab_size, dim=32, n_layers=1, n_heads=2,
+            max_seq_len=64, audio_hidden_size=acfg.dim,
+        )
+        model = Enigma(config=tcfg)
+        tok.encode = lambda text: [1, 2, 3, 4, 5]  # type: ignore
+
+        # 1D waveform tensors so preprocess_audio's tensor branch fires
+        # (file IO not required). Short waveforms keep mel frames small.
+        rng = torch.Generator().manual_seed(0)
+        train_data = [
+            {"audio": torch.randn(2048, generator=rng),
+             "text": f"train sample {i}"}
+            for i in range(2)
+        ]
+        val_data = [
+            {"audio": torch.randn(2048, generator=rng),
+             "text": f"val sample {i}"}
+            for i in range(2)
+        ]
+
+        def factory(**overrides):
+            cfg = TrainingConfig(
+                epochs=overrides.pop("epochs", 1),
+                batch_size=1, use_amp=False, save_every=0,
+                learning_rate=overrides.pop("learning_rate", 1e-4),
+                **overrides,
+            )
+            return Trainer(model, tok, cfg)
+
+        return factory, a_enc, tok, train_data, val_data
+
+    def test_train_audio_accepts_val_data_kwarg(self):
+        """Signature gate — train_audio must accept ``val_data``."""
+        import inspect
+        from enigma_engine.training.training import Trainer
+        sig = inspect.signature(Trainer.train_audio)
+        assert "val_data" in sig.parameters, (
+            "Trainer.train_audio is missing the val_data kwarg — "
+            "Pass 156z9ec mirror of vision V-6 not landed.")
+        # Default must be None so existing callers stay backward-compatible.
+        assert sig.parameters["val_data"].default is None, (
+            "val_data default must be None; non-None would force every "
+            "caller to opt out instead of in.")
+
+    def test_train_audio_records_validation_loss(self):
+        """When ``val_data`` is provided, ``train_audio`` must run a
+        no-grad eval pass after each epoch and append the result to
+        ``state.validation_losses``."""
+        pytest.importorskip("torch")
+        factory, a_enc, _tok, train_data, val_data = (
+            self._build_audio_fixture())
+        trainer = factory(epochs=2)
+
+        state = trainer.train_audio(
+            audio_encoder=a_enc, data=train_data, val_data=val_data)
+
+        assert len(state.validation_losses) == 2, (
+            f"Expected 2 val losses (one per epoch), got "
+            f"{len(state.validation_losses)}: {state.validation_losses}")
+        for v in state.validation_losses:
+            assert isinstance(v, float)
+            assert v == v  # not NaN
+            assert v != float("inf")
+
+    def test_train_audio_no_val_data_keeps_validation_losses_empty(self):
+        """When ``val_data`` is omitted, behaviour must be unchanged —
+        ``state.validation_losses`` stays empty, no extra eval pass."""
+        pytest.importorskip("torch")
+        factory, a_enc, _tok, train_data, _val_data = (
+            self._build_audio_fixture())
+        trainer = factory(epochs=2)
+        state = trainer.train_audio(
+            audio_encoder=a_enc, data=train_data)
+
+        assert state.validation_losses == [], (
+            "validation_losses should remain empty when val_data is None")
+
+
+
     """Scanner detection of image-text datasets."""
 
     def test_scan_empty_dir(self):

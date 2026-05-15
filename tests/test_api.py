@@ -142,22 +142,34 @@ class TestStreamChat:
         mock_engine.clear_history = MagicMock()
 
         old_engine = state.engine
-        old_history = list(state._history)
+        old_histories = dict(state._histories)
+        old_order = list(state._conv_order)
+        old_active = state._active_conv_id
         state.engine = mock_engine
-        state._history.clear()
+        state._histories.clear()
+        state._conv_order.clear()
+        state._active_conv_id = None
         try:
-            client.post(
+            resp = client.post(
                 "/api/chat/stream",
                 json={"message": "test"},
             )
-            assert len(state._history) == 2
-            assert state._history[0]["role"] == "user"
-            assert state._history[0]["content"] == "test"
-            assert state._history[1]["role"] == "assistant"
-            assert "Yes" in state._history[1]["content"]
+            # Drain SSE body so generator runs to completion.
+            _ = resp.text
+            # One conversation was auto-created; pull its history.
+            assert len(state._histories) == 1
+            history = next(iter(state._histories.values()))
+            assert len(history) == 2
+            assert history[0]["role"] == "user"
+            assert history[0]["content"] == "test"
+            assert history[1]["role"] == "assistant"
+            assert "Yes" in history[1]["content"]
         finally:
             state.engine = old_engine
-            state._history[:] = old_history
+            state._histories.clear()
+            state._histories.update(old_histories)
+            state._conv_order[:] = old_order
+            state._active_conv_id = old_active
 
 
 # ---------------------------------------------------------------------------
@@ -306,9 +318,13 @@ class TestAutoResearchAPIParity:
 
         mock_engine.stream_chat = _stream_chat
         old_engine = srv.state.engine
-        old_history = list(srv.state._history)
+        old_histories = dict(srv.state._histories)
+        old_order = list(srv.state._conv_order)
+        old_active = srv.state._active_conv_id
         srv.state.engine = mock_engine
-        srv.state._history.clear()
+        srv.state._histories.clear()
+        srv.state._conv_order.clear()
+        srv.state._active_conv_id = None
         try:
             resp = client.post(
                 "/api/chat/stream",
@@ -319,7 +335,10 @@ class TestAutoResearchAPIParity:
             _ = resp.text  # drain SSE so the generator finishes
         finally:
             srv.state.engine = old_engine
-            srv.state._history[:] = old_history
+            srv.state._histories.clear()
+            srv.state._histories.update(old_histories)
+            srv.state._conv_order[:] = old_order
+            srv.state._active_conv_id = old_active
 
         assert "system_prompt" in captured
         assert "WEB RESEARCH" in captured["system_prompt"]
@@ -1088,7 +1107,11 @@ class TestAppStateThreadSafety:
         """history_snapshot must return a list copy, not the internal ref."""
         from enigma_engine.api.server import AppState
         s = AppState()
-        s.history.append({"role": "user", "content": "hi"})
+        # MC-1: per-conversation history.  Seed one conversation, then
+        # verify the snapshot is independent of the live list.
+        cid = s.create_conversation()
+        s._resolve_and_activate(cid)
+        s._histories[cid].append({"role": "user", "content": "hi"})
         snap = s.history_snapshot()
         assert snap == [{"role": "user", "content": "hi"}]
         # Mutating the snapshot must NOT affect internal state
@@ -1111,10 +1134,14 @@ class TestAppStateThreadSafety:
         mock_eng = MagicMock()
         mock_eng.chat = MagicMock(return_value="reply")
         s.engine = mock_eng
-        s.chat("hello")
-        assert len(s.history) == 2
-        assert s.history[0]["role"] == "user"
-        assert s.history[1]["role"] == "assistant"
+        # MC-1: chat() now returns (response, conv_id) and auto-creates
+        # a conversation when ``conversation_id=None``.
+        response, conv_id = s.chat("hello")
+        assert response == "reply"
+        history = s.history_snapshot(conv_id)
+        assert len(history) == 2
+        assert history[0]["role"] == "user"
+        assert history[1]["role"] == "assistant"
 
 
 # ---------------------------------------------------------------------------
@@ -1624,18 +1651,21 @@ class TestHistoryCap:
         assert server.MAX_HISTORY > 0
 
     def test_history_capped_on_append(self):
-        """History must evict oldest entries when cap is exceeded."""
+        """Per-conversation history must evict oldest entries when cap is exceeded."""
         from enigma_engine.api.server import AppState, MAX_HISTORY
         s = AppState()
-        # Fill beyond cap
+        cid = s.create_conversation()
+        # Fill beyond cap (MC-1: per-conversation trim).
         for i in range(MAX_HISTORY + 20):
             with s._lock:
-                s._history.append({"role": "user", "content": f"msg-{i}"})
-                s._history.append({"role": "assistant", "content": f"reply-{i}"})
-                s._trim_history()
-        assert len(s._history) <= MAX_HISTORY
+                conv = s._histories[cid]
+                conv.append({"role": "user", "content": f"msg-{i}"})
+                conv.append({"role": "assistant", "content": f"reply-{i}"})
+                s._trim_history_locked(cid)
+        conv = s._histories[cid]
+        assert len(conv) <= MAX_HISTORY
         # Most recent entry should still be present
-        assert s._history[-1]["content"] == f"reply-{MAX_HISTORY + 19}"
+        assert conv[-1]["content"] == f"reply-{MAX_HISTORY + 19}"
 
 
 class TestHistoryEndpoints:
@@ -1649,19 +1679,29 @@ class TestHistoryEndpoints:
         mock_engine.clear_kv_cache = MagicMock()
 
         old_engine = state.engine
-        old_history = list(state._history)
+        old_histories = dict(state._histories)
+        old_order = list(state._conv_order)
+        old_active = state._active_conv_id
         state.engine = mock_engine
-        state._history[:] = [{"role": "user", "content": "x"}]
+        # Seed one conversation so the nuke-everything route has
+        # something to clear.
+        cid = state.create_conversation()
+        state._resolve_and_activate(cid)
+        state._histories[cid].append({"role": "user", "content": "x"})
         try:
             resp = client.delete("/api/history")
             assert resp.status_code == 200
             assert resp.json().get("status") == "ok"
-            assert state._history == []
+            assert state._histories == {}
+            assert state._active_conv_id is None
             mock_engine.clear_history.assert_called_once()
             mock_engine.clear_kv_cache.assert_called_once()
         finally:
             state.engine = old_engine
-            state._history[:] = old_history
+            state._histories.clear()
+            state._histories.update(old_histories)
+            state._conv_order[:] = old_order
+            state._active_conv_id = old_active
 
 class TestTrainingModelSave:
     """ARCH-1d: server saves model to state.model_path after training (.pth only)."""
