@@ -30,6 +30,12 @@ huggingface-hub>=0.20.0
 # === SYSTEM MONITORING ===
 psutil>=5.9.0             # Hardware detection, resource monitoring
 
+# === GUI ===
+customtkinter>=5.2.0      # Modern themed Tk widgets used by enigma_engine.gui
+
+# === HTTP CLIENT ===
+requests>=2.31.0          # Used by core.web_utils, data collectors, mods
+
 # === API SERVER (for --serve) ===
 fastapi>=0.100.0
 uvicorn>=0.20.0

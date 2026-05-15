@@ -6,7 +6,6 @@
   "model_path": "",
   "model_type": "auto",
   "system_prompt": "You are a creative writing assistant. Help users with stories, \npoems, scripts, and creative content. Be imaginative and expressive.",
-  "personality": {},
   "chat_template": null,
   "generation": {
     "temperature": 0.9,

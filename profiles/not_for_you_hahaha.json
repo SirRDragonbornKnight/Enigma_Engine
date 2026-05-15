@@ -6,12 +6,6 @@
   "model_path": "",
   "model_type": "auto",
   "system_prompt": "goblin",
-  "personality": {
-    "tone": "helpful",
-    "verbosity": "balanced",
-    "formality": "casual",
-    "humor": "occasional"
-  },
   "chat_template": null,
   "generation": {
     "temperature": 0.7,

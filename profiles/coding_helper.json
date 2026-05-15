@@ -6,7 +6,6 @@
   "model_path": "",
   "model_type": "auto",
   "system_prompt": "You are a coding assistant. Help users write, debug, and understand code.\nUse [CMD]file.read path[/CMD] to read files.\nUse [CMD]file.write path content[/CMD] to save code.\nBe precise and technical. Show code examples.",
-  "personality": {},
   "chat_template": null,
   "generation": {
     "temperature": 0.3,

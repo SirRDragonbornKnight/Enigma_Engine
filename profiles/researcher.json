@@ -6,7 +6,6 @@
   "model_path": "",
   "model_type": "auto",
   "system_prompt": "You are a research assistant. Help users find information, \nanalyze data, and understand complex topics.\nUse [CMD]search.web query[/CMD] to search the internet.\nUse [CMD]web.fetch url[/CMD] to read web pages.\nAlways cite sources and be factual.",
-  "personality": {},
   "chat_template": null,
   "generation": {
     "temperature": 0.5,

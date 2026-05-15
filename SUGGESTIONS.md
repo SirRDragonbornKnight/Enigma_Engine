@@ -1,6 +1,1638 @@
 ﻿# Suggestions
 
-## 🟢 AUDIT SNAPSHOT (current session)
+## PASS 156z9ec — train_audio val_data follow-up: close parked debt from 156z9eb (May 15, 2026)
+
+**Status.** Finished. Closes the only parked item from Pass 156z9eb. `Trainer.train_audio` now accepts a `val_data` kwarg and runs a no-grad eval pass after every epoch, mirroring the vision V-6 contract at [training.py L5171-5246](enigma_engine/training/training.py#L5171-L5246). Dispatcher unpacks dict-shape `data={"train": [...], "val": [...]}` and forwards `val_data` to the trainer; FORGE Audio launcher nests `val_pairs_data` (already built by Pass 156z9eb val_split logic) into the config_dict so the GUI val-split slider now actually drives validation, not just parity logs. Suite: **3217 passed / 2 skipped in 38.8s** (+3 new audio val tests). Ruff clean.
+
+**Touched files.**
+- [enigma_engine/training/training.py](enigma_engine/training/training.py) — `train_audio` gained `val_data: list[dict[str, Any]] | None = None` kwarg (docstring entry cites Pass 156z9ec). Eager val_pairs build after the `if not pairs: raise` guard: iterates `val_data`, calls `preprocess_audio`, `.to(self.device)`, encodes text via tokenizer, appends `(v_mel, v_token_ids)` tuples; logs `"Audio validation: N held-out pairs"` when non-empty. New `_run_audio_validation()` closure mirrors vision's: no-grad pass, `_should_stop()` poll between samples (Pass 156g Bug B contract), no SpecAugment on eval mel, `audio_encoder(v_mel)` direct (no augment), slice `v_logits[:, v_n_audio:-1, :]`, CE against next-token targets, try/finally restores `model.train()`. Per-epoch block now calls `_run_audio_validation()`, appends to `state.validation_losses`, logs `"Epoch N val_loss=..."`, best-checkpoint uses `tracked_loss = val_loss if val_loss is not None else avg_loss` (mirror of L5474).
+- [enigma_engine/training/dispatch.py](enigma_engine/training/dispatch.py) — audio branch now unpacks dict-shape data: `if isinstance(audio_data, dict): val_data = audio_data.get("val"); audio_data = audio_data.get("train", [])`, then forwards `val_data` kwarg to `train_audio`. Identical pattern to vision branch L188-203. Backward-compatible: list-shape data still works (val_data stays None).
+- [enigma_engine/gui/gui_forge_training.py](enigma_engine/gui/gui_forge_training.py) — `_start_audio_training` config_dict now nests `"data": {"train": train_pairs_data, "val": val_pairs_data}`. Removed the Pass 156z9eb parked-debt comment ("val slice is logged for parity… reserved for a follow-up wire"); replaced with one-liner referencing this slice.
+- [tests/test_training.py](tests/test_training.py) — new `TestAudioTraining` class with 3 behavioural gates: (1) `test_train_audio_accepts_val_data_kwarg` — signature gate confirming `val_data` parameter exists with default None; (2) `test_train_audio_records_validation_loss` — epochs=2, builds tiny AudioEncoder + Enigma model with `audio_hidden_size=32`, asserts `len(state.validation_losses) == 2` with finite floats; (3) `test_train_audio_no_val_data_keeps_validation_losses_empty` — confirms backward-compatible path (no val_data) leaves `state.validation_losses == []`.
+
+**Call chain (production entry-point inward, §1 #20 acceptance check).**
+`FORGE Audio mode card → TRAIN → _start_audio_training → val_split slider produces train_pairs_data + val_pairs_data → config_dict["data"] = {"train": [...], "val": [...]} → run_training → dispatch.py audio branch unpacks dict → trainer.train_audio(audio_encoder=..., data=train, val_data=val) → per-epoch _run_audio_validation closure → state.validation_losses appended → best-checkpoint preference for val_loss`.
+
+**Six-question audit (§1 #19).**
+1. *Would I write it this way?* Yes — direct mirror of audited vision V-6 reference. Diverged on one decision (eager val_pairs preprocessing instead of vision's lazy) for **consistency with audio's eager train_pairs path**; vision's lazy was a deliberate OOM mitigation for LLaVA-Pretrain scale, audio data is typically smaller and consistency with audio's train pattern matters more than mirroring vision's lazy strategy.
+2. *Connections?* `preprocess_audio` (audio_encoder.py), `AudioEncoder.forward`, `model.forward_multimodal(audio_features=...)`, ForgeConfig.audio_hidden_size, dispatcher audio branch, GUI val_split logic (Pass 156z9eb), `TrainingState.validation_losses`, best-checkpoint logic in per-epoch block.
+3. *Missing connections?* None. The val_split slider (Pass 156z9eb) now reaches the trainer for the first time — the parity-log placeholder is gone.
+4. *Logic-eye on doc/code:* docstring promises val_data behaves identically to vision's; the closure runs no-grad, polls stop between samples, restores train mode via try/finally, computes CE on the audio-aware logit slice — every claim has a matching code line. No over-promised behaviour.
+5. *Claim-vs-test:* `test_train_audio_records_validation_loss` runs a real 2-epoch training, asserts exactly 2 validation losses, finite floats — would fail if the per-epoch block skipped the val call or if `_run_audio_validation` returned None on the happy path. `test_train_audio_no_val_data_keeps_validation_losses_empty` would fail if the val-pairs build ran unconditionally. `test_train_audio_accepts_val_data_kwarg` is a structural signature gate that catches kwarg-name drift.
+6. *Sibling-boundary sweep:* re-grepped `validation_losses` consumers — vision's per-epoch block (the reference), and now audio's. No other `train_*` method shipped `_run_*_validation`; vision + audio are the only two that consume val_data today. Best-checkpoint `tracked_loss` pattern is the same in both. Dispatcher dict-unpack matches vision's audio branch exactly. No sibling regressed.
+
+**No half-built artefacts (§1 #20 finish/kill/park check).** Slice is **Finished**: signature gained `val_data`, dispatcher unpacks, GUI nests, three behavioural tests gate the contract from kwarg-presence to loss-recording to no-val backward compatibility. Suite green at 3217/2.
+
+**Parked / follow-up (refreshed list).**
+- GUI-ARCH-0b operator measurement run (M1/M2/M3/M5) — unchanged.
+- Personality-5 Row G loss-half — unchanged (gated on 2 real distill runs landing probe summaries).
+- B-3 sibling closure — vision/batch closed (156z9do/dp); GGUF chat parked permanently (156z9dq, design rationale in-source).
+- 50+ uncommitted files in working tree — operational risk flagged in pre-Pass audit; not acted on per §1 operational safety (commit/push only on explicit user direction).
+
+## PASS 156z9eb — ARCH-1d: Forge audio launcher slice (May 15, 2026)
+
+**Status.** Finished. Closes ARCH-1d. The `Trainer.train_audio` path, dispatcher `mode="audio"` branch, and `AudioSettings` schema already existed; this slice supplies the missing GUI launcher so the audio multimodal training pipeline is reachable from a production entry-point (FORGE Audio mode card → TRAIN). Suite: **3213 passed / 3 skipped**, ruff clean.
+
+**Touched files.**
+- [enigma_engine/gui/scanners.py](enigma_engine/gui/scanners.py) — added `_AUDIO_EXTENSIONS` constant and `scan_audio_data(directory)` returning `[{"audio": str, "text": str}]`. Two discovery strategies mirror vision: (1) JSONL with `audio`+`text` fields, (2) paired `clip.wav` + `clip.txt` same-name files. Supports `.wav .mp3 .flac .ogg .m4a .aac .opus`.
+- [enigma_engine/gui/gui_pages_forge.py](enigma_engine/gui/gui_pages_forge.py) — added Audio mode card to `foundation_modes` list and a new `self._forge_audio_section` page section with folder picker, encoder preset dropdown (`tiny`/`base`/`small`), and Stage-2 unfreeze entry.
+- [enigma_engine/gui/gui_forge.py](enigma_engine/gui/gui_forge.py) — five wire-site edits: `_MODE_DISPLAY_TO_KEY["Audio"]`, `_TRAINING_MODE_DESCRIPTIONS["Audio"]`, `_browse_audio_dir`, `section_map["audio"]`, `mode == "Audio"` visibility branch, and dispatcher branch `mode_name == "Audio" → self._start_audio_training()`.
+- [enigma_engine/gui/gui_forge_queue.py](enigma_engine/gui/gui_forge_queue.py) — one-line `_QUEUE_MODE_MAP["Audio"] = "audio"` for queue routing.
+- [enigma_engine/gui/gui_forge_training.py](enigma_engine/gui/gui_forge_training.py) — new `_start_audio_training` method mirroring `_start_vision_training`: in-process path builds `AudioEncoder(AUDIO_PRESETS[preset])`, sets `cfg_dict["audio_hidden_size"]` to encoder dim so `model.audio_projection` materialises at the right width, calls `run_training` with `mode="audio"`, persists `audio_encoder_state` + `audio_encoder_config` alongside model weights. API-mode path forwards `mode="audio"` + `audio: {unfreeze_text_layers}` payload. Pre-training backup helper (`suffix="pre_audio_stage2"`) is gated on `unfreeze_text_layers > 0` — projection-only runs skip the backup, matching the vision Stage-2 contract from Pass 156z9dz. Bound `pre_audio_backup_path: str | None = None` BEFORE the try; `finally:` block surfaces `Rollback : {name}` on every exit path.
+- [tests/test_personality_data.py](tests/test_personality_data.py) — added `test_audio_stage2_uses_helper_gated` as 13th wire-site test. Gates `self._pre_training_backup(`, `suffix="pre_audio_stage2"`, `if unfreeze_text_layers > 0` gate ordering, and `_assert_rollback_in_finally(src, "audio_stage2")` rollback-in-finally invariant.
+- [tests/test_gui.py](tests/test_gui.py) — bumped three mode-count gates (`test_descriptions_cover_all_modes`, `test_display_name_mapping_covers_all_modes`, `test_reverse_mapping_covers_all_keys`) from 9 → 10 with `"Audio"` added to the expected sets.
+
+**Call chain (production entry-point inward, §1 #20 acceptance check).**
+`FORGE mode-card radio → _on_training_mode_changed("Audio") → section_map[audio] visible → user clicks TRAIN → _MODE_DISPLAY_TO_KEY["Audio"] → mode_name == "Audio" branch → _start_audio_training → build_dispatch_context(audio_encoder=AudioEncoder(AUDIO_PRESETS[preset])) → run_training(config_dict={"mode": "audio", ...}, ctx) → dispatch.py L204-213 mode="audio" branch → Trainer.train_audio(audio_encoder, data, unfreeze_text_layers)`.
+
+Queue chain: `Audio queued via Train Manager → _QUEUE_MODE_MAP["Audio"] = "audio" → dispatcher mode="audio"`.
+
+**Six-question audit (§1 #19).**
+1. *Would I write it this way?* Yes — direct mirror of the already-shipped vision launcher (Pass 156z9dz hardened, repeatedly audited). Mirroring an audited reference is cheaper than inventing.
+2. *Connections?* `AudioEncoder` + `AUDIO_PRESETS` from `enigma_engine.core.audio_encoder`, `ForgeConfig.audio_hidden_size`, `Trainer.train_audio`, dispatcher `mode="audio"`, `AudioSettings` schema, `build_dispatch_context(audio_encoder=)`, queue map, scanner.
+3. *Missing connections?* Audio data validation in scanner uses extension whitelist + on-disk existence check (mirrors vision-pair contract). `val_split` knob is logged for parity but `train_audio` does not yet accept val_data — flagged in code comment as a follow-up wire when the trainer grows it. No other gaps found.
+4. *Logic-eye on doc/code:* docstring says "mirrors vision Stage-2"; the gate is `if unfreeze_text_layers > 0`, suffix is `pre_audio_stage2`, finally block surfaces rollback — three checkpoints, all consistent. No over-promised behaviour.
+5. *Claim-vs-test:* `test_audio_stage2_uses_helper_gated` gates **literal call expression** (`self._pre_training_backup(`), **literal suffix** (`suffix="pre_audio_stage2"`), **gate ordering** (`gate_idx < helper_idx`), and **rollback-in-finally** via the shared `_assert_rollback_in_finally` helper. Regression that drops the gate or moves the helper before the gate fails the test. Plus three mode-count gates would fail if `Audio` removed from `_MODE_DISPLAY_TO_KEY` / `_TRAINING_MODE_DESCRIPTIONS` / `_MODE_KEY_TO_DISPLAY`.
+6. *Sibling-boundary sweep:* re-grepped all `_start_*_training` siblings — vision, dialogue, distill, pretrain, lora, dpo, simpo/orpo (kto), grpo, rlhf, selfplay — all 12 still pass `TestPreTrainingBackupWireSites` and broader test coverage. Audio joins the family with identical Stage-2 contract on the appropriate gate. No sibling regressed.
+
+**No half-built artefacts (§1 #20 finish/kill/park check).** Slice is **Finished** — reachable from FORGE Audio radio button, dispatcher branch already existed, trainer method already existed, schema already existed. No signature kwargs without passers, no FSMs without drivers, no doc claims without code delivery. The `val_split` parity log + follow-up comment is an explicit, scoped placeholder — `train_audio` consumes the full list today and the GUI logs the val slice for visibility; when `train_audio` grows `val_data`, the wire is a one-line addition to the config_dict. This is documented at the call site, not advertised in the docstring.
+
+**Refreshed parked list.**
+- B-3 sibling closure — vision/batch closed (156z9do/dp); GGUF chat parked permanently (156z9dq, design rationale in-source).
+- `train_audio` val_data follow-up — wire `val_pairs_data` into `config_dict["data"]["val"]` once `Trainer.train_audio` grows a `val_data` kwarg. Currently logged for parity, not consumed.
+
+## PASS 156z9ea — Janitorial: stale parked-list entries for B-3 sibling closures (May 15, 2026)
+
+**Status.** Finished. Docs-only janitorial. Updates the parked-items list carried forward across recent passes that still labelled B-3 sibling closure as "unchanged" when the in-code comment record at [engine_generation.py L410-427](enigma_engine/core/engine_generation.py#L410-L427) shows the work was already closed/parked-permanently in earlier passes. No production code touched. Suite untouched (no code changes).
+
+**What landed (this stamp records the truth that was already in code).**
+- `_generate_with_vision`: **CLOSED Pass 156z9do** — `"vision"` is in the `_record_search_emissions` B-3a allow-list at [engine_generation.py L431-434](enigma_engine/core/engine_generation.py#L431-L434); splice contract wired.
+- `batch_generate`: **CLOSED Pass 156z9dp** — `"batch"` is in the allow-list at the same site; splice contract wired.
+- **GGUF chat() splice: PARKED PERMANENTLY Pass 156z9dq.** The in-source comment at [engine_generation.py L410-427](enigma_engine/core/engine_generation.py#L410-L427) documents the design rationale: `_maybe_rag_splice` builds raw text-completion prompts, but the GGUF chat() path routes through `create_chat_completion` with role-bounded chat-template messages. Splicing `<search_result>…</search_result>` mid-assistant-message produces undefined behaviour against implicit `<|im_end|>` boundaries that the API does not expose. *"Shipping a half-correct splice here would silently corrupt every GGUF chat call that triggered a search request."* Concrete next step if revisited: chat-template-aware retrieval injection at the **messages-list level**, not the text level — a new `_maybe_rag_splice_chat_messages` helper that appends `{"role": "user", "content": "<search_result>…</search_result>"}` after closing the in-flight assistant message and re-calls `model.chat(messages=...)` for the next round. That's a separate design slice, not a sibling-template port of the text helper.
+
+**Doc drift that this stamp corrects.** The parked-items lines in Pass 156z9dz and earlier (e.g. *"B-3 sibling closure (`batch_generate`, `_generate_with_vision`, GGUF chat unconstrained outputs) — unchanged"*) advertised three open sites when the code record showed two closed + one permanently parked. Carrying that line forward unchanged across multiple stamps is exactly the *self-narration drift* pattern logged in §4 "Self-reporting scope honesty: re-grep parked-item scope claims on every pass" — the next pass copies the prior pass's parked-list verbatim instead of re-grepping the code. From this stamp forward, the parked-list line should read **"B-3 sibling closure — vision/batch closed (156z9do/dp); GGUF chat parked permanently (156z9dq, design rationale in-source)."**
+
+**Six-question audit (§1 #19).** (1) Would I write it this way? Yes — docs-only correction, no rewriting of prior stamps' bodies (preserves history). (2) Connections? The three closure stamps (156z9do/dp/dq), the in-source comment, the allow-list at L431-434, the parked-list line in 156z9dz. (3) Missing connections? None — the in-source comment is already the canonical record; this stamp is the SUGGESTIONS-side counterpart. (4) Logic-eye on doc claim: the new parked-list wording matches the allow-list contents AND the source comment AND the parked-permanently rationale — three checkpoints, all consistent. (5) Claim-vs-test: no behaviour change; existing tests for the splice contract on vision/batch already gate the closure. The GGUF-parked claim is gated by the B-3a WARNING still firing for `path="gguf"` (the WARNING IS the regression test that the path is honestly labelled as not-spliced). (6) Sibling-boundary sweep: re-read the allow-list at L431-434 directly — `("native", "stream", "speculative", "medusa", "lookahead", "vision", "batch")` — confirmed gguf NOT present, no other path in the supported family is missing.
+
+**Acceptance check (§1 #20).** Finished — janitorial doc record corrected; no code claim made beyond what code already enforces.
+
+**Parked / follow-up (refreshed list, this is what the next stamp should inherit).**
+- GUI-ARCH-0b operator measurement run (M1/M2/M3/M5) — unchanged.
+- Personality-5 Row G loss-half — unchanged (gated on 2 real distill runs landing probe summaries).
+- **ARCH-1d audio launcher** — NEXT NAMED PRIORITY. `Trainer.train_audio` + dispatcher mode="audio" exist; no Forge audio launcher / page section / scanner exists. Concrete shape: add `scan_audio_data(directory)` to [scanners.py](enigma_engine/gui/scanners.py) mirroring `scan_vision_data`; add `_start_audio_training` to [gui_forge_training.py](enigma_engine/gui/gui_forge_training.py) mirroring `_start_vision_training` (~250 LOC: heartbeat, API-mode branch via dispatcher `mode="audio"`, local-mode `AudioEncoder` instantiation from preset + `run_training(TrainingJobConfig(mode="audio"), DispatchContext(audio_encoder=enc, ...))`); add audio page section to [gui_pages_forge.py](enigma_engine/gui/gui_pages_forge.py) mirroring vision section (audio dir entry + preset dropdown from `AUDIO_PRESETS`); wire mode card / button; tests for launcher existence, API-mode dispatch ordering, dispatcher mode="audio" gate, pre-training backup rail integration (extend `TestPreTrainingBackupWireSites` from 12 → 13 sites).
+- B-3 sibling closure — **vision/batch closed (156z9do/dp); GGUF chat parked permanently (156z9dq, design rationale in-source).** Revisit only if a chat-template-aware messages-list splice design surfaces (see PASS 156z9ea body for next-step shape).
+
+---
+
+## PASS 156z9dz — AUDIT 156z9dv-A Finding A closed: solo skips local backup on API branch (May 13, 2026)
+
+**Status.** Finished. The last outlier in the pre-training backup rail family is fixed: `_start_solo_training::_finetune` no longer creates a local rollback snapshot when the GUI is in API-chat mode (`use_api_chat=True`). Mirrors the RLHF/Self-Play structural contract — daemon owns the weights server-side, a local backup is a misleading rollback target. **Suite: 3213 passed, 2 skipped in 48.71s** (+1 new regression test, -1 prior conditional skip). Ruff clean.
+
+**What landed.**
+- [gui_forge_training.py](enigma_engine/gui/gui_forge_training.py)::_start_solo_training::_finetune: moved `pre_solo_backup_path = self._pre_training_backup(student_path, suffix="pre_solo")` from BEFORE the `use_api_chat` dispatch check to AFTER the API branch's `return  # finally block handles GUI cleanup` line. Pre-bind `pre_solo_backup_path: str | None = None` at the top of try kept intact so the `finally:` block's `if pre_solo_backup_path: self._log("Rollback : ...")` is safe on the API early-return (local stays None → no Rollback log surfaced).
+- Comments rewritten to name Pass 156z9dz as the closing pass and explain the API-mode rationale ("daemon-side rollback (if any) is a server concern").
+- New regression test [tests/test_personality_data.py::TestPreTrainingBackupWireSites::test_solo_backup_runs_after_api_dispatch](tests/test_personality_data.py): asserts `src.find("self._pre_training_backup(") > src.find("use_api_chat")` on `_start_solo_training` source. Catches the regression where someone moves the helper call back above the API dispatch — the substring-presence test in `test_solo_uses_helper` wouldn't notice.
+
+**Six-question audit (§1 #19).** (1) Would I write it this way? Yes — minimal honest fix, one statement moved. (2) Connections? `_pre_training_backup` helper, `use_api_chat` flag, `_get_api_chat_client`, `_poll_api_training_status`, `Path`. (3) Missing connections? None — RLHF/Self-Play already correct; this was the last outlier per AUDIT 156z9dv-A. (4) Logic-eye on doc claim: code now delivers what the audit promised — API-mode users never see a Rollback log pointing at a stale local file. (5) Claim-vs-test: new ordering test would fail if the helper call gets moved back above the dispatch; existing substring tests still gate presence + finally-reachability; falsification path is concrete and minimal. (6) Sibling-boundary sweep: confirmed RLHF (`_start_rlhf_training::_rlhf_train`) and Self-Play (`_start_selfplay_training::_selfplay_train`) already use the API-hoist-above-define-_run_api pattern; adaptive and evolutionary have no API-mode worker; pretrain/distill/dialogue/dpo/vision route via dispatcher.
+
+**Acceptance check (§1 #20).** Finished — in-process branch still has rollback; API branch returns BEFORE reaching the helper call so no backup file is created; pre-bind keeps `finally:` block safe; new test gates the ordering invariant.
+
+**Parked / follow-up.**
+- GUI-ARCH-0b operator measurement run (M1/M2/M3/M5) — unchanged.
+- Personality-5 Row G loss-half — unchanged (gated on 2 real distill runs landing probe summaries).
+- ARCH-1d audio launcher — unchanged.
+- B-3 sibling closure (`batch_generate`, `_generate_with_vision`, GGUF chat unconstrained outputs) — unchanged.
+
+---
+
+## PASS 156z9dy — Janitorial: rollback-in-finally hardening + stale N-19 row closure (May 13, 2026)
+
+**Status.** Finished. Two small janitorial items closed; zero production code touched (test-only + docs-only). Ruff clean. `TestPreTrainingBackupWireSites` re-runs green (12 passed in 0.11s).
+
+**What landed.**
+- **AUDIT 156z9dv-A Finding B closed.** Strengthened `tests/test_personality_data.py::TestPreTrainingBackupWireSites._assert_rollback_in_finally` with a second discriminator: in addition to the existing `rollback_idx > last_except` (rules out "inside an except body"), now also asserts `rollback_idx > last_finally` where `last_finally = src.rfind("            finally:")`. The two checks together sandwich the Rollback log into the `finally:` block. The summary's planned sentinel `self._set_training_active(False)` does NOT exist in the codebase (grep returned 0); the `finally:` keyword itself is a stronger and structurally guaranteed anchor at every wire-site. **Falsification check ran (out-of-tree script):** a synthetic source with the Rollback log inside an `except Exception as exc:` body PASSES the old `rfind > last_except` check (because `rfind` of the except keyword stops at the matching `except`, not at the placement of statements inside it) but FAILS the new `rfind > last_finally` check with the new error message. All 12 real wire-sites still pass — every site already has its Rollback log in `finally:`.
+- **Stale N-19 row entry struck.** At [SUGGESTIONS.md row 18 (N-19)] the open-follow-ups text claimed a GUI "Generate Teacher Corpus" button on the FORGE page was still pending. That button shipped in the Pass 156z9bp era ([enigma_engine/gui/gui_forge_teacher.py](enigma_engine/gui/gui_forge_teacher.py)) with tests in `tests/test_gui.py::TestForgeTeacherSubprocess`. Row now lists only Magpie synthesis + optional top-k logprobs as remaining slice 2/3 items.
+
+**Logic-eye check (§1 #19 #4).** The strengthened test's doc string claims "proves failure-path reach" — code now verifies both that the log is below every except clause AND below the last finally keyword, which together prove `finally:` membership (the only Python construct that can sit after `finally:` and before another `try`/method-end). The doc and code agree.
+
+**Claim-vs-test check (§1 #19 #5).** Could the test pass while code is wrong? Three failure modes the new test catches that the old one missed: (a) Rollback inside the body of the last `except`, (b) Rollback inside a nested `try:` ABOVE the outer `finally:`, (c) Rollback only inside the success block ABOVE all except clauses (already caught by check 1; still caught here). The remaining theoretical hole: a regression that adds a NEW outer `finally:` block BELOW the existing one, with the Rollback log moved into the new (and broken) block — both checks pass. This would require multi-line surgery on the wire-site and the new block would be visibly dead/redundant in code review. Acceptable residual.
+
+**Parked / follow-up.**
+- AUDIT 156z9dv-A Finding A (API-mode local backup in solo) — unchanged.
+- GUI-ARCH-0b operator measurement run (M1/M2/M3/M5) — unchanged.
+- Personality-5 Row G loss-half — unchanged.
+
+---
+
+## PASS 156z9dx — GUI-ARCH-0b BASELINE.md partial fill + measurement helper (May 13, 2026)
+
+**Status.** Phase 0b acceptance partially closed: agent-fillable rows done; operator-only rows still pending (cannot be filled without a live mainloop on the operator's machine). Suite untouched (no code paths exercised); ruff clean on new file.
+
+**What landed.**
+- M4 (Packaged install size estimate) filled in [information/gui/BASELINE.md](information/gui/BASELINE.md) §3: **19.0 MB** (GUI src 2.4 + CustomTkinter 1.4 + Pillow 15.1, excluding Python interpreter and torch per rubric §5 row 3).
+- New helper [information/gui/measure_baseline.py](information/gui/measure_baseline.py): `--m4` runs the size estimate (reproducible by the operator); `--m3 --pid <PID> --settle 60` polls RSS of a running GUI process after a settle window. Falls back loudly if `psutil` missing or PID dead.
+- BASELINE.md §5 acceptance checklist now distinguishes agent-fillable (M4 + helper, both checked) from operator-fillable (Environment + M1/M2/M3/M5 medians + ARCH_DECISION.md §9 cross-ref, all still unchecked).
+
+**Why not more.** M1 (cold start), M2 (page-switch latency), and M5 (frame stall under load) all require instrumented `print()` pairs spliced into `EnigmaGUI.__init__` + page builders + an after-tick frame monitor, plus a real live GUI session driven by the operator (sidebar clicks for M2, 30 s training run for M5). M3 is automatable but requires the GUI process to already be running. A code agent inside a stateless turn cannot launch the GUI mainloop, click, and read elapsed times — and faking those numbers would invalidate the entire Phase 1 POC bake-off the baseline is supposed to anchor.
+
+**Parked / follow-up.**
+- **GUI-ARCH-0b operator measurement run.** Operator runs `python information/gui/measure_baseline.py --m4` (confirms 19.0 MB), then launches the GUI with M1 instrumentation, captures 3 cold starts, fills the table, and ticks the remaining boxes in §5. Concrete next step is documented in BASELINE.md §2 (M1-M5 protocols).
+- Personality-5 Row G loss-half — unchanged (see Pass 156z9dw stamp).
+- AUDIT 156z9dv-A Findings A + B — unchanged.
+
+---
+
+## PASS 156z9dw — Personality-5 Row G probe-history persistence (May 13, 2026)
+
+**Status.** Finished. Unlocks the loss-half gate from Pass 156z9dg ("metric shows measurable drift in two consecutive distill runs first") by making per-run probe summaries comparable on disk. Loss-half itself remains parked — this slice ships the prerequisite only, not the gated loss. **Suite: 3211 passed, 3 skipped in 64.58s** (+23 new tests vs prior 3187 baseline; skip-count drift is unrelated). Ruff clean.
+
+**What landed.**
+- New module [enigma_engine/core/probe_history.py](enigma_engine/core/probe_history.py): `save_probe_summary(summary, *, stem, kind, ts=None)` and `load_recent_probe_summaries(stem, kind, *, n=2)`. Layout `models/checkpoints/{stem}_{kind}_{ts}.json`; payload `{"kind","stem","ts","summary"}` written via `atomic_write_text(json.dumps(..., indent=2, sort_keys=True))`. `ProbeKind = Literal["identity","consistency"]` gates the kind arg; empty-stem raises `ValueError`. Loader defensively skips malformed JSON, payloads whose `kind`/`stem` disagree with the filename, and entries with non-int `ts` — covers the "load-time merging" failure mode for append-only audit dirs.
+- Two wire-sites in [enigma_engine/gui/gui_forge_new_modes.py](enigma_engine/gui/gui_forge_new_modes.py)::`_start_distill_training`: after the identity probe summary log AND after the consistency probe summary log. Each block loads the most recent prior summary (n=1), saves the current summary, then logs the saved filename plus a one-line "Prior X: ..." diff when a prior exists. Wrapped in `except Exception as exc:` that logs `[!] Could not persist X probe: {exc}` — a corrupt checkpoints dir cannot abort a distill run.
+- 23 tests in [tests/test_probe_history.py](tests/test_probe_history.py): 7 save-path (filename format, round-trip, kind variants, auto-ts, invalid kind, empty stem), 11 load-path (missing dir, no matches, newest-first ordering, n cap, kind isolation, stem isolation, malformed JSON skip, kind-mismatch-in-payload skip, n=0, invalid kind, empty stem), 5 wire-site (regex-anchored full-call-expression structural tests on both `save_probe_summary(...)` and `load_recent_probe_summaries(...)` calls with the kind literal embedded — kind-flip regressions fail).
+
+**Logic-eye check.** The slice claim is "metric persistence" not "loss gate." Docstring on `save_probe_summary` says "Persist a probe summary JSON to models/checkpoints/." — matches what the code delivers. The Pass 156z9dg parked entry's concrete next step ("teacher-locked anchor of 8-16 self-description responses, KL-penalize student against anchor, gate behind `TrainingConfig.consistency_loss_weight: float = 0.0`") is unchanged; it now has the comparison data it needs to validate "measurable drift in two consecutive distill runs."
+
+**Parked / follow-up.**
+- **Personality-5 Row G loss-half (unchanged).** Gate is now reachable: after two real distill runs land summaries, compute `delta_overall` across the consecutive pair and decide whether the loss is worth shipping. No infra work needed first — the metric layer is live.
+- **AUDIT 156z9dv-A Finding A (API-mode local backup).** Still parked; unchanged.
+- **AUDIT 156z9dv-A Finding B (rollback-in-finally discriminator strengthening).** Still parked; planned next pass.
+- **GUI-ARCH-0b BASELINE.md.** Still parked; planned next pass.
+
+---
+
+## AUDIT 156z9dv-A — Two minor findings parked (May 13, 2026)
+
+Author's-lens audit of Pass 156z9dv. **No bugs found.** All 5 new wire-sites verified end-to-end; 12 helper calls pair 1:1 with 12 Rollback log surfaces; sibling family of 21 `_start_*_training` methods exhausted (12 wired + 7 dispatchers transitive + 1 N/A tokenizer + 1 excluded LoRA). Two minor parked findings below:
+
+**Parked Finding A — Solo creates a local backup even in API-mode (pre-existing, NOT introduced by 156z9dv).** **CLOSED Pass 156z9dz.** Moved `_pre_training_backup` call below the `use_api_chat` dispatch return so API-mode users no longer get a misleading local rollback snapshot. New regression test gates the ordering invariant. See Pass 156z9dz stamp above.
+
+**Parked Finding B — `_assert_rollback_in_finally` blind spot.** **CLOSED Pass 156z9dy.** Strengthened the discriminator with a second sentinel (`rfind("            finally:")`). The planned `self._set_training_active(False)` sentinel did not exist in the codebase; the `finally:` keyword itself is structurally guaranteed and stronger. Falsification-tested against a synthetic except-body regression. See Pass 156z9dy stamp above.
+
+---
+
+## PASS 156z9dv — Pre-training backup rail extended to 5 more entry points (May 13, 2026)
+
+**Status.** Closes Finding 1 from the Pass 156z9dt audit (parked in 156z9du). Rail now reaches `solo`, `adaptive`, `evolutionary`, `rlhf` (in-process worker), and `selfplay` (in-process worker). **Suite: 3187 passed, 4 skipped in 74.95s** (+5 collected vs prior baseline of 3183 / 3 — matches the 5 new wire-site tests; the +1 skip delta is unrelated env-conditional drift). Ruff clean on touched files.
+
+**What landed.**
+- 5 wire-sites edited across 4 files. Same pattern as Pass 156z9du at every site: (a) hoist `pre_X_backup_path: str | None = None` BEFORE the outer `try:`, (b) call `pre_X_backup_path = self._pre_training_backup(student_path, suffix="pre_X")` inside try BEFORE any destructive op, (c) `if pre_X_backup_path: self._log(f"Rollback  : {Path(pre_X_backup_path).name}")` at TOP of `finally:` so it runs on every exit path.
+- Sites: `solo` ([gui_forge_training.py](enigma_engine/gui/gui_forge_training.py)::_start_solo_training::_finetune), `adaptive` ([gui_forge_adaptive.py](enigma_engine/gui/gui_forge_adaptive.py)::_start_adaptive_training::_adaptive), `evolutionary` ([gui_forge_advanced.py](enigma_engine/gui/gui_forge_advanced.py)::_start_evolutionary_training::_evo), `rlhf` (in-process worker `_rlhf_train` in [gui_forge_new_modes.py](enigma_engine/gui/gui_forge_new_modes.py)), `selfplay` (in-process worker `_selfplay_train` in [gui_forge_new_modes.py](enigma_engine/gui/gui_forge_new_modes.py)).
+- 5 new tests in `tests/test_personality_data.py::TestPreTrainingBackupWireSites` mirroring the existing 7. Each gates `self._pre_training_backup(`, `suffix="pre_X"`, `pre_X_backup_path` local, the `Rollback` log substring, AND the shared `_assert_rollback_in_finally(src, label)` helper that proves the Rollback log is reachable on every failure path.
+
+**Scope reduction (NOT an overclaim).** Pass 156z9dt's Finding 1 listed 7 entry points; pre-edit survey reduced scope to 5:
+- `_start_basic_training` ([gui_forge.py](enigma_engine/gui/gui_forge.py) L1766) — dispatcher: delegates to `_start_solo_training` (≤7B params) or `_start_lora_training` (>7B). Rail coverage is **transitive through the destination**.
+- `_start_ai_guided_training` ([gui_forge.py](enigma_engine/gui/gui_forge.py) L1817) — dispatcher: delegates to `_start_adaptive_training`. Rail coverage **transitive through the destination**.
+- Test class header explicitly documents the dispatchers are intentionally NOT wired here so future passes don't re-park the same item.
+
+**Parked / follow-up — API-mode workers for RLHF + Self-Play.** Both `_start_rlhf_training` and `_start_selfplay_training` have a SEPARATE `_run_api` inner function alongside the in-process worker. API mode routes training to the daemon server-side; the daemon manages its own backup state. Only the in-process workers were wired today. Concrete next step if ever needed: the API workers currently don't have local rollback because the model weights live on the server; a daemon-side rollback rail would be a separate (server-side) slice. No code paths are at risk today — API-mode users get daemon-side rollback semantics (whatever they are); in-process users get the new file-level rail.
+
+**Adaptive complementary semantics (NOT redundant).** `_adaptive_phase2_train` already saves per-stage checkpoints rolling forward. The pipeline-level `pre_adaptive` backup is a DIFFERENT rollback target: it snapshots BEFORE the entire multi-stage pipeline begins. A stage-1 NaN within the first save interval has no per-stage save yet — only the pre-pipeline backup. Per-stage rolling saves + pre-pipeline snapshot are complementary, not duplicative.
+
+**Production call chain (§1 #19 #6).** GUI FORGE button (Solo / Adaptive / Evolutionary / RLHF / Self-Play) → `_start_X_training()` → in-process background worker → `try: ... pre_X_backup_path = self._pre_training_backup(student_path, suffix="pre_X") ... trainer-or-pipeline ...` → ANY exit path (return, KeyboardInterrupt, RuntimeError OOM, generic Exception) → `finally:` → Rollback log surfaces. Verified by the 5 new structural tests using `_assert_rollback_in_finally`.
+
+**Acceptance check (§1 #20).** **Finished**: feature reachable from production GUI entry-points on all 5 wire-sites; tests gate (a) the helper call, (b) the suffix string, (c) the local name, (d) the failure-path Rollback log via the shared `_assert_rollback_in_finally` helper. Basic + ai_guided dispatcher coverage documented as transitive; API-mode worker coverage documented as parked (daemon-managed). No method has a partial fix.
+
+**Six-question audit (§1 #19).** (1) If I wrote this today, would I do it this way? — Yes; uniform pattern reduces drift risk across 12 total wire-sites. (2) What is this connected to? — `_pre_training_backup` helper, `Path` (already imported at each site), each method's existing `try / except / finally` skeleton, the `_log` mixin method. (3) Could more connections be made? — API-mode workers for RLHF/Self-Play (parked, daemon-managed). LoRA training entry point (`_start_lora_training`) explicitly excluded — LoRA does NOT mutate base weights so the rollback rail does not apply. (4) Logic-eye: does the code deliver what the doc claims? — Yes; rail reaches user from every exit path because Rollback lives in `finally`. (5) Claim-vs-test: could the test pass while the code is wrong? — Same `rfind`-based discriminator as Pass 156z9du; only failure mode is leaving a SECOND Rollback in the success path (loud visual double-print, not silent). (6) Sibling-boundary sweep: grep `_pre_training_backup\(` in `enigma_engine/gui/` returns 12 distinct call sites (was 7 before this pass), one per in-process full-weight-mutation entry. Parked-entry honesty (§4 *Sibling-sweep claims must check PARKED entries*): re-read 156z9du's Finding 1 list, reduced 7 → 5 with explicit dispatcher-transitivity justification rather than overclaiming closure.
+
+**Parked.** API-mode workers for RLHF + Self-Play (see above). Finding 1 from 156z9dt is otherwise CLOSED.
+
+---
+
+## PASS 156z9du — Rollback log moved to `finally` block on all 7 wire-sites (May 13, 2026)
+
+**Status.** Closes Finding 2 from the Pass 156z9dt self-audit. Failure-path Rollback surface now reaches the user on every exit path (success, STOP, OOM, generic crash). **Suite: 3183 passed, 3 skipped in 40.97s** (was 3182 / 4 — one prior env-skip flipped, count unrelated). Ruff clean on touched files. Finding 1 (extend rail to 7 more entry points) remains parked below.
+
+**What landed.**
+- 7 wire-sites edited across 3 files. Same pattern at every site: (a) hoist `pre_X_backup_path: str | None = None` BEFORE the outer `try:`, (b) remove the existing success-path `if pre_X_backup_path: self._log(f"Rollback  : {Path(pre_X_backup_path).name}")` block, (c) add the IDENTICAL block to the TOP of `finally:` so it runs on every exit path. The `finally` block already existed at each site for `self._set_training_active(False)` cleanup; the Rollback log is now adjacent to that.
+- Sites: `pretrain` ([gui_forge_new_modes.py L1129](enigma_engine/gui/gui_forge_new_modes.py#L1129)), `distill` ([gui_forge_new_modes.py L2109](enigma_engine/gui/gui_forge_new_modes.py#L2109)), `rl_variant` ([gui_forge_new_modes.py L3060](enigma_engine/gui/gui_forge_new_modes.py#L3060)), `preference_variant` ([gui_forge_new_modes.py L3378](enigma_engine/gui/gui_forge_new_modes.py#L3378)), `dialogue` ([gui_forge_advanced.py L620](enigma_engine/gui/gui_forge_advanced.py#L620)), `dpo` ([gui_forge_training.py L1046](enigma_engine/gui/gui_forge_training.py#L1046)), `vision Stage-2` ([gui_forge_training.py L1571](enigma_engine/gui/gui_forge_training.py#L1571)). Vision Stage-2 additionally MOVED the existing `pre_vision_backup_path = None` from inside the try-block up to the hoist position so the gated assignment further down still functions.
+- `tests/test_personality_data.py::TestPreTrainingBackupWireSites._assert_rollback_in_finally` — new shared helper on the class. Uses `src.rfind('f"Rollback  : "')` and `src.rfind("            except ")` (12-space indent of the outer `except` clauses) and asserts `rollback_idx > last_except`. `rfind` returns the highest index, so the only way the assertion can pass is if the Rollback log line lives AFTER the last `except` clause — which by Python syntax means it's in `finally`. Applied to all 7 wire-site tests.
+
+**Design tradeoff (literal duplication vs single `finally` block).** Option A: copy the Rollback log into each `except` branch (~14 sites total across 7 methods × ~2 except branches each). Drift risk forever; one branch missed = silent-on-failure for one mode. Option B: single block in `finally`, remove the success-block copy to avoid double-print. Picked B. `finally` always runs after the try-or-except completes; the user sees Rollback exactly once on every exit path (success, KeyboardInterrupt STOP, RuntimeError OOM, generic Exception traceback). No drift risk because there's one site per method.
+
+**Cosmetic UX change.** Before: success path showed `Rollback :` between Duration/Saved and the COMPLETE block. After: success path shows `Rollback :` AFTER the COMPLETE block (same `finally`). Failure paths now show `Rollback :` after STOPPED / FAILED / traceback — which is the whole point of the fix.
+
+**Production call chain (§1 #19 #6).** GUI FORGE button → `_start_*_training()` → background worker (`_pretrain` / `_distill` / `_dialogue` / `_dpo_train` / `_vision_train` / `_rl_train` / `_pref_train`) → `try: ... self._pre_training_backup(...) ... trainer.train(...) ...` → ANY exit path (return normally, KeyboardInterrupt, RuntimeError OOM, generic Exception) → `finally:` block → `if pre_X_backup_path: self._log(f"Rollback  : {Path(pre_X_backup_path).name}")` → `self._set_training_active(False)`. Chain verified by the strengthened structural test (`rfind` on `Rollback` substring must be after `rfind` on the last `except` clause) + manual read of all 7 finally blocks.
+
+**Acceptance check (§1 #20).** **Finished**: failure-path Rollback log is reachable from every production exit path on all 7 wire-sites; test gates `rollback_idx > last_except` for each site; no method has a partial fix (`rfind` would catch a leftover success-block Rollback as the highest match and fail the assertion).
+
+**Six-question audit (§1 #19).** (1) If I wrote this today, would I do it this way? — Yes; `finally` is the canonical Python idiom for "always runs on every exit path." (2) What is this connected to? — Each `_pre_training_backup` call site, each `try / except KeyboardInterrupt / except RuntimeError / except Exception / finally` block, the `_log` mixin method, `Path` (already imported). (3) Could more connections be made? — Yes: Finding 1's 7 missing entry points still don't have the rail at all (parked, see below). (4) Logic-eye: does the code deliver what the doc claims? — Yes; the original Pass 156z9at stamp said *"rollback rail for failures"* and only now does the failure path actually surface the rollback. (5) Claim-vs-test: could the test pass while the code is wrong? — The `rfind`-based assertion would FAIL if someone (a) leaves a Rollback log in the success block AND in finally (then `rfind` returns the finally idx, but the success-block one stays — the test would still pass, BUT a UI double-print would be visible; this is a known weakness, acceptable because the visual artifact is loud), (b) deletes the finally Rollback (rfind returns the success-block idx which is BEFORE last_except → assertion fails), (c) deletes ALL Rollback logs (`rfind` returns -1 → explicit "no Rollback log line found" assertion fires). (6) Sibling-boundary sweep: grep `Rollback  :` in `enigma_engine/gui/` returns exactly 7 matches, one per wire-site, all in finally blocks per the strengthened test. **Note:** the distill site has a separate mid-training drift-alert Rollback reference in a different code path (~L2010 of gui_forge_new_modes.py) which is unrelated and intentionally left untouched.
+
+**Parked.** Finding 1 below — sibling-extension to the 7 additional `_start_*_training` entry points missing the rail entirely. **CLOSED by Pass 156z9dv above** (5 wired, 2 dispatchers documented as transitive-coverage).
+
+---
+
+## ~~Parked — Finding 1 from 156z9dt audit~~ — CLOSED by Pass 156z9dv
+
+Closed May 13, 2026 in Pass 156z9dv. Rail extended to `solo`, `adaptive`, `evolutionary`, `rlhf` (in-process), `selfplay` (in-process). `_start_basic_training` + `_start_ai_guided_training` are dispatchers and inherit rail coverage transitively through their destinations. API-mode workers for RLHF/Self-Play remain parked (daemon-managed; see Pass 156z9dv stamp for the concrete next step).
+
+---
+
+## PASS 156z9dt — Pre-training auto-checkpoint rail extended (May 13, 2026)
+
+**Status.** Closed the last open sibling in the FORGE full-weight-mutation family. **Suite: 3182 passed, 4 skipped in 43.19s.** Ruff clean on touched files.
+
+**What landed.**
+- `enigma_engine/gui/gui_forge_new_modes.py::_start_pretrain_training` — wired `self._pre_training_backup(out_path, suffix="pre_pretrain")` immediately before the `Trainer(model, tokenizer, train_config)` construction inside the `_pretrain()` inner function, after all validation / heartbeat / data-scan / training-config setup completes. Completion-log block now emits `Rollback : {Path(pre_pretrain_backup_path).name}` after the existing `Saved to` line when the backup succeeded (silent when source was missing / copy failed — the helper already logs `[!]` loudly on real failures).
+- `tests/test_personality_data.py::TestPreTrainingBackupWireSites::test_pretrain_uses_helper` — structural wire-site test mirroring the dialogue / vision pattern. Asserts the literal `self._pre_training_backup(` call, the literal `suffix="pre_pretrain"` string, the `pre_pretrain_backup_path` local + the completion-log `Rollback` surface, AND that the helper call appears BEFORE `trainer = Trainer(model, tokenizer, train_config)` in source order (so a step-1 NaN — Pass 156i4 risk — can't poison the only on-disk copy because no backup ran).
+
+**Why the prior parked decision flipped.** The Pass 156z9as / 156z9at stamps had parked pretrain as "duplicative because step-based `checkpoint_dir` saves give rolling rollback granularity during the run." The author's-lens re-read against the actual `_pretrain()` body broke that rationale: `save_every_steps = max(500, _est_total // 20)`. For any pre-train run under ~500 steps total OR where step 1 hits a NaN/Inf before the first step-save fires, there is NO rollback point — the in-place `atomic_torch_save(save_dict, out_path)` at the end of the run is the first thing that touches the file. The pre-train backup is the rollback rail for that opening window. Cost: 6 lines + 1 wire-site test. Same shape, same suffix convention, same `Rollback :` log surface as dialogue / distill / DPO / RL-variant / SimPO / ORPO / vision-Stage-2.
+
+**Production call chain (§1 #19 #6).** GUI FORGE NEW-MODES page → Pre-Train button → `_start_pretrain_training()` → `_pretrain()` worker thread → student-path validation → heartbeat-stale check → data scan + tokenizer retrain → `TrainingConfig` construction → `_pre_training_backup(out_path, suffix="pre_pretrain")` → `Trainer(...)` → `trainer.train(...)` → completion log surfaces `Rollback :` line if backup succeeded. Chain verified by the structural test (call must precede `trainer = Trainer(...)` constructor) + manual read of the method body.
+
+**Acceptance check (§1 #20).** **Finished**: feature reachable from production GUI entry-point (Pre-Train button), test exercises the production call expression in source order (`helper_idx < trainer_idx` gate), every sibling boundary in the family is now closed (distill, dialogue, dpo, apo→dpo, grpo + remax → `_start_rl_variant_training`, simpo + orpo → `_start_preference_variant_training`, vision Stage-2, pretrain), docstring / log / commit message match what the code delivers (helper is unconditional for pretrain — `_pretrain()` always mutates the student .pth in place at end-of-run).
+
+**Six-question audit (§1 #19).** (1) If I wrote this today, would I do it this way? — Yes; one helper-call line + one Rollback log line is the smallest honest closure. (2) What is this connected to? — `_pre_training_backup` (sibling on same mixin), `MODELS_DIR` (lazy-imported inside helper), `Path` (already imported at module top), the completion-log block. (3) Could more connections be made? — No remaining `_start_*_training` siblings mutate full weights without the rail; LoRA explicitly excluded (base weights untouched); the FORGE family is now exhausted. (4) Logic-eye: does the code deliver what the doc / comment / commit claims? — Yes; the inline comment says "rollback rail for the window before the first step-save fires," the code calls the helper unconditionally before any destructive write, the test gates the source ordering. (5) Claim-vs-test: could the test pass while the code is wrong? — The test gates THREE conditions (helper-call substring, suffix-string substring, helper-before-Trainer ordering); the only failure mode it misses is the helper succeeding but the Rollback log line being dropped — covered by the explicit `assert "Rollback" in src` assertion. (6) Sibling-boundary sweep: every full-weight `_start_*_training` in the family now ends with a `pre_*_backup_path` local + `Rollback` log surface (grep `pre_.*_backup_path` returns 7 distinct locals across the family).
+
+**Parked.** None. Pre-training rail extension was the last open in-family slice; sibling family is exhausted. Sub-500-step pretrain runs that hit NaN at step 1 now have a rollback file; full-length pretrain runs still benefit from step-based `checkpoint_dir` saves AS WELL AS the pre-training snapshot.
+
+**Stale parked entry closed.** The Pass 156z9at parked entry at L2038 named `_start_training` (wrong — actual symbol is `_start_pretrain_training`) and conflated vision Stage-2 (already closed in 156z9at itself) with the pretrain rail. Both halves of that entry are now resolved: vision Stage-2 was closed in 156z9at, pretrain is closed in 156z9dt.
+
+---
+
+## PASS 156z9ds — N-14 rag_backend GUI toggle shipped (May 13, 2026)
+
+**Status.** Shipped the dropdown widget parked at the end of Pass 156z9dr. **Suite: 3182 passed, 3 skipped in 41.61s** (was 3180 — +1 new test, +1 prior fakes-injection skip flipped). Ruff clean on touched files.
+
+**What landed.**
+- `enigma_engine/gui/gui_pages_config.py::_build_page_config` — new "RAG BACKEND (retrieval index)" block in the GENERATION BEHAVIOR section. Two-option `themed_dropdown` (`["bm25", "dense"]`) bound to `self._rag_backend_var`, pre-loads from `CONFIG["rag_backend"]` (clamps unknown values to `"bm25"`), dispatches to `_set_rag_backend` on change. Tooltip + description text explain dep-fallback semantics so a user picking `dense` without `sentence-transformers`/`faiss-cpu` installed knows the factory will WARN + downgrade.
+- `enigma_engine/gui/gui_pages_config.py::_set_rag_backend` — callback method. Reads `_rag_backend_var`, clamps unknown values back to `"bm25"` AND rewrites the StringVar so the visible dropdown state matches what was actually persisted (no silent UI/disk divergence). Persists via `update_config({"rag_backend": value})` + `save_config()` from `enigma_engine.config`. Status bar reports the new value AND that it "applies on next index build" — live indexes are NOT rebuilt. Loud-on-save-failure via WARNING + status bar message.
+- `tests/test_memory.py::TestDenseRAGIndex::test_gui_toggle_callback_persists_choice` — unbound mixin test against a `SimpleNamespace` host (per §4 *Unbound mixin tests need explicit sibling-method wiring*). Patches `save_config` on `enigma_engine.config`, supplies minimal `_Var` + `_Status` stubs. Verifies: (a) valid value lands in `CONFIG["rag_backend"]` + triggers `save_config`, (b) unknown value snaps to `"bm25"` AND rewrites the StringVar AND still persists, (c) status bar surfaces the chosen value. CONFIG state is snapshotted + restored in a `finally` block so the test doesn't leak.
+
+**Production call chain (§1 #19 #6).** GUI page `CONFIG` build → user picks `dense` → `_set_rag_backend()` → `update_config({"rag_backend": "dense"})` + `save_config()` → forge_config.json on disk → next process boot reads `rag_backend="dense"` from CONFIG → next `make_rag_index()` call (in `_build_rag_index` background thread OR `index_directory` script) constructs `DenseRAGIndex` (or falls back to BM25 with WARNING). Chain verified end-to-end via the factory tests shipped in Pass 156z9dr + the new toggle test.
+
+**Why the dropdown does NOT rebuild live indexes.** A loaded RAG index already has chunks indexed under one backend (BM25 sparse vectors OR dense embeddings); switching backend mid-session would require re-walking the source documents, re-chunking, re-encoding/re-vectorizing, and replacing `self._rag_index` atomically. That's a multi-thread coordination problem (existing BUILD button already runs in a background thread). The honest minimal slice persists the choice and tells the user when it takes effect, with the existing BUILD action as the natural follow-up trigger. Tooltip + status message both say "next RAG index build".
+
+**Acceptance check (§1 #20).** **Finished**: widget reachable in GUI CONFIG page, behavioural test exercises the production call path (`_set_rag_backend` → CONFIG mutation + save_config invocation), status-message contract verified, no kwargs/signatures advertise behaviour the code skips, dropdown StringVar + persisted value can't drift (unknown-value snap rewrites both sides). Pass 156z9dr's "Parked / follow-up" GUI-toggle entry is now closed.
+
+**Parked / follow-up.**
+- Live-rebuild button next to the dropdown. Concrete next step: add a "Rebuild RAG index" button beside the dropdown that calls the same background-thread `_build_rag_index` flow currently triggered elsewhere, reusing the existing job-queue + status surface. Out of scope today — users can already trigger a rebuild from the existing FORGE NOTES "Build" action.
+
+---
+
+## PASS 156z9dr — N-14 dense semantic RAG (FAISS + sentence-transformers) shipped (May 13, 2026)
+
+**Status.** Shipped behind `CONFIG["rag_backend"]` (default `"bm25"`, opt-in `"dense"`). Soft-fail-to-BM25 on dep miss keeps the slice safe to ship without forcing heavy deps on every install. **Suite: `tests/test_memory.py` 70 passed, 2 skipped (pre-existing).** Ruff clean on all touched files.
+
+**What landed.**
+- `enigma_engine/core/rag_dense.py` (NEW, ~230 LOC). `DenseRAGIndex` class with the full BM25 `RAGIndex` protocol surface (`add_document`, `build`, `is_built`, `chunk_count`, `query`, `save`, `load`) so it's a true drop-in. `format_context` is re-exported via `staticmethod(RAGIndex.format_context)` — identical output, zero consumer branching. Cosine similarity is implemented as inner product on L2-normalized vectors using `faiss.IndexFlatIP`. Save layout: JSON metadata at `<path>` + `numpy.save` sidecar at `<path>.npy` for the embedding matrix.
+- `enigma_engine/core/rag.py::make_rag_index(backend=None)` factory. Resolution order: explicit arg → `CONFIG["rag_backend"]` → `"bm25"` fallback. Returns BM25 `RAGIndex` for `"bm25"` or any unknown backend (loud WARNING on unknown). For `"dense"`, attempts `DenseRAGIndex()` and falls back to BM25 with WARNING if `sentence-transformers` or `faiss-cpu` is missing.
+- `enigma_engine/core/rag.py::index_directory` now routes through `make_rag_index()`.
+- `enigma_engine/gui/gui_logic.py::_build_rag_index` (L1583 area) now routes through `make_rag_index()`. Both production construction sites for end-to-end RAG indexes are now factory-routed.
+- `enigma_engine/config/defaults.py` adds `"rag_backend": "bm25"` to the inference section with a comment naming the fallback contract.
+- `tests/test_memory.py::TestDenseRAGIndex` (8 new tests). Uses `sys.modules` injection of fake `sentence_transformers` + `faiss` per §4 *Gotchas — Lazy `__getattr__` modules* — no heavy deps required for CI. Fake embedder maps 4 marker tokens (`python`, `cats`, `machine`, `garden`) to 4-d unit vectors so `query("python")` deterministically hits chunks containing "python". Coverage: `is_available()` AND-of-flags contract, RuntimeError on direct construction without deps, end-to-end build+query, unbuilt-query empty-list, save/load round-trip (matches result-source ordering), `format_context` identity-equality with `RAGIndex.format_context`, factory bm25 default, factory dense-falls-back-with-WARNING on dep miss, factory unknown-backend-falls-back-with-WARNING.
+
+**Model choice.** Default `BAAI/bge-small-en-v1.5` (33M params, 384-d) per RAG-2 decision row already in this file. Constructor accepts `model_name=` so users who want `sentence-transformers/all-MiniLM-L6-v2` (22M / 384-d) or any HF retrieval model can override. Both load via `SentenceTransformer(model_name)` — first call downloads weights to `~/.cache/huggingface/`, subsequent calls are fully offline. Strict air-gapped installs can set `HF_HUB_OFFLINE=1` after a one-time cache populate.
+
+**Production call chain (sibling-eye verification, §1 #19 #6).** Walked from production entry-point inwards:
+- API path: `POST /api/chat` → `chat()` → `_maybe_rag_splice()` → `self._rag_index.query(...)`. `self._rag_index` is populated by `_build_rag_index` during boot (background thread, GUI) or by `index_directory(...)` (CLI/script). Both producers now go through the factory. **No call-site bypasses the factory.**
+- GUI path: `EnigmaGUI._send_message` → `LogicChatMixin._chat_request*` → server `chat()` → same downstream. RAG index built once on GUI boot, lives for session.
+- Library users constructing `RAGIndex` directly (e.g. tests, `index_directory`'s own internals) bypass the factory by design — `make_rag_index()` is for production wiring, not a hard requirement.
+
+**Test families: behavioural, not structural.** Every test exercises the public protocol: `add_document` → `build` → `query` returns the right dict shape AND the right top result. The factory tests verify the WARNING message content (`"rag_backend"` + `"BM25"`, or the specific unknown backend name) so a regression that silently swallows the fallback would fail. No `inspect.getsource` tests — the contract is verifiable behaviourally end-to-end with the fake modules.
+
+**Parked / follow-up.**
+- ~~GUI toggle widget for `rag_backend` selection (FORGE CONFIG page).~~ **Closed by Pass 156z9ds.**
+- Hybrid retrieval (BM25 + dense reranking) is a separate slice — current factory returns one backend, not a hybrid wrapper. Tracked as N-14b if/when needed.
+- Benchmark-driven default model choice (`bge-small` vs `all-MiniLM-L6` vs `bge-base`) requires an offline eval harness against MTEB-style queries — separate slice.
+
+**Acceptance check (§1 #20).** Slice is **Finished**: feature reachable from production entry-point (`make_rag_index()` called by both `index_directory` and GUI `_build_rag_index`), behavioural tests exercising the production call path (build → query → result shape match), every sibling boundary closed (both `RAGIndex()` direct-construction sites swapped), docstring + comment claims match what the code delivers (soft-fail explicitly named in both factory docstring and CONFIG comment).
+
+---
+
+## PASS 156z9dq — AutoResearch-2 B-3 GGUF parked PERMANENTLY (May 13, 2026)
+
+**Status.** Parked permanently. No code change beyond a corrected comment in `_record_search_emissions` naming the real blocker. WARNING gate (Pass 156z9cq) remains the loud rejection on the off-path. **Suite green (no test changes).**
+
+**Decision.** GGUF splice is NOT shipped, and will NOT be shipped in its current form. The previous Pass 156z9dp comment said "llama-cpp-python lacks a per-token logits-processor hook" — that was wrong. The real blocker is the **chat-template message-boundary semantics**, documented below.
+
+**Why the prior reasoning was wrong.** llama-cpp-python's `create_chat_completion(messages=..., stop=[...], logits_processor=...)` accepts both a `stop` parameter (list of strings — `</search>` auto-stop would work) and a `logits_processor` callable list (per-token logit modification). The infrastructure llama-cpp-python exposes is sufficient for *naive* splice; the problem is one layer up.
+
+**The real blocker — chat-template message boundaries.** `_maybe_rag_splice` builds raw text-completion prompts:
+```
+<system>You are…</system>
+<user>What's the weather in Paris?</user>
+<assistant><search>weather Paris</search>
+<search_result>…retrieved chunks…</search_result>
+[continuation]
+```
+The GGUF chat() path goes through `create_chat_completion(messages=[...])` with role-bounded message templating. Most instruction-tuned chat templates wrap each message in implicit boundary tokens — e.g. ChatML emits `<|im_start|>assistant\n…<|im_end|>` around the assistant turn; Llama-3 emits `<|start_header_id|>assistant<|end_header_id|>\n\n…<|eot_id|>`; Qwen emits `<|im_start|>assistant\n…<|im_end|>`. These boundary tokens are **applied by the template at message-list build time** and are NOT addressable via the `messages=[...]` API. Splicing `<search_result>…</search_result>` into the middle of an assistant message means EITHER:
+- (a) Building a NEW message list with the partial assistant text + retrieved context as a single new assistant message → the template re-wraps it in fresh `<|im_start|>assistant\n…<|im_end|>` boundaries, so the model sees a *complete* prior assistant turn ending in `</search_result>` and is being asked to start a NEW assistant turn — confusing the instruction-following pattern most models were trained on.
+- (b) Dropping into raw text-completion mode (`Llama()(prompt, ...)` instead of `create_chat_completion`) — which means giving up the chat template entirely, so the GGUF user loses the model's instruction-tuned behaviour. Defeats the point of loading a chat-tuned GGUF.
+
+Neither path produces correctness on par with the native splice. Shipping a half-correct splice would silently degrade every GGUF chat call that triggered a search request, which is worse than the current behaviour (WARNING + no splice = user knows the feature doesn't apply on this model).
+
+**Concrete next step IF someone decides to revisit.** Build a separate `_maybe_rag_splice_chat(messages, response, ...)` helper that operates on the messages list — append `<search_result>` as either a new `{"role": "tool", "content": ...}` message (matches the OpenAI tool-call convention some templates respect) or a new system-message addendum, then re-issue `create_chat_completion(messages=updated, ...)`. Test extensively against each major chat-template family (ChatML, Llama-3, Qwen, Mistral, Gemma) because each handles tool/system mid-conversation differently. Estimated scope: significantly larger than any single splice slice shipped this session, plus extensive per-template behavioural tests. Out of scope today.
+
+**Why this is parked (not killed).** The WARNING gate IS the consumer (loud-on-real-issue per §4) — a user who flips `inline_search_splice_enabled=True` and runs a GGUF chat that emits a search request gets exactly one WARNING per call telling them the splice didn't apply on this path. Infrastructure-without-consumer would be killing the WARNING gate; that's not what's happening. The off-path behaviour is documented, loud, and correct. Per §1 #20: parked with concrete next step + loud rejection on off-path = legitimate parked state, not half-built.
+
+**B-3 family final status.**
+- `native` — closed (Pass 156z9aj / older)
+- `stream` — closed (Pass 156z9al)
+- `speculative` / `medusa` / `lookahead` — closed (Pass 156z9cp)
+- `vision` — closed (Pass 156z9do)
+- `batch` — closed (Pass 156z9dp)
+- `gguf` — **parked permanently (Pass 156z9dq)** with documented blocker + concrete next step + loud WARNING gate on off-path
+
+The AutoResearch-2 B-3 contract family is now **closed as far as it can be closed without a chat-template-aware redesign**. Six of seven sibling paths support splice end-to-end; one path is honestly parked with the real reason documented.
+
+---
+
+## PASS 156z9dp — AutoResearch-2 B-3 batch splice closure (May 13, 2026)
+
+**Status.** Finished. Suite **359 passed** in `tests/test_chat.py` + `tests/test_research_upgrades.py` (focused). Lint clean.
+
+**Scope.** Seventh sibling closure in the AutoResearch-2 B-3 contract family — `batch_generate` joins `native` / `stream` / `speculative` / `medusa` / `lookahead` / `vision` as splice-supporting paths. Only `gguf` remains WARNING-only.
+
+**Design choice — post-decode per-prompt splice (vs in-loop per-row stop).** The batch path runs the autoregressive loop in vectorised form: one forward per step, all rows together. Per-sequence `</search>` detection in the loop would desync the moment one row emits the close tag while others are still generating; the resulting state-machine (mask finished rows, keep the rest going, then splice the finished ones separately) is significantly more code for marginal speedup. Cheaper-honest path: decode the batch normally for `max_gen` steps, then post-decode trim each output at `</search>` and call `_maybe_rag_splice(...)` per prompt with that row's own round-0 token budget. Splice rounds run serially per prompt via `_generate_manual` (single-sequence text-only) — the batch efficiency advantage applies only to round 0. Acceptable trade-off: in typical batched calls, splice triggers on a minority of rows.
+
+**Wire-site.** [engine_generation.py `batch_generate`](enigma_engine/core/engine_generation.py): after the decode loop and `results` is built, gated by `splice_enabled = getattr(self, "inline_search_splice_enabled", False)`:
+- `effective_stop_strings_batch = ["</search>"] if splice_enabled else None`.
+- Per output: post-prompt trim at first `</search>`; compute `tokens_round0 = max(0, generated.shape[1] - len(encoded[i]))` (per-row original input length, not the padded `max_input_len` — padding tokens must NOT count as generated); call `self._maybe_rag_splice(...)` with `effective_stop_strings=effective_stop_strings_batch`, `json_constraint=None`, `tokens_already_generated=tokens_round0`.
+- `_record_search_emissions(current_text, prompt=prompt_text, path="batch")` retained (per-prompt attribution).
+
+**Allow-list update.** `_record_search_emissions` allow-list now `("native", "stream", "speculative", "medusa", "lookahead", "vision", "batch")`. Comment updated to name Pass 156z9dp and to flag the GGUF blocker (no per-token logits-processor hook in installed llama-cpp-python).
+
+**Tests.**
+- `tests/test_chat.py::TestB3aSiblingCallSitesUsePathKwarg::test_sibling_path_emits_b3a_warning_when_flag_on` — loop reduced to `("gguf",)`.
+- New class `TestB3BatchSiblingClosure` (3 tests):
+  - `test_batch_trims_per_sequence_at_close_tag_when_flag_on` — regex gates `splice_enabled = getattr(self, "inline_search_splice_enabled"` AND `generated_part.find("</search>")`.
+  - `test_batch_invokes_maybe_rag_splice_per_prompt` — regex gates `self._maybe_rag_splice(`, `tokens_already_generated=tokens_round0`, AND the literal `tokens_round0 = max(0, generated.shape[1] - len(encoded[i]))` budget expression. The third assertion is the key one (per §4 author's-lens "audit the budget"): a regression that uses `max_input_len` instead of `len(encoded[i])` would silently over-charge every row.
+  - `test_batch_path_no_longer_emits_b3a_warning` — behavioural caplog gate.
+
+**Author's lens / six-question audit.**
+1. *Would I write it this way?* Yes — the in-loop alternative would have required per-row stop masking + per-row decode-while-others-generate logic. Trade-off named explicitly in the docstring.
+2. *Connections?* `batch_generate` ← any caller wanting batched inference (production use is the data-collection scripts, FORGE batched evaluation). All callers benefit automatically.
+3. *Missing connections?* None — every splice-eligible path is now closed except GGUF.
+4. *Logic-eye on doc claims?* Inline comment explicitly names "splice rounds run serially per prompt" and "batch efficiency advantage applies only to round 0" — no over-promise.
+5. *Claim-vs-test?* Third structural test (`tokens_round0 = max(0, generated.shape[1] - len(encoded[i]))`) is a budget-correctness gate. Without it, swapping `len(encoded[i])` for `max_input_len` passes the other two tests but silently breaks the round-0 budget for rows shorter than the padded max.
+6. *Sibling-boundary sweep?* Last remaining sibling: `gguf`. Feasibility check is the next todo.
+
+**Parked / follow-up.**
+- GGUF splice — next slice. Feasibility check on llama-cpp-python's logits-processor API; expected outcome is "parked permanently" with a loud SUGGESTIONS.md stamp explaining the blocker, because the current llama-cpp-python `chat()` API returns the full string without exposing a per-token sampling hook of the shape `_maybe_rag_splice` would need.
+
+---
+
+## PASS 156z9do — AutoResearch-2 B-3 vision splice closure (May 13, 2026)
+
+**Status.** Finished. Suite **356 passed** in tests/test_chat.py + tests/test_research_upgrades.py (focused run). Lint clean on changed files. HYG-1 verified already in HEAD (`b73f912 chore: ignore rust_extensions/target build artifacts`); stamp at L2675 corrected.
+
+**Scope.** Sixth sibling closure in the AutoResearch-2 B-3 contract family — `_generate_with_vision` joins `native` / `stream` / `speculative` / `medusa` / `lookahead` as a splice-supporting path. Remaining unsupported family members: `batch`, `gguf`.
+
+**Wire-site (mirror of speculative pattern).** [engine_generation.py](enigma_engine/core/engine_generation.py) `_generate_with_vision`:
+1. After the `json_schema` reject + empty-prompt early-return, `effective_stop_strings = stop_strings; if inline_search_splice_enabled: defensive-copy + append "</search>"`.
+2. Both the in-loop windowed stop check and the post-decode trim use `effective_stop_strings`.
+3. `tokens_round0 = max(0, generated.shape[1] - prompt_len)` (token-count `prompt_len` survives — char-len shadow in the trim block renamed `prompt_text_len`).
+4. `self._maybe_rag_splice(text, prompt, max_gen, ..., effective_stop_strings=..., json_constraint=None, tokens_already_generated=tokens_round0)` before `_record_search_emissions(text, prompt=prompt, path="vision")`.
+
+**Allow-list update.** `_record_search_emissions` allow-list now `("native", "stream", "speculative", "medusa", "lookahead", "vision")`. Comment updated to name Pass 156z9do.
+
+**Documented degradation (logic-eye honesty per §4).** Continuation rounds run through `_maybe_rag_splice` → `_generate_manual`, which is text-only — the KV cache is rebuilt from the spliced text prompt without a fresh `forward_multimodal` prefill, so the model loses image grounding on splice rounds. Accepted because: (a) splice exists to inject retrieved text knowledge, (b) the image content the model needed was already described in the emission up to `</search>`. The trade-off is named in the wire-site docstring inside `_generate_with_vision` so it isn't lost.
+
+**Tests.**
+- `tests/test_chat.py::TestB3aSiblingCallSitesUsePathKwarg::test_sibling_path_emits_b3a_warning_when_flag_on` — dropped `"vision"` from the loop. Remaining members: `("batch", "gguf")`.
+- New class `tests/test_chat.py::TestB3VisionSiblingClosure` (3 tests):
+  - `test_vision_augments_stop_strings_with_close_tag` — regex on the literal `effective_stop_strings = list(stop_strings or [])` and `effective_stop_strings.append("</search>")` patterns inside the method body.
+  - `test_vision_invokes_maybe_rag_splice` — regex on `self._maybe_rag_splice(` + `tokens_already_generated=tokens_round0`.
+  - `test_vision_path_no_longer_emits_b3a_warning` — behavioural gate via `_record_search_emissions(path="vision")` with flag ON; Stage B-2 WARNING still fires, B-3a WARNING does NOT.
+
+**Author's lens / six-question audit.**
+1. *Would I write it this way?* Yes — mirrors speculative_generate verbatim, smallest possible delta.
+2. *Connections?* `_generate_with_vision` ← `chat(images=[...])` (production); `_maybe_rag_splice` shared with five other paths; `_record_search_emissions` allow-list adjusted.
+3. *Missing connections?* None — vision was the documented gap and is now closed.
+4. *Logic-eye on doc claims?* Wire-site docstring explicitly names the image-grounding degradation on continuation rounds (no over-promise; no aspirational-comment-as-audit-finding).
+5. *Claim-vs-test?* Structural tests use word-boundary / full-call-expression regex (per Pass 156k-audit). Behavioural test on the WARNING gate.
+6. *Sibling-boundary sweep?* Two sites left in the family: `generate_batch` (`path="batch"`) and the `_generate_text` GGUF branch (`path="gguf"`). Both still emit the B-3a WARNING and both are tracked as the next two slices in this session.
+
+**Parked / follow-up.**
+- `batch` splice — next slice this session. Per-sequence splice loop needed.
+- `gguf` splice — feasibility check pending; may require a llama-cpp-python logits processor hook that doesn't exist on the current version.
+
+---
+
+## PASS 156z9dn — MC-3 `.bak` orphan cleanup + model-context orphan cleanup (May 13, 2026)
+
+**Status.** Finished. Suite **3166 passed, 3 skipped** (3161 prior + 5 new). Lint clean.
+
+**Scope.** Two real orphan-on-delete bugs surfaced during the prior session's MC-1/MC-2 work, plus one orphan data file. Verified before fixing (§1 #2): prior-session notes had three wrong assumptions about file layouts (`.pt.bak`, per-model tokenizer, flat-file model contexts) — those were dropped from scope.
+
+**Bug A — `.bak` orphans on session delete.** [`atomic_write_json`](enigma_engine/core/safe_save.py) creates `<path>.bak` on every overwrite via `shutil.copy2`. `_confirm_delete_session` called bare `path.unlink()`, leaving `<session>.json.bak` behind on disk forever. Invisible to the user, visible on disk.
+
+**Bug B — model-context dir orphans on model delete.** [`ModelContext`](enigma_engine/core/model_context.py) persists per-model state as a DIRECTORY `data/model_contexts/<model_key>/` (containing `context.json` + `history.json`). `_confirm_delete_model` deleted the `.pth` file + `lora_adapters/<name>/` dir but never touched the context dir → orphan dir per deleted model, accumulating forever.
+
+**Fix.**
+- [`enigma_engine/core/safe_save.py`](enigma_engine/core/safe_save.py): new `unlink_with_backup(path)` helper. Removes `path` + `<path>.bak` together; primary unlink raises non-FNF OSError, backup unlink failures log WARNING but never re-raise. Files-only (directories use `shutil.rmtree`).
+- [`enigma_engine/gui/gui_logic_chat.py`](enigma_engine/gui/gui_logic_chat.py) `_confirm_delete_session`: deferred-import + call `unlink_with_backup(path)` in place of `path.unlink()`.
+- [`enigma_engine/gui/gui_forge_models.py`](enigma_engine/gui/gui_forge_models.py) `_confirm_delete_model._do_delete`: after primary file delete, call `ModelContext(model_key_from_path(str(path))).delete()` (best-effort; `shutil.rmtree(ignore_errors=True)` inside). Logs WARNING on context cleanup failure; never blocks primary delete.
+- Deleted orphan [`data/plan_base.json`](data/plan_base.json) (5152 bytes, mtime 3/15/2026, zero Python refs across all `**/*.py`).
+
+**Sibling sweep.**
+- `atomic_torch_save` / `atomic_safetensors_save` use `.tmp` + `os.replace` only — no `.bak` generated, no fix needed. Confirmed via source read.
+- `_clean_checkpoints` audited: no `.pt.bak` orphans in practice.
+- Tokenizer is shared (`models/tokenizer.json`), not per-model — no orphan path.
+
+**Tests.** 5 new in `tests/test_gui.py::TestAtomicSaves`:
+1. `test_unlink_with_backup_removes_both` — double-write → call helper → both gone.
+2. `test_unlink_with_backup_missing_primary_is_noop` — idempotency.
+3. `test_unlink_with_backup_removes_bak_only_when_primary_gone` — orphan-only cleanup.
+4. `test_confirm_delete_session_uses_unlink_with_backup` — structural regex `\bunlink_with_backup\s*\(\s*path\b` on `LogicChatMixin._confirm_delete_session` source.
+5. `test_confirm_delete_model_cleans_model_context` — structural regex matches both `model_key_from_path` symbol AND `ModelContext(...).delete()` chained call (`[^\n]*` between parens to allow nested call `model_key_from_path(str(path))`).
+
+Structural choice justified per §4: both wire-sites are CTk-bound mixin methods unreachable from headless tests without heavy fixtures. Regex pattern follows the §4 sibling-boundary discipline (full call expression paired with named symbol — falsifiable by deletion).
+
+**Parked / follow-up.** None. MC-3 closed.
+
+---
+
+## PASS 156z9dm — MC-2b stale-id self-heal (May 13, 2026)
+
+**Status.** Finished. Suite **3157 passed, 3 skipped** (3156 prior + 1 new). Lint clean.
+
+**Audit follow-up.** Pass 156z9dl self-audit Finding #1: when `_load_active_conv_id_from_disk` rejected a stale id (saved active no longer in `_histories`), it set in-memory active=None but did NOT rewrite `_active.json`. Same stale id replayed (and re-logged) on every subsequent boot. Cosmetic + log-spam; self-heals on first user activation. Closed for cleanliness.
+
+**Fix.** [enigma_engine/api/server.py](enigma_engine/api/server.py) `_load_active_conv_id_from_disk`: track `stale` flag inside the locked check, then call `self._persist_active_conv_id()` outside the lock when stale → disk gets `{"active_conv_id": null}` and the next boot is silent.
+
+**Test.** `tests/test_api_conversations.py::TestDiskPersistence::test_active_pointer_self_heals_stale_id_on_boot` — hand-write stale pointer, boot, assert `_active.json` payload is null. Falsified by gating the self-heal call behind `if False and stale:` → assertion failed (`'eeee...' is None`); restored → passed.
+
+## PASS 156z9dl — MC-2b active conversation pointer persistence (May 13, 2026)
+
+**Status.** Finished. Suite **3156 passed, 3 skipped** (3153 prior + 3 new). Lint clean.
+
+**Bug (closed).** `_active_conv_id` was process-local state. After a daemon restart (Ctrl+C, crash, reboot) the user always booted into "no active conversation" even when the prior session had a clear one — every prior chat was reachable through `GET /api/conversations` but the *current* one was lost. Latent UX paper-cut: the GUI's "resume" path quietly forked a new conv every restart.
+
+**Fix.** Two new methods on `AppState` ([enigma_engine/api/server.py](enigma_engine/api/server.py)):
+- `_persist_active_conv_id()` — atomic write to new module-level `ACTIVE_CONV_FILE = CONVERSATIONS_DIR / "_active.json"`. Reads under lock, writes outside. Best-effort — failures log WARNING, never raise.
+- `_load_active_conv_id_from_disk()` — called from boot after `load_conversations_from_disk()`. Validates JSON shape, restores `_active_conv_id` only if the saved id is in `_histories` (handles the eviction-between-sessions edge case). Stale id → INFO log + None.
+
+**Wired into all 4 mutation sites:** `_resolve_and_activate` (on switch), `delete_conversation` (when active deleted), `clear_all_conversations`, `unload_model`. Every site copies the active id under lock then persists outside.
+
+**File-shape note.** `_active.json` is invisible to the existing `*.jsonl` glob in `load_conversations_from_disk` — no overlap with MC-2a's stray-file partition.
+
+**Tests.** `tests/test_api_conversations.py::TestDiskPersistence` + 3 cases:
+- `test_active_pointer_persists_across_restart` — activate, persist, wipe in-memory state, reload → active restored.
+- `test_active_pointer_skipped_when_saved_id_evicted` — hand-write stale pointer (id never created), boot → active=None.
+- `test_active_pointer_cleared_when_active_deleted` — delete active conv → on-disk pointer is `null`.
+
+**Falsification.** Disabled the `_persist_active_conv_id()` call inside `_resolve_and_activate` (`if False and switched:`) → `test_active_pointer_persists_across_restart` FAILED at the file-existence assertion. Restored → PASSED.
+
+**Self-audit (six questions).** (1) Author's lens: persist-on-write is the standard pattern for a single-pointer-on-disk feature. (2) Connections: 4 mutation sites + boot loader, all wired. (3) Missing connections: none — every code path that mutates `_active_conv_id` now persists. (4) Logic-eye: docstring says "survives daemon restart" — code does. (5) Claim-vs-test: tests exercise the round-trip on a real disk path via `monkeypatch.setattr(srv, "ACTIVE_CONV_FILE", ...)`, not just `inspect.getsource`. (6) Sibling sweep: no parallel "persist X across restart" infra elsewhere in `AppState` — `model_path` is re-loaded from CLI args, `active_profile` is GUI-set per session.
+
+**Parked / follow-up.** None for MC-2 family — fully closed.
+
+## PASS 156z9dk — Pass 156z9dj/156z9di self-audit follow-ups (May 13, 2026)
+
+**Status.** Finished. Suite **3153 passed, 3 skipped** (3152 prior + 1 new). Lint clean.
+
+**Trigger.** §4 "Self-audit immediately after shipping is mandatory" applied to Pass 156z9dj (MC-2a) + Pass 156z9di (B3). Six-question lens surfaced two real findings.
+
+**A1 — Dead infra (consumer-without-caller) from Pass 156z9di — KILLED.** `_resolve_conversation` + `_activate` had zero production callers after B3 consolidated them into `_resolve_and_activate`. Per §1 #20 / §4 anti-pattern. Both methods deleted from [enigma_engine/api/server.py](enigma_engine/api/server.py); two test setup callsites refactored to call `_resolve_and_activate` directly (`tests/test_api.py` L1113, `tests/test_api_conversations.py` L333). One comment in `TestResolveActivateNoTOCTOU` (L454) intentionally retained — it documents the *historical* two-step shape the test guards against.
+
+**A2 — MC-2a data-loss edge case — FIXED.** The Pass 156z9dj excess-unlink loop ran AFTER mtime-sort but BEFORE the UUID4-hex validity check. A stray non-UUID `*.jsonl` file in `CONVERSATIONS_DIR` with newest mtime (operator backup, hand-edit, log) would occupy a kept slot, push a valid conversation into the excess slice, and **silently delete the real conversation**.
+
+**Fix.** At [enigma_engine/api/server.py L590-L605](enigma_engine/api/server.py#L590-L605): partition `all_files` into valid-shape (32-char lowercase hex stem) and stray BEFORE the cap slice. Stray files are skipped with a "unexpected file" WARNING and **left on disk** — they don't belong to us. Only valid-shape excess files get unlinked.
+
+**Adversarial test.** `tests/test_api_conversations.py::TestDiskPersistence::test_boot_load_stray_file_does_not_displace_valid_conv` writes 3 valid UUID4 files + 1 `notes.jsonl` with newest mtime, sets `MAX_CONVERSATIONS=2`, asserts (a) 2 newest *valid* convs loaded, (b) stray file survives on disk, (c) no MC-2a eviction WARNING mentions the stray. Falsification: replaced the partition with `files = list(all_files)` → test FAILED with `count == 1` (stray pushed cids[1] into excess); restored → PASSED.
+
+**Parked / follow-up.** MC-2b (`_active_conv_id` not persisted across daemon restart) still parked.
+
+## PASS 156z9dj — MC-2a disk-orphan cap drift (May 13, 2026)
+
+**Status.** Finished. Suite **3152 passed, 3 skipped** (3151 prior + 1 new). Lint clean.
+
+**Bug (closed).** `load_conversations_from_disk` capped which files it *loaded* into memory at `MAX_CONVERSATIONS`, but did nothing about excess files left on disk. A user who previously ran with a high cap (or hand-copied jsonl files into `CONVERSATIONS_DIR`) and then lowers the cap would see disk usage grow forever — every boot sorts the same orphans by mtime, drops the oldest from the loaded set, and leaves them sitting on disk. Silent storage leak, no warning, no operator signal.
+
+**Fix.** At [enigma_engine/api/server.py L587-L613](enigma_engine/api/server.py#L587-L613): after `files = files[:MAX_CONVERSATIONS]`, unlink every excess path with a WARNING per file ("MC-2a: deleted excess conversation file X"). Try/except per file so a single unlink failure (locked file, permission error) can't abort boot — log + continue. Docstring updated to call out the eviction-on-boot behaviour.
+
+**Adversarial test.** `tests/test_api_conversations.py::TestDiskPersistence::test_boot_load_evicts_excess_disk_files` writes 5 valid jsonl files with pinned mtimes (i=0 oldest, i=4 newest), sets `MAX_CONVERSATIONS=2`, calls `load_conversations_from_disk`, asserts (a) count == 2, (b) the 2 newest are in `_histories`, (c) the 3 oldest are unlinked from disk, (d) exactly 3 WARNING records tagged `MC-2a`. Falsification: reverted fix to one-liner `files = files[:MAX_CONVERSATIONS]` → test FAILED (excess files survive); restored → PASSED.
+
+**MC-2 parked tracker:** MC-2a closed. **MC-2b (`_active_conv_id` not persisted across daemon restart)** remains parked — trickier because the saved active id can be evicted between sessions; needs an extra existence check on restore. Logged at [SUGGESTIONS.md L250](SUGGESTIONS.md#L250).
+
+## PASS 156z9di — MC-1a B3 TOCTOU fix + T3 stale-parked sweep (May 13, 2026)
+
+**Status.** Finished. Suite **3151 passed, 3 skipped** (3146 prior + 5 new B3 tests). Lint clean.
+
+**T3 — adversarial retry quality test (closed, was stale-parked).** Pre-existing `test_retry_engine_call_sees_clean_history` at [tests/test_api_conversations.py L358](tests/test_api_conversations.py#L358) already implements the verbatim parked contract; was never stamped. Falsification check: stubbed `state.rollback_last_turn(conv_id)` at [server.py L960](enigma_engine/api/server.py#L960), test FAILED with `['response_101']` in retry history; restored, green. Real behavioural gate.
+
+**B3 — Two-lock-acquisition TOCTOU between resolve and activate vs DELETE (FIXED).** Original code did `_resolve_conversation()` → release lock → `_activate()` → release lock → engine generates → `_histories.setdefault(cid, [])` at append. A concurrent `DELETE /api/conversations/{cid}` between any two of those unlocked spans would either (a) leave `_active_conv_id` pointing at a deleted id, or (b) resurrect the row at setdefault time, also re-adding to `_conv_order` via `_touch_locked`.
+
+Three defenses landed at [enigma_engine/api/server.py L227-L313](enigma_engine/api/server.py):
+1. **`_resolve_and_activate(cid_or_none) -> (cid, switched)`** — folds existence-check + active-id store + LRU touch into one `with self._lock:` block. Replaces the two-step at both call sites: [chat() L384](enigma_engine/api/server.py#L384) and [/api/chat/stream L1043](enigma_engine/api/server.py#L1043).
+2. **`_touch_locked` refuses to re-add a missing conv** — if `cid not in self._histories`, the method removes any stale entry from `_conv_order` and returns without re-appending. Stops resurrection via the LRU queue path.
+3. **`_append_turn_if_alive_locked(cid, user, assistant) -> bool`** — replaces `_histories.setdefault(cid, [])` in both chat() and the SSE generator. Returns `False` if the conv was deleted mid-generation; the response is still returned to the caller but no ghost row is written and `_persist_conversation` is skipped.
+
+5 new tests in `TestResolveActivateNoTOCTOU`: KeyError-on-unknown, `_touch_locked` refuses ghost, `_append_turn_if_alive_locked` skip + happy-path, end-to-end resurrection probe (monkey-patches `engine.chat` to DELETE the conv mid-generation). Falsification check: reverted `_append_turn_if_alive_locked` to setdefault — `test_chat_does_not_resurrect_deleted_conv` and `test_append_turn_if_alive_locked_skips_deleted` FAILED as expected; restored, all green.
+
+**MC-1a parked tracker status after this pass:**
+- B1 — closed Pass 156z9cw
+- B2 — closed Pass 156z9cx
+- B3 — **closed this pass**
+- D1 — already addressed; module docstring at [server.py L34-37](enigma_engine/api/server.py#L34-L37) lists conversation endpoints. Closing without code change.
+- D2 — closed Pass 156z9cw
+- T1, T2 — closed earlier
+- T3 — **closed this pass** (test was already there, parked entry was stale)
+
+## PASS 156z9dh — Personality-5 metric audit + structural-test strengthening (May 13, 2026)
+
+**Status.** Finished. Suite **3146 passed, 3 skipped** (3144 prior + 2 new wire-site gates). Lint clean. Pass 156z9dg metric module audited under §1 #19 six-question lens; one real claim-vs-test gap found and closed.
+
+**Findings (six-question lens):**
+
+1. *Would I write it this way?* Yes — module is clean, stdlib-only, deterministic.
+2. *What is it connected to?* Pure functions; called from 4 sites in `_start_distill_training` only. No upstream deps.
+3. *Connections that should exist but don't?* Sibling-extension scope already corrected this turn (LoRA out, simple-SFT phantom, dialogue + DPO honest in-family but blocked on design call). Two new follow-ups logged below.
+4. *Logic-eye on doc claims?* Docstring matches code. One theoretical gap deferred.
+5. **Claim-vs-test — REAL FINDING.** `test_pre_consistency_probe_uses_run_identity_probe` asserted only `self._run_identity_probe(` count ≥ 4 — a regression swapping `CONSISTENCY_PROBE_PROMPTS` ↔ `IDENTITY_PROBE_PROMPTS` at the consistency call sites would silently pass because both probes share the same helper. Counted helper presence, not payload correctness.
+6. *Sibling-boundary sweep?* Done this turn (scope refined).
+
+**Fix landed (claim-vs-test gap).** Two new structural tests in `tests/test_personality_consistency.py::TestConsistencyProbeWireSite`:
+
+- `test_consistency_probe_call_expression_uses_consistency_prompts` — regex match on `_run_identity_probe\(...list\(CONSISTENCY_PROBE_PROMPTS\)`, must hit ≥ 2 sites (pre + post).
+- `test_identity_probe_call_expression_uses_identity_prompts` — symmetric defense, same shape on `IDENTITY_PROBE_PROMPTS`. Without this, a swap in the opposite direction would pass the existing P5-pre-3 wire-site tests in `tests/test_personality_data.py`.
+
+**Falsification check.** Temporarily edited the pre-consistency call site to use `list(IDENTITY_PROBE_PROMPTS)`. Old weak test `test_pre_consistency_probe_uses_run_identity_probe` PASSED (proves it's vacuous on this regression). New test `test_consistency_probe_call_expression_uses_consistency_prompts` FAILED with `Expected >=2 ... found 1` (proves the strong gate works). Source restored, suite green.
+
+§4 principle applied: "Substring-presence assertions on `inspect.getsource` are vacuous when the substring appears at multiple sites in the body" (Pass 156z9y). When a helper is called from a family of sites with different payloads, the test must gate the FULL call expression `helper_name(...literal_payload...)`, not just the helper name or the payload alone.
+
+**Parked — Personality-5 follow-ups (not blockers for current scope):**
+
+- *Metric persistence gap.* Consistency probe output goes to `self._log` only (ephemeral GUI text buffer). The Pass 156z9dg loss-half slice is gated on "metric shows measurable drift in two consecutive distill runs first" — but there is no on-disk record to compare two runs. Same pattern as the identity probe though, so not a regression from this slice. Concrete next step when loss-half is revisited: persist `cons_summary` to `models/checkpoints/{stem}_consistency_{ts}.json` alongside the pre-distill backup checkpoint. Out of scope for this audit pass.
+- *Theoretical `n<2` semantics.* `score_consistency` returns `value_consistency=0.0` for n<2, conflating "not measurable" with "fully inconsistent." Not reachable from production (`CONSISTENCY_PROBE_PROMPTS` is 6 prompts hardcoded). Only a direct API caller could hit this. Concrete next step if it ever becomes reachable: return `None` for value_consistency when `n<2` and update `overall` to equal `pronoun_consistency` in that case. Defer.
+
+**Next.** Awaiting user direction. Realistic in-session options: walk row 11 (AutoResearch-2), HYG-1 git commit (needs user permission for git ops), or hardening tests on other recent slices. Larger options (Personality-5 loss-half, N-6 resume, Approach 3 POC) are gated on operational data or multi-day compute.
+
+---
+
+## PASS 156z9dg — Personality-5 cross-prompt consistency metric (May 13, 2026)
+
+**Status.** Finished (metric half). Suite **3144 passed, 3 skipped in 39.77s** (3121 prior + 23 new). Lint clean on `enigma_engine/ tests/`. SUGGESTIONS Next-Actions row G "stronger trainer-side consistency loss / metric" — **metric half DONE**, loss half explicitly **parked** (cheap-honest-step-first per §1 #11 Trade Study).
+
+**What shipped.**
+
+- `enigma_engine/core/personality_consistency.py` (NEW, stdlib-only). Pure-function metric module:
+  - `CONSISTENCY_PROBE_PROMPTS` — 6 self-description prompts (one-sentence summary, assistant kind, personality, values, response-to-unknown, communication style).
+  - `score_consistency(responses) -> {n, pronoun_consistency, value_consistency, overall}`. Pronoun score = fraction of responses with at least one first-person token (`i`, `me`, `my`, `i'm`, `i've`, …). Value score = mean pairwise Jaccard overlap of >=4-char alpha content tokens with stopwords and contractions filtered out. Overall = mean of the two components. All in `[0.0, 1.0]`.
+  - `summarize_consistency(pre, post) -> {pre, post, delta_overall, regressed}`. `regressed = delta_overall < 0.0` — strict, equal pre/post does NOT regress.
+- Wire-site in `enigma_engine/gui/gui_forge_new_modes.py::_start_distill_training` — two parallel blocks alongside the existing P5-pre-3 identity probe:
+  - **Pre-block** (after pre-identity probe, before `trainer.train(...)`): gated on `"personality" in categories`, runs `_run_identity_probe` with `CONSISTENCY_PROBE_PROMPTS`, logs the baseline score, stores `pre_consistency_responses`. Failures are non-fatal — they leave `pre_consistency_responses = None` so the post block is skipped.
+  - **Post-block** (after post-identity-probe summary, before `# Save model`): gated on `pre_consistency_responses is not None and "personality" in categories`, re-runs the same probe, calls `summarize_consistency`, logs `pre -> post (delta=...)`, WARNS if `regressed`.
+- `tests/test_personality_consistency.py` (NEW, 23 tests):
+  - Probe-data: nonempty + unique prompts.
+  - `score_consistency` branches: empty, n=1 (no-pair case), perfect (1.0), no-pronouns (drops pronoun score), disjoint vocab (drops value score), empty-response coverage penalty, contractions count, stopwords excluded, mean-of-two-components arithmetic, determinism.
+  - `summarize_consistency`: regressed (post<pre), improved (post>pre, regressed=False), equal (delta=0, regressed=False), nested score dicts shape.
+  - Wire-site structural: imports, `_run_identity_probe` count >=4 (identity+consistency × pre+post), pre runs before `trainer.train`, post runs after `summarize_identity_probe`, `"personality" in categories` gate count >=3, post gated on `pre_consistency_responses is not None`, "CONSISTENCY REGRESSED" log + `cons_summary["regressed"]` branch present.
+
+**Trade Study (metric vs loss).** Row G of Personality-5 is worded "consistency loss / metric". Two routes:
+
+| Route | Cost | Risk | Honesty |
+|---|---|---|---|
+| **Metric** (shipped) | one pure module, 6 forward passes pre+post in distill flow | low — observation only, no gradient changes | logs whether distill regressed identity coherence — fails loud on degradation |
+| **Loss term** (parked) | needs a teacher-side anchor set, KL or contrastive term in training loop, hyperparam tuning, sibling-method coverage across train_dpo/train_simpo/etc | medium — interacts with existing distill KD loss + LoRA gates; could over-regularize and produce flat self-descriptions | promises behavior change but cannot validate it without the metric first |
+
+The metric is a prerequisite for the loss: without an observable signal, a loss term has no way to prove it works. Ship the metric, gather drift data from real distill runs, then decide if a loss term earns its complexity. Pure §1 #11 (Trade Study) + §1 #20 (no half-built features — metric is finished, loss is explicitly parked with a concrete next step).
+
+**Author's-lens self-audit findings (caught + fixed in this pass).**
+
+- Docstring claim "0.0 if fewer than 2 non-empty responses" was loose — actual behavior is `0.0` when `n < 2` (no pairs exist) OR when every pair has empty union after filtering. Two mechanisms, one outcome. Fixed the doc to enumerate both (logic-eye: doc must match code).
+- Probe reuses `_run_identity_probe` rather than introducing `_run_consistency_probe`. The helper is a generic greedy generator over a prompt list; the prompt set is what differentiates identity from consistency. No scope creep (§1 #18: no rename outside the named scope).
+- Sibling-boundary sweep (corrected by Pass 156z9dg in-session audit): `_start_distill_training` is the only call site of `_run_identity_probe` in the *current* call graph — verified by grep, 4 hits all in this function (pre/post × identity/consistency). HOWEVER, Pass 156z9aq parked a same-family sibling-extension that, on re-audit, was over-broad — see the scope-correction notes in P5-pre-3 §3 and §6. **Honest in-family list:** [`_start_dialogue_training`](enigma_engine/gui/gui_forge_advanced.py#L38) and [`_start_dpo_training`](enigma_engine/gui/gui_forge_new_modes.py). **Out of family:** `_start_lora_training` (LoRA freezes base weights — Pass 156z9de stamp); `_start_simple_sft` (phantom — no such entry point exists). Even the in-family entries are blocked on a design call (no `categories` gate; mechanical port would probe every run regardless of topic). **The consistency probe inherits that refined parked extension by the same logic that gates the identity probe** — both currently apply only to distill; both are blocked on the same design call for dialogue + DPO extension. This stamp's earlier wording ("no other distill-like path exists that needs parallel wiring") was over-broad; the §4 self-narration-satisfies-negative-presence anti-pattern applied to sibling-sweep claims. Corrected here. Parked sibling-extension carries forward to the next Personality-5 slice.
+
+**Parked — loss half of row G.** Concrete next step: when row G is revisited, build a teacher-locked anchor of 8–16 self-description responses (one per `CONSISTENCY_PROBE_PROMPTS` prompt × 1–3 paraphrases), KL-penalize student outputs against the anchor distribution on those prompts, gate behind a `TrainingConfig.consistency_loss_weight: float = 0.0` field (off by default; on requires the metric to show measurable pre→post drift in two consecutive distill runs first). NOT a "we'll come back to it" stub — current production state has zero kwargs, zero unused config fields, zero unused functions for this. The next slice starts from a blank slate.
+
+**Next.** Code-6 FORGE vision-projection training mode (option C in this session's menu).
+
+---
+
+## PASS 156z9df — GUI-ARCH-0 Phase 0 deliverables (May 13, 2026)
+
+**Status.** Finished. Suite **3121 passed, 3 skipped in 39.30s**. Lint clean on `enigma_engine/services/` and full package. Phase 0 of the GUI Modernization plan (see Next-Actions row 7) is now docs-complete + interface-only skeleton; Phase 1 POC bake-off is unblocked pending the operator-side baseline measurement in [information/gui/BASELINE.md](information/gui/BASELINE.md).
+
+**What shipped.**
+
+- [information/gui/ARCH_DECISION.md](information/gui/ARCH_DECISION.md) — constraints (C1–C4 local/offline/black-box/sibling-package), non-goals, current pain (P1–P5: Tcl single-threaded event loop, hand-rolled theming, per-widget rebuild cost, 30+ scattered `core.*` imports, no engine ↔ GUI process boundary), gates (G1 offline-by-default via pktmon, G2 no remote update/telemetry, G3 UI-doesn't-freeze vs baseline), 8-row rubric with primary "≤ baseline" + stretch absolute targets, 5-option matrix with source confidence per row.
+- [information/gui/BASELINE.md](information/gui/BASELINE.md) — measurement protocol for M1 cold-start, M2 page-switch latency (CONFIG + FORGE), M3 idle RAM (shell-only, model-not-loaded), M4 packaged size estimate, M5 30 s training frame-stall for G3. Empty result table for operator to fill in (cannot be filled by the agent — requires running the live GUI on the operator's machine).
+- [information/gui/PAGE_INVENTORY.md](information/gui/PAGE_INVENTORY.md) — **17** user-facing pages (plan inventory had 16 — `gui_forge_teacher.py` was the missing one, flagged in §1) classified v1/v2/drop (13 v1, 4 v2, 0 drop), 7 support modules with port strategy (`widgets.py`/`themes.py`/`media.py` rewrite; `scanners.py`/`gui_logic.py`/`gui_logic_chat.py`/`gui_logic_media.py` direct-port-to-service), project-goal drift-check appendix (no active C3 violations after Pass 156z9dd cleanup; emotional_state read-only display is OK as AI-computed state), Phase-4 cutover-order proposal (CONFIG → HOME/MODELS → CMD → DOCS → MODS → chat → FORGE → v2 pages).
+- `enigma_engine/services/` skeleton (8 modules): `__init__.py`, `persistence.py` (atomic JSON/text/torch wrappers), `model_lifecycle.py` (build/load/save/list, consolidating the 4-import quartet that appears 10+ times in GUI), `tokenization.py`, `inference.py` (engine factory + chat), `training_dispatch.py` (placeholder for centralized dispatch), `hardware.py` (placeholder), `documents.py` (read_document), `chat_state.py` (model_context load + emotional ranges read-only). All `core.*` imports deferred to call-time; bodies are thin forwards. Three modules ship `NotImplementedError` placeholders (`model_lifecycle.list_models`, `training_dispatch.run`, `hardware.detect`) where the first migrating GUI consumer will pin the shape — they exist now so the import surface is fixed.
+
+**Why this layer.** Today the GUI imports ~30 distinct `enigma_engine.core` modules (almost all via deferred imports inside handler functions; verified by `grep "^from enigma_engine\.core" enigma_engine/gui/*.py` returns 1 match while recursive grep returns 200+). Phase 4 cutover to a new GUI stack would require rewriting every one of those import sites twice (PySide6 + Tauri). After Phase 4 the GUI imports only `enigma_engine.services` — ~8 surfaces instead of 30. After ARCH-1 (separate engine process, future slice) the in-process forward becomes an IPC client with no signature change.
+
+**Phase 0 scope discipline kept.** No framework picked, no GUI page migrated, no core/* edits, no test changes, no production behavior change. Services skeleton is reachable via `import enigma_engine.services` (smoke-checked) and currently has zero callers — that's intentional. First caller migration is Phase 4 work after the framework decision lands.
+
+**Acceptance for Phase 0 close.** ARCH_DECISION.md §9 has three boxes still open: BASELINE numbers (operator-side run), PAGE_INVENTORY operator confirmation, services skeleton merged (this pass). Numbers + confirmation are operator gates, not coding gates — Phase 0 is complete from the code-maker side.
+
+**Next.** Personality-5 (trainer-side consistency loss on top of Pass 156z9ba auxiliary path), then Code-6 (FORGE vision-projection training mode). Both are independent of GUI Phase 1 and can proceed in parallel with operator-side baseline measurement.
+
+---
+
+## PASS 156z9de — kill dead-infra: EWC + monologue writer-side trio (May 13, 2026)
+
+**Status.** Finished. Suite **3121 passed, 3 skipped**. Lint clean on `enigma_engine/ tests/`. Production code, audit principle, and doc sweep all landed.
+
+**Motivation.** Author's-lens audit surfaced two dead-infra clusters that had been carried forward across many passes without callers:
+
+1. **EWC** (`core/ewc.py`) — Fisher information + penalty term. Zero callers anywhere in production. Closed WONTFIX in Pass 156i3 (superseded by LoRA-per-specialist: frozen base weights make forgetting physically impossible) but the module stayed on disk with its test class for ~40 passes.
+2. **Phase-5 inner-monologue writer-side** — `Journal`, `IdleTracker`, `build_reflection_prompt`, idle reflection loop driver, `monologue_mode` config + GUI dropdown, journal panel, journal greeting wiring. Reader-without-writer + FSM-without-driver: no user had ever opted in, the idle loop was never reachable from any production entry-point. Only the heuristic `score_coherence` + FORGE coherence benchmark surface had real callers.
+
+Both clusters had previously triggered §4 anti-patterns (signal-without-consumer, consumer-without-caller, FSM-without-driver) but the kill was never executed because the parked items kept getting re-described instead of removed.
+
+### What was removed
+
+- `enigma_engine/core/ewc.py` (full module)
+- `tests/test_core.py::TestEWC` (16 tests covering the deleted module)
+- `core/monologue.py`: `Journal` class, `IdleTracker` class, `build_reflection_prompt`, all idle-reflection orchestration. Module now exposes only `DEFAULT_COHERENCE_THRESHOLD`, `_COMMON_WORDS`, `score_coherence`, `_BENCHMARK_PROMPTS`, `run_coherence_benchmark`.
+- `monologue_mode` field from `AIProfile` + default profile JSONs
+- `_show_journal_greeting`, `_refresh_journal_display`, `_get_monologue_mode`, `_change_monologue_mode` from GUI
+- Journal panel widget + sidebar journal toggle + monologue card from `gui_pages.py`
+- 9 supporting changes across `enigma_engine/gui/`, `enigma_engine/config/`, `enigma_engine/core/model_context.py` cleaning up dangling references
+
+### What was added
+
+- 16 new tests in `tests/test_monologue.py` covering the retained scorer + benchmark surface
+- §4 Auditing principle "Question zero on dead infra: was the original requirement validated?" with the three honest options (build-as-designed / kill / rebuild-simpler) and the **kill is the default** rule
+- Doc-sweep across `CODE_REVIEW.md`, `SUGGESTIONS.md`, `GUI_REFERENCE.md`: 30+ stale references to deleted symbols purged; historical Pass 156i3 EWC commit-log entry left intact (commit-log convention); 4 RESOLVED research stamps (Mono-1, Mono-2, Code-8, N-18) updated to point at Pass 156z9de; EWC-1 marked KILLED in both backlog tables
+
+### Validation
+
+- `python -m pytest tests/ -q` → **3121 passed, 3 skipped**
+- `ruff check enigma_engine/ tests/` → clean
+- Final grep across the 3 tracker docs for the deleted symbol names returns only the new Pass 156z9de close-stamps + the historical Pass 156i3 entry — no live-feature claims for deleted code remain
+
+### Risk and reversibility
+
+LoRA-per-specialist is the live forgetting-mitigation path (`core/lora_utils.py`). If a reflection loop is ever wanted again, `score_coherence` is the only retained piece — rebuilding the writer-side from a clean slate is cheaper than dragging the dead FSM forward. No migration needed: legacy profile JSONs with a `monologue_mode` block load via `AIProfile.from_dict`'s unknown-key filter.
+
+---
+
+## PASS 156z9dd — remove dead `AIProfile.personality` config layer (May 12, 2026)
+
+**Status.** Finished. Suite **3152 passed, 4 skipped in 49.74s**. Lint clean on `enigma_engine/ tests/ run.py`. Net change: ~250 LOC + 9 tests + 5 JSON blocks deleted; zero behaviour change.
+
+**Motivation.** §Project Goal: *"Personality from training, not the user — the AI's voice, mood, and style are learned, not configured per-session."* The `AIProfile.personality: Dict[str, Any]` field violated this. Audit found exactly ONE production consumer in the entire codebase: a cosmetic log-line branch in `apply_profile_to_engine` ([ai_profile.py L644-654 pre-fix](enigma_engine/core/ai_profile.py)). No prompt change, no generation change, no engine attribute reads it. Three §4 anti-patterns fired on the same field across passes 156y / 156z / 156z2: *signal-without-consumer*, *consumer-without-caller*, *boundary-signal-without-behaviour-change*. Three passes shipped infrastructure trying to give the field meaning; the meaning never arrived because the project goal says it shouldn't.
+
+**Three-layer personality stack now clean:**
+
+| Layer | Status | Why |
+|---|---|---|
+| 1. `AIProfile.personality` (user-set config) | **REMOVED** | Violated project goal; only consumer was cosmetic log |
+| 2. `sentiment.py` + `model_context.emotional_state` (AI-computed runtime) | **KEEP** | Project-goal aligned: AI knows itself, injects mood as tone cue |
+| 3. `personality_data.py` (weights-trained) | **KEEP** | Personality-5 distill pipeline |
+
+After this pass, "personality" has exactly one meaning in the codebase: the free-text identity blurb on `ModelContext` (rendered in the GUI model list) — a per-trained-model attribute, not a per-session config knob.
+
+### What was removed
+
+- `AIProfile.personality: Dict[str, Any]` field ([ai_profile.py](enigma_engine/core/ai_profile.py))
+- `AIProfile.is_roleplay()` method
+- Branched log in `apply_profile_to_engine` → collapsed to one unconditional `logger.info("Applied profile '{name}' to engine")`
+- "Identity vs roleplay" framing in the class docstring (now: "task overlay only — AI personality is weight-trained")
+- `personality`-related comments in `DEFAULT_PROFILES` (4 profile templates)
+- `is_roleplay()` mention in `api/server.py` activate-endpoint comment
+- `"personality": {}` block from all 5 profile JSONs (`assistant`, `coding_helper`, `creative_writer`, `researcher`, `not_for_you_hahaha`)
+- 9 dead tests in `test_core.py` (3 default-state, 1 roundtrip, 1 docstring gate, 4 disk-load gates, 1 apply-engine branch test)
+- 1 `personality={"tone": "dry"}` kwarg in the remaining `test_to_dict_roundtrip` test
+
+### What was preserved
+
+- `AIProfile.from_dict` already filters unknown JSON keys ([ai_profile.py L185-191](enigma_engine/core/ai_profile.py#L185-L191)) — legacy disk profiles with a `personality` block load cleanly with the field silently dropped. No migration needed.
+- All 5 profile JSONs kept as files (including `not_for_you_hahaha.json` — user-saved goblin profile, stripped of personality block but retained).
+- `ModelContext.personality: str` (free-text identity blurb on trained models) — different symbol, real consumer at [gui_pages.py L1439](enigma_engine/gui/gui_pages.py#L1439). Not touched.
+- `sentiment.py`, `monologue.py`, `personality_data.py` — all kept. These are the legitimate personality layers (runtime AI-computed + weights-trained).
+
+### Author's-lens checks before shipping
+
+- *"What is this connected to?"* — One log line. That's it. Confirmed via grep across `enigma_engine/`.
+- *"Could connections be made?"* — Yes, but doing so contradicts the project goal. The honest move is removal.
+- *"Does the code deliver what the docstring claims?"* — No. Docstring said personality is a "roleplay overlay" with `is_roleplay()` as a "boundary signal for downstream consumers." There were no downstream consumers; the signal gated only its own log line.
+- *"Does the test prove correctness or just presence?"* — The 9 deleted tests gated *the existence of dead infrastructure*. Deleting tests for deleted code is correct, not a regression.
+- *"Sibling-boundary sweep?"* — Grepped `is_roleplay\(|\.personality\b` across `enigma_engine/` before edit (4 hits in ai_profile.py, 1 in api/server.py comment) and after edit (0 in ai_profile.py, 0 in api/server.py). `ctx.personality` (3 hits in gui_pages.py + 4 in model_context.py) is the different `ModelContext` symbol and was correctly preserved.
+
+### Risk and reversibility
+
+One-way door but cheap to reverse. `from_dict` filters unknowns, so if a future pass needs a per-profile personality knob, the field can be re-added without breaking saves written today.
+
+### Validation
+
+- `python -m pytest tests/ -q --tb=short` — **3152 passed, 4 skipped in 49.74s** (was 3163 passed / 3 skipped; net −11 tests = 9 deleted + drift on skip-gated tests).
+- `ruff check enigma_engine/ tests/ run.py` → all checks passed.
+
+---
+
+## PASS 156z9dc — top-down 7-item execution + test-quality strengthening (May 12, 2026)
+
+**Status.** Finished. 7 of 7 planned items closed (BIOME-1c, MC-1a B1, MC-1a D1, MC-1a D2, MC-2, MC-1a T3, lint sweep). One additional test-quality strengthening on the D2 eviction gate landed during the post-ship audit. Suite: **3162 passed, 4 skipped in 41.41s**. Lint clean on `enigma_engine/ tests/ run.py`.
+
+**Falsification discipline applied (§1 #19 Q5 + §4 "Use the falsification check before shipping").** Every new test in this pass was inverted against a temporary code break to confirm it fails for the right reason. 5 broken sites → 5 expected failures → all restorations green.
+
+### Items closed
+
+- **BIOME-1c — `run_chat` retired.** [run.py L916](run.py#L916) `run_chat` (in-process model load, no daemon) deprecated; `--chat` now forwards to `run_chat_client` with the autospawn path. Closes the BIOME-1c1 fork that was parked in 156z9db.
+- **MC-1a B1 — stream orphan conversation on 429 (FIXED).** [enigma_engine/api/server.py L1024-1050](enigma_engine/api/server.py#L1024-L1050) `/api/chat/stream` now (a) fast-404s explicit-but-unknown IDs *before* acquiring `_inference_lock`, (b) defers auto-creation until *after* the lock acquire. Previously a 429 (engine busy) on a `conversation_id=None` request could leave an empty orphan in `_histories` because resolve-then-acquire created the row before the busy check fired. Sibling sweep on `/api/chat` + `/api/batch` confirmed no parallel bug (both already correct). 2 new tests in `TestStreamOrphanConv` (busy-with-no-id, busy-with-explicit-id) — falsified by reverting the resolve order: `test_stream_busy_no_id_does_not_create_conversation` failed with `1 == 0` as expected.
+- **MC-1a D1 — `_resolve_conversation` docstring rewritten.** Names the contract precisely: what the method does, what it raises, what it returns, when each branch fires.
+- **MC-1a D2 — `MAX_CONVERSATIONS` floor of 2.** [enigma_engine/api/server.py L68-73](enigma_engine/api/server.py#L68-L73) `_MAX_CONVERSATIONS_RAW = 100; MAX_CONVERSATIONS = max(_MAX_CONVERSATIONS_RAW, 2)`. Prevents an operator misconfiguration (cap=0 or cap=1) from creating an unevictable state where the active conv blocks every new conversation. 2 new tests in `TestMaxConversationsFloor`. The `test_eviction_with_cap_two_does_not_infinite_loop` test was **strengthened during post-ship audit** from a single `c in listed` (presence-only — passed even when eviction silently failed) to a triple gate: `len(listed) == 2` + `b not in listed` + `a in listed` (proves cap enforced, LRU was the victim, active was preserved). Falsified via `return evicted` early in `_evict_locked`: failed with `assert 3 == 2` as expected.
+- **MC-2 — disk persistence for conversations.** [enigma_engine/api/server.py L75-83](enigma_engine/api/server.py#L75-L83) `CONVERSATIONS_DIR = PROJECT_ROOT / "data" / "conversations"`. New `_persist_conversation` (atomic JSONL write), `_delete_disk_conversation`, `load_conversations_from_disk` methods. `run_server` calls `state.load_conversations_from_disk()` before model preload. Per §4 "Call AND verify": every mutation path that touches `_histories` now also persists. 4 new tests in `TestDiskPersistence` (round-trip, eviction-deletes-file, explicit-delete-removes-file, load-on-boot). Falsified via `_persist_conversation` early-return: 3 of 4 tests failed (write-path tests). The boot-load test stayed green because it exercises the READ path (`load_conversations_from_disk`) not the broken write path — well-scoped read-path test, not "fixture data surviving" as an earlier version of this stamp claimed.
+- **MC-1a T3 — retry quality test.** Added `test_retry_engine_call_sees_clean_history` to `TestRetryDoesNotPoisonHistory`. Previously the suite gated "retry doesn't echo failed reply in the final transcript" but not "retry sees a clean history at the engine layer." Distinguishable engine-side response IDs (`response_101` first, `response_102` on retry) prove `rollback_last_turn` fires *before* the second engine call, not just before the transcript append. Falsified via commenting out `rollback_last_turn`: failed with `assert not ['response_101']` as expected.
+- **Lint sweep — 24 errors auto-fixed.** `ruff check --fix run.py tests/` cleared the F541/F401 debt parked in 156z9db. `ruff check enigma_engine/ tests/ run.py` now clean.
+
+### Test-quality audit (Option E — read-only structural-test sample)
+
+Per user request after this pass. Inventory:
+- **3166 tests total. 248 `inspect.getsource` structural assertions across 19 files.** Top offenders: `test_gui.py` (109), `test_training.py` (44), `test_chat.py` (25).
+- **87 negative-absence asserts (`X not in src`).** Sampled ~15 of 87. Sampled subset split roughly: most are correct safety/rule gates (no `CTkSlider`, no `run_command`, no `torch.multinomial` in stochastic paths) — the test IS the policy gate, not a refactor-cleanup gate. A minority gate "old pattern removed" without a paired positive "new pattern present" check — mild risk per §4 Pass 156z9cs (self-narration anti-pattern). Percentages NOT measured across all 87 — sample-only.
+- **Spot-check verdicts.** Initial stamp marked 3 tests "Keep" from visual inspection only. Post-stamp audit ran the falsification check on one (`test_stream_generate_calls_record_in_finally`): removing `finally:` syntax broke module import, so the test fails on parse error before the assertion runs — backstopped by the Python parser, not by the assertion text. Verdict "Keep" survives but the reasoning in the original stamp ("reserved syntax") was wrong; actual mechanism is parser-enforced try/finally pairing. The other two spot-checks (`_epochs/_lr/_preset`, `roleplay`) were NOT falsified — verdicts based on inspection only. **Same anti-pattern §4 warns against, written into the audit itself.** Logged here rather than hidden.
+- **Verdict.** No urgent rewrites required. The ~5% suspect tier (negative-absence-only gates without paired positive checks) stays parked under "structural→behavioural conversion if a real regression slips through one."
+
+### Parked / follow-up
+
+- **MC-2a — disk-orphan cap drift (CLOSED Pass 156z9dj).** See top-of-file Pass 156z9dj stamp. `load_conversations_from_disk` now unlinks excess files with a `MC-2a:` WARNING per file, after capping the loaded slice. Falsified by reverting to one-liner cap.
+- **MC-2b — active conv pointer persistence (CLOSED Pass 156z9dl).** See top-of-file Pass 156z9dl stamp. `_active_conv_id` now round-trips through `_active.json` with stale-id rejection on boot.
+- **Test-quality structural→behavioural conversion.** Not urgent (audit above). Defer until a regression slips through a presence-only gate and we have a concrete trigger. The audit-as-data is logged here so the next time a structural test "passes while code is wrong" we know where to look first.
+
+### Validation
+
+- `python -m pytest tests/ -q --tb=no` — most recent run **3163 passed, 3 skipped in 57.79s** (one skip-gated test flipped to passing between the two runs; total 3166 either way).
+- `ruff check enigma_engine/ tests/ run.py` → all checks passed.
+- Falsification pass on all 5 fixed sites (B1 stream, D2 eviction, MC-2 persist, MC-2 disk-delete, T3 rollback) → expected failures observed, restorations green.
+- Post-stamp self-audit (§1 #19 on this stamp itself) corrected: MC-2 boot-load falsification narrative (was "fixture survived," actually "read-path test, scoped away from broken write path"); structural-file count (was 30, actually 19); negative-absence percentage claim (was "~80%/~20%", actually sample-only, not measured); `finally` spot-check mechanism (was "reserved syntax," actually "parser-enforced try-pairing").
+
+---
+
+## PASS 156z9db — GUI-BIOME-1b polish: orphan-subprocess + delete-active + empty-fallback (May 12, 2026)
+
+**Status.** Finished. Closes three audit findings from the 156z9da self-review under §1 #19 + §1 #20. 4 new tests (32→36), zero new lint debt. `python -m pytest tests/test_run_chat_client.py -q` → 36 passed in 8.35s. Adjacent suites (`test_api_conversations.py` + `test_api.py` + `test_chat.py`) → 267 passed, no regressions.
+
+**Scope (declared overhaul §1 #18).** [run.py L1037-1078](run.py#L1037-L1078) `_try_autospawn_daemon`, [run.py L1119-1133](run.py#L1119-L1133) `:delete` branch in `_dispatch_command`, [run.py L1241-1267](run.py#L1241-L1267) `_chat_repl` empty-fallback path, type-hint normalisation on `run_chat_client`. No other call sites touched.
+
+### Bug 1 — Orphan subprocess on auto-spawn health-poll timeout (CLOSED)
+
+**Bug.** `_try_autospawn_daemon` called `subprocess.Popen(cmd)`, polled `client.health()` for up to 8s, and on failure printed the traceback + returned `None`. The child process was never terminated. Concrete consequence: if boot stalls mid-init (slow model load, port collision, FastAPI crash after socket bind) the parent exits but the daemon stays alive holding the port, so the user's next `--client-chat` invocation hits the same "connection refused" path forever until they manually `taskkill /PID`. Same §4 "silent process death" anti-pattern that bit `subprocess.PIPE never drained will hang the child" but in the reverse direction — the parent dies, the child leaks.
+
+**Why it slipped past 156z9da.** Stamp's `test_autospawn_failure_surfaces_real_error` patched `subprocess.Popen` to a `SimpleNamespace(pid=9999)` so the cleanup contract was never observable — classic §4 "claim-vs-test: test proves presence (error printed), not correctness (process cleaned up)."
+
+**Fix.** On every non-success return path, `proc.terminate()` + `proc.wait(timeout=2.0)`, with `proc.kill()` as the second-tier fallback. Whole block wrapped in `try/except Exception` so a Popen object with a broken `poll()` (e.g. a future test mock that doesn't implement it) can't kill the parent path. Skip if `proc.poll() is not None` — child already exited.
+
+**Adversarial test.** `test_autospawn_failure_terminates_orphan_subprocess` patches `Popen` to return a `MagicMock` with `poll.return_value = None`, asserts `proc.terminate.assert_called_once()` after the function returns `None`. The fake's `terminate` side-effect flips `poll` to 0 so `wait` returns clean.
+
+### Bug 2 — `:delete <active>` left stale local transcript (CLOSED)
+
+**Bug.** `:new` cleared `state.transcript`; `:delete <active-conv-id>` did not. After deleting the conv the screen still showed old turns; the next `:save` would write them under the auto-allocated fresh ID. Confusing provenance.
+
+**Fix.** In `:delete` handler, capture `was_active = client.conversation_id == arg` before the daemon call, then clear `state.transcript` + null `client.conversation_id` only when `was_active`. Inactive deletes leave scrollback alone — least-surprise.
+
+**Tests.** `test_delete_active_clears_local_transcript` (transcript empty after delete-of-active) + `test_delete_inactive_preserves_local_transcript` (transcript unchanged on delete-of-other).
+
+### Bug 3 — Empty stream + empty fallback wrote `"AI: "` to transcript (CLOSED)
+
+**Bug.** [run.py _chat_repl](run.py) — if `chat_stream` yielded zero tokens AND `client.chat()` returned `""`, `response_text = ""` and the transcript got appended `["You: hi", "AI: "]`. Cosmetic per turn but compounds: `:save` writes a misleading record where the AI "answered" with nothing. §4 "loud-on-real-issue, silent-on-normal-path": empty fallback IS a real issue and was being normalised into the transcript silently.
+
+**Fix.** After the fallback branch, if `response_text` is still empty: print `"  [WARN] empty response from server"`, `continue` (skip transcript append). Transcript-shape invariant: every appended pair is `(You: <non-empty>, AI: <non-empty>)`.
+
+**Test.** `test_empty_fallback_does_not_append_blank_transcript` drives `_chat_repl` directly with zero-token stream + empty `chat()`, asserts `"AI: " not in state.transcript` and that every transcript line has content.
+
+### Polish — type-hint normalisation
+
+`run_chat_client(model_path: str = None, profile: str = None, temperature: float = None, ...)` → `model_path: str | None = None, profile: str | None = None, temperature: float | None = None`. Same for `_try_autospawn_daemon(model_path: str = None, ...)`. Matches `_ChatClientState` field style + rest of module. Pure cosmetic, no behaviour change.
+
+### Audit lens applied (§1 #19)
+
+- Q5 (claim-vs-test) caught Bug 1: 156z9da's existing autospawn-failure test gated the "error printed" claim but not the cleanup contract. Fixed test gates `terminate.called`.
+- Q6 (sibling-boundary sweep) opened a parked follow-up: `run_chat` (in-process) at [run.py L916](run.py#L916) has no slash commands. Either rename-and-retire under BIOME-1c, or factor `_dispatch_command` to share. Parked, not done in this pass.
+- Q2 (connections) — verified `_chat_repl` is only called from `run_chat_client` so the empty-fallback change has exactly one consumer.
+
+### Out of scope (parked, named)
+
+- **BIOME-1c1 — Retire `run_chat` in-process or share slash-command surface.** Pre-existing `run_chat` (in-process model load, no daemon) is mode-agnostic on `:help/:save/:reset/:temp`. Decision before next BIOME slice: (a) delete it (recommended — daemon-first is the architecture), or (b) factor `_dispatch_command` to take an adapter so the no-server path gets the same surface. Either way the divergence is a documented decision, not drift.
+- **Lint debt — 23 pre-existing F541/F401 in `run.py`.** Outside BIOME-1b scope. Single ruff `--fix` pass would clear all 23. Park until a docs/cleanup slice.
+
+### Validation
+
+- `python -m pytest tests/test_run_chat_client.py -q` → **36 passed in 8.35s**.
+- `python -m pytest tests/test_api_conversations.py tests/test_api.py tests/test_chat.py -q` → **267 passed in 6.92s**.
+- `ruff check run.py tests/test_run_chat_client.py` → 23 errors, all pre-existing (same count as before the slice).
+
+---
+
+## PASS 156z9da — GUI-BIOME-1b terminal-client polish shipped (May 12, 2026)
+
+**Status.** Finished. `run.py` now has slash commands, local transcript save/reset, local daemon auto-spawn for `--client-chat`, and `--no-auto-spawn` opt-out. Validation: `python -m pytest tests/test_run_chat_client.py -q` → 32 passed. `ruff check run.py tests/test_run_chat_client.py` reported only pre-existing unrelated `run.py` F401/F541 debt outside this slice.
+
+**Closes simultaneously.**
+- BIOME-1b plan as written in the plan body below ("Slice GUI-BIOME-1b — Slash commands + daemon auto-spawn").
+- MC-5 terminal-side surface (`:new` / `:list` / `:delete` are the REPL commands MC-5 documented but never wired). Without them, MC-5 is "consumer without caller" anti-pattern in the terminal direction (§4).
+
+### Acceptance chain (§1 #20)
+
+`python run.py --client-chat` (no daemon running) → `run_chat_client` calls `client.health()` → raises ConnectionError → auto-spawn block: `subprocess.Popen([sys.executable, "run.py", "--serve", "--port", PORT])` → poll `client.health()` every 250ms for up to 8s → success → print "Daemon started (pid=NNN)" → enter REPL → user types `:help` → command dispatched → user types `:new` → `client.new_conversation()` → user types message → `client.chat_stream(message)` carries pinned `conversation_id` from MC-5 auto-pin → tokens stream. On second connect failure surface the original `ConnectionError`, not a generic mask.
+
+### Commands shipped
+
+| Command | Action | Calls |
+|---|---|---|
+| `:help` | print command list + brief usage | local |
+| `:new` | start a fresh conversation thread | `client.new_conversation()` (MC-5 wire) |
+| `:list` | print conversation IDs + last-message preview | `client.list_conversations()` |
+| `:delete <id>` | delete a conversation; if active, switch to `None` | `client.delete_conversation(id)` |
+| `:reset` | clear local screen history (does NOT touch daemon) | local |
+| `:profile <name>` | activate a profile mid-session | `client.activate_profile(name)` |
+| `:model <path>` | load a different model on the daemon | `client.load_model(path)` |
+| `:temp <n>` | set the per-turn temperature override (validated float in [0.0, 2.0]) | local |
+| `:save <path>` | save the current local chat transcript to a text file | local I/O |
+| `:status` | show pinned conv_id, current profile, current model, daemon pid (if spawned) | `client.health()` + `client.get_active_profile()` |
+
+Reserved prefix: any input starting with `:` is treated as a command. Unknown command → print `[ERROR] unknown command — try :help`, do NOT send to chat.
+
+### Auto-spawn discipline
+
+- Only auto-spawn when `api_url` host resolves to `127.0.0.1` or `localhost`. Remote URLs print the original error and exit (never silently start a local daemon when the user pointed at a remote one).
+- Print `Starting daemon at {api_url}...` BEFORE the Popen so the user sees it during the 8s health poll.
+- Track the spawned PID; on REPL exit (`quit`/`exit`/`q`/Ctrl-C) AND auto-spawn happened in this session, do NOT kill the daemon (it may be serving other clients). Just print `Daemon (pid=NNN) still running. Stop with: taskkill /PID NNN`. Windows-friendly text.
+- On second health-check failure surface the raw exception with traceback, not the mask `"Start the server first"`. The mask is correct for the no-auto-spawn fallback path (when the user pointed at a remote URL) but is hostile to debugging when auto-spawn itself failed.
+- New CLI flag: `--no-auto-spawn` opts out (for users who want the old fail-fast behaviour).
+
+### Code-side changes in `run.py`
+
+1. Extract REPL body to `_chat_repl(client, *, temperature, profile, on_command_error)` so tests can drive it without going through the connect/spawn dance. `run_chat_client` becomes: connect → optional auto-spawn → optional `load_model` / `activate_profile` → `_chat_repl(...)`.
+2. New `_dispatch_command(line, client, state) -> bool` returns True if the line was a command (handled), False if it should go to chat. `state` is a small dataclass with mutable `temperature`, `transcript: list[str]`, `daemon_pid: int | None`.
+3. New `_try_autospawn_daemon(api_url, model_path=None, timeout=8.0) -> int | None`. Returns spawned PID on success or None on remote URL / disabled / failure. Uses `urllib.parse.urlparse` to extract host+port. Reuses `EnigmaClient.health()` for the poll.
+4. Argparse: new `--no-auto-spawn` boolean.
+
+### Tests shipped (`tests/test_run_chat_client.py`, 32 cases)
+
+- `TestCommands::test_help_prints_command_list`
+- `TestCommands::test_new_calls_client_new_conversation`
+- `TestCommands::test_list_prints_conversation_ids`
+- `TestCommands::test_delete_removes_conversation`
+- `TestCommands::test_reset_clears_local_state_not_daemon` (assert `delete_conversation` NOT called)
+- `TestCommands::test_profile_command_calls_activate`
+- `TestCommands::test_model_command_calls_load_model`
+- `TestCommands::test_temp_command_sets_temperature[valid]` + `[out_of_range]` + `[non_numeric]`
+- `TestCommands::test_save_writes_transcript_to_file` (tmp_path)
+- `TestCommands::test_unknown_command_prints_error_does_not_send_to_chat`
+- `TestAutoSpawn::test_localhost_failure_triggers_popen` (monkeypatch `subprocess.Popen` + sequenced `client.health()` returning down→down→ok)
+- `TestAutoSpawn::test_remote_url_does_not_autospawn` (assert Popen NOT called)
+- `TestAutoSpawn::test_autospawn_failure_surfaces_real_error` (Popen succeeds but health stays down for entire poll window)
+- `TestAutoSpawn::test_no_auto_spawn_flag_disables` (flag set, localhost, health down → no Popen)
+
+### Author's-lens checks before shipping
+
+- §1 #19 question 5 (claim-vs-test): every command must have a test that asserts the CLIENT METHOD was called (or NOT called for local-only commands), not just that the output looks right. A regression that prints `"new conversation started"` without actually calling `client.new_conversation()` would pass an output-only check.
+- §1 #19 question 6 (sibling-boundary sweep): grep `run_chat_client` AND `run_chat` (in-process). If GUI-BIOME-1c lands later and renames `--client-chat` to `--chat`, the auto-spawn block must also be renamed. Log this in 1c's stamp.
+- §4 "Boundary signal without a consumer" — `:new` calls `client.new_conversation()`; verify the next REPL turn's `chat_stream` actually uses the new pinned ID (not the old one). One end-to-end test on a mock that records every `conversation_id=` kwarg.
+
+### Devil's-advocate (§1 #13)
+
+- **"Why a state dataclass instead of mutable kwargs?"** REPL has 4+ mutable knobs (temperature, transcript, daemon_pid, current profile). Passing them as positional args makes `_dispatch_command` signature unreadable; passing as a dict loses static checking. Dataclass costs one class definition.
+- **"Why poll `health()` instead of waiting on the subprocess?"** Subprocess can be alive but FastAPI still booting. Health endpoint is the canonical "ready" signal.
+- **"Why not kill the daemon on REPL exit?"** Other clients (desktop GUI, future browser viewer) may be connected. Killing it would break them. Print the PID and let the user decide.
+- **"Auto-spawn is magic."** It is. The visible "Starting daemon at..." line + `--no-auto-spawn` opt-out is the compromise.
+
+### Out of scope (parked)
+
+- GUI-BIOME-1c (retire in-process `run_chat`) — separate slice.
+- Desktop GUI binding to `conversation_id` (MC-5 remainder, GUI side) — separate slice.
+- MC-2 disk persistence — bolt-on after this.
+
+### Validation
+
+- `python -m pytest tests/test_run_chat_client.py -q` → **32 passed in 8.39s**.
+- `ruff check run.py tests/test_run_chat_client.py` → no new issues in the touched slice; existing unrelated `run.py` lint debt remains in the file outside this pass.
+
+---
+
+## PASS 156z9cy — GUI-BIOME-1a terminal-client regression gate (May 12, 2026)
+
+**Status.** Finished. 13 new tests gate the production `run.run_chat_client` path. Zero production-code change. Full suite 3129 passed, 3 skipped, ruff clean.
+
+**Scope (declared overhaul §1 #18).** New `tests/test_run_chat_client.py` only. No `run.py` touched.
+
+**Acceptance chain (§1 #20).** Production entry-point: `python run.py --client-chat` → `main()` argparse → `run_chat_client()` → `EnigmaClient` over HTTP. Tests drive `run_chat_client` directly with mocked stdin (`builtins.input`) + mocked `EnigmaClient` (patched at the source module `enigma_engine.EnigmaClient` because `run.py` does a local `from enigma_engine import EnigmaClient` inside the function — patching `runmod.EnigmaClient` would fail).
+
+**Cases shipped (13).**
+- `TestHappyPath::{test_tokens_streamed_to_stdout, test_multiple_turns}` — token loop, multi-turn.
+- `TestStreamFallback::test_empty_stream_falls_back_to_chat` — closes the §4 learned principle from Pass 156z9bw (stream-yields-zero → call `chat()`).
+- `TestExitWords::test_exit_word_ends_loop[quit/exit/q/QUIT/Exit]` — parametrized 5 cases, case-insensitive exit.
+- `TestHealthFailure::test_unhealthy_server_prints_real_error` — `health.get("status") != "ok"` surfaces the underlying error string, not a friendly mask.
+- `TestProfile::{test_profile_success_prints_line, test_profile_failure_warns_and_continues}` — profile failure prints `[WARN]` but does NOT abort the chat loop.
+- `TestTemperatureForwarded::test_temperature_passed_to_chat_stream` — `--temperature` reaches every `client.chat_stream(**kw)` call.
+- `TestRequestError::test_chat_error_prints_and_loop_continues` — one bad turn does not kill the REPL.
+
+**Why this first (build order from MULTICLIENT plan + GUI-BIOME plan).**
+1. MC-1 ✅ (156z9cw) — conv_id contract on the daemon.
+2. MC-1a audit follow-ups ✅ (156z9cx) — B2 retry-poisoning closed.
+3. **GUI-BIOME-1a (this pass)** — lock down the terminal client BEFORE MC-5 / BIOME-1b add slash commands and auto-spawn. Adding tests to existing code is the safest possible move per §1 #2-3. If MC-5's `:new` command later regresses an existing path, these 13 tests catch it.
+4. Next: GUI-BIOME-1b (slash commands + daemon auto-spawn) — adds `:new`/`:list`/`:reset`/`:profile`/`:save`/`:help`/`:model`/`:temp`. Closes MC-5's terminal-side surface as a side effect.
+5. Then: GUI-BIOME-1c (retire `run_chat` in-process duplicate).
+6. Then: MC-2 (per-conv disk persistence).
+7. Then: GUI-BIOME-2 (browser viewer) → BIOME-3 (desktop strip).
+
+**Author's-lens findings during this pass.**
+- `from enigma_engine import EnigmaClient` is a local import inside `run_chat_client` (verified at [run.py L1012](run.py#L1012)). Patching `runmod.EnigmaClient` fails — must patch `enigma_engine.EnigmaClient`. Logged as a test-discipline note: stdlib `from X import Y` inside a function rebinds `Y` to the function-local namespace at call time, so the only patchable site is `X.Y` itself. Same anti-pattern as the `patch("module.submodule.Class")` lazy-getattr trap already documented in §4.
+- The `model_path` branch in `run_chat_client` is untested here because `--client-chat` users typically load the model on the daemon before connecting; the tests don't exercise it. Parked as a low-priority gap.
+
+---
+
+## PASS 156z9cx — MC-1a audit follow-ups (May 12, 2026)
+
+**Status.** B2 closed in this pass. B1, B3, D1, D2, T2, T3 parked with concrete next steps.
+
+### B2 — AutoResearch-2 post-gen retry was poisoning itself (CLOSED)
+
+**Bug.** After MC-1 made `state.chat()` pass `history=` to the engine, the `/api/chat` retry branch in [server.py L803-815](enigma_engine/api/server.py#L803-L815) called `state.chat(req.message, conversation_id=conv_id, ...)` a second time. The first call had already appended `[user=msg, assistant=bad]` to `_histories[conv_id]`. The retry's `history_snapshot(conv_id)` therefore included the failed answer, so `engine.chat(message=msg, history=[msg, bad])` re-asked the same question with its own low-confidence reply baked into context — exactly the input most likely to repeat the bad answer. Pre-MC-1 the engine ignored server-side history and the retry was a clean redo; MC-1 silently regressed retry quality.
+
+**Fix.** Added `AppState.rollback_last_turn(conv_id) -> bool` which atomically (under `_lock`) drops the trailing user+assistant pair when both roles match. `/api/chat` retry path calls it before the second `state.chat()` so the retry sees clean history. Refuses to roll back if the tail is not a complete exchange (defensive against out-of-band mutation).
+
+**Tests added** (`tests/test_api_conversations.py`, +4 cases):
+- `TestHistoryReachesEngine::test_engine_chat_receives_history_kwarg` — closes T1, asserts `engine.chat.call_args.kwargs["history"]` carries the prior turn on the second `/api/chat`.
+- `TestRetryDoesNotPoisonHistory::{test_rollback_last_turn_drops_pair, test_rollback_noop_on_empty, test_rollback_unknown_raises}` — direct contract tests on the rollback helper.
+
+**Acceptance chain.** `POST /api/chat` (web_access=True, no pre-gen ctx, low-confidence reply) → `should_retry_with_research` → `state.rollback_last_turn(conv_id)` → `state.chat(..., conversation_id=conv_id, system_prompt=retry_ctx)` → engine sees clean history.
+
+### Parked follow-ups
+
+**B1 — Stream endpoint leaks orphan convs on 429.** [server.py L749-758](enigma_engine/api/server.py#L749-L758) resolves the conversation *before* acquiring `_inference_lock`; busy server returns 429 but the auto-created empty conversation sits in `_histories` until LRU eviction. `/api/chat` does the resolve *after* the lock (correct). **Next step:** move `_resolve_conversation` past the `_inference_lock.acquire(blocking=False)` block in `/api/chat/stream` (matching `/api/chat`'s ordering), or only auto-allocate when `conversation_id is None` and the lock was acquired. Adversarial test: monkeypatch `_inference_lock` acquired, POST stream with no conv_id, expect 429, assert `len(state._histories) == 0`.
+
+**B3 — Two-lock-acquisition TOCTOU between resolve and activate vs DELETE (CLOSED Pass 156z9di).** See top-of-file Pass 156z9di stamp. Three defenses landed: `_resolve_and_activate` consolidates under one lock, `_touch_locked` refuses to re-add missing convs, `_append_turn_if_alive_locked` replaces resurrecting setdefault. Falsified.
+
+**D1 — Module docstring (CLOSED Pass 156z9di).** Already addressed silently in a prior pass; [server.py L34-37](enigma_engine/api/server.py#L34-L37) lists `POST/GET /api/conversations`, `DELETE /api/conversations/{id}`, `GET /api/conversations/{id}/history` under "Conversation endpoints (MC-1)". Verified during 156z9di audit, no code change needed.
+
+**D2 — `MAX_CONVERSATIONS=1` is a soft brick.** `_evict_locked` refuses to evict the active conversation, so with the cap at 1 the count permanently sits at active+pending=2 until either is explicitly deleted. **Next step:** clamp `MAX_CONVERSATIONS` at module load to `max(value, 2)` with a WARNING, or document the floor in the constant's docstring.
+
+**T2 — No test for B1's 429-orphan path.** Add when B1 is fixed.
+
+**T3 — adversarial retry quality test (CLOSED, verified Pass 156z9dh).** [tests/test_api_conversations.py::TestRetryDoesNotPoisonHistory::test_retry_engine_call_sees_clean_history](tests/test_api_conversations.py#L358) wires AutoResearch-2 + low-confidence reply through `/api/chat` end-to-end with monkeypatched `should_retry_with_research`/`auto_research`, captures every `engine.chat` history kwarg, and asserts the retry call does NOT receive the failed assistant reply. Falsification check Pass 156z9dh: stubbed out `state.rollback_last_turn(conv_id)` at [server.py L960](enigma_engine/api/server.py#L960), test FAILED with `['response_101']` in retry history; restored source, test green. Real behavioural gate, not presence-only.
+
+### Audit lens applied
+
+§1 #19 six-question lens on MC-1 caught: (1) author's-lens "would I write this way?" — surfaced D2's soft-brick; (2) connections — surfaced B3's TOCTOU between unlocked resolve/activate and DELETE; (3) logic-eye on doc claims — surfaced D1 stale endpoint list; (4) claim-vs-test — surfaced T1 gap (history-reaches-engine never gated); (5) sibling-boundary sweep — surfaced B1 (`/api/chat/stream` resolve ordering differs from `/api/chat`); (6) self-audit on the same-pass diff — surfaced B2 (retry semantics regressed silently with MC-1).
+
+---
+
+## PASS 156z9cw — MC-1 conversation_id contract shipped (May 12, 2026)
+
+**Status.** Finished. Baseline 3092→3112 passed, 3 skipped, ruff clean.
+
+**Scope (declared overhaul §1 #18).** `enigma_engine/api/server.py` `AppState` + chat routes; `enigma_engine/client.py` `EnigmaClient`; per-conversation history persistence is OUT of scope (that's MC-2).
+
+**Acceptance chain (§1 #20).** `POST /api/chat` → `state.chat(..., conversation_id=req.conversation_id)` → `state._resolve_conversation` (auto-create or 404) → `state._activate` (LRU + `_invalidate_engine_state` on switch) → `engine.chat(history=state.history_snapshot(conv_id), ...)` → response includes `conversation_id`. Same chain for `POST /api/chat/stream` with the conv_id emitted in start/end event metadata. Production caller: `EnigmaClient.chat()` / `chat_stream()` now carry the server-assigned ID across turns; `run_chat_client` in `run.py` already calls these methods.
+
+**Code-side changes.**
+- `AppState`: `_history: list` → `_histories: dict[str, list]` + `_conv_order: list[str]` (LRU) + `_active_conv_id: str | None`.
+- New methods: `create_conversation`, `list_conversations`, `delete_conversation`, `history_snapshot(conv_id=None)`, `_resolve_conversation`, `_activate`, `_invalidate_engine_state`, `_trim_history_locked(conv_id)`, `clear_all_conversations`, `_evict_locked`, `_touch_locked`.
+- `state.chat()` returns `(response, conv_id)` and accepts `conversation_id=`. Switches conv → calls `engine.clear_kv_cache()` + `engine.clear_history()` before generating. Always passes `history=` to `engine.chat()` so the engine prefills against the right context regardless of its internal state.
+- `ChatRequest`: new `conversation_id: str | None` field (max 128 chars).
+- New routes: `POST /api/conversations`, `GET /api/conversations`, `DELETE /api/conversations/{id}`, `GET /api/conversations/{id}/history`.
+- Legacy `GET /api/history` returns the active conversation's history; `DELETE /api/history` clears all + KV cache.
+- `MAX_CONVERSATIONS = 100` LRU cap; the active conversation is never evicted.
+- `EnigmaClient`: pins server-assigned `conversation_id` across turns; new `new_conversation()`, `list_conversations()`, `delete_conversation()`, `conversation_history()`. Stream path reads `metadata.conversation_id` from SSE start/end events. `clear_history()` clears the pinned ID.
+
+**Tests added (`tests/test_api_conversations.py`, 20 cases).** Lifecycle (create/list/delete/unknown-404), per-conversation isolation, auto-create on missing ID, KV-cache invalidation on switch (and *not* on same-conv repeat — first activation from `None` does clear, subsequent same-conv turns do not), unknown-ID 404 on both `/api/chat` and `/api/chat/stream`, legacy `/api/history` GET (active conv) + DELETE (nuke all), stream conv-id wiring, LRU eviction past `MAX_CONVERSATIONS=3` keeps the three most recent.
+
+**Tests updated.** 5 existing cases in `test_api.py` ported from `state._history` to `state._histories` / `state.history_snapshot(cid)`: `test_stream_tracks_history`, `test_stream_web_access_on_injects_system_prompt`, `test_history_snapshot_returns_copy`, `test_chat_appends_under_lock`, `test_history_capped_on_append`, `test_delete_history_clears_engine_history_and_kv_cache`.
+
+**Author's-lens findings closed in this pass.** (1) `engine.chat()` had `history` kwarg available but the non-stream server path never passed it — fixed, both paths now pass history explicitly. (2) KV cache was only cleared via `DELETE /api/history` — now also cleared on every conversation switch + conversation deletion when the deleted ID was active. (3) `_history_summary` cache on the engine (`engine_chat.py` L329) is per-engine, not per-conv — `_invalidate_engine_state` calls `engine.clear_history()` on switch, which is the existing hook for clearing that summary. (4) LRU eviction protects the active conversation so an aggressive `MAX_CONVERSATIONS` setting can't drop the thread the caller is mid-conversation on.
+
+**Out of scope (parked, named).** MC-2 (per-conv disk persistence to `data/conversations/{id}.jsonl`), MC-3 (`/api/events` SSE cross-client broadcast), MC-4 (per-conv profile + system-prompt overrides), MC-5 (full client surface: terminal `--client-chat` UX, desktop GUI integration). MC-5 is partially landed via `EnigmaClient.new_conversation()` + auto-pinning; remaining work is wiring `run_chat_client` to expose `/new` / `/list` REPL commands and updating desktop GUI's chat page to call the same client methods instead of touching engine state directly.
+
+---
+
+## PLAN — MULTICLIENT (May 12, 2026, awaiting authorization)
+
+**Premise.** The daemon-as-brain architecture is already correct (single `EnigmaEngine`, all clients HTTP). What's missing are three things that prevent more than one client from coexisting honestly. These must land before BIOME-2/3 (browser viewer, desktop strip) because both assume multi-client works.
+
+### Evidence (from [api/server.py](enigma_engine/api/server.py))
+
+- `state._history` is **one global list** (L81). `state.chat()` appends to it on every request (L232-233). Stream path appends too (L733-735). No `conversation_id` field anywhere in `ChatRequest` (L335-359). **Two clients share one thread today.**
+- `_inference_lock.acquire(blocking=False)` returns HTTP 429 when busy (L563, L662). Not corruption — just rejection. Multi-client today = one wins, others get rejected.
+- `GET /api/history` (L851) returns `state.history_snapshot()` — the same global blob.
+- **Engine carries its own state.** `state.engine.clear_history()` and `state.engine.clear_kv_cache()` are called from `DELETE /api/history` (L862-870). The model's KV cache holds prefill from whichever conversation last ran. Switching conversations means either (a) clearing KV + re-prefilling from history (~hundreds of ms latency depending on history length) or (b) accepting that mid-stream switch is undefined.
+- `engine.stream_chat(message, history=...)` (L717) accepts history as a kwarg. The plumbing for per-conversation history already exists at the engine boundary — we just don't use it from the server.
+
+### Slices
+
+#### MC-1 — `conversation_id` contract (correctness, do first)
+
+- Add `conversation_id: str | None = None` to `ChatRequest`.
+- Replace `state._history: list[...]` with `state._histories: dict[str, list[...]]` keyed by ID.
+- New `POST /api/conversations` returns `{"id": "<uuid>"}`. New `GET /api/conversations` lists IDs. New `DELETE /api/conversations/{id}` clears one. `GET /api/history` becomes `GET /api/conversations/{id}/history` (keep old route as deprecated alias for one release).
+- If client posts to `/api/chat` with no ID, server creates one and returns it in the response so the client can use it on the next message. Backward-compatible.
+- `_trim_history` becomes per-conversation. `MAX_HISTORY` cap applies per ID. Add `MAX_CONVERSATIONS` global cap (e.g. 100) with LRU eviction.
+- **KV-cache contract (the real gotcha):** track `state._active_conv_id`. On `/api/chat` for a *different* conversation than the last, call `state.engine.clear_kv_cache()` before generation and pass `history=state._histories[id]` to `stream_chat` / `chat` so the engine re-prefills. Document the latency cost on switch. Same-conversation calls reuse the cache like today.
+- `DELETE /api/history` (legacy route) clears all conversations + KV cache. `DELETE /api/conversations/{id}` only clears KV cache if that conversation was active.
+- Tests: two-client interleaving (each sees its own thread), unknown ID returns 404, no-ID auto-create, eviction, KV cache cleared on switch, KV cache retained on same-conv repeat.
+- **Scope:** ~200 LOC server + ~30 LOC client + ~12 tests.
+
+#### MC-2 — History persistence (durability)
+
+- Save per-conversation history to `data/conversations/{id}.jsonl` on every append using `atomic_write_text` pattern.
+- Load on daemon startup. Skip corrupt files with WARNING (don't crash boot).
+- Cap on-disk count via the same `MAX_CONVERSATIONS` LRU.
+- Tests: round-trip, corrupt file skip, eviction deletes file.
+- **Scope:** ~80 LOC + 4 tests.
+
+#### MC-3 — `/api/events` SSE broadcast (cross-client view)
+
+- New endpoint: `GET /api/events?conversation_id=X` returns an SSE stream.
+- Events: `chat_message` (a new user or assistant message landed), `model_loaded`, `model_unloaded`, `profile_changed`, `training_started`, `training_finished`.
+- Server keeps an `asyncio.Queue` per subscriber; chat endpoint puts events into all subscriber queues filtered by `conversation_id`.
+- On client disconnect, remove subscriber.
+- Backpressure: bounded queue per subscriber (e.g. 100 events), drop oldest on overflow with a warning event.
+- Tests: subscribe, post message, see event; multi-subscriber; disconnect cleanup; overflow drops.
+- **Scope:** ~120 LOC + 5 tests.
+
+#### MC-4 — Request queue (replace 429 reject)
+
+- Replace `acquire(blocking=False)` with a bounded FIFO queue (e.g. 10 pending). Requests beyond queue depth get 503 with `Retry-After`.
+- Clients see "waiting in queue..." instead of immediate rejection. Returns when their turn comes.
+- Streaming requests get a `queued` SSE event when they start waiting, `start` when generation begins.
+- Tests: 3 simultaneous requests serialize correctly, 11th gets 503, cancel removes from queue.
+- **Scope:** ~100 LOC + 4 tests.
+
+#### MC-5 — Wire client + GUI to conversation_id
+
+- `EnigmaClient` grows `conversation_id` attribute. `chat()` / `chat_stream()` send it; if server returns a new ID, client stores it. `EnigmaClient.new_conversation()` rolls a fresh ID.
+- `run_chat_client` adds `:new` command (start fresh thread). Auto-creates one on connect.
+- Desktop GUI binds its chat panel to a single conversation_id at boot. `:new` button clears it.
+- Tests: client round-trip, GUI binding lifecycle.
+- **Scope:** ~80 LOC + 6 tests.
+
+### Build order (not the same as the slice numbering above)
+
+Slice numbers (MC-1..5) are stable identifiers. Build order interleaves them:
+
+1. **MC-1** — only correctness fix. Foundation for everything else.
+2. **MC-5** — wire `EnigmaClient` + terminal + desktop to MC-1 immediately so the contract is exercised end-to-end before any new clients (browser) are built. Without this, MC-1 is dead infra (§4 "signal without consumer").
+3. **MC-2** — small persistence bolt-on while MC-1+5 are fresh.
+4. **MC-3** — SSE events only matter once multi-client is real. Depends on MC-5.
+5. **MC-4** — queue is the lowest-priority polish. 429 rejection is annoying but correct. Defer.
+
+### Devil's advocate
+
+- **"Why not skip MC-1 and just keep one global thread per daemon?"** Then the browser viewer (BIOME-2) and terminal can't both have meaningful chats without stepping on each other. MC-1 is the architectural prereq for everything else.
+- **"SSE backpressure is a footgun."** Yes. Mitigation: bounded queue + drop-oldest. Real fix would be WebSocket with proper flow control; SSE is cheaper and the user is local so backpressure is unlikely in practice.
+- **"Why UUIDs not integers?"** Avoids race on concurrent `POST /api/conversations`. Stdlib `uuid.uuid4()`. Zero cost.
+- **"What if conversation_id collides across daemon restarts?"** UUIDs don't collide. Persistence (MC-2) preserves them.
+
+### Honest scope total
+
+- MC-1+2+3+4+5: ~580 LOC + ~32 tests after KV-cache audit add-on. Real engineering, not a weekend.
+- Does NOT shred the daemon. Adds a layer of indirection (`_history` → `_histories[id]`), conversation-switch KV invalidation, and one new endpoint family.
+
+### Confidence
+
+- MC-1: 85%. Mechanical refactor + KV-cache invalidation rule. Slightly lower than originally claimed because the KV-cache contract is subtle and the wrong choice produces silent corruption (wrong-conversation reply).
+- MC-2: 90%. Atomic-write pattern already in codebase.
+- MC-3: 75%. SSE + asyncio.Queue is new infra for this repo; backpressure has surprise budget.
+- MC-4: 80%. Queue + cancel correctness is the sharp edge.
+- MC-5: 85%. Touches three callers; easy to miss one.
+
+### After MULTICLIENT lands, BIOME plan resumes
+
+The BIOME plan below (terminal client polish, browser viewer, desktop strip) all assume MULTICLIENT is done. BIOME-2 (browser viewer) was the second-highest value slice; MULTICLIENT unblocks it cleanly.
+
+---
+
+## PLAN — GUI BIOME SPLIT (rev 2, May 12, 2026, audit-corrected, awaiting authorization)
+
+**Audit-driven correction.** Prior May 11 plan said "terminal chat = ~80 new lines, not built." Fresh grep of [run.py](run.py) found `run_chat_client` already implemented at L1002 + `--client-chat` flag + `--api-url` flag. The biome is **already wired**, just untested and missing polish. This rev reshapes the slices around what actually exists. Same anti-pattern as the 156z9cv mojibake under-report, in the opposite direction (effort over-reported).
+
+This rev supersedes both the Pass 147 GUI-ARCH plan and the May 11 BIOME plan.
+
+### Current state (verified by audit)
+
+| Capability | Status | Evidence |
+|---|---|---|
+| Daemon (FastAPI, 18 endpoints) | built | [api/server.py](enigma_engine/api/server.py) |
+| `EnigmaClient` HTTP stdlib client | built | [client.py](enigma_engine/client.py) |
+| In-process terminal chat (legacy) | built | `--chat` -> `run_chat` at [run.py L910](run.py#L910) |
+| **Daemon-routed terminal chat** | **built** | `--client-chat` -> `run_chat_client` at [run.py L1002](run.py#L1002) |
+| Tests for `run_chat_client` | **zero** | `grep run_chat_client tests/` returns nothing |
+| Slash commands (`:reset`, `:profile`, `:save`, `:help`) | missing | only `quit/exit/q` recognised |
+| Auto-spawn daemon on connect failure | missing | dies with "Start the server first" |
+| Browser viewer route (`/viewer`) | missing | no matching route |
+| `/outputs/{kind}/{filename}` file serving | missing | grep returns 0 hits |
+| `/api/outputs` JSON listing | missing | not implemented |
+| `outputs/` directory tree (3d, audio, code, gifs, images, videos) | exists | [outputs/](outputs/) |
+| Desktop GUI still owns chat panel | duplicate | [gui_logic_chat.py](enigma_engine/gui/gui_logic_chat.py) |
+
+**Parallel implementation drift (§4):** `run_chat` (in-process) and `run_chat_client` (over daemon) are ~95% identical UX. Two REPLs for one job. The in-process one is legacy from before the daemon existed; per the daemon-and-clients architecture only `run_chat_client` should remain.
+
+### Slice GUI-BIOME-1a — Test the existing terminal client (SMALL, do first)
+
+The terminal client is shipped but unproven. No regression gate exists, so any future change to `EnigmaClient.chat_stream` or the SSE token format silently breaks user-facing chat.
+
+- New `tests/test_run_chat_client.py`. Monkeypatch `EnigmaClient` with a fake yielding token chunks; drive `run_chat_client` via stdin redirection.
+- Cases: happy-path streaming, connection-refused failure mode, profile activation success/failure, temperature kwarg forwarded, `quit`/`exit`/`q` exit, fallback to non-stream when stream yields zero tokens (Pass 156z9bw learned principle gate).
+- 4-6 tests. Zero production code change.
+- **Risk:** very low. Pure test addition.
+
+### Slice GUI-BIOME-1b — Slash commands + daemon auto-spawn (SMALL)
+
+- Slash commands: `:reset` (clear local history), `:profile <name>`, `:save <path>`, `:help`, `:model <path>`, `:temp <n>`. Each is one elif in the input loop.
+- Auto-spawn daemon: on first connect failure, try `subprocess.Popen([sys.executable, "run.py", "--serve"])`, poll `client.health()` for ~5s, retry. Print "starting daemon..." line + pid. On second failure, surface the original error not a friendly mask.
+- Pass through `--model` / `--port` to the spawned daemon when relevant.
+- Tests for each command + the auto-spawn path (subprocess + health mocked).
+- **Risk:** low. Additive. Doesn't change the existing happy-path code.
+
+### Slice GUI-BIOME-1c — Retire the in-process duplicate (SMALL)
+
+Two near-identical REPLs is exactly the §4 "parallel implementation drift" anti-pattern. Pick one truth.
+
+- Pick A (clean): delete `run_chat`. Rename `--client-chat` → `--chat`. Update help text + README + docs. Auto-spawn from 1b makes the daemon transparent so users get the same UX they had before.
+- Option B (cautious, fallback only if 1b auto-spawn proves flaky on Windows): keep `run_chat` as `--chat-local` for daemon-less debugging; make `--chat` invoke `run_chat_client`.
+- Default: A. Matches "daemon is the brain, clients talk to it."
+- Grep impact: `--client-chat` mentions in [run.py](run.py), `GUI_REFERENCE.md`, `AA code maker.md` quick-commands section.
+- **Risk:** small migration. One flag rename, one function deletion, one help-text + docs update.
+
+### Slice GUI-BIOME-2 — Local browser media viewer (MEDIUM)
+
+Generated images / audio / video / 3D land in [outputs/](outputs/) today. Desktop has no good native viewer for those — browsers do, by design.
+
+- **2a — file-serving routes:** add `GET /api/outputs?kind=images&limit=50` returning JSON list of recent files grouped by kind + `GET /outputs/{kind}/{filename}` using FastAPI `FileResponse` with **strict** `Path.relative_to(OUTPUTS_DIR.resolve())` guard (raise 404 on `ValueError`, never echo the path). Allowlist `{kind}` against the existing `outputs/` subdirs. Adversarial tests including `..`, absolute paths, symlinks, kind injection.
+- **2b — viewer page:** `GET /viewer` returns one static HTML file (vanilla JS, no framework, no build step) with chat input at top wired to `/api/chat/stream` and recent-generations grid below using `/api/outputs`. Bind to `127.0.0.1` only (daemon already does this); reject non-localhost origins.
+- **2c — wiring:** add `python run.py --viewer` flag that auto-spawns daemon if needed and opens `http://127.0.0.1:PORT/viewer` via `webbrowser.open()`. Optional: "Open Viewer" button in the desktop GUI.
+- **Risk:** medium. Adds local file-serving surface. Path guard is the critical bit; existing learned principle covers it ("Path traversal: `Path.relative_to()` not `startswith`").
+- **Cost:** 2-3 sub-slices.
+
+### Slice GUI-BIOME-3 — Desktop window becomes operator console only (MEDIUM-LARGE)
+
+After 1a/1b/1c + 2 ship, desktop no longer needs to own chat. Strip chat-only modules; keep training / model registry / mods / queue / FORGE / config.
+
+- Delete: chat-panel widgets in `gui_logic_chat.py`, chat input bar, chat history scroll (or relocate as a small embedded tab if users still want it after 2).
+- Add: "Open Terminal Chat" launcher (`subprocess.Popen([sys.executable, "run.py", "--chat"])` in a new console) + "Open Viewer" launcher.
+- Audit every read of chat state + grep dead handlers per §4 "Removing a widget, remove all read sites."
+- **Risk:** medium. Touches live GUI code that users currently use.
+- **Cost:** 3-5 sub-slices, one per page touched.
+- **Reversible:** git revert.
+
+### Slice GUI-BIOME-4 (PARKED, do not start)
+
+Framework rewrite (PySide6 / Tauri). Only after 1+2+3 ship and the operator console pain still hurts. Pass 147 trade study still applies. Honest: it may never be needed.
+
+### Ordering rationale
+
+1. **1a first** because adding a test to existing code is the safest possible move. Locks in a regression gate on the production path.
+2. **1b** adds polish without changing the contract. Auto-spawn closes the friction the May 11 plan flagged as a real risk.
+3. **1c** retires the parallel implementation. After 1a+1b the new path covers everything the old one did.
+4. **2** is when real new infrastructure (file-serving + HTML page) lands. By this point the daemon seam is fully exercised.
+5. **3** is last because it's the most reversible-but-disruptive change and depends on 2 being a real chat alternative.
+
+### Devil's-advocate (§1 #13)
+
+- **"Auto-spawn daemon is magic."** True. Print a visible line ("starting daemon..." + pid). On failure surface the real error.
+- **"What if `client.health()` says ok but no model is loaded?"** Daemon supports `--model` at startup; auto-spawn passes it through from CLI args.
+- **"Browser viewer adds local HTTP surface."** Daemon ALREADY adds it. New endpoints on the same `127.0.0.1` bind are incremental, not new surface.
+- **"Why not `StaticFiles`?"** Because we need (a) kind allowlist before serving, (b) path-traversal guard with `relative_to`, (c) JSON listing endpoint. `FileResponse` per route gives explicit control.
+- **"What if you stop after 1c?"** Fine. Terminal chat is a complete biome on its own. The system is cleaner than today.
+
+### What this plan does NOT do
+
+- No framework decision (no PySide6 / Tauri commitment).
+- No deletion of working GUI code in 1a/1b/1c/2.
+- No browser cloud-anything.
+- No new dependency (vanilla JS, stdlib HTTP).
+
+### Acceptance per slice (§1 #20)
+
+Every slice ends finished / killed / parked. Finished requires production entry-point reachability + test against that entry-point + docstrings/help matches behaviour.
+
+### Honest confidence
+
+- 1a (tests): ~95%. Pure test addition.
+- 1b (slash commands + auto-spawn): ~85%. Subprocess management has Windows quirks.
+- 1c (retire duplicate): ~85%. Need to grep flag-rename impact across docs.
+- 2 (browser viewer): ~70%. Path guard correctness is the hard part.
+- 3 (desktop strip): ~70%. Touching live GUI code.
+
+### Recommended start
+
+**GUI-BIOME-1a (test the existing terminal client).** Smallest, lowest-risk, closes a real coverage gap on production code. Authorize and I'll start.
+
+### Audit trail
+
+- Prior May 11 plan overstated BIOME-1 effort by ~90% — same anti-pattern as the mojibake under-report stamp shipped 156z9cv. Logged here so future readers see the correction.
+- Stamp 156z9cv learned principle "Self-reporting scope honesty" applies in both directions: over-reporting effort is as dishonest as under-reporting it.
+
+---
+
+## �🟢 PASS 156z9cv (May 11, 2026 — mojibake sweep: inference.py + rl_training.py, scope under-report closed)
+
+Scope: close the H-1 audit finding from this session — the parked "mojibake at [`inference.py` L1167-1168](enigma_engine/core/inference.py#L1167)" item carried forward in stamps 156z9cr / cs / ct / cu was under-reported by three orders of magnitude. Real scope: **2341 mojibake marker chars in [`inference.py`](enigma_engine/core/inference.py) + 7 in [`rl_training.py`](enigma_engine/core/rl_training.py)**, not 2 lines.
+
+**Root cause:** the inference.py module docstring's ASCII-art "MAGIC PROCESS" box-drawing block had been mis-decoded as cp1252 and re-encoded as UTF-8 at some prior commit, producing the canonical double-encoded artefact (`┌─┐│↓└┘` → `â"Œ â"€ â"` â"‚ â†"`). A smaller version of the same corruption was present in `rl_training.py`. Each of the four prior audit stamps (156z9cr/cs/ct/cu) copied "L1167-1168" forward verbatim without re-grepping; the under-report compounded.
+
+**Fix:**
+
+1. **Batch decode reverse via `ftfy.fix_text`** on both files. ftfy reduced `inference.py` from 7033 mojibake markers (extended set including `€`, `”`, `‚`, etc.) to 11 and `rl_training.py` from 21 → 0. File-size delta: `inference.py` 81786 → 77079 bytes; `rl_training.py` 107590 → 107576 bytes. Encoding chain reversed: original UTF-8 (e.g. `\xe2\x94\x80` = `─` U+2500) → mis-decoded as cp1252 → produced `â"€` → re-encoded as UTF-8 → 7-byte sequence. ftfy unwinds the chain safely.
+2. **Surgical replace** for one triple-encoded sequence ftfy could not resolve: 2 occurrences of `âš¡` (cp1252-mis-decoded `⚡` U+26A1) at L81 + L124 — replaced with `⚡`.
+3. **Residual markers verified zero** across the package: `text.count('â') + text.count('Â') + text.count('Ã') == 0` for every `.py` file under `enigma_engine/`.
+
+**Sample of restored content:**
+
+```
+THE MAGIC PROCESS:
+    ┌─────────────────────────────────────────────────────────────┐
+    │  YOU: "What is the meaning of life?"                        │
+    │   │                                                         │
+    │   ↓  (EnigmaEngine encodes your words into numbers)         │
+```
+
+(Previously rendered as `â"Œâ"€â"€â"€...` etc.)
+
+**Tests:** Added new file [`tests/test_repo_hygiene.py`](tests/test_repo_hygiene.py) with `test_package_source_is_free_of_mojibake_markers`. Gate walks `enigma_engine/**/*.py` and asserts the canonical mojibake triad (`â`, `Â`, `Ã`) appears zero times in each file. Includes an `ALLOWED_FILES` set (empty today) for the rare future case of legitimate non-English source. **Falsification check:** monkey-patched `PACKAGE_ROOT` to a tmpdir containing `bad.py` with one injected `âš¡`; gate correctly raised `AssertionError` listing the bad file with `'â'=1`.
+
+### Author's-lens checks (§1 #19) before shipping
+
+1. *Rewrite-from-scratch?* — yes. Box-drawing ASCII art belongs in source as real Unicode, not as mis-encoded byte salad.
+2. *Connected to what?* — `EnigmaEngine` module docstring is documentation surface; lint, doc-extractors, and `help(EnigmaEngine)` all consume it. Mojibake was visible in `python -c "help(EnigmaEngine)"` output.
+3. *More connections?* — the regression gate scans the whole package, so any future re-introduction in any module is caught. No further sites need separate fixes.
+4. *Logic-eye on the claim?* — claim is "mojibake removed and prevented from returning". Code: ftfy + surgical replace produces zero triad chars; gate scans every file. Match.
+5. *Claim-vs-test?* — falsified the gate against an injected mojibake char in a tmpdir; the failure message correctly names the file and count.
+6. *Sibling-boundary sweep?* — repo-wide grep before this stamp returned only `inference.py` and `rl_training.py`; post-fix grep returns zero files. Whole family closed in one pass.
+
+### Production call chain
+
+`python -c "from enigma_engine.core.inference import EnigmaEngine; help(EnigmaEngine.__module__)"` / `pydoc enigma_engine.core.inference` / IDE hover / Sphinx doc build → reads `__doc__` → now displays real box-drawing instead of `â"Œâ"€` artefacts. The regression gate is now part of the standard `pytest tests/` flow so any future edit that reintroduces the corruption fails CI before merge.
+
+### Closed parked items
+
+- **"Mojibake at [`inference.py` L1167-1168](enigma_engine/core/inference.py#L1167)"** in Pass 156z9cu §"Parked / follow-up". Real scope was 2341+7 chars, not 2 lines; both files now clean and gated.
+- **L65 / L92 mojibake mentions** in prior stamps — closed by the gate; no more under-report drift possible.
+
+### Parked / follow-up
+
+- **[`SUGGESTIONS.md` L457 quick-start](SUGGESTIONS.md#L457)** still names "GGUF `chat()` branch" as recommended next sibling — cosmetically stale; update on next slice pick.
+- **AST-based docstring honesty gate** — parked at lower priority since the 18-site manual sweep is closed.
+- **Self-reporting scope honesty** — new learned-principle entry added to `AA code maker.md` §4 (under "Auditing"). The four prior stamps copied "L1167-1168" forward without re-grep; that anti-pattern is now logged so future passes re-verify their own claims.
+
+### Baseline (post-fix)
+
+- `ruff check enigma_engine/ tests/` → **clean**.
+- `python -m pytest tests/ -q` → **3091 passed, 4 skipped in 44.18s**. New `test_repo_hygiene.py::test_package_source_is_free_of_mojibake_markers` collected and passing. (Skip count drift +1 vs prior 156z9cu baseline is environment-conditional optional-dep skips — `pymupdf` / `python-docx` / `Tcl/Tk` / `llama-cpp-python GPU` — not a regression.)
+
+---
+
+## 🟢 PASS 156z9cu (May 11, 2026 — docstring honesty sweep completion: gguf_dequant + onnx_loader)
+
+Scope: closed two of the 18 remaining `Raises:` sites in `enigma_engine/core/` flagged in the Pass 156z9cr/156z9cs/156z9ct parked lists. Same Pass 156s anti-pattern as before — clauses documenting exceptions the code never raises.
+
+**Findings + fixes:**
+
+1. **[`parse_gguf_tensors`](enigma_engine/core/gguf_dequant.py#L34)** documented `Raises: NotImplementedError: If quantized tensors are encountered without gguf library` but the body has **zero** `raise NotImplementedError` statements. Unknown tensor types are skipped with a `WARNING` log (L281), quantized tensors with no dequant flag are also skipped with WARNING, and the only real raise is `RuntimeError("torch required for tensor parsing")` at L57. Pre-fix grep `NotImplementedError` returned exactly two matches — both inside the docstring itself. Pure Pass 156s over-promise. Rewrote the docstring to describe what actually happens (F32/F16 direct, quantized via native dispatch in `dequantize_tensor`, unknown skipped with WARNING) and corrected `Raises:` to `RuntimeError` only.
+2. **[`validate_loaded_model`](enigma_engine/core/onnx_loader.py#L289)** documented two separate triggers: `RuntimeError: If model validation fails` and `ValueError: If output shape is incorrect`. Inspected the body: every internal raise (including `raise ValueError("Output shape mismatch...")` at L322 and `raise ValueError("Model output contains NaN values")` at L328) sits inside a `try:` block that is caught at L333 by `except Exception as e: raise RuntimeError(f"Model validation failed: {e}") from e`. The documented ValueError can NEVER escape to a caller — it gets converted to RuntimeError with the ValueError as `__cause__`. Same Pass 156s anti-pattern in a more subtle wrapping. Collapsed the Raises clause to RuntimeError only, with a note in the description that the cause exception can be read via `__cause__`.
+
+**Tests:** Added two regression gates to [`tests/test_chat.py::TestInferenceDocstringHonesty`](tests/test_chat.py):
+
+- `test_parse_gguf_tensors_does_not_promise_notimplementederror` — regex-anchored negative: `r"^\s*NotImplementedError\s*:"` (multiline) must NOT match the docstring, so narrative reference to the old wording in the explanation is allowed but a Sphinx Raises-block entry is gated. Positive: `r"^\s*RuntimeError\s*:"` must match.
+- `test_validate_loaded_model_documents_only_runtime_error` — line-by-line scan with `r"^ValueError\s*:\s+\w"` (the Sphinx Raises-entry shape: class name + colon + word). Catches the regression where someone reverts the clause to a top-level ValueError entry, while allowing prose ("the inner `raise ValueError(...)` is caught by the outer guard") in the explanation.
+
+**Falsification check:** before shipping, simulated the pre-fix docstrings for both functions and ran the new regex gates against them in isolation — both correctly returned `True` (gate would fail). Then restored real docstrings and ran the suite — both pass.
+
+**Sibling-boundary sweep result (full completion of the 18-site parked list):**
+
+| Site | Status |
+|---|---|
+| [`apply_adapter`](enigma_engine/core/inference.py#L1442) | honest (verified 156z9ct) |
+| [`apply_adapter_stack`](enigma_engine/core/inference.py#L1501) | honest |
+| [`clear_adapter`](enigma_engine/core/inference.py#L1621) | honest |
+| [`count_tokens`](enigma_engine/core/inference.py#L1675) | honest |
+| [`generate_best_of_n`](enigma_engine/core/inference.py#L1284) | honest |
+| [`_generate_with_vision`](enigma_engine/core/engine_generation.py#L1893) | honest |
+| [`create_model`](enigma_engine/core/model.py#L1722) | honest |
+| [`parse_gguf_header`](enigma_engine/core/gguf.py#L447) | honest |
+| [`json_schema_mask`](enigma_engine/core/json_schema_mask.py#L53) | honest |
+| [`dataset` download helper](enigma_engine/core/dataset.py#L579) | honest |
+| [`load_state_dict_safe`](enigma_engine/core/model_registry.py#L116) | honest |
+| [`gguf_loader.load_gguf_model`](enigma_engine/core/gguf_loader.py#L1054) | honest |
+| [`load_from_huggingface`](enigma_engine/core/huggingface_loader.py#L1105) | thin but honest |
+| [`read_pdf`](enigma_engine/core/document_readers.py#L46) | honest |
+| [`read_docx`](enigma_engine/core/document_readers.py#L82) | honest |
+| [`load_from_onnx`](enigma_engine/core/onnx_loader.py#L195) | honest |
+| [`validate_growth` / `grow_state_dict`](enigma_engine/core/progressive_growing.py#L143) | honest |
+| [`ForgeConfig.validate`](enigma_engine/core/model_presets.py#L281) | honest |
+| **[`parse_gguf_tensors`](enigma_engine/core/gguf_dequant.py#L34)** | **FIXED this pass** |
+| **[`validate_loaded_model`](enigma_engine/core/onnx_loader.py#L289)** | **FIXED this pass** |
+
+The 18-site parked list is now closed: 16 were already honest, 2 needed fixes. The AST-based `tests/test_docstring_honesty.py` permanent regression gate is no longer urgent — manual sweep is complete and the 5 specific structural tests in `TestInferenceDocstringHonesty` + `TestChatDocstringHonesty` gate the highest-traffic methods against future drift. Parked at lower priority.
+
+### Author's-lens checks (§1 #19) before shipping
+
+1. *Rewrite-from-scratch?* — yes. Docstrings should describe the actual contract.
+2. *Connected to?* — `parse_gguf_tensors` is called from `load_from_gguf` and tooling; `validate_loaded_model` is called from `load_from_onnx`. Callers writing `except NotImplementedError` against `parse_gguf_tensors` or `except ValueError` against `validate_loaded_model` would have caught nothing — the pre-fix docs steered them into wrong-class handlers.
+3. *More connections?* — none in scope. The AST-based permanent gate (parked from 156z9cr) would catch any future drift across all functions in one regression test; tracked.
+4. *Logic-eye on the claim?* — each new Raises clause was matched 1-to-1 against `grep "raise " <file>` output for the target function's body. No documented class lacks a real raise; no real raise is over-promised.
+5. *Claim-vs-test?* — falsified the regex anchors against simulated pre-fix docstrings before shipping (output above). Both correctly trigger on the old wording.
+6. *Sibling-boundary sweep?* — full 18-site table above. Closed completely.
+
+### Production call chains (paths the corrected docstrings now match)
+
+- GGUF model load → `gguf_loader.load_gguf_model(path)` → `parse_gguf_tensors(f, header)` → torch missing → `RuntimeError("torch required for tensor parsing")` → caller's `except RuntimeError` per the corrected clause.
+- ONNX model load → `onnx_loader.load_from_onnx(path)` → `validate_loaded_model(forge_model)` → output-shape mismatch → caught and re-raised as `RuntimeError("Model validation failed: ...") from ValueError(...)` → caller's `except RuntimeError` triggers; `e.__cause__` exposes the underlying ValueError.
+
+### Parked / follow-up (unchanged from 156z9ct)
+
+- **B-3 sibling closure remaining sites** — GGUF chat full splice (large work — needs messages-API → chat-template → `create_completion` route or fresh messages-API splice helper), `_generate_with_vision` splice (vision context passthrough through `_generate_manual`), `batch_generate` splice (per-row stop tracking + serialization). Pass 156z9cu started this work but deferred when scope analysis showed the GGUF splice needs a new design pass rather than reusing the text-mode `_maybe_rag_splice`.
+- **Mojibake at [`inference.py` L1167-1168](enigma_engine/core/inference.py#L1167)** — still present. Bounded one-shot sweep when convenient.
+- **AST-based docstring honesty gate** — parked at lower priority now that the 18-site manual sweep is closed. Add when next adding many new `Raises:` clauses across modules.
+- **SUGGESTIONS.md L457 quick-start** — still names "GGUF chat() branch" as next. Cosmetically stale; update when picking the next slice.
+
+### Baseline (post-fix)
+
+- `ruff check enigma_engine/ tests/` → **clean**.
+- `python -m pytest tests/ -q` → **3091 passed, 3 skipped in 32.36s** (+2 new tests vs Pass 156z9ct's 3089).
+
+---
+
+## 🟢 PASS 156z9ct (May 11, 2026 — audit-on-ship: Pass 156z9cs introduced under-promise while fixing over-promise)
+
+Scope: §1 #19 author's-lens + §4 "Self-audit immediately after shipping" applied to the three passes shipped this session (156z9cq / 156z9cr / 156z9cs). User asked "do an audit on what has happened so far"; audit found one real bug in 156z9cs's own fix.
+
+**Finding:** [`EnigmaEngine.generate()`](enigma_engine/core/inference.py#L1142) Raises clause replaced — not augmented — when Pass 156z9cs cleared the vague-broad form. The pre-156z9cs text read `ValueError: If parameters are out of valid range`. Vague, but it implicitly covered the 5 distinct `ValueError` triggers `_generate_text` raises (each gated by a pre-existing test in [`tests/test_inference.py::TestGenerateValidation`](tests/test_inference.py#L263)): `max_gen <= 0`, `temperature < 0`, `top_k < 0`, `top_p` outside `[0, 1]`, `repetition_penalty < 1.0`. Pass 156z9cs replaced the whole clause with only `ValueError: If json_schema is not None and execute_tools=True`. The narrow replacement was *honest about one trigger* but stripped the callers' anchor for catching the five numeric-range cases — inverse failure mode of Pass 156s ("documents what's not raised"), shape "documents only ONE of N triggers the class is actually raised for". Both are doc-vs-code lies; this one is just polite.
+
+**Fix:** Expanded the [`generate()` Raises ValueError clause](enigma_engine/core/inference.py#L1145) to enumerate the json_schema gate **and** all five propagated numeric-range triggers, with a Pass 156z9ct trailing note explaining the restoration. New test `test_generate_documents_all_numeric_range_value_errors` in [`tests/test_chat.py::TestInferenceDocstringHonesty`](tests/test_chat.py) asserts each of `max_gen`, `temperature`, `top_k`, `top_p`, `repetition_penalty` appears in the generated docstring — a regression that walks back any one trigger will fail with a specific marker name, not a generic "doc shrank" failure.
+
+**Sibling-boundary sweep result:** spot-checked the other Raises clauses Pass 156z9cs claimed honest:
+- [`generate_best_of_n`](enigma_engine/core/inference.py#L1278) Raises: `ValueError: If n < 1` — body raises exactly that, docstring scope honest. Pass.
+- [`clear_adapter`](enigma_engine/core/inference.py#L1601) — no Raises clause but docstring describes the `disable_adapters` path correctly; logic-eye clean.
+- The remaining 18 `Raises:` sites parked in Pass 156z9cs were not re-verified this pass; tracked.
+
+**Other audit observations (no fixes shipped):**
+- **Pass 156z9cq / 156z9cr edits on `engine_chat.py` did not disturb each other.** The 3 `path="gguf"` forwards from Pass 156z9cq are still on disk at L605, L798, L832. The Pass 156z9cr docstring edits at L543-552 and the new Raises block on `stream_chat` are below the chat() body, no overlap. Clean.
+- **`test_stream_chat_gguf_llamacpp_branch_records_in_finally`** (Pass 156z9cr `src.find → src.rfind` brittle-test fix) — the `create_chat_completion` marker still appears in both docstring and call body in [`engine_chat.py`](enigma_engine/core/engine_chat.py), so the `rfind` anchor still resolves to the call site, not the doc reference. Fix is durable.
+- **Negative-presence assertion vulnerability documented.** Pass 156z9cs round 2's lesson — that the agent's own historical narration *inside the new docstring* satisfied the forbidden-substring gate — generalises beyond docstrings to any negative-presence lint/test. Added as a learned principle to `AA code maker.md` §4 alongside the new "doc-promise-replacement is under-promise inverse of Pass 156s" rule.
+- **Mojibake at [`inference.py` L1167-1168](enigma_engine/core/inference.py#L1167)** (`â”€` artifacts) confirmed still present — same family as Pass 156z9bv sweep, pre-existing, sibling sweep across `enigma_engine/**/*.py` would close it. Out of scope this pass.
+- **Quick-start at SUGGESTIONS.md L457** still says "next sibling: GGUF chat() branch" — wording is technically accurate (B-3 splice for GGUF is still parked) but stale relative to this session's path="gguf" observability close. Out of scope this pass; logged here.
+
+**6-question author's-lens applied to this audit itself:**
+1. *Rewrite-from-scratch?* — yes, restoring the broad trigger enumeration was the right shape; don't replace a vague-broad clause with a specific instance.
+2. *Connected to what?* — `tests/test_inference.py::TestGenerateValidation` (proves the raises are real), `engine_generation._generate_text` (the propagation source).
+3. *More connections?* — every Raises clause in the same module would benefit from a "propagated-from-callee" enumeration; tracked in 156z9cs parked list.
+4. *Logic-eye on the claim?* — pre-existing TestGenerateValidation IS the ground truth; new clause matches it 1-to-1.
+5. *Claim-vs-test?* — new test asserts presence of each of 5 markers; would fail individually if any one walks back. Behavioural correctness is already locked by TestGenerateValidation.
+6. *Sibling-boundary sweep?* — spot-checked 2 inference.py sites + the new engine_chat.py work; full 18-site sweep still parked.
+
+**Production call chain (unchanged from 156z9cs):** `GUI/CLI/API/FORGE/mod-router → EnigmaEngine.generate(prompt, ...) → _generate_text(...) → raises ValueError on numeric-range violation → propagates to caller → caller's documented except clause now correctly anticipates all 6 triggers`.
+
+**Status:** 3089 passed, 3 skipped (was 3088 before this pass). Ruff clean. AA code maker.md §4 gained two learned principles: (a) self-narration-satisfies-negative-presence-assertions, (b) doc-clause-replacement is under-promise inverse of Pass 156s over-promise.
+
+---
+
+## 🟢 PASS 156z9cs (May 11, 2026 — docstring honesty sweep: inference / model / huggingface_loader)
+
+Scope: continuation of the Pass 156z9cr lens onto the 22 remaining `Raises:` sites in [enigma_engine/core/](enigma_engine/core/) flagged at the bottom of that stamp. This pass cleared the four highest-traffic mismatches in `inference.py`, `model.py`, and `huggingface_loader.py`. Same §1 #19 + §4 "Logic-eye on doc claims" lens; same Pass 156s rule ("docstring `Raises:` clauses must enumerate only exceptions the code actually raises").
+
+**Findings + fixes:**
+
+1. **`EnigmaEngine.generate()` ([enigma_engine/core/inference.py L1142](enigma_engine/core/inference.py#L1142)) over-promised + vague.** The clause said `ValueError: If parameters are out of valid range` (vague — gave callers no signal) and `TypeError: If prompt is not a string` (over-promise — `generate()` itself had no `isinstance(prompt, str)` guard; the downstream `_generate_text` at engine_generation.py L520 raises with the message `"prompt must be a string"` after the engine had already paid alias-resolve and routing setup cost). Fixed by (a) adding an explicit early `isinstance` guard at the top of `generate()` using the same `"prompt must be a string"` wording so the pre-existing `tests/test_inference.py::TestGenerateValidation::test_rejects_non_string_prompt` regression test (which existed but was satisfied by the deeper raise) still passes; (b) rewriting the `Raises:` block to name the real `TypeError` trigger AND the real `ValueError` trigger (the Pass 156z7 N-15c2 `json_schema + execute_tools` mutual-exclusion gate at L1168).
+2. **`Enigma.generate()` ([enigma_engine/core/model.py L805](enigma_engine/core/model.py#L805)) under-promised.** Clause said only `ValueError: If temperature is not positive` but the body raises `ValueError` at three distinct sites: temperature, 2D `input_ids` shape mismatch, and device mismatch. Expanded the clause to enumerate all three triggers so callers writing `try/except ValueError` know what they can hit.
+3. **`convert_hf_config_to_forge` ([enigma_engine/core/huggingface_loader.py L926](enigma_engine/core/huggingface_loader.py#L926)) wrong trigger.** Clause said `ValueError: If model type not supported` but the four `ValueError` raises in the function are all about missing architectural fields (dim / layer count / attention-head count / weight-conversion failure). Nothing in the function raises for an unsupported model_type — it just returns whatever it could infer. Corrected the trigger description to name the real missing-field cases.
+
+**Tests:** New class `TestInferenceDocstringHonesty` in [tests/test_chat.py](tests/test_chat.py) with four gates:
+
+- `test_generate_typeerror_guard_is_real_and_documented` — pins **both** the doc claim (`TypeError` + `prompt` substrings on `inspect.getdoc`) **and** the behavioural guard (constructs a stub `EnigmaEngine` via `__new__` and asserts `engine.generate(None)` and `engine.generate(["not", "a", "string"])` both raise `TypeError` with the expected message before any tokenizer/model access). Catches both regressions: doc walked back to vague, and guard deleted from the entry path.
+- `test_generate_documents_json_schema_execute_tools_value_error` — pins the specific `json_schema` + `execute_tools` mutual-exclusion ValueError trigger on `inspect.getdoc`.
+- `test_model_generate_enumerates_all_three_value_error_triggers` — asserts all three substrings (`temperature`, `input_ids`, `device`) appear in `Enigma.generate()`'s `Raises:` clause. Catches a regression that drops back to the single-trigger wording.
+- `test_convert_hf_config_to_forge_documents_real_value_error_trigger` — negative gate (`"model type not supported"` substring must NOT appear) + positive gate (at least one of the real triggers — `dimension`, `hidden_size`, `layer count`, `attention-head` — must appear).
+
+**Self-falsification note:** First run of the negative gate (4 above) FAILED because my own corrected docstring contained the literal old phrase as a historical reference ("the previous wording (``If model type not supported``) did not match any raise"). Rewrote the historical-reference clause to use "unsupported-architecture trigger" instead, preserving the historical context without re-introducing the lie-substring. This is the same hazard §4 names as "structural tests that gate presence of a literal pattern, not correctness" applied in reverse — when fixing a doc and adding a negative-presence test, the doc's own history-of-this-fix narration can satisfy the negative assertion you're trying to enforce.
+
+### Baseline (post-fix)
+
+- `ruff check enigma_engine/ tests/` → **clean**.
+- `python -m pytest tests/ -q` → **3088 passed, 3 skipped in 31.90s** (+4 new tests vs Pass 156z9cr's 3084).
+
+### Author's-lens checks (§1 #19) before shipping
+
+1. *If I wrote this from scratch today, would I do it this way?* — Yes. Each fix either implements the documented behaviour (#1's `isinstance` guard) or aligns the doc to the existing behaviour (#2, #3). No taste-driven drift outside scope.
+2. *What is this connected to?* — `EnigmaEngine.generate()` is the central inference entry-point reached by GUI, API, CLI, FORGE, mod-router, and the daemon's auto-research path. `Enigma.generate()` is the model's forward-loop variant, reached from `_generate_text` and tests. `convert_hf_config_to_forge` is reached from the huggingface_loader chain. All three are "public" in the sense that their docstrings appear in `help(...)` and in IDE tooltips.
+3. *Could more connections be made?* — The early `isinstance` guard at `generate()`'s entry is now duplicated with the deeper guard at `_generate_text` L520. Both must use the same error message wording so tests catching either site keep passing. Could centralise into one helper later but the duplication is ~3 lines and the early-fail benefit (avoid alias-resolve cost) is real; leave as is.
+4. *Logic-eye on each claim* — Each new structural assertion was falsified before shipping. Negative gate on huggingface_loader caught my own history narration the first run and forced a rewrite. Behavioural gate on the `isinstance` guard was confirmed against the pre-existing `test_rejects_non_string_prompt` test which uses a different stub-engine factory (`_make_engine()` builds a real-tokenized engine) and a different invocation form — both error messages now match the same wording so the pre-existing test continues to pass.
+5. *Claim-vs-test* — Gates 1 (behavioural + structural pair), 3, and 4 (positive + negative pair) gate behaviour. Gate 2 is structural-only (substring on `inspect.getdoc`) — acceptable because the trigger it documents is already gated behaviourally by `test_generate_rejects_json_schema_with_execute_tools` from Pass 156z7.
+6. *Sibling-boundary sweep* — Remaining 18 `Raises:` sites in `enigma_engine/core/` (spread across `inference.py:1264/1601` already verified honest, `gguf_loader.py:1054` already verified honest, `gguf.py:447`, `gguf_dequant.py:51`, `onnx_loader.py:195/297`, `model_registry.py:116`, `model_presets.py:281`, `progressive_growing.py:143`, `dataset.py:579`, `document_readers.py:46/82`, `json_schema_mask.py:53`, `engine_generation.py:1893`, `huggingface_loader.py:1099`). All deferred to the next sweep; they're lower-traffic and don't share contract with the three sites fixed here.
+
+### Production call chains (paths whose docstrings now match behaviour)
+
+- `EnigmaEngine.generate(prompt=None)` from any caller → TypeError "prompt must be a string" raised at function entry → caller's `except TypeError` triggers immediately, no expensive setup wasted.
+- `EnigmaEngine.generate(prompt=..., json_schema={...}, execute_tools=True)` → ValueError raised at the L1168 mutual-exclusion gate → caller's `except ValueError` triggers per the now-documented clause.
+- `Enigma.generate(input_ids=<3D-tensor>, ...)` → ValueError raised at the shape gate → caller's `except ValueError` per the expanded clause.
+- HF model loader path `from_huggingface(...)` → `convert_hf_config_to_forge(hf_config)` with a config missing `hidden_size`/`n_embd`/`d_model` → ValueError "Cannot find model dimension in config" → caller's `except ValueError` per the corrected trigger description.
+
+### Parked / follow-up
+
+- **Remaining 18 `Raises:` sites** — Same lens, same rules. Recommend pairing with a `ruff`-style automation check (e.g. a `tests/test_docstring_honesty.py` that uses `ast` to walk each function's body and cross-check raised exception classes against the docstring's `Raises:` clause). Out of scope this pass.
+- **Mojibake artefacts in `inference.py`** — Lines 1153-1156 + several others contain `â”€` mojibake from a prior copy-paste. Same family as the Pass 156z9bv mojibake sweep. Out of scope this pass but logged; should be cleared in a dedicated sweep, not piecemeal.
+- **B-3 sibling closure remaining sites** — Unchanged from Pass 156z9cr. Vision splice + batch splice + GGUF chat full splice.
+
+### Learned principles updated
+
+No new principle to add — Pass 156s ("Docstring `Raises:` clauses must enumerate only exceptions the code actually raises") and Pass 156i2 ("Logic-eye on doc claims") already cover the pattern. The self-falsification finding (history narration in the doc satisfies the negative-presence assertion) is a corollary of the existing §4 entry "structural tests that gate presence of a literal pattern, not correctness" — when writing a negative-presence test on a docstring, scan your own doc text for the forbidden substring before declaring the test ready. Adding a sentence to that effect in §4 would help, but the principle already implicitly covers it.
+
+---
+
+## 🟢 PASS 156z9cr (May 11, 2026 — audit fix: `chat()` / `stream_chat()` docstring honesty)
+
+Scope: continuation of the Pass 156z9cq audit sweep.  Applied §4 "Logic-eye on doc claims" lens to [enigma_engine/core/engine_chat.py](enigma_engine/core/engine_chat.py) and found one over-promise + one undocumented raise.
+
+**Findings:**
+
+1. **`chat()` over-promised `RuntimeError`** — docstring `Raises: RuntimeError: If the underlying model is not loaded or the tokenizer fails to encode the prompt.` was a Pass 156s anti-pattern.  Grep for `raise (RuntimeError|ValueError)` in `engine_chat.py` shows the only `RuntimeError` is in the `chat_with_tools` path (universal_router import).  The main `chat()` body has no `if self.model is None: raise RuntimeError(...)` guard — calling `chat()` against an unloaded engine raises `AttributeError` deep inside `_prepare_chat` or `self.model.chat(...)`, not the documented `RuntimeError`.  Callers writing `try/except RuntimeError` to catch the documented failure silently miss the real error class.
+2. **`chat()` undocumented `NotImplementedError`** — Pass 156z7 (N-15c2) added a loud-reject gate on `json_schema` for GGUF models that DOES raise `NotImplementedError`, but the docstring's `Raises:` clause never enumerated it.  Smaller lie than (1) but still violates the "every documented raise must match a real raise, and every real raise at the public boundary should be documented" rule.
+3. **`stream_chat()` undocumented `NotImplementedError`** — same gate (Pass 156z6 N-15c) raises `NotImplementedError` on `json_schema` for GGUF streams.  No `Raises:` section existed at all on `stream_chat()`.
+
+**Fix:** Replaced `chat()`'s false `RuntimeError` clause with an honest `NotImplementedError` clause that names the trigger (`json_schema`) and the gated modality (GGUF / llama.cpp).  Added a fresh `Raises:` section to `stream_chat()` mirroring the same wording.
+
+**Tests:** New class `TestChatDocstringHonesty` in [tests/test_chat.py](tests/test_chat.py) with three structural gates:
+
+- `test_chat_docstring_does_not_promise_unraised_runtime_error` — pins the negative.  Substring `"If the underlying model is not loaded"` must NOT appear in `inspect.getdoc(_ChatMixin.chat)`.  Falsifies the original Pass 156s wording specifically.
+- `test_chat_docstring_documents_json_schema_gguf_rejection` — pins the positive.  Substrings `NotImplementedError`, `json_schema`, and `GGUF` must all appear so callers can write the right `except` clause and know which path triggers it.
+- `test_stream_chat_docstring_documents_json_schema_gguf_rejection` — same positive gate on `stream_chat()`.
+
+**Brittle-test fix-out, surfaced in the same pass:** the earlier test `test_stream_chat_gguf_llamacpp_branch_records_in_finally` used `src.find("create_chat_completion")` which finds the FIRST occurrence — and `stream_chat()`'s docstring itself mentions `create_chat_completion` ("Works with ... GGUF models (via `create_chat_completion(stream=True)`)").  Window from the docstring mention extended only 3000 chars into the body, which had been wide enough before but slid off the call site after this pass added the `Raises:` block to the docstring.  Switched to `src.rfind(...)` so the anchor lands on the call expression in the body, not the prose reference.  This is itself a §4 "structural test that gates presence of a literal pattern, not correctness" hazard — the marker was ambiguous and the prior test was passing by coincidence, not by gate.
+
+### Baseline (post-fix)
+
+- `ruff check enigma_engine/ tests/` → **clean**.
+- `python -m pytest tests/ -q` → **3084 passed, 3 skipped in 32.27s** (+3 new tests vs Pass 156z9cq's 3081).
+
+### Author's-lens checks (§1 #19) before shipping
+
+1. *If I wrote this from scratch today, would I do it this way?* — Yes.  Honesty principle: a docstring `Raises:` clause is part of the contract; it must enumerate exactly the exceptions a caller might see, no more and no less.
+2. *What is this connected to?* — `chat()` and `stream_chat()` are the two public entry points exposed to GUI / API / CLI users.  Their docstrings are read by IDEs and shown in `help(engine.chat)`.  Wrong docstrings silently steer callers into wrong `except` blocks.
+3. *Could more connections be made?* — Other public methods (`_generate_with_vision`, `batch_generate`, `generate`) also have `Raises:` claims.  Not in scope this pass but flagged below for the next sweep.
+4. *Logic-eye on the claim* — Each new structural assertion was falsified once before shipping: removed the `NotImplementedError` substring → test failed as expected; restored → test passed.  Negative gate (`If the underlying model is not loaded`) was confirmed against the old wording: re-inserting the line into the docstring would cause `test_chat_docstring_does_not_promise_unraised_runtime_error` to fail.
+5. *Claim-vs-test* — Structural-only (substring presence on `inspect.getdoc`).  Pure-doc fix has no behavioural surface to test.  Acceptable per §4 "structural tests are a last resort when behavioural testing requires unavailable hardware" — here the test target IS the docstring text, so structural is the correct gate.
+6. *Sibling-boundary sweep* — Grepped `enigma_engine/core/**/*.py` for `^\s+Raises:\s*$` and got 24 matches.  Sampled `lora_utils.py` (no docstring `Raises:` clauses, only bare `raise` statements — under-documented but not over-promising; skip) and the touched `chat()` / `stream_chat()` pair.  The remaining 22 matches across `inference.py`, `model.py`, `huggingface_loader.py`, `gguf.py`, `gguf_loader.py`, `gguf_dequant.py`, `onnx_loader.py`, `model_registry.py`, `model_presets.py`, `progressive_growing.py`, `dataset.py`, `document_readers.py`, `json_schema_mask.py`, and `engine_generation.py:1893` (`_generate_with_vision`) are out of scope this pass — logged as a follow-up below.
+
+### Production call chains (paths the new docstrings now match)
+
+- `POST /api/chat` → `engine.chat(message, json_schema={...}, history=...)` against GGUF model → docstring `NotImplementedError` clause → caller's `except NotImplementedError` triggers → 422 at the API boundary (FastAPI handler maps via existing error path).
+- `POST /api/chat/stream` (SSE) → `engine.stream_chat(message, json_schema={...}, ...)` against GGUF model → docstring `NotImplementedError` clause → caller's `except NotImplementedError` triggers → 422 boundary mapping.
+- GUI chat path → `engine.chat(...)` no `json_schema` → docstring's `Raises:` clause does not apply → normal return.
+
+### Parked / follow-up
+
+- **Other `Raises:` docstrings in `enigma_engine/core/`** — 22 sites unaudited this pass.  Highest-priority candidates: `inference.py` (6 sites — most-used after `engine_chat.py`), `huggingface_loader.py` (2 sites), `gguf.py` / `gguf_loader.py` / `gguf_dequant.py` (3 sites — GGUF surface).  Recommend a single follow-up pass that runs the same lens: grep `raise` in each file, cross-check the docstring's `Raises:` against the actual raises, fix mismatches.
+- **B-3 sibling closure remaining sites** — Unchanged from Pass 156z9cq.  GGUF chat full splice (medium cost: new `_maybe_rag_splice_chat_messages` helper for messages-based API), `_generate_with_vision` splice (medium cost: vision context passthrough needed because `_generate_manual` clears the KV cache), `batch_generate` splice (large cost: per-row stop tracking + batch serialization on splice).  Recommend GGUF chat full splice next — the helper architecture is already templated by Pass 156z9cp.
+
+### Learned principles updated
+
+§4 "Verification" section in `AA code maker.md` already covers this pattern via:
+
+- **Pass 156s** "Docstring `Raises:` clauses must enumerate only exceptions the code actually raises."
+- **Pass 156i2** "Logic-eye on doc claims."
+- **Pass 156y2** "Library-default change ≠ on-disk-artifact change."
+
+This pass is a direct application of those rules.  No new principle to add; the existing rules caught the bug as soon as the lens was applied.  Generalisation note for future passes: when a docstring's `Raises:` clause is older than the most recent slice that touched the method, treat it as a suspect and verify against the current body.  The `chat()` clause survived Pass 156z7 + Pass 156z9e + Pass 156z9cq because each pass added behaviour without re-reading the existing `Raises:` text.
+
+---
+
+## 🟢 PASS 156z9cq (May 11, 2026 — audit fix: GGUF chat-path `path="gguf"` forward)
+
+Scope: audit follow-up to Pass 156z9cp.  Self-audit on the freshly-shipped sibling-family closure ran the §1 #19 sixth question ("did I grep every sibling boundary that shares this contract?") and found three call sites in [enigma_engine/core/engine_chat.py](enigma_engine/core/engine_chat.py) calling `_record_search_emissions(response)` WITHOUT `path=`, so they all defaulted to `path="native"`.  Because "native" is in the helper's WARNING allow-list (`("native", "stream", "speculative", "medusa", "lookahead")`), turning on `inline_search_splice_enabled=True` against a GGUF model and hitting any of the three chat paths produced **zero B-3a sibling WARNING** and **zero splice behaviour** — the feature was silently labelled-on with no observable effect.  Same shape as the Pass 156z7 sibling-sweep finding (json_schema family) and the Pass 156y2 doc-claim-vs-on-disk-artifact finding: the slice's own stamp narrated the gap ("`chat()` GGUF branch is still parked") while the code labelled the path as supported.
+
+### Baseline (post-fix)
+
+- `ruff check enigma_engine/ tests/` → **clean**.
+- `python -m pytest tests/ -q` → **3081 passed, 3 skipped in 32.45s** (+3 new tests vs Pass 156z9cp's 3078).
+- Focused `pytest tests/test_chat.py -k "B3 or Gguf"` → **54 passed**.
+
+### What shipped
+
+- **[enigma_engine/core/engine_chat.py](enigma_engine/core/engine_chat.py)** — three call-site forwards:
+  - [L605](enigma_engine/core/engine_chat.py#L605) `chat()` GGUF branch (`model.chat(...)` direct call) → `_record_search_emissions(response, path="gguf")`
+  - [L798](enigma_engine/core/engine_chat.py#L798) `stream_chat()` GGUF server-backend branch (one-chunk response) → `_record_search_emissions(response, path="gguf")`
+  - [L832](enigma_engine/core/engine_chat.py#L832) `stream_chat()` in-process llama-cpp streaming branch (finally-block flush) → `_record_search_emissions("".join(gguf_chunks), path="gguf")`
+- All three label is `"gguf"` (matches existing convention at [enigma_engine/core/engine_generation.py L510](enigma_engine/core/engine_generation.py#L510) inside `_generate_text`'s GGUF branch).  Distinct labels (`"gguf_chat"`, `"gguf_chat_stream"`) considered and rejected: the WARNING gate only differentiates supported-vs-not, so finer labels add no behaviour and would force a parallel update on the helper's allow-list.
+
+### What tests landed
+
+New parametrized test `test_gguf_chat_path_forwards_path_kwarg[...]` in `TestStageB2GgufChatSiblingSweep` at [tests/test_chat.py](tests/test_chat.py).  Three parametrized cases, one per call site, each gated by a regex that matches the literal call expression `_record_search_emissions(... path="gguf"...)` inside a windowed source slice anchored to the branch start.  Falsifiable: deleting any `path="gguf"` forward, or changing the label to anything else, fails the matching case.
+
+### Author's-lens checks before merge
+
+1. *If you wrote this from scratch today, would you do it this way?* — Yes.  Three 1-line edits, single literal kwarg, no new abstractions.  The fix is smaller than its audit write-up because the regression was a missing keyword argument, not a missing feature.
+2. *What is this connected to?* — `_record_search_emissions` (consumer), `inline_search_splice_enabled` engine flag (the predicate that flips silent → WARNING).  No new wiring needed; the helper already routes `path="gguf"` through the WARNING gate.
+3. *More connections needed?* — None.  The three chat-path call sites are the only `_record_search_emissions(` callers in the workspace that were missing `path=`.  Grep confirms 8 callers total, all now explicit.
+4. *Logic-eye on the claim* — Pass 156z9cp stamp claimed "GGUF chat still emits B-3a WARNING when flag is on" — that was false until this pass shipped.  The claim is now true (regression test in place).  No over-promise.
+5. *Claim-vs-test* — regex gates literal `path="gguf"` kwarg at the call expression, NOT just substring-presence (the same word appears in nearby comments).  Adversarial: deleting the kwarg falsifies the test even though the comment stays.
+6. *Sibling-boundary sweep* — full grep `_record_search_emissions\(` across `enigma_engine/`: 13 hits, 8 callers + 5 declarations/comments.  All 8 callers now pass explicit `path=` (defaults consumed only by the one unit-test stub).  **No remaining drift in the contract family.**
+
+### Production call chains (Rule §1 #20)
+
+- `POST /api/chat` → FastAPI → `EnigmaEngine.chat()` → `if ctx.is_gguf` → `model.chat(...)` → `_record_search_emissions(response, path="gguf")` → WARNING (if flag on, queries non-empty)
+- `POST /api/chat/stream` (server backend) → `EnigmaEngine.stream_chat()` → `if ctx.has_server_backend` → one-chunk response → `_record_search_emissions(response, path="gguf")` → yield → return
+- `POST /api/chat/stream` (in-process llama-cpp) → `EnigmaEngine.stream_chat()` → `create_chat_completion(stream=True)` → accumulate chunks → finally → `_record_search_emissions("".join(gguf_chunks), path="gguf")`
+
+All three reachable from production via API + GUI client + CLI.
+
+### Learned principle (will be added to §4 of AA code maker.md)
+
+**Default-kwarg silence is a fifth flavor of dead-infra anti-pattern.**  Pass 156z9co tightened gates against `bool(MagicMock())` truthiness; Pass 156z9cp built a sibling-family WARNING allow-list with five supported paths; Pass 156z9cq found three callers that defaulted into the allow-list because they didn't pass `path=`.  When a helper accepts a `path` (or `mode`, `kind`, `source`) kwarg whose value gates behaviour, **every call site must pass the kwarg explicitly**, even when the default looks like the right answer for some callers.  The reason: when the supported-vs-unsupported set on the receiving end changes (allow-list grows or shrinks), the default-using callers silently drift in or out of the new set without anyone noticing.  Rule: search for `helper_name\(` with no `path=` (or whatever the gate kwarg is named) the same pass you change the helper's allow-list — the empty-kwarg callers are sibling-boundary misses pretending to be intentional defaults.
+
+---
+
+## 🟢 PASS 156z9cp (May 11, 2026 — B-3 sibling closure: `speculative_generate` + `medusa_generate` + `lookahead_generate`)
+
+Scope: extend the inline-RAG-splice contract to the three structurally-aligned non-streaming decoding paths in `_GenerationMixin`, mirroring the native (`_generate_text`) and stream (`stream_generate`, Pass 156z9al) wire-sites. User instruction "lets do it" then "do as much as you can" — agent self-corrected from `batch_generate` to `speculative_generate` as the first sibling target (per-row stop tracking + per-row continuation in batch is bigger infra than the 3 single-prompt aligned siblings), then continued through `medusa_generate` and `lookahead_generate` in the same pass.
+
+### Baseline (post-fix)
+
+- `ruff check enigma_engine/ tests/` → **clean**.
+- `python -m pytest tests/ -q` → **3078 passed, 3 skipped in 36.25s** (+9 new B-3 tests vs prior 3069 baseline).
+- Focused `pytest tests/test_chat.py -k "B3"` → **47 passed**.
+
+### What shipped
+
+- **[enigma_engine/core/engine_generation.py](enigma_engine/core/engine_generation.py)** — same three-edit template applied to each of `speculative_generate`, `medusa_generate`, `lookahead_generate`:
+  1. **Stop-string augmentation** at method entry, mirroring the `_generate_text` pattern at [L573](enigma_engine/core/engine_generation.py#L573): when `inline_search_splice_enabled` is True, defensively copy `stop_strings` into `effective_stop_strings` and append `"</search>"` so the decoding loop halts cleanly on the closing tag.
+  2. **Inner stop-check + post-decode trim** switched from `stop_strings` to `effective_stop_strings`.
+  3. **Splice call**: after the post-decode trim and before `_record_search_emissions`, call `self._maybe_rag_splice(text, prompt, max_gen, ..., effective_stop_strings=..., json_constraint=None, tokens_already_generated=tokens_generated)`. The `tokens_already_generated` forward respects the round-budget semantics from Pass 156z9ak. Helper returns `None` on any precondition miss so `text` stays unchanged. Helper continuation runs through `_generate_manual`, not the original decoder — but that's correct: rounds 1..N of a speculative/medusa/lookahead call don't need draft acceleration; the savings already happened on round 0.
+- **`_record_search_emissions` WARNING gate** updated: `path` allow-list grew from `("native", "stream")` to `("native", "stream", "speculative", "medusa", "lookahead")`. Comment in the same block updated to name all five supported paths and the three remaining gaps (vision / batch / GGUF).
+- **Comment in `_generate_text`** near the `effective_stop_strings` build updated to name the four sibling paths that also honour the splice contract.
+
+### What tests landed
+
+New class `TestB3SpeculativeSiblingClosure` in [tests/test_chat.py](tests/test_chat.py) (despite the legacy name, covers all three Pass 156z9cp paths via `@pytest.mark.parametrize`):
+
+1. **`test_path_augments_stop_strings_with_close_tag[method_name]`** — structural regex match on each method's source for both the `effective_stop_strings = list(stop_strings or [])` defensive copy AND the literal `effective_stop_strings.append("</search>")`. 3 parametrized cases.
+2. **`test_path_invokes_maybe_rag_splice[method_name]`** — structural regex for `self._maybe_rag_splice(` call AND the literal `tokens_already_generated=tokens_generated` kwarg forwarding. 3 parametrized cases.
+3. **`test_path_no_longer_emits_b3a_warning[path]`** — behavioural caplog gate on `_record_search_emissions(... path=path)` for `path` in `("speculative", "medusa", "lookahead")`: Stage B-2 generic WARNING must still fire (queries still recorded), B-3a sibling WARNING must NOT fire. 3 parametrized cases.
+
+Updated existing test `TestB3aSiblingPathWarning::test_sibling_path_emits_b3a_warning_when_flag_on`: dropped `"speculative"`, `"medusa"`, `"lookahead"` from the sibling list — only `"vision"`, `"batch"`, `"gguf"` remain on the WARNING list.
+
+### Author's-lens checks before merge
+
+1. *If you wrote this from scratch today, would you do it this way?* — Yes. Three near-identical edits across three near-identical methods. The shared shape (single-prompt, `stop_strings` kwarg, full-sequence decode, post-decode trim) made the template apply cleanly. No new abstractions introduced; ~25 lines of new code per method.
+2. *What is this connected to?* — Inputs: `stop_strings` kwarg, `inline_search_splice_enabled` engine flag, `_rag_index`, `max_search_rounds`. Outputs: `_maybe_rag_splice` (consumer), `_record_search_emissions(path=...)` (observability). All identical to the native wire-site.
+3. *More connections needed?* — None for this slice. Remaining siblings (vision / batch / gguf-chat) each need different infra (image-conditioned continuation / per-row stop tracking / llama-cpp-python wrapper).
+4. *Logic-eye on the claim* — Stamp claims "splice contract honoured on speculative / medusa / lookahead paths." Verified by 9 tests gating the literal call expressions + behavioural caplog. Helper preconditions identical to native — same code path. No over-promise.
+5. *Claim-vs-test* — wire-site tests gate literal call expressions (not just substring-presence). Tokens-already-generated test gates the literal kwarg expression — a regression that drops the kwarg silently fails the test. WARNING tests are behavioural caplog. Adversarial: deleting any of the nine gated code points falsifies the matching parametrized case.
+6. *Sibling-boundary sweep* — `_record_search_emissions(path=...)` allow-list updated in same pass; `_generate_text`'s `effective_stop_strings` comment updated in same pass; `TestB3aSiblingPathWarning` sibling iteration list updated in same pass. **No claim-vs-code drift in the `inline_search_splice_enabled` family for the three closed paths.**
+
+### Production call chains (Rule §1 #20)
+
+- `EnigmaEngine.speculative_generate(prompt, draft_model, ..., stop_strings=...)` → if `inline_search_splice_enabled` → augment `effective_stop_strings` with `</search>` → draft/verify loop with stop check on augmented list → `_decode_output` → trim → `_maybe_rag_splice(...)` → `_record_search_emissions(path="speculative")` → return.
+- `EnigmaEngine.medusa_generate(prompt, ..., stop_strings=...)` → same shape via medusa_forward + MTP heads.
+- `EnigmaEngine.lookahead_generate(prompt, ..., stop_strings=...)` → same shape via Jacobi iteration + N-gram pool.
+
+All three reachable from production via the engine's public methods (CLI / API / GUI / plugins).
+
+### Remaining B-3 sibling work
+
+Three paths still emit the B-3a WARNING when `inline_search_splice_enabled=True` (closed in Pass 156z9cq for GGUF — see top stamp):
+
+- **`batch_generate`** — biggest of the three. No `stop_strings` handling in its loop today; each row runs to `max_gen` or eos. Splice would need per-row stop tracking, per-row continuation (serializes the batch when any row triggers splice), per-row token accounting. >50 lines of new code and a partial loss of batching benefit on splice rounds.
+- **`_generate_with_vision`** — splice in image-conditioned generation is semantically meaningful (model could request a search after seeing an image), but the continuation path needs to re-feed image embeddings. `_maybe_rag_splice` calls `_generate_manual` which does not currently accept image context. Either extend `_generate_manual` with `vision_embeds=` or write a vision-specific splice helper.
+- **`chat()` GGUF branch** — `engine_chat.py` calls `self.model.chat(...)` (llama-cpp-python's loop) directly. Need either a wrapper that re-enters `chat()` with the spliced prompt or pass `stop=["</search>"]` to llama-cpp and post-call splice. Different shape from the `_generate_manual`-based template above.
+
+None of these block the B-3 chain — they're independent closures and the WARNING gate keeps the parked state honest. Pick GGUF chat (easiest, llama-cpp `stop=` exists) for the next pass if continuing.
+
+---
+
+## 🟢 AUDIT + FIX PASS 156z9co (May 11, 2026 — verification + hang fix for 156z9cj/ck/cn)
+
+Scope: audit verification of recent passes; shipped the high-priority fix the audit uncovered (full-suite hang).
+
+### Baseline (post-fix)
+
+- `ruff check enigma_engine/ tests/` → **clean** (no findings).
+- `python -m pytest tests/ -q` → **3069 passed, 3 skipped in 31.91s** (3072 collected).
+- `git status` → clean before this pass; one production edit + this doc update in this pass.
+
+### Audit finding (fixed in this pass): full-suite hang at 92% (regression of Pass 156z9cj)
+
+**Symptom:** `python -m pytest tests/` hung indefinitely at 92%. Background investigation isolated it to `tests/test_training.py::TestBPETokenizerPreference` (3 tests) and `tests/test_training.py::TestQueueDispatcherPayloadContract` (5 tests) — **8 tests total**, all calling `ForgeQueueMixin._execute_queue_job(stub, job)` with a bare `stub = MagicMock()`.
+
+**Root cause:** Pass 156z9cj (commit `167d4d8` ARCH-1d) added an API-mode branch in [enigma_engine/gui/gui_forge_queue.py](enigma_engine/gui/gui_forge_queue.py#L272) gated by `if bool(getattr(self, "use_api_chat", False)) and callable(get_client):`. The branch then enters `while True: status = client.training_status(); ... time.sleep(1.0)`. The pre-existing tests (commit `5d3bb81`, BEFORE 167d4d8) construct `stub = MagicMock()`, so `stub.use_api_chat` is truthy AND `stub._get_api_chat_client()` returns a MagicMock client whose `.training_status()` returns yet another MagicMock whose `.get("active", False)` is truthy → the poll loop never breaks. **8 previously-green tests silently became infinite hangs the moment 156z9cj landed.** Nothing in 156z9cj's own test suite covered the stub sibling.
+
+This is the exact sibling-boundary anti-pattern from Pass 156z6 → 156z7 (§1 #19 question 6 in `AA code maker.md`). The Pass 156z9cn snapshot's wording *"Full-suite baseline run timed out late in execution during this session; no failures were observed before timeout"* and any earlier "2870 passed, 2 skipped" headline-counts cannot have been observed on the post-156z9cj HEAD — the suite never completes.
+
+**Fix (shipped in this pass):** tightened the API-branch gate in `_execute_queue_job` from `bool(getattr(self, "use_api_chat", False))` to `getattr(self, "use_api_chat", False) is True`. Real GUI always assigns `use_api_chat` as a Python bool ([enigma_engine/gui/desktop.py](enigma_engine/gui/desktop.py#L102) explicit `False`, [desktop.py L184](enigma_engine/gui/desktop.py#L184) reads `_read_gui_bool_setting`, [gui_pages_config.py L1090](enigma_engine/gui/gui_pages_config.py#L1090) assigns the `enabled: bool` parameter). The `is True` identity check rejects MagicMock truthiness without weakening production semantics. Verified: all 8 previously-hanging tests pass in 0.12s; full suite **3069 passed, 3 skipped in 31.91s**.
+
+### Other sibling sweeps (clean — no work needed)
+
+- **Pass 156z9cn `min_lr_ratio` forwarding** — all `TrainingConfig(min_lr_ratio=...)` and `training: {min_lr_ratio: ...}` sites in `gui_forge_training.py` (7), `gui_forge_advanced.py` (2), `gui_forge_adaptive.py` (1) forward the FORGE entry. Two `reward_model` warmup-phase blocks in [enigma_engine/gui/gui_forge_new_modes.py](enigma_engine/gui/gui_forge_new_modes.py#L2233) (RLHF Phase 1) and [L2831](enigma_engine/gui/gui_forge_new_modes.py#L2831) (RL-variant Phase 1) lack `min_lr_ratio`, but they're short capped warmups (`min(epochs, 5)`, `lr * 10`) — different schedule concern from the policy phase. The Phase 2 policy blocks immediately following each (L2281, L2898) **do** forward it. **Treated as by-design.** If a future pass wants uniform schedules, forward `min_lr_ratio` here too.
+- **Pass 156z9ck queue STOP** — all 4 exit paths in `gui_forge_queue.py` clear `_active_queue_api_client`. Clean.
+- **Pass 156z9cj API queue** — `_execute_queue_job` loads model on daemon BEFORE submitting train. Clean.
+- **Pass 156z9ck lock-scope** (`activate_profile`, `update_config`, `update_engine_flags` in `enigma_engine/api/server.py`) — read/mutate inside `state._lock`, side-effects outside. Clean.
+
+### Doc fix in this pass
+
+- Stale `ARCH-V1c` reference in the Return-to-work quick-start replaced with real open items (ARCH-1d audio launcher, B-3 sibling closure). ARCH-V1c was closed at step 0b May 6, 2026.
+
+### Deeper review (this pass — sibling-family closure of the `use_api_chat` gate)
+
+After shipping the queue-mode fix, the same `bool(getattr(self, "use_api_chat", False))` gate was grepped across the whole GUI package per the Learned Principle. **22 additional sites** in 7 files used the leaky pattern: `gui_forge.py` (3), `gui_cmd_page.py` (1), `gui_forge_new_modes.py` (6), `gui_forge_training.py` (4), `gui_forge_advanced.py` (2), `gui_logic_chat.py` (4), `gui_logic.py` (2). Real-GUI assignment sites ([desktop.py L102](enigma_engine/gui/desktop.py#L102), [desktop.py L184](enigma_engine/gui/desktop.py#L184), [gui_pages_config.py L1090](enigma_engine/gui/gui_pages_config.py#L1090)) all produce a real Python `bool`, so a uniform `is True` swap is semantically identical for production and rejects MagicMock truthiness for any future test that stubs these mixins. All 22 swept this pass. Companion hardening: `ForgeTrainingMixin._poll_api_training_status` loop condition changed from `while self.training_active:` to `while self.training_active is True:` for the same MagicMock-safety reason — `training_active` is assigned `True`/`False` literals at 30+ sites, so the tightened gate cannot harm production. Verified: full suite **3069 passed, 3 skipped in 31.49s**, ruff clean.
+
+**Findings logged but not fixed this pass:**
+
+- **Doc-vs-code precision on ARCH-1d scope.** SUGGESTIONS L578 says *"ARCH-1d ✅ SHIPPED ... Remaining deferred work: audio launcher GUI surface"*. In reality, 6 GUI launchers still print `"[!] API routing not yet implemented for X mode — running locally on this machine."` and fall back to local execution: Dialogue ([gui_forge_advanced.py L54](enigma_engine/gui/gui_forge_advanced.py#L54)), Evolutionary ([L648](enigma_engine/gui/gui_forge_advanced.py#L648)), Basic ([gui_forge.py L1773](enigma_engine/gui/gui_forge.py#L1773)), AI-Guided ([L1824](enigma_engine/gui/gui_forge.py#L1824)), Pre-Train ([gui_forge_new_modes.py L167](enigma_engine/gui/gui_forge_new_modes.py#L167)), Distill ([L1335](enigma_engine/gui/gui_forge_new_modes.py#L1335)). These are GUI-meta modes (Basic→SFT-ish, Distill is a teacher-loop, Dialogue/Evolutionary/AI-Guided are blended pipelines) — likely intentionally local-only because the dispatcher schema (sft/dpo/simpo/kto/orpo/rest/vision/audio/lora/reward_model/grpo/remax/rlhf/self_play/adaptive) doesn't include them. **The honest doc framing is "ARCH-1d shipped API routing for every mode that has a dispatcher schema; GUI-meta launchers remain local because they're orchestration not single-mode training."** Not a code bug; SUGGESTIONS should clarify in a future pass.
+- **Dispatcher `adaptive` mode** (`enigma_engine/training/dispatch.py` L328) raises `NotImplementedError("adaptive mode is a GUI/meta scheduler path and is not yet supported by the dispatcher")`. No GUI code dispatches `mode="adaptive"`, so this is a Rule §1 #20 "parked with loud rejection" state — acceptable. AdaptiveTrainer's long-term fate (keep / move / delete) remains the deferred decision from SUGGESTIONS L583.
+
+### Learned principle (add to `AA code maker.md` §4 next pass)
+
+**`bool(getattr(self, FLAG, default))` gates leak truthy MagicMock through every sibling stub test.** When a new code branch is gated by a `bool(...)` check and the method is called from tests via `MagicMock()` stubs, the new branch is taken on EVERY existing stub test by default — `bool(MagicMock())` is `True`. Fix at the gate: use `is True` / `isinstance(..., bool) and ... is True` so the gate honours the real type. Real GUI/server code that always assigns the flag as a Python bool will pass; MagicMock truthiness will not. Failing to do this silently converts N green sibling tests into infinite hangs (or wrong-branch executions) the moment the new branch ships, and structural-only test coverage on the new branch will not catch it. Pair with a grep of every test that constructs a `MagicMock` against the affected method in the same pass. **Apply the gate-tightening to the WHOLE FAMILY in the same pass**, not just the one site where the regression manifested — the principle is family-level by definition.
+
+---
+
+## 🟢 AUDIT SNAPSHOT (previous session)
 
 Pass 156z9cn (FORGE min_lr_ratio end-to-end wiring — May 2026):
 
@@ -305,7 +1937,7 @@ Return-to-work quick start:
 
 1. Run a fresh full baseline (`python -m pytest tests/ -q`) and stamp the final pass/skip counts into the snapshot.
 2. Continue with the current top backlog item: **D-4** reasoning mid-training phase (OpenThoughts3).
-3. If postponing D-4, run the next concrete architecture slice: **ARCH-V1c** GGUF metadata/tokenizer audit to close remaining round-trip xfails.
+3. If postponing D-4, the next concrete in-scope slices are **ARCH-1d audio launcher** (no Forge button for audio training yet) or **B-3 sibling closure** — next sibling: GGUF `chat()` branch (easiest of remaining 3; llama-cpp `stop=` parameter exists). Pass 156z9cp closed `speculative_generate` + `medusa_generate` + `lookahead_generate`; remaining: `batch_generate` (needs per-row stop tracking) / `_generate_with_vision` (needs image-conditioned continuation) / GGUF chat.
 
 Test-suite hygiene note:
 
@@ -653,7 +2285,7 @@ FORGE Vision → `_start_vision_training` → text-data load → `unfreeze_text_
 
 **Finished / Killed / Parked (Rule #20):**
 - **Finished**: `_pre_training_backup` helper now called from `_start_distill_training` (156z9ar), `_start_dialogue_training` (156z9ar), `_start_dpo_training` (covers DPO+APO), `_start_rl_variant_training` (covers GRPO+ReMax), `_start_preference_variant_training` (covers SimPO+ORPO).
-- **Parked (concrete next step)**: (a) `_start_vision_training` Stage-2 — gate the helper call on `unfreeze_text_layers > 0` since projection-only training never mutates the text backbone; (b) `_start_training` (pretrain / general SFT) — the in-run `checkpoint_dir` saves are step-based and already give rollback granularity, so the pre-training backup is duplicative. Document this as the design decision OR add the rail anyway for consistency.
+- **Parked (concrete next step)**: ~~(a) `_start_vision_training` Stage-2~~ — closed in Pass 156z9at (helper call gated on `unfreeze_text_layers > 0`). ~~(b) `_start_training` (pretrain / general SFT)~~ — closed in Pass 156z9dt (symbol is actually `_start_pretrain_training`; rationale flipped because step-based saves don't protect step-1 NaN or sub-500-step runs). Both halves of this parked entry are now resolved; the FORGE full-weight-mutation family is exhausted.
 
 ---
 
@@ -745,16 +2377,16 @@ FORGE Vision → `_start_vision_training` → text-data load → `unfreeze_text_
 **Six-question self-audit (Rule #19):**
 1. **Author's-lens** — Probe is the cheapest possible drift detector: no extra training, no second model load, no benchmark dataset, no neural reward. Just five strings, the existing `Enigma.generate` we already use, and the existing `passes_identity_filter` we use during data filtering. Reuse over rebuild. Defensible.
 2. **Connections** — `IDENTITY_PROBE_PROMPTS` and `summarize_identity_probe` live in `personality_data.py` so they're testable without torch (pure-data module discipline preserved). The probe loop calls `student.generate()` directly (no `EnigmaEngine` re-load — would double VRAM). Filter reuses `passes_identity_filter` so probe-failure semantics match data-filter semantics by construction. Rollback logs point at the P5-pre-2 backup, closing the safety loop end-to-end.
-3. **More connections** — Sibling FORGE training entry points (`_start_dialogue_training`, `_start_simple_sft`, `_start_lora_training`, `_start_dpo_training`) could ALL benefit from the probe + backup pattern when their data category is identity-relevant. Parked under "P5-pre-2/3 sibling-extension follow-up." Not done in this pass to keep slice scope tight.
+3. **More connections** — Sibling FORGE training entry points _might_ benefit from the probe + backup pattern. Parked under "P5-pre-2/3 sibling-extension follow-up." Not done in this pass to keep slice scope tight. **Scope refined by Pass 156z9dg audit:** `_start_simple_sft` was a phantom (no such entry point exists in the codebase — grep returns zero hits); `_start_lora_training` is OUT of family because LoRA freezes base weights (Pass 156z9de EWC-kill stamp noted the same: "LoRA path makes forgetting impossible by freezing base weights") — adapter-only updates do not drift the base identity. The honest in-family list is `_start_dialogue_training` + `_start_dpo_training`. Even those need a design call before extension because neither has a `categories` gate — dialogue trains on whatever topic the TRAINER asks (could be math, could be values), and DPO trains on whatever preference pairs are supplied. Always-probing wastes ~30% of training time on identity-neutral topics; add a content-side signal first, then extend.
 4. **Logic-eye** — The probe claims "drift detection." Code delivers: encodes prompt → runs same generation path the user will hit at chat time → checks identity-leak using the same filter we trust at data-filter time → flags any prompt that flipped safe→leak. No over-promised behaviour. The post-probe ALSO tests the regression direction (leak→safe `recovered`) which is rare but possible (fresh student before personality SFT may already leak Qwen-trained vocab; SFT may genuinely fix it).
 5. **Claim-vs-test** — Behavioural tests on `summarize_identity_probe` cover all four branches: safe→safe (no entry), safe→leak (`drifted`), leak→safe (`recovered`), leak→leak (no entry). Empty-input edge case included. Sorted-output gated explicitly (regression to insertion-order would be invisible without it). Wire-site tests are structural-only (a behavioural test would need a live student); each one falsified mentally by deleting the line it gates and confirming the assertion would fail.
-6. **Sibling-boundary sweep** — Three other distill modes touch student weights: dialogue-only, simple-SFT, LoRA. None currently run a probe. Same-family contract is "any training that updates student weights based on teacher signal could drift identity"; closing the family fully means extending the probe to those entry points. Logged as parked sibling-extension. Within this slice the gate is `"personality" in categories` because that's the ONLY category in `_start_distill_training` whose data carries the drift pressure — other categories train on math/code/reasoning where identity leak is a teacher-data filter problem (closed by P5-pre-1), not a probe problem.
+6. **Sibling-boundary sweep** — Other FORGE training entry points might touch student weights. Same-family contract was originally written as "any training that updates student weights based on teacher signal could drift identity"; closing the family fully means extending the probe to those entry points. Logged as parked sibling-extension. Within this slice the gate is `"personality" in categories` because that's the ONLY category in `_start_distill_training` whose data carries the drift pressure — other categories train on math/code/reasoning where identity leak is a teacher-data filter problem (closed by P5-pre-1), not a probe problem. **Scope refined by Pass 156z9dg audit:** see item 3 above — LoRA is out of family (frozen base), simple-SFT is a phantom (no such entry point), only `_start_dialogue_training` and `_start_dpo_training` are honest in-family candidates and even those need a content-side gate design before extension.
 
 **Finished / Killed / Parked (Rule #20):**
 - **Finished**: Identity-guard probe is reachable from the production entry-point `_start_distill_training` via the `personality` category checkbox; pre+post probes both run; `summarize_identity_probe` is fully tested; logs surface drift count + rollback hint. End-to-end chain reaches into new code and back out to the user.
 - **Parked**:
   - Pre/post benchmark integration with `run_gsm8k_benchmark` — heavy to wire mid-flow; logging the manual command pre and post would be the right minimal step. Not done.
-  - Sibling-extension of probe + backup to dialogue / simple-SFT / LoRA / DPO entry points.
+  - Sibling-extension of probe to `_start_dialogue_training` + `_start_dpo_training`. **Blocked on design call** (Pass 156z9dg audit): neither has a `categories` gate; mechanical port would probe every run regardless of topic and waste ~30% of training time on identity-neutral data. Next step is either (a) add a `track_identity_drift` checkbox to dialogue + DPO pages (UX surface), or (b) detect identity-laden content in the training data automatically (heuristic, fragile). Decision deferred until the metric (Pass 156z9dg) accumulates real-run signal in distill mode that proves operational value. **Scope corrections:** LoRA is OUT of family (frozen base weights — Pass 156z9de stamp); `_start_simple_sft` is a phantom (no such entry point in the codebase).
   - "Restore Backup" GUI button on MODELS page (rolls back `models/checkpoints/{stem}_pre_distill_{ts}.pth` → `models/{stem}.pth`).
 
 **Next slices in the P5 chain:**
@@ -926,7 +2558,8 @@ FORGE Vision → `_start_vision_training` → text-data load → `unfreeze_text_
 
 **B-3 chain status: substantively complete.**
 - B-3a (engine flag + native auto-stop + sibling WARNINGs + GUI), B-3b (single-round splice helper), B-3c (bounded multi-round recursion, `max_search_rounds=3`) — all CLOSED across Passes 156z9ag/ah/ai. End-to-end native non-GGUF path: model emits `<search>q</search>` → trimmed at stop → `_maybe_rag_splice` runs up to N rounds of retrieve+splice+continue → final-round `</search>` strip → return.
-- B-3d (streaming inline splice + KV rewind) remains parked per Pass 156z9af — only ships on user request. Sibling WARNING from B-3a stays the honest UX for streaming/vision/GGUF callers.
+- B-3d (streaming inline splice + KV rewind) ✅ shipped Pass 156z9al — `stream_generate` now runs the same bounded-round retrieve+splice+continue loop and yields `<search_result>` blocks mid-stream. The KV-rewind optimisation (replace per-round `clear_cache()` with `rewind_cache(close_pos)`) is tracked separately as **B-3d-followup** — correctness is unaffected, only re-prefill cost.
+- 6 non-splicing sibling paths (gguf, vision, speculative, medusa, lookahead, batch) remain on the B-3a WARNING gate by design — per-path splice closure is logged at SUGGESTIONS L927 as future B-3 work, not regressed work. The WARNING fires the moment a user opts into `inline_search_splice_enabled=True` on any of those paths, so the parked state is honest UX (Rule §1 #20 "parked with loud rejection").
 - 14/14 B-3 tests green. No prompt-echo regressions (Pass 156z9e discipline applied per-round to advancing tail).
 
 **Real audit finding (NOT introduced by this session): `enigma_engine/core/training.py` working tree is dirty with a 480-line NET DELETION vs HEAD (commit `4e4daa8` "Pass 156z9f").** Diff confirms the missing functions ARE in the committed version:
@@ -1449,7 +3082,7 @@ Pass-by-pass prose (Passes 110-135) lives in [information/history/PASS_HISTORY.m
 5. **Approach 3 POC:** distill reasoning traces from Qwen3-30B-A3B into 742M (SFT on ~5K cold-start CoT examples). **Pass 148 currency note:** two additional teacher options verified current — (a) **Qwen3-32B** (arxiv:2505.09388, May 2025, thinking/non-thinking dual mode, YaRN 131K) as a same-family larger alternative to 30B-A3B; (b) **DeepSeek-R1-0528-Qwen3-8B** (May 2025) as a ready-made distilled 8B reasoning checkpoint — SoTA among open sub-10B reasoning models — usable as cold-start weights for our 742M student if we want to bypass teacher inference entirely. QwQ-32B is now older than Qwen3-32B-thinking and should not be used as teacher.
 6. **Personality-5:** Run personality distillation + identity/roleplay separation build plan (R-PERSONALITY-1 research resolved).
 7. **GUI-ARCH-1:** Complete GUI platform decision gate (PySide6 vs Tauri vs keep/refactor current) using the planning criteria below before any UI rewrite.
-8. **HYG-1 (NEW, Pass 156z9al-audit):** Stop tracking Rust build artifacts. `git ls-files rust_extensions/target/` showed **301 files** under `target/release/`, `target/maturin/`, `target/.fingerprint/` — all regenerated by `cargo build` / `maturin build` and bloating every commit that touched Rust (Pass 5005025 + 6cb4109 each carried 30+ binary deltas). **Status:** completed in the working tree — `.gitignore` includes `rust_extensions/target/`, `git rm -r --cached rust_extensions/target/` has been applied, and `git ls-files rust_extensions/target/**` now returns `0`. The cleanup is staged for the next commit while the files remain on disk.
+8. ~~**HYG-1 (NEW, Pass 156z9al-audit):** Stop tracking Rust build artifacts.~~ **DONE — committed as `b73f912 chore: ignore rust_extensions/target build artifacts`.** `.gitignore` line 203 includes `rust_extensions/target/`; `git ls-files rust_extensions/target/` returns 0. Verified Pass 156z9do.
 
 ---
 
@@ -1599,9 +3232,9 @@ All candidates below are ready to implement — spec is written, code locations 
 | ~~C~~ | ~~**Eval-1** GSM8K benchmark~~ | ~~Add `run_gsm8k_benchmark()` to [enigma_engine/core/training_evaluation.py](enigma_engine/core/training_evaluation.py). Load HF `openai/gsm8k` (already cacheable offline), few-shot prompt, numeric answer parse from final line. Expose via `--benchmark gsm8k` in [run.py](run.py).~~ | **DONE (Pass 150).** `parse_final_number` + `load_gsm8k` + `run_gsm8k_benchmark` shipped, 8-shot Wei et al. CoT prefix, exact-match scoring, offline-first JSONL loader with clear download recovery message. CLI: `python run.py --benchmark gsm8k --model models/<name>.pth`. 14 tests green. | — | — |
 | ~~D~~ | ~~**Vision-1b** projection upgrade~~ | ~~[enigma_engine/core/model.py](enigma_engine/core/model.py) `self.vision_projection = nn.Linear(...)` → `nn.Sequential(nn.Linear, nn.GELU, nn.Linear)` per LLaVA-1.5 (arxiv:2310.03744). Keep input/output dims identical.~~ | **DONE (Pass 151).** `nn.Sequential(Linear(vh,d,bias=True), GELU, Linear(d,d,bias=True))` per HF `LlavaMultiModalProjector`. State-dict keys changed; safe (no vision checkpoints exist). 6 tests. | — | — |
 | ~~E~~ | ~~**MTP-2a** reduce `n_predict_heads` 2→1 + weight-tie~~ | ~~[enigma_engine/core/model_presets.py L129](enigma_engine/core/model_presets.py#L129)~~ | **SUPERSEDED — took MTP-2b path Pass 149.** Default flipped to 0 entirely (Medusa retired in favor of EAGLE-2). | — | — |
-| F | **Code-6** FORGE vision-projection training mode | New FORGE mode wired in [enigma_engine/gui/gui_forge_new_modes.py](enigma_engine/gui/gui_forge_new_modes.py) + [enigma_engine/gui/gui_pages_forge.py](enigma_engine/gui/gui_pages_forge.py). Freeze transformer, train only `vision_projection` + CLIP-side adapter on LLaVA-Pretrain (558K) → LLaVA-Instruct-150K (665K). | Vision specialist pipeline. Projection is wired but untrainable. | Fail test: after 1 training step, `vision_projection.weight.grad` is not None and transformer weights `.grad` are None. | Large — new mode + data loader + GUI radio-card entry. Depends on D (Vision-1b) for best parity. |
+| ~~F~~ | ~~**Code-6** FORGE vision-projection training mode~~ | **DONE (closed Pass 156q, see row 9 in Priority Index below; 156r added the Stage-2 `unfreeze_text_layers` GUI knob).** Image mode card → `_start_vision_training` → `Trainer.train_vision()` with LLaVA Stage-1 defaults. Vision-1b 2-layer MLP+GELU shipped Pass 151. The fail-test criterion ("after 1 training step, `vision_projection.weight.grad is not None` and transformer weights `.grad is None`") is satisfied — `train_vision` only adds `model.vision_projection.parameters()` to the optimizer ([training.py L5007](enigma_engine/training/training.py#L5007)) and freezes the backbone via `freeze_backbone=True`. | — | — |
 | G | **Personality-5** personality injection wiring | [enigma_engine/gui/gui_forge_new_modes.py L1259](enigma_engine/gui/gui_forge_new_modes.py#L1259) — **PARTIAL.** Category exists, data generation exists, and Pass 156z9ba added a profile-scoped regularizer on the real SFT path via deterministic quick-profile auxiliary examples. Still open: stronger trainer-side consistency loss / metric. | R-PERSONALITY-1. | Fail test: two generations with same profile + temperature=0 produce consistent first-person pronoun + stated-value alignment. | Medium — helper path shipped; consistency metric/loss still open. |
-| H | ~~**EWC-1** wire `core/ewc.py` into FORGE SFT/dialogue~~ | **CLOSED Pass 156i3 — WONTFIX (superseded by LoRA-per-specialist path).** [ewc.py](enigma_engine/core/ewc.py) library stays for rare-case future use; LoRA freezes base weights so forgetting is physically impossible. See **LoRA-1** (P2) for the replacement work. | — | — | — |
+| H | ~~**EWC-1** wire `core/ewc.py` into FORGE SFT/dialogue~~ | **KILLED Pass 156z9de — module deleted as dead infra.** Was closed WONTFIX in Pass 156i3 (superseded by LoRA-per-specialist); Pass 156z9de removed `core/ewc.py` + TestEWC entirely since it had zero callers anywhere in production. LoRA path makes forgetting physically impossible by freezing base weights. | — | — | — |
 | ~~DET-2~~ | ~~**DET-2** full bitwise GPU reproducibility~~ | **DONE Pass 156i3.** `set_training_seed(seed, deterministic=False)` gained opt-in `deterministic` kwarg (sets `CUBLAS_WORKSPACE_CONFIG=:4096:8` + `torch.use_deterministic_algorithms(True, warn_only=True)`). `TrainingConfig.deterministic` field default False; all 8 train_* siblings forward the flag. `warn_only=True` keeps MoE `index_add_` from crashing. 4 new tests; suite 2379/9. **Out of scope:** DataLoader worker_init_fn (Enigma single-threaded), `Trainer.__init__` DRY refactor (separate design row). | — | — | — |
 
 **Tie-breaker guidance:** A (Tok-2) has the broadest downstream blast radius — every retrain from here on benefits. E (MTP-2a) is the smallest win and frees 49-98M params immediately. B (GRPO-2) is the hard prerequisite for any reasoning RL work.
@@ -1645,7 +3278,7 @@ yet possible) are grouped at the bottom of P2/P3.
 | 12b | ~~**D-9b** — FORGE radio card + dispatcher for APO-zero alignment~~ | **DONE Pass 156k.** APO radio card added to alignment row alongside GRPO/ReMax/SimPO/ORPO. `_start_apo_training` thin wrapper delegates to refactored `_start_dpo_training(loss_type="apo_zero")` which forwards the kwarg to `trainer.train_dpo`. Status bar + logs + `_save_training_run` label parametrized via `algo_label`. 5 structural GUI tests; behavioural routing proven by Pass 156j's sentinel-mock dispatch test. |
 | 13 | **D-19** — Strong-to-weak distillation from Qwen3-30B before GRPO | 10× cheaper than GRPO at small scale. Revisit at N-9. |
 | 14 | **N-14** — Dense semantic memory (FAISS) to replace TF-IDF RAG | Prep for vision+retrieval. |
-| 15 | ~~**EWC-1** — Wire `core/ewc.py` into FORGE SFT/dialogue training path~~ | **CLOSED Pass 156i3 — WONTFIX (superseded by LoRA-per-specialist).** Library kept for rare-case full-weight specialization; LoRA path makes forgetting impossible by freezing base weights. See **LoRA-1**. |
+| 15 | ~~**EWC-1** — Wire `core/ewc.py` into FORGE SFT/dialogue training path~~ | **KILLED Pass 156z9de — module deleted as dead infra.** Was closed WONTFIX in Pass 156i3; Pass 156z9de removed `core/ewc.py` since zero callers existed. LoRA path makes forgetting impossible by freezing base weights. See **LoRA-1**. |
 | 15b | ~~**LoRA-1** — Wire LoRA-per-specialist into FORGE SFT/dialogue~~ | **DONE Pass 156p (training-side).** Explicit `LoRA` foundation mode card forces adapter training on any model size; rank/alpha widgets and `_start_lora_training()` already wired pre-pass. Adapter saved to `models/checkpoints/{name}_lora.pth`. **Inference-side adapter swap deferred → LoRA-1b** below (load `*_lora.pth` at chat time, hot-swap, multi-adapter UI). |
 | 15c | **LoRA-1b** — Inference-side adapter loading and swap (foundation) | **DONE Pass 156s.** PEFT-directory-only save format ([lora_utils.py](enigma_engine/core/lora_utils.py) — manual-fallback `.pth` branch deleted), `scan_lora_adapters(base_model_path=None)` scanner with stem-filtered base matching, `EnigmaEngine.apply_adapter(path)` + `clear_adapter()` + `active_adapter` field with PEFT wrapping and KV-cache-clear on swap, `route_assignments["chat_adapter:<stem>"]` persistence with auto-restore on `_on_model_loaded` and orphan purge when adapter is deleted off-disk. Per-base scoping prevents cross-base adapter mis-application. 6 new tests (3 behavioural scanner + 3 structural double-gates). UX surfaces (MODELS-page list, profile auto-apply, branch markers) → 15d below. |
 | ~~15d~~ | ~~**LoRA-1b UX (Pass 156t)** — MODELS-page list, profile field, branch marker~~ | **DONE Pass 156t.** MODELS-page per-card LoRA section with Apply/Clear buttons and base-stem filter, `AIProfile.adapter: Optional[str]` field with apply-or-clear-on-load semantics, legacy `_lora.pth` migration script. Branch marker generalised into Pass 156v Step 1 (`_chat_session_marker` helper). Lazy KV reprefill via `apply_adapter` cache-clear (Pass 156s). |
@@ -1654,7 +3287,7 @@ yet possible) are grouped at the bottom of P2/P3.
 | ~~15g~~ | ~~**Legacy `_lora.pth` migration (Pass 156t companion)**~~ | **CLOSED Pass 156v (no migration needed).** Migration script [migrate_legacy_lora.py](migrate_legacy_lora.py) shipped Pass 156t; zero `_lora.pth` files exist on disk in `models/checkpoints/` or `models/lora_adapters/`. Active code path (Pass 156s+) only writes PEFT directories. Script remains for any future legacy import. |
 | ~~16~~ | ~~**N-15** — Constrained decoding (grammar for JSON / tool calls)~~ | **DONE Pass 156z3.** `EnigmaEngine.generate(json_schema=...)` builds `JsonSchemaConstraint` once, threads it through `_generate_text` → `_generate_manual` → `_sample_token` (existing mask hook), drives FSM via `.advance()` per token, early-stops on `is_done`. GGUF path raises `NotImplementedError` (mask never reaches llama.cpp's sampler). Tests +4 (3 wire-site + 1 GGUF rejection); FSM itself already had 5 unit tests from T3-9. **N-15b (next):** expose `json_schema` on chat API endpoint + GUI checkbox so users can reach the feature without writing Python. |
 | ~~17~~ | ~~**N-16** — Best-of-N sampling w/ reward model~~ | **DONE Pass 156x.** `EnigmaEngine.generate_best_of_n(prompt, n, reward_fn, *, return_all=False, **gen_kwargs)` runs N candidates, scores via user-supplied `(prompt, response) -> float`, returns highest with first-occurrence tie-break. Validates n>=1 (ValueError), warns on temperature=0+n>1, swallows reward errors with -inf so flaky scorers don't break the batch. 9 behavioural tests via `_FakeSelf` unbound-method pattern. |
-| ~~18~~ | ~~**N-19** — External-teacher distillation (text-only, OpenAI-compatible IPC)~~ | **DONE Pass 156z5 (slice 1: offline corpus collector).** Per-user pivot: NO in-process teacher ("complicated to build AI on AI"). Instead: [collect_distill_data.py](collect_distill_data.py) talks HTTP to any OpenAI-compatible `/v1/chat/completions` endpoint (Ollama default `http://localhost:11434/v1`, llama.cpp server, vLLM, our own `run.py --serve`). Stdlib only (urllib). Writes `data/finetune/distill_<tag>.{jsonl,txt}` in the canonical `User: …\n\nAssistant: …` format the existing FORGE Distill mode already consumes — zero training-loop changes. Resumable (skips prompt-keys already in JSONL). Privacy guard: WARNING when endpoint host is not localhost. Failures (HTTP error, unreachable, empty completion) skipped + counted, never abort the run. **+19 tests.** Black-box distillation per the 2024 KD survey ([arxiv 2402.13116](https://arxiv.org/abs/2402.13116)) + Self-Instruct family. **Open follow-ups (slice 2/3, deferred):** Magpie-style empty-prefix instruction synthesis (per-model chat-template handling), GUI "Generate Teacher Corpus" button on the FORGE page, optional top-k logprobs capture (some endpoints expose it — use only if a real white-box use case appears). |
+| ~~18~~ | ~~**N-19** — External-teacher distillation (text-only, OpenAI-compatible IPC)~~ | **DONE Pass 156z5 (slice 1: offline corpus collector).** Per-user pivot: NO in-process teacher ("complicated to build AI on AI"). Instead: [collect_distill_data.py](collect_distill_data.py) talks HTTP to any OpenAI-compatible `/v1/chat/completions` endpoint (Ollama default `http://localhost:11434/v1`, llama.cpp server, vLLM, our own `run.py --serve`). Stdlib only (urllib). Writes `data/finetune/distill_<tag>.{jsonl,txt}` in the canonical `User: …\n\nAssistant: …` format the existing FORGE Distill mode already consumes — zero training-loop changes. Resumable (skips prompt-keys already in JSONL). Privacy guard: WARNING when endpoint host is not localhost. Failures (HTTP error, unreachable, empty completion) skipped + counted, never abort the run. **+19 tests.** Black-box distillation per the 2024 KD survey ([arxiv 2402.13116](https://arxiv.org/abs/2402.13116)) + Self-Instruct family. **Open follow-ups (slice 2/3, deferred):** Magpie-style empty-prefix instruction synthesis (per-model chat-template handling), optional top-k logprobs capture (some endpoints expose it — use only if a real white-box use case appears). [_Pass 156z9dy_: the previously-listed "GUI Generate Teacher Corpus button on the FORGE page" shipped in `gui_forge_teacher.py` (Pass 156z9bp era) with tests in `tests/test_gui.py::TestForgeTeacherSubprocess` — struck from the open list.] |
 | 19 | ~~**Continuous-1** — Review `BackgroundTrainer` LR (1e-5) + buffer=1000 for continuous SFT safety~~ | **CLOSED Pass 156i4.** Audit caught real silent-drift bug (no NaN/Inf abort \u2192 single bad sample corrupts model permanently with NaN gradients) + OOM exposure (no token-length cap) + claim-vs-test mismatch on replay-buffer eviction. All three fixed; LR=1e-5 + buffer=1000 retained as defaults (sane). See **Continuous-2** for catastrophic-forgetting follow-up. |
 | ~~19b~~ | ~~**Continuous-2** — Add anchor-set rehearsal to `BackgroundTrainer._retrain_on_replay`~~ | **CLOSED Pass 156i5.** New `anchor_data_path` kwarg + `_load_anchor_examples()` helper + extended `replay_batch` in `_retrain_on_replay`. Docstring re-framed ("mitigates", not "prevents"). 5 behavioural tests. See **Continuous-3** for GUI surface + default anchor data follow-up. |
 | ~~19c~~ | ~~**Continuous-3** — GUI surface + default anchor data for `BackgroundTrainer.anchor_data_path`~~ | **DONE Pass 156i7 (core wiring + default file).** [data/anchor_examples.jsonl](data/anchor_examples.jsonl) ships with 51 curated rows; `ModRouter` auto-wires the path when the file exists. GUI widget for in-app editing/selection deferred to **Continuous-3b** (small UX follow-up). Anchor-only periodic schedule (no recent activity required) deferred to **Continuous-3c** (scheduling design). |
@@ -2018,7 +3651,6 @@ yet possible) are grouped at the bottom of P2/P3.
 - Video/3D generation via mod system (goal items, no research done)
 - Mod integration procedure (how to plug in audiogen, videogen, threed mods)
 - LoRA adapter training workflow (directory exists, training procedure unknown)
-- Catastrophic forgetting prevention when creating specialists (EWC exists, is it wired for this use case?)
 - Context extension implementation (YaRN config field exists but forward-pass code needs verification)
 - Router multi-model dispatch design (router.py handles mods, not model selection)
 
@@ -2156,7 +3788,7 @@ These are missing features or unverified behaviors:
 - [RESOLVED] Vision-5: [enigma_engine/core/model.py](enigma_engine/core/model.py) `model.forward()` accepts `vision_features: Optional[Tensor]` (line 670). `vision_projection` created in __init__ when `vision_hidden_size is not None` (lines 185-191). Vision embeds prepended to token embeddings before the transformer. NOT dead code — LLaVA-style path is wired. Training the projection is still needed (Code-6).
 
 **Specialist training (Approach 2):**
-- [RESOLVED] Spec-1: Yes, catastrophic forgetting at 742M on focused fine-tuning is well-documented (Luo et al. 2023, *An Empirical Study of Catastrophic Forgetting in LLMs During Continual Fine-tuning*). Two practical mitigations exist: (a) **EWC** (Kirkpatrick 2017) — our [enigma_engine/core/ewc.py](enigma_engine/core/ewc.py) implements this, but EWC is sensitive to Fisher estimation quality and requires keeping the base model's Fisher matrix in memory; (b) **LoRA adapters per specialist** (Hu et al. 2021) — we already have [enigma_engine/core/lora_utils.py](enigma_engine/core/lora_utils.py). **Verdict:** LoRA is the right default for multi-specialist setups — base weights are frozen so forgetting is physically impossible, adapters are 10-30 MB each, swap at runtime. Reserve EWC for the case where we intentionally want full-weight specialization but need to retain some general capability (rare — usually better to use a LoRA). Backlog item EWC-1 (wire EWC into FORGE SFT/dialogue) is still valid but should be de-prioritized in favor of a LoRA-per-specialist path for Approach 2.
+- [RESOLVED] Spec-1: Yes, catastrophic forgetting at 742M on focused fine-tuning is well-documented (Luo et al. 2023, *An Empirical Study of Catastrophic Forgetting in LLMs During Continual Fine-tuning*). Practical mitigation: **LoRA adapters per specialist** (Hu et al. 2021) — see [enigma_engine/core/lora_utils.py](enigma_engine/core/lora_utils.py). **Verdict:** LoRA is the only serious path for multi-specialist setups on 16 GB VRAM — base weights are frozen so forgetting is physically impossible, adapters are 10-30 MB each, swap at runtime. (EWC was previously implemented in `core/ewc.py` but had zero callers and was killed in Pass 156z9de as superseded dead infra.)
 - [RESOLVED] Spec-2: Existing text's fp16 arithmetic is correct — 742M × 2 B ≈ 1.48 GB per specialist, theoretical max **~10 specialists** in 16 GB VRAM. **Realistic ceiling is 4-6 full-weight specialists** once KV cache (150 MB - 1.2 GB depending on ctx), activation buffers, and framework overhead are included. **Major revision:** LoRA changes this math entirely — **one frozen base model (1.5 GB fp16) + N LoRA adapters (~20 MB each)** supports dozens of specialists simultaneously with hot-swap at < 100 ms. For our 16 GB budget, LoRA gives **20+ effective specialists** vs. ~5 full-weight specialists, and with N× smaller disk footprint. Combined with Spec-1 verdict: **LoRA-per-specialist is the only serious multi-specialist path on 16 GB VRAM**. Full-weight merging (via `model_merging.py`) remains an option for creating the final consolidated model before deployment but not for simultaneous multi-specialist inference.
 - [RESOLVED] Spec-3: Use the **EleutherAI LM Evaluation Harness** (github.com/EleutherAI/lm-evaluation-harness) as the harness — it's the community standard and covers all the benchmarks below with one runner. Per-specialist benchmark set:
   - **Reasoning specialist:** GSM8K (arithmetic CoT), MATH (hard math), ARC-Challenge (science MCQ), MMLU-Pro (general knowledge with CoT). **Skip AIME** — too hard for 742M, noise floor.
@@ -2211,7 +3843,7 @@ Final files read and assessed:
 | [mods/codegen/](mods/codegen/) | TemplateCode + LocalCode (calls Enigma) + OpenAI | Code mod uses base 742M — no code specialist |
 | [enigma_engine/core/memory.py](enigma_engine/core/memory.py) | Flat markdown memory, 200 facts, pattern extraction | No embedding-based retrieval |
 | [enigma_engine/core/model_merging.py](enigma_engine/core/model_merging.py) | SLERP + TIES + linear merge | Can merge specialists after training |
-| [enigma_engine/core/monologue.py](enigma_engine/core/monologue.py) | Inner monologue / journal / coherence gate | Phase 5, already built |
+| [enigma_engine/core/monologue.py](enigma_engine/core/monologue.py) | Heuristic coherence scorer + FORGE benchmark runner | Live via FORGE benchmark_btn |
 | [enigma_engine/core/adaptive_trainer.py](enigma_engine/core/adaptive_trainer.py) | TrainingPlan: basics→conv→commands→web curriculum | Adaptive pipeline exists, not yet used at scale |
 | [mods/avatar/](mods/avatar/) | Full avatar: BoneController (all joints), GLB/GLTF/OBJ loader | Production-ready bone rig, output format TBD |
 
@@ -2266,10 +3898,7 @@ These files/features exist in the codebase but had no research items. Added afte
 - [RESOLVED] AutoResearch-2 (confidence gap): Confirmed from code that `should_auto_research()` is query-keyword based and runs **before** model generation, so it cannot react to model uncertainty. Decision: implement in two stages, not one. **Stage A (fast, no training):** add a post-generation uncertainty pass in chat loop; if output contains calibrated uncertainty markers OR low-evidence patterns, trigger one retry with `auto_research()` context attached. **Stage A SHIPPED Pass 153** — `score_uncertainty()` + `should_retry_with_research()` in [auto_research.py](enigma_engine/core/auto_research.py). Wiring into [gui_logic_chat.py L239](enigma_engine/gui/gui_logic_chat.py#L239) `_gen()` is a follow-up pass. **Stage B (proper long-term):** add inline tool token (`<search>...</search>`) support so model can self-initiate research mid-generation. This requires generation-loop interruption/resume plus training examples that demonstrate when to emit `<search>`. **Verdict:** gap is real; staged plan is now clear and linked to existing files (`auto_research.py`, `gui_logic_chat.py`).
 
 **Continuous learning:**
-- [RESOLVED] Continuous-1: Code review confirms continuous trainer currently does **full-parameter updates** at `lr=1e-5` with replay buffer `maxlen=1000`, periodic replay retrain every 200 examples, and no EWC penalty. This is effective for short-term adaptation but has real long-horizon drift risk (matches continual fine-tuning forgetting concerns already cited in Spec-1). Practical decision: keep architecture, but treat current defaults as aggressive. Recommended safe defaults for always-on mode: `learning_rate=1e-6` (or 2e-6 max), keep replay buffer capped by recency (1000-2000), and require periodic evaluation gates before checkpoints are promoted. If fast adaptation is desired, do it in adapter/LoRA space rather than full-weight online updates.
-
-**EWC wiring (confirmed gap):**
-- [BUILD] EWC-1: [enigma_engine/core/ewc.py](enigma_engine/core/ewc.py) is standalone — zero FORGE integration. For Approach 2 specialist fine-tuning to prevent catastrophic forgetting, EWC must be wired: (1) after base training, compute EWC from a sample of general data, (2) during specialist fine-tuning, add `ewc.penalty(model)` to the loss. Requires adding EWC to the SFT/dialogue training path in [enigma_engine/core/training.py](enigma_engine/core/training.py) and an EWC section in FORGE GUI.
+- [RESOLVED] Continuous-1: Code review confirms continuous trainer currently does **full-parameter updates** at `lr=1e-5` with replay buffer `maxlen=1000`, periodic replay retrain every 200 examples. This is effective for short-term adaptation but has real long-horizon drift risk (matches continual fine-tuning forgetting concerns already cited in Spec-1). Practical decision: keep architecture, but treat current defaults as aggressive. Recommended safe defaults for always-on mode: `learning_rate=1e-6` (or 2e-6 max), keep replay buffer capped by recency (1000-2000), and require periodic evaluation gates before checkpoints are promoted. If fast adaptation is desired, do it in adapter/LoRA space rather than full-weight online updates.
 
 ---
 
@@ -2352,15 +3981,15 @@ These files/features exist in the codebase but had no research items. Added afte
 
 **Memory system:**
 - [RESOLVED] Memory-1: [enigma_engine/core/memory.py](enigma_engine/core/memory.py) is flat text + regex pattern extraction (200 fact max). Retrieves relevant facts by keyword search at query time (not embedding-based). Simple but functional for user preferences.
-- [RESOLVED] Memory-2: Yes, episodic memory can be built directly on the existing RAG path without a new memory subsystem. Current state: `core/memory.py` stores durable user facts; journal stores reflections; chat history already exists per session/model. Practical design: write each completed conversation/session summary as a retrievable document (timestamp + topic tags + key decisions) into a dedicated memory corpus, then query it through the same `RAGIndex.query()` path used for docs. This gives "last week recall" behavior with existing infrastructure. Working-memory can stay lightweight (recent topic list + current task summary) and be injected in prompt, while episodic memory stays retrieval-based.
+- [RESOLVED] Memory-2: Yes, episodic memory can be built directly on the existing RAG path without a new memory subsystem. Current state: `core/memory.py` stores durable user facts; chat history already exists per session/model. Practical design: write each completed conversation/session summary as a retrievable document (timestamp + topic tags + key decisions) into a dedicated memory corpus, then query it through the same `RAGIndex.query()` path used for docs. This gives "last week recall" behavior with existing infrastructure. Working-memory can stay lightweight (recent topic list + current task summary) and be injected in prompt, while episodic memory stays retrieval-based.
 
 **Model merging (Approach 2 enabler):**
 - [RESOLVED] Merge-1: [enigma_engine/core/model_merging.py](enigma_engine/core/model_merging.py) has SLERP, TIES, and linear merge. TIES handles sign conflicts when merging multiple fine-tuned models. This is the right tool for combining specialists after fine-tuning. Already built and tested.
 - [RESOLVED] Merge-2: Keep `density=0.2` as the default baseline for TIES at 742M as well. Code already uses `density: float = 0.2` in `ties_merge()`, which matches the common "top changed parameters" trimming regime from TIES usage. There is no universal scale-law value proven for every checkpoint/task pair, so the practical answer is calibration, not a one-size constant: sweep {0.1, 0.2, 0.3} on a held-out benchmark and pick best aggregate score. Until that ablation is run, 0.2 remains the correct default.
 
 **Inner monologue:**
-- [RESOLVED] Mono-1: [enigma_engine/core/monologue.py](enigma_engine/core/monologue.py) is Phase 5 inner monologue. Modes: disabled/journal_only/automatic. Coherence gate at 0.7 threshold (heuristic scorer). Journal stored as `data/model_contexts/<model_key>/journal.json`. Not on any research list.
-- [RESOLVED] Mono-2: Keep the heuristic coherence gate as the primary filter for now. It is cheap, deterministic, and transparent, while the RL reward models are trained for preference/reward tasks and are not calibrated as a monologue-truth discriminator. Using RewardModel as the only gate risks swapping one heuristic for another opaque scorer. Practical path: retain heuristic gate (`score_coherence`), and add optional secondary rerank later (small classifier or reward model) only after collecting false-positive/false-negative data from real journal entries.
+- [RESOLVED] Mono-1: **SUPERSEDED Pass 156z9de.** Phase 5 inner-monologue writer-side (Journal, IdleTracker, build_reflection_prompt, idle reflection loop, monologue_mode config + GUI dropdown) was killed as dead infra — reader-without-writer + FSM-without-driver, no users had ever opted in. [enigma_engine/core/monologue.py](enigma_engine/core/monologue.py) now exposes only the heuristic coherence scorer (`score_coherence`, threshold 0.7) and the FORGE coherence benchmark runner (`run_coherence_benchmark`).
+- [RESOLVED] Mono-2: Heuristic coherence scorer (`score_coherence`) retained for the FORGE benchmark surface. The earlier monologue-truth-discriminator question is moot post-Pass-156z9de (no reflection writer exists). If a reflection loop is rebuilt later, revisit gate choice then.
 
 **Adaptive training pipeline:**
 - [RESOLVED] Adaptive-1: [enigma_engine/core/adaptive_trainer.py](enigma_engine/core/adaptive_trainer.py) has `TrainingPlan` (stages: basics→conversation→commands→web), adaptive difficulty, TRAINER-evaluates-STUDENT loop. This is the AI-supervised curriculum. Not yet used for any of the planned approaches.
@@ -2384,7 +4013,7 @@ These are areas where the code may have bugs or missing wiring, found during aud
 - [RESOLVED] Code-5: RMSNorm epsilon is 1e-6. Correct.
 - [BUILD] Code-6: No FORGE training path for vision projection training exists. `model.forward()` accepts `vision_features` and the projection is wired (Vision-5 resolved), but there is no training mode that: (1) loads a CLIP encoder, (2) passes image tensors through it, (3) trains only the projection Linear while freezing the LLM body. This requires a new FORGE training mode ("Vision Projection" or an extension of LoRA mode). Search terms: "LLaVA stage 1 training" (projection only), "LLaVA stage 2 training" (full SFT). File to create: a method in [enigma_engine/gui/gui_forge_training.py](enigma_engine/gui/gui_forge_training.py) mirroring `_start_vision_training()` but with frozen transformer.
 - [RESOLVED] Code-7: [enigma_engine/core/lora_utils.py](enigma_engine/core/lora_utils.py) is a full LoRA/QLoRA trainer with PEFT + bitsandbytes + accelerate support. Classes: `LoraConfig`, `QLoraConfig`, `OffloadConfig`, `LoraTrainer`. Complete training workflow with `save_adapter()`. Used by RLHF/SelfPlay trainers for reference policy via `create_lora_model()`.
-- [RESOLVED] Code-8: EWC ([enigma_engine/core/ewc.py](enigma_engine/core/ewc.py)) is standalone — NOT wired into FORGE GUI. Uses empirical Fisher information (squared gradients), diagonal approximation, `penalty()` returns scalar tensor for adding to loss. For Approach 2 specialist training, EWC must be manually wired into the relevant training path.
+- [RESOLVED] Code-8: **SUPERSEDED Pass 156z9de.** `core/ewc.py` was killed as dead infra (zero callers, never wired into any FORGE path). LoRA-per-specialist (see Spec-1, LoRA-1) replaces it — frozen base weights make forgetting physically impossible without the Fisher penalty.
 
 ---
 
@@ -2517,7 +4146,7 @@ These must be resolved before N-6 restart or will cause silent training problems
 | N-15 | Constrained decoding | Grammar-constrained generation for JSON/tool calls |
 | N-16 | Best-of-N sampling | Generate N, score with reward model, return best |
 | N-17 | ~~Model merging~~ | **Done.** core/model_merging.py — SLERP, TIES, linear merge. GUI caller added in N-21 (Pass 126). |
-| N-18 | ~~Continual learning~~ | **Done.** core/ewc.py — Fisher information + penalty |
+| N-18 | ~~Continual learning~~ | **Killed Pass 156z9de.** `core/ewc.py` was deleted as dead infra (zero callers, superseded by LoRA-per-specialist). |
 | N-19 | Knowledge distillation | Logit-level distillation from teacher |
 | N-20 | ~~Agentic tool loops~~ | **Done.** engine_generation.py — parse/execute/inject loop |
 | N-21 | ~~Wire model merging to GUI~~ | **Done.** MODELS page inline merge row: two model dropdowns, SLERP/LINEAR/TIES method dropdown, t entry, density entry, output name, MERGE button. `_merge_models()` in [enigma_engine/gui/gui_forge_models.py](enigma_engine/gui/gui_forge_models.py) calls [enigma_engine/core/model_merging.py](enigma_engine/core/model_merging.py) in a background thread. |
