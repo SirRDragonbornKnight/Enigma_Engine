@@ -206,9 +206,15 @@ def run_training(config: TrainingJobConfig | dict[str, Any], ctx: DispatchContex
             raise ValueError("audio mode requires DispatchContext.audio_encoder")
         trainer = Trainer(ctx.model, ctx.tokenizer, train_cfg)
         _apply_callbacks(trainer, ctx)
+        audio_data = job.data
+        val_data = None
+        if isinstance(audio_data, dict):
+            val_data = audio_data.get("val")
+            audio_data = audio_data.get("train", [])
         return trainer.train_audio(
             audio_encoder=ctx.audio_encoder,
-            data=job.data,
+            data=audio_data,
+            val_data=val_data,
             unfreeze_text_layers=job.audio.unfreeze_text_layers,
         )
 

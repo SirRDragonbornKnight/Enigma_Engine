@@ -5618,6 +5618,7 @@ class Trainer:
         audio_encoder: nn.Module,
         data: list[dict[str, Any]],
         unfreeze_text_layers: int = 0,
+        val_data: list[dict[str, Any]] | None = None,
     ) -> "TrainingState":
         """
         Train the audio encoder and projection layer on audio-text pairs.
@@ -5636,6 +5637,13 @@ class Trainer:
             unfreeze_text_layers: Number of last text transformer layers to
                 unfreeze (0 = freeze all text layers, only train encoder +
                 projection).
+            val_data: Optional held-out audio-text pairs. When provided
+                (and non-empty after validation), a no-grad evaluation
+                pass runs after each epoch; results land in
+                ``state.validation_losses`` and drive best-checkpoint /
+                early-stopping decisions instead of the training avg.
+                Pass 156z9ec: mirrors V-6 vision val_data — closes the
+                "overfitting on small audio datasets is invisible" gap.
 
         Returns:
             TrainingState with loss history.
@@ -5752,6 +5760,34 @@ class Trainer:
         if not pairs:
             raise ValueError("No valid audio-text pairs found in training data.")
 
+        # Pass 156z9ec: build held-out val_pairs eagerly, matching the
+        # training preprocess pattern (mel computed once, moved to
+        # device). Pairs with missing fields, preprocessing failures,
+        # or <1-token captions are skipped silently — matches train
+        # drop policy.
+        val_pairs: list[tuple[torch.Tensor, list[int]]] = []
+        if val_data:
+            for i, item in enumerate(val_data):
+                v_audio = item.get("audio")
+                v_text = item.get("text", "")
+                if v_audio is None or not v_text:
+                    logger.warning(
+                        f"Skipping audio val item {i}: missing audio or text")
+                    continue
+                try:
+                    v_mel = preprocess_audio(v_audio, config=audio_config)
+                    v_mel = v_mel.to(self.device)
+                except Exception as exc:
+                    logger.warning(f"Skipping audio val item {i}: {exc}")
+                    continue
+                v_token_ids = self.tokenizer.encode(v_text)
+                if len(v_token_ids) < 1:
+                    continue
+                val_pairs.append((v_mel, v_token_ids))
+            if val_pairs:
+                logger.info(
+                    f"Audio validation: {len(val_pairs)} held-out pairs")
+
         self._emit_progress(5, f"Prepared {len(pairs)} audio-text pairs")
         logger.info(f"Audio training: {len(pairs)} pairs, {self.config.epochs} epochs")
 
@@ -5761,6 +5797,80 @@ class Trainer:
 
         checkpoint_dir = Path(self.config.checkpoint_dir)
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
+        def _run_audio_validation() -> float | None:
+            """Pass 156z9ec: no-grad evaluation over the held-out
+            val_pairs. Returns mean cross-entropy loss across all valid
+            val samples, or None when val_pairs is empty / every sample
+            was dropped. Caller restores train mode.
+
+            Mirrors vision's V-6 ``_run_validation`` including the
+            Pass 156g audit (Bug B) stop-poll between samples so the
+            user's STOP press isn't ignored during a long val pass."""
+            if not val_pairs:
+                return None
+            audio_encoder.eval()
+            self.model.eval()
+            losses: list[float] = []
+            try:
+                with torch.no_grad():
+                    for v_mel, v_ids in val_pairs:
+                        if self._should_stop():
+                            logger.info(
+                                "Audio validation stopped by user "
+                                "request after %d sample(s)",
+                                len(losses))
+                            break
+                        try:
+                            with torch.amp.autocast(
+                                "cuda",
+                                dtype=self._amp_dtype,
+                                enabled=self.config.use_amp
+                                and self.device.type == "cuda",
+                            ):
+                                # No SpecAugment during validation —
+                                # eval the clean mel.
+                                v_feats = audio_encoder(v_mel)
+                                v_text_tensor = torch.tensor(
+                                    [v_ids], dtype=torch.long,
+                                    device=self.device,
+                                )
+                                v_logits = self.model.forward_multimodal(
+                                    input_ids=v_text_tensor,
+                                    audio_features=v_feats,
+                                )
+                                v_n_audio = v_feats.shape[1]
+                                if v_n_audio >= v_logits.shape[1]:
+                                    continue
+                                v_text_logits = v_logits[
+                                    :, v_n_audio:-1, :]
+                                v_text_targets = v_text_tensor[:, 1:]
+                                v_min_len = min(
+                                    v_text_logits.shape[1],
+                                    v_text_targets.shape[1])
+                                if v_min_len < 1:
+                                    continue
+                                v_text_logits = v_text_logits[
+                                    :, :v_min_len, :]
+                                v_text_targets = v_text_targets[
+                                    :, :v_min_len]
+                                v_loss = nn.functional.cross_entropy(
+                                    v_text_logits.reshape(
+                                        -1, v_text_logits.size(-1)),
+                                    v_text_targets.reshape(-1),
+                                )
+                        except Exception as exc:
+                            logger.debug(
+                                "Audio val: forward failed (%s); "
+                                "skipping", exc)
+                            continue
+                        losses.append(v_loss.item())
+            finally:
+                audio_encoder.train()
+                self.model.train()
+            if not losses:
+                return None
+            return sum(losses) / len(losses)
 
         for epoch in range(self.config.epochs):
             if self._should_stop():
@@ -5877,14 +5987,26 @@ class Trainer:
             self._emit_loss(avg_loss)
             logger.info(f"Audio Epoch {epoch + 1}: avg_loss={avg_loss:.4f}")
 
+            # Pass 156z9ec: held-out validation pass after each epoch.
+            # Drives best-checkpoint + early-stopping when available;
+            # falls back to training avg_loss otherwise. Mirrors V-6.
+            val_loss = _run_audio_validation()
+            if val_loss is not None:
+                self.state.validation_losses.append(val_loss)
+                logger.info(
+                    f"Audio Epoch {epoch + 1}: val_loss={val_loss:.4f}")
+
             if self.on_epoch_complete:
                 try:
                     self.on_epoch_complete(epoch + 1, avg_loss)
                 except Exception:
                     logger.debug("on_epoch_complete callback error", exc_info=True)
 
-            if avg_loss < self.state.best_loss:
-                self.state.best_loss = avg_loss
+            # Best model tracking and early stopping. Prefer val_loss
+            # when present (Pass 156z9ec); fall back to train avg_loss.
+            tracked_loss = val_loss if val_loss is not None else avg_loss
+            if tracked_loss < self.state.best_loss:
+                self.state.best_loss = tracked_loss
                 self._epochs_without_improvement = 0
                 self._save_checkpoint(
                     checkpoint_dir / f"{self._checkpoint_stem}_audio_best.pt")
