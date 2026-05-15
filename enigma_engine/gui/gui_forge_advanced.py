@@ -50,7 +50,7 @@ class ForgeAdvancedMixin:
         the STUDENT actually says and tailors its teaching to the
         STUDENT's real weaknesses.
         """
-        if bool(getattr(self, "use_api_chat", False)):
+        if getattr(self, "use_api_chat", False) is True:
             self._log("[!] API routing not yet implemented for Dialogue mode — running locally on this machine.\n")
         if self.training_active:
             return
@@ -104,6 +104,9 @@ class ForgeAdvancedMixin:
 
         def _dialogue():
             losses = []
+            # Pre-bind so failure-path ``finally`` can surface the
+            # rollback file regardless of when the exception fires.
+            pre_dialogue_backup_path: str | None = None
             try:
                 import torch
                 from enigma_engine.core.model import Enigma
@@ -577,10 +580,6 @@ class ForgeAdvancedMixin:
                 self._log(
                     "Run again to continue building "
                     "on what the student learned.")
-                if pre_dialogue_backup_path:
-                    self._log(
-                        f"Rollback  : "
-                        f"{Path(pre_dialogue_backup_path).name}")
                 if transcript_name:
                     self._log(
                         f"Review transcript: "
@@ -613,6 +612,13 @@ class ForgeAdvancedMixin:
                     f"\n[!] Dialogue training failed: {exc}")
                 self._log(tb)
             finally:
+                # Surface the rollback file on EVERY exit path
+                # (success, user-stop, crash) so the user always
+                # knows where the pre-training snapshot lives.
+                if pre_dialogue_backup_path:
+                    self._log(
+                        f"Rollback  : "
+                        f"{Path(pre_dialogue_backup_path).name}")
                 self._active_trainer = None
                 self.training_active = False
                 self._reset_forge_progress()
@@ -644,7 +650,7 @@ class ForgeAdvancedMixin:
 
         Needs: STUDENT model + task file.
         """
-        if bool(getattr(self, "use_api_chat", False)):
+        if getattr(self, "use_api_chat", False) is True:
             self._log("[!] API routing not yet implemented for Evolutionary mode — running locally on this machine.\n")
         if self.training_active:
             return
@@ -687,6 +693,9 @@ class ForgeAdvancedMixin:
 
         def _evo():
             losses = []
+            # Pre-bind so failure-path ``finally`` can surface the
+            # rollback file regardless of when the exception fires.
+            pre_evolutionary_backup_path: str | None = None
             try:
                 import torch
                 from enigma_engine.core.model import Enigma
@@ -704,6 +713,11 @@ class ForgeAdvancedMixin:
                 device = ("cuda"
                           if torch.cuda.is_available()
                           else "cpu")
+
+                # Snapshot the student's current weights so a
+                # failure mid-training has a rollback target.
+                pre_evolutionary_backup_path = self._pre_training_backup(
+                    student_path, suffix="pre_evolutionary")
 
                 # Load tasks
                 tasks = Path(data_path).read_text(
@@ -960,6 +974,13 @@ class ForgeAdvancedMixin:
                     f"failed: {exc}")
                 self._log(tb)
             finally:
+                # Surface the rollback file on EVERY exit path
+                # (success, user-stop, OOM, crash) so the user always
+                # knows where the pre-training snapshot lives.
+                if pre_evolutionary_backup_path:
+                    self._log(
+                        f"Rollback  : "
+                        f"{Path(pre_evolutionary_backup_path).name}")
                 self._active_trainer = None
                 self.training_active = False
                 self._reset_forge_progress()

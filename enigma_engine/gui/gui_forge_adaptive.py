@@ -139,6 +139,9 @@ class ForgeAdaptiveMixin:
         def _adaptive():
             all_losses = []
             plan = None
+            # Pre-bind so failure-path ``finally`` can surface the
+            # rollback file regardless of when the exception fires.
+            pre_adaptive_backup_path: str | None = None
             try:
                 import torch
                 from enigma_engine.core.model import Enigma
@@ -152,6 +155,13 @@ class ForgeAdaptiveMixin:
                 device = ("cuda"
                           if torch.cuda.is_available() else "cpu")
                 self._log(f"Device  : {device.upper()}")
+
+                # Snapshot the student's current weights once at
+                # pipeline start.  Stages overwrite student_path
+                # per-stage; this is the rollback target for the
+                # whole pipeline.
+                pre_adaptive_backup_path = self._pre_training_backup(
+                    student_path, suffix="pre_adaptive")
 
                 # Check for existing plan to resume
                 plan_path = (
@@ -302,6 +312,13 @@ class ForgeAdaptiveMixin:
                         / f"plan_{student_name}.json")
                     plan.save(pp)
             finally:
+                # Surface the rollback file on EVERY exit path
+                # (success, user-stop, OOM, crash) so the user always
+                # knows where the pre-training snapshot lives.
+                if pre_adaptive_backup_path:
+                    self._log(
+                        f"Rollback  : "
+                        f"{Path(pre_adaptive_backup_path).name}")
                 self._active_trainer = None
                 self.training_active = False
                 self._reset_forge_progress()

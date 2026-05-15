@@ -1154,65 +1154,6 @@ class EnigmaGUI(
         if self.models_data:
             self._populate_model_cards(frame)
 
-    # ================================================================
-    # Monologue / Journal greeting
-    # ================================================================
-
-    def _get_monologue_mode(self) -> str:
-        """Return the current monologue mode.
-
-        Reads from gui_settings.json first, falls back to
-        get_config for the default.
-        """
-        try:
-            settings_path = DATA_DIR / "gui_settings.json"
-            if settings_path.exists():
-                import json
-                settings = json.loads(
-                    settings_path.read_text(encoding="utf-8"))
-                mode = settings.get("monologue_mode", "")
-                if mode:
-                    return mode
-        except (json.JSONDecodeError, OSError):
-            pass
-        from enigma_engine.config.defaults import get_config
-        return get_config("monologue_mode", "disabled")
-
-    def _show_journal_greeting(self):
-        """Show a journal-based greeting if monologue is enabled.
-
-        Reads the most recent journal entry that passes the
-        coherence quality gate and displays it as a system message.
-        """
-        try:
-            mode = self._get_monologue_mode()
-            if mode == "disabled":
-                return
-
-            from enigma_engine.core.monologue import (
-                Journal, DEFAULT_COHERENCE_THRESHOLD)
-
-            model_path = getattr(self, "model_path", None)
-            if not model_path:
-                return
-
-            from pathlib import Path as _Path
-            journal_dir = _Path(model_path).parent
-            journal = Journal(journal_dir)
-            entry = journal.latest()
-            if entry is None:
-                return
-
-            coherence = entry.get("coherence", 0.0)
-            if coherence < DEFAULT_COHERENCE_THRESHOLD:
-                return
-
-            text = entry.get("text", "").strip()
-            if text:
-                self._chat_system(f"[Journal] {text}")
-        except Exception as exc:
-            logger.debug("Journal greeting failed: %s", exc)
-
     def _start_status_ticker(self):
         """Update status bar with uptime every second."""
         # Detect CPU and GPU names in background

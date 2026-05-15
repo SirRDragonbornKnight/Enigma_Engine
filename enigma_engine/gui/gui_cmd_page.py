@@ -532,7 +532,7 @@ class CMDPageMixin:
             self._cmd_write("error", "[!] Usage: ask <question>\n")
             return
 
-        use_api_chat = bool(getattr(self, "use_api_chat", False))
+        use_api_chat = getattr(self, "use_api_chat", False) is True
         if self.engine is None and not use_api_chat:
             self._cmd_write(
                 "error",

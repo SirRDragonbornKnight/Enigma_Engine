@@ -853,6 +853,7 @@ def load_route_prompt(route: str) -> str:
 
 _IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp", ".tiff"}
 _VIDEO_EXTENSIONS = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".flv", ".wmv"}
+_AUDIO_EXTENSIONS = {".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac", ".opus"}
 
 
 def _extract_video_frames(
@@ -994,6 +995,73 @@ def scan_vision_data(directory: str | Path) -> list[dict]:
             pairs.append({
                 "image": frame,  # PIL Image object
                 "text": caption,
+            })
+
+    return pairs
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AUDIO DATA SCANNING (ARCH-1d)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def scan_audio_data(directory: str | Path) -> list[dict]:
+    """
+    Discover audio-text training pairs in a directory.
+
+    Supports two formats:
+    1. JSONL: each line has {"audio": "path", "text": "transcript"}
+    2. Paired files: clip.wav + clip.txt in the same folder
+
+    Args:
+        directory: Path to scan for audio training data.
+
+    Returns:
+        List of dicts with "audio" (path string) and "text" keys —
+        the exact shape ``Trainer.train_audio`` and the ``mode="audio"``
+        dispatcher expect.
+    """
+    directory = Path(directory)
+    if not directory.exists():
+        return []
+
+    pairs: list[dict] = []
+
+    # -- Strategy 1: JSONL files with audio+text fields --
+    for jsonl_path in directory.glob("*.jsonl"):
+        try:
+            with open(jsonl_path, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        record = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if "audio" in record and "text" in record:
+                        pairs.append({
+                            "audio": str(record["audio"]),
+                            "text": str(record["text"]),
+                        })
+        except OSError:
+            logger.debug(f"Could not read JSONL: {jsonl_path}")
+
+    # -- Strategy 2: Paired files (audio + same-name .txt) --
+    for clip_path in directory.iterdir():
+        if clip_path.suffix.lower() not in _AUDIO_EXTENSIONS:
+            continue
+        txt_path = clip_path.with_suffix(".txt")
+        if not txt_path.exists():
+            continue
+        try:
+            transcript = txt_path.read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        if transcript:
+            pairs.append({
+                "audio": str(clip_path),
+                "text": transcript,
             })
 
     return pairs

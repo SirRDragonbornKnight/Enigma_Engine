@@ -163,7 +163,7 @@ class ForgeNewModesMixin:
         Pre-training uses higher LR, no general mix (this IS the
         general knowledge), and longer warmup than fine-tuning.
         """
-        if bool(getattr(self, "use_api_chat", False)):
+        if getattr(self, "use_api_chat", False) is True:
             self._log("[!] API routing not yet implemented for Pre-Train mode — running locally on this machine.\n")
         params = self._pretrain_validate_inputs()
         if params is None:
@@ -264,6 +264,9 @@ class ForgeNewModesMixin:
                     pass  # never crash on heartbeat
 
             _write_hb("data_load")
+            # Pre-bind so failure-path ``finally`` can surface the
+            # rollback file regardless of when the exception fires.
+            pre_pretrain_backup_path: str | None = None
             try:
                 import torch
                 from enigma_engine.core.model import Enigma
@@ -851,6 +854,19 @@ class ForgeNewModesMixin:
                     f"{train_config.eval_every} steps"
                     f"  |  Eval: ON")
 
+                # Pass 156z9dt: pre-pretrain auto-checkpoint.  Pre-
+                # training overwrites ``out_path`` in place at the
+                # end of the run, and step-based checkpoints inside
+                # the run only protect against mid-run failure.  A
+                # NaN/Inf spike at step 1 (Pass 156i4 risk) or a
+                # corrupted dataset can poison the only on-disk
+                # copy before the first ``save_every_steps`` save
+                # fires.  The pre-train backup is the rollback rail
+                # for that window.
+                pre_pretrain_backup_path = (
+                    self._pre_training_backup(
+                        out_path, suffix="pre_pretrain"))
+
                 trainer = Trainer(model, tokenizer, train_config)
                 self._log(f"Batch   : {trainer.config.batch_size}")
 
@@ -1103,6 +1119,15 @@ class ForgeNewModesMixin:
                 self._log(f"\n[!] Pre-training failed: {exc}")
                 self._log(tb)
             finally:
+                # Surface the rollback file on EVERY exit path
+                # (success, user-stop, OOM, crash).  The user's
+                # pre-training snapshot lives at this path so they
+                # can revert if the trained weights are worse than
+                # the starting checkpoint.
+                if pre_pretrain_backup_path:
+                    self._log(
+                        f"Rollback  : "
+                        f"{Path(pre_pretrain_backup_path).name}")
                 self._active_trainer = None
                 self.training_active = False
                 self._reset_forge_progress()
@@ -1331,7 +1356,7 @@ class ForgeNewModesMixin:
         teacher (Qwen3-8B) generates personality, reasoning,
         conversation styles that the student then learns.
         """
-        if bool(getattr(self, "use_api_chat", False)):
+        if getattr(self, "use_api_chat", False) is True:
             self._log("[!] API routing not yet implemented for Distill mode — running locally on this machine.\n")
         params = self._distill_validate_inputs()
         if params is None:
@@ -1442,6 +1467,9 @@ class ForgeNewModesMixin:
 
         def _distill():
             losses = []
+            # Pre-bind so failure-path ``finally`` can surface the
+            # rollback file regardless of when the exception fires.
+            pre_distill_backup_path: str | None = None
             try:
                 import torch
                 from enigma_engine.core.model import Enigma
@@ -1813,6 +1841,7 @@ class ForgeNewModesMixin:
                 # post-training comparison after `trainer.train`
                 # returns.  Probe failures are non-fatal.
                 pre_probe_responses: dict | None = None
+                pre_consistency_responses: dict | None = None
                 if "personality" in categories:
                     try:
                         from enigma_engine.core.personality_data import (
@@ -1844,6 +1873,39 @@ class ForgeNewModesMixin:
                             f"Post-probe drift comparison will be "
                             f"skipped.")
                         pre_probe_responses = None
+
+                    # Personality-5 (Pass 156z9dg): cross-prompt
+                    # consistency probe.  Runs alongside the
+                    # identity probe and shares its failure
+                    # semantics (any exception leaves the pre-set
+                    # at None and post-comparison is skipped).
+                    # Metric only; no gradient, no loss term.
+                    try:
+                        from enigma_engine.core.personality_consistency import (
+                            CONSISTENCY_PROBE_PROMPTS,
+                            score_consistency,
+                        )
+                        self._log(
+                            "Consistency probe (pre-training)...")
+                        pre_consistency_responses = (
+                            self._run_identity_probe(
+                                student, tokenizer, device,
+                                list(CONSISTENCY_PROBE_PROMPTS)))
+                        _pre_score = score_consistency(
+                            pre_consistency_responses)
+                        self._log(
+                            f"  Pre-consistency: "
+                            f"overall={_pre_score['overall']:.2f} "
+                            f"(pronoun="
+                            f"{_pre_score['pronoun_consistency']:.2f}, "
+                            f"value="
+                            f"{_pre_score['value_consistency']:.2f})")
+                    except Exception as cons_exc:
+                        self._log(
+                            f"[!] Pre-consistency probe failed: "
+                            f"{cons_exc}.  Post-consistency "
+                            f"comparison will be skipped.")
+                        pre_consistency_responses = None
 
                 train_config = TrainingConfig(
                     epochs=epochs,
@@ -1957,9 +2019,105 @@ class ForgeNewModesMixin:
                                 f"  Identity recovered on "
                                 f"{len(summary['recovered'])} "
                                 f"prompt(s)")
+                        # Personality-5 Row G persistence (Pass 156z9dw):
+                        # save this run's summary + log prior run's
+                        # drift count so two consecutive distill runs
+                        # can be compared on-disk (the loss-half gate).
+                        try:
+                            from enigma_engine.core.probe_history import (
+                                load_recent_probe_summaries,
+                                save_probe_summary,
+                            )
+                            prior = load_recent_probe_summaries(
+                                student_name, "identity", n=1)
+                            saved = save_probe_summary(
+                                summary,
+                                stem=student_name,
+                                kind="identity")
+                            self._log(
+                                f"  Saved : {saved.name}")
+                            if prior:
+                                prev_summary = prior[0]["summary"]
+                                prev_drift = len(
+                                    prev_summary.get("drifted", []))
+                                self._log(
+                                    f"  Prior identity drift: "
+                                    f"{prev_drift} prompt(s)")
+                        except Exception as save_exc:
+                            self._log(
+                                f"[!] Could not persist identity probe: "
+                                f"{save_exc}")
                     except Exception as probe_exc:
                         self._log(
                             f"[!] Post-probe failed: {probe_exc}")
+
+                # Personality-5 (Pass 156z9dg): post-training
+                # consistency probe + pre/post delta log.  Only
+                # runs if the pre-probe succeeded; metric is
+                # observation-only, never gates training flow.
+                if (pre_consistency_responses is not None
+                        and "personality" in categories):
+                    try:
+                        from enigma_engine.core.personality_consistency import (
+                            CONSISTENCY_PROBE_PROMPTS,
+                            summarize_consistency,
+                        )
+                        self._log(
+                            "Consistency probe (post-training)...")
+                        post_consistency_responses = (
+                            self._run_identity_probe(
+                                student, tokenizer, device,
+                                list(CONSISTENCY_PROBE_PROMPTS)))
+                        cons_summary = summarize_consistency(
+                            pre_consistency_responses,
+                            post_consistency_responses)
+                        _pre = cons_summary["pre"]
+                        _post = cons_summary["post"]
+                        self._log(
+                            f"  Consistency: "
+                            f"{_pre['overall']:.2f} pre  ->  "
+                            f"{_post['overall']:.2f} post "
+                            f"(delta="
+                            f"{cons_summary['delta_overall']:+.2f})")
+                        if cons_summary["regressed"]:
+                            self._log(
+                                "  [!] CONSISTENCY REGRESSED: "
+                                "student answers identity/values "
+                                "prompts less coherently after "
+                                "distillation.  Inspect generated "
+                                "data or reduce epochs.")
+                        # Personality-5 Row G persistence (Pass 156z9dw):
+                        # save this run's summary + log prior run's
+                        # delta so two consecutive distill runs can be
+                        # compared on-disk (the loss-half gate).
+                        try:
+                            from enigma_engine.core.probe_history import (
+                                load_recent_probe_summaries,
+                                save_probe_summary,
+                            )
+                            prior = load_recent_probe_summaries(
+                                student_name, "consistency", n=1)
+                            saved = save_probe_summary(
+                                cons_summary,
+                                stem=student_name,
+                                kind="consistency")
+                            self._log(
+                                f"  Saved : {saved.name}")
+                            if prior:
+                                prev_delta = float(
+                                    prior[0]["summary"].get(
+                                        "delta_overall", 0.0))
+                                self._log(
+                                    f"  Prior consistency delta: "
+                                    f"{prev_delta:+.2f}")
+                        except Exception as save_exc:
+                            self._log(
+                                f"[!] Could not persist consistency "
+                                f"probe: {save_exc}")
+                    except Exception as cons_exc:
+                        self._log(
+                            f"[!] Post-consistency probe failed: "
+                            f"{cons_exc}")
 
                 # Save model
                 from enigma_engine.core.safe_save import (
@@ -1977,10 +2135,6 @@ class ForgeNewModesMixin:
                 self._log(f"Best loss : {state.best_loss:.4f}")
                 self._log(f"Examples  : {len(all_examples)}")
                 self._log(f"Saved to  : {Path(student_path).name}")
-                if pre_distill_backup_path:
-                    self._log(
-                        f"Rollback  : "
-                        f"{Path(pre_distill_backup_path).name}")
                 total = _time_d.monotonic() - _distill_start[0]
                 t_m, t_s = int(total // 60), int(total % 60)
                 self._log(f"Duration  : {t_m}m {t_s:02d}s")
@@ -2003,6 +2157,13 @@ class ForgeNewModesMixin:
                 import traceback
                 self._log(traceback.format_exc())
             finally:
+                # Surface the rollback file on EVERY exit path
+                # (success, user-stop, crash) so the user always
+                # knows where the pre-training snapshot lives.
+                if pre_distill_backup_path:
+                    self._log(
+                        f"Rollback  : "
+                        f"{Path(pre_distill_backup_path).name}")
                 self._active_trainer = None
                 self.training_active = False
                 self._reset_forge_progress()
@@ -2077,7 +2238,7 @@ class ForgeNewModesMixin:
         self._reset_forge_progress()
 
         # ARCH-1d Slice 3: API routing for RLHF
-        client = self._get_api_chat_client() if bool(getattr(self, "use_api_chat", False)) else None
+        client = self._get_api_chat_client() if getattr(self, "use_api_chat", False) is True else None
         if client is not None:
             def _run_api():
                 try:
@@ -2133,6 +2294,9 @@ class ForgeNewModesMixin:
             return
 
         def _rlhf_train():
+            # Pre-bind so failure-path ``finally`` can surface the
+            # rollback file regardless of when the exception fires.
+            pre_rlhf_backup_path: str | None = None
             try:
                 import json
                 import torch
@@ -2146,6 +2310,11 @@ class ForgeNewModesMixin:
 
                 device = "cuda" if torch.cuda.is_available() else "cpu"
                 self._log(f"Device  : {device.upper()}")
+
+                # Snapshot the student's current weights so a
+                # failure mid-training has a rollback target.
+                pre_rlhf_backup_path = self._pre_training_backup(
+                    student_path, suffix="pre_rlhf")
 
                 # Load student model
                 self._log(f"Loading {model_name}...")
@@ -2320,6 +2489,13 @@ class ForgeNewModesMixin:
                 import traceback
                 self._log(traceback.format_exc())
             finally:
+                # Surface the rollback file on EVERY exit path
+                # (success, user-stop, OOM, crash) so the user always
+                # knows where the pre-training snapshot lives.
+                if pre_rlhf_backup_path:
+                    self._log(
+                        f"Rollback  : "
+                        f"{Path(pre_rlhf_backup_path).name}")
                 self._active_trainer = None
                 self.training_active = False
                 self._reset_forge_progress()
@@ -2392,7 +2568,7 @@ class ForgeNewModesMixin:
         self._reset_forge_progress()
 
         # ARCH-1d Slice 3: API routing for Self-Play
-        client = self._get_api_chat_client() if bool(getattr(self, "use_api_chat", False)) else None
+        client = self._get_api_chat_client() if getattr(self, "use_api_chat", False) is True else None
         if client is not None:
             def _run_api():
                 try:
@@ -2452,6 +2628,9 @@ class ForgeNewModesMixin:
             return
 
         def _selfplay_train():
+            # Pre-bind so failure-path ``finally`` can surface the
+            # rollback file regardless of when the exception fires.
+            pre_selfplay_backup_path: str | None = None
             try:
                 import torch
                 from enigma_engine.core.model import Enigma
@@ -2461,6 +2640,11 @@ class ForgeNewModesMixin:
                 from enigma_engine.core.inference import EnigmaEngine
 
                 device = "cuda" if torch.cuda.is_available() else "cpu"
+
+                # Snapshot the student's current weights so a
+                # failure mid-training has a rollback target.
+                pre_selfplay_backup_path = self._pre_training_backup(
+                    student_path, suffix="pre_selfplay")
 
                 # Load student
                 self._log(f"Loading student: {model_name}...")
@@ -2576,6 +2760,13 @@ class ForgeNewModesMixin:
                 import traceback
                 self._log(traceback.format_exc())
             finally:
+                # Surface the rollback file on EVERY exit path
+                # (success, user-stop, OOM, crash) so the user always
+                # knows where the pre-training snapshot lives.
+                if pre_selfplay_backup_path:
+                    self._log(
+                        f"Rollback  : "
+                        f"{Path(pre_selfplay_backup_path).name}")
                 self._active_trainer = None
                 self.training_active = False
                 self._reset_forge_progress()
@@ -2652,7 +2843,7 @@ class ForgeNewModesMixin:
         self._reset_forge_progress()
 
         # ARCH-1d Slice 3: API routing for GRPO/ReMax
-        client = self._get_api_chat_client() if bool(getattr(self, "use_api_chat", False)) else None
+        client = self._get_api_chat_client() if getattr(self, "use_api_chat", False) is True else None
         if client is not None:
             def _run_api():
                 try:
@@ -2709,6 +2900,9 @@ class ForgeNewModesMixin:
             return
 
         def _rl_train():
+            # Pre-bind so failure-path ``finally`` can surface the
+            # rollback file regardless of when the exception fires.
+            pre_rl_backup_path: str | None = None
             try:
                 import json
                 import torch
@@ -2926,10 +3120,6 @@ class ForgeNewModesMixin:
                 total = _time.monotonic() - _start[0]
                 t_m, t_s = int(total // 60), int(total % 60)
                 self._log(f"Duration  : {t_m}m {t_s:02d}s")
-                if pre_rl_backup_path:
-                    self._log(
-                        f"Rollback  : "
-                        f"{Path(pre_rl_backup_path).name}")
                 self._update_forge_progress(100, "Complete")
                 self._save_training_run(
                     algo, model_name, epochs, final_reward)
@@ -2948,6 +3138,13 @@ class ForgeNewModesMixin:
                 import traceback
                 self._log(traceback.format_exc())
             finally:
+                # Surface the rollback file on EVERY exit path
+                # (success, user-stop, crash) so the user always
+                # knows where the pre-training snapshot lives.
+                if pre_rl_backup_path:
+                    self._log(
+                        f"Rollback  : "
+                        f"{Path(pre_rl_backup_path).name}")
                 self._active_trainer = None
                 self.training_active = False
                 self._reset_forge_progress()
@@ -3018,7 +3215,7 @@ class ForgeNewModesMixin:
         self._reset_forge_progress()
 
         # ARCH-1d Slice 3: API routing for SimPO/ORPO
-        client = self._get_api_chat_client() if bool(getattr(self, "use_api_chat", False)) else None
+        client = self._get_api_chat_client() if getattr(self, "use_api_chat", False) is True else None
         if client is not None:
             def _run_api():
                 try:
@@ -3077,6 +3274,9 @@ class ForgeNewModesMixin:
         forge_params = self._read_forge_train_params()
 
         def _pref_train():
+            # Pre-bind so failure-path ``finally`` can surface the
+            # rollback file regardless of when the exception fires.
+            pre_pref_backup_path: str | None = None
             try:
                 import json
                 import torch
@@ -3238,10 +3438,6 @@ class ForgeNewModesMixin:
                 total = _time.monotonic() - _start[0]
                 t_m, t_s = int(total // 60), int(total % 60)
                 self._log(f"Duration  : {t_m}m {t_s:02d}s")
-                if pre_pref_backup_path:
-                    self._log(
-                        f"Rollback  : "
-                        f"{Path(pre_pref_backup_path).name}")
                 self._update_forge_progress(100, "Complete")
                 self._save_training_run(
                     algo, model_name, epochs, final_loss)
@@ -3260,6 +3456,13 @@ class ForgeNewModesMixin:
                 import traceback
                 self._log(traceback.format_exc())
             finally:
+                # Surface the rollback file on EVERY exit path
+                # (success, user-stop, crash) so the user always
+                # knows where the pre-training snapshot lives.
+                if pre_pref_backup_path:
+                    self._log(
+                        f"Rollback  : "
+                        f"{Path(pre_pref_backup_path).name}")
                 self._active_trainer = None
                 self.training_active = False
                 self._reset_forge_progress()

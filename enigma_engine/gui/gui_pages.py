@@ -575,37 +575,11 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
                 "show_emotional_state", True):
             self._emo_panel.grid_remove()
 
-        # --- Collapsible JOURNAL panel ---
-        self._journal_panel = CollapsiblePanel(
-            sidebar, "Journal", color=C_PURPLE,
-            start_expanded=False,
-            on_toggle=lambda _: self._rebalance_sidebar())
-        self._journal_panel.grid(row=3, column=0, sticky="nsew",
-                                 pady=(2, 0))
-
-        journal_frame = HUDFrame(
-            self._journal_panel.content, glow_color=C_BORDER)
-        journal_frame.pack(fill="both", expand=True)
-
-        self._journal_display = SelectableTextbox(
-            journal_frame, height=120, font=FONT_TINY,
-            fg_color=C_SURFACE, text_color=C_TEXT_DIM,
-            wrap="word")
-        self._journal_display.pack(fill="both", expand=True,
-                                   padx=4, pady=4)
-        self._journal_display.configure(state="disabled")
-        Tooltip(self._journal_panel.content,
-                "AI reflections from idle periods.\n"
-                "Enable in CONFIG > Monologue Mode.")
-
         # Store sidebar ref for rebalancing
         self._sidebar = sidebar
         self._sidebar_visible = True
         self._core_page = page
         self._rebalance_sidebar()
-
-        # Populate journal display if model already loaded
-        self._refresh_journal_display()
 
         self._refresh_history_list()
         self._chat_system(
@@ -640,11 +614,9 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
         """
         hist_open = self._hist_panel.is_expanded
         prompt_open = self._prompt_panel.is_expanded
-        journal_open = getattr(self, "_journal_panel", None) and self._journal_panel.is_expanded
         self._sidebar.grid_rowconfigure(0, weight=1 if hist_open else 0)
         self._sidebar.grid_rowconfigure(1, weight=1 if prompt_open else 0)
         self._sidebar.grid_rowconfigure(2, weight=0)
-        self._sidebar.grid_rowconfigure(3, weight=1 if journal_open else 0)
 
     def _update_emotional_display(self):
         """Refresh the emotional state bars from model_context."""
@@ -684,35 +656,6 @@ class PagesMixin(ForgePageMixin, ConfigPageMixin):
         else:
             panel.grid_remove()
         self._rebalance_sidebar()
-
-    def _refresh_journal_display(self):
-        """Populate the journal panel with recent entries."""
-        display = getattr(self, "_journal_display", None)
-        if display is None:
-            return
-        ctx = getattr(self, "model_context", None)
-        if ctx is None:
-            text = "(no model loaded)"
-        else:
-            try:
-                journal = ctx.journal
-                if journal.count == 0:
-                    text = "(no journal entries yet)"
-                else:
-                    lines = []
-                    for entry in journal.entries[-5:]:
-                        ts = entry.get("timestamp", "")
-                        # Show just the date portion
-                        short_ts = ts[:10] if len(ts) >= 10 else ts
-                        lines.append(
-                            f"[{short_ts}] {entry.get('text', '')}")
-                    text = "\n\n".join(lines)
-            except Exception:
-                text = "(journal unavailable)"
-        display.configure(state="normal")
-        display.delete("1.0", "end")
-        display.insert("1.0", text)
-        display.configure(state="disabled")
 
     def _toggle_chat_fullscreen(self):
         """Enter fullscreen chat mode — hides header, nav, status bar.

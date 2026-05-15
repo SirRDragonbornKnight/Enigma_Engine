@@ -187,6 +187,7 @@ class ForgePageMixin:
             ("Basic", "Train on your own data (text files, JSONL). Auto-LoRA for large models"),
             ("LoRA", "Force low-rank adapter training on any model size. 10-30 MB adapter"),
             ("Image", "Train on images or video. Teach visual understanding"),
+            ("Audio", "Train on audio clips. Teach speech and sound understanding"),
         ]
 
         # Advanced modes — refine the model
@@ -819,6 +820,71 @@ class ForgePageMixin:
                 "Set to e.g. 4 to also fine-tune the last 4 text "
                 "transformer layers.\n"
                 "Higher = better multimodal grounding but heavier "
+                "training and a larger checkpoint diff.")
+
+        # === AUDIO TRAINING OPTIONS (ARCH-1d) ===
+        self._forge_audio_section = ctk.CTkFrame(
+            ctrl_scroll, fg_color="transparent")
+        self._forge_audio_section.pack(fill="x", padx=0, pady=(8, 0))
+
+        self._forge_label(self._forge_audio_section,
+            "Audio folder (required)")
+        self.forge_audio_dir_var = ctk.StringVar(
+            value=str(DATA_DIR / "audio"))
+        audio_dir_row = ctk.CTkFrame(
+            self._forge_audio_section, fg_color="transparent")
+        audio_dir_row.pack(fill="x", padx=10, pady=(0, 6))
+        audio_dir_row.grid_columnconfigure(0, weight=1)
+        self._forge_audio_dir_entry = themed_entry(
+            audio_dir_row, textvariable=self.forge_audio_dir_var)
+        self._forge_audio_dir_entry.grid(
+            row=0, column=0, sticky="ew", padx=(0, 4))
+        self._forge_audio_browse_btn = themed_button(
+            audio_dir_row, "Browse", style="secondary",
+            width=70,
+            font=FONT_SMALL,
+            command=self._browse_audio_dir)
+        self._forge_audio_browse_btn.grid(row=0, column=1, sticky="e")
+        Tooltip(self._forge_audio_browse_btn,
+            "Pick the folder containing audio training data.")
+        Tooltip(self._forge_audio_dir_entry,
+                "Folder with audio+text pairs.\n"
+                "Format 1: clip.wav + clip.txt (same name)\n"
+                "Format 2: transcripts.jsonl with audio+text fields\n"
+                "Supported: .wav .mp3 .flac .ogg .m4a .aac .opus")
+
+        self._forge_label(self._forge_audio_section, "Audio encoder size")
+        self.forge_audio_preset_var = ctk.StringVar(
+            value="tiny - ~5M params, fast")
+        audio_preset_dd = themed_dropdown(
+            self._forge_audio_section,
+            values=[
+                "tiny - ~5M params, fast",
+                "base - ~20M params, good balance",
+                "small - ~80M params, best quality",
+            ],
+            variable=self.forge_audio_preset_var,
+            width=240)
+        audio_preset_dd.pack(anchor="w", padx=10, pady=(0, 6))
+
+        # ARCH-1d audio Stage-2 knob — mirrors vision unfreeze.
+        # Default 0 = projection-only (audio_projection + encoder
+        # only); set >0 to also fine-tune the last N text
+        # transformer layers for tighter audio grounding.
+        self._forge_label(self._forge_audio_section,
+            "Unfreeze last N text layers (0 = projection only)")
+        self.forge_audio_unfreeze_var = ctk.StringVar(value="0")
+        audio_unfreeze_entry = themed_entry(
+            self._forge_audio_section,
+            textvariable=self.forge_audio_unfreeze_var,
+            width=80,
+            placeholder_text="0")
+        audio_unfreeze_entry.pack(anchor="w", padx=10, pady=(0, 6))
+        Tooltip(audio_unfreeze_entry,
+                "0 = projection-only (default, fastest).\n"
+                "Set to e.g. 4 to also fine-tune the last 4 text "
+                "transformer layers.\n"
+                "Higher = tighter audio-text grounding but heavier "
                 "training and a larger checkpoint diff.")
 
         # === AI-GUIDED: TRAINING STAGES ===

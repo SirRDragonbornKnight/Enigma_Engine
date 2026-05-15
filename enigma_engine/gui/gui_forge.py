@@ -1436,7 +1436,7 @@ class ForgeMixin(
         threading.Thread(target=_train_tok, daemon=True).start()
 
     def _stop_training(self):
-        if bool(getattr(self, "use_api_chat", False)):
+        if getattr(self, "use_api_chat", False) is True:
             get_client_fn = getattr(self, "_get_api_chat_client", None)
             client = (get_client_fn() if callable(get_client_fn) else None)
             if client is not None:
@@ -1471,6 +1471,7 @@ class ForgeMixin(
         "LoRA": "LoRA",
         "AI-Guided": "AI-Guided",
         "Image": "Image",
+        "Audio": "Audio",
         "Dialogue": "Dialogue",
         "RLHF": "RLHF",
         "Self-Play": "Self-Play",
@@ -1502,6 +1503,10 @@ class ForgeMixin(
             "Train on images or video.\n"
             "Teach visual understanding.\n"
             "Needs: STUDENT model + image folder."),
+        "Audio": (
+            "Train on audio clips with transcripts.\n"
+            "Teach speech and sound understanding.\n"
+            "Needs: STUDENT model + audio folder."),
         "Dialogue": (
             "Teacher and student have a real conversation.\n"
             "Teacher scores answers and provides corrections.\n"
@@ -1560,6 +1565,18 @@ class ForgeMixin(
         if chosen and current:
             current.set(chosen)
 
+    def _browse_audio_dir(self):
+        """Open a folder picker for the audio data directory (ARCH-1d)."""
+        from tkinter import filedialog
+
+        current = getattr(self, "forge_audio_dir_var", None)
+        initial = current.get() if current else ""
+        chosen = filedialog.askdirectory(
+            title="Select audio folder",
+            initialdir=initial if initial else None)
+        if chosen and current:
+            current.set(chosen)
+
     def _on_training_mode_changed(self, mode: str):
         """Update UI sections visibility when training mode changes.
 
@@ -1585,6 +1602,7 @@ class ForgeMixin(
             "basic": getattr(self, "_forge_basic_section", None),
             "ai": getattr(self, "_forge_ai_section", None),
             "image": getattr(self, "_forge_image_section", None),
+            "audio": getattr(self, "_forge_audio_section", None),
             "stages": getattr(self, "_forge_stages_section", None),
             "brief": getattr(self, "_forge_brief_section", None),
             "pairs": getattr(self, "_forge_pairs_section", None),
@@ -1606,6 +1624,8 @@ class ForgeMixin(
                        "reasoning", "evolutionary", "preserve"}
         elif mode == "Image":
             visible = {"image"}
+        elif mode == "Audio":
+            visible = {"audio"}
         elif mode == "Dialogue":
             visible = {"pairs", "preserve"}
         elif mode == "RLHF":
@@ -1704,6 +1724,8 @@ class ForgeMixin(
             self._start_ai_guided_training()
         elif mode_name == "Image":
             self._start_vision_training()
+        elif mode_name == "Audio":
+            self._start_audio_training()
         elif mode_name == "Dialogue":
             self._start_dialogue_training()
         elif mode_name == "RLHF":
@@ -1769,7 +1791,7 @@ class ForgeMixin(
         Auto-selects LoRA if the student model is > 7B parameters.
         Otherwise uses full fine-tuning (Solo mode).
         """
-        if bool(getattr(self, "use_api_chat", False)):
+        if getattr(self, "use_api_chat", False) is True:
             self._log("[!] API routing not yet implemented for Basic training — running locally on this machine.\n")
         # Check for data
         data_path = self.train_data_var.get()
@@ -1820,7 +1842,7 @@ class ForgeMixin(
         Checks for training topic/goal. If empty, prompts user to provide one.
         If provided, uses adaptive trainer to generate curriculum and train.
         """
-        if bool(getattr(self, "use_api_chat", False)):
+        if getattr(self, "use_api_chat", False) is True:
             self._log("[!] API routing not yet implemented for AI-Guided training — running locally on this machine.\n")
         # Check for TRAINER and STUDENT models
         trainer_path = self.route_assignments.get("trainer")

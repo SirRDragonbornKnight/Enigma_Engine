@@ -192,16 +192,24 @@ class ForgeTrainingMixin:
 
         def _finetune():
             losses = []
+            # Pre-bind so failure-path ``finally`` can surface the
+            # rollback file regardless of when the exception fires.
+            pre_solo_backup_path: str | None = None
             try:
                 import torch
                 from enigma_engine.core.model import Enigma
                 from enigma_engine.core.tokenizer import get_tokenizer
+
                 # ARCH-1d: when the GUI is in API-chat mode, route training
                 # through the daemon via EnigmaClient instead of running it
                 # in-process.  The server loads the model, trains, and saves
                 # back to its model file.  The GUI just ships the config dict
-                # and polls status until done.
-                if bool(getattr(self, "use_api_chat", False)):
+                # and polls status until done.  No local backup is taken on
+                # the API branch: the weights live on the daemon, so a local
+                # snapshot is a misleading rollback target (Pass 156z9dz —
+                # AUDIT 156z9dv-A Finding A).  Daemon-side rollback (if any)
+                # is a server concern, mirroring the RLHF/Self-Play pattern.
+                if getattr(self, "use_api_chat", False) is True:
                     get_client_fn = getattr(
                         self, "_get_api_chat_client", None)
                     client = (get_client_fn()
@@ -251,6 +259,13 @@ class ForgeTrainingMixin:
                                 f"\n[!] API training failed: {exc}")
                             self._log(traceback.format_exc())
                         return  # finally block handles GUI cleanup
+
+                # In-process branch only: snapshot the student's
+                # current weights so a failure mid-training has a
+                # rollback target.  API branch above returns before
+                # reaching this point — see Pass 156z9dz.
+                pre_solo_backup_path = self._pre_training_backup(
+                    student_path, suffix="pre_solo")
 
                 device = ("cuda"
                           if torch.cuda.is_available() else "cpu")
@@ -588,6 +603,13 @@ class ForgeTrainingMixin:
                 self._log(f"\n[!] Solo training failed: {exc}")
                 self._log(tb)
             finally:
+                # Surface the rollback file on EVERY exit path
+                # (success, user-stop, OOM, crash) so the user always
+                # knows where the pre-training snapshot lives.
+                if pre_solo_backup_path:
+                    self._log(
+                        f"Rollback  : "
+                        f"{Path(pre_solo_backup_path).name}")
                 self._active_trainer = None
                 self.training_active = False
                 self._reset_forge_progress()
@@ -621,7 +643,10 @@ class ForgeTrainingMixin:
         _last_step = -1
         _start_t = _time.monotonic()
 
-        while self.training_active:
+        # Use `is True` (not truthy) so MagicMock-based tests cannot spin the
+        # poll loop forever. Real GUI assigns `training_active` as a Python
+        # bool in desktop.py / gui_forge_*.py launchers.
+        while self.training_active is True:
             try:
                 status = client.training_status()
             except Exception as exc:
@@ -746,7 +771,7 @@ class ForgeTrainingMixin:
         model_name = Path(student_path).stem
 
         # ARCH-1d Slice 2: API routing for preference training
-        if bool(getattr(self, "use_api_chat", False)):
+        if getattr(self, "use_api_chat", False) is True:
             get_client_fn = getattr(self, "_get_api_chat_client", None)
             client = (get_client_fn() if callable(get_client_fn) else None)
             if client is not None:
@@ -827,6 +852,9 @@ class ForgeTrainingMixin:
         self._reset_forge_progress()
 
         def _dpo_train():
+            # Pre-bind so failure-path ``finally`` can surface the
+            # rollback file regardless of when the exception fires.
+            pre_dpo_backup_path: str | None = None
             try:
                 import json as _json
                 import torch
@@ -1017,10 +1045,6 @@ class ForgeTrainingMixin:
                 total = _time.monotonic() - _dpo_start[0]
                 t_m, t_s = int(total // 60), int(total % 60)
                 self._log(f"Duration  : {t_m}m {t_s:02d}s")
-                if pre_dpo_backup_path:
-                    self._log(
-                        f"Rollback  : "
-                        f"{Path(pre_dpo_backup_path).name}")
                 self._update_forge_progress(100, "Complete")
                 self._save_training_run(
                     algo_label, Path(student_path).stem,
@@ -1036,6 +1060,13 @@ class ForgeTrainingMixin:
                 import traceback
                 self._log(traceback.format_exc())
             finally:
+                # Surface the rollback file on EVERY exit path
+                # (success, user-stop, crash) so the user always
+                # knows where the pre-training snapshot lives.
+                if pre_dpo_backup_path:
+                    self._log(
+                        f"Rollback  : "
+                        f"{Path(pre_dpo_backup_path).name}")
                 self._active_trainer = None
                 self.training_active = False
                 self._reset_forge_progress()
@@ -1164,7 +1195,7 @@ class ForgeTrainingMixin:
                 pass
 
         # ARCH-1d Slice 2: API routing for vision training
-        if bool(getattr(self, "use_api_chat", False)):
+        if getattr(self, "use_api_chat", False) is True:
             get_client_fn = getattr(self, "_get_api_chat_client", None)
             client = (get_client_fn() if callable(get_client_fn) else None)
             if client is not None:
@@ -1284,6 +1315,9 @@ class ForgeTrainingMixin:
                     pass  # never crash on heartbeat
 
             _write_hb("data_load")
+            # Pre-bind so failure-path ``finally`` can surface the
+            # rollback file regardless of when the exception fires.
+            pre_vision_backup_path: str | None = None
             try:
                 import torch
                 from enigma_engine.core.model import Enigma
@@ -1357,7 +1391,6 @@ class ForgeTrainingMixin:
                 # the text backbone.  Projection-only training keeps
                 # the text weights frozen, so the rollback rail is
                 # unnecessary in that path.
-                pre_vision_backup_path = None
                 if unfreeze_text_layers > 0:
                     pre_vision_backup_path = (
                         self._pre_training_backup(
@@ -1509,10 +1542,6 @@ class ForgeTrainingMixin:
                 total = _time.monotonic() - _vis_start[0]
                 t_m, t_s = int(total // 60), int(total % 60)
                 self._log(f"Duration  : {t_m}m {t_s:02d}s")
-                if pre_vision_backup_path:
-                    self._log(
-                        f"Rollback  : "
-                        f"{Path(pre_vision_backup_path).name}")
                 self._update_forge_progress(100, "Complete")
                 self._save_training_run(
                     "Vision", Path(student_path).stem,
@@ -1556,6 +1585,13 @@ class ForgeTrainingMixin:
                 self._log(traceback.format_exc())
                 _write_hb("training", status="crashed")
             finally:
+                # Surface the rollback file on EVERY exit path
+                # (success, user-stop, OOM, crash) so the user always
+                # knows where the pre-training snapshot lives.
+                if pre_vision_backup_path:
+                    self._log(
+                        f"Rollback  : "
+                        f"{Path(pre_vision_backup_path).name}")
                 self._active_trainer = None
                 self.training_active = False
                 self._reset_forge_progress()
@@ -1567,6 +1603,501 @@ class ForgeTrainingMixin:
                     "\u26a1 READY"))
 
         threading.Thread(target=_vision_train, daemon=True).start()
+
+    # ================================================================
+    # Audio training (ARCH-1d — speech/sound multimodal)
+    # ================================================================
+
+    def _start_audio_training(self):
+        """Train STUDENT to understand audio using audio-text pairs.
+
+        Mirrors ``_start_vision_training`` but routes through the
+        ``mode="audio"`` dispatcher branch, builds an AudioEncoder
+        from ``AUDIO_PRESETS``, and feeds ``Trainer.train_audio`` via
+        ``run_training``. Like vision Stage-2, the pre-training
+        backup helper only fires when ``unfreeze_text_layers > 0``
+        will mutate the text backbone.
+        """
+        if self.training_active:
+            return
+
+        student_path = self.route_assignments.get("student")
+        if not student_path or not Path(student_path).exists():
+            self._log(
+                "[!] No model assigned to STUDENT route.\n"
+                "    Go to ROUTER and assign the model to train.")
+            return
+
+        audio_dir_var = getattr(self, "forge_audio_dir_var", None)
+        audio_dir = (audio_dir_var.get()
+                     if audio_dir_var else str(DATA_DIR / "audio"))
+        if not audio_dir or not Path(audio_dir).exists():
+            self._log(
+                "[!] Audio data directory not found.\n"
+                f"    Expected: {audio_dir}\n"
+                "    Create clip.wav + clip.txt pairs in the folder.")
+            return
+
+        from enigma_engine.gui.scanners import scan_audio_data
+        pairs = scan_audio_data(audio_dir)
+        if not pairs:
+            self._log(
+                "[!] No audio-text pairs found.\n"
+                f"    Scanned: {audio_dir}\n"
+                "    Format 1: clip.wav + clip.txt (same name)\n"
+                "    Format 2: transcripts.jsonl with audio+text fields")
+            return
+
+        result = self._validate_epochs_lr()
+        if result is None:
+            return
+        epochs, lr = result
+
+        if not self._validate_general_data_path():
+            return
+
+        preset_var = getattr(self, "forge_audio_preset_var", None)
+        preset = preset_var.get() if preset_var else "tiny"
+        preset = preset.split(" - ", 1)[0]
+
+        # Unfreeze knob (mirror vision Stage-2). Clamp + bad-input
+        # guard match the vision launcher pattern verbatim.
+        unfreeze_var = getattr(self, "forge_audio_unfreeze_var", None)
+        try:
+            raw_unfreeze = unfreeze_var.get().strip() if unfreeze_var else ""
+            unfreeze_text_layers = int(raw_unfreeze) if raw_unfreeze else 0
+            if unfreeze_text_layers < 0:
+                self._log(
+                    f"[!] Unfreeze layers '{raw_unfreeze}' negative, "
+                    f"using 0")
+                unfreeze_text_layers = 0
+            if unfreeze_text_layers > 64:
+                self._log(
+                    f"[!] Unfreeze layers '{raw_unfreeze}' "
+                    f"unreasonably large, clamping to 64")
+                unfreeze_text_layers = 64
+        except (ValueError, TypeError):
+            if unfreeze_var and unfreeze_var.get().strip():
+                self._log(
+                    f"[!] Unfreeze layers '{unfreeze_var.get().strip()}' "
+                    f"not a number, using 0")
+            unfreeze_text_layers = 0
+
+        # V-4 stale-heartbeat probe (mirror vision).
+        import json as _json_stale
+        _hb_check_path = Path("logs") / "training_heartbeat.json"
+        if _hb_check_path.exists():
+            try:
+                _hb_prev = _json_stale.loads(
+                    _hb_check_path.read_text(encoding="utf-8"))
+                if _hb_prev.get("status") not in ("complete", "stopped"):
+                    _hb_pid = _hb_prev.get("pid")
+                    _hb_dead = True
+                    if _hb_pid:
+                        try:
+                            import psutil as _psutil_hb
+                            _hb_dead = not _psutil_hb.pid_exists(_hb_pid)
+                        except ImportError:
+                            _hb_dead = False
+                    if _hb_dead:
+                        self._log(
+                            "\n[!] PREVIOUS AUDIO SESSION WAS "
+                            "INTERRUPTED UNEXPECTEDLY\n"
+                            f"    Model : {_hb_prev.get('model', '?')}"
+                            f"  |  Phase: {_hb_prev.get('phase', '?')}"
+                            f"  |  Step: {_hb_prev.get('step', '?')}\n"
+                            f"    Last seen: "
+                            f"{_hb_prev.get('timestamp', '?')}\n"
+                            "    Likely cause: OS out-of-memory kill "
+                            "(no Python traceback).\n"
+                            "    Any saved checkpoint is intact in "
+                            "models/checkpoints/.\n")
+            except Exception:
+                pass
+
+        # ARCH-1d audio API-mode dispatch (mirror vision Slice 2).
+        if getattr(self, "use_api_chat", False) is True:
+            get_client_fn = getattr(self, "_get_api_chat_client", None)
+            client = (get_client_fn() if callable(get_client_fn) else None)
+            if client is not None:
+                def _run_api():
+                    try:
+                        import json as _json_audio
+                        pairs_data = "\n".join(
+                            _json_audio.dumps(p) for p in pairs)
+                        forge_params = self._read_forge_train_params()
+                        api_config = {
+                            "mode": "audio",
+                            "data": pairs_data,
+                            "training": {
+                                "epochs": epochs,
+                                "batch_size": forge_params["batch_size"],
+                                "learning_rate": lr,
+                                "max_grad_accumulation":
+                                    forge_params["max_grad_accumulation"],
+                                "use_gradient_checkpointing":
+                                    forge_params["use_gradient_checkpointing"],
+                                "use_sequence_packing": True,
+                                "ce_chunk_size": forge_params["ce_chunk_size"],
+                                "use_compile": True,
+                                "rolling_best_k": forge_params["rolling_best_k"],
+                                "general_mix_ratio":
+                                    forge_params["general_mix_ratio"],
+                                "general_data":
+                                    forge_params["general_data"] or "",
+                                "val_split": forge_params["val_split"],
+                                "save_every": max(1, epochs // 5),
+                                "run_evaluation": True,
+                            },
+                            "audio": {
+                                "unfreeze_text_layers": unfreeze_text_layers,
+                            },
+                        }
+                        api_config["training"]["min_lr_ratio"] = \
+                            forge_params["min_lr_ratio"]
+                        self._log("Sending audio training to API server...\n")
+                        self.training_active = True
+                        self.solo_train_btn.configure(state="disabled",
+                                                      text="TRAINING...")
+                        self.stop_train_btn.configure(state="normal")
+                        self.status_bar.set_left("\u2692 AUDIO TRAINING...")
+                        client.train(api_config)
+                        self._poll_api_training_status(
+                            client,
+                            mode_label="AUDIO")
+                    except Exception as exc:
+                        import traceback
+                        self._log(f"\n[!] API training failed: {exc}")
+                        self._log(traceback.format_exc())
+                    finally:
+                        self.training_active = False
+                        self.after(0, lambda: self.solo_train_btn.configure(
+                            state="normal", text="TRAIN"))
+                        self.after(0, lambda: self.stop_train_btn.configure(
+                            state="disabled", text="STOP"))
+                        self.after(0, lambda: self.status_bar.set_left(
+                            "\u26a1 READY"))
+                import threading
+                threading.Thread(target=_run_api, daemon=True).start()
+                return
+
+        self.training_active = True
+        self.solo_train_btn.configure(state="disabled",
+                                      text="TRAINING...")
+        self.stop_train_btn.configure(state="normal")
+        self.status_bar.set_left("\u2692 AUDIO TRAINING...")
+
+        summary_fields = {
+            "Student": Path(student_path).stem,
+            "Data dir": audio_dir,
+            "Pairs": str(len(pairs)),
+            "Encoder": preset,
+            "Unfreeze": (f"{unfreeze_text_layers} text layers"
+                         if unfreeze_text_layers > 0
+                         else "projection only"),
+            "Epochs": epochs,
+            "LR": lr,
+        }
+        self._log_training_summary("Audio Training", **summary_fields)
+        self._clear_forge_param_count()
+        self._reset_forge_progress()
+
+        def _audio_train():
+            losses: list[float] = []
+            import os as _os_hb
+            import json as _json_hb
+            import datetime as _dt_hb
+            _hb_path = Path("logs") / "training_heartbeat.json"
+            _hb_path.parent.mkdir(exist_ok=True)
+            _safe_name = Path(student_path).stem
+
+            def _write_hb(phase="data_load", step=None,
+                          loss=None, status="running"):
+                try:
+                    hb = {
+                        "pid": _os_hb.getpid(),
+                        "status": status,
+                        "model": _safe_name,
+                        "phase": phase,
+                        "timestamp": _dt_hb.datetime.now()
+                            .isoformat(timespec="seconds"),
+                    }
+                    if step is not None:
+                        hb["step"] = step
+                    if loss is not None:
+                        hb["loss"] = round(float(loss), 4)
+                    _hb_path.write_text(
+                        _json_hb.dumps(hb, indent=2),
+                        encoding="utf-8")
+                except Exception:
+                    pass
+
+            _write_hb("data_load")
+            # Pre-bind so failure-path ``finally`` always has a
+            # value to surface, per the Pass 156z9dz contract.
+            pre_audio_backup_path: str | None = None
+            try:
+                import torch
+                from enigma_engine.core.model import Enigma
+                from enigma_engine.core.model_presets import ForgeConfig
+                from enigma_engine.core.tokenizer import get_tokenizer
+                from enigma_engine.core.audio_encoder import (
+                    AudioEncoder, AUDIO_PRESETS)
+
+                device = ("cuda"
+                          if torch.cuda.is_available() else "cpu")
+                self._log(f"Device  : {device.upper()}")
+                self._log(f"Loading student: {Path(student_path).stem}")
+
+                from enigma_engine.core.model_registry import (
+                    get_state_dict, safe_load_weights)
+                checkpoint = safe_load_weights(
+                    student_path, map_location=device)
+
+                cfg_dict = (checkpoint.get("model_config")
+                            or checkpoint.get("config", {}))
+                if isinstance(cfg_dict, dict) and "epochs" in cfg_dict:
+                    cfg_dict = checkpoint.get("model_config", {})
+
+                # Set audio_hidden_size to match encoder preset dim
+                # so model.audio_projection is built at the right
+                # width on first construction.
+                a_preset = AUDIO_PRESETS.get(preset, AUDIO_PRESETS["tiny"])
+                cfg_dict["audio_hidden_size"] = a_preset.dim
+
+                config = ForgeConfig(**{
+                    k: v for k, v in cfg_dict.items()
+                    if k in ForgeConfig.__dataclass_fields__})
+                model = Enigma(config=config)
+                state_dict = get_state_dict(checkpoint)
+                model.load_state_dict(state_dict, strict=False)
+                model = model.to(device)
+
+                _bpe_path = MODELS_DIR / "tokenizer.json"
+                if _bpe_path.exists():
+                    try:
+                        from enigma_engine.core.bpe_tokenizer import (
+                            BPETokenizer)
+                        tokenizer = BPETokenizer(_bpe_path)
+                    except Exception:
+                        tokenizer = get_tokenizer("auto")
+                else:
+                    tokenizer = get_tokenizer("auto")
+                self._log(
+                    f"Tokenizer: {type(tokenizer).__name__} "
+                    f"(vocab {tokenizer.vocab_size})")
+
+                pc = sum(p.numel() for p in model.parameters())
+                self._log(f"Params  : {pc:,}")
+
+                a_encoder = AudioEncoder(a_preset).to(device)
+                a_params = sum(p.numel() for p in a_encoder.parameters())
+                self._log(f"Audio encoder: {a_params:,} params ({preset})")
+
+                # train_audio expects {"audio": path, "text": text}
+                audio_data = [
+                    {"audio": p["audio"], "text": p["text"]}
+                    for p in pairs
+                ]
+
+                forge_params = self._read_forge_train_params()
+                _trainer_ref: list = []
+
+                # Pre-audio auto-checkpoint gated on Stage-2, same
+                # contract as vision (only when text backbone will
+                # actually mutate).
+                if unfreeze_text_layers > 0:
+                    pre_audio_backup_path = (
+                        self._pre_training_backup(
+                            student_path,
+                            suffix="pre_audio_stage2"))
+
+                import time as _time
+                _last_aud_t = [0.0]
+                _aud_start = [_time.monotonic()]
+
+                def on_progress(pct: int, msg: str):
+                    if not self.training_active:
+                        raise KeyboardInterrupt("Stopped")
+                    now = _time.monotonic()
+                    if now - _last_aud_t[0] >= 1.0:
+                        self._update_forge_progress(pct, msg)
+                        _last_aud_t[0] = now
+                        _write_hb("training", step=pct)
+
+                def on_epoch(epoch, loss):
+                    if not self.training_active:
+                        raise KeyboardInterrupt("Stopped")
+                    losses.append(loss)
+                    _write_hb("training", step=epoch, loss=loss)
+                    pct = int(epoch / epochs * 100)
+                    self._update_forge_progress(
+                        pct, f"Epoch {epoch}/{epochs}")
+                    elapsed = _time.monotonic() - _aud_start[0]
+                    mins = int(elapsed // 60)
+                    secs = int(elapsed % 60)
+                    eta = ""
+                    if epoch > 0:
+                        remaining = (elapsed / epoch) * (
+                            epochs - epoch)
+                        r_m = int(remaining // 60)
+                        r_s = int(remaining % 60)
+                        eta = f"  |  ETA {r_m}m {r_s:02d}s"
+                    t = _trainer_ref[0] if _trainer_ref else None
+                    best = t.state.best_loss if t else float("inf")
+                    import math as _math
+                    best_str = (f"  |  best {best:.4f}"
+                                if not _math.isinf(best) else "")
+                    self._log(
+                        f"  Epoch {epoch:>3d}/{epochs}  |  "
+                        f"loss {loss:.4f}{best_str}  |  "
+                        f"{mins}m {secs:02d}s{eta}")
+
+                def on_trainer_ready(t) -> None:
+                    _trainer_ref.append(t)
+                    self._active_trainer = t
+
+                self._log("Training audio encoder...\n")
+
+                val_split_frac = float(
+                    forge_params["val_split"] or 0.0)
+                val_pairs_data = None
+                train_pairs_data = audio_data
+                if val_split_frac > 0 and len(audio_data) >= 2:
+                    rng = random.Random()
+                    _shuffled = list(audio_data)
+                    rng.shuffle(_shuffled)
+                    n_val = max(1, int(len(_shuffled) * val_split_frac))
+                    n_val = min(n_val, len(_shuffled) - 1)
+                    val_pairs_data = _shuffled[:n_val]
+                    train_pairs_data = _shuffled[n_val:]
+                    self._log(
+                        f"Audio split: {len(train_pairs_data)} train / "
+                        f"{len(val_pairs_data)} val "
+                        f"(val_split={val_split_frac:.2f})\n")
+
+                from enigma_engine.training.dispatch import (
+                    build_dispatch_context, run_training)
+                ctx = build_dispatch_context(
+                    model=model,
+                    tokenizer=tokenizer,
+                    audio_encoder=a_encoder,
+                    on_progress=on_progress,
+                    on_epoch_complete=on_epoch,
+                    on_trainer_ready=on_trainer_ready,
+                )
+                # Pass 156z9ec: train_audio now consumes a train/val
+                # dict (mirrors vision); dispatcher unpacks before
+                # forwarding to ``Trainer.train_audio``.
+                config_dict = {
+                    "mode": "audio",
+                    "data": {
+                        "train": train_pairs_data,
+                        "val": val_pairs_data,
+                    },
+                    "training": {
+                        "epochs": epochs,
+                        "batch_size": 1,
+                        "learning_rate": lr,
+                        "max_grad_accumulation": forge_params[
+                            "max_grad_accumulation"],
+                        "use_gradient_checkpointing": forge_params[
+                            "use_gradient_checkpointing"],
+                        "use_sequence_packing": True,
+                        "ce_chunk_size": forge_params["ce_chunk_size"],
+                        "use_compile": True,
+                        "rolling_best_k": forge_params["rolling_best_k"],
+                        "general_mix_ratio": forge_params[
+                            "general_mix_ratio"],
+                        "general_data": (
+                            forge_params["general_data"] or ""),
+                        "val_split": forge_params["val_split"],
+                        "save_every": max(1, epochs // 5),
+                        "checkpoint_dir": str(
+                            MODELS_DIR / "checkpoints"),
+                        "use_amp": torch.cuda.is_available(),
+                        "run_evaluation": True,
+                    },
+                    "audio": {
+                        "unfreeze_text_layers": unfreeze_text_layers,
+                    },
+                }
+                config_dict["training"]["min_lr_ratio"] = \
+                    forge_params["min_lr_ratio"]
+                state = run_training(config_dict, ctx)
+
+                from enigma_engine.core.safe_save import atomic_torch_save
+                save_dict = {
+                    "model_state_dict": model.state_dict(),
+                    "model_config": self._model_config_dict(model),
+                    "audio_encoder_state": a_encoder.state_dict(),
+                    "audio_encoder_config": a_preset.to_dict(),
+                    "training_state": {
+                        "epochs": state.epoch,
+                        "best_loss": state.best_loss,
+                    },
+                }
+                atomic_torch_save(save_dict, student_path)
+
+                self._log("\n--- AUDIO TRAINING COMPLETE ---")
+                self._log(f"Best loss : {state.best_loss:.4f}")
+                self._log(f"Saved to  : {Path(student_path).name}")
+                total = _time.monotonic() - _aud_start[0]
+                t_m, t_s = int(total // 60), int(total % 60)
+                self._log(f"Duration  : {t_m}m {t_s:02d}s")
+                self._update_forge_progress(100, "Complete")
+                self._save_training_run(
+                    "Audio", Path(student_path).stem,
+                    epochs, state.best_loss)
+                self.after(0, lambda pc=pc: self._update_forge_param_count(pc))
+                if losses:
+                    self._display_loss_curve(losses)
+                self.after(0, self._refresh_models)
+                self._notify_training_complete()
+                _write_hb("training", step=state.epoch,
+                          loss=state.best_loss, status="complete")
+
+            except KeyboardInterrupt:
+                self._log("\n--- AUDIO TRAINING STOPPED ---")
+                if losses:
+                    self._display_loss_curve(losses)
+                _write_hb("training", status="stopped")
+            except RuntimeError as exc:
+                import traceback
+                tb = traceback.format_exc()
+                msg = str(exc).lower()
+                if "out of memory" in msg or "cuda" in msg:
+                    _write_hb("training", status="crashed_oom")
+                    self._log(
+                        f"\n[!] GPU out of memory: {exc}\n"
+                        "    Try: smaller audio encoder preset, "
+                        "fewer epochs, or shorter clips.")
+                else:
+                    _write_hb("training", status="crashed")
+                    self._log(f"\n[!] Audio training failed: {exc}")
+                self._log(tb)
+            except Exception as exc:
+                self._log(f"\n[!] Audio training failed: {exc}")
+                import traceback
+                self._log(traceback.format_exc())
+                _write_hb("training", status="crashed")
+            finally:
+                # Surface rollback file on EVERY exit path.
+                if pre_audio_backup_path:
+                    self._log(
+                        f"Rollback  : "
+                        f"{Path(pre_audio_backup_path).name}")
+                self._active_trainer = None
+                self.training_active = False
+                self._reset_forge_progress()
+                self.after(0, lambda: self.solo_train_btn.configure(
+                    state="normal", text="TRAIN"))
+                self.after(0, lambda: self.stop_train_btn.configure(
+                    state="disabled", text="STOP"))
+                self.after(0, lambda: self.status_bar.set_left(
+                    "\u26a1 READY"))
+
+        threading.Thread(target=_audio_train, daemon=True).start()
 
     # ================================================================
     # LoRA training (low-rank adapter fine-tuning)
@@ -1639,7 +2170,7 @@ class ForgeTrainingMixin:
             lora_alpha = 16
 
         # ARCH-1d Slice 2: API routing for LoRA training.
-        if bool(getattr(self, "use_api_chat", False)):
+        if getattr(self, "use_api_chat", False) is True:
             get_client_fn = getattr(self, "_get_api_chat_client", None)
             client = (get_client_fn() if callable(get_client_fn) else None)
             if client is not None:

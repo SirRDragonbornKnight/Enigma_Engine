@@ -450,8 +450,8 @@ class ForgeToolsMixin:
         """Run a coherence benchmark on the CHAT model.
 
         Generates reflections using the loaded chat model, scores
-        each with the heuristic coherence scorer, and reports whether
-        the model passes the quality gate for automatic monologue.
+        each with the heuristic coherence scorer, and reports a
+        quality summary.
         """
         chat_path = self.route_assignments.get("chat")
         if not chat_path or not Path(chat_path).exists():
@@ -501,14 +501,13 @@ class ForgeToolsMixin:
                 rec = result['recommendation'].upper()
                 if rec == "READY":
                     msg = ("READY — model produces coherent "
-                           "reflections. Safe for automatic mode.")
+                           "reflections.")
                 elif rec == "MARGINAL":
-                    msg = ("MARGINAL — some reflections pass. "
-                           "journal_only mode recommended.")
+                    msg = ("MARGINAL — some reflections pass "
+                           "the coherence gate.")
                 else:
                     msg = ("NOT READY — most reflections fail "
-                           "the quality gate. Keep monologue "
-                           "disabled or journal_only.")
+                           "the coherence gate.")
                 self.after(0, lambda: self._log(
                     f"Result  : {msg}"))
 

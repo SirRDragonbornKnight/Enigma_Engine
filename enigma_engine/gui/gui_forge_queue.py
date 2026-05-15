@@ -29,6 +29,7 @@ _QUEUE_MODE_MAP: dict[str, str] = {
     "DPO": "dpo",
     "APO": "dpo",
     "Image": "vision",
+    "Audio": "audio",
     "GRPO": "grpo",
     "ReMax": "remax",
     "SimPO": "simpo",
@@ -266,10 +267,14 @@ class ForgeQueueMixin:
             raise ValueError(f"Training data file is empty: {job.data_path}")
 
         # API-mode queue execution: load model on daemon, submit one job,
-        # then poll daemon status until completion.
+        # then poll daemon status until completion. Use `is True` (not
+        # `bool(...)`) so that MagicMock-based tests do not accidentally
+        # take the API branch and spin in the status-poll loop forever —
+        # real GUI assigns `use_api_chat` as a Python bool in
+        # desktop.py and gui_pages_config.py.
         get_client = getattr(self, "_get_api_chat_client", None)
         client = None
-        if bool(getattr(self, "use_api_chat", False)) and callable(get_client):
+        if getattr(self, "use_api_chat", False) is True and callable(get_client):
             client = get_client()
 
         if client is not None:

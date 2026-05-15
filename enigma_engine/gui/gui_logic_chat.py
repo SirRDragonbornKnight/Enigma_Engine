@@ -177,7 +177,7 @@ class LogicChatMixin:
 
         Returns ``None`` when API mode is disabled or stream setup fails.
         """
-        use_api_chat = bool(getattr(self, "use_api_chat", False))
+        use_api_chat = getattr(self, "use_api_chat", False) is True
         if not use_api_chat:
             return None
 
@@ -209,7 +209,7 @@ class LogicChatMixin:
         API mode is opt-in via ``self.use_api_chat``. On API failure,
         we fall back to local engine mode when available.
         """
-        use_api_chat = bool(getattr(self, "use_api_chat", False))
+        use_api_chat = getattr(self, "use_api_chat", False) is True
 
         if use_api_chat:
             try:
@@ -287,7 +287,7 @@ class LogicChatMixin:
             if len(hist) > self._INPUT_HISTORY_MAX:
                 hist.pop(0)
         self._input_hist_idx = -1
-        use_api_chat = bool(getattr(self, "use_api_chat", False))
+        use_api_chat = getattr(self, "use_api_chat", False) is True
         if self.engine is None and not use_api_chat:
             self._chat_system(
                 "No model loaded. Go to ROUTER and load one first.")
@@ -1028,7 +1028,7 @@ class LogicChatMixin:
             ctx.increment_sessions()
         # Save cleared history to model context
         self._save_model_context()
-        use_api_chat = bool(getattr(self, "use_api_chat", False))
+        use_api_chat = getattr(self, "use_api_chat", False) is True
         if use_api_chat:
             get_client = getattr(self, "_get_api_chat_client", None)
             if callable(get_client):
@@ -1464,7 +1464,8 @@ class LogicChatMixin:
         name = session["name"]
 
         try:
-            path.unlink()
+            from enigma_engine.core.safe_save import unlink_with_backup
+            unlink_with_backup(path)
             self._chat_system(f"Deleted session: {name}")
         except OSError as exc:
             self._chat_error(f"Failed to delete: {exc}")

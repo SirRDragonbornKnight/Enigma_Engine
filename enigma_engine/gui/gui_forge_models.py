@@ -451,6 +451,22 @@ class ForgeModelsMixin:
                     shutil.rmtree(path)
                 else:
                     path.unlink()
+                # Clean up the per-model context directory
+                # (data/model_contexts/<key>/) so it doesn't outlive the
+                # model file. ModelContext.delete() uses shutil.rmtree
+                # with ignore_errors=True — safe even if dir is missing.
+                try:
+                    from enigma_engine.core.model_context import (
+                        ModelContext, model_key_from_path,
+                    )
+                    ModelContext(model_key_from_path(str(path))).delete()
+                except Exception as ctx_exc:
+                    # Context cleanup is best-effort — never block the
+                    # primary delete on context-side failures.
+                    import logging
+                    logging.getLogger(__name__).warning(
+                        "Context cleanup failed for %s: %s",
+                        name, ctx_exc)
                 self.after(0, lambda: self._models_msg(
                     f"Deleted: {name}", "#22c55e"))
             except OSError as exc:

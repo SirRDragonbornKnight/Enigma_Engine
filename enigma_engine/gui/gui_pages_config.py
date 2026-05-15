@@ -229,6 +229,49 @@ class ConfigPageMixin:
                 "WARNING instead — auto-stop applies to native text\n"
                 "only in B-3a.")
 
+        # N-14 (Pass 156z9ds): GUI surface for `rag_backend`
+        # selection.  The factory `make_rag_index()` reads
+        # CONFIG["rag_backend"] each call; this dropdown writes the
+        # user choice to forge_config.json so the next RAG index
+        # build picks it up.  Live indexes are not rebuilt — the
+        # toggle takes effect when the user re-runs the
+        # "Build RAG index" action (e.g. via the FORGE NOTES page).
+        SelectableLabel(
+            gen_inner, text="RAG BACKEND (retrieval index)",
+            font=FONT_TINY, text_color=C_TEXT_BRIGHT
+        ).pack(anchor="w", pady=(10, 0))
+        ctk.CTkLabel(
+            gen_inner,
+            text=(
+                "bm25 = keyword retrieval (default, zero extra "
+                "deps).  dense = semantic retrieval via "
+                "sentence-transformers + faiss-cpu (better recall "
+                "on paraphrased queries; falls back to bm25 with "
+                "a WARNING if the deps are missing)."
+            ),
+            font=FONT_TINY, text_color=C_TEXT_DIM, wraplength=500,
+            justify="left"
+        ).pack(anchor="w", pady=(2, 4))
+        rag_row = ctk.CTkFrame(gen_inner, fg_color="transparent")
+        rag_row.pack(fill="x", pady=(0, 4))
+        from enigma_engine.config import CONFIG as _CONFIG
+        _rag_backend_value = str(
+            _CONFIG.get("rag_backend", "bm25") or "bm25")
+        if _rag_backend_value not in ("bm25", "dense"):
+            _rag_backend_value = "bm25"
+        self._rag_backend_var = ctk.StringVar(value=_rag_backend_value)
+        self._rag_backend_menu = themed_dropdown(
+            rag_row, ["bm25", "dense"],
+            variable=self._rag_backend_var,
+            width=120, height=30,
+            command=lambda _v: self._set_rag_backend())
+        self._rag_backend_menu.pack(side="left", padx=(0, 6))
+        Tooltip(self._rag_backend_menu,
+                "Selecting a backend writes to forge_config.json.\n"
+                "Takes effect on the NEXT RAG index build — live\n"
+                "indexes already loaded keep their current backend\n"
+                "until rebuilt.")
+
         # N-15b (Pass 156z9aa): GUI surface for `json_schema`
         # constrained decoding.  The library + API endpoint already
         # accept the field (Pass 156z3 + Pass 156z6); this is the
@@ -540,43 +583,6 @@ class ConfigPageMixin:
         except Exception:
             pass
 
-        # Monologue mode
-        mono_row = ctk.CTkFrame(
-            mem_inner, fg_color="transparent")
-        mono_row.pack(fill="x", pady=2)
-        mono_row.grid_columnconfigure(1, weight=1)
-
-        SelectableLabel(
-            mono_row, text="Monologue Mode",
-            font=FONT_SMALL, text_color=C_TEXT,
-            width=160, anchor="w"
-        ).grid(row=0, column=0, sticky="w", padx=(0, 4))
-
-        # Load current monologue mode from cached settings
-        _mono_mode = _cached_settings.get("monologue_mode", "disabled")
-
-        _mono_options = [
-            "disabled - no background reflection",
-            "journal_only - reflects but never shows it",
-            "automatic - reflects and greets with insights",
-        ]
-        _mono_display = next(
-            (v for v in _mono_options if v.startswith(_mono_mode)),
-            _mono_options[0])
-        self._monologue_mode_var = ctk.StringVar(value=_mono_display)
-        self._monologue_mode_dd = themed_dropdown(
-            mono_row, width=280,
-            values=_mono_options,
-            variable=self._monologue_mode_var,
-            command=self._change_monologue_mode)
-        self._monologue_mode_dd.grid(
-            row=0, column=1, sticky="w", padx=(0, 4))
-        Tooltip(self._monologue_mode_dd,
-                "disabled — no background reflection\n"
-                "journal_only — AI reflects during idle, "
-                "stores journal, but never shows it\n"
-                "automatic — AI reflects and can greet you "
-                "with insights if quality is high enough")
 
         # Show emotional state panel toggle
         _show_emo = bool(
@@ -1012,35 +1018,6 @@ class ConfigPageMixin:
             logger.debug("Could not save memory_mode: %s", exc)
 
     # ------------------------------------------------------------------
-    # Monologue mode
-    # ------------------------------------------------------------------
-
-    def _change_monologue_mode(self, mode: str):
-        """Save monologue_mode setting to gui_settings.json and forge_config."""
-        mode = mode.split(" - ", 1)[0]
-        import json
-        settings_path = DATA_DIR / "gui_settings.json"
-        try:
-            settings: dict = {}
-            if settings_path.exists():
-                settings = json.loads(
-                    settings_path.read_text(encoding="utf-8"))
-            settings["monologue_mode"] = mode
-            from enigma_engine.core.safe_save import atomic_write_json
-            atomic_write_json(settings_path, settings)
-            self.status_bar.set_left(
-                f"\u26a1 Monologue mode set to: {mode}")
-        except Exception as exc:
-            logger.debug("Could not save monologue_mode: %s", exc)
-        # Also persist to forge_config.json for non-GUI users
-        try:
-            from enigma_engine.config import update_config, save_config
-            update_config({"monologue_mode": mode})
-            save_config()
-        except Exception as exc:
-            logger.debug("Could not save monologue_mode to config: %s", exc)
-
-    # ------------------------------------------------------------------
     # Emotional state panel visibility
     # ------------------------------------------------------------------
 
@@ -1194,6 +1171,46 @@ class ConfigPageMixin:
         state = "enabled" if enabled else "disabled"
         self.status_bar.set_left(
             f"\u26a1 Inline <search> auto-stop {state}")
+
+    # ------------------------------------------------------------------
+    # RAG backend dropdown (N-14, Pass 156z9ds)
+    # ------------------------------------------------------------------
+
+    def _set_rag_backend(self):
+        """Persist `rag_backend` to forge_config.json so the next
+        `make_rag_index()` call honours the choice.
+
+        Live RAG indexes are NOT rebuilt — the toggle only affects
+        future builds (e.g. the next "Build RAG index" action from
+        the FORGE NOTES page).  If the dropdown value is invalid the
+        method falls back to ``"bm25"`` and rewrites the StringVar
+        so the visible state matches what was actually persisted.
+        """
+        try:
+            value = str(self._rag_backend_var.get() or "bm25")
+        except Exception as exc:
+            logger.warning("Could not read rag_backend var: %s", exc)
+            return
+        if value not in ("bm25", "dense"):
+            logger.warning(
+                "Unknown rag_backend %r, falling back to bm25", value)
+            value = "bm25"
+            try:
+                self._rag_backend_var.set("bm25")
+            except Exception:
+                pass
+        try:
+            from enigma_engine.config import save_config, update_config
+            update_config({"rag_backend": value})
+            save_config()
+        except Exception as exc:
+            logger.warning("Could not persist rag_backend: %s", exc)
+            self.status_bar.set_left(
+                f"[!] RAG backend save failed: {exc}")
+            return
+        self.status_bar.set_left(
+            f"\u26a1 RAG backend set to {value} "
+            f"(applies on next index build)")
 
     # ------------------------------------------------------------------
     # JSON schema constrained decoding (N-15b, Pass 156z9aa)

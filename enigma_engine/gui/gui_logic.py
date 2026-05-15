@@ -602,7 +602,7 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
 
     def _load_model(self, path: str):
         """Load a model file in a background thread and update the UI."""
-        use_api_chat = bool(getattr(self, "use_api_chat", False))
+        use_api_chat = getattr(self, "use_api_chat", False) is True
         if getattr(self, '_model_loading', False):
             self._chat_system("Model already loading. Please wait.")
             return
@@ -705,7 +705,6 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
             chat_menu.set(display)
 
         self._update_route_status()
-        self._show_journal_greeting()
 
     def _on_model_loaded(self, path: str, param_count: int):
         """Handle successful model load — update header, routes, and context."""
@@ -829,9 +828,6 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
             chat_menu.set(display)
 
         self._update_route_status()
-
-        # Show journal greeting if a high-quality entry exists
-        self._show_journal_greeting()
 
     def _on_model_error(self, error: str):
         """Handle model load failure — show error and re-enable controls."""
@@ -1170,7 +1166,7 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
         self._model_display_name = None
         self._model_suspended_by_minimize = False
         self._suspended_model_path = None
-        use_api_chat = bool(getattr(self, "use_api_chat", False))
+        use_api_chat = getattr(self, "use_api_chat", False) is True
         if self.engine is None and use_api_chat and self.model_path:
             try:
                 get_client = getattr(self, "_get_api_chat_client", None)
@@ -1580,11 +1576,13 @@ class LogicMixin(LogicChatMixin, LogicMediaMixin):
     def _build_rag_index(self):
         """Build RAG index from data/ and information/ in a background thread."""
         try:
-            from enigma_engine.core.rag import RAGIndex
+            from enigma_engine.core.rag import make_rag_index
             from enigma_engine.core.document_readers import (
                 read_document, SUPPORTED_EXTENSIONS)
 
-            index = RAGIndex()
+            # Pass 156z9dr: factory honours CONFIG['rag_backend']
+            # ("bm25" default, "dense" opt-in with soft-fallback).
+            index = make_rag_index()
             indexed = 0
 
             # Index data/ and information/ directories
