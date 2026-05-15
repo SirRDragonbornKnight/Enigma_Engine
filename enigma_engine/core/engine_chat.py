@@ -541,8 +541,12 @@ class _ChatMixin:
             ``<think>...</think>`` blocks.
 
         Raises:
-            RuntimeError: If the underlying model is not loaded or the
-                tokenizer fails to encode the prompt.
+            NotImplementedError: When ``json_schema`` is passed and the
+                loaded model is a GGUF (llama.cpp) model. llama.cpp
+                uses its own sampler so the logit-masking FSM never
+                runs; rejecting at the boundary avoids returning
+                unconstrained tokens labelled as schema-conforming.
+                Pass 156z7 (N-15c2) sibling closure.
 
         Example:
             >>> engine = EnigmaEngine()
@@ -602,7 +606,10 @@ class _ChatMixin:
                 # ran on this path.  llama.cpp returns continuation
                 # only, so prompt=None.  Loud-on-real-issue: a model
                 # emitting <search> here gets one WARNING.
-                self._record_search_emissions(response)
+                # Pass 156z9cq: forward path="gguf" so the B-3a
+                # sibling WARNING fires when inline_search_splice_enabled
+                # is on (this path doesn't run splice yet).
+                self._record_search_emissions(response, path="gguf")
                 return response
             except Exception:
                 # Let the error propagate — no silent fallback (Suggestion #9A)
@@ -756,6 +763,14 @@ class _ChatMixin:
 
         Yields:
             Generated tokens one at a time
+
+        Raises:
+            NotImplementedError: When ``json_schema`` is passed and the
+                loaded model is a GGUF (llama.cpp) model. Matches the
+                non-streaming ``chat()`` rejection so callers fail loud
+                at the API boundary instead of silently receiving
+                unconstrained tokens labelled as schema-valid.
+                Pass 156z6 (N-15c) sibling closure.
         """
         # ── Shared preparation (truncation, reasoning, prompt/messages) ──
         ctx = self._prepare_chat(
@@ -795,7 +810,10 @@ class _ChatMixin:
                 # Pass 156z9e (Stage B-2 sibling sweep): GGUF server
                 # streaming returns the full response in one chunk
                 # without going through stream_generate's finally hook.
-                self._record_search_emissions(response)
+                # Pass 156z9cq: forward path="gguf" so the B-3a
+                # sibling WARNING fires when inline_search_splice_enabled
+                # is on (this path doesn't run splice yet).
+                self._record_search_emissions(response, path="gguf")
                 yield response
                 return
 
@@ -829,7 +847,12 @@ class _ChatMixin:
                     return
                 finally:
                     try:
-                        self._record_search_emissions("".join(gguf_chunks))
+                        # Pass 156z9cq: forward path="gguf" so the
+                        # B-3a sibling WARNING fires when
+                        # inline_search_splice_enabled is on (this
+                        # path doesn't run splice yet).
+                        self._record_search_emissions(
+                            "".join(gguf_chunks), path="gguf")
                     except Exception:
                         logger.exception(
                             "Stage B-2: GGUF stream scan crashed; "

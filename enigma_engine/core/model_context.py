@@ -135,9 +135,6 @@ class ModelContext:
         self.emotional_state: dict[str, float] = dict(_EMOTIONAL_BASELINE)
         self._emotional_lock = threading.Lock()
 
-        # Journal — lazily loaded on first access
-        self._journal = None
-
     @staticmethod
     def _default_prompt() -> str:
         """Load default prompt from data/prompts/chat.md, fallback to builtin."""
@@ -168,15 +165,6 @@ class ModelContext:
     def history_path(self) -> Path:
         """Path to history.json (chat messages)."""
         return self.context_dir / "history.json"
-
-    @property
-    def journal(self):
-        """Per-model journal (lazy-loaded on first access)."""
-        if self._journal is None:
-            from enigma_engine.core.monologue import Journal
-            self.context_dir.mkdir(parents=True, exist_ok=True)
-            self._journal = Journal(journal_dir=self.context_dir)
-        return self._journal
 
     # ----------------------------------------------------------------
     # Load

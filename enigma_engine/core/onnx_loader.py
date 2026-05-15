@@ -295,8 +295,15 @@ def validate_loaded_model(model: 'Enigma') -> None:
         model: Loaded Forge model to validate
 
     Raises:
-        RuntimeError: If model validation fails
-        ValueError: If output shape is incorrect
+        RuntimeError: If validation fails for any reason — the body
+            wraps every check (forward-pass execution, output-shape
+            mismatch, NaN detection) in a single ``try`` / ``except
+            Exception`` and re-raises as ``RuntimeError(...) from e``.
+            Pass 156z9cu: previous docstring claimed a separate
+            ``ValueError`` for shape mismatch, but the inner
+            ``raise ValueError(...)`` is caught by the outer guard
+            and converted before escaping. Callers see ``RuntimeError``
+            and can read the underlying cause via ``__cause__``.
     """
     _ensure_onnx_imports()
     if not HAVE_TORCH:

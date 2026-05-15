@@ -1,4 +1,4 @@
-﻿"""
+"""
 ================================================================================
                 CHAPTER 2: THE ORACLE - SPEAKING WITH YOUR AI
 ================================================================================
@@ -16,21 +16,21 @@ WHY THIS FILE MATTERS:
     Enigma AI Engine passes through this file.
 
 THE MAGIC PROCESS:
-    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-    â”‚  YOU: "What is the meaning of life?"                        â”‚
-    â”‚   â”‚                                                         â”‚
-    â”‚   â†“  (EnigmaEngine encodes your words into numbers)         â”‚
-    â”‚  [15496, 318, 262, 3616, ...]                               â”‚
-    â”‚   â”‚                                                         â”‚
-    â”‚   â†“  (Sends numbers through the Enigma brain)               â”‚
-    â”‚  [Matrix multiplication magic x millions]                   â”‚
-    â”‚   â”‚                                                         â”‚
-    â”‚   â†“  (Gets probability for each possible next word)         â”‚
-    â”‚  "The" 0.3, "It" 0.2, "42" 0.15, ...                       â”‚
-    â”‚   â”‚                                                         â”‚
-    â”‚   â†“  (Picks one, repeats until done)                        â”‚
-    â”‚  AI: "The meaning of life is to find purpose..."           â”‚
-    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+    ┌─────────────────────────────────────────────────────────────┐
+    │  YOU: "What is the meaning of life?"                        │
+    │   │                                                         │
+    │   ↓  (EnigmaEngine encodes your words into numbers)         │
+    │  [15496, 318, 262, 3616, ...]                               │
+    │   │                                                         │
+    │   ↓  (Sends numbers through the Enigma brain)               │
+    │  [Matrix multiplication magic x millions]                   │
+    │   │                                                         │
+    │   ↓  (Gets probability for each possible next word)         │
+    │  "The" 0.3, "It" 0.2, "42" 0.15, ...                       │
+    │   │                                                         │
+    │   ↓  (Picks one, repeats until done)                        │
+    │  AI: "The meaning of life is to find purpose..."           │
+    └─────────────────────────────────────────────────────────────┘
 
 SPEAKING STYLES (Sampling Strategies):
     | Style      | Description                | When to Use           |
@@ -47,10 +47,10 @@ YOUR FIRST CONVERSATION:
     "Why did the AI go to therapy? Too many neural issues!"
 
 CONNECTED PATHS:
-    You came from â†’ model.py (Chapter 1: The Brain)
-    You can go to â†’ tool_router.py (Chapter 3: The Dispatcher)
-                  â†’ chat_tab.py (The GUI interface)
-                  â†’ api_server.py (REST API for remote access)
+    You came from → model.py (Chapter 1: The Brain)
+    You can go to → tool_router.py (Chapter 3: The Dispatcher)
+                  → chat_tab.py (The GUI interface)
+                  → api_server.py (REST API for remote access)
 """
 from __future__ import annotations
 
@@ -78,7 +78,7 @@ LEGACY_MODEL = MODELS_DIR / "tiny_enigma_engine.pth"
 
 
 # =============================================================================
-# âš¡ INFERENCE ENGINE - Talk to Your AI!
+# ⚡ INFERENCE ENGINE - Talk to Your AI!
 # =============================================================================
 # This is the main class for generating text with a trained model.
 # It handles all the complexity of:
@@ -92,62 +92,62 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
     """
     High-performance inference engine for Enigma models.
 
-    ðŸ“– WHAT THIS DOES:
+    📖 WHAT THIS DOES:
     Takes your text prompt and generates a response using the AI model.
 
-    ðŸ“ GENERATION LOOP:
-    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-    â”‚  "Hello, how are" â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€    â”‚
-    â”‚         â”‚                                                              â”‚
-    â”‚         â–¼                                                              â”‚
-    â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”                                                       â”‚
-    â”‚  â”‚ Tokenizer   â”‚ â†’ [15496, 11, 703, 389]                              â”‚
-    â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜                                                       â”‚
-    â”‚         â”‚                                                              â”‚
-    â”‚         â–¼                                                              â”‚
-    â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”     â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”   â”‚
-    â”‚  â”‚   Model     â”‚ â”€â”€â–¶ â”‚ Probabilities for ALL vocab tokens        â”‚   â”‚
-    â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜     â”‚ "you": 0.15, "doing": 0.08, "the": 0.02   â”‚   â”‚
-    â”‚         â”‚            â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜   â”‚
-    â”‚         â–¼                                                              â”‚
-    â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”                                                       â”‚
-    â”‚  â”‚  Sampler    â”‚ â†’ Pick "you" (based on temperature, top_k, etc.)    â”‚
-    â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜                                                       â”‚
-    â”‚         â”‚                                                              â”‚
-    â”‚         â–¼                                                              â”‚
-    â”‚  Add "you" to sequence, REPEAT until done                             â”‚
-    â”‚         â”‚                                                              â”‚
-    â”‚         â–¼                                                              â”‚
-    â”‚  "Hello, how are you doing today?"                                    â”‚
-    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+    📐 GENERATION LOOP:
+    ┌────────────────────────────────────────────────────────────────────────┐
+    │  "Hello, how are" ─────────────────────────────────────────────────    │
+    │         │                                                              │
+    │         ▼                                                              │
+    │  ┌─────────────┐                                                       │
+    │  │ Tokenizer   │ → [15496, 11, 703, 389]                              │
+    │  └─────────────┘                                                       │
+    │         │                                                              │
+    │         ▼                                                              │
+    │  ┌─────────────┐     ┌───────────────────────────────────────────┐   │
+    │  │   Model     │ ──▶ │ Probabilities for ALL vocab tokens        │   │
+    │  └─────────────┘     │ "you": 0.15, "doing": 0.08, "the": 0.02   │   │
+    │         │            └───────────────────────────────────────────┘   │
+    │         ▼                                                              │
+    │  ┌─────────────┐                                                       │
+    │  │  Sampler    │ → Pick "you" (based on temperature, top_k, etc.)    │
+    │  └─────────────┘                                                       │
+    │         │                                                              │
+    │         ▼                                                              │
+    │  Add "you" to sequence, REPEAT until done                             │
+    │         │                                                              │
+    │         ▼                                                              │
+    │  "Hello, how are you doing today?"                                    │
+    └────────────────────────────────────────────────────────────────────────┘
 
-    âš¡ KEY FEATURES:
+    ⚡ KEY FEATURES:
     - KV-cache: Don't recompute past tokens (10x faster!)
     - Multiple samplers: greedy, top-k, top-p, temperature
     - Streaming: Get tokens as they're generated
     - Tools: Route to specialized models/APIs
     - Chat: Maintains conversation history
 
-    ðŸŽ›ï¸ SAMPLING STRATEGIES:
-    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-    â”‚ GREEDY (temperature=0):                                                â”‚
-    â”‚   Always pick highest probability token                                â”‚
-    â”‚   Pro: Deterministic, consistent                                       â”‚
-    â”‚   Con: Repetitive, boring                                              â”‚
-    â”‚                                                                        â”‚
-    â”‚ TEMPERATURE (0.1 to 2.0):                                              â”‚
-    â”‚   Scales probabilities before sampling                                 â”‚
-    â”‚   Low (0.3): More focused, predictable                                â”‚
-    â”‚   High (1.5): More random, creative                                   â”‚
-    â”‚                                                                        â”‚
-    â”‚ TOP-K (e.g., k=50):                                                    â”‚
-    â”‚   Only consider top K most likely tokens                              â”‚
-    â”‚   Prevents sampling very unlikely tokens                              â”‚
-    â”‚                                                                        â”‚
-    â”‚ TOP-P / NUCLEUS (e.g., p=0.9):                                        â”‚
-    â”‚   Only consider tokens covering P% of probability mass                â”‚
-    â”‚   Dynamic cutoff based on confidence                                  â”‚
-    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+    🎛️ SAMPLING STRATEGIES:
+    ┌────────────────────────────────────────────────────────────────────────┐
+    │ GREEDY (temperature=0):                                                │
+    │   Always pick highest probability token                                │
+    │   Pro: Deterministic, consistent                                       │
+    │   Con: Repetitive, boring                                              │
+    │                                                                        │
+    │ TEMPERATURE (0.1 to 2.0):                                              │
+    │   Scales probabilities before sampling                                 │
+    │   Low (0.3): More focused, predictable                                │
+    │   High (1.5): More random, creative                                   │
+    │                                                                        │
+    │ TOP-K (e.g., k=50):                                                    │
+    │   Only consider top K most likely tokens                              │
+    │   Prevents sampling very unlikely tokens                              │
+    │                                                                        │
+    │ TOP-P / NUCLEUS (e.g., p=0.9):                                        │
+    │   Only consider tokens covering P% of probability mass                │
+    │   Dynamic cutoff based on confidence                                  │
+    └────────────────────────────────────────────────────────────────────────┘
 
     Attributes:
         model: The loaded ``Forge`` transformer model instance.
@@ -348,7 +348,7 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
         """
         Initialize the inference engine.
 
-        ðŸ“– THIS IS THE MAIN CONSTRUCTOR!
+        📖 THIS IS THE MAIN CONSTRUCTOR!
         It loads the model and tokenizer, sets up the device,
         and prepares everything for text generation.
 
@@ -395,19 +395,19 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
                 )
                 self.enable_tools = False
 
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # ─────────────────────────────────────────────────────────────────────
         # LOAD TOKENIZER
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # ─────────────────────────────────────────────────────────────────────
         self.tokenizer = self._load_tokenizer(tokenizer_path, model_path)
 
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # ─────────────────────────────────────────────────────────────────────
         # LOAD MODEL
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # ─────────────────────────────────────────────────────────────────────
         self.model = self._load_model(model_path, model_size)
 
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # ─────────────────────────────────────────────────────────────────────
         # APPLY DEVICE PLACEMENT (PyTorch models only)
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # ─────────────────────────────────────────────────────────────────────
         # GGUF models handle their own device placement via n_gpu_layers
         if not getattr(self, '_is_gguf', False):
             if self.use_offloading:
@@ -420,9 +420,9 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
             # Set to evaluation mode (disables dropout, etc.)
             self.model.eval()
 
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # ─────────────────────────────────────────────────────────────────────
         # LOAD MODEL METADATA (including content rating support)
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # ─────────────────────────────────────────────────────────────────────
         self._load_model_metadata(model_path)
 
         # Log what we loaded
@@ -593,7 +593,7 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
         """
         Load or create the model.
 
-        ðŸ“– AUTO-DETECTION:
+        📖 AUTO-DETECTION:
         If model_size="auto", this method will:
         1. Detect hardware capabilities (RAM, GPU, Pi)
         2. Choose the best model size for this device
@@ -601,9 +601,9 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
 
         This enables seamless deployment from Raspberry Pi to datacenter!
         """
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # ─────────────────────────────────────────────────────────────────────
         # AUTO-DETECT MODEL SIZE FOR HARDWARE
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # ─────────────────────────────────────────────────────────────────────
         auto_quantize = False
         quantization_mode = "none"
 
@@ -635,9 +635,9 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
                 logger.warning(f"[Auto-Detect] Detection failed: {e}, using 'small'")
                 model_size = "small"
 
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # ─────────────────────────────────────────────────────────────────────
         # FIND MODEL FILE
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # ─────────────────────────────────────────────────────────────────────
         model_file = None
         if model_path:
             model_file = Path(model_path)
@@ -882,9 +882,9 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
                 raw_checkpoint, model, model_file,
             )
 
-            # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            # ─────────────────────────────────────────────────────────────────
             # APPLY AUTO-QUANTIZATION IF NEEDED
-            # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            # ─────────────────────────────────────────────────────────────────
             if auto_quantize and quantization_mode != "none":
                 # Skip if model is already quantized (e.g. loaded from quantized checkpoint)
                 already_quantized = any(
@@ -1052,7 +1052,7 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
         logger.info(f"FP16: {self.use_half}")
 
     # =========================================================================
-    # ðŸ“ GENERATION METHODS - The Heart of Text Generation
+    # 📝 GENERATION METHODS - The Heart of Text Generation
     # =========================================================================
 
     def generate(
@@ -1076,10 +1076,10 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
         """
         Generate text from a prompt.
 
-        ðŸ“– WHAT THIS DOES:
+        📖 WHAT THIS DOES:
         This is the main generation function. Give it text, get more text back!
 
-        ðŸ“ HOW IT WORKS:
+        📐 HOW IT WORKS:
         1. Check if prompt needs special routing (image/code/web)
         2. Acquire thread lock (only one generation at a time)
         3. Tokenize the prompt into numbers
@@ -1088,29 +1088,29 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
         6. Repeat until max_gen tokens or stop_string found
         7. If AI tried to use tools, execute them and continue
 
-        ðŸ“ PARAMETER GUIDE:
-        â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-        â”‚ temperature:  Controls randomness                              â”‚
-        â”‚   0.1-0.3:   Very focused, predictable                        â”‚
-        â”‚   0.7-0.9:   Good balance (default area)                      â”‚
-        â”‚   1.0-1.5:   More creative, less coherent                     â”‚
-        â”‚   >1.5:      Very random, may be nonsense                     â”‚
-        â”‚                                                                â”‚
-        â”‚ top_k:       Only consider top K tokens                       â”‚
-        â”‚   10-30:     Very focused                                      â”‚
-        â”‚   50:        Good default                                      â”‚
-        â”‚   100+:      More variety                                      â”‚
-        â”‚                                                                â”‚
-        â”‚ top_p:       Nucleus sampling - dynamic cutoff                â”‚
-        â”‚   0.5:       Conservative, focused                            â”‚
-        â”‚   0.9:       Good default                                      â”‚
-        â”‚   0.95-1.0:  More variety                                      â”‚
-        â”‚                                                                â”‚
-        â”‚ repetition_penalty: Discourage repeating words               â”‚
-        â”‚   1.0:       No penalty                                        â”‚
-        â”‚   1.1:       Mild (good default)                              â”‚
-        â”‚   1.3+:      Strong (may break grammar)                       â”‚
-        â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+        📐 PARAMETER GUIDE:
+        ┌────────────────────────────────────────────────────────────────┐
+        │ temperature:  Controls randomness                              │
+        │   0.1-0.3:   Very focused, predictable                        │
+        │   0.7-0.9:   Good balance (default area)                      │
+        │   1.0-1.5:   More creative, less coherent                     │
+        │   >1.5:      Very random, may be nonsense                     │
+        │                                                                │
+        │ top_k:       Only consider top K tokens                       │
+        │   10-30:     Very focused                                      │
+        │   50:        Good default                                      │
+        │   100+:      More variety                                      │
+        │                                                                │
+        │ top_p:       Nucleus sampling - dynamic cutoff                │
+        │   0.5:       Conservative, focused                            │
+        │   0.9:       Good default                                      │
+        │   0.95-1.0:  More variety                                      │
+        │                                                                │
+        │ repetition_penalty: Discourage repeating words               │
+        │   1.0:       No penalty                                        │
+        │   1.1:       Mild (good default)                              │
+        │   1.3+:      Strong (may break grammar)                       │
+        └────────────────────────────────────────────────────────────────┘
 
         Args:
             prompt: Input text to continue
@@ -1140,9 +1140,29 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
             Generated text (including the prompt)
 
         Raises:
-            ValueError: If parameters are out of valid range
-            TypeError: If prompt is not a string
+            TypeError: If ``prompt`` is not a ``str``. Pass 156z9cs:
+                explicit type guard at entry — without it the failure
+                landed deep inside the tokenizer with an opaque error
+                class (often ``AttributeError`` on a ``None`` prompt).
+            ValueError: If ``json_schema is not None`` and
+                ``execute_tools=True`` (mutually exclusive — tool
+                re-entry would silently drop the constraint; Pass
+                156z7 N-15c2 gate). Also propagated from
+                ``_generate_text`` for each numeric-range violation:
+                ``max_gen <= 0``, ``temperature < 0``, ``top_k < 0``,
+                ``top_p`` outside ``[0, 1]``, ``repetition_penalty
+                < 1.0``. Pass 156z9ct: expanded after the 156z9cs
+                clause narrowed the documented set below what the
+                code actually raises.
         """
+        # Pass 156z9cs: honour the documented TypeError clause. The
+        # downstream `_generate_text` also enforces this with the same
+        # message; doing it here avoids paying alias/route setup cost
+        # on a malformed call.
+        if not isinstance(prompt, str):
+            raise TypeError(
+                f"prompt must be a string, got {type(prompt).__name__}"
+            )
         # Handle max_tokens, max_new_tokens, max_length aliases for backward compatibility
         if max_tokens is not None:
             max_gen = max_tokens
@@ -1151,9 +1171,9 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
         if max_length is not None:
             max_gen = max_length
 
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # ─────────────────────────────────────────────────────────────────────
         # STEP 1: Determine if tools should be executed
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # ─────────────────────────────────────────────────────────────────────
         if execute_tools is None:
             execute_tools = self.enable_tools
 
@@ -1174,18 +1194,18 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
                 "engine) when using json_schema."
             )
 
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # ─────────────────────────────────────────────────────────────────────
         # STEP 2: Check if specialized routing should handle this
         # Some prompts can bypass the main AI for faster execution
-        # e.g., "draw a cat" â†’ directly calls image generator
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # e.g., "draw a cat" → directly calls image generator
+        # ─────────────────────────────────────────────────────────────────────
         if self.use_routing and self._tool_router:
             # Classify what the user wants (image, code, web, etc.)
             intent = self._tool_router.classify_intent(prompt)
             logger.info(f"Classified intent: {intent}")
 
             # Check if this needs AI creativity (ambiguous/creative requests)
-            # "surprise me" â†’ needs AI, "draw a cat" â†’ can route directly
+            # "surprise me" → needs AI, "draw a cat" → can route directly
             if self._needs_ai_creativity(prompt):
                 logger.info("Prompt requires AI creativity, using main AI")
                 # Fall through to standard generation
@@ -1195,10 +1215,10 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
                 if direct_result is not None:
                     return direct_result
 
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # ─────────────────────────────────────────────────────────────────────
         # STEP 3: Thread-safe generation (protects KV-cache state)
         # Only one generation can happen at a time!
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # ─────────────────────────────────────────────────────────────────────
         # Try to coordinate with background training.  Non-blocking:
         # if training holds the lock, proceed anyway (graceful degradation).
         train_lock = self._train_lock

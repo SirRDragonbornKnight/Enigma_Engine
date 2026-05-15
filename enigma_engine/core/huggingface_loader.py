@@ -924,7 +924,13 @@ def convert_hf_config_to_forge(hf_config) -> dict:
         Dictionary with Forge config parameters
 
     Raises:
-        ValueError: If model type not supported
+        ValueError: If a required architectural field cannot be
+            located on ``hf_config`` — specifically the model
+            dimension (``hidden_size`` / ``n_embd`` / ``d_model``),
+            the layer count, or the attention-head count. Pass
+            156z9cs corrected the trigger description; the pre-Pass
+            wording named an unsupported-architecture trigger that
+            no raise in this function actually performs.
     """
     model_type = getattr(hf_config, 'model_type', 'unknown')
 

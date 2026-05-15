@@ -402,15 +402,35 @@ class _GenerationMixin:
                 "recorded on engine.last_search_queries for inspection",
                 len(queries))
             # B-3a sibling-boundary warning.  When the splice opt-in
-            # flag is ON, ``native`` (`_generate_text`) and ``stream``
-            # (`stream_generate`, B-3d Pass 156z9al) honour the splice
-            # contract.  Every other generation method (vision /
-            # speculative / medusa / lookahead / batch / GGUF) emits
-            # a one-shot WARNING per call so callers know the flag
-            # had no effect on this path.
+            # flag is ON, ``native`` (`_generate_text`), ``stream``
+            # (`stream_generate`, B-3d Pass 156z9al),  ``speculative``
+            # / ``medusa`` / ``lookahead`` (Pass 156z9cp), ``vision``
+            # (`_generate_with_vision`, Pass 156z9do), and ``batch``
+            # (`batch_generate`, Pass 156z9dp) honour the splice
+            # contract.  Only the GGUF path remains WARNING-only and
+            # is parked PERMANENTLY (Pass 156z9dq): llama-cpp-python
+            # exposes a string ``stop=[...]`` parameter and a
+            # logits-processor hook, but our ``_maybe_rag_splice``
+            # helper builds raw text-completion prompts while the
+            # GGUF chat() path goes through ``create_chat_completion``
+            # with role-bounded message templating.  Splicing
+            # ``<search_result>…</search_result>`` into the middle
+            # of an assistant message produces undefined behaviour
+            # on most instruction-tuned chat templates (the
+            # ``<|im_end|>`` boundary is implicit in the template,
+            # not exposed by the API).  Shipping a half-correct
+            # splice here would silently corrupt every GGUF chat
+            # call that triggered a search request.  See the Pass
+            # 156z9dq SUGGESTIONS.md stamp for the parked-permanently
+            # decision rationale and the concrete next step needed
+            # (chat-template-aware retrieval injection at the
+            # messages-list level, not the text level).
             if (
                 getattr(self, "inline_search_splice_enabled", False)
-                and path not in ("native", "stream")
+                and path not in (
+                    "native", "stream", "speculative",
+                    "medusa", "lookahead", "vision", "batch",
+                )
             ):
                 logger.warning(
                     "B-3a: inline_search_splice_enabled=True but the "
@@ -567,8 +587,10 @@ class _GenerationMixin:
         # the closing tag instead of streaming past it into more text
         # we'll discard later.  Defensive copy so we don't mutate the
         # caller's list (some callers pass module-level constants).
-        # Native non-GGUF path only — sibling paths (stream / vision
-        # / speculative / medusa / lookahead / batch / GGUF) warn via
+        # Native non-GGUF path here; sibling paths that also honour
+        # the splice contract: ``stream`` (Pass 156z9al), ``speculative``
+        # / ``medusa`` / ``lookahead`` (Pass 156z9cp).  The remaining
+        # sibling paths (vision / batch / GGUF) warn via
         # ``_record_search_emissions(path=...)`` instead.
         effective_stop_strings = stop_strings
         if getattr(self, "inline_search_splice_enabled", False):
@@ -1837,11 +1859,54 @@ class _GenerationMixin:
         # Errors in one prompt's scan do NOT corrupt other prompts'
         # results — each call to ``_record_search_emissions`` is
         # already exception-safe.
+        #
+        # B-3 sibling closure (Pass 156z9do): when
+        # ``inline_search_splice_enabled`` is True, per-prompt trim at
+        # ``</search>`` and then call ``_maybe_rag_splice`` on each
+        # output independently so multi-round retrieval + continuation
+        # works for batched calls too.  Continuation rounds run through
+        # ``_generate_manual`` (single-sequence text-only), so the
+        # batch efficiency advantage applies only to round 0 — splice
+        # rounds are serial per prompt.  Acceptable trade-off because
+        # most batched calls won't trigger splice on every row.
+        splice_enabled = getattr(self, "inline_search_splice_enabled", False)
+        effective_stop_strings_batch = (
+            ["</search>"] if splice_enabled else None
+        )
         per_prompt: list[list[str]] = []
         flat: list[str] = []
-        for prompt_text, output_text in zip(prompts, results):
+        for i, (prompt_text, output_text) in enumerate(zip(prompts, results)):
+            current_text = output_text
+            if splice_enabled and isinstance(current_text, str):
+                # Per-sequence post-decode trim at ``</search>`` so the
+                # splice helper sees an unclosed ``<search>q`` tail.
+                pl = len(prompt_text)
+                generated_part = (
+                    current_text[pl:] if len(current_text) > pl else current_text
+                )
+                if "</search>" in generated_part:
+                    stop_pos = generated_part.find("</search>")
+                    current_text = current_text[:pl + stop_pos]
+
+                # Round-0 token count for this sequence: generated total
+                # minus the original (unpadded) input length for row ``i``.
+                tokens_round0 = max(
+                    0, generated.shape[1] - len(encoded[i])
+                )
+                spliced = self._maybe_rag_splice(
+                    current_text, prompt_text, max_gen,
+                    temperature, top_k, top_p,
+                    repetition_penalty, min_p,
+                    effective_stop_strings=effective_stop_strings_batch,
+                    json_constraint=None,
+                    tokens_already_generated=tokens_round0,
+                )
+                if spliced is not None:
+                    current_text = spliced
+
+            results[i] = current_text
             self._record_search_emissions(
-                output_text, prompt=prompt_text, path="batch")
+                current_text, prompt=prompt_text, path="batch")
             per_prompt.append(list(self.last_search_queries))
             flat.extend(self.last_search_queries)
         self.last_search_queries_per_prompt = per_prompt
@@ -1906,6 +1971,23 @@ class _GenerationMixin:
         if not isinstance(prompt, str) or not prompt.strip():
             return ""
 
+        # B-3a sibling closure (Pass 156z9do): when the splice flag is
+        # ON, append ``</search>`` to ``stop_strings`` so the vision
+        # loop halts cleanly on the closing tag, mirroring
+        # ``_generate_text`` and the speculative siblings.  Continuation
+        # rounds run through ``_maybe_rag_splice`` → ``_generate_manual``
+        # which is a text-only path: image grounding is lost on splice
+        # rounds (the cache is rebuilt from the spliced text prompt
+        # without a fresh ``forward_multimodal`` prefill).  This is an
+        # accepted degradation — the splice exists to inject retrieved
+        # text knowledge, and the image content the model needed was
+        # already in the emission up to ``</search>``.
+        effective_stop_strings = stop_strings
+        if getattr(self, "inline_search_splice_enabled", False):
+            effective_stop_strings = list(stop_strings or [])
+            if "</search>" not in effective_stop_strings:
+                effective_stop_strings.append("</search>")
+
         # Tokenise prompt
         input_ids = self._encode_prompt(prompt)  # [1, seq_len]
         device = getattr(self, "device", torch.device("cpu"))
@@ -1958,13 +2040,13 @@ class _GenerationMixin:
                     break
 
                 # Periodic stop-string check (windowed decode)
-                if (stop_strings
+                if (effective_stop_strings
                         and (step + 1) % self._STOP_CHECK_INTERVAL == 0):
                     tail_start = max(prompt_len, generated.shape[1] - self._STOP_CHECK_WINDOW)
                     recent_ids = generated[0, tail_start:].tolist()
                     recent_text = self.tokenizer.decode(
                         recent_ids, skip_special_tokens=True)
-                    if any(ss in recent_text for ss in stop_strings):
+                    if any(ss in recent_text for ss in effective_stop_strings):
                         break
 
                 # Decode step: only new token with start_pos
@@ -1990,14 +2072,37 @@ class _GenerationMixin:
             )
 
         # Apply stop strings
-        if stop_strings:
-            prompt_len = len(prompt)
-            generated_part = text[prompt_len:] if len(text) > prompt_len else text
-            for stop_str in stop_strings:
+        if effective_stop_strings:
+            prompt_text_len = len(prompt)
+            generated_part = text[prompt_text_len:] if len(text) > prompt_text_len else text
+            for stop_str in effective_stop_strings:
                 if stop_str in generated_part:
                     stop_pos = generated_part.find(stop_str)
-                    text = text[:prompt_len + stop_pos]
+                    text = text[:prompt_text_len + stop_pos]
                     break
+
+        # B-3b/B-3c sibling closure (Pass 156z9do): same retrieve+splice
+        # contract as ``_generate_text`` / speculative siblings.  When
+        # the splice flag is ON and a built RAG index is attached, an
+        # unclosed ``<search>q`` tail triggers up to ``max_search_rounds``
+        # rounds of retrieve and continuation via ``_maybe_rag_splice``.
+        # Helper returns ``None`` on any precondition miss, leaving
+        # ``text`` unchanged.  ``tokens_already_generated`` is the
+        # round-0 emission count so the helper budgets remaining rounds
+        # against the original ``max_gen`` instead of multiplying it.
+        # NOTE: continuation rounds are text-only (no vision features
+        # re-injected) — see the docstring on the stop-string augment
+        # block above for the rationale.
+        tokens_round0 = max(0, generated.shape[1] - prompt_len)
+        spliced = self._maybe_rag_splice(
+            text, prompt, max_gen, temperature, top_k, top_p,
+            repetition_penalty, min_p,
+            effective_stop_strings=effective_stop_strings,
+            json_constraint=None,
+            tokens_already_generated=tokens_round0,
+        )
+        if spliced is not None:
+            text = spliced
 
         # Stage B-2 sibling sweep: vision path returns final text here.
         # Pass 156z9e: pass prompt= so user prompts containing literal
@@ -2062,6 +2167,18 @@ class _GenerationMixin:
         Returns:
             Generated text (prompt + new tokens).
         """
+        # B-3a sibling closure (Pass 156z9cp): when the splice flag is
+        # ON, append ``</search>`` to ``stop_strings`` so the
+        # speculative loop halts cleanly on the closing tag, mirroring
+        # ``_generate_text``'s ``effective_stop_strings`` pattern.  The
+        # post-decode trim already iterates ``stop_strings`` so no
+        # additional trim wiring is needed.
+        effective_stop_strings = stop_strings
+        if getattr(self, "inline_search_splice_enabled", False):
+            effective_stop_strings = list(stop_strings or [])
+            if "</search>" not in effective_stop_strings:
+                effective_stop_strings.append("</search>")
+
         input_ids = self._encode_prompt(prompt)
         device = input_ids.device
         generated = input_ids
@@ -2231,24 +2348,44 @@ class _GenerationMixin:
                 # EOS / stop check
                 if generated[0, -1].item() == eos_id:
                     break
-                if (stop_strings
+                if (effective_stop_strings
                         and tokens_generated % self._STOP_CHECK_INTERVAL == 0):
                     tail_start = max(prompt_len, generated.shape[1] - self._STOP_CHECK_WINDOW)
                     recent_text = self.tokenizer.decode(
                         generated[0, tail_start:].tolist(),
                         skip_special_tokens=True)
-                    if any(ss in recent_text for ss in stop_strings):
+                    if any(ss in recent_text for ss in effective_stop_strings):
                         break
 
         # Decode
         text = self._decode_output(generated)
-        if stop_strings:
+        if effective_stop_strings:
             pl = len(prompt)
             gen_part = text[pl:] if len(text) > pl else text
-            for ss in stop_strings:
+            for ss in effective_stop_strings:
                 if ss in gen_part:
                     text = text[:pl + gen_part.find(ss)]
                     break
+
+        # B-3b/B-3c sibling closure (Pass 156z9cp): same retrieve+splice
+        # contract as ``_generate_text`` — when the splice flag is ON
+        # and a built RAG index is attached, an unclosed ``<search>q``
+        # tail triggers up to ``max_search_rounds`` rounds of retrieve
+        # and continuation via :meth:`_maybe_rag_splice`.  Helper
+        # returns ``None`` on any precondition miss, leaving ``text``
+        # unchanged.  ``tokens_already_generated`` is the round-0
+        # emission count so the helper budgets remaining rounds against
+        # the original ``max_gen`` instead of multiplying it.
+        spliced = self._maybe_rag_splice(
+            text, prompt, max_gen, temperature, top_k, top_p,
+            repetition_penalty, min_p,
+            effective_stop_strings=effective_stop_strings,
+            json_constraint=None,
+            tokens_already_generated=tokens_generated,
+        )
+        if spliced is not None:
+            text = spliced
+
         # Stage B-2 sibling sweep: speculative decoding return path.
         # Pass 156z9e: prompt-slice so prompt-side <search> isn't recorded.
         self._record_search_emissions(
@@ -2289,6 +2426,16 @@ class _GenerationMixin:
         Returns:
             Generated text (prompt + new tokens).
         """
+        # B-3a sibling closure (Pass 156z9cp): when the splice flag is
+        # ON, append ``</search>`` to ``stop_strings`` so the medusa
+        # loop halts cleanly on the closing tag, mirroring
+        # ``_generate_text``'s ``effective_stop_strings`` pattern.
+        effective_stop_strings = stop_strings
+        if getattr(self, "inline_search_splice_enabled", False):
+            effective_stop_strings = list(stop_strings or [])
+            if "</search>" not in effective_stop_strings:
+                effective_stop_strings.append("</search>")
+
         input_ids = self._encode_prompt(prompt)
         device = input_ids.device
         generated = input_ids
@@ -2403,7 +2550,7 @@ class _GenerationMixin:
                     )
 
                 # Stop string check
-                if (stop_strings
+                if (effective_stop_strings
                         and tokens_generated % self._STOP_CHECK_INTERVAL == 0):
                     tail_start = max(
                         prompt_len,
@@ -2411,20 +2558,36 @@ class _GenerationMixin:
                     recent_text = self.tokenizer.decode(
                         generated[0, tail_start:].tolist(),
                         skip_special_tokens=True)
-                    if any(ss in recent_text for ss in stop_strings):
+                    if any(ss in recent_text for ss in effective_stop_strings):
                         break
 
                 if generated[0, -1].item() == eos_id:
                     break
 
         text = self._decode_output(generated)
-        if stop_strings:
+        if effective_stop_strings:
             pl = len(prompt)
             gen_part = text[pl:] if len(text) > pl else text
-            for ss in stop_strings:
+            for ss in effective_stop_strings:
                 if ss in gen_part:
                     text = text[:pl + gen_part.find(ss)]
                     break
+
+        # B-3b/B-3c sibling closure (Pass 156z9cp): same retrieve+splice
+        # contract as ``_generate_text`` — when the splice flag is ON
+        # and a built RAG index is attached, an unclosed ``<search>q``
+        # tail triggers up to ``max_search_rounds`` rounds of retrieve
+        # and continuation via :meth:`_maybe_rag_splice`.
+        spliced = self._maybe_rag_splice(
+            text, prompt, max_gen, temperature, top_k, top_p,
+            repetition_penalty, min_p,
+            effective_stop_strings=effective_stop_strings,
+            json_constraint=None,
+            tokens_already_generated=tokens_generated,
+        )
+        if spliced is not None:
+            text = spliced
+
         # Stage B-2 sibling sweep: medusa decoding return path.
         # Pass 156z9e: prompt-slice so prompt-side <search> isn't recorded.
         self._record_search_emissions(text, prompt=prompt, path="medusa")
@@ -2543,6 +2706,16 @@ class _GenerationMixin:
         Returns:
             Generated text.
         """
+        # B-3a sibling closure (Pass 156z9cp): when the splice flag is
+        # ON, append ``</search>`` to ``stop_strings`` so the lookahead
+        # loop halts cleanly on the closing tag, mirroring
+        # ``_generate_text``'s ``effective_stop_strings`` pattern.
+        effective_stop_strings = stop_strings
+        if getattr(self, "inline_search_splice_enabled", False):
+            effective_stop_strings = list(stop_strings or [])
+            if "</search>" not in effective_stop_strings:
+                effective_stop_strings.append("</search>")
+
         input_ids = self._encode_prompt(prompt)
         generated = input_ids
         prompt_len = input_ids.shape[1]
@@ -2664,7 +2837,7 @@ class _GenerationMixin:
                         generated[:, -max_len:], use_cache=has_cache)
 
                 # Stop string check
-                if (stop_strings
+                if (effective_stop_strings
                         and tokens_generated % self._STOP_CHECK_INTERVAL == 0):
                     tail_start = max(
                         prompt_len,
@@ -2672,20 +2845,36 @@ class _GenerationMixin:
                     recent_text = self.tokenizer.decode(
                         generated[0, tail_start:].tolist(),
                         skip_special_tokens=True)
-                    if any(ss in recent_text for ss in stop_strings):
+                    if any(ss in recent_text for ss in effective_stop_strings):
                         break
 
                 if generated[0, -1].item() == eos_id:
                     break
 
         text = self._decode_output(generated)
-        if stop_strings:
+        if effective_stop_strings:
             pl = len(prompt)
             gen_part = text[pl:] if len(text) > pl else text
-            for ss in stop_strings:
+            for ss in effective_stop_strings:
                 if ss in gen_part:
                     text = text[:pl + gen_part.find(ss)]
                     break
+
+        # B-3b/B-3c sibling closure (Pass 156z9cp): same retrieve+splice
+        # contract as ``_generate_text`` — when the splice flag is ON
+        # and a built RAG index is attached, an unclosed ``<search>q``
+        # tail triggers up to ``max_search_rounds`` rounds of retrieve
+        # and continuation via :meth:`_maybe_rag_splice`.
+        spliced = self._maybe_rag_splice(
+            text, prompt, max_gen, temperature, top_k, top_p,
+            repetition_penalty, min_p,
+            effective_stop_strings=effective_stop_strings,
+            json_constraint=None,
+            tokens_already_generated=tokens_generated,
+        )
+        if spliced is not None:
+            text = spliced
+
         # Stage B-2 sibling sweep: lookahead decoding return path.
         # Pass 156z9e: prompt-slice so prompt-side <search> isn't recorded.
         self._record_search_emissions(

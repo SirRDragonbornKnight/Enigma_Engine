@@ -35,21 +35,30 @@ def parse_gguf_tensors(
     """
     Parse and extract tensors from GGUF file.
 
-    ⚠️ NOTE: Full dequantization of all GGUF quantization types is not yet
-    implemented. This function will work for F32 and F16 tensors, but will
-    raise NotImplementedError for quantized types unless the gguf library
-    is available.
+    F32 and F16 tensors load directly. Quantized tensors (Q4_0, Q4_K,
+    Q5_K, Q8_0, etc.) are dispatched to the dequantization functions
+    further down this module — those have native fp32 implementations
+    and do NOT require the external ``gguf`` library.
+
+    Unknown / unsupported tensor types are SKIPPED with a WARNING log
+    rather than raised, so a stray unsupported quant in an otherwise
+    valid file degrades to "tensor missing" instead of aborting the
+    whole load. Pass 156z9cu: the previous "raises NotImplementedError"
+    promise was a Pass 156s anti-pattern — no such raise existed.
 
     Args:
         f: Open file handle (binary mode)
         header: Parsed header dictionary
-        dequantize: If True, dequantize quantized tensors to float32
+        dequantize: If True, dequantize quantized tensors to float32.
+            If False, quantized tensors are SKIPPED (logged at WARNING).
 
     Returns:
-        Dictionary mapping tensor names to PyTorch tensors
+        Dictionary mapping tensor names to PyTorch tensors. Skipped
+        tensors are absent from the dict.
 
     Raises:
-        NotImplementedError: If quantized tensors are encountered without gguf library
+        RuntimeError: If ``torch`` is not installed. Tensor parsing
+            requires torch to construct the result dict.
     """
     import struct
 

@@ -1,11 +1,11 @@
-﻿"""
+"""
 Reinforcement Learning Training for Enigma Engine
 ====================================================
 
 Implements:
-- RL-B: RLHF with reward model â€” small reward model trained from
+- RL-B: RLHF with reward model — small reward model trained from
   DPO preference data, then PPO-style policy gradient on the main model.
-- RL-C: Self-play RL â€” TRAINER model scores STUDENT responses as
+- RL-C: Self-play RL — TRAINER model scores STUDENT responses as
   reward signal; policy gradient updates push STUDENT toward higher
   scored outputs.
 
@@ -489,7 +489,7 @@ def _get_logps_hidden_entropy(
 class RewardModel(nn.Module):
     """Small transformer + scalar head that outputs a reward score.
 
-    Built on top of an existing Enigma model â€” reuses its embeddings
+    Built on top of an existing Enigma model — reuses its embeddings
     and transformer layers but replaces the language model head with
     a single-value linear projection.  The base weights can be frozen
     or fine-tuned.
@@ -602,7 +602,7 @@ class RewardModel(nn.Module):
 
 
 # =============================================================================
-# REWARD TRAINER â€” train reward model from preference data
+# REWARD TRAINER — train reward model from preference data
 # =============================================================================
 
 @dataclass
@@ -1043,7 +1043,7 @@ class PRMTrainer:
         return {"final_loss": final_loss, "epochs_completed": epochs_done}
 
 # =============================================================================
-# RLHF TRAINER (RL-B) â€” PPO-style policy gradient with reward model
+# RLHF TRAINER (RL-B) — PPO-style policy gradient with reward model
 # =============================================================================
 
 @dataclass
@@ -1674,7 +1674,7 @@ class RLHFTrainer:
 
 
 # =============================================================================
-# SELF-PLAY RL (RL-C) â€” TRAINER as reward signal
+# SELF-PLAY RL (RL-C) — TRAINER as reward signal
 # =============================================================================
 
 @dataclass
@@ -1718,7 +1718,7 @@ class SelfPlayConfig:
 class SelfPlayTrainer:
     """Self-play RL: TRAINER model scores STUDENT responses.
 
-    The TRAINER model is used as a reward function â€” it reads the
+    The TRAINER model is used as a reward function — it reads the
     STUDENT's response and outputs a numerical score.  Policy gradient
     updates push the STUDENT toward higher-scoring responses, with
     a KL penalty against the initial STUDENT weights.

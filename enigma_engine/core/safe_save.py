@@ -166,3 +166,37 @@ def atomic_write_json(
         default=default,
     )
     atomic_write_text(path, content)
+
+
+def unlink_with_backup(path: str | Path) -> None:
+    """Delete *path* and its ``<path>.bak`` sibling together.
+
+    :func:`atomic_write_text` and :func:`atomic_write_json` rotate the
+    previous file contents to ``<path>.bak`` on every write. When the
+    caller later deletes ``<path>`` directly (``Path.unlink``), the
+    ``.bak`` sibling is orphaned and lingers on disk forever — the user
+    sees the artifact disappear from the UI but the file is still there.
+
+    This helper is the safe deletion counterpart: removes both the
+    target and its backup in one call. Both removals are
+    ``missing_ok=True`` — the helper is idempotent and safe to call
+    even if only one of the two exists. Directories are not handled
+    here; callers deleting directories should use ``shutil.rmtree``.
+
+    Args:
+        path: Target file path (file, not directory).
+
+    Raises:
+        OSError: If unlinking the primary path fails for a reason other
+            than ``FileNotFoundError``. ``.bak`` failures are logged but
+            never re-raised — losing a backup never blocks deletion.
+    """
+    p = Path(path)
+    bak = p.with_suffix(p.suffix + ".bak")
+    # Primary first — its failure is fatal to the caller.
+    p.unlink(missing_ok=True)
+    # Backup second — best-effort, never blocks the delete contract.
+    try:
+        bak.unlink(missing_ok=True)
+    except OSError as exc:
+        logger.warning("Backup cleanup failed for %s: %s", bak, exc)

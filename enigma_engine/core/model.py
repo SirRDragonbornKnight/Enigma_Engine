@@ -803,7 +803,13 @@ class Enigma(nn.Module):
             or generator if stream=True
 
         Raises:
-            ValueError: If temperature is not positive
+            ValueError: If any of the following hold — ``temperature``
+                is not positive; ``input_ids`` is not a 2D tensor of
+                shape ``[batch, seq_len]``; ``input_ids.device`` does
+                not match the model's parameter device. Pass 156z9cs
+                expanded this clause to enumerate all three real
+                triggers; the previous wording only named the
+                temperature gate.
         """
         # Validate temperature
         if temperature <= 0:

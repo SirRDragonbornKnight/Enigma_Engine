@@ -584,6 +584,50 @@ class RAGIndex:
 # Helper: index a directory of files
 # ---------------------------------------------------------------------------
 
+def make_rag_index(backend: str | None = None) -> "RAGIndex":
+    """Factory: construct a RAG index per configured backend (Pass 156z9dr).
+
+    ``backend`` resolution order:
+
+    1. Explicit argument (``"dense"`` or ``"bm25"``).
+    2. ``CONFIG["rag_backend"]`` (default ``"bm25"``).
+    3. Hard fallback ``"bm25"``.
+
+    When ``"dense"`` is requested but ``sentence-transformers`` /
+    ``faiss-cpu`` are not installed, the factory falls back to the
+    BM25 :class:`RAGIndex` with a WARNING — soft-fail keeps the slice
+    safe to ship without forcing the heavy deps on every install.
+    Returned object satisfies the protocol surface
+    (``add_document`` / ``build`` / ``is_built`` / ``query`` /
+    ``format_context`` / ``save`` / ``load``) regardless of backend.
+    """
+    if backend is None:
+        try:
+            from enigma_engine.config import CONFIG
+            backend = CONFIG.get("rag_backend", "bm25")
+        except Exception:
+            backend = "bm25"
+    backend = (backend or "bm25").lower()
+    if backend == "dense":
+        try:
+            from .rag_dense import DenseRAGIndex, is_available
+            if is_available():
+                return DenseRAGIndex()
+            logger.warning(
+                "rag_backend='dense' requested but sentence-transformers "
+                "or faiss-cpu is not installed; falling back to BM25."
+            )
+        except Exception:
+            logger.exception(
+                "Failed to construct DenseRAGIndex; falling back to BM25."
+            )
+    elif backend != "bm25":
+        logger.warning(
+            "Unknown rag_backend=%r; falling back to BM25.", backend
+        )
+    return RAGIndex()
+
+
 def index_directory(directory: str | Path,
                     extensions: tuple[str, ...] = (
                         ".txt", ".md", ".jsonl",
@@ -592,11 +636,13 @@ def index_directory(directory: str | Path,
     """Recursively index all matching files in *directory*.
 
     Automatically uses ``document_readers`` for PDF/DOCX when available.
+    Pass 156z9dr: now routes through :func:`make_rag_index` so the
+    ``rag_backend`` CONFIG flag applies here too.
     """
     from .document_readers import read_document, SUPPORTED_EXTENSIONS
 
     directory = Path(directory)
-    index = RAGIndex()
+    index = make_rag_index()
 
     for p in sorted(directory.rglob("*")):
         if not p.is_file():

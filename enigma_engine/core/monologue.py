@@ -1,184 +1,29 @@
 """
-Inner Monologue & Journal System — Phase 5
-==========================================
+Coherence Scoring & Benchmark
+=============================
 
-Per-model journal storage, coherence quality gate, reflection prompt
-builder, and idle detection.  The monologue system lets the AI reflect
-during idle periods, storing journal entries that persist with the model.
+Heuristic 0.0-1.0 quality scorer for model output, plus a benchmark
+runner used by the FORGE tools page to evaluate whether a model
+produces coherent reflections.
 
-Architecture:
-  - ``Journal`` — per-model markdown journal (read/write/trim)
-  - ``score_coherence()`` — heuristic quality gate (0.0–1.0)
-  - ``build_reflection_prompt()`` — assembles context for reflection
-  - ``IdleTracker`` — detects when the user has been inactive
-
-The quality gate (default threshold 0.7) prevents low-quality
-reflections from reaching the user.  At current student model scale
-(125M), most output will be journal-only.  Teacher models or larger
-students can pass the gate for user-facing greetings.
-
-Directory layout::
-
-    data/model_contexts/<model_key>/journal.json
-
-Usage::
-
-    journal = Journal(journal_dir=model_context_dir)
-    journal.add("The user seems interested in physics.")
-    latest = journal.latest()  # most recent entry or None
-    context = journal.build_context(max_entries=5)
+Previously this module also exposed ``Journal``, ``IdleTracker``, and
+``build_reflection_prompt`` for a never-finished idle-reflection
+feature.  Those were dead infra (reader-without-writer, FSM-without-
+driver) and were removed.  Only the live coherence/benchmark surface
+remains.
 """
 from __future__ import annotations
 
-import json
 import logging
 import re
-import threading
-import time
 from collections import Counter
-from datetime import datetime, timezone
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# ----------------------------------------------------------------
-# Constants
-# ----------------------------------------------------------------
 
-# Valid monologue modes:
-#   disabled     — no background reflection at all
-#   journal_only — AI reflects, stores journal, but never initiates
-#   automatic    — AI reflects, stores journal, and can initiate
-#                  greetings/thoughts if quality gate passes
-MONOLOGUE_MODES = ("disabled", "journal_only", "automatic")
-DEFAULT_MONOLOGUE_MODE = "disabled"
-
-# Coherence threshold — model output must score above this
-# to be shown to the user.  Below it → journal-only storage.
+# Coherence threshold — output must score at or above this to be
+# considered "high quality".  Used by the benchmark recommendation.
 DEFAULT_COHERENCE_THRESHOLD = 0.7
-
-# Maximum journal entries per model
-_MAX_JOURNAL_ENTRIES = 200
-
-# Idle threshold before triggering reflection (seconds)
-DEFAULT_IDLE_SECONDS = 300  # 5 minutes
-
-
-# ----------------------------------------------------------------
-# Journal — Per-Model Persistent Storage
-# ----------------------------------------------------------------
-
-class Journal:
-    """Per-model journal stored as ``journal.json``.
-
-    Each entry has:
-      - ``text``: the reflection content
-      - ``timestamp``: ISO 8601 creation time
-      - ``coherence``: float score at time of writing
-
-    Thread-safe via lock + file-level atomicity (atomic writes).
-    """
-
-    def __init__(
-        self,
-        journal_dir: Path,
-        max_entries: int = _MAX_JOURNAL_ENTRIES,
-    ) -> None:
-        self._path = Path(journal_dir) / "journal.json"
-        self._max_entries = max_entries
-        self._entries: list[dict] = []
-        self._lock = threading.Lock()
-        self._load()
-
-    def _load(self) -> None:
-        """Read journal from disk."""
-        if not self._path.exists():
-            self._entries = []
-            return
-        try:
-            data = json.loads(self._path.read_text(encoding="utf-8"))
-            entries = data.get("entries", [])
-            # Validate structure
-            valid = []
-            for e in entries:
-                if isinstance(e, dict) and "text" in e:
-                    valid.append(e)
-            self._entries = valid
-        except (json.JSONDecodeError, OSError) as exc:
-            logger.warning("Failed to load journal: %s", exc)
-            self._entries = []
-
-    def _save(self, snapshot: list[dict] | None = None) -> None:
-        """Write journal to disk atomically."""
-        try:
-            self._path.parent.mkdir(parents=True, exist_ok=True)
-            if snapshot is None:
-                with self._lock:
-                    snapshot = list(self._entries)
-            data = {
-                "version": 1,
-                "entry_count": len(snapshot),
-                "entries": snapshot,
-            }
-            from enigma_engine.core.safe_save import atomic_write_json
-            atomic_write_json(self._path, data)
-        except OSError as exc:
-            logger.error("Failed to save journal: %s", exc)
-
-    def add(self, text: str, coherence: float = 0.0) -> None:
-        """Add a journal entry. Rejects empty text."""
-        text = text.strip()
-        if not text:
-            return
-        entry = {
-            "text": text,
-            "timestamp": datetime.now(timezone.utc).isoformat(
-                timespec="seconds"),
-            "coherence": round(coherence, 3),
-        }
-        with self._lock:
-            self._entries.append(entry)
-            # Trim oldest if over capacity
-            while len(self._entries) > self._max_entries:
-                self._entries.pop(0)
-            snapshot = list(self._entries)
-        self._save(snapshot)
-
-    @property
-    def entries(self) -> list[dict]:
-        """Return a copy of all journal entries."""
-        with self._lock:
-            return list(self._entries)
-
-    @property
-    def count(self) -> int:
-        """Number of journal entries."""
-        with self._lock:
-            return len(self._entries)
-
-    def latest(self) -> dict | None:
-        """Return the most recent entry, or None if empty."""
-        with self._lock:
-            if not self._entries:
-                return None
-            return self._entries[-1]
-
-    def build_context(self, max_entries: int = 5) -> str:
-        """Format recent journal entries for injection into prompts.
-
-        Returns a string suitable for appending to the system prompt,
-        or empty string if no entries.
-        """
-        with self._lock:
-            if not self._entries:
-                return ""
-            recent = list(self._entries[-max_entries:])
-        lines = ["[JOURNAL — Recent reflections]"]
-        for entry in recent:
-            ts = entry.get("timestamp", "")
-            text = entry.get("text", "")
-            lines.append(f"- ({ts}) {text}")
-        return "\n".join(lines)
 
 
 # ----------------------------------------------------------------
@@ -203,15 +48,15 @@ _COMMON_WORDS = frozenset({
 
 
 def score_coherence(text: str) -> float:
-    """Score text coherence on a 0.0–1.0 scale.
+    """Score text coherence on a 0.0-1.0 scale.
 
-    Heuristic approach — no model inference needed:
+    Heuristic approach - no model inference needed:
       1. Length adequacy (very short = low quality)
       2. Word variety (repetitive = low quality)
       3. Vocabulary overlap with common English (gibberish = low)
       4. Sentence structure (at least one proper sentence)
 
-    This is intentionally conservative — the gate should let
+    This is intentionally conservative - the gate should let
     through obviously good text and reject obviously bad text.
     Borderline cases are scored low (fail-safe).
     """
@@ -220,13 +65,13 @@ def score_coherence(text: str) -> float:
 
     text = text.strip()
 
-    # --- Length score: 0–0.25 ---
+    # --- Length score: 0-0.25 ---
     char_count = len(text)
     if char_count < 10:
-        return 0.0  # single word / fragment — never passes
+        return 0.0  # single word / fragment - never passes
     length_score = min(char_count / 200, 1.0) * 0.25
 
-    # --- Word variety: 0–0.25 ---
+    # --- Word variety: 0-0.25 ---
     words = re.findall(r"[a-z']+", text.lower())
     if not words:
         return 0.0
@@ -234,13 +79,13 @@ def score_coherence(text: str) -> float:
     unique_ratio = len(word_counts) / len(words) if words else 0
     variety_score = min(unique_ratio / 0.6, 1.0) * 0.25
 
-    # --- Vocabulary overlap: 0–0.25 ---
+    # --- Vocabulary overlap: 0-0.25 ---
     word_set = set(words)
     known = len(word_set & _COMMON_WORDS)
     overlap_ratio = known / len(word_set) if word_set else 0
     vocab_score = min(overlap_ratio / 0.3, 1.0) * 0.25
 
-    # --- Sentence structure: 0–0.25 ---
+    # --- Sentence structure: 0-0.25 ---
     # Check for at least one sentence with 4+ words ending in punctuation
     sentences = re.split(r"[.!?]+", text)
     good_sentences = sum(
@@ -254,111 +99,7 @@ def score_coherence(text: str) -> float:
 
 
 # ----------------------------------------------------------------
-# Reflection Prompt Builder
-# ----------------------------------------------------------------
-
-def build_reflection_prompt(
-    emotional_state: dict[str, float] | None = None,
-    recent_topics: list[str] | None = None,
-    memory_facts: list[str] | None = None,
-) -> str:
-    """Build a prompt that asks the model to reflect.
-
-    Assembles available context (emotional state, recent conversation
-    topics, memory facts) into a prompt that invites introspection.
-    The model's response becomes a journal entry.
-
-    Args:
-        emotional_state: Current emotional dimensions (may be empty).
-        recent_topics: Keywords from recent conversations.
-        memory_facts: Known facts about the user from PersistentMemory.
-
-    Returns:
-        A system-prompt-style string for generating a reflection.
-    """
-    parts = [
-        "You are reflecting quietly between conversations. "
-        "Write a brief, honest internal thought — something you "
-        "noticed about recent interactions, a pattern you observed, "
-        "or something you want to remember for next time. "
-        "Keep it to 1-3 sentences. Be genuine, not performative."
-    ]
-
-    # Add emotional context
-    if emotional_state:
-        from enigma_engine.core.model_context import _EMOTIONAL_BASELINE
-        significant = []
-        for key, val in emotional_state.items():
-            baseline = _EMOTIONAL_BASELINE.get(key, 0.0)
-            if abs(val - baseline) >= 0.2:
-                if key == "valence":
-                    mood = "positive" if val > 0 else "negative"
-                    significant.append(f"mood is {mood}")
-                elif key == "engagement":
-                    level = "high" if val > baseline else "low"
-                    significant.append(f"engagement is {level}")
-                elif key == "frustration" and val > 0.3:
-                    significant.append("some frustration detected")
-                elif key == "trust":
-                    level = "high" if val > baseline else "low"
-                    significant.append(f"trust level is {level}")
-        if significant:
-            parts.append(
-                f"\nEmotional context: {', '.join(significant)}."
-            )
-
-    # Add recent topics
-    if recent_topics:
-        topics_str = ", ".join(recent_topics[:5])
-        parts.append(f"\nRecent conversation topics: {topics_str}.")
-
-    # Add memory facts
-    if memory_facts:
-        facts_str = "; ".join(memory_facts[:5])
-        parts.append(f"\nKnown about the user: {facts_str}.")
-
-    return "\n".join(parts)
-
-
-# ----------------------------------------------------------------
-# Idle Tracker
-# ----------------------------------------------------------------
-
-class IdleTracker:
-    """Tracks user activity to detect idle periods.
-
-    Usage:
-        tracker = IdleTracker(idle_threshold_seconds=300)
-        tracker.record_activity()  # call on each user interaction
-        if tracker.is_idle():
-            # trigger reflection
-            tracker.mark_reflected()
-    """
-
-    def __init__(self, idle_threshold_seconds: float = DEFAULT_IDLE_SECONDS):
-        self._threshold = idle_threshold_seconds
-        self._last_activity: float = time.monotonic()
-        self._reflected_since_activity: bool = False
-
-    def record_activity(self) -> None:
-        """Reset idle timer — call on user interaction."""
-        self._last_activity = time.monotonic()
-        self._reflected_since_activity = False
-
-    def is_idle(self) -> bool:
-        """Return True if idle threshold has passed and not yet reflected."""
-        if self._reflected_since_activity:
-            return False
-        elapsed = time.monotonic() - self._last_activity
-        return elapsed >= self._threshold
-
-    def mark_reflected(self) -> None:
-        """Mark that a reflection has been done for this idle period."""
-        self._reflected_since_activity = True
-
-
-# ----------------------------------------------------------------
-# Coherence Benchmark — Teacher-Scored Evaluation
+# Coherence Benchmark - Teacher-Scored Evaluation
 # ----------------------------------------------------------------
 
 # Diverse prompt variations so the benchmark tests a range of
@@ -415,7 +156,7 @@ def run_coherence_benchmark(
         prompt = _BENCHMARK_PROMPTS[i % len(_BENCHMARK_PROMPTS)]
         system = (
             "You are reflecting quietly between conversations. "
-            "Write a brief, honest internal thought — something you "
+            "Write a brief, honest internal thought - something you "
             "noticed, a pattern you observed, or something to remember. "
             "Keep it to 1-3 sentences. Be genuine, not performative."
         )
