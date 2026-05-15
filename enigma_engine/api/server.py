@@ -24,10 +24,16 @@ Endpoints:
     POST /api/profiles/{id}/activate  Activate a profile
     GET  /api/config        Get generation config
     POST /api/config        Update generation config
-    GET  /api/history       Get chat history
-    DELETE /api/history     Clear chat history
+    GET  /api/history       Legacy alias -- returns active-conversation history
+    DELETE /api/history     Clear ALL conversations + KV cache (legacy alias)
     GET  /api/training/status  Training progress
     POST /api/train         Start training
+
+Conversation endpoints (MC-1):
+    POST   /api/conversations            Create a new conversation thread
+    GET    /api/conversations            List all conversation IDs + metadata
+    DELETE /api/conversations/{id}       Delete a conversation
+    GET    /api/conversations/{id}/history  Per-conversation history
 """
 from __future__ import annotations
 
@@ -36,6 +42,7 @@ import json
 import logging
 import threading
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -48,10 +55,20 @@ from enigma_engine import __version__
 from enigma_engine.core.json_schema_mask import validate_json_schema_shape
 logger = logging.getLogger(__name__)
 
-# Maximum chat history entries (user + assistant pairs).
+# Maximum chat history entries (user + assistant pairs) per conversation.
 # Oldest entries evicted when exceeded.  Prevents unbounded memory growth
 # on long-running server sessions.
 MAX_HISTORY = 10_000
+
+# Maximum simultaneous conversations the daemon will keep in memory
+# (MC-1). LRU eviction kicks in past this number -- the least-recently
+# touched conversation is dropped when a new one is created.  Bounds
+# memory at MAX_CONVERSATIONS * MAX_HISTORY entries.
+# D2 fix (Pass 156z9dc): floor clamped to 2.  A value of 1 is a soft
+# brick -- _evict_locked skips the active conversation so the count
+# permanently sits at 2 (active + one pending) until one is deleted.
+_MAX_CONVERSATIONS_RAW = 100
+MAX_CONVERSATIONS = max(_MAX_CONVERSATIONS_RAW, 2)
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -60,17 +77,33 @@ API_DIR = Path(__file__).parent
 PROJECT_ROOT = API_DIR.parent.parent
 PROFILES_DIR = PROJECT_ROOT / "profiles"
 MODELS_DIR = PROJECT_ROOT / "models"
+# MC-2: on-disk conversation store.  Each conversation is one JSONL file
+# named <conversation_id>.jsonl.  Created on first write; absent means
+# the conversation has no history yet.
+CONVERSATIONS_DIR = PROJECT_ROOT / "data" / "conversations"
+
+# MC-2b: persisted active-conversation pointer.  One JSON file alongside
+# the conversations directory so the active id survives daemon restarts.
+# Skipped on load if the saved id is no longer in ``_histories`` (the
+# user evicted/deleted it between sessions).
+ACTIVE_CONV_FILE = CONVERSATIONS_DIR / "_active.json"
 
 # ---------------------------------------------------------------------------
 # App State (module-level singleton — one engine per process)
 # ---------------------------------------------------------------------------
 
 class AppState:
-    """Holds the loaded engine, config overrides, and chat history.
+    """Holds the loaded engine, config overrides, and per-conversation chat history.
 
     All mutable state is guarded by ``_lock``.  Read-only accessors
     return *snapshots* (copy-on-write) so callers never hold a
     reference to the live internal list/dict.
+
+    MC-1: history is scoped per ``conversation_id`` so multiple
+    clients (terminal REPL, desktop GUI, future browser viewer) don't
+    cross-contaminate threads.  The engine's KV cache is invalidated
+    on every conversation switch — leaving it primed with another
+    conversation's tokens would produce garbage continuations.
     """
 
     def __init__(self):
@@ -78,22 +111,37 @@ class AppState:
         self.engine: Any = None
         self.model_path: str | None = None
         self._model_info: dict[str, Any] = {}
-        self._history: list[dict[str, str]] = []
+        # MC-1: per-conversation history map.  Keys are conversation
+        # IDs (UUID4 strings by default), values are lists of
+        # {"role", "content"} dicts.  Insertion order in
+        # ``_conv_order`` doubles as the LRU ordering for eviction:
+        # touched conversations move to the end.
+        self._histories: dict[str, list[dict[str, str]]] = {}
+        self._conv_order: list[str] = []
+        self._active_conv_id: str | None = None
         self.active_profile: str | None = None
         self.config_overrides: dict[str, Any] = {}
         self.start_time: float = time.time()
 
     # -- Copy-on-write snapshots (Suggestion #8D) ----------------------
 
-    @property
-    def history(self) -> list[dict[str, str]]:
-        """Direct access for internal mutations (under _lock)."""
-        return self._history
+    def history_snapshot(
+        self, conversation_id: str | None = None
+    ) -> list[dict[str, str]]:
+        """Return a shallow copy of a conversation's history.
 
-    def history_snapshot(self) -> list[dict[str, str]]:
-        """Return a shallow copy of chat history (safe for readers)."""
+        ``conversation_id=None`` returns the currently-active
+        conversation, or ``[]`` if none has been started yet.
+        Raises ``KeyError`` if a specific ID was supplied and is unknown.
+        """
         with self._lock:
-            return list(self._history)
+            if conversation_id is None:
+                if self._active_conv_id is None:
+                    return []
+                return list(self._histories.get(self._active_conv_id, []))
+            if conversation_id not in self._histories:
+                raise KeyError(conversation_id)
+            return list(self._histories[conversation_id])
 
     @property
     def model_info(self) -> dict[str, Any]:
@@ -109,6 +157,172 @@ class AppState:
         """Return a shallow copy of model info (safe for readers)."""
         with self._lock:
             return dict(self._model_info)
+
+    # -- Conversation management (MC-1) -------------------------------
+
+    def create_conversation(self) -> str:
+        """Allocate a fresh conversation ID and return it.
+
+        Triggers LRU eviction if ``MAX_CONVERSATIONS`` would be exceeded.
+        """
+        cid = uuid.uuid4().hex
+        with self._lock:
+            self._histories[cid] = []
+            self._conv_order.append(cid)
+            evicted = self._evict_locked()
+        # MC-2: delete evicted conversation files outside the lock.
+        for eid in evicted:
+            self._delete_disk_conversation(eid)
+        return cid
+
+    def list_conversations(self) -> list[dict[str, Any]]:
+        """List known conversations with message counts (LRU order)."""
+        with self._lock:
+            return [
+                {"id": cid,
+                 "messages": len(self._histories[cid]),
+                 "active": cid == self._active_conv_id}
+                for cid in self._conv_order
+                if cid in self._histories
+            ]
+
+    def delete_conversation(self, conversation_id: str) -> None:
+        """Drop a conversation.  Clears engine state if it was active.
+
+        Raises ``KeyError`` if the ID is unknown.
+        """
+        with self._lock:
+            if conversation_id not in self._histories:
+                raise KeyError(conversation_id)
+            was_active = conversation_id == self._active_conv_id
+            del self._histories[conversation_id]
+            try:
+                self._conv_order.remove(conversation_id)
+            except ValueError:
+                pass
+            if was_active:
+                self._active_conv_id = None
+        if was_active:
+            self._invalidate_engine_state()
+        # MC-2: delete the on-disk file regardless of whether it was active.
+        self._delete_disk_conversation(conversation_id)
+        # MC-2b: persist updated active pointer if it changed.
+        if was_active:
+            self._persist_active_conv_id()
+
+    def _evict_locked(self) -> list[str]:
+        """LRU-evict oldest conversations until under MAX_CONVERSATIONS.
+
+        Must be called while ``self._lock`` is held.  Never evicts
+        the currently-active conversation.  Returns a list of evicted
+        IDs so the caller can clean up on-disk files outside the lock.
+        """
+        evicted: list[str] = []
+        while len(self._conv_order) > MAX_CONVERSATIONS:
+            for victim in list(self._conv_order):
+                if victim == self._active_conv_id:
+                    continue
+                self._conv_order.remove(victim)
+                self._histories.pop(victim, None)
+                evicted.append(victim)
+                break
+            else:
+                # Every remaining conversation is the active one.  Bail
+                # to avoid an infinite loop; the operator picked an
+                # impossibly small MAX_CONVERSATIONS.
+                break
+        return evicted
+
+    def _touch_locked(self, conversation_id: str) -> None:
+        """Move a conversation to the end of the LRU queue.
+
+        Must be called while ``self._lock`` is held. MC-1a B3: refuses
+        to re-add a conversation that is no longer in ``_histories`` —
+        otherwise a TOCTOU race between resolve/activate and DELETE can
+        silently resurrect a deleted conv in the LRU queue.
+        """
+        if conversation_id not in self._histories:
+            try:
+                self._conv_order.remove(conversation_id)
+            except ValueError:
+                pass
+            return
+        try:
+            self._conv_order.remove(conversation_id)
+        except ValueError:
+            pass
+        self._conv_order.append(conversation_id)
+
+    def _invalidate_engine_state(self) -> None:
+        """Clear engine KV cache + history-summary cache.
+
+        Called on conversation switch and on full history clear.
+        Both engine methods are best-effort: legacy engines may not
+        implement them.
+        """
+        engine = self.engine
+        if engine is None:
+            return
+        if hasattr(engine, "clear_kv_cache"):
+            try:
+                engine.clear_kv_cache()
+            except Exception as exc:
+                logger.warning("Engine clear_kv_cache raised: %s", exc)
+        if hasattr(engine, "clear_history"):
+            try:
+                engine.clear_history()
+            except Exception as exc:
+                logger.warning("Engine clear_history raised: %s", exc)
+
+    def _resolve_and_activate(
+            self, conversation_id: str | None) -> tuple[str, bool]:
+        """Resolve + activate atomically under a single lock acquisition.
+
+        MC-1a B3 fix: separate ``_resolve_conversation`` + ``_activate``
+        calls create a TOCTOU window — a concurrent ``DELETE
+        /api/conversations/{cid}`` between the two unlocked sections
+        could leave ``_active_conv_id`` pointing at a deleted id and
+        cause downstream ``setdefault`` calls to resurrect it.
+
+        Auto-creation (``conversation_id is None``) is delegated to
+        ``create_conversation`` outside this method, which is itself
+        atomic; the returned id then enters this method to be activated.
+        Raises ``KeyError`` if a specific id is supplied and unknown.
+        Returns ``(conv_id, switched)``.
+        """
+        if conversation_id is None:
+            conversation_id = self.create_conversation()
+        with self._lock:
+            if conversation_id not in self._histories:
+                raise KeyError(conversation_id)
+            switched = self._active_conv_id != conversation_id
+            self._active_conv_id = conversation_id
+            self._touch_locked(conversation_id)
+        # MC-2b: persist active pointer when it changes so the next
+        # daemon boot resumes on the same conversation.
+        if switched:
+            self._persist_active_conv_id()
+        return conversation_id, switched
+
+    def _append_turn_if_alive_locked(
+            self, conversation_id: str,
+            user_msg: str, assistant_msg: str) -> bool:
+        """Append a user/assistant pair only if the conv still exists.
+
+        MC-1a B3 fix: replaces ``_histories.setdefault(cid, [])`` in the
+        post-generation history-tracking blocks. If the conversation was
+        deleted while the engine was generating, the response is still
+        returned to the caller (already produced) but the history is NOT
+        resurrected. Returns ``True`` if the turn was stored.
+        Must be called while ``self._lock`` is held.
+        """
+        conv = self._histories.get(conversation_id)
+        if conv is None:
+            return False
+        conv.append({"role": "user", "content": user_msg})
+        conv.append({"role": "assistant", "content": assistant_msg})
+        self._trim_history_locked(conversation_id)
+        return True
 
     # -- Engine management --------------------------------------------------
 
@@ -164,7 +378,9 @@ class AppState:
                 self.engine = None
                 self.model_path = None
                 self._model_info = {}
-                self._history.clear()
+                self._histories.clear()
+                self._conv_order.clear()
+                self._active_conv_id = None
 
             # Free GPU memory
             try:
@@ -173,6 +389,8 @@ class AppState:
                     torch.cuda.empty_cache()
             except ImportError:
                 pass
+        # MC-2b: clear the active pointer on disk after unload.
+        self._persist_active_conv_id()
 
     def chat(self, message: str, temperature: float | None = None,
              max_tokens: int | None = None,
@@ -180,8 +398,15 @@ class AppState:
              top_k: int | None = None,
              repetition_penalty: float | None = None,
              json_schema: dict[str, Any] | None = None,
-             system_prompt: str | None = None) -> str:
+             system_prompt: str | None = None,
+             conversation_id: str | None = None) -> tuple[str, str]:
         """Send a message to the engine and get a response.
+
+        MC-1: ``conversation_id`` scopes the history.  ``None``
+        auto-creates a new conversation.  Returns ``(response, conv_id)``.
+        On conversation switch the engine KV cache is cleared and the
+        full conversation history is passed in via the ``history``
+        kwarg so the engine prefills against the right context.
 
         N-15b: ``json_schema`` is forwarded through engine.chat() into
         engine.generate(), where ``JsonSchemaConstraint`` masks logits
@@ -197,6 +422,13 @@ class AppState:
         """
         if self.engine is None:
             raise RuntimeError("No model loaded")
+
+        # Resolve / activate the conversation.  KeyError bubbles out
+        # so the route handler can return 404. MC-1a B3: single locked
+        # critical section so a concurrent DELETE cannot squeeze in.
+        conv_id, switched = self._resolve_and_activate(conversation_id)
+        if switched:
+            self._invalidate_engine_state()
 
         # Build kwargs from config overrides + per-request overrides
         kwargs: dict[str, Any] = {}
@@ -217,32 +449,311 @@ class AppState:
         if system_prompt is not None:
             kwargs["system_prompt"] = system_prompt
 
-        # Try passing kwargs to engine.chat; fall back to no-kwargs if unsupported
+        # MC-1: pass the per-conversation history explicitly so the
+        # engine prefills against the right context regardless of its
+        # internal state.
+        history = self.history_snapshot(conv_id)
         try:
-            response = self.engine.chat(message, **kwargs)
+            response = self.engine.chat(message, history=history, **kwargs)
         except TypeError as exc:
-            if "unexpected keyword argument" in str(exc) or "got an unexpected" in str(exc):
-                logger.debug("Engine.chat() does not accept kwargs, retrying without")
+            msg = str(exc)
+            if "unexpected keyword argument" in msg or "got an unexpected" in msg:
+                logger.debug(
+                    "Engine.chat() does not accept kwargs, retrying without")
                 response = self.engine.chat(message)
             else:
                 raise
 
-        # Track history
+        # Track history under lock. MC-1a B3: skip the append if the
+        # conv was deleted mid-generation rather than resurrecting it.
         with self._lock:
-            self._history.append({"role": "user", "content": message})
-            self._history.append({"role": "assistant", "content": response})
-            self._trim_history()
+            stored = self._append_turn_if_alive_locked(
+                conv_id, message, response)
 
-        return response
+        # MC-2: persist after every exchange (outside the lock to keep I/O off the hot path).
+        if stored:
+            self._persist_conversation(conv_id)
+        return response, conv_id
 
-    def _trim_history(self) -> None:
-        """Evict oldest entries when history exceeds MAX_HISTORY.
+    def _trim_history_locked(self, conversation_id: str) -> None:
+        """Evict oldest entries when a conversation exceeds MAX_HISTORY.
 
         Must be called while self._lock is held.
         """
-        if len(self._history) > MAX_HISTORY:
-            excess = len(self._history) - MAX_HISTORY
-            del self._history[:excess]
+        conv = self._histories.get(conversation_id)
+        if conv is None:
+            return
+        if len(conv) > MAX_HISTORY:
+            excess = len(conv) - MAX_HISTORY
+            del conv[:excess]
+
+    def clear_all_conversations(self) -> None:
+        """Clear all conversations and invalidate engine state.
+
+        Used by ``DELETE /api/history`` (legacy nuke-everything route).
+        """
+        with self._lock:
+            all_ids = list(self._histories.keys())
+            self._histories.clear()
+            self._conv_order.clear()
+            self._active_conv_id = None
+        self._invalidate_engine_state()
+        # MC-2: purge all on-disk files.
+        for cid in all_ids:
+            self._delete_disk_conversation(cid)
+        # MC-2b: clear the active pointer on disk too.
+        self._persist_active_conv_id()
+
+    def rollback_last_turn(self, conversation_id: str) -> bool:
+        """Drop the last user+assistant pair from a conversation.
+
+        Returns ``True`` if a pair was removed, ``False`` otherwise.
+        Used by AutoResearch-2 retry on ``/api/chat`` so the retry call
+        sees clean history instead of the low-confidence reply it is
+        about to replace.  Raises ``KeyError`` if the conversation is
+        unknown.
+        """
+        with self._lock:
+            if conversation_id not in self._histories:
+                raise KeyError(conversation_id)
+            conv = self._histories[conversation_id]
+            if len(conv) < 2:
+                return False
+            # Only roll back when the tail looks like a complete
+            # exchange (user followed by assistant).  Anything else
+            # means a caller has been mutating the list out-of-band;
+            # leave it alone.
+            if (conv[-2].get("role") != "user"
+                    or conv[-1].get("role") != "assistant"):
+                return False
+            del conv[-2:]
+        # MC-2: persist rollback result.
+        self._persist_conversation(conversation_id)
+        return True
+
+    # -- MC-2: disk persistence -----------------------------------------
+
+    def _persist_conversation(self, conversation_id: str) -> None:
+        """Atomically write a conversation's history to disk.
+
+        Writes ``CONVERSATIONS_DIR/<conversation_id>.jsonl``.
+        Each line is a JSON object ``{"role": ..., "content": ...}``.
+        Skipped silently when ``CONVERSATIONS_DIR`` is not writable so
+        that unit tests without the real filesystem path don't break.
+
+        MC-2 B3 sibling: if the conversation was deleted between the
+        post-generation history append and this persist call, skip the
+        write. Without this gate ``_histories.get(cid, [])`` returns the
+        empty default and we'd write a phantom empty ``.jsonl`` that
+        survives daemon restart as a zero-message ghost conversation
+        occupying a ``MAX_CONVERSATIONS`` slot.
+        """
+        from enigma_engine.core.safe_save import atomic_write_text
+
+        with self._lock:
+            if conversation_id not in self._histories:
+                return
+            messages = list(self._histories[conversation_id])
+
+        try:
+            CONVERSATIONS_DIR.mkdir(parents=True, exist_ok=True)
+            text = "\n".join(json.dumps(m, ensure_ascii=False) for m in messages)
+            atomic_write_text(CONVERSATIONS_DIR / f"{conversation_id}.jsonl", text)
+        except Exception as exc:
+            logger.warning("Could not persist conversation %s: %s",
+                           conversation_id, exc)
+
+    def _delete_disk_conversation(self, conversation_id: str) -> None:
+        """Remove the on-disk file(s) for a conversation if they exist.
+
+        MC-2c: ``atomic_write_text`` writes a ``<path>.bak`` revision-back
+        backup on every successful save (see ``core/safe_save.py``). When
+        a conversation is deleted, its ``.bak`` becomes a permanent
+        orphan — ``glob("*.jsonl")`` doesn't see it on boot so it never
+        resurrects the deleted conv, but it accumulates forever as a
+        silent storage leak. Unlink both files in one shot.
+        """
+        path = CONVERSATIONS_DIR / f"{conversation_id}.jsonl"
+        bak_path = CONVERSATIONS_DIR / f"{conversation_id}.jsonl.bak"
+        for p in (path, bak_path):
+            try:
+                p.unlink(missing_ok=True)
+            except Exception as exc:
+                logger.warning("Could not delete on-disk conversation file %s: %s",
+                               p.name, exc)
+
+    def _persist_active_conv_id(self) -> None:
+        """Atomically write the active-conversation pointer to disk.
+
+        MC-2b: the active id survives daemon restart so a user who
+        ``Ctrl+C``'d the server mid-session resumes on the same
+        conversation. Reads ``_active_conv_id`` under the lock; writes
+        outside the lock to keep I/O off the hot path. Best-effort —
+        write failures log a WARNING but never raise (a stale active
+        pointer is recoverable; a crashed boot is not).
+        """
+        from enigma_engine.core.safe_save import atomic_write_text
+
+        with self._lock:
+            active = self._active_conv_id
+        try:
+            CONVERSATIONS_DIR.mkdir(parents=True, exist_ok=True)
+            atomic_write_text(
+                ACTIVE_CONV_FILE,
+                json.dumps({"active_conv_id": active}, ensure_ascii=False),
+            )
+        except Exception as exc:
+            logger.warning("MC-2b: could not persist active conv id: %s", exc)
+
+    def _load_active_conv_id_from_disk(self) -> None:
+        """Restore the active-conversation pointer from disk on boot.
+
+        MC-2b: only restores if the saved id is still present in
+        ``_histories`` after ``load_conversations_from_disk`` has run
+        — otherwise the user evicted/deleted it between sessions and
+        the pointer is stale. Caller must invoke AFTER the histories
+        have been loaded.
+        """
+        if not ACTIVE_CONV_FILE.exists():
+            return
+        try:
+            payload = json.loads(ACTIVE_CONV_FILE.read_text(encoding="utf-8"))
+        except Exception as exc:
+            logger.warning(
+                "MC-2b: could not parse active conv pointer (%s); ignoring",
+                exc)
+            return
+        saved = payload.get("active_conv_id") if isinstance(payload, dict) else None
+        if not isinstance(saved, str):
+            return
+        with self._lock:
+            if saved in self._histories:
+                self._active_conv_id = saved
+                logger.info("MC-2b: restored active conversation %s", saved)
+                stale = False
+            else:
+                logger.info(
+                    "MC-2b: saved active conv %s no longer in histories; "
+                    "starting with no active conversation", saved)
+                stale = True
+        # Self-heal: rewrite disk to ``null`` so the same stale id is not
+        # rediscovered (and re-logged) on every subsequent boot.
+        if stale:
+            self._persist_active_conv_id()
+
+    def load_conversations_from_disk(self) -> int:
+        """Load persisted conversations from ``CONVERSATIONS_DIR`` on startup.
+
+        Skips corrupt files with a WARNING.  Ignores conversations whose
+        IDs are not valid UUID4 hexstrings (defence against stray files).
+        Returns the count of conversations successfully loaded.
+
+        If more than ``MAX_CONVERSATIONS`` files are found, only the
+        ``MAX_CONVERSATIONS`` most-recently-modified ones are loaded
+        and the older excess files are deleted from disk (MC-2a) so a
+        previously-higher cap cannot leave the conversations directory
+        growing unbounded.
+        """
+        if not CONVERSATIONS_DIR.exists():
+            return 0
+
+        all_files = sorted(
+            CONVERSATIONS_DIR.glob("*.jsonl"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        # MC-2a follow-up: partition valid-shape (UUID4 hex stem) from
+        # stray files BEFORE the cap slice. Otherwise a stray ``*.jsonl``
+        # with a newer mtime than a real conversation would occupy a
+        # kept-slot and push a valid conv into the excess slice, causing
+        # silent data loss. Stray files are skipped (not counted toward
+        # cap, not deleted) — they don't belong to us and we shouldn't
+        # destroy operator backups / hand-edits.
+        files: list[Path] = []
+        for path in all_files:
+            cid = path.stem
+            if len(cid) == 32 and all(c in "0123456789abcdef" for c in cid):
+                files.append(path)
+            else:
+                logger.warning(
+                    "Skipping unexpected file in conversations dir: %s",
+                    path.name)
+        # Cap to the allowed maximum so we don't bloat memory on first
+        # boot after lowering the limit.  MC-2a: also unlink the excess
+        # files on disk — keeping them around is a silent storage leak
+        # because every future boot will see them, sort them, and drop
+        # them again forever.
+        excess = files[MAX_CONVERSATIONS:]
+        files = files[:MAX_CONVERSATIONS]
+        for path in excess:
+            bak_path = path.with_suffix(path.suffix + ".bak")
+            try:
+                path.unlink(missing_ok=True)
+                # MC-2c: also unlink the .bak sibling so it doesn't
+                # become an orphan after the parent is evicted.
+                bak_path.unlink(missing_ok=True)
+                logger.warning(
+                    "MC-2a: deleted excess conversation file %s "
+                    "(disk count exceeded MAX_CONVERSATIONS=%d)",
+                    path.name, MAX_CONVERSATIONS,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "MC-2a: could not delete excess conversation file %s: %s",
+                    path.name, exc,
+                )
+
+        # MC-2c: sweep orphan ``.bak`` files whose parent ``.jsonl`` no
+        # longer exists. Backups are created by ``atomic_write_text`` on
+        # every save and become permanent garbage once the live file is
+        # deleted (by user delete, LRU eviction, or an older code path
+        # that pre-dated this sweep). Cleanup is best-effort and silent
+        # on misses — orphans don't affect correctness, only disk usage.
+        kept_stems = {p.stem for p in files}
+        for bak in CONVERSATIONS_DIR.glob("*.jsonl.bak"):
+            # bak.name = "<cid>.jsonl.bak" -> parent stem is bak.name[:-len(".jsonl.bak")]
+            parent_stem = bak.name[:-len(".jsonl.bak")]
+            if parent_stem in kept_stems:
+                continue
+            live_parent = CONVERSATIONS_DIR / f"{parent_stem}.jsonl"
+            if live_parent.exists():
+                continue
+            try:
+                bak.unlink(missing_ok=True)
+            except Exception as exc:
+                logger.warning(
+                    "MC-2c: could not delete orphan backup %s: %s",
+                    bak.name, exc,
+                )
+
+        loaded = 0
+        for path in reversed(files):  # oldest first -> LRU order
+            cid = path.stem
+            try:
+                messages: list[dict[str, str]] = []
+                for lineno, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                    raw = raw.strip()
+                    if not raw:
+                        continue
+                    entry = json.loads(raw)
+                    if not isinstance(entry, dict):
+                        raise ValueError(f"line {lineno}: expected object, got {type(entry).__name__}")
+                    messages.append(entry)
+            except Exception as exc:
+                logger.warning(
+                    "Skipping corrupt conversation file %s: %s", path.name, exc)
+                continue
+
+            with self._lock:
+                self._histories[cid] = messages
+                if cid not in self._conv_order:
+                    self._conv_order.append(cid)
+            loaded += 1
+            logger.debug("Loaded conversation %s (%d messages)", cid, len(messages))
+
+        if loaded:
+            logger.info("MC-2: restored %d conversation(s) from disk", loaded)
+        return loaded
 
 
 state = AppState()
@@ -334,6 +845,11 @@ def _maybe_research_context(message: str, web_access: bool) -> str:
 
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=MAX_MESSAGE_LENGTH)
+    # MC-1: per-client conversation scoping.  ``None`` auto-creates a
+    # fresh conversation; the response carries the assigned ID so the
+    # client can pin subsequent turns to the same thread.  Unknown IDs
+    # return 404.
+    conversation_id: str | None = Field(default=None, max_length=128)
     temperature: float | None = None
     max_tokens: int | None = None
     top_p: float | None = None
@@ -586,10 +1102,17 @@ async def chat(req: ChatRequest):
         if web_ctx:
             kw["system_prompt"] = web_ctx
 
-        response = state.chat(
-            req.message,
-            **kw,
-        )
+        try:
+            response, conv_id = state.chat(
+                req.message,
+                conversation_id=req.conversation_id,
+                **kw,
+            )
+        except KeyError:
+            return JSONResponse(
+                status_code=404,
+                content={"error": f"Unknown conversation_id: {req.conversation_id}"},
+            )
 
         # Stage A post-gen retry. Mirrors gui_logic_chat.py: if web
         # access is on, no pre-gen research ran, and the visible reply
@@ -611,7 +1134,19 @@ async def chat(req: ChatRequest):
                         logger.info(
                             "AutoResearch-2: low-confidence reply on "
                             "/api/chat, retrying with research context")
-                        response = state.chat(req.message, **retry_kw)
+                        # MC-1a B2: drop the failed user+assistant pair
+                        # before retry so the retry call sees clean
+                        # history instead of the low-confidence reply
+                        # it is about to replace.
+                        try:
+                            state.rollback_last_turn(conv_id)
+                        except KeyError:
+                            pass
+                        response, conv_id = state.chat(
+                            req.message,
+                            conversation_id=conv_id,
+                            **retry_kw,
+                        )
             except Exception as exc:
                 logger.debug(
                     "Auto-research post-gen retry failed: %s", exc)
@@ -622,7 +1157,7 @@ async def chat(req: ChatRequest):
             response = response[:500_000]
             truncated = True
             logger.warning("Response truncated from %d to 500000 chars", original_len)
-        result: dict[str, Any] = {"message": response}
+        result: dict[str, Any] = {"message": response, "conversation_id": conv_id}
         if truncated:
             result["truncated"] = True
         return result
@@ -664,11 +1199,41 @@ async def chat_stream(req: ChatRequest):
                 status_code=400,
                 content={"error": f"Invalid json_schema: {exc}"},
             )
+
+    # MC-1: fast 404 for explicit-but-unknown IDs before acquiring the
+    # inference lock (no orphan risk — we don't create anything here).
+    # Auto-creation (conversation_id=None) is deferred until AFTER we
+    # hold the lock so a 429 response can't leave an empty orphan
+    # conversation in _histories.  B1 fix (Pass 156z9dc).
+    if req.conversation_id is not None:
+        with state._lock:
+            if req.conversation_id not in state._histories:
+                return JSONResponse(
+                    status_code=404,
+                    content={"error": f"Unknown conversation_id: {req.conversation_id}"},
+                )
+
     if not _inference_lock.acquire(blocking=False):
         return JSONResponse(
             status_code=429,
             content={"error": "Engine busy — another request is in progress."},
         )
+
+    # Auto-create or re-validate + activate atomically. MC-1a B3:
+    # single locked critical section so a concurrent DELETE cannot
+    # race between resolve and activate.
+    try:
+        conv_id, switched = state._resolve_and_activate(req.conversation_id)
+    except KeyError:
+        _inference_lock.release()
+        return JSONResponse(
+            status_code=404,
+            content={"error": f"Unknown conversation_id: {req.conversation_id}"},
+        )
+
+    # MC-1: invalidate KV cache on switch.
+    if switched:
+        state._invalidate_engine_state()
 
     # Build kwargs from config overrides + per-request overrides
     kwargs: dict[str, Any] = {}
@@ -706,16 +1271,21 @@ async def chat_stream(req: ChatRequest):
         from enigma_engine.core.streaming import StreamChunk, StreamEvent
 
         try:
-            # Start event
+            # Start event — MC-1: include conversation_id so clients
+            # auto-creating a thread learn the assigned ID before any
+            # tokens arrive.
             start_chunk = StreamChunk(
                 content="", event=StreamEvent.START,
-                metadata={"message": req.message})
+                metadata={"message": req.message,
+                          "conversation_id": conv_id})
             yield start_chunk.to_sse()
 
             full_response = []
             try:
                 gen = state.engine.stream_chat(
-                    req.message, history=state.history_snapshot(), **kwargs)
+                    req.message,
+                    history=state.history_snapshot(conv_id),
+                    **kwargs)
                 for token in gen:
                     full_response.append(token)
                     token_chunk = StreamChunk(
@@ -725,16 +1295,19 @@ async def chat_stream(req: ChatRequest):
                 # End event with full response
                 combined = "".join(full_response)
                 end_chunk = StreamChunk(
-                    content=combined, event=StreamEvent.END)
+                    content=combined, event=StreamEvent.END,
+                    metadata={"conversation_id": conv_id})
                 yield end_chunk.to_sse()
 
-                # Track history
+                # Track history under lock (per-conv). MC-1a B3: skip
+                # if the conv was deleted mid-stream rather than
+                # resurrecting it.
                 with state._lock:
-                    state._history.append(
-                        {"role": "user", "content": req.message})
-                    state._history.append(
-                        {"role": "assistant", "content": combined})
-                    state._trim_history()
+                    stored = state._append_turn_if_alive_locked(
+                        conv_id, req.message, combined)
+                # MC-2: persist after stream completes.
+                if stored:
+                    state._persist_conversation(conv_id)
 
             except Exception as exc:
                 logger.exception("Stream chat error")
@@ -850,25 +1423,65 @@ async def batch_inference(req: BatchRequest):
 
 @app.get("/api/history")
 async def get_history():
-    """Get chat history."""
+    """Get chat history for the currently-active conversation (legacy route).
+
+    MC-1: with per-conversation scoping this returns the most recent
+    conversation's transcript, or an empty list if none has been
+    started yet.  New clients should prefer
+    ``GET /api/conversations/{id}/history``.
+    """
     return {"history": state.history_snapshot()}
 
 
 @app.delete("/api/history")
 async def clear_history():
-    """Clear chat history."""
-    with state._lock:
-        state._history.clear()
-    if state.engine is not None and hasattr(state.engine, "clear_history"):
-        try:
-            state.engine.clear_history()
-        except Exception as exc:
-            logger.warning("Engine clear_history raised: %s", exc)
-    if state.engine is not None and hasattr(state.engine, "clear_kv_cache"):
-        try:
-            state.engine.clear_kv_cache()
-        except Exception as exc:
-            logger.warning("Engine clear_kv_cache raised: %s", exc)
+    """Clear all conversations and invalidate engine state (legacy nuke route).
+
+    MC-1: matches the prior behaviour of wiping everything in one
+    call.  Clients that want per-conversation deletion should use
+    ``DELETE /api/conversations/{id}`` instead.
+    """
+    state.clear_all_conversations()
+    return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# Conversations (MC-1)
+# ---------------------------------------------------------------------------
+
+@app.post("/api/conversations")
+async def create_conversation():
+    """Allocate a fresh conversation and return its ID.
+
+    Triggers LRU eviction if ``MAX_CONVERSATIONS`` would be exceeded.
+    """
+    cid = state.create_conversation()
+    return {"id": cid}
+
+
+@app.get("/api/conversations")
+async def list_conversations():
+    """List known conversations (LRU order, oldest first)."""
+    return {"conversations": state.list_conversations()}
+
+
+@app.get("/api/conversations/{conv_id}/history")
+async def get_conversation_history(conv_id: str):
+    """Return the message history for a specific conversation."""
+    try:
+        history = state.history_snapshot(conv_id)
+    except KeyError:
+        raise HTTPException(404, f"Unknown conversation_id: {conv_id}") from None
+    return {"history": history}
+
+
+@app.delete("/api/conversations/{conv_id}")
+async def delete_conversation(conv_id: str):
+    """Drop a conversation.  Clears engine KV cache if it was active."""
+    try:
+        state.delete_conversation(conv_id)
+    except KeyError:
+        raise HTTPException(404, f"Unknown conversation_id: {conv_id}") from None
     return {"status": "ok"}
 
 
@@ -950,14 +1563,14 @@ async def activate_profile(profile_id: str):
             state.config_overrides.update(validated)
         engine = state.engine
 
-    # Apply remaining profile fields (system_prompt, adapter, roleplay
-    # boundary log marker) to the live engine when one is loaded. Pass
+    # Apply remaining profile fields (system_prompt, adapter,
+    # generation knobs) to the live engine when one is loaded. Pass
     # 156z2 audit fix: closes the dead-infra-to-dead-infra gap caught
     # in self-audit on Pass 156z. Pre-fix, the API endpoint dropped
-    # ``system_prompt``, ``adapter``, and the ``is_roleplay()`` boundary
-    # on the floor — only ``generation`` survived the trip from disk to
-    # engine. ``apply_profile_to_engine`` is the canonical applier and
-    # uses ``hasattr`` guards throughout + catches adapter failures
+    # ``system_prompt`` and ``adapter`` on the floor — only
+    # ``generation`` survived the trip from disk to engine.
+    # ``apply_profile_to_engine`` is the canonical applier and uses
+    # ``hasattr`` guards throughout + catches adapter failures
     # internally, so calling it on a partially-initialised engine is
     # safe. Engine-not-loaded path is a no-op (profile id still saved
     # on state), preserving the existing UX where users set the active
@@ -1394,6 +2007,12 @@ def run_server(host: str = "127.0.0.1", port: int = 8080, model_path: str | None
                 return await call_next(request)
 
         app.add_middleware(_APIKeyMiddleware)
+
+    # MC-2: restore persisted conversations from disk.
+    state.load_conversations_from_disk()
+    # MC-2b: restore the active-conversation pointer (if the saved id
+    # is still in the just-loaded histories).
+    state._load_active_conv_id_from_disk()
 
     # Pre-load a model if specified
     if model_path:

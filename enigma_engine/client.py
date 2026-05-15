@@ -26,6 +26,53 @@ class EnigmaClient:
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
+        # MC-1: remember the daemon-assigned conversation ID so
+        # subsequent chat/stream turns pin to the same thread.  Cleared
+        # by ``new_conversation()`` or ``clear_history()``.
+        self.conversation_id: str | None = None
+
+    def new_conversation(self) -> str:
+        """Allocate a fresh conversation on the server and remember its ID.
+
+        Returns the new conversation ID.  Subsequent ``chat()`` /
+        ``chat_stream()`` calls automatically include it.
+        """
+        obj = self._request("POST", "/api/conversations")
+        cid = obj.get("id")
+        if not isinstance(cid, str):
+            raise RuntimeError(
+                f"API /api/conversations missing 'id' field: {obj}")
+        self.conversation_id = cid
+        return cid
+
+    def list_conversations(self) -> list[dict[str, Any]]:
+        obj = self._request("GET", "/api/conversations")
+        convs = obj.get("conversations", [])
+        return list(convs) if isinstance(convs, list) else []
+
+    def delete_conversation(self, conversation_id: str) -> dict[str, Any]:
+        safe = urllib.parse.quote(conversation_id, safe="")
+        result = self._request("DELETE", f"/api/conversations/{safe}")
+        if self.conversation_id == conversation_id:
+            self.conversation_id = None
+        return result
+
+    def conversation_history(
+        self, conversation_id: str | None = None
+    ) -> list[dict[str, str]]:
+        """Return the message history for a conversation.
+
+        ``None`` uses the client's pinned conversation (raises if none
+        has been started).
+        """
+        cid = conversation_id or self.conversation_id
+        if cid is None:
+            raise RuntimeError(
+                "No conversation pinned; call new_conversation() or pass an ID")
+        safe = urllib.parse.quote(cid, safe="")
+        obj = self._request("GET", f"/api/conversations/{safe}/history")
+        hist = obj.get("history", [])
+        return list(hist) if isinstance(hist, list) else []
 
     def _request(
         self,
@@ -115,11 +162,16 @@ class EnigmaClient:
         repetition_penalty: float | None = None,
         web_access: bool = False,
         json_schema: dict[str, Any] | None = None,
+        conversation_id: str | None = None,
     ) -> str:
         payload: dict[str, Any] = {
             "message": message,
             "web_access": bool(web_access),
         }
+        # MC-1: prefer explicit per-call ID, fall back to client-pinned ID.
+        effective_cid = conversation_id or self.conversation_id
+        if effective_cid is not None:
+            payload["conversation_id"] = effective_cid
         if temperature is not None:
             payload["temperature"] = float(temperature)
         if max_tokens is not None:
@@ -136,6 +188,11 @@ class EnigmaClient:
         obj = self._request("POST", "/api/chat", payload)
         if "message" not in obj:
             raise RuntimeError(f"API /api/chat missing message field: {obj}")
+        # MC-1: remember the assigned conversation_id so the next turn
+        # auto-pins to the same thread.
+        returned_cid = obj.get("conversation_id")
+        if isinstance(returned_cid, str):
+            self.conversation_id = returned_cid
         return str(obj["message"])
 
     def train(self, config: dict[str, Any]) -> dict[str, Any]:
@@ -150,6 +207,9 @@ class EnigmaClient:
         return self._request("DELETE", "/api/training/cancel")
 
     def clear_history(self) -> dict[str, Any]:
+        # MC-1: legacy nuke-all route also clears the client's pinned
+        # conversation_id so the next chat() auto-creates a fresh thread.
+        self.conversation_id = None
         return self._request("DELETE", "/api/history")
 
     def chat_stream(
@@ -163,11 +223,16 @@ class EnigmaClient:
         repetition_penalty: float | None = None,
         web_access: bool = False,
         json_schema: dict[str, Any] | None = None,
+        conversation_id: str | None = None,
     ) -> Iterator[str]:
         payload: dict[str, Any] = {
             "message": message,
             "web_access": bool(web_access),
         }
+        # MC-1: prefer explicit per-call ID, fall back to client-pinned ID.
+        effective_cid = conversation_id or self.conversation_id
+        if effective_cid is not None:
+            payload["conversation_id"] = effective_cid
         if temperature is not None:
             payload["temperature"] = float(temperature)
         if max_tokens is not None:
@@ -202,6 +267,14 @@ class EnigmaClient:
                         payload_obj = json.loads(data_line)
                         event = str(payload_obj.get("event", event_name or ""))
                         content = str(payload_obj.get("content", ""))
+                        # MC-1: pick up the server-assigned conversation
+                        # ID from the start/end event metadata so the
+                        # next stream call pins to the same thread.
+                        meta = payload_obj.get("metadata") or {}
+                        if isinstance(meta, dict):
+                            cid = meta.get("conversation_id")
+                            if isinstance(cid, str):
+                                self.conversation_id = cid
                         if event == "token":
                             yield content
                         elif event == "error":

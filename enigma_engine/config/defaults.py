@@ -193,6 +193,12 @@ CONFIG = _LazyConfig({
     "repetition_penalty": 1.1,
     "max_gen": 8192,
 
+    # Pass 156z9dr (N-14): RAG retrieval backend.  "bm25" uses the
+    # built-in BM25/TF-IDF index (no extra deps).  "dense" uses
+    # sentence-transformers + faiss-cpu for semantic embeddings;
+    # falls back to BM25 with a WARNING if either dep is missing.
+    "rag_backend": "bm25",
+
     # =========================================================================
     # THE MESSENGER'S GATE - Server Defaults
     # =========================================================================
@@ -255,14 +261,6 @@ CONFIG = _LazyConfig({
     # Empty list means ALL discovered plugins are loaded (legacy behavior).
     # Example: ["hello.py", "my_tools.py"]
     "trusted_plugins": [],
-
-    # =========================================================================
-    # Monologue / Self-Initiated Behavior
-    # =========================================================================
-    # "disabled"     — no background reflection
-    # "journal_only" — AI reflects, stores journal, never initiates
-    # "automatic"    — AI reflects, stores journal, and can initiate
-    "monologue_mode": "disabled",
 
     # =========================================================================
     # Logging

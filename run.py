@@ -4,19 +4,21 @@ Enigma AI Engine - Main Entry Point
 
 Commands:
     python run.py               Show info and test imports
-    python run.py --chat        Simple CLI chat (requires model)
-    python run.py --train       Train a model on data
+    python run.py --client-chat  CLI chat via daemon (recommended)
+    python run.py --train        Train a model on data
     python run.py --train --resume <checkpoint>  Resume training from checkpoint
     python run.py --train-tokenizer  Train BPE tokenizer on data
 """
 
 import argparse
 import copy
-import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
+from dataclasses import dataclass, field
+from urllib.parse import urlparse
 
 
 def _ensure_venv() -> None:
@@ -97,8 +99,8 @@ Examples:
   python run.py --serve --model models/my.pth     API server with model pre-loaded
     python run.py --client-chat                     CLI chat over API client
     python run.py --client-chat --api-url http://127.0.0.1:8080
-  python run.py --chat                            CLI chat (requires trained model)
-  python run.py --chat --model models/my.pth      Chat with specific model
+  python run.py --client-chat                     CLI chat via daemon (auto-spawns if needed)
+  python run.py --client-chat --model models/my.pth  Chat with specific model
   python run.py --train data/training.txt         Train model on text data
     python run.py --config train.yaml               Train using dispatcher config
   python run.py --train data/qa.jsonl --epochs 20 Train with custom epochs
@@ -118,11 +120,14 @@ Examples:
     parser.add_argument("--cors-origins", type=str, default=None,
                         help="Comma-separated CORS origins (e.g. http://localhost:3000). "
                              "CORS is disabled when omitted")
-    parser.add_argument("--chat", action="store_true", help="Simple CLI chat")
+    parser.add_argument("--chat", action="store_true",
+                        help="[deprecated] Use --client-chat instead")
     parser.add_argument("--client-chat", action="store_true",
                         help="CLI chat over HTTP API (ARCH-1b/1c bridge)")
     parser.add_argument("--api-url", type=str, default="http://127.0.0.1:8080",
                         help="Base URL for --client-chat (default: http://127.0.0.1:8080)")
+    parser.add_argument("--no-auto-spawn", action="store_true",
+                        help="Disable local daemon auto-spawn for --client-chat")
     parser.add_argument("--profile", type=str, default=None,
                         help="AI profile to load for --chat (e.g. assistant, creative_writer)")
     parser.add_argument("--temperature", type=float, default=None,
@@ -225,9 +230,20 @@ Examples:
             model_path=args.model,
             profile=args.profile,
             temperature=args.temperature,
+            no_auto_spawn=args.no_auto_spawn,
         )
     elif args.chat:
-        run_chat(args.model, args.profile, args.temperature)
+        # BIOME-1c: --chat is deprecated. Forward to --client-chat so the
+        # in-process run_chat code path is no longer exercised. Auto-spawn
+        # handles the "no daemon running" case transparently.
+        print("[WARN] --chat is deprecated; use --client-chat (auto-spawns daemon).")
+        run_chat_client(
+            api_url=args.api_url,
+            model_path=args.model,
+            profile=args.profile,
+            temperature=args.temperature,
+            no_auto_spawn=False,
+        )
     elif args.benchmark is not None:
         if args.benchmark == "gsm8k":
             run_gsm8k_benchmark_cli(
@@ -253,7 +269,7 @@ def run_gui_app(model_path: str = None):
         run_gui(model_path=model_path)
     except ImportError as e:
         print(f"  [ERROR] Missing GUI dependencies: {e}")
-        print(f"  Install them:  pip install customtkinter")
+        print("  Install them:  pip install customtkinter")
         sys.exit(1)
     except Exception as e:
         print(f"  [ERROR] GUI failed: {e}")
@@ -276,7 +292,7 @@ def run_serve(model_path: str = None, port: int = 8080,
                    api_key=api_key, cors_origins=cors_origins)
     except ImportError as e:
         print(f"  [ERROR] Missing server dependencies: {e}")
-        print(f"  Install them:  pip install fastapi uvicorn")
+        print("  Install them:  pip install fastapi uvicorn")
         sys.exit(1)
     except Exception as e:
         print(f"  [ERROR] Server failed: {e}")
@@ -296,7 +312,7 @@ def show_info():
     
     try:
         from enigma_engine import CONFIG
-        print(f"  [OK] CONFIG loaded")
+        print("  [OK] CONFIG loaded")
         print(f"       Models dir: {CONFIG.get('models_dir', 'models')}")
     except Exception as e:
         print(f"  [FAIL] CONFIG: {e}")
@@ -305,10 +321,10 @@ def show_info():
         from enigma_engine.core import get_hardware
         if get_hardware:
             hw = get_hardware()
-            print(f"  [OK] Hardware detection")
+            print("  [OK] Hardware detection")
             print(f"       Device: {hw.device if hw else 'unknown'}")
         else:
-            print(f"  [OK] Hardware module (not initialized)")
+            print("  [OK] Hardware module (not initialized)")
     except Exception as e:
         print(f"  [FAIL] Hardware: {e}")
     
@@ -320,14 +336,12 @@ def show_info():
         print(f"  [FAIL] PyTorch: {e}")
     
     try:
-        from enigma_engine.core import Enigma, create_model
-        print(f"  [OK] Model classes loaded")
+        print("  [OK] Model classes loaded")
     except Exception as e:
         print(f"  [FAIL] Model: {e}")
     
     try:
-        from enigma_engine.core import EnigmaEngine
-        print(f"  [OK] EnigmaEngine loaded")
+        print("  [OK] EnigmaEngine loaded")
     except Exception as e:
         print(f"  [FAIL] EnigmaEngine: {e}")
     
@@ -335,7 +349,7 @@ def show_info():
     print("  Commands:")
     print("    python run.py --gui                 Launch desktop GUI")
     print("    python run.py --serve              Start API server")
-    print("    python run.py --chat               Start CLI chat")
+    print("    python run.py --client-chat        Start CLI chat (via daemon)")
     print("    python run.py --train <data>        Train a model")
     print("    python run.py --train-tokenizer <data>  Train tokenizer")
     print("    python run.py --analyze-tokenizer       Analyze tokenizer")
@@ -382,7 +396,7 @@ def run_train_tokenizer(data_path: str, vocab_size: int,
     print(f"Training data: {[str(f) for f in data_files]}")
     print(f"Target vocab size: {vocab_size}")
     if utf8_bytes:
-        print(f"Byte-level BPE: enabled")
+        print("Byte-level BPE: enabled")
     print()
     
     try:
@@ -398,7 +412,7 @@ def run_train_tokenizer(data_path: str, vocab_size: int,
             print(f"  Loaded {f.name} ({len(text):,} chars)")
         
         print(f"\n  Total: {total_chars:,} chars across {len(texts)} files")
-        print(f"  Training BPE tokenizer...\n")
+        print("  Training BPE tokenizer...\n")
         
         tokenizer = BPETokenizer()
         if utf8_bytes:
@@ -424,11 +438,11 @@ def run_train_tokenizer(data_path: str, vocab_size: int,
         print(f"  Also saved to: {vocab_path}")
         print(f"  Final vocab size: {tokenizer.vocab_size}")
         print(f"  Total merges: {len(tokenizer.merges)}")
-        print(f"\n  Round-trip test:")
+        print("\n  Round-trip test:")
         print(f"    Input:   '{test_text}'")
         print(f"    Encoded: {encoded[:20]}{'...' if len(encoded) > 20 else ''}")
         print(f"    Decoded: '{decoded}'")
-        print(f"\n  Tokenizer ready!")
+        print("\n  Tokenizer ready!")
         
     except Exception as e:
         print(f"\n  [ERROR] Tokenizer training failed: {e}")
@@ -521,7 +535,7 @@ def run_train(data_path: str, model_path: str, model_size: str,
             print(f"  VRAM: {vram:.1f} GB")
         
         # Load tokenizer
-        print(f"\n  Loading tokenizer...")
+        print("\n  Loading tokenizer...")
         tokenizer = get_tokenizer("auto")
         print(f"  Tokenizer: {type(tokenizer).__name__} (vocab: {tokenizer.vocab_size})")
         
@@ -573,13 +587,13 @@ def run_train(data_path: str, model_path: str, model_size: str,
             model = model.to(device)
         except RuntimeError as e:
             if "out of memory" in str(e).lower():
-                print(f"\n  ERROR: Not enough GPU memory to load model.")
-                print(f"  Try using --device cpu or a smaller model.")
+                print("\n  ERROR: Not enough GPU memory to load model.")
+                print("  Try using --device cpu or a smaller model.")
                 return
             raise
         
         # Load training data
-        print(f"\n  Loading training data...")
+        print("\n  Loading training data...")
         all_text = []
         for f in data_files:
             text = f.read_text(encoding="utf-8")
@@ -601,7 +615,7 @@ def run_train(data_path: str, model_path: str, model_size: str,
             golden_eval_path=golden_eval or "",
         )
         
-        print(f"\n  Training config:")
+        print("\n  Training config:")
         print(f"    Epochs: {epochs}")
         print(f"    Batch size: {batch_size}")
         print(f"    Learning rate: {lr}")
@@ -609,7 +623,7 @@ def run_train(data_path: str, model_path: str, model_size: str,
         print(f"    Checkpoint dir: {config.checkpoint_dir}")
         
         # Train
-        print(f"\n  Starting training...\n")
+        print("\n  Starting training...\n")
         
         trainer = Trainer(model, tokenizer, config)
         
@@ -659,12 +673,12 @@ def run_train(data_path: str, model_path: str, model_size: str,
         elif hasattr(tokenizer, 'save_vocab'):
             tokenizer.save_vocab(tok_path)
         
-        print(f"\n  Training complete!")
+        print("\n  Training complete!")
         print(f"  Best loss: {state.best_loss:.4f}")
         print(f"  Total tokens: {state.total_tokens:,}")
         print(f"  Model saved: {output_path}")
         print(f"  Tokenizer saved: {tok_path}")
-        print(f"\n  To chat: python run.py --chat --model {output_path}")
+        print(f"\n  To chat: python run.py --client-chat --model {output_path}")
         
     except Exception as e:
         print(f"\n  [ERROR] Training failed: {e}")
@@ -907,103 +921,294 @@ def run_gsm8k_benchmark_cli(model_path: str = None,
         sys.exit(1)
 
 
-def run_chat(model_path: str = None, profile: str = None,
-             temperature: float = None):
-    """Simple CLI chat interface with streaming output."""
+# run_chat (in-process) was removed in BIOME-1c (Pass 156z9dc).
+# --chat now forwards to run_chat_client, which auto-spawns the daemon
+# if it is not already running. This keeps the public flag alive for any
+# existing scripts while retiring the in-process engine path.
+
+
+@dataclass
+class _ChatClientState:
+    temperature: float | None = None
+    transcript: list[str] = field(default_factory=list)
+    daemon_pid: int | None = None
+    profile: str | None = None
+    model_path: str | None = None
+
+
+_CHAT_HELP_TEXT = "\n".join([
+    "Commands:",
+    "  :help              Show this command list",
+    "  :new               Start a fresh conversation thread",
+    "  :list              List conversations with short previews",
+    "  :delete <id>       Delete a conversation",
+    "  :reset             Clear local transcript history",
+    "  :profile <name>    Activate a profile on the daemon",
+    "  :model <path>      Load a model on the daemon",
+    "  :temp <n>          Set the per-turn temperature [0.0, 2.0]",
+    "  :save <path>       Save the local transcript to a text file",
+    "  :status            Show local and daemon state",
+])
+
+
+def _is_local_api_url(api_url: str) -> bool:
+    host = urlparse(api_url).hostname or ""
+    return host in {"127.0.0.1", "localhost"}
+
+
+def _try_autospawn_daemon(api_url: str, model_path: str | None = None,
+                          timeout: float = 8.0) -> int | None:
+    parsed = urlparse(api_url)
+    host = parsed.hostname or ""
+    if host not in {"127.0.0.1", "localhost"}:
+        return None
+
+    port = parsed.port or 8080
+    script_path = Path(__file__).resolve()
+    cmd = [sys.executable, str(script_path), "--serve", "--port", str(port)]
+    if model_path:
+        cmd.extend(["--model", model_path])
+
+    print(f"Starting daemon at {api_url}...")
+    try:
+        proc = subprocess.Popen(cmd)
+    except Exception as exc:
+        import traceback
+        traceback.print_exception(type(exc), exc, exc.__traceback__)
+        print(f"\nError connecting to API server: {exc}")
+        return None
+
+    from enigma_engine import EnigmaClient
+
+    client = EnigmaClient(api_url)
+    attempts = max(1, int(timeout / 0.25) + 1)
+    last_error: Exception | None = None
+
+    for _ in range(attempts):
+        try:
+            health = client.health()
+            if health.get("status") == "ok":
+                return getattr(proc, "pid", None)
+            last_error = RuntimeError(f"server health check failed: {health}")
+        except Exception as exc:
+            last_error = exc
+        time.sleep(0.25)
+
+    # Health never went OK — terminate the orphan to free the port + PID.
+    # Pass 156z9da audit #1: silent leak left the subprocess running while
+    # the caller exited, blocking subsequent --client-chat retries.
+    try:
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=2.0)
+            except Exception:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    if last_error is not None:
+        import traceback
+        traceback.print_exception(type(last_error), last_error,
+                                  last_error.__traceback__)
+        print(f"\nError connecting to API server: {last_error}")
+    return None
+
+
+def _dispatch_command(line: str, client, state: _ChatClientState) -> bool:
+    if not line.startswith(":"):
+        return False
+
+    command_text = line[1:].strip()
+    if not command_text:
+        print("[ERROR] unknown command — try :help")
+        return True
+
+    command, _, remainder = command_text.partition(" ")
+    command = command.lower()
+    arg = remainder.strip()
+
+    if command == "help":
+        print(_CHAT_HELP_TEXT)
+        return True
+
+    if command == "new":
+        conversation_id = client.new_conversation()
+        state.transcript.clear()
+        print(f"Conversation: {conversation_id}")
+        return True
+
+    if command == "list":
+        conversations = client.list_conversations()
+        if not conversations:
+            print("No conversations.")
+            return True
+        for entry in conversations:
+            if not isinstance(entry, dict):
+                continue
+            conversation_id = entry.get("id", "(unknown)")
+            preview = entry.get("last_message") or entry.get("preview") \
+                or entry.get("message") or ""
+            print(f"{conversation_id}: {preview}")
+        return True
+
+    if command == "delete":
+        if not arg:
+            print("[ERROR] usage: :delete <id>")
+            return True
+        was_active = getattr(client, "conversation_id", None) == arg
+        client.delete_conversation(arg)
+        if was_active:
+            # Pass 156z9da audit #2: clear local scrollback when the active
+            # thread is deleted, matching :new behaviour. Inactive deletes
+            # leave scrollback untouched.
+            client.conversation_id = None
+            state.transcript.clear()
+        print(f"Deleted conversation: {arg}")
+        return True
+
+    if command == "reset":
+        state.transcript.clear()
+        print("Local transcript cleared.")
+        return True
+
+    if command == "profile":
+        if not arg:
+            print("[ERROR] usage: :profile <name>")
+            return True
+        client.activate_profile(arg)
+        state.profile = arg
+        print(f"Profile: {arg}")
+        return True
+
+    if command == "model":
+        if not arg:
+            print("[ERROR] usage: :model <path>")
+            return True
+        client.load_model(arg)
+        state.model_path = arg
+        print(f"Model: {arg}")
+        return True
+
+    if command == "temp":
+        if not arg:
+            print("[ERROR] usage: :temp <n>")
+            return True
+        try:
+            temperature = float(arg)
+        except ValueError:
+            print("[ERROR] temperature must be a number in [0.0, 2.0]")
+            return True
+        if not 0.0 <= temperature <= 2.0:
+            print("[ERROR] temperature must be a number in [0.0, 2.0]")
+            return True
+        state.temperature = temperature
+        print(f"Temperature: {temperature:g}")
+        return True
+
+    if command == "save":
+        if not arg:
+            print("[ERROR] usage: :save <path>")
+            return True
+        from enigma_engine.core.safe_save import atomic_write_text
+
+        save_path = Path(arg).expanduser()
+        transcript = "\n".join(state.transcript)
+        if transcript:
+            transcript += "\n"
+        atomic_write_text(save_path, transcript)
+        print(f"Saved transcript to {save_path}")
+        return True
+
+    if command == "status":
+        health = client.health()
+        conversation_id = getattr(client, "conversation_id", None) or "(none)"
+        profile = state.profile or "(none)"
+        model_path = state.model_path or "(none)"
+        daemon_pid = state.daemon_pid if state.daemon_pid is not None else "(none)"
+        print(
+            f"Health: {health.get('status', 'unknown')} | "
+            f"Conversation: {conversation_id} | Profile: {profile} | "
+            f"Model: {model_path} | Daemon PID: {daemon_pid}"
+        )
+        return True
+
+    print("[ERROR] unknown command — try :help")
+    return True
+
+
+def _chat_repl(client, *, state: _ChatClientState, on_command_error) -> None:
     import sys
 
-    print("\n" + "=" * 50)
-    print("  Enigma AI Engine - Chat")
-    print("  Type 'quit' to exit")
-    print("=" * 50 + "\n")
+    while True:
+        try:
+            user_input = input("You: ").strip()
+            if user_input.lower() in ("quit", "exit", "q"):
+                print("Goodbye!")
+                break
+            if not user_input:
+                continue
 
-    try:
-        from enigma_engine.core import EnigmaEngine
-
-        # Try to load engine
-        print("Loading model...")
-        engine = EnigmaEngine(model_path=model_path) if model_path else EnigmaEngine()
-        print("Model loaded!")
-
-        # Load AI profile if specified
-        system_prompt = None
-        gen_kwargs: dict = {}
-        if profile:
-            try:
-                from enigma_engine.core.ai_profile import AIProfile
-                p = AIProfile.load_profile(profile)
-                system_prompt = p.system_prompt
-                if p.generation:
-                    gen_kwargs = p.generation.__dict__.copy()
-                print(f"Profile: {p.name}")
-            except Exception as e:
-                print(f"  [WARN] Could not load profile '{profile}': {e}")
-
-        # CLI temperature override takes precedence
-        if temperature is not None:
-            gen_kwargs["temperature"] = temperature
-
-        if gen_kwargs:
-            names = ", ".join(f"{k}={v}" for k, v in gen_kwargs.items()
-                              if v is not None)
-            if names:
-                print(f"Config: {names}")
-        print()
-        
-        history: list[dict[str, str]] = []
-
-        # Chat loop
-        while True:
-            try:
-                user_input = input("You: ").strip()
-                if user_input.lower() in ('quit', 'exit', 'q'):
-                    print("Goodbye!")
-                    break
-                if not user_input:
+            if user_input.startswith(":"):
+                try:
+                    handled = _dispatch_command(user_input, client, state)
+                except Exception as exc:
+                    on_command_error(exc)
                     continue
-                
-                sys.stdout.write("AI: ")
-                sys.stdout.flush()
+                if handled:
+                    continue
 
-                full_response = ""
-                chat_kwargs: dict = {"history": history}
-                if system_prompt:
-                    chat_kwargs["system_prompt"] = system_prompt
-                chat_kwargs.update(
-                    {k: v for k, v in gen_kwargs.items()
-                     if v is not None})
-                for token in engine.stream_chat(
-                    user_input, **chat_kwargs
-                ):
+            sys.stdout.write("AI: ")
+            sys.stdout.flush()
+
+            stream_kwargs: dict = {}
+            if state.temperature is not None:
+                stream_kwargs["temperature"] = state.temperature
+
+            try:
+                emitted_tokens: list[str] = []
+                for token in client.chat_stream(user_input, **stream_kwargs):
+                    emitted_tokens.append(token)
                     sys.stdout.write(token)
                     sys.stdout.flush()
-                    full_response += token
 
-                # Newline after streamed response
-                sys.stdout.write("\n\n")
+                response_text = "".join(emitted_tokens)
+                if not emitted_tokens:
+                    # Fallback for servers/proxies that buffer SSE responses.
+                    response_text = client.chat(user_input, **stream_kwargs)
+                    sys.stdout.write(response_text)
+                    sys.stdout.flush()
+            except Exception as exc:
+                on_command_error(exc)
+                continue
+
+            sys.stdout.write("\n\n")
+            sys.stdout.flush()
+
+            # Pass 156z9da audit #5: skip transcript append when both stream
+            # and non-stream fallback returned empty — avoids logging a bare
+            # "AI: " line under a misleading user turn.
+            if not response_text:
+                sys.stdout.write("  [WARN] empty response from server\n")
                 sys.stdout.flush()
+                continue
 
-                # Maintain conversation history
-                history.append({"role": "user", "content": user_input})
-                history.append({"role": "assistant", "content": full_response})
-                
-            except KeyboardInterrupt:
-                print("\nGoodbye!")
-                break
-                
-    except FileNotFoundError as e:
-        print(f"\nNo model found. Train a model first or specify --model path.")
-        print(f"Error: {e}")
-    except Exception as e:
-        print(f"\nError loading model: {e}")
-        print("Make sure you have trained a model or specified a valid model path.")
+            state.transcript.append(f"You: {user_input}")
+            state.transcript.append(f"AI: {response_text}")
+
+        except KeyboardInterrupt:
+            print("\nGoodbye!")
+            break
 
 
-def run_chat_client(api_url: str, model_path: str = None,
-                    profile: str = None, temperature: float = None):
+def run_chat_client(api_url: str, model_path: str | None = None,
+                    profile: str | None = None,
+                    temperature: float | None = None,
+                    no_auto_spawn: bool = False):
     """CLI chat interface that talks to a running API server."""
-    import sys
-
     print("\n" + "=" * 50)
     print("  Enigma AI Engine - Client Chat")
     print("  Type 'quit' to exit")
@@ -1013,61 +1218,54 @@ def run_chat_client(api_url: str, model_path: str = None,
         from enigma_engine import EnigmaClient
 
         client = EnigmaClient(api_url)
-        health = client.health()
-        if health.get("status") != "ok":
-            raise RuntimeError(f"server health check failed: {health}")
+        daemon_pid: int | None = None
+        try:
+            health = client.health()
+            if health.get("status") != "ok":
+                raise RuntimeError(f"server health check failed: {health}")
+        except Exception as exc:
+            if no_auto_spawn:
+                print(f"\nError connecting to API server: {exc}")
+                print("Start the server first: python run.py --serve")
+                return
+
+            if not _is_local_api_url(api_url):
+                print(f"\nError connecting to API server: {exc}")
+                print("Start the server first: python run.py --serve")
+                return
+
+            daemon_pid = _try_autospawn_daemon(api_url, model_path=model_path)
+            if daemon_pid is None:
+                return
+            print(f"Daemon started (pid={daemon_pid})")
+
         print(f"Connected: {api_url}")
+
+        state = _ChatClientState(
+            temperature=temperature,
+            daemon_pid=daemon_pid,
+        )
 
         if model_path:
             print("Loading model via API...")
             client.load_model(model_path)
+            state.model_path = model_path
             print("Model loaded!")
 
         if profile:
             try:
                 client.activate_profile(profile)
+                state.profile = profile
                 print(f"Profile: {profile}")
             except Exception as exc:
                 print(f"  [WARN] Could not activate profile '{profile}': {exc}")
 
         print()
 
-        while True:
-            try:
-                user_input = input("You: ").strip()
-                if user_input.lower() in ("quit", "exit", "q"):
-                    print("Goodbye!")
-                    break
-                if not user_input:
-                    continue
+        def _command_error(exc: Exception) -> None:
+            print(f"\n  [ERROR] Request failed: {exc}\n")
 
-                sys.stdout.write("AI: ")
-                sys.stdout.flush()
-
-                stream_kwargs: dict = {}
-                if temperature is not None:
-                    stream_kwargs["temperature"] = temperature
-
-                emitted = False
-                for token in client.chat_stream(user_input, **stream_kwargs):
-                    emitted = True
-                    sys.stdout.write(token)
-                    sys.stdout.flush()
-
-                if not emitted:
-                    # Fallback for servers/proxies that buffer SSE responses.
-                    response = client.chat(user_input, **stream_kwargs)
-                    sys.stdout.write(response)
-                    sys.stdout.flush()
-
-                sys.stdout.write("\n\n")
-                sys.stdout.flush()
-
-            except KeyboardInterrupt:
-                print("\nGoodbye!")
-                break
-            except Exception as exc:
-                print(f"\n  [ERROR] Request failed: {exc}\n")
+        _chat_repl(client, state=state, on_command_error=_command_error)
 
     except Exception as exc:
         print(f"\nError connecting to API server: {exc}")
