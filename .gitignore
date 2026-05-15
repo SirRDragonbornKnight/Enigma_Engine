@@ -75,6 +75,7 @@ htmlcov/
 pytest_*.txt
 complete_run.txt
 final_run.txt
+*.err
 .tox/
 
 # Linting/Type checking
