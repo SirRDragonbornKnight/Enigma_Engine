@@ -482,7 +482,7 @@ impl RustBPETokenizer {
     #[getter]
     fn get_use_utf8_bytes(&self) -> bool { self.use_utf8_bytes }
 
-    fn get_vocab(&self, py: Python<'_>) -> PyResult<PyObject> {
+    fn get_vocab(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let dict = PyDict::new(py);
         for (k, v) in &self.token_to_id {
             dict.set_item(k, v)?;
@@ -505,8 +505,8 @@ impl RustBPETokenizer {
         vocab_size: usize,
         min_frequency: usize,
         use_utf8_bytes: bool,
-        callback: Option<PyObject>,
-    ) -> PyResult<PyObject> {
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Py<PyAny>> {
         if texts.is_empty() {
             return Err(pyo3::exceptions::PyValueError::new_err(
                 "Cannot train on empty text list",
@@ -543,7 +543,7 @@ impl RustBPETokenizer {
                 *word_map.entry(syms).or_insert(0) += 1;
             }
             // Yield GIL between texts for GUI responsiveness
-            py.allow_threads(|| {});
+            py.detach(|| {});
         }
 
         // Convert to indexed arrays
@@ -716,7 +716,7 @@ impl RustBPETokenizer {
 
             // Yield GIL every 10 merges for GUI responsiveness
             if (i + 1) % 10 == 0 {
-                py.allow_threads(|| {});
+                py.detach(|| {});
             }
             // Progress callback every 100 merges
             if (i + 1) % 100 == 0 || i + 1 == num_merges {
