@@ -1,0 +1,23 @@
+﻿2.1-threed: kill Local3DGen silent fallback + flip default to local
+
+Local3DGen.load() previously imported Shap-E, swallowed ImportError/Exception
+at INFO/WARNING level, then masqueraded as loaded by promoting an internal
+Builtin3DGen placeholder. Callers saw 'local' loaded successfully while
+actually receiving placeholder cubes. Three sites carried the silent-fallback
+anti-pattern: __init__ (self._fallback attr), load() (fallback.load() promote),
+generate() (fallback.generate() proxy on missing pipe). All three killed.
+
+Now: ImportError -> logger.error('install diffusers + transformers + torch') +
+return False. Exception -> logger.error(reason) + return False. No masquerade.
+ThreeD._cmd_generate already surfaces 'Failed to load local' on False return.
+
+Default provider flipped builtin -> local (constructor + CLI argparse), same
+pattern as 2.1-imagegen. Builtin remains as explicit opt-in fallback.
+
+Tests (tests/test_core.py TestThreeDServiceDefaults):
+  - test_default_provider_is_local (regression gate)
+  - test_local_has_no_silent_fallback_attribute (kills _fallback resurrection)
+  - test_load_failure_does_not_silently_fallback (surfaces real failure)
+
+Suite: 3261 pass / 3 skip (was 3258; +3 from new slice). Lint clean.
+Honors AA code maker.md S4 'loud-on-real-issue, silent-on-normal-path'.

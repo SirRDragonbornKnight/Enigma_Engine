@@ -397,6 +397,53 @@ class TestImageGenServiceDefaults:
             f"load-failure error must name the failing provider, got: {result!r}")
 
 
+class TestThreeDServiceDefaults:
+    """2.1-threed slice (May 25 2026): standalone service default flipped
+    builtin -> local; Local3DGen no longer silently falls back to Builtin3DGen."""
+
+    @staticmethod
+    def _load_threed_module():
+        import importlib.util
+        from pathlib import Path
+        path = Path(__file__).resolve().parent.parent / "mods" / "threed" / "threed.py"
+        spec = importlib.util.spec_from_file_location("threed_service", path)
+        assert spec is not None and spec.loader is not None
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def test_default_provider_is_local(self):
+        """Constructor default must be 'local' (was 'builtin' pre-slice)."""
+        mod = self._load_threed_module()
+        service = mod.ThreeD()
+        assert service.default_provider == "local", (
+            f"default_provider regressed to {service.default_provider!r}; "
+            "2.1-threed flipped it to 'local' so Shap-E is the out-of-box behaviour")
+
+    def test_local_has_no_silent_fallback_attribute(self):
+        """Local3DGen must NOT carry a Builtin3DGen fallback handle. The old
+        implementation hid Shap-E load failures behind self._fallback, so
+        callers couldn't tell when they were getting placeholder cubes."""
+        mod = self._load_threed_module()
+        local = mod.Local3DGen()
+        assert not hasattr(local, "_fallback"), (
+            "Local3DGen._fallback re-introduces the silent-fallback "
+            "anti-pattern fixed by 2.1-threed")
+
+    def test_load_failure_does_not_silently_fallback(self):
+        """When local provider fails to load, _cmd_generate must surface the
+        failure, NOT promote builtin behind the caller's back."""
+        mod = self._load_threed_module()
+        service = mod.ThreeD()
+        local = service.get_provider("local")
+        assert local is not None
+        local.load = lambda: False  # simulate Shap-E weights/deps missing
+        result = service._cmd_generate({"prompt": "a cube"})
+        assert result.get("success") is False
+        assert "local" in result.get("error", "").lower(), (
+            f"load-failure error must name the failing provider, got: {result!r}")
+
+
 class TestAiProfileCallableType:
     """AIProfileManager must accept callables for callbacks."""
 

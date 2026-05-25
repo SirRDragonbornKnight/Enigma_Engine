@@ -338,56 +338,59 @@ class Builtin3DGen:
 
 
 class Local3DGen:
-    """Local 3D generation using Shap-E."""
-    
+    """Local 3D generation using Shap-E.
+
+    2.1-threed slice (May 25 2026): removed silent fallback to Builtin3DGen.
+    Previously load() would import Shap-E, swallow ImportError/Exception, and
+    masquerade as loaded by promoting the builtin placeholder. Callers saw
+    'local' loaded successfully while actually receiving placeholder output.
+    Honors §4 'loud-on-real-issue, silent-on-normal-path'.
+    """
+
     def __init__(self, use_cpu: bool = False):
         self.pipe = None
         self.is_loaded = False
         self.use_cpu = use_cpu
-        self._fallback = Builtin3DGen()
-    
+
     def load(self) -> bool:
         try:
             import torch
             from diffusers import ShapEPipeline
-            
+
             if torch.cuda.is_available() and not self.use_cpu:
-                free_mem = (torch.cuda.get_device_properties(0).total_memory - 
+                free_mem = (torch.cuda.get_device_properties(0).total_memory -
                            torch.cuda.memory_allocated(0)) / (1024**3)
                 if free_mem < 3.5:
                     self.use_cpu = True
                     logger.warning("Low GPU memory, using CPU")
-            
+
             dtype = torch.float32 if self.use_cpu else torch.float16
             device = "cpu" if self.use_cpu else "cuda"
-            
+
             logger.info(f"Loading Shap-E ({device})...")
             self.pipe = ShapEPipeline.from_pretrained(
                 "openai/shap-e",
                 torch_dtype=dtype,
                 low_cpu_mem_usage=True
             )
-            
+
             if not self.use_cpu and torch.cuda.is_available():
                 self.pipe = self.pipe.to("cuda")
                 try:
                     self.pipe.enable_attention_slicing(1)
                 except Exception:
                     pass
-            
+
             self.is_loaded = True
             logger.info("Shap-E loaded")
             return True
         except ImportError:
-            logger.info("Shap-E not available, using fallback")
+            logger.error("Shap-E not available: install 'diffusers' + 'transformers' + 'torch'")
+            return False
         except Exception as e:
-            logger.warning(f"Shap-E failed: {e}")
-        
-        if self._fallback.load():
-            self.is_loaded = True
-            return True
-        return False
-    
+            logger.error(f"Shap-E load failed: {e}")
+            return False
+
     def unload(self):
         if self.pipe:
             del self.pipe
@@ -398,16 +401,12 @@ class Local3DGen:
                     torch.cuda.empty_cache()
             except Exception:
                 pass
-        self._fallback.unload()
         self.is_loaded = False
-    
+
     def generate(self, prompt: str, guidance_scale: float = 15.0,
                  num_inference_steps: int = 64, **kwargs) -> Dict[str, Any]:
-        if not self.is_loaded:
-            return {"success": False, "error": "Not loaded"}
-        
-        if not self.pipe:
-            return self._fallback.generate(prompt, **kwargs)
+        if not self.is_loaded or not self.pipe:
+            return {"success": False, "error": "Local Shap-E provider not loaded"}
         
         try:
             start = time.time()
@@ -460,7 +459,11 @@ class ThreeD:
         "local": Local3DGen,
     }
     
-    def __init__(self, default_provider: str = "builtin"):
+    def __init__(self, default_provider: str = "local"):
+        # 2.1-threed slice (May 25 2026): default flipped builtin -> local.
+        # Local3DGen.load() now fails loud (logger.error + return False) when
+        # Shap-E weights/deps are missing; _cmd_generate surfaces 'Failed to
+        # load local' instead of silently producing builtin placeholder cubes.
         self.providers: Dict[str, Any] = {}
         self.default_provider = default_provider
         self._running = False
@@ -647,7 +650,7 @@ def main():
     parser = argparse.ArgumentParser(description="3D Generation Service")
     parser.add_argument("--port", type=int, default=9905)
     parser.add_argument("--router", type=str)
-    parser.add_argument("--provider", type=str, default="builtin",
+    parser.add_argument("--provider", type=str, default="local",
                        choices=["builtin", "local"])
     parser.add_argument("--generate", type=str)
     
