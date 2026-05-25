@@ -397,6 +397,95 @@ class TestImageGenServiceDefaults:
             f"load-failure error must name the failing provider, got: {result!r}")
 
 
+class TestAudioGenServiceDefaults:
+    """2.1-audiogen slice (May 25 2026): swapped pyttsx3-as-LocalTTS for
+    Kokoro-82M neural TTS, flipped default system -> local."""
+
+    @staticmethod
+    def _load_audiogen_module():
+        import importlib.util
+        from pathlib import Path
+        path = Path(__file__).resolve().parent.parent / "mods" / "audiogen" / "audiogen.py"
+        spec = importlib.util.spec_from_file_location("audiogen_service", path)
+        assert spec is not None and spec.loader is not None
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def test_default_provider_is_local(self):
+        """Constructor default must be 'local' (was 'system' pre-slice)."""
+        mod = self._load_audiogen_module()
+        service = mod.AudioGen()
+        assert service.default_provider == "local", (
+            f"default_provider regressed to {service.default_provider!r}; "
+            "2.1-audiogen flipped it to 'local' so Kokoro is the out-of-box behaviour")
+
+    def test_load_failure_does_not_silently_fallback(self):
+        """When the local provider fails to load, _cmd_generate must surface
+        the failure, NOT silently promote SystemTTS behind the caller's back."""
+        mod = self._load_audiogen_module()
+        service = mod.AudioGen()
+        local = service.get_provider("local")
+        assert local is not None
+        local.load = lambda: False  # simulate Kokoro weights/deps missing
+        result = service._cmd_generate({"text": "hello world"})
+        assert result.get("success") is False
+        assert "local" in result.get("error", "").lower(), (
+            f"load-failure error must name the failing provider, got: {result!r}")
+
+    def test_local_uses_kokoro_not_pyttsx3(self):
+        """LocalTTS.load() must wire kokoro.KPipeline, not the obsolete
+        pyttsx3 wrapper. Behavioural gate via injected fake kokoro module;
+        a regression to `import pyttsx3` would not touch the fake and would
+        also fail to expose the Kokoro pipeline contract."""
+        import sys
+        import types
+        mod = self._load_audiogen_module()
+
+        captured = {}
+
+        class FakeKPipeline:
+            def __init__(self, lang_code="a", **kwargs):
+                captured["lang_code"] = lang_code
+
+            def __call__(self, text, voice="af_heart", speed=1.0, **kwargs):
+                captured["text"] = text
+                captured["voice"] = voice
+                captured["speed"] = speed
+                yield (0, 0, [0.0, 0.0, 0.0])
+
+        fake_kokoro = types.ModuleType("kokoro")
+        fake_kokoro.KPipeline = FakeKPipeline
+        # Guard: if the code regressed to pyttsx3, this fake would never be
+        # touched because the load path would import a different module.
+        original = sys.modules.get("kokoro")
+        sys.modules["kokoro"] = fake_kokoro
+        try:
+            local = mod.LocalTTS()
+            ok = local.load()
+        finally:
+            if original is not None:
+                sys.modules["kokoro"] = original
+            else:
+                sys.modules.pop("kokoro", None)
+
+        assert ok is True, "Kokoro load path should succeed with fake pipeline"
+        assert captured.get("lang_code") == "a", (
+            f"LocalTTS must instantiate KPipeline with lang_code, got {captured!r}")
+
+    def test_local_advertises_kokoro_voices(self):
+        """get_voices() must return Kokoro voice IDs (af_*, am_*, bf_*, bm_*),
+        not pyttsx3 OS voice names. Adversarial gate against silent regression."""
+        mod = self._load_audiogen_module()
+        local = mod.LocalTTS()
+        voices = local.get_voices()
+        assert voices, "LocalTTS must advertise at least one voice"
+        # Every voice ID should match the Kokoro naming scheme.
+        for v in voices:
+            assert isinstance(v, str) and v[:3] in ("af_", "am_", "bf_", "bm_"), (
+                f"voice {v!r} does not match Kokoro naming (af_/am_/bf_/bm_)")
+
+
 class TestVideoGenServiceDefaults:
     """2.1-videogen slice (May 25 2026): swapped AnimateDiff for CogVideoX-5B,
     flipped default builtin -> local, killed LocalVideo._fallback masquerade."""

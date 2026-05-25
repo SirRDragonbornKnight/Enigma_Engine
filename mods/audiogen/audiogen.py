@@ -3,8 +3,8 @@
 Audio Generation - Standalone Text-to-Speech Service
 
 Text-to-speech and audio generation using:
-- pyttsx3 (local offline)
-- System speech fallback
+- Kokoro-82M (local, Apache 2.0, ~300MB) - current best open TTS for <1GB VRAM
+- System speech (OS SAPI / say / espeak) as explicit opt-in fallback
 
 Usage:
     python audiogen.py                              # Start service
@@ -73,90 +73,137 @@ class Message:
 # =============================================================================
 
 class LocalTTS:
-    """Local text-to-speech using pyttsx3."""
-    
-    def __init__(self):
-        self.engine = None
+    """Neural text-to-speech using Kokoro-82M (local, Apache 2.0, ~300MB).
+
+    Engine pick (2.1-audiogen, May 25 2026): Kokoro-82M beats Bark / MeloTTS
+    on the open TTS Arena leaderboard at a tiny VRAM footprint. Coqui XTTS-v2
+    and F5-TTS are non-commercial licenses; Piper is CPU-only with weaker
+    prosody. Kokoro wins on quality-per-VRAM AND license.
+    """
+
+    # Canonical Kokoro voices shipped with the model (af=american female,
+    # am=american male, bf=british female, bm=british male).
+    DEFAULT_VOICES = (
+        "af_heart", "af_bella", "af_sarah",
+        "am_adam", "am_michael",
+        "bf_emma", "bf_isabella",
+        "bm_george", "bm_lewis",
+    )
+
+    def __init__(self, voice: str = "af_heart", lang_code: str = "a"):
+        self.pipeline = None
         self.is_loaded = False
-        self.voices = []
-        self.current_voice = 0
-        self.rate = 150
+        self.voice = voice
+        self.lang_code = lang_code
+        # Kokoro speed multiplier; we expose pyttsx3-style 50..300 via set_rate
+        # for caller compatibility but store as 0.5..2.0 internally.
+        self.rate = 1.0
         self.volume = 1.0
-    
+        self.sample_rate = 24000
+
     def load(self) -> bool:
         try:
-            import pyttsx3
-            self.engine = pyttsx3.init()
-            self.voices = self.engine.getProperty('voices')
+            from kokoro import KPipeline
+            self.pipeline = KPipeline(lang_code=self.lang_code)
             self.is_loaded = True
-            logger.info("pyttsx3 TTS loaded")
+            logger.info(f"Kokoro TTS loaded (voice={self.voice}, lang={self.lang_code})")
             return True
         except ImportError:
-            logger.error("Install: pip install pyttsx3")
+            logger.error("Kokoro not available: install 'kokoro>=0.3' + 'soundfile' + 'torch'")
         except Exception as e:
-            logger.warning(f"pyttsx3 failed: {e}")
+            logger.error(f"Kokoro load failed: {e}")
         return False
-    
+
     def unload(self):
-        if self.engine:
-            try:
-                self.engine.stop()
-            except Exception:
-                pass
-            self.engine = None
+        self.pipeline = None
         self.is_loaded = False
-    
+
     def get_voices(self) -> List[str]:
-        if not self.is_loaded:
-            return []
-        return [v.name for v in self.voices]
-    
-    def set_voice(self, index: int):
-        if not self.is_loaded or not (0 <= index < len(self.voices)):
-            return
-        self.engine.setProperty('voice', self.voices[index].id)
-        self.current_voice = index
-    
-    def set_rate(self, rate: int):
-        if not self.is_loaded:
-            return
-        self.rate = rate
-        self.engine.setProperty('rate', rate)
-    
-    def set_volume(self, volume: float):
-        if not self.is_loaded:
-            return
-        self.volume = max(0.0, min(1.0, volume))
-        self.engine.setProperty('volume', self.volume)
-    
-    def speak(self, text: str) -> Dict[str, Any]:
-        """Speak text directly."""
-        if not self.is_loaded:
-            return {"success": False, "error": "TTS not loaded"}
+        return list(self.DEFAULT_VOICES)
+
+    def set_voice(self, index_or_name):
+        voices = self.get_voices()
+        if isinstance(index_or_name, int) and 0 <= index_or_name < len(voices):
+            self.voice = voices[index_or_name]
+        elif isinstance(index_or_name, str) and index_or_name in voices:
+            self.voice = index_or_name
+
+    def set_rate(self, rate):
+        # Accept pyttsx3-style words/min (~150 default) or kokoro speed (0.5..2.0).
         try:
-            self.engine.say(text)
-            self.engine.runAndWait()
-            return {"success": True}
+            r = float(rate)
+        except (TypeError, ValueError):
+            return
+        if r > 5:  # pyttsx3 range
+            r = r / 150.0
+        self.rate = max(0.5, min(2.0, r))
+
+    def set_volume(self, volume: float):
+        try:
+            self.volume = max(0.0, min(1.0, float(volume)))
+        except (TypeError, ValueError):
+            pass
+
+    def speak(self, text: str) -> Dict[str, Any]:
+        """Generate audio then play via sounddevice (optional dep)."""
+        result = self.generate(text)
+        if not result.get("success"):
+            return result
+        try:
+            import soundfile as sf
+            import sounddevice as sd
+            audio, sr = sf.read(result["path"])
+            sd.play(audio, sr)
+            sd.wait()
+            return {"success": True, "path": result["path"]}
+        except ImportError:
+            return {
+                "success": True,
+                "path": result["path"],
+                "note": "Generated to file; install 'sounddevice' for direct playback",
+            }
         except Exception as e:
             return {"success": False, "error": str(e)}
-    
+
     def generate(self, text: str, **kwargs) -> Dict[str, Any]:
-        """Generate speech and save to file."""
-        if not self.is_loaded:
-            return {"success": False, "error": "TTS not loaded"}
-        
+        """Generate speech and save to a .wav file."""
+        if not self.is_loaded or self.pipeline is None:
+            return {"success": False, "error": "Local Kokoro provider not loaded"}
+        try:
+            import numpy as np
+            import soundfile as sf
+        except ImportError:
+            return {
+                "success": False,
+                "error": "Install 'soundfile' + 'numpy' to write audio output",
+            }
         try:
             start = time.time()
             timestamp = int(time.time())
             filepath = OUTPUT_DIR / f"speech_{timestamp}.wav"
-            
-            self.engine.save_to_file(text, str(filepath))
-            self.engine.runAndWait()
-            
+
+            voice = kwargs.get("voice", self.voice)
+            speed = float(kwargs.get("speed", self.rate))
+
+            chunks = []
+            for _gs, _ps, audio in self.pipeline(text, voice=voice, speed=speed):
+                # Kokoro yields torch tensors or numpy arrays; coerce uniformly.
+                arr = audio.detach().cpu().numpy() if hasattr(audio, "detach") else np.asarray(audio)
+                chunks.append(arr)
+
+            if not chunks:
+                return {"success": False, "error": "Kokoro produced no audio"}
+
+            combined = np.concatenate(chunks) if len(chunks) > 1 else chunks[0]
+            if self.volume != 1.0:
+                combined = combined * self.volume
+            sf.write(str(filepath), combined, self.sample_rate)
+
             return {
                 "success": True,
                 "path": str(filepath),
-                "duration": time.time() - start
+                "duration": time.time() - start,
+                "voice": voice,
             }
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -244,7 +291,11 @@ class AudioGen:
         "system": SystemTTS,
     }
     
-    def __init__(self, default_provider: str = "system"):
+    # 2.1-audiogen (May 25 2026): default flipped "system" -> "local" so the
+    # out-of-box behaviour is the neural Kokoro engine, matching the
+    # imagegen/threed/videogen pattern. "system" remains opt-in for callers
+    # who want the zero-dependency OS speech path.
+    def __init__(self, default_provider: str = "local"):
         self.providers: Dict[str, Any] = {}
         self.default_provider = default_provider
         self._running = False
@@ -479,8 +530,9 @@ def main():
     parser = argparse.ArgumentParser(description="Audio Generation Service")
     parser.add_argument("--port", type=int, default=9904)
     parser.add_argument("--router", type=str)
-    parser.add_argument("--provider", type=str, default="system",
-                       choices=["local", "system"])
+    parser.add_argument("--provider", type=str, default="local",
+                       choices=["local", "system"],
+                       help="Default provider (local=Kokoro-82M neural TTS, system=OS SAPI/say/espeak)")
     parser.add_argument("--speak", type=str, help="Speak text")
     parser.add_argument("--generate", type=str, help="Generate to file")
     

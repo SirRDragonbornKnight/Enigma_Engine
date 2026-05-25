@@ -1,23 +1,43 @@
-﻿2.1-threed: kill Local3DGen silent fallback + flip default to local
+﻿2.1-audiogen: swap pyttsx3-as-LocalTTS for Kokoro-82M + flip default
 
-Local3DGen.load() previously imported Shap-E, swallowed ImportError/Exception
-at INFO/WARNING level, then masqueraded as loaded by promoting an internal
-Builtin3DGen placeholder. Callers saw 'local' loaded successfully while
-actually receiving placeholder cubes. Three sites carried the silent-fallback
-anti-pattern: __init__ (self._fallback attr), load() (fallback.load() promote),
-generate() (fallback.generate() proxy on missing pipe). All three killed.
+Engine comparison for local TTS at 16GB VRAM budget:
+- Kokoro-82M (Apache 2.0, 82M, ~300MB) - top open TTS leaderboard, <1GB VRAM
+- Coqui XTTS-v2 - non-commercial license (rejected)
+- Bark (Suno) - 4GB, slower, lower quality than Kokoro
+- F5-TTS - CC-BY-NC license (rejected)
+- MeloTTS - Apache 2.0 but Kokoro beats it on quality
+- Piper - CPU-only, weaker prosody
 
-Now: ImportError -> logger.error('install diffusers + transformers + torch') +
-return False. Exception -> logger.error(reason) + return False. No masquerade.
-ThreeD._cmd_generate already surfaces 'Failed to load local' on False return.
+Winner: Kokoro-82M on quality-per-VRAM AND open license.
 
-Default provider flipped builtin -> local (constructor + CLI argparse), same
-pattern as 2.1-imagegen. Builtin remains as explicit opt-in fallback.
+Pre-slice LocalTTS was a pyttsx3 wrapper - functionally identical to
+SystemTTS (both wrap OS SAPI/say/espeak). Misleading name, no neural
+component. Rewrite makes LocalTTS the true neural local path and keeps
+SystemTTS as the explicit OS-builtin fallback, mirroring the
+imagegen/threed/videogen pattern.
 
-Tests (tests/test_core.py TestThreeDServiceDefaults):
-  - test_default_provider_is_local (regression gate)
-  - test_local_has_no_silent_fallback_attribute (kills _fallback resurrection)
-  - test_load_failure_does_not_silently_fallback (surfaces real failure)
+Changes:
+- Rewrote LocalTTS to use kokoro.KPipeline with bf16-friendly defaults,
+  9 canonical voices (af_/am_/bf_/bm_), .wav output via soundfile, optional
+  sounddevice playback for speak(). Loud-fail on ImportError/Exception
+  (logger.error + return False), no silent fallback to system.
+- AudioGen.__init__ default_provider: "system" -> "local"
+- argparse --provider default: "system" -> "local"
+- Updated header docstring to name Kokoro-82M as the engine.
 
-Suite: 3261 pass / 3 skip (was 3258; +3 from new slice). Lint clean.
-Honors AA code maker.md S4 'loud-on-real-issue, silent-on-normal-path'.
+Tests: TestAudioGenServiceDefaults (4 tests):
+- test_default_provider_is_local
+- test_load_failure_does_not_silently_fallback (lambda: False -> surfaced error)
+- test_local_uses_kokoro_not_pyttsx3 (discriminator: fake kokoro module
+  with KPipeline; regression to pyttsx3 would not touch the fake and the
+  contract assertion would fail)
+- test_local_advertises_kokoro_voices (every voice ID matches af_/am_/bf_/bm_)
+
+Validation:
+- 4/4 new tests pass in 0.31s
+- Full suite 3269 pass / 3 skip (was 3265+3, +4 new)
+- ruff check enigma_engine/ tests/ clean
+- Pre-existing F541 at mods/audiogen/audiogen.py:439 (connect_to_router)
+  left untouched per AA code maker.md section 1 rule 18 (outside named
+  overhaul scope; overhaul is LocalTTS + default, not connect_to_router).
+  Confirmed via git stash that the error pre-existed this slice.
