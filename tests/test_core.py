@@ -397,6 +397,73 @@ class TestImageGenServiceDefaults:
             f"load-failure error must name the failing provider, got: {result!r}")
 
 
+class TestCodeGenServiceDefaults:
+    """2.1-codegen slice (May 25 2026): killed LocalCode._fallback=TemplateCode()
+    silent fallback (same anti-pattern as imagegen/threed/videogen/audiogen);
+    flipped default template -> local. Engine choice: in-tree Enigma model
+    (the project's trainable LLM), NOT an external model like Qwen-Coder."""
+
+    @staticmethod
+    def _load_codegen_module():
+        import importlib.util
+        from pathlib import Path
+        path = Path(__file__).resolve().parent.parent / "mods" / "codegen" / "codegen.py"
+        spec = importlib.util.spec_from_file_location("codegen_service", path)
+        assert spec is not None and spec.loader is not None
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def test_default_provider_is_local(self):
+        mod = self._load_codegen_module()
+        service = mod.CodeGen()
+        assert service.default_provider == "local", (
+            "CodeGen default must be 'local' (Enigma model); template is opt-in")
+
+    def test_local_has_no_silent_template_fallback(self):
+        """LocalCode must NOT carry a TemplateCode instance for silent
+        substitution. Same anti-pattern as the four prior 2.1 mods."""
+        mod = self._load_codegen_module()
+        local = mod.LocalCode()
+        assert not hasattr(local, "_fallback"), (
+            "LocalCode._fallback re-introduces the silent template-substitution "
+            "bug killed in 2.1-codegen")
+
+    def test_load_failure_does_not_silently_fallback(self, monkeypatch):
+        """When the Enigma model cannot be loaded, generate() must surface
+        the failure as success=False with a clear error - not silently emit
+        template-generated code that looks like Enigma output."""
+        mod = self._load_codegen_module()
+        service = mod.CodeGen(default_provider="local")
+        # Force the lazy provider instantiation, then break load().
+        if "local" not in service.providers:
+            service.providers["local"] = mod.LocalCode()
+        local = service.providers["local"]
+        monkeypatch.setattr(local, "load", lambda: False)
+        result = service._cmd_generate({"prompt": "sort a list", "language": "python"})
+        assert result.get("success") is False, (
+            f"load-failure must surface as failure, got: {result!r}")
+        err = result.get("error", "").lower()
+        assert "local" in err or "enigma" in err or "load" in err, (
+            f"load-failure error must name the failing layer, got: {result!r}")
+
+    def test_local_uses_enigma_not_template(self):
+        """LocalCode.generate must wire engine.generate (Enigma path), not
+        delegate to a TemplateCode helper. Adversarial source-level gate:
+        if a regression re-adds `self._fallback.generate(...)` the test fails."""
+        from pathlib import Path
+        src = (Path(__file__).resolve().parent.parent / "mods" / "codegen" / "codegen.py").read_text(encoding="utf-8")
+        # Extract just the LocalCode class body for the check.
+        start = src.index("class LocalCode:")
+        end = src.index("\nclass ", start + 1)
+        local_src = src[start:end]
+        assert "_fallback" not in local_src, (
+            "LocalCode source still references _fallback - silent template "
+            "substitution must remain killed")
+        assert "self.engine.generate" in local_src, (
+            "LocalCode.generate must call self.engine.generate (Enigma path)")
+
+
 class TestAudioGenServiceDefaults:
     """2.1-audiogen slice (May 25 2026): swapped pyttsx3-as-LocalTTS for
     Kokoro-82M neural TTS, flipped default system -> local."""

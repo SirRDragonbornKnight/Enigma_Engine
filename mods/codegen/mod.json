@@ -2,7 +2,7 @@
     "name": "Code Generation Mod",
     "id": "codegen",
     "version": "1.0.0",
-    "description": "Generate code from text prompts using templates or local Enigma models",
+    "description": "Generate code using the local Enigma model (default) or offline keyword templates (opt-in)",
     "author": "Enigma AI Engine",
     "port": 9902,
     "commands": [

@@ -1,43 +1,51 @@
-﻿2.1-audiogen: swap pyttsx3-as-LocalTTS for Kokoro-82M + flip default
+﻿2.1-codegen: kill LocalCode silent template fallback + flip default to Enigma
 
-Engine comparison for local TTS at 16GB VRAM budget:
-- Kokoro-82M (Apache 2.0, 82M, ~300MB) - top open TTS leaderboard, <1GB VRAM
-- Coqui XTTS-v2 - non-commercial license (rejected)
-- Bark (Suno) - 4GB, slower, lower quality than Kokoro
-- F5-TTS - CC-BY-NC license (rejected)
-- MeloTTS - Apache 2.0 but Kokoro beats it on quality
-- Piper - CPU-only, weaker prosody
+Engine choice rationale: unlike imagegen/threed/videogen/audiogen (which
+bridge external HF models because Enigma is not yet trained on those
+modalities), code generation is Enigma's PRIMARY skill per the project
+goals ('locally-trained AI capable of code & software development'). The
+correct local engine here is the in-tree Enigma model itself, NOT an
+external model like Qwen2.5-Coder-7B, DeepSeek-Coder-V2-Lite,
+StarCoder2-7B, or CodeLlama-7B - those are finished products we would
+delegate to, while Enigma is the trainable model we are building toward.
 
-Winner: Kokoro-82M on quality-per-VRAM AND open license.
-
-Pre-slice LocalTTS was a pyttsx3 wrapper - functionally identical to
-SystemTTS (both wrap OS SAPI/say/espeak). Misleading name, no neural
-component. Rewrite makes LocalTTS the true neural local path and keeps
-SystemTTS as the explicit OS-builtin fallback, mirroring the
-imagegen/threed/videogen pattern.
+The pre-slice LocalCode already wired the Enigma path correctly via
+ModelRegistry + EnigmaEngine, but masked load failures with a silent
+TemplateCode fallback (self._fallback) - same anti-pattern killed in
+the previous four 2.1 slices. A user who pointed CodeGen at a missing
+or untrained model would silently receive keyword-template output that
+looked like Enigma generations.
 
 Changes:
-- Rewrote LocalTTS to use kokoro.KPipeline with bf16-friendly defaults,
-  9 canonical voices (af_/am_/bf_/bm_), .wav output via soundfile, optional
-  sounddevice playback for speak(). Loud-fail on ImportError/Exception
-  (logger.error + return False), no silent fallback to system.
-- AudioGen.__init__ default_provider: "system" -> "local"
-- argparse --provider default: "system" -> "local"
-- Updated header docstring to name Kokoro-82M as the engine.
+- LocalCode: killed self._fallback = TemplateCode(); split load() into
+  ImportError branch (logger.error + return False, hint --provider template)
+  and Exception branch (logger.error naming the failing model + return False).
+  unload() no longer references _fallback. generate() early-returns
+  'Local Enigma provider not loaded' when engine is None.
+- CodeGen.__init__ default_provider: 'template' -> 'local' with slice-stamp.
+- argparse --provider default: 'template' -> 'local' with help text
+  documenting both options ('local=Enigma model, template=offline keyword
+  templates').
+- Header docstring rewritten to name the engine and explain why Enigma
+  (not an external model) is the right local choice.
+- mod.json description updated to reflect new default and opt-in semantics.
 
-Tests: TestAudioGenServiceDefaults (4 tests):
+Tests: TestCodeGenServiceDefaults (4 tests, all behavioural):
 - test_default_provider_is_local
-- test_load_failure_does_not_silently_fallback (lambda: False -> surfaced error)
-- test_local_uses_kokoro_not_pyttsx3 (discriminator: fake kokoro module
-  with KPipeline; regression to pyttsx3 would not touch the fake and the
-  contract assertion would fail)
-- test_local_advertises_kokoro_voices (every voice ID matches af_/am_/bf_/bm_)
+- test_local_has_no_silent_template_fallback (hasattr discriminator)
+- test_load_failure_does_not_silently_fallback (lambda: False -> surfaced
+  error mentioning local/enigma/load)
+- test_local_uses_enigma_not_template (file-level source gate: '_fallback'
+  not in LocalCode body, 'self.engine.generate' is in LocalCode body)
+
+Note: inspect.getsource fails for modules loaded via
+spec_from_file_location ('built-in class' TypeError). Read the mod source
+directly via Path.read_text and slice the LocalCode class body by
+'class LocalCode:' / '\nclass ' markers - same pattern other mod-loading
+tests should follow for source-level gates.
 
 Validation:
-- 4/4 new tests pass in 0.31s
-- Full suite 3269 pass / 3 skip (was 3265+3, +4 new)
-- ruff check enigma_engine/ tests/ clean
-- Pre-existing F541 at mods/audiogen/audiogen.py:439 (connect_to_router)
-  left untouched per AA code maker.md section 1 rule 18 (outside named
-  overhaul scope; overhaul is LocalTTS + default, not connect_to_router).
-  Confirmed via git stash that the error pre-existed this slice.
+- 4/4 new tests pass in 0.35s
+- Full suite 3273 pass / 3 skip (was 3269+3, +4 new)
+- ruff check enigma_engine/ tests/ clean ('All checks passed!')
+- No mod.json schema changes; only description field updated.

@@ -3,14 +3,25 @@
 Code Generation - Standalone AI Code Generator
 
 Generates code from natural language prompts using:
-- Local Enigma model
-- Template-based fallback
+- Local Enigma model (default) - the project's own trainable LLM; code is
+  Enigma's primary skill per the project goals, not an external bridge.
+- Template provider (explicit opt-in) - deterministic keyword-template
+  generation for offline / no-model environments. Never silently substituted
+  for the local engine; users pick it explicitly via --provider template.
+
+2.1-codegen slice (May 25 2026): killed `LocalCode._fallback = TemplateCode()`
+silent fallback (same anti-pattern as imagegen/threed/videogen/audiogen);
+flipped default template -> local. Engine choice: Enigma itself rather than
+an external model (Qwen2.5-Coder, DeepSeek-Coder, StarCoder2, CodeLlama) -
+because the project goal is to TRAIN Enigma for code generation, not to
+delegate to a pre-finished competitor.
 
 Usage:
     python codegen.py                              # Start service
     python codegen.py --port 9902                 # Custom port
     python codegen.py --generate "sort a list"   # Generate code
     python codegen.py --language python          # Language setting
+    python codegen.py --provider template          # Offline template mode
 """
 
 import argparse
@@ -262,26 +273,38 @@ console.log(obj.toString());
 
 
 class LocalCode:
-    """Local code generation using Enigma model."""
-    
+    """Local code generation using the in-tree Enigma model.
+
+    No silent fallback to TemplateCode - load failures are surfaced loud
+    (logger.error + return False) so the user knows the local engine isn't
+    serving requests. Users who want template-based output must pass
+    --provider template explicitly. This matches the loud-on-real-issue
+    pattern shipped across imagegen/threed/videogen/audiogen in slice 2.1.
+    """
+
     def __init__(self, model_name: str = "small_enigma_engine"):
         self.model_name = model_name
         self.engine = None
         self.is_loaded = False
-        self._fallback = TemplateCode()
-    
+
     def load(self) -> bool:
-        # Try loading Enigma model
         try:
             sys.path.insert(0, str(Path(__file__).parent.parent.parent))
             from enigma_engine.core.model_registry import ModelRegistry
             from enigma_engine.core.inference import EnigmaEngine
             from enigma_engine.core.tokenizer import load_tokenizer
             import torch
-            
+        except ImportError as e:
+            logger.error(
+                f"Enigma core not importable for LocalCode: {e}. "
+                "Run from the Enigma Engine repo root, or use --provider template."
+            )
+            return False
+
+        try:
             registry = ModelRegistry()
             model, config = registry.load_model(self.model_name)
-            
+
             self.engine = EnigmaEngine.__new__(EnigmaEngine)
             self.engine.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             self.engine.model = model
@@ -292,43 +315,40 @@ class LocalCode:
             self.engine.enable_tools = False
             self.engine.module_manager = None
             self.engine._tool_executor = None
-            
+
             self.is_loaded = True
             logger.info(f"Loaded Enigma model: {self.model_name}")
             return True
         except Exception as e:
-            logger.debug(f"Enigma model not available: {e}")
-        
-        # Fallback to template
-        if self._fallback.load():
-            self.is_loaded = True
-            logger.info("Using template-based code generation")
-            return True
-        
-        return False
-    
+            logger.error(
+                f"Enigma model '{self.model_name}' failed to load: {e}. "
+                "Train or register the model, or use --provider template."
+            )
+            self.engine = None
+            self.is_loaded = False
+            return False
+
     def unload(self):
         self.engine = None
-        self._fallback.unload()
         self.is_loaded = False
-    
+
     def generate(self, prompt: str, language: str = "python", **kwargs) -> Dict[str, Any]:
-        if not self.is_loaded:
-            return {"success": False, "error": "Not loaded"}
-        
-        if not self.engine:
-            return self._fallback.generate(prompt, language, **kwargs)
-        
+        if not self.is_loaded or self.engine is None:
+            return {
+                "success": False,
+                "error": "Local Enigma provider not loaded (use --provider template for offline mode)",
+            }
+
         try:
             start = time.time()
             code_prompt = f"Write {language} code:\n{prompt}\n\n```{language}\n"
-            
+
             result = self.engine.generate(
                 code_prompt,
                 max_tokens=kwargs.get('max_tokens', 500),
                 temperature=kwargs.get('temperature', 0.3),
             )
-            
+
             return {
                 "success": True,
                 "code": result,
@@ -351,7 +371,10 @@ class CodeGen:
         "local": LocalCode,
     }
     
-    def __init__(self, default_provider: str = "template"):
+    def __init__(self, default_provider: str = "local"):
+        # 2.1-codegen slice (May 25 2026): flipped default template -> local.
+        # Enigma is the project's trainable code model; template stays as
+        # explicit opt-in (--provider template) for offline / no-model usage.
         self.providers: Dict[str, Any] = {}
         self.default_provider = default_provider
         self._running = False
@@ -581,8 +604,9 @@ def main():
     parser = argparse.ArgumentParser(description="Code Generation Service")
     parser.add_argument("--port", type=int, default=9902, help="Server port")
     parser.add_argument("--router", type=str, help="Router address (host:port)")
-    parser.add_argument("--provider", type=str, default="template",
-                       choices=["template", "local"])
+    parser.add_argument("--provider", type=str, default="local",
+                       choices=["template", "local"],
+                       help="Default provider (local=Enigma model, template=offline keyword templates)")
     parser.add_argument("--generate", type=str, help="Generate code")
     parser.add_argument("--language", type=str, default="python")
     
