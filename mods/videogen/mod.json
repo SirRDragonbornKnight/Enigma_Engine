@@ -2,7 +2,7 @@
     "name": "Video Generation Mod",
     "id": "videogen",
     "version": "1.0.0",
-    "description": "AI video generation from text prompts using AnimateDiff or built-in GIF fallback",
+    "description": "AI video generation from text prompts using CogVideoX-5B (local) or built-in animated GIF placeholder",
     "author": "Enigma AI Engine",
     "port": 9903,
     "commands": [

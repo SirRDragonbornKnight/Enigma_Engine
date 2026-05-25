@@ -3,8 +3,8 @@
 Video Generation - Standalone AI Video Generator
 
 Creates videos from text prompts using:
-- AnimateDiff (local)
-- Built-in animated GIF fallback
+- CogVideoX-5B (local, THUDM) - current best text-to-video that fits 16GB VRAM
+- Built-in animated GIF (explicit opt-in fallback only)
 
 Usage:
     python videogen.py                           # Start service
@@ -203,43 +203,59 @@ class BuiltinVideo:
 
 
 class LocalVideo:
-    """Local video generation using AnimateDiff."""
-    
-    def __init__(self, model_id: str = "guoyww/animatediff-motion-adapter-v1-5-2"):
+    """Local text-to-video using CogVideoX-5B (THUDM).
+
+    Replaces the legacy AnimateDiff path. CogVideoX-5B is the current best
+    open-weights text-to-video model that fits a 16GB VRAM budget with bf16 +
+    sequential CPU offload + VAE tiling. Quality is markedly higher than the
+    SD1.5 motion-adapter approach for the same envelope, and the prompt->video
+    contract matches imagegen/threed (no input image required, unlike SVD).
+
+    Slice 2.1-videogen (May 25 2026): no silent fallback to BuiltinVideo.
+    ImportError and load failures return False with logger.error so the
+    dispatcher can surface 'Failed to load local' instead of masquerading
+    placeholder GIFs as a successful CogVideoX run.
+    """
+
+    def __init__(self, model_id: str = "THUDM/CogVideoX-5b"):
         self.model_id = model_id
         self.pipe = None
         self.is_loaded = False
-        self._fallback = BuiltinVideo()
-    
+
     def load(self) -> bool:
         try:
             import torch
-            from diffusers import AnimateDiffPipeline, DDIMScheduler, MotionAdapter
-            
-            adapter = MotionAdapter.from_pretrained(self.model_id)
-            model_id = "SG161222/Realistic_Vision_V5.1_noVAE"
-            
-            self.pipe = AnimateDiffPipeline.from_pretrained(model_id, motion_adapter=adapter)
-            self.pipe.scheduler = DDIMScheduler.from_config(
-                self.pipe.scheduler.config, beta_schedule="linear"
-            )
-            
+            from diffusers import CogVideoXPipeline
+
+            dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
+            self.pipe = CogVideoXPipeline.from_pretrained(self.model_id, torch_dtype=dtype)
+
             if torch.cuda.is_available():
-                self.pipe = self.pipe.to("cuda")
-            
+                # 16GB AI budget: prefer sequential CPU offload over plain .to('cuda').
+                # Falls back to direct device move if accelerate is missing.
+                try:
+                    self.pipe.enable_sequential_cpu_offload()
+                except Exception:
+                    self.pipe = self.pipe.to("cuda")
+                # VAE tiling/slicing reduces peak VRAM on the decode pass.
+                try:
+                    self.pipe.vae.enable_tiling()
+                    self.pipe.vae.enable_slicing()
+                except Exception:
+                    pass
+
             self.is_loaded = True
-            logger.info("AnimateDiff loaded")
+            logger.info("CogVideoX-5B loaded")
             return True
         except ImportError:
-            logger.info("AnimateDiff not available, using fallback")
+            logger.error(
+                "CogVideoX not available: install 'diffusers>=0.30' + 'transformers' + 'torch' + 'accelerate'"
+            )
+            return False
         except Exception as e:
-            logger.warning(f"AnimateDiff failed: {e}")
-        
-        if self._fallback.load():
-            self.is_loaded = True
-            return True
-        return False
-    
+            logger.error(f"CogVideoX load failed: {e}")
+            return False
+
     def unload(self):
         if self.pipe:
             del self.pipe
@@ -250,43 +266,51 @@ class LocalVideo:
                     torch.cuda.empty_cache()
             except Exception:
                 pass
-        self._fallback.unload()
         self.is_loaded = False
-    
+
     def generate(self, prompt: str, duration: float = 2.0, fps: int = 8,
                  **kwargs) -> Dict[str, Any]:
-        if not self.is_loaded:
-            return {"success": False, "error": "Not loaded"}
-        
-        if not self.pipe:
-            return self._fallback.generate(prompt, frames=int(duration * fps), 
-                                          duration=duration, **kwargs)
-        
+        if not self.is_loaded or not self.pipe:
+            return {"success": False, "error": "Local CogVideoX provider not loaded"}
+
+        prompt = str(prompt).strip() if prompt else ""
+        if not prompt:
+            return {"success": False, "error": "Prompt cannot be empty"}
+
         try:
             start = time.time()
-            prompt = str(prompt).strip() if prompt else ""
-            if not prompt:
-                return {"success": False, "error": "Prompt cannot be empty"}
-            
-            num_frames = int(duration * fps)
-            output = self.pipe(prompt, num_frames=num_frames, guidance_scale=7.5)
-            
-            timestamp = int(time.time())
-            filepath = OUTPUT_DIR / f"video_{timestamp}.gif"
-            
-            frames = output.frames[0]
-            frames[0].save(
-                str(filepath),
-                save_all=True,
-                append_images=frames[1:],
-                duration=int(1000 / fps),
-                loop=0
+            # CogVideoX prefers frame counts that are multiples of 8.
+            num_frames = max(8, int(duration * fps))
+            num_frames = ((num_frames + 7) // 8) * 8
+
+            output = self.pipe(
+                prompt=prompt,
+                num_frames=num_frames,
+                guidance_scale=kwargs.get("guidance_scale", 6.0),
+                num_inference_steps=kwargs.get("num_inference_steps", 50),
             )
-            
+            frames = output.frames[0]
+
+            timestamp = int(time.time())
+            try:
+                from diffusers.utils import export_to_video
+                filepath = OUTPUT_DIR / f"video_{timestamp}.mp4"
+                export_to_video(frames, str(filepath), fps=fps)
+            except Exception:
+                # Fallback only for the on-disk encoder; the model itself ran.
+                filepath = OUTPUT_DIR / f"video_{timestamp}.gif"
+                frames[0].save(
+                    str(filepath),
+                    save_all=True,
+                    append_images=frames[1:],
+                    duration=int(1000 / fps),
+                    loop=0,
+                )
+
             return {
                 "success": True,
                 "path": str(filepath),
-                "duration": time.time() - start
+                "duration": time.time() - start,
             }
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -304,7 +328,12 @@ class VideoGen:
         "local": LocalVideo,
     }
     
-    def __init__(self, default_provider: str = "builtin"):
+    def __init__(self, default_provider: str = "local"):
+        # Slice 2.1-videogen (May 25 2026): default flipped builtin -> local so
+        # CogVideoX-5B is the out-of-box behaviour. Builtin GIF stays available
+        # as an explicit opt-in fallback, never an automatic substitute. Load
+        # failures surface 'Failed to load local' via _cmd_generate per the
+        # loud-on-real-issue principle.
         self.providers: Dict[str, Any] = {}
         self.default_provider = default_provider
         self._running = False
@@ -491,8 +520,9 @@ def main():
     parser = argparse.ArgumentParser(description="Video Generation Service")
     parser.add_argument("--port", type=int, default=9903)
     parser.add_argument("--router", type=str)
-    parser.add_argument("--provider", type=str, default="builtin",
-                       choices=["builtin", "local"])
+    parser.add_argument("--provider", type=str, default="local",
+                       choices=["builtin", "local"],
+                       help="Default provider (local=CogVideoX-5B, builtin=animated GIF placeholder)")
     parser.add_argument("--generate", type=str)
     parser.add_argument("--duration", type=float, default=2.0)
     parser.add_argument("--fps", type=int, default=8)

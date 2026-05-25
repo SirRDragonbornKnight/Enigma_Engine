@@ -397,6 +397,99 @@ class TestImageGenServiceDefaults:
             f"load-failure error must name the failing provider, got: {result!r}")
 
 
+class TestVideoGenServiceDefaults:
+    """2.1-videogen slice (May 25 2026): swapped AnimateDiff for CogVideoX-5B,
+    flipped default builtin -> local, killed LocalVideo._fallback masquerade."""
+
+    @staticmethod
+    def _load_videogen_module():
+        import importlib.util
+        from pathlib import Path
+        path = Path(__file__).resolve().parent.parent / "mods" / "videogen" / "videogen.py"
+        spec = importlib.util.spec_from_file_location("videogen_service", path)
+        assert spec is not None and spec.loader is not None
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def test_default_provider_is_local(self):
+        """Constructor default must be 'local' (was 'builtin' pre-slice)."""
+        mod = self._load_videogen_module()
+        service = mod.VideoGen()
+        assert service.default_provider == "local", (
+            f"default_provider regressed to {service.default_provider!r}; "
+            "2.1-videogen flipped it to 'local' so CogVideoX is the out-of-box behaviour")
+
+    def test_local_has_no_silent_fallback_attribute(self):
+        """LocalVideo must NOT carry a BuiltinVideo fallback handle. The old
+        AnimateDiff implementation hid load failures behind self._fallback,
+        promoting placeholder GIFs as a successful 'local' run."""
+        mod = self._load_videogen_module()
+        local = mod.LocalVideo()
+        assert not hasattr(local, "_fallback"), (
+            "LocalVideo._fallback re-introduces the silent-fallback "
+            "anti-pattern fixed by 2.1-videogen")
+
+    def test_load_failure_does_not_silently_fallback(self):
+        """When the local provider fails to load, _cmd_generate must surface
+        the failure, NOT promote BuiltinVideo behind the caller's back."""
+        mod = self._load_videogen_module()
+        service = mod.VideoGen()
+        local = service.get_provider("local")
+        assert local is not None
+        local.load = lambda: False  # simulate CogVideoX weights/deps missing
+        result = service._cmd_generate({"prompt": "ocean waves"})
+        assert result.get("success") is False
+        assert "local" in result.get("error", "").lower(), (
+            f"load-failure error must name the failing provider, got: {result!r}")
+
+    def test_local_uses_cogvideox_not_animatediff(self):
+        """LocalVideo.load() must wire CogVideoXPipeline, not the obsolete
+        AnimateDiffPipeline. Behavioural gate via injected fake diffusers."""
+        import sys
+        import types
+        mod = self._load_videogen_module()
+
+        captured = {}
+
+        class FakePipe:
+            @classmethod
+            def from_pretrained(cls, model_id, **kwargs):
+                captured["model_id"] = model_id
+                captured["dtype"] = kwargs.get("torch_dtype")
+                inst = cls()
+                inst.vae = types.SimpleNamespace(
+                    enable_tiling=lambda: None, enable_slicing=lambda: None,
+                )
+                return inst
+
+            def enable_sequential_cpu_offload(self):
+                captured["offload"] = True
+
+            def to(self, dev):
+                captured["to_dev"] = dev
+                return self
+
+        fake_diffusers = types.ModuleType("diffusers")
+        fake_diffusers.CogVideoXPipeline = FakePipe
+        # Guard: if the code regressed to AnimateDiff, the import would fail
+        # because we deliberately do NOT define AnimateDiffPipeline.
+        original = sys.modules.get("diffusers")
+        sys.modules["diffusers"] = fake_diffusers
+        try:
+            local = mod.LocalVideo()
+            ok = local.load()
+        finally:
+            if original is not None:
+                sys.modules["diffusers"] = original
+            else:
+                sys.modules.pop("diffusers", None)
+
+        assert ok is True, "CogVideoX load path should succeed with fake pipeline"
+        assert "CogVideoX" in captured.get("model_id", ""), (
+            f"LocalVideo must load a CogVideoX model, got {captured.get('model_id')!r}")
+
+
 class TestThreeDServiceDefaults:
     """2.1-threed slice (May 25 2026): standalone service default flipped
     builtin -> local; Local3DGen no longer silently falls back to Builtin3DGen."""
