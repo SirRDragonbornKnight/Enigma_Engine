@@ -20,6 +20,11 @@ from pathlib import Path
 from dataclasses import dataclass, field
 from urllib.parse import urlparse
 
+# Captured as early as possible so the GUI baseline M1 cold-start
+# metric measures from CLI import time, not from EnigmaGUI.__init__.
+# Forwarded to run_gui_app when --baseline is set.
+_PROCESS_START = time.perf_counter()
+
 
 def _ensure_venv() -> None:
     """Create the project venv if missing, install deps, and re-launch.
@@ -110,6 +115,13 @@ Examples:
         """
     )
     parser.add_argument("--gui", action="store_true", help="Launch desktop GUI")
+    parser.add_argument(
+        "--baseline",
+        action="store_true",
+        help="(GUI only) Splice M1/M2/M5 instrumentation prints for "
+             "GUI-ARCH-0b measurement. Run 3 times, read [BASELINE] "
+             "lines off stdout, fill information/gui/BASELINE.md.",
+    )
     parser.add_argument("--serve", action="store_true", help="Start local API server")
     parser.add_argument("--port", type=int, default=None,
                         help="API server port (default: reads from CONFIG, fallback 8080)")
@@ -223,7 +235,7 @@ Examples:
                 pass
         run_serve(args.model, port, args.host, key, cors)
     elif args.gui:
-        run_gui_app(args.model)
+        run_gui_app(args.model, baseline=args.baseline)
     elif args.client_chat:
         run_chat_client(
             api_url=args.api_url,
@@ -258,15 +270,30 @@ Examples:
         show_info()
 
 
-def run_gui_app(model_path: str = None):
-    """Launch the desktop GUI."""
+def run_gui_app(model_path: str = None, baseline: bool = False):
+    """Launch the desktop GUI.
+
+    Parameters
+    ----------
+    model_path:
+        Optional .pth to load on startup.
+    baseline:
+        When True, splices M1/M2/M5 instrumentation (GUI-ARCH-0b).
+        ``_PROCESS_START`` (captured at module-import time at the top
+        of run.py) is forwarded so the M1 cold-start metric covers
+        the full CLI → GUI-ready window.
+    """
     print("\n" + "=" * 50)
     print("  Enigma AI Engine - Desktop GUI")
     print("=" * 50 + "\n")
 
     try:
         from enigma_engine.gui.desktop import run_gui
-        run_gui(model_path=model_path)
+        run_gui(
+            model_path=model_path,
+            baseline=baseline,
+            process_start=_PROCESS_START if baseline else None,
+        )
     except ImportError as e:
         print(f"  [ERROR] Missing GUI dependencies: {e}")
         print("  Install them:  pip install customtkinter")

@@ -24,13 +24,39 @@ Fill in once. All Phase 1 POC runs must use the **same machine** — running PyS
 
 ## 2. Measurement protocol
 
+**Automation:** M1, M2 and M5 are now spliced into the live GUI behind an opt-in flag (Pass 156z9ed, GUI-ARCH-0b). M3 is automated by [measure_baseline.py](measure_baseline.py). M4 is a static disk-size estimate already filled in §3 below.
+
+**Operator workflow (one-pass, fills M1/M2a/M2b/M5):**
+
+```powershell
+# Three cold launches. Kill the GUI between each via the window's X button.
+# Each run prints [BASELINE] M1_..., [BASELINE] M2_..., [BASELINE] M5_... lines.
+python run.py --gui --baseline
+python run.py --gui --baseline
+python run.py --gui --baseline
+```
+
+For each run:
+1. **M1** — Read the `[BASELINE] M1_cold_start_s=<value>` line printed once the window is idle.
+2. **M2a / M2b** — Click sidebar CONFIG, then FORGE. Each click prints one `[BASELINE] M2_switch from=<from> to=<to> ms=<value>` line.
+3. **M5** — Start a smoke-data training run from FORGE (epochs=1, ~30 s). Watch the `[BASELINE] M5_max_stall_ms_so_far=<value>` checkpoint lines (one every ~5 s). Record the final value after the run.
+
+Take the **median** of 3 cold launches per metric and write it into §3.
+
+For **M3** (idle RAM, GUI must be running):
+```powershell
+# In a separate terminal, with the GUI idle on CORE / HOME:
+python information/gui/measure_baseline.py --m3 --pid <PID> --settle 60
+```
+Get `<PID>` from Task Manager or `Get-Process python`.
+
 Run each measurement **3 times**, record min/median/max, use **median** in the table. Close all non-essential apps first. Disable Windows Game Bar / Discord overlay / any FPS overlay before measuring.
 
 ### M1 — Cold start (shell ready to accept input)
 
-**What:** Time from `Launch Enigma.bat` (or `python run.py --gui`) double-click to the moment the main window is rendered AND a keyboard event reaches the focused widget.
+**What:** Time from `python run.py --gui --baseline` invocation to the moment the main window is rendered AND tk's event loop reaches its first idle cycle (i.e. ready to receive input). Captured as `[BASELINE] M1_cold_start_s=<seconds>`.
 
-**How:** Wrap the entry point with a stopwatch. Insert a one-off `print(f"[BASELINE] ready {time.perf_counter():.3f}")` at the end of `EnigmaGUI.__init__` (or wherever the mainloop is entered) and a `print(f"[BASELINE] start {time.perf_counter():.3f}")` at the very top of `run.py`. Subtract.
+**Mechanism:** `_PROCESS_START = time.perf_counter()` is captured at the very top of `run.py` (right after imports). When `--baseline` is set, that value is forwarded to `BaselineMonitor`. `EnigmaGUI.__init__` schedules `self.after(0, monitor.emit_m1)`, which fires once the tk mainloop is idle — i.e. after the full cold-start window has elapsed.
 
 **Record:** median of 3 cold starts (kill the process between runs; do not measure warm starts).
 
@@ -38,17 +64,17 @@ Run each measurement **3 times**, record min/median/max, use **median** in the t
 
 **What:** Time from sidebar button press on CONFIG → page fully rendered. Repeat for FORGE.
 
-**How:** Bind `<Button-1>` on the nav button to record `t0 = time.perf_counter()` *before* dispatch; record `t1` at the end of the page build function (`_build_config_page` or similar). Print `t1 - t0`.
+**Mechanism:** `_switch_page` captures `time.perf_counter()` before any grid reflow and emits `[BASELINE] M2_switch from=<old> to=<new> ms=<value>` after the new page is gridded and the SEND-button safety check runs. The first auto-switch to CORE during `__init__` prints `from=<initial>`; ignore that line and use the operator-triggered transitions.
 
-**Record:** median of 3 switches each. Switch from a different page (e.g. HOME → CONFIG, not CONFIG → CONFIG).
+**Record:** median of 3 switches each. Switch from CORE (the boot landing page) to CONFIG, then to FORGE.
 
 ### M3 — Idle RAM, shell process only
 
 **What:** Resident set size (RSS) of the GUI Python process after the window has been idle for 60 seconds, **before any model is loaded** (no checkpoint selected in MODELS page).
 
-**How:** PowerShell, with the GUI window idle on the HOME page for 60 s:
+**How:** PowerShell helper:
 ```powershell
-Get-Process python | Where-Object { $_.MainWindowTitle -like "*Enigma*" } | Select-Object Id, @{n="RSS_MB";e={[math]::Round($_.WorkingSet64/1MB,1)}}
+python information/gui/measure_baseline.py --m3 --pid <PID> --settle 60
 ```
 **Record:** median of 3 cold launches.
 
@@ -72,26 +98,9 @@ python information/gui/measure_baseline.py --m4
 
 ### M5 — Frame stall during 30-second training step (Gate G3)
 
-**Automation note.** The M3 idle RSS step is automated by [measure_baseline.py](measure_baseline.py) (`--m3 --pid <PID> --settle 60`); operator still needs to launch the GUI in a separate process first. M1/M2/M5 remain operator-instrumented (require code splicing into live `EnigmaGUI.__init__` and the page builders).
-
-
 **What:** While a synthetic 30-second training run is executing on a worker thread, log the longest interval between `after(16, ...)` callbacks. A 16 ms interval = 60 FPS. Anything above ~50 ms is visible jank. The number we record is the **median of the max-stall-per-run** over 3 runs.
 
-**How:** Add a one-off frame-monitor:
-```python
-import time
-_last_tick = [time.perf_counter()]
-_max_stall = [0.0]
-def _tick():
-    now = time.perf_counter()
-    dt = (now - _last_tick[0]) * 1000  # ms
-    if dt > _max_stall[0]:
-        _max_stall[0] = dt
-    _last_tick[0] = now
-    self.after(16, _tick)
-self.after(16, _tick)
-```
-Trigger a real 30 s training step from FORGE (a smoke-data SFT pass with `epochs=1`, `--batch-size 1`, ~30 s wall-clock). Read `_max_stall[0]` after.
+**Mechanism:** When `--baseline` is set, `EnigmaGUI` schedules `self.after(16, self._baseline_frame_tick)` once the mainloop starts. Each tick calls `BaselineMonitor.frame_tick()` which tracks the rolling max. Every ~5 s the GUI prints `[BASELINE] M5_max_stall_ms_so_far=<ms>` so the operator does not need a debugger. Record the final printed value after the 30 s training step completes.
 
 **Record:** median of 3 max-stall values. This is the number Phase 1 POCs must not exceed on the same workload (primary G3) or improve to < 100 ms (stretch G3).
 
@@ -122,6 +131,7 @@ Operator: free-form notes about anything unusual — disk I/O during cold start,
 
 - [x] M4 estimate captured (agent, May 13, 2026 — 19.0 MB).
 - [x] Helper script [measure_baseline.py](measure_baseline.py) automates M3 + M4.
+- [x] M1/M2/M5 splice shipped behind `--baseline` opt-in (agent, Pass 156z9ed — `python run.py --gui --baseline`).
 - [ ] §1 Environment filled in (operator).
 - [ ] §3 Results table has medians for M1, M2a, M2b, M3, M5 (operator).
 - [ ] §4 Notes captured (or explicit "no anomalies observed") (operator).

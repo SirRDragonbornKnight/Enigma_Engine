@@ -77,8 +77,32 @@ class EnigmaGUI(
     All mixins access shared state through self.* attributes set here.
     """
 
-    def __init__(self, model_path: str | None = None):
+    def __init__(
+        self,
+        model_path: str | None = None,
+        *,
+        baseline: bool = False,
+        process_start: float | None = None,
+    ):
         super().__init__()
+
+        # GUI-ARCH-0b baseline instrumentation.  When ``baseline`` is
+        # True, M1 (cold start), M2 (page-switch) and M5 (frame stall)
+        # measurements are emitted to stdout for the operator to
+        # capture into information/gui/BASELINE.md.  Zero overhead
+        # when baseline is False (None monitor, all splice sites
+        # branch on ``is not None``).
+        self._baseline_monitor = None
+        if baseline:
+            from enigma_engine.gui.baseline_instrument import (
+                BaselineMonitor,
+            )
+            ps = (
+                process_start
+                if process_start is not None
+                else time.perf_counter()
+            )
+            self._baseline_monitor = BaselineMonitor(process_start=ps)
 
         self.title("ENIGMA ENGINE")
         self.geometry("1440x900")
@@ -283,6 +307,45 @@ class EnigmaGUI(
 
         # Watchdog: exit if parent process (terminal) dies
         self._start_parent_watchdog()
+
+        # GUI-ARCH-0b: emit M1 cold-start once the tk event loop is
+        # idle (i.e. the first paint cycle is complete and we're
+        # ready to accept input).  Then kick off the M5 frame-stall
+        # tick.  Both are no-ops when baseline mode is off.
+        if self._baseline_monitor is not None:
+            self.after(0, self._baseline_monitor.emit_m1)
+            self.after(16, self._baseline_frame_tick)
+
+    def _baseline_frame_tick(self) -> None:
+        """Frame-stall poller for GUI-ARCH-0b M5.
+
+        Schedules itself every 16 ms (60 FPS target).  Each call
+        measures the gap since the previous call and updates the
+        rolling max stall on the monitor.  Operator reads the final
+        value via ``self._baseline_monitor.max_stall_ms`` after
+        running the 30 s smoke load.  We also emit a checkpoint line
+        every 5 s so the operator doesn't have to dump the attribute
+        by hand.
+        """
+        mon = self._baseline_monitor
+        if mon is None or getattr(self, "_shutting_down", False):
+            return
+        max_ms = mon.frame_tick()
+        # Every ~5 s (5000 ms / 16 ms tick ≈ 313 ticks), print a
+        # progress checkpoint so the operator sees the running max
+        # without needing a debugger.
+        counter = getattr(self, "_baseline_tick_counter", 0) + 1
+        self._baseline_tick_counter = counter
+        if counter % 313 == 0:
+            print(
+                f"[BASELINE] M5_max_stall_ms_so_far={max_ms:.1f}",
+                flush=True,
+            )
+        try:
+            self.after(16, self._baseline_frame_tick)
+        except Exception:
+            # tk destroyed mid-shutdown — silently stop.
+            pass
 
     def _read_gui_bool_setting(self, key: str, default: bool) -> bool:
         """Read a boolean setting from gui_settings.json."""
@@ -1092,6 +1155,13 @@ class EnigmaGUI(
     def _switch_page(self, name: str):
         if name == self._current_page:
             return
+        # GUI-ARCH-0b M2 page-switch timing.  Capture BEFORE any
+        # work; the monitor.time_page_switch call below prints the
+        # delta after the new page has been gridded.
+        _baseline_t0 = None
+        _baseline_from = self._current_page
+        if self._baseline_monitor is not None:
+            _baseline_t0 = time.perf_counter()
         for key, btn in self._nav_buttons.items():
             btn.set_active(key == name)
         for key, page in self._pages.items():
@@ -1110,6 +1180,11 @@ class EnigmaGUI(
                 self.send_btn.configure(state="normal")
             except Exception:
                 pass
+
+        if _baseline_t0 is not None and self._baseline_monitor is not None:
+            self._baseline_monitor.time_page_switch(
+                _baseline_from or "<initial>", name, _baseline_t0,
+            )
 
     def _make_page(self, name: str) -> ctk.CTkFrame:
         page = ctk.CTkFrame(self.content, fg_color=C_BG, corner_radius=0)
@@ -1269,8 +1344,26 @@ def _acquire_instance_lock() -> bool:
 # Entry point
 # -------------------------------------------------------------------
 
-def run_gui(model_path: str | None = None):
-    """Launch the desktop GUI."""
+def run_gui(
+    model_path: str | None = None,
+    *,
+    baseline: bool = False,
+    process_start: float | None = None,
+):
+    """Launch the desktop GUI.
+
+    Parameters
+    ----------
+    model_path:
+        Optional .pth to auto-load on startup.
+    baseline:
+        GUI-ARCH-0b instrumentation toggle.  Forwarded to
+        ``EnigmaGUI`` so M1/M2/M5 splice prints are emitted.
+    process_start:
+        ``time.perf_counter()`` value captured as early as possible
+        in the CLI entry point (``run.py``).  Forwarded to the
+        monitor so M1 covers the full CLI → GUI-ready window.
+    """
     if not _acquire_instance_lock():
         logger.warning(
             "Another Enigma GUI is already running — exiting.")
@@ -1279,7 +1372,11 @@ def run_gui(model_path: str | None = None):
               "leftover python.exe processes.\n")
         return
 
-    app = EnigmaGUI(model_path=model_path)
+    app = EnigmaGUI(
+        model_path=model_path,
+        baseline=baseline,
+        process_start=process_start,
+    )
 
     # On Windows, register a console event handler so closing the cmd
     # window triggers a clean shutdown instead of leaving a zombie.
