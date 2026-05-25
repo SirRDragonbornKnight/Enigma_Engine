@@ -1,6 +1,27 @@
 ﻿# Suggestions
 
-## 🔴 REALIGN-1 — Project realignment plan (May 24, 2026, Decisions #1/#2/#4 EXECUTED, #3 RETRACTED, #5 = next slice)
+## � SESSION-AUDIT (May 25, 2026) — Tracker hygiene + lessons folded
+
+**Closed this session:**
+- `AUDIT_CHECKLIST.md` (582 LOC, one-shot) — H.1-H.12 all complete, actionable items folded into REALIGN-1.2-CORRECTION slices 1-7 below. File **DELETED** per new §4 "Tracker sprawl is a cousin of dead infra" lesson (git history preserves it).
+- `suggestions.txt` — DELETED commit `dbc19ea` (items closed in §4 Learned Principles, predates SUGGESTIONS.md history).
+- `enigma_engine/services/` — DELETED commit `dbc19ea` (9 stub modules, zero importers).
+
+**Kept (live trackers):**
+- `CLEANUP_TRACKER.md` — rolling per-file cleanup tracker, right-shape permanent (Started May 15 2026, per-file acceptance gate).
+- `SUGGESTIONS.md` (this file) — canonical slice tracker.
+
+**Three new §4 lessons folded into `AA code maker.md` (Auditing section):**
+1. **Tracker sprawl is a cousin of dead infra** — declare lifecycle upfront (one-shot / rolling / archive), grep for tracker files at session close.
+2. **Kitchen-sink commits defeat bisect** — if subject needs three nouns joined by commas/dashes, split it. Cite: `91d3d75` (35 files, mixed cloud-purge + core fixes + feature slice + 9 tests + tracker docs).
+3. **Historical doc references to deleted infra need a marker** — `[DELETED hash, date]` annotation, not silence. Post-kill grep is mandatory.
+
+**Parked from this audit (own slice eventually):**
+- Annotate `enigma_engine/services/` mentions in SUGGESTIONS.md (12+ lines) and `AA code maker.md` L388 with `[DELETED dbc19ea, May 25 2026]`. Same family pattern applies to historical `mods/codegen/` etc. if any future kill lands. Not urgent — annotated as backlog under new §4 lesson #3.
+
+---
+
+## �🔴 REALIGN-1 — Project realignment plan (May 24, 2026, Decisions #1/#2/#4 EXECUTED, #3 RETRACTED, #5 = next slice)
 
 **Status:** Logged May 24, 2026. Decisions #1/#2/#4 executed. Decision #3 ("kill 4 stub mods") **RETRACTED** May 25, 2026 — disk-truth audit showed the "stubs" were working local capability code, the delete didn't actually take, and the close-stamp lied. Decision #5 (avatar audit) is still the next slice.
 
@@ -37,6 +58,7 @@
 4. videogen `animatediff` dropdown lie: implement OR remove from mod.json.
 5. threed Shap-E weights-present gate (same pattern as slice 2).
 6. codegen scope decision: keep separate service OR delete in favor of main engine.
+7. **DOC-AUDIT-1** — Full doc-vs-code reconciliation pass over `information/*.md`, `GUI_REFERENCE.md`, `CODE_REVIEW.md`, `FORGE_TEST_GUIDE.md` (25 files parked in H.11 of AUDIT_CHECKLIST.md). Scope: every operator-facing claim cross-checked against current code under §0 disk-truth lens. Anti-pattern to catch: doc claims more than code delivers (Pass 156s family). Expected output: each doc gets [OK] / [BUG-X] / [KILL] disposition; bugs land in their own follow-up slices. Read-only pass except for trivial corrections. Scheduled May 25, 2026 per user decision.
 
 **§1 #20 status for the 4 mods previously claimed killed:** REVERTED to "Parked / kept on disk pending honest scope decision per slices 3/4/5/6 above". Each has working local code post-REALIGN-1.1; killing would delete goal-aligned functionality.
 
