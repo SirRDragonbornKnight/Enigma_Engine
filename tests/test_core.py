@@ -356,6 +356,47 @@ class TestImageGenIntegration:
         assert "backend" in result.message.lower()
 
 
+class TestImageGenServiceDefaults:
+    """2.1-imagegen slice (May 25 2026): standalone service default flipped
+    placeholder -> local with loud-on-load-failure semantics."""
+
+    @staticmethod
+    def _load_imagegen_module():
+        import importlib.util
+        from pathlib import Path
+        path = Path(__file__).resolve().parent.parent / "mods" / "imagegen" / "imagegen.py"
+        spec = importlib.util.spec_from_file_location("imagegen_service", path)
+        assert spec is not None and spec.loader is not None
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def test_default_provider_is_local(self):
+        """Constructor default must be 'local' (was 'placeholder' pre-slice)."""
+        mod = self._load_imagegen_module()
+        service = mod.ImageGen()
+        assert service.default_provider == "local", (
+            f"default_provider regressed to {service.default_provider!r}; "
+            "2.1-imagegen flipped it to 'local' so SD is the out-of-box behaviour")
+
+    def test_load_failure_does_not_silently_fallback(self):
+        """When local provider fails to load (no diffusers / no weights),
+        _cmd_generate must surface the failure, NOT silently switch to
+        placeholder. Honors \u00a74 'loud-on-real-issue'."""
+        mod = self._load_imagegen_module()
+        service = mod.ImageGen()
+        # Force the local provider into a known-fail state
+        local = service.get_provider("local")
+        assert local is not None
+        local.load = lambda: False  # simulate ImportError / weights missing
+        result = service._cmd_generate({"prompt": "test"})
+        assert result.get("success") is False
+        # Error message must name the failing provider so the operator can
+        # diagnose (not the placeholder, not a generic message)
+        assert "local" in result.get("error", "").lower(), (
+            f"load-failure error must name the failing provider, got: {result!r}")
+
+
 class TestAiProfileCallableType:
     """AIProfileManager must accept callables for callbacks."""
 

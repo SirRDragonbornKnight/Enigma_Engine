@@ -306,7 +306,13 @@ class ImageGen:
         "local": StableDiffusionLocal,
     }
     
-    def __init__(self, default_provider: str = "placeholder"):
+    def __init__(self, default_provider: str = "local"):
+        # 2.1-imagegen slice (May 25 2026): default flipped placeholder -> local.
+        # StableDiffusionLocal.load() is loud-on-real-issue (logger.error on
+        # ImportError + Exception, returns False); _cmd_generate surfaces the
+        # failure as {"success": False, "error": "Failed to load local"}
+        # rather than silently falling back to placeholder. Honors §4
+        # "loud-on-real-issue, silent-on-normal-path."
         self.providers: Dict[str, Any] = {}
         self.default_provider = default_provider
         self._running = False
@@ -551,9 +557,9 @@ def main():
     parser = argparse.ArgumentParser(description="Image Generation Service")
     parser.add_argument("--port", type=int, default=9901, help="Server port")
     parser.add_argument("--router", type=str, help="Router address (host:port)")
-    parser.add_argument("--provider", type=str, default="placeholder",
+    parser.add_argument("--provider", type=str, default="local",
                        choices=["placeholder", "local"],
-                       help="Default provider")
+                       help="Default provider (local = Stable Diffusion; placeholder = no-deps fallback)")
     parser.add_argument("--generate", type=str, help="Generate single image")
     parser.add_argument("--width", type=int, default=512)
     parser.add_argument("--height", type=int, default=512)
