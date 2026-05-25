@@ -2,7 +2,7 @@
     "name": "Code Generation Mod",
     "id": "codegen",
     "version": "1.0.0",
-    "description": "Generate code from text prompts using templates, local Enigma models, or OpenAI GPT-4",
+    "description": "Generate code from text prompts using templates or local Enigma models",
     "author": "Enigma AI Engine",
     "port": 9902,
     "commands": [
@@ -12,14 +12,14 @@
             "args": {
                 "prompt": {"type": "string", "required": true, "description": "Description of the code to generate"},
                 "language": {"type": "string", "required": false, "default": "python", "description": "Target language (python, javascript, etc.)"},
-                "provider": {"type": "string", "required": false, "description": "Provider to use (template, local, openai)"}
+                "provider": {"type": "string", "required": false, "description": "Provider to use (template, local)"}
             }
         },
         {
             "name": "load_provider",
             "description": "Load a code generation provider",
             "args": {
-                "provider": {"type": "string", "required": false, "description": "Provider name (template, local, openai)"}
+                "provider": {"type": "string", "required": false, "description": "Provider name (template, local)"}
             }
         },
         {
@@ -59,7 +59,7 @@
         "widgets": [
             {"type": "text_area", "id": "prompt", "label": "Code Prompt", "placeholder": "Describe the code you want to generate..."},
             {"type": "dropdown", "id": "language", "label": "Language", "options": ["python", "javascript", "typescript", "java", "cpp", "c"]},
-            {"type": "dropdown", "id": "provider", "label": "Provider", "options": ["template", "local", "openai"]},
+            {"type": "dropdown", "id": "provider", "label": "Provider", "options": ["template", "local"]},
             {"type": "button", "id": "generate", "label": "Generate", "command": "generate"},
             {"type": "button", "id": "save", "label": "Save Code", "command": "save_code"}
         ]

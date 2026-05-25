@@ -2,7 +2,7 @@
     "name": "3D Generation Mod",
     "id": "threed",
     "version": "1.0.0",
-    "description": "AI 3D model generation from text prompts using Shap-E, built-in primitives, or Replicate API",
+    "description": "AI 3D model generation from text prompts using Shap-E or built-in primitives",
     "author": "Enigma AI Engine",
     "port": 9905,
     "commands": [
@@ -12,7 +12,7 @@
             "args": {
                 "prompt": {"type": "string", "required": true, "description": "Text description of the 3D model to generate"},
                 "format": {"type": "string", "required": false, "default": "obj", "description": "Output format (obj, ply, pkl)"},
-                "provider": {"type": "string", "required": false, "description": "Provider to use (builtin, shap_e, replicate)"}
+                "provider": {"type": "string", "required": false, "description": "Provider to use (builtin, shap_e)"}
             }
         },
         {
@@ -50,7 +50,7 @@
         "widgets": [
             {"type": "text_area", "id": "prompt", "label": "3D Prompt", "placeholder": "Describe the 3D model you want to generate..."},
             {"type": "dropdown", "id": "format", "label": "Format", "options": ["obj", "ply", "pkl"]},
-            {"type": "dropdown", "id": "provider", "label": "Provider", "options": ["builtin", "shap_e", "replicate"]},
+            {"type": "dropdown", "id": "provider", "label": "Provider", "options": ["builtin", "shap_e"]},
             {"type": "button", "id": "generate", "label": "Generate", "command": "generate"}
         ]
     },

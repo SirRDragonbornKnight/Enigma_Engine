@@ -5,7 +5,6 @@
 Creates 3D models from text prompts using:
 - Shap-E (local)
 - Built-in geometric primitives
-- Replicate cloud API
 
 Usage:
     python threed.py                           # Start service
@@ -17,7 +16,6 @@ import argparse
 import json
 import logging
 import math
-import os
 import socket
 import struct
 import threading
@@ -450,53 +448,6 @@ class Local3DGen:
             return {"success": False, "error": str(e)}
 
 
-class Replicate3D:
-    """Replicate cloud 3D generation."""
-    
-    def __init__(self, api_key: Optional[str] = None,
-                 model: str = "adirik/dreamgaussian:latest"):
-        self.api_key = api_key or os.environ.get("REPLICATE_API_TOKEN")
-        self.model = model
-        self.client = None
-        self.is_loaded = False
-    
-    def load(self) -> bool:
-        try:
-            import replicate
-            os.environ["REPLICATE_API_TOKEN"] = self.api_key or ""
-            self.client = replicate
-            self.is_loaded = bool(self.api_key)
-            return self.is_loaded
-        except ImportError:
-            logger.error("Install: pip install replicate")
-            return False
-    
-    def unload(self):
-        self.client = None
-        self.is_loaded = False
-    
-    def generate(self, prompt: str, **kwargs) -> Dict[str, Any]:
-        if not self.is_loaded:
-            return {"success": False, "error": "Not loaded"}
-        
-        try:
-            import requests
-            start = time.time()
-            
-            output = self.client.run(self.model, input={"prompt": prompt})
-            model_url = output[0] if isinstance(output, list) else output
-            resp = requests.get(model_url, timeout=300)
-            
-            timestamp = int(time.time())
-            ext = ".glb" if "glb" in str(model_url) else ".obj"
-            filepath = OUTPUT_DIR / f"3d_{timestamp}{ext}"
-            filepath.write_bytes(resp.content)
-            
-            return {"success": True, "path": str(filepath), "duration": time.time() - start}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
-
-
 # =============================================================================
 # ThreeD Service
 # =============================================================================
@@ -507,7 +458,6 @@ class ThreeD:
     PROVIDERS = {
         "builtin": Builtin3DGen,
         "local": Local3DGen,
-        "replicate": Replicate3D,
     }
     
     def __init__(self, default_provider: str = "builtin"):
@@ -698,7 +648,7 @@ def main():
     parser.add_argument("--port", type=int, default=9905)
     parser.add_argument("--router", type=str)
     parser.add_argument("--provider", type=str, default="builtin",
-                       choices=["builtin", "local", "replicate"])
+                       choices=["builtin", "local"])
     parser.add_argument("--generate", type=str)
     
     args = parser.parse_args()

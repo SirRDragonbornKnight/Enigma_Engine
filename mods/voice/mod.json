@@ -2,7 +2,7 @@
     "name": "Voice Mod",
     "id": "voice",
     "version": "1.1.0",
-    "description": "Unified speech-to-text and text-to-speech/audio generation service using Whisper, SpeechRecognition, pyttsx3, ElevenLabs, and system fallback",
+    "description": "Unified speech-to-text and text-to-speech/audio generation service using Whisper, SpeechRecognition, pyttsx3, and system fallback",
     "author": "Enigma AI Engine",
     "port": 9907,
     "commands": [
@@ -19,7 +19,7 @@
             "description": "Speak text via TTS pipeline",
             "args": {
                 "text": {"type": "string", "required": true, "description": "Text to speak aloud"},
-                "provider": {"type": "string", "required": false, "description": "TTS provider (pyttsx3, elevenlabs, system)"}
+                "provider": {"type": "string", "required": false, "description": "TTS provider (pyttsx3, system)"}
             }
         },
         {
@@ -35,7 +35,7 @@
             "description": "Generate audio file from text",
             "args": {
                 "text": {"type": "string", "required": true, "description": "Text to convert to audio"},
-                "provider": {"type": "string", "required": false, "description": "TTS provider (pyttsx3, elevenlabs, system)"},
+                "provider": {"type": "string", "required": false, "description": "TTS provider (pyttsx3, system)"},
                 "filename": {"type": "string", "required": false, "description": "Output filename"}
             }
         },
@@ -44,7 +44,7 @@
             "description": "Alias for generate_audio",
             "args": {
                 "text": {"type": "string", "required": true, "description": "Text to convert to audio"},
-                "provider": {"type": "string", "required": false, "description": "TTS provider (pyttsx3, elevenlabs, system)"}
+                "provider": {"type": "string", "required": false, "description": "TTS provider (pyttsx3, system)"}
             }
         },
         {
@@ -122,18 +122,17 @@
         "layout": "vertical",
         "widgets": [
             {"type": "text_area", "id": "text", "label": "Text", "placeholder": "Enter text to speak..."},
-            {"type": "dropdown", "id": "provider", "label": "Provider", "options": ["pyttsx3", "elevenlabs", "system"], "default": "pyttsx3"},
+            {"type": "dropdown", "id": "provider", "label": "Provider", "options": ["pyttsx3", "system"], "default": "pyttsx3"},
             {"type": "button", "id": "listen", "label": "Listen", "command": "listen"},
             {"type": "button", "id": "speak", "label": "Speak", "command": "speak"},
             {"type": "button", "id": "generate_audio", "label": "Generate Audio", "command": "generate_audio"},
             {"type": "button", "id": "transcribe", "label": "Transcribe", "command": "transcribe"}
         ]
     },
-    "prompt": "For voice/audio tasks, use: mod.send voice listen, mod.send voice speak <text> --provider pyttsx3|elevenlabs|system, mod.send voice generate_audio <text>, mod.send voice transcribe <path>",
+    "prompt": "For voice/audio tasks, use: mod.send voice listen, mod.send voice speak <text> --provider pyttsx3|system, mod.send voice generate_audio <text>, mod.send voice transcribe <path>",
     "rules": [
         "Use this single voice mod for both speech and audio generation tasks.",
-        "Prefer pyttsx3 or system for local/offline usage.",
-        "Use elevenlabs only when API key and network access are available."
+        "Prefer pyttsx3 or system for local/offline usage."
     ],
     "dependencies": ["pyttsx3"],
     "settings": {

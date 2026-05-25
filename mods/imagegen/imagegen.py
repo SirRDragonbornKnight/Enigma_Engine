@@ -2,11 +2,9 @@
 """
 Image Generation - Standalone AI Image Generator
 
-Creates images from text prompts using multiple providers:
+Creates images from text prompts using local providers:
 - Placeholder (no deps)
 - Stable Diffusion (local GPU)
-- DALL-E 3 (OpenAI API)
-- Replicate (cloud API)
 
 Usage:
     python imagegen.py                           # Start service on default port
@@ -16,19 +14,16 @@ Usage:
 """
 
 import argparse
-import base64
 import json
 import logging
-import os
 import socket
 import struct
-import sys
 import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
@@ -299,124 +294,6 @@ class StableDiffusionLocal:
             return {"success": False, "error": str(e)}
 
 
-class OpenAIImage:
-    """DALL-E image generation via OpenAI API."""
-    
-    def __init__(self, api_key: Optional[str] = None, model: str = "dall-e-3"):
-        self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
-        self.model = model
-        self.client = None
-        self.is_loaded = False
-    
-    def load(self) -> bool:
-        try:
-            from openai import OpenAI
-            self.client = OpenAI(api_key=self.api_key)
-            self.is_loaded = bool(self.api_key)
-            if not self.is_loaded:
-                logger.warning("No OpenAI API key set")
-            return self.is_loaded
-        except ImportError:
-            logger.error("Install: pip install openai")
-            return False
-    
-    def unload(self):
-        self.client = None
-        self.is_loaded = False
-    
-    def generate(self, prompt: str, width: int = 1024, height: int = 1024,
-                 **kwargs) -> Dict[str, Any]:
-        if not self.is_loaded or not self.client:
-            return {"success": False, "error": "Not loaded or missing API key"}
-        
-        try:
-            start = time.time()
-            
-            size = f"{width}x{height}"
-            if size not in ["1024x1024", "1792x1024", "1024x1792"]:
-                size = "1024x1024"
-            
-            response = self.client.images.generate(
-                model=self.model,
-                prompt=prompt,
-                size=size,
-                n=1,
-                response_format="b64_json",
-            )
-            
-            image_data = base64.b64decode(response.data[0].b64_json)
-            timestamp = int(time.time())
-            filename = f"dalle_{timestamp}.png"
-            filepath = OUTPUT_DIR / filename
-            filepath.write_bytes(image_data)
-            
-            return {
-                "success": True,
-                "path": str(filepath),
-                "duration": time.time() - start
-            }
-        except Exception as e:
-            return {"success": False, "error": str(e)}
-
-
-class ReplicateImage:
-    """Replicate cloud image generation."""
-    
-    def __init__(self, api_key: Optional[str] = None,
-                 model: str = "stability-ai/sdxl:latest"):
-        self.api_key = api_key or os.environ.get("REPLICATE_API_TOKEN")
-        self.model = model
-        self.client = None
-        self.is_loaded = False
-    
-    def load(self) -> bool:
-        try:
-            import replicate
-            os.environ["REPLICATE_API_TOKEN"] = self.api_key or ""
-            self.client = replicate
-            self.is_loaded = bool(self.api_key)
-            if not self.is_loaded:
-                logger.warning("No Replicate API key set")
-            return self.is_loaded
-        except ImportError:
-            logger.error("Install: pip install replicate")
-            return False
-    
-    def unload(self):
-        self.client = None
-        self.is_loaded = False
-    
-    def generate(self, prompt: str, width: int = 1024, height: int = 1024,
-                 **kwargs) -> Dict[str, Any]:
-        if not self.is_loaded:
-            return {"success": False, "error": "Not loaded or missing API key"}
-        
-        try:
-            import requests
-            start = time.time()
-            
-            output = self.client.run(
-                self.model,
-                input={"prompt": prompt, "width": width, "height": height}
-            )
-            
-            image_url = output[0] if isinstance(output, list) else output
-            resp = requests.get(image_url, timeout=120)
-            
-            timestamp = int(time.time())
-            filename = f"replicate_{timestamp}.png"
-            filepath = OUTPUT_DIR / filename
-            filepath.write_bytes(resp.content)
-            
-            return {
-                "success": True,
-                "path": str(filepath),
-                "duration": time.time() - start
-            }
-        except Exception as e:
-            return {"success": False, "error": str(e)}
-
-
 # =============================================================================
 # ImageGen Service
 # =============================================================================
@@ -427,8 +304,6 @@ class ImageGen:
     PROVIDERS = {
         "placeholder": PlaceholderImage,
         "local": StableDiffusionLocal,
-        "openai": OpenAIImage,
-        "replicate": ReplicateImage,
     }
     
     def __init__(self, default_provider: str = "placeholder"):
@@ -677,7 +552,7 @@ def main():
     parser.add_argument("--port", type=int, default=9901, help="Server port")
     parser.add_argument("--router", type=str, help="Router address (host:port)")
     parser.add_argument("--provider", type=str, default="placeholder",
-                       choices=["placeholder", "local", "openai", "replicate"],
+                       choices=["placeholder", "local"],
                        help="Default provider")
     parser.add_argument("--generate", type=str, help="Generate single image")
     parser.add_argument("--width", type=int, default=512)

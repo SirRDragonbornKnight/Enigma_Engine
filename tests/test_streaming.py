@@ -424,3 +424,53 @@ class TestAsyncQueueUnbounded:
             "Old maxsize=1000 cap still present — tokens can be "
             "silently dropped"
         )
+
+
+class TestEmitAppendUnderLock:
+    """Pass 156z9er: _emit must append to _chunks inside _async_lock.
+
+    Race: when __aiter__ is first attached, it acquires _async_lock and
+    copies _chunks into the freshly-created async_queue. If _emit appends
+    to _chunks BEFORE acquiring the lock, a concurrent __aiter__ can see
+    the appended chunk and copy it into async_queue, then _emit acquires
+    the lock and schedules a duplicate put via call_soon_threadsafe.
+    The __aiter__ docstring claims the lock prevents duplicates — but
+    only if _chunks.append is also inside the lock.
+    """
+
+    def test_emit_chunks_append_inside_async_lock_block(self):
+        """self._chunks.append must be nested inside the with self._async_lock block."""
+        import inspect
+        import re
+        from enigma_engine.core.streaming import StreamingResponse
+
+        src = inspect.getsource(StreamingResponse._emit)
+        lines = src.split("\n")
+
+        lock_idx = None
+        lock_indent = None
+        for i, ln in enumerate(lines):
+            if re.search(r"with\s+self\._async_lock\s*:", ln):
+                lock_idx = i
+                lock_indent = len(ln) - len(ln.lstrip())
+                break
+        assert lock_idx is not None, "with self._async_lock: not found in _emit"
+
+        append_idx = None
+        append_indent = None
+        for i, ln in enumerate(lines):
+            if "self._chunks.append" in ln:
+                append_idx = i
+                append_indent = len(ln) - len(ln.lstrip())
+                break
+        assert append_idx is not None, "self._chunks.append not found in _emit"
+
+        assert append_idx > lock_idx, (
+            f"self._chunks.append (line {append_idx}) must appear AFTER "
+            f"with self._async_lock: (line {lock_idx}) to prevent duplicate "
+            "emission race with __aiter__ backfill"
+        )
+        assert append_indent > lock_indent, (
+            f"self._chunks.append indent={append_indent} but lock indent="
+            f"{lock_indent}; append must be nested INSIDE the lock block"
+        )

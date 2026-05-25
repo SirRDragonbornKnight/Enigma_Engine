@@ -20,7 +20,8 @@ logger = logging.getLogger(__name__)
 
 # Maximum file size (bytes) for individual files during corpus processing.
 # Files exceeding this limit are skipped to prevent OOM crashes.
-# 20 GB accommodates large pre-training corpora (e.g. Wikipedia dumps).
+# 100 GB accommodates large pre-training corpora (e.g. Wikipedia dumps,
+# multi-language Common Crawl shards).
 MAX_FILE_SIZE: int = 100_000_000_000  # 100 GB
 
 # Files above this threshold are read in chunks instead of all at once.

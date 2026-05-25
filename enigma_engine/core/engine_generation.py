@@ -312,10 +312,21 @@ class _GenerationMixin:
                 "repetition_penalty", 1.1)
             stop_strings = kwargs.get("stop_strings")
             use_cache = kwargs.get("use_cache", True)
+            min_p = kwargs.get("min_p", 0.0)
+            # Pass 156z9fe (Pass A fix #1): forward ``json_schema`` so
+            # the tool-call continuation stays constrained.  Without
+            # this, ``engine.generate(json_schema=..., execute_tools=
+            # True)`` produces a constrained first chunk and then an
+            # unconstrained continuation after every ``<tool_call>``
+            # marker.  Sibling-boundary site Pass 156z7 named (the
+            # original close-stamp wrote "the docstring named this as
+            # a caveat with no code-side gate") — closed now.
+            json_schema = kwargs.get("json_schema")
 
             continuation = self._generate_text(
                 text, max_gen, temperature, top_k, top_p,
-                repetition_penalty, stop_strings, use_cache)
+                repetition_penalty, stop_strings, use_cache,
+                min_p=min_p, json_schema=json_schema)
 
             # The continuation includes the full prompt+response;
             # _generate_text returns just the new tokens.
@@ -993,6 +1004,10 @@ class _GenerationMixin:
         _confidence_window = 4
 
         for step in range(max_gen):
+            # Pass B (Pass 156z9ff): honour user stop signal.
+            if self._check_cancel():
+                logger.info("Generation cancelled by user at step %d", step)
+                break
             # Sample next token
             next_token = self._sample_token(
                 logits[:, -1, :],
@@ -1009,6 +1024,10 @@ class _GenerationMixin:
             # Track max softmax probability for adaptive stop-check interval.
             # Only needed when stop_strings are active — avoids per-token
             # GPU→CPU sync (.item()) and full-vocab softmax otherwise.
+            # Pass 156z9fe (Pass A fix #5): the stop-check itself and
+            # the ``_adaptive_stop_interval`` call below are now both
+            # gated on ``stop_strings`` so the per-iter helper call is
+            # skipped entirely on the common no-stop-strings path.
             if stop_strings:
                 with torch.no_grad():
                     max_prob = torch.softmax(
@@ -1037,16 +1056,18 @@ class _GenerationMixin:
 
             # Periodic stop-string check (amortised decode cost).
             # T2-7: Adaptive interval based on model confidence.
-            check_interval = self._adaptive_stop_interval(
-                _confidence_history)
-            if (stop_strings
-                    and (step + 1) % check_interval == 0):
-                tail_start = max(prompt_len, generated.shape[1] - self._STOP_CHECK_WINDOW)
-                recent_ids = generated[0, tail_start:].tolist()
-                recent_text = self.tokenizer.decode(
-                    recent_ids, skip_special_tokens=True)
-                if any(ss in recent_text for ss in stop_strings):
-                    break
+            # Pass 156z9fe (Pass A fix #5): gate the helper call on
+            # ``stop_strings`` so the no-stop-strings path skips it.
+            if stop_strings:
+                check_interval = self._adaptive_stop_interval(
+                    _confidence_history)
+                if (step + 1) % check_interval == 0:
+                    tail_start = max(prompt_len, generated.shape[1] - self._STOP_CHECK_WINDOW)
+                    recent_ids = generated[0, tail_start:].tolist()
+                    recent_text = self.tokenizer.decode(
+                        recent_ids, skip_special_tokens=True)
+                    if any(ss in recent_text for ss in stop_strings):
+                        break
 
             # Decode step: only feed new token with start_pos
             if has_cache:
@@ -1472,6 +1493,12 @@ class _GenerationMixin:
         eos_id = getattr(self.tokenizer, 'eos_token_id', 2)
 
         for _ in range(max_gen):
+            # Pass B (Pass 156z9ff): honour user stop signal.
+            if self._check_cancel():
+                if state is not None:
+                    state["terminated_on"] = "cancel"
+                logger.info("Stream generation cancelled by user")
+                break
             next_token = self._sample_token(
                 logits[:, -1, :],
                 generated,
@@ -1562,14 +1589,32 @@ class _GenerationMixin:
 
         Yields:
             Each newly generated token as it's produced
+        Raises:
+            ValueError: when more than one of ``max_tokens`` /
+                ``max_new_tokens`` / ``max_length`` is set.  Pass
+                156z9fe (Pass A fix #3): the previous code overwrote
+                them sequentially so the last-checked alias won
+                silently, hiding caller mistakes (e.g. a
+                HuggingFace-style ``max_new_tokens=100`` plus a
+                native ``max_tokens=200`` would silently honour
+                ``max_length``).
         """
-        # Handle max_tokens, max_new_tokens, max_length aliases for backward compatibility
-        if max_tokens is not None:
-            max_gen = max_tokens
-        if max_new_tokens is not None:
-            max_gen = max_new_tokens
-        if max_length is not None:
-            max_gen = max_length
+        # Aliases for backward / cross-API compatibility.  At most one
+        # of max_tokens / max_new_tokens / max_length may be set.
+        _aliases = [
+            ("max_tokens", max_tokens),
+            ("max_new_tokens", max_new_tokens),
+            ("max_length", max_length),
+        ]
+        _set_aliases = [(n, v) for n, v in _aliases if v is not None]
+        if len(_set_aliases) > 1:
+            raise ValueError(
+                "Conflicting max-length aliases set: "
+                f"{[n for n, _ in _set_aliases]}. Pass only one of "
+                "max_gen / max_tokens / max_new_tokens / max_length."
+            )
+        if _set_aliases:
+            max_gen = _set_aliases[0][1]
 
         # N-15c: build JSON schema constraint once per call (vocab scan
         # amortised across all tokens, same discipline as _generate_text).
@@ -1736,7 +1781,30 @@ class _GenerationMixin:
 
         Returns:
             List of generated texts
+
+        Raises:
+            NotImplementedError: when ``json_schema`` is passed via
+                ``**kwargs``.  The batched sampler
+                (``_sample_token_batch``) does not accept a
+                ``json_constraint`` parameter and the FSM is
+                single-sequence by design, so a batched call cannot
+                guarantee schema-conforming output across rows.
+                Silent drop would let callers receive unconstrained
+                batched output labelled as schema-conforming.  Pass
+                156z9fe (Pass A fix #2): fourth sibling-boundary site
+                in the json_schema family (after GGUF chat, stream
+                chat, and vision — Pass 156z7 closed those three).
+                Drop the schema or call ``generate()`` per prompt.
         """
+        if kwargs.get("json_schema") is not None:
+            raise NotImplementedError(
+                "json_schema constrained decoding is not supported "
+                "on the batch_generate path. The batched sampler "
+                "shares one FSM across rows which would not produce "
+                "schema-conforming output. Drop the schema or call "
+                "generate() per prompt."
+            )
+
         if not prompts:
             return []
 
@@ -1791,6 +1859,10 @@ class _GenerationMixin:
 
         with self._generation_lock:
             for step in range(max_gen):
+                # Pass B (Pass 156z9ff): honour user stop signal.
+                if self._check_cancel():
+                    logger.info("Batch generation cancelled by user at step %d", step)
+                    break
                 # Early exit if all sequences finished (check every 5 steps starting from step 5 to reduce overhead)
                 if all_finished or (step >= 5 and step % 5 == 0 and finished.all()):
                     all_finished = True
@@ -2020,6 +2092,10 @@ class _GenerationMixin:
             )
 
             for step in range(max_gen):
+                # Pass B (Pass 156z9ff): honour user stop signal.
+                if self._check_cancel():
+                    logger.info("Vision generation cancelled by user at step %d", step)
+                    break
                 # Shared sampling (windowed penalty, min_p, top-k/p)
                 next_token = self._sample_token(
                     logits[:, -1, :],
@@ -2204,6 +2280,13 @@ class _GenerationMixin:
             draft_model(input_ids, use_cache=has_cache_draft)
 
             while tokens_generated < max_gen:
+                # Pass B (Pass 156z9ff): honour user stop signal.
+                if self._check_cancel():
+                    logger.info(
+                        "Speculative generation cancelled by user (%d tokens generated)",
+                        tokens_generated,
+                    )
+                    break
                 # --- Draft phase: generate K tokens from draft model ---
                 draft_tokens: list[int] = []
                 draft_probs_list: list[torch.Tensor] = []
@@ -2455,6 +2538,13 @@ class _GenerationMixin:
                 input_ids, use_cache=has_cache)
 
             while tokens_generated < max_gen:
+                # Pass B (Pass 156z9ff): honour user stop signal.
+                if self._check_cancel():
+                    logger.info(
+                        "Medusa generation cancelled by user (%d tokens generated)",
+                        tokens_generated,
+                    )
+                    break
                 # --- Sample from main head (position +1) ---
                 # S740: Use _sample_token for consistent filtering
                 tok_1_tensor = self._sample_token(
@@ -2635,6 +2725,13 @@ class _GenerationMixin:
 
         responses: list[str] = []
         for _ in range(n_samples):
+            # Pass B (Pass 156z9ff): honour user stop signal between samples.
+            if self._check_cancel():
+                logger.info(
+                    "Self-consistent generation cancelled by user after %d samples",
+                    len(responses),
+                )
+                break
             # S780: acquire _generation_lock per sample — _generate_text
             # clears and uses the KV cache, so concurrent calls corrupt it.
             with self._generation_lock:
@@ -2725,6 +2822,10 @@ class _GenerationMixin:
 
         # N-gram pool: maps (tok_i, tok_i+1) -> tok_i+2 (bigram -> next token)
         ngram_pool: dict[tuple[int, int], int] = {}
+        # Pass 156z9fe (Pass A fix #4): track the next bigram index to
+        # update so each call walks only NEW tokens instead of the full
+        # generated sequence.  Was O(n²) cumulative over the run.
+        ngram_pool_idx = 0
 
         with self._generation_lock, torch.no_grad():
             has_cache = hasattr(self.model, 'clear_cache')
@@ -2739,6 +2840,13 @@ class _GenerationMixin:
 
             tokens_generated = 0
             while tokens_generated < max_gen:
+                # Pass B (Pass 156z9ff): honour user stop signal.
+                if self._check_cancel():
+                    logger.info(
+                        "Lookahead generation cancelled by user (%d tokens generated)",
+                        tokens_generated,
+                    )
+                    break
                 # Sample the verified next token
                 next_token = self._sample_token(
                     logits[:, -1, :], generated, temperature,
@@ -2774,7 +2882,9 @@ class _GenerationMixin:
                     else:
                         logits = self.model(generated[:, -max_len:])
                     # Update N-gram pool from generated tokens
-                    self._update_ngram_pool(ngram_pool, generated[0].tolist(), ngram_pool_size)
+                    ngram_pool_idx = self._update_ngram_pool(
+                        ngram_pool, generated[0].tolist(),
+                        ngram_pool_size, start_index=ngram_pool_idx)
                     continue
 
                 # Verify draft: feed all draft tokens through model in one pass
@@ -2822,7 +2932,9 @@ class _GenerationMixin:
                         break
 
                 # Update N-gram pool with accepted tokens
-                self._update_ngram_pool(ngram_pool, generated[0].tolist(), ngram_pool_size)
+                ngram_pool_idx = self._update_ngram_pool(
+                    ngram_pool, generated[0].tolist(),
+                    ngram_pool_size, start_index=ngram_pool_idx)
 
                 # Reset cache to match actual generated sequence
                 if has_cache and hasattr(self.model, 'rewind_cache'):
@@ -2886,12 +2998,52 @@ class _GenerationMixin:
         pool: dict[tuple[int, int], int],
         tokens: list[int],
         max_size: int,
-    ) -> None:
-        """Update bigram → next-token pool from a token sequence."""
-        for i in range(len(tokens) - 2):
+        start_index: int = 0,
+    ) -> int:
+        """Update bigram → next-token pool from a token sequence.
+
+        Args:
+            pool: Bigram → next-token map (mutated in place).
+            tokens: Token sequence to scan.
+            max_size: Max pool entries; FIFO-evict oldest above this.
+            start_index: First bigram index to scan.  Pass 156z9fe
+                (Pass A fix #4): callers track the last-scanned index
+                and pass it back here so each call walks only NEW
+                tokens.  Previously called with ``start_index=0`` on
+                every iteration, producing O(n²) cumulative work over
+                a long generation.
+
+        Returns:
+            The new ``start_index`` callers should pass on the next
+            call (i.e. ``max(0, len(tokens) - 2)``).
+        """
+        for i in range(max(0, start_index), len(tokens) - 2):
             key = (tokens[i], tokens[i + 1])
             pool[key] = tokens[i + 2]
         # Evict oldest entries if pool exceeds max size
         while len(pool) > max_size:
             oldest_key = next(iter(pool))
             del pool[oldest_key]
+        return max(0, len(tokens) - 2)
+
+    def _check_cancel(self) -> bool:
+        """Consume the cancel-generation signal.
+
+        Pass 156z9ff (Pass B): closes the signal-without-consumer
+        sibling-boundary dead-infra (§4 Learned Principles). The
+        ``_cancel_generation`` attribute is set by
+        :func:`builtin_commands.stop_cmd` (gated on
+        ``_generation_lock.locked()`` so the flag is only ever set
+        while a generation is active). Every token-loop in this
+        mixin calls this helper first thing in each iteration and
+        breaks out on True. Read-and-clear (one-shot semantics) so
+        a single set never cancels more than one in-flight loop.
+
+        Returns:
+            True if a stop was requested (flag was True; now cleared).
+            False otherwise.
+        """
+        if getattr(self, "_cancel_generation", False):
+            self._cancel_generation = False
+            return True
+        return False

@@ -7,14 +7,15 @@ Modular AI services that can run independently or connect to a central router.
 | Service | Port | Description |
 |---------|------|-------------|
 | **router** | 9900 | Central hub for service coordination |
-| **imagegen** | 9901 | Image generation (SD, DALL-E, Replicate) |
-| **codegen** | 9902 | Code generation (template, local, OpenAI) |
-| **videogen** | 9903 | Video generation (AnimateDiff, built-in GIF) |
-| **threed** | 9905 | 3D model generation (Shap-E, built-in OBJ) |
+| **imagegen** | 9901 | Image generation (Stable Diffusion local + procedural placeholder) |
+| **codegen** | 9902 | Code generation (template + local Enigma model) |
+| **audiogen** | 9903 | Text-to-speech (pyttsx3 / system) — overlaps with `voice/`, see SUGGESTIONS |
+| **videogen** | 9904 | Animated GIF generation (PIL procedural builtin) |
+| **threed** | 9905 | 3D `.obj` mesh generation (procedural primitives + Shap-E local) |
 | **vision** | 9906 | Screen capture and image analysis |
-| **voice** | 9907 | Unified speech-to-text + audio generation (pyttsx3, ElevenLabs, system) |
-| **audiogen** | — | Audio/music generation |
+| **voice** | 9907 | Unified speech-to-text + text-to-speech (pyttsx3, system) |
 | **transcriber** | — | Audio transcription |
+| **avatar** | — | Avatar / character animation |
 
 ## Quick Start
 
@@ -41,10 +42,7 @@ python mods/router/router.py
 # Terminal 2: Start image service
 python mods/imagegen/imagegen.py --router localhost:9900
 
-# Terminal 3: Start code service
-python mods/codegen/codegen.py --router localhost:9900
-
-# Terminal 4: Check connected services
+# Terminal 3: Check connected services
 python mods/router/router.py --list
 ```
 
@@ -67,24 +65,11 @@ All services use TCP with JSON messages:
 
 ### imagegen
 - `generate` - Generate image from prompt
-- `load_provider` - Load a provider (placeholder, local, openai, replicate)
+- `load_provider` - Load a provider (placeholder, local)
 - `unload_provider` - Unload a provider
 - `list_providers` - List available providers
 - `set_default` - Set default provider
 - `status` - Get service status
-
-### codegen  
-- `generate` - Generate code from prompt
-- `save_code` - Save generated code to file
-- `load_provider` / `unload_provider` / `list_providers` / `set_default` / `status`
-
-### videogen
-- `generate` - Generate video from prompt
-- `load_provider` / `unload_provider` / `list_providers` / `set_default` / `status`
-
-### threed
-- `generate` - Generate 3D model from prompt
-- `load_provider` / `unload_provider` / `list_providers` / `set_default` / `status`
 
 ### vision
 - `capture` - Capture screen
@@ -106,25 +91,17 @@ All services use TCP with JSON messages:
 
 ## Providers
 
-Each service supports multiple providers:
+Each service supports multiple providers (all local — cloud providers removed in REALIGN-1.1):
 
 | Service | Providers |
 |---------|-----------|
-| imagegen | placeholder (built-in), local (Stable Diffusion), openai (DALL-E), replicate |
-| codegen | template (built-in), local (Enigma), openai (GPT-4) |
-| videogen | builtin (GIF), local (AnimateDiff), replicate |
-| threed | builtin (OBJ primitives), local (Shap-E), replicate |
-| vision | Built-in (mss/PIL/pyautogui for capture, tesseract/easyocr for OCR) |
-| voice | speech (SpeechRecognition), whisper (local STT), pyttsx3/system/elevenlabs (TTS) |
-
-## Environment Variables
-
-```bash
-# For cloud providers
-OPENAI_API_KEY=sk-...
-REPLICATE_API_TOKEN=r8_...
-ELEVENLABS_API_KEY=...
-```
+| imagegen | placeholder (procedural), local (Stable Diffusion via diffusers) |
+| codegen  | template (pattern library), local (local Enigma model) |
+| audiogen | local (pyttsx3 LocalTTS), system (SystemTTS) |
+| videogen | builtin (PIL animated GIF) — `animatediff` dropdown option not yet implemented |
+| threed   | builtin (procedural .obj primitives), local (Shap-E via diffusers, weights required) |
+| vision   | Built-in (mss/PIL/pyautogui for capture, tesseract/easyocr for OCR) |
+| voice    | speech (SpeechRecognition), whisper (local STT), pyttsx3/system (TTS) |
 
 ## Python Client Example
 
@@ -163,17 +140,16 @@ client.disconnect()
 │                                                              │
 │  Capabilities Registry    Service Registry                  │
 │  generate_image -> [imagegen]    imagegen -> socket         │
-│  generate_code -> [codegen]      codegen -> socket          │
 │  tts -> [voice]                  ...                        │
 └──────────────┬──────────────────────────────────────────────┘
                │
-    ┌──────────┼──────────┬──────────┬──────────┬─────────┐
-    │          │          │          │          │         │
-┌───┴──┐  ┌───┴──┐  ┌───┴──┐  ┌───┴──┐  ┌───┴──┐  ┌──┴───┐
-│image │  │code  │  │video │  │audio │  │3d    │  │vision│
-│gen   │  │gen   │  │gen   │  │voice │  │3d    │  │vision│
-│:9901 │  │:9902 │  │:9903 │  │:9907 │  │:9905 │  │:9906 │
-└──────┘  └──────┘  └──────┘  └──────┘  └──────┘  └──────┘
+        ┌──────┼──────┬──────────┐
+        │      │      │          │
+    ┌───┴──┐ ┌─┴────┐ ┌─┴────┐ ┌─┴────┐
+    │image │ │voice │ │vision│ │avatar│
+    │gen   │ │      │ │      │ │      │
+    │:9901 │ │:9907 │ │:9906 │ │  —   │
+    └──────┘ └──────┘ └──────┘ └──────┘
 ```
 
 Each service:
@@ -187,9 +163,5 @@ Each service:
 
 All services output to `outputs/` subdirectories:
 - `outputs/images/` - Generated images
-- `outputs/code/` - Generated code files  
-- `outputs/videos/` - Generated videos/GIFs
-- `outputs/voice/` - Generated audio files
-- `outputs/3d/` - Generated 3D models
 - `outputs/vision/` - Screen captures
 - `outputs/voice/` - Voice recordings

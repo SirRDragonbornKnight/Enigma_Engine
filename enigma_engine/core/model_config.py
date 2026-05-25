@@ -7,8 +7,9 @@ USAGE:
 
     config = get_model_config("medium")  # or "tiny", "small", "large", "xl"
 
-NOTE: This module re-exports from enigma_engine.core.model for backward compatibility.
-The canonical MODEL_PRESETS are defined in enigma_engine.core.model.
+NOTE: This module re-exports ``MODEL_PRESETS`` from
+:mod:`enigma_engine.core.model_presets` for backward compatibility.
+The canonical presets live there.
 """
 
 # Import from the canonical location

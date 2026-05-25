@@ -591,7 +591,13 @@ def apply_profile_to_engine(profile: AIProfile, engine) -> None:
                 engine.clear_adapter()
             else:
                 engine.apply_adapter(adapter_path)
-        except (FileNotFoundError, ImportError, RuntimeError) as e:
+        except (FileNotFoundError, ImportError, RuntimeError,
+                ValueError) as e:
+            # Pass 156z9el: ``ValueError`` covers the canonical PEFT
+            # failure on adapter/base architecture mismatch
+            # (target_modules absent, dim mismatch). Sibling
+            # ``_restore_lora_adapter_for_base`` already catches it
+            # per §4 Pass 156u-A2; this site was drifted.
             logger.warning(
                 f"Profile '{profile.name}' adapter not applied: {e}")
 

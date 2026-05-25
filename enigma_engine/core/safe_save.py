@@ -19,7 +19,6 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Dict
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +49,7 @@ def atomic_torch_save(data: dict, path: str | Path) -> None:
 
 
 def atomic_safetensors_save(
-    tensors: Dict[str, "torch.Tensor"],  # noqa: F821
+    tensors: dict[str, "torch.Tensor"],  # noqa: F821
     path: str | Path,
     metadata: dict[str, str] | None = None,
 ) -> None:

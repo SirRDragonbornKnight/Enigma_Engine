@@ -18,12 +18,10 @@ Usage:
 import argparse
 import json
 import logging
-import os
 import socket
 import struct
 import threading
 import time
-import wave
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -278,99 +276,6 @@ class Pyttsx3TTS:
             return {"success": False, "error": str(e)}
 
 
-class ElevenLabsTTS:
-    """ElevenLabs cloud TTS."""
-
-    def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or os.environ.get("ELEVENLABS_API_KEY")
-        self.client = None
-        self.is_loaded = False
-        self.voices = []
-        self.current_voice = None
-
-    def load(self) -> bool:
-        try:
-            from elevenlabs import ElevenLabs as EL
-            self.client = EL(api_key=self.api_key)
-
-            if not self.api_key:
-                logger.warning("ELEVENLABS_API_KEY not set")
-                return False
-
-            response = self.client.voices.get_all()
-            self.voices = [
-                {"id": v.voice_id, "name": v.name}
-                for v in response.voices
-            ]
-            if self.voices:
-                self.current_voice = self.voices[0]["id"]
-
-            self.is_loaded = True
-            return True
-        except ImportError:
-            logger.warning("Install: pip install elevenlabs")
-        except Exception as e:
-            logger.warning(f"ElevenLabs failed: {e}")
-        return False
-
-    def unload(self):
-        self.client = None
-        self.is_loaded = False
-
-    def get_voices(self) -> List[str]:
-        return [v["name"] for v in self.voices]
-
-    def set_voice(self, index: int):
-        if 0 <= index < len(self.voices):
-            self.current_voice = self.voices[index]["id"]
-
-    def speak(self, text: str) -> Dict[str, Any]:
-        result = self.generate(text)
-        if not result.get("success"):
-            return result
-        try:
-            import platform
-            import subprocess
-            path = result.get("path", "")
-            if not path:
-                return result
-            if platform.system() == "Windows":
-                os.startfile(path)
-            elif platform.system() == "Darwin":
-                subprocess.run(["afplay", path])
-            else:
-                subprocess.run(["aplay", path])
-        except Exception:
-            pass
-        return result
-
-    def generate(self, text: str, **kwargs) -> Dict[str, Any]:
-        if not self.is_loaded or not self.client:
-            return {"success": False, "error": "Not loaded"}
-
-        try:
-            start = time.time()
-            audio = self.client.generate(
-                text=text,
-                voice=self.current_voice,
-                model="eleven_monolingual_v1"
-            )
-
-            timestamp = int(time.time())
-            filepath = OUTPUT_DIR / f"eleven_{timestamp}.mp3"
-            with open(filepath, "wb") as f:
-                for chunk in audio:
-                    f.write(chunk)
-
-            return {
-                "success": True,
-                "path": str(filepath),
-                "duration": time.time() - start,
-            }
-        except Exception as e:
-            return {"success": False, "error": str(e)}
-
-
 class SystemTTS:
     """System speech using OS features."""
     
@@ -442,8 +347,6 @@ class VoicePipeline:
             return Pyttsx3TTS()
         if provider == "system":
             return SystemTTS()
-        if provider == "elevenlabs":
-            return ElevenLabsTTS()
         return None
 
     def load_tts_provider(self, provider: str) -> bool:
@@ -517,8 +420,7 @@ class VoicePipeline:
 
     def list_tts_providers(self) -> Dict[str, Dict[str, bool]]:
         providers = {"pyttsx3": {"loaded": False},
-                     "system": {"loaded": False},
-                     "elevenlabs": {"loaded": False}}
+                     "system": {"loaded": False}}
         for name in providers:
             inst = self._tts_instances.get(name)
             providers[name]["loaded"] = bool(inst and inst.is_loaded)
@@ -669,7 +571,7 @@ class Voice:
 
     def _cmd_set_default(self, params: Dict[str, Any]) -> Dict[str, Any]:
         provider = params.get("provider", "")
-        if provider not in ("pyttsx3", "system", "elevenlabs"):
+        if provider not in ("pyttsx3", "system"):
             return {"success": False, "error": f"Unknown provider: {provider}"}
         self.pipeline.tts_provider = provider
         return {"success": True, "default": provider}
@@ -811,7 +713,7 @@ def main():
     parser.add_argument("--speak", type=str, help="Speak text")
     parser.add_argument("--transcribe", type=str, help="Transcribe audio file")
     parser.add_argument("--stt", type=str, default="speech", choices=["whisper", "speech"])
-    parser.add_argument("--tts", type=str, default="pyttsx3", choices=["pyttsx3", "system", "elevenlabs"])
+    parser.add_argument("--tts", type=str, default="pyttsx3", choices=["pyttsx3", "system"])
     
     args = parser.parse_args()
     service = Voice(stt_provider=args.stt, tts_provider=args.tts)

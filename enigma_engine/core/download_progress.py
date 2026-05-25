@@ -313,6 +313,16 @@ class DownloadTracker:
         Returns:
             Path to downloaded model, or None if failed
         """
+        # Pass 156z9en: ``disable_progress_bars()`` mutates global HF
+        # state.  Track whether we disabled so the paired
+        # ``enable_progress_bars()`` always runs on every exit path
+        # (success, ImportError, snapshot_download raising).  Prior
+        # code only re-enabled on the success path, leaking the
+        # disabled state into unrelated later HF calls in the same
+        # process — same shape as the "cleanup on ALL return paths"
+        # principle (§4) applied to global state.
+        bars_disabled = False
+        enable_progress_bars = None
         try:
             from huggingface_hub import snapshot_download
             from huggingface_hub.utils import (
@@ -323,6 +333,7 @@ class DownloadTracker:
             # Disable default progress bars if we're handling it
             if not self.show_cli:
                 disable_progress_bars()
+                bars_disabled = True
 
             # Create progress callback
             self._progress_callback = ProgressCallback(
@@ -348,10 +359,6 @@ class DownloadTracker:
             # Use snapshot_download for full model
             path = snapshot_download(**download_kwargs)
 
-            # Re-enable progress bars
-            if not self.show_cli:
-                enable_progress_bars()
-
             logger.info(f"Model downloaded to: {path}")
             return Path(path)
 
@@ -369,6 +376,16 @@ class DownloadTracker:
                 progress.error = str(e)
                 self._emit_progress(progress)
             return None
+        finally:
+            if bars_disabled and enable_progress_bars is not None:
+                try:
+                    enable_progress_bars()
+                except Exception:
+                    # Best-effort restore; never let cleanup hide the
+                    # original error.
+                    logger.debug(
+                        "enable_progress_bars() failed during cleanup",
+                        exc_info=True)
 
     def download_file(
         self,

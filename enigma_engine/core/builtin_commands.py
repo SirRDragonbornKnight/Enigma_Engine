@@ -310,15 +310,25 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
     # ========== Stop Command ==========
 
     def stop_cmd(args: list[str], ctx: Dict) -> CommandResult:
-        """Stop current AI generation."""
+        """Stop current AI generation.
+
+        Pass 156z9ff (Pass B): only set the cancel flag when a generation
+        is actually running, detected via ``engine._generation_lock.locked()``.
+        Otherwise a stale True flag would silently kill the next generation
+        the user starts. The engine's generation mixin consumes the flag
+        via ``_check_cancel()`` with read-and-clear semantics.
+        """
         engine = ctx.get("engine")
 
-        if engine:
-            # Set cancel flag that the generation loop checks
-            engine._cancel_generation = True
-            return CommandResult(True, "[OK] Stop signal sent")
+        if not engine:
+            return CommandResult(True, "[OK] No active generation to stop")
 
-        return CommandResult(True, "[OK] No active generation to stop")
+        lock = getattr(engine, "_generation_lock", None)
+        if lock is not None and not lock.locked():
+            return CommandResult(True, "[OK] No active generation to stop")
+
+        engine._cancel_generation = True
+        return CommandResult(True, "[OK] Stop signal sent")
 
     registry.register("stop", stop_cmd, "Stop current generation", "stop")
 

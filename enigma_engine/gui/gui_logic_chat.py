@@ -699,6 +699,17 @@ class LogicChatMixin:
     def _stop_generation(self):
         """Stop the current AI generation and typewriter animation."""
         self._stop_requested = True
+        # Pass 156z9fg: propagate stop to the engine so the daemon
+        # generation thread breaks out of its token loop instead of
+        # burning GPU producing tokens the UI has already discarded.
+        # Gated on _generation_lock.locked() so a stale True flag
+        # from an idle stop cannot eat the next generation (mirrors
+        # the gate in builtin_commands.stop_cmd from Pass 156z9ff).
+        engine = getattr(self, "engine", None)
+        if engine is not None:
+            lock = getattr(engine, "_generation_lock", None)
+            if lock is not None and lock.locked():
+                engine._cancel_generation = True
         self._hide_thinking()
         # Stop TTS if voice is speaking
         self._tts_stop()

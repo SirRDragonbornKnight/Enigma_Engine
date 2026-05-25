@@ -10,9 +10,10 @@ and can be executed by name. CLI-only - no GUI dependencies.
 from __future__ import annotations
 
 import logging
-from typing import Callable, Any, Optional
-from dataclasses import dataclass
 import re
+import threading
+from dataclasses import dataclass
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -193,7 +194,7 @@ def parse_commands(text: str) -> tuple:
 
 # Global registry instance
 _registry: Optional[CommandRegistry] = None
-_registry_lock = __import__("threading").Lock()
+_registry_lock = threading.Lock()
 
 
 def get_registry() -> CommandRegistry:

@@ -204,14 +204,50 @@ class TestClearKVCache:
         assert called
 
     def test_clear_kv_cache_with_reset_cache(self):
-        """Falls back to reset_cache if clear_kv_cache missing."""
+        """Falls back to reset_cache when only reset_cache is exposed."""
         engine = _make_engine()
-        if hasattr(engine.model, 'clear_kv_cache'):
-            delattr(engine.model, 'clear_kv_cache')
         called = []
-        engine.model.reset_cache = lambda: called.append(True)
+
+        class _OnlyResetCache:
+            def reset_cache(self):
+                called.append(True)
+
+        engine.model = _OnlyResetCache()
         engine.clear_kv_cache()
         assert called
+
+    def test_clear_kv_cache_dispatches_to_native_enigma_clear_cache(self):
+        """Native Enigma model exposes clear_cache() (singular, per-layer).
+
+        Regression guard for Pass 156z9fa finding: the dispatcher used to
+        probe only ('clear_kv_cache', 'reset_cache', 'kv_cache') and silently
+        no-op'd on real Enigma models, leaving stale KV after adapter swaps.
+        """
+        engine = _make_engine()
+        # Real Enigma created via _make_engine() — must NOT have the HF-style
+        # method names, must have native clear_cache().
+        assert not hasattr(engine.model, 'clear_kv_cache')
+        assert not hasattr(engine.model, 'reset_cache')
+        assert hasattr(engine.model, 'clear_cache')
+
+        # Prime per-layer KV caches by running a forward pass with use_cache.
+        ids = torch.tensor([[1, 2, 3, 4]], dtype=torch.long)
+        with torch.no_grad():
+            engine.model(ids, use_cache=True, start_pos=0)
+        # At least one layer should now have a populated cache.
+        primed = [
+            layer for layer in engine.model.layers
+            if getattr(layer.attention, '_kv_cache', None) is not None
+        ]
+        assert primed, "Expected at least one layer KV cache to be primed"
+
+        engine.clear_kv_cache()
+
+        # clear_cache() sets each layer's _kv_cache back to None.
+        for layer in engine.model.layers:
+            assert layer.attention._kv_cache is None, (
+                "clear_kv_cache() did not clear native Enigma layer cache"
+            )
 
 
 # ── get_max_context_length ───────────────────────────────────────────────────

@@ -4,7 +4,6 @@ Audio Generation - Standalone Text-to-Speech Service
 
 Text-to-speech and audio generation using:
 - pyttsx3 (local offline)
-- ElevenLabs (cloud API)
 - System speech fallback
 
 Usage:
@@ -17,7 +16,6 @@ Usage:
 import argparse
 import json
 import logging
-import os
 import socket
 import struct
 import threading
@@ -164,95 +162,6 @@ class LocalTTS:
             return {"success": False, "error": str(e)}
 
 
-class ElevenLabsTTS:
-    """ElevenLabs cloud TTS."""
-    
-    def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or os.environ.get("ELEVENLABS_API_KEY")
-        self.client = None
-        self.is_loaded = False
-        self.voices = []
-        self.current_voice = None
-    
-    def load(self) -> bool:
-        try:
-            from elevenlabs import ElevenLabs as EL
-            self.client = EL(api_key=self.api_key)
-            
-            # Get available voices
-            response = self.client.voices.get_all()
-            self.voices = [{"id": v.voice_id, "name": v.name} for v in response.voices]
-            if self.voices:
-                self.current_voice = self.voices[0]["id"]
-            
-            self.is_loaded = bool(self.api_key)
-            if self.is_loaded:
-                logger.info("ElevenLabs TTS loaded")
-            return self.is_loaded
-        except ImportError:
-            logger.error("Install: pip install elevenlabs")
-        except Exception as e:
-            logger.warning(f"ElevenLabs failed: {e}")
-        return False
-    
-    def unload(self):
-        self.client = None
-        self.is_loaded = False
-    
-    def get_voices(self) -> List[str]:
-        return [v["name"] for v in self.voices]
-    
-    def set_voice(self, index: int):
-        if 0 <= index < len(self.voices):
-            self.current_voice = self.voices[index]["id"]
-    
-    def generate(self, text: str, **kwargs) -> Dict[str, Any]:
-        if not self.is_loaded or not self.client:
-            return {"success": False, "error": "Not loaded"}
-        
-        try:
-            start = time.time()
-            
-            audio = self.client.generate(
-                text=text,
-                voice=self.current_voice,
-                model="eleven_monolingual_v1"
-            )
-            
-            timestamp = int(time.time())
-            filepath = OUTPUT_DIR / f"eleven_{timestamp}.mp3"
-            
-            with open(filepath, 'wb') as f:
-                for chunk in audio:
-                    f.write(chunk)
-            
-            return {
-                "success": True,
-                "path": str(filepath),
-                "duration": time.time() - start
-            }
-        except Exception as e:
-            return {"success": False, "error": str(e)}
-    
-    def speak(self, text: str) -> Dict[str, Any]:
-        """Generate and play audio."""
-        result = self.generate(text)
-        if result.get("success"):
-            try:
-                import subprocess
-                import platform
-                path = result["path"]
-                if platform.system() == "Windows":
-                    os.startfile(path)
-                elif platform.system() == "Darwin":
-                    subprocess.run(["afplay", path])
-                else:
-                    subprocess.run(["aplay", path])
-            except Exception:
-                pass
-        return result
-
-
 class SystemTTS:
     """System speech fallback using OS features."""
     
@@ -332,7 +241,6 @@ class AudioGen:
     
     PROVIDERS = {
         "local": LocalTTS,
-        "elevenlabs": ElevenLabsTTS,
         "system": SystemTTS,
     }
     
@@ -572,7 +480,7 @@ def main():
     parser.add_argument("--port", type=int, default=9904)
     parser.add_argument("--router", type=str)
     parser.add_argument("--provider", type=str, default="system",
-                       choices=["local", "elevenlabs", "system"])
+                       choices=["local", "system"])
     parser.add_argument("--speak", type=str, help="Speak text")
     parser.add_argument("--generate", type=str, help="Generate to file")
     

@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 import re
 from collections import Counter
+from typing import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +123,7 @@ def run_coherence_benchmark(
     engine,
     num_prompts: int = 20,
     threshold: float = DEFAULT_COHERENCE_THRESHOLD,
-    on_progress: "callable | None" = None,
+    on_progress: Callable | None = None,
 ) -> dict:
     """Run a coherence benchmark to assess model reflection quality.
 

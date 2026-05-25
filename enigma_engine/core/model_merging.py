@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Sequence
+from typing import Callable, Sequence
 
 import torch
 
@@ -96,7 +96,7 @@ def slerp_merge(
     t: float = 0.5,
     output_path: str | Path | None = None,
     device: str = "cpu",
-    on_progress: callable | None = None,
+    on_progress: Callable | None = None,
 ) -> dict:
     """Merge two checkpoints via SLERP.
 
@@ -153,7 +153,7 @@ def ties_merge(
     weights: Sequence[float] | None = None,
     output_path: str | Path | None = None,
     device: str = "cpu",
-    on_progress: callable | None = None,
+    on_progress: Callable | None = None,
 ) -> dict:
     """Merge checkpoints via TIES (Trim, Elect Sign, Disjoint Merge).
 
@@ -267,7 +267,7 @@ def linear_merge(
     t: float = 0.5,
     output_path: str | Path | None = None,
     device: str = "cpu",
-    on_progress: callable | None = None,
+    on_progress: Callable | None = None,
 ) -> dict:
     """Merge two checkpoints via linear interpolation.
 

@@ -1649,6 +1649,10 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
         if hasattr(self.model, 'clear_kv_cache'):
             self.model.clear_kv_cache()
             logger.debug("Cleared model KV-cache")
+        elif hasattr(self.model, 'clear_cache'):
+            # Native Enigma model exposes per-layer clear via clear_cache().
+            self.model.clear_cache()
+            logger.debug("Cleared model cache (per-layer)")
         elif hasattr(self.model, 'reset_cache'):
             self.model.reset_cache()
             logger.debug("Reset model cache")

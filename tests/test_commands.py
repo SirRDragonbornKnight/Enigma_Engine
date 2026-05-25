@@ -770,14 +770,41 @@ class TestStopHandler:
         result = handler([], {})
         assert result.success
 
-    def test_stop_sets_cancel_flag(self):
+    def test_stop_sets_cancel_flag_when_generation_active(self):
+        """Pass 156z9ff (Pass B): stop_cmd sets the flag only when
+        _generation_lock is currently held (a generation is in flight)."""
+        import threading
+
         handler = _get_handler("stop")
 
         class FakeEngine:
-            _cancel_generation = False
+            def __init__(self):
+                self._cancel_generation = False
+                self._generation_lock = threading.Lock()
+
+        engine = FakeEngine()
+        # Hold the lock to simulate active generation.
+        with engine._generation_lock:
+            result = handler([], {"engine": engine})
+        assert result.success
+        assert engine._cancel_generation, "cancel flag must be set"
+        assert "Stop signal sent" in result.message
+
+    def test_stop_noop_when_no_generation_active(self):
+        """Pass 156z9ff (Pass B): unlocked lock means idle engine; stop
+        must not set the flag (would silently kill the next generation)."""
+        import threading
+
+        handler = _get_handler("stop")
+
+        class FakeEngine:
+            def __init__(self):
+                self._cancel_generation = False
+                self._generation_lock = threading.Lock()
 
         engine = FakeEngine()
         result = handler([], {"engine": engine})
         assert result.success
-        assert engine._cancel_generation
+        assert not engine._cancel_generation, "cancel flag must NOT be set"
+        assert "No active generation" in result.message
 

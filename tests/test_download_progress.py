@@ -219,3 +219,56 @@ class TestProgressCallback:
         cb(5000, 10000, 5000)
         # At least one speed entry should be > 0
         assert any(s > 0 for s in speeds)
+
+
+# ================================================================
+# DownloadTracker.download_model — global progress-bar state
+# ================================================================
+
+
+class TestDownloadModelProgressBarRestore:
+    """Pass 156z9en regression: ``disable_progress_bars()`` is global
+    state. If ``snapshot_download`` raises and we never call the
+    paired ``enable_progress_bars()``, HF progress bars stay disabled
+    for the rest of the process — affecting unrelated later downloads.
+    The pairing must hold on every exit path, not only the success
+    path.
+    """
+
+    def test_progress_bars_re_enabled_when_download_raises(
+            self, monkeypatch):
+        from enigma_engine.core.download_progress import DownloadTracker
+
+        calls: list[str] = []
+
+        fake_hub = type(sys)("huggingface_hub")
+        fake_hub_utils = type(sys)("huggingface_hub.utils")
+
+        def _fake_disable():
+            calls.append("disable")
+
+        def _fake_enable():
+            calls.append("enable")
+
+        def _fake_snapshot_download(**_kwargs):
+            calls.append("download")
+            raise RuntimeError("simulated network failure")
+
+        fake_hub.snapshot_download = _fake_snapshot_download
+        fake_hub_utils.disable_progress_bars = _fake_disable
+        fake_hub_utils.enable_progress_bars = _fake_enable
+        monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hub)
+        monkeypatch.setitem(
+            sys.modules, "huggingface_hub.utils", fake_hub_utils)
+
+        tracker = DownloadTracker(callback=None, show_cli=False)
+        result = tracker.download_model("fake/model")
+
+        assert result is None
+        # Disable must be paired with enable on the failure path.
+        assert "disable" in calls
+        assert "enable" in calls, (
+            "enable_progress_bars() never called after failure — "
+            "global state leak")
+        # Enable must happen after the failed download, not before it.
+        assert calls.index("enable") > calls.index("download")

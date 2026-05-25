@@ -64,8 +64,6 @@ class TestScanners:
         ids = [m["id"] for m in mods]
         assert "imagegen" in ids
         assert "voice" in ids
-        # Voice and audio generation are intentionally unified.
-        assert "audiogen" not in ids
         assert "_template" not in ids
         for mod in mods:
             assert "id" in mod
@@ -686,6 +684,47 @@ class TestScanners:
         assert old_prof.adapter is None, (
             "Old profiles without adapter field must default to "
             "None for backward compatibility")
+
+    def test_profile_apply_swallows_peft_value_error(self):
+        """Pass 156z9el sibling-boundary fix: PEFT raises
+        ``ValueError`` on adapter/base architecture mismatch
+        (target_modules don't exist on base, dim mismatch). The
+        canonical failure mode for a profile that pins an adapter
+        against an incompatible base must be a logged WARNING and
+        successful return — NOT an uncaught exception that crashes
+        the API request handler.
+
+        Sibling discipline: ``_restore_lora_adapter_for_base``
+        already catches ``ValueError`` per §4 Pass 156u-A2.
+        ``apply_profile_to_engine`` was missing it, drift between
+        siblings in the same adapter-apply contract family.
+        """
+        from enigma_engine.core.ai_profile import (
+            AIProfile, apply_profile_to_engine,
+        )
+
+        class FakeEngineRaisesValueError:
+            def __init__(self):
+                self.system_prompt = ""
+                self.temperature = 0.0
+                self.top_p = 0.0
+                self.top_k = 0
+                self.max_tokens = 0
+
+            def apply_adapter(self, path):
+                raise ValueError(
+                    "Target modules ['q_proj', 'v_proj'] not found "
+                    "in the base model")
+
+            def clear_adapter(self):
+                pass
+
+        eng = FakeEngineRaisesValueError()
+        prof = AIProfile(name="Mismatch",
+                         adapter="models/checkpoints/wrong_base")
+        # Must not raise — the profile apply should log a WARNING
+        # and continue. Pre-fix this raises ValueError.
+        apply_profile_to_engine(prof, eng)
 
     def test_legacy_lora_migration_moves_pth_files(self, tmp_path,
                                                    monkeypatch):
@@ -5969,8 +6008,9 @@ class TestBareExceptCleanup:
     """Mods do not use bare except: — use except Exception instead."""
 
     @pytest.mark.parametrize("mod_name", [
-        "voice", "threed", "videogen", "router",
-        "imagegen", "audiogen",
+        "voice", "router", "imagegen", "vision",
+        "transcriber", "avatar",
+        "audiogen", "codegen", "threed", "videogen",
     ])
     def test_mod_no_bare_except(self, mod_name):
         """Mod files must not contain bare 'except:'."""
@@ -6440,6 +6480,111 @@ class TestForgeAPOAlignmentMode:
         assert '"mode": "dpo"' in src
         assert '"loss_type": loss_type' in src, (
             "_start_dpo_training must pass loss_type through dpo config")
+
+
+# ════════════════════════════════════════════════════════════════════
+# Pass 156z9fg — GUI STOP button propagates cancel to the engine
+# ════════════════════════════════════════════════════════════════════
+
+class TestStopGenerationCancelsEngine:
+    """Pass 156z9fg: ``_stop_generation`` (GUI STOP button + ESC key)
+    must set ``engine._cancel_generation`` so the daemon generation
+    thread breaks out of its token loop instead of burning GPU on
+    tokens the UI has already discarded. Gated on
+    ``_generation_lock.locked()`` to mirror ``stop_cmd`` (Pass 156z9ff)
+    so a stale flag from an idle stop cannot eat the next generation."""
+
+    def _make_host(self, engine):
+        """Build a minimal LogicChatMixin host with the stubs
+        ``_stop_generation`` touches (UI side-effects)."""
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+        obj = object.__new__(LogicChatMixin)
+        obj.engine = engine
+        obj._stop_requested = False
+        obj._is_generating = True
+        # Stub out UI side-effects.
+        obj._hide_thinking = lambda: None
+        obj._tts_stop = lambda: None
+        obj._chat_system = lambda msg: None
+
+        class _BtnStub:
+            def configure(self, **kw):
+                pass
+
+            def grid(self, **kw):
+                pass
+
+            def grid_forget(self):
+                pass
+
+        obj.send_btn = _BtnStub()
+        obj.stop_btn = _BtnStub()
+        return obj
+
+    def test_stop_sets_engine_cancel_flag_when_locked(self):
+        """Lock held → engine._cancel_generation must be set."""
+        import threading
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+
+        class FakeEngine:
+            def __init__(self):
+                self._cancel_generation = False
+                self._generation_lock = threading.Lock()
+
+        engine = FakeEngine()
+        host = self._make_host(engine)
+        # Simulate active generation.
+        with engine._generation_lock:
+            LogicChatMixin._stop_generation(host)
+        assert engine._cancel_generation is True, (
+            "GUI _stop_generation must set engine._cancel_generation "
+            "when a generation is actively holding the lock")
+        assert host._stop_requested is True
+
+    def test_stop_no_engine_cancel_when_unlocked(self):
+        """Lock unheld (idle engine) → flag must NOT be set; the GUI's
+        own _stop_requested still flips so UI animation halts."""
+        import threading
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+
+        class FakeEngine:
+            def __init__(self):
+                self._cancel_generation = False
+                self._generation_lock = threading.Lock()
+
+        engine = FakeEngine()
+        host = self._make_host(engine)
+        LogicChatMixin._stop_generation(host)
+        assert engine._cancel_generation is False, (
+            "Stale-flag-eats-next-gen guard: lock unheld means no "
+            "active generation, so we must not set the cancel flag")
+        assert host._stop_requested is True
+
+    def test_stop_handles_missing_engine_gracefully(self):
+        """No engine attached (or engine=None) → must not crash;
+        _stop_requested still flips."""
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+
+        host = self._make_host(engine=None)
+        LogicChatMixin._stop_generation(host)
+        assert host._stop_requested is True
+
+    def test_stop_generation_source_propagates_to_engine(self):
+        """Structural gate: ``_stop_generation`` must reference
+        ``_cancel_generation`` AND ``_generation_lock.locked()`` so a
+        future refactor cannot silently drop the propagation while
+        leaving the UI side-effects in place."""
+        import inspect
+        from enigma_engine.gui.gui_logic_chat import LogicChatMixin
+
+        src = inspect.getsource(LogicChatMixin._stop_generation)
+        assert "_cancel_generation" in src, (
+            "_stop_generation must set engine._cancel_generation; "
+            "Pass 156z9fg requires the propagation")
+        assert ".locked()" in src, (
+            "_stop_generation must gate the cancel on "
+            "_generation_lock.locked() (mirrors stop_cmd)")
+
 
     def test_start_dpo_training_user_facing_strings_use_algo_label(self):
         """Pass 156k-audit: the SUGGESTIONS claim 'logs are accurate

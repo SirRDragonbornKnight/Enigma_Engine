@@ -5,7 +5,6 @@ Code Generation - Standalone AI Code Generator
 Generates code from natural language prompts using:
 - Local Enigma model
 - Template-based fallback
-- OpenAI GPT-4
 
 Usage:
     python codegen.py                              # Start service
@@ -17,7 +16,6 @@ Usage:
 import argparse
 import json
 import logging
-import os
 import re
 import socket
 import struct
@@ -341,65 +339,6 @@ class LocalCode:
             return {"success": False, "error": str(e)}
 
 
-class OpenAICode:
-    """OpenAI GPT code generation."""
-    
-    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-4"):
-        self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
-        self.model = model
-        self.client = None
-        self.is_loaded = False
-    
-    def load(self) -> bool:
-        try:
-            from openai import OpenAI
-            self.client = OpenAI(api_key=self.api_key)
-            self.is_loaded = bool(self.api_key)
-            if not self.is_loaded:
-                logger.warning("No OpenAI API key set")
-            return self.is_loaded
-        except ImportError:
-            logger.error("Install: pip install openai")
-            return False
-    
-    def unload(self):
-        self.client = None
-        self.is_loaded = False
-    
-    def generate(self, prompt: str, language: str = "python", **kwargs) -> Dict[str, Any]:
-        if not self.is_loaded or not self.client:
-            return {"success": False, "error": "Not loaded or missing API key"}
-        
-        try:
-            start = time.time()
-            
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": f"You are a {language} code generator. Output only code, no explanations."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=kwargs.get('temperature', 0.3),
-                max_tokens=kwargs.get('max_tokens', 1000),
-            )
-            
-            code = response.choices[0].message.content
-            
-            # Clean markdown code blocks
-            if code.startswith("```"):
-                lines = code.split("\n")
-                code = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:])
-            
-            return {
-                "success": True,
-                "code": code,
-                "language": language,
-                "duration": time.time() - start
-            }
-        except Exception as e:
-            return {"success": False, "error": str(e)}
-
-
 # =============================================================================
 # CodeGen Service
 # =============================================================================
@@ -410,7 +349,6 @@ class CodeGen:
     PROVIDERS = {
         "template": TemplateCode,
         "local": LocalCode,
-        "openai": OpenAICode,
     }
     
     def __init__(self, default_provider: str = "template"):
@@ -644,7 +582,7 @@ def main():
     parser.add_argument("--port", type=int, default=9902, help="Server port")
     parser.add_argument("--router", type=str, help="Router address (host:port)")
     parser.add_argument("--provider", type=str, default="template",
-                       choices=["template", "local", "openai"])
+                       choices=["template", "local"])
     parser.add_argument("--generate", type=str, help="Generate code")
     parser.add_argument("--language", type=str, default="python")
     

@@ -1156,6 +1156,45 @@ class TestEmotionalState:
         assert "emotional_state" in export
         assert export["emotional_state"]["valence"] == 0.5
 
+    def test_load_survives_corrupt_emotional_state(self, tmp_path):
+        """Pass 156z9em: non-numeric emotional_state value must not crash load.
+
+        Sibling-boundary fix: _load_context wraps load in
+        try/except (JSONDecodeError, OSError), but float(saved_emo[key])
+        could raise ValueError/TypeError on corrupt data, propagating
+        out of load() instead of degrading to baseline like
+        _load_history skips bad rows.
+        """
+        import json
+        from enigma_engine.core.model_context import ModelContext
+        import enigma_engine.core.model_context as mc_mod
+
+        ctx_dir = tmp_path / "corrupt_emo"
+        ctx_dir.mkdir()
+        # Non-numeric emotional state value — would raise ValueError
+        # inside the load try/except pre-fix.
+        data = {
+            "model_key": "corrupt_emo",
+            "system_prompt": "preserved system prompt",
+            "config": {},
+            "last_used": 0.0,
+            "emotional_state": {"valence": "not_a_number"},
+        }
+        (ctx_dir / "context.json").write_text(
+            json.dumps(data), encoding="utf-8")
+
+        ctx = ModelContext("corrupt_emo")
+        orig_dir = mc_mod._CONTEXTS_DIR
+        mc_mod._CONTEXTS_DIR = tmp_path
+        try:
+            ctx.load()  # Must NOT raise
+        finally:
+            mc_mod._CONTEXTS_DIR = orig_dir
+
+        # Emotional state degraded to baseline, rest of context intact.
+        assert ctx.emotional_state["valence"] == 0.0
+        assert ctx.system_prompt == "preserved system prompt"
+
 
 # =====================================================================
 # Phase 3: State-Aware Generation

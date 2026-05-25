@@ -309,10 +309,13 @@ class StreamingResponse:
 
     def _emit(self, chunk: StreamChunk) -> None:
         """Emit a chunk to all outputs."""
-        self._chunks.append(chunk)
         self._queue.put_nowait(chunk)
 
         with self._async_lock:
+            # Append to _chunks under the lock so __aiter__'s backfill
+            # cannot race with a concurrent _emit and duplicate this
+            # chunk (Pass 156z9er).
+            self._chunks.append(chunk)
             if self._async_queue is not None and self._loop is not None:
                 try:
                     self._loop.call_soon_threadsafe(

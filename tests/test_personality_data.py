@@ -185,6 +185,32 @@ class TestQualityFilter:
             "specific the smell of rain on hot pavement is. It's "
             "always a small joy.")
 
+    def test_accepts_cant_help_but_idiom(self):
+        # Pass 156z9eo regression: "I can't help but [verb]" is an
+        # English idiom meaning the OPPOSITE of refusal (compelled
+        # to, drawn to).  Prior refusal pattern ``"i can't help"``
+        # matched the idiom and dropped these legitimate personality
+        # answers.  Narrowed pattern keeps real refusals
+        # ("I can't help you with that", "I can't help with this")
+        # while letting the idiom through.
+        assert passes_quality_filter(
+            "Honestly, I can't help but smile when someone asks "
+            "me that. It's one of those questions where the "
+            "answer keeps surprising me each time.")
+        assert passes_quality_filter(
+            "I can't help but feel a small thrill whenever a "
+            "really specific question comes in — the kind where "
+            "the asker clearly already cares about the answer.")
+
+    def test_still_rejects_real_cant_help_refusals(self):
+        # Pass 156z9eo: narrowed pattern must still catch the
+        # actual refusal phrasings.
+        assert not passes_quality_filter(
+            "I can't help you with that particular request, "
+            "please try asking something else instead.")
+        assert not passes_quality_filter(
+            "I can't help with this kind of question, sorry.")
+
     def test_rejects_empty(self):
         assert not passes_quality_filter("")
 

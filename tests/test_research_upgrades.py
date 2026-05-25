@@ -1927,6 +1927,258 @@ class TestJsonSchemaConstraintWiring:
 
 
 # ════════════════════════════════════════════════════════════════════
+# Pass 156z9fe (Pass A) — engine_generation.py bounded fixes
+# ════════════════════════════════════════════════════════════════════
+
+class TestPassAEngineGenerationFixes:
+    """Pass 156z9fe fixes #1-5 against ``engine_generation.py``.
+
+    All five fixes were identified by the Pass 156z9fd author's-lens
+    audit and shipped together as the smallest bounded slice that
+    closes the easiest wins (mirroring Pass 156z7's ``json_schema``
+    NotImplementedError rejection template).
+    """
+
+    def test_execute_tools_forwards_json_schema(self):
+        """Fix #1: ``_execute_tools_in_text`` must forward
+        ``json_schema`` on its recursive ``_generate_text`` call.
+
+        Without forwarding, ``engine.generate(json_schema=...,
+        execute_tools=True)`` produced a constrained first chunk and
+        then an unconstrained continuation after every ``<tool_call>``
+        marker.  Pass 156z7 named this gap in the docstring without
+        gating it in code.
+        """
+        from enigma_engine.core.engine_generation import _GenerationMixin
+
+        # Capture the kwargs passed into the recursive _generate_text
+        # call.  Inject one synthetic tool call into the input text so
+        # the loop fires exactly once.
+        captured: dict = {}
+
+        class _FakeExecutor:
+            def execute_tool(self, name, args):
+                return {"success": True, "result": "ok"}
+
+        class _FakeSelf:
+            _tool_executor = _FakeExecutor()
+            _TOOL_CALL_RE = _GenerationMixin._TOOL_CALL_RE
+
+            def _generate_text(self, prompt, *args, **kwargs):
+                captured["json_schema"] = kwargs.get("json_schema")
+                # Return empty continuation so the loop ends after
+                # one iteration (no more tool markers in updated text).
+                return ""
+
+        seed_text = '<tool_call>{"name": "x", "args": {}}</tool_call>'
+        schema = {"type": "object", "properties": {}}
+        _GenerationMixin._execute_tools_in_text(
+            _FakeSelf(), seed_text, json_schema=schema,
+        )
+        assert captured.get("json_schema") == schema, (
+            "_execute_tools_in_text must forward json_schema to its "
+            "recursive _generate_text call so constrained decoding "
+            "survives the tool-call loop."
+        )
+
+    def test_batch_generate_rejects_json_schema(self):
+        """Fix #2: ``batch_generate`` must raise NotImplementedError
+        when ``json_schema`` is supplied.
+
+        Fourth sibling-boundary site in the json_schema family (after
+        the three Pass 156z7 closed).  Batched sampler shares one FSM
+        across rows so it cannot guarantee schema-conforming output
+        across the batch.
+        """
+        from enigma_engine.core.engine_generation import _GenerationMixin
+
+        class _FakeSelf:
+            pass
+
+        with pytest.raises(NotImplementedError, match="batch_generate"):
+            _GenerationMixin.batch_generate(
+                _FakeSelf(),
+                ["a", "b"],
+                max_gen=4,
+                json_schema={"type": "object", "properties": {}},
+            )
+
+    def test_stream_generate_rejects_multiple_max_aliases(self):
+        """Fix #3: ``stream_generate`` must raise ValueError when more
+        than one of ``max_tokens`` / ``max_new_tokens`` / ``max_length``
+        is set.
+
+        Previous code overwrote them sequentially so the last-checked
+        alias won silently — a HuggingFace-style ``max_new_tokens=100``
+        plus a native ``max_tokens=200`` silently honoured the third
+        alias instead of failing loud.
+        """
+        from enigma_engine.core.engine_generation import _GenerationMixin
+
+        class _FakeSelf:
+            pass
+
+        gen = _GenerationMixin.stream_generate(
+            _FakeSelf(),
+            "hi",
+            max_tokens=100,
+            max_new_tokens=200,
+        )
+        with pytest.raises(ValueError, match="Conflicting max-length"):
+            next(gen)
+
+    def test_update_ngram_pool_respects_start_index(self):
+        """Fix #4: ``_update_ngram_pool`` must only scan bigrams from
+        ``start_index`` onward.
+
+        Was O(n²) cumulative when called every loop iteration with
+        ``start_index=0`` and a growing generated sequence.  Caller in
+        ``lookahead_generate`` now tracks the last-scanned index.
+        """
+        from enigma_engine.core.engine_generation import _GenerationMixin
+
+        pool: dict = {}
+        tokens = [1, 2, 3, 4, 5]
+        # First call: scan from 0; pool gets (1,2)->3, (2,3)->4,
+        # (3,4)->5.  Returns next start = max(0, 5-2) = 3.
+        next_idx = _GenerationMixin._update_ngram_pool(
+            pool, tokens, max_size=100, start_index=0,
+        )
+        assert next_idx == 3
+        assert (1, 2) in pool and (2, 3) in pool and (3, 4) in pool
+
+        # Second call: same tokens, start_index=3 (no new bigrams).
+        # Pool must NOT be re-scanned; mutate pool to prove it.
+        pool[(1, 2)] = 999  # poison; should remain after second call
+        next_idx2 = _GenerationMixin._update_ngram_pool(
+            pool, tokens, max_size=100, start_index=next_idx,
+        )
+        assert next_idx2 == 3
+        assert pool[(1, 2)] == 999, (
+            "Second call with start_index=3 must skip bigram at i=0; "
+            "poisoned entry should survive."
+        )
+
+        # Third call: extend with one new token; only new bigram added.
+        tokens_ext = tokens + [6]
+        next_idx3 = _GenerationMixin._update_ngram_pool(
+            pool, tokens_ext, max_size=100, start_index=next_idx2,
+        )
+        assert next_idx3 == 4
+        assert pool[(4, 5)] == 6
+        # Poison still present — we never rescanned i=0.
+        assert pool[(1, 2)] == 999
+
+    def test_generate_manual_adaptive_call_gated_on_stop_strings(self):
+        """Fix #5 (structural): ``_generate_manual`` must gate the
+        ``_adaptive_stop_interval`` helper call on ``stop_strings``.
+
+        Previously the helper ran every iteration even when
+        ``stop_strings`` was None (the confidence history stayed empty,
+        the result was constant, and the periodic stop check below was
+        skipped anyway).  Structural test because the behaviour
+        requires a full GPU generation loop; the gate is the
+        contract.
+        """
+        import inspect
+        from enigma_engine.core.engine_generation import _GenerationMixin
+
+        src = inspect.getsource(_GenerationMixin._generate_manual)
+        # The helper call must now sit inside an ``if stop_strings:``
+        # block, not be unconditional.  Search for the pattern.
+        import re
+        m = re.search(
+            r"if\s+stop_strings\s*:\s*\n"
+            r"\s+check_interval\s*=\s*self\._adaptive_stop_interval\(",
+            src,
+        )
+        assert m is not None, (
+            "_generate_manual must gate _adaptive_stop_interval(...) "
+            "behind `if stop_strings:` so the no-stop-strings path "
+            "skips the per-iteration helper call entirely."
+        )
+
+
+# ════════════════════════════════════════════════════════════════════
+# Pass 156z9ff (Pass B) — _cancel_generation wired into all generation loops
+# ════════════════════════════════════════════════════════════════════
+
+class TestPassBCancelGenerationWiring:
+    """Pass 156z9ff (Pass B): close the signal-without-consumer
+    sibling-boundary dead-infra. ``_cancel_generation`` is set by
+    ``builtin_commands.stop_cmd`` (gated on ``_generation_lock.locked()``)
+    and consumed by every token-loop in the generation mixin via
+    ``_check_cancel()`` (read-and-clear)."""
+
+    def test_check_cancel_reads_and_clears(self):
+        """Helper has one-shot semantics: first True read clears the flag."""
+        from enigma_engine.core.engine_generation import _GenerationMixin
+
+        class Host:
+            _check_cancel = _GenerationMixin._check_cancel
+
+        host = Host()
+        # No attribute set yet -> False (getattr default).
+        assert host._check_cancel() is False
+        # Set True, first read returns True and clears.
+        host._cancel_generation = True
+        assert host._check_cancel() is True
+        assert host._cancel_generation is False
+        # Second read returns False (one-shot).
+        assert host._check_cancel() is False
+
+    def test_all_eight_generation_loops_check_cancel(self):
+        """Every token-generation loop must call ``self._check_cancel()``
+        and break out on True. Structural check — full GPU loops can't
+        run in unit tests, but the gate's presence at the start of each
+        loop body is the contract."""
+        from enigma_engine.core import engine_generation
+
+        src = inspect.getsource(engine_generation)
+
+        # Each loop has a unique log-line tag we can assert against:
+        expected_tags = [
+            "Generation cancelled by user at step",           # _generate_manual
+            "Stream generation cancelled by user",            # _stream_round_tokens
+            "Batch generation cancelled by user at step",     # batch_generate
+            "Vision generation cancelled by user at step",    # _generate_with_vision
+            "Speculative generation cancelled by user",       # speculative_generate
+            "Medusa generation cancelled by user",            # medusa_generate
+            "Self-consistent generation cancelled by user",   # self_consistent_generate
+            "Lookahead generation cancelled by user",         # lookahead_generate
+        ]
+        for tag in expected_tags:
+            assert tag in src, (
+                f"Loop tagged {tag!r} is missing its _check_cancel() gate. "
+                "Pass B requires every token-generation loop in the mixin "
+                "to consume the cancel signal."
+            )
+
+        # Sanity: the helper must exist on the mixin.
+        assert "def _check_cancel(self) -> bool:" in src
+
+    def test_stream_round_tokens_sets_terminated_on_cancel(self):
+        """Streaming break must communicate the cancel reason to caller
+        so ``stream_generate``'s outer round-loop sees ``terminated_on
+        == 'cancel'`` and exits instead of trying another splice round."""
+        from enigma_engine.core import engine_generation
+
+        src = inspect.getsource(engine_generation)
+        import re
+        m = re.search(
+            r'if self\._check_cancel\(\):\s*\n'
+            r'\s+if state is not None:\s*\n'
+            r'\s+state\["terminated_on"\] = "cancel"',
+            src,
+        )
+        assert m is not None, (
+            "_stream_round_tokens must set state['terminated_on'] = "
+            "'cancel' before breaking so the caller can distinguish "
+            "cancel from natural stop / max-tokens / search."
+        )
+
+
+# ════════════════════════════════════════════════════════════════════
 # S562 — PrefixKVCache.prompt_hash Removed
 # ════════════════════════════════════════════════════════════════════
 

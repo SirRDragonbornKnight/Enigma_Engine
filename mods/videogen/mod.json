@@ -2,7 +2,7 @@
     "name": "Video Generation Mod",
     "id": "videogen",
     "version": "1.0.0",
-    "description": "AI video generation from text prompts using AnimateDiff, built-in GIF fallback, or Replicate API",
+    "description": "AI video generation from text prompts using AnimateDiff or built-in GIF fallback",
     "author": "Enigma AI Engine",
     "port": 9903,
     "commands": [
@@ -14,7 +14,7 @@
                 "frames": {"type": "integer", "required": false, "default": 16, "description": "Number of frames to generate"},
                 "width": {"type": "integer", "required": false, "default": 256, "description": "Video width in pixels"},
                 "height": {"type": "integer", "required": false, "default": 256, "description": "Video height in pixels"},
-                "provider": {"type": "string", "required": false, "description": "Provider to use (builtin, animatediff, replicate)"}
+                "provider": {"type": "string", "required": false, "description": "Provider to use (builtin, animatediff)"}
             }
         },
         {
@@ -52,7 +52,7 @@
         "widgets": [
             {"type": "text_area", "id": "prompt", "label": "Video Prompt", "placeholder": "Describe the video you want to generate..."},
             {"type": "number_input", "id": "frames", "label": "Frames", "default": 16, "min": 4, "max": 120},
-            {"type": "dropdown", "id": "provider", "label": "Provider", "options": ["builtin", "animatediff", "replicate"]},
+            {"type": "dropdown", "id": "provider", "label": "Provider", "options": ["builtin", "animatediff"]},
             {"type": "button", "id": "generate", "label": "Generate", "command": "generate"}
         ]
     },

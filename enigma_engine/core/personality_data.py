@@ -225,7 +225,14 @@ def passes_identity_filter(text: str) -> bool:
 # is almost always a teacher refusing to play the personality card.
 _REFUSAL_OPENERS: tuple[str, ...] = (
     "i cannot",
-    "i can't help",
+    # Pass 156z9eo: narrowed from bare ``"i can't help"`` which
+    # collided with the English idiom "I can't help but [feel/
+    # smile/notice/...]" — opposite meaning of refusal.  Real
+    # refusals almost always say "I can't help you" or "I can't
+    # help with" (the rare "Sorry, I can't help" form is already
+    # caught by the "sorry, i can" opener below).
+    "i can't help you",
+    "i can't help with",
     "i can not",
     "i won't",
     "i will not",

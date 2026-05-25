@@ -218,7 +218,13 @@ class ModelContext:
 
             logger.info(
                 "Loaded context for model: %s", self.model_key)
-        except (json.JSONDecodeError, OSError) as exc:
+        except (json.JSONDecodeError, OSError, ValueError, TypeError) as exc:
+            # Pass 156z9em: ``ValueError``/``TypeError`` cover value
+            # corruption inside otherwise-valid JSON (e.g. non-numeric
+            # ``emotional_state`` entries hitting ``float()``).  Sibling
+            # ``_load_history`` already defends per-row; this site was
+            # drifted — corruption would crash ``load()`` instead of
+            # degrading to defaults.
             logger.warning(
                 "Failed to load context for %s: %s",
                 self.model_key, exc)
