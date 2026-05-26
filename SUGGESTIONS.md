@@ -1,5 +1,51 @@
 # Suggestions
 
+## 2.1-avatar-deadfile slice stamp (May 26, 2026) — FINISHED
+
+**Trigger.** Self-audit on the 2.1-voice slice ran the §1 #19 sibling-boundary sweep across `mods/` and surfaced two findings the 4.1 audit (this file, below) had under-claimed: (a) the `enigma_avatar/` package was tagged **FINISHED** + "the live implementation" while the launcher at `enigma_engine/gui/gui_mods.py::_launch_mod` L32-35 requires `mods/<mod>/main.py` and the package put its entry point at `mods/avatar/enigma_avatar/main.py` — one directory too deep, **unreachable from the GUI**; (b) `enigma_avatar_brick.py` and the `enigma_avatar/` package were *both* dead infra, not just brick. Cross-workspace grep for `enigma_avatar|AvatarBrick|mods\.avatar` returned **43 matches, zero in `enigma_engine/`** — only self-references inside `mods/avatar/` plus doc mentions. Same anti-pattern family as §4 Pass 156z2 *"grep the consumer ITSELF for production callers"* — the 4.1 audit graded each implementation in isolation without walking the launcher → mod chain.
+
+**Anti-pattern.** §4 *"Dead-end ≠ trash — three-axis disposition score (code quality / completeness / uniqueness)"*: both implementations scored low on completeness (no renderer; `pyproject.toml` declared `PyOpenGL` but no `.py` ever imported it) and zero on reachability (wrong launcher path, wrong wire protocol — newline-framed JSON vs `mod_base.py`'s 4-byte length prefix), but **medium-high on uniqueness** for one piece only: the 19-row anatomically-real `STANDARD_BONE_LIMITS` table (head, neck, spine, chest, hips, L+R shoulder/arm/forearm/hand, L+R leg/shin/foot). Salvage that table as static data, kill everything else. User authorized verbatim: *"lets do b for now because we are doing something else overall and do not want to be destracted"* — Option B = data-salvage kill, no parallel Option-C renderer work.
+
+**Killed (~2167 LOC across 9 files + 2 empty dirs).**
+- `mods/avatar/enigma_avatar_brick.py` (1041 LOC) — IntEnum protocol drift, no renderer, no tests, zero callers.
+- `mods/avatar/enigma_avatar/` package (1126 LOC across 6 files): `__init__.py`, `main.py`, `protocol.py`, `core/__init__.py`, `core/bones.py`, `core/model.py` — string-Enum protocol drift, no renderer, `main.py` one folder too deep for the launcher convention.
+- `mods/avatar/pyproject.toml` — declared unused `PyOpenGL>=3.1.0` and a broken `[project.scripts] enigma-avatar = "enigma_avatar.main:main"` console-script.
+- `mods/avatar/test_brick.py` — hardcoded absolute path, imported the now-deleted package.
+- `mods/avatar/__pycache__/` — bytecode for the deleted code.
+- `mods/avatar/data/avatar/models/` — empty duplicate of `data/avatar/models/`.
+
+**Salvaged (1 file, ~3.8 KB).**
+- `mods/avatar/bone_limits.json` — JSON dump of the 19-bone × 6-axis anatomy table + `default` record (±45/±45/±30/speed=60). Schema documented inline (`_schema` key). Stored next to `mod.json` because `data/*` is `.gitignore`d — verified with `git check-ignore -v` before placement.
+
+**Rewrites (3 files, stubbed).**
+- `mods/avatar/mod.json` — version `1.0.0` → `0.0.0` with `"status": "stub"`. Stripped all 11 commands (load/show/hide/bone/reset/expression/speak/position/scale/info/bones), stripped UI widgets, dropped port 9910 reservation, dropped `default_model`/`window_width`/`window_height` settings. Honest description points at `bone_limits.json` survival.
+- `mods/avatar/README.md` — replaced "Standalone avatar display and control" claims with a STUB notice that lists why both old implementations were killed (launcher mismatch, wire-protocol drift, no renderer, 2167 LOC unreachable), what survived (the anatomy table), and the 5-step revival path (main.py at the right depth, real `mod_base.py` protocol, renderer pick, quaternion bone controller, load `bone_limits.json`).
+
+**Files touched (3 new / 3 rewritten / 9 deleted / 2 dirs removed).**
+- NEW: `mods/avatar/bone_limits.json`, `tests/test_avatar_bone_data.py`, plus 1 Learned Principle added to `AA code maker.md` § Auditing ("Dead-end ≠ trash — three-axis disposition score") folded into this commit.
+- REWRITTEN: `mods/avatar/mod.json`, `mods/avatar/README.md`, plus this SUGGESTIONS.md stamp + retraction in the 4.1 audit section + correction at the bottom-of-file capability table.
+- DELETED: 7 source files + `pyproject.toml` + `test_brick.py` + `__pycache__/` + `mods/avatar/data/`.
+
+**Test discipline (§4 lessons applied).**
+- 5 tests in `tests/test_avatar_bone_data.py`: `test_top_level_shape`, `test_default_limits_well_formed`, `test_all_expected_bones_present` (set-equality, catches both missing AND extra bones — §4 *adversarial-set* discipline), `test_every_bone_has_valid_ranges` (per-axis `min ≤ max` + positive speed_limit on all 19 bones + default), `test_anatomical_invariants` (knees only flex backward, elbows only flex forward, hands mirror on yaw — §4 *behavioural invariant* discipline, catches data-corruption a structural shape test would miss).
+- No structural-only `inspect.getsource` tests — the data IS the artifact; tests load and validate the real file.
+
+**Acceptance chain (§1 #20).** "Slice is FINISHED, not parked": (1) the salvaged data is reachable — `mods/avatar/bone_limits.json` is committed (verified `git check-ignore` returns false at this path); (2) the surviving artifact has a real consumer — `tests/test_avatar_bone_data.py` loads + validates it on every suite run; (3) the dead code is gone from disk (verified `Get-ChildItem mods/avatar` returns only `bone_limits.json` + `mod.json` + `README.md`); (4) the docstring/README/mod.json claims match the code — all three say "stub", "no working implementation"; no over-promise anywhere. **Not parked**: there is no kwarg-without-passer, no signal-without-consumer, no FSM-without-driver. The mod is honestly dead; the data is honestly alive.
+
+**Six-question self-audit (§1 #19).**
+1. Would I write it this way? Yes — kill the unreachable, preserve the only uniquely-valuable piece (anatomy data is referenced by Mixamo / VRM / OpenPose specs, not trivial to reconstruct).
+2. Connections — `bone_limits.json` lives next to `mod.json` because `data/*` is `.gitignore`d; verified before placement. Test path resolves via `Path(__file__).resolve().parents[1] / "mods" / "avatar" / "bone_limits.json"`.
+3. Missing connections — none, because the consumer (the future Option-C renderer) doesn't exist yet. The data sits in a known location with a documented schema; whoever picks up Option C reads it. README names the path explicitly, mod.json description names the path explicitly.
+4. Logic-eye — claim ("anatomical bone limits, 19 bones, validated") matches code (JSON has 19 bones, test enforces shape + invariants); no over-promise. Test `test_anatomical_invariants` proves the salvaged numbers ARE anatomical, not just well-formed.
+5. Claim-vs-test — every test calls `json.loads(DATA_PATH.read_text(...))` and asserts on real values; no structural-only gates. Adversarial: `test_all_expected_bones_present` checks BOTH missing AND extra (a regression that renames `head` → `skull` AND adds `skull` would fail on the extra-check).
+6. Sibling-boundary sweep — grep `recognize_google|api\.openai\.com|api\.replicate\.com|elevenlabs|api-inference\.huggingface|enigma_avatar` across `mods/` and `enigma_engine/`: zero cloud calls anywhere, zero dangling avatar references. The cloud-purge family AND the dead-avatar-infra family are both closed.
+
+**Verification.** Ruff clean (run pre-stamp on `enigma_engine/` + `tests/`). Suite: 5 new tests pass in 0.04s; full suite re-run pending commit (target: 3283 + 5 = 3288 passed, 3 skipped). `Get-ChildItem mods/avatar` post-delete shows `bone_limits.json`, `mod.json`, `README.md` only — disk truth verified per §4 *"Disk truth > stamp truth"*.
+
+**Closed.** 2.1-avatar-deadfile. The 4.1 audit section below has been retracted in place to match disk reality.
+
+---
+
 ## 2.1-voice slice stamp (May 26, 2026) — FINISHED
 
 **Trigger.** Self-audit on the 2.1-transcriber slice (commit `2f2e964`) ran the §1 #19 Q6 sibling-boundary sweep AFTER ship and found `mods/voice/voice.py` carried the SAME `recognize_google()` cloud exfiltration that 2.1-transcriber had just killed, plus a parallel-impl drift (pyttsx3 TTS vs the canonical Kokoro-82M `LocalTTS` already shipped in `mods/audiogen/audiogen.py`). User authorized the full rewrite verbatim: *"i do not care about cheaper. update the files to where it needs to be."*
@@ -61,27 +107,31 @@
   4. Vosk — older, lower quality. Lose.
   5. SpeechRecognition+Google — **CURRENT, REJECTED** (cloud violation).
 
-### Avatar — Two parallel implementations (dead-infra finding)
+### Avatar — Two parallel implementations (dead-infra finding) — **[RETRACTED — see 2.1-avatar-deadfile stamp above]**
+
+> **Retraction (May 26, 2026):** This subsection was wrong on disposition. It correctly identified `enigma_avatar_brick.py` as dead but incorrectly tagged the `enigma_avatar/` package as "the live implementation" + **FINISHED**. The package was ALSO unreachable from the GUI launcher (wrong `main.py` depth, wrong wire protocol, no renderer). Both implementations were killed in slice 2.1-avatar-deadfile; the 19-row anatomical bone-limits table was salvaged to `mods/avatar/bone_limits.json`. The original text is left below for audit history only — do not act on it.
 
 `mods/avatar/` contains TWO avatar systems side-by-side:
 
-1. `mods/avatar/enigma_avatar/` — proper package (main.py + protocol.py + core/bones.py + core/model.py). Wired by pyproject.toml `[project.scripts] enigma-avatar = "enigma_avatar.main:main"` and `mods/avatar/test_brick.py`. **This is the live implementation.**
+1. `mods/avatar/enigma_avatar/` — proper package (main.py + protocol.py + core/bones.py + core/model.py). Wired by pyproject.toml `[project.scripts] enigma-avatar = "enigma_avatar.main:main"` and `mods/avatar/test_brick.py`. ~~**This is the live implementation.**~~ **Wrong** — the launcher requires `mods/<mod>/main.py` not `mods/<mod>/<pkg>/main.py`. Console-script entry was never wired into the GUI.
 2. `mods/avatar/enigma_avatar_brick.py` — 900+ LOC single-file rewrite. Zero callers outside its own usage docstring. Grep across the whole workspace: only matches are its own self-references. **Dead infra** per §4 "infrastructure without consumers is dead code."
 
-- **Disposition:** Parked, kill candidate. Awaiting user promote-to-slice (call it 2.1-avatar-deadfile) before deleting per §1 operational-safety on uncommitted work.
-- The live `enigma_avatar/` package shows no silent-fallback / wrong-default / cloud-call anti-patterns. Uses `pygltflib` (local), `PyQt5` (optional [qt] extra). Real local capability. Tagged **FINISHED**.
+- **Disposition:** ~~Parked, kill candidate.~~ **KILLED 2.1-avatar-deadfile (May 26, 2026).**
+- ~~The live `enigma_avatar/` package shows no silent-fallback / wrong-default / cloud-call anti-patterns. Uses `pygltflib` (local), `PyQt5` (optional [qt] extra). Real local capability. Tagged **FINISHED**.~~ **Retracted** — the package was unreachable. Tagged **KILLED**.
 
-### Avatar — mod.json capability claims match disk
+### Avatar — mod.json capability claims match disk — **[RETRACTED — see 2.1-avatar-deadfile stamp above]**
 
-Cross-checked the 11 commands declared in `mods/avatar/mod.json` against `enigma_avatar/main.py` handlers and `core/bones.py` + `core/model.py` implementations. All present. No "doc claims more than code delivers" (§4 Pass 156s) anti-pattern. Tagged **FINISHED**.
+> **Retraction (May 26, 2026):** The 11 declared commands matched handlers *inside* `enigma_avatar/main.py`, but `enigma_avatar/main.py` was never reached by the GUI launcher (wrong path) and never spoke the real `mod_base.py` socket protocol. So the commands "matched disk" only in the trivial sense that the handlers existed in source; they were not reachable in production. Tagged **KILLED**, not FINISHED. mod.json now stripped to the empty-command stub.
+
+Cross-checked the 11 commands declared in `mods/avatar/mod.json` against `enigma_avatar/main.py` handlers and `core/bones.py` + `core/model.py` implementations. All present. No "doc claims more than code delivers" (§4 Pass 156s) anti-pattern. ~~Tagged **FINISHED**.~~ **Retracted** — Tagged **KILLED**.
 
 ### 4.1 dispositions
 
 | Target | Status | Action |
 |---|---|---|
-| `mods/transcriber/` (cloud call) | **BROKEN** | Ship 2.1-transcriber NOW (faster-whisper swap) |
-| `mods/avatar/enigma_avatar/` (package) | **FINISHED** | None |
-| `mods/avatar/enigma_avatar_brick.py` (dead file) | **PARKED — kill candidate** | Open 2.1-avatar-deadfile slice, user promotes |
+| `mods/transcriber/` (cloud call) | **CLOSED** | 2.1-transcriber shipped (faster-whisper swap) |
+| `mods/avatar/enigma_avatar/` (package) | **KILLED 2.1-avatar-deadfile** | Deleted — unreachable from launcher |
+| `mods/avatar/enigma_avatar_brick.py` (dead file) | **KILLED 2.1-avatar-deadfile** | Deleted — anatomy data salvaged to `mods/avatar/bone_limits.json` |
 
 ### 2.1-transcriber — Cloud → faster-whisper swap (NEW SLICE, opened this pass)
 
@@ -5257,7 +5307,7 @@ Final files read and assessed:
 | [enigma_engine/core/model_merging.py](enigma_engine/core/model_merging.py) | SLERP + TIES + linear merge | Can merge specialists after training |
 | [enigma_engine/core/monologue.py](enigma_engine/core/monologue.py) | Heuristic coherence scorer + FORGE benchmark runner | Live via FORGE benchmark_btn |
 | [enigma_engine/core/adaptive_trainer.py](enigma_engine/core/adaptive_trainer.py) | TrainingPlan: basics→conv→commands→web curriculum | Adaptive pipeline exists, not yet used at scale |
-| [mods/avatar/](mods/avatar/) | Full avatar: BoneController (all joints), GLB/GLTF/OBJ loader | Production-ready bone rig, output format TBD |
+| [mods/avatar/](mods/avatar/) | STUB — only `bone_limits.json` (19-bone anatomical table) survives | Mod killed in 2.1-avatar-deadfile; needs renderer + protocol rebuild to revive |
 
 ---
 
