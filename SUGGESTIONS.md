@@ -1,5 +1,49 @@
 # Suggestions
 
+## 2.1-voice slice stamp (May 26, 2026) — FINISHED
+
+**Trigger.** Self-audit on the 2.1-transcriber slice (commit `2f2e964`) ran the §1 #19 Q6 sibling-boundary sweep AFTER ship and found `mods/voice/voice.py` carried the SAME `recognize_google()` cloud exfiltration that 2.1-transcriber had just killed, plus a parallel-impl drift (pyttsx3 TTS vs the canonical Kokoro-82M `LocalTTS` already shipped in `mods/audiogen/audiogen.py`). User authorized the full rewrite verbatim: *"i do not care about cheaper. update the files to where it needs to be."*
+
+**Anti-pattern.** Same family as §4 *"Self-audit on the diff is not coverage of the family — sibling-boundary sweep is mandatory"*: the 1.1 cloud-provider purge audit had grepped class names and missed both `recognize_google()` call sites (transcriber + voice). 2.1-transcriber closed one site, voice was the unclosed sibling.
+
+**Engine picks (mirror canonical project picks, not new tech).**
+- STT → `faster_whisper.WhisperModel` (mirrors `mods/transcriber/main.py`). Lazy import, INT8 on CPU / FP16 on CUDA via `_resolve_device`.
+- TTS (primary) → `kokoro.KPipeline` (mirrors `mods/audiogen/audiogen.py::LocalTTS`). 24 kHz output, 9 default voices, soundfile WAV writer.
+- TTS (opt-in fallback) → `SystemTTS` — OS-native SAPI / `say` / `espeak`. NOT a silent default; pipeline names the failure if `local` (Kokoro) drops out.
+
+**Killed.**
+- `SpeechRecognitionSTT` class — was `_recognizer.recognize_google(audio, language=...)` over the public internet on every `listen` and `transcribe` call.
+- `Pyttsx3TTS` class — parallel-impl drift vs audiogen's Kokoro path.
+- `speech_recognition` and `pyttsx3` imports + mod.json `dependencies` entries.
+- Argparse `--stt`/`--tts` choices that named the dropped engines.
+- UI dropdown `["pyttsx3", "system"]` → `["local", "system"]`.
+
+**Files touched (3).**
+- `mods/voice/voice.py` — full rewrite (~700 LOC). `WhisperSTT` + `LocalTTS` + `SystemTTS` + `VoicePipeline` (default `stt_provider="whisper"`, `tts_provider="local"`) + `Voice` service with command dispatch dict (17 commands, same surface as before minus dropped-engine artifacts). Self-contained raw-socket service, port 9907.
+- `mods/voice/mod.json` — version `1.1.0` → `2.0.0`. Description rewrites cloud claims to "100% local - no cloud calls". Dependencies `["pyttsx3"]` → `["faster_whisper", "kokoro", "sounddevice", "soundfile", "numpy"]`. Settings: `stt_engine: "whisper"`, `tts_engine: "local"`, `default_provider: "local"`, plus new keys `whisper_model`, `whisper_device`, `kokoro_voice`, `kokoro_lang_code`, `mic_sample_rate`, `mic_chunk_sec`.
+- `tests/test_core.py` — new `TestVoiceServiceDefaults` class (6 tests) inserted between `TestTranscriberServiceDefaults` and `TestVideoGenServiceDefaults`: `test_no_recognize_google_anywhere` (regex `\brecognize_google\s*\(` + `^\s*(import|from)\s+speech_recognition\b`), `test_no_pyttsx3_anywhere`, `test_uses_faster_whisper_and_kokoro`, `test_load_failure_surfaces_engine_names` (stubs both factories, asserts error list names both engines), `test_default_providers_are_local`, `test_mod_json_deps_and_settings`.
+
+**Test discipline notes (§4 lessons applied this pass).**
+- `_load_voice_module()` helper registers the spec in `sys.modules` BEFORE `exec_module(...)` — required so `@dataclass` can resolve `cls.__module__.__dict__` during `_process_class` on a file loaded via `spec_from_file_location`.
+- `test_no_recognize_google_anywhere` triggered the §4 *"self-narration satisfies negative-presence assertions"* anti-pattern on round 1 — the new docstring narrated the killed API by name, satisfying the negative-presence gate from inside a docstring. Fixed by rewriting the docstring to reference "cloud STT" without naming the dropped function. The pattern recurs across every kill-stamp; logged in §4 already (Pass 156z9cs round 2).
+
+**Acceptance chain (production-entry → new code, §1 #20).**
+`Mod loader reads mods/voice/mod.json` (deps gate) → `python -m mods.voice.main` or socket on `127.0.0.1:9907` → `Voice.__init__(stt_provider="whisper", tts_provider="local")` → `_cmd_listen` / `_cmd_transcribe` → `WhisperSTT.transcribe(...)` → `faster_whisper.WhisperModel`. AND: `_cmd_speak` / `_cmd_generate_audio` → `LocalTTS.speak/generate_to_file` → `kokoro.KPipeline`. Chain walked end-to-end; no half-wired contracts.
+
+**Six-question self-audit (§1 #19).**
+1. Would I write it this way? Yes — composition of two already-canonical engine modules behind one socket is the legitimate value-add over having callers wire transcriber + audiogen separately.
+2. Connections — STT mirrors transcriber, TTS mirrors audiogen, both lazy-imported, no cross-mod imports from voice.py (self-contained per project pattern).
+3. Missing connections — none. Both engines are wired through `VoicePipeline._make_stt`/`_make_tts` factories; the `load_provider`/`unload_provider`/`set_default` commands cover the runtime-switch surface; argparse + mod.json + UI dropdown all advertise the same provider set.
+4. Logic-eye — docstring says "100% local, no cloud calls"; code has no socket calls to external hosts, no API key fields, no `urllib`/`requests`/`httpx`/`openai`/`google` imports anywhere in the file. Claim matches code.
+5. Claim-vs-test — `test_no_recognize_google_anywhere` is a behavioural negative-presence gate (regex, not substring); `test_load_failure_surfaces_engine_names` is a behavioural test that constructs a real `VoicePipeline`, stubs both factories, calls `.load()`, and inspects the returned error list. Not structural-only.
+6. Sibling-boundary sweep — `grep -rn "recognize_google\|api\.openai\.com\|api\.replicate\.com\|elevenlabs\|api-inference\.huggingface" mods/` returned **zero** matches. The cloud-purge family is now closed across the whole `mods/` tree.
+
+**Verification.** Ruff clean (`ruff check enigma_engine/ tests/ mods/voice/`). Suite **3283 passed, 3 skipped in 52.53s** (was 3277 / 3 — +6 new voice tests, no regressions). Manifest version bumped 1.1.0 → 2.0.0 to signal the breaking dependency change for any consumer pinning `pyttsx3`.
+
+**Closed.** 2.1-voice. Cloud-call family fully closed across `mods/`.
+
+---
+
 ## 4.1 AUDIT — Avatar + transcriber findings (May 25, 2026)
 
 **Scope:** Read-only investigation per slice 4.1 of REALIGN-1.2-CORRECTION. Two mods characterised, three findings (one CRITICAL).

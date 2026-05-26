@@ -648,6 +648,174 @@ class TestTranscriberServiceDefaults:
             f"got {deps!r}")
 
 
+class TestVoiceServiceDefaults:
+    """2.1-voice slice (May 26 2026): killed cloud `recognize_google()`
+    exfiltration path (4.1 audit sibling-boundary miss - voice.py was the
+    second cloud-call site after transcriber). Aligned engines with sibling
+    mods: STT -> faster-whisper (mirrors transcriber), TTS -> Kokoro-82M
+    (mirrors audiogen.LocalTTS). Dropped openai-whisper, SpeechRecognition,
+    and pyttsx3 - all replaced by canonical local engines."""
+
+    @staticmethod
+    def _voice_source() -> str:
+        from pathlib import Path
+        return (
+            Path(__file__).resolve().parent.parent
+            / "mods" / "voice" / "voice.py"
+        ).read_text(encoding="utf-8")
+
+    @staticmethod
+    def _load_voice_module():
+        """Load mods/voice/voice.py for behavioural inspection."""
+        import importlib.util
+        import sys
+        from pathlib import Path
+        mod_dir = Path(__file__).resolve().parent.parent / "mods" / "voice"
+        added = False
+        if str(mod_dir) not in sys.path:
+            sys.path.insert(0, str(mod_dir))
+            added = True
+        try:
+            spec = importlib.util.spec_from_file_location(
+                "voice_service", mod_dir / "voice.py"
+            )
+            assert spec is not None and spec.loader is not None
+            mod = importlib.util.module_from_spec(spec)
+            # Register in sys.modules BEFORE exec_module so @dataclass can
+            # resolve cls.__module__ during _process_class.
+            sys.modules[spec.name] = mod
+            try:
+                spec.loader.exec_module(mod)
+            except Exception:
+                sys.modules.pop(spec.name, None)
+                raise
+            return mod
+        finally:
+            if added:
+                sys.path.remove(str(mod_dir))
+
+    def test_no_recognize_google_anywhere(self):
+        """The cloud path 4.1 audit caught at L162+L190 must stay killed.
+        Adversarial gate on the CALL form per the negative-presence rule
+        (substring scan would self-trigger on any future audit comment
+        that names the killed API)."""
+        import re
+        src = self._voice_source()
+        assert not re.search(r"\brecognize_google\s*\(", src), (
+            "recognize_google() is a cloud call (Google Speech API) and "
+            "was killed in 2.1-voice - regression re-introduces data "
+            "exfiltration on every listen + transcribe call")
+        assert not re.search(r"^\s*import\s+speech_recognition\b", src, re.M), (
+            "speech_recognition is the carrier package for recognize_google "
+            "- must stay out of the voice mod")
+        assert not re.search(r"^\s*from\s+speech_recognition\b", src, re.M), (
+            "speech_recognition is the carrier package for recognize_google "
+            "- must stay out of the voice mod")
+
+    def test_no_pyttsx3_anywhere(self):
+        """Pyttsx3TTS was dropped in favour of Kokoro (LocalTTS) to align
+        with audiogen.py. Regression to pyttsx3 = parallel-impl drift."""
+        import re
+        src = self._voice_source()
+        assert not re.search(r"^\s*import\s+pyttsx3\b", src, re.M), (
+            "pyttsx3 was replaced by Kokoro (LocalTTS) in 2.1-voice")
+        assert not re.search(r"^\s*from\s+pyttsx3\b", src, re.M), (
+            "pyttsx3 was replaced by Kokoro (LocalTTS) in 2.1-voice")
+        assert not re.search(r"\bpyttsx3\.init\s*\(", src), (
+            "pyttsx3.init() call signals a regression to the dropped engine")
+
+    def test_uses_faster_whisper_and_kokoro(self):
+        """STT path must wire faster_whisper.WhisperModel and TTS path
+        must wire kokoro.KPipeline. Source-level gate covers both engines
+        in one assertion family (mirrors transcriber + audiogen contracts)."""
+        src = self._voice_source()
+        assert "from faster_whisper import WhisperModel" in src, (
+            "voice mod must use faster_whisper for STT (mirrors transcriber)")
+        assert "from kokoro import KPipeline" in src, (
+            "voice mod must use kokoro KPipeline for TTS (mirrors audiogen)")
+
+    def test_load_failure_surfaces_engine_names(self):
+        """When neither engine can load, the pipeline load result must
+        name BOTH failing engines in the error list - not silently no-op
+        or fall back to a cloud path. Mirrors the load-failure contract
+        from 2.1-transcriber and 2.1-audiogen."""
+        mod = self._load_voice_module()
+        pipeline = mod.VoicePipeline(
+            stt_provider="whisper", tts_provider="local"
+        )
+        # Force both engines to fail by stubbing the factories.
+
+        class _FailSTT:
+            def load(self):
+                return False
+
+            def unload(self):
+                pass
+
+        class _FailTTS:
+            def load(self):
+                return False
+
+            def unload(self):
+                pass
+
+        pipeline._make_stt = lambda name: _FailSTT()
+        pipeline._make_tts = lambda name: _FailTTS()
+        result = pipeline.load()
+        assert result["success"] is False
+        joined = " | ".join(result.get("errors", [])).lower()
+        assert "faster-whisper" in joined or "whisper" in joined, (
+            f"stt load failure must name faster-whisper, got: {result!r}")
+        assert "kokoro" in joined, (
+            f"tts load failure must name kokoro, got: {result!r}")
+
+    def test_default_providers_are_local(self):
+        """Behavioural gate: VoicePipeline defaults must be whisper (STT)
+        and local/Kokoro (TTS) - NOT the dropped pyttsx3 or speech_recognition
+        defaults. Catches a regression where someone reverts the defaults
+        without touching the engine code."""
+        mod = self._load_voice_module()
+        pipeline = mod.VoicePipeline()
+        assert pipeline.stt_provider == "whisper", (
+            f"default STT must be 'whisper', got {pipeline.stt_provider!r}")
+        assert pipeline.tts_provider == "local", (
+            f"default TTS must be 'local' (Kokoro), "
+            f"got {pipeline.tts_provider!r}")
+        # The dropped provider names must NOT be in the supported lists.
+        assert "pyttsx3" not in pipeline.list_tts_providers()
+        assert "speech" not in pipeline.list_stt_providers()
+        assert "google" not in pipeline.list_stt_providers()
+
+    def test_mod_json_deps_and_settings(self):
+        """mod.json must advertise faster_whisper + kokoro as runtime deps,
+        and settings.default_provider must be 'local'. Gates regression at
+        the manifest layer (mirrors transcriber manifest gate)."""
+        import json
+        from pathlib import Path
+        manifest = json.loads((
+            Path(__file__).resolve().parent.parent
+            / "mods" / "voice" / "mod.json"
+        ).read_text(encoding="utf-8"))
+        deps = manifest.get("dependencies", [])
+        assert "faster_whisper" in deps, (
+            f"mod.json deps must include faster_whisper, got {deps!r}")
+        assert "kokoro" in deps, (
+            f"mod.json deps must include kokoro, got {deps!r}")
+        assert "pyttsx3" not in deps, (
+            f"pyttsx3 dep must be removed (parallel-impl drift killed), "
+            f"got {deps!r}")
+        assert "speech_recognition" not in deps, (
+            f"speech_recognition dep must be removed (cloud path killed), "
+            f"got {deps!r}")
+        settings = manifest.get("settings", {})
+        assert settings.get("default_provider") == "local", (
+            f"default_provider must be 'local', got {settings!r}")
+        assert settings.get("stt_engine") == "whisper", (
+            f"stt_engine must be 'whisper', got {settings!r}")
+        assert settings.get("tts_engine") == "local", (
+            f"tts_engine must be 'local', got {settings!r}")
+
+
 class TestVideoGenServiceDefaults:
     """2.1-videogen slice (May 25 2026): swapped AnimateDiff for CogVideoX-5B,
     flipped default builtin -> local, killed LocalVideo._fallback masquerade."""
