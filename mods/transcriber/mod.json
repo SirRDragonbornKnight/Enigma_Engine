@@ -2,7 +2,7 @@
     "name": "Transcriber",
     "id": "transcriber",
     "version": "1.0.0",
-    "description": "Audio/video transcription using speech recognition. Transcribes audio files, video files, and live microphone input to text.",
+    "description": "Local audio/video transcription via faster-whisper. Transcribes audio/video files and live mic input. Fully offline.",
     "author": "Enigma Engine",
     "port": 9920,
     "commands": [
@@ -43,9 +43,12 @@
         ]
     },
     "prompt": "For transcription tasks, use: mod.send transcriber transcribe <file_path> or mod.send transcriber listen to start live mic transcription.",
-    "dependencies": ["speech_recognition"],
+    "dependencies": ["faster_whisper"],
     "settings": {
-        "energy_threshold": 300,
-        "language": "en-US"
+        "whisper_model": "base",
+        "whisper_device": "auto",
+        "language": "",
+        "mic_sample_rate": 16000,
+        "mic_chunk_sec": 5.0
     }
 }

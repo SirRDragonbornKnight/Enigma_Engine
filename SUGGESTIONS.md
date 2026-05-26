@@ -1,4 +1,55 @@
-﻿# Suggestions
+# Suggestions
+
+## 4.1 AUDIT — Avatar + transcriber findings (May 25, 2026)
+
+**Scope:** Read-only investigation per slice 4.1 of REALIGN-1.2-CORRECTION. Two mods characterised, three findings (one CRITICAL).
+
+### Transcriber — CRITICAL: cloud-call disguised as local mod
+
+`mods/transcriber/main.py` calls `self._recognizer.recognize_google(audio, language=...)` at L73 (file transcribe) and L128 (live mic loop). `recognize_google()` is `speech_recognition.Recognizer.recognize_google()` — sends raw audio bytes to **Google's Speech Recognition Web API over the internet** using a free public key. This is a live cloud-exfiltration path on every transcribe + listen call.
+
+- **Severity:** Violates non-negotiable project constraint ("system must remain private, fully local/offline-capable, no cloud dependency, no external data leakage"). Same class as the 1.1 cloud-provider purge (`OpenAIImage` / `ReplicateImage` / `ElevenLabsTTS` / etc.) — that pass missed `recognize_google` because the audit grepped class names, not method calls.
+- **Disposition:** **KILL the cloud path + ship 2.1-transcriber** (opened below). Disk has only one transcription path; it has to be replaced, not just feature-gated.
+- **Engine pick at 16GB VRAM (trade study per §1 #11):**
+  1. **faster-whisper (CTranslate2 backend) — winner.** MIT licence, 4× faster than openai-whisper at equal quality, large-v3 fits in ~3GB VRAM, INT8/FP16 quant available for further reduction, supports both file + streaming-mic modes, well-maintained (SYSTRAN), CPU-only fallback.
+  2. openai-whisper — slower, ~3× the VRAM at same model size. Loses on speed.
+  3. whisper.cpp — C++ port, lowest VRAM but adds a build-system dep. Loses on integration cost.
+  4. Vosk — older, lower quality. Lose.
+  5. SpeechRecognition+Google — **CURRENT, REJECTED** (cloud violation).
+
+### Avatar — Two parallel implementations (dead-infra finding)
+
+`mods/avatar/` contains TWO avatar systems side-by-side:
+
+1. `mods/avatar/enigma_avatar/` — proper package (main.py + protocol.py + core/bones.py + core/model.py). Wired by pyproject.toml `[project.scripts] enigma-avatar = "enigma_avatar.main:main"` and `mods/avatar/test_brick.py`. **This is the live implementation.**
+2. `mods/avatar/enigma_avatar_brick.py` — 900+ LOC single-file rewrite. Zero callers outside its own usage docstring. Grep across the whole workspace: only matches are its own self-references. **Dead infra** per §4 "infrastructure without consumers is dead code."
+
+- **Disposition:** Parked, kill candidate. Awaiting user promote-to-slice (call it 2.1-avatar-deadfile) before deleting per §1 operational-safety on uncommitted work.
+- The live `enigma_avatar/` package shows no silent-fallback / wrong-default / cloud-call anti-patterns. Uses `pygltflib` (local), `PyQt5` (optional [qt] extra). Real local capability. Tagged **FINISHED**.
+
+### Avatar — mod.json capability claims match disk
+
+Cross-checked the 11 commands declared in `mods/avatar/mod.json` against `enigma_avatar/main.py` handlers and `core/bones.py` + `core/model.py` implementations. All present. No "doc claims more than code delivers" (§4 Pass 156s) anti-pattern. Tagged **FINISHED**.
+
+### 4.1 dispositions
+
+| Target | Status | Action |
+|---|---|---|
+| `mods/transcriber/` (cloud call) | **BROKEN** | Ship 2.1-transcriber NOW (faster-whisper swap) |
+| `mods/avatar/enigma_avatar/` (package) | **FINISHED** | None |
+| `mods/avatar/enigma_avatar_brick.py` (dead file) | **PARKED — kill candidate** | Open 2.1-avatar-deadfile slice, user promotes |
+
+### 2.1-transcriber — Cloud → faster-whisper swap (NEW SLICE, opened this pass)
+
+Mirrors the 2.1-audiogen / 2.1-codegen template:
+- Replace `_recognizer.recognize_google()` with `faster_whisper.WhisperModel.transcribe()` for both `cmd_transcribe` (file) and `_listen_loop` (mic).
+- Default model size: `base` (~140MB, fits CPU + ~1GB VRAM on GPU). User can override via mod.json settings `whisper_model`.
+- Compute type: `int8` on CPU, `float16` on CUDA (auto-detect).
+- Lazy-import: `_ensure_imports` returns False with hint "pip install faster-whisper" on ImportError; surfaces failing layer in transcribe/listen replies.
+- Update mod.json: dependencies `speech_recognition` → `faster_whisper`; add settings `whisper_model: "base"`, `whisper_device: "auto"`.
+- Tests in `tests/test_core.py` mirror 2.1-audiogen pattern.
+
+---
 
 ## � SESSION-AUDIT (May 25, 2026) — Tracker hygiene + lessons folded
 

@@ -553,6 +553,101 @@ class TestAudioGenServiceDefaults:
                 f"voice {v!r} does not match Kokoro naming (af_/am_/bf_/bm_)")
 
 
+class TestTranscriberServiceDefaults:
+    """2.1-transcriber slice (May 25 2026): killed cloud `recognize_google()`
+    exfiltration path (4.1 audit finding) and swapped SpeechRecognition for
+    local faster-whisper (CTranslate2). Default model 'base', auto device."""
+
+    @staticmethod
+    def _load_transcriber_module():
+        """Load mods/transcriber/main.py with its own mod_base import path."""
+        import importlib.util
+        import sys
+        from pathlib import Path
+        mod_dir = Path(__file__).resolve().parent.parent / "mods" / "transcriber"
+        # main.py does `from mod_base import ModClient` — its sibling.
+        added = False
+        if str(mod_dir) not in sys.path:
+            sys.path.insert(0, str(mod_dir))
+            added = True
+        try:
+            spec = importlib.util.spec_from_file_location(
+                "transcriber_service", mod_dir / "main.py"
+            )
+            assert spec is not None and spec.loader is not None
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return mod
+        finally:
+            if added:
+                sys.path.remove(str(mod_dir))
+
+    def test_no_recognize_google_anywhere(self):
+        """The cloud path that 4.1 audit caught must stay killed. Adversarial
+        gate via regex on the CALL form (per the negative-presence /
+        self-narration rule: substring scan would self-trigger on any future
+        historical comment that names the killed API)."""
+        import re
+        from pathlib import Path
+        src = (
+            Path(__file__).resolve().parent.parent
+            / "mods" / "transcriber" / "main.py"
+        ).read_text(encoding="utf-8")
+        # Match the call form only: `.recognize_google(` or `recognize_google(`.
+        assert not re.search(r"\brecognize_google\s*\(", src), (
+            "recognize_google() is a cloud call (Google Speech API) and was "
+            "killed in 2.1-transcriber - regression re-introduces "
+            "data exfiltration on every transcribe + listen call")
+        # Module-level import of the carrier package is also forbidden.
+        assert not re.search(r"^\s*import\s+speech_recognition\b", src, re.M), (
+            "speech_recognition import is the carrier for recognize_google - "
+            "must stay out of the transcriber mod")
+        assert not re.search(r"^\s*from\s+speech_recognition\b", src, re.M), (
+            "speech_recognition import is the carrier for recognize_google - "
+            "must stay out of the transcriber mod")
+
+    def test_uses_faster_whisper(self):
+        """LocalTranscriber path must wire faster_whisper.WhisperModel,
+        not openai-whisper or any other engine. Source-level gate."""
+        from pathlib import Path
+        src = (
+            Path(__file__).resolve().parent.parent
+            / "mods" / "transcriber" / "main.py"
+        ).read_text(encoding="utf-8")
+        assert "from faster_whisper import WhisperModel" in src, (
+            "transcriber must use faster_whisper (4.1 trade study winner: "
+            "MIT, 4x faster than openai-whisper at equal quality)")
+
+    def test_load_failure_surfaces_error_no_silent_fallback(self):
+        """When faster-whisper cannot be imported, cmd_transcribe must
+        return a clear error - not silently no-op or fall back to a
+        cloud/template path. Same anti-pattern as the prior 2.1 mods."""
+        mod = self._load_transcriber_module()
+        service = mod.TranscriberMod()
+        # Simulate ImportError path: _ensure_imports returns False.
+        service._ensure_imports = lambda: False
+        result = service.cmd_transcribe({"file_path": "anything.wav"})
+        low = result.lower()
+        assert "error" in low and "faster-whisper" in low, (
+            f"load-failure must name the failing engine, got: {result!r}")
+
+    def test_mod_json_dependency_is_faster_whisper(self):
+        """mod.json must advertise faster_whisper as the runtime dep,
+        not speech_recognition. Gates regression at the manifest layer."""
+        import json
+        from pathlib import Path
+        manifest = json.loads((
+            Path(__file__).resolve().parent.parent
+            / "mods" / "transcriber" / "mod.json"
+        ).read_text(encoding="utf-8"))
+        deps = manifest.get("dependencies", [])
+        assert "faster_whisper" in deps, (
+            f"mod.json dependencies must include faster_whisper, got {deps!r}")
+        assert "speech_recognition" not in deps, (
+            f"speech_recognition dep must be removed (cloud path killed), "
+            f"got {deps!r}")
+
+
 class TestVideoGenServiceDefaults:
     """2.1-videogen slice (May 25 2026): swapped AnimateDiff for CogVideoX-5B,
     flipped default builtin -> local, killed LocalVideo._fallback masquerade."""
