@@ -2894,6 +2894,55 @@ class TestInferenceDocstringHonesty:
         )
 
 
+class TestEncodePromptTokenRangeGuard:
+    """Runtime guard for tokenizer/model vocab mismatch before tensor move."""
+
+    def test_encode_prompt_rejects_out_of_range_token_ids(self):
+        import torch
+        from enigma_engine.core.inference import EnigmaEngine
+
+        class _Tok:
+            def encode(self, prompt, add_special_tokens=True):
+                return [1, 99]
+
+        class _Emb:
+            num_embeddings = 32
+
+        class _Model:
+            tok_embeddings = _Emb()
+
+        engine = EnigmaEngine.__new__(EnigmaEngine)
+        engine.tokenizer = _Tok()
+        engine.model = _Model()
+        engine.device = torch.device("cpu")
+
+        with pytest.raises(ValueError, match="vocabulary range"):
+            engine._encode_prompt("hello")
+
+    def test_encode_prompt_accepts_in_range_token_ids(self):
+        import torch
+        from enigma_engine.core.inference import EnigmaEngine
+
+        class _Tok:
+            def encode(self, prompt, add_special_tokens=True):
+                return [1, 2, 3]
+
+        class _Emb:
+            num_embeddings = 32
+
+        class _Model:
+            tok_embeddings = _Emb()
+
+        engine = EnigmaEngine.__new__(EnigmaEngine)
+        engine.tokenizer = _Tok()
+        engine.model = _Model()
+        engine.device = torch.device("cpu")
+
+        t = engine._encode_prompt("hello")
+        assert t.shape == (1, 3)
+        assert t.dtype == torch.long
+
+
 # ---------------------------------------------------------------------------
 # Pass after 156z9e — Stage B-2b per-prompt attribution for batch_generate
 # ---------------------------------------------------------------------------

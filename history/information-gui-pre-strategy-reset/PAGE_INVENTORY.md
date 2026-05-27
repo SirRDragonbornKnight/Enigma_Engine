@@ -49,7 +49,7 @@ Not classified by cutover wave because they are infrastructure. Each row gets a 
 | Module | Purpose | Port strategy | Notes |
 |---|---|---|---|
 | `widgets.py` | Custom widgets (CTk extensions, factory helpers) | **rewrite** | Qt/Tauri have first-class widget systems; hand-rolled CTk wrappers do not map 1-to-1. |
-| `themes.py` | Hand-rolled palette + atomic theme persistence | **rewrite** | Replaced by Qt stylesheet / Tauri CSS. Theme **persistence** logic (atomic write) is retained but moves to `enigma_engine/services/`. |
+| `themes.py` | Hand-rolled palette + atomic theme persistence | **rewrite** | Replaced by Qt stylesheet / Tauri CSS. Theme **persistence** logic (atomic write) is retained but moves to `enigma_engine/services/` `[DELETED dbc19ea, May 25 2026]`. |
 | `scanners.py` | Filesystem scanners (model registry, mods) | **direct port** | Pure logic. Already mostly framework-agnostic; lives behind a service. |
 | `media.py` | Image / media helpers for chat surface | **rewrite** | Qt and Tauri have native image-handling pipelines; the current PIL+CTk shim becomes redundant. |
 | `gui_logic.py` | Chat dispatch, command runner, RAG wiring (mixin-style) | **direct port → service** | Already mixin-style. Port the logic, replace direct `core.*` imports with service calls. |

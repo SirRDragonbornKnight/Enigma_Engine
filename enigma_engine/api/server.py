@@ -326,6 +326,32 @@ class AppState:
 
     # -- Engine management --------------------------------------------------
 
+    def _validate_loaded_engine_vocab_compatibility(self, engine: Any, model_path: str) -> None:
+        """Fail loud when tokenizer IDs can exceed model embedding rows.
+
+        This closes the class of failures where model load succeeds but the
+        first chat call on CUDA crashes with a device-side index assertion.
+        The runtime guard in ``EnigmaEngine._encode_prompt`` is the second
+        layer; this load-time gate is the first.
+        """
+        from enigma_engine.core.model_utils import (
+            get_model_vocab_limit,
+            get_tokenizer_vocab_size,
+        )
+
+        model_limit = get_model_vocab_limit(getattr(engine, "model", None))
+        tokenizer_size = get_tokenizer_vocab_size(getattr(engine, "tokenizer", None))
+        if model_limit is None or tokenizer_size is None:
+            return
+        if tokenizer_size > model_limit:
+            raise RuntimeError(
+                "Tokenizer/model vocabulary mismatch for "
+                f"{model_path}: tokenizer vocab_size={tokenizer_size} "
+                f"> model limit={model_limit}. "
+                "Refusing to load this checkpoint to prevent runtime "
+                "index errors during generation."
+            )
+
     def load_model(self, model_path: str) -> dict[str, Any]:
         """Load a model into the engine."""
         from enigma_engine.core import EnigmaEngine
@@ -335,6 +361,7 @@ class AppState:
 
         try:
             engine = EnigmaEngine(model_path=model_path)
+            self._validate_loaded_engine_vocab_compatibility(engine, model_path)
         except Exception:
             # Cleanup any partially loaded state
             try:
@@ -397,6 +424,7 @@ class AppState:
              top_p: float | None = None,
              top_k: int | None = None,
              repetition_penalty: float | None = None,
+             images: list[str] | None = None,
              json_schema: dict[str, Any] | None = None,
              system_prompt: str | None = None,
              conversation_id: str | None = None) -> tuple[str, str]:
@@ -444,6 +472,8 @@ class AppState:
             kwargs["top_k"] = top_k
         if repetition_penalty is not None:
             kwargs["repetition_penalty"] = repetition_penalty
+        if images is not None:
+            kwargs["images"] = images
         if json_schema is not None:
             kwargs["json_schema"] = json_schema
         if system_prompt is not None:
@@ -873,6 +903,10 @@ class ChatRequest(BaseModel):
     # would require a second SSE stream the existing
     # ``_inference_lock`` design doesn't support.
     web_access: bool = False
+    # Optional image file paths for visual context in non-streaming
+    # /api/chat requests. Streaming path rejects images loud until a
+    # token-streaming vision route exists.
+    images: list[str] | None = None
 
 class ChatResponse(BaseModel):
     message: str
@@ -1106,12 +1140,18 @@ async def chat(req: ChatRequest):
             response, conv_id = state.chat(
                 req.message,
                 conversation_id=req.conversation_id,
+                images=req.images,
                 **kw,
             )
         except KeyError:
             return JSONResponse(
                 status_code=404,
                 content={"error": f"Unknown conversation_id: {req.conversation_id}"},
+            )
+        except ValueError as exc:
+            return JSONResponse(
+                status_code=400,
+                content={"error": f"Invalid request: {exc}"},
             )
 
         # Stage A post-gen retry. Mirrors gui_logic_chat.py: if web
@@ -1199,6 +1239,13 @@ async def chat_stream(req: ChatRequest):
                 status_code=400,
                 content={"error": f"Invalid json_schema: {exc}"},
             )
+    if req.images:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": "images are not supported on /api/chat/stream yet; use /api/chat."
+            },
+        )
 
     # MC-1: fast 404 for explicit-but-unknown IDs before acquiring the
     # inference lock (no orphan risk — we don't create anything here).

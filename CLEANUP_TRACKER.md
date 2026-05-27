@@ -1,8 +1,35 @@
 # Code Cleanup Tracker
 
 **Started:** May 15, 2026
+**Status:** Paused — Strategy reset May 26 (see SUGGESTIONS.md). Cleanup resumes after SUGGESTIONS.md Block 2 (Gradio UI) is verified.
 **Scope:** All `.py` files in repo root, `enigma_engine/`, and `tests/`.
 **Out of scope:** `rust_extensions/target/`, `.venv314/`, `models/`, `data/`, `outputs/`, `temp_claw/`, generated stubs.
+
+## ⚠️ UPCOMING: GUI + Web UI deletion (unblocked once Gradio UI is verified — SUGGESTIONS.md Block 2)
+
+**Strategy reset May 26, 2026:** Both the tkinter GUI and the Svelte web frontend are replaced by a single Gradio UI (`enigma_engine/ui.py`). Delete both after Gradio is smoke-tested and functional.
+
+### Tkinter GUI — delete when Gradio UI is verified
+- ❌ `enigma_engine/gui/desktop.py` (1166 LOC, main tkinter GUI)
+- ❌ `enigma_engine/gui/gui_pages.py` (primary page builder)
+- ❌ `enigma_engine/gui/gui_forge.py` (training config builder)
+- ❌ `enigma_engine/gui/gui_forge_*.py` (specialized FORGE launchers, ~4 files)
+- ❌ `enigma_engine/gui/gui_cmd_page.py` (shell subprocess one-shot)
+- ❌ `enigma_engine/gui/gui_logic.py` (event handlers)
+- ❌ `enigma_engine/gui/gui_logic_chat.py` (chat integration)
+- ❌ `enigma_engine/gui/gui_mods.py` (mod launcher)
+- ❌ `enigma_engine/gui/widgets.py` (custom tkinter widgets)
+- ❌ `enigma_engine/gui/__init__.py` (GUI package)
+- ❌ Remove `customtkinter` from `pyproject.toml`
+- ❌ Update `enigma_engine/__init__.py` to remove GUI imports
+
+### Svelte web frontend — delete when Gradio UI is verified
+- ❌ `enigma_engine/web/` (entire directory — `package.json`, `vite.config.ts`, `src/App.svelte`, `src/pages/Chat.svelte`, `src/lib/api.ts`, `src/lib/store.ts`, `index.html`, `tsconfig*.json`)
+- ❌ Reason: Five pages were missing (`Training.svelte`, `Files.svelte`, `Models.svelte`, `Config.svelte`, `Terminal.svelte`), frontend is not buildable, TypeScript overhead not warranted while brain is incomplete. Replaced by Gradio.
+
+**Files preserved:**
+- ✅ `enigma_engine/gui/` directory itself — retained as a location for Gradio static assets if needed later
+- ✅ All core logic untouched (`enigma_engine/core/`, `enigma_engine/training/`, `enigma_engine/api/`)
 
 ## Cleanup Levels Applied (each file gets ALL of these)
 
@@ -164,19 +191,9 @@ After every file: `ruff check enigma_engine/ tests/` clean + `pytest tests/ -q` 
 | ✅ | [enigma_engine/gui/themes.py](enigma_engine/gui/themes.py) | 186 | 156z9ef | clean — frozen-dataclass theme registry |
 | ⬜ | [enigma_engine/gui/widgets.py](enigma_engine/gui/widgets.py) | 1083 | — | — |
 
-## enigma_engine/services (9 files — Phase 0c skeleton)
+## ~~enigma_engine/services~~ `[DELETED dbc19ea, May 25 2026]`
 
-| Status | File | Lines | Pass | Notes |
-|--------|------|-------|------|-------|
-| ✅ | [enigma_engine/services/__init__.py](enigma_engine/services/__init__.py) | 44 | 156z9ef | clean Phase 0c skeleton (docstring + `__all__`) |
-| ✅ | [enigma_engine/services/chat_state.py](enigma_engine/services/chat_state.py) | 27 | 156z9ef | clean — `load_context`, display-only `emotional_ranges` |
-| ✅ | [enigma_engine/services/documents.py](enigma_engine/services/documents.py) | 17 | 156z9ee | fixed return type `str` → `str \| None` honesty bug; removed false `TXT/MD/etc.` docstring claim |
-| ✅ | [enigma_engine/services/hardware.py](enigma_engine/services/hardware.py) | 18 | 156z9ef | clean Phase 0 `NotImplementedError` placeholder |
-| ✅ | [enigma_engine/services/inference.py](enigma_engine/services/inference.py) | 24 | 156z9ef | clean — thin forwarder to `EnigmaEngine` |
-| ✅ | [enigma_engine/services/model_lifecycle.py](enigma_engine/services/model_lifecycle.py) | 41 | 156z9ef | clean — `build_model` / `load_weights` / `get_state_dict` forwarders |
-| ✅ | [enigma_engine/services/persistence.py](enigma_engine/services/persistence.py) | 30 | 156z9ef | clean — forwards to `safe_save.atomic_*` |
-| ✅ | [enigma_engine/services/tokenization.py](enigma_engine/services/tokenization.py) | 26 | 156z9ef | clean — `get_tokenizer` / `load_bpe_tokenizer` |
-| ✅ | [enigma_engine/services/training_dispatch.py](enigma_engine/services/training_dispatch.py) | 24 | 156z9ef | clean Phase 0 `NotImplementedError` placeholder |
+Phase 0c skeleton was deleted as dead infra (no production callers). 9 files / ~250 LOC. Git history preserves the original work.
 
 ## enigma_engine/training (8 files)
 

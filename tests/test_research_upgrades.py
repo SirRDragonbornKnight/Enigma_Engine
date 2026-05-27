@@ -2658,6 +2658,81 @@ class TestCrossLayerKVSharing:
         assert logits2.shape == (1, 1, 128)
         model.clear_cache()
 
+    def test_kv_share_first_forward_no_crash(self):
+        """BUG-1: follower must not crash when source._kv_cache is None.
+
+        Scenario: source layer (the leader) hasn't warmed up yet, so its
+        ``_kv_cache`` is ``None``. The follower must not call ``.get()`` on
+        ``None``. Reproduced by directly invoking the follower's attention
+        forward with ``use_cache=True`` before the leader has been called.
+        """
+        import torch
+        from enigma_engine.core.model_presets import ForgeConfig
+        from enigma_engine.core.model import Enigma
+
+        config = ForgeConfig(
+            dim=64, n_heads=4, n_kv_heads=2, n_layers=4,
+            vocab_size=100, max_seq_len=64, kv_share_groups=2,
+        )
+        model = Enigma(config)
+        model.eval()
+
+        leader = model.layers[0].attention
+        follower = model.layers[1].attention
+        assert follower._kv_share_source is leader
+        assert leader._kv_cache is None, "leader must not have warmed up"
+
+        # Build the freqs_cis the layer needs.
+        from enigma_engine.core.model_components import precompute_rope_frequencies
+        head_dim = config.dim // config.n_heads
+        freqs_cis = precompute_rope_frequencies(
+            dim=head_dim, max_seq_len=8,
+            theta=config.rope_theta)
+
+        x = torch.randn(1, 4, config.dim)
+        # Before fix: AttributeError on None._kv_cache.get()
+        with torch.no_grad():
+            out = follower(x, freqs_cis=freqs_cis, mask=None,
+                           use_cache=True, start_pos=0)
+        assert out.shape == (1, 4, config.dim)
+
+    def test_kv_share_after_clear_cache_no_crash(self):
+        """BUG-1 sibling: follower must not crash mid-run if cache is cleared.
+
+        Real-world reproduction: ``clear_cache()`` sets every layer's
+        ``_kv_cache`` to None. A subsequent follower call before the
+        leader re-runs would crash on the same ``.get()`` access.
+        """
+        import torch
+        from enigma_engine.core.model_presets import ForgeConfig
+        from enigma_engine.core.model import Enigma
+
+        config = ForgeConfig(
+            dim=64, n_heads=4, n_kv_heads=2, n_layers=4,
+            vocab_size=100, max_seq_len=64, kv_share_groups=2,
+        )
+        model = Enigma(config)
+        model.eval()
+        # Warm up
+        x = torch.randint(0, 100, (1, 4))
+        with torch.no_grad():
+            model(x, use_cache=True, start_pos=0)
+        # Clear, then invoke follower directly before leader re-runs
+        model.clear_cache()
+        leader = model.layers[0].attention
+        follower = model.layers[1].attention
+        assert leader._kv_cache is None
+        from enigma_engine.core.model_components import precompute_rope_frequencies
+        head_dim = config.dim // config.n_heads
+        freqs_cis = precompute_rope_frequencies(
+            dim=head_dim, max_seq_len=8,
+            theta=config.rope_theta)
+        h = torch.randn(1, 4, config.dim)
+        with torch.no_grad():
+            out = follower(h, freqs_cis=freqs_cis, mask=None,
+                           use_cache=True, start_pos=0)
+        assert out.shape == (1, 4, config.dim)
+
 
 # ════════════════════════════════════════════════════════════════════
 # T3-2 — Self-Speculative Decoding (Early Exit)

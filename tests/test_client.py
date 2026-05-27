@@ -51,6 +51,21 @@ def test_chat_posts_message_and_returns_reply(monkeypatch: pytest.MonkeyPatch) -
     assert seen["body"]["web_access"] is True
 
 
+def test_chat_posts_images_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen = {}
+
+    def _fake_urlopen(req, timeout=0):
+        seen["body"] = json.loads(req.data.decode("utf-8"))
+        return _Resp(json.dumps({"message": "ok"}))
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+    client = EnigmaClient()
+    out = client.chat("describe", images=["data/avatar/images/default.png"])
+
+    assert out == "ok"
+    assert seen["body"]["images"] == ["data/avatar/images/default.png"]
+
+
 def test_chat_raises_on_missing_message_field(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("urllib.request.urlopen", lambda req, timeout=0: _Resp("{}"))
     client = EnigmaClient()

@@ -1993,3 +1993,62 @@ class TestDropPathBaseline:
         out = dp(x)
         assert torch.allclose(out, x)
 
+
+class TestQuantizationLogHonesty:
+    """BUG-2: quantization helpers must log the path they actually took."""
+
+    def test_static_int8_logs_dynamic_fallback(self, caplog):
+        """``_apply_static_int8_quantization`` falls back to dynamic when no
+        calibration data is wired; the log must say so, not claim
+        'Applied static INT8 quantization'."""
+        import logging
+        from enigma_engine.core.model import Enigma
+        from enigma_engine.core.model_presets import ForgeConfig
+
+        config = ForgeConfig(
+            dim=64, n_heads=4, n_kv_heads=2, n_layers=2,
+            vocab_size=100, max_seq_len=64,
+        )
+        model = Enigma(config)
+
+        caplog.set_level(logging.INFO, logger="enigma_engine.core.model")
+        model._apply_static_int8_quantization()
+
+        messages = [record.message for record in caplog.records]
+        # Honest: mentions the actual path that ran (dynamic fallback)
+        assert any("dynamic" in m.lower() for m in messages), (
+            f"static INT8 helper must log the dynamic-fallback path. Got: {messages}"
+        )
+        # Forbidden: blanket "Applied static INT8 quantization" claim
+        assert not any(
+            m == "Applied static INT8 quantization" for m in messages
+        ), f"Found dishonest 'Applied static INT8 quantization' log: {messages}"
+
+    def test_quantize_int8_does_not_claim_static_when_falling_back(
+            self, caplog):
+        """End-to-end: ``quantize('int8')`` must not log
+        'Applied static INT8 quantization' when the underlying helper
+        actually ran dynamic INT8."""
+        import logging
+        from enigma_engine.core.model import Enigma
+        from enigma_engine.core.model_presets import ForgeConfig
+
+        config = ForgeConfig(
+            dim=64, n_heads=4, n_kv_heads=2, n_layers=2,
+            vocab_size=100, max_seq_len=64,
+        )
+        model = Enigma(config)
+
+        caplog.set_level(logging.INFO, logger="enigma_engine.core.model")
+        try:
+            model.quantize("int8")
+        except Exception:
+            # Quantization may fail in CI environments — the log
+            # assertion still applies to whatever ran.
+            pass
+
+        messages = [record.message for record in caplog.records]
+        assert not any(
+            m == "Applied static INT8 quantization" for m in messages
+        ), f"quantize('int8') still claims 'static' on fallback: {messages}"
+

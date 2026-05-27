@@ -301,10 +301,77 @@ class TestShellMetacharNotBlocked:
         """shell command handler does not contain metacharacter blocking."""
         from enigma_engine.core.builtin_commands import register_builtin_commands
         source = inspect.getsource(register_builtin_commands)
-        # Find the shell command handler
-        shell_idx = source.index("ALLOWED_COMMANDS")
-        shell_body = source[shell_idx:shell_idx + 1000]
+        # Find the shell command handler. After the SAFE/CODE_EXEC
+        # split, anchor on the SAFE_COMMANDS literal which is unique
+        # to shell_cmd.
+        shell_idx = source.index("SAFE_COMMANDS")
+        shell_body = source[shell_idx:shell_idx + 1500]
         assert "Shell metacharacters are not allowed" not in shell_body
+
+
+class TestShellCodeExecGate:
+    """Security: python/pip/pytest defeat the whitelist by design and
+    must be gated behind an explicit ``allow_code_exec=True`` opt-in."""
+
+    def _shell_handler(self):
+        return _get_handler("shell")
+
+    def test_python_blocked_without_opt_in(self):
+        h = self._shell_handler()
+        ctx = {"cwd": "."}
+        result = h(["python", "-c", "print(1)"], ctx)
+        assert not result.success
+        assert "arbitrary code" in result.message.lower()
+
+    def test_pip_blocked_without_opt_in(self):
+        h = self._shell_handler()
+        ctx = {"cwd": "."}
+        result = h(["pip", "install", "requests"], ctx)
+        assert not result.success
+        assert "arbitrary code" in result.message.lower()
+
+    def test_pytest_blocked_without_opt_in(self):
+        h = self._shell_handler()
+        ctx = {"cwd": "."}
+        result = h(["pytest", "tests/"], ctx)
+        assert not result.success
+        assert "arbitrary code" in result.message.lower()
+
+    def test_safe_command_still_works_without_opt_in(self):
+        """Read-only commands (echo, dir, etc) still run without the flag."""
+        h = self._shell_handler()
+        ctx = {"cwd": "."}
+        result = h(["echo", "hello"], ctx)
+        # echo doesn't always exist on Windows shell=False; we only
+        # require that the whitelist DOESN'T reject it.
+        if not result.success:
+            assert "not in allowed list" not in result.message
+
+    def test_allow_code_exec_lets_python_through_gate(self, monkeypatch):
+        """When opt-in is set, the whitelist accepts python but the
+        underlying subprocess call is still subject to shell=False
+        and BLOCKED_PATTERNS. Verify the gate, not the subprocess."""
+        h = self._shell_handler()
+        ctx = {"cwd": ".", "allow_code_exec": True}
+        # Mock subprocess to avoid actually running python here.
+        import subprocess
+        called: dict = {}
+
+        def fake_run(*args, **kwargs):
+            called["args"] = args
+            class _R:
+                returncode = 0
+                stdout = "ok"
+                stderr = ""
+            return _R()
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        result = h(["python", "--version"], ctx)
+        assert result.success, (
+            "with allow_code_exec=True, python must pass the gate; "
+            f"got {result.message}"
+        )
+        assert called, "subprocess.run must have been called when gate opens"
 
 
 class TestRunCommandRemovedFromDefaults:

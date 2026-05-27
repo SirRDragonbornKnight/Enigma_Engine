@@ -37,7 +37,7 @@ Captured from direct reading of `enigma_engine/gui/` modules and from §4 Learne
 | P2 | **Hand-rolled theming via `themes.py` is non-standard and brittle.** Custom palette propagation per widget, `CTkEntry.configure(fg_color="transparent")` crashes (Learned Principle), `<Configure>` recursion if not debounced. | `enigma_engine/gui/themes.py`, multiple §4 entries about CTk quirks. | Documented. New shell should use a first-class theming system (Qt stylesheet / Tauri CSS). |
 | P3 | **Per-widget rebuild cost is high.** Tooltip dismissal needs watchdog timers, cursor-per-tag binding needs single `<Motion>` handler workaround, fixed-width labels clip text and require `grid_columnconfigure minsize`. | Multiple §4 entries. | Documented. |
 | P4 | **30+ direct `from enigma_engine.core.X` imports scattered across `enigma_engine/gui/*.py`** (all but one are deferred / lazy inside functions). This is the surface the Phase 0c service skeleton replaces. | Verified Pass 156z9df by `grep_search "^from enigma_engine\.core" enigma_engine/gui/*.py` (1 module-level) and `grep_search "from enigma_engine\.core"` recursively (200+ deferred). | Documented. Service skeleton lands in Phase 0c. |
-| P5 | **No clear engine ↔ GUI process boundary today.** GUI imports core directly and runs the engine in-process. Sibling-package decision (Enigma AI daemon + Enigma GUI client) implies a future IPC seam that does not exist yet. | [ARCH-1 in SUGGESTIONS.md](../../SUGGESTIONS.md). | Documented. The service contract is the precursor — once every GUI/API surface routes through `enigma_engine/services/`, swapping the in-process implementation for an IPC client is a single layer's worth of work. |
+| P5 | **No clear engine ↔ GUI process boundary today.** GUI imports core directly and runs the engine in-process. Sibling-package decision (Enigma AI daemon + Enigma GUI client) implies a future IPC seam that does not exist yet. | [ARCH-1 in SUGGESTIONS.md](../../SUGGESTIONS.md). | Documented. The service contract is the precursor — once every GUI/API surface routes through `enigma_engine/services/` `[DELETED dbc19ea, May 25 2026]`, swapping the in-process implementation for an IPC client is a single layer's worth of work. |
 
 ## 4. Decision gates (binary pass/fail, scored separately from the rubric)
 
@@ -96,6 +96,6 @@ Phase 1 scores each track against this rubric. Weights sum to 100%. Gates G1/G2/
 - [x] Option matrix lists all 5 with confidence-tagged sources.
 - [ ] [BASELINE.md](BASELINE.md) measured and numbers filled in (Phase 0b — measurement protocol shipped; numbers pending operator run).
 - [ ] [PAGE_INVENTORY.md](PAGE_INVENTORY.md) classification rows complete with drift-check appendix (Phase 0d).
-- [ ] `enigma_engine/services/` skeleton merged (Phase 0c).
+- [ ] `enigma_engine/services/` skeleton merged (Phase 0c). `[OBSOLETE: services/ deleted dbc19ea, May 25 2026; Strategy Reset May 26 2026 chose Gradio over CTk/Tauri tracks]`
 
 When all 9 boxes are checked, Phase 0 is closed and Phase 1 (POC bake-off) is unblocked.

@@ -360,6 +360,19 @@ class TestMaxGenAliases:
         result = engine.generate("hi", max_new_tokens=5)
         assert isinstance(result, str)
 
+    def test_generate_rejects_multiple_max_aliases(self):
+        """BUG-3: generate() must raise ValueError when caller passes more
+        than one of ``max_tokens`` / ``max_new_tokens`` / ``max_length`` to
+        match ``stream_generate()``. Previously last-wins silently."""
+        engine = _make_engine()
+        with pytest.raises(ValueError, match="Conflicting max-length aliases"):
+            engine.generate("hi", max_tokens=5, max_new_tokens=10)
+        with pytest.raises(ValueError, match="Conflicting max-length aliases"):
+            engine.generate("hi", max_tokens=5, max_length=10)
+        with pytest.raises(ValueError, match="Conflicting max-length aliases"):
+            engine.generate(
+                "hi", max_tokens=5, max_new_tokens=10, max_length=15)
+
 
 # ── Actual generation produces output ────────────────────────────────────────
 

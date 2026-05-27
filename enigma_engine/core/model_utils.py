@@ -302,3 +302,68 @@ def estimate_memory_usage(size: str, quantization: str = "none") -> dict[str, fl
             "inference_ram_mb": model_mb * 2.5,
             "training_ram_mb": model_mb * 5
         }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# VOCAB / EMBEDDING COMPATIBILITY HELPERS
+# ─────────────────────────────────────────────────────────────────────────────
+# Shared between AppState.load_model() (load-time gate) and
+# EnigmaEngine._encode_prompt() (per-prompt gate) to enforce the same
+# tokenizer/model contract. See AA code maker.md §4 "Token-ID bounds must
+# be validated before tensors hit CUDA."
+
+
+def get_model_vocab_limit(model: Any) -> Optional[int]:
+    """Return the model's token-id upper bound (exclusive), if known.
+
+    Preference order:
+    1. ``model.tok_embeddings.num_embeddings`` (actual embedding rows; this
+       is what CUDA reads during embedding lookup)
+    2. ``model.config.vocab_size`` (logical config value; fallback for
+       models that don't expose ``tok_embeddings`` directly)
+
+    Returns ``None`` when neither attribute is present — caller must
+    treat that as "skip the check" rather than "limit = 0".
+    """
+    if model is None:
+        return None
+
+    tok_embeddings = getattr(model, "tok_embeddings", None)
+    if tok_embeddings is not None:
+        num_embeddings = getattr(tok_embeddings, "num_embeddings", None)
+        if isinstance(num_embeddings, int) and num_embeddings > 0:
+            return num_embeddings
+
+    cfg = getattr(model, "config", None)
+    vocab_size = getattr(cfg, "vocab_size", None)
+    if isinstance(vocab_size, int) and vocab_size > 0:
+        return vocab_size
+
+    return None
+
+
+def get_tokenizer_vocab_size(tokenizer: Any) -> Optional[int]:
+    """Return tokenizer vocab size, if exposed.
+
+    Tries ``tokenizer.vocab_size`` first (attribute on most HF / Enigma
+    tokenizers), then falls back to a ``get_vocab_size()`` callable
+    (Rust BPE / SentencePiece wrappers). Returns ``None`` when neither
+    is available.
+    """
+    if tokenizer is None:
+        return None
+
+    vocab_size = getattr(tokenizer, "vocab_size", None)
+    if isinstance(vocab_size, int) and vocab_size > 0:
+        return vocab_size
+
+    getter = getattr(tokenizer, "get_vocab_size", None)
+    if callable(getter):
+        try:
+            size = getter()
+        except Exception:
+            return None
+        if isinstance(size, int) and size > 0:
+            return size
+
+    return None

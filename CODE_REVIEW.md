@@ -1,7 +1,196 @@
 ﻿# Code Review Tracker
 
 **Started:** March 24, 2026
-**Last pass:** Pass 156z9cn (May 2026) — **FORGE min_lr_ratio surfaced end-to-end from GUI to TrainingConfig across all active launchers.**
+**Last pass:** Deep audit pass (May 26, 2026) — **Full read-through of core/model_components, model, inference, engine_generation, engine_chat, rag, rag_dense, memory, auto_research, personality_data, personality_consistency, monologue, hardware_detection, reasoning. Bugs found and documented below.**
+
+## Priority Queue (Next Actions)
+
+**🔥 IMMEDIATE: Bugs found in deep audit (fix before next feature work)**
+
+- [ ] **CRITICAL — `model_components.py` L426:** Cross-layer KV sharing `_kv_share_source._kv_cache.get()` when `use_cache=True` on first forward → `_kv_cache` is `None` → `AttributeError`. Fix: guard `if self._kv_share_source._kv_cache is not None` before calling `.get()`, otherwise fall through to self-attention for that layer.
+- [ ] **MISLEADING LOG — `model.py` `_apply_static_int8_quantization()`:** Falls back silently to dynamic INT8 but logs `"Applied static INT8 quantization"`. Fix: log the actual path taken.
+- [ ] **INCONSISTENCY — `inference.py` `generate()`:** Multiple `max_tokens`/`max_new_tokens`/`max_length` aliases overwrite `max_gen` with last-wins semantics; `stream_generate()` was upgraded to raise `ValueError` for this case. Fix: align `generate()` to match `stream_generate()` behavior.
+
+**🟡 PERFORMANCE DEBT (known, not blocking)**
+
+- [ ] `batch_generate()` in `engine_generation.py` runs full O(n²) recompute per decode step (no `use_cache=True`). Document in TODO comment, fix when batch inference becomes a priority.
+- [ ] ToMe `_bipartite_soft_matching` / `_tome_unmerge` use Python loops — only slow on very long sequences. GPU-accelerated path deferred.
+
+---
+
+## Deep Audit Pass — May 26, 2026
+
+**Scope:** Full read-through of all major `enigma_engine/core/` files (~15 000+ lines across 15 files). Read-only pass. No code changed.
+
+**Files audited:**
+`model_components.py` (1263 L), `model.py` (1775 L), `inference.py` (1798 L), `engine_generation.py` (3049 L), `engine_chat.py` (909 L), `rag.py` (672 L), `rag_dense.py` (257 L), `memory.py` (474 L), `auto_research.py` (342 L), `personality_data.py` (531 L), `personality_consistency.py` (201 L), `monologue.py` (208 L), `hardware_detection.py` (679 L), `reasoning.py` (397 L). Sampled: `training/training.py` (first 200 L of 6038), `api/server.py` (first 200 L of 2119), `router.py` (first 150 L of 1619).
+
+**Suite baseline going into audit:** 3288 passing, ruff clean.
+
+---
+
+### Bugs Found
+
+#### BUG-1 — CRITICAL: Cross-layer KV sharing NoneType crash
+**File:** `enigma_engine/core/model_components.py` ~L426  
+**Severity:** Runtime crash (CRITICAL) — triggers whenever `use_cache=True` and cross-layer KV sharing is enabled and the source layer has not yet built its KV cache (first forward pass).  
+**Root cause:** `TransformerLayer._forward_attention_kv_share()` calls `self._kv_share_source._kv_cache.get(seq_len)` but `_kv_cache` on the source layer is initialised to `None` and only becomes a real object after the first forward pass when `_init_kv_cache()` is triggered. On the very first call, `_kv_share_source._kv_cache` is `None`, so `.get()` raises `AttributeError: 'NoneType' object has no attribute 'get'`.  
+**Fix:** Guard the call:
+```python
+if self._kv_share_source._kv_cache is not None:
+    k, v = self._kv_share_source._kv_cache.get(seq_len)
+else:
+    # source not warm yet — fall through to own attention
+    k, v = self._compute_kv(x)
+```
+**Test to add:** `test_kv_share_first_forward_no_crash` — create a model with `kv_share_layers > 0`, call `forward(x, use_cache=True)` without any prior warm-up. Expect no exception.
+
+---
+
+#### BUG-2 — Misleading log: static INT8 quantization
+**File:** `enigma_engine/core/model.py`, `_apply_static_int8_quantization()`  
+**Severity:** Low (operational confusion) — does not affect correctness, but operators reading logs believe static quantization ran when dynamic quantization actually ran.  
+**Root cause:** Static INT8 calibration requires a calibration dataset pass. The function silently falls back to `torch.quantization.quantize_dynamic()` when calibration data is absent, but the success log still reads `"Applied static INT8 quantization"`.  
+**Fix:** Log the actual path: `"Static INT8 calibration data absent — fell back to dynamic INT8 quantization"`. Add a docstring note documenting the fallback.  
+**Test to add:** Assert that when `calibration_data=None`, the log message contains `"dynamic"`, not `"static"`.
+
+---
+
+#### BUG-3 — Inconsistency: max_tokens alias last-wins in generate() vs ValueError in stream_generate()
+**File:** `enigma_engine/core/inference.py`, `generate()` L1058–1249 vs `stream_generate()`  
+**Severity:** Medium (subtle mis-use footgun) — callers who pass both `max_tokens` and `max_new_tokens` (common mistake) get silently different behaviour depending on whether they call `generate()` or `stream_generate()`.  
+**Root cause:** When `stream_generate()` was hardened to raise `ValueError` on conflicting aliases, `generate()` was not updated in the same pass.  
+**Fix:** Add the same check at the top of `generate()`:
+```python
+alias_count = sum(k in kwargs for k in ("max_tokens", "max_new_tokens", "max_length"))
+if alias_count > 1:
+    raise ValueError("Pass only one of max_tokens / max_new_tokens / max_length")
+```
+**Test:** Confirm `generate()` raises `ValueError` when two aliases are passed simultaneously.
+
+---
+
+### Performance Observations
+
+#### PERF-1 — batch_generate() O(n²) per decode step
+**File:** `enigma_engine/core/engine_generation.py`, `batch_generate()` L1768–1986  
+**Impact:** For batch sizes > 4 or sequences > 256 tokens, decode time grows quadratically because each step re-runs full prefill (no `use_cache=True`). Single-turn batch generation is the main use case, so this is acceptable debt — but should be documented.  
+**Fix path (when prioritised):** Pass `past_key_values` through the decode loop and use `use_cache=True`. The pre-allocated KV cache in `KVCache` already supports this pattern. Cross-check with `_sample_token_batch()` which is already vectorised.  
+**Action now:** Add a `# PERF-1: O(n²) — no KV cache; see CODE_REVIEW.md` comment at the decode step.
+
+#### PERF-2 — ToMe Python loops on long sequences
+**File:** `enigma_engine/core/model_components.py`, `_bipartite_soft_matching()` and `_tome_unmerge()`  
+**Impact:** On sequences ≥ 512 tokens, Python-level token merging loops become a meaningful fraction of forward pass time. For short chat turns this is negligible.  
+**Fix path:** Vectorise with `torch.gather` / `scatter` ops. Not blocking anything; log as deferred.
+
+#### PERF-3 — memory.py add() rebuilds lower_facts on every call
+**File:** `enigma_engine/core/memory.py`, `PersistentMemory.add()`  
+**Impact:** Inside the lock, every `add()` rebuilds `self._lower_facts = [f.lower() for f in self.facts]` which is O(n) allocation. At `MAX_FACTS=200` this is completely fine — not a real problem. Noted for completeness.  
+**Action:** No change needed unless `MAX_FACTS` is raised above ~5000.
+
+---
+
+### Architecture Observations
+
+#### ARCH-A — AutoResearch B-3 is more complete than prior docs stated
+Stage B-3 (RAG splice mid-generation) is **fully wired for native PyTorch models** including multi-round with cumulative token budget, proper prompt-echo discipline, `</search>` stripping on the final round, and `current_prompt` advance. This is production-quality. The only permanently parked piece is GGUF B-3 (by design: GGUF uses llama-server process boundary, injecting results would require streaming restart). Prior SUGGESTIONS.md text understated this.
+
+#### ARCH-B — Speculative decoding is adaptive and production-ready
+`speculative_generate()` in `engine_generation.py` implements adaptive K (draft run count per step), with accept-rate thresholds 0.8 (increase K) / 0.4 (decrease K). This is the R23/R24 design. It is complete and production-ready for any model that has a compatible draft head or external draft model loaded. No gaps.
+
+#### ARCH-C — RAG BM25+ is correctly implemented
+`TfidfVectorizer` in `rag.py` implements the Lv & Zhai BM25+ delta variant (adds δ to the tf component to give non-zero scores to rare terms), with scipy CSR sparse matrices, query expansion via co-occurrence (T2-2), and `to_dict()`/`from_dict()` with backward compat. Solid.
+
+#### ARCH-D — DenseRAGIndex is soft-fail-safe
+`rag_dense.py` soft-imports `sentence_transformers` and `faiss` with `_HAS_ST` / `_HAS_FAISS` flags. However, `DenseRAGIndex.__init__()` then raises `RuntimeError` on missing deps (loud fail) — this is intentional: the factory `make_rag_index()` in `rag.py` is responsible for routing to BM25 when dense deps are absent. The pattern is correct.
+
+#### ARCH-E — Prefix KV cache is sound but SHA256 may be over-specified
+`engine_chat.py` `chat()` keys the prefix KV cache with `hashlib.sha256(prompt_prefix.encode()).hexdigest()`. SHA256 is collision-safe but slower than xxHash or a simple truncated MD5 for this use case. Not wrong — just heavier than needed for cache keying.
+
+#### ARCH-F — Sampling pipeline is correct and complete
+`_sample_token()` in `engine_generation.py` chains: adaptive repetition window → exempt tokens (prompt tokens, special tokens, proper-noun entities) → frequency/presence penalties → JSON FSM mask → temperature → min-p → top-k → top-p → typical-p → Mirostat v2 → NaN fallback. The NaN fallback chain (`logits.isnan()` → `fill_(-inf)` → uniform fallback) means sampling never crashes on degenerate logits. All filters are in the correct order (penalties before sampling temperature).
+
+#### ARCH-G — Personality system is defence-in-depth
+`personality_data.py` / `personality_consistency.py` stack four independent filters before any generated personality text lands in training data: (1) identity-leak filter (18 substrings — Qwen, Llama, Claude, etc.), (2) quality filter (length 40–2000, no refusal openers), (3) char-trigram near-dedup (Jaccard ≥ 0.85), (4) profile consistency SFT examples cross-checked via pronoun + Jaccard scoring. This is appropriately rigorous for a system where training data quality is critical.
+
+#### ARCH-H — Hardware budget scaling is conservative
+`InferenceMemoryBudget` and `TrainingMemoryBudget` in `hardware_detection.py` use explicit tiers (Pi, low-RAM, mid-RAM, high-RAM, low-VRAM, mid-VRAM, high-VRAM). Batch sizes, context lengths, and cache caps are all pre-scaled. The thresholds are conservative — e.g., "high VRAM" starts at 16 GB, which gives 30B-A3B GGUF workable parameters. Reasonable for a hardware-agnostic consumer app.
+
+#### ARCH-I — Background trainer uses correct lock discipline
+`BackgroundTrainer` in `router.py` acquires `train_lock` (non-reentrant `threading.Lock`) for weight-update phases and releases it while waiting for replay buffer threshold. This is the correct pattern: `generate()` in `inference.py` does a non-blocking `train_lock.acquire(blocking=False)` and skips generation (returns `""`) rather than deadlocking. The asymmetry is intentional.
+
+---
+
+### Qwen3 / Strategy Notes
+
+The deep audit confirms no architectural blockers to loading and fine-tuning Qwen3:
+
+1. **HuggingFace path** in `inference.py` `_load_pytorch()` handles any HF-compatible `AutoModelForCausalLM` via the state dict auto-config inference path — or more directly via `transformers.AutoModelForCausalLM.from_pretrained()` which is already present in the loader fallback chain.
+2. **LoRA** `apply_adapter()` / `apply_adapter_stack()` use PEFT — fully Qwen3-compatible since PEFT supports any `nn.Linear`-based HF model.
+3. **SFT training** `training/training.py` wraps any HF model — the `BackgroundTrainer` / `Trainer` classes operate on the model via `model.parameters()` and `forward()`, which Qwen3 satisfies.
+4. **GGUF path** via llama-server is also confirmed working (Round-trip tests pass, see Pass 156z9ay).
+5. **Only gap:** The `Enigma`-specific `ForgeConfig` presets and `model_components.py` architecture are not needed for Qwen3 — that code stays dormant, not broken.
+
+---
+
+### Files Not Audited in This Pass
+
+The following files were sampled (first 150–200 lines) but not fully read. They are lower-risk because they are either test infrastructure, secondary to the primary inference path, or have been individually smoke-tested by prior passes:
+
+- `enigma_engine/training/training.py` (6038 L) — sampled; AdEMAMix, Muon, warmup cap confirmed
+- `enigma_engine/api/server.py` (2119 L) — sampled; MC-1/MC-2 multi-conversation, copy-on-write confirmed
+- `enigma_engine/router.py` (1619 L) — sampled; BackgroundTrainer, IPC protocol confirmed
+- `enigma_engine/core/kv_cache.py` (1344 L) — not read; used correctly from calling sites
+- `enigma_engine/core/lora_utils.py` (1346 L) — not read; called via PEFT wrapper in inference.py
+- `enigma_engine/core/builtin_commands.py` (1870 L) — not read; command dispatch layer
+- `enigma_engine/core/rl_training.py` (2842 L) — not read; RL training path
+- `enigma_engine/core/tokenizer.py` (888 L), `bpe_tokenizer.py` (780 L) — not read
+- `enigma_engine/core/vision_encoder.py` (935 L) — not read; called from inference correctly
+- GGUF stack: `gguf.py`, `gguf_loader.py`, `gguf_dequant.py` — round-trip tests are green (see Pass 156z9ay)
+- All mods: `imagegen`, `audiogen`, `voice`, `transcriber`, `vision`, `codegen`, `threed`, `videogen`, `avatar` — mod.json surveyed; individual mod code not fully read
+- All 49 test files — tests are green, not audited for quality
+
+---
+
+### Next Actions After This Pass
+
+1. **Fix BUG-1** (KV share crash) — `model_components.py` ~L426. Add guard + test. Low-effort, high-severity.
+2. **Fix BUG-2** (misleading log) — `model.py` `_apply_static_int8_quantization()`. One-liner log fix.
+3. **Fix BUG-3** (alias inconsistency) — `inference.py` `generate()`. Add ValueError guard matching `stream_generate()`.
+4. **Document PERF-1** — add TODO comment in `batch_generate()` decode loop.
+5. Proceed to **Block 2 (Gradio UI)** per STRATEGY RESET execution sequence in SUGGESTIONS.md.
+
+---
+
+## Priority Queue (Next Actions)
+
+**🔥 ACTIVE NOW: Main AI 4-step sequence (in order)**
+- [x] LOGIC: baseline/runtime audit performed (`ruff` clean, `pytest` green, API health verified)
+- [x] LANGUAGE: chat/runtime path second (load + chat verified with `enigma_pi_zero.pth`; `smoke.pth` is a model-specific failure case)
+- [ ] VISUAL: multimodal/vision path third
+- [x] TRAIN: training smoke path verified (`/api/train` legacy SFT on `smoke_test_basic.txt` completed)
+- [ ] Commit only core fixes needed for readiness in this sequence
+
+**🟡 PARKED: Web UI Phase 1-3**
+- Scaffold already created under `enigma_engine/web/`
+- Resume after core AI readiness checkpoints are green
+
+**📋 BACKLOG: (No timeline until core-first block closes)**
+- Vision data collection optimization (prefetch LLaVA images in parallel)
+- LoRA adapter auto-restore in API mode (requires `/api/models/adapter` endpoint)
+- Continuous training hardening (NaN abort, token-length cap, anchor rehearsal)
+
+## Resume Point (Next Session)
+
+- First action: run VISUAL runtime verification on API path (this is the only main-priority stage still open)
+- Command entry: `python run.py --serve --port 8081`
+- Model for stable smoke: `enigma_pi_zero.pth`
+- Secondary action after visual: implement fix policy for `smoke.pth` GPU chat crash
+- Stopping rule: do not resume parked web work until Visual is closed or explicitly parked with blocker evidence
+
+---
+
+**Previous pass:** Pass 156z9cn (May 8, 2026) — **FORGE min_lr_ratio surfaced end-to-end from GUI to TrainingConfig across all active launchers.**
 
 ---
 
@@ -291,7 +480,7 @@ Tests: 10 new in [tests/test_core.py::TestAutoResearch](tests/test_core.py) cove
 **MTP-2b:** [enigma_engine/core/model_presets.py L129](enigma_engine/core/model_presets.py#L129) flipped default `n_predict_heads` `2`→`0` and corrected the inverted comment (paper says MTP gain grows with model size; sub-1B benefit is marginal). Pass 148 designated EAGLE-2 as the inference-time speculative path, retiring Medusa (the only consumer of the heads). Existing zero-guards at [model.py L238/L496/L594](enigma_engine/core/model.py#L238) + [progressive_growing.py L219](enigma_engine/core/progressive_growing.py#L219) handled the zero case correctly with no surgery. Saves ~33-49M params per fresh model.
 
 Tests: 6 new/changed in [tests/test_tokenizer.py](tests/test_tokenizer.py) + regression-fix to [tests/test_core.py L1815](tests/test_core.py#L1815) (Tok-2); 1 new test `test_default_model_has_no_predict_heads` + spec-floor adjustment to `test_small_preset_range` 50M→30M (MTP-2b). Suite **2291/9** green, ruff clean.
-**Pass 148 (April 24, 2026)** — planning-only. Two-round audit of the Pass 147 GUI Modernization Plan in [SUGGESTIONS.md](SUGGESTIONS.md). Verified via tool reads: `enigma_engine/api/` is FastAPI-only (server.py + __init__.py), so service contract is placed at new `enigma_engine/services/`; 30+ `from enigma_engine.core` imports live in `enigma_engine/gui/`; Tauri sidecar doc (https://v2.tauri.app/develop/sidecar/) confirmed — `externalBin` + `-$TARGET_TRIPLE` + `shell:allow-execute` + pyinstaller is the canonical Python bundling pattern. Plan now includes explicit `api/server.py` → `services/` migration step in Phase 4, sequential 10-day bake-off budget (solo builder), split page inventory (16 user-facing pages vs 7 support modules), baseline measurement for all three gates on CustomTkinter, and project-goal drift check against "personality from training, not the user" + "blackbox". No source code changes.
+**Pass 148 (April 24, 2026)** — planning-only. Two-round audit of the Pass 147 GUI Modernization Plan in [SUGGESTIONS.md](SUGGESTIONS.md). Verified via tool reads: `enigma_engine/api/` is FastAPI-only (server.py + __init__.py), so service contract is placed at new `enigma_engine/services/` `[DELETED dbc19ea, May 25 2026]`; 30+ `from enigma_engine.core` imports live in `enigma_engine/gui/`; Tauri sidecar doc (https://v2.tauri.app/develop/sidecar/) confirmed — `externalBin` + `-$TARGET_TRIPLE` + `shell:allow-execute` + pyinstaller is the canonical Python bundling pattern. Plan now includes explicit `api/server.py` → `services/` migration step in Phase 4, sequential 10-day bake-off budget (solo builder), split page inventory (16 user-facing pages vs 7 support modules), baseline measurement for all three gates on CustomTkinter, and project-goal drift check against "personality from training, not the user" + "blackbox". No source code changes.
 **Pass 147:** Planning-only GUI architecture research pass. Wrote migration-ready GUI modernization plan (Phases 0-4, hard gates G1/G2/G3, weighted rubric, decision ladder, coexistence blueprint) into [SUGGESTIONS.md](SUGGESTIONS.md). No source code changes.
 **Pass 145:** Research-only continuation. Closed R-ARCH-4a/4b/4c in [SUGGESTIONS.md](SUGGESTIONS.md): finalized sequential integration order, per-phase benchmark gates, and explicit fallback/skip policy for failed phases. No source code changes.
 **Pass 144:** Research-only continuation. Closed R-ARCH-3a/3b/3c/3d in [SUGGESTIONS.md](SUGGESTIONS.md): (a) distillation feasibility at 742M scale, (b) staged data sizing bands, (c) benchmark matrix per specialist + routed E2E metric, (d) heuristic-to-learned router promotion rule for Approach 3. Evidence references include DeepSeek-R1 (arxiv:2501.12948 + model card), Orca instruction distillation (arxiv:2306.02707), and RouteLLM (arxiv:2406.18665). No source code changes.

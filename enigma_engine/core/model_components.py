@@ -422,10 +422,42 @@ class Attention(nn.Module):
                 q = apply_rotary_embedding(q, freqs_cis, start_pos)
             if self.use_qk_norm:
                 q = self.q_norm(q)
-            if use_cache:
-                k, v = self._kv_share_source._kv_cache.get()
+
+            # BUG-1 fix: source may not have run yet on this forward
+            # (first forward, after clear_cache, or out-of-order layer
+            # config). _kv_cache lazy-inits in the leader's STEP 3
+            # block, and _shared_kv is set only in the leader's
+            # training-mode branch. Either can be None when the
+            # follower reaches this point — compute K, V locally as a
+            # fallback rather than crashing.
+            source = self._kv_share_source
+            source_cache = source._kv_cache if use_cache else None
+            source_shared = source._shared_kv if not use_cache else None
+            if (use_cache and source_cache is not None) or (
+                    not use_cache and source_shared is not None):
+                if use_cache:
+                    k, v = source_cache.get()
+                else:
+                    k, v = source_shared
             else:
-                k, v = self._kv_share_source._shared_kv
+                # Source not warm yet — compute K, V from this
+                # follower's own wk/wv projection weights. Mirrors the
+                # leader path's STEP 1 + STEP 2 logic (MLA-aware).
+                if self._use_mla:
+                    kv_latent = self.wkv_down(x)
+                    k = self.wk_up(kv_latent).reshape(
+                        B, T, self.n_kv_heads, self.head_dim)
+                    v = self.wv_up(kv_latent).reshape(
+                        B, T, self.n_kv_heads, self.head_dim)
+                else:
+                    k = self.wk(x).reshape(
+                        B, T, self.n_kv_heads, self.head_dim)
+                    v = self.wv(x).reshape(
+                        B, T, self.n_kv_heads, self.head_dim)
+                if self.use_rope and freqs_cis is not None:
+                    k = apply_rotary_embedding(k, freqs_cis, start_pos)
+                if self.use_qk_norm:
+                    k = self.k_norm(k)
         else:
             # ─────────────────────────────────────────────────────────────────
             # STEP 1: Project input to Q, K, V

@@ -1068,18 +1068,21 @@ class Enigma(nn.Module):
                 logger.warning(f"Dynamic quantization failed: {e}")
 
         elif mode == "int8":
-            # Static INT8 quantization
+            # Static INT8 quantization (falls back to dynamic when no
+            # calibration data is wired in — see _apply_static_int8_quantization).
+            # The success log lives inside the helper so it reflects the
+            # path that actually ran, not the requested mode.
             try:
                 self._apply_static_int8_quantization()
-                logger.info("Applied static INT8 quantization")
             except Exception as e:
                 logger.warning(f"Static INT8 quantization failed: {e}")
 
         elif mode == "int4":
-            # 4-bit quantization (most aggressive)
+            # 4-bit quantization (most aggressive). Success log lives
+            # inside _apply_int4_quantization so it reflects the actual
+            # path (bitsandbytes vs dynamic fallback).
             try:
                 self._apply_int4_quantization()
-                logger.info("Applied INT4 quantization")
             except Exception as e:
                 logger.warning(f"INT4 quantization failed: {e}")
         else:
@@ -1097,10 +1100,16 @@ class Enigma(nn.Module):
         )
 
     def _apply_static_int8_quantization(self) -> None:
-        """Apply static INT8 quantization (requires calibration data)."""
-        # For static quantization, we'd need calibration data
-        # Fall back to dynamic for now
-        logger.info("Static INT8 uses dynamic quantization (no calibration data)")
+        """Apply static INT8 quantization (requires calibration data).
+
+        Note: true static INT8 needs a calibration data pass which is not
+        wired in. This currently falls back to dynamic INT8. The log
+        message reflects the actual path taken so operators can trust it.
+        """
+        logger.info(
+            "Static INT8 calibration data absent — fell back to "
+            "dynamic INT8 quantization"
+        )
         self._apply_dynamic_quantization()
 
     def _apply_int4_quantization(self) -> None:
@@ -1136,8 +1145,13 @@ class Enigma(nn.Module):
             logger.info("Applied bitsandbytes INT4 quantization")
 
         except ImportError:
-            # Fallback to dynamic quantization
-            logger.warning("bitsandbytes not available, using dynamic quantization")
+            # Fallback to dynamic quantization. Log reflects the actual
+            # path so operators reading logs aren't told "INT4" when
+            # only dynamic INT8 ran.
+            logger.warning(
+                "bitsandbytes not available — fell back to dynamic INT8 "
+                "quantization (not true INT4)"
+            )
             self._apply_dynamic_quantization()
 
     @classmethod

@@ -1285,6 +1285,59 @@ class TestPathTraversal:
         assert resp.status_code in (404, 422)
 
 
+class TestModelVocabGuards:
+    """Guards against tokenizer/model vocab mismatch crash paths."""
+
+    def test_appstate_load_model_rejects_vocab_mismatch(
+            self, monkeypatch: pytest.MonkeyPatch):
+        """Load must fail loud when tokenizer vocab exceeds model limit.
+
+        This prevents loading a model that will later crash generation
+        with index errors.
+        """
+        from enigma_engine.api.server import AppState
+
+        class _FakeTokEmb:
+            num_embeddings = 16
+
+        class _FakeModel:
+            tok_embeddings = _FakeTokEmb()
+
+        class _FakeTokenizer:
+            vocab_size = 32
+
+        class _FakeEngine:
+            def __init__(self, model_path: str):
+                self.model = _FakeModel()
+                self.tokenizer = _FakeTokenizer()
+
+        monkeypatch.setattr("enigma_engine.core.EnigmaEngine", _FakeEngine)
+
+        state = AppState()
+        with pytest.raises(RuntimeError, match="vocabulary mismatch"):
+            state.load_model("models/smoke.pth")
+        assert state.engine is None
+        assert state.model_path is None
+
+    def test_chat_returns_400_for_value_error(self, client):
+        """/api/chat should map user/input validation errors to HTTP 400."""
+        from enigma_engine.api.server import state
+
+        mock_engine = MagicMock()
+        mock_engine.chat = MagicMock(
+            side_effect=ValueError("Prompt token IDs out of model vocabulary range")
+        )
+
+        old_engine = state.engine
+        state.engine = mock_engine
+        try:
+            resp = client.post("/api/chat", json={"message": "hello"})
+            assert resp.status_code == 400
+            assert "Invalid request" in resp.json().get("error", "")
+        finally:
+            state.engine = old_engine
+
+
 class TestChatRequestSamplingParams:
     """ChatRequest accepts top_p, top_k, repetition_penalty."""
 
@@ -1448,6 +1501,86 @@ class TestChatJsonSchemaWiring:
             assert "json_schema" not in kwargs, (
                 "/api/chat/stream must NOT pass json_schema=None — "
                 "legacy stream_generate signatures would TypeError")
+        finally:
+            state.engine = old
+
+
+class TestChatImageWiring:
+    """Visual-chat API contract: image paths must be explicit, forwarded,
+    and never silently ignored on unsupported endpoints."""
+
+    def test_chat_request_has_images_field(self):
+        """ChatRequest exposes images as optional list[str] for visual chat."""
+        from enigma_engine.api.server import ChatRequest
+
+        fields = ChatRequest.model_fields
+        assert "images" in fields, (
+            "ChatRequest must expose images so /api/chat can accept visual context")
+        req = ChatRequest(message="test")
+        assert req.images is None
+        req2 = ChatRequest(message="test", images=["data/avatar/images/default.png"])
+        assert req2.images == ["data/avatar/images/default.png"]
+
+    def test_appstate_chat_forwards_images(self):
+        """AppState.chat must pass images through to engine.chat."""
+        from unittest.mock import MagicMock
+        from enigma_engine.api.server import AppState
+
+        s = AppState()
+        mock_eng = MagicMock()
+        mock_eng.chat = MagicMock(return_value="reply")
+        s.engine = mock_eng
+
+        images = ["data/avatar/images/default.png"]
+        s.chat("hi", images=images)
+        _, kwargs = mock_eng.chat.call_args
+        assert kwargs.get("images") == images, (
+            "AppState.chat must forward images kwarg to engine.chat")
+
+    def test_chat_endpoint_forwards_images(self, client):
+        """POST /api/chat must forward images to engine.chat end-to-end."""
+        from unittest.mock import MagicMock
+        from enigma_engine.api.server import state
+
+        mock_engine = MagicMock()
+        mock_engine.chat = MagicMock(return_value="ok")
+        old = state.engine
+        state.engine = mock_engine
+        try:
+            images = ["data/avatar/images/default.png"]
+            resp = client.post(
+                "/api/chat",
+                json={"message": "describe", "images": images},
+            )
+            assert resp.status_code == 200
+            _, kwargs = mock_engine.chat.call_args
+            assert kwargs.get("images") == images, (
+                "/api/chat must forward images to engine.chat")
+        finally:
+            state.engine = old
+
+    def test_chat_stream_rejects_images_until_supported(self, client):
+        """/api/chat/stream must fail loud for images, not drop them silently."""
+        from unittest.mock import MagicMock
+        from enigma_engine.api.server import state
+
+        mock_engine = MagicMock()
+        mock_engine.stream_chat = MagicMock(return_value=iter(["ok"]))
+        old = state.engine
+        state.engine = mock_engine
+        try:
+            resp = client.post(
+                "/api/chat/stream",
+                json={
+                    "message": "describe",
+                    "images": ["data/avatar/images/default.png"],
+                },
+            )
+            assert resp.status_code == 400
+            body = resp.json()
+            assert "images" in body.get("error", "").lower()
+            assert "use /api/chat" in body.get("error", "")
+            mock_engine.stream_chat.assert_not_called()
         finally:
             state.engine = old
 

@@ -1147,13 +1147,13 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
             ValueError: If ``json_schema is not None`` and
                 ``execute_tools=True`` (mutually exclusive — tool
                 re-entry would silently drop the constraint; Pass
-                156z7 N-15c2 gate). Also propagated from
-                ``_generate_text`` for each numeric-range violation:
-                ``max_gen <= 0``, ``temperature < 0``, ``top_k < 0``,
-                ``top_p`` outside ``[0, 1]``, ``repetition_penalty
-                < 1.0``. Pass 156z9ct: expanded after the 156z9cs
-                clause narrowed the documented set below what the
-                code actually raises.
+                156z7 N-15c2 gate). Also raised when more than one of
+                ``max_tokens`` / ``max_new_tokens`` / ``max_length`` is
+                set (BUG-3 fix; mirrors ``stream_generate``). Also
+                propagated from ``_generate_text`` for each
+                numeric-range violation: ``max_gen <= 0``,
+                ``temperature < 0``, ``top_k < 0``, ``top_p`` outside
+                ``[0, 1]``, ``repetition_penalty < 1.0``.
         """
         # Pass 156z9cs: honour the documented TypeError clause. The
         # downstream `_generate_text` also enforces this with the same
@@ -1163,13 +1163,26 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
             raise TypeError(
                 f"prompt must be a string, got {type(prompt).__name__}"
             )
-        # Handle max_tokens, max_new_tokens, max_length aliases for backward compatibility
-        if max_tokens is not None:
-            max_gen = max_tokens
-        if max_new_tokens is not None:
-            max_gen = max_new_tokens
-        if max_length is not None:
-            max_gen = max_length
+        # BUG-3: aliases for backward / cross-API compatibility. At most
+        # one of max_tokens / max_new_tokens / max_length may be set —
+        # mirror stream_generate() (engine_generation.py L1602-1617) so
+        # both entry points reject conflicting kwargs identically.
+        # Previously this method overwrote sequentially (last-wins),
+        # hiding caller mistakes.
+        _aliases = [
+            ("max_tokens", max_tokens),
+            ("max_new_tokens", max_new_tokens),
+            ("max_length", max_length),
+        ]
+        _set_aliases = [(n, v) for n, v in _aliases if v is not None]
+        if len(_set_aliases) > 1:
+            raise ValueError(
+                "Conflicting max-length aliases set: "
+                f"{[n for n, _ in _set_aliases]}. Pass only one of "
+                "max_gen / max_tokens / max_new_tokens / max_length."
+            )
+        if _set_aliases:
+            max_gen = _set_aliases[0][1]
 
         # ─────────────────────────────────────────────────────────────────────
         # STEP 1: Determine if tools should be executed
@@ -1380,6 +1393,23 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
                 ids = ids.tolist()
             if isinstance(ids[0], list):
                 ids = ids[0]
+
+        # Guard before moving token IDs onto device: if tokenizer emits an
+        # ID outside model embedding rows, CUDA can hard-fail with a
+        # device-side assert during embedding lookup. Fail loud here with a
+        # deterministic, actionable error.
+        from .model_utils import get_model_vocab_limit
+
+        model_limit = get_model_vocab_limit(getattr(self, "model", None))
+        if model_limit is not None and ids:
+            min_id = min(ids)
+            max_id = max(ids)
+            if min_id < 0 or max_id >= model_limit:
+                raise ValueError(
+                    "Prompt token IDs out of model vocabulary range: "
+                    f"min={min_id}, max={max_id}, model_limit={model_limit}. "
+                    "This usually means tokenizer/model vocab mismatch."
+                )
 
         # Convert to tensor
         input_ids = torch.tensor([ids], dtype=torch.long, device=self.device)

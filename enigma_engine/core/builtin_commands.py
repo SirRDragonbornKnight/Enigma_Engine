@@ -1242,7 +1242,21 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
     # ========== Shell Command ==========
 
     def shell_cmd(args: list[str], ctx: Dict) -> CommandResult:
-        """Run a terminal command (restricted to safe commands)."""
+        """Run a terminal command (restricted to safe commands).
+
+        Two-tier whitelist:
+
+        - ``SAFE_COMMANDS``: read-only / informational commands that
+          cannot run arbitrary code. Always allowed.
+        - ``CODE_EXEC_COMMANDS``: ``python`` / ``pip`` / ``pytest`` —
+          arbitrary-code-execution primitives. Only allowed when
+          ``ctx["allow_code_exec"]`` is explicitly True, because
+          ``python -c "<arbitrary>"``, ``pip install <package>``, and
+          ``pytest <conftest.py>`` defeat the whole point of a
+          whitelist. AI-initiated calls go through ``ctx`` without
+          this flag and are rejected; explicit user / dev shells can
+          set the flag to opt in.
+        """
         import shlex
         import subprocess
 
@@ -1256,12 +1270,13 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
         # Extract the base command (first word)
         base_cmd = args[0].lower().strip()
 
-        ALLOWED_COMMANDS = {
-            "python", "pip", "dir", "ls", "cat", "type", "echo",
+        SAFE_COMMANDS = {
+            "dir", "ls", "cat", "type", "echo",
             "git", "cd", "pwd", "whoami", "hostname", "date",
             "find", "grep", "head", "tail", "wc", "sort",
-            "pytest", "where", "which", "env", "set",
+            "where", "which", "env", "set",
         }
+        CODE_EXEC_COMMANDS = {"python", "pip", "pytest"}
 
         BLOCKED_PATTERNS = [
             "rm -rf", "del /f", "format", "mkfs", "dd if=",
@@ -1269,11 +1284,24 @@ def register_builtin_commands(registry: CommandRegistry) -> None:
             ":(){", "fork", ">(", "curl | sh", "wget | sh",
         ]
 
-        if base_cmd not in ALLOWED_COMMANDS:
+        if base_cmd in CODE_EXEC_COMMANDS:
+            if not ctx.get("allow_code_exec", False):
+                return CommandResult(
+                    False,
+                    f"[ERROR] Command '{base_cmd}' executes arbitrary "
+                    "code (python/pip/pytest defeat the whitelist). "
+                    "Use the dedicated code.run command for sandboxed "
+                    "Python, or set ctx['allow_code_exec']=True for "
+                    "an explicit opt-in user shell."
+                )
+        elif base_cmd not in SAFE_COMMANDS:
+            allowed_display = sorted(SAFE_COMMANDS)
+            if ctx.get("allow_code_exec", False):
+                allowed_display = sorted(SAFE_COMMANDS | CODE_EXEC_COMMANDS)
             return CommandResult(
                 False,
                 f"[ERROR] Command '{base_cmd}' not in allowed list. "
-                f"Allowed: {', '.join(sorted(ALLOWED_COMMANDS))}"
+                f"Allowed: {', '.join(allowed_display)}"
             )
 
         # Check for dangerous patterns within allowed commands

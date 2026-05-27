@@ -155,6 +155,7 @@ class EnigmaClient:
         self,
         message: str,
         *,
+        images: list[str] | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
         top_p: float | None = None,
@@ -182,6 +183,8 @@ class EnigmaClient:
             payload["top_k"] = int(top_k)
         if repetition_penalty is not None:
             payload["repetition_penalty"] = float(repetition_penalty)
+        if images is not None:
+            payload["images"] = list(images)
         if json_schema is not None:
             payload["json_schema"] = json_schema
 
@@ -216,6 +219,7 @@ class EnigmaClient:
         self,
         message: str,
         *,
+        images: list[str] | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
         top_p: float | None = None,
@@ -243,6 +247,8 @@ class EnigmaClient:
             payload["top_k"] = int(top_k)
         if repetition_penalty is not None:
             payload["repetition_penalty"] = float(repetition_penalty)
+        if images is not None:
+            payload["images"] = list(images)
         if json_schema is not None:
             payload["json_schema"] = json_schema
 
