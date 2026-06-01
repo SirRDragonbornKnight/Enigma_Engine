@@ -380,10 +380,17 @@ class AppState:
                 pass
             raise
 
-        # Gather info
+        # Gather info. GGUF models wrap a llama.cpp backend, not an
+        # nn.Module, so they expose no .parameters() (EnigmaEngine._log_init_info
+        # guards the same case via _is_gguf). Param counting is best-effort
+        # info-gathering — it must never fail an otherwise-successful load.
         param_count = 0
-        if hasattr(engine, "model") and engine.model is not None:
-            param_count = sum(p.numel() for p in engine.model.parameters())
+        model_obj = getattr(engine, "model", None)
+        if model_obj is not None and hasattr(model_obj, "parameters"):
+            try:
+                param_count = sum(p.numel() for p in model_obj.parameters())
+            except Exception:
+                param_count = 0
 
         device = "cpu"
         try:

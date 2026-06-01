@@ -1273,6 +1273,41 @@ class TestModelVocabGuards:
         assert state.engine is None
         assert state.model_path is None
 
+    def test_appstate_load_model_gguf_no_parameters_no_crash(
+            self, monkeypatch: pytest.MonkeyPatch):
+        """A GGUF engine.model has no .parameters(); the load must succeed.
+
+        Regression for the load failure ``'GGUFModel' object has no
+        attribute 'parameters'`` — info-gathering reached into
+        ``engine.model.parameters()`` assuming an nn.Module, which crashed
+        every GGUF load through the API. GGUF wraps a llama.cpp backend, so
+        param counting is best-effort and reports 0.
+        """
+        from enigma_engine.api.server import AppState
+
+        class _FakeGGUFModel:
+            # Mirrors GGUFModel: a llama.cpp wrapper, NOT an nn.Module.
+            # No .parameters() and no .tok_embeddings, so the vocab guard
+            # (get_model_vocab_limit) returns None and skips — exactly as a
+            # real GGUF load does before reaching param counting.
+            model_path = "qwen3-30b-a3b/Qwen3-30B-A3B-Q4_K_M.gguf"
+
+        class _FakeEngine:
+            def __init__(self, model_path: str):
+                self.model = _FakeGGUFModel()
+                self.tokenizer = None
+                self._is_gguf = True
+
+        monkeypatch.setattr("enigma_engine.core.EnigmaEngine", _FakeEngine)
+
+        state = AppState()
+        info = state.load_model("qwen3-30b-a3b/Qwen3-30B-A3B-Q4_K_M.gguf")
+
+        assert info["loaded"] is True
+        assert info["parameters"] == 0
+        assert state.engine is not None
+        assert state.model_path.endswith("Qwen3-30B-A3B-Q4_K_M.gguf")
+
     def test_chat_returns_400_for_value_error(self, client):
         """/api/chat should map user/input validation errors to HTTP 400."""
         from enigma_engine.api.server import state

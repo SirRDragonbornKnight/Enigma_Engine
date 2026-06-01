@@ -103,6 +103,83 @@ class TestLlamaServerBackend:
         assert isinstance(port, int)
         assert 1024 <= port <= 65535
 
+    def test_stream_chat_parses_sse_deltas(self, monkeypatch):
+        """stream_chat yields incremental content from an OpenAI SSE stream.
+
+        Covers the gap fixed in this pass: the server backend used to
+        hardcode ``stream: False`` and return one buffered chunk. The SSE
+        reader must yield each ``choices[0].delta.content`` fragment, skip
+        blank/keepalive and content-less lines, and stop at ``[DONE]``.
+        """
+        from enigma_engine.core import gguf_loader
+
+        class _FakeSSEResponse:
+            def __init__(self, lines):
+                self._lines = lines
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def __iter__(self):
+                return iter(self._lines)
+
+        sse_lines = [
+            b'data: {"choices":[{"delta":{"content":"Red"}}]}\n',
+            b'\n',  # keepalive blank line -> skipped
+            b'data: {"choices":[{"delta":{"content":", Yellow"}}]}\n',
+            b'data: {"choices":[{"delta":{"role":"assistant"}}]}\n',  # no content
+            b'data: {"choices":[{"delta":{"content":", Blue"}}]}\n',
+            b'data: [DONE]\n',
+            b'data: {"choices":[{"delta":{"content":"IGNORED"}}]}\n',  # after DONE
+        ]
+        monkeypatch.setattr(
+            "urllib.request.urlopen",
+            lambda *a, **k: _FakeSSEResponse(sse_lines),
+        )
+
+        backend = gguf_loader.LlamaServerBackend.__new__(
+            gguf_loader.LlamaServerBackend)
+        backend._base_url = "http://127.0.0.1:9"
+
+        out = list(backend.stream_chat([{"role": "user", "content": "hi"}]))
+        assert out == ["Red", ", Yellow", ", Blue"]
+
+
+class TestGGUFModelStreaming:
+    """GGUFModel.stream_chat backend dispatch."""
+
+    def test_stream_chat_delegates_to_server_backend(self):
+        """When a server backend is active, stream_chat forwards to it."""
+        from unittest.mock import MagicMock
+
+        from enigma_engine.core.gguf_loader import GGUFModel
+
+        model = GGUFModel.__new__(GGUFModel)
+        model.is_loaded = True
+        fake_server = MagicMock()
+        fake_server.stream_chat = MagicMock(return_value=iter(["a", "b", "c"]))
+        model._server = fake_server
+
+        out = list(model.stream_chat(
+            [{"role": "user", "content": "hi"}], max_tokens=8))
+
+        assert out == ["a", "b", "c"]
+        fake_server.stream_chat.assert_called_once()
+
+    def test_stream_chat_requires_loaded(self):
+        """stream_chat on an unloaded model fails loud, not silently empty."""
+        from enigma_engine.core.gguf_loader import GGUFModel
+
+        model = GGUFModel.__new__(GGUFModel)
+        model.is_loaded = False
+        model._server = None
+
+        with pytest.raises(RuntimeError, match="Model not loaded"):
+            list(model.stream_chat([{"role": "user", "content": "hi"}]))
+
 
 # ================================================================
 # Persistent Memory system

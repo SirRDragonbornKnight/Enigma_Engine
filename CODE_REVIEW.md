@@ -1,7 +1,8 @@
 ﻿# Code Review Tracker
 
 **Started:** March 24, 2026
-**Last pass:** May 27 2026 — **F1-F4 audit closures + doc resync** (commit pending). BUG-1/2/3 from May 26 deep audit + 5 live-path bugs + 1 sibling-boundary miss closed in `da65525` + working tree. Suite **3312 passed, 3 skipped**, ruff clean.
+**Last pass:** June 1 2026 — **Block 1 live bring-up** (commit pending): 2 GGUF defects fixed (BL-1 load crash, BL-2 non-incremental streaming) while verifying the Qwen3 chat path end-to-end against the real 30B GGUF. Suite **3389 passed, 3 skipped**, ruff clean.
+_Prior:_ May 27 2026 — F1-F4 audit closures + doc resync. BUG-1/2/3 from May 26 deep audit + 5 live-path bugs + 1 sibling-boundary miss closed in `da65525` + working tree.
 
 ## Priority Queue (Next Actions)
 
@@ -10,6 +11,13 @@
 - [x] **CRITICAL — `model_components.py` L426:** Cross-layer KV sharing `_kv_share_source._kv_cache.get()` when `use_cache=True` on first forward → `_kv_cache` is `None` → `AttributeError`. **Closed `da65525` — fall-through to local K/V projection when source not warm; 2 regression tests + falsification verified.**
 - [x] **MISLEADING LOG — `model.py` `_apply_static_int8_quantization()`:** Falls back silently to dynamic INT8 but logs `"Applied static INT8 quantization"`. **Closed `da65525` — success log moved inside helper so it reflects actual path; INT4 fallback also corrected; 2 caplog tests.**
 - [x] **INCONSISTENCY — `inference.py` `generate()`:** Multiple `max_tokens`/`max_new_tokens`/`max_length` aliases overwrite `max_gen` with last-wins semantics; `stream_generate()` was upgraded to raise `ValueError` for this case. **Closed `da65525`; chat-path sibling closure landed May 27 in working tree (`_prepare_chat` raises same `ValueError`).**
+
+**🔥 BLOCK 1 LIVE BRING-UP (June 1 2026) — both CLOSED**
+
+Found while standing up the API server against the real `Qwen3-30B-A3B-Q4_K_M.gguf` (full GPU offload, RTX 5090, ~23 GB VRAM via bundled `llama-server.exe`).
+
+- [x] **BL-1 — GGUF load crash (CRITICAL — blocked all GGUF loads via the API):** `AppState.load_model` (`api/server.py`) counted params via `engine.model.parameters()`; a GGUF `engine.model` is a `GGUFModel` (llama.cpp wrapper) with no `.parameters()` → `AttributeError` → endpoint's except-clause unloaded everything and returned HTTP 500. **Fixed** — guard on `hasattr(model, "parameters")` with a try/except (param count is best-effort info-gathering and must never fail an otherwise-successful load); mirrors the existing `_is_gguf` guard in `EnigmaEngine._log_init_info`. Regression test `test_appstate_load_model_gguf_no_parameters_no_crash`. Sibling sweep: `inference.py:1044` already guarded by `_is_gguf`; the other `.model.parameters()` sites are training/scratch paths (real `nn.Module`) or the dying tkinter GUI — not GGUF-inference siblings.
+- [x] **BL-2 — GGUF server-backend streaming was not token-incremental:** `LlamaServerBackend.chat()` hardcoded `"stream": False`, so `/api/chat/stream` returned the whole response as a single SSE `token` event (framing worked, content correct, but no incremental delivery). The author had flagged it: *"Server backend — no streaming helper yet, yield in one piece."* **Fixed** — added `LlamaServerBackend._post_stream` (OpenAI SSE reader) + `LlamaServerBackend.stream_chat` + `GGUFModel.stream_chat`, and rewired `engine_chat.stream_chat`'s server-backend branch to stream token-by-token, preserving the same `_record_search_emissions(... path="gguf")` accumulate-in-`finally` Stage-B2 hook as the in-process branch. Verified live (15 incremental token events). 3 tests in `test_gguf.py`. (The in-process llama-cpp-python path already streamed correctly.)
 
 **🟡 PERFORMANCE DEBT (known, not blocking)**
 

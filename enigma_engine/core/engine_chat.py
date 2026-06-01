@@ -862,26 +862,37 @@ class _ChatMixin:
                     "on GGUF models (llama.cpp uses its own sampler). "
                     "Load a native PyTorch model or drop the schema."
                 )
-            # Server backend — no streaming helper yet, yield in one piece
+            # Server backend — stream content deltas via llama-server SSE
+            # (LlamaServerBackend.stream_chat). Mirror the in-process branch
+            # below: accumulate chunks and scan for <search> emissions in
+            # finally (Stage B-2), since this path also bypasses
+            # stream_generate's own observability hook.
             if ctx.has_server_backend:
-                with self._generation_lock:
-                    response = self.model.chat(
-                        ctx.messages,
-                        max_tokens=ctx.max_gen,
-                        temperature=ctx.temperature,
-                        repeat_penalty=ctx.repeat_penalty,
-                        top_p=ctx.top_p,
-                        top_k=ctx.top_k,
-                    )
-                # Pass 156z9e (Stage B-2 sibling sweep): GGUF server
-                # streaming returns the full response in one chunk
-                # without going through stream_generate's finally hook.
-                # Pass 156z9cq: forward path="gguf" so the B-3a
-                # sibling WARNING fires when inline_search_splice_enabled
-                # is on (this path doesn't run splice yet).
-                self._record_search_emissions(response, path="gguf")
-                yield response
-                return
+                gguf_chunks: list[str] = []
+                try:
+                    with self._generation_lock:
+                        for text in self.model.stream_chat(
+                            ctx.messages,
+                            max_tokens=ctx.max_gen,
+                            temperature=ctx.temperature,
+                            repeat_penalty=ctx.repeat_penalty,
+                            top_p=ctx.top_p,
+                            top_k=ctx.top_k,
+                        ):
+                            gguf_chunks.append(text)
+                            yield text
+                    return
+                finally:
+                    # Pass 156z9cq: forward path="gguf" so the B-3a sibling
+                    # WARNING fires when inline_search_splice_enabled is on
+                    # (this path doesn't run splice yet).
+                    emitted = "".join(gguf_chunks)
+                    try:
+                        self._record_search_emissions(emitted, path="gguf")
+                    except Exception:
+                        logger.exception(
+                            "Stage B-2: GGUF stream scan crashed; "
+                            "last_search_queries left at previous value")
 
             # In-process llama-cpp-python — true streaming
             try:

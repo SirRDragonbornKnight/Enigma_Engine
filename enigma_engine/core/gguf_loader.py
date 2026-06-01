@@ -27,6 +27,7 @@ import socket
 import subprocess
 import time
 import urllib.request
+from collections.abc import Generator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -235,6 +236,42 @@ class LlamaServerBackend:
         resp = urllib.request.urlopen(req, timeout=timeout)
         return json.loads(resp.read())
 
+    def _post_stream(
+        self, path: str, payload: dict, timeout: int = 120,
+    ) -> Generator[str, None, None]:
+        """POST and yield content deltas from an OpenAI-style SSE stream.
+
+        llama-server emits ``text/event-stream`` lines of the form
+        ``data: {json}`` (terminated by ``data: [DONE]``) when the request
+        sets ``stream: True``. Yields each ``choices[0].delta.content``
+        fragment as it arrives; blank keepalive and malformed lines are
+        skipped.
+        """
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            f"{self._base_url}{path}",
+            data=data,
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            for raw in resp:
+                line = raw.decode("utf-8", "replace").strip()
+                if not line or not line.startswith("data:"):
+                    continue
+                chunk = line[len("data:"):].strip()
+                if chunk == "[DONE]":
+                    break
+                try:
+                    obj = json.loads(chunk)
+                except json.JSONDecodeError:
+                    continue
+                choices = obj.get("choices") or []
+                if not choices:
+                    continue
+                text = (choices[0].get("delta") or {}).get("content")
+                if text:
+                    yield text
+
     # ------------------------------------------------------------------
     # Generation (matches GGUFModel interface)
     # ------------------------------------------------------------------
@@ -284,6 +321,31 @@ class LlamaServerBackend:
         }
         result = self._post("/v1/chat/completions", payload)
         return result["choices"][0]["message"]["content"]
+
+    def stream_chat(
+        self,
+        messages: list[dict[str, str]],
+        max_tokens: int = 256,
+        temperature: float = 0.8,
+        **kwargs,
+    ) -> Generator[str, None, None]:
+        """Stream chat-completion content deltas via /v1/chat/completions.
+
+        Same payload as :meth:`chat` but with ``stream: True`` and an SSE
+        reader, so callers get true token-by-token output instead of one
+        buffered chunk.
+        """
+        payload: dict[str, Any] = {
+            "model": "local",
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "top_p": kwargs.get("top_p", 0.95),
+            "top_k": kwargs.get("top_k", 40),
+            "repeat_penalty": kwargs.get("repeat_penalty", 1.1),
+            "stream": True,
+        }
+        yield from self._post_stream("/v1/chat/completions", payload)
 
     def chat_with_tools(
         self,
@@ -742,6 +804,44 @@ class GGUFModel:
         except Exception as e:
             logger.error(f"Chat failed: {e}")
             raise
+
+    def stream_chat(
+        self,
+        messages: list[dict[str, str]],
+        max_tokens: int = 256,
+        temperature: float = 0.8,
+        **kwargs,
+    ) -> Generator[str, None, None]:
+        """Stream chat-completion content deltas token-by-token.
+
+        Server backend → llama-server SSE
+        (:meth:`LlamaServerBackend.stream_chat`); in-process
+        llama-cpp-python → ``create_chat_completion(stream=True)``.
+        Yields only non-empty content fragments.
+        """
+        if not self.is_loaded:
+            raise RuntimeError("Model not loaded. Call load() first.")
+
+        if self._server:
+            yield from self._server.stream_chat(
+                messages, max_tokens=max_tokens, temperature=temperature,
+                **kwargs,
+            )
+            return
+
+        stream_resp = self.model.create_chat_completion(
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            stream=True,
+            **kwargs,
+        )
+        for chunk in stream_resp:
+            choices = chunk.get("choices", [])
+            if choices:
+                text = choices[0].get("delta", {}).get("content", "")
+                if text:
+                    yield text
 
     def chat_with_tools(
         self,

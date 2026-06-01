@@ -8,6 +8,8 @@
 
 The custom `Enigma` transformer is architecturally well-built, but training it from scratch on consumer hardware (16 GB VRAM) cannot close the gap with Qwen3's pretrained knowledge for the breadth of tasks Enigma AI targets. Qwen3-8B (or 30B-A3B on capable hardware) fine-tuned with LoRA is the primary brain path. The from-scratch `Enigma` model stays in the codebase as an experimental / research track only — it does not drive the roadmap.
 
+> **Hardware correction (June 1 2026):** the dev box is actually an **RTX 5090 (32 GB VRAM) + ~66 GB RAM**, not the 16 GB assumed above. This softens the "can't fit" premise — Qwen3-8B fp16 (~16 GB) fits, and the 30B-A3B GGUF runs **fully GPU-offloaded** (~23 GB resident). The decision still stands (fine-tuning a strong pretrained base beats from-scratch training), and the 32 GB headroom makes LoRA SFT on the 8B comfortable for Block 4. Note: auto-detect uses the bundled `llama-server.exe` for GGUF, not in-process llama-cpp-python, because the 50-series (Blackwell, sm_120) needs newer CUDA than the installed wheel.
+
 **What this means in practice:**
 - Load and serve Qwen3 via the existing HuggingFace loader or llama-server GGUF path
 - Personality + task specialisation come from LoRA SFT runs on curated data via `training/training.py`
@@ -57,10 +59,10 @@ This is the real starting gate. Everything else builds on a working Qwen3 base.
 - [x] **Download Qwen3:** Already on disk.
   - `models/qwen3-8b/` — full HF safetensors (5 shards + config.json). **Use this for LoRA fine-tuning.**
   - `models/qwen3-30b-a3b/Qwen3-30B-A3B-Q4_K_M.gguf` — 30B MoE GGUF. **Use this for heavy inference/chat via llama-server.**
-- [ ] **Verify load:** Start the API server (`python run.py --serve --port 8081`), then `POST /api/models/load` with the path. Confirm `/api/models/status` returns `loaded`.
-- [ ] **Verify chat:** `POST /api/chat` with a simple message. Confirm a real text response comes back — not empty, not an error.
-- [ ] **Verify stream:** `POST /api/chat/stream` (SSE). Confirm tokens arrive incrementally.
-- [ ] **TRAIN stability check:** `POST /api/train` with `smoke_test_basic.txt`. Confirm lifecycle: `active → complete`, `abort_reason: ""`.
+- [x] **Verify load:** ✅ June 1 2026 — `run.py --serve` + `POST /api/models/load {"path":"qwen3-30b-a3b/Qwen3-30B-A3B-Q4_K_M.gguf"}` → `loaded:true`, ~23 GB VRAM (full GPU offload via bundled `llama-server.exe`). **Fixed BL-1:** `AppState.load_model` crashed on every GGUF load (`'GGUFModel' object has no attribute 'parameters'`) — param-count now guards on `hasattr(model,"parameters")`, mirroring `EnigmaEngine._log_init_info`'s `_is_gguf` guard. 1 regression test.
+- [x] **Verify chat:** ✅ June 1 2026 — `POST /api/chat "what is the capital of France?"` → `"The capital of France is Paris."` in 0.95 s. Coherent, non-empty.
+- [x] **Verify stream:** ✅ June 1 2026 — `POST /api/chat/stream` now yields **15 incremental `token` events** (`start → token×N → end`), confirmed live. **Fixed BL-2:** `LlamaServerBackend.chat()` hardcoded `stream:False`, so the server backend returned one buffered chunk (SSE framing worked but was not token-incremental). Added real SSE streaming (`LlamaServerBackend._post_stream`/`stream_chat` + `GGUFModel.stream_chat`) and wired the engine's GGUF server-backend branch in `engine_chat.stream_chat`. 3 tests. (In-process llama-cpp path already streamed.)
+- [ ] **TRAIN stability check:** `POST /api/train` with `smoke_test_basic.txt`. Confirm lifecycle: `active → complete`, `abort_reason: ""`. **Remaining (June 1 2026):** requires a *trainable* model loaded — the 30B GGUF is inference-only (llama-server subprocess), so this needs: unload GGUF → load a small scratch Enigma model → drive `mode:"sft"` with the smoke text as `data`. Deferred as a separable subsystem check; it gates Block 4 (LoRA SFT), not the now-verified chat path.
 
 #### Block 2 — Gradio UI
 
@@ -186,6 +188,17 @@ This is the most impactful block. The training infrastructure already exists —
 3. AutoResearch B-2/B-3 wired — model can look things up mid-generation
 4. Gradio UI running, functional, and smoke-tested
 5. All tests green, lint clean
+
+---
+
+### Recent closures (June 1 2026)
+
+**Block 1 live bring-up — Qwen3 chat path verified end-to-end.** Brought the API server up against the real `Qwen3-30B-A3B-Q4_K_M.gguf` (full GPU offload on the RTX 5090) and drove load → chat → stream. Two real defects found and fixed:
+
+- **BL-1 — GGUF load crash (blocked all GGUF loads via API).** `AppState.load_model` counted params via `engine.model.parameters()`, but a GGUF `engine.model` is a `GGUFModel` (llama.cpp wrapper, no `.parameters()`) → `AttributeError` → the endpoint's cleanup unloaded everything → HTTP 500. Fixed by guarding on `hasattr(model,"parameters")` (best-effort info-gathering must never fail a successful load), mirroring `EnigmaEngine._log_init_info`'s existing `_is_gguf` guard. `enigma_engine/api/server.py`; 1 regression test.
+- **BL-2 — GGUF server-backend streaming was not incremental.** `LlamaServerBackend.chat()` hardcoded `stream:False`, so `/api/chat/stream` returned the whole response in a single SSE `token` event. Added a real SSE reader (`_post_stream`) + `LlamaServerBackend.stream_chat` + `GGUFModel.stream_chat`, and rewired `engine_chat.stream_chat`'s server-backend branch to stream token-by-token (mirroring the in-process llama-cpp branch's accumulate-and-scan-in-`finally` Stage-B2 hook). Verified live: 15 incremental token events. `gguf_loader.py` + `engine_chat.py`; 3 tests.
+
+Suite after fixes: **3389 passed, 3 skipped**, ruff clean. Remaining Block 1 item: the TRAIN stability smoke check (needs a trainable model loaded — see Block 1 above).
 
 ---
 
