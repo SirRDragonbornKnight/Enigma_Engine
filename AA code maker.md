@@ -34,7 +34,7 @@ That is the long-term vision and it is **not** narrowed by the May 26 2026 Strat
 
 ### Near-term primary-brain path (Strategy Reset, May 26 2026)
 
-The current production brain is **Qwen3-8B fine-tuned with LoRA** (or Qwen3-30B-A3B GGUF on capable hardware), because training a from-scratch transformer on 16 GB VRAM can't close the knowledge gap with a pretrained base. The from-scratch `Enigma` transformer + `ForgeConfig` presets remain in the tree as a **research/experimental track** — not the daily-driver brain, but still important (see "AI trains AI" below).
+The current production brain is **Qwen3-8B fine-tuned with LoRA** (or Qwen3-30B-A3B-Instruct-2507 GGUF on capable hardware), because training a from-scratch transformer on 16 GB VRAM can't close the knowledge gap with a pretrained base. The from-scratch `Enigma` transformer + `ForgeConfig` presets remain in the tree as a **research/experimental track** — not the daily-driver brain, but still important (see "AI trains AI" below).
 
 ### AI trains AI (research / experimental track)
 
