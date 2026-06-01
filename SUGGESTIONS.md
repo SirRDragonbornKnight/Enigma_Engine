@@ -83,6 +83,16 @@ The token registry is done (`reasoning.py` Stage B-1). B-3 RAG injection is done
 
 This is the most impactful block. The training infrastructure already exists — what's needed is the data.
 
+**✅ v1 LANDED (June 1 2026) — Enigma has a voice.** Built and verified end-to-end:
+- **4.1 voice** → `data/enigma_voice.md`: identity = a *local, private, yours* AI; 8 traits (direct, concise-by-default, peer-not-servant, honest, pushes back, warm-dry, curious, no-boilerplate) + explicit anti-patterns.
+- **4.2 corpus** → `make_enigma_corpus.py` → `data/personality_corpus.jsonl`: 50 hand-crafted `{prompt, completion}` examples (Qwen3 ChatML, prompt-masked loss) across identity / casual / opinions / coding / knowledge / honesty-pushback / refusal / support / depth-on-demand.
+- **4.3 LoRA SFT** → `train_enigma_lora.py` (standalone transformers+PEFT — the in-house dispatcher LoRA path is broken on HF models, see below). r=16, α=32, dropout=0.05, target `q/k/v/o_proj`, 8 epochs, lr=2e-4. Loss **4.68 → 1.11**. Adapter → `models/enigma_lora_v1/` (15.3M trainable, 0.19%).
+- **4.4 eval** → `eval_enigma.py`: base-vs-Enigma adapter-toggle on **6 held-out prompts**. The voice generalizes (direct, owns takes, dry wit — "haiku about debugging" → *"Crash — line 17."*) AND it suppresses Qwen3's `<think>` rambling entirely. Coherence-benchmark scoring still TODO.
+
+**Pipeline bug found:** the in-house `LoraTrainer` (dispatcher `mode=lora`) crashes on HF models — mishandles `CausalLMOutput` at `lora_utils.py` ~L983. Spun off as a separate fix; `peft` was also missing (now installed). Until fixed, use the standalone `train_enigma_lora.py`.
+
+**Next on Block 4:** expand the corpus (50 → a few hundred) for robustness; wire the adapter into the inference / terminal-chat path so the user can actually chat with Enigma; run the coherence benchmark.
+
 **Step 4.1 — Corpus design**
 - [ ] Define the voice: pick 5–10 adjectives that describe how Enigma speaks (tone, formality, quirks). Write these down in a `data/enigma_voice.md` reference doc.
 - [ ] Define task coverage: list the topic areas Enigma should handle well (coding help, general Q&A, creative writing, reasoning, casual chat). Aim for ~equal distribution across categories.
