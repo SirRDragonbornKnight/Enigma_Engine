@@ -1,5 +1,14 @@
 # GUI Reference - Every Element Explained
 
+> **⚠️ SCHEDULED FOR DELETION** (Strategy Reset, May 26 2026). This document
+> describes the **tkinter desktop GUI** under `enigma_engine/gui/`. Per
+> SUGGESTIONS.md Block 2, the tkinter GUI is being replaced by a Gradio UI
+> (`enigma_engine/ui.py`) and will be deleted once Gradio is verified.
+> Until then this doc remains the canonical reference for the live GUI,
+> but **do not invest in new feature mapping here** — any GUI work
+> should target Gradio. After deletion this file moves to
+> `history/GUI_REFERENCE-tkinter.md`.
+
 This document maps every visible element in the Enigma Engine desktop GUI,
 what it is, where it lives in code, and what it does.
 

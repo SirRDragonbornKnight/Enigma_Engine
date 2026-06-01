@@ -24,8 +24,8 @@ Endpoints:
     POST /api/profiles/{id}/activate  Activate a profile
     GET  /api/config        Get generation config
     POST /api/config        Update generation config
-    GET  /api/history       Legacy alias -- returns active-conversation history
-    DELETE /api/history     Clear ALL conversations + KV cache (legacy alias)
+    GET  /api/history       Active-conversation history (convenience over /api/conversations/{id}/messages)
+    DELETE /api/history     Clear ALL conversations + KV cache (nuke-all; complements per-conv DELETE)
     GET  /api/training/status  Training progress
     POST /api/train         Start training
 
@@ -49,7 +49,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.responses import StreamingResponse as FastAPIStreamingResponse
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from enigma_engine import __version__
 from enigma_engine.core.json_schema_mask import validate_json_schema_shape
@@ -121,6 +121,10 @@ class AppState:
         self._active_conv_id: str | None = None
         self.active_profile: str | None = None
         self.config_overrides: dict[str, Any] = {}
+        # PERSONA-2 Slice 4: per-conversation style overrides set via the
+        # ``/style`` chat command. Keyed by conversation id; absent key =
+        # use the disk-loaded preferences from STYLE_PREFERENCES_PATH.
+        self._style_overrides_by_conversation: dict[str, Any] = {}
         self.start_time: float = time.time()
 
     # -- Copy-on-write snapshots (Suggestion #8D) ----------------------
@@ -200,6 +204,10 @@ class AppState:
                 self._conv_order.remove(conversation_id)
             except ValueError:
                 pass
+            # PERSONA-2 Slice 4: drop the per-conversation style override
+            # too so a recycled conversation id doesn't inherit stale
+            # /style state.
+            self._style_overrides_by_conversation.pop(conversation_id, None)
             if was_active:
                 self._active_conv_id = None
         if was_active:
@@ -257,8 +265,8 @@ class AppState:
         """Clear engine KV cache + history-summary cache.
 
         Called on conversation switch and on full history clear.
-        Both engine methods are best-effort: legacy engines may not
-        implement them.
+        Both engine methods are best-effort and guarded with hasattr
+        because mock engines in tests don't always implement them.
         """
         engine = self.engine
         if engine is None:
@@ -419,6 +427,112 @@ class AppState:
         # MC-2b: clear the active pointer on disk after unload.
         self._persist_active_conv_id()
 
+    # ── PERSONA-2 Slice 4: /style chat command parser + handler ─────────
+
+    # Single-token grammar — each value belongs to exactly one field, so the
+    # token alone is unambiguous. Mapping table doubles as the "valid token"
+    # list for the help / error messages so it can't drift.
+    _STYLE_TOKEN_MAP: dict[str, tuple[str, Any]] = {
+        "terse":   ("verbosity", "terse"),
+        "normal":  ("verbosity", "normal"),
+        "verbose": ("verbosity", "verbose"),
+        "casual":  ("formality", "casual"),
+        "neutral": ("formality", "neutral"),
+        "formal":  ("formality", "formal"),
+        "short":   ("default_response_length", "short"),
+        "medium":  ("default_response_length", "medium"),
+        "long":    ("default_response_length", "long"),
+        "bullets": ("prefer_bullet_points", True),
+        "code":    ("prefer_code_examples", True),
+    }
+
+    def _handle_style_command(
+        self,
+        message: str,
+        conv_id: str,
+    ) -> str | None:
+        """Detect and handle ``/style`` chat commands.
+
+        Returns the ack message string if ``message`` is a ``/style``
+        command — the caller (``chat()``) returns this directly without
+        invoking the model and without appending to history. Returns
+        ``None`` if ``message`` is not a style command (fall through to
+        normal chat).
+
+        Recognized:
+        - ``/style``           → show current overrides + valid tokens
+        - ``/style reset``     → clear conversation overrides
+        - ``/style <token>``   → set the field that token belongs to
+
+        Tokens (single source of truth at ``_STYLE_TOKEN_MAP``):
+        ``terse`` / ``normal`` / ``verbose`` (verbosity),
+        ``casual`` / ``neutral`` / ``formal`` (formality),
+        ``short`` / ``medium`` / ``long`` (length),
+        ``bullets`` (enable bullet points),
+        ``code`` (enable code examples).
+
+        Identity-style overrides like ``/style "be a pirate"`` are
+        REFUSED because the grammar only accepts known enum tokens —
+        identity stays in LoRA weights, not user-typeable strings.
+        """
+        from dataclasses import asdict as _asdict
+
+        from enigma_engine.core.style_preferences import (
+            STYLE_PREFERENCES_PATH,
+            StylePreferences,
+            load_style_preferences,
+        )
+
+        msg = message.strip()
+        if not msg.lower().startswith("/style"):
+            return None
+
+        rest = msg[len("/style"):].strip()
+        token = rest.lower()
+
+        if not token:
+            with self._lock:
+                current = self._style_overrides_by_conversation.get(conv_id)
+            if current is None:
+                current = load_style_preferences(STYLE_PREFERENCES_PATH)
+            return (
+                f"Current style for this conversation: "
+                f"verbosity={current.verbosity}, "
+                f"formality={current.formality}, "
+                f"length={current.default_response_length}, "
+                f"code_examples={current.prefer_code_examples}, "
+                f"bullets={current.prefer_bullet_points}. "
+                f"Tokens: {', '.join(self._STYLE_TOKEN_MAP)}, reset."
+            )
+
+        if token == "reset":
+            with self._lock:
+                self._style_overrides_by_conversation.pop(conv_id, None)
+            return "Style overrides cleared for this conversation."
+
+        if token not in self._STYLE_TOKEN_MAP:
+            return (
+                f"Unknown style token '{rest}'. Valid: "
+                f"{', '.join(self._STYLE_TOKEN_MAP)}, reset."
+            )
+
+        field, value = self._STYLE_TOKEN_MAP[token]
+        with self._lock:
+            current = self._style_overrides_by_conversation.get(conv_id)
+        if current is None:
+            # Start from disk-loaded preferences so any global
+            # customizations carry into the conversation override.
+            current = load_style_preferences(STYLE_PREFERENCES_PATH)
+        merged = _asdict(current)
+        merged[field] = value
+        try:
+            new_prefs = StylePreferences(**merged)
+        except (ValueError, TypeError) as exc:
+            return f"Invalid style: {exc}"
+        with self._lock:
+            self._style_overrides_by_conversation[conv_id] = new_prefs
+        return f"Set {field}={value} for this conversation."
+
     def chat(self, message: str, temperature: float | None = None,
              max_tokens: int | None = None,
              top_p: float | None = None,
@@ -458,6 +572,12 @@ class AppState:
         if switched:
             self._invalidate_engine_state()
 
+        # PERSONA-2 Slice 4: intercept ``/style`` commands BEFORE the
+        # model call. They never hit the engine, never append to history.
+        style_ack = self._handle_style_command(message, conv_id)
+        if style_ack is not None:
+            return style_ack, conv_id
+
         # Build kwargs from config overrides + per-request overrides
         kwargs: dict[str, Any] = {}
         if self.config_overrides:
@@ -478,6 +598,13 @@ class AppState:
             kwargs["json_schema"] = json_schema
         if system_prompt is not None:
             kwargs["system_prompt"] = system_prompt
+
+        # PERSONA-2 Slice 4: forward per-conversation style overrides if
+        # the user has issued any ``/style`` commands on this thread.
+        with self._lock:
+            style_override = self._style_overrides_by_conversation.get(conv_id)
+        if style_override is not None:
+            kwargs["style_overrides"] = style_override
 
         # MC-1: pass the per-conversation history explicitly so the
         # engine prefills against the right context regardless of its
@@ -520,12 +647,14 @@ class AppState:
     def clear_all_conversations(self) -> None:
         """Clear all conversations and invalidate engine state.
 
-        Used by ``DELETE /api/history`` (legacy nuke-everything route).
+        Used by ``DELETE /api/history`` (the nuke-everything route).
         """
         with self._lock:
             all_ids = list(self._histories.keys())
             self._histories.clear()
             self._conv_order.clear()
+            # PERSONA-2 Slice 4: nuke per-conversation style overrides too.
+            self._style_overrides_by_conversation.clear()
             self._active_conv_id = None
         self._invalidate_engine_state()
         # MC-2: purge all on-disk files.
@@ -1282,6 +1411,25 @@ async def chat_stream(req: ChatRequest):
     if switched:
         state._invalidate_engine_state()
 
+    # PERSONA-2 Slice 4 sibling-boundary closure (F-A audit, May 27 2026):
+    # /style is a control command, not chat content. Intercept here so a
+    # streaming client gets the same behavior as the non-streaming
+    # /api/chat path — no model call, no SSE stream, just a JSON ack.
+    # Wrapped so a raise inside the handler releases the inference lock
+    # rather than leaking it (same convention as _resolve_and_activate
+    # above; F-Audit-2 closure).
+    try:
+        style_ack = state._handle_style_command(req.message, conv_id)
+    except Exception:
+        _inference_lock.release()
+        raise
+    if style_ack is not None:
+        _inference_lock.release()
+        return JSONResponse(
+            status_code=200,
+            content={"message": style_ack, "conversation_id": conv_id},
+        )
+
     # Build kwargs from config overrides + per-request overrides
     kwargs: dict[str, Any] = {}
     if state.config_overrides:
@@ -1297,11 +1445,19 @@ async def chat_stream(req: ChatRequest):
     if req.repetition_penalty is not None:
         kwargs["repetition_penalty"] = req.repetition_penalty
     # N-15c: json_schema reaches stream_generate via stream_chat's **kwargs
-    # forwarding. Omit-when-None to stay compatible with legacy engines
-    # that lack the parameter on stream_generate (same discipline as the
-    # non-streaming /api/chat handler).
+    # forwarding. Omit-when-None so mock engines in tests that don't
+    # accept the kwarg on stream_generate don't fail on kwarg-pass; the
+    # real EnigmaEngine accepts it. Same discipline as non-streaming
+    # /api/chat handler.
     if req.json_schema is not None:
         kwargs["json_schema"] = req.json_schema
+
+    # PERSONA-2 Slice 4 sibling-boundary closure (F-A audit): forward
+    # per-conversation style overrides on the stream path too.
+    with state._lock:
+        style_override = state._style_overrides_by_conversation.get(conv_id)
+    if style_override is not None:
+        kwargs["style_overrides"] = style_override
 
     # Pass 156z9g: AutoResearch-2 pre-gen wiring (streaming). Post-gen
     # retry is intentionally NOT wired here — it would require ending
@@ -1470,23 +1626,23 @@ async def batch_inference(req: BatchRequest):
 
 @app.get("/api/history")
 async def get_history():
-    """Get chat history for the currently-active conversation (legacy route).
+    """Get chat history for the currently-active conversation.
 
-    MC-1: with per-conversation scoping this returns the most recent
-    conversation's transcript, or an empty list if none has been
-    started yet.  New clients should prefer
-    ``GET /api/conversations/{id}/history``.
+    Returns the most recent conversation's transcript, or an empty
+    list if none has been started yet. Clients with a specific
+    conversation id should prefer ``GET /api/conversations/{id}/history``.
     """
     return {"history": state.history_snapshot()}
 
 
 @app.delete("/api/history")
 async def clear_history():
-    """Clear all conversations and invalidate engine state (legacy nuke route).
+    """Clear all conversations and invalidate engine state.
 
-    MC-1: matches the prior behaviour of wiping everything in one
-    call.  Clients that want per-conversation deletion should use
-    ``DELETE /api/conversations/{id}`` instead.
+    This is the nuke-all route; it complements per-conversation
+    ``DELETE /api/conversations/{id}`` which only clears one thread.
+    Useful for "start fresh" workflows where the caller doesn't have
+    every conversation id on hand.
     """
     state.clear_all_conversations()
     return {"status": "ok"}
@@ -1687,6 +1843,74 @@ async def update_engine_flags(req: EngineFlagsUpdate):
 
 
 # ---------------------------------------------------------------------------
+# Style preferences (PERSONA-2 Slice 3) — Layer 2 of the layered-personality
+# model. User-side surface preferences (verbosity / formality / length /
+# format). Identity stays in LoRA weights and is NOT exposed here.
+# ---------------------------------------------------------------------------
+
+
+class StylePreferencesUpdate(BaseModel):
+    """Body for ``PUT /api/style-preferences``.
+
+    All fields optional — only provided fields are changed. Omitted
+    fields keep their current value. Invalid enum values are rejected
+    at the boundary (HTTP 422), so callers can't accidentally jailbreak
+    identity via the style channel (e.g. ``verbosity="pirate"``).
+    """
+    model_config = ConfigDict(extra="forbid")
+    verbosity: str | None = None
+    formality: str | None = None
+    default_response_length: str | None = None
+    prefer_code_examples: bool | None = None
+    prefer_bullet_points: bool | None = None
+
+
+@app.get("/api/style-preferences")
+async def get_style_preferences():
+    """Get current user style preferences.
+
+    Returns the on-disk preferences (or defaults if no file exists).
+    Black-box invariant: this is user-side runtime config; the model
+    artifact is never touched.
+    """
+    from dataclasses import asdict
+    from enigma_engine.core.style_preferences import (
+        STYLE_PREFERENCES_PATH,
+        load_style_preferences,
+    )
+    prefs = load_style_preferences(STYLE_PREFERENCES_PATH)
+    return asdict(prefs)
+
+
+@app.put("/api/style-preferences")
+async def put_style_preferences(req: StylePreferencesUpdate):
+    """Update user style preferences (partial — omitted fields unchanged).
+
+    Validates the merged result against the enum constraints; rejects
+    with HTTP 422 if any value is invalid. On success, returns the new
+    full preferences dict.
+    """
+    from dataclasses import asdict
+    from enigma_engine.core.style_preferences import (
+        STYLE_PREFERENCES_PATH,
+        StylePreferences,
+        load_style_preferences,
+        save_style_preferences,
+    )
+
+    current = load_style_preferences(STYLE_PREFERENCES_PATH)
+    updates = req.model_dump(exclude_none=True)
+    merged = asdict(current)
+    merged.update(updates)
+    try:
+        new_prefs = StylePreferences(**merged)
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(422, str(exc)) from exc
+    save_style_preferences(new_prefs, STYLE_PREFERENCES_PATH)
+    return asdict(new_prefs)
+
+
+# ---------------------------------------------------------------------------
 # Training
 # ---------------------------------------------------------------------------
 
@@ -1711,14 +1935,21 @@ _training_state: dict[str, Any] = {
 
 
 class TrainRequest(BaseModel):
-    # Legacy SFT-only fields (kept for backward compatibility).
-    data_file: str | None = Field(default=None, max_length=MAX_PATH_LENGTH)
-    epochs: int = Field(default=5, ge=1, le=1000)
-    learning_rate: float = Field(default=0.00005, gt=0.0, le=1.0)
-    batch_size: int = Field(default=4, ge=1, le=256)
+    """Training request — dispatcher shape only.
 
-    # Dispatcher fields (forwarded verbatim to TrainingJobConfig).
-    mode: str | None = None
+    Pre-May-27 2026 the API accepted a legacy SFT-only shape
+    (``data_file`` + ``epochs`` + ``learning_rate`` + ``batch_size``)
+    in addition to the dispatcher shape. The legacy shape was a
+    backward-compat shim and was deleted per AA code maker §2 rule
+    ("Do not add backward-compatible shims"). Callers that previously
+    used ``data_file`` must now pass ``mode: "sft"`` with ``data``
+    holding the file content (read by the caller) and ``training``
+    holding the per-mode settings.
+
+    All fields below forward verbatim to
+    :class:`TrainingJobConfig`.
+    """
+    mode: str
     data: Any = None
     training: dict[str, Any] | None = None
     dpo: dict[str, Any] | None = None
@@ -1767,12 +1998,15 @@ async def cancel_training():
 async def start_training(req: TrainRequest):
     """Start a training run in the background.
 
-    Requires a model to be loaded. Two request shapes are supported:
+    Requires a model to be loaded. The request body is the dispatcher
+    shape: ``mode`` plus optional per-mode fields (``data``,
+    ``training``, ``dpo``, ``grpo``, ``lora``, ...). The body is
+    forwarded verbatim to :class:`TrainingJobConfig`.
 
-    1. Legacy SFT: pass `data_file` (resolved under data/) plus optional
-       epochs/learning_rate/batch_size. Routes to dispatcher mode 'sft'.
-    2. Config-body: pass `mode` plus dispatcher fields (data, training, dpo,
-       grpo, lora, ...). Forwarded verbatim to TrainingJobConfig.
+    Callers that need to train on a file's contents must read the file
+    themselves and pass the text via ``data`` (the API does not resolve
+    paths). The legacy ``data_file`` shim was deleted May 27 2026 per
+    AA code maker §2 rule on backward-compat shims.
     """
     if state.engine is None:
         return JSONResponse(
@@ -1786,53 +2020,20 @@ async def start_training(req: TrainRequest):
                 content={"error": "Training already in progress."},
             )
 
-    has_mode = req.mode is not None
-    has_data_file = req.data_file is not None
-    if has_mode == has_data_file:
-        raise HTTPException(
-            422,
-            "Provide exactly one of 'mode' or 'data_file'",
-        )
-
-    # Build dispatcher payload.
-    is_legacy = not has_mode
-
-    if is_legacy:
-        # Legacy SFT path: data_file required, resolved under data/.
-        if not req.data_file:
-            raise HTTPException(422, "data_file is required when mode is not set")
-        data_dir = PROJECT_ROOT / "data"
-        data_path = (data_dir / req.data_file).resolve()
-        try:
-            data_path.relative_to(data_dir.resolve())
-        except ValueError:
-            raise HTTPException(403, "Data file must be inside the data directory") from None
-        if not data_path.exists():
-            raise HTTPException(404, f"Data file not found: {req.data_file}")
-        dispatch_dict: dict[str, Any] = {
-            "mode": "sft",
-            "data": data_path.read_text(encoding="utf-8"),
-            "training": {
-                "epochs": req.epochs,
-                "learning_rate": req.learning_rate,
-                "batch_size": req.batch_size,
-            },
-        }
-    else:
-        # Config-body path: forward dispatcher fields directly.
-        dispatch_dict = {"mode": req.mode}
-        if req.data is not None:
-            dispatch_dict["data"] = req.data
-        for field in (
-            "training", "dpo", "grpo", "lora", "simpo", "kto", "orpo",
-            "rest", "reward_model", "vision", "audio", "self_play",
-            "rlhf", "remax", "adaptive", "resume_from",
-        ):
-            value = getattr(req, field, None)
-            if value is not None:
-                dispatch_dict[field] = value
-        if req.allow_experimental:
-            dispatch_dict["allow_experimental"] = True
+    # Build dispatcher payload (config-body shape only).
+    dispatch_dict: dict[str, Any] = {"mode": req.mode}
+    if req.data is not None:
+        dispatch_dict["data"] = req.data
+    for field in (
+        "training", "dpo", "grpo", "lora", "simpo", "kto", "orpo",
+        "rest", "reward_model", "vision", "audio", "self_play",
+        "rlhf", "remax", "adaptive", "resume_from",
+    ):
+        value = getattr(req, field, None)
+        if value is not None:
+            dispatch_dict[field] = value
+    if req.allow_experimental:
+        dispatch_dict["allow_experimental"] = True
 
     from enigma_engine.training.schema import TrainingJobConfig, materialize_dispatch_payload
 
@@ -2000,7 +2201,6 @@ async def start_training(req: TrainRequest):
     return {
         "status": "started",
         "mode": job.mode,
-        "data_file": req.data_file,
         "epochs": job.training.epochs,
     }
 

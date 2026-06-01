@@ -45,10 +45,10 @@ The Svelte frontend (`enigma_engine/web/`) cannot build as-is (five missing page
 
 These are small targeted fixes. Do them before any training run so the model stack is clean.
 
-- [ ] **BUG-1 (CRITICAL):** `enigma_engine/core/model_components.py` ~L426 — guard `_kv_share_source._kv_cache` before calling `.get()` when `use_cache=True` on first forward. Add test `test_kv_share_first_forward_no_crash`.
-- [ ] **BUG-2:** `enigma_engine/core/model.py` `_apply_static_int8_quantization()` — fix log message to say "dynamic" when falling back.
-- [ ] **BUG-3:** `enigma_engine/core/inference.py` `generate()` — add `ValueError` when more than one of `max_tokens`/`max_new_tokens`/`max_length` is passed, matching `stream_generate()`.
-- [ ] Run `ruff check enigma_engine/ tests/` and `python -m pytest tests/ -q` — confirm still green after fixes.
+- [x] **BUG-1 (CRITICAL):** `enigma_engine/core/model_components.py` ~L426 — guard `_kv_share_source._kv_cache` before calling `.get()` when `use_cache=True` on first forward. Add test `test_kv_share_first_forward_no_crash`. **Closed `da65525` (May 27 2026). Fix uses fall-through-to-local-K/V when source layer hasn't warmed yet; 2 regression tests (`test_kv_share_first_forward_no_crash`, `test_kv_share_after_clear_cache_no_crash`) with falsification verified.**
+- [x] **BUG-2:** `enigma_engine/core/model.py` `_apply_static_int8_quantization()` — fix log message to say "dynamic" when falling back. **Closed `da65525`. Success log moved inside helper to reflect actual path; INT4 fallback also corrected. 2 caplog tests.**
+- [x] **BUG-3:** `enigma_engine/core/inference.py` `generate()` — add `ValueError` when more than one of `max_tokens`/`max_new_tokens`/`max_length` is passed, matching `stream_generate()`. **Closed `da65525`. Sibling-boundary closure on `_prepare_chat` followed May 27 2026 audit; chat path now raises same `ValueError`.**
+- [x] Run `ruff check enigma_engine/ tests/` and `python -m pytest tests/ -q` — confirm still green after fixes. **3310 passed, 3 skipped, ruff clean (May 27 2026).**
 
 #### Block 1 — Get Qwen3 loading and chatting
 
@@ -108,6 +108,68 @@ This is the most impactful block. The training infrastructure already exists —
 - [ ] `BackgroundTrainer` picks these up automatically on the next replay cycle.
 - [ ] After 50+ corrections accumulate, a DPO pass runs automatically (`_maybe_train_dpo_pairs()` in `router.py`).
 
+#### Block 4.5 — Layered personality (PERSONA-2)
+
+**Trigger.** May 27 2026 review surfaced that the current "Personality from training, not the user" constraint is too tight — it conflates **core identity** (correct to lock) with **surface style** (better adjusted per-context). The strongest assistants (Claude, ChatGPT) combine both. Black-box constraint preserved: model artifact stays untouched, style preferences are user-side runtime config that follows the user, not the model.
+
+**Design — layered personality:**
+
+| Layer | What | Where stored | Who sets it | How applied |
+|---|---|---|---|---|
+| 1. Core identity | Voice, humor, values, reasoning style — what makes Enigma *Enigma* | LoRA adapter weights | Training corpus + TEACH-1 corrections | Active LoRA at inference |
+| 2. Style preferences | Verbosity, formality, default length, output format | `data/style_preferences.json` (atomic save) | User via GUI settings | Injected as `[USER STYLE PREFERENCES]` block in system prompt |
+| 3. Per-conversation overrides | "Be terse for this chat" via natural language or `/style` command | Conversation state (in-memory) | User mid-conversation | Layered on top of (2) for current conversation only; resets on new conversation |
+
+**Constraint to change in AA code maker.md:**
+- FROM: *"Personality from training, not the user — the AI's voice, mood, and style are learned, not configured per-session."*
+- TO: *"Core identity from training; surface style from the user. The AI's voice, humor, values, and reasoning patterns are LoRA-trained and locked — users don't edit weights, and asking the AI to 'be a pirate' doesn't override its core. Surface preferences (verbosity, formality, length, output format) are user-adjustable per-conversation via the profile or natural-language requests. Identity corrections feed training; style corrections feed the profile."*
+
+**Implementation slices (in order; each is shippable):**
+
+- [ ] **Slice 0 — Update constraint wording.** Edit AA code maker.md §Project Goal Constraints. Document the layered model in the same constraint block. Smallest change; gates everything else.
+- [ ] **Slice 1 — `StylePreferences` schema + storage.** New dataclass in `enigma_engine/core/style_preferences.py` with: `verbosity` (terse/normal/verbose), `formality` (casual/neutral/formal), `default_response_length` (short/medium/long), `prefer_code_examples` (bool), `prefer_bullet_points` (bool). Atomic load/save to `data/style_preferences.json`. Defaults preserve current behavior — no regression for existing users. Tests: schema round-trip, atomic save, defaults match current behavior.
+- [ ] **Slice 2 — Inject into system prompt.** In `_build_gui_context()` (gui_logic.py:196) and the equivalent API-side path, assemble a `[USER STYLE PREFERENCES]` block when ANY preference is non-default. Skip injection entirely when all defaults (zero overhead for users who don't customize). Block format is machine-readable enough for the LLM to use AND human-readable enough that the user can see what's being applied. Tests: caplog/captured-prompt assertion that the block appears when non-default, absent at defaults.
+- [ ] **Slice 3 — GUI controls.** One settings panel in Gradio UI (and CONFIG page in tkinter while it lives) with 5 controls — 3 dropdowns + 2 checkboxes. Save button persists to disk. "Reset to defaults" button. Tests: round-trip save/load through the GUI handler.
+- [ ] **Slice 4 — Per-conversation override commands.** Chat-side: user can say `/style terse`, `/style normal`, `/style reset` (chat commands) to override Slice 2 settings for the current conversation only. Resets on new conversation. Also: natural-language detection ("be more concise" → infer `verbosity=terse` for this chat). Tests: override persists per-conversation, doesn't leak to next conversation.
+- [ ] **Slice 5 — Corrections-loop categorization. DEFERRED — blocked on Block 2 (Gradio UI).** When user clicks FIX (TEACH-1), they pick: (a) "What it said" → feeds DPO replay (current behavior), or (b) "How it said it" → updates style preferences. Default if unspecified: identity (preserves current behavior). Tests: identity corrections still flow to existing DPO pipeline (no regression); style corrections update preferences without touching weights. **Why deferred (May 27 2026):** the categorization UX needs an actual UI affordance — the FIX button has to surface a "What's wrong?" picker for the user to choose between identity and style. Without the Gradio UI (Block 2) shipped, building the categorization plumbing now would be backend code with no user-facing path to exercise it (dead-infra anti-pattern). Resume this slice immediately after Block 2 lands: add the picker to the Gradio FIX-button flow, then wire the categorized correction through `BackgroundTrainer.ingest_corrections_file()` (identity branch) vs `PUT /api/style-preferences` (style branch).
+
+**Tests to write FIRST (per Test Loop):**
+- Default behavior unchanged when style preferences are at defaults — no regression for existing users
+- Style preferences round-trip through JSON
+- Style preferences inject as a clearly-marked block, never silently
+- Per-conversation overrides don't leak across conversations
+- Identity corrections still feed DPO (no behavior change to existing TEACH-1 path)
+- Black-box invariant: model file hash unchanged when style preferences are written
+
+**Risks / open questions:**
+- **Schema bloat.** 5 preferences is enough. Don't add more until a real user need surfaces. YAGNI.
+- **Contradictory preferences** (e.g. "terse" + "always include code examples"). Document precedence: more-specific overrides more-general. Test the edge case.
+- **Style override of identity** (e.g. user types `/style "be a pirate"`). REFUSE — that's identity, not style. The chat command takes only known enum values; refuse free-text.
+- **Slice 5 is the hardest part.** Could rathole. Defer until Slices 0-4 are green and we see what corrections users actually make.
+- **Multi-persona** (e.g. "work me" / "creative me" with different preferences). Out of scope for now. Design Slice 1 schema so it could extend to multiple profiles later.
+- **Per-tool style** (terse in code, chatty in casual). Out of scope. Could later key style off the active tool context.
+
+**Definition of done:**
+1. Constraint updated in AA code maker.md
+2. `StylePreferences` schema + storage works
+3. Injection into system prompt is observable in tests
+4. GUI controls round-trip
+5. Per-conversation overrides work and reset cleanly
+6. Corrections-loop categorization wired (basic version)
+7. Black-box invariant: no model file written by this feature; all preferences are user-side runtime config
+8. All tests green, ruff clean
+9. Existing TEACH-1 / DPO path unchanged for identity corrections
+
+**Honest scope estimate:** Slices 0-4 are ~1-2 days solo. Slice 5 is a separate slice that might take 1-2 more days because the user-categorization UX is the trickiest part. Total: 3-4 working days for a complete layered-personality feature.
+
+**What this does NOT change:**
+- The LoRA training pipeline — unchanged
+- The TEACH-1 corrections loop for identity — unchanged
+- The `AIProfile` task-overlay system_prompt — unchanged
+- The black-box constraint — preserved (model artifact never touched by this feature)
+
+---
+
 #### Block 5 — Mods (one at a time, only after Blocks 1–4 are green)
 
 - [ ] Vision quality: end-to-end test with a real vision-capable model
@@ -127,13 +189,26 @@ This is the most impactful block. The training infrastructure already exists —
 
 ---
 
-### Pre-Block-1 bug fixes (from May 26 deep audit — fix before next feature work)
+### Recent closures (May 27 2026)
 
-Three bugs found in the deep audit of `enigma_engine/core/`. All are small, targeted fixes. Full details in `CODE_REVIEW.md` under **Deep Audit Pass — May 26, 2026**.
+**Backward-compat shim sweep** — per AA code maker §2 ("Do not add backward-compatible shims"). Cleaned up actual rule violations in code:
 
-- [ ] **BUG-1 (CRITICAL):** `model_components.py` ~L426 — cross-layer KV sharing crashes with `AttributeError` on first forward pass when `use_cache=True` because `_kv_share_source._kv_cache` is `None`. Guard needed before calling `.get()`.
-- [ ] **BUG-2 (low):** `model.py` `_apply_static_int8_quantization()` — logs `"Applied static INT8 quantization"` when it actually ran dynamic INT8. Fix the log message.
-- [ ] **BUG-3 (medium):** `inference.py` `generate()` — silently accepts multiple conflicting aliases (`max_tokens`/`max_new_tokens`/`max_length`) last-wins, while `stream_generate()` raises `ValueError`. Align `generate()` to match.
+- `enigma_engine/core/model_config.py` — deleted (whole-file re-export shim for `MODEL_PRESETS`)
+- `enigma_engine/core/tokenizer.py::load_tokenizer()` — deleted (alias for `get_tokenizer()`); single caller migrated
+- `enigma_engine/core/gguf_loader.py` re-exports — deleted (15 dequant/parse symbols re-exported "for backward compatibility"; zero callers)
+- `enigma_engine/api/server.py::TrainRequest` legacy SFT-only shape — deleted (`data_file`+`epochs`+`learning_rate`+`batch_size` parallel to dispatcher shape); `mode` field is now required; 6 shim tests deleted, 2 new tests added for new shape + legacy rejection
+
+**Mislabeled comments fixed:**
+- `inference.py` / `engine_generation.py` — `max_tokens`/`max_new_tokens`/`max_length` were tagged "backward compatibility"; relabeled as industry-standard SDK aliases (HF/OpenAI/Anthropic)
+- `rag.py::TfidfVectorizer` — "kept for backward compatibility" replaced with honest "rename has high cost (30+ test imports + on-disk schema)"
+- `/api/history` GET/DELETE routes — "legacy alias" / "legacy nuke route" replaced with honest "convenience over per-conv route" / "complements per-conv DELETE"
+
+**F1-F4 audit closures** (earlier May 27 session):
+- F1: BUG-1/2/3 status flipped to `[x]` in SUGGESTIONS.md (had been `[ ]` open in two duplicate sections)
+- F2/F3: CLEANUP_TRACKER stale claims about already-closed bugs in shell_cmd and engine_generation refreshed
+- F4: `_prepare_chat` silent alias-pop closed — same `ValueError` gate as `generate()` and `stream_generate()` now applied at the chat layer too (sibling-boundary miss from the original BUG-3 fix)
+
+Final suite after sweep: **3306 passed, 3 skipped**, ruff clean.
 
 ---
 

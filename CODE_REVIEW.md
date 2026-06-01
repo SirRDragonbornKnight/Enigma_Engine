@@ -1,15 +1,15 @@
 ﻿# Code Review Tracker
 
 **Started:** March 24, 2026
-**Last pass:** Deep audit pass (May 26, 2026) — **Full read-through of core/model_components, model, inference, engine_generation, engine_chat, rag, rag_dense, memory, auto_research, personality_data, personality_consistency, monologue, hardware_detection, reasoning. Bugs found and documented below.**
+**Last pass:** May 27 2026 — **F1-F4 audit closures + doc resync** (commit pending). BUG-1/2/3 from May 26 deep audit + 5 live-path bugs + 1 sibling-boundary miss closed in `da65525` + working tree. Suite **3312 passed, 3 skipped**, ruff clean.
 
 ## Priority Queue (Next Actions)
 
-**🔥 IMMEDIATE: Bugs found in deep audit (fix before next feature work)**
+**🔥 IMMEDIATE: Deep-audit bugs — ALL CLOSED**
 
-- [ ] **CRITICAL — `model_components.py` L426:** Cross-layer KV sharing `_kv_share_source._kv_cache.get()` when `use_cache=True` on first forward → `_kv_cache` is `None` → `AttributeError`. Fix: guard `if self._kv_share_source._kv_cache is not None` before calling `.get()`, otherwise fall through to self-attention for that layer.
-- [ ] **MISLEADING LOG — `model.py` `_apply_static_int8_quantization()`:** Falls back silently to dynamic INT8 but logs `"Applied static INT8 quantization"`. Fix: log the actual path taken.
-- [ ] **INCONSISTENCY — `inference.py` `generate()`:** Multiple `max_tokens`/`max_new_tokens`/`max_length` aliases overwrite `max_gen` with last-wins semantics; `stream_generate()` was upgraded to raise `ValueError` for this case. Fix: align `generate()` to match `stream_generate()` behavior.
+- [x] **CRITICAL — `model_components.py` L426:** Cross-layer KV sharing `_kv_share_source._kv_cache.get()` when `use_cache=True` on first forward → `_kv_cache` is `None` → `AttributeError`. **Closed `da65525` — fall-through to local K/V projection when source not warm; 2 regression tests + falsification verified.**
+- [x] **MISLEADING LOG — `model.py` `_apply_static_int8_quantization()`:** Falls back silently to dynamic INT8 but logs `"Applied static INT8 quantization"`. **Closed `da65525` — success log moved inside helper so it reflects actual path; INT4 fallback also corrected; 2 caplog tests.**
+- [x] **INCONSISTENCY — `inference.py` `generate()`:** Multiple `max_tokens`/`max_new_tokens`/`max_length` aliases overwrite `max_gen` with last-wins semantics; `stream_generate()` was upgraded to raise `ValueError` for this case. **Closed `da65525`; chat-path sibling closure landed May 27 in working tree (`_prepare_chat` raises same `ValueError`).**
 
 **🟡 PERFORMANCE DEBT (known, not blocking)**
 
@@ -154,43 +154,50 @@ The following files were sampled (first 150–200 lines) but not fully read. The
 
 ### Next Actions After This Pass
 
-1. **Fix BUG-1** (KV share crash) — `model_components.py` ~L426. Add guard + test. Low-effort, high-severity.
-2. **Fix BUG-2** (misleading log) — `model.py` `_apply_static_int8_quantization()`. One-liner log fix.
-3. **Fix BUG-3** (alias inconsistency) — `inference.py` `generate()`. Add ValueError guard matching `stream_generate()`.
-4. **Document PERF-1** — add TODO comment in `batch_generate()` decode loop.
+1. ~~Fix BUG-1~~ **CLOSED** (`da65525`, May 27 2026).
+2. ~~Fix BUG-2~~ **CLOSED** (`da65525`).
+3. ~~Fix BUG-3~~ **CLOSED** (`da65525` + chat-path sibling May 27 working tree).
+4. **Document PERF-1** — add TODO comment in `batch_generate()` decode loop. Still open.
 5. Proceed to **Block 2 (Gradio UI)** per STRATEGY RESET execution sequence in SUGGESTIONS.md.
 
 ---
 
-## Priority Queue (Next Actions)
+## Resume Point (Next Session)
 
-**🔥 ACTIVE NOW: Main AI 4-step sequence (in order)**
-- [x] LOGIC: baseline/runtime audit performed (`ruff` clean, `pytest` green, API health verified)
-- [x] LANGUAGE: chat/runtime path second (load + chat verified with `enigma_pi_zero.pth`; `smoke.pth` is a model-specific failure case)
-- [ ] VISUAL: multimodal/vision path third
-- [x] TRAIN: training smoke path verified (`/api/train` legacy SFT on `smoke_test_basic.txt` completed)
-- [ ] Commit only core fixes needed for readiness in this sequence
+**Strategy Reset (May 26 2026)** chose Qwen3 LoRA + Gradio UI; supersedes the older `LOGIC → LANGUAGE → VISUAL → TRAIN` 4-step ordering. Active execution sequence lives in [SUGGESTIONS.md](SUGGESTIONS.md).
 
-**🟡 PARKED: Web UI Phase 1-3**
-- Scaffold already created under `enigma_engine/web/`
-- Resume after core AI readiness checkpoints are green
+- **Next action:** Block 1 verification → load Qwen3-8B (`models/qwen3-8b/`) via `POST /api/models/load`, confirm chat + stream + train smoke.
+- **Then:** Block 2 → build `enigma_engine/ui.py` (Gradio) on top of `EnigmaClient`.
+- **Command entry:** `python run.py --serve --port 8081`
+- **Stopping rule:** do not start Block 2 until Block 1 verification rows are checked in SUGGESTIONS.md.
 
-**📋 BACKLOG: (No timeline until core-first block closes)**
+**Closed since prior Resume Point:**
+- VISUAL multimodal API contract (May 26 — vocab guards on load + runtime; images forwarded on `/api/chat`, rejected on `/api/chat/stream`)
+- LANGUAGE alias inconsistency (May 27 — BUG-3 + `_prepare_chat` sibling)
+- LOGIC live-path bugs (May 27 session — shell_cmd code-exec gate, merge_lora silent corruption, KV share crash, INT8 log honesty)
+
+**📋 BACKLOG (no timeline):**
 - Vision data collection optimization (prefetch LLaVA images in parallel)
 - LoRA adapter auto-restore in API mode (requires `/api/models/adapter` endpoint)
 - Continuous training hardening (NaN abort, token-length cap, anchor rehearsal)
-
-## Resume Point (Next Session)
-
-- First action: run VISUAL runtime verification on API path (this is the only main-priority stage still open)
-- Command entry: `python run.py --serve --port 8081`
-- Model for stable smoke: `enigma_pi_zero.pth`
-- Secondary action after visual: implement fix policy for `smoke.pth` GPU chat crash
-- Stopping rule: do not resume parked web work until Visual is closed or explicitly parked with blocker evidence
+- Split `engine_generation.py` (2897 LOC) and `training.py` (5220 LOC) for audit-ability
+- Demote scratch `Enigma` transformer to `experimental/` per Strategy Reset Decision 1
 
 ---
 
 **Previous pass:** Pass 156z9cn (May 8, 2026) — **FORGE min_lr_ratio surfaced end-to-end from GUI to TrainingConfig across all active launchers.**
+
+---
+
+# Historical context (pre-May-26-2026 Strategy Reset)
+
+The sections below are archeology: pre-reset pass stamps and the original per-file review tables. They predate `CLEANUP_TRACKER.md` (which is now the canonical per-file status source). Read them for "why was X done" context; do **not** treat the per-file tables as current state — many files have been touched since their last entry here.
+
+For current state:
+- Active priorities → top of this file + [SUGGESTIONS.md](SUGGESTIONS.md)
+- Per-file cleanup status → [CLEANUP_TRACKER.md](CLEANUP_TRACKER.md)
+- Pre-reset SUGGESTIONS history → [history/SUGGESTIONS-archive-pre-reset.md](history/SUGGESTIONS-archive-pre-reset.md)
+- Pass-by-pass prose for Passes 119-135 → [information/history/PASS_HISTORY.md](information/history/PASS_HISTORY.md)
 
 ---
 
@@ -494,7 +501,13 @@ Pass-by-pass prose (Passes 119-135) lives in [information/history/PASS_HISTORY.m
 
 ---
 
-## How This Works
+## How This Worked (historical workflow — superseded)
+
+> The workflow below was the original audit loop. It has been **replaced by
+> [CLEANUP_TRACKER.md](CLEANUP_TRACKER.md)** with per-file pass refs and
+> a clearer acceptance gate. The tables below remain as archeology — many
+> files have been touched since their last entry here, so do not trust
+> the status column without cross-checking the tracker.
 
 - Go through each file, read it fully, note anything worth changing
 - Mark each file: DONE, SKIP (no logic), or the date reviewed
@@ -516,7 +529,7 @@ Pass-by-pass prose (Passes 119-135) lives in [information/history/PASS_HISTORY.m
 | File | Status | Notes |
 |------|--------|-------|
 | core/model_presets.py | DONE 4/24p149 | S126: discriminant guard before math.sqrt, fallback dim=64. R25: n_predict_heads field. R27: neftune_alpha field. S518: to_dict()/from_dict() now includes neftune_alpha + n_predict_heads. P35: Removed legacy alias fields (depth/heads/max_len/embed_dim), __post_init__ legacy mapping, legacy keys from from_dict() known set. P36: Added kv_share_groups, early_exit_layer, use_mixture_of_depths, mod_capacity_factor fields. P38: T5-4 tome_ratio, T5-6 mla_latent_dim fields. P39: S564 to_dict/from_dict added 6 missing T3 fields. R35: use_weight_norm field + to_dict/from_dict. P57: use_gradient_checkpointing default changed False→True. **P149: MTP-2b — L129 default `n_predict_heads` flipped 2→0 + inverted comment fixed (paper says MTP gain grows with model size, not the other way). Pass 148 retired Medusa in favor of EAGLE-2 so the heads have no consumer. Saves ~33-49M params on every fresh model from default config. All zero-guards in `model.py` and `progressive_growing.py` already handled the case correctly. Closes P2 #27b.** |
-| core/model_config.py | DONE 4/15p75 | Clean — thin re-export. P75: Re-audited — still clean |
+| ~~core/model_config.py~~ | `[DELETED May 27 2026]` | Was a backward-compat re-export shim for `MODEL_PRESETS` from `model_presets.py`. Deleted per AA code maker §2 ("Do not add backward-compatible shims"). Only callers were 3 shim tests, also deleted. |
 | core/model_components.py | DONE 4/20p115 | S101: n_kv_heads validation. S10: dim%2 validation. S208: MoE flat_indices duplicate handling, S222: YaRN magic numbers. P36: T3-1 Attention KV sharing (_kv_share_source, _shared_kv, follower Q-only path). T3-4 MoD depth_router + top-K FFN routing in TransformerBlock, get_mod_aux_loss(). T3-8 Shifted sparse attention. P38: T5-4 ToMe (_bipartite_soft_matching, _tome_merge, _tome_unmerge + TransformerBlock wiring). T5-6 MLA low-rank KV (wkv_down/wk_up/wv_up in Attention). P39: S567 RoPE theta>0 and max_seq_len>0 validation. P41: S577 YaRN div-by-zero guard when dim==beta_fast (32). P56: Pre-computed self._scale = 1/sqrt(head_dim) in Attention.__init__(), replaced 3 runtime math.sqrt() calls with cached multiply. P85: SDPA fallback path in Attention.forward() — three-tier attention: flash-attn package → PyTorch F.scaled_dot_product_attention (is_causal=True or attn_mask) → manual matmul. Free 2-4x speedup even without flash-attn installed. P85b: S741 Attention.rewind_cache(pos) — calls _kv_cache.rewind_to(pos) + invalidates _shared_kv (keeps cache alive unlike clear_cache which destroys it). TransformerBlock.rewind_cache(pos) delegates to attention. P111: S824 MoE forward() accumulator upcast to fp32 (was zeros_like inheriting fp16 under AMP), weighted_output.float() for index_add_, output cast back to input dtype before reshape. P115: S812 causal mask rebuilt with torch.triu after ToMe merge (was mask=None on standard path). S822 _bipartite_soft_matching skips merge when T>4096 (O(T²) OOM guard) |
 | core/model.py | DONE 4/26p151 | #73 FIXED. S205: docstring wrong class name, S206: generate() no input_ids shape validation. R25: multi-token prediction heads + aux loss. R27: NEFTune noise injection in forward. P35: Simplified __init__ to config-only, removed 5 legacy self attrs, removed token_embed/head aliases, removed Forge=Enigma alias, removed CONFIG import, ONNX uses self.config.*, load_state_dict no legacy keys, 'Forge'→'Enigma' string type hints. P36: T3-1 KV share group setup in __init__(). T3-2 early_exit_norm/head + draft_forward() + 0.1× aux loss. T3-3 medusa_forward(). Layer loop enumerated for early-exit capture. R35: _apply_weight_norm() nGPT parametric weight normalization on all Linear layers (skips weight-tied output head). P57: Added gradient_checkpointing_enable()/gradient_checkpointing_disable() methods (sets layer.use_checkpoint on all TransformerBlocks). P85b: S741 rewind_cache(pos) — loops all layers calling layer.rewind_cache(pos). P101: S786 MTP loss divided by total head count instead of contributing head count — underweights aux loss when targets shorter than n_predict_heads (edge case). P116: S834 config_path.write_text() → atomic_write_text() (non-atomic save). **P151 (Vision-1b):** `vision_projection` upgraded `nn.Linear` → `nn.Sequential(Linear, GELU, Linear)` per LLaVA-1.5 (arxiv:2310.03744 §3.2). Bias=True both Linears. State-dict keys changed (acceptable, no vision checkpoints exist). 6 new tests in [tests/test_model_arch.py::TestVisionProjectionMLP](tests/test_model_arch.py). |
 | core/kv_cache.py | DONE 4/17p100 | S11: overflow warning added. S207: update() batch size validation added P19. S521: topk(k=0) guard when heavy_hitter_count=0. R29: TurboQuantKVCache. R31: StreamingLLMCache. P36: T3-5 per-channel-group quantization (asymmetric, 3-tuple API). P42: S585 PrefixKVCache.build() raises AttributeError instead of silent return. P56: get() returns views instead of clones (zero-copy, callers never mutate), overflow shift uses torch.roll() instead of clone (handles overlapping memory). P74: S726 negative position edge case logged (seq_len > max_seq_len in overflow path). P83: S726 fixed — truncates k/v to last max_seq_len positions when seq_len exceeds cache capacity. P85: S739 H2O evict_if_needed() compacts _zp_k/_zp_v alongside scales. P85b: S741 rewind_to(pos) on KVCache (zeros K/V/scales/zp for invalidated slots), H2OKVCache (+ attn scores), TurboQuantKVCache (+ INT4 caches, preserves importance), StreamingLLMCache (+ logical_pos delta), KVCacheManager (loops layers). P100: Re-audited — clean |

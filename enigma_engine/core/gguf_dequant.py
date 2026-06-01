@@ -6,8 +6,8 @@ Low-level routines for reading tensors out of a GGUF file and
 dequantizing quantized weight blocks back to float32.
 
 Moved out of ``gguf_loader.py`` to keep the user-facing API module
-small.  Everything in this file is re-exported from ``gguf_loader``
-for backward compatibility.
+small. Import directly from this module — the ``gguf_loader``
+re-export shim was removed May 27 2026 per AA code maker §2.
 """
 
 import logging

@@ -356,11 +356,41 @@ class _ChatMixin:
         Handles history truncation, reasoning injection, GGUF message
         list construction, prompt building, and kwarg extraction.
 
+        Raises:
+            ValueError: If more than one of ``max_tokens`` /
+                ``max_new_tokens`` / ``max_length`` is passed via
+                ``kwargs``. Mirrors ``generate()`` and
+                ``stream_generate()`` — chat-side callers must not
+                silently last-wins on conflicting aliases.
+                Sibling-boundary closure on the BUG-3 fix family
+                (May 27 2026 audit).
+
         Returns:
             A :class:`ChatContext` with everything both callers need.
         """
-        # ── Override max_gen from kwargs if caller passed max_tokens ──────
-        max_gen = kwargs.pop("max_tokens", kwargs.pop("max_new_tokens", max_gen))
+        # ── Override max_gen from kwargs if caller passed an alias ────────
+        # Sibling-boundary closure with generate() (inference.py L1167-
+        # L1183) and stream_generate() (engine_generation.py L1602-
+        # L1617): at most ONE of max_tokens / max_new_tokens /
+        # max_length may be set. Previously this site used silent
+        # nested pop semantics that hid caller mistakes.
+        _aliases = [
+            ("max_tokens", kwargs.get("max_tokens")),
+            ("max_new_tokens", kwargs.get("max_new_tokens")),
+            ("max_length", kwargs.get("max_length")),
+        ]
+        _set_aliases = [(n, v) for n, v in _aliases if v is not None]
+        if len(_set_aliases) > 1:
+            raise ValueError(
+                "Conflicting max-length aliases set: "
+                f"{[n for n, _ in _set_aliases]}. Pass only one of "
+                "max_gen / max_tokens / max_new_tokens / max_length."
+            )
+        # Pop all three so they don't leak into downstream kwargs.
+        for name, _ in _aliases:
+            kwargs.pop(name, None)
+        if _set_aliases:
+            max_gen = _set_aliases[0][1]
 
         # ── Truncate history to prevent context overflow ─────────────────
         if auto_truncate and history:
@@ -405,6 +435,42 @@ class _ChatMixin:
                     "RAG query failed — continuing without document context",
                     exc_info=True,
                 )
+
+        # ── User style preferences (PERSONA-2 Slices 2 + 4) ─────────────
+        # Layer 2 of the layered-personality model: surface preferences
+        # like verbosity / formality / length / format. Identity stays
+        # in LoRA weights (Layer 1, untouched here). Returns "" when
+        # the user hasn't customized anything — zero overhead.
+        #
+        # Slice 4: callers may pass ``style_overrides=StylePreferences(...)``
+        # via kwargs to override the disk-loaded preferences for THIS
+        # call only. AppState uses this to apply per-conversation
+        # ``/style`` command state without touching disk.
+        _style_overrides = kwargs.pop("style_overrides", None)
+        try:
+            from .style_preferences import (
+                StylePreferences,
+                get_style_preferences_block_for_prompt,
+                render_style_preferences_block,
+            )
+            if isinstance(_style_overrides, StylePreferences):
+                style_block = render_style_preferences_block(_style_overrides)
+            else:
+                style_block = get_style_preferences_block_for_prompt()
+            if style_block:
+                if system_prompt:
+                    system_prompt = f"{system_prompt}\n\n{style_block}"
+                else:
+                    system_prompt = style_block
+        except Exception:
+            # Defensive: style preferences must NEVER break chat. The
+            # load helper already swallows file errors and returns
+            # defaults, so this should only trigger on an import-time
+            # bug — log + continue.
+            logger.debug(
+                "Style preferences injection failed — continuing without",
+                exc_info=True,
+            )
 
         # ── Reasoning: inject chain-of-thought instruction ───────────────
         if reasoning:

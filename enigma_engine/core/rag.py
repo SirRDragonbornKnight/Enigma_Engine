@@ -232,9 +232,10 @@ def _tokenize(text: str) -> list[str]:
 class TfidfVectorizer:
     """BM25-scored vectorizer backed by sparse matrices when scipy is available.
 
-    Despite the class name (kept for backward compatibility), this uses
-    Okapi BM25 scoring which consistently outperforms plain TF-IDF for
-    document retrieval.
+    The class name is historical — the actual scoring is Okapi BM25 (with
+    the Lv & Zhai BM25+ delta variant), which consistently outperforms
+    plain TF-IDF for document retrieval. Rename deferred; would touch 30+
+    test imports and the on-disk ``to_dict()`` schema.
     """
 
     def __init__(self, max_vocab: int = MAX_VOCAB,

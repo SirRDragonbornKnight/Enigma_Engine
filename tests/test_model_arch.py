@@ -1025,30 +1025,6 @@ class TestModelComponents:
 # D5: Model config shim tests
 # ================================================================
 
-class TestModelConfigShim:
-    """Tests for model_config.py — backward-compat shim."""
-
-    def test_get_model_config_returns_dict(self):
-        """get_model_config returns a valid config dict."""
-        from enigma_engine.core.model_config import get_model_config
-        config = get_model_config("tiny")
-        assert isinstance(config, dict)
-        assert "dim" in config
-        assert "n_layers" in config
-
-    def test_get_model_config_invalid_raises(self):
-        """get_model_config raises ValueError for unknown sizes."""
-        from enigma_engine.core.model_config import get_model_config
-        with pytest.raises(ValueError, match="Unknown size"):
-            get_model_config("nonexistent_size_xyz")
-
-    def test_model_presets_reexport(self):
-        """model_config.py re-exports MODEL_PRESETS from model_presets."""
-        from enigma_engine.core.model_config import MODEL_PRESETS
-        from enigma_engine.core.model_presets import MODEL_PRESETS as orig
-        assert MODEL_PRESETS is orig
-
-
 # ================================================================
 # Mod Tools — auto-register mod commands as AI tools
 # ================================================================

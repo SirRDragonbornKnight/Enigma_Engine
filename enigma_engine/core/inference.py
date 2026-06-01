@@ -1069,9 +1069,13 @@ class EnigmaEngine(_GenerationMixin, _ChatMixin):
         max_tool_iterations: int = 5,
         min_p: float = 0.0,
         json_schema: dict | None = None,
-        max_tokens: int | None = None,  # Alias for max_gen (backward compatibility)
-        max_new_tokens: int | None = None,  # Alias for max_gen (Forge model compatibility)
-        max_length: int | None = None  # Alias for max_gen (common parameter name)
+        # Industry-standard aliases for ``max_gen``. At most one may be
+        # set; conflicts raise ValueError (BUG-3 gate). These are real
+        # public parameters used by HuggingFace, OpenAI, and Anthropic
+        # SDKs respectively — not backward-compat shims.
+        max_tokens: int | None = None,
+        max_new_tokens: int | None = None,
+        max_length: int | None = None,
     ) -> str:
         """
         Generate text from a prompt.

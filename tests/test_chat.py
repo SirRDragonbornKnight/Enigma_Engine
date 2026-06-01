@@ -382,6 +382,30 @@ class TestPrepareChatKwargs:
         ctx = obj._prepare_chat("hi", max_new_tokens=300)
         assert ctx.max_gen == 300
 
+    def test_max_length_overrides_max_gen(self):
+        """F4 sibling-boundary closure: max_length is a documented alias
+        (see ``generate()`` / ``stream_generate()`` docstrings) and
+        ``_prepare_chat`` must honour it like the other two."""
+        obj = _make_mixin()
+        ctx = obj._prepare_chat("hi", max_length=400)
+        assert ctx.max_gen == 400
+
+    def test_prepare_chat_rejects_multiple_max_aliases(self):
+        """F4: ``_prepare_chat`` must raise ValueError on conflicting
+        aliases — same contract as ``generate()`` and
+        ``stream_generate()``. Previously silently last-wins via
+        nested ``kwargs.pop`` semantics."""
+        obj = _make_mixin()
+        with pytest.raises(ValueError, match="Conflicting max-length aliases"):
+            obj._prepare_chat("hi", max_tokens=100, max_new_tokens=200)
+        with pytest.raises(ValueError, match="Conflicting max-length aliases"):
+            obj._prepare_chat("hi", max_tokens=100, max_length=200)
+        with pytest.raises(ValueError, match="Conflicting max-length aliases"):
+            obj._prepare_chat("hi", max_new_tokens=100, max_length=200)
+        with pytest.raises(ValueError, match="Conflicting max-length aliases"):
+            obj._prepare_chat(
+                "hi", max_tokens=100, max_new_tokens=200, max_length=300)
+
 
 # ================================================================
 # TC-11: _prepare_chat — message building

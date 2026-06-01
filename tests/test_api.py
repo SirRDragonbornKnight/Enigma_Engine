@@ -410,36 +410,35 @@ class TestTraining:
         """Triggering training without a model should fail."""
         resp = client.post(
             "/api/train",
-            json={"data_file": "training.txt"},
+            json={"mode": "sft", "data": "hello world"},
         )
         assert resp.status_code == 503
         data = resp.json()
         assert "error" in data
 
-    def test_train_rejects_both_mode_and_data_file(self, client):
-        """The API contract exposes two mutually exclusive request shapes."""
-        state, training_state, old_engine, old_active = self._install_mock_engine()
-        try:
-            resp = client.post(
-                "/api/train",
-                json={
-                    "mode": "dpo",
-                    "data_file": "training.txt",
-                    "data": [{"prompt": "p", "chosen": "c", "rejected": "r"}],
-                },
-            )
-            assert resp.status_code == 422
-            assert "data_file" in resp.text and "mode" in resp.text
-        finally:
-            state.engine = old_engine
-            training_state["active"] = old_active or False
-
-    def test_train_rejects_neither_mode_nor_data_file(self, client):
+    def test_train_requires_mode(self, client):
+        """Missing ``mode`` is a 422 — legacy data_file shim was removed."""
         state, training_state, old_engine, old_active = self._install_mock_engine()
         try:
             resp = client.post("/api/train", json={})
             assert resp.status_code == 422
-            assert "data_file" in resp.text and "mode" in resp.text
+            assert "mode" in resp.text.lower()
+        finally:
+            state.engine = old_engine
+            training_state["active"] = old_active or False
+
+    def test_train_rejects_legacy_data_file_field(self, client):
+        """Pre-May-27 2026 the API accepted ``data_file``; the shim was
+        deleted. Requests using the legacy shape must now fail loudly
+        rather than silently routing to SFT."""
+        state, training_state, old_engine, old_active = self._install_mock_engine()
+        try:
+            resp = client.post(
+                "/api/train",
+                json={"data_file": "training.txt"},
+            )
+            # No ``mode`` → 422 (mode is now required)
+            assert resp.status_code == 422
         finally:
             state.engine = old_engine
             training_state["active"] = old_active or False
@@ -530,13 +529,14 @@ class TestTraining:
             state.engine = old_engine
             _training_state["active"] = old_active or False
 
-    def test_train_legacy_data_file_routes_to_sft(self, tmp_path, client, monkeypatch):
-        """Legacy data_file path should route through dispatcher with mode='sft'."""
-        from enigma_engine.api.server import (
-            PROJECT_ROOT,
-            _training_state,
-            state,
-        )
+    def test_train_sft_with_inline_data(self, client, monkeypatch):
+        """SFT mode via dispatcher shape: data is passed inline as text.
+
+        Replaces the pre-May-27 2026 ``data_file`` legacy shim test.
+        Callers now read the file themselves and pass the contents in
+        ``data`` rather than relying on the API to resolve a path.
+        """
+        from enigma_engine.api.server import _training_state, state
         captured: dict = {}
 
         def fake_run_training(config, ctx):
@@ -549,12 +549,6 @@ class TestTraining:
 
             def start(self):
                 self._target()
-
-        # Stage a fake training file under data/.
-        data_dir = PROJECT_ROOT / "data"
-        data_dir.mkdir(parents=True, exist_ok=True)
-        fake_data = data_dir / "_test_legacy_routing.txt"
-        fake_data.write_text("hello world", encoding="utf-8")
 
         monkeypatch.setattr(
             "enigma_engine.training.run_training", fake_run_training
@@ -572,8 +566,9 @@ class TestTraining:
             resp = client.post(
                 "/api/train",
                 json={
-                    "data_file": "_test_legacy_routing.txt",
-                    "epochs": 2,
+                    "mode": "sft",
+                    "data": "hello world",
+                    "training": {"epochs": 2},
                 },
             )
             assert resp.status_code == 200, resp.text
@@ -585,10 +580,6 @@ class TestTraining:
         finally:
             state.engine = old_engine
             _training_state["active"] = old_active or False
-            try:
-                fake_data.unlink()
-            except OSError:
-                pass
 
 
 # ---------------------------------------------------------------------------
@@ -987,19 +978,6 @@ class TestInputLimits:
         finally:
             state.engine = old
 
-    def test_train_data_file_too_long(self, client):
-        """Training data_file path exceeding limit should be rejected."""
-        from enigma_engine.api.server import state
-        mock_engine = MagicMock()
-        old = state.engine
-        state.engine = mock_engine
-        try:
-            long_path = "a" * 300 + ".txt"
-            resp = client.post("/api/train", json={"data_file": long_path})
-            assert resp.status_code == 422
-        finally:
-            state.engine = old
-
     def test_constants_exported(self):
         """Limit constants should be importable."""
         from enigma_engine.api.server import (
@@ -1237,35 +1215,11 @@ class TestPathTraversal:
         # 403 (path outside models/) or 404 (resolved but not found)
         assert resp.status_code in (403, 404)
 
-    def test_train_rejects_traversal(self, client):
-        """Training with ../ data file should be rejected."""
-        from enigma_engine.api.server import state
-        mock_engine = MagicMock()
-        old = state.engine
-        state.engine = mock_engine
-        try:
-            resp = client.post(
-                "/api/train",
-                json={"data_file": "../../etc/passwd"},
-            )
-            assert resp.status_code == 403
-        finally:
-            state.engine = old
-
-    def test_train_rejects_dot_dot_in_filename(self, client):
-        """Training data_file with embedded .. should be rejected."""
-        from enigma_engine.api.server import state
-        mock_engine = MagicMock()
-        old = state.engine
-        state.engine = mock_engine
-        try:
-            resp = client.post(
-                "/api/train",
-                json={"data_file": "subdir/../../../secret.txt"},
-            )
-            assert resp.status_code in (403, 404)
-        finally:
-            state.engine = old
+    # Path-traversal tests on the legacy ``data_file`` training field
+    # were deleted May 27 2026 alongside the field itself. The
+    # dispatcher shape passes data inline (``data`` is a string or list,
+    # never a path the server resolves), so this attack class is
+    # structurally impossible at the new boundary.
 
     def test_model_load_valid_path_inside_models(self, client):
         """Model load with a path inside models/ should not get 403."""
@@ -1956,3 +1910,417 @@ class TestTrainingModelSave:
                       "output_path", "abort_reason"):
             assert field in body, f"Missing field in training status: {field}"
 
+
+# ---------------------------------------------------------------------------
+# Style preferences (PERSONA-2 Slice 3)
+# ---------------------------------------------------------------------------
+
+
+class TestStylePreferencesEndpoints:
+    """GET + PUT /api/style-preferences — Layer 2 of the layered-personality
+    model. The trained core identity (Layer 1, LoRA weights) is NOT exposed
+    through this endpoint and cannot be overridden via the style channel.
+    """
+
+    def test_get_returns_defaults_when_no_file(self, tmp_path, monkeypatch, client):
+        """First-run / missing file → defaults returned, no error."""
+        from enigma_engine.core import style_preferences as sp_module
+        monkeypatch.setattr(
+            sp_module,
+            "STYLE_PREFERENCES_PATH",
+            tmp_path / "no_such_file.json",
+        )
+        resp = client.get("/api/style-preferences")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["verbosity"] == "normal"
+        assert body["formality"] == "neutral"
+        assert body["default_response_length"] == "medium"
+        assert body["prefer_code_examples"] is False
+        assert body["prefer_bullet_points"] is False
+
+    def test_put_then_get_roundtrip(self, tmp_path, monkeypatch, client):
+        """PUT a partial update; subsequent GET returns the updated state."""
+        from enigma_engine.core import style_preferences as sp_module
+        prefs_path = tmp_path / "style.json"
+        monkeypatch.setattr(sp_module, "STYLE_PREFERENCES_PATH", prefs_path)
+
+        resp = client.put(
+            "/api/style-preferences",
+            json={"verbosity": "terse", "prefer_bullet_points": True},
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["verbosity"] == "terse"
+        assert body["prefer_bullet_points"] is True
+        # Untouched fields must keep their default values
+        assert body["formality"] == "neutral"
+        assert body["default_response_length"] == "medium"
+        assert body["prefer_code_examples"] is False
+
+        # GET must reflect the PUT
+        get_resp = client.get("/api/style-preferences")
+        assert get_resp.status_code == 200
+        assert get_resp.json() == body
+
+    def test_put_partial_update_preserves_other_fields(
+            self, tmp_path, monkeypatch, client):
+        """PUT only verbosity → other previously-set fields stay intact."""
+        from enigma_engine.core import style_preferences as sp_module
+        prefs_path = tmp_path / "style.json"
+        monkeypatch.setattr(sp_module, "STYLE_PREFERENCES_PATH", prefs_path)
+
+        # First PUT: set verbosity + formality
+        client.put(
+            "/api/style-preferences",
+            json={"verbosity": "verbose", "formality": "formal"},
+        )
+        # Second PUT: only change formality
+        resp = client.put(
+            "/api/style-preferences",
+            json={"formality": "casual"},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["formality"] == "casual"
+        # verbosity must still be "verbose" from the first PUT
+        assert body["verbosity"] == "verbose"
+
+    def test_put_rejects_invalid_verbosity_enum(
+            self, tmp_path, monkeypatch, client):
+        """Invalid enum value → HTTP 422, NOT a silent identity override."""
+        from enigma_engine.core import style_preferences as sp_module
+        prefs_path = tmp_path / "style.json"
+        monkeypatch.setattr(sp_module, "STYLE_PREFERENCES_PATH", prefs_path)
+
+        resp = client.put(
+            "/api/style-preferences",
+            json={"verbosity": "pirate"},
+        )
+        assert resp.status_code == 422
+        # Must mention verbosity so the caller knows what was wrong
+        assert "verbosity" in resp.text.lower()
+
+    def test_put_rejects_invalid_formality_enum(
+            self, tmp_path, monkeypatch, client):
+        from enigma_engine.core import style_preferences as sp_module
+        prefs_path = tmp_path / "style.json"
+        monkeypatch.setattr(sp_module, "STYLE_PREFERENCES_PATH", prefs_path)
+
+        resp = client.put(
+            "/api/style-preferences",
+            json={"formality": "rude"},
+        )
+        assert resp.status_code == 422
+
+    def test_put_rejects_unknown_field(self, tmp_path, monkeypatch, client):
+        """``extra="forbid"`` blocks unknown top-level fields."""
+        from enigma_engine.core import style_preferences as sp_module
+        prefs_path = tmp_path / "style.json"
+        monkeypatch.setattr(sp_module, "STYLE_PREFERENCES_PATH", prefs_path)
+
+        resp = client.put(
+            "/api/style-preferences",
+            json={"verbosity": "terse", "secret_jailbreak": "anything"},
+        )
+        assert resp.status_code == 422
+
+    def test_put_persists_to_disk(self, tmp_path, monkeypatch, client):
+        """PUT must actually write the JSON file (load-able after)."""
+        from enigma_engine.core import style_preferences as sp_module
+        prefs_path = tmp_path / "style.json"
+        monkeypatch.setattr(sp_module, "STYLE_PREFERENCES_PATH", prefs_path)
+
+        client.put(
+            "/api/style-preferences",
+            json={"verbosity": "terse"},
+        )
+        assert prefs_path.exists()
+        loaded = sp_module.load_style_preferences(prefs_path)
+        assert loaded.verbosity == "terse"
+
+    def test_put_does_not_touch_model_files(self, tmp_path, monkeypatch, client):
+        """Black-box invariant at the API layer: a fake model file beside
+        the preferences file must remain byte-identical after PUT."""
+        from enigma_engine.core import style_preferences as sp_module
+        prefs_path = tmp_path / "style.json"
+        monkeypatch.setattr(sp_module, "STYLE_PREFERENCES_PATH", prefs_path)
+
+        models_dir = tmp_path / "models"
+        models_dir.mkdir()
+        fake_model = models_dir / "test.pth"
+        fake_model.write_bytes(b"fake-model-bytes")
+        before = fake_model.read_bytes()
+
+        client.put(
+            "/api/style-preferences",
+            json={"verbosity": "verbose", "prefer_code_examples": True},
+        )
+        assert fake_model.read_bytes() == before
+
+
+# ---------------------------------------------------------------------------
+# /style chat command (PERSONA-2 Slice 4)
+# ---------------------------------------------------------------------------
+
+
+class TestStyleChatCommand:
+    """``/style ...`` is intercepted at the AppState.chat() layer BEFORE the
+    model is invoked. The command never appends to history and never reaches
+    the engine. Per-conversation overrides are stored in
+    ``_style_overrides_by_conversation`` and passed as ``style_overrides``
+    kwarg to ``engine.chat`` on subsequent normal-chat turns."""
+
+    def _make_state(self):
+        """Fresh AppState with a mock engine."""
+        from enigma_engine.api.server import AppState
+        state = AppState()
+        mock_engine = MagicMock()
+        mock_engine.chat = MagicMock(return_value="ENGINE_REPLY")
+        state.engine = mock_engine
+        return state, mock_engine
+
+    def test_style_alone_returns_current_state(self):
+        state, mock_engine = self._make_state()
+        reply, conv_id = state.chat("/style")
+        assert "verbosity=" in reply
+        assert "formality=" in reply
+        # Engine MUST NOT have been called — /style is a control command
+        mock_engine.chat.assert_not_called()
+
+    def test_style_token_sets_field(self):
+        state, mock_engine = self._make_state()
+        reply, conv_id = state.chat("/style terse")
+        assert "verbosity=terse" in reply.lower() or "set verbosity=terse" in reply.lower()
+        mock_engine.chat.assert_not_called()
+        # Override stored under this conversation id
+        assert conv_id in state._style_overrides_by_conversation
+        assert state._style_overrides_by_conversation[conv_id].verbosity == "terse"
+
+    def test_style_reset_clears_overrides(self):
+        state, mock_engine = self._make_state()
+        _, conv_id = state.chat("/style terse")
+        state.chat("/style reset", conversation_id=conv_id)
+        # Override removed
+        assert conv_id not in state._style_overrides_by_conversation
+
+    def test_style_unknown_token_returns_error(self):
+        state, mock_engine = self._make_state()
+        reply, conv_id = state.chat("/style pirate")
+        assert "unknown" in reply.lower() or "valid" in reply.lower()
+        mock_engine.chat.assert_not_called()
+        # No override was stored on the failed attempt
+        assert conv_id not in state._style_overrides_by_conversation
+
+    def test_style_command_does_not_append_to_history(self):
+        """``/style ...`` is a control command, NOT chat content. The user
+        message and the ack must NOT appear in conversation history."""
+        state, mock_engine = self._make_state()
+        _, conv_id = state.chat("/style terse")
+        history = state.history_snapshot(conv_id)
+        assert history == []
+
+    def test_normal_chat_after_style_passes_override_to_engine(self):
+        """After ``/style terse``, the next normal chat must pass
+        ``style_overrides`` kwarg with a StylePreferences instance to
+        ``engine.chat``."""
+        from enigma_engine.core.style_preferences import StylePreferences
+        state, mock_engine = self._make_state()
+        _, conv_id = state.chat("/style terse")
+        # Now a normal chat turn
+        state.chat("hello", conversation_id=conv_id)
+        # Verify engine.chat was called with style_overrides kwarg
+        _, call_kwargs = mock_engine.chat.call_args
+        assert "style_overrides" in call_kwargs
+        assert isinstance(call_kwargs["style_overrides"], StylePreferences)
+        assert call_kwargs["style_overrides"].verbosity == "terse"
+
+    def test_normal_chat_with_no_override_omits_kwarg(self):
+        """Conversation without any /style command → no style_overrides
+        kwarg passed (engine uses disk-loaded preferences)."""
+        state, mock_engine = self._make_state()
+        state.chat("hello")
+        _, call_kwargs = mock_engine.chat.call_args
+        assert "style_overrides" not in call_kwargs
+
+    def test_style_override_does_not_leak_across_conversations(self):
+        """A /style command in conversation A must not affect conversation B."""
+        state, mock_engine = self._make_state()
+        _, conv_a = state.chat("/style terse")
+        _, conv_b = state.chat("hello")  # auto-creates new conv
+        assert conv_a != conv_b
+        # conv_a has the override
+        assert conv_a in state._style_overrides_by_conversation
+        # conv_b does not
+        assert conv_b not in state._style_overrides_by_conversation
+
+    def test_delete_conversation_drops_style_override(self):
+        """Deleting a conversation must purge its style override so a
+        recycled id can't inherit stale state."""
+        state, mock_engine = self._make_state()
+        _, conv_id = state.chat("/style terse")
+        assert conv_id in state._style_overrides_by_conversation
+        state.delete_conversation(conv_id)
+        assert conv_id not in state._style_overrides_by_conversation
+
+    def test_clear_all_conversations_drops_all_style_overrides(self):
+        state, mock_engine = self._make_state()
+        _, conv_a = state.chat("/style terse")
+        _, conv_b = state.chat("/style formal")
+        assert len(state._style_overrides_by_conversation) == 2
+        state.clear_all_conversations()
+        assert state._style_overrides_by_conversation == {}
+
+    def test_style_command_case_insensitive(self):
+        """``/STYLE TERSE`` and ``/style terse`` are equivalent."""
+        state, mock_engine = self._make_state()
+        _, conv_id = state.chat("/STYLE TERSE")
+        assert state._style_overrides_by_conversation[conv_id].verbosity == "terse"
+
+    def test_style_command_with_leading_whitespace(self):
+        """Leading whitespace before ``/style`` is tolerated."""
+        state, mock_engine = self._make_state()
+        reply, conv_id = state.chat("  /style verbose")
+        mock_engine.chat.assert_not_called()
+        assert state._style_overrides_by_conversation[conv_id].verbosity == "verbose"
+
+    def test_style_boolean_tokens(self):
+        """``bullets`` and ``code`` set the boolean preferences."""
+        state, mock_engine = self._make_state()
+        _, conv_id = state.chat("/style bullets")
+        assert state._style_overrides_by_conversation[conv_id].prefer_bullet_points is True
+        state.chat("/style code", conversation_id=conv_id)
+        assert state._style_overrides_by_conversation[conv_id].prefer_code_examples is True
+        # Both stuck (didn't overwrite each other)
+        assert state._style_overrides_by_conversation[conv_id].prefer_bullet_points is True
+
+
+class TestStyleChatCommandStreamPath:
+    """F-A sibling-boundary closure: ``/api/chat/stream`` must intercept
+    ``/style`` commands (no model call, no SSE stream, JSON ack only) and
+    must forward per-conversation ``style_overrides`` kwarg on normal
+    streaming turns. Sibling-boundary parity with ``state.chat()``."""
+
+    def test_stream_intercepts_style_command(self, client):
+        """``/style terse`` on the stream endpoint returns a JSON ack,
+        NOT an SSE stream — engine.stream_chat is never called."""
+        from enigma_engine.api.server import state
+        mock_engine = MagicMock()
+        mock_engine.stream_chat = MagicMock(return_value=iter(["nope"]))
+        old_engine = state.engine
+        # Clear conversation state for a clean test
+        state.clear_all_conversations()
+        state.engine = mock_engine
+        try:
+            resp = client.post(
+                "/api/chat/stream",
+                json={"message": "/style terse"},
+            )
+            assert resp.status_code == 200
+            body = resp.json()
+            assert "message" in body
+            assert "conversation_id" in body
+            # The engine MUST NOT have been called
+            mock_engine.stream_chat.assert_not_called()
+            # The override must have been stored
+            conv_id = body["conversation_id"]
+            assert conv_id in state._style_overrides_by_conversation
+            assert (
+                state._style_overrides_by_conversation[conv_id].verbosity
+                == "terse"
+            )
+        finally:
+            state.engine = old_engine
+            state.clear_all_conversations()
+
+    def test_stream_forwards_style_overrides_kwarg(self, client):
+        """A conversation with an active ``/style`` override must pass
+        ``style_overrides`` kwarg to ``engine.stream_chat`` on the next
+        streaming turn."""
+        from enigma_engine.api.server import state
+        from enigma_engine.core.style_preferences import StylePreferences
+
+        mock_engine = MagicMock()
+        mock_engine.stream_chat = MagicMock(return_value=iter(["ok"]))
+        old_engine = state.engine
+        state.clear_all_conversations()
+        state.engine = mock_engine
+        try:
+            # First: /style command to set the override
+            resp1 = client.post(
+                "/api/chat/stream",
+                json={"message": "/style verbose"},
+            )
+            assert resp1.status_code == 200
+            conv_id = resp1.json()["conversation_id"]
+
+            # Second: normal streaming chat in the same conversation
+            resp2 = client.post(
+                "/api/chat/stream",
+                json={"message": "hello", "conversation_id": conv_id},
+            )
+            assert resp2.status_code == 200
+            # The engine.stream_chat MUST have been called with the kwarg
+            _, call_kwargs = mock_engine.stream_chat.call_args
+            assert "style_overrides" in call_kwargs
+            assert isinstance(call_kwargs["style_overrides"], StylePreferences)
+            assert call_kwargs["style_overrides"].verbosity == "verbose"
+        finally:
+            state.engine = old_engine
+            state.clear_all_conversations()
+
+    def test_stream_without_override_omits_style_overrides_kwarg(
+            self, client):
+        """Conversations with no /style command must NOT pass the kwarg."""
+        from enigma_engine.api.server import state
+
+        mock_engine = MagicMock()
+        mock_engine.stream_chat = MagicMock(return_value=iter(["ok"]))
+        old_engine = state.engine
+        state.clear_all_conversations()
+        state.engine = mock_engine
+        try:
+            resp = client.post(
+                "/api/chat/stream",
+                json={"message": "hello"},
+            )
+            assert resp.status_code == 200
+            _, call_kwargs = mock_engine.stream_chat.call_args
+            assert "style_overrides" not in call_kwargs
+        finally:
+            state.engine = old_engine
+            state.clear_all_conversations()
+
+    def test_stream_style_handler_exception_releases_inference_lock(
+            self, client, monkeypatch):
+        """F-Audit-2: if _handle_style_command raises mid-stream-request, the
+        inference lock must be released — otherwise every subsequent request
+        gets 429 'Engine busy' until restart (permanent lock leak)."""
+        from enigma_engine.api import server as srv
+        from enigma_engine.api.server import state
+
+        mock_engine = MagicMock()
+        mock_engine.stream_chat = MagicMock(return_value=iter(["ok"]))
+        old_engine = state.engine
+        state.clear_all_conversations()
+        state.engine = mock_engine
+
+        def _boom(message, conv_id):
+            raise RuntimeError("simulated handler failure")
+
+        monkeypatch.setattr(state, "_handle_style_command", _boom)
+        try:
+            # The request raises through — TestClient surfaces it as a 500
+            # (or raises); either way the key assertion is the lock state.
+            try:
+                client.post("/api/chat/stream", json={"message": "hi"})
+            except RuntimeError:
+                pass
+            # Lock MUST be free now — acquire must succeed immediately.
+            acquired = srv._inference_lock.acquire(blocking=False)
+            assert acquired, "inference lock leaked after handler exception"
+            srv._inference_lock.release()
+        finally:
+            state.engine = old_engine
+            state.clear_all_conversations()
+            monkeypatch.undo()

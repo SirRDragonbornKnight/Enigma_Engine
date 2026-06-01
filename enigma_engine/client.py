@@ -210,10 +210,49 @@ class EnigmaClient:
         return self._request("DELETE", "/api/training/cancel")
 
     def clear_history(self) -> dict[str, Any]:
-        # MC-1: legacy nuke-all route also clears the client's pinned
-        # conversation_id so the next chat() auto-creates a fresh thread.
+        # Nuke-all route: wipes every server conversation. Also clears
+        # this client's pinned conversation_id so the next chat() auto-
+        # creates a fresh thread server-side.
         self.conversation_id = None
         return self._request("DELETE", "/api/history")
+
+    # ── PERSONA-2 Layer 2: style preferences ───────────────────────────────
+
+    def get_style_preferences(self) -> dict[str, Any]:
+        """Get the current user style preferences (verbosity / formality /
+        length / format). Layer 2 of the layered-personality model — the
+        trained core identity (Layer 1) is NOT exposed here."""
+        return self._request("GET", "/api/style-preferences")
+
+    def set_style_preferences(
+        self,
+        *,
+        verbosity: str | None = None,
+        formality: str | None = None,
+        default_response_length: str | None = None,
+        prefer_code_examples: bool | None = None,
+        prefer_bullet_points: bool | None = None,
+    ) -> dict[str, Any]:
+        """Update style preferences (partial — omitted fields unchanged).
+
+        Invalid enum values are rejected by the server with HTTP 422.
+        Trying to use the style channel as an identity override
+        (e.g. ``verbosity="pirate"``) raises ``RuntimeError`` because
+        validation lives in :class:`StylePreferences.__post_init__`
+        with the same enum constants on both sides.
+        """
+        payload: dict[str, Any] = {}
+        if verbosity is not None:
+            payload["verbosity"] = verbosity
+        if formality is not None:
+            payload["formality"] = formality
+        if default_response_length is not None:
+            payload["default_response_length"] = default_response_length
+        if prefer_code_examples is not None:
+            payload["prefer_code_examples"] = bool(prefer_code_examples)
+        if prefer_bullet_points is not None:
+            payload["prefer_bullet_points"] = bool(prefer_bullet_points)
+        return self._request("PUT", "/api/style-preferences", payload)
 
     def chat_stream(
         self,

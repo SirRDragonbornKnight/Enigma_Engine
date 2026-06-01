@@ -292,7 +292,7 @@ class LocalCode:
             sys.path.insert(0, str(Path(__file__).parent.parent.parent))
             from enigma_engine.core.model_registry import ModelRegistry
             from enigma_engine.core.inference import EnigmaEngine
-            from enigma_engine.core.tokenizer import load_tokenizer
+            from enigma_engine.core.tokenizer import get_tokenizer
             import torch
         except ImportError as e:
             logger.error(
@@ -310,7 +310,7 @@ class LocalCode:
             self.engine.model = model
             self.engine.model.to(self.engine.device)
             self.engine.model.eval()
-            self.engine.tokenizer = load_tokenizer()
+            self.engine.tokenizer = get_tokenizer()
             self.engine.use_half = False
             self.engine.enable_tools = False
             self.engine.module_manager = None
@@ -535,7 +535,7 @@ class CodeGen:
                     break
                     
         except ConnectionRefusedError:
-            logger.warning(f"Could not connect to router")
+            logger.warning("Could not connect to router")
         except Exception as e:
             logger.error(f"Connection error: {e}")
         finally:

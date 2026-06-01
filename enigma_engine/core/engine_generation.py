@@ -1562,9 +1562,13 @@ class _GenerationMixin:
         top_p: float = 0.9,
         repetition_penalty: float = 1.1,
         min_p: float = 0.0,
-        max_tokens: int | None = None,  # Alias for max_gen (backward compatibility)
-        max_new_tokens: int | None = None,  # Alias for max_gen (Forge model compatibility)
-        max_length: int | None = None,  # Alias for max_gen (common parameter name)
+        # Industry-standard aliases for ``max_gen``. At most one may be
+        # set; conflicts raise ValueError. These are real public
+        # parameters used by HuggingFace, OpenAI, and Anthropic SDKs —
+        # not backward-compat shims.
+        max_tokens: int | None = None,
+        max_new_tokens: int | None = None,
+        max_length: int | None = None,
         json_schema: dict | None = None,
     ) -> Generator[str]:
         """
@@ -1577,9 +1581,9 @@ class _GenerationMixin:
             top_k: Top-k sampling
             top_p: Top-p sampling
             repetition_penalty: Repetition penalty
-            max_tokens: Alias for max_gen (backward compatibility)
-            max_new_tokens: Alias for max_gen (Forge model compatibility)
-            max_length: Alias for max_gen (common parameter name)
+            max_tokens: Industry-standard alias for max_gen (HuggingFace API).
+            max_new_tokens: Industry-standard alias for max_gen (OpenAI API).
+            max_length: Industry-standard alias for max_gen (Anthropic API).
             json_schema: Optional JSON schema dict. When set, masks logits
                 each step so only schema-conforming tokens are emitted, and
                 stops yielding once the FSM reaches DONE. Mirrors the

@@ -1322,6 +1322,54 @@ class TestOptimizerBetasConsistency:
             assert trainer.adam_beta2 == 0.999
 
 
+class TestMergeLoraWeightsGuard:
+    """Silent-corruption guard for merge_lora_weights on non-PEFT models."""
+
+    def test_zero_matches_raises_loud(self):
+        """All-mismatched keys must raise instead of returning success."""
+        import torch
+        import torch.nn as nn
+        import pytest
+        from enigma_engine.core.lora_utils import merge_lora_weights
+
+        # Plain Linear — no merge_and_unload.
+        model = nn.Linear(4, 4)
+        # PEFT-style names that won't appear in nn.Linear's state_dict.
+        bogus_weights = {
+            "base_model.model.layers.0.attention.wq.lora_A.default.weight":
+                torch.zeros(2, 4),
+            "base_model.model.layers.0.attention.wq.lora_B.default.weight":
+                torch.zeros(4, 2),
+        }
+        with pytest.raises(ValueError, match="no keys.*matched"):
+            merge_lora_weights(model, bogus_weights)
+
+    def test_shape_mismatch_raises_loud(self):
+        """Matched key with wrong-shape delta must raise, not silently."""
+        import torch
+        import torch.nn as nn
+        import pytest
+        from enigma_engine.core.lora_utils import merge_lora_weights
+
+        model = nn.Linear(4, 4)
+        # weight shape is (4, 4); a (2, 4) delta would be a raw lora_A
+        bad_delta = {"weight": torch.zeros(2, 4)}
+        with pytest.raises(ValueError, match="shape mismatch"):
+            merge_lora_weights(model, bad_delta)
+
+    def test_valid_delta_merges_successfully(self):
+        """Pre-multiplied delta with matching name + shape merges."""
+        import torch
+        import torch.nn as nn
+        from enigma_engine.core.lora_utils import merge_lora_weights
+
+        model = nn.Linear(4, 4)
+        orig = model.weight.detach().clone()
+        delta = torch.ones_like(model.weight) * 0.1
+        merge_lora_weights(model, {"weight": delta})
+        assert torch.allclose(model.weight, orig + delta)
+
+
 # ================================================================
 # Auto Research Cache, Rate Limiting, Parallel Fetch (#25)
 # ================================================================

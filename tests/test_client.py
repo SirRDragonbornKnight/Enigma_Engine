@@ -260,3 +260,75 @@ def test_set_engine_flags_no_args_returns_empty(monkeypatch: pytest.MonkeyPatch)
     assert out == {}
     assert not called  # No HTTP call when nothing to send
 
+
+# ── PERSONA-2 Slice 3 client coverage ──────────────────────────────────────
+
+
+def test_get_style_preferences_uses_get(monkeypatch: pytest.MonkeyPatch) -> None:
+    """GET /api/style-preferences returns the body as a dict."""
+    seen = {}
+
+    def _fake_urlopen(req, timeout=0):
+        seen["method"] = req.get_method()
+        seen["url"] = req.full_url
+        return _Resp(json.dumps({
+            "verbosity": "normal",
+            "formality": "neutral",
+            "default_response_length": "medium",
+            "prefer_code_examples": False,
+            "prefer_bullet_points": False,
+        }))
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+    client = EnigmaClient()
+    out = client.get_style_preferences()
+
+    assert seen["method"] == "GET"
+    assert seen["url"].endswith("/api/style-preferences")
+    assert out["verbosity"] == "normal"
+
+
+def test_set_style_preferences_uses_put_with_filtered_body(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    """PUT with only the non-None kwargs included in the body. None kwargs
+    must be omitted so the server treats the call as a partial update."""
+    seen = {}
+
+    def _fake_urlopen(req, timeout=0):
+        seen["method"] = req.get_method()
+        seen["url"] = req.full_url
+        seen["body"] = json.loads(req.data.decode("utf-8"))
+        return _Resp(json.dumps({"verbosity": "terse"}))
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+    client = EnigmaClient()
+    client.set_style_preferences(verbosity="terse")
+
+    assert seen["method"] == "PUT"
+    assert seen["url"].endswith("/api/style-preferences")
+    assert seen["body"] == {"verbosity": "terse"}
+    # Other fields must NOT be sent (partial update semantics)
+    for omitted in (
+        "formality",
+        "default_response_length",
+        "prefer_code_examples",
+        "prefer_bullet_points",
+    ):
+        assert omitted not in seen["body"]
+
+
+def test_set_style_preferences_coerces_bool_kwargs(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    """Truthy ints / values coerced to bool so the JSON shape is strict."""
+    seen = {}
+
+    def _fake_urlopen(req, timeout=0):
+        seen["body"] = json.loads(req.data.decode("utf-8"))
+        return _Resp(json.dumps({}))
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+    client = EnigmaClient()
+    client.set_style_preferences(prefer_code_examples=1, prefer_bullet_points=0)
+    assert seen["body"]["prefer_code_examples"] is True
+    assert seen["body"]["prefer_bullet_points"] is False
+

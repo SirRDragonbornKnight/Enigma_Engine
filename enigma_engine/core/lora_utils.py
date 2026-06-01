@@ -655,9 +655,25 @@ def merge_lora_weights(
     After merging, LoRA weights become part of base weights
     and the adapter can be deleted to save memory.
 
+    The non-PEFT (manual) path expects ``lora_weights`` to be a dict
+    of *already-deltas* (i.e. ``B @ A * scaling``) keyed by base
+    weight names that exist in ``model.state_dict()``. If you have
+    raw LoRA A/B matrices, multiply them yourself before calling.
+
     Args:
         model: Target model with LoRA adapters
-        lora_weights: LoRA weight dictionary
+        lora_weights: LoRA delta-weight dictionary keyed by base
+            weight name. Each value must have the same shape as the
+            target base weight.
+
+    Raises:
+        ValueError: If the manual path is taken (model has no
+            ``merge_and_unload``) and either (a) no key in
+            ``lora_weights`` matches the model's state_dict, or
+            (b) a matched value's shape disagrees with the base
+            weight. Closes the silent-corruption case where the
+            function appears to succeed but no merge happened
+            because every key was filtered out.
 
     Example:
         merge_lora_weights(model, weights)  # Now permanent
@@ -671,13 +687,51 @@ def merge_lora_weights(
     # Manual merge for non-PEFT models
     state_dict = model.state_dict()
 
+    matched = 0
+    skipped: list[str] = []
     for key, lora_weight in lora_weights.items():
         if key in state_dict:
-            # Simple addition for merged weights
-            state_dict[key] = state_dict[key] + lora_weight
+            base = state_dict[key]
+            if tuple(base.shape) != tuple(lora_weight.shape):
+                raise ValueError(
+                    f"merge_lora_weights: shape mismatch for '{key}'. "
+                    f"base shape {tuple(base.shape)} vs delta shape "
+                    f"{tuple(lora_weight.shape)}. The manual path "
+                    "expects pre-multiplied LoRA deltas (B @ A * "
+                    "scaling), not raw A/B matrices."
+                )
+            state_dict[key] = base + lora_weight
+            matched += 1
+        else:
+            skipped.append(key)
+
+    if matched == 0:
+        # Silent-corruption guard: every key was filtered out. The
+        # most common cause is passing a raw PEFT adapter state_dict
+        # (keys like ``base_model.model.layers.0.attention.wq.lora_A
+        # .default.weight``) to a non-PEFT model expecting base
+        # weight names. Fail loud instead of logging "Merged" and
+        # returning with no effect.
+        raise ValueError(
+            "merge_lora_weights: no keys in lora_weights matched the "
+            "model's state_dict. The function would have been a "
+            "silent no-op. Either pass a PEFT-wrapped model "
+            "(use merge_and_unload) or pre-process the LoRA state "
+            f"dict to use base-weight names. "
+            f"First 3 unmatched keys: {skipped[:3]}"
+        )
+
+    if skipped:
+        logger.warning(
+            "merge_lora_weights: %d/%d keys not in base state_dict "
+            "(merged %d). First skipped: %s",
+            len(skipped), len(lora_weights), matched, skipped[:3]
+        )
 
     model.load_state_dict(state_dict)
-    logger.info("Merged LoRA weights into base model")
+    logger.info(
+        "Merged %d LoRA delta weight(s) into base model", matched
+    )
 
 
 # =============================================================================

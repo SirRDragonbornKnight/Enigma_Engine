@@ -1003,31 +1003,6 @@ def recommend_gpu_layers(model_size_gb: float, vram_gb: float) -> int:
         return 999  # Use a large number to offload all layers
 
 
-# ---------------------------------------------------------------------------
-# GGUF parsing: delegated to the shared implementation in gguf.py
-# Re-exported here for backward compatibility.
-# ---------------------------------------------------------------------------
-from .gguf import parse_gguf_header, parse_gguf_metadata, read_gguf_value  # noqa: F401
-
-# ---------------------------------------------------------------------------
-# Tensor parsing & dequantization: moved to gguf_dequant.py
-# Re-exported here for backward compatibility.
-# ---------------------------------------------------------------------------
-from .gguf_dequant import (  # noqa: F401
-    parse_gguf_tensors,
-    extract_config_from_metadata,
-    dequantize_q4_0,
-    dequantize_q4_1,
-    dequantize_q5_0,
-    dequantize_q5_1,
-    dequantize_q8_0,
-    dequantize_q2_K,
-    dequantize_q3_K,
-    dequantize_q4_K,
-    dequantize_q5_K,
-    dequantize_q6_K,
-)
-
 
 def load_gguf_model(
     gguf_model_path: str,

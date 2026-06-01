@@ -773,15 +773,6 @@ def get_tokenizer(
     )
 
 
-def load_tokenizer(tokenizer_type: str = "auto") -> Any:
-    """
-    Load the best available tokenizer.
-
-    Alias for get_tokenizer() for backwards compatibility.
-    """
-    return get_tokenizer(tokenizer_type)
-
-
 def clear_tokenizer_cache():
     """Clear the tokenizer cache to free memory or force reload."""
     with _tokenizer_cache_lock:
@@ -874,7 +865,6 @@ Tokenizer = SimpleTokenizer
 __all__ = [
     # Main functions
     "get_tokenizer",
-    "load_tokenizer",
     "train_tokenizer",
     "clear_tokenizer_cache",
 
