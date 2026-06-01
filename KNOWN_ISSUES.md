@@ -3,12 +3,10 @@
 _Snapshot compiled 2026-06-01. This is a navigation layer over the detailed trackers, not a replacement._
 _Authoritative trackers: `SUGGESTIONS.md` (active strategy + execution blocks), `CODE_REVIEW.md` (bugs/audits), `CLEANUP_TRACKER.md` (file-by-file cleanup)._
 
-## 1. UI direction is unresolved — DECIDE THIS FIRST ⚠️
-The single biggest open question; everything UI-related depends on it.
-- **Documented strategy** (`SUGGESTIONS.md` "STRATEGY RESET", 2026-05-26, marked ACTIVE): a single **Gradio** UI (`enigma_engine/ui.py`) replaces **both** the tkinter GUI and the Svelte web frontend. Both scheduled for deletion once Gradio is verified. Rationale: pure Python (no TS context-switch), AI-native widgets, reuses `client.py`.
-- **2026-06-01 exploration (this session):** leaned toward *finishing the Svelte web GUI* + wrapping in pywebview. This **contradicts** the documented Gradio decision and was made before re-reading the strategy docs.
-- **Reality:** Gradio is **not started** (no `ui.py`; `gradio` not in deps). tkinter and Svelte both still present.
-- **Action:** confirm Gradio (resume Block 2) vs override to Svelte.
+## 1. UI direction — RESOLVED June 1 2026 ✅
+- **Ruling (2026-06-01):** the **interim main-chat UI is the terminal client** — `python run.py --client-chat --model <path>` — verified working end-to-end against the 30B GGUF (streaming, autospawn; see SUGGESTIONS.md June 1 closures TC-1..TC-3). No new UI framework; the fastest path to actually using the brain, and the user is fine chatting in PowerShell.
+- **Gradio stays the planned richer GUI** (Block 2) for when sliders / image upload / a browser window are wanted — still pure Python, still reuses `client.py`. Not started (`gradio` not in deps); now **optional/deferred**, no longer a blocker.
+- **tkinter (`enigma_engine/gui/`) and Svelte (`enigma_engine/web/`) stay slated for deletion** (CLEANUP_TRACKER) — neither is the path forward. The 2026-06-01 Svelte+pywebview exploration was dropped.
 
 ## 2. Three parallel UIs in the tree
 - `enigma_engine/gui/` — tkinter, ~30K LOC / 26 files, several 1.5–3.5K-line god-modules. Works today. Marked for deletion.

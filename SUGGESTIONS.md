@@ -200,6 +200,13 @@ This is the most impactful block. The training infrastructure already exists —
 
 Suite after fixes: **3389 passed, 3 skipped**, ruff clean. Remaining Block 1 item: the TRAIN stability smoke check (needs a trainable model loaded — see Block 1 above).
 
+**Terminal chat verified as the interim UI (UI ruling: terminal now, Gradio later).** Per the June 1 ruling, the main chat runs in PowerShell via the existing `python run.py --client-chat --model <path>` — no new UI framework, and the deletion-marked tkinter/Svelte UIs stay untouched. Brought it up end-to-end against the 30B GGUF and fixed three launcher UX papercuts:
+- **TC-1 — `--model` path resolution.** The CLI `--model` resolved relative to CWD while `POST /api/models/load` resolves relative to MODELS_DIR, so `--model qwen3-30b-a3b/x.gguf` silently failed ("file not found") and the server started model-less. Added `server._resolve_model_path` (absolute as-is; relative tried at CWD then under MODELS_DIR) so CLI and API accept the same path strings. 3 tests.
+- **TC-2 — autospawn died on big models.** `_try_autospawn_daemon`'s 8s health-wait couldn't cover a multi-GB preload, so `--client-chat --model <gguf>` terminated the half-loaded daemon. Bumped to 180s, added a fast-fail on daemon process death (no full-timeout wait on a crash), and skip the redundant client-side load when the daemon already preloaded (no double-load). Made the `_drive` test helper hermetic (it was spawning a real daemon + sleeping the timeout — 182s → 0.1s).
+- **TC-3 — daemon logs cluttered the chat.** The autospawned daemon inherited the terminal; redirected its stdout/stderr to DEVNULL so HTTP logs don't interleave with replies (`run.py --serve` directly still shows full logs).
+
+Verified live: `python run.py --client-chat --model qwen3-30b-a3b/Qwen3-30B-A3B-Q4_K_M.gguf` → autospawn → preload → `AI: 4` → clean exit; streaming is incremental (BL-2). Suite **3392 passed, 3 skipped**, ruff clean. Known minor: a rapid-fire (zero-gap) follow-up message can hit a transient 429 from the inference lock's sub-ms release window — does not affect human-paced typing (verified 3 sequential turns with 1.5s gaps).
+
 ---
 
 ### Recent closures (May 27 2026)

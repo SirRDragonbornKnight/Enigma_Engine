@@ -37,6 +37,12 @@ def _drive(monkeypatch, inputs, fake_client):
     monkeypatch.setattr("builtins.input", _make_input(list(inputs)))
     monkeypatch.setattr(enigma_engine, "EnigmaClient",
                         lambda *a, **kw: fake_client)
+    # Keep the suite hermetic + fast: an unhealthy client trips the autospawn
+    # poll loop, which must not spawn a real daemon or sleep through the
+    # (deliberately generous) health-wait timeout.
+    monkeypatch.setattr(runmod.subprocess, "Popen",
+                        lambda *a, **kw: SimpleNamespace(pid=12345))
+    monkeypatch.setattr(runmod.time, "sleep", lambda *_: None)
     buf = io.StringIO()
     monkeypatch.setattr("sys.stdout", buf)
     runmod.run_chat_client(api_url="http://127.0.0.1:0")
@@ -348,6 +354,10 @@ class TestAutoSpawn:
         assert "--model" in popen_calls["args"]
         assert "models/demo.pth" in popen_calls["args"]
         assert "Daemon started (pid=4321)" in buf.getvalue()
+        # The daemon was autospawned with --model, so it pre-loads the model
+        # itself; the client must NOT load it again (no redundant multi-GB
+        # second load).
+        assert fake.load_model.call_count == 0
 
     def test_remote_url_does_not_autospawn(self, monkeypatch):
         fake = _client(healthy=False)

@@ -984,7 +984,12 @@ def _is_local_api_url(api_url: str) -> bool:
 
 
 def _try_autospawn_daemon(api_url: str, model_path: str | None = None,
-                          timeout: float = 8.0) -> int | None:
+                          timeout: float = 180.0) -> int | None:
+    # Generous default: when ``model_path`` is set the spawned daemon
+    # pre-loads the model (run.py --serve --model ...) *before* it serves
+    # health, so a multi-GB GGUF blocks readiness for ~60-90s on top of the
+    # heavy cold-start import. The old 8s default failed every large-model
+    # autospawn and then terminated the half-loaded daemon.
     parsed = urlparse(api_url)
     host = parsed.hostname or ""
     if host not in {"127.0.0.1", "localhost"}:
@@ -997,8 +1002,15 @@ def _try_autospawn_daemon(api_url: str, model_path: str | None = None,
         cmd.extend(["--model", model_path])
 
     print(f"Starting daemon at {api_url}...")
+    if model_path:
+        print("  Loading model — large GGUFs can take 1-2 min...")
     try:
-        proc = subprocess.Popen(cmd)
+        # Send the daemon's own logs to the void so its uvicorn/HTTP lines
+        # don't interleave with the chat REPL (it inherits our terminal
+        # otherwise). Run `python run.py --serve --model ...` directly to
+        # see full daemon logs when debugging a failed autospawn.
+        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL)
     except Exception as exc:
         import traceback
         traceback.print_exception(type(exc), exc, exc.__traceback__)
@@ -1012,6 +1024,13 @@ def _try_autospawn_daemon(api_url: str, model_path: str | None = None,
     last_error: Exception | None = None
 
     for _ in range(attempts):
+        # Fast-fail if the daemon already exited (crash, port in use, bad
+        # import) instead of polling health for the full timeout.
+        poll = getattr(proc, "poll", None)
+        if callable(poll) and poll() is not None:
+            last_error = last_error or RuntimeError(
+                f"daemon exited early (code {getattr(proc, 'returncode', '?')})")
+            break
         try:
             health = client.health()
             if health.get("status") == "ok":
@@ -1274,10 +1293,17 @@ def run_chat_client(api_url: str, model_path: str | None = None,
         )
 
         if model_path:
-            print("Loading model via API...")
-            client.load_model(model_path)
-            state.model_path = model_path
-            print("Model loaded!")
+            if daemon_pid is not None:
+                # The daemon we just autospawned pre-loads the model itself
+                # (run.py --serve --model ...). Loading again here would be a
+                # redundant second load of a multi-GB model, so skip it.
+                state.model_path = model_path
+                print(f"Model pre-loaded by daemon: {model_path}")
+            else:
+                print("Loading model via API...")
+                client.load_model(model_path)
+                state.model_path = model_path
+                print("Model loaded!")
 
         if profile:
             try:

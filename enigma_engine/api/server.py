@@ -2216,6 +2216,25 @@ async def start_training(req: TrainRequest):
 # Server runner (called from run.py --serve)
 # ---------------------------------------------------------------------------
 
+def _resolve_model_path(model_path: str) -> str:
+    """Resolve a ``--model`` preload path the way ``POST /api/models/load``
+    does, so the CLI and the API accept the same path strings.
+
+    Absolute paths are used as-is. A relative path is tried as given
+    (relative to CWD) and then under :data:`MODELS_DIR`, so both
+    ``--model qwen3-30b-a3b/x.gguf`` (MODELS_DIR-relative, matching the API
+    body) and ``--model models/qwen3-30b-a3b/x.gguf`` (CWD-relative) resolve
+    to the same file. The original string is returned unchanged when neither
+    candidate exists, so the loader still raises a clear "not found" error.
+    """
+    p = Path(model_path)
+    if not p.is_absolute() and not p.exists():
+        candidate = MODELS_DIR / model_path
+        if candidate.exists():
+            return str(candidate)
+    return str(p)
+
+
 def run_server(host: str = "127.0.0.1", port: int = 8080, model_path: str | None = None,
                api_key: str | None = None, cors_origins: list[str] | None = None):
     """Start the local API server.
@@ -2270,6 +2289,7 @@ def run_server(host: str = "127.0.0.1", port: int = 8080, model_path: str | None
 
     # Pre-load a model if specified
     if model_path:
+        model_path = _resolve_model_path(model_path)
         logger.info("Pre-loading model: %s", model_path)
         try:
             state.load_model(model_path)

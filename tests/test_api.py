@@ -1239,6 +1239,48 @@ class TestPathTraversal:
         assert resp.status_code in (404, 422)
 
 
+class TestResolveModelPath:
+    """run_server ``--model`` path resolution — the CLI accepts the same
+    path strings as ``POST /api/models/load`` (MODELS_DIR-relative)."""
+
+    def test_modelsdir_relative_path_resolves_under_models_dir(
+            self, monkeypatch, tmp_path):
+        """A path absent at CWD but present under MODELS_DIR resolves there,
+        so ``--model qwen3/x.gguf`` matches the API body (regression: the CLI
+        used to pass it straight to load_model and fail 'file not found')."""
+        from enigma_engine.api import server
+
+        cwd = tmp_path / "cwd"
+        cwd.mkdir()
+        monkeypatch.chdir(cwd)
+        models_dir = tmp_path / "models"
+        (models_dir / "sub").mkdir(parents=True)
+        target = models_dir / "sub" / "m.gguf"
+        target.write_bytes(b"x")
+        monkeypatch.setattr(server, "MODELS_DIR", models_dir)
+
+        assert Path(server._resolve_model_path("sub/m.gguf")) == target
+
+    def test_cwd_relative_path_wins_when_it_exists(self, monkeypatch, tmp_path):
+        """A path that exists relative to CWD is used as-is (not re-rooted)."""
+        from enigma_engine.api import server
+
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "models").mkdir()
+        (tmp_path / "local.gguf").write_bytes(b"x")
+        monkeypatch.setattr(server, "MODELS_DIR", tmp_path / "models")
+
+        assert server._resolve_model_path("local.gguf") == str(Path("local.gguf"))
+
+    def test_missing_path_returned_unchanged(self, monkeypatch, tmp_path):
+        """Absent at both CWD and MODELS_DIR → original returned so the
+        loader still raises a clear not-found error."""
+        from enigma_engine.api import server
+
+        monkeypatch.setattr(server, "MODELS_DIR", tmp_path)
+        assert server._resolve_model_path("nope/x.gguf") == str(Path("nope/x.gguf"))
+
+
 class TestModelVocabGuards:
     """Guards against tokenizer/model vocab mismatch crash paths."""
 
