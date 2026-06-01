@@ -1,24 +1,15 @@
-"""
-Enigma AI Engine - Modular AI Framework
+"""Modkit — the AI's capability backend (the Forge + mods).
 
-Simple imports:
-    from enigma_engine.core import EnigmaEngine
+This package forges and manages models and capabilities; the models are *run* by
+Odysseus + an external runner (Ollama / llama.cpp / vLLM), not here.
+
+(The import package is still named ``enigma_engine`` for now — the package-level
+rename to ``modkit`` is a deliberate follow-up to avoid churning every import.)
 """
 
-# Re-export configuration from central location
 from .config import CONFIG
 
-try:
-    from .client import EnigmaClient
-except ImportError:
-    EnigmaClient = None
-
-# Version info
-__version__ = "1.1.0"
+__version__ = "2.0.0"
 __author__ = "SirRDragonbornKnight"
 
-__all__ = [
-    'CONFIG',
-    'EnigmaClient',
-    '__version__',
-]
+__all__ = ["CONFIG", "__version__"]

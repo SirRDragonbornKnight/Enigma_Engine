@@ -45,7 +45,10 @@ def test_lora_config_defaults_target_attention():
 
 def test_mod_discovery_returns_list():
     """The mod system can enumerate installed mods (the AI's capabilities)."""
+    from pathlib import Path
+
     from enigma_engine.core.mod_tools import discover_mod_tools
 
-    tools = discover_mod_tools()
+    mods_dir = Path(__file__).resolve().parent.parent / "mods"
+    tools = discover_mod_tools(mods_dir)
     assert isinstance(tools, list)

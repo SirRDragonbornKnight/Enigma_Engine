@@ -111,8 +111,8 @@ def main() -> None:
     print(f"Training [{args.mode}]: {args.epochs} epochs, batch={args.batch_size}, lr={args.lr}")
     trainer = Trainer(model, tok, tc)
     losses: list[float] = []
-    trainer.on_loss = lambda loss: losses.append(loss)
-    state = trainer.train(text)
+    trainer.on_loss = losses.append
+    trainer.train(text)
 
     if losses:
         print(f"Loss: {losses[0]:.4f} (start)  ->  {losses[-1]:.4f} (end)   "

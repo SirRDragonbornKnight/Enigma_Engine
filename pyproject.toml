@@ -3,9 +3,9 @@ requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "enigma-engine"
-version = "1.1.0"
-description = "Enigma AI Engine - Personal AI Framework to train and deploy your own AI locally"
+name = "modkit"
+version = "2.0.0"
+description = "Modkit — the AI's capability backend: forge your own local models (Enigma) + mods an AI front-end (Odysseus) controls via MCP"
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
