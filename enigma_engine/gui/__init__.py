@@ -1,1 +1,0 @@
-"""Enigma Engine GUI package."""
