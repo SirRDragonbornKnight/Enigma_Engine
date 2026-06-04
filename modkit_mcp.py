@@ -216,6 +216,39 @@ async def list_tools() -> list[Tool]:
                 "required": ["text"],
             },
         ),
+        Tool(
+            name="avatar_command",
+            description=(
+                "Full control of the on-screen avatar, beyond express/say. ONE action "
+                "per call. Actions:\n"
+                "  load — switch model (url, e.g. ./models/glados/scene.gltf)\n"
+                "  size — resize (value, ~0.3–1.5)\n"
+                "  moveTo — reposition (px, py in screen pixels)\n"
+                "  recolor — tint a part (name = material e.g. hair/body/Eye, color = #rrggbb)\n"
+                "  attach — add a prop/clothing mesh (url to .glb/.fbx, optional bone like "
+                "righthand/head/back, category prop|clothes|furniture)\n"
+                "  detach — remove an attachment (id, or omit for all)\n"
+                "  springTune — hair/tail feel (stiffness, drag, gravity)\n"
+                "  stop — stop speaking\n"
+                "No-op if the overlay/bus isn't running, so it's safe to call."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "description": "load, size, moveTo, recolor, attach, detach, springTune, stop"},
+                    "url": {"type": "string", "description": "model/prop path for load/attach"},
+                    "value": {"type": "number", "description": "scale for size"},
+                    "px": {"type": "number"}, "py": {"type": "number"},
+                    "name": {"type": "string", "description": "material name (recolor)"},
+                    "color": {"type": "string", "description": "#rrggbb (recolor)"},
+                    "bone": {"type": "string", "description": "attach target (righthand/lefthand/head/back/hips…)"},
+                    "category": {"type": "string", "description": "prop | clothes | furniture (attach)"},
+                    "id": {"type": "string", "description": "attachment id (detach)"},
+                    "stiffness": {"type": "number"}, "drag": {"type": "number"}, "gravity": {"type": "number"},
+                },
+                "required": ["action"],
+            },
+        ),
     ]
 
 
@@ -259,6 +292,22 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 async with websockets.connect(_AVATAR_BUS, open_timeout=2) as ws:
                     await ws.send(json.dumps({"action": "say", "url": wav.as_uri()}))
                 return [TextContent(type="text", text=f"avatar: speaking ({len(text)} chars)")]
+            except Exception as exc:
+                return [TextContent(type="text",
+                                    text=f"avatar not reachable (overlay/bus not running): {exc}")]
+        if name == "avatar_command":
+            action = (args.get("action") or "").strip()
+            if not action:
+                return [TextContent(type="text", text="Error: action is required")]
+            cmd = {"action": action}
+            for k in ("url", "value", "px", "py", "name", "color", "bone", "category",
+                      "id", "stiffness", "drag", "gravity", "breeze", "scale", "dur", "pos", "rot"):
+                if args.get(k) is not None:
+                    cmd[k] = args[k]
+            try:
+                async with websockets.connect(_AVATAR_BUS, open_timeout=2) as ws:
+                    await ws.send(json.dumps(cmd))
+                return [TextContent(type="text", text=f"avatar: '{action}' sent")]
             except Exception as exc:
                 return [TextContent(type="text",
                                     text=f"avatar not reachable (overlay/bus not running): {exc}")]
