@@ -69,7 +69,8 @@ def _load_service(mod_file: str, class_name: str):
     spec = importlib.util.spec_from_file_location(
         f"modkit_{class_name}", ROOT / mod_file)
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    sys.modules[spec.name] = module   # register before exec, or a mod's @dataclass fails
+    spec.loader.exec_module(module)   # (dataclasses resolves types via sys.modules[cls.__module__])
     cls = getattr(module, class_name)
     _service_cache[class_name] = cls
     return cls
