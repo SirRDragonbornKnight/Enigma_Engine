@@ -1,5 +1,11 @@
 # Modkit — Hand-off / Start Here
 
+> **⚠️ STATUS (2026-06-04) — read first; the sections below are partly stale.**
+> There are now **two** "Enigmas" and the direction has moved:
+> - **Qwen3-8B + LoRA** → `models/enigma-8b/`, served by `serve_enigma.py` (capable, tool-calling). §1–2 below describe this path and are still valid for *using* a capable Enigma today.
+> - **From-scratch transformer** → `models/enigma_pretrain_base/` — the "own-brained" Enigma (~350M-param / GPT-2-class, vocab 4718, trained from `data/pretrain/tokens.bin`, 56.6B tokens) via `pretrain_enigma.py`. This is the current research direction. It needs its **own** serving runtime (`sample_enigma.py`, `kv_cache.py`) — a custom architecture can't be run by Odysseus/llama.cpp/Ollama.
+> **Open decision (see the 2026-06-04 whole-project audit):** *capability* (Qwen+LoRA is far stronger today) vs *craft* (a genuinely own brain, but GPT-2-class for now). Resolve this before investing further in either path.
+
 Everything you need to use what we built. **The model runs locally; the front-end is Odysseus.**
 
 ## 1. Chat with Enigma in Odysseus
@@ -8,10 +14,11 @@ Enigma = Qwen3-8B fine-tuned with its own voice, merged into `models/enigma-8b/`
 
 1. Start the Enigma server (Modkit's serving glue):
    ```
-   python serve_enigma.py
+   python serve_enigma.py                # 4-bit NF4, ~9 GB VRAM (default)
+   python serve_enigma.py --quant bf16   # full precision, ~16 GB (max quality)
    ```
-   Serves an OpenAI-compatible API at `http://127.0.0.1:8000/v1` (~16 GB VRAM; Ctrl-C to stop).
-   *(It's running right now from our session — you can skip straight to step 2.)*
+   Serves an OpenAI-compatible API at `http://127.0.0.1:8000/v1` (Ctrl-C to stop).
+   *(It's running right now in 4-bit from our session — you can skip straight to step 2.)*
 2. In Odysseus chat:
    ```
    /setup local http://127.0.0.1:8000/v1
@@ -52,7 +59,7 @@ Deps to run the scripts: `pip install -e ".[full,server]"` (already installed in
   devices), not just chat. The leap from "a model in a chat box" to "an AI that runs its own backend."
 - **Restore Forge test coverage** — deep model/training/tokenizer tests are in git history (`dde5c99`); only smoke-tested now.
 - **The 3D rigged avatar** — last.
-- Known Enigma v1 limits (50-example fine-tune): identity not fully locked ("are you ChatGPT?"), occasional truncation, voice thins on long-form. More corpus fixes these.
+- Enigma **v2** (2026-06-02): corpus expanded 50→**130 examples** (38% identity) and retrained at **rank 32** → identity now **locks** (answers "Are you Qwen?" with "No, I'm Enigma"; owns the Qwen3 base honestly), and native tool-calling still fires. Remaining wrinkle: occasional clipped endings at temp 0.7 (mild overfit at 0.13 train loss) — fewer epochs or more corpus would smooth it.
 
 ## Models on disk
 - `models/qwen3-8b/` — base model.
