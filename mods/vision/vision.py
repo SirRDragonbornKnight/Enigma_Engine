@@ -197,10 +197,11 @@ class OCR:
         except Exception:
             pass
         
-        # Try EasyOCR
+        # Try EasyOCR. Force CPU: screen OCR is fast enough on CPU (~1-2s) and
+        # must NOT contend for VRAM with the resident Enigma model (~9 GB).
         try:
             import easyocr
-            self._reader = easyocr.Reader(['en'], verbose=False)
+            self._reader = easyocr.Reader(['en'], gpu=False, verbose=False)
             self._method = "easyocr"
             self.is_loaded = True
             logger.info("Using EasyOCR")
@@ -398,14 +399,14 @@ class Vision:
     def _cmd_ocr(self, params: Dict[str, Any]) -> Dict[str, Any]:
         if not self.ocr.is_loaded:
             self.ocr.load()
-        
+
         image_path = params.get("image_path")
         if not image_path:
             cap_result = self._cmd_capture({"save": True})
             if not cap_result.get("success"):
                 return cap_result
             image_path = cap_result.get("path")
-        
+
         return self.ocr.extract_text(image_path)
     
     def _cmd_start_watch(self, params: Dict[str, Any]) -> Dict[str, Any]:

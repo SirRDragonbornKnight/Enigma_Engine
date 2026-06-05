@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "modkit": {
+      "command": "C:\\Users\\SirKn\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+      "args": ["C:\\Users\\SirKn\\Enigma Engine\\modkit_mcp.py"]
+    }
+  }
+}
