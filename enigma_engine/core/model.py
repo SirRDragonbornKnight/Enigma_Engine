@@ -454,22 +454,25 @@ class Enigma(nn.Module):
                 )
             h = h + self.pos[:, start_pos:end_pos]
 
-        # Causal mask: built on demand at actual sequence length, cached for reuse
+        # Causal masking. For the PLAIN causal case (no packed/pad mask) we leave
+        # mask=None so attention applies causality via is_causal=True — that lets SDPA
+        # pick the fast mem-efficient/flash kernel instead of the slow additive-mask
+        # path (~1.7x on the attention op; math-identical). An explicit additive mask
+        # is materialized ONLY when a packed (2D) or padding mask must be combined in.
         mask = None
         if attention_mask_2d is not None:
             # Pre-built 4D mask from sequence packing — use directly
             mask = attention_mask_2d.to(device=h.device, dtype=h.dtype)
-        elif T > 1:
-            # Shape: (T, T) -> (1, 1, T, T) for broadcasting with attention
+        elif T > 1 and attention_mask is not None:
+            # Padding present: materialize causal + pad as one additive mask.
             mask = self._get_causal_mask(T).to(device=h.device).unsqueeze(0).unsqueeze(0)
-
-            # Combine with attention_mask: pad positions get -inf
-            if attention_mask is not None:
-                # attention_mask shape: (B, T) → (B, 1, 1, T)
-                pad_mask = (1 - attention_mask.unsqueeze(1).unsqueeze(2).float()) * (
-                    torch.finfo(h.dtype).min
-                )
-                mask = mask + pad_mask
+            # attention_mask shape: (B, T) → (B, 1, 1, T)
+            pad_mask = (1 - attention_mask.unsqueeze(1).unsqueeze(2).float()) * (
+                torch.finfo(h.dtype).min
+            )
+            mask = mask + pad_mask
+        # else: plain causal (T>1, no pad) or single-token decode (T==1) → mask stays
+        # None; attention applies is_causal=True (correct for this decoder-only model).
 
         # T3-2: Capture hidden state at early-exit layer for draft head
         _early_h = None

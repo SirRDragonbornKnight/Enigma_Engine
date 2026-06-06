@@ -57,7 +57,7 @@ Deps to run the scripts: `pip install -e ".[full,server]"` (already installed in
 
 - **MCP server** — expose Modkit's mods to Odysseus so Enigma can *control* them (train, avatar,
   devices), not just chat. The leap from "a model in a chat box" to "an AI that runs its own backend."
-- **Restore Forge test coverage** — deep model/training/tokenizer tests are in git history (`dde5c99`); only smoke-tested now.
+- **Restore Forge test coverage** — deep model/training/tokenizer tests are in git history (`dde5c99`); only smoke-tested now. *(Partly restored: the from-scratch Enigma's KV-cache serving path is now locked by `tests/test_model_kv_cache.py` — cached decode is verified logit-for-logit equal to a full no-cache recompute. Training/tokenizer depth still pending.)*
 - **The 3D rigged avatar** — last.
 - Enigma **v2** (2026-06-02): corpus expanded 50→**130 examples** (38% identity) and retrained at **rank 32** → identity now **locks** (answers "Are you Qwen?" with "No, I'm Enigma"; owns the Qwen3 base honestly), and native tool-calling still fires. Remaining wrinkle: occasional clipped endings at temp 0.7 (mild overfit at 0.13 train loss) — fewer epochs or more corpus would smooth it.
 

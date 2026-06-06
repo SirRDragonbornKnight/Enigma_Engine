@@ -33,7 +33,6 @@ def main() -> None:
 
     from enigma_engine.core.model import Enigma
     from enigma_engine.core.model_presets import ForgeConfig
-    from enigma_engine.core.model_utils import sample_next_token
     from enigma_engine.core.tokenizer import get_tokenizer
 
     device = args.device if (args.device != "cuda" or torch.cuda.is_available()) else "cpu"
@@ -62,18 +61,17 @@ def main() -> None:
             ids_list = ids_list[:-1]
         if not ids_list or ids_list[0] != bos:
             ids_list = [bos] + ids_list
-        gen = torch.tensor([ids_list], device=device)
-        # No-cache loop: full recompute each step. The KV-cache module was pruned
-        # in the refocus; for short samples plain recompute is plenty fast and
-        # avoids that dependency. (Restore kv_cache.py for efficient serving.)
+        ids = torch.tensor([ids_list], device=device)
+        # Cached decode: prefill the prompt once, then one new token per step with
+        # O(1) KV-cache writes (enigma_engine.core.kv_cache). Verified equivalent to
+        # a full no-cache recompute, logit-for-logit, by tests/test_model_kv_cache.py
+        # — so this is both faster and exact.
         with torch.no_grad():
-            for _ in range(args.max_new):
-                logits = model(gen)  # use_cache=False (default) -> returns logits
-                nxt = sample_next_token(logits[:, -1, :], gen, args.temperature,
-                                        args.top_k, args.top_p, 1.1)
-                gen = torch.cat([gen, nxt], dim=1)
-                if int(nxt.item()) == eos or gen.shape[1] >= config.max_seq_len:
-                    break
+            gen = model.generate(
+                ids, max_new_tokens=args.max_new, temperature=args.temperature,
+                top_k=args.top_k, top_p=args.top_p, repetition_penalty=1.1,
+                stop_tokens=[eos],
+            )
         text = tok.decode(gen[0].tolist())
         print(f"\n>>> {p!r}\n    {text!r}", flush=True)
 

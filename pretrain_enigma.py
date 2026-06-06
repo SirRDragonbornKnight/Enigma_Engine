@@ -60,6 +60,8 @@ def main() -> None:
     ap.add_argument("--lr", type=float, default=6e-4)
     ap.add_argument("--warmup", type=int, default=200)
     ap.add_argument("--weight-decay", type=float, default=0.1)
+    ap.add_argument("--dropout", type=float, default=0.0,
+                    help="dropout (0.0 for single-epoch pretraining; presets default to 0.1)")
     ap.add_argument("--grad-clip", type=float, default=1.0)
     ap.add_argument("--save-every", type=int, default=250, help="steps between checkpoints")
     ap.add_argument("--eval-every", type=int, default=250, help="steps between val-loss checks")
@@ -70,6 +72,8 @@ def main() -> None:
     ap.add_argument("--no-grad-ckpt", action="store_true", help="disable gradient checkpointing")
     ap.add_argument("--no-diff-attn", action="store_true",
                     help="disable differential attention -> use fused SDPA kernel (2-4x faster)")
+    ap.add_argument("--compile", action=argparse.BooleanOptionalAction, default=True,
+                    help="torch.compile the model (~1.5-2x; --no-compile for eager / if Triton is absent)")
     ap.add_argument("--sanity", action="store_true", help="one fwd/bwd step then exit")
     args = ap.parse_args()
 
@@ -123,24 +127,43 @@ def main() -> None:
 
     # Build the model from a preset, sized to the corpus vocab.
     from enigma_engine.core.model import Enigma
-    from enigma_engine.core.model_presets import get_preset
-    config = get_preset(args.size, vocab_size=vocab_size)
-    config.neftune_alpha = 0.0  # NEFTune is a finetuning trick; off for pretraining
-    if args.no_diff_attn:
-        config.use_differential_attn = False  # engages F.scaled_dot_product_attention (fused/flash)
+    from enigma_engine.core.model_presets import ForgeConfig, get_preset
+    # On resume, rebuild config from the CHECKPOINT (exact architecture) rather than the
+    # preset. Otherwise a flag mismatch (e.g. forgetting --no-diff-attn) builds a
+    # differently-shaped model and load_state_dict(strict=False) silently leaves the
+    # mismatched tensors at random init — a silent corruption. Trust the checkpoint.
+    ck = None
+    if args.resume and Path(args.resume).exists():
+        ck = torch.load(args.resume, map_location=device)
+        config = ForgeConfig.from_dict(ck["config"])
+        print(f"resume: config rebuilt from checkpoint ({args.resume})", flush=True)
+    else:
+        config = get_preset(args.size, vocab_size=vocab_size)
+        config.neftune_alpha = 0.0  # NEFTune is a finetuning trick; off for pretraining
+        if args.no_diff_attn:
+            config.use_differential_attn = False  # fused SDPA; must stay consistent across resumes
+    config.dropout = args.dropout  # 0.0 for single-epoch pretraining (preset default 0.1 undertrains)
     if block > config.max_seq_len:
         config.max_seq_len = block
     model = Enigma(config)
     if not args.no_grad_ckpt:
         model.gradient_checkpointing_enable()
     model.to(device)
+    raw_model = model  # the real nn.Module; checkpoints/optimizer bind here even when compiled
     n_params = sum(p.numel() for p in model.parameters())
     print(f"Enigma '{args.size}': {n_params/1e6:.1f}M params, dim={config.dim} "
           f"layers={config.n_layers} heads={config.n_heads} block={block} "
           f"diff_attn={config.use_differential_attn}", flush=True)
 
-    optim = torch.optim.AdamW(model.parameters(), lr=args.lr, betas=(0.9, 0.95),
-                              weight_decay=args.weight_decay)
+    # Weight-decay only tensors with dim>=2 (matmuls, embeddings); never 1-D params
+    # (RMSNorm gains) — decaying norm scales mildly hurts. Standard GPT-2/nanoGPT split.
+    _decay = [p for p in raw_model.parameters() if p.requires_grad and p.dim() >= 2]
+    _no_decay = [p for p in raw_model.parameters() if p.requires_grad and p.dim() < 2]
+    optim = torch.optim.AdamW(
+        [{"params": _decay, "weight_decay": args.weight_decay},
+         {"params": _no_decay, "weight_decay": 0.0}],
+        lr=args.lr, betas=(0.9, 0.95))
+    print(f"optim: weight-decay on {len(_decay)} tensors, none on {len(_no_decay)}", flush=True)
 
     use_bf16 = device == "cuda" and torch.cuda.is_bf16_supported()
     amp_dtype = torch.bfloat16 if use_bf16 else torch.float16
@@ -154,18 +177,47 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
 
     start_step = 0
-    if args.resume and Path(args.resume).exists():
-        ck = torch.load(args.resume, map_location=device)
-        model.load_state_dict(ck["model_state_dict"], strict=False)
+    if ck is not None:
+        missing, unexpected = raw_model.load_state_dict(ck["model_state_dict"], strict=False)
+        # config came from the checkpoint, so any real mismatch signals corruption —
+        # hard-fail rather than silently train half-random weights. (freqs_cis / causal
+        # mask are non-persistent buffers recomputed at build time; ignore those.)
+        real_missing = [k for k in missing if "freqs_cis" not in k and "causal_mask" not in k]
+        if unexpected or real_missing:
+            raise SystemExit(f"resume arch mismatch — refusing to corrupt: "
+                             f"missing={real_missing[:5]} unexpected={unexpected[:5]}")
         if "optimizer" in ck:
             optim.load_state_dict(ck["optimizer"])
         start_step = int(ck.get("step", 0))
         print(f"resumed from {args.resume} at step {start_step}", flush=True)
 
+    # torch.compile after any resume-load so weights land in raw_model first. The
+    # compiled wrapper is used only for fwd/bwd; save/load/optimizer stay on
+    # raw_model so the `_orig_mod.` prefix never leaks into checkpoints. Eager
+    # fallback keeps the run alive where inductor/Triton is unavailable (Windows).
+    if args.compile and device == "cuda":
+        try:
+            compiled = torch.compile(raw_model)
+            # torch.compile traces lazily on first call, so a missing-Triton /
+            # inductor failure would otherwise crash mid-run. Force the compile
+            # NOW on the real training shape (same graph the loop uses -> no later
+            # recompile); on any failure fall back to eager. Throwaway grads cleared.
+            _x = torch.zeros((args.micro_batch, block), dtype=torch.long, device=device)
+            with torch.autocast(device_type="cuda", dtype=amp_dtype):
+                _, _loss = compiled(_x, targets=_x)
+            _loss.backward()
+            optim.zero_grad(set_to_none=True)
+            model = compiled
+            print("torch.compile: enabled", flush=True)
+        except Exception as exc:
+            optim.zero_grad(set_to_none=True)
+            model = raw_model
+            print(f"torch.compile: unavailable -> eager ({str(exc).splitlines()[0][:140]})", flush=True)
+
     def save(tag: str, step: int):
         from enigma_engine.core.safe_save import atomic_torch_save
         atomic_torch_save({
-            "model_state_dict": model.state_dict(),
+            "model_state_dict": raw_model.state_dict(),
             "config": config.to_dict(),
             "step": step,
             "optimizer": optim.state_dict(),
@@ -174,19 +226,19 @@ def main() -> None:
 
     @torch.no_grad()
     def estimate_val() -> float:
-        model.eval()
+        raw_model.eval()
         losses = []
         for _ in range(args.eval_iters):
             X, Y = get_batch("val")
             with torch.autocast(device_type="cuda", dtype=amp_dtype, enabled=(device == "cuda")):
                 _, loss = model(X, targets=Y)
             losses.append(loss.item())
-        model.train()
+        raw_model.train()
         return sum(losses) / max(1, len(losses))
 
     # --- sanity: one fwd/bwd, report loss vs random baseline, exit ----------
     if args.sanity:
-        model.train()
+        raw_model.train()
         X, Y = get_batch("train")
         with torch.autocast(device_type="cuda", dtype=amp_dtype, enabled=(device == "cuda")):
             _, loss = model(X, targets=Y)
@@ -200,7 +252,7 @@ def main() -> None:
           f"{tokens_per_step:,} tok/step (mb {args.micro_batch} x ga {args.grad_accum} x {block}) | "
           f"amp={'bf16' if use_bf16 else 'fp16'} ckpt={not args.no_grad_ckpt}", flush=True)
 
-    model.train()
+    raw_model.train()
     t0 = time.time()
     base_tokens = start_step * tokens_per_step
     seen = base_tokens

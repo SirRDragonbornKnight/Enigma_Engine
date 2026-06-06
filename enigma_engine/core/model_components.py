@@ -605,6 +605,15 @@ class Attention(nn.Module):
             scores = torch.matmul(q, k.transpose(-2, -1)) * self._scale
             if mask is not None:
                 scores = scores + mask  # Mask is -inf for blocked positions
+            elif T > 1:
+                # Plain causal case: the main model now passes mask=None so the SDPA
+                # path can use is_causal=True. This non-SDPA / CPU fallback must apply
+                # causality itself. (T==1 decode needs none: the 1 query sees all keys.)
+                causal = torch.triu(
+                    torch.full((T, T), float("-inf"), device=scores.device, dtype=scores.dtype),
+                    diagonal=1,
+                )
+                scores = scores + causal
 
             # R22: Differential attention — noise cancellation.
             if self.use_differential_attn:
