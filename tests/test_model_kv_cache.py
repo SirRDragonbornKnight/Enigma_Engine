@@ -8,10 +8,23 @@ recompute over the same realized sequence — otherwise served output silently
 diverges from the model's true distribution.
 
 These tests lock that equivalence (deep model coverage that was removed in
-the Modkit refocus; see HANDOFF.md "Restore Forge test coverage"). They run on
-CPU with a nano preset so they're fast and GPU-independent, and they exercise
-GQA (nano = 4 query heads / 2 KV heads) plus both position schemes
-(RoPE and learned positional embeddings).
+the Modkit refocus; see HANDOFF.md "Restore Forge test coverage").
+
+⚠️ COVERAGE MATRIX — learned the hard way. A genuine KV-cache decode bug
+(SDPA called with ``is_causal=True`` for the rectangular q_len=1 / k_len=L
+decode step, which top-left-aligns the mask so the new token sees only key 0)
+shipped *despite* an earlier version of this test passing — because that
+version ran only on CPU with the preset default ``use_differential_attn=True``,
+and BOTH of those route around the buggy branch:
+
+  * CPU                       → standard (non-SDPA) attention path
+  * use_differential_attn=True → differential attention path
+
+The broken branch is **CUDA + standard attention** (``use_differential_attn``
+False), which is exactly the production serving config (``--no-diff-attn`` on
+the large run). So we now cross **device × attention-variant × position-scheme**
+and assert cache==no-cache on every combination. The ``("cuda", std-attn)``
+cells are the ones that actually exercise SDPA incremental decode.
 """
 
 from dataclasses import replace
@@ -22,36 +35,52 @@ import torch
 from enigma_engine.core.model import Enigma
 from enigma_engine.core.model_presets import MODEL_PRESETS
 
+# Run on CPU always; add CUDA when present (no-op skip on CPU-only boxes —
+# honors the "works on any device" constraint).
+DEVICES = ["cpu"] + (["cuda"] if torch.cuda.is_available() else [])
 
-def _tiny(use_rope: bool = True, seed: int = 0) -> Enigma:
-    """A small, deterministic, CPU Enigma in eval mode (dropout off)."""
+
+def _tiny(
+    use_rope: bool = True,
+    differential: bool = False,
+    device: str = "cpu",
+    seed: int = 0,
+) -> Enigma:
+    """A small, deterministic Enigma in eval mode (dropout off) on ``device``."""
     torch.manual_seed(seed)
     cfg = replace(
         MODEL_PRESETS["nano"],
         vocab_size=64,
         max_seq_len=64,
         use_rope=use_rope,
+        use_differential_attn=differential,
     )
     # Sanity: the preset we lean on must keep n_kv_heads < n_heads so the
     # cache↔GQA-repeat interaction is actually under test.
     assert cfg.n_kv_heads < cfg.n_heads, "nano preset must use GQA for this test"
-    return Enigma(cfg).eval()
+    return Enigma(cfg).eval().to(device)
 
 
+@pytest.mark.parametrize("device", DEVICES)
+@pytest.mark.parametrize("differential", [False, True], ids=["std_attn", "diff_attn"])
 @pytest.mark.parametrize("use_rope", [True, False], ids=["rope", "learned_pos"])
 @torch.no_grad()
-def test_kv_cache_decode_matches_no_cache(use_rope: bool):
+def test_kv_cache_decode_matches_no_cache(use_rope: bool, differential: bool, device: str):
     """Incremental cached decode == full no-cache recompute, logit-for-logit.
 
     Walk a realized sequence one token at a time: at each step compare the
     cached path's next-token logits against recomputing the whole sequence
     from scratch with ``use_cache=False``. They must agree to within float32
-    numerical noise at *every* step (prefill + each decode step).
+    numerical noise at *every* step (prefill + each decode step), and the
+    greedy argmax must agree (that's what actually drives generation).
+
+    The ``(cuda, std_attn)`` parametrization is the production serving path
+    and the one a CPU-only / diff-attn-only test silently skipped.
     """
-    model = _tiny(use_rope=use_rope)
+    model = _tiny(use_rope=use_rope, differential=differential, device=device)
     vocab = model.config.vocab_size
     torch.manual_seed(1)
-    prefix = torch.randint(0, vocab, (1, 5))
+    prefix = torch.randint(0, vocab, (1, 5), device=device)
 
     def ref_last_logits(seq: torch.Tensor) -> torch.Tensor:
         return model(seq, use_cache=False)[0, -1]
@@ -70,22 +99,28 @@ def test_kv_cache_decode_matches_no_cache(use_rope: bool):
         cached = model(nxt, use_cache=True, start_pos=seq.shape[1] - 1)[0, -1]
         ref = ref_last_logits(seq)
         assert torch.allclose(cached, ref, atol=1e-4), (
-            f"decode step {step} (len {seq.shape[1]}) diverged: "
+            f"decode step {step} (len {seq.shape[1]}) diverged on {device}/"
+            f"{'diff' if differential else 'std'}-attn: "
             f"max|Δ|={(cached - ref).abs().max().item():.2e}"
         )
-        assert cached.argmax() == ref.argmax(), f"argmax disagrees at step {step}"
+        assert cached.argmax() == ref.argmax(), (
+            f"argmax disagrees at step {step} on {device}/"
+            f"{'diff' if differential else 'std'}-attn"
+        )
 
 
+@pytest.mark.parametrize("device", DEVICES)
 @torch.no_grad()
-def test_generate_is_deterministic_and_clear_cache_resets():
+def test_generate_is_deterministic_and_clear_cache_resets(device: str):
     """``generate`` is greedy-deterministic and ``clear_cache`` fully resets state.
 
     Two back-to-back greedy generations (top_k=1) from the same prompt must
     produce byte-identical token sequences — proving the per-call
     ``clear_cache()`` wipes the previous run's KV entries (a stale-cache leak
-    would corrupt the second call)."""
-    model = _tiny()
-    prompt = torch.tensor([[1, 7, 11, 3]])
+    would corrupt the second call). Runs std-attn so it drives the SDPA decode
+    path on CUDA."""
+    model = _tiny(differential=False, device=device)
+    prompt = torch.tensor([[1, 7, 11, 3]], device=device)
 
     out1 = model.generate(prompt, max_new_tokens=12, temperature=1.0, top_k=1)
     out2 = model.generate(prompt, max_new_tokens=12, temperature=1.0, top_k=1)
@@ -96,11 +131,12 @@ def test_generate_is_deterministic_and_clear_cache_resets():
     assert torch.equal(out1[:, : prompt.shape[1]], prompt)
 
 
+@pytest.mark.parametrize("device", DEVICES)
 @torch.no_grad()
-def test_generate_respects_stop_token():
+def test_generate_respects_stop_token(device: str):
     """Generation halts as soon as a stop token is emitted."""
-    model = _tiny()
-    prompt = torch.tensor([[1, 7, 11, 3]])
+    model = _tiny(differential=False, device=device)
+    prompt = torch.tensor([[1, 7, 11, 3]], device=device)
 
     # Discover the first token greedy-generation would emit, then make THAT a
     # stop token: generation should append it and immediately halt.

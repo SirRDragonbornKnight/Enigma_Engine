@@ -589,9 +589,25 @@ class Attention(nn.Module):
                 output = F.scaled_dot_product_attention(
                     q_s, k_s, v_s, attn_mask=mask,
                     dropout_p=drop_p, scale=self._scale)
-            else:
+            elif q_s.shape[-2] == k_s.shape[-2]:
+                # Square attention (prefill / training): plain causal via the fast kernel.
                 output = F.scaled_dot_product_attention(
                     q_s, k_s, v_s, is_causal=True,
+                    dropout_p=drop_p, scale=self._scale)
+            else:
+                # KV-cache incremental decode: q_len < k_len. The q_len new queries are
+                # the LAST q_len positions of the length-k_len sequence, so query i
+                # (absolute pos k_len-q_len+i) may attend to keys 0..k_len-q_len+i.
+                # is_causal=True here top-left-aligns the (q_len, k_len) mask and wrongly
+                # leaves each query able to see ONLY key 0 — silent KV-cache corruption
+                # that makes served generation collapse. Build the bottom-right-aligned
+                # causal mask instead (for q_len==1 this is all-True = attend to full cache).
+                Tq, Tk = q_s.shape[-2], k_s.shape[-2]
+                attn_causal = torch.ones(
+                    Tq, Tk, dtype=torch.bool, device=q_s.device
+                ).tril(diagonal=Tk - Tq)
+                output = F.scaled_dot_product_attention(
+                    q_s, k_s, v_s, attn_mask=attn_causal,
                     dropout_p=drop_p, scale=self._scale)
             output = output.transpose(1, 2).reshape(B, T, -1)
         else:
