@@ -75,6 +75,8 @@ def main() -> None:
     ap.add_argument("--compile", action=argparse.BooleanOptionalAction, default=True,
                     help="torch.compile the model (~1.5-2x; --no-compile for eager / if Triton is absent)")
     ap.add_argument("--sanity", action="store_true", help="one fwd/bwd step then exit")
+    ap.add_argument("--throttle-ms", type=float, default=0.0,
+                    help="sleep N ms after each micro-batch to yield the GPU (e.g. while gaming); 0 = full speed")
     args = ap.parse_args()
 
     if not TOKENS_BIN.exists():
@@ -269,6 +271,8 @@ def main() -> None:
                 loss = loss / args.grad_accum
             scaler.scale(loss).backward()
             loss_acc += loss.item()
+            if args.throttle_ms:
+                time.sleep(args.throttle_ms / 1000.0)
         if use_scaler:
             scaler.unscale_(optim)
         torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
