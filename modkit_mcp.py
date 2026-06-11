@@ -17,7 +17,10 @@ from __future__ import annotations
 import asyncio
 import importlib.util
 import json
+import os
+import subprocess
 import sys
+import uuid
 from pathlib import Path
 
 import websockets
@@ -138,6 +141,69 @@ def _avatar_speak_wav(text: str, voice: str, speed: float) -> Path:
 
 
 # --------------------------------------------------------------------------
+# Capability: avatar model introspection (headless glTF scan → capability profile)
+# --------------------------------------------------------------------------
+def _avatar_node() -> str:
+    """The portable Node the avatar overlay ships with; fall back to PATH `node`.
+    Resolved via %LOCALAPPDATA% (no hardcoded user path) so it travels per-machine."""
+    base = os.environ.get("LOCALAPPDATA")
+    if base:
+        cand = Path(base) / "node-portable" / "node.exe"
+        if cand.exists():
+            return str(cand)
+    return "node"
+
+
+def _describe_model(model: str | None) -> str:
+    """Run the headless profiler (mods/avatar/tools/describe.mjs) and return its JSON.
+    `model` = a model id or path; omit for a brief menu of every installed model. The
+    profile is name-agnostic: parts are addressed by role / material index / VRM preset."""
+    script = ROOT / "mods" / "avatar" / "tools" / "describe.mjs"
+    if not script.exists():
+        return f"Error: avatar scanner not found at {script}"
+    cmd = [_avatar_node(), str(script)]
+    if model:
+        cmd.append(model)
+    try:
+        proc = subprocess.run(
+            cmd, cwd=str(script.parent.parent),  # mods/avatar, so ./models + overrides resolve
+            capture_output=True, encoding="utf-8", errors="replace", timeout=60)
+    except Exception as exc:
+        return f"avatar_describe: could not run the scanner — {exc}"
+    if proc.returncode != 0:
+        err = (proc.stderr or "").strip() or (proc.stdout or "").strip()
+        return f"avatar_describe: scanner exited {proc.returncode} — {err or 'no output'}"
+    return (proc.stdout or "").strip() or "(scanner produced no output)"
+
+
+# --------------------------------------------------------------------------
+# Capability: live avatar self-report (two-way bus RPC — ground truth from the overlay)
+# --------------------------------------------------------------------------
+async def _avatar_rpc(cmd: dict, timeout: float = 3.0):
+    """Send a command to the avatar bus and AWAIT the overlay's reply (two-way). Returns the
+    reply's `result`, or None if none arrives in time. The bus broadcasts the overlay's reply
+    to every other client, so we tag a reqId and filter for our own."""
+    req_id = uuid.uuid4().hex
+    payload = json.dumps({**cmd, "reqId": req_id})
+    async with websockets.connect(_AVATAR_BUS, open_timeout=2) as ws:
+        await ws.send(payload)
+        loop = asyncio.get_event_loop()
+        deadline = loop.time() + timeout
+        while loop.time() < deadline:
+            try:
+                raw = await asyncio.wait_for(ws.recv(), timeout=max(0.05, deadline - loop.time()))
+            except asyncio.TimeoutError:
+                break
+            try:
+                msg = json.loads(raw)
+            except Exception:
+                continue
+            if isinstance(msg, dict) and msg.get("type") == "reply" and msg.get("reqId") == req_id:
+                return msg.get("result")
+    return None
+
+
+# --------------------------------------------------------------------------
 # MCP wiring
 # --------------------------------------------------------------------------
 @server.list_tools()
@@ -230,15 +296,25 @@ async def list_tools() -> list[Tool]:
                 "righthand/head/back, category prop|clothes|furniture)\n"
                 "  detach — remove an attachment (id, or omit for all)\n"
                 "  springTune — hair/tail feel (stiffness, drag, gravity)\n"
+                "  setMorph — drive a morph target by index (probe to find the mouth → face.mouthMorph)\n"
+                "  gesture — animated whole-body MOTION (name: jump|flip|laydown|getup|clap; optional dur) — fires LIVE/instantly\n"
+                "  express — emote (name: happy|sad|talk|wag|nod|alert|shake; optional dur)\n"
+                "  rotate — turn her (x,y,z degrees, or axis+deg)\n"
+                "  lookAt — gaze at a screen point (px,py)   ·   lookMode — head|eyes|both (mode)\n"
+                "  goTo — move by name (to: center|topleft|cursor|…) or px,py\n"
+                "  regionWeight — soft-body jiggle per area (region, weight)   ·   morph — set a shape key (index, value)\n"
+                "  setMesh — show/hide a part (index, on)   ·   monitor — hop screens (value: next|prev|index)\n"
                 "  stop — stop speaking\n"
+                "These run LIVE — the overlay is its own process, so commands take effect the instant they "
+                "arrive; fire them in short bursts mid-task to drive her like a body.\n"
                 "No-op if the overlay/bus isn't running, so it's safe to call."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "action": {"type": "string", "description": "load, size, moveTo, recolor, attach, detach, springTune, stop"},
+                    "action": {"type": "string", "description": "load|size|moveTo|goTo|rotate|gesture|express|lookAt|lookMode|recolor|attach|detach|springTune|setMorph|regionWeight|morph|setMesh|monitor|stop"},
                     "url": {"type": "string", "description": "model/prop path for load/attach"},
-                    "value": {"type": "number", "description": "scale for size"},
+                    "value": {"type": ["number", "string"], "description": "scale for size · morph value 0..1 · monitor: next|prev|<index>"},
                     "px": {"type": "number"}, "py": {"type": "number"},
                     "name": {"type": "string", "description": "material name (recolor)"},
                     "color": {"type": "string", "description": "#rrggbb (recolor)"},
@@ -246,8 +322,67 @@ async def list_tools() -> list[Tool]:
                     "category": {"type": "string", "description": "prop | clothes | furniture (attach)"},
                     "id": {"type": "string", "description": "attachment id (detach)"},
                     "stiffness": {"type": "number"}, "drag": {"type": "number"}, "gravity": {"type": "number"},
+                    "index": {"type": "number", "description": "morph index (setMorph) or material index (recolor)"},
+                    "idx": {"type": "number", "description": "alias for index"},
+                    "on": {"type": "boolean", "description": "toggle on/off (showBones / setMesh)"},
+                    "deg": {"type": "number", "description": "degrees (hue / single-axis rotate)"},
+                    "dur": {"type": "number", "description": "seconds (gesture / express duration)"},
+                    "x": {"type": "number", "description": "rotate pitch°"},
+                    "y": {"type": "number", "description": "rotate yaw°"},
+                    "z": {"type": "number", "description": "rotate roll°"},
+                    "axis": {"type": "string", "description": "x|y|z for a single-axis rotate"},
+                    "mode": {"type": "string", "description": "head|eyes|both (lookMode)"},
+                    "to": {"type": "string", "description": "anchor name for goTo (center|topleft|topright|cursor|…)"},
+                    "region": {"type": "string", "description": "soft-body area (regionWeight)"},
+                    "weight": {"type": "number", "description": "jiggle amount 0..2 (regionWeight)"},
+                    "breeze": {"type": "number", "description": "springTune ambient sway"},
+                    "scale": {"type": "number", "description": "attach fit: prop scale"},
+                    "pos": {"type": "array", "items": {"type": "number"}, "description": "attach fit: [x,y,z] offset"},
+                    "rot": {"type": "array", "items": {"type": "number"}, "description": "attach fit: [x,y,z] degrees"},
                 },
                 "required": ["action"],
+            },
+        ),
+        Tool(
+            name="avatar_describe",
+            description=(
+                "Scan a 3D avatar model BEFORE driving it and return its capability "
+                "profile as JSON: which rig roles resolved (found by STRUCTURE, not by "
+                "name), the facial / lip-sync system, recolorable materials (by index), "
+                "morph targets, spring/dynamic chains (hair/tail/wires), health, and "
+                "which avatar_express / say / command actions are actually supported on "
+                "it. Models share NO naming and some have corrupted names, so address "
+                "parts by the returned ROLE / material INDEX / VRM PRESET — never by a "
+                "guessed name. Omit `model` for a brief menu of all installed models. "
+                "Call this before avatar_command load/recolor/attach so your commands "
+                "fit the actual model."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "model": {
+                        "type": "string",
+                        "description": "model id or path (e.g. 'roxanne_wolf' or './models/x/scene.gltf'); omit for the menu of all models",
+                    },
+                },
+            },
+        ),
+        Tool(
+            name="avatar_status",
+            description=(
+                "Report the LIVE avatar overlay's ACTUAL state (ground truth from the running "
+                "overlay, not a static scan): current model, facial/lip-sync mode (whether the "
+                "loaded model even HAS a mouth), recolorable materials BY INDEX (the authority "
+                "for avatar_command recolor — get indices here; names are unreliable), resolved "
+                "rig roles, attachments, toggles. Call before recolor, or to check whether the "
+                "loaded model can lip-sync. `what`: state (default) | materials | facial | model. "
+                "Empty if the overlay/bus isn't running."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "what": {"type": "string", "description": "state (default) | materials | facial | model"},
+                },
             },
         ),
     ]
@@ -302,7 +437,9 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 return [TextContent(type="text", text="Error: action is required")]
             cmd = {"action": action}
             for k in ("url", "value", "px", "py", "name", "color", "bone", "category",
-                      "id", "stiffness", "drag", "gravity", "breeze", "scale", "dur", "pos", "rot"):
+                      "id", "stiffness", "drag", "gravity", "breeze", "scale", "dur", "pos", "rot",
+                      "index", "idx", "on", "deg", "x", "y", "z", "axis", "mode", "to", "anchor",
+                      "region", "weight", "gesture", "open", "what"):
                 if args.get(k) is not None:
                     cmd[k] = args[k]
             try:
@@ -312,6 +449,18 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             except Exception as exc:
                 return [TextContent(type="text",
                                     text=f"avatar not reachable (overlay/bus not running): {exc}")]
+        if name == "avatar_describe":
+            out = await asyncio.to_thread(_describe_model, args.get("model"))
+            return [TextContent(type="text", text=out)]
+        if name == "avatar_status":
+            what = (args.get("what") or "state").strip()
+            try:
+                result = await _avatar_rpc({"action": "query", "what": what})
+            except Exception as exc:
+                return [TextContent(type="text", text=f"avatar not reachable (overlay/bus not running): {exc}")]
+            if result is None:
+                return [TextContent(type="text", text="(no reply — the avatar overlay/bus isn't running)")]
+            return [TextContent(type="text", text=json.dumps(result, indent=2))]
         return [TextContent(type="text", text=f"Unknown tool: {name}")]
     except Exception as exc:  # never crash the server on a bad call
         return [TextContent(type="text", text=f"Error: {exc}")]
