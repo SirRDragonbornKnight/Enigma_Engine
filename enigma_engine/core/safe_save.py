@@ -23,13 +23,20 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-def atomic_torch_save(data: dict, path: str | Path) -> None:
+def atomic_torch_save(data: dict, path: str | Path,
+                      rotate_to: str | Path | None = None) -> None:
     """Save a PyTorch checkpoint atomically.
 
     Writes to ``<path>.tmp`` first, then replaces the target via
     ``os.replace`` (atomic on both Windows NTFS and Linux ext4).
     On failure the temp file is cleaned up and the original is
     left untouched.
+
+    When *rotate_to* is given and *path* already exists, the current
+    file is renamed to *rotate_to* after the new data is fully written
+    and immediately before promotion — keeping one previous generation
+    as a fallback. The only crash window (between the two renames)
+    leaves *rotate_to* (old data) plus the complete ``.tmp``.
     """
     import torch
 
@@ -38,6 +45,8 @@ def atomic_torch_save(data: dict, path: str | Path) -> None:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         torch.save(data, tmp_path)
+        if rotate_to is not None and path.exists():
+            os.replace(path, Path(rotate_to))
         os.replace(tmp_path, path)
     except BaseException:
         # Clean up partial temp file on any failure

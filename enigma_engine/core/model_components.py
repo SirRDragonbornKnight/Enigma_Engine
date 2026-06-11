@@ -2,7 +2,7 @@
 Neural network components for the Enigma transformer.
 
 Contains RMSNorm, RoPE functions, DropPath, Attention, FeedForward,
-MoEFeedForward, and TransformerBlock modules.
+and TransformerBlock modules.
 """
 import logging
 import math
@@ -840,159 +840,6 @@ class FeedForward(nn.Module):
         return self.down(self.dropout(F.gelu(self.up(x))))
 
 
-class MoEFeedForward(nn.Module):
-    """
-    Mixture of Experts Feed-Forward layer.
-
-    📖 WHAT THIS DOES:
-    Routes each token to top-k experts for specialized processing.
-    Different experts can specialize in different types of content
-    (e.g., one for code, one for math, one for creative writing).
-
-    📐 MOE ARCHITECTURE:
-    ┌────────────────────────────────────────────────────────────────────────┐
-    │  Input x                                                               │
-    │      ↓                                                                 │
-    │  [Router/Gate] → Selects top-k experts                                │
-    │      ↓                                                                 │
-    │  ┌─────────┬─────────┬─────────┬─────────┐                            │
-    │  │Expert 1 │Expert 2 │Expert 3 │Expert N │  (only top-k activated)    │
-    │  └─────────┴─────────┴─────────┴─────────┘                            │
-    │      ↓                                                                 │
-    │  [Weighted Sum] → Combined output                                      │
-    └────────────────────────────────────────────────────────────────────────┘
-
-    💡 WHY MOE?
-    - More parameters without proportional compute increase
-    - Experts can specialize in different domains
-    - Scales to very large models efficiently (GPT-4, Mixtral)
-
-    ⚠️ TRAINING CONSIDERATIONS:
-    - Load balancing loss prevents all tokens going to same expert
-    - Auxiliary loss weight (moe_load_balancing) controls this
-    """
-
-    def __init__(self, config: ForgeConfig) -> None:
-        """
-        Args:
-            config: Model configuration with MoE settings
-        """
-        super().__init__()
-        self.num_experts = config.num_experts
-        self.num_experts_per_token = config.num_experts_per_token
-        self.aux_loss_weight = config.moe_load_balancing
-
-        # Router: determines which experts to use for each token
-        self.gate = nn.Linear(config.dim, config.num_experts, bias=False)
-
-        # Expert networks (each is a standard FeedForward)
-        self.experts = nn.ModuleList([
-            FeedForward(config) for _ in range(config.num_experts)
-        ])
-
-        # Track load balancing loss for training
-        self.load_balancing_loss = 0.0
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass through MoE layer with vectorized routing.
-
-        This implementation groups tokens by expert and processes them in batches,
-        avoiding the O(tokens × experts) nested loop that would kill performance.
-
-        Args:
-            x: Input tensor [batch, seq_len, dim]
-
-        Returns:
-            Output tensor [batch, seq_len, dim]
-        """
-        B, T, D = x.shape
-        num_tokens = B * T
-
-        # Flatten batch and sequence dimensions for routing
-        x_flat = x.reshape(-1, D)  # [num_tokens, D]
-
-        # Compute router scores
-        router_logits = self.gate(x_flat)  # [num_tokens, num_experts]
-        router_probs = F.softmax(router_logits, dim=-1)
-
-        # Select top-k experts for each token
-        top_k_probs, top_k_indices = torch.topk(
-            router_probs, self.num_experts_per_token, dim=-1
-        )  # Both: [num_tokens, k]
-
-        # Normalize selected expert weights
-        top_k_probs = top_k_probs / top_k_probs.sum(dim=-1, keepdim=True)
-
-        # Compute load balancing loss for training (Switch Transformer formulation)
-        # Must be differentiable through router_probs so the router learns.
-        if self.training:
-            # f_i: fraction of tokens dispatched to each expert (non-diff)
-            flat_indices = top_k_indices.reshape(-1)  # [num_tokens * k]
-            expert_counts = torch.bincount(
-                flat_indices, minlength=self.num_experts
-            ).float()
-            f = expert_counts / (num_tokens * self.num_experts_per_token)
-
-            # P_i: mean router probability per expert (differentiable!)
-            P = router_probs.mean(dim=0)  # [num_experts]
-
-            # aux = N * sum(f_i * P_i) — gradient flows through P_i
-            self.load_balancing_loss = self.num_experts * (f * P).sum()
-
-        # ─────────────────────────────────────────────────────────────────────
-        # VECTORIZED EXPERT ROUTING: Process each expert once with batched tokens
-        # ─────────────────────────────────────────────────────────────────────
-        # Instead of nested loops O(k × num_experts × num_tokens), we:
-        # 1. Create a flat list of (token_idx, expert_idx, weight) assignments
-        # 2. Sort/group by expert
-        # 3. Process each expert's batch once
-        # 4. Scatter results back
-
-        # Expand token indices for all k selections
-        token_indices = torch.arange(num_tokens, device=x.device)
-        token_indices = token_indices.unsqueeze(1).expand(-1, self.num_experts_per_token)
-        # token_indices: [num_tokens, k] - which token each assignment belongs to
-
-        # Flatten everything for batched processing
-        flat_token_idx = token_indices.reshape(-1)  # [num_tokens * k]
-        flat_expert_idx = top_k_indices.reshape(-1)  # [num_tokens * k]
-        flat_weights = top_k_probs.reshape(-1)  # [num_tokens * k]
-
-        # Initialize output accumulator in fp32 for precision (S824)
-        output = torch.zeros(num_tokens, D, dtype=torch.float32, device=x_flat.device)
-
-        # Process each expert's tokens in a single batch
-        for expert_id in range(self.num_experts):
-            # Find all assignments to this expert
-            expert_mask = (flat_expert_idx == expert_id)
-
-            if not expert_mask.any():
-                continue
-
-            # Get token indices and weights for this expert
-            selected_token_idx = flat_token_idx[expert_mask]
-            selected_weights = flat_weights[expert_mask]
-
-            # Gather input tokens for this expert (single gather operation)
-            expert_input = x_flat[selected_token_idx]  # [num_selected, D]
-
-            # Process all tokens through this expert at once
-            expert_output = self.experts[expert_id](expert_input)  # [num_selected, D]
-
-            # Weight the outputs
-            weighted_output = expert_output * selected_weights.unsqueeze(-1)
-
-            # Scatter-add back to output (handles duplicate token indices)
-            output.index_add_(0, selected_token_idx, weighted_output.float())
-
-        # Reshape back to [B, T, D]
-        return output.to(x_flat.dtype).reshape(B, T, D)
-
-    def get_aux_loss(self) -> torch.Tensor:
-        """Get the auxiliary load balancing loss for training."""
-        return self.load_balancing_loss * self.aux_loss_weight
-
 
 # =============================================================================
 # T5-4: Token Merging (ToMe) — merge similar tokens mid-forward-pass
@@ -1166,11 +1013,7 @@ class TransformerBlock(nn.Module):
 
         # The actual computation modules
         self.attention = Attention(config)
-        # Use MoE feed-forward if enabled, otherwise standard feed-forward
-        if self.use_moe:
-            self.feed_forward = MoEFeedForward(config)
-        else:
-            self.feed_forward = FeedForward(config)
+        self.feed_forward = FeedForward(config)
 
         # LayerScale: learnable per-channel scaling of residual outputs
         # Initialized to a tiny value so early training is stable

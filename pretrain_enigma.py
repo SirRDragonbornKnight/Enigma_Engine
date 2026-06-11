@@ -12,9 +12,11 @@ produced ``tokens.bin`` and streams the tokens via memmap (nanoGPT-style).
   python pretrain_enigma.py --size base --tokens 2e9  # the real run (~GPT-2-small)
   python pretrain_enigma.py --resume models/enigma_pretrain_base/latest.pth
 
-Checkpoints (model_state_dict + config + step + optimizer) land in
-``models/enigma_pretrain_<size>/latest.pth`` every --save-every steps and are
-fully resumable. The final model is written as ``model.pth`` in the standard
+Checkpoints (model_state_dict + config + step + optimizer + schedule) land in
+``models/enigma_pretrain_<size>/latest.pth`` every --save-every steps, with the
+previous generation rotated to ``prev.pth`` (and optional frozen snapshots via
+--archive-every). Resumes restore the recorded schedule — pass
+--override-schedule to deliberately change it. The final model is written as ``model.pth`` in the standard
 {model_state_dict, config} format the rest of the stack already loads.
 """
 from __future__ import annotations
@@ -69,6 +71,13 @@ def main() -> None:
     ap.add_argument("--val-tokens", type=int, default=10_000_000, help="tail tokens held out for val")
     ap.add_argument("--out", default=None)
     ap.add_argument("--resume", default=None)
+    ap.add_argument("--override-schedule", action="store_true",
+                    help="on resume, let CLI schedule args override the checkpoint's recorded schedule")
+    ap.add_argument("--archive-every", type=int, default=0,
+                    help="also keep a frozen step_NNNNNN.pth checkpoint every N steps (0 = off)")
+    ap.add_argument("--val-general-end", type=int, default=56_575_624_692,
+                    help="end offset of the pre-anime-append corpus; a second [val-gen] eval window "
+                         "is carved just below it (0 = disable)")
     ap.add_argument("--no-grad-ckpt", action="store_true", help="disable gradient checkpointing")
     ap.add_argument("--no-diff-attn", action="store_true",
                     help="disable differential attention -> use fused SDPA kernel (2-4x faster)")
@@ -109,6 +118,38 @@ def main() -> None:
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
 
+    # Load the resume checkpoint EARLY: its recorded schedule must be restored
+    # before anything derived from schedule args (block, val windows, token
+    # budget) is computed. A typo'd --resume must hard-fail here — the old
+    # behavior silently started a FRESH run into the same --out directory.
+    ck = None
+    if args.resume:
+        rp = Path(args.resume)
+        if not rp.exists() and rp.name == "latest.pth" and (rp.parent / "prev.pth").exists():
+            print(f"resume: {rp} missing -> falling back to {rp.parent / 'prev.pth'}", flush=True)
+            rp = rp.parent / "prev.pth"
+        if not rp.exists():
+            raise SystemExit(f"--resume {args.resume} not found (no prev.pth fallback either) — "
+                             f"refusing to silently start a fresh run")
+        ck = torch.load(rp, map_location=device)
+        saved_sched = ck.get("schedule")
+        if saved_sched:
+            diffs = {k: (v, getattr(args, k)) for k, v in saved_sched.items()
+                     if getattr(args, k, None) != v}
+            if args.override_schedule:
+                for k, (ck_v, cli_v) in diffs.items():
+                    print(f"resume: schedule[{k}] CLI {cli_v} OVERRIDES checkpoint {ck_v} "
+                          f"(--override-schedule)", flush=True)
+            else:
+                for k, v in saved_sched.items():
+                    setattr(args, k, v)
+                for k, (ck_v, cli_v) in diffs.items():
+                    print(f"resume: schedule[{k}] = {ck_v} from checkpoint (CLI {cli_v} ignored)",
+                          flush=True)
+        else:
+            print("resume: checkpoint predates schedule recording — trusting CLI args "
+                  "(this run will record them)", flush=True)
+
     # memmap the uint32 token stream after the 256-byte header.
     data = np.memmap(TOKENS_BIN, dtype=np.uint32, mode="r", offset=HEADER_BYTES)
     n = len(data)
@@ -116,11 +157,36 @@ def main() -> None:
     train_end = n - val_n
     print(f"memmapped {n:,} tokens  (train {train_end:,} / val {val_n:,})", flush=True)
 
+    # [val-gen]: second eval window at the tail of the ORIGINAL corpus. The
+    # 2026-06-07 anime append landed at the END of tokens.bin, so the held-out
+    # tail above ([val]) became 100% anime-domain. This window restores a
+    # general-domain signal. It was truly held out only until the append
+    # (~16% train-sampled between then and this fence landing), so it reads
+    # slightly optimistic; the fence in get_batch stops further leakage.
+    vg_end = min(args.val_general_end, train_end)
+    vg_lo = max(0, vg_end - val_n)
+    use_val_gen = args.val_general_end > 0 and (vg_end - vg_lo) > args.block + 1
+    if use_val_gen:
+        print(f"val-gen window: [{vg_lo:,}, {vg_end:,}) — pre-append tail, fenced "
+              f"from train sampling", flush=True)
+
     block = args.block
 
     def get_batch(split: str):
-        lo, hi = (0, train_end) if split == "train" else (train_end, n)
+        if split == "train":
+            lo, hi = 0, train_end
+        elif split == "val":
+            lo, hi = train_end, n
+        else:  # "val_gen" — pre-append general-domain window
+            lo, hi = vg_lo, vg_end
         ix = np.random.randint(lo, hi - block - 1, size=args.micro_batch, dtype=np.int64)
+        if split == "train" and use_val_gen:
+            # Fence: re-draw the rare index (~0.02% chance) whose sample
+            # [i, i+block] would overlap the val-gen window, keeping it
+            # held out from here on.
+            for j in range(len(ix)):
+                while vg_lo - block <= ix[j] < vg_end:
+                    ix[j] = np.random.randint(lo, hi - block - 1)
         x = np.stack([np.asarray(data[i:i + block], dtype=np.int64) for i in ix])
         y = np.stack([np.asarray(data[i + 1:i + 1 + block], dtype=np.int64) for i in ix])
         X = torch.from_numpy(x).to(device, non_blocking=True)
@@ -131,12 +197,11 @@ def main() -> None:
     from enigma_engine.core.model import Enigma
     from enigma_engine.core.model_presets import ForgeConfig, get_preset
     # On resume, rebuild config from the CHECKPOINT (exact architecture) rather than the
-    # preset. Otherwise a flag mismatch (e.g. forgetting --no-diff-attn) builds a
-    # differently-shaped model and load_state_dict(strict=False) silently leaves the
-    # mismatched tensors at random init — a silent corruption. Trust the checkpoint.
-    ck = None
-    if args.resume and Path(args.resume).exists():
-        ck = torch.load(args.resume, map_location=device)
+    # preset. Otherwise a flag mismatch builds a differently-shaped model and
+    # load_state_dict(strict=False) silently leaves the mismatched tensors at random
+    # init — a silent corruption. Trust the checkpoint. (ck was loaded early, above,
+    # so its recorded schedule could win before schedule-derived values were computed.)
+    if ck is not None:
         config = ForgeConfig.from_dict(ck["config"])
         print(f"resume: config rebuilt from checkpoint ({args.resume})", flush=True)
     else:
@@ -174,6 +239,13 @@ def main() -> None:
 
     tokens_per_step = args.micro_batch * args.grad_accum * block
     total_steps = max(1, int(args.tokens / tokens_per_step))
+
+    # Everything that defines the run's MATH, recorded into every checkpoint so a
+    # resume restores it exactly (see the resume block above). Operational knobs
+    # (--save-every/--eval-every/--compile/--throttle-ms/...) stay CLI-controlled.
+    schedule = {k: getattr(args, k) for k in (
+        "tokens", "lr", "warmup", "micro_batch", "grad_accum", "block", "dropout",
+        "val_tokens", "weight_decay", "grad_clip", "val_general_end")}
 
     out = Path(args.out) if args.out else ROOT / "models" / f"enigma_pretrain_{args.size}"
     out.mkdir(parents=True, exist_ok=True)
@@ -218,20 +290,25 @@ def main() -> None:
 
     def save(tag: str, step: int):
         from enigma_engine.core.safe_save import atomic_torch_save
+        # latest.pth keeps one previous generation as prev.pth (rotated atomically
+        # inside atomic_torch_save AFTER the new file is fully written), so one bad
+        # save can never cost more than --save-every steps.
+        rotate = (out / "prev.pth") if tag == "latest.pth" else None
         atomic_torch_save({
             "model_state_dict": raw_model.state_dict(),
             "config": config.to_dict(),
             "step": step,
             "optimizer": optim.state_dict(),
-        }, str(out / tag))
+            "schedule": schedule,
+        }, str(out / tag), rotate_to=rotate)
         (out / "config.json").write_text(json.dumps(config.to_dict(), indent=2), encoding="utf-8")
 
     @torch.no_grad()
-    def estimate_val() -> float:
+    def estimate_val(split: str = "val") -> float:
         raw_model.eval()
         losses = []
         for _ in range(args.eval_iters):
-            X, Y = get_batch("val")
+            X, Y = get_batch(split)
             with torch.autocast(device_type="cuda", dtype=amp_dtype, enabled=(device == "cuda")):
                 _, loss = model(X, targets=Y)
             losses.append(loss.item())
@@ -287,12 +364,25 @@ def main() -> None:
                   f"{tps:,.0f} tok/s {seen/1e9:.3f}B", flush=True)
 
         if step > start_step and step % args.eval_every == 0:
-            vl = estimate_val()
+            vl = estimate_val("val")
             print(f"  [val] step {step} loss {vl:.4f} ppl {math.exp(min(20, vl)):.1f}", flush=True)
+            if use_val_gen:
+                vg = estimate_val("val_gen")
+                print(f"  [val-gen] step {step} loss {vg:.4f} "
+                      f"ppl {math.exp(min(20, vg)):.1f}", flush=True)
 
         if step > start_step and step % args.save_every == 0:
-            save("latest.pth", step)
-            print(f"  [ckpt] step {step} -> {out/'latest.pth'}", flush=True)
+            if math.isfinite(loss_acc):
+                save("latest.pth", step)
+                print(f"  [ckpt] step {step} -> {out/'latest.pth'}", flush=True)
+            else:
+                print(f"  [ckpt] step {step} SKIPPED — non-finite loss ({loss_acc}); "
+                      f"keeping last good latest.pth/prev.pth", flush=True)
+
+        if (args.archive_every and step > start_step and step % args.archive_every == 0
+                and math.isfinite(loss_acc)):
+            save(f"step_{step:06d}.pth", step)
+            print(f"  [archive] step {step} -> {out / f'step_{step:06d}.pth'}", flush=True)
 
     save("model.pth", total_steps)
     print(f"done -> {out/'model.pth'}  ({total_steps:,} steps, {seen/1e9:.2f}B tokens)", flush=True)
