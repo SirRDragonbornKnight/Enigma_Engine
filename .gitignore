@@ -105,6 +105,9 @@ temp/
 # Test outputs
 test-test-test/
 
+# Archived / parked code (moved out of the working tree, kept locally for reference)
+_archive/
+
 # Secrets and configuration
 .env
 *.key

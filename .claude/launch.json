@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "avatar",
+      "runtimeExecutable": "C:\\Users\\SirKn\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+      "runtimeArgs": ["-m", "http.server", "8000", "--directory", "C:\\Users\\SirKn\\Enigma Engine\\mods\\avatar"],
+      "port": 8000
+    }
+  ]
+}

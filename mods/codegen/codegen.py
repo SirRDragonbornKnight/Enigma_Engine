@@ -409,8 +409,12 @@ class CodeGen:
         if not provider.is_loaded:
             if not provider.load():
                 return {"success": False, "error": f"Failed to load {provider_name}"}
-        
-        return provider.generate(prompt, language=language, **params)
+
+        # prompt/language/provider are passed explicitly; only forward the rest
+        # (e.g. max_tokens, temperature) so we don't double-pass keywords.
+        extra = {k: v for k, v in params.items()
+                 if k not in ("prompt", "language", "provider")}
+        return provider.generate(prompt, language=language, **extra)
     
     def _cmd_load_provider(self, params: Dict[str, Any]) -> Dict[str, Any]:
         name = params.get("provider", self.default_provider)

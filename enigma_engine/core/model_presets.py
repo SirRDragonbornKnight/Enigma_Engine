@@ -124,8 +124,13 @@ class ForgeConfig:
     use_qk_norm: bool = True          # Normalize Q and K in attention (stabilizes, prevents head collapse)
     use_layer_scale: bool = False     # Learnable residual scaling (stabilizes deep training)
     drop_path_rate: float = 0.0       # Stochastic depth (0.0 = disabled, 0.1-0.3 typical)
-    use_differential_attn: bool = True   # R22: Differential attention (noise cancellation, reduces hallucination)
-    neftune_alpha: float = 5.0        # R27: NEFTune embedding noise during training (5.0 = AlpacaEval optimal)
+    use_differential_attn: bool = False  # R22: Differential attention. OFF by default: it forces the
+                                         # slow non-SDPA attention branch (2-4x), and default-True here
+                                         # was the footgun behind the "always pass --no-diff-attn" rule.
+                                         # Set True explicitly to experiment.
+    neftune_alpha: float = 0.0        # R27: NEFTune embedding noise — a FINETUNING trick (5.0 =
+                                      # AlpacaEval optimal); wrong as a pretraining default, so off.
+                                      # Set explicitly when finetuning.
     n_predict_heads: int = 0          # R25 / MTP-2b: Multi-token prediction extra heads.
                                        # Paper (arxiv:2404.19737) shows MTP gain grows with model size and is
                                        # marginal sub-1B; each head is `dim × padded_vocab` un-tied params

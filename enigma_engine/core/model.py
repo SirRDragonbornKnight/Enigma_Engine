@@ -42,7 +42,7 @@ from .model_presets import (  # noqa: F401
     get_preset, estimate_parameters, list_presets,
 )
 from .model_components import (  # noqa: F401
-    RMSNorm, DropPath, Attention, FeedForward, MoEFeedForward, TransformerBlock,
+    RMSNorm, DropPath, Attention, FeedForward, TransformerBlock,
     precompute_rope_frequencies, apply_rotary_embedding,
     HAS_FLASH_ATTN, flash_attn_func,
 )
@@ -454,22 +454,25 @@ class Enigma(nn.Module):
                 )
             h = h + self.pos[:, start_pos:end_pos]
 
-        # Causal mask: built on demand at actual sequence length, cached for reuse
+        # Causal masking. For the PLAIN causal case (no packed/pad mask) we leave
+        # mask=None so attention applies causality via is_causal=True — that lets SDPA
+        # pick the fast mem-efficient/flash kernel instead of the slow additive-mask
+        # path (~1.7x on the attention op; math-identical). An explicit additive mask
+        # is materialized ONLY when a packed (2D) or padding mask must be combined in.
         mask = None
         if attention_mask_2d is not None:
             # Pre-built 4D mask from sequence packing — use directly
             mask = attention_mask_2d.to(device=h.device, dtype=h.dtype)
-        elif T > 1:
-            # Shape: (T, T) -> (1, 1, T, T) for broadcasting with attention
+        elif T > 1 and attention_mask is not None:
+            # Padding present: materialize causal + pad as one additive mask.
             mask = self._get_causal_mask(T).to(device=h.device).unsqueeze(0).unsqueeze(0)
-
-            # Combine with attention_mask: pad positions get -inf
-            if attention_mask is not None:
-                # attention_mask shape: (B, T) → (B, 1, 1, T)
-                pad_mask = (1 - attention_mask.unsqueeze(1).unsqueeze(2).float()) * (
-                    torch.finfo(h.dtype).min
-                )
-                mask = mask + pad_mask
+            # attention_mask shape: (B, T) → (B, 1, 1, T)
+            pad_mask = (1 - attention_mask.unsqueeze(1).unsqueeze(2).float()) * (
+                torch.finfo(h.dtype).min
+            )
+            mask = mask + pad_mask
+        # else: plain causal (T>1, no pad) or single-token decode (T==1) → mask stays
+        # None; attention applies is_causal=True (correct for this decoder-only model).
 
         # T3-2: Capture hidden state at early-exit layer for draft head
         _early_h = None
@@ -553,75 +556,6 @@ class Enigma(nn.Module):
         """Truncate all layer KV-caches back to *position*."""
         for layer in self.layers:
             layer.rewind_cache(position)
-
-    def draft_forward(
-        self, input_ids: torch.Tensor,
-        use_cache: bool = False, start_pos: int = 0,
-    ) -> torch.Tensor:
-        """Forward through early-exit layers only (T3-2).
-
-        Used for self-speculative decoding: the early exit head
-        produces draft tokens that the full model can verify.
-
-        Returns:
-            Logits from the early-exit head ``[B, T, vocab]``.
-        """
-        if self.early_exit_layer <= 0:
-            raise RuntimeError("early_exit_layer not configured")
-
-        B, T = input_ids.shape
-        h = self.tok_embeddings(input_ids)
-
-        if not self.config.use_rope:
-            end_pos = start_pos + T
-            h = h + self.pos[:, start_pos:end_pos]
-
-        mask = None
-        if T > 1:
-            mask = self._get_causal_mask(T).to(
-                device=h.device).unsqueeze(0).unsqueeze(0)
-
-        for layer in self.layers[:self.early_exit_layer]:
-            h = layer(h, self.freqs_cis, mask, use_cache, start_pos)
-
-        return self.early_exit_head(self.early_exit_norm(h))
-
-    def medusa_forward(
-        self, input_ids: torch.Tensor,
-        use_cache: bool = False, start_pos: int = 0,
-    ) -> tuple[torch.Tensor, list[torch.Tensor]]:
-        """Forward pass returning main logits + MTP draft logits (T3-3).
-
-        Runs one full forward pass, then applies each ``predict_head``
-        to the shared hidden state.  The K extra logit tensors are
-        draft predictions for positions +2, +3, etc.
-
-        Returns:
-            ``(main_logits, [head_1_logits, ..., head_K_logits])``
-            Each tensor has shape ``[B, T, vocab]``.
-        """
-        if not self.predict_heads:
-            raise RuntimeError("n_predict_heads is 0 — no MTP heads for Medusa")
-
-        B, T = input_ids.shape
-        h = self.tok_embeddings(input_ids)
-
-        if not self.config.use_rope:
-            end_pos = start_pos + T
-            h = h + self.pos[:, start_pos:end_pos]
-
-        mask = None
-        if T > 1:
-            mask = self._get_causal_mask(T).to(
-                device=h.device).unsqueeze(0).unsqueeze(0)
-
-        for i, layer in enumerate(self.layers):
-            h = layer(h, self.freqs_cis, mask, use_cache, start_pos)
-
-        h_normed = self.norm(h)
-        main_logits = self.output(h_normed)
-        draft_logits = [head(h_normed) for head in self.predict_heads]
-        return main_logits, draft_logits
 
     def restore_prefix_cache(self, prefix_cache) -> None:
         """Restore prefix KV into each layer's attention cache.
@@ -1578,144 +1512,6 @@ class Enigma(nn.Module):
             model_name=model_name,
             description=description,
         )
-
-    # =========================================================================
-    # SPECULATIVE DECODING
-    # =========================================================================
-
-    def enable_speculative_decoding(
-        self,
-        draft_model: 'Enigma',
-        num_speculative_tokens: int = 4
-    ) -> None:
-        """
-        Enable speculative decoding for faster generation.
-
-        📖 WHAT THIS DOES:
-        Uses a smaller "draft" model to predict multiple tokens quickly,
-        then verifies them with the main model in parallel. Can be 2-4x faster!
-
-        📐 HOW IT WORKS:
-        1. Draft model generates K tokens quickly (small model = fast)
-        2. Main model verifies all K tokens in one forward pass (parallel!)
-        3. Accept correct tokens, reject and regenerate incorrect ones
-
-        Args:
-            draft_model: Smaller, faster model for speculation
-            num_speculative_tokens: How many tokens to speculate (2-8 typical)
-
-        Example:
-            small_model = create_model('tiny')
-            large_model = create_model('large')
-            large_model.enable_speculative_decoding(small_model, num_speculative_tokens=4)
-        """
-        self._draft_model = draft_model
-        self._num_speculative_tokens = num_speculative_tokens
-        self._use_speculation = True
-        logger.info(
-            f"Enabled speculative decoding with {num_speculative_tokens} tokens"
-        )
-
-    def disable_speculative_decoding(self) -> None:
-        """Disable speculative decoding and return to standard generation."""
-        self._use_speculation = False
-        self._draft_model = None
-        logger.info("Disabled speculative decoding")
-
-    @torch.no_grad()
-    def generate_speculative(
-        self,
-        input_ids: torch.Tensor,
-        max_new_tokens: int = 100,
-        **kwargs
-    ) -> torch.Tensor:
-        """
-        Generate tokens using speculative decoding.
-
-        📖 WHAT THIS DOES:
-        Faster generation using a draft model for speculation.
-        Falls back to standard generation if no draft model is set.
-
-        Args:
-            input_ids: Input token IDs [batch, seq_len]
-            max_new_tokens: Maximum tokens to generate
-            **kwargs: Generation parameters (temperature, top_k, etc.)
-
-        Returns:
-            Generated token IDs [batch, seq_len + new_tokens]
-        """
-        if not hasattr(self, '_use_speculation') or not self._use_speculation:
-            # Fall back to standard generation
-            return self.generate(input_ids, max_new_tokens=max_new_tokens, **kwargs)
-
-        draft_model = self._draft_model
-        num_spec = self._num_speculative_tokens
-
-        generated = input_ids
-        tokens_generated = 0
-
-        while tokens_generated < max_new_tokens:
-            # Step 1: Draft model generates K tokens
-            draft_tokens = draft_model.generate(
-                generated,
-                max_new_tokens=num_spec,
-                **kwargs
-            )
-
-            # Step 2: Main model verifies all K tokens in one pass
-            # Concatenate draft tokens to input
-            candidate_ids = torch.cat([generated, draft_tokens[:, generated.shape[1]:]], dim=1)
-
-            # Draft may produce fewer than num_spec tokens (e.g. stop token)
-            actual_draft = draft_tokens.shape[1] - generated.shape[1]
-            if actual_draft == 0:
-                # Draft produced nothing — generate one token with main model
-                logits = self.forward(generated)
-                next_token_logits = logits[:, -1, :]
-                next_token = torch.multinomial(
-                    F.softmax(next_token_logits / kwargs.get('temperature', 0.8), dim=-1),
-                    num_samples=1
-                )
-                generated = torch.cat([generated, next_token], dim=1)
-                tokens_generated += 1
-                continue
-
-            # Get probabilities from main model
-            logits = self.forward(candidate_ids)
-            probs = F.softmax(logits[:, -actual_draft-1:-1, :], dim=-1)
-
-            # Step 3: Accept or reject using rejection sampling
-            # Proper speculative decoding: accept if r < min(1, p_main / p_draft)
-            draft_logits = draft_model.forward(candidate_ids)
-            draft_probs = F.softmax(draft_logits[:, -actual_draft-1:-1, :], dim=-1)
-            accepted = 0
-            for i in range(actual_draft):
-                draft_token = draft_tokens[:, generated.shape[1] + i]
-                p_main = probs[:, i, draft_token].item()
-                p_draft = draft_probs[:, i, draft_token].item()
-                ratio = min(1.0, p_main / max(p_draft, 1e-10))
-                if torch.rand(1).item() < ratio:
-                    accepted += 1
-                else:
-                    break
-
-            # Add accepted tokens
-            if accepted > 0:
-                generated = candidate_ids[:, :generated.shape[1] + accepted]
-                tokens_generated += accepted
-            else:
-                # No tokens accepted, generate one with main model
-                next_token_logits = logits[:, -1, :]
-                next_token = torch.multinomial(
-                    F.softmax(next_token_logits / kwargs.get('temperature', 0.8), dim=-1),
-                    num_samples=1
-                )
-                generated = torch.cat([generated, next_token], dim=1)
-                tokens_generated += 1
-
-        return generated
-
-
 
 # =============================================================================
 # Factory Functions
