@@ -1,4 +1,5 @@
 """Tests for training evaluation features."""
+
 from unittest.mock import MagicMock
 
 
@@ -8,6 +9,7 @@ class TestTrainingEvaluation:
     def test_evaluate_model_returns_dict(self):
         """evaluate_model returns dict with expected keys."""
         from enigma_engine.training.training_evaluation import evaluate_model
+
         result = evaluate_model(None, None, [], device="cpu")
         assert isinstance(result, dict)
         assert "perplexity" in result
@@ -17,6 +19,7 @@ class TestTrainingEvaluation:
     def test_default_test_prompts_exist(self):
         """DEFAULT_TEST_PROMPTS is available and populated."""
         from enigma_engine.training.training_evaluation import DEFAULT_TEST_PROMPTS
+
         assert isinstance(DEFAULT_TEST_PROMPTS, list)
         assert len(DEFAULT_TEST_PROMPTS) > 0
         assert all(isinstance(p, str) for p in DEFAULT_TEST_PROMPTS)
@@ -24,6 +27,7 @@ class TestTrainingEvaluation:
     def test_training_config_evaluation_defaults(self):
         """TrainingConfig has evaluation fields with correct defaults."""
         from enigma_engine.training.training import TrainingConfig
+
         config = TrainingConfig()
         assert isinstance(config.run_evaluation, bool)
         assert hasattr(config, "eval_test_prompts")
@@ -31,6 +35,7 @@ class TestTrainingEvaluation:
     def test_evaluate_tool_usage_returns_dict(self):
         """evaluate_tool_usage returns dict with success metrics."""
         from enigma_engine.training.training_evaluation import evaluate_tool_usage
+
         result = evaluate_tool_usage(None, None, None, [], device="cpu")
         assert isinstance(result, dict)
         assert "success_rate" in result
@@ -101,9 +106,7 @@ class TestEvalModelModeRestore:
 
         # Provide a real golden file with cases so model.eval() is reached
         golden = tmp_path / "golden.json"
-        golden.write_text(
-            json.dumps([{"prompt": "test", "expected": ["x"]}]),
-            encoding="utf-8")
+        golden.write_text(json.dumps([{"prompt": "test", "expected": ["x"]}]), encoding="utf-8")
         run_golden_eval(model, tok, golden, device="cpu")
         assert model.training, "model should be back in training mode"
 
@@ -129,8 +132,7 @@ class TestEvalBugFixes:
         # Second prompt: 5 tokens → evaluated
         tok.encode.side_effect = [[1], [1, 2, 3, 4, 5]]
 
-        result = evaluate_model(model, tok, ["a", "hello world"],
-                                device="cpu")
+        result = evaluate_model(model, tok, ["a", "hello world"], device="cpu")
         assert result["num_prompts"] == 1  # Only the 5-token prompt
 
     def test_golden_eval_skips_empty_expected(self, tmp_path):
@@ -146,9 +148,7 @@ class TestEvalBugFixes:
         tok.eos_token_id = 0  # stops immediately
 
         golden = tmp_path / "golden.json"
-        golden.write_text(
-            json.dumps([{"prompt": "test", "expected": []}]),
-            encoding="utf-8")
+        golden.write_text(json.dumps([{"prompt": "test", "expected": []}]), encoding="utf-8")
 
         result = run_golden_eval(model, tok, golden, device="cpu")
         # Empty expected = no constraint = meaningless test → skip
@@ -163,36 +163,43 @@ class TestGSM8KBenchmark:
     def test_parse_final_number_gold_format(self):
         """`#### N` is the canonical GSM8K answer marker."""
         from enigma_engine.training.training_evaluation import parse_final_number
+
         assert parse_final_number("Janet has 3 ducks ... #### 18") == 18.0
 
     def test_parse_final_number_with_commas(self):
         """Numbers with thousand separators must parse."""
         from enigma_engine.training.training_evaluation import parse_final_number
+
         assert parse_final_number("total #### 1,234") == 1234.0
 
     def test_parse_final_number_negative(self):
         """Negative numbers must parse."""
         from enigma_engine.training.training_evaluation import parse_final_number
+
         assert parse_final_number("loss #### -42") == -42.0
 
     def test_parse_final_number_decimal(self):
         """Decimal numbers must parse."""
         from enigma_engine.training.training_evaluation import parse_final_number
+
         assert parse_final_number("price #### 3.5") == 3.5
 
     def test_parse_final_number_fallback_last_number(self):
         """No `####` → fall back to last number in text."""
         from enigma_engine.training.training_evaluation import parse_final_number
+
         assert parse_final_number("the answer is 42") == 42.0
 
     def test_parse_final_number_returns_none_no_number(self):
         """No number anywhere → None."""
         from enigma_engine.training.training_evaluation import parse_final_number
+
         assert parse_final_number("I don't know") is None
 
     def test_parse_final_number_empty_string(self):
         """Empty input → None."""
         from enigma_engine.training.training_evaluation import parse_final_number
+
         assert parse_final_number("") is None
 
     # ---- load_gsm8k ----
@@ -222,9 +229,7 @@ class TestGSM8KBenchmark:
             {"question": "q2", "answer": "step\n#### 2"},
             {"question": "q3", "answer": "step\n#### 3"},
         ]
-        path.write_text(
-            "\n".join(json.dumps(it) for it in items) + "\n",
-            encoding="utf-8")
+        path.write_text("\n".join(json.dumps(it) for it in items) + "\n", encoding="utf-8")
 
         loaded = load_gsm8k(path)
         assert len(loaded) == 3
@@ -238,9 +243,7 @@ class TestGSM8KBenchmark:
 
         path = tmp_path / "g.jsonl"
         items = [{"question": f"q{i}", "answer": f"#### {i}"} for i in range(5)]
-        path.write_text(
-            "\n".join(json.dumps(it) for it in items) + "\n",
-            encoding="utf-8")
+        path.write_text("\n".join(json.dumps(it) for it in items) + "\n", encoding="utf-8")
 
         loaded = load_gsm8k(path, n=2)
         assert len(loaded) == 2
@@ -255,13 +258,12 @@ class TestGSM8KBenchmark:
         engine.generate.return_value = "thinking ... #### 18"
 
         examples = [
-            {"question": "q1", "answer": "step\n#### 18"},   # correct
-            {"question": "q2", "answer": "step\n#### 18"},   # correct
-            {"question": "q3", "answer": "step\n#### 99"},   # wrong
+            {"question": "q1", "answer": "step\n#### 18"},  # correct
+            {"question": "q2", "answer": "step\n#### 18"},  # correct
+            {"question": "q3", "answer": "step\n#### 99"},  # wrong
         ]
 
-        result = run_gsm8k_benchmark(engine, examples, num_shots=0,
-                                      max_gen=32)
+        result = run_gsm8k_benchmark(engine, examples, num_shots=0, max_gen=32)
         assert result["total"] == 3
         assert result["correct"] == 2
         assert abs(result["accuracy"] - 2 / 3) < 1e-6
@@ -274,8 +276,7 @@ class TestGSM8KBenchmark:
         engine.generate.return_value = "i dunno"
 
         examples = [{"question": "q1", "answer": "#### 7"}]
-        result = run_gsm8k_benchmark(engine, examples, num_shots=0,
-                                      max_gen=32)
+        result = run_gsm8k_benchmark(engine, examples, num_shots=0, max_gen=32)
         assert result["total"] == 1
         assert result["correct"] == 0
         assert result["accuracy"] == 0.0
@@ -288,8 +289,7 @@ class TestGSM8KBenchmark:
         engine.generate.return_value = "#### 3.00"
 
         examples = [{"question": "q1", "answer": "#### 3"}]
-        result = run_gsm8k_benchmark(engine, examples, num_shots=0,
-                                      max_gen=32)
+        result = run_gsm8k_benchmark(engine, examples, num_shots=0, max_gen=32)
         assert result["correct"] == 1
 
     def test_run_gsm8k_benchmark_empty_returns_zero_total(self):

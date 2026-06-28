@@ -51,6 +51,7 @@ ENVIRONMENT VARIABLES:
 WARNING: The blocked_paths and blocked_patterns settings are sacred
          protections that the AI cannot modify at runtime.
 """
+
 import json
 import logging
 import os
@@ -128,146 +129,138 @@ class _LazyConfig(dict):
         return super().setdefault(key, default)
 
 
-CONFIG = _LazyConfig({
-    # =========================================================================
-    # THE MAP OF REALMS - Path Configuration
-    # =========================================================================
-    # Every treasure has its place. These paths define where Enigma AI Engine
-    # stores its knowledge, memories, and creations.
-
-    "root": str(BASE_DIR),
-    "data_dir": str(BASE_DIR / "data"),              # Training data, icons, themes
-    "info_dir": str(BASE_DIR / "information"),       # Runtime settings, tasks, reminders
-    "models_dir": str(BASE_DIR / "models"),
-    "memory_dir": str(BASE_DIR / "memory"),
-    "outputs_dir": str(BASE_DIR / "outputs"),        # Generated images, audio, video
-    "db_path": str(BASE_DIR / "memory" / "memory.db"),
-    "vocab_dir": str(BASE_DIR / "enigma_engine" / "vocab_model"),
-    "logs_dir": str(BASE_DIR / "logs"),
-    "personas_dir": str(BASE_DIR / "data" / "personas"),  # AI persona storage
-
-    # =========================================================================
-    # THE ARCHITECT'S BLUEPRINT - Model Architecture
-    # =========================================================================
-    # These settings define the structure of the AI's mind - how many
-    # layers of thought, how wide its neural pathways, how far it can see.
-
-    "default_model": "enigma_engine",
-    "embed_dim": 256,
-    "depth": 6,
-    "num_layers": 6,
-    "heads": 8,
-    "num_heads": 8,
-    "max_len": 2048,
-    "ff_mult": 4.0,
-    "dropout": 0.0,
-    "vocab_size": 32000,
-
-    # =========================================================================
-    # THE TEACHER'S WISDOM - Training Defaults
-    # =========================================================================
-    # When the AI learns, these settings guide its education - how quickly
-    # it absorbs knowledge, how many times it studies the texts.
-
-    "learning_rate": 1e-4,
-    "batch_size": 32,
-    "epochs": 10,
-    "warmup_steps": 100,
-    "gradient_accumulation_steps": 1,
-    "weight_decay": 0.1,
-    "max_grad_norm": 1.0,
-    "use_amp": True,
-    "auto_learn": True,
-    "auto_train_threshold": 10,
-
-    # =========================================================================
-    # THE ORACLE'S VOICE - Inference Defaults
-    # =========================================================================
-    # When the AI speaks, these settings color its responses - how creative,
-    # how focused, how varied its words shall be.
-
-    "temperature": 0.8,
-    "top_k": 50,
-    "top_p": 0.9,
-    "min_p": 0.0,
-    "repetition_penalty": 1.1,
-    "max_gen": 8192,
-
-    # Pass 156z9dr (N-14): RAG retrieval backend.  "bm25" uses the
-    # built-in BM25/TF-IDF index (no extra deps).  "dense" uses
-    # sentence-transformers + faiss-cpu for semantic embeddings;
-    # falls back to BM25 with a WARNING if either dep is missing.
-    "rag_backend": "bm25",
-
-    # =========================================================================
-    # THE MESSENGER'S GATE - Server Defaults
-    # =========================================================================
-    # The API server allows distant travelers to commune with the AI.
-    # These settings control access and security.
-
-    "api_host": "127.0.0.1",
-    "api_port": 5000,
-    "enable_cors": True,
-    "require_api_key": True,       # Require authentication for API access
-    "enigma_api_key": None,        # Set via env ENIGMA_API_KEY or forge_config.json
-
-    # =========================================================================
-    # THE FORGE'S HEART - Hardware Configuration
-    # =========================================================================
-    # What powers drive the forge? CPU, GPU, or the mystical MPS of Apple?
-    # The precision of calculations affects both speed and quality.
-
-    "device": "auto",       # "auto", "cpu", "cuda", "mps"
-    "precision": "auto",    # "auto", "float32", "float16", "bfloat16"
-
-    # Backend selection for neural network operations
-    # "auto" - Auto-detect (PyTorch if available, CPU fallback)
-    # "torch" - Always use PyTorch
-    "nn_backend": "auto",
-
-    # =========================================================================
-    # Capability Toggles
-    # =========================================================================
-    # Features that have backing code set to True, others commented out
-    "enable_offloading": False,   # CPU+GPU layer offloading (inference.py supports this)
-    "offload_folder": None,       # Folder for offloaded weights (None = temp)
-    "max_gpu_layers": None,       # Max layers on GPU (None = auto)
-
-    # =========================================================================
-    # Resource Management
-    # =========================================================================
-    "resource_mode": "performance",  # "minimal", "balanced", "performance"
-    "cpu_threads": 0,             # 0 = auto
-    "memory_limit_mb": 0,         # 0 = no limit
-    "gpu_memory_fraction": 0.85,  # Use 85% of GPU VRAM
-
-    # =========================================================================
-    # Security Settings
-    # =========================================================================
-    "blocked_paths": [
-        "C:/Windows",
-        "C:/Program Files",
-        "C:/Program Files (x86)",
-        "/etc",
-        "/usr",
-        "/bin",
-        "/sbin",
-    ],
-    "blocked_patterns": [
-        "*.exe", "*.dll", "*.sys", "*.pem", "*.key",
-        "*password*", "*secret*", "*.env", ".git/config",
-    ],
-    # Plugin allowlist — only these plugin filenames are loaded.
-    # Empty list means ALL discovered plugins are loaded (legacy behavior).
-    # Example: ["hello.py", "my_tools.py"]
-    "trusted_plugins": [],
-
-    # =========================================================================
-    # Logging
-    # =========================================================================
-    "log_level": "INFO",
-    "log_to_file": False,
-})
+CONFIG = _LazyConfig(
+    {
+        # =========================================================================
+        # THE MAP OF REALMS - Path Configuration
+        # =========================================================================
+        # Every treasure has its place. These paths define where Enigma AI Engine
+        # stores its knowledge, memories, and creations.
+        "root": str(BASE_DIR),
+        "data_dir": str(BASE_DIR / "data"),  # Training data, icons, themes
+        "info_dir": str(BASE_DIR / "information"),  # Runtime settings, tasks, reminders
+        "models_dir": str(BASE_DIR / "models"),
+        "memory_dir": str(BASE_DIR / "memory"),
+        "outputs_dir": str(BASE_DIR / "outputs"),  # Generated images, audio, video
+        "db_path": str(BASE_DIR / "memory" / "memory.db"),
+        "vocab_dir": str(BASE_DIR / "enigma_engine" / "vocab_model"),
+        "logs_dir": str(BASE_DIR / "logs"),
+        "personas_dir": str(BASE_DIR / "data" / "personas"),  # AI persona storage
+        # =========================================================================
+        # THE ARCHITECT'S BLUEPRINT - Model Architecture
+        # =========================================================================
+        # These settings define the structure of the AI's mind - how many
+        # layers of thought, how wide its neural pathways, how far it can see.
+        "default_model": "enigma_engine",
+        "embed_dim": 256,
+        "depth": 6,
+        "num_layers": 6,
+        "heads": 8,
+        "num_heads": 8,
+        "max_len": 2048,
+        "ff_mult": 4.0,
+        "dropout": 0.0,
+        "vocab_size": 32000,
+        # =========================================================================
+        # THE TEACHER'S WISDOM - Training Defaults
+        # =========================================================================
+        # When the AI learns, these settings guide its education - how quickly
+        # it absorbs knowledge, how many times it studies the texts.
+        "learning_rate": 1e-4,
+        "batch_size": 32,
+        "epochs": 10,
+        "warmup_steps": 100,
+        "gradient_accumulation_steps": 1,
+        "weight_decay": 0.1,
+        "max_grad_norm": 1.0,
+        "use_amp": True,
+        "auto_learn": True,
+        "auto_train_threshold": 10,
+        # =========================================================================
+        # THE ORACLE'S VOICE - Inference Defaults
+        # =========================================================================
+        # When the AI speaks, these settings color its responses - how creative,
+        # how focused, how varied its words shall be.
+        "temperature": 0.8,
+        "top_k": 50,
+        "top_p": 0.9,
+        "min_p": 0.0,
+        "repetition_penalty": 1.1,
+        "max_gen": 8192,
+        # Pass 156z9dr (N-14): RAG retrieval backend.  "bm25" uses the
+        # built-in BM25/TF-IDF index (no extra deps).  "dense" uses
+        # sentence-transformers + faiss-cpu for semantic embeddings;
+        # falls back to BM25 with a WARNING if either dep is missing.
+        "rag_backend": "bm25",
+        # =========================================================================
+        # THE MESSENGER'S GATE - Server Defaults
+        # =========================================================================
+        # The API server allows distant travelers to commune with the AI.
+        # These settings control access and security.
+        "api_host": "127.0.0.1",
+        "api_port": 5000,
+        "enable_cors": True,
+        "require_api_key": True,  # Require authentication for API access
+        "enigma_api_key": None,  # Set via env ENIGMA_API_KEY or forge_config.json
+        # =========================================================================
+        # THE FORGE'S HEART - Hardware Configuration
+        # =========================================================================
+        # What powers drive the forge? CPU, GPU, or the mystical MPS of Apple?
+        # The precision of calculations affects both speed and quality.
+        "device": "auto",  # "auto", "cpu", "cuda", "mps"
+        "precision": "auto",  # "auto", "float32", "float16", "bfloat16"
+        # Backend selection for neural network operations
+        # "auto" - Auto-detect (PyTorch if available, CPU fallback)
+        # "torch" - Always use PyTorch
+        "nn_backend": "auto",
+        # =========================================================================
+        # Capability Toggles
+        # =========================================================================
+        # Features that have backing code set to True, others commented out
+        "enable_offloading": False,  # CPU+GPU layer offloading (inference.py supports this)
+        "offload_folder": None,  # Folder for offloaded weights (None = temp)
+        "max_gpu_layers": None,  # Max layers on GPU (None = auto)
+        # =========================================================================
+        # Resource Management
+        # =========================================================================
+        "resource_mode": "performance",  # "minimal", "balanced", "performance"
+        "cpu_threads": 0,  # 0 = auto
+        "memory_limit_mb": 0,  # 0 = no limit
+        "gpu_memory_fraction": 0.85,  # Use 85% of GPU VRAM
+        # =========================================================================
+        # Security Settings
+        # =========================================================================
+        "blocked_paths": [
+            "C:/Windows",
+            "C:/Program Files",
+            "C:/Program Files (x86)",
+            "/etc",
+            "/usr",
+            "/bin",
+            "/sbin",
+        ],
+        "blocked_patterns": [
+            "*.exe",
+            "*.dll",
+            "*.sys",
+            "*.pem",
+            "*.key",
+            "*password*",
+            "*secret*",
+            "*.env",
+            ".git/config",
+        ],
+        # Plugin allowlist — only these plugin filenames are loaded.
+        # Empty list means ALL discovered plugins are loaded (legacy behavior).
+        # Example: ["hello.py", "my_tools.py"]
+        "trusted_plugins": [],
+        # =========================================================================
+        # Logging
+        # =========================================================================
+        "log_level": "INFO",
+        "log_to_file": False,
+    }
+)
 
 
 # =============================================================================
@@ -320,7 +313,9 @@ def _validate_config_types(user_config: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(value, expected):
             logger.warning(
                 "Config key %r has wrong type: expected %s, got %s — skipped",
-                key, expected, type(value).__name__,
+                key,
+                expected,
+                type(value).__name__,
             )
             continue
         cleaned[key] = value
@@ -330,6 +325,7 @@ def _validate_config_types(user_config: dict[str, Any]) -> dict[str, Any]:
 # =============================================================================
 # THE RITUAL OF READING - Loading User Configuration
 # =============================================================================
+
 
 def _load_user_config() -> None:
     """
@@ -373,6 +369,7 @@ def _load_user_config() -> None:
 # =============================================================================
 # THE RITUAL OF ENVIRONMENT - Loading Environment Variables
 # =============================================================================
+
 
 def _load_env_config() -> None:
     """
@@ -418,6 +415,7 @@ def _load_env_config() -> None:
 # =============================================================================
 # THE PUBLIC INTERFACE - Configuration Access Functions
 # =============================================================================
+
 
 def get_config(key: str, default: Any = None) -> Any:
     """
@@ -468,6 +466,7 @@ def save_config(path: Optional[str] = None) -> None:
         config_path.parent.mkdir(parents=True, exist_ok=True)
 
         from enigma_engine.core.safe_save import atomic_write_json
+
         atomic_write_json(config_path, CONFIG)
     except Exception as e:
         raise OSError(f"Failed to save config to {path}: {e}") from e
@@ -501,9 +500,7 @@ def _ensure_initialized() -> None:
             try:
                 Path(_raw_get(CONFIG, dir_key)).mkdir(parents=True, exist_ok=True)
             except (OSError, PermissionError) as e:
-                logger.warning(
-                    f"Could not create directory "
-                    f"{_raw_get(CONFIG, dir_key)}: {e}")
+                logger.warning(f"Could not create directory {_raw_get(CONFIG, dir_key)}: {e}")
 
         _load_user_config()
         _load_env_config()

@@ -15,6 +15,7 @@ native shape.
 Replaces the rejected Qwen-wrapper server (the "Muppet", removed 2026-06-11; its
 <tool_call> parsing lives in git history and returns with the instruct pass).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -51,24 +52,30 @@ ROOT = Path(__file__).resolve().parent
 MODEL_ID = "enigma"
 
 _p = argparse.ArgumentParser()
-_p.add_argument("--model",
-                default=str(ROOT / "models" / "enigma_pretrain_large" / "latest.pth"),
-                help="Enigma checkpoint (.pth with model_state_dict + config)")
+_p.add_argument(
+    "--model",
+    default=str(ROOT / "models" / "enigma_pretrain_large" / "latest.pth"),
+    help="Enigma checkpoint (.pth with model_state_dict + config)",
+)
 _p.add_argument("--host", default="127.0.0.1")
 _p.add_argument("--port", type=int, default=8000)
-_p.add_argument("--max-context", type=int, default=1024,
-                help="prompt+generation token budget; she trains at block 1024 — "
-                     "longer is mechanically possible but untested")
-_p.add_argument("--memory-dir", default=None,
-                help="enable the local memory store (JSONL + BM25); relevant "
-                     "memories are injected into her system context")
+_p.add_argument(
+    "--max-context",
+    type=int,
+    default=1024,
+    help="prompt+generation token budget; she trains at block 1024 — longer is mechanically possible but untested",
+)
+_p.add_argument(
+    "--memory-dir",
+    default=None,
+    help="enable the local memory store (JSONL + BM25); relevant memories are injected into her system context",
+)
 ARGS, _ = _p.parse_known_args()
 
 print(f"Loading Enigma from {ARGS.model} ...", flush=True)
 _ck = torch.load(ARGS.model, map_location="cpu", weights_only=False)  # our own checkpoint
 if not (isinstance(_ck, dict) and "model_state_dict" in _ck and "config" in _ck):
-    raise SystemExit(f"{ARGS.model} is not an Enigma checkpoint "
-                     f"(need model_state_dict + config)")
+    raise SystemExit(f"{ARGS.model} is not an Enigma checkpoint (need model_state_dict + config)")
 CONFIG = ForgeConfig.from_dict(_ck["config"])
 model = Enigma(CONFIG)
 model.load_state_dict(_ck["model_state_dict"], strict=True)
@@ -80,8 +87,10 @@ del _ck
 
 tokenizer = get_tokenizer("bpe")  # the exact tokenizer that built tokens.bin
 if getattr(tokenizer, "vocab_size", None) != CONFIG.vocab_size:
-    print(f"  WARN: tokenizer vocab {getattr(tokenizer, 'vocab_size', '?')} != "
-          f"model vocab {CONFIG.vocab_size}", flush=True)
+    print(
+        f"  WARN: tokenizer vocab {getattr(tokenizer, 'vocab_size', '?')} != model vocab {CONFIG.vocab_size}",
+        flush=True,
+    )
 EOS_ID = getattr(tokenizer, "eos_token_id", 2)
 BOS_ID = getattr(tokenizer, "bos_token_id", 1)
 
@@ -94,15 +103,17 @@ attach_chat_tokens(tokenizer)
 MEMORY = None
 if ARGS.memory_dir:
     from enigma_engine.core.memory_store import MemoryStore
+
     MEMORY = MemoryStore(ARGS.memory_dir)
 
 _n_params = sum(p.numel() for p in model.parameters())
-print(f"Enigma loaded: {_n_params / 1e6:.1f}M params on {DEVICE}"
-      + (f", checkpoint step {STEP:,}" if STEP is not None else "")
-      + (f" | INSTRUCT ({META.get('chat_format')})" if INSTRUCT
-         else " | base (transcript bridge)")
-      + (f" | memory: {len(MEMORY)} entries" if MEMORY is not None else ""),
-      flush=True)
+print(
+    f"Enigma loaded: {_n_params / 1e6:.1f}M params on {DEVICE}"
+    + (f", checkpoint step {STEP:,}" if STEP is not None else "")
+    + (f" | INSTRUCT ({META.get('chat_format')})" if INSTRUCT else " | base (transcript bridge)")
+    + (f" | memory: {len(MEMORY)} entries" if MEMORY is not None else ""),
+    flush=True,
+)
 
 app = FastAPI(title="Modkit · Enigma (from-scratch)")
 
@@ -165,8 +176,9 @@ def _find_stop(text: str, stop_texts: tuple[str, ...]) -> int:
     return min(hits) if hits else -1
 
 
-def _generate_text(prompt: str, max_tokens: int, temperature: float, top_p: float,
-                   stop_texts: tuple[str, ...] = (), min_p: float = 0.0):
+def _generate_text(
+    prompt: str, max_tokens: int, temperature: float, top_p: float, stop_texts: tuple[str, ...] = (), min_p: float = 0.0
+):
     """Yield text deltas from her KV-cached streaming path.
 
     Decoding re-decodes the full output each token (O(n²) chars, trivial at
@@ -186,7 +198,7 @@ def _generate_text(prompt: str, max_tokens: int, temperature: float, top_p: floa
     max_tokens = max(1, min(int(max_tokens), ARGS.max_context - 2))
     budget = max(2, ARGS.max_context - max_tokens)
     if len(ids) > budget - 1:
-        ids = ids[-(budget - 1):]  # keep the most recent context
+        ids = ids[-(budget - 1) :]  # keep the most recent context
     if not ids or ids[0] != BOS_ID:
         ids = [BOS_ID] + ids
     x = torch.tensor([ids], dtype=torch.long, device=DEVICE)
@@ -196,8 +208,8 @@ def _generate_text(prompt: str, max_tokens: int, temperature: float, top_p: floa
     out_ids: list[int] = []
     with _GEN_LOCK, torch.no_grad():
         for t in model.generate_stream(
-                x, max_new_tokens=max_tokens, temperature=temperature,
-                top_p=top_p, stop_tokens=[EOS_ID], min_p=min_p):
+            x, max_new_tokens=max_tokens, temperature=temperature, top_p=top_p, stop_tokens=[EOS_ID], min_p=min_p
+        ):
             tid = int(t.item())
             if tid == EOS_ID:
                 break
@@ -221,8 +233,9 @@ def _generate_text(prompt: str, max_tokens: int, temperature: float, top_p: floa
         yield text[emitted:]
 
 
-def _gen_ids(ids: list[int], max_tokens: int, temperature: float, top_p: float,
-             min_p: float, stop_ids: tuple[int, ...]):
+def _gen_ids(
+    ids: list[int], max_tokens: int, temperature: float, top_p: float, min_p: float, stop_ids: tuple[int, ...]
+):
     """ID-level generation for instruct mode: render_chat already built the
     exact prompt (BOS included, no trailing EOS — the whole encode() EOS
     gotcha is bypassed). Yields raw token ids; stops on EOS/<|im_end|>."""
@@ -231,8 +244,8 @@ def _gen_ids(ids: list[int], max_tokens: int, temperature: float, top_p: float,
     temperature = max(float(temperature), 1e-3)
     with _GEN_LOCK, torch.no_grad():
         for t in model.generate_stream(
-                x, max_new_tokens=max_tokens, temperature=temperature,
-                top_p=top_p, stop_tokens=list(stop_ids), min_p=min_p):
+            x, max_new_tokens=max_tokens, temperature=temperature, top_p=top_p, stop_tokens=list(stop_ids), min_p=min_p
+        ):
             tid = int(t.item())
             if tid in stop_ids:
                 break
@@ -250,8 +263,7 @@ def _with_context(msgs: list[dict], req: ChatReq) -> list[dict]:
     """Fold tool specs and retrieved memories into the system message."""
     extra = []
     if MEMORY is not None:
-        mem = MEMORY.render_context(_last_user_text(req.messages), tokenizer,
-                                    max_ids=128)
+        mem = MEMORY.render_context(_last_user_text(req.messages), tokenizer, max_ids=128)
         if mem:
             extra.append(mem)
     if req.tools:
@@ -266,24 +278,27 @@ def _with_context(msgs: list[dict], req: ChatReq) -> list[dict]:
 
 
 def _openai_tool_calls(calls: list[dict]) -> list[dict]:
-    return [{"id": f"call_{i}", "type": "function",
-             "function": {"name": c.get("name"),
-                          "arguments": json.dumps(c.get("arguments", {}),
-                                                  ensure_ascii=False)}}
-            for i, c in enumerate(calls) if c.get("name")]
+    return [
+        {
+            "id": f"call_{i}",
+            "type": "function",
+            "function": {"name": c.get("name"), "arguments": json.dumps(c.get("arguments", {}), ensure_ascii=False)},
+        }
+        for i, c in enumerate(calls)
+        if c.get("name")
+    ]
 
 
 def _chat_instruct(req: ChatReq):
     msgs = _with_context([m.model_dump(exclude_none=True) for m in req.messages], req)
     max_tokens = max(1, min(int(req.max_tokens), ARGS.max_context - 2))
-    prompt_ids = render_chat(tokenizer, msgs, add_generation_prompt=True,
-                             max_ids=ARGS.max_context - max_tokens)
+    prompt_ids = render_chat(tokenizer, msgs, add_generation_prompt=True, max_ids=ARGS.max_context - max_tokens)
     created = int(time.time())
     cid = f"chatcmpl-{created}"
-    gen = _gen_ids(prompt_ids, max_tokens, req.temperature, req.top_p,
-                   req.min_p, (EOS_ID, IM_END))
+    gen = _gen_ids(prompt_ids, max_tokens, req.temperature, req.top_p, req.min_p, (EOS_ID, IM_END))
 
     if req.stream:
+
         def events():
             from enigma_engine.core.chat_format import (
                 THINK,
@@ -291,6 +306,7 @@ def _chat_instruct(req: ChatReq):
                 TOOL_CALL,
                 TOOL_CALL_END,
             )
+
             all_ids: list[int] = []
             content_ids: list[int] = []
             emitted = 0
@@ -308,50 +324,76 @@ def _chat_instruct(req: ChatReq):
                 content_ids.append(tid)
                 text = tokenizer.decode(content_ids, skip_special_tokens=True)
                 if len(text) > emitted:
-                    yield "data: " + json.dumps({
-                        "id": cid, "object": "chat.completion.chunk",
-                        "created": created, "model": MODEL_ID,
-                        "choices": [{"index": 0,
-                                     "delta": {"content": text[emitted:]},
-                                     "finish_reason": None}]}) + "\n\n"
+                    yield (
+                        "data: "
+                        + json.dumps(
+                            {
+                                "id": cid,
+                                "object": "chat.completion.chunk",
+                                "created": created,
+                                "model": MODEL_ID,
+                                "choices": [{"index": 0, "delta": {"content": text[emitted:]}, "finish_reason": None}],
+                            }
+                        )
+                        + "\n\n"
+                    )
                     emitted = len(text)
             out = parse_assistant_ids(tokenizer, all_ids)
             calls = _openai_tool_calls(out["tool_calls"])
             if calls:
-                yield "data: " + json.dumps({
-                    "id": cid, "object": "chat.completion.chunk",
-                    "created": created, "model": MODEL_ID,
-                    "choices": [{"index": 0, "delta": {"tool_calls": calls},
-                                 "finish_reason": None}]}) + "\n\n"
-            yield "data: " + json.dumps({
-                "id": cid, "object": "chat.completion.chunk",
-                "created": created, "model": MODEL_ID,
-                "choices": [{"index": 0, "delta": {},
-                             "finish_reason": "tool_calls" if calls else "stop"}]
-            }) + "\n\n"
+                yield (
+                    "data: "
+                    + json.dumps(
+                        {
+                            "id": cid,
+                            "object": "chat.completion.chunk",
+                            "created": created,
+                            "model": MODEL_ID,
+                            "choices": [{"index": 0, "delta": {"tool_calls": calls}, "finish_reason": None}],
+                        }
+                    )
+                    + "\n\n"
+                )
+            yield (
+                "data: "
+                + json.dumps(
+                    {
+                        "id": cid,
+                        "object": "chat.completion.chunk",
+                        "created": created,
+                        "model": MODEL_ID,
+                        "choices": [{"index": 0, "delta": {}, "finish_reason": "tool_calls" if calls else "stop"}],
+                    }
+                )
+                + "\n\n"
+            )
             yield "data: [DONE]\n\n"
+
         return StreamingResponse(events(), media_type="text/event-stream")
 
     out_ids = list(gen)
     out = parse_assistant_ids(tokenizer, out_ids)
     calls = _openai_tool_calls(out["tool_calls"])
-    message = {"role": "assistant",
-               "content": out["content"] or (None if calls else "")}
+    message = {"role": "assistant", "content": out["content"] or (None if calls else "")}
     if calls:
         message["tool_calls"] = calls
-    return {"id": cid, "object": "chat.completion", "created": created,
-            "model": MODEL_ID,
-            "choices": [{"index": 0, "message": message,
-                         "finish_reason": "tool_calls" if calls else "stop"}],
-            "usage": {"prompt_tokens": len(prompt_ids),
-                      "completion_tokens": len(out_ids),
-                      "total_tokens": len(prompt_ids) + len(out_ids)}}
+    return {
+        "id": cid,
+        "object": "chat.completion",
+        "created": created,
+        "model": MODEL_ID,
+        "choices": [{"index": 0, "message": message, "finish_reason": "tool_calls" if calls else "stop"}],
+        "usage": {
+            "prompt_tokens": len(prompt_ids),
+            "completion_tokens": len(out_ids),
+            "total_tokens": len(prompt_ids) + len(out_ids),
+        },
+    }
 
 
 @app.get("/v1/models")
 def list_models():
-    return {"object": "list",
-            "data": [{"id": MODEL_ID, "object": "model", "owned_by": "modkit"}]}
+    return {"object": "list", "data": [{"id": MODEL_ID, "object": "model", "owned_by": "modkit"}]}
 
 
 @app.post("/v1/chat/completions")
@@ -366,23 +408,40 @@ def chat(req: ChatReq):
     prompt = _render_transcript(messages)
     created = int(time.time())
     cid = f"chatcmpl-{created}"
-    gen = _generate_text(prompt, req.max_tokens, req.temperature, req.top_p,
-                         _STOP_TEXTS, min_p=req.min_p)
+    gen = _generate_text(prompt, req.max_tokens, req.temperature, req.top_p, _STOP_TEXTS, min_p=req.min_p)
 
     if req.stream:
+
         def events():
             for delta in gen:
-                yield "data: " + json.dumps({
-                    "id": cid, "object": "chat.completion.chunk",
-                    "created": created, "model": MODEL_ID,
-                    "choices": [{"index": 0, "delta": {"content": delta},
-                                 "finish_reason": None}]}) + "\n\n"
-            yield "data: " + json.dumps({
-                "id": cid, "object": "chat.completion.chunk",
-                "created": created, "model": MODEL_ID,
-                "choices": [{"index": 0, "delta": {},
-                             "finish_reason": "stop"}]}) + "\n\n"
+                yield (
+                    "data: "
+                    + json.dumps(
+                        {
+                            "id": cid,
+                            "object": "chat.completion.chunk",
+                            "created": created,
+                            "model": MODEL_ID,
+                            "choices": [{"index": 0, "delta": {"content": delta}, "finish_reason": None}],
+                        }
+                    )
+                    + "\n\n"
+                )
+            yield (
+                "data: "
+                + json.dumps(
+                    {
+                        "id": cid,
+                        "object": "chat.completion.chunk",
+                        "created": created,
+                        "model": MODEL_ID,
+                        "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+                    }
+                )
+                + "\n\n"
+            )
             yield "data: [DONE]\n\n"
+
         return StreamingResponse(events(), media_type="text/event-stream")
 
     text = "".join(gen).strip()
@@ -391,47 +450,68 @@ def chat(req: ChatReq):
     # so don't let encode()'s BOS/EOS bracketing inflate the numbers.
     n_prompt = len(tokenizer.encode(prompt, add_special_tokens=False)) + 1
     n_out = len(tokenizer.encode(text, add_special_tokens=False)) if text else 0
-    return {"id": cid, "object": "chat.completion", "created": created,
-            "model": MODEL_ID,
-            "choices": [{"index": 0,
-                         "message": {"role": "assistant", "content": text},
-                         "finish_reason": "stop"}],
-            "usage": {"prompt_tokens": n_prompt, "completion_tokens": n_out,
-                      "total_tokens": n_prompt + n_out}}
+    return {
+        "id": cid,
+        "object": "chat.completion",
+        "created": created,
+        "model": MODEL_ID,
+        "choices": [{"index": 0, "message": {"role": "assistant", "content": text}, "finish_reason": "stop"}],
+        "usage": {"prompt_tokens": n_prompt, "completion_tokens": n_out, "total_tokens": n_prompt + n_out},
+    }
 
 
 @app.post("/v1/completions")
 def completions(req: CompletionReq):
     created = int(time.time())
     cid = f"cmpl-{created}"
-    gen = _generate_text(req.prompt, req.max_tokens, req.temperature, req.top_p,
-                         min_p=req.min_p)
+    gen = _generate_text(req.prompt, req.max_tokens, req.temperature, req.top_p, min_p=req.min_p)
 
     if req.stream:
+
         def events():
             for delta in gen:
-                yield "data: " + json.dumps({
-                    "id": cid, "object": "text_completion", "created": created,
-                    "model": MODEL_ID,
-                    "choices": [{"index": 0, "text": delta,
-                                 "finish_reason": None}]}) + "\n\n"
-            yield "data: " + json.dumps({
-                "id": cid, "object": "text_completion", "created": created,
-                "model": MODEL_ID,
-                "choices": [{"index": 0, "text": "",
-                             "finish_reason": "stop"}]}) + "\n\n"
+                yield (
+                    "data: "
+                    + json.dumps(
+                        {
+                            "id": cid,
+                            "object": "text_completion",
+                            "created": created,
+                            "model": MODEL_ID,
+                            "choices": [{"index": 0, "text": delta, "finish_reason": None}],
+                        }
+                    )
+                    + "\n\n"
+                )
+            yield (
+                "data: "
+                + json.dumps(
+                    {
+                        "id": cid,
+                        "object": "text_completion",
+                        "created": created,
+                        "model": MODEL_ID,
+                        "choices": [{"index": 0, "text": "", "finish_reason": "stop"}],
+                    }
+                )
+                + "\n\n"
+            )
             yield "data: [DONE]\n\n"
+
         return StreamingResponse(events(), media_type="text/event-stream")
 
     text = "".join(gen)
     # Same accounting as chat: fed = [BOS]+body, generated ids have no specials.
     n_prompt = len(tokenizer.encode(req.prompt, add_special_tokens=False)) + 1
     n_out = len(tokenizer.encode(text, add_special_tokens=False)) if text else 0
-    return {"id": cid, "object": "text_completion", "created": created,
-            "model": MODEL_ID,
-            "choices": [{"index": 0, "text": text, "finish_reason": "stop"}],
-            "usage": {"prompt_tokens": n_prompt, "completion_tokens": n_out,
-                      "total_tokens": n_prompt + n_out}}
+    return {
+        "id": cid,
+        "object": "text_completion",
+        "created": created,
+        "model": MODEL_ID,
+        "choices": [{"index": 0, "text": text, "finish_reason": "stop"}],
+        "usage": {"prompt_tokens": n_prompt, "completion_tokens": n_out, "total_tokens": n_prompt + n_out},
+    }
 
 
 class MemReq(BaseModel):

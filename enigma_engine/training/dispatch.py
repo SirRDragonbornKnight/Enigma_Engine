@@ -123,9 +123,7 @@ def run_training(config: TrainingJobConfig | dict[str, Any], ctx: DispatchContex
     if spec is None:
         raise ValueError(f"Unknown training mode: {job.mode}")
     if spec.experimental and not job.allow_experimental:
-        raise ValueError(
-            f"Mode '{job.mode}' is experimental. Set allow_experimental=true to run it."
-        )
+        raise ValueError(f"Mode '{job.mode}' is experimental. Set allow_experimental=true to run it.")
 
     train_cfg = _core_training_config(job)
 
@@ -332,8 +330,7 @@ def run_training(config: TrainingJobConfig | dict[str, Any], ctx: DispatchContex
 
     if job.mode == "adaptive":
         raise NotImplementedError(
-            "adaptive mode is a GUI/meta scheduler path and is not yet supported "
-            "by the dispatcher"
+            "adaptive mode is a GUI/meta scheduler path and is not yet supported by the dispatcher"
         )
 
     raise ValueError(f"Unhandled training mode: {job.mode}")

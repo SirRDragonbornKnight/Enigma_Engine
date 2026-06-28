@@ -17,11 +17,7 @@ import collect_distill_data as cdd
 def test_load_prompts_txt_skips_blank_and_comments(tmp_path: Path) -> None:
     p = tmp_path / "prompts.txt"
     p.write_text(
-        "first prompt\n"
-        "\n"
-        "# this is a comment\n"
-        "second prompt\n"
-        "  third with whitespace  \n",
+        "first prompt\n\n# this is a comment\nsecond prompt\n  third with whitespace  \n",
         encoding="utf-8",
     )
     prompts = cdd.load_prompts(p)
@@ -34,8 +30,10 @@ def test_load_prompts_jsonl_extracts_prompt_field(tmp_path: Path) -> None:
         json.dumps({"prompt": "alpha", "extra": "ignored"}) + "\n"
         "\n"  # blank line tolerated
         + "not-json-line\n"  # malformed → warned + skipped
-        + json.dumps({"prompt": "beta"}) + "\n"
-        + json.dumps({"prompt": "   "}) + "\n",  # whitespace-only → skipped
+        + json.dumps({"prompt": "beta"})
+        + "\n"
+        + json.dumps({"prompt": "   "})
+        + "\n",  # whitespace-only → skipped
         encoding="utf-8",
     )
     prompts = cdd.load_prompts(p)
@@ -54,9 +52,7 @@ def test_load_prompts_missing_file_raises(tmp_path: Path) -> None:
     "endpoint",
     ["http://localhost:11434/v1", "http://127.0.0.1:8080/v1", "http://[::1]:8000/v1"],
 )
-def test_warn_if_remote_silent_for_localhost(
-    endpoint: str, caplog: pytest.LogCaptureFixture
-) -> None:
+def test_warn_if_remote_silent_for_localhost(endpoint: str, caplog: pytest.LogCaptureFixture) -> None:
     with caplog.at_level(logging.WARNING, logger=cdd.logger.name):
         cdd._warn_if_remote(endpoint)
     assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
@@ -77,8 +73,10 @@ def test_warn_if_remote_logs_for_non_localhost(
 def test_load_done_keys_reads_existing_rows(tmp_path: Path) -> None:
     jsonl = tmp_path / "out.jsonl"
     jsonl.write_text(
-        json.dumps({"prompt": "alpha", "completion": "A"}) + "\n"
-        + json.dumps({"prompt": "beta", "completion": "B"}) + "\n"
+        json.dumps({"prompt": "alpha", "completion": "A"})
+        + "\n"
+        + json.dumps({"prompt": "beta", "completion": "B"})
+        + "\n"
         + "garbage line\n",
         encoding="utf-8",
     )
@@ -107,10 +105,13 @@ def test_prompt_key_stable() -> None:
 def test_rewrite_combined_text_canonical_format(tmp_path: Path) -> None:
     jsonl = tmp_path / "src.jsonl"
     jsonl.write_text(
-        json.dumps({"prompt": "Q1", "completion": "A1"}) + "\n"
-        + json.dumps({"prompt": "Q2", "completion": "A2"}) + "\n"
+        json.dumps({"prompt": "Q1", "completion": "A1"})
+        + "\n"
+        + json.dumps({"prompt": "Q2", "completion": "A2"})
+        + "\n"
         # Empty completion must be filtered out
-        + json.dumps({"prompt": "Q3", "completion": "  "}) + "\n",
+        + json.dumps({"prompt": "Q3", "completion": "  "})
+        + "\n",
         encoding="utf-8",
     )
     txt = tmp_path / "out.txt"
@@ -124,8 +125,7 @@ def test_rewrite_combined_text_canonical_format(tmp_path: Path) -> None:
 
 
 class _FakeClient:
-    def __init__(self, replies: dict[str, str] | None = None,
-                 raises_on: set[str] | None = None) -> None:
+    def __init__(self, replies: dict[str, str] | None = None, raises_on: set[str] | None = None) -> None:
         self.replies = replies or {}
         self.raises_on = raises_on or set()
         self.calls: list[str] = []
@@ -173,11 +173,7 @@ def test_collect_failed_prompt_does_not_abort_run(tmp_path: Path) -> None:
     assert summary["ok"] == 2
     assert summary["failed"] == 1
     assert client.calls == ["one", "two", "three"]
-    rows = [
-        json.loads(ln)
-        for ln in (tmp_path / "distill_t2.jsonl").read_text("utf-8").splitlines()
-        if ln.strip()
-    ]
+    rows = [json.loads(ln) for ln in (tmp_path / "distill_t2.jsonl").read_text("utf-8").splitlines() if ln.strip()]
     assert {r["prompt"] for r in rows} == {"one", "three"}
 
 
@@ -201,8 +197,10 @@ def test_collect_resume_skips_done_prompts_without_calling_client(
     # Pre-seed two rows, then re-run with all three prompts + resume=True.
     jsonl = tmp_path / "distill_t4.jsonl"
     jsonl.write_text(
-        json.dumps({"prompt": "one", "completion": "old-A"}) + "\n"
-        + json.dumps({"prompt": "two", "completion": "old-B"}) + "\n",
+        json.dumps({"prompt": "one", "completion": "old-A"})
+        + "\n"
+        + json.dumps({"prompt": "two", "completion": "old-B"})
+        + "\n",
         encoding="utf-8",
     )
     client = _FakeClient()
@@ -220,11 +218,7 @@ def test_collect_resume_skips_done_prompts_without_calling_client(
     assert summary["ok"] == 1
     assert summary["skipped_done"] == 2
     # Final JSONL has all three (two old + one new).
-    rows = [
-        json.loads(ln)
-        for ln in jsonl.read_text("utf-8").splitlines()
-        if ln.strip()
-    ]
+    rows = [json.loads(ln) for ln in jsonl.read_text("utf-8").splitlines() if ln.strip()]
     assert {r["prompt"] for r in rows} == {"one", "two", "three"}
 
 
@@ -244,11 +238,7 @@ def test_collect_overwrites_existing_when_resume_false(tmp_path: Path) -> None:
         resume=False,
         client=client,
     )
-    rows = [
-        json.loads(ln)
-        for ln in jsonl.read_text("utf-8").splitlines()
-        if ln.strip()
-    ]
+    rows = [json.loads(ln) for ln in jsonl.read_text("utf-8").splitlines() if ln.strip()]
     assert [r["prompt"] for r in rows] == ["fresh"]
 
 
@@ -422,10 +412,7 @@ class _FakeMagpieClient:
 
 
 def test_magpie_collect_writes_jsonl_and_txt(tmp_path: Path) -> None:
-    fake = _FakeMagpieClient(
-        [("What is entropy?", "A measure of disorder."),
-         ("Name a prime.", "Seven.")]
-    )
+    fake = _FakeMagpieClient([("What is entropy?", "A measure of disorder."), ("Name a prime.", "Seven.")])
     summary = cdd.magpie_collect(
         endpoint="http://localhost:11434/v1",
         model="m",
@@ -462,8 +449,7 @@ def test_magpie_collect_failed_pair_does_not_abort(tmp_path: Path) -> None:
     """A flaky teacher / parse failure on one call must not kill the
     batch — same robustness contract as prompts-driven collect()."""
     fake = _FakeMagpieClient(
-        [RuntimeError("magpie parse failed: marker not found"),
-         ("Define gravity.", "Mass attracts mass.")]
+        [RuntimeError("magpie parse failed: marker not found"), ("Define gravity.", "Mass attracts mass.")]
     )
     summary = cdd.magpie_collect(
         endpoint="http://localhost:11434/v1",
@@ -483,10 +469,7 @@ def test_magpie_collect_deduplicates_repeated_instructions(tmp_path: Path) -> No
     """When the model samples a duplicate instruction (same string),
     the second hit must be dropped not appended — otherwise the JSONL
     accumulates duplicate prompts that bias training."""
-    fake = _FakeMagpieClient(
-        [("What is X?", "A unique thing."),
-         ("What is X?", "Different answer, same instruction.")]
-    )
+    fake = _FakeMagpieClient([("What is X?", "A unique thing."), ("What is X?", "Different answer, same instruction.")])
     summary = cdd.magpie_collect(
         endpoint="http://localhost:11434/v1",
         model="m",
@@ -507,9 +490,11 @@ def test_magpie_collect_warns_on_high_failure_rate(
     was chosen for the model. Run summary must surface this so the
     user doesn't keep banging on a wrong setup."""
     fake = _FakeMagpieClient(
-        [RuntimeError("magpie parse failed: marker not found"),
-         RuntimeError("magpie parse failed: marker not found"),
-         ("OK instruction.", "OK answer.")]
+        [
+            RuntimeError("magpie parse failed: marker not found"),
+            RuntimeError("magpie parse failed: marker not found"),
+            ("OK instruction.", "OK answer."),
+        ]
     )
     with caplog.at_level(logging.WARNING):
         cdd.magpie_collect(
@@ -520,10 +505,9 @@ def test_magpie_collect_warns_on_high_failure_rate(
             output_dir=tmp_path,
             client=fake,
         )
-    assert any("failure rate" in rec.message.lower() and "template" in rec.message.lower()
-               for rec in caplog.records), (
-        "high-failure-rate warning missing — user has no signal that "
-        "their --template choice is wrong")
+    assert any("failure rate" in rec.message.lower() and "template" in rec.message.lower() for rec in caplog.records), (
+        "high-failure-rate warning missing — user has no signal that their --template choice is wrong"
+    )
 
 
 def test_magpie_collect_resume_skips_already_present_instructions(
@@ -539,10 +523,7 @@ def test_magpie_collect_resume_skips_already_present_instructions(
         json.dumps({"prompt": "Already seen.", "completion": "Old answer."}) + "\n",
         encoding="utf-8",
     )
-    fake = _FakeMagpieClient(
-        [("Already seen.", "Different answer."),
-         ("New question.", "New answer.")]
-    )
+    fake = _FakeMagpieClient([("Already seen.", "Different answer."), ("New question.", "New answer.")])
     summary = cdd.magpie_collect(
         endpoint="http://localhost:11434/v1",
         model="m",
@@ -591,9 +572,9 @@ def test_magpie_client_sends_template_prefix_and_stop(
             pass
 
         def read(self_) -> bytes:
-            return json.dumps({
-                "choices": [{"text": "Hello.<|im_end|>\n<|im_start|>assistant\nHi.<|im_end|>"}]
-            }).encode("utf-8")
+            return json.dumps({"choices": [{"text": "Hello.<|im_end|>\n<|im_start|>assistant\nHi.<|im_end|>"}]}).encode(
+                "utf-8"
+            )
 
     def fake_urlopen(req: object, timeout: float = 0.0) -> _FakeResp:
         _ = timeout
@@ -638,11 +619,16 @@ def test_main_rejects_both_prompts_and_magpie(
     prompts_file = tmp_path / "p.txt"
     prompts_file.write_text("hello\n", encoding="utf-8")
     with caplog.at_level(logging.ERROR):
-        rc = cdd.main([
-            "--model", "m",
-            "--prompts", str(prompts_file),
-            "--magpie", "5",
-        ])
+        rc = cdd.main(
+            [
+                "--model",
+                "m",
+                "--prompts",
+                str(prompts_file),
+                "--magpie",
+                "5",
+            ]
+        )
     assert rc == 2
     assert any("mutually exclusive" in rec.message.lower() for rec in caplog.records)
 
@@ -653,8 +639,7 @@ def test_main_rejects_neither_prompts_nor_magpie(
     with caplog.at_level(logging.ERROR):
         rc = cdd.main(["--model", "m"])
     assert rc == 2
-    assert any("--prompts" in rec.message and "--magpie" in rec.message
-               for rec in caplog.records)
+    assert any("--prompts" in rec.message and "--magpie" in rec.message for rec in caplog.records)
 
 
 # ── CLI temperature default per mode (Pass 156z9b) ────────────────────
@@ -673,16 +658,14 @@ def test_main_magpie_unset_temperature_defaults_to_one_point_zero(
 
     def fake_magpie_collect(**kwargs: object) -> dict[str, object]:
         captured.update(kwargs)
-        return {"ok": 1, "failed": 0, "skipped": 0,
-                "out_jsonl": "x", "out_text": "x"}
+        return {"ok": 1, "failed": 0, "skipped": 0, "out_jsonl": "x", "out_text": "x"}
 
     monkeypatch.setattr(cdd, "magpie_collect", fake_magpie_collect)
     with caplog.at_level(logging.INFO):
         rc = cdd.main(["--model", "m", "--magpie", "1"])
     assert rc == 0
     assert captured["temperature"] == 1.0
-    assert any("1.0" in rec.message and "magpie" in rec.message.lower()
-               for rec in caplog.records)
+    assert any("1.0" in rec.message and "magpie" in rec.message.lower() for rec in caplog.records)
 
 
 def test_main_magpie_explicit_temperature_is_passed_through(
@@ -695,16 +678,14 @@ def test_main_magpie_explicit_temperature_is_passed_through(
 
     def fake_magpie_collect(**kwargs: object) -> dict[str, object]:
         captured.update(kwargs)
-        return {"ok": 1, "failed": 0, "skipped": 0,
-                "out_jsonl": "x", "out_text": "x"}
+        return {"ok": 1, "failed": 0, "skipped": 0, "out_jsonl": "x", "out_text": "x"}
 
     monkeypatch.setattr(cdd, "magpie_collect", fake_magpie_collect)
     with caplog.at_level(logging.INFO):
         rc = cdd.main(["--model", "m", "--magpie", "1", "--temperature", "0.5"])
     assert rc == 0
     assert captured["temperature"] == 0.5
-    assert not any("paper recommendation" in rec.message
-                   for rec in caplog.records)
+    assert not any("paper recommendation" in rec.message for rec in caplog.records)
 
 
 def test_main_prompts_unset_temperature_defaults_to_zero_point_seven(
@@ -717,8 +698,7 @@ def test_main_prompts_unset_temperature_defaults_to_zero_point_seven(
 
     def fake_collect(**kwargs: object) -> dict[str, object]:
         captured.update(kwargs)
-        return {"ok": 1, "failed": 0, "skipped": 0,
-                "out_jsonl": "x", "out_text": "x"}
+        return {"ok": 1, "failed": 0, "skipped": 0, "out_jsonl": "x", "out_text": "x"}
 
     monkeypatch.setattr(cdd, "collect", fake_collect)
     prompts_file = tmp_path / "p.txt"
@@ -726,4 +706,3 @@ def test_main_prompts_unset_temperature_defaults_to_zero_point_seven(
     rc = cdd.main(["--model", "m", "--prompts", str(prompts_file)])
     assert rc == 0
     assert captured["temperature"] == 0.7
-

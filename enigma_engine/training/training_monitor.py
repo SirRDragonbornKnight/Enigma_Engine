@@ -26,6 +26,7 @@ Usage:
     monitor.finish_run("sft", "chat model", data_source="data/training.txt")
     history = monitor.get_history()
 """
+
 from __future__ import annotations
 
 import json
@@ -43,12 +44,14 @@ logger = logging.getLogger(__name__)
 # TRAINING RUN LOG (TM-D)
 # =============================================================================
 
+
 @dataclass
 class TrainingRun:
     """Metadata for one completed training run.
 
     Stored in the history log on disk.
     """
+
     run_id: str = ""
     timestamp: str = ""
     mode: str = ""  # sft, dpo, rlhf, self-play, progressive, etc.
@@ -99,6 +102,7 @@ class TrainingRun:
 # =============================================================================
 # TRAINING MONITOR
 # =============================================================================
+
 
 class TrainingMonitor:
     """Central training monitor: loss tracking and history.
@@ -210,7 +214,9 @@ class TrainingMonitor:
             self._epoch_perplexities.append(ppl)
 
     def record_throughput(
-        self, tokens_in_batch: int, step_time: float,
+        self,
+        tokens_in_batch: int,
+        step_time: float,
     ) -> None:
         """Record throughput metrics for one training step.
 
@@ -377,10 +383,8 @@ class TrainingMonitor:
             "tokens_per_sec": tps_snap,
             "step_times": st_snap,
             "total_tokens": total_tok,
-            "avg_tokens_per_sec": (
-                sum(tps_snap) / len(tps_snap) if tps_snap else 0.0),
-            "avg_step_time": (
-                sum(st_snap) / len(st_snap) if st_snap else 0.0),
+            "avg_tokens_per_sec": (sum(tps_snap) / len(tps_snap) if tps_snap else 0.0),
+            "avg_step_time": (sum(st_snap) / len(st_snap) if st_snap else 0.0),
         }
 
     # -----------------------------------------------------------------
@@ -412,8 +416,7 @@ class TrainingMonitor:
 
         # Snapshot live state under lock
         with self._lock:
-            duration = (
-                time.time() - self._start_time if self._start_time else 0.0)
+            duration = time.time() - self._start_time if self._start_time else 0.0
             final_loss = self._losses[-1] if self._losses else 0.0
             best = self._best_loss
             n_epochs = len(self._epoch_losses)
@@ -432,11 +435,9 @@ class TrainingMonitor:
         if total_tok > 0:
             run_extra["total_tokens"] = total_tok
         if tps_snap:
-            run_extra["avg_tokens_per_sec"] = round(
-                sum(tps_snap) / len(tps_snap), 1)
+            run_extra["avg_tokens_per_sec"] = round(sum(tps_snap) / len(tps_snap), 1)
         if duration > 0 and total_tok > 0:
-            run_extra["overall_tokens_per_sec"] = round(
-                total_tok / duration, 1)
+            run_extra["overall_tokens_per_sec"] = round(total_tok / duration, 1)
 
         run = TrainingRun(
             run_id=f"{int(time.time())}_{mode}",
@@ -456,7 +457,12 @@ class TrainingMonitor:
         self._append_to_history(run)
         logger.info(
             "Training run recorded: %s (%s, %d steps, loss=%.4f, %.0fs)",
-            run.run_id, mode, run.total_steps, run.final_loss, duration)
+            run.run_id,
+            mode,
+            run.total_steps,
+            run.final_loss,
+            duration,
+        )
 
         return run
 
@@ -500,6 +506,7 @@ class TrainingMonitor:
 
         data = [r.to_dict() for r in runs]
         from enigma_engine.core.safe_save import atomic_write_json
+
         atomic_write_json(self.history_path, data)
 
     def _load_history(self) -> list[TrainingRun]:

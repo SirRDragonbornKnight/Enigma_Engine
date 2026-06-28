@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 # Optional imports
 try:
     import requests
+
     HAS_REQUESTS = True
 except ImportError:
     HAS_REQUESTS = False
@@ -41,6 +42,7 @@ except ImportError:
 
 try:
     from PIL import Image
+
     HAS_PIL = True
 except ImportError:
     HAS_PIL = False
@@ -86,32 +88,32 @@ class ImageGenMod(ModClient):
         self._active_loras: list[str] = []
 
         logger.info(f"Active backend: {self.backend or 'none'}")
-    
+
     def _detect_backend(self):
         """Detect which backend is available."""
         backend_pref = self.settings.get("backend", "auto")
         backends = self.settings.get("backends", {})
-        
+
         # If specific backend requested
         if backend_pref != "auto" and backend_pref in backends:
             if self._check_backend(backend_pref, backends[backend_pref]):
                 self.backend = backend_pref
                 return
-        
+
         # Auto-detect: try each enabled backend
         for name, config in backends.items():
             if config.get("enabled", False):
                 if self._check_backend(name, config):
                     self.backend = name
                     return
-        
+
         logger.warning("No image generation backend available")
-    
+
     def _check_backend(self, name: str, config: Dict) -> bool:
         """Check if a backend is available."""
         if not HAS_REQUESTS:
             return False
-        
+
         try:
             if name == "sdwebui":
                 url = config.get("url", "http://127.0.0.1:7860")
@@ -121,7 +123,7 @@ class ImageGenMod(ModClient):
                     self._backend_info["url"] = url
                     logger.info(f"SD WebUI available at {url}")
                     return True
-            
+
             elif name == "comfyui":
                 url = config.get("url", "http://127.0.0.1:8188")
                 r = requests.get(f"{url}/system_stats", timeout=2)
@@ -129,23 +131,24 @@ class ImageGenMod(ModClient):
                     self._backend_info["url"] = url
                     logger.info(f"ComfyUI available at {url}")
                     return True
-            
+
             elif name == "diffusers":
                 # Check if diffusers is installed
                 try:
                     from diffusers import StableDiffusionPipeline  # noqa: F401
+
                     self._backend_info["model"] = config.get("model", "runwayml/stable-diffusion-v1-5")
                     self._backend_info["device"] = config.get("device", "auto")
                     self._backend_info["scheduler"] = config.get("scheduler", "default")
                     return True
                 except ImportError:
                     return False
-        
+
         except Exception as e:
             logger.debug(f"Backend {name} not available: {e}")
-        
+
         return False
-    
+
     def cmd_generate(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """Generate an image from a text prompt.
 
@@ -157,7 +160,7 @@ class ImageGenMod(ModClient):
         prompt = args.get("prompt", "")
         if not prompt:
             raise ValueError("Prompt is required")
-        
+
         negative_prompt = args.get("negative_prompt", "")
         width = args.get("width", 512)
         height = args.get("height", 512)
@@ -166,10 +169,12 @@ class ImageGenMod(ModClient):
         seed = args.get("seed", -1)
         mode = args.get("mode", "txt2img")
         scheduler = args.get("scheduler", "default")
-        
+
         if not self.backend:
-            raise RuntimeError("No image generation backend available. Please start Stable Diffusion WebUI or install diffusers.")
-        
+            raise RuntimeError(
+                "No image generation backend available. Please start Stable Diffusion WebUI or install diffusers."
+            )
+
         # Generate based on backend
         if self.backend == "sdwebui":
             return self._generate_sdwebui(prompt, negative_prompt, width, height, steps, cfg_scale, seed)
@@ -177,23 +182,30 @@ class ImageGenMod(ModClient):
             return self._generate_comfyui(prompt, negative_prompt, width, height, steps, cfg_scale, seed)
         elif self.backend == "diffusers":
             return self._generate_diffusers(
-                prompt, negative_prompt, width, height, steps,
-                cfg_scale, seed, mode=mode, scheduler=scheduler,
+                prompt,
+                negative_prompt,
+                width,
+                height,
+                steps,
+                cfg_scale,
+                seed,
+                mode=mode,
+                scheduler=scheduler,
                 init_image=args.get("init_image"),
                 mask_image=args.get("mask_image"),
                 strength=args.get("strength", 0.75),
                 controlnet_image=args.get("controlnet_image"),
                 controlnet_model=args.get("controlnet_model"),
             )
-        
+
         raise RuntimeError(f"Unknown backend: {self.backend}")
-    
-    def _generate_sdwebui(self, prompt: str, negative_prompt: str, 
-                                 width: int, height: int, steps: int, 
-                                 cfg_scale: float, seed: int) -> Dict[str, Any]:
+
+    def _generate_sdwebui(
+        self, prompt: str, negative_prompt: str, width: int, height: int, steps: int, cfg_scale: float, seed: int
+    ) -> Dict[str, Any]:
         """Generate using Stable Diffusion WebUI API."""
         url = self._backend_info.get("url", "http://127.0.0.1:7860")
-        
+
         payload = {
             "prompt": prompt,
             "negative_prompt": negative_prompt,
@@ -201,49 +213,44 @@ class ImageGenMod(ModClient):
             "height": height,
             "steps": steps,
             "cfg_scale": cfg_scale,
-            "seed": seed
+            "seed": seed,
         }
-        
+
         response = requests.post(f"{url}/sdapi/v1/txt2img", json=payload, timeout=120)
-        
+
         if response.status_code != 200:
             raise RuntimeError(f"SD WebUI error: {response.status_code}")
-        
+
         result = response.json()
         images = result.get("images", [])
-        
+
         if not images:
             raise RuntimeError("No images returned")
-        
+
         # Save image
         saved_path = None
         if self.settings.get("save_images", True) and HAS_PIL:
             img_data = base64.b64decode(images[0])
             img = Image.open(BytesIO(img_data))
-            
+
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"img_{timestamp}.png"
             saved_path = str(self.output_dir / filename)
             img.save(saved_path)
             logger.info(f"Saved image: {saved_path}")
-        
+
         # Get actual seed used
         info = json.loads(result.get("info", "{}"))
         actual_seed = info.get("seed", seed)
-        
-        return {
-            "image_base64": images[0],
-            "saved_path": saved_path,
-            "seed": actual_seed,
-            "backend": "sdwebui"
-        }
-    
-    def _generate_comfyui(self, prompt: str, negative_prompt: str,
-                                 width: int, height: int, steps: int,
-                                 cfg_scale: float, seed: int) -> Dict[str, Any]:
+
+        return {"image_base64": images[0], "saved_path": saved_path, "seed": actual_seed, "backend": "sdwebui"}
+
+    def _generate_comfyui(
+        self, prompt: str, negative_prompt: str, width: int, height: int, steps: int, cfg_scale: float, seed: int
+    ) -> Dict[str, Any]:
         """Generate using ComfyUI API."""
         url = self._backend_info.get("url", "http://127.0.0.1:8188")
-        
+
         # Basic txt2img workflow
         workflow = {
             "3": {
@@ -258,26 +265,26 @@ class ImageGenMod(ModClient):
                     "sampler_name": "euler",
                     "scheduler": "normal",
                     "seed": seed if seed > 0 else 42,
-                    "steps": steps
-                }
+                    "steps": steps,
+                },
             },
             "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "v1-5-pruned-emaonly.safetensors"}},
             "5": {"class_type": "EmptyLatentImage", "inputs": {"batch_size": 1, "height": height, "width": width}},
             "6": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["4", 1], "text": prompt}},
             "7": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["4", 1], "text": negative_prompt}},
             "8": {"class_type": "VAEDecode", "inputs": {"samples": ["3", 0], "vae": ["4", 2]}},
-            "9": {"class_type": "SaveImage", "inputs": {"filename_prefix": "enigma", "images": ["8", 0]}}
+            "9": {"class_type": "SaveImage", "inputs": {"filename_prefix": "enigma", "images": ["8", 0]}},
         }
-        
+
         # Queue prompt
         response = requests.post(f"{url}/prompt", json={"prompt": workflow}, timeout=120)
-        
+
         if response.status_code != 200:
             raise RuntimeError(f"ComfyUI error: {response.status_code}")
-        
+
         result = response.json()
         prompt_id = result.get("prompt_id")
-        
+
         # Poll for completion
         for _ in range(60):
             time.sleep(2)
@@ -292,22 +299,29 @@ class ImageGenMod(ModClient):
                         return {
                             "saved_path": img_info.get("filename"),
                             "backend": "comfyui",
-                            "subfolder": img_info.get("subfolder", "")
+                            "subfolder": img_info.get("subfolder", ""),
                         }
-        
+
         raise RuntimeError("ComfyUI generation timeout")
-    
-    def _generate_diffusers(self, prompt: str, negative_prompt: str,
-                                   width: int, height: int, steps: int,
-                                   cfg_scale: float, seed: int, *,
-                                   mode: str = "txt2img",
-                                   scheduler: str = "default",
-                                   init_image: str | None = None,
-                                   mask_image: str | None = None,
-                                   strength: float = 0.75,
-                                   controlnet_image: str | None = None,
-                                   controlnet_model: str | None = None,
-                                   ) -> Dict[str, Any]:
+
+    def _generate_diffusers(
+        self,
+        prompt: str,
+        negative_prompt: str,
+        width: int,
+        height: int,
+        steps: int,
+        cfg_scale: float,
+        seed: int,
+        *,
+        mode: str = "txt2img",
+        scheduler: str = "default",
+        init_image: str | None = None,
+        mask_image: str | None = None,
+        strength: float = 0.75,
+        controlnet_image: str | None = None,
+        controlnet_model: str | None = None,
+    ) -> Dict[str, Any]:
         """Generate using local diffusers library.
 
         Supports txt2img, img2img, inpainting, and ControlNet pipelines.
@@ -326,8 +340,7 @@ class ImageGenMod(ModClient):
         dtype = torch.float16 if device == "cuda" else torch.float32
 
         # Select and load the right pipeline for the requested mode
-        pipe = self._get_or_load_pipeline(mode, model, device, dtype,
-                                          controlnet_model=controlnet_model)
+        pipe = self._get_or_load_pipeline(mode, model, device, dtype, controlnet_model=controlnet_model)
 
         # Apply scheduler if requested
         if scheduler != "default":
@@ -421,8 +434,7 @@ class ImageGenMod(ModClient):
     # Pipeline management
     # -----------------------------------------------------------------
 
-    def _get_or_load_pipeline(self, mode: str, model: str, device: str,
-                              dtype, *, controlnet_model: str | None = None):
+    def _get_or_load_pipeline(self, mode: str, model: str, device: str, dtype, *, controlnet_model: str | None = None):
         """Load or retrieve a cached diffusers pipeline.
 
         Pipelines keyed by (mode, model) to avoid redundant loading.
@@ -439,8 +451,7 @@ class ImageGenMod(ModClient):
         elif mode == "inpainting":
             pipe = self._load_inpainting_pipeline(model, device, dtype, is_sdxl)
         elif mode == "controlnet":
-            pipe = self._load_controlnet_pipeline(model, device, dtype,
-                                                  controlnet_model, is_sdxl)
+            pipe = self._load_controlnet_pipeline(model, device, dtype, controlnet_model, is_sdxl)
         else:
             pipe = self._load_txt2img_pipeline(model, device, dtype, is_sdxl)
 
@@ -451,12 +462,12 @@ class ImageGenMod(ModClient):
         """Load txt2img pipeline (SD 1.5 or SDXL)."""
         if is_sdxl:
             from diffusers import StableDiffusionXLPipeline
-            pipe = StableDiffusionXLPipeline.from_pretrained(
-                model, torch_dtype=dtype)
+
+            pipe = StableDiffusionXLPipeline.from_pretrained(model, torch_dtype=dtype)
         else:
             from diffusers import StableDiffusionPipeline
-            pipe = StableDiffusionPipeline.from_pretrained(
-                model, torch_dtype=dtype)
+
+            pipe = StableDiffusionPipeline.from_pretrained(model, torch_dtype=dtype)
         pipe = pipe.to(device)
         logger.info(f"Loaded txt2img pipeline: {model} ({device})")
         return pipe
@@ -465,12 +476,12 @@ class ImageGenMod(ModClient):
         """Load img2img pipeline."""
         if is_sdxl:
             from diffusers import StableDiffusionXLImg2ImgPipeline
-            pipe = StableDiffusionXLImg2ImgPipeline.from_pretrained(
-                model, torch_dtype=dtype)
+
+            pipe = StableDiffusionXLImg2ImgPipeline.from_pretrained(model, torch_dtype=dtype)
         else:
             from diffusers import StableDiffusionImg2ImgPipeline
-            pipe = StableDiffusionImg2ImgPipeline.from_pretrained(
-                model, torch_dtype=dtype)
+
+            pipe = StableDiffusionImg2ImgPipeline.from_pretrained(model, torch_dtype=dtype)
         pipe = pipe.to(device)
         logger.info(f"Loaded img2img pipeline: {model} ({device})")
         return pipe
@@ -479,18 +490,17 @@ class ImageGenMod(ModClient):
         """Load inpainting pipeline."""
         if is_sdxl:
             from diffusers import StableDiffusionXLInpaintPipeline
-            pipe = StableDiffusionXLInpaintPipeline.from_pretrained(
-                model, torch_dtype=dtype)
+
+            pipe = StableDiffusionXLInpaintPipeline.from_pretrained(model, torch_dtype=dtype)
         else:
             from diffusers import StableDiffusionInpaintPipeline
-            pipe = StableDiffusionInpaintPipeline.from_pretrained(
-                model, torch_dtype=dtype)
+
+            pipe = StableDiffusionInpaintPipeline.from_pretrained(model, torch_dtype=dtype)
         pipe = pipe.to(device)
         logger.info(f"Loaded inpainting pipeline: {model} ({device})")
         return pipe
 
-    def _load_controlnet_pipeline(self, model: str, device: str, dtype,
-                                   controlnet_model: str | None, is_sdxl: bool):
+    def _load_controlnet_pipeline(self, model: str, device: str, dtype, controlnet_model: str | None, is_sdxl: bool):
         """Load ControlNet pipeline."""
         from diffusers import ControlNetModel
 
@@ -499,12 +509,12 @@ class ImageGenMod(ModClient):
 
         if is_sdxl:
             from diffusers import StableDiffusionXLControlNetPipeline
-            pipe = StableDiffusionXLControlNetPipeline.from_pretrained(
-                model, controlnet=controlnet, torch_dtype=dtype)
+
+            pipe = StableDiffusionXLControlNetPipeline.from_pretrained(model, controlnet=controlnet, torch_dtype=dtype)
         else:
             from diffusers import StableDiffusionControlNetPipeline
-            pipe = StableDiffusionControlNetPipeline.from_pretrained(
-                model, controlnet=controlnet, torch_dtype=dtype)
+
+            pipe = StableDiffusionControlNetPipeline.from_pretrained(model, controlnet=controlnet, torch_dtype=dtype)
         pipe = pipe.to(device)
         logger.info(f"Loaded controlnet pipeline: {model} + {cn_model_id} ({device})")
         return pipe
@@ -531,21 +541,27 @@ class ImageGenMod(ModClient):
 
         if name == "dpm":
             from diffusers import DPMSolverMultistepScheduler
+
             pipe.scheduler = DPMSolverMultistepScheduler.from_config(sched_config)
         elif name == "euler":
             from diffusers import EulerDiscreteScheduler
+
             pipe.scheduler = EulerDiscreteScheduler.from_config(sched_config)
         elif name == "euler_a":
             from diffusers import EulerAncestralDiscreteScheduler
+
             pipe.scheduler = EulerAncestralDiscreteScheduler.from_config(sched_config)
         elif name == "pndm":
             from diffusers import PNDMScheduler
+
             pipe.scheduler = PNDMScheduler.from_config(sched_config)
         elif name == "ddim":
             from diffusers import DDIMScheduler
+
             pipe.scheduler = DDIMScheduler.from_config(sched_config)
         elif name == "lms":
             from diffusers import LMSDiscreteScheduler
+
             pipe.scheduler = LMSDiscreteScheduler.from_config(sched_config)
         else:
             logger.warning(f"Unknown scheduler '{scheduler_name}', keeping default")
@@ -616,7 +632,7 @@ class ImageGenMod(ModClient):
             "schedulers": ["default", "dpm", "euler", "euler_a", "pndm", "ddim", "lms"],
             "current": self._backend_info.get("scheduler", "default"),
         }
-    
+
     def cmd_status(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """Return mod status."""
         return {

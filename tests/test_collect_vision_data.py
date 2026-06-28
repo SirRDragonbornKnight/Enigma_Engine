@@ -9,6 +9,7 @@ learned principle:
 Fake images-dir is a tmp_path with empty .jpg files — the fetcher must only
 verify the file exists (it does not read pixel bytes).
 """
+
 import importlib
 import json
 import sys
@@ -23,6 +24,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 
 # ── Fake datasets injection ─────────────────────────────────────────────────
+
 
 def _install_fake_datasets(monkeypatch, rows_by_path):
     """Inject a fake `datasets` module whose `load_dataset(path, ...)`
@@ -46,10 +48,7 @@ def _install_fake_datasets(monkeypatch, rows_by_path):
 
     def _load_dataset(path, *args, **kwargs):
         if path not in rows_by_path:
-            raise ValueError(
-                f"Repo '{path}' not found. Available: "
-                "['liuhaotian/LLaVA-Pretrain']"
-            )
+            raise ValueError(f"Repo '{path}' not found. Available: ['liuhaotian/LLaVA-Pretrain']")
         return _FakeDataset(rows_by_path[path])
 
     fake.load_dataset = _load_dataset
@@ -120,14 +119,16 @@ class TestCollectLLaVAPretrain:
     ]
 
     def test_writes_jsonl_with_absolute_image_paths(
-        self, monkeypatch, cv_module, tmp_path,
+        self,
+        monkeypatch,
+        cv_module,
+        tmp_path,
     ):
         """All present images → JSONL with abs-path image + gpt-turn text."""
         images_dir = tmp_path / "llava_images"
         _make_image_files(
             images_dir,
-            ["00000/000000001.jpg", "00000/000000002.jpg",
-             "00000/000000003.jpg"],
+            ["00000/000000001.jpg", "00000/000000002.jpg", "00000/000000003.jpg"],
         )
         _install_fake_datasets(
             monkeypatch,
@@ -139,7 +140,8 @@ class TestCollectLLaVAPretrain:
         cv = importlib.import_module("collect_vision_data")
 
         pairs = cv.collect_llava_pretrain(
-            max_samples=10, images_dir=images_dir,
+            max_samples=10,
+            images_dir=images_dir,
         )
 
         assert len(pairs) == 3
@@ -155,7 +157,11 @@ class TestCollectLLaVAPretrain:
         assert "A close-up of a yellow flower." in captions
 
     def test_skips_missing_image_with_warning(
-        self, monkeypatch, cv_module, tmp_path, caplog,
+        self,
+        monkeypatch,
+        cv_module,
+        tmp_path,
+        caplog,
     ):
         """Missing-on-disk images are skipped; one warning per skip."""
         images_dir = tmp_path / "llava_images"
@@ -173,23 +179,27 @@ class TestCollectLLaVAPretrain:
         cv = importlib.import_module("collect_vision_data")
 
         import logging
+
         with caplog.at_level(logging.WARNING, logger=cv.logger.name):
             pairs = cv.collect_llava_pretrain(
-                max_samples=10, images_dir=images_dir,
+                max_samples=10,
+                images_dir=images_dir,
             )
 
         assert len(pairs) == 2
         assert any("000000002.jpg" in r.message for r in caplog.records)
 
     def test_caps_at_max_samples(
-        self, monkeypatch, cv_module, tmp_path,
+        self,
+        monkeypatch,
+        cv_module,
+        tmp_path,
     ):
         """max_samples bounds the number of rows iterated."""
         images_dir = tmp_path / "llava_images"
         _make_image_files(
             images_dir,
-            ["00000/000000001.jpg", "00000/000000002.jpg",
-             "00000/000000003.jpg"],
+            ["00000/000000001.jpg", "00000/000000002.jpg", "00000/000000003.jpg"],
         )
         _install_fake_datasets(
             monkeypatch,
@@ -200,13 +210,17 @@ class TestCollectLLaVAPretrain:
         cv = importlib.import_module("collect_vision_data")
 
         pairs = cv.collect_llava_pretrain(
-            max_samples=2, images_dir=images_dir,
+            max_samples=2,
+            images_dir=images_dir,
         )
 
         assert len(pairs) == 2
 
     def test_dedups_identical_image_caption_pairs(
-        self, monkeypatch, cv_module, tmp_path,
+        self,
+        monkeypatch,
+        cv_module,
+        tmp_path,
     ):
         """Two rows with same image+caption collapse to one."""
         images_dir = tmp_path / "llava_images"
@@ -221,13 +235,17 @@ class TestCollectLLaVAPretrain:
         cv = importlib.import_module("collect_vision_data")
 
         pairs = cv.collect_llava_pretrain(
-            max_samples=10, images_dir=images_dir,
+            max_samples=10,
+            images_dir=images_dir,
         )
 
         assert len(pairs) == 1
 
     def test_skips_rows_missing_gpt_turn(
-        self, monkeypatch, cv_module, tmp_path,
+        self,
+        monkeypatch,
+        cv_module,
+        tmp_path,
     ):
         """Rows without a gpt turn are silently skipped (malformed data)."""
         images_dir = tmp_path / "llava_images"
@@ -249,13 +267,18 @@ class TestCollectLLaVAPretrain:
         cv = importlib.import_module("collect_vision_data")
 
         pairs = cv.collect_llava_pretrain(
-            max_samples=10, images_dir=images_dir,
+            max_samples=10,
+            images_dir=images_dir,
         )
 
         assert pairs == []
 
     def test_unknown_repo_returns_empty_and_logs(
-        self, monkeypatch, cv_module, tmp_path, caplog,
+        self,
+        monkeypatch,
+        cv_module,
+        tmp_path,
+        caplog,
     ):
         """Auth/availability failures → return [] (per Pass 155 lesson)."""
         images_dir = tmp_path / "llava_images"
@@ -267,16 +290,21 @@ class TestCollectLLaVAPretrain:
         cv = importlib.import_module("collect_vision_data")
 
         import logging
+
         with caplog.at_level(logging.ERROR, logger=cv.logger.name):
             pairs = cv.collect_llava_pretrain(
-                max_samples=10, images_dir=images_dir,
+                max_samples=10,
+                images_dir=images_dir,
             )
 
         assert pairs == []
         assert any("LLaVA-Pretrain" in r.message for r in caplog.records)
 
     def test_missing_images_dir_raises(
-        self, monkeypatch, cv_module, tmp_path,
+        self,
+        monkeypatch,
+        cv_module,
+        tmp_path,
     ):
         """A non-existent images-dir is a hard error — fail fast, don't
         silently produce a JSONL referencing files that aren't there.
@@ -291,7 +319,8 @@ class TestCollectLLaVAPretrain:
 
         with pytest.raises(FileNotFoundError):
             cv.collect_llava_pretrain(
-                max_samples=10, images_dir=tmp_path / "does_not_exist",
+                max_samples=10,
+                images_dir=tmp_path / "does_not_exist",
             )
 
 

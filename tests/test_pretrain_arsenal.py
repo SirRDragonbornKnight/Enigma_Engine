@@ -47,14 +47,14 @@ def test_wsd_shape_warmup_plateau_decay_to_zero():
         return pe.get_lr(s, warmup, total, peak, schedule="wsd", decay_frac=0.1)
 
     assert lr(0) == pytest.approx(peak / 10)  # warmup ramps
-    assert lr(9) == pytest.approx(peak)       # warmup ends at peak
-    assert lr(500) == peak                    # stable plateau
-    assert lr(899) == peak                    # last stable step
+    assert lr(9) == pytest.approx(peak)  # warmup ends at peak
+    assert lr(500) == peak  # stable plateau
+    assert lr(899) == peak  # last stable step
     decay = [lr(s) for s in range(900, 1000)]
-    assert decay[0] == peak                   # decay starts from peak
+    assert decay[0] == peak  # decay starts from peak
     assert all(a > b for a, b in zip(decay, decay[1:]))  # strictly decreasing
     assert lr(999) > 0.0
-    assert lr(1000) == 0.0                    # decay-to-ZERO, not to a floor
+    assert lr(1000) == 0.0  # decay-to-ZERO, not to a floor
 
 
 def test_newton_schulz_orthogonalizes_both_orientations():

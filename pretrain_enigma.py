@@ -25,6 +25,7 @@ into checkpoints): ``--optimizer muon`` (Moonlight Muon for the 2-D body, aux Ad
 and ``--schedule wsd`` (warmup-stable-decay-to-zero — continuation/multi-epoch
 friendly). Never switch either on an existing lineage.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -48,8 +49,15 @@ TOKENS_META = ROOT / "data" / "pretrain" / "tokens.json"
 HEADER_BYTES = 256  # ETOK reserved header (see pretokenize_data.py)
 
 
-def get_lr(step: int, warmup: int, total: int, peak: float, min_ratio: float = 0.1,
-           schedule: str = "cosine", decay_frac: float = 0.1) -> float:
+def get_lr(
+    step: int,
+    warmup: int,
+    total: int,
+    peak: float,
+    min_ratio: float = 0.1,
+    schedule: str = "cosine",
+    decay_frac: float = 0.1,
+) -> float:
     """Linear warmup, then either cosine decay to ``min_ratio * peak`` (default —
     the live run's recorded schedule; its math is byte-identical to the original)
     or ``wsd``: hold at peak, then LINEAR decay to ZERO over the last
@@ -97,10 +105,8 @@ class Muon(torch.optim.Optimizer):
     Muon and the aux AdamW. Embeddings/heads/1-D gains do NOT belong here —
     route them to AdamW (see build_optimizer)."""
 
-    def __init__(self, params, lr: float = 6e-4, momentum: float = 0.95,
-                 weight_decay: float = 0.1, ns_steps: int = 5):
-        super().__init__(params, dict(lr=lr, momentum=momentum,
-                                      weight_decay=weight_decay, ns_steps=ns_steps))
+    def __init__(self, params, lr: float = 6e-4, momentum: float = 0.95, weight_decay: float = 0.1, ns_steps: int = 5):
+        super().__init__(params, dict(lr=lr, momentum=momentum, weight_decay=weight_decay, ns_steps=ns_steps))
 
     @torch.no_grad()
     def step(self, closure=None):
@@ -150,8 +156,7 @@ class CompositeOptimizer:
 
     def load_state_dict(self, sd):
         if "composite" not in sd:
-            raise ValueError("optimizer state is not composite — this checkpoint "
-                             "was saved by a different --optimizer")
+            raise ValueError("optimizer state is not composite — this checkpoint was saved by a different --optimizer")
         for o, s in zip(self.opts, sd["composite"]):
             o.load_state_dict(s)
 
@@ -173,20 +178,27 @@ def build_optimizer(model: torch.nn.Module, kind: str, lr: float, weight_decay: 
         else:
             decay.append(p)
     if kind == "muon":
-        optim = CompositeOptimizer([
-            Muon(body, lr=lr, weight_decay=weight_decay),
-            torch.optim.AdamW(
-                [{"params": decay, "weight_decay": weight_decay},
-                 {"params": no_decay, "weight_decay": 0.0}],
-                lr=lr, betas=(0.9, 0.95)),
-        ])
-        print(f"optim: Muon on {len(body)} body matrices (NS5, rms-matched) + AdamW on "
-              f"{len(decay)} embedding + {len(no_decay)} 1-D tensors", flush=True)
+        optim = CompositeOptimizer(
+            [
+                Muon(body, lr=lr, weight_decay=weight_decay),
+                torch.optim.AdamW(
+                    [{"params": decay, "weight_decay": weight_decay}, {"params": no_decay, "weight_decay": 0.0}],
+                    lr=lr,
+                    betas=(0.9, 0.95),
+                ),
+            ]
+        )
+        print(
+            f"optim: Muon on {len(body)} body matrices (NS5, rms-matched) + AdamW on "
+            f"{len(decay)} embedding + {len(no_decay)} 1-D tensors",
+            flush=True,
+        )
         return optim
     optim = torch.optim.AdamW(
-        [{"params": decay, "weight_decay": weight_decay},
-         {"params": no_decay, "weight_decay": 0.0}],
-        lr=lr, betas=(0.9, 0.95))
+        [{"params": decay, "weight_decay": weight_decay}, {"params": no_decay, "weight_decay": 0.0}],
+        lr=lr,
+        betas=(0.9, 0.95),
+    )
     print(f"optim: weight-decay on {len(decay)} tensors, none on {len(no_decay)}", flush=True)
     return optim
 
@@ -201,39 +213,71 @@ def main() -> None:
     ap.add_argument("--lr", type=float, default=6e-4)
     ap.add_argument("--warmup", type=int, default=200)
     ap.add_argument("--weight-decay", type=float, default=0.1)
-    ap.add_argument("--dropout", type=float, default=0.0,
-                    help="dropout (0.0 for single-epoch pretraining; presets default to 0.1)")
+    ap.add_argument(
+        "--dropout", type=float, default=0.0, help="dropout (0.0 for single-epoch pretraining; presets default to 0.1)"
+    )
     ap.add_argument("--grad-clip", type=float, default=1.0)
-    ap.add_argument("--optimizer", choices=["adamw", "muon"], default="adamw",
-                    help="adamw = the live run's exact path. muon (Moonlight variant) "
-                         "is for FUTURE runs — never switch mid-lineage")
-    ap.add_argument("--schedule", choices=["cosine", "wsd"], default="cosine",
-                    help="cosine = the live run's schedule. wsd = warmup-stable-decay "
-                         "(linear decay-to-zero over the last --wsd-decay-frac) — "
-                         "continuation-friendly, for FUTURE runs")
-    ap.add_argument("--wsd-decay-frac", type=float, default=0.10,
-                    help="fraction of total steps spent in the WSD decay phase")
+    ap.add_argument(
+        "--optimizer",
+        choices=["adamw", "muon"],
+        default="adamw",
+        help="adamw = the live run's exact path. muon (Moonlight variant) "
+        "is for FUTURE runs — never switch mid-lineage",
+    )
+    ap.add_argument(
+        "--schedule",
+        choices=["cosine", "wsd"],
+        default="cosine",
+        help="cosine = the live run's schedule. wsd = warmup-stable-decay "
+        "(linear decay-to-zero over the last --wsd-decay-frac) — "
+        "continuation-friendly, for FUTURE runs",
+    )
+    ap.add_argument(
+        "--wsd-decay-frac", type=float, default=0.10, help="fraction of total steps spent in the WSD decay phase"
+    )
     ap.add_argument("--save-every", type=int, default=250, help="steps between checkpoints")
     ap.add_argument("--eval-every", type=int, default=250, help="steps between val-loss checks")
     ap.add_argument("--eval-iters", type=int, default=40)
     ap.add_argument("--val-tokens", type=int, default=10_000_000, help="tail tokens held out for val")
     ap.add_argument("--out", default=None)
     ap.add_argument("--resume", default=None)
-    ap.add_argument("--override-schedule", action="store_true",
-                    help="on resume, let CLI schedule args override the checkpoint's recorded schedule")
-    ap.add_argument("--archive-every", type=int, default=0,
-                    help="also keep a frozen step_NNNNNN.pth checkpoint every N steps (0 = off)")
-    ap.add_argument("--val-general-end", type=int, default=56_575_624_692,
-                    help="end offset of the pre-anime-append corpus; a second [val-gen] eval window "
-                         "is carved just below it (0 = disable)")
+    ap.add_argument(
+        "--override-schedule",
+        action="store_true",
+        help="on resume, let CLI schedule args override the checkpoint's recorded schedule",
+    )
+    ap.add_argument(
+        "--archive-every",
+        type=int,
+        default=0,
+        help="also keep a frozen step_NNNNNN.pth checkpoint every N steps (0 = off)",
+    )
+    ap.add_argument(
+        "--val-general-end",
+        type=int,
+        default=56_575_624_692,
+        help="end offset of the pre-anime-append corpus; a second [val-gen] eval window "
+        "is carved just below it (0 = disable)",
+    )
     ap.add_argument("--no-grad-ckpt", action="store_true", help="disable gradient checkpointing")
-    ap.add_argument("--no-diff-attn", action="store_true",
-                    help="disable differential attention -> use fused SDPA kernel (2-4x faster)")
-    ap.add_argument("--compile", action=argparse.BooleanOptionalAction, default=True,
-                    help="torch.compile the model (~1.5-2x; --no-compile for eager / if Triton is absent)")
+    ap.add_argument(
+        "--no-diff-attn",
+        action="store_true",
+        help="disable differential attention -> use fused SDPA kernel (2-4x faster)",
+    )
+    ap.add_argument(
+        "--compile",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="torch.compile the model (~1.5-2x; --no-compile for eager / if Triton is absent)",
+    )
     ap.add_argument("--sanity", action="store_true", help="one fwd/bwd step then exit")
-    ap.add_argument("--throttle-ms", type=float, default=0.0,
-                    help="sleep N ms after each micro-batch to yield the GPU (e.g. while gaming); 0 = full speed")
+    ap.add_argument(
+        "--throttle-ms",
+        type=float,
+        default=0.0,
+        help="sleep N ms after each micro-batch to yield the GPU (e.g. while gaming); 0 = full speed",
+    )
     args = ap.parse_args()
 
     if not TOKENS_BIN.exists():
@@ -242,8 +286,10 @@ def main() -> None:
     if meta.get("dtype") != "uint32":
         raise SystemExit(f"expected uint32 tokens, got {meta.get('dtype')}")
     vocab_meta = meta["vocab_size"]
-    print(f"corpus: {meta['total_tokens']:,} tokens, vocab {vocab_meta}, "
-          f"{meta['file_size_gb']} GB ({meta['tokenizer']})", flush=True)
+    print(
+        f"corpus: {meta['total_tokens']:,} tokens, vocab {vocab_meta}, {meta['file_size_gb']} GB ({meta['tokenizer']})",
+        flush=True,
+    )
 
     # Vocab is authoritative from the corpus metadata: the model trains on the
     # raw token IDs, so it doesn't need the tokenizer at all. We still try to
@@ -253,10 +299,14 @@ def main() -> None:
     vocab_size = vocab_meta
     try:
         from enigma_engine.core.tokenizer import get_tokenizer
+
         tok = get_tokenizer("bpe")
         if getattr(tok, "vocab_size", None) != vocab_size:
-            print(f"  WARN: tokenizer vocab {getattr(tok, 'vocab_size', '?')} != "
-                  f"corpus vocab {vocab_size}; using corpus vocab", flush=True)
+            print(
+                f"  WARN: tokenizer vocab {getattr(tok, 'vocab_size', '?')} != "
+                f"corpus vocab {vocab_size}; using corpus vocab",
+                flush=True,
+            )
     except Exception as exc:
         tok = None
         print(f"  (tokenizer unavailable — training on raw IDs: {exc})", flush=True)
@@ -277,26 +327,30 @@ def main() -> None:
             print(f"resume: {rp} missing -> falling back to {rp.parent / 'prev.pth'}", flush=True)
             rp = rp.parent / "prev.pth"
         if not rp.exists():
-            raise SystemExit(f"--resume {args.resume} not found (no prev.pth fallback either) — "
-                             f"refusing to silently start a fresh run")
+            raise SystemExit(
+                f"--resume {args.resume} not found (no prev.pth fallback either) — "
+                f"refusing to silently start a fresh run"
+            )
         ck = torch.load(rp, map_location=device)
         saved_sched = ck.get("schedule")
         if saved_sched:
-            diffs = {k: (v, getattr(args, k)) for k, v in saved_sched.items()
-                     if getattr(args, k, None) != v}
+            diffs = {k: (v, getattr(args, k)) for k, v in saved_sched.items() if getattr(args, k, None) != v}
             if args.override_schedule:
                 for k, (ck_v, cli_v) in diffs.items():
-                    print(f"resume: schedule[{k}] CLI {cli_v} OVERRIDES checkpoint {ck_v} "
-                          f"(--override-schedule)", flush=True)
+                    print(
+                        f"resume: schedule[{k}] CLI {cli_v} OVERRIDES checkpoint {ck_v} (--override-schedule)",
+                        flush=True,
+                    )
             else:
                 for k, v in saved_sched.items():
                     setattr(args, k, v)
                 for k, (ck_v, cli_v) in diffs.items():
-                    print(f"resume: schedule[{k}] = {ck_v} from checkpoint (CLI {cli_v} ignored)",
-                          flush=True)
+                    print(f"resume: schedule[{k}] = {ck_v} from checkpoint (CLI {cli_v} ignored)", flush=True)
         else:
-            print("resume: checkpoint predates schedule recording — trusting CLI args "
-                  "(this run will record them)", flush=True)
+            print(
+                "resume: checkpoint predates schedule recording — trusting CLI args (this run will record them)",
+                flush=True,
+            )
 
     # memmap the uint32 token stream after the 256-byte header.
     data = np.memmap(TOKENS_BIN, dtype=np.uint32, mode="r", offset=HEADER_BYTES)
@@ -315,8 +369,7 @@ def main() -> None:
     vg_lo = max(0, vg_end - val_n)
     use_val_gen = args.val_general_end > 0 and (vg_end - vg_lo) > args.block + 1
     if use_val_gen:
-        print(f"val-gen window: [{vg_lo:,}, {vg_end:,}) — pre-append tail, fenced "
-              f"from train sampling", flush=True)
+        print(f"val-gen window: [{vg_lo:,}, {vg_end:,}) — pre-append tail, fenced from train sampling", flush=True)
 
     block = args.block
 
@@ -337,8 +390,8 @@ def main() -> None:
                     # dtype is load-bearing: legacy randint defaults to C-long
                     # (int32 on Windows) and hi is ~56.7e9.
                     ix[j] = np.random.randint(lo, hi - block - 1, dtype=np.int64)
-        x = np.stack([np.asarray(data[i:i + block], dtype=np.int64) for i in ix])
-        y = np.stack([np.asarray(data[i + 1:i + 1 + block], dtype=np.int64) for i in ix])
+        x = np.stack([np.asarray(data[i : i + block], dtype=np.int64) for i in ix])
+        y = np.stack([np.asarray(data[i + 1 : i + 1 + block], dtype=np.int64) for i in ix])
         X = torch.from_numpy(x).to(device, non_blocking=True)
         Y = torch.from_numpy(y).to(device, non_blocking=True)
         return X, Y
@@ -346,6 +399,7 @@ def main() -> None:
     # Build the model from a preset, sized to the corpus vocab.
     from enigma_engine.core.model import Enigma
     from enigma_engine.core.model_presets import ForgeConfig, get_preset
+
     # On resume, rebuild config from the CHECKPOINT (exact architecture) rather than the
     # preset. Otherwise a flag mismatch builds a differently-shaped model and
     # load_state_dict(strict=False) silently leaves the mismatched tensors at random
@@ -368,9 +422,12 @@ def main() -> None:
     model.to(device)
     raw_model = model  # the real nn.Module; checkpoints/optimizer bind here even when compiled
     n_params = sum(p.numel() for p in model.parameters())
-    print(f"Enigma '{args.size}': {n_params/1e6:.1f}M params, dim={config.dim} "
-          f"layers={config.n_layers} heads={config.n_heads} block={block} "
-          f"diff_attn={config.use_differential_attn}", flush=True)
+    print(
+        f"Enigma '{args.size}': {n_params / 1e6:.1f}M params, dim={config.dim} "
+        f"layers={config.n_layers} heads={config.n_heads} block={block} "
+        f"diff_attn={config.use_differential_attn}",
+        flush=True,
+    )
 
     optim = build_optimizer(raw_model, args.optimizer, args.lr, args.weight_decay)
 
@@ -385,10 +442,25 @@ def main() -> None:
     # Everything that defines the run's MATH, recorded into every checkpoint so a
     # resume restores it exactly (see the resume block above). Operational knobs
     # (--save-every/--eval-every/--compile/--throttle-ms/...) stay CLI-controlled.
-    schedule = {k: getattr(args, k) for k in (
-        "tokens", "lr", "warmup", "micro_batch", "grad_accum", "block", "dropout",
-        "val_tokens", "weight_decay", "grad_clip", "val_general_end",
-        "optimizer", "schedule", "wsd_decay_frac")}
+    schedule = {
+        k: getattr(args, k)
+        for k in (
+            "tokens",
+            "lr",
+            "warmup",
+            "micro_batch",
+            "grad_accum",
+            "block",
+            "dropout",
+            "val_tokens",
+            "weight_decay",
+            "grad_clip",
+            "val_general_end",
+            "optimizer",
+            "schedule",
+            "wsd_decay_frac",
+        )
+    }
 
     out = Path(args.out) if args.out else ROOT / "models" / f"enigma_pretrain_{args.size}"
     out.mkdir(parents=True, exist_ok=True)
@@ -401,8 +473,9 @@ def main() -> None:
         # mask are non-persistent buffers recomputed at build time; ignore those.)
         real_missing = [k for k in missing if "freqs_cis" not in k and "causal_mask" not in k]
         if unexpected or real_missing:
-            raise SystemExit(f"resume arch mismatch — refusing to corrupt: "
-                             f"missing={real_missing[:5]} unexpected={unexpected[:5]}")
+            raise SystemExit(
+                f"resume arch mismatch — refusing to corrupt: missing={real_missing[:5]} unexpected={unexpected[:5]}"
+            )
         if "optimizer" in ck:
             try:
                 optim.load_state_dict(ck["optimizer"])
@@ -410,7 +483,8 @@ def main() -> None:
                 raise SystemExit(
                     f"resume: checkpoint optimizer state does not fit --optimizer "
                     f"{args.optimizer} ({exc}) — the run was saved with a different "
-                    f"optimizer; refusing to continue with reset moments") from None
+                    f"optimizer; refusing to continue with reset moments"
+                ) from None
         start_step = int(ck.get("step", 0))
         print(f"resumed from {args.resume} at step {start_step}", flush=True)
 
@@ -439,17 +513,22 @@ def main() -> None:
 
     def save(tag: str, step: int):
         from enigma_engine.core.safe_save import atomic_torch_save
+
         # latest.pth keeps one previous generation as prev.pth (rotated atomically
         # inside atomic_torch_save AFTER the new file is fully written), so one bad
         # save can never cost more than --save-every steps.
         rotate = (out / "prev.pth") if tag == "latest.pth" else None
-        atomic_torch_save({
-            "model_state_dict": raw_model.state_dict(),
-            "config": config.to_dict(),
-            "step": step,
-            "optimizer": optim.state_dict(),
-            "schedule": schedule,
-        }, str(out / tag), rotate_to=rotate)
+        atomic_torch_save(
+            {
+                "model_state_dict": raw_model.state_dict(),
+                "config": config.to_dict(),
+                "step": step,
+                "optimizer": optim.state_dict(),
+                "schedule": schedule,
+            },
+            str(out / tag),
+            rotate_to=rotate,
+        )
         (out / "config.json").write_text(json.dumps(config.to_dict(), indent=2), encoding="utf-8")
 
     @torch.no_grad()
@@ -472,21 +551,25 @@ def main() -> None:
             _, loss = model(X, targets=Y)
         loss.backward()
         base = math.log(vocab_meta)
-        print(f"[sanity] batch={tuple(X.shape)} loss={loss.item():.4f} "
-              f"(random baseline ln(V)={base:.3f}) — pipeline OK", flush=True)
+        print(
+            f"[sanity] batch={tuple(X.shape)} loss={loss.item():.4f} (random baseline ln(V)={base:.3f}) — pipeline OK",
+            flush=True,
+        )
         return
 
-    print(f"training: target {args.tokens/1e9:.2f}B tokens over {total_steps:,} steps | "
-          f"{tokens_per_step:,} tok/step (mb {args.micro_batch} x ga {args.grad_accum} x {block}) | "
-          f"amp={'bf16' if use_bf16 else 'fp16'} ckpt={not args.no_grad_ckpt}", flush=True)
+    print(
+        f"training: target {args.tokens / 1e9:.2f}B tokens over {total_steps:,} steps | "
+        f"{tokens_per_step:,} tok/step (mb {args.micro_batch} x ga {args.grad_accum} x {block}) | "
+        f"amp={'bf16' if use_bf16 else 'fp16'} ckpt={not args.no_grad_ckpt}",
+        flush=True,
+    )
 
     raw_model.train()
     t0 = time.time()
     base_tokens = start_step * tokens_per_step
     seen = base_tokens
     for step in range(start_step, total_steps):
-        lr = get_lr(step, args.warmup, total_steps, args.lr,
-                    schedule=args.schedule, decay_frac=args.wsd_decay_frac)
+        lr = get_lr(step, args.warmup, total_steps, args.lr, schedule=args.schedule, decay_frac=args.wsd_decay_frac)
         for g in optim.param_groups:
             g["lr"] = lr
         optim.zero_grad(set_to_none=True)
@@ -510,32 +593,35 @@ def main() -> None:
         if step % 10 == 0:
             dt = max(1e-9, time.time() - t0)
             tps = (seen - base_tokens) / dt
-            print(f"step {step}/{total_steps} loss {loss_acc:.4f} lr {lr:.2e} "
-                  f"{tps:,.0f} tok/s {seen/1e9:.3f}B", flush=True)
+            print(
+                f"step {step}/{total_steps} loss {loss_acc:.4f} lr {lr:.2e} {tps:,.0f} tok/s {seen / 1e9:.3f}B",
+                flush=True,
+            )
 
         if step > start_step and step % args.eval_every == 0:
             vl = estimate_val("val")
             print(f"  [val] step {step} loss {vl:.4f} ppl {math.exp(min(20, vl)):.1f}", flush=True)
             if use_val_gen:
                 vg = estimate_val("val_gen")
-                print(f"  [val-gen] step {step} loss {vg:.4f} "
-                      f"ppl {math.exp(min(20, vg)):.1f}", flush=True)
+                print(f"  [val-gen] step {step} loss {vg:.4f} ppl {math.exp(min(20, vg)):.1f}", flush=True)
 
         if step > start_step and step % args.save_every == 0:
             if math.isfinite(loss_acc):
                 save("latest.pth", step)
-                print(f"  [ckpt] step {step} -> {out/'latest.pth'}", flush=True)
+                print(f"  [ckpt] step {step} -> {out / 'latest.pth'}", flush=True)
             else:
-                print(f"  [ckpt] step {step} SKIPPED — non-finite loss ({loss_acc}); "
-                      f"keeping last good latest.pth/prev.pth", flush=True)
+                print(
+                    f"  [ckpt] step {step} SKIPPED — non-finite loss ({loss_acc}); "
+                    f"keeping last good latest.pth/prev.pth",
+                    flush=True,
+                )
 
-        if (args.archive_every and step > start_step and step % args.archive_every == 0
-                and math.isfinite(loss_acc)):
+        if args.archive_every and step > start_step and step % args.archive_every == 0 and math.isfinite(loss_acc):
             save(f"step_{step:06d}.pth", step)
             print(f"  [archive] step {step} -> {out / f'step_{step:06d}.pth'}", flush=True)
 
     save("model.pth", total_steps)
-    print(f"done -> {out/'model.pth'}  ({total_steps:,} steps, {seen/1e9:.2f}B tokens)", flush=True)
+    print(f"done -> {out / 'model.pth'}  ({total_steps:,} steps, {seen / 1e9:.2f}B tokens)", flush=True)
 
 
 if __name__ == "__main__":

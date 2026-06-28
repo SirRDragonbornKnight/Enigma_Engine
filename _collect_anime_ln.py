@@ -9,8 +9,10 @@ crawls a bounded first batch, and persists progress at the end.
 GPU-free: network + disk only. Light-novel PROSE is copyrighted and NOT scraped;
 this collects the light-novel *fan wikis* (summaries/lore), same as the anime wikis.
 """
+
 import sys
 from itertools import zip_longest
+
 try:  # Fandom sitenames contain non-cp1252 chars (e.g. "Haikyū") -> force UTF-8 stdout
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
@@ -19,40 +21,67 @@ except Exception:
 sys.path.insert(0, r"C:\Users\SirKn\Enigma Engine")
 import collect_pretraining_data as C
 
-MIN_ARTICLES = 150          # inclusive of smaller LN wikis; quality filtered later
+MIN_ARTICLES = 150  # inclusive of smaller LN wikis; quality filtered later
 NEW_ARTICLE_BUDGET = 50_000  # bound this first batch
 
 ANIME = [
-    ("naruto", "Naruto"), ("onepiece", "One Piece"), ("bleach", "Bleach"),
-    ("attackontitan", "Attack on Titan"), ("myheroacademia", "My Hero Academia"),
-    ("kimetsu-no-yaiba", "Demon Slayer"), ("jujutsu-kaisen", "Jujutsu Kaisen"),
-    ("hunterxhunter", "Hunter x Hunter"), ("fairytail", "Fairy Tail"),
-    ("swordartonline", "Sword Art Online"), ("tokyoghoul", "Tokyo Ghoul"),
-    ("deathnote", "Death Note"), ("fma", "Fullmetal Alchemist"),
-    ("evangelion", "Evangelion"), ("sailormoon", "Sailor Moon"),
-    ("inuyasha", "InuYasha"), ("cowboybebop", "Cowboy Bebop"),
-    ("steins-gate", "Steins;Gate"), ("onepunchman", "One Punch Man"),
-    ("berserk", "Berserk"), ("spy-x-family", "Spy x Family"),
-    ("chainsaw-man", "Chainsaw Man"), ("gintama", "Gintama"),
-    ("haikyuu", "Haikyuu"), ("detectiveconan", "Detective Conan"),
-    ("ghibli", "Studio Ghibli"), ("vinlandsaga", "Vinland Saga"),
-    ("blackclover", "Black Clover"), ("jojo", "JoJo's Bizarre Adventure"),
-    ("codegeass", "Code Geass"), ("puella-magi", "Madoka Magica"),
-    ("hellsing", "Hellsing"), ("fate", "Fate"),
+    ("naruto", "Naruto"),
+    ("onepiece", "One Piece"),
+    ("bleach", "Bleach"),
+    ("attackontitan", "Attack on Titan"),
+    ("myheroacademia", "My Hero Academia"),
+    ("kimetsu-no-yaiba", "Demon Slayer"),
+    ("jujutsu-kaisen", "Jujutsu Kaisen"),
+    ("hunterxhunter", "Hunter x Hunter"),
+    ("fairytail", "Fairy Tail"),
+    ("swordartonline", "Sword Art Online"),
+    ("tokyoghoul", "Tokyo Ghoul"),
+    ("deathnote", "Death Note"),
+    ("fma", "Fullmetal Alchemist"),
+    ("evangelion", "Evangelion"),
+    ("sailormoon", "Sailor Moon"),
+    ("inuyasha", "InuYasha"),
+    ("cowboybebop", "Cowboy Bebop"),
+    ("steins-gate", "Steins;Gate"),
+    ("onepunchman", "One Punch Man"),
+    ("berserk", "Berserk"),
+    ("spy-x-family", "Spy x Family"),
+    ("chainsaw-man", "Chainsaw Man"),
+    ("gintama", "Gintama"),
+    ("haikyuu", "Haikyuu"),
+    ("detectiveconan", "Detective Conan"),
+    ("ghibli", "Studio Ghibli"),
+    ("vinlandsaga", "Vinland Saga"),
+    ("blackclover", "Black Clover"),
+    ("jojo", "JoJo's Bizarre Adventure"),
+    ("codegeass", "Code Geass"),
+    ("puella-magi", "Madoka Magica"),
+    ("hellsing", "Hellsing"),
+    ("fate", "Fate"),
 ]
 LIGHT_NOVELS = [
-    ("overlordmaruyama", "Overlord"), ("mushokutensei", "Mushoku Tensei"),
-    ("rezero", "Re:Zero"), ("konosuba", "KonoSuba"),
-    ("shieldhero", "Rising of the Shield Hero"), ("danmachi", "DanMachi"),
+    ("overlordmaruyama", "Overlord"),
+    ("mushokutensei", "Mushoku Tensei"),
+    ("rezero", "Re:Zero"),
+    ("konosuba", "KonoSuba"),
+    ("shieldhero", "Rising of the Shield Hero"),
+    ("danmachi", "DanMachi"),
     ("classroom-of-the-elite", "Classroom of the Elite"),
-    ("oregairu", "Oregairu"), ("no-game-no-life", "No Game No Life"),
-    ("tensura", "Reincarnated as a Slime"), ("youjo-senki", "Saga of Tanya"),
+    ("oregairu", "Oregairu"),
+    ("no-game-no-life", "No Game No Life"),
+    ("tensura", "Reincarnated as a Slime"),
+    ("youjo-senki", "Saga of Tanya"),
     ("mahouka", "Irregular at Magic High School"),
-    ("spiceandwolf", "Spice and Wolf"), ("log-horizon", "Log Horizon"),
-    ("bofuri", "BOFURI"), ("goblinslayer", "Goblin Slayer"),
-    ("haruhi", "Haruhi Suzumiya"), ("bakemonogatari", "Monogatari"),
-    ("accelworld", "Accel World"), ("durarara", "Durarara"),
-    ("toarumajutsunoindex", "A Certain Magical Index"), ("frieren", "Frieren"),
+    ("spiceandwolf", "Spice and Wolf"),
+    ("log-horizon", "Log Horizon"),
+    ("bofuri", "BOFURI"),
+    ("goblinslayer", "Goblin Slayer"),
+    ("haruhi", "Haruhi Suzumiya"),
+    ("bakemonogatari", "Monogatari"),
+    ("accelworld", "Accel World"),
+    ("durarara", "Durarara"),
+    ("toarumajutsunoindex", "A Certain Magical Index"),
+    ("frieren", "Frieren"),
 ]
 
 # Interleave (LN first in each pair) so a bounded budget still covers BOTH.
@@ -68,8 +97,7 @@ def probe(sub):
     try:
         r = C.SESSION.get(
             f"https://{sub}.fandom.com/api.php",
-            params={"action": "query", "format": "json",
-                    "meta": "siteinfo", "siprop": "statistics|general"},
+            params={"action": "query", "format": "json", "meta": "siteinfo", "siprop": "statistics|general"},
             timeout=8,
         )
         if r.status_code == 200:
@@ -108,8 +136,9 @@ if skipped_done:
 before = len(list(C.FANDOM_DIR.glob("*.txt"))) if C.FANDOM_DIR.exists() else 0
 budget = before + NEW_ARTICLE_BUDGET
 print(f"\nfandom .txt before = {before:,}", flush=True)
-print(f"crawling {len(todo)} new targeted wikis, budget = +{NEW_ARTICLE_BUDGET:,} "
-      f"(stop at {budget:,} total)", flush=True)
+print(
+    f"crawling {len(todo)} new targeted wikis, budget = +{NEW_ARTICLE_BUDGET:,} (stop at {budget:,} total)", flush=True
+)
 
 C.fetch_fandom(todo, budget, progress)
 C.save_progress(progress)

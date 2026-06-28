@@ -118,9 +118,7 @@ def main():
                                 continue
 
                             try:
-                                text = Path(entry.path).read_text(
-                                    encoding="utf-8", errors="replace"
-                                )
+                                text = Path(entry.path).read_text(encoding="utf-8", errors="replace")
                             except OSError:
                                 continue
                             if len(text.strip()) < MIN_PARAGRAPH_LENGTH:
@@ -134,9 +132,7 @@ def main():
                                 if len(para) < MIN_PARAGRAPH_LENGTH:
                                     unique_paras.append(para)
                                     continue
-                                h = hashlib.sha256(
-                                    para.encode("utf-8")
-                                ).digest()[:8]
+                                h = hashlib.sha256(para.encode("utf-8")).digest()[:8]
                                 if h in seen_hashes:
                                     dupes_skipped += 1
                                     continue
@@ -144,10 +140,7 @@ def main():
                                     seen_hashes.add(h)
                                 elif not dedup_warned:
                                     dedup_warned = True
-                                    print(
-                                        f"  WARNING: Dedup table at capacity "
-                                        f"({MAX_DEDUP_ENTRIES:,})"
-                                    )
+                                    print(f"  WARNING: Dedup table at capacity ({MAX_DEDUP_ENTRIES:,})")
                                 unique_paras.append(para)
 
                             cleaned = "\n\n".join(unique_paras).strip()
@@ -175,9 +168,7 @@ def main():
 
                             if dir_files % 50_000 == 0:
                                 elapsed = time.monotonic() - start_time
-                                rate = (
-                                    total_tokens / elapsed if elapsed > 0 else 0
-                                )
+                                rate = total_tokens / elapsed if elapsed > 0 else 0
                                 gb = (total_tokens * 4) / (1024**3)
                                 print(
                                     f"  [{label}] {dir_files:,} files | "
@@ -189,10 +180,7 @@ def main():
 
                 if dir_files > 0:
                     gb = (total_tokens * 4) / (1024**3)
-                    print(
-                        f"  [{label}] {dir_files:,} files -> "
-                        f"{dir_tokens:,} tokens  ({gb:.2f} GB cumulative)"
-                    )
+                    print(f"  [{label}] {dir_files:,} files -> {dir_tokens:,} tokens  ({gb:.2f} GB cumulative)")
 
             # ----------------------------------------------------------
             # Write header now that we know totals
@@ -204,12 +192,12 @@ def main():
 
             header = struct.pack(
                 "<4sIIQII",
-                b"ETOK",       # Magic bytes
-                1,             # Version
-                4,             # Bytes per token (uint32)
+                b"ETOK",  # Magic bytes
+                1,  # Version
+                4,  # Bytes per token (uint32)
                 total_tokens,  # Total token count
-                vocab_size,    # Vocab size
-                eos_id,        # EOS token ID
+                vocab_size,  # Vocab size
+                eos_id,  # EOS token ID
             )
             out.write(header)
 

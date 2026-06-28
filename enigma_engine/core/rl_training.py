@@ -30,6 +30,7 @@ Usage:
     sp = SelfPlayTrainer(student, tokenizer, trainer_engine)
     sp.train(prompts)
 """
+
 from __future__ import annotations
 
 import copy
@@ -64,6 +65,7 @@ def _resolve_amp_dtype(amp_dtype: str = "auto") -> torch.dtype:
     if torch.cuda.is_available() and torch.cuda.is_bf16_supported():
         return torch.bfloat16
     return torch.float16
+
 
 # =============================================================================
 # VALUE HEAD — critic for PPO advantage estimation
@@ -146,8 +148,7 @@ class RolloutBuffer:
         self._masks.append(response_mask.detach())
         self._full_ids.append(full_ids.detach() if full_ids is not None else None)
         self._prompt_lens.append(prompt_len)
-        self._ref_logps.append(
-            ref_logps.detach() if ref_logps is not None else None)
+        self._ref_logps.append(ref_logps.detach() if ref_logps is not None else None)
 
     def __len__(self) -> int:
         return len(self._log_probs)
@@ -176,7 +177,10 @@ class RolloutBuffer:
         all_returns = []
 
         for logp, vals, rews, mask in zip(
-            self._log_probs, self._values, self._rewards, self._masks,
+            self._log_probs,
+            self._values,
+            self._rewards,
+            self._masks,
         ):
             T = vals.shape[0]
             advantages = torch.zeros(T, device=vals.device)
@@ -201,7 +205,10 @@ class RolloutBuffer:
     def get_batched_data(
         self,
     ) -> tuple[
-        torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
     ]:
         """Concatenate all stored data for minibatch iteration.
 
@@ -237,8 +244,7 @@ class ReplayBuffer:
             1 = fully prioritized).
     """
 
-    def __init__(self, capacity: int = 256,
-                 priority_alpha: float = 0.6) -> None:
+    def __init__(self, capacity: int = 256, priority_alpha: float = 0.6) -> None:
         self.capacity = capacity
         self.alpha = priority_alpha
         self._experiences: list[dict[str, torch.Tensor | float]] = []
@@ -271,8 +277,11 @@ class ReplayBuffer:
             self._experiences.sort(key=lambda e: e["priority"])
             self._experiences.pop(0)
 
-    def sample(self, n: int, device: torch.device | str = "cpu",
-               ) -> list[dict[str, torch.Tensor]]:
+    def sample(
+        self,
+        n: int,
+        device: torch.device | str = "cpu",
+    ) -> list[dict[str, torch.Tensor]]:
         """Sample *n* experiences weighted by priority.
 
         Returns list of dicts with tensors moved to *device*.
@@ -281,9 +290,8 @@ class ReplayBuffer:
             return []
 
         n = min(n, len(self._experiences))
-        priorities = torch.tensor(
-            [e["priority"] for e in self._experiences])
-        probs = priorities ** self.alpha
+        priorities = torch.tensor([e["priority"] for e in self._experiences])
+        probs = priorities**self.alpha
         probs = probs / probs.sum()
 
         indices = torch.multinomial(probs, n, replacement=False).tolist()
@@ -311,8 +319,7 @@ class ReplayBuffer:
             "capacity": self.capacity,
             "alpha": self.alpha,
             "experiences": [
-                {k: v.clone() if isinstance(v, torch.Tensor) else v
-                 for k, v in exp.items()}
+                {k: v.clone() if isinstance(v, torch.Tensor) else v for k, v in exp.items()}
                 for exp in self._experiences
             ],
         }
@@ -353,15 +360,12 @@ def _get_response_logps(
 
     log_probs = F.log_softmax(logits, dim=-1)  # (1, L-1, V)
     targets = full_ids[:, 1:]  # (1, L-1)
-    per_token = log_probs.gather(
-        2, targets.unsqueeze(-1)).squeeze(-1)  # (1, L-1)
+    per_token = log_probs.gather(2, targets.unsqueeze(-1)).squeeze(-1)  # (1, L-1)
 
     response_start = max(prompt_len - 1, 0)
     seq_len = per_token.shape[1]
     if response_start >= seq_len:
-        logger.warning(
-            "prompt_len %d >= sequence length %d — returning zeros",
-            prompt_len, seq_len + 1)
+        logger.warning("prompt_len %d >= sequence length %d — returning zeros", prompt_len, seq_len + 1)
         return per_token.new_zeros(1)
     return per_token[0, response_start:]
 
@@ -387,9 +391,7 @@ def _get_response_entropy(
     response_start = max(prompt_len - 1, 0)
     seq_len = entropy.shape[1]
     if response_start >= seq_len:
-        logger.warning(
-            "prompt_len %d >= sequence length %d — returning zeros",
-            prompt_len, seq_len + 1)
+        logger.warning("prompt_len %d >= sequence length %d — returning zeros", prompt_len, seq_len + 1)
         return entropy.new_zeros(1)
     return entropy[0, response_start:]
 
@@ -442,8 +444,7 @@ def _get_logps_hidden_entropy(
     T = h.shape[1]
     mask = None
     if T > 1 and hasattr(model, "_get_causal_mask"):
-        mask = (model._get_causal_mask(T)
-                .to(device=h.device).unsqueeze(0).unsqueeze(0))
+        mask = model._get_causal_mask(T).to(device=h.device).unsqueeze(0).unsqueeze(0)
 
     for layer in getattr(model, "layers", []):
         h = layer(h, freqs, mask, False, 0)
@@ -457,34 +458,32 @@ def _get_logps_hidden_entropy(
     logits = output_layer(h)  # (1, T, V)
 
     # --- derive all three outputs from logits + h ---
-    log_probs = F.log_softmax(logits, dim=-1)   # (1, T, V)
+    log_probs = F.log_softmax(logits, dim=-1)  # (1, T, V)
     probs = torch.exp(log_probs)
     entropy = -(probs * log_probs).sum(dim=-1)  # (1, T)
 
     targets = full_ids[:, 1:]  # (1, T)
-    per_token_logps = log_probs.gather(
-        2, targets.unsqueeze(-1)).squeeze(-1)    # (1, T)
+    per_token_logps = log_probs.gather(2, targets.unsqueeze(-1)).squeeze(-1)  # (1, T)
 
     response_start = max(prompt_len - 1, 0)
     seq_len = per_token_logps.shape[1]
     if response_start >= seq_len:
-        logger.warning(
-            "prompt_len %d >= sequence length %d — returning zeros",
-            prompt_len, seq_len + 1)
+        logger.warning("prompt_len %d >= sequence length %d — returning zeros", prompt_len, seq_len + 1)
         zeros = per_token_logps.new_zeros(1)
         dummy_hidden = h[:, :1, :]
         return zeros, dummy_hidden, zeros
 
     return (
-        per_token_logps[0, response_start:],   # (resp_len,)
-        h[:, response_start:, :],              # (1, resp_len, dim)
-        entropy[0, response_start:],           # (resp_len,)
+        per_token_logps[0, response_start:],  # (resp_len,)
+        h[:, response_start:, :],  # (1, resp_len, dim)
+        entropy[0, response_start:],  # (resp_len,)
     )
 
 
 # =============================================================================
 # REWARD MODEL
 # =============================================================================
+
 
 class RewardModel(nn.Module):
     """Small transformer + scalar head that outputs a reward score.
@@ -547,7 +546,7 @@ class RewardModel(nn.Module):
         """Return a (size, size) upper-triangle causal mask, cached and grown on demand."""
         if self._causal_mask is None or self._causal_mask_size < size:
             new_size = max(size, self._causal_mask_size)
-            mask = torch.full((new_size, new_size), float('-inf'))
+            mask = torch.full((new_size, new_size), float("-inf"))
             self._causal_mask = torch.triu(mask, diagonal=1)
             self._causal_mask_size = new_size
         return self._causal_mask[:size, :size]
@@ -589,9 +588,7 @@ class RewardModel(nn.Module):
             # Last non-zero position per batch
             lengths = attention_mask.sum(dim=-1).long() - 1
             if (lengths < 0).any():
-                logger.warning(
-                    "RewardModel received all-padding batch — "
-                    "reward scores will be unreliable.")
+                logger.warning("RewardModel received all-padding batch — reward scores will be unreliable.")
             lengths = lengths.clamp(min=0)
             last_hidden = h[torch.arange(B, device=h.device), lengths]
         else:
@@ -605,9 +602,11 @@ class RewardModel(nn.Module):
 # REWARD TRAINER — train reward model from preference data
 # =============================================================================
 
+
 @dataclass
 class RewardTrainerConfig:
     """Config for reward model training."""
+
     epochs: int = 3
     learning_rate: float = 1e-5
     batch_size: int = 4
@@ -682,10 +681,11 @@ class RewardTrainer:
         )
 
         amp_dt = _resolve_amp_dtype(self.config.amp_dtype)
-        scaler = torch.amp.GradScaler("cuda") if (
-            self.config.use_amp and torch.cuda.is_available()
-            and amp_dt != torch.bfloat16
-        ) else None
+        scaler = (
+            torch.amp.GradScaler("cuda")
+            if (self.config.use_amp and torch.cuda.is_available() and amp_dt != torch.bfloat16)
+            else None
+        )
 
         final_loss = 0.0
         epochs_done = 0
@@ -712,25 +712,19 @@ class RewardTrainer:
                     rejected_reward = self.model(rejected_ids)
 
                     # Bradley-Terry loss
-                    loss = -F.logsigmoid(
-                        chosen_reward - rejected_reward - self.config.margin
-                    ).mean()
+                    loss = -F.logsigmoid(chosen_reward - rejected_reward - self.config.margin).mean()
 
                 if scaler is not None:
                     scaler.scale(loss).backward()
                     if self.config.gradient_clip > 0:
                         scaler.unscale_(optimizer)
-                        nn.utils.clip_grad_norm_(
-                            self.model.parameters(),
-                            self.config.gradient_clip)
+                        nn.utils.clip_grad_norm_(self.model.parameters(), self.config.gradient_clip)
                     scaler.step(optimizer)
                     scaler.update()
                 else:
                     loss.backward()
                     if self.config.gradient_clip > 0:
-                        nn.utils.clip_grad_norm_(
-                            self.model.parameters(),
-                            self.config.gradient_clip)
+                        nn.utils.clip_grad_norm_(self.model.parameters(), self.config.gradient_clip)
                     optimizer.step()
 
                 batch_loss = loss.item()
@@ -778,11 +772,10 @@ class RewardTrainer:
         return pairs
 
 
-
-
 # =============================================================================
 # T5-8: PROCESS REWARD MODEL (PRM) -- per-step reward scoring
 # =============================================================================
+
 
 class ProcessRewardModel(nn.Module):
     """Reward model that scores each reasoning step, not just the final answer.
@@ -842,7 +835,7 @@ class ProcessRewardModel(nn.Module):
 
     def _get_causal_mask(self, size: int) -> torch.Tensor:
         if self._causal_mask is None or self._causal_mask_size < size:
-            mask = torch.full((size, size), float('-inf'))
+            mask = torch.full((size, size), float("-inf"))
             self._causal_mask = torch.triu(mask, diagonal=1)
             self._causal_mask_size = size
         return self._causal_mask[:size, :size]
@@ -884,7 +877,7 @@ class ProcessRewardModel(nn.Module):
         if step_mask is None and self.step_markers:
             step_mask = torch.zeros_like(input_ids, dtype=torch.bool)
             for marker in self.step_markers:
-                step_mask |= (input_ids == marker)
+                step_mask |= input_ids == marker
 
         if step_mask is not None and step_mask.any():
             # Return only rewards at step boundary positions
@@ -903,6 +896,7 @@ class ProcessRewardModel(nn.Module):
 @dataclass
 class PRMTrainerConfig:
     """Config for Process Reward Model training."""
+
     epochs: int = 3
     learning_rate: float = 1e-5
     batch_size: int = 4
@@ -966,10 +960,11 @@ class PRMTrainer:
         )
 
         amp_dt = _resolve_amp_dtype(self.config.amp_dtype)
-        scaler = torch.amp.GradScaler("cuda") if (
-            self.config.use_amp and torch.cuda.is_available()
-            and amp_dt != torch.bfloat16
-        ) else None
+        scaler = (
+            torch.amp.GradScaler("cuda")
+            if (self.config.use_amp and torch.cuda.is_available() and amp_dt != torch.bfloat16)
+            else None
+        )
         use_amp = self.config.use_amp and torch.cuda.is_available()
 
         final_loss = float("inf")
@@ -994,9 +989,9 @@ class PRMTrainer:
                     continue
 
                 # Truncate to max length
-                ids = ids[:self.config.max_length]
+                ids = ids[: self.config.max_length]
                 positions = [p for p in positions if p < len(ids)]
-                labels = labels[:len(positions)]
+                labels = labels[: len(positions)]
                 if not positions:
                     continue
 
@@ -1017,14 +1012,12 @@ class PRMTrainer:
                 if scaler is not None:
                     scaler.scale(loss).backward()
                     scaler.unscale_(optimizer)
-                    nn.utils.clip_grad_norm_(
-                        self.model.parameters(), self.config.gradient_clip)
+                    nn.utils.clip_grad_norm_(self.model.parameters(), self.config.gradient_clip)
                     scaler.step(optimizer)
                     scaler.update()
                 else:
                     loss.backward()
-                    nn.utils.clip_grad_norm_(
-                        self.model.parameters(), self.config.gradient_clip)
+                    nn.utils.clip_grad_norm_(self.model.parameters(), self.config.gradient_clip)
                     optimizer.step()
 
                 epoch_loss += loss.item()
@@ -1042,13 +1035,16 @@ class PRMTrainer:
         self.model.eval()
         return {"final_loss": final_loss, "epochs_completed": epochs_done}
 
+
 # =============================================================================
 # RLHF TRAINER (RL-B) — PPO-style policy gradient with reward model
 # =============================================================================
 
+
 @dataclass
 class RLHFConfig:
     """Config for RLHF training with PPO."""
+
     epochs: int = 3
     learning_rate: float = 1e-6
     kl_coeff: float = 0.1  # KL penalty coefficient (initial value)
@@ -1160,6 +1156,7 @@ class RLHFTrainer:
             if hasattr(self.model, "config"):
                 checkpoint["model_config"] = self.model.config.__dict__
             from enigma_engine.core.safe_save import atomic_torch_save
+
             atomic_torch_save(checkpoint, path)
             logger.info("RLHF checkpoint saved: %s", path)
         except Exception as exc:
@@ -1174,16 +1171,15 @@ class RLHFTrainer:
         inside ``train()``.
         """
         from enigma_engine.core.model_registry import safe_load_weights
+
         checkpoint = safe_load_weights(path, map_location=self.device)
 
         state_dict = checkpoint.get("model_state_dict")
         if state_dict:
             self.model.load_state_dict(state_dict)
 
-        self._pending_optimizer_state = checkpoint.get(
-            "optimizer_state_dict")
-        self._pending_value_head_state = checkpoint.get(
-            "value_head_state_dict")
+        self._pending_optimizer_state = checkpoint.get("optimizer_state_dict")
+        self._pending_value_head_state = checkpoint.get("value_head_state_dict")
         self._pending_replay_state = checkpoint.get("replay_buffer")
         self._start_epoch = checkpoint.get("epoch", 0)
         logger.info("RLHF checkpoint loaded: %s", path)
@@ -1201,15 +1197,16 @@ class RLHFTrainer:
 
         try:
             from enigma_engine.core.lora_utils import (
-                create_lora_model, PEFT_AVAILABLE, LoraConfig,
+                create_lora_model,
+                PEFT_AVAILABLE,
+                LoraConfig,
             )
+
             if PEFT_AVAILABLE:
                 lora_cfg = LoraConfig(rank=8, alpha=16, dropout=0.0)
                 self.model = create_lora_model(self.model, lora_cfg)
                 self._use_lora_ref = True
-                logger.info(
-                    "RLHF: using LoRA — frozen base weights serve "
-                    "as reference policy (no extra VRAM)")
+                logger.info("RLHF: using LoRA — frozen base weights serve as reference policy (no extra VRAM)")
                 return
         except Exception as exc:
             logger.debug("LoRA setup failed, using copy: %s", exc)
@@ -1222,18 +1219,17 @@ class RLHFTrainer:
         # Try keeping ref on GPU if enough VRAM (S546 — avoids 1000+ transfers)
         if torch.cuda.is_available() and self.device.type == "cuda":
             try:
-                model_bytes = sum(
-                    p.nelement() * p.element_size()
-                    for p in ref.parameters())
+                model_bytes = sum(p.nelement() * p.element_size() for p in ref.parameters())
                 free_bytes = torch.cuda.mem_get_info(self.device)[0]
                 # Keep on GPU if model fits in <50% of remaining VRAM
                 if model_bytes < free_bytes * 0.5:
                     self._ref_model_cpu = ref.to(self.device)
                     self._ref_on_gpu = True
                     logger.info(
-                        "RLHF: reference model kept on GPU "
-                        "(%.0f MB model, %.0f MB free)",
-                        model_bytes / 1e6, free_bytes / 1e6)
+                        "RLHF: reference model kept on GPU (%.0f MB model, %.0f MB free)",
+                        model_bytes / 1e6,
+                        free_bytes / 1e6,
+                    )
                     return
             except Exception as exc:
                 logger.debug("GPU ref check failed: %s", exc)
@@ -1241,12 +1237,12 @@ class RLHFTrainer:
         # Fallback: CPU-offloaded reference
         ref = ref.cpu()
         self._ref_model_cpu = ref
-        logger.info(
-            "RLHF: using CPU-offloaded reference model "
-            "(no extra VRAM, slight I/O overhead)")
+        logger.info("RLHF: using CPU-offloaded reference model (no extra VRAM, slight I/O overhead)")
 
     def _get_ref_logps(
-        self, full_ids: torch.Tensor, prompt_len: int,
+        self,
+        full_ids: torch.Tensor,
+        prompt_len: int,
     ) -> torch.Tensor:
         """Get reference policy log-probs, using LoRA disable or CPU offload."""
         if self._use_lora_ref:
@@ -1254,8 +1250,7 @@ class RLHFTrainer:
             with torch.no_grad():
                 self.model.disable_adapter_layers()
                 try:
-                    ref_logps = _get_response_logps(
-                        self.model, full_ids, prompt_len)
+                    ref_logps = _get_response_logps(self.model, full_ids, prompt_len)
                 finally:
                     self.model.enable_adapter_layers()
             self.model.train()
@@ -1264,8 +1259,7 @@ class RLHFTrainer:
         # Reference model already on GPU — no transfer needed (S546)
         if self._ref_on_gpu:
             with torch.no_grad():
-                return _get_response_logps(
-                    self._ref_model_cpu, full_ids, prompt_len)
+                return _get_response_logps(self._ref_model_cpu, full_ids, prompt_len)
 
         try:
             ref = self._ref_model_cpu.to(self.device)
@@ -1328,16 +1322,18 @@ class RLHFTrainer:
         trainable = [p for p in self.model.parameters() if p.requires_grad]
         all_params = trainable + list(value_head.parameters())
         optimizer = torch.optim.AdamW(
-            all_params, lr=cfg.learning_rate,
+            all_params,
+            lr=cfg.learning_rate,
             betas=(cfg.adam_beta1, cfg.adam_beta2),
             eps=cfg.adam_eps,
         )
 
         amp_dt = _resolve_amp_dtype(cfg.amp_dtype)
-        scaler = torch.amp.GradScaler("cuda") if (
-            cfg.use_amp and torch.cuda.is_available()
-            and amp_dt != torch.bfloat16
-        ) else None
+        scaler = (
+            torch.amp.GradScaler("cuda")
+            if (cfg.use_amp and torch.cuda.is_available() and amp_dt != torch.bfloat16)
+            else None
+        )
         use_amp = cfg.use_amp and torch.cuda.is_available()
 
         all_rewards: list[float] = []
@@ -1347,10 +1343,7 @@ class RLHFTrainer:
         reward_history: deque[float] = deque(maxlen=500)
 
         # Prioritized replay buffer for cross-epoch experience reuse
-        replay = (
-            ReplayBuffer(capacity=cfg.replay_capacity)
-            if cfg.replay_capacity > 0 else None
-        )
+        replay = ReplayBuffer(capacity=cfg.replay_capacity) if cfg.replay_capacity > 0 else None
 
         # Restore pending state from load_checkpoint()
         start_epoch = getattr(self, "_start_epoch", 0)
@@ -1369,6 +1362,7 @@ class RLHFTrainer:
         ckpt_dir = None
         if cfg.checkpoint_dir:
             from pathlib import Path
+
             ckpt_dir = Path(cfg.checkpoint_dir)
             ckpt_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1388,9 +1382,8 @@ class RLHFTrainer:
                     break
 
                 prompt_ids = self.tokenizer.encode(prompt)
-                prompt_ids = prompt_ids[:cfg.max_prompt_length]
-                prompt_tensor = torch.tensor(
-                    [prompt_ids], dtype=torch.long, device=self.device)
+                prompt_ids = prompt_ids[: cfg.max_prompt_length]
+                prompt_tensor = torch.tensor([prompt_ids], dtype=torch.long, device=self.device)
                 prompt_len = len(prompt_ids)
 
                 # Generate n_responses, keep the best
@@ -1434,24 +1427,20 @@ class RLHFTrainer:
                 reward_scalar = best_reward
                 if cfg.normalize_rewards and len(reward_history) > 1:
                     r_mean = sum(reward_history) / len(reward_history)
-                    r_var = sum(
-                        (r - r_mean) ** 2 for r in reward_history
-                    ) / len(reward_history)
-                    r_std = max(r_var ** 0.5, 1e-8)
+                    r_var = sum((r - r_mean) ** 2 for r in reward_history) / len(reward_history)
+                    r_std = max(r_var**0.5, 1e-8)
                     reward_scalar = (best_reward - r_mean) / r_std
 
                 # Per-token reward: 0 everywhere except last response token
-                per_token_rewards = torch.zeros(
-                    resp_len, device=self.device)
+                per_token_rewards = torch.zeros(resp_len, device=self.device)
                 per_token_rewards[-1] = reward_scalar
 
                 # Collect old log-probs and values (no grad) — single combined pass
                 with torch.no_grad(), torch.amp.autocast("cuda", dtype=amp_dt, enabled=use_amp):
-                        old_logps, hidden, _ = _get_logps_hidden_entropy(
-                            self.model, full_ids, prompt_len)
-                        old_values = value_head(hidden).squeeze(0)  # (resp_len,)
+                    old_logps, hidden, _ = _get_logps_hidden_entropy(self.model, full_ids, prompt_len)
+                    old_values = value_head(hidden).squeeze(0)  # (resp_len,)
 
-                        ref_logps = self._get_ref_logps(full_ids, prompt_len)
+                    ref_logps = self._get_ref_logps(full_ids, prompt_len)
 
                 kl = (old_logps - ref_logps).mean().item()
                 response_mask = torch.ones(resp_len, device=self.device)
@@ -1494,8 +1483,7 @@ class RLHFTrainer:
             # Mix in replay experiences from prior epochs
             if replay is not None and len(replay) > 0:
                 n_replay = max(1, int(n_collected * cfg.replay_ratio))
-                replay_samples = replay.sample(
-                    n_replay, device=self.device)
+                replay_samples = replay.sample(n_replay, device=self.device)
                 for s in replay_samples:
                     rollout.store(
                         log_probs=s["log_probs"],
@@ -1507,17 +1495,14 @@ class RLHFTrainer:
                         ref_logps=s.get("ref_logps"),
                     )
 
-            advantages, returns = rollout.compute_advantages(
-                gamma=cfg.gamma, lam=cfg.gae_lambda)
-            old_logps_all, old_values_all, _, masks_all = (
-                rollout.get_batched_data())
+            advantages, returns = rollout.compute_advantages(gamma=cfg.gamma, lam=cfg.gae_lambda)
+            old_logps_all, old_values_all, _, masks_all = rollout.get_batched_data()
 
             # Normalize advantages
             if advantages.numel() > 1:
                 adv_std = advantages.std(unbiased=False)
                 if adv_std > 1e-6:
-                    advantages = (advantages - advantages.mean()) / (
-                        adv_std + 1e-8)
+                    advantages = (advantages - advantages.mean()) / (adv_std + 1e-8)
                 else:
                     advantages = advantages - advantages.mean()
 
@@ -1538,20 +1523,15 @@ class RLHFTrainer:
                 # Pre-compute cumulative offsets for O(1) lookup
                 _offsets = [0] * (n_rollouts + 1)
                 for _i in range(n_rollouts):
-                    _offsets[_i + 1] = (
-                        _offsets[_i] + rollout._log_probs[_i].shape[0])
+                    _offsets[_i + 1] = _offsets[_i] + rollout._log_probs[_i].shape[0]
 
                 for mb_start in range(0, n_rollouts, cfg.minibatch_size):
-                    mb_indices = indices[mb_start:mb_start + cfg.minibatch_size]
+                    mb_indices = indices[mb_start : mb_start + cfg.minibatch_size]
 
-                    total_policy_loss = torch.tensor(
-                        0.0, device=self.device)
-                    total_value_loss = torch.tensor(
-                        0.0, device=self.device)
-                    total_entropy = torch.tensor(
-                        0.0, device=self.device)
-                    total_kl = torch.tensor(
-                        0.0, device=self.device)
+                    total_policy_loss = torch.tensor(0.0, device=self.device)
+                    total_value_loss = torch.tensor(0.0, device=self.device)
+                    total_entropy = torch.tensor(0.0, device=self.device)
+                    total_kl = torch.tensor(0.0, device=self.device)
                     n_tokens = 0
 
                     for idx in mb_indices:
@@ -1571,7 +1551,8 @@ class RLHFTrainer:
                             with torch.amp.autocast("cuda", dtype=amp_dt, enabled=use_amp):
                                 # Single combined pass: logps + hidden + entropy
                                 new_logps, hidden, entropy = _get_logps_hidden_entropy(
-                                    self.model, stored_ids, stored_plen)
+                                    self.model, stored_ids, stored_plen
+                                )
                                 new_values = value_head(hidden).squeeze(0)
                             log_ratio = (new_logps - mb_old_logps_i).clamp(-20, 20)
                             ratio = torch.exp(log_ratio)
@@ -1580,8 +1561,7 @@ class RLHFTrainer:
                             # Per-token KL: current policy vs reference
                             stored_ref = rollout._ref_logps[idx]
                             if stored_ref is not None:
-                                total_kl = total_kl + (
-                                    new_logps - stored_ref).mean()
+                                total_kl = total_kl + (new_logps - stored_ref).mean()
                         else:
                             # Replay items: no full_ids, fall back to
                             # ratio=1 (first PPO epoch is exact)
@@ -1591,21 +1571,21 @@ class RLHFTrainer:
 
                         # Clipped surrogate loss
                         surr1 = ratio * mb_advantages_i
-                        surr2 = torch.clamp(
-                            ratio,
-                            1.0 - cfg.clip_range,
-                            1.0 + cfg.clip_range,
-                        ) * mb_advantages_i
+                        surr2 = (
+                            torch.clamp(
+                                ratio,
+                                1.0 - cfg.clip_range,
+                                1.0 + cfg.clip_range,
+                            )
+                            * mb_advantages_i
+                        )
                         policy_loss = -torch.min(surr1, surr2).mean()
 
                         # Value loss (clipped)
-                        value_loss = F.mse_loss(
-                            new_values, mb_returns_i)
+                        value_loss = F.mse_loss(new_values, mb_returns_i)
 
-                        total_policy_loss = (
-                            total_policy_loss + policy_loss)
-                        total_value_loss = (
-                            total_value_loss + value_loss)
+                        total_policy_loss = total_policy_loss + policy_loss
+                        total_value_loss = total_value_loss + value_loss
                         total_entropy = total_entropy + entropy_bonus
                         n_tokens += rollout_len
 
@@ -1626,15 +1606,13 @@ class RLHFTrainer:
                         scaler.scale(loss).backward()
                         if cfg.gradient_clip > 0:
                             scaler.unscale_(optimizer)
-                            nn.utils.clip_grad_norm_(
-                                all_params, cfg.gradient_clip)
+                            nn.utils.clip_grad_norm_(all_params, cfg.gradient_clip)
                         scaler.step(optimizer)
                         scaler.update()
                     else:
                         loss.backward()
                         if cfg.gradient_clip > 0:
-                            nn.utils.clip_grad_norm_(
-                                all_params, cfg.gradient_clip)
+                            nn.utils.clip_grad_norm_(all_params, cfg.gradient_clip)
                         optimizer.step()
 
             avg_reward = epoch_reward / max(n_collected, 1)
@@ -1643,21 +1621,21 @@ class RLHFTrainer:
             all_kl.append(avg_kl)
             epochs_done = epoch + 1
 
-            logger.info(
-                "RLHF epoch %d: avg_reward=%.4f, avg_kl=%.4f",
-                epoch + 1, avg_reward, avg_kl)
+            logger.info("RLHF epoch %d: avg_reward=%.4f, avg_kl=%.4f", epoch + 1, avg_reward, avg_kl)
 
             if self.on_progress:
                 pct = int((epoch + 1) / cfg.epochs * 100)
-                self.on_progress(
-                    pct,
-                    f"RLHF epoch {epoch + 1}: reward={avg_reward:.3f}, kl={avg_kl:.4f}")
+                self.on_progress(pct, f"RLHF epoch {epoch + 1}: reward={avg_reward:.3f}, kl={avg_kl:.4f}")
 
             if ckpt_dir:
                 self._save_checkpoint(
                     ckpt_dir / f"rlhf_epoch{epoch + 1}.pt",
-                    optimizer, value_head, replay, epoch + 1,
-                    {"avg_rewards": all_rewards, "avg_kl": all_kl})
+                    optimizer,
+                    value_head,
+                    replay,
+                    epoch + 1,
+                    {"avg_rewards": all_rewards, "avg_kl": all_kl},
+                )
 
         self.model.eval()
         if self._ref_model_cpu is not None:
@@ -1672,14 +1650,15 @@ class RLHFTrainer:
         }
 
 
-
 # =============================================================================
 # SELF-PLAY RL (RL-C) — TRAINER as reward signal
 # =============================================================================
 
+
 @dataclass
 class SelfPlayConfig:
     """Config for self-play RL training."""
+
     epochs: int = 3
     learning_rate: float = 1e-6
     kl_coeff: float = 0.05
@@ -1791,6 +1770,7 @@ class SelfPlayTrainer:
             if hasattr(self.student, "config"):
                 checkpoint["model_config"] = self.student.config.__dict__
             from enigma_engine.core.safe_save import atomic_torch_save
+
             atomic_torch_save(checkpoint, path)
             logger.info("Self-play checkpoint saved: %s", path)
         except Exception as exc:
@@ -1805,16 +1785,15 @@ class SelfPlayTrainer:
         inside ``train()``.
         """
         from enigma_engine.core.model_registry import safe_load_weights
+
         checkpoint = safe_load_weights(path, map_location=self.device)
 
         state_dict = checkpoint.get("model_state_dict")
         if state_dict:
             self.student.load_state_dict(state_dict)
 
-        self._pending_optimizer_state = checkpoint.get(
-            "optimizer_state_dict")
-        self._pending_value_head_state = checkpoint.get(
-            "value_head_state_dict")
+        self._pending_optimizer_state = checkpoint.get("optimizer_state_dict")
+        self._pending_value_head_state = checkpoint.get("value_head_state_dict")
         self._pending_replay_state = checkpoint.get("replay_buffer")
         self._start_epoch = checkpoint.get("epoch", 0)
         logger.info("Self-play checkpoint loaded: %s", path)
@@ -1832,8 +1811,7 @@ class SelfPlayTrainer:
         Returns:
             Numeric score 0-10, or 5.0 on failure.
         """
-        score_prompt = self.config.score_prompt.format(
-            prompt=prompt, response=response)
+        score_prompt = self.config.score_prompt.format(prompt=prompt, response=response)
 
         base_score = 5.0  # neutral fallback
         try:
@@ -1844,7 +1822,8 @@ class SelfPlayTrainer:
 
             # Extract first number from response
             import re
-            match = re.search(r'(\d+(?:\.\d+)?)', result)
+
+            match = re.search(r"(\d+(?:\.\d+)?)", result)
             if match:
                 base_score = float(match.group(1))
                 base_score = min(max(base_score, 0.0), 10.0)
@@ -1854,6 +1833,7 @@ class SelfPlayTrainer:
         # Phase 6: emotional quality bonus
         try:
             from enigma_engine.core.sentiment import evaluate_response_quality
+
             bonus = evaluate_response_quality(prompt, response)
             # Scale bonus to 0-10 range (±0.5 → ±2.5 points)
             base_score = min(max(base_score + bonus * 5.0, 0.0), 10.0)
@@ -1869,15 +1849,16 @@ class SelfPlayTrainer:
 
         try:
             from enigma_engine.core.lora_utils import (
-                create_lora_model, PEFT_AVAILABLE, LoraConfig,
+                create_lora_model,
+                PEFT_AVAILABLE,
+                LoraConfig,
             )
+
             if PEFT_AVAILABLE:
                 lora_cfg = LoraConfig(rank=8, alpha=16, dropout=0.0)
                 self.student = create_lora_model(self.student, lora_cfg)
                 self._use_lora_ref = True
-                logger.info(
-                    "Self-play: using LoRA — frozen base weights serve "
-                    "as reference policy (no extra VRAM)")
+                logger.info("Self-play: using LoRA — frozen base weights serve as reference policy (no extra VRAM)")
                 return
         except Exception as exc:
             logger.debug("LoRA setup failed, using CPU offload: %s", exc)
@@ -1889,12 +1870,12 @@ class SelfPlayTrainer:
             p.requires_grad = False
         ref = ref.cpu()
         self._ref_model_cpu = ref
-        logger.info(
-            "Self-play: using CPU-offloaded reference model "
-            "(no extra VRAM, slight I/O overhead)")
+        logger.info("Self-play: using CPU-offloaded reference model (no extra VRAM, slight I/O overhead)")
 
     def _get_ref_logps(
-        self, full_ids: torch.Tensor, prompt_len: int,
+        self,
+        full_ids: torch.Tensor,
+        prompt_len: int,
     ) -> torch.Tensor:
         """Get reference policy log-probs, using LoRA disable or CPU offload."""
         if self._use_lora_ref:
@@ -1902,8 +1883,7 @@ class SelfPlayTrainer:
             with torch.no_grad():
                 self.student.disable_adapter_layers()
                 try:
-                    ref_logps = _get_response_logps(
-                        self.student, full_ids, prompt_len)
+                    ref_logps = _get_response_logps(self.student, full_ids, prompt_len)
                 finally:
                     self.student.enable_adapter_layers()
             self.student.train()
@@ -1961,26 +1941,25 @@ class SelfPlayTrainer:
         trainable = [p for p in self.student.parameters() if p.requires_grad]
         all_params = trainable + list(value_head.parameters())
         optimizer = torch.optim.AdamW(
-            all_params, lr=cfg.learning_rate,
+            all_params,
+            lr=cfg.learning_rate,
             betas=(cfg.adam_beta1, cfg.adam_beta2),
             eps=cfg.adam_eps,
         )
 
         amp_dt = _resolve_amp_dtype(cfg.amp_dtype)
-        scaler = torch.amp.GradScaler("cuda") if (
-            cfg.use_amp and torch.cuda.is_available()
-            and amp_dt != torch.bfloat16
-        ) else None
+        scaler = (
+            torch.amp.GradScaler("cuda")
+            if (cfg.use_amp and torch.cuda.is_available() and amp_dt != torch.bfloat16)
+            else None
+        )
         use_amp = cfg.use_amp and torch.cuda.is_available()
 
         all_scores: list[float] = []
         epochs_done = 0
 
         # Prioritized replay buffer for cross-epoch experience reuse
-        replay = (
-            ReplayBuffer(capacity=cfg.replay_capacity)
-            if cfg.replay_capacity > 0 else None
-        )
+        replay = ReplayBuffer(capacity=cfg.replay_capacity) if cfg.replay_capacity > 0 else None
 
         # Restore pending checkpoint state (from load_checkpoint)
         start_epoch = getattr(self, "_start_epoch", 0)
@@ -1998,6 +1977,7 @@ class SelfPlayTrainer:
         ckpt_dir = None
         if cfg.checkpoint_dir:
             from pathlib import Path
+
             ckpt_dir = Path(cfg.checkpoint_dir)
             ckpt_dir.mkdir(parents=True, exist_ok=True)
 
@@ -2016,9 +1996,8 @@ class SelfPlayTrainer:
                 if self._should_stop():
                     break
 
-                prompt_ids = self.tokenizer.encode(prompt)[:cfg.max_prompt_length]
-                prompt_tensor = torch.tensor(
-                    [prompt_ids], dtype=torch.long, device=self.device)
+                prompt_ids = self.tokenizer.encode(prompt)[: cfg.max_prompt_length]
+                prompt_tensor = torch.tensor([prompt_ids], dtype=torch.long, device=self.device)
                 prompt_len = len(prompt_ids)
 
                 # Generate n_responses, score each, keep the best
@@ -2060,14 +2039,12 @@ class SelfPlayTrainer:
                 reward_scalar = (best_score - 5.0) / 5.0
 
                 # Per-token reward: terminal only
-                per_token_rewards = torch.zeros(
-                    resp_len, device=self.device)
+                per_token_rewards = torch.zeros(resp_len, device=self.device)
                 per_token_rewards[-1] = reward_scalar
 
                 # Collect old log-probs and values — single combined pass
                 with torch.no_grad(), torch.amp.autocast("cuda", dtype=amp_dt, enabled=use_amp):
-                    old_logps, hidden, _ = _get_logps_hidden_entropy(
-                        self.student, full_ids, prompt_len)
+                    old_logps, hidden, _ = _get_logps_hidden_entropy(self.student, full_ids, prompt_len)
                     old_values = value_head(hidden).squeeze(0)
                     ref_logps = self._get_ref_logps(full_ids, prompt_len)
 
@@ -2111,8 +2088,7 @@ class SelfPlayTrainer:
             # Mix in replay experiences from prior epochs
             if replay is not None and len(replay) > 0:
                 n_replay = max(1, int(n_collected * cfg.replay_ratio))
-                replay_samples = replay.sample(
-                    n_replay, device=self.device)
+                replay_samples = replay.sample(n_replay, device=self.device)
                 for s in replay_samples:
                     rollout.store(
                         log_probs=s["log_probs"],
@@ -2124,17 +2100,14 @@ class SelfPlayTrainer:
                         ref_logps=s.get("ref_logps"),
                     )
 
-            advantages, returns = rollout.compute_advantages(
-                gamma=1.0, lam=cfg.gae_lambda)
-            old_logps_all, old_values_all, _, masks_all = (
-                rollout.get_batched_data())
+            advantages, returns = rollout.compute_advantages(gamma=1.0, lam=cfg.gae_lambda)
+            old_logps_all, old_values_all, _, masks_all = rollout.get_batched_data()
 
             # Normalize advantages
             if advantages.numel() > 1:
                 adv_std = advantages.std(unbiased=False)
                 if adv_std > 1e-6:
-                    advantages = (advantages - advantages.mean()) / (
-                        adv_std + 1e-8)
+                    advantages = (advantages - advantages.mean()) / (adv_std + 1e-8)
                 else:
                     advantages = advantages - advantages.mean()
 
@@ -2150,20 +2123,15 @@ class SelfPlayTrainer:
                 # Pre-compute cumulative offsets for O(1) lookup
                 _offsets = [0] * (n_rollouts + 1)
                 for _i in range(n_rollouts):
-                    _offsets[_i + 1] = (
-                        _offsets[_i] + rollout._log_probs[_i].shape[0])
+                    _offsets[_i + 1] = _offsets[_i] + rollout._log_probs[_i].shape[0]
 
                 for mb_start in range(0, n_rollouts, cfg.minibatch_size):
-                    mb_indices = indices[mb_start:mb_start + cfg.minibatch_size]
+                    mb_indices = indices[mb_start : mb_start + cfg.minibatch_size]
 
-                    total_policy_loss = torch.tensor(
-                        0.0, device=self.device)
-                    total_value_loss = torch.tensor(
-                        0.0, device=self.device)
-                    total_entropy = torch.tensor(
-                        0.0, device=self.device)
-                    total_kl = torch.tensor(
-                        0.0, device=self.device)
+                    total_policy_loss = torch.tensor(0.0, device=self.device)
+                    total_value_loss = torch.tensor(0.0, device=self.device)
+                    total_entropy = torch.tensor(0.0, device=self.device)
+                    total_kl = torch.tensor(0.0, device=self.device)
 
                     for idx in mb_indices:
                         rollout_len = rollout._log_probs[idx].shape[0]
@@ -2182,7 +2150,8 @@ class SelfPlayTrainer:
                             with torch.amp.autocast("cuda", dtype=amp_dt, enabled=use_amp):
                                 # Single combined pass: logps + hidden + entropy
                                 new_logps, hidden, entropy = _get_logps_hidden_entropy(
-                                    self.student, stored_ids, stored_plen)
+                                    self.student, stored_ids, stored_plen
+                                )
                                 new_values = value_head(hidden).squeeze(0)
                             log_ratio = (new_logps - mb_old_logps_i).clamp(-20, 20)
                             ratio = torch.exp(log_ratio)
@@ -2191,28 +2160,27 @@ class SelfPlayTrainer:
                             # Per-token KL: current policy vs reference
                             stored_ref = rollout._ref_logps[idx]
                             if stored_ref is not None:
-                                total_kl = total_kl + (
-                                    new_logps - stored_ref).mean()
+                                total_kl = total_kl + (new_logps - stored_ref).mean()
                         else:
                             ratio = torch.ones_like(mb_old_logps_i)
                             new_values = old_values_all[start:end]
                             entropy_bonus = -mb_old_logps_i.mean()
 
                         surr1 = ratio * mb_advantages_i
-                        surr2 = torch.clamp(
-                            ratio,
-                            1.0 - cfg.clip_range,
-                            1.0 + cfg.clip_range,
-                        ) * mb_advantages_i
+                        surr2 = (
+                            torch.clamp(
+                                ratio,
+                                1.0 - cfg.clip_range,
+                                1.0 + cfg.clip_range,
+                            )
+                            * mb_advantages_i
+                        )
                         policy_loss = -torch.min(surr1, surr2).mean()
 
-                        value_loss = F.mse_loss(
-                            new_values, mb_returns_i)
+                        value_loss = F.mse_loss(new_values, mb_returns_i)
 
-                        total_policy_loss = (
-                            total_policy_loss + policy_loss)
-                        total_value_loss = (
-                            total_value_loss + value_loss)
+                        total_policy_loss = total_policy_loss + policy_loss
+                        total_value_loss = total_value_loss + value_loss
                         total_entropy = total_entropy + entropy_bonus
 
                     mb_count = max(len(mb_indices), 1)
@@ -2232,15 +2200,13 @@ class SelfPlayTrainer:
                         scaler.scale(loss).backward()
                         if cfg.gradient_clip > 0:
                             scaler.unscale_(optimizer)
-                            nn.utils.clip_grad_norm_(
-                                all_params, cfg.gradient_clip)
+                            nn.utils.clip_grad_norm_(all_params, cfg.gradient_clip)
                         scaler.step(optimizer)
                         scaler.update()
                     else:
                         loss.backward()
                         if cfg.gradient_clip > 0:
-                            nn.utils.clip_grad_norm_(
-                                all_params, cfg.gradient_clip)
+                            nn.utils.clip_grad_norm_(all_params, cfg.gradient_clip)
                         optimizer.step()
 
             avg_score = epoch_score / max(n_collected, 1)
@@ -2256,8 +2222,12 @@ class SelfPlayTrainer:
             if ckpt_dir:
                 self._save_checkpoint(
                     ckpt_dir / f"selfplay_epoch{epoch + 1}.pt",
-                    optimizer, value_head, replay, epoch + 1,
-                    {"avg_scores": all_scores})
+                    optimizer,
+                    value_head,
+                    replay,
+                    epoch + 1,
+                    {"avg_scores": all_scores},
+                )
 
         self.student.eval()
         if self._ref_model_cpu is not None:
@@ -2285,6 +2255,7 @@ class GRPOConfig:
     external scorer), and uses the within-group ranking as the advantage
     signal.  No GAE, no value network, no critic head to train.
     """
+
     epochs: int = 3
     learning_rate: float = 1e-6
     kl_coeff: float = 0.05
@@ -2410,9 +2381,8 @@ class GRPOTrainer:
                     break
 
                 prompt_ids = self.tokenizer.encode(prompt)
-                prompt_ids = prompt_ids[:cfg.max_prompt_length]
-                prompt_tensor = torch.tensor(
-                    [prompt_ids], dtype=torch.long, device=self.device)
+                prompt_ids = prompt_ids[: cfg.max_prompt_length]
+                prompt_tensor = torch.tensor([prompt_ids], dtype=torch.long, device=self.device)
                 prompt_len = len(prompt_ids)
 
                 # Generate a group of N responses
@@ -2469,44 +2439,40 @@ class GRPOTrainer:
 
                         optimizer.zero_grad()
 
-                        with torch.amp.autocast(
-                            "cuda", dtype=amp_dtype, enabled=use_amp
-                        ):
+                        with torch.amp.autocast("cuda", dtype=amp_dtype, enabled=use_amp):
                             # Policy log-probs
                             logits = self.model(full_ids)
                             if hasattr(logits, "logits"):
                                 logits = logits.logits
-                            resp_logits = logits[:, prompt_len - 1:-1, :]
+                            resp_logits = logits[:, prompt_len - 1 : -1, :]
                             resp_targets = full_ids[:, prompt_len:]
                             log_probs = F.log_softmax(resp_logits, dim=-1)
-                            token_logps = log_probs.gather(
-                                2, resp_targets.unsqueeze(-1)).squeeze(-1)
+                            token_logps = log_probs.gather(2, resp_targets.unsqueeze(-1)).squeeze(-1)
 
                             # Reference log-probs
                             with torch.no_grad():
                                 ref_logits = ref_model(full_ids)
                                 if hasattr(ref_logits, "logits"):
                                     ref_logits = ref_logits.logits
-                                ref_resp = ref_logits[:, prompt_len - 1:-1, :]
+                                ref_resp = ref_logits[:, prompt_len - 1 : -1, :]
                                 ref_log_probs = F.log_softmax(ref_resp, dim=-1)
-                                ref_token_logps = ref_log_probs.gather(
-                                    2, resp_targets.unsqueeze(-1)).squeeze(-1)
+                                ref_token_logps = ref_log_probs.gather(2, resp_targets.unsqueeze(-1)).squeeze(-1)
 
                             # Log-ratio for clipping
-                            log_ratio = (token_logps - ref_token_logps
-                                         ).clamp(-20, 20)
+                            log_ratio = (token_logps - ref_token_logps).clamp(-20, 20)
                             ratio = log_ratio.exp()
 
-                            adv_t = torch.tensor(
-                                adv, dtype=torch.float32,
-                                device=self.device)
+                            adv_t = torch.tensor(adv, dtype=torch.float32, device=self.device)
 
                             surr1 = ratio * adv_t
-                            surr2 = torch.clamp(
-                                ratio,
-                                1.0 - cfg.clip_range,
-                                1.0 + cfg.clip_range,
-                            ) * adv_t
+                            surr2 = (
+                                torch.clamp(
+                                    ratio,
+                                    1.0 - cfg.clip_range,
+                                    1.0 + cfg.clip_range,
+                                )
+                                * adv_t
+                            )
                             policy_loss = -torch.min(surr1, surr2).mean()
 
                             # KL penalty (single-sample estimate, consistent
@@ -2524,15 +2490,13 @@ class GRPOTrainer:
                             scaler.scale(loss).backward()
                             if cfg.gradient_clip > 0:
                                 scaler.unscale_(optimizer)
-                                nn.utils.clip_grad_norm_(
-                                    self.model.parameters(), cfg.gradient_clip)
+                                nn.utils.clip_grad_norm_(self.model.parameters(), cfg.gradient_clip)
                             scaler.step(optimizer)
                             scaler.update()
                         else:
                             loss.backward()
                             if cfg.gradient_clip > 0:
-                                nn.utils.clip_grad_norm_(
-                                    self.model.parameters(), cfg.gradient_clip)
+                                nn.utils.clip_grad_norm_(self.model.parameters(), cfg.gradient_clip)
                             optimizer.step()
 
                         n_updates += 1
@@ -2548,24 +2512,28 @@ class GRPOTrainer:
                         logits_r = ref_model(last_gen)
                         if hasattr(logits_r, "logits"):
                             logits_r = logits_r.logits
-                        lp = F.log_softmax(logits_p[:, prompt_len - 1:-1, :], dim=-1)
-                        lr = F.log_softmax(logits_r[:, prompt_len - 1:-1, :], dim=-1)
+                        lp = F.log_softmax(logits_p[:, prompt_len - 1 : -1, :], dim=-1)
+                        lr = F.log_softmax(logits_r[:, prompt_len - 1 : -1, :], dim=-1)
                         tgts = last_gen[:, prompt_len:]
-                        obs_kl = (lr.gather(2, tgts.unsqueeze(-1)).squeeze(-1)
-                                  - lp.gather(2, tgts.unsqueeze(-1)).squeeze(-1)).mean().item()
+                        obs_kl = (
+                            (
+                                lr.gather(2, tgts.unsqueeze(-1)).squeeze(-1)
+                                - lp.gather(2, tgts.unsqueeze(-1)).squeeze(-1)
+                            )
+                            .mean()
+                            .item()
+                        )
                     self._update_adaptive_kl(abs(obs_kl))
 
             avg_r = epoch_reward / max(len(prompts), 1)
             avg_rewards.append(avg_r)
             epochs_done = epoch + 1
 
-            logger.info("GRPO epoch %d: avg_reward=%.3f, updates=%d",
-                        epoch + 1, avg_r, n_updates)
+            logger.info("GRPO epoch %d: avg_reward=%.3f, updates=%d", epoch + 1, avg_r, n_updates)
 
             if self.on_progress:
                 pct = int((epoch + 1) / cfg.epochs * 100)
-                self.on_progress(pct, f"GRPO epoch {epoch + 1}: "
-                                 f"reward={avg_r:.3f}")
+                self.on_progress(pct, f"GRPO epoch {epoch + 1}: reward={avg_r:.3f}")
 
         self.model.eval()
         del ref_model
@@ -2596,6 +2564,7 @@ class ReMaxConfig:
     and the complexity of advantage estimation, while achieving
     comparable performance on language model alignment tasks.
     """
+
     epochs: int = 3
     learning_rate: float = 1e-6
     kl_coeff: float = 0.05
@@ -2722,9 +2691,8 @@ class ReMaxTrainer:
                     break
 
                 prompt_ids = self.tokenizer.encode(prompt)
-                prompt_ids = prompt_ids[:cfg.max_prompt_length]
-                prompt_tensor = torch.tensor(
-                    [prompt_ids], dtype=torch.long, device=self.device)
+                prompt_ids = prompt_ids[: cfg.max_prompt_length]
+                prompt_tensor = torch.tensor([prompt_ids], dtype=torch.long, device=self.device)
                 prompt_len = len(prompt_ids)
 
                 # Generate N responses
@@ -2768,15 +2736,12 @@ class ReMaxTrainer:
                     if resp_len < 1:
                         continue
 
-                    with torch.amp.autocast("cuda", dtype=amp_dtype,
-                                            enabled=use_amp):
+                    with torch.amp.autocast("cuda", dtype=amp_dtype, enabled=use_amp):
                         # Current policy log-probs + entropy — single combined pass
-                        new_logps, _, entropy = _get_logps_hidden_entropy(
-                            self.model, full_ids, prompt_len)
+                        new_logps, _, entropy = _get_logps_hidden_entropy(self.model, full_ids, prompt_len)
                         # Old log-probs (from generation — frozen ref approx)
                         with torch.no_grad():
-                            old_logps = _get_response_logps(
-                                ref_model, full_ids, prompt_len)
+                            old_logps = _get_response_logps(ref_model, full_ids, prompt_len)
 
                         log_ratio = (new_logps - old_logps).clamp(-20, 20)
                         ratio = torch.exp(log_ratio)
@@ -2784,11 +2749,14 @@ class ReMaxTrainer:
                         # Clipped surrogate (same as PPO)
                         adv_tensor = torch.full_like(ratio, advantage)
                         surr1 = ratio * adv_tensor
-                        surr2 = torch.clamp(
-                            ratio,
-                            1.0 - cfg.clip_range,
-                            1.0 + cfg.clip_range,
-                        ) * adv_tensor
+                        surr2 = (
+                            torch.clamp(
+                                ratio,
+                                1.0 - cfg.clip_range,
+                                1.0 + cfg.clip_range,
+                            )
+                            * adv_tensor
+                        )
                         policy_loss = -torch.min(surr1, surr2).mean()
 
                         # Entropy bonus (already computed in combined pass above)
@@ -2803,14 +2771,12 @@ class ReMaxTrainer:
                     if scaler is not None:
                         scaler.scale(loss).backward()
                         scaler.unscale_(optimizer)
-                        nn.utils.clip_grad_norm_(
-                            self.model.parameters(), cfg.gradient_clip)
+                        nn.utils.clip_grad_norm_(self.model.parameters(), cfg.gradient_clip)
                         scaler.step(optimizer)
                         scaler.update()
                     else:
                         loss.backward()
-                        nn.utils.clip_grad_norm_(
-                            self.model.parameters(), cfg.gradient_clip)
+                        nn.utils.clip_grad_norm_(self.model.parameters(), cfg.gradient_clip)
                         optimizer.step()
 
                     optimizer.zero_grad()
@@ -2823,13 +2789,11 @@ class ReMaxTrainer:
             avg_rewards.append(avg_r)
             epochs_done = epoch + 1
 
-            logger.info("ReMax epoch %d: avg_reward=%.3f, updates=%d",
-                        epoch + 1, avg_r, n_updates)
+            logger.info("ReMax epoch %d: avg_reward=%.3f, updates=%d", epoch + 1, avg_r, n_updates)
 
             if self.on_progress:
                 pct = int((epoch + 1) / cfg.epochs * 100)
-                self.on_progress(pct, f"ReMax epoch {epoch + 1}: "
-                                 f"reward={avg_r:.3f}")
+                self.on_progress(pct, f"ReMax epoch {epoch + 1}: reward={avg_r:.3f}")
 
         self.model.eval()
         del ref_model
@@ -2839,4 +2803,3 @@ class ReMaxTrainer:
             "avg_rewards": avg_rewards,
             "final_reward": avg_rewards[-1] if avg_rewards else 0.0,
         }
-

@@ -4,8 +4,10 @@ with a LOWER prose-length gate so infobox-heavy anime pages qualify.
 Un-marks the targeted wikis in progress.json so fetch_fandom retries them.
 GPU-free: network + disk only.
 """
+
 import sys
 from itertools import chain
+
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
@@ -20,19 +22,24 @@ MIN_ARTICLES = 100
 
 # 5 mis-named wikis from the last run -> try alias subdomains in priority order.
 RECOVER = [
-    ("Rising of the Shield Hero",
-     ["shieldhero", "tate-no-yuusha-no-nariagari", "risingoftheshieldhero", "the-rising-of-the-shield-hero"]),
-    ("Classroom of the Elite",
-     ["youkoso-jitsuryoku", "classroomoftheelite", "you-zitsu", "cote"]),
-    ("Irregular at Magic High School",
-     ["mahouka-koukou-no-rettousei", "the-irregular-at-magic-high-school", "irregularatmagichighschool"]),
+    (
+        "Rising of the Shield Hero",
+        ["shieldhero", "tate-no-yuusha-no-nariagari", "risingoftheshieldhero", "the-rising-of-the-shield-hero"],
+    ),
+    ("Classroom of the Elite", ["youkoso-jitsuryoku", "classroomoftheelite", "you-zitsu", "cote"]),
+    (
+        "Irregular at Magic High School",
+        ["mahouka-koukou-no-rettousei", "the-irregular-at-magic-high-school", "irregularatmagichighschool"],
+    ),
     ("Goblin Slayer", ["goblin-slayer", "goblinslayer-anime"]),
     ("Madoka Magica", ["madoka-magica", "puellamagi", "madokamagica", "magireco"]),
 ]
 # Marquee wikis that came back broken-thin -> un-mark + re-crawl at lower threshold.
 REDO = [
-    ("Bleach", ["bleach"]), ("Naruto", ["naruto"]),
-    ("Fate", ["fate"]), ("Berserk", ["berserk"]),
+    ("Bleach", ["bleach"]),
+    ("Naruto", ["naruto"]),
+    ("Fate", ["fate"]),
+    ("Berserk", ["berserk"]),
 ]
 
 
@@ -40,8 +47,7 @@ def probe_one(sub):
     try:
         r = C.SESSION.get(
             f"https://{sub}.fandom.com/api.php",
-            params={"action": "query", "format": "json",
-                    "meta": "siteinfo", "siprop": "statistics|general"},
+            params={"action": "query", "format": "json", "meta": "siteinfo", "siprop": "statistics|general"},
             timeout=8,
         )
         if r.status_code == 200:

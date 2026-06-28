@@ -44,11 +44,10 @@ def _ensure_datasets():
     """Check that the `datasets` library is installed."""
     try:
         import datasets  # noqa: F401
+
         return True
     except ImportError:
-        logger.error(
-            "The `datasets` library is required.\n"
-            "Install with: pip install datasets")
+        logger.error("The `datasets` library is required.\nInstall with: pip install datasets")
         return False
 
 
@@ -57,9 +56,7 @@ def _dedup_pairs(pairs: list[dict]) -> list[dict]:
     seen = set()
     unique = []
     for item in pairs:
-        key = hashlib.sha256(
-            (item["prompt"] + item["completion"]).encode()
-        ).digest()[:16]
+        key = hashlib.sha256((item["prompt"] + item["completion"]).encode()).digest()[:16]
         if key not in seen:
             seen.add(key)
             unique.append(item)
@@ -115,6 +112,7 @@ def _clean_text(text: str) -> str:
 
 
 # ── OASST1 ─────────────────────────────────────────────────────────
+
 
 def collect_oasst() -> list[dict]:
     """Download and format Open Assistant Conversations (OASST1).
@@ -175,10 +173,12 @@ def collect_oasst() -> list[dict]:
         if not completion or len(completion) < 10:
             continue
 
-        pairs.append({
-            "prompt": prompt,
-            "completion": completion,
-        })
+        pairs.append(
+            {
+                "prompt": prompt,
+                "completion": completion,
+            }
+        )
 
     pairs = _dedup_pairs(pairs)
     logger.info(f"OASST1: {len(pairs)} instruction pairs extracted")
@@ -186,6 +186,7 @@ def collect_oasst() -> list[dict]:
 
 
 # ── Dolly 15k ──────────────────────────────────────────────────────
+
 
 def collect_dolly() -> list[dict]:
     """Download and format Databricks Dolly 15k.
@@ -219,10 +220,12 @@ def collect_dolly() -> list[dict]:
         else:
             prompt = instruction
 
-        pairs.append({
-            "prompt": prompt,
-            "completion": response,
-        })
+        pairs.append(
+            {
+                "prompt": prompt,
+                "completion": response,
+            }
+        )
 
     pairs = _dedup_pairs(pairs)
     logger.info(f"Dolly: {len(pairs)} instruction pairs extracted")
@@ -230,6 +233,7 @@ def collect_dolly() -> list[dict]:
 
 
 # ── SlimOrca ───────────────────────────────────────────────────────
+
 
 def collect_slimorca(max_samples: int = 100000) -> list[dict]:
     """Download and format Open-Orca SlimOrca.
@@ -242,10 +246,8 @@ def collect_slimorca(max_samples: int = 100000) -> list[dict]:
 
     from datasets import load_dataset
 
-    logger.info(
-        f"Downloading SlimOrca (max {max_samples:,} samples)...")
-    ds = load_dataset(
-        "Open-Orca/SlimOrca", split="train", streaming=True)
+    logger.info(f"Downloading SlimOrca (max {max_samples:,} samples)...")
+    ds = load_dataset("Open-Orca/SlimOrca", split="train", streaming=True)
 
     pairs = []
     count = 0
@@ -287,15 +289,16 @@ def collect_slimorca(max_samples: int = 100000) -> list[dict]:
         ):
             prompt = f"{system}\n\n{prompt}"
 
-        pairs.append({
-            "prompt": prompt,
-            "completion": completion,
-        })
+        pairs.append(
+            {
+                "prompt": prompt,
+                "completion": completion,
+            }
+        )
         count += 1
 
         if count % 10000 == 0:
-            logger.info(f"  SlimOrca: {count:,} processed, "
-                        f"{len(pairs):,} kept...")
+            logger.info(f"  SlimOrca: {count:,} processed, {len(pairs):,} kept...")
 
     pairs = _dedup_pairs(pairs)
     logger.info(f"SlimOrca: {len(pairs)} instruction pairs extracted")
@@ -303,6 +306,7 @@ def collect_slimorca(max_samples: int = 100000) -> list[dict]:
 
 
 # ── OpenThoughts3 (D-4) ────────────────────────────────────────────
+
 
 def collect_openthoughts3(max_samples: int = 100000) -> list[dict]:
     """Download and format OpenThoughts3-1.2M reasoning data.
@@ -325,8 +329,7 @@ def collect_openthoughts3(max_samples: int = 100000) -> list[dict]:
 
     from datasets import load_dataset
 
-    logger.info(
-        f"Downloading OpenThoughts3-1.2M (max {max_samples:,} samples)...")
+    logger.info(f"Downloading OpenThoughts3-1.2M (max {max_samples:,} samples)...")
     try:
         ds = load_dataset(
             "open-thoughts/OpenThoughts3-1.2M",
@@ -345,10 +348,8 @@ def collect_openthoughts3(max_samples: int = 100000) -> list[dict]:
         seen += 1
 
         conversations = item.get("conversations") or []
-        human_turn = next(
-            (t for t in conversations if t.get("from") == "human"), None)
-        gpt_turn = next(
-            (t for t in conversations if t.get("from") == "gpt"), None)
+        human_turn = next((t for t in conversations if t.get("from") == "human"), None)
+        gpt_turn = next((t for t in conversations if t.get("from") == "gpt"), None)
         if not human_turn or not gpt_turn:
             continue
 
@@ -363,17 +364,15 @@ def collect_openthoughts3(max_samples: int = 100000) -> list[dict]:
         pairs.append({"prompt": prompt, "completion": completion})
 
         if seen % 10000 == 0:
-            logger.info(
-                f"  OpenThoughts3: {seen:,} processed, "
-                f"{len(pairs):,} kept...")
+            logger.info(f"  OpenThoughts3: {seen:,} processed, {len(pairs):,} kept...")
 
     pairs = _dedup_pairs(pairs)
-    logger.info(
-        f"OpenThoughts3: {len(pairs)} reasoning pairs extracted")
+    logger.info(f"OpenThoughts3: {len(pairs)} reasoning pairs extracted")
     return pairs
 
 
 # ── SmolTalk2 (D-11) ───────────────────────────────────────────────
+
 
 def collect_smoltalk2(
     max_samples: int = 100000,
@@ -405,30 +404,25 @@ def collect_smoltalk2(
 
     from datasets import get_dataset_split_names, load_dataset
 
-    logger.info(
-        f"Downloading SmolTalk2 (config={config!r}, "
-        f"split={split!r}, max {max_samples:,})...")
+    logger.info(f"Downloading SmolTalk2 (config={config!r}, split={split!r}, max {max_samples:,})...")
 
     # Resolve splits to iterate.
     if split is None:
         try:
-            splits = list(get_dataset_split_names(
-                "HuggingFaceTB/smoltalk2", config))
+            splits = list(get_dataset_split_names("HuggingFaceTB/smoltalk2", config))
         except Exception as exc:
             logger.error(
                 "Failed to enumerate SmolTalk2 splits "
                 "(config=%r): %s. Pick a valid config and "
                 "re-run with --smoltalk2-config NAME.",
-                config, exc,
+                config,
+                exc,
             )
             return []
         if not splits:
-            logger.error(
-                "SmolTalk2 config=%r has no splits.", config)
+            logger.error("SmolTalk2 config=%r has no splits.", config)
             return []
-        logger.info(
-            f"  SmolTalk2 config={config!r} has "
-            f"{len(splits)} splits; iterating all.")
+        logger.info(f"  SmolTalk2 config={config!r} has {len(splits)} splits; iterating all.")
     else:
         splits = [split]
 
@@ -446,9 +440,10 @@ def collect_smoltalk2(
             )
         except Exception as exc:
             logger.error(
-                "Failed to load SmolTalk2 (config=%r, "
-                "split=%r): %s.",
-                config, split_name, exc,
+                "Failed to load SmolTalk2 (config=%r, split=%r): %s.",
+                config,
+                split_name,
+                exc,
             )
             continue
 
@@ -469,8 +464,7 @@ def collect_smoltalk2(
                     system = content
                 elif role == "user" and content and not prompt:
                     prompt = content
-                elif (role == "assistant" and content
-                      and not completion):
+                elif role == "assistant" and content and not completion:
                     completion = content
                     # first assistant reply is enough for SFT pair
                     break
@@ -486,13 +480,10 @@ def collect_smoltalk2(
             ):
                 prompt = f"{system}\n\n{prompt}"
 
-            pairs.append({
-                "prompt": prompt, "completion": completion})
+            pairs.append({"prompt": prompt, "completion": completion})
 
             if seen % 10000 == 0:
-                logger.info(
-                    f"  SmolTalk2: {seen:,} processed, "
-                    f"{len(pairs):,} kept...")
+                logger.info(f"  SmolTalk2: {seen:,} processed, {len(pairs):,} kept...")
 
     pairs = _dedup_pairs(pairs)
     logger.info(f"SmolTalk2: {len(pairs)} instruction pairs extracted")
@@ -500,6 +491,7 @@ def collect_smoltalk2(
 
 
 # ── Combine & Stats ───────────────────────────────────────────────
+
 
 def combine_all(output_dir: Path) -> Path:
     """Merge all source JSONL files into one combined file."""
@@ -529,9 +521,7 @@ def combine_all(output_dir: Path) -> Path:
 
     size_mb = combined_path.stat().st_size / (1024 * 1024)
     text_size_mb = text_path.stat().st_size / (1024 * 1024)
-    logger.info(
-        f"Combined: {len(all_pairs):,} pairs, {size_mb:.1f} MB "
-        f"→ {combined_path}")
+    logger.info(f"Combined: {len(all_pairs):,} pairs, {size_mb:.1f} MB → {combined_path}")
     # D-11d (Pass 156l): file-present-zero-yield must be loud, not silent.
     # If we have collected pairs but every one had empty prompt/completion,
     # the .txt file is 0 bytes and the SFT path will silently train on
@@ -539,13 +529,12 @@ def combine_all(output_dir: Path) -> Path:
     # Pass 156i6 anchor loader.
     if text_count == 0 and len(all_pairs) > 0:
         logger.warning(
-            "All %d combined pairs had empty prompt or completion — "
-            "text file is 0 bytes (%s). Check fetcher output.",
-            len(all_pairs), text_path)
+            "All %d combined pairs had empty prompt or completion — text file is 0 bytes (%s). Check fetcher output.",
+            len(all_pairs),
+            text_path,
+        )
     else:
-        logger.info(
-            f"Combined text: {text_count:,} blocks, {text_size_mb:.1f} MB "
-            f"→ {text_path}")
+        logger.info(f"Combined text: {text_count:,} blocks, {text_size_mb:.1f} MB → {text_path}")
     return combined_path
 
 
@@ -572,61 +561,54 @@ def show_stats(output_dir: Path):
         total_pairs += n_lines
         total_bytes += size
 
-        size_str = (
-            f"{size / (1024*1024):.1f} MB" if size > 1024 * 1024
-            else f"{size / 1024:.0f} KB")
+        size_str = f"{size / (1024 * 1024):.1f} MB" if size > 1024 * 1024 else f"{size / 1024:.0f} KB"
         print(f"  {jsonl_file.name:<23} {n_lines:>10,} {size_str:>10}")
 
     print("-" * 47)
-    total_str = (
-        f"{total_bytes / (1024*1024):.1f} MB"
-        if total_bytes > 1024 * 1024
-        else f"{total_bytes / 1024:.0f} KB")
+    total_str = f"{total_bytes / (1024 * 1024):.1f} MB" if total_bytes > 1024 * 1024 else f"{total_bytes / 1024:.0f} KB"
     print(f"  {'TOTAL':<23} {total_pairs:>10,} {total_str:>10}")
     print()
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Collect fine-tuning data for Enigma Engine")
+    parser = argparse.ArgumentParser(description="Collect fine-tuning data for Enigma Engine")
+    parser.add_argument("--oasst", action="store_true", help="Download OASST1 conversation dataset")
+    parser.add_argument("--dolly", action="store_true", help="Download Databricks Dolly 15k")
     parser.add_argument(
-        "--oasst", action="store_true",
-        help="Download OASST1 conversation dataset")
+        "--slimorca", type=int, nargs="?", const=100000, help="Download SlimOrca (default: 100K samples)"
+    )
     parser.add_argument(
-        "--dolly", action="store_true",
-        help="Download Databricks Dolly 15k")
+        "--openthoughts3",
+        type=int,
+        nargs="?",
+        const=100000,
+        help="Download OpenThoughts3-1.2M reasoning data with <think> tags (default: 100K samples)",
+    )
     parser.add_argument(
-        "--slimorca", type=int, nargs="?", const=100000,
-        help="Download SlimOrca (default: 100K samples)")
+        "--smoltalk2",
+        type=int,
+        nargs="?",
+        const=100000,
+        help="Download SmolTalk2 SFT data (default: 100K samples). Requires --smoltalk2-config.",
+    )
     parser.add_argument(
-        "--openthoughts3", type=int, nargs="?", const=100000,
-        help="Download OpenThoughts3-1.2M reasoning data "
-             "with <think> tags (default: 100K samples)")
+        "--smoltalk2-config",
+        type=str,
+        default="default",
+        help="SmolTalk2 config name (e.g. smol_magpie_ultra). On a missing config the loader logs available choices.",
+    )
     parser.add_argument(
-        "--smoltalk2", type=int, nargs="?", const=100000,
-        help="Download SmolTalk2 SFT data "
-             "(default: 100K samples). Requires --smoltalk2-config.")
-    parser.add_argument(
-        "--smoltalk2-config", type=str, default="default",
-        help="SmolTalk2 config name (e.g. smol_magpie_ultra). "
-             "On a missing config the loader logs available choices.")
-    parser.add_argument(
-        "--smoltalk2-split", type=str, default=None,
+        "--smoltalk2-split",
+        type=str,
+        default=None,
         help="SmolTalk2 split name within the chosen config. "
-             "If omitted, all splits in the config are concatenated "
-             "until --smoltalk2 max is reached.")
-    parser.add_argument(
-        "--all", action="store_true",
-        help="Download all sources")
-    parser.add_argument(
-        "--combine-only", action="store_true",
-        help="Re-combine existing source files")
-    parser.add_argument(
-        "--stats", action="store_true",
-        help="Show collected data statistics")
-    parser.add_argument(
-        "--output-dir", type=str, default=str(OUTPUT_DIR),
-        help="Output directory")
+        "If omitted, all splits in the config are concatenated "
+        "until --smoltalk2 max is reached.",
+    )
+    parser.add_argument("--all", action="store_true", help="Download all sources")
+    parser.add_argument("--combine-only", action="store_true", help="Re-combine existing source files")
+    parser.add_argument("--stats", action="store_true", help="Show collected data statistics")
+    parser.add_argument("--output-dir", type=str, default=str(OUTPUT_DIR), help="Output directory")
 
     args = parser.parse_args()
     output_dir = Path(args.output_dir)
@@ -640,10 +622,7 @@ def main():
         combine_all(output_dir)
         return
 
-    any_source = (
-        args.oasst or args.dolly or args.slimorca
-        or args.openthoughts3 or args.smoltalk2 or args.all
-    )
+    any_source = args.oasst or args.dolly or args.slimorca or args.openthoughts3 or args.smoltalk2 or args.all
     if not any_source:
         parser.print_help()
         return
@@ -677,10 +656,7 @@ def main():
             collected.append(("SlimOrca", len(pairs)))
 
     if args.openthoughts3 is not None or args.all:
-        max_n = (
-            args.openthoughts3 if args.openthoughts3 is not None
-            else 100000
-        )
+        max_n = args.openthoughts3 if args.openthoughts3 is not None else 100000
         pairs = collect_openthoughts3(max_samples=max_n)
         if pairs:
             path = output_dir / "openthoughts3.jsonl"
@@ -689,9 +665,7 @@ def main():
             collected.append(("OpenThoughts3", len(pairs)))
 
     if args.smoltalk2 is not None or args.all:
-        max_n = (
-            args.smoltalk2 if args.smoltalk2 is not None else 100000
-        )
+        max_n = args.smoltalk2 if args.smoltalk2 is not None else 100000
         pairs = collect_smoltalk2(
             max_samples=max_n,
             config=args.smoltalk2_config,

@@ -26,13 +26,19 @@ def test_math_reward_can_infer_simple_arithmetic_from_prompt():
 def test_reasoning_reward_matches_grpo2_contract_example():
     from enigma_engine.core.reward_functions import reasoning_reward
 
-    assert reasoning_reward(
-        "What is 2 + 2?",
-        "<think>2+2=4</think>\n4",
-        ground_truth="4",
-    ) == 1.0
-    assert reasoning_reward(
-        "What is 2 + 2?",
-        "5",
-        ground_truth="4",
-    ) == 0.0
+    assert (
+        reasoning_reward(
+            "What is 2 + 2?",
+            "<think>2+2=4</think>\n4",
+            ground_truth="4",
+        )
+        == 1.0
+    )
+    assert (
+        reasoning_reward(
+            "What is 2 + 2?",
+            "5",
+            ground_truth="4",
+        )
+        == 0.0
+    )

@@ -118,6 +118,7 @@ class WhisperSTT:
             return True
         try:
             from faster_whisper import WhisperModel
+
             self._WhisperModel = WhisperModel
             return True
         except Exception as e:
@@ -130,6 +131,7 @@ class WhisperSTT:
         try:
             import sounddevice as sd
             import numpy as np
+
             self._sd = sd
             self._np = np
             return True
@@ -147,6 +149,7 @@ class WhisperSTT:
         # auto
         try:
             import torch
+
             if torch.cuda.is_available():
                 return "cuda", "float16"
         except Exception:
@@ -159,13 +162,8 @@ class WhisperSTT:
             return False
         try:
             device, compute_type = self._resolve_device()
-            logger.info(
-                f"Loading faster-whisper model='{self.model_name}' "
-                f"device={device} compute={compute_type}"
-            )
-            self._model = self._WhisperModel(
-                self.model_name, device=device, compute_type=compute_type
-            )
+            logger.info(f"Loading faster-whisper model='{self.model_name}' device={device} compute={compute_type}")
+            self._model = self._WhisperModel(self.model_name, device=device, compute_type=compute_type)
             return True
         except Exception as e:
             logger.error(f"faster-whisper load failed: {e}")
@@ -181,9 +179,7 @@ class WhisperSTT:
             logger.error(f"transcribe_file failed: {e}")
             return ""
 
-    def listen_microphone(
-        self, duration: float = 5.0, language: Optional[str] = None
-    ) -> str:
+    def listen_microphone(self, duration: float = 5.0, language: Optional[str] = None) -> str:
         """Record `duration` seconds from default mic, transcribe locally."""
         if not self._ensure_mic_imports():
             return ""
@@ -214,10 +210,15 @@ class WhisperSTT:
 # TTS - Kokoro-82M (local, Apache 2.0)
 # ===========================================================================
 DEFAULT_KOKORO_VOICES = (
-    "af_heart", "af_bella", "af_sarah",
-    "am_adam", "am_michael",
-    "bf_emma", "bf_isabella",
-    "bm_george", "bm_lewis",
+    "af_heart",
+    "af_bella",
+    "af_sarah",
+    "am_adam",
+    "am_michael",
+    "bf_emma",
+    "bf_isabella",
+    "bm_george",
+    "bm_lewis",
 )
 
 
@@ -243,6 +244,7 @@ class LocalTTS:
             return True
         try:
             from kokoro import KPipeline
+
             self._pipeline = KPipeline(lang_code=self.lang_code)
             return True
         except Exception as e:
@@ -253,9 +255,11 @@ class LocalTTS:
         try:
             if self._sf is None:
                 import soundfile as sf
+
                 self._sf = sf
             if self._sd is None:
                 import sounddevice as sd
+
                 self._sd = sd
             return True
         except Exception as e:
@@ -305,6 +309,7 @@ class LocalTTS:
             if not chunks:
                 return None
             import numpy as np
+
             data = np.concatenate(chunks) if len(chunks) > 1 else chunks[0]
             self._sf.write(str(out_path), data, 24000)
             return out_path
@@ -372,10 +377,7 @@ class SystemTTS:
                 # Linux: try espeak / spd-say if installed; else log.
                 code = os.system(f'espeak "{text_safe}" 2>/dev/null')
                 if code != 0:
-                    logger.warning(
-                        "SystemTTS: no espeak on Linux; install espeak-ng or "
-                        "use Kokoro provider"
-                    )
+                    logger.warning("SystemTTS: no espeak on Linux; install espeak-ng or use Kokoro provider")
                     return False
             return True
         except Exception as e:
@@ -433,16 +435,12 @@ class VoicePipeline:
     # -- factories ---------------------------------------------------------
     def _make_stt(self, name: str) -> Optional[Any]:
         if name == "whisper":
-            return WhisperSTT(
-                model_name=self.whisper_model, device=self.whisper_device
-            )
+            return WhisperSTT(model_name=self.whisper_model, device=self.whisper_device)
         return None  # no cloud STT supported
 
     def _make_tts(self, name: str) -> Optional[Any]:
         if name == "local":
-            return LocalTTS(
-                voice=self.kokoro_voice, lang_code=self.kokoro_lang_code
-            )
+            return LocalTTS(voice=self.kokoro_voice, lang_code=self.kokoro_lang_code)
         if name == "system":
             return SystemTTS()
         return None
@@ -460,8 +458,7 @@ class VoicePipeline:
         if self.stt is None:
             result["success"] = False
             result["errors"].append(
-                f"unknown stt provider '{self.stt_provider}'; "
-                "supported: ['whisper'] (faster-whisper)"
+                f"unknown stt provider '{self.stt_provider}'; supported: ['whisper'] (faster-whisper)"
             )
         elif not self.stt.load():
             result["success"] = False
@@ -476,8 +473,7 @@ class VoicePipeline:
         if self.tts is None:
             result["success"] = False
             result["errors"].append(
-                f"unknown tts provider '{self.tts_provider}'; "
-                "supported: ['local' (kokoro), 'system']"
+                f"unknown tts provider '{self.tts_provider}'; supported: ['local' (kokoro), 'system']"
             )
         elif not self.tts.load():
             result["success"] = False
@@ -486,9 +482,7 @@ class VoicePipeline:
                 if self.tts_provider == "local"
                 else "OS-native TTS unavailable"
             )
-            result["errors"].append(
-                f"tts provider '{self.tts_provider}' load failed - {err}"
-            )
+            result["errors"].append(f"tts provider '{self.tts_provider}' load failed - {err}")
         else:
             result["tts"]["loaded"] = True
 
@@ -846,8 +840,13 @@ class Voice:
             payload={
                 "service": "voice",
                 "capabilities": [
-                    "stt", "tts", "listen", "speak",
-                    "transcribe", "audio", "generate_audio",
+                    "stt",
+                    "tts",
+                    "listen",
+                    "speak",
+                    "transcribe",
+                    "audio",
+                    "generate_audio",
                 ],
                 "commands": list(self._commands.keys()),
             },
@@ -874,9 +873,7 @@ class Voice:
                         msg.payload.get("command", ""),
                         msg.payload.get("params", {}),
                     )
-                    resp = Message(
-                        type=MessageType.RESPONSE, payload=result, id=msg.id
-                    )
+                    resp = Message(type=MessageType.RESPONSE, payload=result, id=msg.id)
                     resp_data = resp.to_bytes()
                     sock.sendall(struct.pack(">I", len(resp_data)) + resp_data)
             except Exception as e:
@@ -895,9 +892,7 @@ class Voice:
         while self._running:
             try:
                 client, _addr = sock.accept()
-                threading.Thread(
-                    target=self._handle_client, args=(client,), daemon=True
-                ).start()
+                threading.Thread(target=self._handle_client, args=(client,), daemon=True).start()
             except Exception as e:
                 logger.error(f"Accept error: {e}")
                 break
@@ -922,9 +917,7 @@ class Voice:
                         msg.payload.get("command", ""),
                         msg.payload.get("params", {}),
                     )
-                    resp = Message(
-                        type=MessageType.RESPONSE, payload=result, id=msg.id
-                    )
+                    resp = Message(type=MessageType.RESPONSE, payload=result, id=msg.id)
                     client.sendall(resp.to_bytes())
         except Exception as e:
             logger.error(f"Client error: {e}")
@@ -948,11 +941,17 @@ def main() -> None:
     parser.add_argument("--speak", type=str, help="Speak text")
     parser.add_argument("--transcribe", type=str, help="Transcribe audio file")
     parser.add_argument(
-        "--stt", type=str, default="whisper", choices=["whisper"],
+        "--stt",
+        type=str,
+        default="whisper",
+        choices=["whisper"],
         help="STT provider (faster-whisper, local-only)",
     )
     parser.add_argument(
-        "--tts", type=str, default="local", choices=["local", "system"],
+        "--tts",
+        type=str,
+        default="local",
+        choices=["local", "system"],
         help="TTS provider: 'local' (Kokoro) or 'system' (OS-native fallback)",
     )
 
@@ -968,9 +967,7 @@ def main() -> None:
         print(json.dumps(result, indent=2))
         return
     if args.transcribe:
-        result = service.handle_command(
-            "transcribe", {"audio_path": args.transcribe}
-        )
+        result = service.handle_command("transcribe", {"audio_path": args.transcribe})
         print(json.dumps(result, indent=2))
         return
 

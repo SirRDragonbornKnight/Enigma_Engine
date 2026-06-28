@@ -207,10 +207,7 @@ class WeightMapper:
                 logger.warning(f"Skipped unmapped weight: {source_name}")
 
         total = self._stats["mapped"] + self._stats["skipped"]
-        logger.info(
-            f"Weight mapping: {self._stats['mapped']} mapped, "
-            f"{self._stats['skipped']} skipped"
-        )
+        logger.info(f"Weight mapping: {self._stats['mapped']} mapped, {self._stats['skipped']} skipped")
 
         # Raise if more than 10% of weights are unmapped — likely wrong
         # model type or corrupted checkpoint.
@@ -246,11 +243,7 @@ class WeightMapper:
         logger.warning("Could not auto-detect model type, defaulting to llama")
         return "llama"
 
-    def map_huggingface_to_forge(
-        self,
-        hf_state_dict: dict,
-        model_type: Optional[str] = None
-    ) -> dict:
+    def map_huggingface_to_forge(self, hf_state_dict: dict, model_type: Optional[str] = None) -> dict:
         """
         Convert HuggingFace state dict to Forge format.
 
@@ -268,8 +261,7 @@ class WeightMapper:
         model_type = model_type.lower()
         mapping_rules = HF_MODEL_MAPS.get(model_type, HF_LLAMA_MAP)
 
-        logger.info(f"Mapping HuggingFace weights (type={model_type}, "
-                    f"rules={len(mapping_rules)})")
+        logger.info(f"Mapping HuggingFace weights (type={model_type}, rules={len(mapping_rules)})")
 
         return self._apply_mapping(hf_state_dict, mapping_rules)
 
@@ -330,15 +322,15 @@ class WeightMapper:
         This is a last resort for ONNX models with non-standard naming.
         """
         result = {}
-        dim = getattr(config, 'dim', None)
-        vocab_size = getattr(config, 'vocab_size', None)
+        dim = getattr(config, "dim", None)
+        vocab_size = getattr(config, "vocab_size", None)
 
         if dim is None or vocab_size is None:
             logger.warning("Cannot do shape-based mapping without dim and vocab_size in config")
             return result
 
         for name, tensor in weights.items():
-            shape = tuple(tensor.shape) if hasattr(tensor, 'shape') else ()
+            shape = tuple(tensor.shape) if hasattr(tensor, "shape") else ()
 
             # Token embeddings: [vocab_size, dim]
             if shape == (vocab_size, dim) and "tok_embeddings.weight" not in result:

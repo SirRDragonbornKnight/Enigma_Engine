@@ -21,6 +21,7 @@ Usage:
     config = ForgeConfig(vocab_size=32000, dim=512, n_layers=8)
     model = Enigma(config=config)
 """
+
 import json
 import logging
 import math
@@ -38,19 +39,38 @@ logger = logging.getLogger(__name__)
 # Re-exports from sub-modules
 # ─────────────────────────────────────────────────────────────────────────────
 from .model_presets import (  # noqa: F401
-    ForgeConfig, QuantizationConfig, MODEL_PRESETS, MODEL_DESCRIPTIONS,
-    get_preset, estimate_parameters, list_presets,
+    ForgeConfig,
+    QuantizationConfig,
+    MODEL_PRESETS,
+    MODEL_DESCRIPTIONS,
+    get_preset,
+    estimate_parameters,
+    list_presets,
 )
 from .model_components import (  # noqa: F401
-    RMSNorm, DropPath, Attention, FeedForward, TransformerBlock,
-    precompute_rope_frequencies, apply_rotary_embedding,
-    HAS_FLASH_ATTN, flash_attn_func,
+    RMSNorm,
+    DropPath,
+    Attention,
+    FeedForward,
+    TransformerBlock,
+    precompute_rope_frequencies,
+    apply_rotary_embedding,
+    HAS_FLASH_ATTN,
+    flash_attn_func,
 )
 from .model_utils import (  # noqa: F401
-    apply_repetition_penalty, sample_next_token,
-    detect_hardware, recommend_model_size, estimate_memory_usage,
-    get_running_models, is_model_loaded, register_model, unregister_model, get_model,
-    _LOADED_MODELS, _MODELS_LOCK,
+    apply_repetition_penalty,
+    sample_next_token,
+    detect_hardware,
+    recommend_model_size,
+    estimate_memory_usage,
+    get_running_models,
+    is_model_loaded,
+    register_model,
+    unregister_model,
+    get_model,
+    _LOADED_MODELS,
+    _MODELS_LOCK,
 )
 from .safe_save import atomic_torch_save, atomic_write_json
 
@@ -90,10 +110,11 @@ def _chunked_cross_entropy(
         n_valid = valid_mask.sum()
         if n_valid > 0:
             total_loss = total_loss + F.cross_entropy(
-                chunk_logits, chunk_targets,
+                chunk_logits,
+                chunk_targets,
                 ignore_index=ignore_index,
                 label_smoothing=label_smoothing,
-                reduction='sum',
+                reduction="sum",
             )
             total_tokens = total_tokens + n_valid
 
@@ -105,6 +126,7 @@ def _chunked_cross_entropy(
 # =============================================================================
 # MAIN MODEL - THE FULL TRANSFORMER
 # =============================================================================
+
 
 class Enigma(nn.Module):
     """
@@ -189,8 +211,7 @@ class Enigma(nn.Module):
             # LLaVA-1; the MLP upgrade was the headline architecture change.
             # State-dict keys: vision_projection.{0,2}.{weight,bias}.
             self.vision_projection = nn.Sequential(
-                nn.Linear(self.config.vision_hidden_size, self.config.dim,
-                          bias=True),
+                nn.Linear(self.config.vision_hidden_size, self.config.dim, bias=True),
                 nn.GELU(),
                 nn.Linear(self.config.dim, self.config.dim, bias=True),
             )
@@ -203,11 +224,7 @@ class Enigma(nn.Module):
             self.vision_projection = None
 
         if self.config.audio_hidden_size is not None:
-            self.audio_projection = nn.Linear(
-                self.config.audio_hidden_size,
-                self.config.dim,
-                bias=False
-            )
+            self.audio_projection = nn.Linear(self.config.audio_hidden_size, self.config.dim, bias=False)
             logger.info(f"Added audio projection: {self.config.audio_hidden_size} → {self.config.dim}")
         else:
             self.audio_projection = None
@@ -217,22 +234,18 @@ class Enigma(nn.Module):
             self.pos = nn.Parameter(torch.randn(1, self.config.max_seq_len, self.config.dim) * 0.02)
 
         # Transformer layers
-        self.layers = nn.ModuleList([
-            TransformerBlock(self.config, i) for i in range(self.config.n_layers)
-        ])
+        self.layers = nn.ModuleList([TransformerBlock(self.config, i) for i in range(self.config.n_layers)])
 
         # T3-1: Cross-layer KV sharing — group layers into bands that
         # share K, V projections.  Only the first layer in each band
         # computes K, V; followers reuse them.
-        n_groups = getattr(self.config, 'kv_share_groups', 0)
+        n_groups = getattr(self.config, "kv_share_groups", 0)
         if n_groups > 0 and self.config.n_layers >= n_groups:
             layers_per_group = self.config.n_layers // n_groups
             for i, layer in enumerate(self.layers):
                 leader_idx = (i // layers_per_group) * layers_per_group
                 if i != leader_idx:
-                    layer.attention._kv_share_source = (
-                        self.layers[leader_idx].attention
-                    )
+                    layer.attention._kv_share_source = self.layers[leader_idx].attention
 
         # Output (padded for GPU alignment, weight-tied with embeddings)
         Norm = RMSNorm if self.config.use_rms_norm else nn.LayerNorm
@@ -247,15 +260,13 @@ class Enigma(nn.Module):
         self.predict_heads = nn.ModuleList()
         if self.config.n_predict_heads > 0:
             for _ in range(self.config.n_predict_heads):
-                self.predict_heads.append(
-                    nn.Linear(self.config.dim, padded_vocab, bias=False))
+                self.predict_heads.append(nn.Linear(self.config.dim, padded_vocab, bias=False))
 
         # T3-2: Self-speculative decoding — early-exit head
-        self.early_exit_layer = getattr(self.config, 'early_exit_layer', 0)
+        self.early_exit_layer = getattr(self.config, "early_exit_layer", 0)
         if self.early_exit_layer > 0:
             self.early_exit_norm = RMSNorm(self.config.dim)
-            self.early_exit_head = nn.Linear(
-                self.config.dim, padded_vocab, bias=False)
+            self.early_exit_head = nn.Linear(self.config.dim, padded_vocab, bias=False)
 
         # RoPE frequencies with optional scaling
         if self.config.use_rope:
@@ -268,13 +279,13 @@ class Enigma(nn.Module):
                     f"Adjust dim or n_heads so dim/n_heads is even."
                 )
             self.register_buffer(
-                'freqs_cis',
+                "freqs_cis",
                 precompute_rope_frequencies(
                     head_dim,
                     self.config.max_seq_len * 2,
                     self.config.rope_theta,
                     scaling_type=self.config.rope_scaling_type,
-                    scaling_factor=self.config.rope_scaling_factor
+                    scaling_factor=self.config.rope_scaling_factor,
                 ),
                 persistent=False,
             )
@@ -296,7 +307,7 @@ class Enigma(nn.Module):
 
         # nGPT: Apply weight normalization to all Linear layers
         # (except weight-tied output head) for training stability.
-        if getattr(self.config, 'use_weight_norm', False):
+        if getattr(self.config, "use_weight_norm", False):
             self._apply_weight_norm()
 
     def _init_weights(self, module) -> None:
@@ -309,7 +320,7 @@ class Enigma(nn.Module):
 
     def _init_output_weights(self) -> None:
         for name, p in self.named_parameters():
-            if name.endswith('wo.weight') or name.endswith('w2.weight'):
+            if name.endswith("wo.weight") or name.endswith("w2.weight"):
                 torch.nn.init.normal_(p, mean=0.0, std=0.02 / math.sqrt(2 * self.config.n_layers))
 
     def gradient_checkpointing_enable(self) -> None:
@@ -340,7 +351,7 @@ class Enigma(nn.Module):
         count = 0
         for module in self.modules():
             if isinstance(module, nn.Linear) and id(module.weight) != tied_id:
-                weight_norm(module, name='weight')
+                weight_norm(module, name="weight")
                 count += 1
         if count:
             logger.info(f"nGPT: applied weight normalization to {count} Linear layers")
@@ -358,14 +369,12 @@ class Enigma(nn.Module):
             # Build at the requested size (never shrink)
             new_size = max(size, self._causal_mask_size)
             device = next(self.parameters()).device
-            mask = torch.full((new_size, new_size), float('-inf'), device=device)
+            mask = torch.full((new_size, new_size), float("-inf"), device=device)
             mask = torch.triu(mask, diagonal=1)
             # Sliding window: also mask positions beyond window distance
             if sw is not None and sw > 0:
-                sw_mask = torch.tril(
-                    torch.ones(new_size, new_size, device=device), diagonal=-sw - 1
-                )
-                mask = mask.masked_fill(sw_mask.bool(), float('-inf'))
+                sw_mask = torch.tril(torch.ones(new_size, new_size, device=device), diagonal=-sw - 1)
+                mask = mask.masked_fill(sw_mask.bool(), float("-inf"))
             self._causal_mask = mask
             self._causal_mask_size = new_size
         return self._causal_mask[:size, :size]
@@ -379,29 +388,34 @@ class Enigma(nn.Module):
         2. Vocab padding — model pads vocab to multiple of 64 for GPU
            matmul alignment, but older checkpoints have unpadded weights.
         """
-        if 'freqs_cis' in state_dict:
-            state_dict.pop('freqs_cis')
+        if "freqs_cis" in state_dict:
+            state_dict.pop("freqs_cis")
             logger.debug("Removed stale freqs_cis buffer from checkpoint")
 
         padded_vocab = (self.config.vocab_size + 63) & ~63
         if padded_vocab != self.config.vocab_size:
             vocab_keys = [
-                'tok_embeddings.weight',
-                'output.weight',
+                "tok_embeddings.weight",
+                "output.weight",
             ]
             for key in vocab_keys:
                 if key in state_dict and state_dict[key].shape[0] == self.config.vocab_size:
                     old = state_dict[key]
                     padded = torch.zeros(padded_vocab, *old.shape[1:], dtype=old.dtype)
-                    padded[:self.config.vocab_size] = old
+                    padded[: self.config.vocab_size] = old
                     state_dict[key] = padded
 
         return super().load_state_dict(state_dict, strict=strict, **kwargs)
 
     def forward(
-        self, input_ids: torch.Tensor, targets: Optional[torch.Tensor] = None,
-        use_cache: bool = False, start_pos: int = 0, return_loss: bool = False,
-        pad_token_id: int = 0, label_smoothing: float = 0.0,
+        self,
+        input_ids: torch.Tensor,
+        targets: Optional[torch.Tensor] = None,
+        use_cache: bool = False,
+        start_pos: int = 0,
+        return_loss: bool = False,
+        pad_token_id: int = 0,
+        label_smoothing: float = 0.0,
         attention_mask: Optional[torch.Tensor] = None,
         attention_mask_2d: Optional[torch.Tensor] = None,
         chunked_ce: int = 0,
@@ -432,8 +446,7 @@ class Enigma(nn.Module):
             logits if no targets and return_loss=False, else (logits, loss)
         """
         if not (0.0 <= label_smoothing <= 1.0):
-            raise ValueError(
-                f"label_smoothing must be in [0.0, 1.0], got {label_smoothing}")
+            raise ValueError(f"label_smoothing must be in [0.0, 1.0], got {label_smoothing}")
 
         B, T = input_ids.shape
 
@@ -467,9 +480,7 @@ class Enigma(nn.Module):
             # Padding present: materialize causal + pad as one additive mask.
             mask = self._get_causal_mask(T).to(device=h.device).unsqueeze(0).unsqueeze(0)
             # attention_mask shape: (B, T) → (B, 1, 1, T)
-            pad_mask = (1 - attention_mask.unsqueeze(1).unsqueeze(2).float()) * (
-                torch.finfo(h.dtype).min
-            )
+            pad_mask = (1 - attention_mask.unsqueeze(1).unsqueeze(2).float()) * (torch.finfo(h.dtype).min)
             mask = mask + pad_mask
         # else: plain causal (T>1, no pad) or single-token decode (T==1) → mask stays
         # None; attention applies is_causal=True (correct for this decoder-only model).
@@ -493,29 +504,34 @@ class Enigma(nn.Module):
         if targets is not None:
             if use_chunked:
                 loss = _chunked_cross_entropy(
-                    self.output, h_normed, targets,
+                    self.output,
+                    h_normed,
+                    targets,
                     chunk_size=chunked_ce,
                     ignore_index=pad_token_id,
                     label_smoothing=label_smoothing,
                 )
             else:
-                loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)),
-                                       targets.reshape(-1),
-                                       ignore_index=pad_token_id,
-                                       label_smoothing=label_smoothing)
+                loss = F.cross_entropy(
+                    logits.reshape(-1, logits.size(-1)),
+                    targets.reshape(-1),
+                    ignore_index=pad_token_id,
+                    label_smoothing=label_smoothing,
+                )
 
             # Multi-token prediction auxiliary loss (R25, Gloeckle et al. 2024)
             # Each extra head predicts the k-th next token (k=2,3,...).
             if self.training and self.predict_heads:
-                mtp_loss = torch.tensor(
-                    0.0, device=h_normed.device, dtype=h_normed.dtype)
+                mtp_loss = torch.tensor(0.0, device=h_normed.device, dtype=h_normed.dtype)
                 for i, head in enumerate(self.predict_heads):
                     shift = i + 1
                     if targets.size(1) > shift:
                         shifted_targets = targets[:, shift:]
                         if use_chunked:
                             mtp_loss = mtp_loss + _chunked_cross_entropy(
-                                head, h_normed[:, :-shift], shifted_targets,
+                                head,
+                                h_normed[:, :-shift],
+                                shifted_targets,
                                 chunk_size=chunked_ce,
                                 ignore_index=pad_token_id,
                                 label_smoothing=label_smoothing,
@@ -574,6 +590,7 @@ class Enigma(nn.Module):
             # Ensure the per-layer KVCache exists (lazy-init)
             if attn._kv_cache is None:
                 from enigma_engine.core.kv_cache import KVCache
+
                 attn._kv_cache = KVCache(
                     batch_size=pk.shape[0],
                     max_seq_len=attn.max_cache_len,
@@ -613,7 +630,7 @@ class Enigma(nn.Module):
         input_ids: Optional[torch.Tensor] = None,
         vision_features: Optional[torch.Tensor] = None,
         audio_features: Optional[torch.Tensor] = None,
-        **kwargs
+        **kwargs,
     ) -> torch.Tensor:
         """
         Forward pass with multi-modal inputs.
@@ -643,18 +660,14 @@ class Enigma(nn.Module):
         # Process vision features
         if vision_features is not None:
             if self.vision_projection is None:
-                raise ValueError(
-                    "Vision features provided but vision_hidden_size not set in config"
-                )
+                raise ValueError("Vision features provided but vision_hidden_size not set in config")
             vision_embeds = self.vision_projection(vision_features)
             embeddings_list.append(vision_embeds)
 
         # Process audio features
         if audio_features is not None:
             if self.audio_projection is None:
-                raise ValueError(
-                    "Audio features provided but audio_hidden_size not set in config"
-                )
+                raise ValueError("Audio features provided but audio_hidden_size not set in config")
             audio_embeds = self.audio_projection(audio_features)
             embeddings_list.append(audio_embeds)
 
@@ -674,7 +687,7 @@ class Enigma(nn.Module):
         h = combined_embeds
 
         # Add positional embeddings if not using RoPE
-        if not self.config.use_rope and hasattr(self, 'pos'):
+        if not self.config.use_rope and hasattr(self, "pos"):
             if T > self.config.max_seq_len:
                 raise ValueError(
                     f"Sequence length {T} exceeds max_seq_len {self.config.max_seq_len} "
@@ -688,16 +701,14 @@ class Enigma(nn.Module):
             mask = self._get_causal_mask(T).to(device=h.device).unsqueeze(0).unsqueeze(0)
 
             # Combine with attention_mask if provided via kwargs
-            attention_mask = kwargs.get('attention_mask')
+            attention_mask = kwargs.get("attention_mask")
             if attention_mask is not None:
-                pad_mask = (1 - attention_mask.unsqueeze(1).unsqueeze(2).float()) * (
-                    torch.finfo(h.dtype).min
-                )
+                pad_mask = (1 - attention_mask.unsqueeze(1).unsqueeze(2).float()) * (torch.finfo(h.dtype).min)
                 mask = mask + pad_mask
 
         # Transform through layers
         for layer in self.layers:
-            h = layer(h, self.freqs_cis, mask, kwargs.get('use_cache', False), kwargs.get('start_pos', 0))
+            h = layer(h, self.freqs_cis, mask, kwargs.get("use_cache", False), kwargs.get("start_pos", 0))
 
         # Output projection
         logits = self.output(self.norm(h))
@@ -753,21 +764,19 @@ class Enigma(nn.Module):
 
         # Validate input shape
         if input_ids.dim() != 2:
-            raise ValueError(
-                f"input_ids must be 2D [batch, seq_len], got shape {list(input_ids.shape)}")
+            raise ValueError(f"input_ids must be 2D [batch, seq_len], got shape {list(input_ids.shape)}")
 
         # Validate device match
         model_device = next(self.parameters()).device
         if input_ids.device != model_device:
             raise ValueError(
-                f"input_ids on {input_ids.device} but model on {model_device}. "
-                f"Move input to model device first.")
+                f"input_ids on {input_ids.device} but model on {model_device}. Move input to model device first."
+            )
 
         # Delegate to streaming generator if requested
         if stream:
             return self.generate_stream(
-                input_ids, max_new_tokens, temperature, top_k, top_p,
-                repetition_penalty, stop_tokens, min_p=min_p
+                input_ids, max_new_tokens, temperature, top_k, top_p, repetition_penalty, stop_tokens, min_p=min_p
             )
 
         self.clear_cache()
@@ -779,8 +788,13 @@ class Enigma(nn.Module):
 
         for _ in range(max_new_tokens):
             next_token = sample_next_token(
-                logits[:, -1, :], generated, temperature,
-                top_k, top_p, repetition_penalty, min_p=min_p,
+                logits[:, -1, :],
+                generated,
+                temperature,
+                top_k,
+                top_p,
+                repetition_penalty,
+                min_p=min_p,
             )
             generated = torch.cat([generated, next_token], dim=1)
 
@@ -859,8 +873,13 @@ class Enigma(nn.Module):
 
         for _ in range(max_new_tokens):
             next_token = sample_next_token(
-                logits[:, -1, :], generated, temperature,
-                top_k, top_p, repetition_penalty, min_p=min_p,
+                logits[:, -1, :],
+                generated,
+                temperature,
+                top_k,
+                top_p,
+                repetition_penalty,
+                min_p=min_p,
             )
 
             # Yield the token immediately
@@ -879,32 +898,34 @@ class Enigma(nn.Module):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
     @classmethod
-    def from_config(cls, config: dict[str, Any]) -> 'Enigma':
+    def from_config(cls, config: dict[str, Any]) -> "Enigma":
         return cls(config=ForgeConfig.from_dict(config))
 
     @classmethod
-    def from_pretrained(cls, path: Path) -> 'Enigma':
+    def from_pretrained(cls, path: Path) -> "Enigma":
         from .model_registry import safe_load_weights
+
         path = Path(path)
-        config_file = path / 'config.json' if path.is_dir() else path.with_suffix('.json')
+        config_file = path / "config.json" if path.is_dir() else path.with_suffix(".json")
 
         if config_file.exists():
-            with open(config_file, encoding='utf-8') as f:
+            with open(config_file, encoding="utf-8") as f:
                 model = cls.from_config(json.load(f))
         else:
             model = cls()
 
-        weights_file = path / 'weights.pth' if path.is_dir() else path
+        weights_file = path / "weights.pth" if path.is_dir() else path
         if weights_file.exists():
             from .model_registry import get_state_dict
-            raw = safe_load_weights(weights_file, map_location='cpu')
+
+            raw = safe_load_weights(weights_file, map_location="cpu")
             state_dict = get_state_dict(raw)
             model.load_state_dict(state_dict, strict=False)
 
         return model
 
     @classmethod
-    def auto_configure(cls, vocab_size: int = 32000) -> 'Enigma':
+    def auto_configure(cls, vocab_size: int = 32000) -> "Enigma":
         """
         Create an optimally-configured model for the current hardware.
 
@@ -941,20 +962,20 @@ class Enigma(nn.Module):
             logger.info(f"Recommended: {config['model_size']} with {config.get('quantization', 'none')} quantization")
 
             # Create model with recommended size
-            model = create_model(config['model_size'], vocab_size=vocab_size)
+            model = create_model(config["model_size"], vocab_size=vocab_size)
 
             # Apply quantization if recommended
-            quant = config.get('quantization', 'none')
-            if quant and quant != 'none':
+            quant = config.get("quantization", "none")
+            if quant and quant != "none":
                 model.quantize(quant)
 
             return model
 
         except ImportError as e:
             logger.warning(f"Hardware detection not available: {e}, using default config")
-            return create_model('small', vocab_size=vocab_size)
+            return create_model("small", vocab_size=vocab_size)
 
-    def quantize(self, mode: str = "dynamic") -> 'Enigma':
+    def quantize(self, mode: str = "dynamic") -> "Enigma":
         """
         Apply quantization to reduce model memory footprint.
 
@@ -993,7 +1014,7 @@ class Enigma(nn.Module):
 
         # Ensure model is on CPU for quantization
         device = next(self.parameters()).device
-        if device.type != 'cpu':
+        if device.type != "cpu":
             logger.info("Moving model to CPU for quantization")
             self.cpu()
 
@@ -1034,7 +1055,7 @@ class Enigma(nn.Module):
             self,
             {nn.Linear},  # Quantize Linear layers
             dtype=torch.qint8,
-            inplace=True
+            inplace=True,
         )
 
     def _apply_static_int8_quantization(self) -> None:
@@ -1044,10 +1065,7 @@ class Enigma(nn.Module):
         wired in. This currently falls back to dynamic INT8. The log
         message reflects the actual path taken so operators can trust it.
         """
-        logger.info(
-            "Static INT8 calibration data absent — fell back to "
-            "dynamic INT8 quantization"
-        )
+        logger.info("Static INT8 calibration data absent — fell back to dynamic INT8 quantization")
         self._apply_dynamic_quantization()
 
     def _apply_int4_quantization(self) -> None:
@@ -1062,19 +1080,12 @@ class Enigma(nn.Module):
             for name, module in self.named_modules():
                 if isinstance(module, nn.Linear):
                     # Replace with 4-bit linear
-                    parent_name = '.'.join(name.split('.')[:-1])
-                    child_name = name.split('.')[-1]
+                    parent_name = ".".join(name.split(".")[:-1])
+                    child_name = name.split(".")[-1]
                     parent = self.get_submodule(parent_name) if parent_name else self
 
-                    new_layer = bnb.nn.Linear4bit(
-                        module.in_features,
-                        module.out_features,
-                        bias=module.bias is not None
-                    )
-                    new_layer.weight = bnb.nn.Params4bit(
-                        module.weight.data,
-                        requires_grad=False
-                    )
+                    new_layer = bnb.nn.Linear4bit(module.in_features, module.out_features, bias=module.bias is not None)
+                    new_layer.weight = bnb.nn.Params4bit(module.weight.data, requires_grad=False)
                     if module.bias is not None:
                         new_layer.bias = module.bias
 
@@ -1086,14 +1097,11 @@ class Enigma(nn.Module):
             # Fallback to dynamic quantization. Log reflects the actual
             # path so operators reading logs aren't told "INT4" when
             # only dynamic INT8 ran.
-            logger.warning(
-                "bitsandbytes not available — fell back to dynamic INT8 "
-                "quantization (not true INT4)"
-            )
+            logger.warning("bitsandbytes not available — fell back to dynamic INT8 quantization (not true INT4)")
             self._apply_dynamic_quantization()
 
     @classmethod
-    def from_huggingface(cls, model_id: str, **kwargs) -> 'Enigma':
+    def from_huggingface(cls, model_id: str, **kwargs) -> "Enigma":
         """
         Load a model from HuggingFace Hub or local HuggingFace format.
 
@@ -1114,12 +1122,12 @@ class Enigma(nn.Module):
         """
         try:
             from .huggingface_loader import convert_huggingface_to_forge
+
             logger.info(f"Loading HuggingFace model: {model_id}")
             return convert_huggingface_to_forge(model_id, **kwargs)
         except ImportError:
             logger.error(
-                "HuggingFace model loading requires transformers library. "
-                "Install with: pip install transformers"
+                "HuggingFace model loading requires transformers library. Install with: pip install transformers"
             )
             raise
         except Exception as e:
@@ -1127,7 +1135,7 @@ class Enigma(nn.Module):
             raise
 
     @classmethod
-    def from_safetensors(cls, path: Union[str, Path], **kwargs) -> 'Enigma':
+    def from_safetensors(cls, path: Union[str, Path], **kwargs) -> "Enigma":
         """
         Load a model from Safetensors format.
 
@@ -1148,18 +1156,15 @@ class Enigma(nn.Module):
         try:
             from safetensors.torch import load_file
         except ImportError:
-            logger.error(
-                "Safetensors loading requires safetensors library. "
-                "Install with: pip install safetensors"
-            )
+            logger.error("Safetensors loading requires safetensors library. Install with: pip install safetensors")
             raise
 
         path = Path(path)
 
         # Load config if available
-        config_file = path.with_suffix('.json')
+        config_file = path.with_suffix(".json")
         if config_file.exists():
-            with open(config_file, encoding='utf-8') as f:
+            with open(config_file, encoding="utf-8") as f:
                 model = cls.from_config(json.load(f))
         else:
             logger.warning("No config file found, using default config")
@@ -1167,13 +1172,13 @@ class Enigma(nn.Module):
 
         # Load weights
         logger.info(f"Loading Safetensors from: {path}")
-        state_dict = load_file(str(path), device=kwargs.get('map_location', 'cpu'))
+        state_dict = load_file(str(path), device=kwargs.get("map_location", "cpu"))
         model.load_state_dict(state_dict, strict=False)
 
         return model
 
     @classmethod
-    def from_gguf(cls, path: Union[str, Path], **kwargs) -> 'Enigma':
+    def from_gguf(cls, path: Union[str, Path], **kwargs) -> "Enigma":
         """
         Load a model from GGUF format (llama.cpp compatible).
 
@@ -1198,20 +1203,18 @@ class Enigma(nn.Module):
         """
         try:
             from .gguf_loader import load_gguf_model
+
             logger.info(f"Loading GGUF model from: {path}")
             return load_gguf_model(str(path), **kwargs)
         except ImportError:
-            logger.error(
-                "GGUF model loading requires gguf library. "
-                "Install with: pip install gguf"
-            )
+            logger.error("GGUF model loading requires gguf library. Install with: pip install gguf")
             raise
         except Exception as e:
             logger.error(f"Failed to load GGUF model: {e}")
             raise
 
     @classmethod
-    def from_onnx(cls, path: Union[str, Path], **kwargs) -> 'Enigma':
+    def from_onnx(cls, path: Union[str, Path], **kwargs) -> "Enigma":
         """
         Load a model from ONNX format.
 
@@ -1237,12 +1240,10 @@ class Enigma(nn.Module):
 
         try:
             from .onnx_loader import load_onnx_model
+
             return load_onnx_model(str(path), **kwargs)
         except ImportError:
-            logger.error(
-                "ONNX model loading requires onnx library. "
-                "Install with: pip install onnx"
-            )
+            logger.error("ONNX model loading requires onnx library. Install with: pip install onnx")
             raise
         except Exception as e:
             logger.error(f"Failed to load ONNX model: {e}")
@@ -1252,12 +1253,7 @@ class Enigma(nn.Module):
     # 🎯 LORA & ADAPTER SUPPORT
     # =========================================================================
 
-    def load_lora(
-        self,
-        path: Union[str, Path],
-        adapter_name: str = "default",
-        merge: bool = False
-    ) -> None:
+    def load_lora(self, path: Union[str, Path], adapter_name: str = "default", merge: bool = False) -> None:
         """
         Load LoRA (Low-Rank Adaptation) weights.
 
@@ -1296,7 +1292,7 @@ class Enigma(nn.Module):
             logger.info(f"Merged LoRA adapter '{adapter_name}' into base weights")
         else:
             # Keep as separate adapter
-            if not hasattr(self, '_lora_adapters'):
+            if not hasattr(self, "_lora_adapters"):
                 self._lora_adapters = {}
             self._lora_adapters[adapter_name] = lora_weights
             apply_lora(self, lora_weights, adapter_name=adapter_name)
@@ -1317,7 +1313,7 @@ class Enigma(nn.Module):
             model.load_lora("adapter.pth", "my_adapter")
             model.merge_lora("my_adapter")  # Merge into base weights
         """
-        if not hasattr(self, '_lora_adapters'):
+        if not hasattr(self, "_lora_adapters"):
             logger.warning("No LoRA adapters loaded")
             return
 
@@ -1366,8 +1362,7 @@ class Enigma(nn.Module):
             from safetensors.torch import save_file
         except ImportError:
             raise ImportError(
-                "Safetensors export requires safetensors library. "
-                "Install with: pip install safetensors"
+                "Safetensors export requires safetensors library. Install with: pip install safetensors"
             ) from None
 
         path = Path(path)
@@ -1377,13 +1372,11 @@ class Enigma(nn.Module):
         logger.info(f"Exported weights to: {path}")
 
         # Save config alongside
-        config_path = path.with_suffix('.json')
+        config_path = path.with_suffix(".json")
         import json as _json
         from enigma_engine.core.safe_save import atomic_write_text
-        atomic_write_text(
-            config_path,
-            _json.dumps(self.config.to_dict(), indent=2,
-                        ensure_ascii=False))
+
+        atomic_write_text(config_path, _json.dumps(self.config.to_dict(), indent=2, ensure_ascii=False))
         logger.info(f"Exported config to: {config_path}")
 
     def export_to_onnx(
@@ -1392,7 +1385,7 @@ class Enigma(nn.Module):
         opset_version: int = 14,
         input_names: Optional[list[str]] = None,
         output_names: Optional[list[str]] = None,
-        dynamic_axes: Optional[dict[str, dict[int, str]]] = None
+        dynamic_axes: Optional[dict[str, dict[int, str]]] = None,
     ) -> None:
         """
         Export model to ONNX format for deployment.
@@ -1422,18 +1415,13 @@ class Enigma(nn.Module):
         path = Path(path)
 
         # Default configurations
-        input_names = input_names or ['input_ids']
-        output_names = output_names or ['logits']
-        dynamic_axes = dynamic_axes or {
-            'input_ids': {0: 'batch', 1: 'sequence'},
-            'logits': {0: 'batch', 1: 'sequence'}
-        }
+        input_names = input_names or ["input_ids"]
+        output_names = output_names or ["logits"]
+        dynamic_axes = dynamic_axes or {"input_ids": {0: "batch", 1: "sequence"}, "logits": {0: "batch", 1: "sequence"}}
 
         # Create dummy input (representative of actual input)
         dummy_input = torch.randint(
-            0, self.config.vocab_size,
-            (1, min(128, self.config.max_seq_len)),
-            device=next(self.parameters()).device
+            0, self.config.vocab_size, (1, min(128, self.config.max_seq_len)), device=next(self.parameters()).device
         )
 
         # Export
@@ -1451,7 +1439,7 @@ class Enigma(nn.Module):
         logger.info(f"Exported to ONNX: {path}")
 
         # Save config alongside
-        config_path = path.with_suffix('.json')
+        config_path = path.with_suffix(".json")
         atomic_write_json(config_path, self.config.to_dict())
         logger.info(f"Exported config to: {config_path}")
 
@@ -1472,17 +1460,19 @@ class Enigma(nn.Module):
         path = Path(path)
 
         # Save weights in checkpoint format (compatible with gui_forge loader)
-        atomic_torch_save({
-            'model_state_dict': self.state_dict(),
-            'config': self.config.to_dict(),
-        }, path)
+        atomic_torch_save(
+            {
+                "model_state_dict": self.state_dict(),
+                "config": self.config.to_dict(),
+            },
+            path,
+        )
         logger.info(f"Exported weights to: {path}")
 
         # Save config alongside as JSON for external tools
-        config_path = path.with_suffix('.json')
+        config_path = path.with_suffix(".json")
         atomic_write_json(config_path, self.config.to_dict())
         logger.info(f"Exported config to: {config_path}")
-
 
     def export_to_gguf(
         self,
@@ -1490,7 +1480,7 @@ class Enigma(nn.Module):
         quant_type: str = "F16",
         tokenizer: Any = None,
         model_name: Optional[str] = None,
-        description: Optional[str] = None
+        description: Optional[str] = None,
     ) -> str:
         """
         Export model to GGUF format for use with llama.cpp.
@@ -1509,19 +1499,23 @@ class Enigma(nn.Module):
             model.export_to_gguf("model-q8.gguf", quant_type="Q8_0")
         """
         from enigma_engine.core.gguf import export_to_gguf
+
         return export_to_gguf(
-            self, str(path),
+            self,
+            str(path),
             quant_type=quant_type,
             tokenizer=tokenizer,
             model_name=model_name,
             description=description,
         )
 
+
 # =============================================================================
 # Factory Functions
 # =============================================================================
 
-def create_model(size: str = 'small', vocab_size: Optional[int] = None, **kwargs) -> Enigma:
+
+def create_model(size: str = "small", vocab_size: Optional[int] = None, **kwargs) -> Enigma:
     """
     Create an Enigma model from a preset configuration.
 
@@ -1550,6 +1544,7 @@ def create_model(size: str = 'small', vocab_size: Optional[int] = None, **kwargs
     if vocab_size is None:
         try:
             from .tokenizer import get_tokenizer
+
             tok = get_tokenizer()
             vocab_size = tok.vocab_size
             logger.info(f"Auto-detected vocab_size={vocab_size} from tokenizer")
@@ -1584,6 +1579,5 @@ def create_model(size: str = 'small', vocab_size: Optional[int] = None, **kwargs
         logger.error(f"Failed to initialize model: {e}")
         raise RuntimeError(f"Model creation failed: {e}") from e
 
-    logger.info(f"Created Enigma ({size}): {model.num_parameters:,} params, "
-          f"{config.dim}d, {config.n_layers}L")
+    logger.info(f"Created Enigma ({size}): {model.num_parameters:,} params, {config.dim}d, {config.n_layers}L")
     return model

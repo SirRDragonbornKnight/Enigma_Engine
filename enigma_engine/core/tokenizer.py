@@ -60,6 +60,7 @@ Converts sentences into sequences of integers for the neural network.
     • enigma_engine/core/char_tokenizer.py     - Character tokenizer
     • enigma_engine/core/advanced_tokenizer.py - Advanced tokenizer
 """
+
 import json
 import logging
 import threading
@@ -78,6 +79,7 @@ VOCAB_DIR = Path(__file__).resolve().parent.parent / "vocab_model"
 # This protocol defines the contract that ALL tokenizers must follow.
 # Using Protocol enables static type checking without requiring inheritance.
 
+
 @runtime_checkable
 class TokenizerProtocol(Protocol):
     """
@@ -92,6 +94,7 @@ class TokenizerProtocol(Protocol):
         def process_text(tokenizer: TokenizerProtocol, text: str) -> List[int]:
             return tokenizer.encode(text)
     """
+
     vocab_size: int
     eos_token_id: int
     bos_token_id: int
@@ -112,12 +115,9 @@ class TokenizerProtocol(Protocol):
 # These functions provide a unified interface for tokenizer operations,
 # handling the differences between tokenizer implementations.
 
+
 def encode_text(
-    tokenizer: Any,
-    text: str,
-    add_special_tokens: bool = True,
-    max_length: Optional[int] = None,
-    truncate: bool = True
+    tokenizer: Any, text: str, add_special_tokens: bool = True, max_length: Optional[int] = None, truncate: bool = True
 ) -> list[int]:
     """
     Encode text using any tokenizer with a unified interface.
@@ -138,7 +138,7 @@ def encode_text(
         List of token IDs
     """
     # Try direct encode method (Enigma AI Engine tokenizers, HuggingFace)
-    if hasattr(tokenizer, 'encode'):
+    if hasattr(tokenizer, "encode"):
         try:
             ids = tokenizer.encode(text, add_special_tokens=add_special_tokens)
         except TypeError:
@@ -147,7 +147,7 @@ def encode_text(
     # Try callable interface (some HuggingFace tokenizers)
     elif callable(tokenizer):
         result = tokenizer(text, add_special_tokens=add_special_tokens)
-        ids = result.get('input_ids', result) if isinstance(result, dict) else result
+        ids = result.get("input_ids", result) if isinstance(result, dict) else result
     else:
         raise TypeError(f"Tokenizer {type(tokenizer)} has no encode method")
 
@@ -156,7 +156,7 @@ def encode_text(
         ids = ids[0]
 
     # Handle tensor returns
-    if hasattr(ids, 'tolist'):
+    if hasattr(ids, "tolist"):
         ids = ids.tolist()
 
     # Truncate if needed
@@ -166,11 +166,7 @@ def encode_text(
     return ids
 
 
-def decode_tokens(
-    tokenizer: Any,
-    ids: list[int],
-    skip_special_tokens: bool = True
-) -> str:
+def decode_tokens(tokenizer: Any, ids: list[int], skip_special_tokens: bool = True) -> str:
     """
     Decode token IDs using any tokenizer with a unified interface.
 
@@ -182,7 +178,7 @@ def decode_tokens(
     Returns:
         Decoded text string
     """
-    if hasattr(tokenizer, 'decode'):
+    if hasattr(tokenizer, "decode"):
         try:
             return tokenizer.decode(ids, skip_special_tokens=skip_special_tokens)
         except TypeError:
@@ -202,14 +198,14 @@ def get_vocab_size(tokenizer: Any) -> int:
     Returns:
         Vocabulary size as integer
     """
-    if hasattr(tokenizer, 'vocab_size'):
+    if hasattr(tokenizer, "vocab_size"):
         size = tokenizer.vocab_size
         return size() if callable(size) else size
-    if hasattr(tokenizer, 'get_vocab_size'):
+    if hasattr(tokenizer, "get_vocab_size"):
         return tokenizer.get_vocab_size()
-    if hasattr(tokenizer, '__len__'):
+    if hasattr(tokenizer, "__len__"):
         return len(tokenizer)
-    if hasattr(tokenizer, 'vocab'):
+    if hasattr(tokenizer, "vocab"):
         return len(tokenizer.vocab)
     raise AttributeError(f"Cannot determine vocab_size for {type(tokenizer)}")
 
@@ -225,12 +221,12 @@ def get_special_token_ids(tokenizer: Any) -> dict[str, int]:
 
     # Standard attribute names
     for name, attrs in [
-        ('pad', ['pad_token_id', 'pad_id']),
-        ('bos', ['bos_token_id', 'bos_id', 'start_token_id']),
-        ('eos', ['eos_token_id', 'eos_id', 'end_token_id']),
-        ('unk', ['unk_token_id', 'unk_id']),
-        ('think_start', ['think_start_id']),
-        ('think_end', ['think_end_id']),
+        ("pad", ["pad_token_id", "pad_id"]),
+        ("bos", ["bos_token_id", "bos_id", "start_token_id"]),
+        ("eos", ["eos_token_id", "eos_id", "end_token_id"]),
+        ("unk", ["unk_token_id", "unk_id"]),
+        ("think_start", ["think_start_id"]),
+        ("think_end", ["think_end_id"]),
     ]:
         for attr in attrs:
             if hasattr(tokenizer, attr):
@@ -241,8 +237,12 @@ def get_special_token_ids(tokenizer: Any) -> dict[str, int]:
         # Default fallbacks
         if name not in result:
             defaults = {
-                'pad': 0, 'bos': 1, 'eos': 2, 'unk': 3,
-                'think_start': 4, 'think_end': 5,
+                "pad": 0,
+                "bos": 1,
+                "eos": 2,
+                "unk": 3,
+                "think_start": 4,
+                "think_end": 5,
             }
             fallback = defaults.get(name, -1)
             logger.warning("Tokenizer missing '%s' attribute, using default %d", name, fallback)
@@ -256,6 +256,7 @@ def get_special_token_ids(tokenizer: Any) -> dict[str, int]:
 # =============================================================================
 # This is the FALLBACK tokenizer that works without any external libraries.
 # It's simple but reliable - perfect for bootstrapping or when tiktoken fails.
+
 
 class SimpleTokenizer:
     """
@@ -295,21 +296,21 @@ class SimpleTokenizer:
         # ─────────────────────────────────────────────────────────────────────
         # SPECIAL TOKENS: Reserved tokens with fixed IDs
         # ─────────────────────────────────────────────────────────────────────
-        self.pad_token = "<pad>"   # Padding for batching
-        self.eos_token = "</s>"    # End of sequence
-        self.unk_token = "<unk>"   # Unknown token (fallback)
-        self.bos_token = "<s>"     # Beginning of sequence
+        self.pad_token = "<pad>"  # Padding for batching
+        self.eos_token = "</s>"  # End of sequence
+        self.unk_token = "<unk>"  # Unknown token (fallback)
+        self.bos_token = "<s>"  # Beginning of sequence
 
         # Special token IDs (MUST be fixed for model compatibility)
         self.special_tokens = {
-            "<pad>": 0,   # Padding - used to make sequences same length
-            "<s>": 1,     # Start - marks beginning of text
-            "</s>": 2,    # End - marks end of text
-            "<unk>": 3,   # Unknown - used for characters not in vocab
+            "<pad>": 0,  # Padding - used to make sequences same length
+            "<s>": 1,  # Start - marks beginning of text
+            "</s>": 2,  # End - marks end of text
+            "<unk>": 3,  # Unknown - used for characters not in vocab
             "<think>": 4,  # Start of reasoning block
-            "</think>": 5, # End of reasoning block
+            "</think>": 5,  # End of reasoning block
             "<search>": 6,  # AutoResearch-2 Stage B-1: start of inline search query
-            "</search>": 7, # AutoResearch-2 Stage B-1: end of inline search query
+            "</search>": 7,  # AutoResearch-2 Stage B-1: end of inline search query
         }
 
         # Convenient ID lookups
@@ -365,20 +366,112 @@ class SimpleTokenizer:
         # Without these, "the" would be 3 tokens: "t", "h", "e"
         # With these, "the" is 1 token - 3x more efficient!
         common = [
-            "the", "is", "a", "to", "of", "and", "in", "that", "it",
-            "for", "you", "was", "with", "on", "are", "be", "have",
-            "this", "will", "your", "from", "or", "by", "not", "but",
-            "what", "all", "were", "we", "when", "can", "there", "an",
-            "which", "their", "if", "has", "more", "also", "do", "no",
-            "my", "one", "so", "our", "they", "been", "would", "how",
-            "her", "him", "his", "its", "may", "new", "now", "old",
-            "see", "way", "who", "did", "get", "just", "know", "take",
-            "come", "could", "good", "some", "them", "very", "after",
-            "most", "make", "should", "still", "over", "such", "much",
-            "then", "first", "any", "only", "other", "into", "year",
-            "hello", "hi", "yes", "please", "thank", "thanks",
-            "sorry", "help", "AI", "I", "You", "What", "How", "Why",
-            "When", "Where", "Q:", "A:", "User:", "Bot:",
+            "the",
+            "is",
+            "a",
+            "to",
+            "of",
+            "and",
+            "in",
+            "that",
+            "it",
+            "for",
+            "you",
+            "was",
+            "with",
+            "on",
+            "are",
+            "be",
+            "have",
+            "this",
+            "will",
+            "your",
+            "from",
+            "or",
+            "by",
+            "not",
+            "but",
+            "what",
+            "all",
+            "were",
+            "we",
+            "when",
+            "can",
+            "there",
+            "an",
+            "which",
+            "their",
+            "if",
+            "has",
+            "more",
+            "also",
+            "do",
+            "no",
+            "my",
+            "one",
+            "so",
+            "our",
+            "they",
+            "been",
+            "would",
+            "how",
+            "her",
+            "him",
+            "his",
+            "its",
+            "may",
+            "new",
+            "now",
+            "old",
+            "see",
+            "way",
+            "who",
+            "did",
+            "get",
+            "just",
+            "know",
+            "take",
+            "come",
+            "could",
+            "good",
+            "some",
+            "them",
+            "very",
+            "after",
+            "most",
+            "make",
+            "should",
+            "still",
+            "over",
+            "such",
+            "much",
+            "then",
+            "first",
+            "any",
+            "only",
+            "other",
+            "into",
+            "year",
+            "hello",
+            "hi",
+            "yes",
+            "please",
+            "thank",
+            "thanks",
+            "sorry",
+            "help",
+            "AI",
+            "I",
+            "You",
+            "What",
+            "How",
+            "Why",
+            "When",
+            "Where",
+            "Q:",
+            "A:",
+            "User:",
+            "Bot:",
         ]
 
         for word in common:
@@ -402,7 +495,7 @@ class SimpleTokenizer:
 
     def _load_vocab(self, vocab_file: Path):
         """Load vocabulary from JSON file."""
-        with open(vocab_file, encoding='utf-8') as f:
+        with open(vocab_file, encoding="utf-8") as f:
             self.token_to_id = json.load(f)
         self.id_to_token = {v: k for k, v in self.token_to_id.items()}
         # Rebuild self.special_tokens from the loaded vocab: keep only
@@ -421,6 +514,7 @@ class SimpleTokenizer:
         """Save vocabulary to JSON file."""
         Path(vocab_file).parent.mkdir(parents=True, exist_ok=True)
         from enigma_engine.core.safe_save import atomic_write_json
+
         atomic_write_json(vocab_file, self.token_to_id)
 
     def encode(self, text: str, add_special_tokens: bool = True) -> list[int]:
@@ -536,7 +630,7 @@ class SimpleTokenizer:
         padding: bool = False,
         truncation: bool = False,
         max_length: Optional[int] = None,
-        add_special_tokens: bool = True
+        add_special_tokens: bool = True,
     ) -> dict[str, Any]:
         """
         Tokenize text (HuggingFace-compatible interface).
@@ -570,6 +664,7 @@ class SimpleTokenizer:
         # Convert to PyTorch tensor if requested
         if return_tensors == "pt":
             import torch
+
             return {"input_ids": torch.tensor([ids])}
 
         return {"input_ids": ids}
@@ -587,11 +682,13 @@ class SimpleTokenizer:
 # Tiktoken Tokenizer (Fast GPT-style tokenizer)
 # =============================================================================
 
+
 class TiktokenWrapper:
     """Wrapper for tiktoken (GPT-style fast tokenizer)."""
 
     def __init__(self, encoding: str = "cl100k_base"):
         import tiktoken
+
         self.enc = tiktoken.get_encoding(encoding)
         # Reserve IDs above the real vocab range so they never collide
         # with actual tiktoken token IDs (0 .. n_vocab-1).
@@ -615,8 +712,14 @@ class TiktokenWrapper:
         """Decode token IDs to text."""
         if skip_special_tokens:
             # Filter out special tokens (all reserved IDs above real vocab)
-            special = {self.pad_token_id, self.bos_token_id, self.eos_token_id,
-                       self.unk_token_id, self.think_start_id, self.think_end_id}
+            special = {
+                self.pad_token_id,
+                self.bos_token_id,
+                self.eos_token_id,
+                self.unk_token_id,
+                self.think_start_id,
+                self.think_end_id,
+            }
             ids = [i for i in ids if i not in special]
         return self.enc.decode(ids)
 
@@ -627,7 +730,7 @@ class TiktokenWrapper:
         padding: bool = False,
         truncation: bool = False,
         max_length: Optional[int] = None,
-        add_special_tokens: bool = True
+        add_special_tokens: bool = True,
     ) -> dict[str, Any]:
         """Tokenize text (HuggingFace-compatible interface)."""
         ids = self.encode(text, add_special_tokens=add_special_tokens)
@@ -640,6 +743,7 @@ class TiktokenWrapper:
 
         if return_tensors == "pt":
             import torch
+
             return {"input_ids": torch.tensor([ids])}
 
         return {"input_ids": ids}
@@ -657,11 +761,7 @@ _tokenizer_cache: dict[tuple, Any] = {}
 _tokenizer_cache_lock = threading.Lock()
 
 
-def get_tokenizer(
-    tokenizer_type: str = "auto",
-    vocab_path: Optional[str | Path] = None,
-    use_cache: bool = True
-) -> Any:
+def get_tokenizer(tokenizer_type: str = "auto", vocab_path: Optional[str | Path] = None, use_cache: bool = True) -> Any:
     """
     Get the best available tokenizer.
 
@@ -781,10 +881,7 @@ def clear_tokenizer_cache():
 
 
 def train_tokenizer(
-    data_paths: list[str],
-    vocab_size: int = 32000,
-    output_path: Optional[str] = None,
-    tokenizer_type: str = "bpe"
+    data_paths: list[str], vocab_size: int = 32000, output_path: Optional[str] = None, tokenizer_type: str = "bpe"
 ) -> Any:
     """
     Train a tokenizer on text data.
@@ -803,7 +900,7 @@ def train_tokenizer(
     for path in data_paths:
         p = Path(path)
         if p.exists():
-            with open(p, encoding='utf-8') as f:
+            with open(p, encoding="utf-8") as f:
                 texts.append(f.read())
             logger.info(f"Loaded training data from {path}")
 
@@ -867,12 +964,10 @@ __all__ = [
     "get_tokenizer",
     "train_tokenizer",
     "clear_tokenizer_cache",
-
     # Classes
     "SimpleTokenizer",
     "TiktokenWrapper",
     "Tokenizer",
-
     # Constants
     "VOCAB_DIR",
 ]

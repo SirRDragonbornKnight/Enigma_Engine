@@ -41,7 +41,7 @@ class ModClient:
         if config_path is None:
             config_path = Path(__file__).parent / "mod.json"
 
-        with open(config_path, encoding='utf-8') as f:
+        with open(config_path, encoding="utf-8") as f:
             self.config = json.load(f)
 
         self.mod_id: str = self.config.get("id", "unknown")
@@ -73,8 +73,7 @@ class ModClient:
             self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self._socket.connect((self.router_host, self.router_port))
             self._socket.settimeout(120.0)  # 2× heartbeat interval
-            logger.info(
-                f"Connected to router at {self.router_host}:{self.router_port}")
+            logger.info(f"Connected to router at {self.router_host}:{self.router_port}")
             return True
         except Exception as e:
             logger.error(f"Failed to connect to router: {e}")
@@ -86,8 +85,8 @@ class ModClient:
         if not self._socket:
             return False
         try:
-            msg = json.dumps(data).encode('utf-8')
-            length = struct.pack('>I', len(msg))
+            msg = json.dumps(data).encode("utf-8")
+            length = struct.pack(">I", len(msg))
             with self._send_lock:
                 self._socket.sendall(length + msg)
             return True
@@ -109,7 +108,7 @@ class ModClient:
             if not length_data:
                 return None  # Remote side closed
 
-            length = struct.unpack('>I', length_data)[0]
+            length = struct.unpack(">I", length_data)[0]
 
             if length > 10_000_000:  # 10 MB safety limit
                 logger.warning(f"Message too large: {length}")
@@ -119,7 +118,7 @@ class ModClient:
             if not data:
                 return None
 
-            return json.loads(data.decode('utf-8'))
+            return json.loads(data.decode("utf-8"))
         except socket.timeout:
             raise  # Propagate so run() can retry
         except json.JSONDecodeError as e:
@@ -131,7 +130,7 @@ class ModClient:
 
     def _recv_exact(self, n: int) -> Optional[bytes]:
         """Read exactly *n* bytes from the socket."""
-        buf = b''
+        buf = b""
         while len(buf) < n:
             chunk = self._socket.recv(n - len(buf))
             if not chunk:
@@ -182,26 +181,34 @@ class ModClient:
                 try:
                     result = handler(args)
                     return {
-                        "id": msg_id, "type": "response",
-                        "success": True, "data": result,
+                        "id": msg_id,
+                        "type": "response",
+                        "success": True,
+                        "data": result,
                     }
                 except Exception as e:
                     logger.exception(f"Command {command} failed")
                     return {
-                        "id": msg_id, "type": "error",
-                        "success": False, "error": str(e),
+                        "id": msg_id,
+                        "type": "error",
+                        "success": False,
+                        "error": str(e),
                     }
             return {
-                "id": msg_id, "type": "error",
-                "success": False, "error": f"Unknown command: {command}",
+                "id": msg_id,
+                "type": "error",
+                "success": False,
+                "error": f"Unknown command: {command}",
             }
 
         if msg_type == "ping":
             return {"id": msg_id, "type": "pong"}
 
         return {
-            "id": msg_id, "type": "error",
-            "success": False, "error": f"Unknown message type: {msg_type}",
+            "id": msg_id,
+            "type": "error",
+            "success": False,
+            "error": f"Unknown message type: {msg_type}",
         }
 
     def send_update(self, update_type: str, data: Dict[str, Any]) -> bool:

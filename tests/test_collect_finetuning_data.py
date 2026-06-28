@@ -6,6 +6,7 @@ HuggingFace network access. See AA learned principle:
 "Optional dependency tests: inject fake module via types.ModuleType
 + monkeypatch.setitem(sys.modules, ...)".
 """
+
 import importlib
 import sys
 import types
@@ -20,8 +21,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 # ── Fake datasets injection ─────────────────────────────────────────────────
 
-def _install_fake_datasets(monkeypatch, rows_by_path,
-                           splits_by_path=None):
+
+def _install_fake_datasets(monkeypatch, rows_by_path, splits_by_path=None):
     """Inject a fake `datasets` module whose `load_dataset(path, ...)`
     returns the rows registered for that dataset path.
 
@@ -44,10 +45,7 @@ def _install_fake_datasets(monkeypatch, rows_by_path,
 
     def _load_dataset(path, *args, **kwargs):
         if path not in rows_by_path:
-            raise ValueError(
-                "BuilderConfig 'unknown' not found. Available: "
-                "['default', 'subset_a', 'subset_b']"
-            )
+            raise ValueError("BuilderConfig 'unknown' not found. Available: ['default', 'subset_a', 'subset_b']")
         return _FakeDataset(rows_by_path[path])
 
     def _get_dataset_split_names(path, config=None, *args, **kwargs):
@@ -55,10 +53,7 @@ def _install_fake_datasets(monkeypatch, rows_by_path,
             return list(splits_by_path[path])
         if path in rows_by_path:
             return ["train"]
-        raise ValueError(
-            "BuilderConfig 'unknown' not found. Available: "
-            "['default', 'subset_a', 'subset_b']"
-        )
+        raise ValueError("BuilderConfig 'unknown' not found. Available: ['default', 'subset_a', 'subset_b']")
 
     fake.load_dataset = _load_dataset
     fake.get_dataset_split_names = _get_dataset_split_names
@@ -75,6 +70,7 @@ def cf_module(monkeypatch):
 
 # ── OpenThoughts3 (D-4) ─────────────────────────────────────────────────────
 
+
 class TestCollectOpenThoughts3:
     """Pass 139 spec verified the row schema:
         {"difficulty": int, "source": str, "domain": str,
@@ -89,10 +85,10 @@ class TestCollectOpenThoughts3:
         "domain": "math",
         "conversations": [
             {"from": "human", "value": "What is 2+2?"},
-            {"from": "gpt", "value": (
-                "<think>\nOkay, I need to add two and two.\n"
-                "2 + 2 = 4.\n</think>\n\nThe answer is 4."
-            )},
+            {
+                "from": "gpt",
+                "value": ("<think>\nOkay, I need to add two and two.\n2 + 2 = 4.\n</think>\n\nThe answer is 4."),
+            },
         ],
     }
 
@@ -113,17 +109,14 @@ class TestCollectOpenThoughts3:
         assert "\nOkay, I need to add" in completion
         assert "</think>\n\nThe answer is 4." in completion
 
-    def test_skips_rows_with_no_human_gpt_pair(
-            self, monkeypatch, cf_module):
+    def test_skips_rows_with_no_human_gpt_pair(self, monkeypatch, cf_module):
         """Rows missing either turn are dropped, not crashed on."""
         rows = [
             {"conversations": [{"from": "human", "value": "Q"}]},  # no gpt
-            {"conversations": [{"from": "gpt", "value": "A"}]},     # no human
+            {"conversations": [{"from": "gpt", "value": "A"}]},  # no human
             self._SAMPLE_ROW,
         ]
-        _install_fake_datasets(
-            monkeypatch, {"open-thoughts/OpenThoughts3-1.2M": rows}
-        )
+        _install_fake_datasets(monkeypatch, {"open-thoughts/OpenThoughts3-1.2M": rows})
         cf = importlib.reload(cf_module)
         pairs = cf.collect_openthoughts3(max_samples=10)
         assert len(pairs) == 1
@@ -131,9 +124,7 @@ class TestCollectOpenThoughts3:
     def test_respects_max_samples(self, monkeypatch, cf_module):
         """`max_samples` caps streaming early."""
         rows = [self._SAMPLE_ROW] * 50
-        _install_fake_datasets(
-            monkeypatch, {"open-thoughts/OpenThoughts3-1.2M": rows}
-        )
+        _install_fake_datasets(monkeypatch, {"open-thoughts/OpenThoughts3-1.2M": rows})
         cf = importlib.reload(cf_module)
         pairs = cf.collect_openthoughts3(max_samples=3)
         # Dedup collapses identical rows to 1 — but we cap iteration at 3
@@ -143,6 +134,7 @@ class TestCollectOpenThoughts3:
 
 # ── SmolTalk2 (D-11) ────────────────────────────────────────────────────────
 
+
 class TestCollectSmolTalk2:
     """SmolTalk2 (`HuggingFaceTB/smoltalk2`) ships many configs, not one
     'SFT'. Standard ChatML schema: `messages: [{role, content}]`.
@@ -151,25 +143,24 @@ class TestCollectSmolTalk2:
     _SAMPLE_ROW = {
         "messages": [
             {"role": "user", "content": "Explain gravity briefly."},
-            {"role": "assistant", "content": (
-                "Gravity is the force pulling masses together. "
-                "On Earth it accelerates objects at ~9.8 m/s^2."
-            )},
+            {
+                "role": "assistant",
+                "content": (
+                    "Gravity is the force pulling masses together. On Earth it accelerates objects at ~9.8 m/s^2."
+                ),
+            },
         ],
     }
 
     def test_extracts_user_assistant_pair(self, monkeypatch, cf_module):
-        _install_fake_datasets(
-            monkeypatch, {"HuggingFaceTB/smoltalk2": [self._SAMPLE_ROW]}
-        )
+        _install_fake_datasets(monkeypatch, {"HuggingFaceTB/smoltalk2": [self._SAMPLE_ROW]})
         cf = importlib.reload(cf_module)
         pairs = cf.collect_smoltalk2(max_samples=10, config="default")
         assert len(pairs) == 1
         assert "gravity" in pairs[0]["prompt"].lower()
         assert "9.8" in pairs[0]["completion"]
 
-    def test_unknown_config_returns_empty_with_log(
-            self, monkeypatch, cf_module, caplog):
+    def test_unknown_config_returns_empty_with_log(self, monkeypatch, cf_module, caplog):
         """Missing config → log available configs, return [], do not crash.
         Per learned principle: detect gated/missing on first attempt, no loop.
         """
@@ -179,33 +170,30 @@ class TestCollectSmolTalk2:
             pairs = cf.collect_smoltalk2(max_samples=10, config="unknown")
         assert pairs == []
         # Error message should help user pick a real config
-        assert any(
-            "config" in rec.message.lower() or "available" in rec.message.lower()
-            for rec in caplog.records
-        )
+        assert any("config" in rec.message.lower() or "available" in rec.message.lower() for rec in caplog.records)
 
     def test_skips_short_or_empty_messages(self, monkeypatch, cf_module):
         rows = [
-            {"messages": [
-                {"role": "user", "content": ""},
-                {"role": "assistant", "content": "hi"},
-            ]},  # empty user
-            {"messages": [
-                {"role": "user", "content": "ok?"},
-                {"role": "assistant", "content": "y"},  # too short
-            ]},
+            {
+                "messages": [
+                    {"role": "user", "content": ""},
+                    {"role": "assistant", "content": "hi"},
+                ]
+            },  # empty user
+            {
+                "messages": [
+                    {"role": "user", "content": "ok?"},
+                    {"role": "assistant", "content": "y"},  # too short
+                ]
+            },
             self._SAMPLE_ROW,
         ]
-        _install_fake_datasets(
-            monkeypatch, {"HuggingFaceTB/smoltalk2": rows}
-        )
+        _install_fake_datasets(monkeypatch, {"HuggingFaceTB/smoltalk2": rows})
         cf = importlib.reload(cf_module)
         pairs = cf.collect_smoltalk2(max_samples=10, config="default")
         assert len(pairs) == 1
 
-
-    def test_split_none_iterates_all_splits(
-            self, monkeypatch, cf_module):
+    def test_split_none_iterates_all_splits(self, monkeypatch, cf_module):
         """When split=None, all splits in the config are concatenated.
 
         Pass 155b: real SmolTalk2 SFT config has 25 named splits, none
@@ -215,31 +203,26 @@ class TestCollectSmolTalk2:
         _install_fake_datasets(
             monkeypatch,
             {"HuggingFaceTB/smoltalk2": [self._SAMPLE_ROW]},
-            splits_by_path={
-                "HuggingFaceTB/smoltalk2": [
-                    "split_a_think", "split_b_no_think", "split_c"]
-            },
+            splits_by_path={"HuggingFaceTB/smoltalk2": ["split_a_think", "split_b_no_think", "split_c"]},
         )
         cf = importlib.reload(cf_module)
-        pairs = cf.collect_smoltalk2(
-            max_samples=10, config="SFT", split=None)
+        pairs = cf.collect_smoltalk2(max_samples=10, config="SFT", split=None)
         # Same row in every split → after dedup, 1 pair survives.
         assert len(pairs) == 1
 
-    def test_explicit_split_used_directly(
-            self, monkeypatch, cf_module):
+    def test_explicit_split_used_directly(self, monkeypatch, cf_module):
         """When split is provided, function uses it without enumerating."""
         _install_fake_datasets(
             monkeypatch,
             {"HuggingFaceTB/smoltalk2": [self._SAMPLE_ROW]},
         )
         cf = importlib.reload(cf_module)
-        pairs = cf.collect_smoltalk2(
-            max_samples=10, config="SFT", split="train")
+        pairs = cf.collect_smoltalk2(max_samples=10, config="SFT", split="train")
         assert len(pairs) == 1
 
 
 # ── D-11 wiring (Pass 156i8): combined_finetune.txt for SFT consumer ────────
+
 
 class TestCombineAllText:
     """`combine_all` must emit a User:/Assistant: text file alongside the
@@ -256,18 +239,14 @@ class TestCombineAllText:
         """combine_all writes both .jsonl AND .txt outputs."""
         import collect_finetuning_data as cf
         import json
+
         src = tmp_path / "smoltalk2.jsonl"
         with src.open("w", encoding="utf-8") as f:
-            f.write(json.dumps({
-                "prompt": "What is 2+2?", "completion": "4."}) + "\n")
-            f.write(json.dumps({
-                "prompt": "Capital of France?",
-                "completion": "Paris."}) + "\n")
+            f.write(json.dumps({"prompt": "What is 2+2?", "completion": "4."}) + "\n")
+            f.write(json.dumps({"prompt": "Capital of France?", "completion": "Paris."}) + "\n")
         cf.combine_all(tmp_path)
         text_path = tmp_path / "combined_finetune.txt"
-        assert text_path.exists(), (
-            "combine_all must emit combined_finetune.txt alongside "
-            "combined_finetune.jsonl")
+        assert text_path.exists(), "combine_all must emit combined_finetune.txt alongside combined_finetune.jsonl"
         text = text_path.read_text(encoding="utf-8")
         assert "User: What is 2+2?" in text
         assert "Assistant: 4." in text
@@ -280,15 +259,13 @@ class TestCombineAllText:
         format and the existing GUI chat format."""
         import collect_finetuning_data as cf
         import json
+
         src = tmp_path / "test.jsonl"
         with src.open("w", encoding="utf-8") as f:
-            f.write(json.dumps({
-                "prompt": "P1", "completion": "C1"}) + "\n")
-            f.write(json.dumps({
-                "prompt": "P2", "completion": "C2"}) + "\n")
+            f.write(json.dumps({"prompt": "P1", "completion": "C1"}) + "\n")
+            f.write(json.dumps({"prompt": "P2", "completion": "C2"}) + "\n")
         cf.combine_all(tmp_path)
-        text = (tmp_path / "combined_finetune.txt").read_text(
-            encoding="utf-8")
+        text = (tmp_path / "combined_finetune.txt").read_text(encoding="utf-8")
         assert "User: P1\n\nAssistant: C1" in text
         assert "User: P2\n\nAssistant: C2" in text
         # Blocks separated by blank line (so \n\n\n appears between them)
@@ -300,19 +277,17 @@ class TestCombineAllText:
         skip empties so the SFT path never sees 'User: \\n\\nAssistant:'."""
         import collect_finetuning_data as cf
         import json
+
         src = tmp_path / "test.jsonl"
         with src.open("w", encoding="utf-8") as f:
             f.write(json.dumps({"prompt": "", "completion": "C"}) + "\n")
             f.write(json.dumps({"prompt": "P", "completion": ""}) + "\n")
-            f.write(json.dumps({"prompt": "Pgood",
-                                "completion": "Cgood"}) + "\n")
+            f.write(json.dumps({"prompt": "Pgood", "completion": "Cgood"}) + "\n")
         cf.combine_all(tmp_path)
-        text = (tmp_path / "combined_finetune.txt").read_text(
-            encoding="utf-8")
+        text = (tmp_path / "combined_finetune.txt").read_text(encoding="utf-8")
         assert "User: \n\nAssistant: C" not in text
         assert "User: P\n\nAssistant: " not in text
         assert "User: Pgood\n\nAssistant: Cgood" in text
-
 
     def test_warns_when_all_pairs_yield_empty_text(self, tmp_path, caplog):
         """D-11d (Pass 156l): file-present-zero-yield must be loud.
@@ -325,6 +300,7 @@ class TestCombineAllText:
         import collect_finetuning_data as cf
         import json
         import logging
+
         src = tmp_path / "bad.jsonl"
         with src.open("w", encoding="utf-8") as f:
             f.write(json.dumps({"prompt": "", "completion": "C"}) + "\n")
@@ -333,5 +309,5 @@ class TestCombineAllText:
             cf.combine_all(tmp_path)
         warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
         assert any("text file is 0 bytes" in r.getMessage() for r in warnings), (
-            f"Expected WARNING about empty text yield. Got: {[r.getMessage() for r in warnings]}")
-
+            f"Expected WARNING about empty text yield. Got: {[r.getMessage() for r in warnings]}"
+        )

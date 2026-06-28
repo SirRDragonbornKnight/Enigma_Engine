@@ -1,4 +1,5 @@
 """Tests for weight mapping between HuggingFace, GGUF, ONNX and Forge formats."""
+
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -11,6 +12,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 # ── Helper ───────────────────────────────────────────────────────────────────
 
+
 def _make_dummy_tensor():
     """Return a lightweight stand-in for a weight tensor."""
     return MagicMock(shape=(64, 64))
@@ -18,11 +20,13 @@ def _make_dummy_tensor():
 
 # ── HuggingFace → Forge mapping ─────────────────────────────────────────────
 
+
 class TestHuggingFaceLlamaMapping:
     """Test Llama-style HF → Forge weight mapping."""
 
     def test_embed_tokens(self):
         from enigma_engine.core.weight_mapping import WeightMapper
+
         mapper = WeightMapper()
         sd = {"model.embed_tokens.weight": _make_dummy_tensor()}
         result = mapper.map_huggingface_to_forge(sd, model_type="llama")
@@ -30,6 +34,7 @@ class TestHuggingFaceLlamaMapping:
 
     def test_lm_head(self):
         from enigma_engine.core.weight_mapping import WeightMapper
+
         mapper = WeightMapper()
         sd = {"lm_head.weight": _make_dummy_tensor()}
         result = mapper.map_huggingface_to_forge(sd, model_type="llama")
@@ -37,6 +42,7 @@ class TestHuggingFaceLlamaMapping:
 
     def test_attention_projections(self):
         from enigma_engine.core.weight_mapping import WeightMapper
+
         mapper = WeightMapper()
         sd = {
             "model.layers.0.self_attn.q_proj.weight": _make_dummy_tensor(),
@@ -52,6 +58,7 @@ class TestHuggingFaceLlamaMapping:
 
     def test_ffn_projections(self):
         from enigma_engine.core.weight_mapping import WeightMapper
+
         mapper = WeightMapper()
         sd = {
             "model.layers.2.mlp.gate_proj.weight": _make_dummy_tensor(),
@@ -65,6 +72,7 @@ class TestHuggingFaceLlamaMapping:
 
     def test_layer_norms(self):
         from enigma_engine.core.weight_mapping import WeightMapper
+
         mapper = WeightMapper()
         sd = {
             "model.layers.0.input_layernorm.weight": _make_dummy_tensor(),
@@ -79,6 +87,7 @@ class TestHuggingFaceLlamaMapping:
     def test_multi_layer_index(self):
         """Layer indices should be preserved correctly for deeper layers."""
         from enigma_engine.core.weight_mapping import WeightMapper
+
         mapper = WeightMapper()
         sd = {
             "model.layers.15.self_attn.q_proj.weight": _make_dummy_tensor(),
@@ -92,6 +101,7 @@ class TestHuggingFaceGPT2Mapping:
 
     def test_gpt2_embeddings(self):
         from enigma_engine.core.weight_mapping import WeightMapper
+
         mapper = WeightMapper()
         sd = {
             "transformer.wte.weight": _make_dummy_tensor(),
@@ -103,6 +113,7 @@ class TestHuggingFaceGPT2Mapping:
 
     def test_gpt2_attention_fused_qkv(self):
         from enigma_engine.core.weight_mapping import WeightMapper
+
         mapper = WeightMapper()
         sd = {
             "transformer.h.0.attn.c_attn.weight": _make_dummy_tensor(),
@@ -118,6 +129,7 @@ class TestHuggingFaceQwenMapping:
 
     def test_qwen_qk_norm(self):
         from enigma_engine.core.weight_mapping import WeightMapper
+
         mapper = WeightMapper()
         sd = {
             "model.layers.0.self_attn.q_norm.weight": _make_dummy_tensor(),
@@ -130,11 +142,13 @@ class TestHuggingFaceQwenMapping:
 
 # ── GGUF → Forge mapping ────────────────────────────────────────────────────
 
+
 class TestGGUFMapping:
     """Test GGUF → Forge weight mapping."""
 
     def test_gguf_basic_mapping(self):
         from enigma_engine.core.weight_mapping import WeightMapper
+
         mapper = WeightMapper()
         sd = {
             "token_embd.weight": _make_dummy_tensor(),
@@ -159,6 +173,7 @@ class TestGGUFMapping:
 
     def test_gguf_multi_block(self):
         from enigma_engine.core.weight_mapping import WeightMapper
+
         mapper = WeightMapper()
         sd = {
             "blk.7.attn_q.weight": _make_dummy_tensor(),
@@ -169,33 +184,35 @@ class TestGGUFMapping:
 
 # ── Auto-detection ───────────────────────────────────────────────────────────
 
+
 class TestAutoDetection:
     """Test _detect_hf_model_type auto-detection."""
 
     def test_detect_gpt2(self):
         from enigma_engine.core.weight_mapping import WeightMapper
+
         mapper = WeightMapper()
-        sd = {"transformer.h.0.attn.c_attn.weight": None,
-              "transformer.wte.weight": None}
+        sd = {"transformer.h.0.attn.c_attn.weight": None, "transformer.wte.weight": None}
         assert mapper._detect_hf_model_type(sd) == "gpt2"
 
     def test_detect_llama(self):
         from enigma_engine.core.weight_mapping import WeightMapper
+
         mapper = WeightMapper()
-        sd = {"model.layers.0.self_attn.q_proj.weight": None,
-              "model.layers.0.mlp.gate_proj.weight": None}
+        sd = {"model.layers.0.self_attn.q_proj.weight": None, "model.layers.0.mlp.gate_proj.weight": None}
         assert mapper._detect_hf_model_type(sd) == "llama"
 
     def test_detect_phi(self):
         from enigma_engine.core.weight_mapping import WeightMapper
+
         mapper = WeightMapper()
-        sd = {"model.layers.0.self_attn.q_proj.weight": None,
-              "model.layers.0.mlp.fc1.weight": None}
+        sd = {"model.layers.0.self_attn.q_proj.weight": None, "model.layers.0.mlp.fc1.weight": None}
         assert mapper._detect_hf_model_type(sd) == "phi"
 
     def test_auto_detect_used_when_no_type(self):
         """map_huggingface_to_forge should auto-detect when model_type=None."""
         from enigma_engine.core.weight_mapping import WeightMapper
+
         mapper = WeightMapper()
         sd = {
             "model.embed_tokens.weight": _make_dummy_tensor(),
@@ -210,12 +227,14 @@ class TestAutoDetection:
 
 # ── Error handling ───────────────────────────────────────────────────────────
 
+
 class TestWeightMappingErrors:
     """Test error handling for bad weight dicts."""
 
     def test_high_unmapped_ratio_raises(self):
         """More than 10% unmapped weights should raise ValueError."""
         from enigma_engine.core.weight_mapping import WeightMapper
+
         mapper = WeightMapper()
         # All garbage keys — none will match llama patterns
         sd = {f"garbage_key_{i}": _make_dummy_tensor() for i in range(20)}
@@ -225,6 +244,7 @@ class TestWeightMappingErrors:
     def test_empty_dict_returns_empty(self):
         """Empty state dict should return empty result."""
         from enigma_engine.core.weight_mapping import WeightMapper
+
         mapper = WeightMapper()
         result = mapper.map_huggingface_to_forge({}, model_type="llama")
         assert result == {}
@@ -232,11 +252,13 @@ class TestWeightMappingErrors:
 
 # ── Stats tracking ───────────────────────────────────────────────────────────
 
+
 class TestWeightMapperStats:
     """Test get_stats() reporting."""
 
     def test_stats_after_mapping(self):
         from enigma_engine.core.weight_mapping import WeightMapper
+
         mapper = WeightMapper()
         sd = {
             "model.embed_tokens.weight": _make_dummy_tensor(),

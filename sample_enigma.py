@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 """Generate text from a pretrained Enigma checkpoint (the from-scratch model).
 
-  python sample_enigma.py                                   # uses latest base checkpoint
-  python sample_enigma.py --ckpt models/enigma_pretrain_base/latest.pth --prompts "The" "In 1850"
+python sample_enigma.py                                   # uses latest base checkpoint
+python sample_enigma.py --ckpt models/enigma_pretrain_base/latest.pth --prompts "The" "In 1850"
 """
+
 from __future__ import annotations
 
 import argparse
@@ -45,8 +46,11 @@ def main() -> None:
     model = Enigma(config)
     model.load_state_dict(ck["model_state_dict"], strict=False)
     model.to(device).eval()
-    print(f"loaded {args.ckpt}\n  step {ck.get('step','?')} | "
-          f"{sum(p.numel() for p in model.parameters())/1e6:.1f}M params | device {device}", flush=True)
+    print(
+        f"loaded {args.ckpt}\n  step {ck.get('step', '?')} | "
+        f"{sum(p.numel() for p in model.parameters()) / 1e6:.1f}M params | device {device}",
+        flush=True,
+    )
 
     prompts = args.prompts or [
         "The history of",
@@ -57,7 +61,7 @@ def main() -> None:
     ]
     for p in prompts:
         ids_list = tok.encode(p)
-        if ids_list and ids_list[-1] == eos:   # drop trailing EOS so it keeps going
+        if ids_list and ids_list[-1] == eos:  # drop trailing EOS so it keeps going
             ids_list = ids_list[:-1]
         if not ids_list or ids_list[0] != bos:
             ids_list = [bos] + ids_list
@@ -68,8 +72,12 @@ def main() -> None:
         # — so this is both faster and exact.
         with torch.no_grad():
             gen = model.generate(
-                ids, max_new_tokens=args.max_new, temperature=args.temperature,
-                top_k=args.top_k, top_p=args.top_p, repetition_penalty=1.1,
+                ids,
+                max_new_tokens=args.max_new,
+                temperature=args.temperature,
+                top_k=args.top_k,
+                top_p=args.top_p,
+                repetition_penalty=1.1,
                 stop_tokens=[eos],
             )
         text = tok.decode(gen[0].tolist())

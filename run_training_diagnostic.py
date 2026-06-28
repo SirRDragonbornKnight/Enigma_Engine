@@ -16,6 +16,7 @@ Usage:
 
 Filters: imports, hardware, data, tokenizer, pretrain, finetune, callbacks
 """
+
 from __future__ import annotations
 
 import argparse
@@ -34,8 +35,7 @@ from pathlib import Path
 class EventLog:
     """Records timestamped events during the diagnostic run."""
 
-    CATEGORIES = ("system", "progress", "loss", "epoch", "throughput",
-                  "data", "error", "result")
+    CATEGORIES = ("system", "progress", "loss", "epoch", "throughput", "data", "error", "result")
 
     def __init__(self, verbose: bool = False):
         self.verbose = verbose
@@ -69,9 +69,7 @@ class EventLog:
     def to_dict(self) -> dict:
         return {
             "event_count": len(self.events),
-            "categories": {
-                cat: len(self.get_events(cat)) for cat in self.CATEGORIES
-            },
+            "categories": {cat: len(self.get_events(cat)) for cat in self.CATEGORIES},
             "events": self.events,
         }
 
@@ -124,6 +122,7 @@ def _check_hardware():
     """Report hardware info."""
     _hr("STEP 2: Hardware")
     import torch
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"  Device   : {device}")
     if torch.cuda.is_available():
@@ -135,15 +134,20 @@ def _check_hardware():
         print(f"  GPU      : {gpu_name}")
         print(f"  VRAM     : {total_gb:.1f} GB")
         print(f"  Free     : {free_gb:.1f} GB")
-        _log.log("system", "hardware detected",
-                 device=device, gpu=gpu_name,
-                 vram_gb=round(total_gb, 1), free_gb=round(free_gb, 1))
+        _log.log(
+            "system",
+            "hardware detected",
+            device=device,
+            gpu=gpu_name,
+            vram_gb=round(total_gb, 1),
+            free_gb=round(free_gb, 1),
+        )
     else:
         import psutil
+
         ram = psutil.virtual_memory()
         print(f"  RAM      : {ram.total / 1e9:.1f} GB ({ram.available / 1e9:.1f} GB free)")
-        _log.log("system", "hardware detected", device="cpu",
-                 ram_gb=round(ram.total / 1e9, 1))
+        _log.log("system", "hardware detected", device="cpu", ram_gb=round(ram.total / 1e9, 1))
     return device
 
 
@@ -201,8 +205,7 @@ def _test_tokenizer():
     return tokenizer
 
 
-def _test_pretrain(device: str, pretrain_files: list[Path],
-                   tokenizer, epochs: int, preset_name: str):
+def _test_pretrain(device: str, pretrain_files: list[Path], tokenizer, epochs: int, preset_name: str):
     """Test pre-training from scratch."""
     _hr("STEP 5: Pre-Train Test")
     import torch
@@ -249,8 +252,8 @@ def _test_pretrain(device: str, pretrain_files: list[Path],
     while pos < len(text):
         end = min(pos + chars_per_chunk, len(text))
         if end < len(text):
-            boundary = text.rfind(' ', pos, end)
-            nl = text.rfind('\n', pos, end)
+            boundary = text.rfind(" ", pos, end)
+            nl = text.rfind("\n", pos, end)
             boundary = max(boundary, nl)
             if boundary > pos:
                 end = boundary + 1
@@ -279,9 +282,13 @@ def _test_pretrain(device: str, pretrain_files: list[Path],
 
     # Callbacks — track everything
     results = {
-        "steps": 0, "losses": [], "epoch_losses": [],
-        "tokens_total": 0, "errors": [],
-        "progress_calls": 0, "loss_calls": 0,
+        "steps": 0,
+        "losses": [],
+        "epoch_losses": [],
+        "tokens_total": 0,
+        "errors": [],
+        "progress_calls": 0,
+        "loss_calls": 0,
     }
     t0 = time.monotonic()
 
@@ -299,15 +306,12 @@ def _test_pretrain(device: str, pretrain_files: list[Path],
         results["epoch_losses"].append(loss)
         elapsed = time.monotonic() - t0
         print(f"    Epoch {epoch}/{epochs} | loss {loss:.4f} | {elapsed:.1f}s")
-        _log.log("epoch", f"pretrain epoch {epoch}/{epochs}",
-                 loss=loss, elapsed=round(elapsed, 1))
+        _log.log("epoch", f"pretrain epoch {epoch}/{epochs}", loss=loss, elapsed=round(elapsed, 1))
 
     def on_throughput(tokens, step_time):
         results["tokens_total"] += tokens
         tps = tokens / step_time if step_time > 0 else 0
-        _log.log("throughput", "batch done",
-                 tokens=tokens, step_time=round(step_time, 4),
-                 tokens_per_sec=round(tps))
+        _log.log("throughput", "batch done", tokens=tokens, step_time=round(step_time, 4), tokens_per_sec=round(tps))
 
     trainer.on_progress = on_progress
     trainer.on_loss = on_loss
@@ -315,15 +319,13 @@ def _test_pretrain(device: str, pretrain_files: list[Path],
     trainer.on_throughput = on_throughput
 
     print(f"\n  Training ({epochs} epochs)...")
-    _log.log("system", "pretrain started", epochs=epochs,
-             batch_size=trainer.config.batch_size, chunks=len(chunks))
+    _log.log("system", "pretrain started", epochs=epochs, batch_size=trainer.config.batch_size, chunks=len(chunks))
     try:
         state = trainer.train(text)
     except Exception as exc:
         print(f"\n  [FAIL] Training crashed: {exc}")
         traceback.print_exc()
-        _log.log("error", "pretrain crashed", error=str(exc),
-                 traceback=traceback.format_exc())
+        _log.log("error", "pretrain crashed", error=str(exc), traceback=traceback.format_exc())
         return False
 
     elapsed = time.monotonic() - t0
@@ -336,16 +338,20 @@ def _test_pretrain(device: str, pretrain_files: list[Path],
         print(f"  Speed    : {speed:,.0f} tok/s")
     print(f"  Best loss: {state.best_loss:.4f}")
     print(f"  Epoch losses: {[f'{l:.4f}' for l in results['epoch_losses']]}")
-    print(f"  Callbacks: {results['progress_calls']} progress, "
-          f"{results['loss_calls']} loss")
+    print(f"  Callbacks: {results['progress_calls']} progress, {results['loss_calls']} loss")
 
-    _log.log("result", "pretrain finished",
-             elapsed=round(elapsed, 1), steps=state.step,
-             tokens=state.total_tokens, speed=round(speed),
-             best_loss=round(state.best_loss, 4),
-             epoch_losses=[round(l, 4) for l in results["epoch_losses"]],
-             progress_calls=results["progress_calls"],
-             loss_calls=results["loss_calls"])
+    _log.log(
+        "result",
+        "pretrain finished",
+        elapsed=round(elapsed, 1),
+        steps=state.step,
+        tokens=state.total_tokens,
+        speed=round(speed),
+        best_loss=round(state.best_loss, 4),
+        epoch_losses=[round(l, 4) for l in results["epoch_losses"]],
+        progress_calls=results["progress_calls"],
+        loss_calls=results["loss_calls"],
+    )
 
     # Sanity checks
     ok = True
@@ -376,8 +382,7 @@ def _test_pretrain(device: str, pretrain_files: list[Path],
     return ok
 
 
-def _test_finetune(device: str, data_file: Path, tokenizer,
-                   epochs: int, preset_name: str):
+def _test_finetune(device: str, data_file: Path, tokenizer, epochs: int, preset_name: str):
     """Test fine-tuning on existing data."""
     _hr("STEP 6: Fine-Tune Test")
     import torch
@@ -414,8 +419,7 @@ def _test_finetune(device: str, data_file: Path, tokenizer,
     trainer = Trainer(model, tokenizer, train_config)
     print(f"  Batch sz : {trainer.config.batch_size} (auto)")
 
-    results = {"epoch_losses": [], "progress_calls": 0,
-               "loss_calls": 0, "losses": []}
+    results = {"epoch_losses": [], "progress_calls": 0, "loss_calls": 0, "losses": []}
     t0 = time.monotonic()
 
     def on_progress(pct, msg):
@@ -431,14 +435,13 @@ def _test_finetune(device: str, data_file: Path, tokenizer,
         results["epoch_losses"].append(loss)
         elapsed = time.monotonic() - t0
         print(f"    Epoch {epoch}/{epochs} | loss {loss:.4f} | {elapsed:.1f}s")
-        _log.log("epoch", f"finetune epoch {epoch}/{epochs}",
-                 loss=loss, elapsed=round(elapsed, 1))
+        _log.log("epoch", f"finetune epoch {epoch}/{epochs}", loss=loss, elapsed=round(elapsed, 1))
 
     def on_throughput(tokens, step_time):
         tps = tokens / step_time if step_time > 0 else 0
-        _log.log("throughput", "finetune batch",
-                 tokens=tokens, step_time=round(step_time, 4),
-                 tokens_per_sec=round(tps))
+        _log.log(
+            "throughput", "finetune batch", tokens=tokens, step_time=round(step_time, 4), tokens_per_sec=round(tps)
+        )
 
     trainer.on_progress = on_progress
     trainer.on_loss = on_loss
@@ -446,16 +449,13 @@ def _test_finetune(device: str, data_file: Path, tokenizer,
     trainer.on_throughput = on_throughput
 
     print(f"\n  Training ({epochs} epochs)...")
-    _log.log("system", "finetune started", epochs=epochs,
-             batch_size=trainer.config.batch_size,
-             data_chars=len(text))
+    _log.log("system", "finetune started", epochs=epochs, batch_size=trainer.config.batch_size, data_chars=len(text))
     try:
         state = trainer.train(text)
     except Exception as exc:
         print(f"\n  [FAIL] Fine-tune crashed: {exc}")
         traceback.print_exc()
-        _log.log("error", "finetune crashed", error=str(exc),
-                 traceback=traceback.format_exc())
+        _log.log("error", "finetune crashed", error=str(exc), traceback=traceback.format_exc())
         return False
 
     elapsed = time.monotonic() - t0
@@ -464,15 +464,18 @@ def _test_finetune(device: str, data_file: Path, tokenizer,
     print(f"  Steps    : {state.step}")
     print(f"  Best loss: {state.best_loss:.4f}")
     print(f"  Epoch losses: {[f'{l:.4f}' for l in results['epoch_losses']]}")
-    print(f"  Callbacks: {results['progress_calls']} progress, "
-          f"{results['loss_calls']} loss")
+    print(f"  Callbacks: {results['progress_calls']} progress, {results['loss_calls']} loss")
 
-    _log.log("result", "finetune finished",
-             elapsed=round(elapsed, 1), steps=state.step,
-             best_loss=round(state.best_loss, 4),
-             epoch_losses=[round(l, 4) for l in results["epoch_losses"]],
-             progress_calls=results["progress_calls"],
-             loss_calls=results["loss_calls"])
+    _log.log(
+        "result",
+        "finetune finished",
+        elapsed=round(elapsed, 1),
+        steps=state.step,
+        best_loss=round(state.best_loss, 4),
+        epoch_losses=[round(l, 4) for l in results["epoch_losses"]],
+        progress_calls=results["progress_calls"],
+        loss_calls=results["loss_calls"],
+    )
 
     ok = True
     if math.isinf(state.best_loss):
@@ -537,8 +540,7 @@ def _test_gui_callbacks():
     def _cb_throughput(t, s):
         counts["throughput"] += 1
         tps = t / s if s > 0 else 0
-        _log.log("throughput", "callback-test batch",
-                 tokens=t, tokens_per_sec=round(tps))
+        _log.log("throughput", "callback-test batch", tokens=t, tokens_per_sec=round(tps))
 
     trainer.on_progress = _cb_progress
     trainer.on_loss = _cb_loss
@@ -651,10 +653,7 @@ def _write_report(report_data: dict, report_path: Path):
                 else:
                     detail_parts.append(f"{k}={v}")
             detail = " | " + ", ".join(detail_parts) if detail_parts else ""
-            lines.append(
-                f"  {ev['t']:7.2f}s  [{ev['cat']:>10s}]  "
-                f"{ev['msg']}{detail}"
-            )
+            lines.append(f"  {ev['t']:7.2f}s  [{ev['cat']:>10s}]  {ev['msg']}{detail}")
         lines.append("")
 
     lines.append(f"  Total time: {report_data.get('total_time', '?')}s")
@@ -668,8 +667,7 @@ def _write_report(report_data: dict, report_path: Path):
 
     # Also save raw JSON for programmatic use
     json_path = report_path.with_suffix(".json")
-    json_path.write_text(json.dumps(report_data, indent=2, default=str),
-                         encoding="utf-8")
+    json_path.write_text(json.dumps(report_data, indent=2, default=str), encoding="utf-8")
     print(f"  JSON data : {json_path}")
 
 
@@ -680,30 +678,34 @@ def main():
         description="Training diagnostic — exercises training code paths",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="Filters: imports, hardware, data, tokenizer, pretrain, finetune, callbacks\n"
-               "Examples:\n"
-               "  python test_training_diagnostic.py -v -f pretrain\n"
-               "  python test_training_diagnostic.py --report --full\n"
-               "  python test_training_diagnostic.py -v -f pretrain,callbacks --report\n",
+        "Examples:\n"
+        "  python test_training_diagnostic.py -v -f pretrain\n"
+        "  python test_training_diagnostic.py --report --full\n"
+        "  python test_training_diagnostic.py -v -f pretrain,callbacks --report\n",
     )
-    parser.add_argument("--full", action="store_true",
-                        help="Run longer test (5 epochs, small preset)")
-    parser.add_argument("-v", "--verbose", action="store_true",
-                        help="Show every callback trigger in real-time")
-    parser.add_argument("-f", "--filter", type=str, default=None,
-                        help="Comma-separated list of steps to run "
-                             "(imports,hardware,data,tokenizer,pretrain,finetune,callbacks)")
-    parser.add_argument("--report", nargs="?", const="auto", default=None,
-                        help="Save report to file (default: logs/diagnostic_<timestamp>.txt)")
+    parser.add_argument("--full", action="store_true", help="Run longer test (5 epochs, small preset)")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Show every callback trigger in real-time")
+    parser.add_argument(
+        "-f",
+        "--filter",
+        type=str,
+        default=None,
+        help="Comma-separated list of steps to run (imports,hardware,data,tokenizer,pretrain,finetune,callbacks)",
+    )
+    parser.add_argument(
+        "--report",
+        nargs="?",
+        const="auto",
+        default=None,
+        help="Save report to file (default: logs/diagnostic_<timestamp>.txt)",
+    )
     # Keep old flags for compat
-    parser.add_argument("--pretrain-only", action="store_true",
-                        help=argparse.SUPPRESS)
-    parser.add_argument("--finetune-only", action="store_true",
-                        help=argparse.SUPPRESS)
+    parser.add_argument("--pretrain-only", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--finetune-only", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
 
     # Resolve filter
-    ALL_STEPS = ["imports", "hardware", "data", "tokenizer",
-                 "pretrain", "finetune", "callbacks"]
+    ALL_STEPS = ["imports", "hardware", "data", "tokenizer", "pretrain", "finetune", "callbacks"]
     if args.filter:
         active = [s.strip().lower() for s in args.filter.split(",")]
         invalid = [s for s in active if s not in ALL_STEPS]
@@ -740,9 +742,15 @@ def main():
         print(f"  Report : {'auto' if args.report == 'auto' else args.report}")
     t_start = time.monotonic()
 
-    _log.log("system", "diagnostic started",
-             mode=mode_str, preset=preset, epochs=epochs,
-             filter=filter_str, verbose=args.verbose)
+    _log.log(
+        "system",
+        "diagnostic started",
+        mode=mode_str,
+        preset=preset,
+        epochs=epochs,
+        filter=filter_str,
+        verbose=args.verbose,
+    )
 
     device = "cpu"
     tokenizer = None
@@ -759,6 +767,7 @@ def main():
         device = _check_hardware()
     else:
         import torch
+
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # Step 3: Data
@@ -768,8 +777,7 @@ def main():
         # Still need data paths for training steps
         data_dir = Path("data")
         pretrain_dir = data_dir / "pretrain"
-        txt_files = sorted(data_dir.glob("*.txt"),
-                           key=lambda p: p.stat().st_size, reverse=True)
+        txt_files = sorted(data_dir.glob("*.txt"), key=lambda p: p.stat().st_size, reverse=True)
         finetune_data = txt_files[0] if txt_files else None
         pretrain_files = list(pretrain_dir.rglob("*.txt")) if pretrain_dir.exists() else []
 
@@ -780,6 +788,7 @@ def main():
             sys.exit(1)
     else:
         from enigma_engine.core.tokenizer import get_tokenizer
+
         tokenizer = get_tokenizer("auto")
 
     results = {}
@@ -787,8 +796,7 @@ def main():
     # Step 5: Pre-train
     if "pretrain" in active:
         if pretrain_files:
-            results["pretrain"] = _test_pretrain(
-                device, pretrain_files, tokenizer, epochs, preset)
+            results["pretrain"] = _test_pretrain(device, pretrain_files, tokenizer, epochs, preset)
         else:
             print("\n  [SKIP] No pretrain data available")
             results["pretrain"] = None
@@ -796,8 +804,7 @@ def main():
     # Step 6: Fine-tune
     if "finetune" in active:
         if finetune_data and finetune_data.stat().st_size > 100:
-            results["finetune"] = _test_finetune(
-                device, finetune_data, tokenizer, epochs, preset)
+            results["finetune"] = _test_finetune(device, finetune_data, tokenizer, epochs, preset)
         else:
             print("\n  [SKIP] No fine-tune data available")
             results["finetune"] = None
@@ -822,8 +829,7 @@ def main():
     print(f"\n  Total time: {total_time}s")
 
     # Event summary
-    event_counts = {cat: len(_log.get_events(cat))
-                    for cat in EventLog.CATEGORIES}
+    event_counts = {cat: len(_log.get_events(cat)) for cat in EventLog.CATEGORIES}
     active_cats = {k: v for k, v in event_counts.items() if v > 0}
     if active_cats:
         print(f"\n  Events recorded: {len(_log.events)} total")
@@ -839,8 +845,7 @@ def main():
             report_path = Path(args.report)
 
         # Gather hardware info from events
-        hw_events = [e for e in _log.events
-                     if e["cat"] == "system" and "device" in e]
+        hw_events = [e for e in _log.events if e["cat"] == "system" and "device" in e]
         hw_data = hw_events[0] if hw_events else {}
 
         report_data = {

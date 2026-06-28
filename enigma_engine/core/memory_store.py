@@ -10,6 +10,7 @@ must be sharp, not big).
 Retrieval is BM25 over whitespace/word tokens. At her scale — hundreds to a
 few thousand memories — lexical scoring is the boring, proven choice.
 """
+
 from __future__ import annotations
 
 import json
@@ -92,8 +93,7 @@ class MemoryStore:
         scored.sort(key=lambda s: -s[0])
         return [rec for _, rec in scored[:k]]
 
-    def render_context(self, query: str, tokenizer, max_ids: int = 128,
-                       k: int = 3) -> str:
+    def render_context(self, query: str, tokenizer, max_ids: int = 128, k: int = 3) -> str:
         """Top-k matches as a system-prompt block, trimmed to a token budget.
         Empty string when nothing relevant — never pad her context with noise."""
         hits = self.search(query, k=k)

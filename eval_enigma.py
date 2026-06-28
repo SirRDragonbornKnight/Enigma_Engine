@@ -40,14 +40,15 @@ HELD_OUT = [
 
 def gen(model, tokenizer, q: str) -> str:
     text = f"<|im_start|>user\n{q}<|im_end|>\n<|im_start|>assistant\n"
-    ids = tokenizer(text, add_special_tokens=False,
-                    return_tensors="pt").to(model.device)
+    ids = tokenizer(text, add_special_tokens=False, return_tensors="pt").to(model.device)
     out = model.generate(
-        **ids, max_new_tokens=160, do_sample=False,
-        repetition_penalty=1.05, pad_token_id=tokenizer.eos_token_id,
+        **ids,
+        max_new_tokens=160,
+        do_sample=False,
+        repetition_penalty=1.05,
+        pad_token_id=tokenizer.eos_token_id,
     )
-    return tokenizer.decode(out[0][ids.input_ids.shape[1]:],
-                            skip_special_tokens=True).strip()
+    return tokenizer.decode(out[0][ids.input_ids.shape[1] :], skip_special_tokens=True).strip()
 
 
 def main() -> None:
@@ -64,8 +65,8 @@ def main() -> None:
 
     for q in HELD_OUT:
         with model.disable_adapter():
-            base = gen(model, tokenizer, q)   # stock Qwen3
-        enigma = gen(model, tokenizer, q)     # adapter active
+            base = gen(model, tokenizer, q)  # stock Qwen3
+        enigma = gen(model, tokenizer, q)  # adapter active
         print("\n" + "=" * 72)
         print(f"Q: {q}")
         print(f"\n[ base Qwen3 ]\n{base}")

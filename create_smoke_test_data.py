@@ -122,9 +122,15 @@ PSYCHOLOGY_PARAGRAPHS = [
 ]
 
 ALL_PARAGRAPHS = (
-    SCIENCE_PARAGRAPHS + MATH_PARAGRAPHS + HISTORY_PARAGRAPHS +
-    CS_PARAGRAPHS + PHILOSOPHY_PARAGRAPHS + TECHNOLOGY_PARAGRAPHS +
-    ECONOMICS_PARAGRAPHS + LITERATURE_PARAGRAPHS + PSYCHOLOGY_PARAGRAPHS
+    SCIENCE_PARAGRAPHS
+    + MATH_PARAGRAPHS
+    + HISTORY_PARAGRAPHS
+    + CS_PARAGRAPHS
+    + PHILOSOPHY_PARAGRAPHS
+    + TECHNOLOGY_PARAGRAPHS
+    + ECONOMICS_PARAGRAPHS
+    + LITERATURE_PARAGRAPHS
+    + PSYCHOLOGY_PARAGRAPHS
 )
 
 # ---------------------------------------------------------------------------
@@ -132,30 +138,102 @@ ALL_PARAGRAPHS = (
 # ---------------------------------------------------------------------------
 
 INSTRUCTION_PAIRS = [
-    ("What is photosynthesis?", "Photosynthesis is the process by which plants convert light energy into chemical energy. In the chloroplasts of plant cells, chlorophyll absorbs sunlight and uses it to transform carbon dioxide and water into glucose and oxygen. The light-dependent reactions occur in the thylakoid membranes, producing ATP and NADPH, while the Calvin cycle in the stroma uses these molecules to fix carbon into sugar."),
-    ("Explain Newton's second law of motion.", "Newton's second law states that the acceleration of an object is directly proportional to the net force acting on it and inversely proportional to its mass. This relationship is expressed as F = ma, where F is the net force, m is the mass, and a is the acceleration. A heavier object requires more force to achieve the same acceleration as a lighter one."),
-    ("What causes earthquakes?", "Earthquakes are caused by the sudden release of energy in Earth's crust, usually resulting from the movement of tectonic plates. When plates push against, pull apart from, or slide past each other, stress builds up along fault lines. When this stress exceeds the strength of the rocks, it is released as seismic waves that shake the ground. The point where rupture begins is called the focus, and the point directly above on the surface is the epicenter."),
-    ("How does a computer store information?", "Computers store information as binary data, sequences of ones and zeros called bits. Eight bits form a byte, the basic unit of data storage. RAM provides fast temporary storage that loses data when power is off. Hard drives and solid-state drives provide persistent storage using magnetic platters or flash memory chips. Data is organized into files by the operating system's file system."),
-    ("What is the difference between weather and climate?", "Weather refers to the short-term atmospheric conditions at a specific place and time, including temperature, humidity, precipitation, and wind. Climate is the average pattern of weather conditions in a region over a long period, typically 30 years or more. A region might have a rainy day (weather) while still being classified as arid (climate). Climate change refers to long-term shifts in these average patterns."),
-    ("Explain how vaccines work.", "Vaccines train the immune system to recognize and fight specific pathogens without causing the actual disease. They contain weakened, inactivated, or fragments of the pathogen that trigger an immune response. The body produces antibodies and memory cells that remember the pathogen. If the person later encounters the real pathogen, their immune system can respond quickly and effectively, preventing illness or reducing its severity."),
-    ("What is compound interest?", "Compound interest is interest calculated on both the initial principal and the accumulated interest from previous periods. Unlike simple interest, which is only calculated on the principal, compound interest grows exponentially over time. The formula is A = P(1 + r/n)^(nt), where P is the principal, r is the annual rate, n is the compounding frequency, and t is time in years. This is why starting to save early has such a powerful effect."),
-    ("How do neural networks learn?", "Neural networks learn by adjusting the weights and biases of connections between artificial neurons to minimize prediction errors. During training, input data passes through layers of neurons (forward propagation), producing an output that is compared to the expected result. The error is calculated using a loss function, and backpropagation computes gradients that indicate how to adjust each weight. An optimizer like SGD or Adam updates the weights iteratively."),
-    ("What is DNA and why is it important?", "DNA, or deoxyribonucleic acid, is a molecule that carries the genetic instructions for the development, functioning, and reproduction of all known living organisms. It consists of two strands twisted into a double helix, with pairs of nucleotide bases (adenine-thymine and guanine-cytosine) forming the rungs. DNA encodes genes, which are segments that specify the sequence of amino acids in proteins that carry out most cellular functions."),
-    ("Explain the water cycle.", "The water cycle is the continuous movement of water between Earth's surface and atmosphere. Water evaporates from oceans, lakes, and rivers when heated by the sun. Plants also release water vapor through transpiration. This vapor rises, cools, and condenses to form clouds. When droplets in clouds grow large enough, they fall as precipitation—rain, snow, sleet, or hail. The water then flows through rivers and underground aquifers back to the oceans."),
-    ("What is inflation and what causes it?", "Inflation is a sustained increase in the general price level of goods and services in an economy over time, reducing purchasing power. Demand-pull inflation occurs when aggregate demand exceeds aggregate supply. Cost-push inflation happens when production costs rise, such as increased wages or raw material prices. Central banks manage inflation through monetary policy, primarily by adjusting interest rates and controlling the money supply."),
-    ("How does encryption protect data?", "Encryption transforms readable data (plaintext) into unreadable ciphertext using a mathematical algorithm and a key. Only someone with the correct decryption key can convert the ciphertext back to plaintext. Symmetric encryption uses the same key for both operations, while asymmetric encryption uses a public key for encryption and a private key for decryption. HTTPS uses encryption to protect web traffic from eavesdropping."),
-    ("What is natural selection?", "Natural selection is the process by which organisms with traits better suited to their environment are more likely to survive and reproduce. Over generations, these advantageous traits become more common in the population. Three conditions are necessary: variation in traits within a population, heritability of those traits, and differential fitness based on those traits. Natural selection does not act on individuals but on populations over time."),
-    ("Explain the concept of supply and demand.", "Supply and demand is a fundamental economic model describing how prices are determined in a market. Demand represents how much of a product consumers are willing to buy at various prices—typically more at lower prices. Supply represents how much producers are willing to sell—typically more at higher prices. The equilibrium price is where the quantity demanded equals the quantity supplied, and market forces push prices toward this point."),
-    ("What is the scientific method?", "The scientific method is a systematic approach to investigating phenomena and acquiring knowledge. It begins with observation and the formulation of a question. A testable hypothesis is proposed, and experiments are designed to test it while controlling variables. Data is collected and analyzed to determine whether the results support or refute the hypothesis. Results are communicated through peer-reviewed publication, and other scientists attempt to replicate the findings."),
-    ("How does the human heart work?", "The human heart is a muscular organ that pumps blood through the circulatory system. It has four chambers: the right atrium receives deoxygenated blood from the body and passes it to the right ventricle, which pumps it to the lungs for oxygenation. Oxygenated blood returns to the left atrium, flows to the left ventricle, and is pumped to the rest of the body. The heart beats about 100,000 times per day, regulated by electrical signals from the sinoatrial node."),
-    ("What is machine learning?", "Machine learning is a branch of artificial intelligence where computer systems learn from data without being explicitly programmed for every task. In supervised learning, models are trained on labeled examples to predict outcomes for new inputs. Unsupervised learning finds patterns in unlabeled data. Reinforcement learning trains agents through trial and error, rewarding good decisions. Common algorithms include linear regression, decision trees, and neural networks."),
-    ("Explain plate tectonics.", "Plate tectonics is the theory that Earth's outer shell is divided into several large plates that float on the semi-fluid asthenosphere beneath them. These plates move relative to each other at boundaries where they diverge, converge, or slide past one another. At divergent boundaries, new crust forms as plates separate. At convergent boundaries, one plate may subduct beneath another, forming trenches and volcanoes. Transform boundaries produce lateral movement and earthquakes."),
-    ("What are black holes?", "Black holes are regions of spacetime where gravity is so intense that nothing, not even light, can escape once it crosses the event horizon. They form when massive stars collapse at the end of their life cycle, compressing their mass into an incredibly small volume. Supermassive black holes, millions to billions of times the Sun's mass, reside at the centers of most galaxies. Black holes can be detected by their gravitational effects on nearby matter and by radiation emitted as material falls inward."),
-    ("How do computers execute programs?", "Computers execute programs through a cycle of fetch, decode, and execute. The processor fetches an instruction from memory at the address stored in the program counter. The instruction decoder interprets what operation to perform. The execution unit carries out the operation, such as arithmetic, logic, or memory access. The program counter advances to the next instruction. Modern processors execute billions of these cycles per second and use pipelining to overlap stages."),
-    ("What is the greenhouse effect?", "The greenhouse effect is a natural process where certain gases in Earth's atmosphere trap heat from the sun, keeping the planet warm enough to support life. Sunlight passes through the atmosphere and warms the surface, which then emits infrared radiation. Greenhouse gases like carbon dioxide, methane, and water vapor absorb some of this radiation and re-emit it in all directions, warming the lower atmosphere. Human activities have increased greenhouse gas concentrations, enhancing this effect."),
-    ("Explain the concept of recursion in programming.", "Recursion is a programming technique where a function calls itself to solve a problem by breaking it into smaller subproblems. Each recursive call works on a smaller input until reaching a base case that can be solved directly without further recursion. Classic examples include computing factorials, traversing tree structures, and the Fibonacci sequence. Recursion uses the call stack to track each invocation, so deep recursion can cause stack overflow errors."),
-    ("What is general relativity?", "General relativity, published by Albert Einstein in 1915, describes gravity as the curvature of spacetime caused by mass and energy. Massive objects like stars and planets warp the fabric of spacetime around them, and other objects follow curved paths through this warped geometry. This explains why light bends around massive objects, why time passes more slowly in stronger gravitational fields, and why the universe can expand. GPS satellites must account for relativistic time differences to maintain accuracy."),
-    ("How do antibiotics work?", "Antibiotics are drugs that kill or inhibit the growth of bacteria. They target structures or processes unique to bacterial cells, minimizing harm to human cells. Penicillin and related drugs interfere with cell wall synthesis, causing bacteria to burst. Tetracyclines block bacterial ribosomes, preventing protein production. Fluoroquinolones inhibit DNA replication. Antibiotic resistance develops when bacteria mutate or acquire genes that neutralize the drug, making infections harder to treat."),
+    (
+        "What is photosynthesis?",
+        "Photosynthesis is the process by which plants convert light energy into chemical energy. In the chloroplasts of plant cells, chlorophyll absorbs sunlight and uses it to transform carbon dioxide and water into glucose and oxygen. The light-dependent reactions occur in the thylakoid membranes, producing ATP and NADPH, while the Calvin cycle in the stroma uses these molecules to fix carbon into sugar.",
+    ),
+    (
+        "Explain Newton's second law of motion.",
+        "Newton's second law states that the acceleration of an object is directly proportional to the net force acting on it and inversely proportional to its mass. This relationship is expressed as F = ma, where F is the net force, m is the mass, and a is the acceleration. A heavier object requires more force to achieve the same acceleration as a lighter one.",
+    ),
+    (
+        "What causes earthquakes?",
+        "Earthquakes are caused by the sudden release of energy in Earth's crust, usually resulting from the movement of tectonic plates. When plates push against, pull apart from, or slide past each other, stress builds up along fault lines. When this stress exceeds the strength of the rocks, it is released as seismic waves that shake the ground. The point where rupture begins is called the focus, and the point directly above on the surface is the epicenter.",
+    ),
+    (
+        "How does a computer store information?",
+        "Computers store information as binary data, sequences of ones and zeros called bits. Eight bits form a byte, the basic unit of data storage. RAM provides fast temporary storage that loses data when power is off. Hard drives and solid-state drives provide persistent storage using magnetic platters or flash memory chips. Data is organized into files by the operating system's file system.",
+    ),
+    (
+        "What is the difference between weather and climate?",
+        "Weather refers to the short-term atmospheric conditions at a specific place and time, including temperature, humidity, precipitation, and wind. Climate is the average pattern of weather conditions in a region over a long period, typically 30 years or more. A region might have a rainy day (weather) while still being classified as arid (climate). Climate change refers to long-term shifts in these average patterns.",
+    ),
+    (
+        "Explain how vaccines work.",
+        "Vaccines train the immune system to recognize and fight specific pathogens without causing the actual disease. They contain weakened, inactivated, or fragments of the pathogen that trigger an immune response. The body produces antibodies and memory cells that remember the pathogen. If the person later encounters the real pathogen, their immune system can respond quickly and effectively, preventing illness or reducing its severity.",
+    ),
+    (
+        "What is compound interest?",
+        "Compound interest is interest calculated on both the initial principal and the accumulated interest from previous periods. Unlike simple interest, which is only calculated on the principal, compound interest grows exponentially over time. The formula is A = P(1 + r/n)^(nt), where P is the principal, r is the annual rate, n is the compounding frequency, and t is time in years. This is why starting to save early has such a powerful effect.",
+    ),
+    (
+        "How do neural networks learn?",
+        "Neural networks learn by adjusting the weights and biases of connections between artificial neurons to minimize prediction errors. During training, input data passes through layers of neurons (forward propagation), producing an output that is compared to the expected result. The error is calculated using a loss function, and backpropagation computes gradients that indicate how to adjust each weight. An optimizer like SGD or Adam updates the weights iteratively.",
+    ),
+    (
+        "What is DNA and why is it important?",
+        "DNA, or deoxyribonucleic acid, is a molecule that carries the genetic instructions for the development, functioning, and reproduction of all known living organisms. It consists of two strands twisted into a double helix, with pairs of nucleotide bases (adenine-thymine and guanine-cytosine) forming the rungs. DNA encodes genes, which are segments that specify the sequence of amino acids in proteins that carry out most cellular functions.",
+    ),
+    (
+        "Explain the water cycle.",
+        "The water cycle is the continuous movement of water between Earth's surface and atmosphere. Water evaporates from oceans, lakes, and rivers when heated by the sun. Plants also release water vapor through transpiration. This vapor rises, cools, and condenses to form clouds. When droplets in clouds grow large enough, they fall as precipitation—rain, snow, sleet, or hail. The water then flows through rivers and underground aquifers back to the oceans.",
+    ),
+    (
+        "What is inflation and what causes it?",
+        "Inflation is a sustained increase in the general price level of goods and services in an economy over time, reducing purchasing power. Demand-pull inflation occurs when aggregate demand exceeds aggregate supply. Cost-push inflation happens when production costs rise, such as increased wages or raw material prices. Central banks manage inflation through monetary policy, primarily by adjusting interest rates and controlling the money supply.",
+    ),
+    (
+        "How does encryption protect data?",
+        "Encryption transforms readable data (plaintext) into unreadable ciphertext using a mathematical algorithm and a key. Only someone with the correct decryption key can convert the ciphertext back to plaintext. Symmetric encryption uses the same key for both operations, while asymmetric encryption uses a public key for encryption and a private key for decryption. HTTPS uses encryption to protect web traffic from eavesdropping.",
+    ),
+    (
+        "What is natural selection?",
+        "Natural selection is the process by which organisms with traits better suited to their environment are more likely to survive and reproduce. Over generations, these advantageous traits become more common in the population. Three conditions are necessary: variation in traits within a population, heritability of those traits, and differential fitness based on those traits. Natural selection does not act on individuals but on populations over time.",
+    ),
+    (
+        "Explain the concept of supply and demand.",
+        "Supply and demand is a fundamental economic model describing how prices are determined in a market. Demand represents how much of a product consumers are willing to buy at various prices—typically more at lower prices. Supply represents how much producers are willing to sell—typically more at higher prices. The equilibrium price is where the quantity demanded equals the quantity supplied, and market forces push prices toward this point.",
+    ),
+    (
+        "What is the scientific method?",
+        "The scientific method is a systematic approach to investigating phenomena and acquiring knowledge. It begins with observation and the formulation of a question. A testable hypothesis is proposed, and experiments are designed to test it while controlling variables. Data is collected and analyzed to determine whether the results support or refute the hypothesis. Results are communicated through peer-reviewed publication, and other scientists attempt to replicate the findings.",
+    ),
+    (
+        "How does the human heart work?",
+        "The human heart is a muscular organ that pumps blood through the circulatory system. It has four chambers: the right atrium receives deoxygenated blood from the body and passes it to the right ventricle, which pumps it to the lungs for oxygenation. Oxygenated blood returns to the left atrium, flows to the left ventricle, and is pumped to the rest of the body. The heart beats about 100,000 times per day, regulated by electrical signals from the sinoatrial node.",
+    ),
+    (
+        "What is machine learning?",
+        "Machine learning is a branch of artificial intelligence where computer systems learn from data without being explicitly programmed for every task. In supervised learning, models are trained on labeled examples to predict outcomes for new inputs. Unsupervised learning finds patterns in unlabeled data. Reinforcement learning trains agents through trial and error, rewarding good decisions. Common algorithms include linear regression, decision trees, and neural networks.",
+    ),
+    (
+        "Explain plate tectonics.",
+        "Plate tectonics is the theory that Earth's outer shell is divided into several large plates that float on the semi-fluid asthenosphere beneath them. These plates move relative to each other at boundaries where they diverge, converge, or slide past one another. At divergent boundaries, new crust forms as plates separate. At convergent boundaries, one plate may subduct beneath another, forming trenches and volcanoes. Transform boundaries produce lateral movement and earthquakes.",
+    ),
+    (
+        "What are black holes?",
+        "Black holes are regions of spacetime where gravity is so intense that nothing, not even light, can escape once it crosses the event horizon. They form when massive stars collapse at the end of their life cycle, compressing their mass into an incredibly small volume. Supermassive black holes, millions to billions of times the Sun's mass, reside at the centers of most galaxies. Black holes can be detected by their gravitational effects on nearby matter and by radiation emitted as material falls inward.",
+    ),
+    (
+        "How do computers execute programs?",
+        "Computers execute programs through a cycle of fetch, decode, and execute. The processor fetches an instruction from memory at the address stored in the program counter. The instruction decoder interprets what operation to perform. The execution unit carries out the operation, such as arithmetic, logic, or memory access. The program counter advances to the next instruction. Modern processors execute billions of these cycles per second and use pipelining to overlap stages.",
+    ),
+    (
+        "What is the greenhouse effect?",
+        "The greenhouse effect is a natural process where certain gases in Earth's atmosphere trap heat from the sun, keeping the planet warm enough to support life. Sunlight passes through the atmosphere and warms the surface, which then emits infrared radiation. Greenhouse gases like carbon dioxide, methane, and water vapor absorb some of this radiation and re-emit it in all directions, warming the lower atmosphere. Human activities have increased greenhouse gas concentrations, enhancing this effect.",
+    ),
+    (
+        "Explain the concept of recursion in programming.",
+        "Recursion is a programming technique where a function calls itself to solve a problem by breaking it into smaller subproblems. Each recursive call works on a smaller input until reaching a base case that can be solved directly without further recursion. Classic examples include computing factorials, traversing tree structures, and the Fibonacci sequence. Recursion uses the call stack to track each invocation, so deep recursion can cause stack overflow errors.",
+    ),
+    (
+        "What is general relativity?",
+        "General relativity, published by Albert Einstein in 1915, describes gravity as the curvature of spacetime caused by mass and energy. Massive objects like stars and planets warp the fabric of spacetime around them, and other objects follow curved paths through this warped geometry. This explains why light bends around massive objects, why time passes more slowly in stronger gravitational fields, and why the universe can expand. GPS satellites must account for relativistic time differences to maintain accuracy.",
+    ),
+    (
+        "How do antibiotics work?",
+        "Antibiotics are drugs that kill or inhibit the growth of bacteria. They target structures or processes unique to bacterial cells, minimizing harm to human cells. Penicillin and related drugs interfere with cell wall synthesis, causing bacteria to burst. Tetracyclines block bacterial ribosomes, preventing protein production. Fluoroquinolones inhibit DNA replication. Antibiotic resistance develops when bacteria mutate or acquire genes that neutralize the drug, making infections harder to treat.",
+    ),
 ]
 
 # ---------------------------------------------------------------------------
@@ -163,21 +241,81 @@ INSTRUCTION_PAIRS = [
 # ---------------------------------------------------------------------------
 
 DPO_PAIRS = [
-    {"prompt": "Explain what gravity is.", "chosen": "Gravity is a fundamental force of nature that causes objects with mass to attract one another. According to Newton's law of universal gravitation, every mass attracts every other mass with a force proportional to the product of their masses and inversely proportional to the square of the distance between them. Einstein's general relativity describes gravity as the curvature of spacetime caused by mass and energy, where objects follow curved paths through warped space.", "rejected": "gravity is when stuff falls down. things are heavy because of gravity. the moon has less gravity so you can jump higher there."},
-    {"prompt": "What is the capital of France?", "chosen": "The capital of France is Paris. Located on the River Seine in northern France, Paris is the country's largest city and has been its political, economic, and cultural center for centuries. It is home to landmarks such as the Eiffel Tower, the Louvre Museum, and Notre-Dame Cathedral.", "rejected": "france capital is paris i think. its a city in europe somewhere."},
-    {"prompt": "How do plants grow?", "chosen": "Plants grow through a combination of cell division, elongation, and differentiation. Seeds germinate when exposed to adequate moisture, warmth, and sometimes light. The root system develops downward to absorb water and minerals from the soil, while the shoot grows upward toward light. Photosynthesis in the leaves converts carbon dioxide and water into glucose using sunlight energy, providing the fuel for growth. Hormones like auxin regulate the direction and rate of growth.", "rejected": "plants grow from seeds. you put them in dirt and water them. they get bigger from the sun. thats basically it."},
-    {"prompt": "Write a function to reverse a string.", "chosen": "Here is a Python function to reverse a string:\n\ndef reverse_string(s: str) -> str:\n    return s[::-1]\n\nThis uses Python's slice notation with a step of -1, which creates a new string with characters in reverse order. For example, reverse_string('hello') returns 'olleh'. The time complexity is O(n) where n is the length of the string, and it creates a new string rather than modifying the original.", "rejected": "def reverse(s):\n  r = ''\n  for i in s:\n    r = i + r\n  return r\n\nthat should work i think"},
-    {"prompt": "What causes seasons on Earth?", "chosen": "Earth's seasons are caused by the tilt of its rotational axis, approximately 23.5 degrees relative to its orbital plane around the Sun. As Earth orbits the Sun, different hemispheres receive varying amounts of direct sunlight throughout the year. When the Northern Hemisphere is tilted toward the Sun, it experiences summer with longer days and more direct sunlight, while the Southern Hemisphere experiences winter. Six months later, the situation reverses. The equinoxes occur when neither hemisphere is tilted toward the Sun.", "rejected": "seasons happen because earth is closer to the sun in summer and farther in winter. thats why its hot in summer and cold in winter."},
-    {"prompt": "Explain the difference between RAM and storage.", "chosen": "RAM (Random Access Memory) and storage serve different roles in a computer. RAM is volatile memory that provides fast, temporary workspace for the CPU during active tasks—data is lost when power is turned off. It typically offers speeds of tens of gigabytes per second. Storage devices like SSDs and hard drives provide persistent, non-volatile memory that retains data without power. Storage is slower than RAM but offers much larger capacity at lower cost per gigabyte. The operating system loads programs from storage into RAM when you run them.", "rejected": "ram is fast memory, storage is slow memory. ram loses stuff when you turn off the computer. storage keeps it. you need both."},
-    {"prompt": "What is democracy?", "chosen": "Democracy is a system of government in which power is vested in the people, who exercise it directly or through elected representatives. In a direct democracy, citizens vote on laws and policies themselves. In a representative democracy, citizens elect officials to make decisions on their behalf. Key principles include free and fair elections, protection of individual rights, rule of law, separation of powers, and freedom of expression. Modern democracies typically include constitutional safeguards to prevent majority tyranny.", "rejected": "democracy means the people get to vote for stuff. its when everyone gets a say in how things are run. america is a democracy."},
-    {"prompt": "How does the Internet work?", "chosen": "The Internet is a global network of interconnected computer networks that communicate using standardized protocols. When you request a webpage, your browser sends an HTTP request through your local network to your Internet Service Provider. DNS servers translate the domain name into an IP address. The request travels through multiple routers across the network, guided by routing protocols. The destination server processes the request and sends back the webpage data in packets, which are reassembled by your browser for display.", "rejected": "the internet works with wifi and cables. your computer sends stuff to other computers through the internet. google and websites are on servers somewhere."},
-    {"prompt": "What is the Pythagorean theorem?", "chosen": "The Pythagorean theorem states that in a right triangle, the square of the length of the hypotenuse (the side opposite the right angle) equals the sum of the squares of the lengths of the other two sides. Expressed as a² + b² = c², where c is the hypotenuse and a and b are the other sides. For example, a triangle with sides 3 and 4 has a hypotenuse of 5, since 9 + 16 = 25. This theorem has applications in distance calculations, navigation, construction, and many areas of mathematics.", "rejected": "its a squared plus b squared equals c squared. you use it for triangles. the long side is c."},
-    {"prompt": "Explain how a vaccine works.", "chosen": "A vaccine works by training the immune system to recognize and combat a specific pathogen without causing the disease itself. It contains either weakened or inactivated forms of the pathogen, pieces of it (like proteins), or instructions for cells to produce those pieces (as in mRNA vaccines). When administered, the immune system mounts a response, producing antibodies and activating T cells. Crucially, memory cells are formed that persist long-term, enabling a rapid and effective immune response if the real pathogen is encountered later.", "rejected": "vaccines put a weak version of the virus in you so your body learns to fight it. then if you get the real virus your body already knows what to do."},
-    {"prompt": "What is an algorithm?", "chosen": "An algorithm is a finite, well-defined sequence of instructions for solving a problem or performing a computation. It takes one or more inputs and produces an output after a finite number of steps. Key properties include definiteness (each step is precisely defined), finiteness (it terminates after finite steps), and effectiveness (each step is feasible). Examples include binary search for finding items in sorted lists, Dijkstra's algorithm for shortest paths in graphs, and quicksort for ordering elements. Algorithm efficiency is analyzed using time and space complexity.", "rejected": "an algorithm is like steps to do something. like a recipe but for computers. you tell the computer what to do step by step."},
-    {"prompt": "Describe the structure of an atom.", "chosen": "An atom consists of a dense central nucleus surrounded by a cloud of electrons. The nucleus contains positively charged protons and electrically neutral neutrons, held together by the strong nuclear force. Electrons, which carry a negative charge, occupy regions around the nucleus described by quantum mechanical orbitals. The number of protons (atomic number) determines the element. In a neutral atom, the number of electrons equals the number of protons. Isotopes of an element have the same number of protons but different numbers of neutrons.", "rejected": "atoms have protons neutrons and electrons. protons and neutrons are in the middle and electrons go around the outside. protons are positive electrons are negative."},
-    {"prompt": "What is climate change?", "chosen": "Climate change refers to significant, long-term shifts in global temperatures and weather patterns. While natural factors like volcanic eruptions and solar cycles cause some variation, the current rapid warming trend is primarily driven by human activities, particularly the burning of fossil fuels, which releases greenhouse gases like carbon dioxide and methane. These gases trap heat in the atmosphere, raising global temperatures. Consequences include rising sea levels, more frequent extreme weather events, ocean acidification, and disruption of ecosystems and agriculture.", "rejected": "climate change is when the weather changes over time. some people think humans cause it by pollution. the earth is getting warmer."},
-    {"prompt": "How do batteries work?", "chosen": "Batteries convert chemical energy into electrical energy through electrochemical reactions. A battery contains two electrodes—an anode (negative) and a cathode (positive)—separated by an electrolyte. During discharge, a chemical reaction at the anode releases electrons, which flow through an external circuit to the cathode, providing electrical current. At the cathode, another reaction consumes electrons. In rechargeable batteries like lithium-ion, applying an external voltage reverses these reactions, restoring the original chemical state.", "rejected": "batteries have chemicals inside that make electricity. when the chemicals run out the battery dies. rechargeable ones can be charged back up."},
-    {"prompt": "What is the theory of relativity?", "chosen": "Einstein's theory of relativity consists of two parts. Special relativity (1905) established that the laws of physics are the same for all non-accelerating observers and that the speed of light in a vacuum is constant regardless of the observer's motion. This leads to time dilation, length contraction, and the famous equation E=mc². General relativity (1915) extended these ideas to include gravity, describing it as the curvature of spacetime caused by mass and energy. Massive objects warp spacetime, and this curvature determines how objects move.", "rejected": "relativity is einsteins theory about how time and space work. e equals mc squared. time goes slower if youre moving fast. gravity bends light."},
+    {
+        "prompt": "Explain what gravity is.",
+        "chosen": "Gravity is a fundamental force of nature that causes objects with mass to attract one another. According to Newton's law of universal gravitation, every mass attracts every other mass with a force proportional to the product of their masses and inversely proportional to the square of the distance between them. Einstein's general relativity describes gravity as the curvature of spacetime caused by mass and energy, where objects follow curved paths through warped space.",
+        "rejected": "gravity is when stuff falls down. things are heavy because of gravity. the moon has less gravity so you can jump higher there.",
+    },
+    {
+        "prompt": "What is the capital of France?",
+        "chosen": "The capital of France is Paris. Located on the River Seine in northern France, Paris is the country's largest city and has been its political, economic, and cultural center for centuries. It is home to landmarks such as the Eiffel Tower, the Louvre Museum, and Notre-Dame Cathedral.",
+        "rejected": "france capital is paris i think. its a city in europe somewhere.",
+    },
+    {
+        "prompt": "How do plants grow?",
+        "chosen": "Plants grow through a combination of cell division, elongation, and differentiation. Seeds germinate when exposed to adequate moisture, warmth, and sometimes light. The root system develops downward to absorb water and minerals from the soil, while the shoot grows upward toward light. Photosynthesis in the leaves converts carbon dioxide and water into glucose using sunlight energy, providing the fuel for growth. Hormones like auxin regulate the direction and rate of growth.",
+        "rejected": "plants grow from seeds. you put them in dirt and water them. they get bigger from the sun. thats basically it.",
+    },
+    {
+        "prompt": "Write a function to reverse a string.",
+        "chosen": "Here is a Python function to reverse a string:\n\ndef reverse_string(s: str) -> str:\n    return s[::-1]\n\nThis uses Python's slice notation with a step of -1, which creates a new string with characters in reverse order. For example, reverse_string('hello') returns 'olleh'. The time complexity is O(n) where n is the length of the string, and it creates a new string rather than modifying the original.",
+        "rejected": "def reverse(s):\n  r = ''\n  for i in s:\n    r = i + r\n  return r\n\nthat should work i think",
+    },
+    {
+        "prompt": "What causes seasons on Earth?",
+        "chosen": "Earth's seasons are caused by the tilt of its rotational axis, approximately 23.5 degrees relative to its orbital plane around the Sun. As Earth orbits the Sun, different hemispheres receive varying amounts of direct sunlight throughout the year. When the Northern Hemisphere is tilted toward the Sun, it experiences summer with longer days and more direct sunlight, while the Southern Hemisphere experiences winter. Six months later, the situation reverses. The equinoxes occur when neither hemisphere is tilted toward the Sun.",
+        "rejected": "seasons happen because earth is closer to the sun in summer and farther in winter. thats why its hot in summer and cold in winter.",
+    },
+    {
+        "prompt": "Explain the difference between RAM and storage.",
+        "chosen": "RAM (Random Access Memory) and storage serve different roles in a computer. RAM is volatile memory that provides fast, temporary workspace for the CPU during active tasks—data is lost when power is turned off. It typically offers speeds of tens of gigabytes per second. Storage devices like SSDs and hard drives provide persistent, non-volatile memory that retains data without power. Storage is slower than RAM but offers much larger capacity at lower cost per gigabyte. The operating system loads programs from storage into RAM when you run them.",
+        "rejected": "ram is fast memory, storage is slow memory. ram loses stuff when you turn off the computer. storage keeps it. you need both.",
+    },
+    {
+        "prompt": "What is democracy?",
+        "chosen": "Democracy is a system of government in which power is vested in the people, who exercise it directly or through elected representatives. In a direct democracy, citizens vote on laws and policies themselves. In a representative democracy, citizens elect officials to make decisions on their behalf. Key principles include free and fair elections, protection of individual rights, rule of law, separation of powers, and freedom of expression. Modern democracies typically include constitutional safeguards to prevent majority tyranny.",
+        "rejected": "democracy means the people get to vote for stuff. its when everyone gets a say in how things are run. america is a democracy.",
+    },
+    {
+        "prompt": "How does the Internet work?",
+        "chosen": "The Internet is a global network of interconnected computer networks that communicate using standardized protocols. When you request a webpage, your browser sends an HTTP request through your local network to your Internet Service Provider. DNS servers translate the domain name into an IP address. The request travels through multiple routers across the network, guided by routing protocols. The destination server processes the request and sends back the webpage data in packets, which are reassembled by your browser for display.",
+        "rejected": "the internet works with wifi and cables. your computer sends stuff to other computers through the internet. google and websites are on servers somewhere.",
+    },
+    {
+        "prompt": "What is the Pythagorean theorem?",
+        "chosen": "The Pythagorean theorem states that in a right triangle, the square of the length of the hypotenuse (the side opposite the right angle) equals the sum of the squares of the lengths of the other two sides. Expressed as a² + b² = c², where c is the hypotenuse and a and b are the other sides. For example, a triangle with sides 3 and 4 has a hypotenuse of 5, since 9 + 16 = 25. This theorem has applications in distance calculations, navigation, construction, and many areas of mathematics.",
+        "rejected": "its a squared plus b squared equals c squared. you use it for triangles. the long side is c.",
+    },
+    {
+        "prompt": "Explain how a vaccine works.",
+        "chosen": "A vaccine works by training the immune system to recognize and combat a specific pathogen without causing the disease itself. It contains either weakened or inactivated forms of the pathogen, pieces of it (like proteins), or instructions for cells to produce those pieces (as in mRNA vaccines). When administered, the immune system mounts a response, producing antibodies and activating T cells. Crucially, memory cells are formed that persist long-term, enabling a rapid and effective immune response if the real pathogen is encountered later.",
+        "rejected": "vaccines put a weak version of the virus in you so your body learns to fight it. then if you get the real virus your body already knows what to do.",
+    },
+    {
+        "prompt": "What is an algorithm?",
+        "chosen": "An algorithm is a finite, well-defined sequence of instructions for solving a problem or performing a computation. It takes one or more inputs and produces an output after a finite number of steps. Key properties include definiteness (each step is precisely defined), finiteness (it terminates after finite steps), and effectiveness (each step is feasible). Examples include binary search for finding items in sorted lists, Dijkstra's algorithm for shortest paths in graphs, and quicksort for ordering elements. Algorithm efficiency is analyzed using time and space complexity.",
+        "rejected": "an algorithm is like steps to do something. like a recipe but for computers. you tell the computer what to do step by step.",
+    },
+    {
+        "prompt": "Describe the structure of an atom.",
+        "chosen": "An atom consists of a dense central nucleus surrounded by a cloud of electrons. The nucleus contains positively charged protons and electrically neutral neutrons, held together by the strong nuclear force. Electrons, which carry a negative charge, occupy regions around the nucleus described by quantum mechanical orbitals. The number of protons (atomic number) determines the element. In a neutral atom, the number of electrons equals the number of protons. Isotopes of an element have the same number of protons but different numbers of neutrons.",
+        "rejected": "atoms have protons neutrons and electrons. protons and neutrons are in the middle and electrons go around the outside. protons are positive electrons are negative.",
+    },
+    {
+        "prompt": "What is climate change?",
+        "chosen": "Climate change refers to significant, long-term shifts in global temperatures and weather patterns. While natural factors like volcanic eruptions and solar cycles cause some variation, the current rapid warming trend is primarily driven by human activities, particularly the burning of fossil fuels, which releases greenhouse gases like carbon dioxide and methane. These gases trap heat in the atmosphere, raising global temperatures. Consequences include rising sea levels, more frequent extreme weather events, ocean acidification, and disruption of ecosystems and agriculture.",
+        "rejected": "climate change is when the weather changes over time. some people think humans cause it by pollution. the earth is getting warmer.",
+    },
+    {
+        "prompt": "How do batteries work?",
+        "chosen": "Batteries convert chemical energy into electrical energy through electrochemical reactions. A battery contains two electrodes—an anode (negative) and a cathode (positive)—separated by an electrolyte. During discharge, a chemical reaction at the anode releases electrons, which flow through an external circuit to the cathode, providing electrical current. At the cathode, another reaction consumes electrons. In rechargeable batteries like lithium-ion, applying an external voltage reverses these reactions, restoring the original chemical state.",
+        "rejected": "batteries have chemicals inside that make electricity. when the chemicals run out the battery dies. rechargeable ones can be charged back up.",
+    },
+    {
+        "prompt": "What is the theory of relativity?",
+        "chosen": "Einstein's theory of relativity consists of two parts. Special relativity (1905) established that the laws of physics are the same for all non-accelerating observers and that the speed of light in a vacuum is constant regardless of the observer's motion. This leads to time dilation, length contraction, and the famous equation E=mc². General relativity (1915) extended these ideas to include gravity, describing it as the curvature of spacetime caused by mass and energy. Massive objects warp spacetime, and this curvature determines how objects move.",
+        "rejected": "relativity is einsteins theory about how time and space work. e equals mc squared. time goes slower if youre moving fast. gravity bends light.",
+    },
 ]
 
 
@@ -186,14 +324,26 @@ def build_pretrain_text(target_kb: int) -> str:
     target_bytes = target_kb * 1024
     sections = []
     topic_names = [
-        "Natural Sciences", "Mathematics", "World History",
-        "Computer Science", "Philosophy", "Technology",
-        "Economics", "Literature", "Psychology",
+        "Natural Sciences",
+        "Mathematics",
+        "World History",
+        "Computer Science",
+        "Philosophy",
+        "Technology",
+        "Economics",
+        "Literature",
+        "Psychology",
     ]
     topic_groups = [
-        SCIENCE_PARAGRAPHS, MATH_PARAGRAPHS, HISTORY_PARAGRAPHS,
-        CS_PARAGRAPHS, PHILOSOPHY_PARAGRAPHS, TECHNOLOGY_PARAGRAPHS,
-        ECONOMICS_PARAGRAPHS, LITERATURE_PARAGRAPHS, PSYCHOLOGY_PARAGRAPHS,
+        SCIENCE_PARAGRAPHS,
+        MATH_PARAGRAPHS,
+        HISTORY_PARAGRAPHS,
+        CS_PARAGRAPHS,
+        PHILOSOPHY_PARAGRAPHS,
+        TECHNOLOGY_PARAGRAPHS,
+        ECONOMICS_PARAGRAPHS,
+        LITERATURE_PARAGRAPHS,
+        PSYCHOLOGY_PARAGRAPHS,
     ]
 
     # First pass: all paragraphs in order with topic headers
@@ -217,7 +367,7 @@ def build_pretrain_text(target_kb: int) -> str:
         sections = [f"\n--- Section {cycle} ---\n"]
         for i, p in enumerate(shuffled):
             # Add slight variation to avoid exact dedup
-            prefix = f"[{cycle}.{i+1}] "
+            prefix = f"[{cycle}.{i + 1}] "
             sections.append(prefix + p)
             sections.append("")
 

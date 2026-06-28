@@ -27,7 +27,8 @@ def test_bpe_tokenizer_roundtrip():
     tok = BPETokenizer()
     tok.train(
         ["hello world", "the quick brown fox jumps", "hello there world"],
-        vocab_size=300, verbose=False,
+        vocab_size=300,
+        verbose=False,
     )
     ids = tok.encode("hello world")
     assert isinstance(ids, list) and len(ids) > 0

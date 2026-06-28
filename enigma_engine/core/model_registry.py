@@ -3,6 +3,7 @@ Model Registry - Safe Model Loading and Caching
 
 Provides thread-safe model loading with security checks.
 """
+
 import copy
 import hashlib
 import json
@@ -53,6 +54,7 @@ class ModelRegistry:
     def _save_registry(self):
         """Save registry to disk."""
         from enigma_engine.core.safe_save import atomic_write_json
+
         with self._lock:
             data = copy.deepcopy(self.registry)
         atomic_write_json(self.registry_file, data)
@@ -91,6 +93,7 @@ class ModelRegistry:
         """Check if a model exists."""
         with self._lock:
             return name in self.registry.get("models", {})
+
 
 # Thread-safe lock for model loading
 _load_lock = threading.Lock()
@@ -135,12 +138,15 @@ def safe_load_weights(
         # Safetensors — no pickle, no code execution risk
         if path.suffix == ".safetensors":
             from safetensors.torch import load_file
+
             checkpoint = load_file(str(path), device=map_location)
         else:
             logger.warning(
                 "Loading %s — .pth/.pt/.bin files use pickle. "
                 "Prefer .safetensors format for models from "
-                "untrusted sources.", path.name)
+                "untrusted sources.",
+                path.name,
+            )
             # Always weights_only=True — no fallback to insecure loading
             checkpoint = torch.load(
                 path,
@@ -156,10 +162,7 @@ def safe_load_weights(
         raise RuntimeError(f"Failed to load model weights: {e}") from e
 
 
-def get_state_dict(
-    checkpoint: dict[str, Any],
-    prefix: str = ""
-) -> dict[str, torch.Tensor]:
+def get_state_dict(checkpoint: dict[str, Any], prefix: str = "") -> dict[str, torch.Tensor]:
     """
     Extract state dict from a checkpoint.
 
@@ -177,44 +180,40 @@ def get_state_dict(
         State dict
     """
     # Check for common keys
-    if 'model_state_dict' in checkpoint:
-        state_dict = checkpoint['model_state_dict']
-    elif 'state_dict' in checkpoint:
-        state_dict = checkpoint['state_dict']
-    elif 'model' in checkpoint:
-        state_dict = checkpoint['model']
+    if "model_state_dict" in checkpoint:
+        state_dict = checkpoint["model_state_dict"]
+    elif "state_dict" in checkpoint:
+        state_dict = checkpoint["state_dict"]
+    elif "model" in checkpoint:
+        state_dict = checkpoint["model"]
     else:
         # Check for single-key nested checkpoint wrapping a state dict
         if len(checkpoint) == 1:
             nested_key = next(iter(checkpoint))
             nested = checkpoint[nested_key]
             if isinstance(nested, dict):
-                logger.info(
-                    "Unwrapping nested checkpoint key '%s'",
-                    nested_key)
+                logger.info("Unwrapping nested checkpoint key '%s'", nested_key)
                 return get_state_dict(nested, prefix)
         # Assume it's already a state dict — warn in case it contains
         # non-tensor entries (optimizer state, config, etc.).
-        non_tensor = [k for k in list(checkpoint.keys())[:5]
-                      if not isinstance(checkpoint.get(k), torch.Tensor)]
+        non_tensor = [k for k in list(checkpoint.keys())[:5] if not isinstance(checkpoint.get(k), torch.Tensor)]
         if non_tensor:
             logger.warning(
                 "Checkpoint has no 'model_state_dict'/'state_dict'/'model' "
                 "key. Using it as-is, but it may contain non-tensor entries: %s",
-                non_tensor)
+                non_tensor,
+            )
         state_dict = checkpoint
 
     if not state_dict:
-        logger.warning(
-            "Extracted state dict is empty — checkpoint may be "
-            "corrupted or in an unrecognized format")
+        logger.warning("Extracted state dict is empty — checkpoint may be corrupted or in an unrecognized format")
 
     # Strip prefix if present
     if prefix:
         new_state_dict = {}
         for k, v in state_dict.items():
             if k.startswith(prefix):
-                new_state_dict[k[len(prefix):]] = v
+                new_state_dict[k[len(prefix) :]] = v
             else:
                 new_state_dict[k] = v
         state_dict = new_state_dict
@@ -237,8 +236,8 @@ def get_model_hash(path: Union[str, Path]) -> str:
 
 
 __all__ = [
-    'ModelRegistry',
-    'get_model_hash',
-    'get_state_dict',
-    'safe_load_weights',
+    "ModelRegistry",
+    "get_model_hash",
+    "get_state_dict",
+    "safe_load_weights",
 ]

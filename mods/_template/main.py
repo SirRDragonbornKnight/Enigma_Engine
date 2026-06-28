@@ -48,6 +48,7 @@ logger = logging.getLogger(__name__)
 # YOUR MOD CLASS - EDIT THIS!
 # =============================================================================
 
+
 class MyMod(ModClient):
     """
     Your mod implementation. Rename this class to match your mod.
@@ -94,7 +95,7 @@ class MyMod(ModClient):
         # Return result to AI
         return {
             "result": f"Generated from: {prompt}",
-            "type": "text"  # or "image", "audio", etc.
+            "type": "text",  # or "image", "audio", etc.
         }
 
     # =========================================================================

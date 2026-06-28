@@ -5,6 +5,7 @@ library), so the real assertions are in ``mods/avatar/tests/*.test.js``. This wr
 runs them via the portable Node interpreter so ``pytest`` covers them too, alongside
 ``tests/test_avatar_bone_data.py``. Skips cleanly if Node isn't available.
 """
+
 from __future__ import annotations
 
 import os
@@ -32,13 +33,12 @@ def test_avatar_js_rig_tests_pass() -> None:
     if not (AVATAR_DIR / "node_modules" / "three").exists():
         pytest.skip("avatar node_modules/three not installed — run npm install in mods/avatar")
     proc = subprocess.run(
-        [node, "--test"],   # auto-discovers tests/*.test.js (skips node_modules)
+        [node, "--test"],  # auto-discovers tests/*.test.js (skips node_modules)
         cwd=str(AVATAR_DIR),
         capture_output=True,
         text=True,
     )
     if proc.returncode != 0:
         raise AssertionError(
-            "avatar JS rig tests failed:\n"
-            f"--- stdout ---\n{proc.stdout}\n--- stderr ---\n{proc.stderr}"
+            f"avatar JS rig tests failed:\n--- stdout ---\n{proc.stdout}\n--- stderr ---\n{proc.stderr}"
         )

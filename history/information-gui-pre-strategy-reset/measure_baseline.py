@@ -32,25 +32,19 @@ def m4_estimate() -> dict[str, float]:
     """Sum GUI source tree + customtkinter + Pillow as a packaged-size proxy."""
     repo = Path(__file__).resolve().parent.parent.parent
     gui_dir = repo / "enigma_engine" / "gui"
-    gui_bytes = sum(
-        f.stat().st_size
-        for f in gui_dir.rglob("*")
-        if f.is_file()
-    )
+    gui_bytes = sum(f.stat().st_size for f in gui_dir.rglob("*") if f.is_file())
     try:
         import customtkinter
+
         ctk_root = Path(customtkinter.__file__).parent
-        ctk_bytes = sum(
-            f.stat().st_size for f in ctk_root.rglob("*") if f.is_file()
-        )
+        ctk_bytes = sum(f.stat().st_size for f in ctk_root.rglob("*") if f.is_file())
     except ImportError:
         ctk_bytes = 0
     try:
         import PIL
+
         pil_root = Path(PIL.__file__).parent
-        pil_bytes = sum(
-            f.stat().st_size for f in pil_root.rglob("*") if f.is_file()
-        )
+        pil_bytes = sum(f.stat().st_size for f in pil_root.rglob("*") if f.is_file())
     except ImportError:
         pil_bytes = 0
 
@@ -124,8 +118,7 @@ def main() -> int:
         rss_mb = m3_rss(args.pid, args.settle)
         print(f"[M3] Idle RSS after {args.settle}s settle: {rss_mb} MB")
         print(
-            "      Run this 3 times across cold launches; record median in "
-            "BASELINE.md §3.",
+            "      Run this 3 times across cold launches; record median in BASELINE.md §3.",
         )
 
     return 0

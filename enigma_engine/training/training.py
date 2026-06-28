@@ -1,4 +1,4 @@
-﻿"""
+"""
 Training Module for Enigma AI Engine
 
 Provides:
@@ -32,7 +32,10 @@ import torch
 import torch.nn as nn
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import (
-    CosineAnnealingLR, CosineAnnealingWarmRestarts, LambdaLR, SequentialLR,
+    CosineAnnealingLR,
+    CosineAnnealingWarmRestarts,
+    LambdaLR,
+    SequentialLR,
 )
 
 logger = logging.getLogger(__name__)
@@ -112,8 +115,12 @@ class AdEMAMix(torch.optim.Optimizer):
             raise ValueError(f"Invalid epsilon: {eps}")
 
         defaults = dict(
-            lr=lr, betas=betas, beta3=beta3, alpha=alpha,
-            eps=eps, weight_decay=weight_decay,
+            lr=lr,
+            betas=betas,
+            beta3=beta3,
+            alpha=alpha,
+            eps=eps,
+            weight_decay=weight_decay,
         )
         super().__init__(params, defaults)
 
@@ -163,9 +170,9 @@ class AdEMAMix(torch.optim.Optimizer):
                 v.mul_(beta2).addcmul_(grad, grad, value=1.0 - beta2)
 
                 # Bias correction
-                bc_fast = 1.0 - beta1 ** step
-                bc_slow = 1.0 - beta3 ** step
-                bc_v = 1.0 - beta2 ** step
+                bc_fast = 1.0 - beta1**step
+                bc_slow = 1.0 - beta3**step
+                bc_v = 1.0 - beta2**step
 
                 m_fast_hat = m_fast / bc_fast
                 m_slow_hat = m_slow / bc_slow
@@ -223,8 +230,7 @@ class Muon(torch.optim.Optimizer):
         if ns_steps < 1:
             raise ValueError(f"ns_steps must be >= 1, got {ns_steps}")
 
-        defaults = dict(lr=lr, momentum=momentum, ns_steps=ns_steps,
-                        weight_decay=weight_decay)
+        defaults = dict(lr=lr, momentum=momentum, ns_steps=ns_steps, weight_decay=weight_decay)
         super().__init__(params, defaults)
 
     @staticmethod
@@ -330,8 +336,7 @@ def set_training_seed(seed: int = 42, deterministic: bool = False) -> None:
         os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
         torch.use_deterministic_algorithms(True, warn_only=True)
         logger.info(
-            "Random seed set to %d (deterministic=True; "
-            "CUBLAS_WORKSPACE_CONFIG=:4096:8, ~5-15%% throughput cost)",
+            "Random seed set to %d (deterministic=True; CUBLAS_WORKSPACE_CONFIG=:4096:8, ~5-15%% throughput cost)",
             seed,
         )
     else:
@@ -359,6 +364,7 @@ def dataset_fingerprint(data: str) -> str:
 # CONFIGURATION
 # =============================================================================
 
+
 @dataclass
 class TrainingConfig:
     """Configuration for model training.
@@ -377,6 +383,7 @@ class TrainingConfig:
         use_amp: Use automatic mixed precision (fp16)
         max_grad_accumulation: Gradient accumulation steps
     """
+
     epochs: int = 10
     batch_size: int = 4
     learning_rate: float = 1e-4
@@ -559,80 +566,58 @@ class TrainingConfig:
         if self.batch_size < 0:
             raise ValueError(f"batch_size must be >= 0 (0 = auto), got {self.batch_size}")
         if self.training_memory_gb < 0:
-            raise ValueError(
-                f"training_memory_gb must be >= 0 (0 = auto), got {self.training_memory_gb}")
+            raise ValueError(f"training_memory_gb must be >= 0 (0 = auto), got {self.training_memory_gb}")
         if self.learning_rate <= 0:
             raise ValueError(f"learning_rate must be > 0, got {self.learning_rate}")
         if self.gradient_clip < 0:
             raise ValueError(f"gradient_clip must be >= 0, got {self.gradient_clip}")
         if self.save_every_steps < 0:
-            raise ValueError(
-                f"save_every_steps must be >= 0 (0 = disabled), "
-                f"got {self.save_every_steps}")
+            raise ValueError(f"save_every_steps must be >= 0 (0 = disabled), got {self.save_every_steps}")
         if self.max_grad_accumulation < 1:
-            raise ValueError(
-                f"max_grad_accumulation must be >= 1, got {self.max_grad_accumulation}"
-            )
+            raise ValueError(f"max_grad_accumulation must be >= 1, got {self.max_grad_accumulation}")
         if not 0.0 <= self.val_split < 1.0:
-            raise ValueError(
-                f"val_split must be in [0.0, 1.0), got {self.val_split}"
-            )
+            raise ValueError(f"val_split must be in [0.0, 1.0), got {self.val_split}")
         # Optimizer betas must be in (0, 1)
         if not 0.0 < self.adam_beta1 < 1.0:
-            raise ValueError(
-                f"adam_beta1 must be in (0, 1), got {self.adam_beta1}")
+            raise ValueError(f"adam_beta1 must be in (0, 1), got {self.adam_beta1}")
         if not 0.0 < self.adam_beta2 < 1.0:
-            raise ValueError(
-                f"adam_beta2 must be in (0, 1), got {self.adam_beta2}")
+            raise ValueError(f"adam_beta2 must be in (0, 1), got {self.adam_beta2}")
         # min_lr_ratio in [0, 1] - Pass 156z9au.
         if not 0.0 <= self.min_lr_ratio <= 1.0:
-            raise ValueError(
-                f"min_lr_ratio must be in [0.0, 1.0], "
-                f"got {self.min_lr_ratio}")
+            raise ValueError(f"min_lr_ratio must be in [0.0, 1.0], got {self.min_lr_ratio}")
         # EMA decay in [0, 1)
         if not 0.0 <= self.ema_decay < 1.0:
-            raise ValueError(
-                f"ema_decay must be in [0.0, 1.0), got {self.ema_decay}")
+            raise ValueError(f"ema_decay must be in [0.0, 1.0), got {self.ema_decay}")
         # Label smoothing in [0, 1)
         if not 0.0 <= self.label_smoothing < 1.0:
-            raise ValueError(
-                f"label_smoothing must be in [0.0, 1.0), got {self.label_smoothing}")
+            raise ValueError(f"label_smoothing must be in [0.0, 1.0), got {self.label_smoothing}")
         # Z-loss weight must be non-negative
         if self.z_loss_weight < 0:
-            raise ValueError(
-                f"z_loss_weight must be >= 0, got {self.z_loss_weight}")
+            raise ValueError(f"z_loss_weight must be >= 0, got {self.z_loss_weight}")
         # Reasoning loss weight must be positive
         if self.reasoning_loss_weight <= 0:
-            raise ValueError(
-                f"reasoning_loss_weight must be > 0, got {self.reasoning_loss_weight}")
+            raise ValueError(f"reasoning_loss_weight must be > 0, got {self.reasoning_loss_weight}")
         # General mix ratio in [0, 1]
         if not 0.0 <= self.general_mix_ratio <= 1.0:
-            raise ValueError(
-                f"general_mix_ratio must be in [0.0, 1.0], got {self.general_mix_ratio}")
+            raise ValueError(f"general_mix_ratio must be in [0.0, 1.0], got {self.general_mix_ratio}")
         # Rolling best K must be non-negative
         if self.rolling_best_k < 0:
-            raise ValueError(
-                f"rolling_best_k must be >= 0, got {self.rolling_best_k}")
+            raise ValueError(f"rolling_best_k must be >= 0, got {self.rolling_best_k}")
         # LLRD decay must be in [0, 1)
         if not 0.0 <= self.llrd_decay < 1.0:
-            raise ValueError(
-                f"llrd_decay must be in [0.0, 1.0), got {self.llrd_decay}")
+            raise ValueError(f"llrd_decay must be in [0.0, 1.0), got {self.llrd_decay}")
         # Gradient noise gamma must be non-negative (used as exponent)
         if self.gradient_noise_gamma < 0:
-            raise ValueError(
-                f"gradient_noise_gamma must be >= 0, got {self.gradient_noise_gamma}")
+            raise ValueError(f"gradient_noise_gamma must be >= 0, got {self.gradient_noise_gamma}")
         # Optimizer must be one of the supported values
         if self.optimizer not in ("adamw", "ademamix", "muon"):
-            raise ValueError(
-                f"optimizer must be 'adamw', 'ademamix', or 'muon', got '{self.optimizer}'")
+            raise ValueError(f"optimizer must be 'adamw', 'ademamix', or 'muon', got '{self.optimizer}'")
         # BPE-Dropout in [0, 1)
         if not 0.0 <= self.bpe_dropout < 1.0:
-            raise ValueError(
-                f"bpe_dropout must be in [0.0, 1.0), got {self.bpe_dropout}")
+            raise ValueError(f"bpe_dropout must be in [0.0, 1.0), got {self.bpe_dropout}")
         # Curriculum must be a known value
         if self.curriculum not in ("none", "easy_first"):
-            raise ValueError(
-                f"curriculum must be 'none' or 'easy_first', got '{self.curriculum}'")
+            raise ValueError(f"curriculum must be 'none' or 'easy_first', got '{self.curriculum}'")
 
     def to_dict(self) -> dict[str, Any]:
         """Convert config to dictionary."""
@@ -702,9 +687,10 @@ class TrainingConfig:
 @dataclass
 class TrainingState:
     """Tracks training state for checkpointing and resume."""
+
     epoch: int = 0
     step: int = 0
-    best_loss: float = float('inf')
+    best_loss: float = float("inf")
     total_tokens: int = 0
     training_losses: list[float] = field(default_factory=list)
     validation_losses: list[float] = field(default_factory=list)
@@ -723,9 +709,7 @@ class EMAWeightAverager:
 
     def __init__(self, model: nn.Module, decay: float = 0.999) -> None:
         self.decay = decay
-        self.shadow: list[torch.Tensor] = [
-            p.clone().detach() for p in model.parameters()
-        ]
+        self.shadow: list[torch.Tensor] = [p.clone().detach() for p in model.parameters()]
         self._backup: list[torch.Tensor] = []
 
     @torch.no_grad()
@@ -772,9 +756,7 @@ class SWAWeightAverager:
     def __init__(self, model: nn.Module, update_interval: int = 1) -> None:
         self.update_interval = max(1, update_interval)
         self.n_averaged = 0
-        self.avg: list[torch.Tensor] = [
-            p.clone().detach() for p in model.parameters()
-        ]
+        self.avg: list[torch.Tensor] = [p.clone().detach() for p in model.parameters()]
         self._backup: list[torch.Tensor] = []
 
     @torch.no_grad()
@@ -813,6 +795,7 @@ class SWAWeightAverager:
 # SEQUENCE PACKING
 # =============================================================================
 
+
 def pack_sequences(
     encoded_seqs: list[list[int]],
     max_length: int,
@@ -832,8 +815,7 @@ def pack_sequences(
         - mask_tensor: ``(num_rows, 1, max_length, max_length)``
           float tensor.  0 = attend, -inf = block.
     """
-    rows, boundaries = pack_sequences_lazy(
-        encoded_seqs, max_length, eos_id, pad_id)
+    rows, boundaries = pack_sequences_lazy(encoded_seqs, max_length, eos_id, pad_id)
 
     # Pad rows ? tensor
     packed = []
@@ -869,6 +851,7 @@ def pack_sequences_lazy(
         raise ValueError(f"max_length must be >= 1, got {max_length}")
 
     import heapq
+
     sorted_seqs = sorted(encoded_seqs, key=len, reverse=True)
 
     heap: list[tuple[int, int]] = []  # (remaining, bin_idx)
@@ -880,7 +863,7 @@ def pack_sequences_lazy(
         needed = len(seq) + 1  # +1 for EOS separator
         if needed > max_length:
             truncated_count += 1
-            seq = seq[:max_length - 1]
+            seq = seq[: max_length - 1]
             needed = max_length
 
         placed = False
@@ -913,8 +896,8 @@ def pack_sequences_lazy(
 
     if truncated_count > 0:
         logger.warning(
-            "pack_sequences: %d sequence(s) exceeded max_length=%d "
-            "and were truncated", truncated_count, max_length)
+            "pack_sequences: %d sequence(s) exceeded max_length=%d and were truncated", truncated_count, max_length
+        )
 
     return bin_rows, bin_bounds
 
@@ -932,9 +915,8 @@ def build_packing_masks(
     Returns:
         ``(num_rows, 1, T, T)`` float tensor.  0 = attend, -inf = block.
     """
-    neg_inf = float('-inf')
-    causal = torch.triu(
-        torch.full((max_length, max_length), neg_inf), diagonal=1)
+    neg_inf = float("-inf")
+    causal = torch.triu(torch.full((max_length, max_length), neg_inf), diagonal=1)
 
     masks = []
     for bounds in boundaries:
@@ -956,6 +938,7 @@ def build_packing_masks(
 # =============================================================================
 # NEAR-DUPLICATE DETECTION (T4-1)
 # =============================================================================
+
 
 def minhash_dedup(
     texts: list[str],
@@ -1008,8 +991,7 @@ def minhash_dedup(
     def _shingles(text: str) -> set[str]:
         if len(text) < shingle_size:
             return {text}
-        return {text[i:i + shingle_size]
-                for i in range(len(text) - shingle_size + 1)}
+        return {text[i : i + shingle_size] for i in range(len(text) - shingle_size + 1)}
 
     shingle_sets = [_shingles(texts[i]) for i in unique_indices]
 
@@ -1020,8 +1002,7 @@ def minhash_dedup(
     rng_bytes = hashlib.sha256(b"minhash_dedup_seed").digest()
     coeffs: list[tuple[int, int]] = []
     for k in range(num_hashes):
-        seed = hashlib.sha256(
-            rng_bytes + struct.pack(">I", k)).digest()
+        seed = hashlib.sha256(rng_bytes + struct.pack(">I", k)).digest()
         a = int.from_bytes(seed[:8], "big") % _LARGE_PRIME
         b = int.from_bytes(seed[8:16], "big") % _LARGE_PRIME
         if a == 0:
@@ -1032,9 +1013,7 @@ def minhash_dedup(
         sig = [_LARGE_PRIME] * num_hashes
         for s in shings:
             # Deterministic hash - Python's hash() is randomised per-process
-            h = int.from_bytes(
-                hashlib.sha256(s.encode("utf-8")).digest()[:8], "big"
-            )
+            h = int.from_bytes(hashlib.sha256(s.encode("utf-8")).digest()[:8], "big")
             for k, (a, b_) in enumerate(coeffs):
                 val = (a * h + b_) % _LARGE_PRIME
                 if val < sig[k]:
@@ -1048,6 +1027,7 @@ def minhash_dedup(
         # can process events during large dedup operations.
         if (idx + 1) % 50 == 0:
             import time
+
             time.sleep(0)
 
     # -- Step 4: Find near-duplicate clusters --
@@ -1060,32 +1040,31 @@ def minhash_dedup(
         # Yield GIL periodically during O(n^2) pairwise comparison
         if i % 100 == 0:
             import time
+
             time.sleep(0)
         for j in range(i + 1, n):
             if j in removed:
                 continue
             # Estimate Jaccard similarity
-            matches = sum(1 for k in range(num_hashes)
-                          if sigs[i][k] == sigs[j][k])
+            matches = sum(1 for k in range(num_hashes) if sigs[i][k] == sigs[j][k])
             sim = matches / num_hashes
             if sim >= threshold:
                 # Keep the longer one, remove shorter
-                if len(texts[unique_indices[i]]) >= len(
-                        texts[unique_indices[j]]):
+                if len(texts[unique_indices[i]]) >= len(texts[unique_indices[j]]):
                     removed.add(j)
                 else:
                     removed.add(i)
                     break  # i is removed, stop comparing
 
     # -- Step 5: Build result preserving original order --
-    kept = sorted(i for idx, i in enumerate(unique_indices)
-                  if idx not in removed)
+    kept = sorted(i for idx, i in enumerate(unique_indices) if idx not in removed)
     return [texts[i] for i in kept]
 
 
 # =============================================================================
 # DATA VALIDATION (DQ-B)
 # =============================================================================
+
 
 @dataclass
 class DataValidationResult:
@@ -1098,6 +1077,7 @@ class DataValidationResult:
         errors: Fatal issues that block training.
         stats: Summary statistics about the data.
     """
+
     is_valid: bool = True
     total_sequences: int = 0
     warnings: list[str] = field(default_factory=list)
@@ -1141,18 +1121,14 @@ def validate_training_data(
     # Check for encoding issues (null bytes, stray control chars)
     null_count = data.count("\x00")
     if null_count > 0:
-        result.warnings.append(
-            f"Data contains {null_count} null bytes — "
-            f"may indicate encoding corruption.")
+        result.warnings.append(f"Data contains {null_count} null bytes — may indicate encoding corruption.")
 
     # Count non-printable control characters (exclude newline, tab, CR)
     # Use regex instead of character-by-character Python loop - the C
     # regex engine is orders of magnitude faster on multi-GB strings.
-    ctrl_count = len(re.findall(
-        r'[\x01-\x08\x0b\x0c\x0e-\x1f\x7f]', data[:5_000_000]))
+    ctrl_count = len(re.findall(r"[\x01-\x08\x0b\x0c\x0e-\x1f\x7f]", data[:5_000_000]))
     if ctrl_count > 0:
-        result.warnings.append(
-            f"Data contains {ctrl_count}+ control characters.")
+        result.warnings.append(f"Data contains {ctrl_count}+ control characters.")
 
     # Split into sequences (paragraphs or double-newline separated)
     # Use the same logic as _parse_training_data for consistency
@@ -1182,29 +1158,25 @@ def validate_training_data(
     if short_count > 0:
         pct = short_count / len(lines) * 100
         result.warnings.append(
-            f"{short_count} sequences ({pct:.0f}%) shorter than "
-            f"{min_length} chars — may not provide useful signal.")
+            f"{short_count} sequences ({pct:.0f}%) shorter than {min_length} chars — may not provide useful signal."
+        )
 
     if long_count > 0:
         result.warnings.append(
-            f"{long_count} sequences exceed {max_length:,} chars — "
-            f"will be truncated to model max_seq_len.")
+            f"{long_count} sequences exceed {max_length:,} chars — will be truncated to model max_seq_len."
+        )
 
     if empty_count > 5:
-        result.warnings.append(
-            f"{empty_count} runs of 3+ empty lines — "
-            f"consider cleaning whitespace.")
+        result.warnings.append(f"{empty_count} runs of 3+ empty lines — consider cleaning whitespace.")
 
     # Check for duplicates
     unique_lines = set(lines)
     dup_count = len(lines) - len(unique_lines)
     if dup_count > 0:
         dup_ratio = dup_count / len(lines)
-        msg = (f"{dup_count} duplicate sequences "
-               f"({dup_ratio:.0%} of data).")
+        msg = f"{dup_count} duplicate sequences ({dup_ratio:.0%} of data)."
         if dup_ratio >= warn_duplicate_ratio:
-            result.warnings.append(msg + " High duplication may "
-                                   "cause over-fitting.")
+            result.warnings.append(msg + " High duplication may cause over-fitting.")
         else:
             result.warnings.append(msg)
 
@@ -1231,6 +1203,7 @@ def validate_training_data(
 # TRAINER CLASS
 # =============================================================================
 
+
 class Trainer:
     """
     Trainer for fine-tuning Enigma models.
@@ -1250,12 +1223,7 @@ class Trainer:
         trainer.train(data)
     """
 
-    def __init__(
-        self,
-        model: nn.Module,
-        tokenizer: Any,
-        config: TrainingConfig | None = None
-    ):
+    def __init__(self, model: nn.Module, tokenizer: Any, config: TrainingConfig | None = None):
         """
         Initialize trainer.
 
@@ -1293,6 +1261,7 @@ class Trainer:
         # Build memory budget - scales all RAM/VRAM-sensitive constants
         # to the actual hardware.  Explicit override via config field.
         from enigma_engine.core.hardware_detection import TrainingMemoryBudget
+
         self._budget = TrainingMemoryBudget(
             ram_gb=self.config.training_memory_gb,  # 0 = auto
             vram_gb=0.0,  # always auto-detect VRAM from device
@@ -1319,13 +1288,12 @@ class Trainer:
         self.scaler = None
         if self.config.use_amp and torch.cuda.is_available():
             if self._amp_dtype != torch.bfloat16:
-                self.scaler = torch.amp.GradScaler('cuda')
+                self.scaler = torch.amp.GradScaler("cuda")
 
         # Resolve pad token ID from the tokenizer — used for
         # padding batches and as ignore_index in cross-entropy loss.
         # Built-in tokenizer uses 0, tiktoken uses base+0.
-        self.pad_token_id: int = getattr(
-            self.tokenizer, "pad_token_id", 0)
+        self.pad_token_id: int = getattr(self.tokenizer, "pad_token_id", 0)
 
         # Rolling best checkpoint tracking (CK-C)
         # List of (loss, path) tuples sorted by loss ascending
@@ -1340,29 +1308,24 @@ class Trainer:
         # SWA weight averaging (R13)
         self.swa: SWAWeightAverager | None = None
         if self.config.swa_update_interval > 0:
-            self.swa = SWAWeightAverager(
-                self.model,
-                update_interval=self.config.swa_update_interval)
-            logger.info(
-                f"SWA enabled with interval={self.config.swa_update_interval}")
+            self.swa = SWAWeightAverager(self.model, update_interval=self.config.swa_update_interval)
+            logger.info(f"SWA enabled with interval={self.config.swa_update_interval}")
 
         # LISA: Layerwise Importance Sampled AdamW (R26)
         self.lisa = None
         if self.config.use_lisa:
-            n_layers = getattr(
-                getattr(self.model, 'config', None), 'n_layers', 0)
+            n_layers = getattr(getattr(self.model, "config", None), "n_layers", 0)
             if n_layers >= 3:
                 from enigma_engine.core.progressive_growing import LISAScheduler
-                self.lisa = LISAScheduler(
-                    self.model, n_layers,
-                    self.config.lisa_activated_layers)
+
+                self.lisa = LISAScheduler(self.model, n_layers, self.config.lisa_activated_layers)
                 logger.info(
                     f"LISA enabled: {self.config.lisa_activated_layers} "
                     f"active middle layers per step "
-                    f"(of {n_layers - 2} middle layers)")
+                    f"(of {n_layers - 2} middle layers)"
+                )
             else:
-                logger.warning(
-                    f"LISA disabled: need >= 3 layers, got {n_layers}")
+                logger.warning(f"LISA disabled: need >= 3 layers, got {n_layers}")
 
         # torch.compile for throughput gains (PyTorch 2.0+)
         # Requires Triton backend; without it Inductor falls back to C++
@@ -1376,7 +1339,8 @@ class Trainer:
                 logger.warning(
                     "torch.compile requested but Triton is not installed - "
                     "skipping (Inductor C++ fallback is too RAM-hungry). "
-                    "Install with: pip install triton")
+                    "Install with: pip install triton"
+                )
             else:
                 try:
                     self.model = torch.compile(self.model)
@@ -1406,21 +1370,22 @@ class Trainer:
                 # the representation magnitude and hurts convergence.
                 # Note: output head is weight-tied to tok_embeddings (same tensor),
                 # so it's only counted once by the optimizer.
-                if 'bias' in name or 'norm' in name or 'embed' in name:
+                if "bias" in name or "norm" in name or "embed" in name:
                     no_decay_params.append(param)
                 else:
                     decay_params.append(param)
 
             param_groups = [
-                {'params': decay_params, 'weight_decay': self.config.weight_decay},
-                {'params': no_decay_params, 'weight_decay': 0.0},
+                {"params": decay_params, "weight_decay": self.config.weight_decay},
+                {"params": no_decay_params, "weight_decay": 0.0},
             ]
 
         opt_name = self.config.optimizer
 
         if opt_name == "ademamix":
             # AdEMAMix (R30): dual EMA optimizer
-            self.optimizer = AdEMAMix(param_groups,
+            self.optimizer = AdEMAMix(
+                param_groups,
                 lr=self.config.learning_rate,
                 betas=(self.config.adam_beta1, self.config.adam_beta2),
                 beta3=self.config.ademamix_beta3,
@@ -1430,7 +1395,8 @@ class Trainer:
             logger.info("Using AdEMAMix optimizer (R30)")
         elif opt_name == "muon":
             # Muon (R34): Newton-Schulz orthogonalization
-            self.optimizer = Muon(param_groups,
+            self.optimizer = Muon(
+                param_groups,
                 lr=self.config.learning_rate,
                 momentum=self.config.adam_beta1,
             )
@@ -1440,14 +1406,17 @@ class Trainer:
             adamw_kwargs: dict[str, Any] = {}
             if torch.cuda.is_available():
                 import inspect
-                if 'fused' in inspect.signature(AdamW).parameters:
-                    adamw_kwargs['fused'] = True
 
-            self.optimizer = AdamW(param_groups,
-               lr=self.config.learning_rate,
-               betas=(self.config.adam_beta1, self.config.adam_beta2),
-               eps=self.config.adam_eps,
-               **adamw_kwargs)
+                if "fused" in inspect.signature(AdamW).parameters:
+                    adamw_kwargs["fused"] = True
+
+            self.optimizer = AdamW(
+                param_groups,
+                lr=self.config.learning_rate,
+                betas=(self.config.adam_beta1, self.config.adam_beta2),
+                eps=self.config.adam_eps,
+                **adamw_kwargs,
+            )
 
         # Scheduler set when we know total steps (see _create_scheduler)
         self.scheduler = None
@@ -1463,8 +1432,7 @@ class Trainer:
         decay = self.config.llrd_decay
         lr = self.config.learning_rate
         wd = self.config.weight_decay
-        n_layers = getattr(
-            getattr(self.model, 'config', None), 'n_layers', 0)
+        n_layers = getattr(getattr(self.model, "config", None), "n_layers", 0)
 
         # Collect params keyed by layer index
         layer_params: dict[int, list] = {}
@@ -1476,14 +1444,14 @@ class Trainer:
             if not param.requires_grad:
                 continue
             # Bias, norm, and embedding params get no weight decay (see D-8).
-            is_no_decay = 'bias' in name or 'norm' in name or 'embed' in name
+            is_no_decay = "bias" in name or "norm" in name or "embed" in name
 
             # Try to extract layer index from name (e.g. "layers.3.attention.wq.weight")
             layer_idx = None
-            if '.layers.' in name:
-                parts = name.split('.')
+            if ".layers." in name:
+                parts = name.split(".")
                 for i, p in enumerate(parts):
-                    if p == 'layers' and i + 1 < len(parts):
+                    if p == "layers" and i + 1 < len(parts):
                         try:
                             layer_idx = int(parts[i + 1])
                         except ValueError:
@@ -1502,30 +1470,38 @@ class Trainer:
         groups = []
         # Non-layer params (embeddings, output head) get full LR
         if non_layer_decay:
-            groups.append({'params': non_layer_decay, 'lr': lr, 'weight_decay': wd})
+            groups.append({"params": non_layer_decay, "lr": lr, "weight_decay": wd})
         if non_layer_no_decay:
-            groups.append({'params': non_layer_no_decay, 'lr': lr, 'weight_decay': 0.0})
+            groups.append({"params": non_layer_no_decay, "lr": lr, "weight_decay": 0.0})
 
         # Per-layer groups with decaying LR
         for layer_idx in sorted(set(list(layer_params.keys()) + list(layer_no_decay_params.keys()))):
             # Top layer = n_layers-1 gets full LR, layer 0 gets most decay
             layer_lr = lr * (decay ** (n_layers - 1 - layer_idx))
             if layer_idx in layer_params:
-                groups.append({
-                    'params': layer_params[layer_idx],
-                    'lr': layer_lr, 'weight_decay': wd,
-                })
+                groups.append(
+                    {
+                        "params": layer_params[layer_idx],
+                        "lr": layer_lr,
+                        "weight_decay": wd,
+                    }
+                )
             if layer_idx in layer_no_decay_params:
-                groups.append({
-                    'params': layer_no_decay_params[layer_idx],
-                    'lr': layer_lr, 'weight_decay': 0.0,
-                })
+                groups.append(
+                    {
+                        "params": layer_no_decay_params[layer_idx],
+                        "lr": layer_lr,
+                        "weight_decay": 0.0,
+                    }
+                )
 
         logger.info(
-            "LLRD enabled: decay=%.3f, %d param groups, "
-            "bottom LR=%.2e, top LR=%.2e",
-            decay, len(groups),
-            lr * (decay ** max(n_layers - 1, 0)), lr)
+            "LLRD enabled: decay=%.3f, %d param groups, bottom LR=%.2e, top LR=%.2e",
+            decay,
+            len(groups),
+            lr * (decay ** max(n_layers - 1, 0)),
+            lr,
+        )
         return groups
 
     def _estimate_batch_size(self) -> int:
@@ -1542,21 +1518,19 @@ class Trainer:
             Power-of-2 batch size clamped to [1, batch_size_cap].
         """
         from enigma_engine.core.hardware_detection import TrainingMemoryBudget
-        budget = TrainingMemoryBudget(
-            ram_gb=self.config.training_memory_gb)
+
+        budget = TrainingMemoryBudget(ram_gb=self.config.training_memory_gb)
 
         if not torch.cuda.is_available() or self.device.type != "cuda":
             cpu_bs = budget.cpu_batch_size
-            logger.info("Auto batch size: CPU detected, using batch_size=%d",
-                        cpu_bs)
+            logger.info("Auto batch size: CPU detected, using batch_size=%d", cpu_bs)
             return cpu_bs
 
         cfg = getattr(self.model, "config", None)
         seq_len = getattr(cfg, "max_seq_len", 512)
         vocab_size = getattr(cfg, "vocab_size", 32000)
 
-        total_vram = torch.cuda.get_device_properties(
-            self.device).total_memory
+        total_vram = torch.cuda.get_device_properties(self.device).total_memory
 
         self.model.train()
         torch.cuda.empty_cache()
@@ -1566,10 +1540,7 @@ class Trainer:
         baseline_mem = torch.cuda.memory_allocated(self.device)
 
         trial_bs = 2
-        dummy_ids = torch.randint(
-            0, min(100, vocab_size),
-            (trial_bs, seq_len),
-            device=self.device)
+        dummy_ids = torch.randint(0, min(100, vocab_size), (trial_bs, seq_len), device=self.device)
         logits = None
         shift_logits = None
         shift_labels = None
@@ -1579,10 +1550,10 @@ class Trainer:
             use_amp = self.config.use_amp and torch.cuda.is_available()
             # Resolve AMP dtype for the trial (same logic as training)
             from enigma_engine.core.rl_training import _resolve_amp_dtype as _amp_dt
+
             amp_dtype = _amp_dt(self.config.amp_dtype)
 
-            with torch.amp.autocast(
-                    'cuda', enabled=use_amp, dtype=amp_dtype):
+            with torch.amp.autocast("cuda", enabled=use_amp, dtype=amp_dtype):
                 logits = self.model(dummy_ids)
                 if isinstance(logits, tuple):
                     logits = logits[0]
@@ -1603,18 +1574,14 @@ class Trainer:
                 if p.grad is not None:
                     p.grad = None
             torch.cuda.empty_cache()
-            logger.info(
-                "Auto batch size: trial OOM, using batch_size=1")
+            logger.info("Auto batch size: trial OOM, using batch_size=1")
             return 1
 
         peak_mem = torch.cuda.max_memory_allocated(self.device)
 
         # Measure actual gradient memory (fixed per-param cost, not
         # per-sample).  Must measure BEFORE clearing gradients.
-        grad_mem = sum(
-            p.grad.numel() * p.grad.element_size()
-            for p in self.model.parameters()
-            if p.grad is not None)
+        grad_mem = sum(p.grad.numel() * p.grad.element_size() for p in self.model.parameters() if p.grad is not None)
 
         # Activation memory = peak minus weights minus gradients.
         # Gradients are fixed cost already tracked in the budget below,
@@ -1638,20 +1605,19 @@ class Trainer:
         #   4 bytes/param
         # - Activations: per_sample * batch_size (measured above)
         # - Safety margin: 20% for CUDA fragmentation + temp allocations
-        total_params = sum(
-            p.numel() for p in self.model.parameters()
-            if p.requires_grad)
+        total_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
         optimizer_overhead = total_params * 8  # fp32 momentum + variance
-        gradient_overhead = total_params * 4   # fp32 gradients
+        gradient_overhead = total_params * 4  # fp32 gradients
         fixed_cost = baseline_mem + optimizer_overhead + gradient_overhead
 
         # Usable = 80% of total VRAM minus all fixed costs
         usable_vram = int(total_vram * 0.80) - fixed_cost
         if usable_vram <= 0 or per_sample <= 0:
             logger.info(
-                "Auto batch size: no headroom (fixed=%.1f GB, "
-                "total=%.1f GB), using batch_size=1",
-                fixed_cost / 1e9, total_vram / 1e9)
+                "Auto batch size: no headroom (fixed=%.1f GB, total=%.1f GB), using batch_size=1",
+                fixed_cost / 1e9,
+                total_vram / 1e9,
+            )
             return 1
 
         max_batch = usable_vram // per_sample
@@ -1668,9 +1634,13 @@ class Trainer:
             "Auto batch size: %d  (model=%.1f GB + optimizer=%.1f GB "
             "+ grad=%.1f GB + activations=%.1f GB = %.1f/%.1f GB)",
             batch,
-            baseline_mem / 1e9, optimizer_overhead / 1e9,
-            gradient_overhead / 1e9, batch * per_sample / 1e9,
-            total_estimated / 1e9, total_vram / 1e9)
+            baseline_mem / 1e9,
+            optimizer_overhead / 1e9,
+            gradient_overhead / 1e9,
+            batch * per_sample / 1e9,
+            total_estimated / 1e9,
+            total_vram / 1e9,
+        )
         return max(1, batch)
 
     def _lr_find(
@@ -1704,17 +1674,16 @@ class Trainer:
 
         # Accept both lists and generators.  For generators, pre-collect
         # up to num_steps batches so we know the count and can index.
-        if hasattr(batches, '__len__'):
+        if hasattr(batches, "__len__"):
             num_steps = min(num_steps, len(batches))
             batch_list = batches
         else:
             import itertools
+
             batch_list = list(itertools.islice(batches, num_steps))
             num_steps = len(batch_list)
         if num_steps < 10:
-            logger.warning(
-                "LR finder: too few batches (%d), keeping default LR",
-                num_steps)
+            logger.warning("LR finder: too few batches (%d), keeping default LR", num_steps)
             return self.config.learning_rate
 
         # Snapshot model + optimizer so we can restore after the sweep
@@ -1743,8 +1712,7 @@ class Trainer:
             target_ids = batch_tensor[:, 1:]
 
             self.optimizer.zero_grad()
-            with torch.amp.autocast(
-                    "cuda", enabled=use_amp, dtype=amp_dtype):
+            with torch.amp.autocast("cuda", enabled=use_amp, dtype=amp_dtype):
                 output = self.model(input_ids)
                 logits = output[0] if isinstance(output, tuple) else output
                 loss = torch.nn.functional.cross_entropy(
@@ -1758,10 +1726,7 @@ class Trainer:
 
             loss_val = loss.item()
             # Exponential moving average of loss
-            smoothed_loss = (
-                0.98 * smoothed_loss + 0.02 * loss_val
-                if i > 0 else loss_val
-            )
+            smoothed_loss = 0.98 * smoothed_loss + 0.02 * loss_val if i > 0 else loss_val
             # Stop if loss explodes past 4x the best observed
             if smoothed_loss > 4 * best_loss and i > 10:
                 break
@@ -1772,8 +1737,7 @@ class Trainer:
             losses.append(smoothed_loss)
 
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(
-                self.model.parameters(), self.config.gradient_clip or 1.0)
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.gradient_clip or 1.0)
             self.optimizer.step()
 
             # Increase LR exponentially
@@ -1785,9 +1749,7 @@ class Trainer:
         self.optimizer.load_state_dict(optim_state)
 
         if len(losses) < 10:
-            logger.warning(
-                "LR finder: too few valid steps (%d), keeping default LR",
-                len(losses))
+            logger.warning("LR finder: too few valid steps (%d), keeping default LR", len(losses))
             return self.config.learning_rate
 
         # Find steepest descent: largest negative gradient in log-space
@@ -1811,9 +1773,11 @@ class Trainer:
         suggested_lr = max(1e-6, min(suggested_lr, 1e-2))
 
         logger.info(
-            "LR finder: swept %d steps, suggested LR=%.2e "
-            "(steepest descent at %.2e)",
-            len(losses), suggested_lr, lrs[min_grad_idx + 1])
+            "LR finder: swept %d steps, suggested LR=%.2e (steepest descent at %.2e)",
+            len(losses),
+            suggested_lr,
+            lrs[min_grad_idx + 1],
+        )
         return suggested_lr
 
     def _resolve_amp_dtype(self) -> torch.dtype:
@@ -1824,6 +1788,7 @@ class Trainer:
         which avoids many loss-scaling headaches.
         """
         from enigma_engine.core.rl_training import _resolve_amp_dtype
+
         return _resolve_amp_dtype(self.config.amp_dtype)
 
     def _emit_progress(self, percent: int, message: str) -> None:
@@ -1898,17 +1863,15 @@ class Trainer:
                     # this fallback the JSONL silently produced empty
                     # sequences and the parser landed in last-resort
                     # line-split (raw ``{...}`` strings as training).
-                    completion = item.get(
-                        "completion",
-                        item.get("answer", item.get("response", "")))
+                    completion = item.get("completion", item.get("answer", item.get("response", "")))
                     thinking = item.get("thinking", item.get("reasoning", ""))
                     if prompt and completion:
                         # Wrap thinking in <think> tags if provided
                         if thinking:
                             from enigma_engine.core.reasoning import wrap_reasoning
+
                             completion = wrap_reasoning(thinking, completion)
-                        sequences.append(
-                            f"User: {prompt}\nAssistant: {completion}")
+                        sequences.append(f"User: {prompt}\nAssistant: {completion}")
                 elif isinstance(item, str):
                     sequences.append(item)
             return sequences
@@ -1917,8 +1880,8 @@ class Trainer:
         data = data.strip()
 
         # Try JSONL first
-        if data.startswith('{'):
-            for line in data.split('\n'):
+        if data.startswith("{"):
+            for line in data.split("\n"):
                 line = line.strip()
                 if not line:
                     continue
@@ -1927,16 +1890,14 @@ class Trainer:
                     prompt = item.get("prompt", item.get("question", ""))
                     # P5-pre-2: ``response`` accepted alongside
                     # ``completion`` / ``answer`` (matches anchor JSONL).
-                    completion = item.get(
-                        "completion",
-                        item.get("answer", item.get("response", "")))
+                    completion = item.get("completion", item.get("answer", item.get("response", "")))
                     thinking = item.get("thinking", item.get("reasoning", ""))
                     if prompt and completion:
                         if thinking:
                             from enigma_engine.core.reasoning import wrap_reasoning
+
                             completion = wrap_reasoning(thinking, completion)
-                        sequences.append(
-                            f"User: {prompt}\nAssistant: {completion}")
+                        sequences.append(f"User: {prompt}\nAssistant: {completion}")
                 except json.JSONDecodeError:
                     continue
             if sequences:
@@ -1944,27 +1905,25 @@ class Trainer:
 
         # Try Q&A format - normalise to User/Assistant to match
         # the chat inference prompt format.
-        qa_pattern = re.compile(r'Q:\s*(.+?)\s*A:\s*(.+?)(?=Q:|$)', re.DOTALL)
+        qa_pattern = re.compile(r"Q:\s*(.+?)\s*A:\s*(.+?)(?=Q:|$)", re.DOTALL)
         matches = qa_pattern.findall(data)
         if matches:
             for q, a in matches:
-                sequences.append(
-                    f"User: {q.strip()}\nAssistant: {a.strip()}")
+                sequences.append(f"User: {q.strip()}\nAssistant: {a.strip()}")
             return sequences
 
         # Try User/AI dialogue format - normalise role labels
         dialogue_pattern = re.compile(
-            r'(?:User|Human):\s*(.+?)\s*(?:AI|Assistant):\s*(.+?)(?=(?:User|Human):|$)',
-            re.DOTALL | re.IGNORECASE)
+            r"(?:User|Human):\s*(.+?)\s*(?:AI|Assistant):\s*(.+?)(?=(?:User|Human):|$)", re.DOTALL | re.IGNORECASE
+        )
         d_matches = dialogue_pattern.findall(data)
         if d_matches:
             for user_msg, ai_msg in d_matches:
-                sequences.append(
-                    f"User: {user_msg.strip()}\nAssistant: {ai_msg.strip()}")
+                sequences.append(f"User: {user_msg.strip()}\nAssistant: {ai_msg.strip()}")
             return sequences
 
         # Fall back to paragraph splitting
-        paragraphs = data.split('\n\n')
+        paragraphs = data.split("\n\n")
         for para in paragraphs:
             para = para.strip()
             if len(para) > 50:  # Skip short/noisy paragraphs
@@ -1972,7 +1931,7 @@ class Trainer:
 
         if not sequences:
             # Last resort: split by lines
-            sequences = [line.strip() for line in data.split('\n') if line.strip()]
+            sequences = [line.strip() for line in data.split("\n") if line.strip()]
 
         return sequences
 
@@ -1994,8 +1953,8 @@ class Trainer:
         """
         try:
             # Use named attributes (available on all 4 tokenizer classes)
-            start_id = getattr(self.tokenizer, 'think_start_id', None)
-            end_id = getattr(self.tokenizer, 'think_end_id', None)
+            start_id = getattr(self.tokenizer, "think_start_id", None)
+            end_id = getattr(self.tokenizer, "think_end_id", None)
 
             if start_id is None or end_id is None:
                 return base_loss
@@ -2033,8 +1992,7 @@ class Trainer:
             return base_loss
 
         except Exception:
-            logger.debug("Reasoning-weighted loss failed, using base loss",
-                         exc_info=True)
+            logger.debug("Reasoning-weighted loss failed, using base loss", exc_info=True)
             return base_loss
 
     def _pack_sequences(
@@ -2065,8 +2023,8 @@ class Trainer:
         # so only one batch lives on GPU at a time.
         batch_size = self.config.batch_size
         for i in range(0, len(rows), batch_size):
-            batch_rows = rows[i:i + batch_size]
-            batch_bounds = boundaries[i:i + batch_size]
+            batch_rows = rows[i : i + batch_size]
+            batch_bounds = boundaries[i : i + batch_size]
 
             # Pad each row to max_length
             padded = []
@@ -2102,8 +2060,7 @@ class Trainer:
                 if len(tokens) < 2:
                     scores.append(0.0)
                     continue
-                ids = torch.tensor(
-                    [tokens], dtype=torch.long, device=self.device)
+                ids = torch.tensor([tokens], dtype=torch.long, device=self.device)
                 with torch.no_grad():
                     logits = self.model(ids)
                     if isinstance(logits, tuple):
@@ -2189,11 +2146,9 @@ class Trainer:
         """
         window = self._budget.streaming_window
         for win_start in range(0, len(indices), window):
-            win_indices = indices[win_start:win_start + window]
-            win_seqs = self._read_sequences_from_disk(
-                seq_path, seq_offsets, win_indices)
-            win_batches = self._create_batches(
-                win_seqs, max_length=max_length)
+            win_indices = indices[win_start : win_start + window]
+            win_seqs = self._read_sequences_from_disk(seq_path, seq_offsets, win_indices)
+            win_batches = self._create_batches(win_seqs, max_length=max_length)
             del win_seqs
             yield from win_batches
             del win_batches
@@ -2235,6 +2190,7 @@ class Trainer:
         bpe_dropout = self.config.bpe_dropout
         # Only pass dropout kwarg if the tokenizer supports it
         import inspect
+
         _enc_sig = inspect.signature(self.tokenizer.encode)
         _supports_dropout = "dropout" in _enc_sig.parameters
         for idx, seq in enumerate(sequences):
@@ -2250,6 +2206,7 @@ class Trainer:
             # during tokenization of large corpora.
             if (idx + 1) % 200 == 0:
                 import time
+
                 time.sleep(0)
 
         if not encoded:
@@ -2268,7 +2225,7 @@ class Trainer:
         batch_size = self.config.batch_size
 
         for i in range(0, len(encoded), batch_size):
-            batch_tokens = encoded[i:i + batch_size]
+            batch_tokens = encoded[i : i + batch_size]
 
             # Pad to max length in batch
             max_len = max(len(t) for t in batch_tokens)
@@ -2283,11 +2240,13 @@ class Trainer:
             attention_mask = torch.tensor(masks, dtype=torch.long, device=self.device)
             yield (batch_tensor, attention_mask)
 
-    def train(self, data: "str | list | None" = None,
-              resume_from: str | Path | None = None,
-              data_path: "str | Path | None" = None,
-              data_offsets: "list[int] | None" = None,
-              ) -> TrainingState:
+    def train(
+        self,
+        data: "str | list | None" = None,
+        resume_from: str | Path | None = None,
+        data_path: "str | Path | None" = None,
+        data_offsets: "list[int] | None" = None,
+    ) -> TrainingState:
         """
         Train the model on data.
 
@@ -2315,17 +2274,14 @@ class Trainer:
             if ckpt_path.exists():
                 self.load_checkpoint(ckpt_path)
                 logger.info(
-                    "Resuming from checkpoint: epoch=%d, step=%d, "
-                    "best_loss=%.4f",
-                    self.state.epoch, self.state.step,
-                    self.state.best_loss)
-                self._emit_progress(
-                    0, f"Resuming from step {self.state.step}, "
-                       f"epoch {self.state.epoch}")
+                    "Resuming from checkpoint: epoch=%d, step=%d, best_loss=%.4f",
+                    self.state.epoch,
+                    self.state.step,
+                    self.state.best_loss,
+                )
+                self._emit_progress(0, f"Resuming from step {self.state.step}, epoch {self.state.epoch}")
             else:
-                logger.warning(
-                    "Checkpoint not found: %s - training from scratch",
-                    ckpt_path)
+                logger.warning("Checkpoint not found: %s - training from scratch", ckpt_path)
 
         self.model.train()
         self._training_start_time = time.monotonic()
@@ -2345,17 +2301,12 @@ class Trainer:
         if data_path is not None and data_offsets is not None:
             data_path = Path(data_path)
             if not data_path.exists():
-                raise FileNotFoundError(
-                    f"data_path not found: {data_path}")
+                raise FileNotFoundError(f"data_path not found: {data_path}")
             n_sequences = len(data_offsets)
             if n_sequences == 0:
-                raise ValueError(
-                    "data_offsets is empty - no sequences to train on")
-            logger.info(
-                "Disk-backed training: %d sequences from %s",
-                n_sequences, data_path)
-            self._dataset_fingerprint = hashlib.sha256(
-                str(data_path).encode()).hexdigest()[:16]
+                raise ValueError("data_offsets is empty - no sequences to train on")
+            logger.info("Disk-backed training: %d sequences from %s", n_sequences, data_path)
+            self._dataset_fingerprint = hashlib.sha256(str(data_path).encode()).hexdigest()[:16]
 
             # Val split from disk offsets - train and val sequences
             # are in the same file, distinguished by offset lists.
@@ -2369,69 +2320,60 @@ class Trainer:
                 indices = list(range(n_sequences))
                 random.Random(42).shuffle(indices)
                 val_idx_set = set(indices[:n_val])
-                val_offsets = [data_offsets[i]
-                               for i in sorted(val_idx_set)]
-                seq_offsets = [data_offsets[i]
-                               for i in range(n_sequences)
-                               if i not in val_idx_set]
+                val_offsets = [data_offsets[i] for i in sorted(val_idx_set)]
+                seq_offsets = [data_offsets[i] for i in range(n_sequences) if i not in val_idx_set]
                 n_val_sequences = len(val_offsets)
                 n_sequences = len(seq_offsets)
                 # Val reads from the same file, different offsets
                 _val_file = data_path
                 logger.info(
                     "Validation split: %d train, %d val (%.0f%%)",
-                    n_sequences, n_val_sequences,
-                    self.config.val_split * 100)
+                    n_sequences,
+                    n_val_sequences,
+                    self.config.val_split * 100,
+                )
 
             # Before-training evaluation
             before_eval = None
             if self.config.run_evaluation:
-                self._emit_progress(
-                    3, "Evaluating model (before training)...")
+                self._emit_progress(3, "Evaluating model (before training)...")
                 try:
-                    from enigma_engine.training.training_evaluation import (
-                        evaluate_model, DEFAULT_TEST_PROMPTS)
-                    test_prompts = (
-                        self.config.eval_test_prompts
-                        or DEFAULT_TEST_PROMPTS)
+                    from enigma_engine.training.training_evaluation import evaluate_model, DEFAULT_TEST_PROMPTS
+
+                    test_prompts = self.config.eval_test_prompts or DEFAULT_TEST_PROMPTS
                     device = next(self.model.parameters()).device
-                    before_eval = evaluate_model(
-                        self.model, self.tokenizer,
-                        test_prompts, str(device))
+                    before_eval = evaluate_model(self.model, self.tokenizer, test_prompts, str(device))
                     logger.info(
-                        "Before training: perplexity=%.2f, loss=%.4f",
-                        before_eval['perplexity'],
-                        before_eval['loss'])
+                        "Before training: perplexity=%.2f, loss=%.4f", before_eval["perplexity"], before_eval["loss"]
+                    )
                 except Exception as exc:
-                    logger.warning(
-                        "Before-training evaluation failed: %s", exc)
+                    logger.warning("Before-training evaluation failed: %s", exc)
 
             # Golden prompt eval
             golden_before = None
             if self.config.golden_eval_path:
                 try:
-                    from enigma_engine.training.training_evaluation import (
-                        run_golden_eval)
+                    from enigma_engine.training.training_evaluation import run_golden_eval
+
                     device = next(self.model.parameters()).device
                     golden_before = run_golden_eval(
-                        self.model, self.tokenizer,
-                        self.config.golden_eval_path, str(device))
+                        self.model, self.tokenizer, self.config.golden_eval_path, str(device)
+                    )
                     logger.info(
                         "Golden eval (before): %d/%d passed (%.0f%%)",
                         golden_before["passed"],
                         golden_before["total"],
-                        golden_before["pass_rate"] * 100)
+                        golden_before["pass_rate"] * 100,
+                    )
                 except Exception as exc:
-                    logger.warning(
-                        "Golden eval (before) failed: %s", exc)
+                    logger.warning("Golden eval (before) failed: %s", exc)
 
             cfg = getattr(self.model, "config", None)
             max_seq_len = getattr(cfg, "max_seq_len", 512)
 
             use_streaming = True
             _seq_file = data_path
-            est_batches_per_epoch = max(
-                1, n_sequences // self.config.batch_size)
+            est_batches_per_epoch = max(1, n_sequences // self.config.batch_size)
 
             # LR finder on sample window
             if self.config.auto_lr:
@@ -2440,10 +2382,8 @@ class Trainer:
                 lr_cap = 100 * max(1, self.config.batch_size)
                 sample_n = min(lr_cap, n_sequences)
                 sample_indices = list(range(sample_n))
-                sample_seqs = self._read_sequences_from_disk(
-                    _seq_file, seq_offsets, sample_indices)
-                sample_batches = list(self._create_batches(
-                    sample_seqs, max_length=max_seq_len))
+                sample_seqs = self._read_sequences_from_disk(_seq_file, seq_offsets, sample_indices)
+                sample_batches = list(self._create_batches(sample_seqs, max_length=max_seq_len))
                 del sample_seqs
                 found_lr = self._lr_find(sample_batches)
                 del sample_batches
@@ -2452,8 +2392,7 @@ class Trainer:
                 self.config.learning_rate = found_lr
                 for pg in self.optimizer.param_groups:
                     pg["lr"] = found_lr
-                self._emit_progress(
-                    6, f"LR finder: using {found_lr:.2e}")
+                self._emit_progress(6, f"LR finder: using {found_lr:.2e}")
 
             total_steps = est_batches_per_epoch * self.config.epochs
             batches = None
@@ -2469,8 +2408,7 @@ class Trainer:
         else:
             _disk_backed = False
             if data is None:
-                raise ValueError(
-                    "Either data or data_path must be provided")
+                raise ValueError("Either data or data_path must be provided")
 
         if not _disk_backed:
             # Validate training data quality (DQ-B) before investing
@@ -2482,7 +2420,7 @@ class Trainer:
             if isinstance(data, list) and len(data) > _LARGE_LIST_THRESHOLD:
                 # Sample head + middle + tail for validation
                 mid = len(data) // 2
-                sample = data[:500] + data[mid:mid + 500] + data[-500:]
+                sample = data[:500] + data[mid : mid + 500] + data[-500:]
                 data_str = "\n".join(str(s) for s in sample)
                 # Incremental fingerprint from metadata + sample
                 _h = hashlib.sha256()
@@ -2508,9 +2446,7 @@ class Trainer:
             for e in dq_result.errors:
                 logger.error("Data quality: %s", e)
             if not dq_result.is_valid:
-                raise ValueError(
-                    "Training data failed validation: "
-                    + "; ".join(dq_result.errors))
+                raise ValueError("Training data failed validation: " + "; ".join(dq_result.errors))
 
             # Dataset fingerprint for reproducibility tracking
             logger.info("Dataset fingerprint: %s", fingerprint)
@@ -2530,12 +2466,10 @@ class Trainer:
             if not sequences:
                 raise ValueError("No training sequences found in data")
 
-
             # Mix general knowledge data to prevent catastrophic forgetting.
             # When focused data is provided, keep the model general by mixing
             # a portion of general/diverse examples into each training batch.
-            if (self.config.general_data
-                    and self.config.general_mix_ratio > 0):
+            if self.config.general_data and self.config.general_mix_ratio > 0:
                 try:
                     general_text = self.config.general_data
                     # If it looks like a file path, load it
@@ -2546,23 +2480,20 @@ class Trainer:
                     if general_seqs:
                         ratio = min(self.config.general_mix_ratio, 0.9)
                         n_focused = len(sequences)
-                        n_general = max(1, int(
-                            n_focused * ratio / max(0.01, 1.0 - ratio)))
+                        n_general = max(1, int(n_focused * ratio / max(0.01, 1.0 - ratio)))
                         if len(general_seqs) >= n_general:
                             mixed = random.sample(general_seqs, n_general)
                         else:
-                            mixed = (general_seqs
-                                     * (n_general // len(general_seqs) + 1)
-                                     )[:n_general]
+                            mixed = (general_seqs * (n_general // len(general_seqs) + 1))[:n_general]
                         sequences.extend(mixed)
                         random.shuffle(sequences)
                         logger.info(
                             f"Mixed {n_general} general sequences "
                             f"with {n_focused} focused sequences "
-                            f"(ratio {ratio:.0%} general)")
+                            f"(ratio {ratio:.0%} general)"
+                        )
                 except Exception as exc:
-                    logger.warning(
-                        f"Could not mix general data: {exc}")
+                    logger.warning(f"Could not mix general data: {exc}")
 
             # Deduplicate while preserving order — prevents the model
             # from over-fitting on repeated examples.
@@ -2570,8 +2501,7 @@ class Trainer:
             self._emit_progress(2, f"Deduplicating {len(sequences):,} sequences...")
             sequences = list(dict.fromkeys(sequences))
             if len(sequences) < pre_dedup:
-                msg = (f"Removed {pre_dedup - len(sequences)} duplicates "
-                       f"({len(sequences)} unique remain)")
+                msg = f"Removed {pre_dedup - len(sequences)} duplicates ({len(sequences)} unique remain)"
                 logger.info(msg)
                 self._emit_progress(2, msg)
 
@@ -2588,14 +2518,15 @@ class Trainer:
                 sequences = minhash_dedup(sequences)
                 n_removed = pre_minhash - len(sequences)
                 if n_removed > 0:
-                    msg = (f"MinHash: removed {n_removed} near-duplicates "
-                           f"({len(sequences)} remain)")
+                    msg = f"MinHash: removed {n_removed} near-duplicates ({len(sequences)} remain)"
                     logger.info(msg)
                     self._emit_progress(2, msg)
             elif len(sequences) > _MINHASH_LIMIT:
                 logger.info(
-                    "Skipping MinHash dedup: %d sequences exceeds %d limit "
-                    "(exact dedup already applied)", len(sequences), _MINHASH_LIMIT)
+                    "Skipping MinHash dedup: %d sequences exceeds %d limit (exact dedup already applied)",
+                    len(sequences),
+                    _MINHASH_LIMIT,
+                )
             time.sleep(0)  # Yield GIL after dedup
 
             # Split train/validation when val_split > 0
@@ -2609,9 +2540,8 @@ class Trainer:
                 val_sequences = [sequences[i] for i in sorted(val_indices)]
                 sequences = [sequences[i] for i in range(len(sequences)) if i not in val_indices]
                 logger.info(
-                    f"Validation split: {len(sequences)} train, "
-                    f"{len(val_sequences)} val "
-                    f"({self.config.val_split:.0%})")
+                    f"Validation split: {len(sequences)} train, {len(val_sequences)} val ({self.config.val_split:.0%})"
+                )
 
             # Run before-training evaluation (EV-C)
             before_eval = None
@@ -2619,18 +2549,15 @@ class Trainer:
                 self._emit_progress(3, "Evaluating model (before training)...")
                 try:
                     from enigma_engine.training.training_evaluation import (
-                        evaluate_model, DEFAULT_TEST_PROMPTS,
+                        evaluate_model,
+                        DEFAULT_TEST_PROMPTS,
                     )
-                    test_prompts = (
-                        self.config.eval_test_prompts or DEFAULT_TEST_PROMPTS
-                    )
+
+                    test_prompts = self.config.eval_test_prompts or DEFAULT_TEST_PROMPTS
                     device = next(self.model.parameters()).device
-                    before_eval = evaluate_model(
-                        self.model, self.tokenizer, test_prompts, str(device)
-                    )
+                    before_eval = evaluate_model(self.model, self.tokenizer, test_prompts, str(device))
                     logger.info(
-                        f"Before training: perplexity={before_eval['perplexity']:.2f}, "
-                        f"loss={before_eval['loss']:.4f}"
+                        f"Before training: perplexity={before_eval['perplexity']:.2f}, loss={before_eval['loss']:.4f}"
                     )
                 except Exception as exc:
                     logger.warning(f"Before-training evaluation failed: {exc}")
@@ -2642,14 +2569,17 @@ class Trainer:
                     from enigma_engine.training.training_evaluation import (
                         run_golden_eval,
                     )
+
                     device = next(self.model.parameters()).device
                     golden_before = run_golden_eval(
-                        self.model, self.tokenizer,
-                        self.config.golden_eval_path, str(device))
+                        self.model, self.tokenizer, self.config.golden_eval_path, str(device)
+                    )
                     logger.info(
                         "Golden eval (before): %d/%d passed (%.0f%%)",
-                        golden_before["passed"], golden_before["total"],
-                        golden_before["pass_rate"] * 100)
+                        golden_before["passed"],
+                        golden_before["total"],
+                        golden_before["pass_rate"] * 100,
+                    )
                 except Exception as exc:
                     logger.warning("Golden eval (before) failed: %s", exc)
 
@@ -2659,8 +2589,7 @@ class Trainer:
             # Skip for large datasets: scoring many sequences = many forward
             # passes.  Limit scales with available VRAM/RAM.
             _CURRICULUM_LIMIT = self._budget.curriculum_limit
-            if (self.config.curriculum == "easy_first"
-                    and 1 < len(sequences) <= _CURRICULUM_LIMIT):
+            if self.config.curriculum == "easy_first" and 1 < len(sequences) <= _CURRICULUM_LIMIT:
                 self._emit_progress(4, "Scoring sequences for curriculum...")
                 cfg = getattr(self.model, "config", None)
                 _max_len = getattr(cfg, "max_seq_len", 512)
@@ -2669,14 +2598,15 @@ class Trainer:
                 paired = sorted(zip(losses, sequences), key=lambda x: x[0])
                 sequences = [s for _, s in paired]
                 logger.info(
-                    "Curriculum: sorted %d sequences by loss "
-                    "(easy first, range %.2f-%.2f)",
-                    len(sequences), paired[0][0], paired[-1][0])
-            elif (self.config.curriculum == "easy_first"
-                  and len(sequences) > _CURRICULUM_LIMIT):
+                    "Curriculum: sorted %d sequences by loss (easy first, range %.2f-%.2f)",
+                    len(sequences),
+                    paired[0][0],
+                    paired[-1][0],
+                )
+            elif self.config.curriculum == "easy_first" and len(sequences) > _CURRICULUM_LIMIT:
                 logger.info(
-                    "Skipping curriculum sorting: %d sequences exceeds "
-                    "%d limit", len(sequences), _CURRICULUM_LIMIT)
+                    "Skipping curriculum sorting: %d sequences exceeds %d limit", len(sequences), _CURRICULUM_LIMIT
+                )
 
             time.sleep(0)  # Yield GIL after evaluation/curriculum
             self._emit_progress(5, f"Creating batches from {len(sequences)} sequences...")
@@ -2692,20 +2622,19 @@ class Trainer:
             #   1) epochs > 3 (multiple passes make memorisation likely)
             #   2) tokens/param < 5 (data-constrained regime)
             #   3) bpe_dropout is currently 0 (user hasn't set it)
-            if (self.config.bpe_dropout == 0.0
-                    and self.config.epochs > 3):
+            if self.config.bpe_dropout == 0.0 and self.config.epochs > 3:
                 # Rough token estimate: avg 4 chars/token - total chars
                 total_chars = sum(len(s) for s in sequences)
                 est_tokens = total_chars / 4
-                total_params = sum(
-                    p.numel() for p in self.model.parameters())
+                total_params = sum(p.numel() for p in self.model.parameters())
                 tokens_per_param = est_tokens / max(1, total_params)
                 if tokens_per_param < 5.0:
                     self.config.bpe_dropout = 0.1
                     logger.info(
-                        "Auto BPE-dropout enabled (0.1): %d epochs, "
-                        "%.1f tokens/param < 5.0",
-                        self.config.epochs, tokens_per_param)
+                        "Auto BPE-dropout enabled (0.1): %d epochs, %.1f tokens/param < 5.0",
+                        self.config.epochs,
+                        tokens_per_param,
+                    )
 
             # -- Streaming vs eager batch creation --
             # For large datasets (>50K sequences), writing sequences to
@@ -2722,23 +2651,19 @@ class Trainer:
             if use_streaming:
                 n_sequences = len(sequences)
                 _seq_file = checkpoint_dir / "_train_sequences.jsonl"
-                logger.info(
-                    "Streaming mode: writing %d sequences to disk...",
-                    n_sequences)
-                self._emit_progress(
-                    5, f"Writing {n_sequences:,} sequences to disk...")
-                seq_offsets = self._write_sequences_to_disk(
-                    sequences, _seq_file)
+                logger.info("Streaming mode: writing %d sequences to disk...", n_sequences)
+                self._emit_progress(5, f"Writing {n_sequences:,} sequences to disk...")
+                seq_offsets = self._write_sequences_to_disk(sequences, _seq_file)
                 del sequences  # Free the strings from RAM
                 time.sleep(0)
 
-                est_batches_per_epoch = max(
-                    1, n_sequences // self.config.batch_size)
+                est_batches_per_epoch = max(1, n_sequences // self.config.batch_size)
                 logger.info(
-                    "Streaming: %d sequences on disk, "
-                    "~%d batches/epoch (window=%d)",
-                    n_sequences, est_batches_per_epoch,
-                    self._budget.streaming_window)
+                    "Streaming: %d sequences on disk, ~%d batches/epoch (window=%d)",
+                    n_sequences,
+                    est_batches_per_epoch,
+                    self._budget.streaming_window,
+                )
 
                 # Val sequences to disk
                 n_val_sequences = 0
@@ -2746,12 +2671,9 @@ class Trainer:
                 if val_sequences:
                     n_val_sequences = len(val_sequences)
                     _val_file = checkpoint_dir / "_val_sequences.jsonl"
-                    val_offsets = self._write_sequences_to_disk(
-                        val_sequences, _val_file)
+                    val_offsets = self._write_sequences_to_disk(val_sequences, _val_file)
                     del val_sequences
-                    logger.info(
-                        "Streaming: %d val sequences on disk",
-                        n_val_sequences)
+                    logger.info("Streaming: %d val sequences on disk", n_val_sequences)
 
                 # LR finder: build sample batches from first window
                 if self.config.auto_lr:
@@ -2760,10 +2682,8 @@ class Trainer:
                     lr_cap = 100 * max(1, self.config.batch_size)
                     sample_n = min(lr_cap, n_sequences)
                     sample_indices = list(range(sample_n))
-                    sample_seqs = self._read_sequences_from_disk(
-                        _seq_file, seq_offsets, sample_indices)
-                    sample_batches = list(self._create_batches(
-                        sample_seqs, max_length=max_seq_len))
+                    sample_seqs = self._read_sequences_from_disk(_seq_file, seq_offsets, sample_indices)
+                    sample_batches = list(self._create_batches(sample_seqs, max_length=max_seq_len))
                     del sample_seqs
                     found_lr = self._lr_find(sample_batches)
                     del sample_batches
@@ -2772,8 +2692,7 @@ class Trainer:
                     self.config.learning_rate = found_lr
                     for pg in self.optimizer.param_groups:
                         pg["lr"] = found_lr
-                    self._emit_progress(
-                        6, f"LR finder: using {found_lr:.2e}")
+                    self._emit_progress(6, f"LR finder: using {found_lr:.2e}")
 
                 total_steps = est_batches_per_epoch * self.config.epochs
                 batches = None  # Not used in streaming mode
@@ -2787,12 +2706,9 @@ class Trainer:
                 val_offsets = []
 
                 try:
-                    batches = list(self._create_batches(
-                        sequences, max_length=max_seq_len))
+                    batches = list(self._create_batches(sequences, max_length=max_seq_len))
                     logger.info(f"Created {len(batches)} training batches")
-                    self._emit_progress(
-                        5, f"Created {len(batches):,} batches "
-                           f"(batch_size={self.config.batch_size})")
+                    self._emit_progress(5, f"Created {len(batches):,} batches (batch_size={self.config.batch_size})")
                 except Exception as e:
                     logger.error(f"Failed to create batches: {e}")
                     raise
@@ -2800,13 +2716,10 @@ class Trainer:
                 val_batches = []
                 if val_sequences:
                     try:
-                        val_batches = list(self._create_batches(
-                            val_sequences, max_length=max_seq_len))
-                        logger.info(
-                            f"Created {len(val_batches)} validation batches")
+                        val_batches = list(self._create_batches(val_sequences, max_length=max_seq_len))
+                        logger.info(f"Created {len(val_batches)} validation batches")
                     except Exception as exc:
-                        logger.warning(
-                            f"Failed to create val batches: {exc}")
+                        logger.warning(f"Failed to create val batches: {exc}")
 
                 if self.config.auto_lr:
                     self._emit_progress(6, "Running LR range test...")
@@ -2814,8 +2727,7 @@ class Trainer:
                     self.config.learning_rate = found_lr
                     for pg in self.optimizer.param_groups:
                         pg["lr"] = found_lr
-                    self._emit_progress(
-                        6, f"LR finder: using {found_lr:.2e}")
+                    self._emit_progress(6, f"LR finder: using {found_lr:.2e}")
 
                 total_steps = len(batches) * self.config.epochs
                 est_batches_per_epoch = len(batches)
@@ -2826,12 +2738,10 @@ class Trainer:
         warmup = _effective_warmup(self.config.warmup_steps, total_steps)
         decay_steps = max(1, total_steps - warmup)
 
-        warmup_scheduler = LambdaLR(
-            self.optimizer,
-            lr_lambda=lambda step: min(1.0, (step + 1) / warmup))
+        warmup_scheduler = LambdaLR(self.optimizer, lr_lambda=lambda step: min(1.0, (step + 1) / warmup))
 
         sched_type = self.config.schedule_type
-        if sched_type == 'wsd':
+        if sched_type == "wsd":
             # T2-6: Warmup-Stable-Decay.  Three phases:
             # 1) warmup (handled by warmup_scheduler above)
             # 2) stable at peak LR
@@ -2847,34 +2757,25 @@ class Trainer:
                 if step < decay_start:
                     return 1.0  # stable phase
                 # linear decay
-                progress = (step - decay_start) / max(
-                    1, _decay_steps - decay_start)
+                progress = (step - decay_start) / max(1, _decay_steps - decay_start)
                 return 1.0 - (1.0 - min_lr_ratio) * progress
 
-            post_warmup_scheduler = LambdaLR(
-                self.optimizer, lr_lambda=_wsd_lambda)
+            post_warmup_scheduler = LambdaLR(self.optimizer, lr_lambda=_wsd_lambda)
         else:
             # Cosine warm restarts vs single cosine decay (R8)
             restart_t0 = self.config.cosine_restart_period
             if restart_t0 > 0:
                 post_warmup_scheduler = CosineAnnealingWarmRestarts(
-                    self.optimizer,
-                    T_0=restart_t0,
-                    eta_min=(
-                        self.config.learning_rate
-                        * self.config.min_lr_ratio))
+                    self.optimizer, T_0=restart_t0, eta_min=(self.config.learning_rate * self.config.min_lr_ratio)
+                )
             else:
                 post_warmup_scheduler = CosineAnnealingLR(
-                    self.optimizer,
-                    T_max=decay_steps,
-                    eta_min=(
-                        self.config.learning_rate
-                        * self.config.min_lr_ratio))
+                    self.optimizer, T_max=decay_steps, eta_min=(self.config.learning_rate * self.config.min_lr_ratio)
+                )
 
         self.scheduler = SequentialLR(
-            self.optimizer,
-            schedulers=[warmup_scheduler, post_warmup_scheduler],
-            milestones=[warmup])
+            self.optimizer, schedulers=[warmup_scheduler, post_warmup_scheduler], milestones=[warmup]
+        )
 
         # Restore scheduler/scaler state from checkpoint if available
         self._restore_pending_state()
@@ -2884,6 +2785,7 @@ class Trainer:
         # Dump config + fingerprint for reproducibility
         try:
             from enigma_engine.core.safe_save import atomic_write_json
+
             run_info = {
                 "training_config": self.config.to_dict(),
                 "dataset_fingerprint": self._dataset_fingerprint,
@@ -2892,8 +2794,7 @@ class Trainer:
             model_cfg = getattr(self.model, "config", None)
             if model_cfg is not None:
                 run_info["model_config"] = model_cfg.__dict__
-            atomic_write_json(
-                checkpoint_dir / "run_config.json", run_info)
+            atomic_write_json(checkpoint_dir / "run_config.json", run_info)
         except Exception:
             logger.debug("Could not save run config", exc_info=True)
 
@@ -2909,9 +2810,13 @@ class Trainer:
         _weight_snapshot: torch.Tensor | None = None
         _weight_ref_name = ""
         for _name, _p in self.model.named_parameters():
-            if (_p.requires_grad and _p.ndim >= 2
-                    and "embed" not in _name and "output" not in _name
-                    and "head" not in _name):
+            if (
+                _p.requires_grad
+                and _p.ndim >= 2
+                and "embed" not in _name
+                and "output" not in _name
+                and "head" not in _name
+            ):
                 _weight_snapshot = _p.data.clone()
                 _weight_ref_name = _name
                 break
@@ -2940,8 +2845,7 @@ class Trainer:
             # Time-limit guard
             if (
                 self.config.max_training_seconds > 0
-                and time.monotonic() - self._training_start_time
-                > self.config.max_training_seconds
+                and time.monotonic() - self._training_start_time > self.config.max_training_seconds
             ):
                 logger.info("Training stopped: time limit reached")
                 break
@@ -2958,8 +2862,7 @@ class Trainer:
                 # in windows, tokenize + pack per window, yield batches
                 indices = list(range(n_sequences))
                 random.shuffle(indices)
-                epoch_batches = self._stream_batches(
-                    _seq_file, seq_offsets, indices, max_seq_len)
+                epoch_batches = self._stream_batches(_seq_file, seq_offsets, indices, max_seq_len)
             else:
                 random.shuffle(batches)
                 epoch_batches = batches
@@ -2978,8 +2881,7 @@ class Trainer:
                     # checkpointing, and retry the batch once
                     self._handle_oom(exc)
                     try:
-                        batch_loss = self._train_one_batch(
-                            batch, batch_idx)
+                        batch_loss = self._train_one_batch(batch, batch_idx)
                     except RuntimeError as exc2:
                         if "out of memory" not in str(exc2).lower():
                             raise
@@ -2988,12 +2890,10 @@ class Trainer:
                             "enabling gradient checkpointing. "
                             "Reduce batch_size or max_seq_len."
                         )
-                        self._emit_progress(
-                            0, "OOM: reduce batch size or sequence length")
+                        self._emit_progress(0, "OOM: reduce batch size or sequence length")
                         self.state.abort_reason = (
-                            "OOM persists after enabling gradient "
-                            "checkpointing. Reduce batch_size or "
-                            "max_seq_len.")
+                            "OOM persists after enabling gradient checkpointing. Reduce batch_size or max_seq_len."
+                        )
                         self.model.eval()
                         _cleanup_temp_files()
                         return self.state
@@ -3007,20 +2907,14 @@ class Trainer:
                     _cleanup_temp_files()
                     return self.state
                 if batch_loss > self.config.max_loss:
-                    logger.error(
-                        f"Training aborted: loss {batch_loss:.4f} exceeded "
-                        f"max_loss {self.config.max_loss}"
-                    )
-                    self.state.abort_reason = (
-                        f"Loss {batch_loss:.4f} exceeded "
-                        f"max_loss {self.config.max_loss}")
+                    logger.error(f"Training aborted: loss {batch_loss:.4f} exceeded max_loss {self.config.max_loss}")
+                    self.state.abort_reason = f"Loss {batch_loss:.4f} exceeded max_loss {self.config.max_loss}"
                     self.model.eval()
                     _cleanup_temp_files()
                     return self.state
 
                 batch_tokens = batch[0].numel()
-                non_pad = int(
-                    (batch[0] != self.pad_token_id).sum().item())
+                non_pad = int((batch[0] != self.pad_token_id).sum().item())
                 epoch_loss += batch_loss * non_pad
                 epoch_tokens += non_pad
                 self.state.step += 1
@@ -3047,11 +2941,11 @@ class Trainer:
                                     "WARNING: Model weights unchanged after "
                                     "%d optimizer steps (%s). Training may "
                                     "not be effective.",
-                                    self.state.step, _name)
+                                    self.state.step,
+                                    _name,
+                                )
                             else:
-                                logger.info(
-                                    "Weight update verified: %s "
-                                    "max_delta=%.2e", _name, delta)
+                                logger.info("Weight update verified: %s max_delta=%.2e", _name, delta)
                             break
                     del _weight_snapshot
                     _weight_snapshot = None
@@ -3063,23 +2957,20 @@ class Trainer:
                     self._emit_loss(avg_loss)
 
                 # Update progress
-                batch_progress = int(progress_base + (batch_idx / max(1, est_batches_per_epoch)) * (90 / self.config.epochs))
+                batch_progress = int(
+                    progress_base + (batch_idx / max(1, est_batches_per_epoch)) * (90 / self.config.epochs)
+                )
                 self._emit_progress(batch_progress, f"Epoch {epoch + 1}: Batch {batch_idx + 1}/{est_batches_per_epoch}")
 
                 # Step-based validation (eval_every > 0).
                 # Critical for long single-epoch pre-training runs
                 # where per-epoch validation would never fire until
                 # the very end.
-                if (
-                    self.config.eval_every > 0
-                    and self.state.step % self.config.eval_every == 0
-                ):
+                if self.config.eval_every > 0 and self.state.step % self.config.eval_every == 0:
                     _step_val = None
                     if use_streaming and n_val_sequences > 0:
                         _sv_idx = list(range(n_val_sequences))
-                        _sv_gen = self._stream_batches(
-                            _val_file, val_offsets, _sv_idx,
-                            max_seq_len)
+                        _sv_gen = self._stream_batches(_val_file, val_offsets, _sv_idx, max_seq_len)
                         _sv_batches = list(_sv_gen)
                         if _sv_batches:
                             _step_val = self._validate(_sv_batches)
@@ -3087,28 +2978,18 @@ class Trainer:
                     elif val_batches:
                         _step_val = self._validate(val_batches)
                     if _step_val is not None:
-                        logger.info(
-                            "Step %d val_loss=%.4f",
-                            self.state.step, _step_val)
-                        self._emit_loss(
-                            epoch_loss / max(1, epoch_tokens),
-                            val_loss=_step_val)
+                        logger.info("Step %d val_loss=%.4f", self.state.step, _step_val)
+                        self._emit_loss(epoch_loss / max(1, epoch_tokens), val_loss=_step_val)
 
                 # Step-based checkpoint save (save_every_steps > 0).
                 # Critical for long single-epoch pre-training runs
                 # where epoch-end saves would never fire until the
                 # very end - potentially months of lost progress.
-                if (
-                    self.config.save_every_steps > 0
-                    and self.state.step % self.config.save_every_steps == 0
-                ):
+                if self.config.save_every_steps > 0 and self.state.step % self.config.save_every_steps == 0:
                     stem = self._checkpoint_stem
-                    ckpt_path = (
-                        checkpoint_dir
-                        / f"{stem}_step{self.state.step}.pt")
+                    ckpt_path = checkpoint_dir / f"{stem}_step{self.state.step}.pt"
                     self._save_checkpoint(ckpt_path)
-                    self._cleanup_periodic_checkpoints(
-                        checkpoint_dir, f"{stem}_step", keep=3)
+                    self._cleanup_periodic_checkpoints(checkpoint_dir, f"{stem}_step", keep=3)
 
                 # Yield GIL so GUI/other threads stay responsive.
                 # On fast GPUs the batch loop can starve the main
@@ -3127,8 +3008,7 @@ class Trainer:
             if use_streaming and n_val_sequences > 0:
                 # Stream val batches from disk too
                 _val_indices = list(range(n_val_sequences))
-                _val_gen = self._stream_batches(
-                    _val_file, val_offsets, _val_indices, max_seq_len)
+                _val_gen = self._stream_batches(_val_file, val_offsets, _val_indices, max_seq_len)
                 _vb = list(_val_gen)
                 if _vb:
                     val_loss = self._validate(_vb)
@@ -3136,13 +3016,11 @@ class Trainer:
                     if torch.cuda.is_available():
                         torch.cuda.empty_cache()
                     self.state.validation_losses.append(val_loss)
-                    logger.info(
-                        f"Epoch {epoch + 1} val_loss={val_loss:.4f}")
+                    logger.info(f"Epoch {epoch + 1} val_loss={val_loss:.4f}")
             elif val_batches:
                 val_loss = self._validate(val_batches)
                 self.state.validation_losses.append(val_loss)
-                logger.info(
-                    f"Epoch {epoch + 1} val_loss={val_loss:.4f}")
+                logger.info(f"Epoch {epoch + 1} val_loss={val_loss:.4f}")
 
             if self.on_epoch_complete:
                 try:
@@ -3156,8 +3034,7 @@ class Trainer:
                 ckpt_num = (epoch + 1) // self.config.save_every
                 ckpt_path = checkpoint_dir / f"{stem}_checkpoint{ckpt_num}.pt"
                 self._save_checkpoint(ckpt_path)
-                self._cleanup_periodic_checkpoints(
-                    checkpoint_dir, f"{stem}_checkpoint", keep=3)
+                self._cleanup_periodic_checkpoints(checkpoint_dir, f"{stem}_checkpoint", keep=3)
 
             # Track best loss + early stopping
             # Prefer val_loss when available, fall back to train loss
@@ -3165,37 +3042,28 @@ class Trainer:
             if tracked_loss < self.state.best_loss:
                 self.state.best_loss = tracked_loss
                 self._epochs_without_improvement = 0
-                self._save_checkpoint(
-                    checkpoint_dir / f"{self._checkpoint_stem}_best.pt")
+                self._save_checkpoint(checkpoint_dir / f"{self._checkpoint_stem}_best.pt")
                 # Rolling best checkpoints (CK-C)
                 if self.config.rolling_best_k > 0:
-                    self._save_rolling_checkpoint(
-                        checkpoint_dir, tracked_loss, epoch + 1)
+                    self._save_rolling_checkpoint(checkpoint_dir, tracked_loss, epoch + 1)
             else:
                 self._epochs_without_improvement += 1
                 if (
                     self.config.early_stopping_patience > 0
-                    and self._epochs_without_improvement
-                    >= self.config.early_stopping_patience
+                    and self._epochs_without_improvement >= self.config.early_stopping_patience
                 ):
-                    logger.info(
-                        f"Early stopping: no improvement for "
-                        f"{self._epochs_without_improvement} epochs"
-                    )
+                    logger.info(f"Early stopping: no improvement for {self._epochs_without_improvement} epochs")
                     break
 
         # Apply SWA averaged weights before final save (Izmailov et al.)
         # SWA weights are the whole point - they should be the saved model.
         if self.swa is not None and self.swa.n_averaged > 0:
-            logger.info(
-                "Applying SWA averaged weights (%d snapshots) for "
-                "final save", self.swa.n_averaged)
+            logger.info("Applying SWA averaged weights (%d snapshots) for final save", self.swa.n_averaged)
             self.swa.apply(self.model)
 
         # Final save
         self._emit_progress(95, "Saving final model...")
-        self._save_checkpoint(
-            checkpoint_dir / f"{self._checkpoint_stem}_final.pt")
+        self._save_checkpoint(checkpoint_dir / f"{self._checkpoint_stem}_final.pt")
 
         # Run after-training evaluation (EV-C)
         after_eval = None
@@ -3203,19 +3071,14 @@ class Trainer:
             self._emit_progress(97, "Evaluating model (after training)...")
             try:
                 from enigma_engine.training.training_evaluation import (
-                    evaluate_model, DEFAULT_TEST_PROMPTS,
+                    evaluate_model,
+                    DEFAULT_TEST_PROMPTS,
                 )
-                test_prompts = (
-                    self.config.eval_test_prompts or DEFAULT_TEST_PROMPTS
-                )
+
+                test_prompts = self.config.eval_test_prompts or DEFAULT_TEST_PROMPTS
                 device = next(self.model.parameters()).device
-                after_eval = evaluate_model(
-                    self.model, self.tokenizer, test_prompts, str(device)
-                )
-                logger.info(
-                    f"After training: perplexity={after_eval['perplexity']:.2f}, "
-                    f"loss={after_eval['loss']:.4f}"
-                )
+                after_eval = evaluate_model(self.model, self.tokenizer, test_prompts, str(device))
+                logger.info(f"After training: perplexity={after_eval['perplexity']:.2f}, loss={after_eval['loss']:.4f}")
                 if before_eval:
                     ppl_improvement = before_eval["perplexity"] - after_eval["perplexity"]
                     logger.info(
@@ -3232,19 +3095,18 @@ class Trainer:
                 from enigma_engine.training.training_evaluation import (
                     run_golden_eval,
                 )
+
                 device = next(self.model.parameters()).device
-                golden_after = run_golden_eval(
-                    self.model, self.tokenizer,
-                    self.config.golden_eval_path, str(device))
+                golden_after = run_golden_eval(self.model, self.tokenizer, self.config.golden_eval_path, str(device))
                 logger.info(
                     "Golden eval (after): %d/%d passed (%.0f%%)",
-                    golden_after["passed"], golden_after["total"],
-                    golden_after["pass_rate"] * 100)
+                    golden_after["passed"],
+                    golden_after["total"],
+                    golden_after["pass_rate"] * 100,
+                )
                 if golden_before:
-                    delta = (golden_after["passed"]
-                             - golden_before["passed"])
-                    logger.info(
-                        "Golden eval delta: %+d cases", delta)
+                    delta = golden_after["passed"] - golden_before["passed"]
+                    logger.info("Golden eval delta: %+d cases", delta)
             except Exception as exc:
                 logger.warning("Golden eval (after) failed: %s", exc)
 
@@ -3285,13 +3147,12 @@ class Trainer:
         is_packed = attention_mask.ndim == 4  # 4D = sequence packing
 
         # LISA: resample active layers each optimizer step (R26)
-        if (self.lisa is not None
-                and batch_idx % self.config.max_grad_accumulation == 0):
+        if self.lisa is not None and batch_idx % self.config.max_grad_accumulation == 0:
             self.lisa.step()
 
         # Forward pass
         with torch.amp.autocast(
-            'cuda',
+            "cuda",
             dtype=self._amp_dtype,
             enabled=self.config.use_amp and torch.cuda.is_available(),
         ):
@@ -3300,9 +3161,7 @@ class Trainer:
 
             # T3-6: Use chunked CE when logits aren't needed downstream
             _needs_logits = (
-                self.config.r_drop_alpha > 0
-                or self.config.reasoning_loss_weight > 1.0
-                or self.config.z_loss_weight > 0
+                self.config.r_drop_alpha > 0 or self.config.reasoning_loss_weight > 1.0 or self.config.z_loss_weight > 0
             )
             _ce_chunk = 0 if _needs_logits else self.config.ce_chunk_size
 
@@ -3310,63 +3169,65 @@ class Trainer:
                 # 4D block-diagonal mask: slice both spatial dims
                 attn_mask_2d = attention_mask[:, :, :-1, :-1]
                 logits, loss = self.model(
-                    input_ids, targets=targets,
+                    input_ids,
+                    targets=targets,
                     pad_token_id=self.pad_token_id,
                     label_smoothing=self.config.label_smoothing,
                     attention_mask_2d=attn_mask_2d,
-                    chunked_ce=_ce_chunk)
+                    chunked_ce=_ce_chunk,
+                )
             else:
                 # Standard 2D pad mask: slice last position
                 attn_mask = attention_mask[:, :-1]
                 logits, loss = self.model(
-                    input_ids, targets=targets,
+                    input_ids,
+                    targets=targets,
                     pad_token_id=self.pad_token_id,
                     label_smoothing=self.config.label_smoothing,
                     attention_mask=attn_mask,
-                    chunked_ce=_ce_chunk)
+                    chunked_ce=_ce_chunk,
+                )
 
             # T2-4: R-Drop regularization - second forward pass with
             # different dropout masks, plus KL-divergence penalty.
             if self.config.r_drop_alpha > 0 and loss is not None:
                 if is_packed:
                     logits2, loss2 = self.model(
-                        input_ids, targets=targets,
+                        input_ids,
+                        targets=targets,
                         pad_token_id=self.pad_token_id,
                         label_smoothing=self.config.label_smoothing,
-                        attention_mask_2d=attn_mask_2d)
+                        attention_mask_2d=attn_mask_2d,
+                    )
                 else:
                     logits2, loss2 = self.model(
-                        input_ids, targets=targets,
+                        input_ids,
+                        targets=targets,
                         pad_token_id=self.pad_token_id,
                         label_smoothing=self.config.label_smoothing,
-                        attention_mask=attn_mask)
+                        attention_mask=attn_mask,
+                    )
                 # Average CE losses from both passes
                 loss = (loss + loss2) / 2
                 # Symmetric KL divergence
                 p = torch.nn.functional.log_softmax(logits, dim=-1)
                 q = torch.nn.functional.log_softmax(logits2, dim=-1)
-                kl_pq = torch.nn.functional.kl_div(
-                    q, p, log_target=True, reduction='batchmean')
-                kl_qp = torch.nn.functional.kl_div(
-                    p, q, log_target=True, reduction='batchmean')
+                kl_pq = torch.nn.functional.kl_div(q, p, log_target=True, reduction="batchmean")
+                kl_qp = torch.nn.functional.kl_div(p, q, log_target=True, reduction="batchmean")
                 loss = loss + self.config.r_drop_alpha * (kl_pq + kl_qp) / 2
 
             # Reasoning-weighted loss (CoT-E)
-            if (
-                self.config.reasoning_loss_weight > 1.0
-                and loss is not None
-            ):
-                loss = self._apply_reasoning_weight(
-                    logits, targets, loss)
+            if self.config.reasoning_loss_weight > 1.0 and loss is not None:
+                loss = self._apply_reasoning_weight(logits, targets, loss)
 
             # Z-Loss: penalizes large logits for stability (R28, PaLM)
             if self.config.z_loss_weight > 0 and loss is not None:
                 z = torch.logsumexp(logits, dim=-1)
-                z_loss = self.config.z_loss_weight * (z ** 2).mean()
+                z_loss = self.config.z_loss_weight * (z**2).mean()
                 loss = loss + z_loss
 
             # MoE auxiliary loss
-            if hasattr(self.model, 'get_moe_aux_loss'):
+            if hasattr(self.model, "get_moe_aux_loss"):
                 aux_loss = self.model.get_moe_aux_loss()
                 loss = loss + aux_loss * 0.01
 
@@ -3384,12 +3245,9 @@ class Trainer:
             # Gradient noise injection (Neelakantan et al.) with
             # warmup/decay envelope (T2-3).
             if self.config.gradient_noise_eta > 0:
-                noise_std = (
-                    self.config.gradient_noise_eta
-                    / (1.0 + self.state.step) ** self.config.gradient_noise_gamma
-                )
+                noise_std = self.config.gradient_noise_eta / (1.0 + self.state.step) ** self.config.gradient_noise_gamma
                 # T2-3: Apply noise lifecycle envelope
-                total = getattr(self, '_total_training_steps', 0)
+                total = getattr(self, "_total_training_steps", 0)
                 if total > 0:
                     frac = self.state.step / total
                     warmup_end = self.config.noise_warmup_fraction
@@ -3408,9 +3266,7 @@ class Trainer:
             if self.config.gradient_clip > 0:
                 if self.scaler is not None:
                     self.scaler.unscale_(self.optimizer)
-                torch.nn.utils.clip_grad_norm_(
-                    self.model.parameters(),
-                    self.config.gradient_clip)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.gradient_clip)
 
             if self.scaler is not None:
                 self.scaler.step(self.optimizer)
@@ -3422,18 +3278,17 @@ class Trainer:
 
             # S560: AdEMAMix alpha annealing - decay alpha from initial
             # to final over the first warmup fraction of training.
-            if (self.config.optimizer == 'ademamix'
-                    and self.config.ademamix_alpha_initial != self.config.ademamix_alpha):
-                total = getattr(self, '_total_training_steps', 0)
+            if self.config.optimizer == "ademamix" and self.config.ademamix_alpha_initial != self.config.ademamix_alpha:
+                total = getattr(self, "_total_training_steps", 0)
                 if total > 0:
                     warmup_steps = int(total * self.config.ademamix_alpha_warmup)
                     if warmup_steps > 0 and self.state.step <= warmup_steps:
                         frac = self.state.step / warmup_steps
-                        alpha = (self.config.ademamix_alpha_initial
-                                 + frac * (self.config.ademamix_alpha
-                                           - self.config.ademamix_alpha_initial))
+                        alpha = self.config.ademamix_alpha_initial + frac * (
+                            self.config.ademamix_alpha - self.config.ademamix_alpha_initial
+                        )
                         for group in self.optimizer.param_groups:
-                            group['alpha'] = alpha
+                            group["alpha"] = alpha
 
             if self.scheduler is not None:
                 self.scheduler.step()
@@ -3450,25 +3305,17 @@ class Trainer:
                 self.swa.update(self.model, step)
                 restart_t0 = self.config.cosine_restart_period
                 if restart_t0 > 0:
-                    warmup = _effective_warmup(
-                        self.config.warmup_steps,
-                        self._total_training_steps)
+                    warmup = _effective_warmup(self.config.warmup_steps, self._total_training_steps)
                     step_in_cosine = step - warmup
-                    if (step_in_cosine > 0
-                            and step_in_cosine % restart_t0 == 0
-                            and step % self.swa.update_interval != 0):
+                    if step_in_cosine > 0 and step_in_cosine % restart_t0 == 0 and step % self.swa.update_interval != 0:
                         # Restart boundary that wasn't already an
                         # interval boundary - force extra snapshot
                         self.swa.n_averaged += 1
-                        for avg, param in zip(
-                                self.swa.avg, self.model.parameters()):
-                            avg.add_(
-                                (param.detach() - avg)
-                                / self.swa.n_averaged)
+                        for avg, param in zip(self.swa.avg, self.model.parameters()):
+                            avg.add_((param.detach() - avg) / self.swa.n_averaged)
                         logger.debug(
-                            "SWA restart snapshot at step %d "
-                            "(cosine cycle %d)",
-                            step, step_in_cosine // restart_t0)
+                            "SWA restart snapshot at step %d (cosine cycle %d)", step, step_in_cosine // restart_t0
+                        )
 
         return loss.item() * self.config.max_grad_accumulation
 
@@ -3499,7 +3346,7 @@ class Trainer:
                 attention_mask = attention_mask.to(self.device)
                 is_packed = attention_mask.ndim == 4
                 with torch.amp.autocast(
-                    'cuda',
+                    "cuda",
                     dtype=self._amp_dtype,
                     enabled=self.config.use_amp and torch.cuda.is_available(),
                 ):
@@ -3508,19 +3355,16 @@ class Trainer:
                     if is_packed:
                         attn_mask_2d = attention_mask[:, :, :-1, :-1]
                         _logits, loss = self.model(
-                            input_ids, targets=targets,
-                            pad_token_id=self.pad_token_id,
-                            attention_mask_2d=attn_mask_2d)
+                            input_ids, targets=targets, pad_token_id=self.pad_token_id, attention_mask_2d=attn_mask_2d
+                        )
                     else:
                         attn_mask = attention_mask[:, :-1]
                         _logits, loss = self.model(
-                            input_ids, targets=targets,
-                            pad_token_id=self.pad_token_id,
-                            attention_mask=attn_mask)
+                            input_ids, targets=targets, pad_token_id=self.pad_token_id, attention_mask=attn_mask
+                        )
 
                 if loss is not None:
-                    non_pad = int(
-                        (targets != self.pad_token_id).sum().item())
+                    non_pad = int((targets != self.pad_token_id).sum().item())
                     total_loss += loss.item() * non_pad
                     total_tokens += non_pad
         finally:
@@ -3541,9 +3385,7 @@ class Trainer:
         checkpointing (trades compute for VRAM) and clears the CUDA
         cache so the retry has the best chance of succeeding.
         """
-        logger.warning(
-            "CUDA out of memory — clearing cache and enabling "
-            "gradient checkpointing for retry: %s", exc)
+        logger.warning("CUDA out of memory — clearing cache and enabling gradient checkpointing for retry: %s", exc)
         self.optimizer.zero_grad(set_to_none=True)
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
@@ -3556,12 +3398,11 @@ class Trainer:
                 for layer in getattr(self.model, "layers", []):
                     if hasattr(layer, "use_checkpoint"):
                         layer.use_checkpoint = True
-            logger.info(
-                "Gradient checkpointing enabled to reduce VRAM usage")
+            logger.info("Gradient checkpointing enabled to reduce VRAM usage")
 
     def _restore_pending_state(self) -> None:
         """Restore scheduler and scaler state stashed by load_checkpoint."""
-        sched_state = getattr(self, '_pending_scheduler_state', None)
+        sched_state = getattr(self, "_pending_scheduler_state", None)
         if sched_state is not None and self.scheduler is not None:
             try:
                 self.scheduler.load_state_dict(sched_state)
@@ -3570,7 +3411,7 @@ class Trainer:
                 logger.warning("Could not restore scheduler state: %s", exc)
             self._pending_scheduler_state = None
 
-        scaler_state = getattr(self, '_pending_scaler_state', None)
+        scaler_state = getattr(self, "_pending_scaler_state", None)
         if scaler_state is not None and self.scaler is not None:
             try:
                 self.scaler.load_state_dict(scaler_state)
@@ -3601,50 +3442,48 @@ class Trainer:
         """
         try:
             checkpoint = {
-                'model_state_dict': self.model.state_dict(),
-                'optimizer_state_dict': self.optimizer.state_dict(),
-                'training_state': {
-                    'epoch': self.state.epoch,
-                    'step': self.state.step,
-                    'best_loss': self.state.best_loss,
-                    'total_tokens': self.state.total_tokens,
-                    'training_losses': self.state.training_losses,
-                    'validation_losses': self.state.validation_losses,
-                    'dataset_fingerprint': getattr(
-                        self, '_dataset_fingerprint', None),
+                "model_state_dict": self.model.state_dict(),
+                "optimizer_state_dict": self.optimizer.state_dict(),
+                "training_state": {
+                    "epoch": self.state.epoch,
+                    "step": self.state.step,
+                    "best_loss": self.state.best_loss,
+                    "total_tokens": self.state.total_tokens,
+                    "training_losses": self.state.training_losses,
+                    "validation_losses": self.state.validation_losses,
+                    "dataset_fingerprint": getattr(self, "_dataset_fingerprint", None),
                 },
-                'training_config': self.config.to_dict(),
+                "training_config": self.config.to_dict(),
             }
             # Save scheduler state for exact resume
             if self.scheduler is not None:
-                checkpoint['scheduler_state_dict'] = self.scheduler.state_dict()
+                checkpoint["scheduler_state_dict"] = self.scheduler.state_dict()
             # Save AMP scaler state
             if self.scaler is not None:
-                checkpoint['scaler_state_dict'] = self.scaler.state_dict()
+                checkpoint["scaler_state_dict"] = self.scaler.state_dict()
 
             # Save EMA state for resume
             if self.ema is not None:
-                checkpoint['ema_state_dict'] = self.ema.state_dict()
+                checkpoint["ema_state_dict"] = self.ema.state_dict()
 
             # Save SWA state for resume
             if self.swa is not None:
-                checkpoint['swa_state_dict'] = self.swa.state_dict()
+                checkpoint["swa_state_dict"] = self.swa.state_dict()
 
-            if hasattr(self.model, 'config'):
-                checkpoint['model_config'] = self.model.config.__dict__
+            if hasattr(self.model, "config"):
+                checkpoint["model_config"] = self.model.config.__dict__
                 # Also save as 'config' for compatibility with gui_forge loader
-                checkpoint['config'] = self.model.config.__dict__
+                checkpoint["config"] = self.model.config.__dict__
 
             from enigma_engine.core.safe_save import atomic_torch_save
+
             atomic_torch_save(checkpoint, path)
             logger.info(f"Saved checkpoint: {path}")
         except Exception as e:
             logger.error(f"Failed to save checkpoint: {e}")
             self._emit_warning(f"Checkpoint save failed: {e}")
 
-    def _save_rolling_checkpoint(
-        self, checkpoint_dir: Path, loss: float, epoch: int
-    ) -> None:
+    def _save_rolling_checkpoint(self, checkpoint_dir: Path, loss: float, epoch: int) -> None:
         """Save a rolling best checkpoint (CK-C).
 
         Keeps only the K best checkpoints by loss.  When a new
@@ -3661,18 +3500,14 @@ class Trainer:
         if k <= 0:
             return
 
-        path = checkpoint_dir / (
-            f"{self._checkpoint_stem}_rolling_e{epoch}"
-            f"_loss{loss:.4f}.pt")
+        path = checkpoint_dir / (f"{self._checkpoint_stem}_rolling_e{epoch}_loss{loss:.4f}.pt")
 
         # If we haven't filled K slots yet, just save
         if len(self._rolling_checkpoints) < k:
             self._save_checkpoint(path)
             self._rolling_checkpoints.append((loss, path))
             self._rolling_checkpoints.sort(key=lambda x: x[0])
-            logger.info(
-                "Rolling checkpoint saved: %s (%d/%d slots)",
-                path.name, len(self._rolling_checkpoints), k)
+            logger.info("Rolling checkpoint saved: %s (%d/%d slots)", path.name, len(self._rolling_checkpoints), k)
             return
 
         # Check if this is better than the worst
@@ -3682,26 +3517,19 @@ class Trainer:
             try:
                 if worst_path.exists():
                     worst_path.unlink()
-                    logger.info(
-                        "Rolling checkpoint deleted (worst): %s",
-                        worst_path.name)
+                    logger.info("Rolling checkpoint deleted (worst): %s", worst_path.name)
             except OSError as exc:
-                logger.debug(
-                    "Could not delete old rolling checkpoint: %s", exc)
+                logger.debug("Could not delete old rolling checkpoint: %s", exc)
 
             # Remove worst from tracking and add new
             self._rolling_checkpoints.pop()
             self._save_checkpoint(path)
             self._rolling_checkpoints.append((loss, path))
             self._rolling_checkpoints.sort(key=lambda x: x[0])
-            logger.info(
-                "Rolling checkpoint replaced: %s (loss=%.4f)",
-                path.name, loss)
+            logger.info("Rolling checkpoint replaced: %s (loss=%.4f)", path.name, loss)
 
     @staticmethod
-    def _cleanup_periodic_checkpoints(
-        checkpoint_dir: Path, prefix: str, keep: int = 3
-    ) -> None:
+    def _cleanup_periodic_checkpoints(checkpoint_dir: Path, prefix: str, keep: int = 3) -> None:
         """Delete old periodic checkpoints, keeping only the most recent *keep*.
 
         Matches files like ``mymodel_checkpoint3.pt`` inside *checkpoint_dir*.
@@ -3710,6 +3538,7 @@ class Trainer:
         file are never deleted (protected).
         """
         import re
+
         pattern = re.compile(rf"^{re.escape(prefix)}(\d+)\.pt$")
         found: list[tuple[int, Path]] = []
         try:
@@ -3729,17 +3558,13 @@ class Trainer:
             # Skip protected checkpoints (.keep sidecar)
             keep_marker = old_path.parent / (old_path.name + ".keep")
             if keep_marker.exists():
-                logger.debug(
-                    "Skipping protected checkpoint: %s", old_path.name)
+                logger.debug("Skipping protected checkpoint: %s", old_path.name)
                 continue
             try:
                 old_path.unlink()
-                logger.info(
-                    "Deleted old periodic checkpoint: %s", old_path.name)
+                logger.info("Deleted old periodic checkpoint: %s", old_path.name)
             except OSError as exc:
-                logger.debug(
-                    "Could not delete old checkpoint %s: %s",
-                    old_path.name, exc)
+                logger.debug("Could not delete old checkpoint %s: %s", old_path.name, exc)
 
     @staticmethod
     def _find_latest_checkpoint(checkpoint_dir: Path) -> Path | None:
@@ -3755,6 +3580,7 @@ class Trainer:
         directory is missing.
         """
         import re
+
         if not checkpoint_dir.is_dir():
             return None
 
@@ -3763,8 +3589,7 @@ class Trainer:
             stem = "model"
 
         # Match new format: {stem}_checkpoint{N}.pt
-        new_pat = re.compile(
-            rf"^{re.escape(stem)}_checkpoint(\d+)\.pt$")
+        new_pat = re.compile(rf"^{re.escape(stem)}_checkpoint(\d+)\.pt$")
         # Match legacy format: checkpoint_epoch_{N}.pt
         old_pat = re.compile(r"^checkpoint_epoch_(\d+)\.pt$")
 
@@ -3780,8 +3605,10 @@ class Trainer:
 
         # No periodic checkpoints - try best/final (new then legacy)
         for name in (
-            f"{stem}_best.pt", f"{stem}_final.pt",
-            "best_model.pt", "final_model.pt",
+            f"{stem}_best.pt",
+            f"{stem}_final.pt",
+            "best_model.pt",
+            "final_model.pt",
         ):
             candidate = checkpoint_dir / name
             if candidate.exists():
@@ -3793,38 +3620,39 @@ class Trainer:
         """Load model checkpoint."""
         try:
             from enigma_engine.core.model_registry import safe_load_weights
+
             checkpoint = safe_load_weights(path, map_location=self.device)
 
             # Unwrap state dict — handles both flat and wrapped formats
-            state_dict = checkpoint.get('model_state_dict') or checkpoint.get('state_dict') or checkpoint.get('model')
+            state_dict = checkpoint.get("model_state_dict") or checkpoint.get("state_dict") or checkpoint.get("model")
             if state_dict is None:
                 # Assume the whole checkpoint is a bare state dict
                 state_dict = checkpoint
             self.model.load_state_dict(state_dict)
 
-            opt_state = checkpoint.get('optimizer_state_dict')
+            opt_state = checkpoint.get("optimizer_state_dict")
             if opt_state:
                 self.optimizer.load_state_dict(opt_state)
 
-            state = checkpoint.get('training_state', {})
-            self.state.epoch = state.get('epoch', 0)
-            self.state.step = state.get('step', 0)
-            self.state.best_loss = state.get('best_loss', float('inf'))
-            self.state.total_tokens = state.get('total_tokens', 0)
-            self.state.training_losses = state.get('training_losses', [])
-            self.state.validation_losses = state.get('validation_losses', [])
+            state = checkpoint.get("training_state", {})
+            self.state.epoch = state.get("epoch", 0)
+            self.state.step = state.get("step", 0)
+            self.state.best_loss = state.get("best_loss", float("inf"))
+            self.state.total_tokens = state.get("total_tokens", 0)
+            self.state.training_losses = state.get("training_losses", [])
+            self.state.validation_losses = state.get("validation_losses", [])
 
             # Stash scheduler/scaler state for deferred restore
-            self._pending_scheduler_state = checkpoint.get('scheduler_state_dict')
-            self._pending_scaler_state = checkpoint.get('scaler_state_dict')
+            self._pending_scheduler_state = checkpoint.get("scheduler_state_dict")
+            self._pending_scaler_state = checkpoint.get("scaler_state_dict")
 
             # Restore EMA state if saved and EMA is active
-            ema_state = checkpoint.get('ema_state_dict')
+            ema_state = checkpoint.get("ema_state_dict")
             if ema_state is not None and self.ema is not None:
                 self.ema.load_state_dict(ema_state)
 
             # Restore SWA state if saved and SWA is active
-            swa_state = checkpoint.get('swa_state_dict')
+            swa_state = checkpoint.get("swa_state_dict")
             if swa_state is not None and self.swa is not None:
                 self.swa.load_state_dict(swa_state)
 
@@ -3835,9 +3663,7 @@ class Trainer:
             keep_marker = path.parent / (path.name + ".keep")
             if not keep_marker.exists():
                 try:
-                    keep_marker.write_text(
-                        "protected - resumed for training",
-                        encoding="utf-8")
+                    keep_marker.write_text("protected - resumed for training", encoding="utf-8")
                 except OSError:
                     pass
         except Exception as e:
@@ -3906,8 +3732,8 @@ class Trainer:
         loss = (chosen_term + rejected_term).mean()
         if not torch.isfinite(loss):
             logger.warning(
-                "APO-zero loss is non-finite (%s), clamping to 0",
-                loss.item() if loss.numel() == 1 else "tensor")
+                "APO-zero loss is non-finite (%s), clamping to 0", loss.item() if loss.numel() == 1 else "tensor"
+            )
             loss = torch.zeros_like(loss)
         return loss
 
@@ -3924,13 +3750,13 @@ class Trainer:
             "apo_zero": Trainer._apo_zero_loss,
         }
         if loss_type not in registry:
-            raise ValueError(
-                f"Unknown loss_type {loss_type!r}; must be one of "
-                f"{sorted(registry)}")
+            raise ValueError(f"Unknown loss_type {loss_type!r}; must be one of {sorted(registry)}")
         return registry[loss_type]
 
     def _get_sequence_logps(
-        self, model: "nn.Module", input_ids: "torch.Tensor",
+        self,
+        model: "nn.Module",
+        input_ids: "torch.Tensor",
         labels: "torch.Tensor",
         attention_mask: "torch.Tensor | None" = None,
     ) -> "torch.Tensor":
@@ -3954,8 +3780,7 @@ class Trainer:
         targets = labels[:, 1:]  # shift right
 
         # Gather log-probs for target tokens
-        per_token = log_probs.gather(
-            2, targets.unsqueeze(-1)).squeeze(-1)
+        per_token = log_probs.gather(2, targets.unsqueeze(-1)).squeeze(-1)
 
         # Mask out padding — labels use -100 for ignored positions,
         # 0 is a valid token ID (pad_token) that should still be masked.
@@ -3981,10 +3806,8 @@ class Trainer:
             return False
 
         prompt_ids = self.tokenizer.encode(f"User: {prompt}\nAssistant: ")
-        chosen_ids = self.tokenizer.encode(
-            f"User: {prompt}\nAssistant: {chosen}")
-        rejected_ids = self.tokenizer.encode(
-            f"User: {prompt}\nAssistant: {rejected}")
+        chosen_ids = self.tokenizer.encode(f"User: {prompt}\nAssistant: {chosen}")
+        rejected_ids = self.tokenizer.encode(f"User: {prompt}\nAssistant: {rejected}")
 
         chosen_ids = chosen_ids[:max_len_dpo]
         rejected_ids = rejected_ids[:max_len_dpo]
@@ -3993,14 +3816,8 @@ class Trainer:
         if len(chosen_ids) <= prompt_len or len(rejected_ids) <= prompt_len:
             return False
 
-        chosen_labels = (
-            [-100] * min(prompt_len, len(chosen_ids))
-            + chosen_ids[prompt_len:]
-        )
-        rejected_labels = (
-            [-100] * min(prompt_len, len(rejected_ids))
-            + rejected_ids[prompt_len:]
-        )
+        chosen_labels = [-100] * min(prompt_len, len(chosen_ids)) + chosen_ids[prompt_len:]
+        rejected_labels = [-100] * min(prompt_len, len(rejected_ids)) + rejected_ids[prompt_len:]
 
         chosen_mask = [1] * len(chosen_ids)
         rejected_mask = [1] * len(rejected_ids)
@@ -4013,16 +3830,14 @@ class Trainer:
         chosen_labels += [-100] * (max_len - len(chosen_labels))
         rejected_labels += [-100] * (max_len - len(rejected_labels))
 
-        pairs.append((
-            torch.tensor([chosen_ids, rejected_ids],
-                         dtype=torch.long, device=self.device),
-            torch.tensor([chosen_labels],
-                         dtype=torch.long, device=self.device),
-            torch.tensor([rejected_labels],
-                         dtype=torch.long, device=self.device),
-            torch.tensor([chosen_mask, rejected_mask],
-                         dtype=torch.long, device=self.device),
-        ))
+        pairs.append(
+            (
+                torch.tensor([chosen_ids, rejected_ids], dtype=torch.long, device=self.device),
+                torch.tensor([chosen_labels], dtype=torch.long, device=self.device),
+                torch.tensor([rejected_labels], dtype=torch.long, device=self.device),
+                torch.tensor([chosen_mask, rejected_mask], dtype=torch.long, device=self.device),
+            )
+        )
         return True
 
     def _generate_online_dpo_pairs(
@@ -4044,13 +3859,11 @@ class Trainer:
 
         self.model.eval()
         new_pairs: list[dict] = []
-        eos_id = getattr(self.tokenizer, 'eos_token_id', 2)
+        eos_id = getattr(self.tokenizer, "eos_token_id", 2)
         try:
             for prompt_text in prompts:
-                encoded = self.tokenizer.encode(
-                    f"User: {prompt_text}\nAssistant: ")
-                input_ids = torch.tensor(
-                    [encoded], dtype=torch.long, device=self.device)
+                encoded = self.tokenizer.encode(f"User: {prompt_text}\nAssistant: ")
+                input_ids = torch.tensor([encoded], dtype=torch.long, device=self.device)
                 responses: list[tuple[str, float]] = []
                 for _ in range(n_samples):
                     ids = input_ids.clone()
@@ -4065,19 +3878,19 @@ class Trainer:
                         generated.append(next_id)
                         if next_id == eos_id:
                             break
-                        ids = torch.tensor(
-                            [[next_id]], dtype=torch.long,
-                            device=self.device)
+                        ids = torch.tensor([[next_id]], dtype=torch.long, device=self.device)
                     resp_text = self.tokenizer.decode(generated)
                     score = reward_fn(prompt_text, resp_text)
                     responses.append((resp_text, score))
                 if len(responses) >= 2:
                     responses.sort(key=lambda x: x[1])
-                    new_pairs.append({
-                        "prompt": prompt_text,
-                        "chosen": responses[-1][0],   # highest score
-                        "rejected": responses[0][0],   # lowest score
-                    })
+                    new_pairs.append(
+                        {
+                            "prompt": prompt_text,
+                            "chosen": responses[-1][0],  # highest score
+                            "rejected": responses[0][0],  # lowest score
+                        }
+                    )
         finally:
             self.model.train()
         return new_pairs
@@ -4151,10 +3964,9 @@ class Trainer:
         # Fallback: deepcopy for non-LoRA models.
         use_lora_ref = False
         ref_model = None
-        if hasattr(self.model, 'disable_adapter_layers'):
+        if hasattr(self.model, "disable_adapter_layers"):
             use_lora_ref = True
-            logger.info("DPO: using LoRA disable - frozen base weights "
-                        "serve as reference policy (no extra VRAM)")
+            logger.info("DPO: using LoRA disable - frozen base weights serve as reference policy (no extra VRAM)")
         else:
             ref_model = copy.deepcopy(self.model)
             ref_model.to(self.device)
@@ -4165,8 +3977,8 @@ class Trainer:
 
         # Encode preference pairs
         pairs: list[tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]] = []
-        max_len_dpo = getattr(self.model, 'config', None)
-        max_len_dpo = getattr(max_len_dpo, 'max_seq_len', 512) if max_len_dpo else 512
+        max_len_dpo = getattr(self.model, "config", None)
+        max_len_dpo = getattr(max_len_dpo, "max_seq_len", 512) if max_len_dpo else 512
         for item in preference_data:
             self._encode_dpo_pair(item, pairs, max_len_dpo)
 
@@ -4174,8 +3986,7 @@ class Trainer:
             raise ValueError("No valid preference pairs after encoding")
 
         self._emit_progress(5, f"DPO training: {len(pairs)} pairs")
-        logger.info(f"DPO training: {len(pairs)} preference pairs, "
-                    f"beta={beta}")
+        logger.info(f"DPO training: {len(pairs)} preference pairs, beta={beta}")
 
         # Gradient accumulation: batch N pairs before optimizer step
         accum_steps = max(1, self.config.max_grad_accumulation)
@@ -4186,18 +3997,11 @@ class Trainer:
         warmup = _effective_warmup(self.config.warmup_steps, total_steps)
         decay_steps = max(1, total_steps - warmup)
 
-        warmup_sched = LambdaLR(
-            self.optimizer,
-            lr_lambda=lambda step: min(1.0, (step + 1) / warmup))
+        warmup_sched = LambdaLR(self.optimizer, lr_lambda=lambda step: min(1.0, (step + 1) / warmup))
         cosine_sched = CosineAnnealingLR(
-            self.optimizer,
-            T_max=decay_steps,
-            eta_min=(
-                self.config.learning_rate * self.config.min_lr_ratio))
-        self.scheduler = SequentialLR(
-            self.optimizer,
-            schedulers=[warmup_sched, cosine_sched],
-            milestones=[warmup])
+            self.optimizer, T_max=decay_steps, eta_min=(self.config.learning_rate * self.config.min_lr_ratio)
+        )
+        self.scheduler = SequentialLR(self.optimizer, schedulers=[warmup_sched, cosine_sched], milestones=[warmup])
 
         # Restore scheduler/scaler state from checkpoint if available
         self._restore_pending_state()
@@ -4208,9 +4012,10 @@ class Trainer:
         for epoch in range(self.config.epochs):
             if self._should_stop():
                 break
-            if (self.config.max_training_seconds > 0
-                    and time.monotonic() - self._training_start_time
-                    > self.config.max_training_seconds):
+            if (
+                self.config.max_training_seconds > 0
+                and time.monotonic() - self._training_start_time > self.config.max_training_seconds
+            ):
                 break
 
             epoch_loss = 0.0
@@ -4218,21 +4023,19 @@ class Trainer:
             self.optimizer.zero_grad()
 
             progress_base = int(5 + (epoch / self.config.epochs) * 90)
-            self._emit_progress(
-                progress_base, f"DPO Epoch {epoch + 1}/{self.config.epochs}")
+            self._emit_progress(progress_base, f"DPO Epoch {epoch + 1}/{self.config.epochs}")
 
-            for i, (input_ids, chosen_labels, rejected_labels, attention_mask) in enumerate(
-                    pairs):
+            for i, (input_ids, chosen_labels, rejected_labels, attention_mask) in enumerate(pairs):
                 if self._should_stop():
                     break
 
                 # Policy log-probs
                 policy_chosen = self._get_sequence_logps(
-                    self.model, input_ids[:1], chosen_labels,
-                    attention_mask=attention_mask[:1])
+                    self.model, input_ids[:1], chosen_labels, attention_mask=attention_mask[:1]
+                )
                 policy_rejected = self._get_sequence_logps(
-                    self.model, input_ids[1:], rejected_labels,
-                    attention_mask=attention_mask[1:])
+                    self.model, input_ids[1:], rejected_labels, attention_mask=attention_mask[1:]
+                )
 
                 # Reference log-probs (no grad)
                 with torch.no_grad():
@@ -4241,25 +4044,23 @@ class Trainer:
                         self.model.disable_adapter_layers()
                         try:
                             ref_chosen = self._get_sequence_logps(
-                                self.model, input_ids[:1], chosen_labels,
-                                attention_mask=attention_mask[:1])
+                                self.model, input_ids[:1], chosen_labels, attention_mask=attention_mask[:1]
+                            )
                             ref_rejected = self._get_sequence_logps(
-                                self.model, input_ids[1:], rejected_labels,
-                                attention_mask=attention_mask[1:])
+                                self.model, input_ids[1:], rejected_labels, attention_mask=attention_mask[1:]
+                            )
                         finally:
                             self.model.enable_adapter_layers()
                         self.model.train()
                     else:
                         ref_chosen = self._get_sequence_logps(
-                            ref_model, input_ids[:1], chosen_labels,
-                            attention_mask=attention_mask[:1])
+                            ref_model, input_ids[:1], chosen_labels, attention_mask=attention_mask[:1]
+                        )
                         ref_rejected = self._get_sequence_logps(
-                            ref_model, input_ids[1:], rejected_labels,
-                            attention_mask=attention_mask[1:])
+                            ref_model, input_ids[1:], rejected_labels, attention_mask=attention_mask[1:]
+                        )
 
-                loss = loss_fn(
-                    policy_chosen, policy_rejected,
-                    ref_chosen, ref_rejected, beta=beta)
+                loss = loss_fn(policy_chosen, policy_rejected, ref_chosen, ref_rejected, beta=beta)
 
                 # Scale loss for gradient accumulation
                 loss = loss / accum_steps
@@ -4279,9 +4080,7 @@ class Trainer:
                 # Step optimizer every accum_steps pairs
                 if (i + 1) % accum_steps == 0:
                     if self.config.gradient_clip > 0:
-                        torch.nn.utils.clip_grad_norm_(
-                            self.model.parameters(),
-                            self.config.gradient_clip)
+                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.gradient_clip)
                     self.optimizer.step()
                     self.optimizer.zero_grad()
                     if self.scheduler:
@@ -4289,26 +4088,20 @@ class Trainer:
                     self.state.step += 1
 
                     # T2-5: Online DPO - generate fresh pairs periodically
-                    if (reward_fn is not None
-                            and dpo_online_interval > 0
-                            and self.state.step % dpo_online_interval == 0):
+                    if reward_fn is not None and dpo_online_interval > 0 and self.state.step % dpo_online_interval == 0:
                         sample_prompts = random.sample(
-                            [d["prompt"] for d in preference_data
-                             if d.get("prompt")],
-                            k=min(4, len(preference_data)))
+                            [d["prompt"] for d in preference_data if d.get("prompt")], k=min(4, len(preference_data))
+                        )
                         new_items = self._generate_online_dpo_pairs(
-                            sample_prompts, reward_fn,
-                            n_samples=dpo_online_samples)
+                            sample_prompts, reward_fn, n_samples=dpo_online_samples
+                        )
                         for item in new_items:
-                            self._encode_dpo_pair(
-                                item, pairs, max_len_dpo)
+                            self._encode_dpo_pair(item, pairs, max_len_dpo)
 
             # Flush remaining accumulated gradients at epoch end
             if len(pairs) % accum_steps != 0:
                 if self.config.gradient_clip > 0:
-                    torch.nn.utils.clip_grad_norm_(
-                        self.model.parameters(),
-                        self.config.gradient_clip)
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.gradient_clip)
                 self.optimizer.step()
                 self.optimizer.zero_grad()
                 if self.scheduler:
@@ -4330,13 +4123,13 @@ class Trainer:
             if avg_loss < self.state.best_loss:
                 self.state.best_loss = avg_loss
                 self._epochs_without_improvement = 0
-                self._save_checkpoint(
-                    checkpoint_dir / f"{self._checkpoint_stem}_best.pt")
+                self._save_checkpoint(checkpoint_dir / f"{self._checkpoint_stem}_best.pt")
             else:
                 self._epochs_without_improvement += 1
-                if (self.config.early_stopping_patience > 0
-                        and self._epochs_without_improvement
-                        >= self.config.early_stopping_patience):
+                if (
+                    self.config.early_stopping_patience > 0
+                    and self._epochs_without_improvement >= self.config.early_stopping_patience
+                ):
                     logger.info("DPO early stopping triggered")
                     break
 
@@ -4402,13 +4195,11 @@ class Trainer:
                 continue
 
             prompt_ids = self.tokenizer.encode(f"User: {prompt}\nAssistant: ")
-            chosen_ids = self.tokenizer.encode(
-                f"User: {prompt}\nAssistant: {chosen}")
-            rejected_ids = self.tokenizer.encode(
-                f"User: {prompt}\nAssistant: {rejected}")
+            chosen_ids = self.tokenizer.encode(f"User: {prompt}\nAssistant: {chosen}")
+            rejected_ids = self.tokenizer.encode(f"User: {prompt}\nAssistant: {rejected}")
 
-            max_len_s = getattr(self.model, 'config', None)
-            max_len_s = getattr(max_len_s, 'max_seq_len', 512) if max_len_s else 512
+            max_len_s = getattr(self.model, "config", None)
+            max_len_s = getattr(max_len_s, "max_seq_len", 512) if max_len_s else 512
             chosen_ids = chosen_ids[:max_len_s]
             rejected_ids = rejected_ids[:max_len_s]
 
@@ -4417,14 +4208,8 @@ class Trainer:
             if len(chosen_ids) <= prompt_len or len(rejected_ids) <= prompt_len:
                 continue
 
-            chosen_labels = (
-                [-100] * min(prompt_len, len(chosen_ids))
-                + chosen_ids[prompt_len:]
-            )
-            rejected_labels = (
-                [-100] * min(prompt_len, len(rejected_ids))
-                + rejected_ids[prompt_len:]
-            )
+            chosen_labels = [-100] * min(prompt_len, len(chosen_ids)) + chosen_ids[prompt_len:]
+            rejected_labels = [-100] * min(prompt_len, len(rejected_ids)) + rejected_ids[prompt_len:]
             chosen_mask = [1] * len(chosen_ids)
             rejected_mask = [1] * len(rejected_ids)
             max_len = max(len(chosen_ids), len(rejected_ids))
@@ -4435,16 +4220,14 @@ class Trainer:
             chosen_labels += [-100] * (max_len - len(chosen_labels))
             rejected_labels += [-100] * (max_len - len(rejected_labels))
 
-            pairs.append((
-                torch.tensor([chosen_ids, rejected_ids],
-                             dtype=torch.long, device=self.device),
-                torch.tensor([chosen_labels],
-                             dtype=torch.long, device=self.device),
-                torch.tensor([rejected_labels],
-                             dtype=torch.long, device=self.device),
-                torch.tensor([chosen_mask, rejected_mask],
-                             dtype=torch.long, device=self.device),
-            ))
+            pairs.append(
+                (
+                    torch.tensor([chosen_ids, rejected_ids], dtype=torch.long, device=self.device),
+                    torch.tensor([chosen_labels], dtype=torch.long, device=self.device),
+                    torch.tensor([rejected_labels], dtype=torch.long, device=self.device),
+                    torch.tensor([chosen_mask, rejected_mask], dtype=torch.long, device=self.device),
+                )
+            )
 
         if not pairs:
             raise ValueError("No valid preference pairs after encoding")
@@ -4470,17 +4253,16 @@ class Trainer:
 
                 # Average log-probs = implicit reward (no ref model)
                 policy_chosen = self._get_sequence_logps(
-                    self.model, input_ids[:1], chosen_labels,
-                    attention_mask=attn_mask[:1])
+                    self.model, input_ids[:1], chosen_labels, attention_mask=attn_mask[:1]
+                )
                 policy_rejected = self._get_sequence_logps(
-                    self.model, input_ids[1:], rejected_labels,
-                    attention_mask=attn_mask[1:])
+                    self.model, input_ids[1:], rejected_labels, attention_mask=attn_mask[1:]
+                )
 
                 # SimPO loss: -log sigma(beta * (r_c - r_r) - gamma)
                 import torch.nn.functional as _F
-                loss = -_F.logsigmoid(
-                    beta * (policy_chosen - policy_rejected) - gamma
-                ).mean()
+
+                loss = -_F.logsigmoid(beta * (policy_chosen - policy_rejected) - gamma).mean()
 
                 loss = loss / accum_steps
                 loss.backward()
@@ -4495,8 +4277,7 @@ class Trainer:
 
                 if (i + 1) % accum_steps == 0:
                     if self.config.gradient_clip > 0:
-                        torch.nn.utils.clip_grad_norm_(
-                            self.model.parameters(), self.config.gradient_clip)
+                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.gradient_clip)
                     self.optimizer.step()
                     self.optimizer.zero_grad()
                     self.state.step += 1
@@ -4510,13 +4291,13 @@ class Trainer:
             if avg_loss < self.state.best_loss:
                 self.state.best_loss = avg_loss
                 self._epochs_without_improvement = 0
-                self._save_checkpoint(
-                    checkpoint_dir / f"{self._checkpoint_stem}_best.pt")
+                self._save_checkpoint(checkpoint_dir / f"{self._checkpoint_stem}_best.pt")
             else:
                 self._epochs_without_improvement += 1
-                if (self.config.early_stopping_patience > 0
-                        and self._epochs_without_improvement
-                        >= self.config.early_stopping_patience):
+                if (
+                    self.config.early_stopping_patience > 0
+                    and self._epochs_without_improvement >= self.config.early_stopping_patience
+                ):
                     break
 
         self._emit_progress(100, "SimPO training complete")
@@ -4582,7 +4363,7 @@ class Trainer:
         # Frozen reference model
         use_lora_ref = False
         ref_model = None
-        if hasattr(self.model, 'disable_adapter_layers'):
+        if hasattr(self.model, "disable_adapter_layers"):
             use_lora_ref = True
         else:
             ref_model = copy.deepcopy(self.model)
@@ -4596,10 +4377,9 @@ class Trainer:
             if not (prompt and response):
                 return None
             prompt_ids = self.tokenizer.encode(f"User: {prompt}\nAssistant: ")
-            full_ids = self.tokenizer.encode(
-                f"User: {prompt}\nAssistant: {response}")
-            max_len_k = getattr(self.model, 'config', None)
-            max_len_k = getattr(max_len_k, 'max_seq_len', 512) if max_len_k else 512
+            full_ids = self.tokenizer.encode(f"User: {prompt}\nAssistant: {response}")
+            max_len_k = getattr(self.model, "config", None)
+            max_len_k = getattr(max_len_k, "max_seq_len", 512) if max_len_k else 512
             full_ids = full_ids[:max_len_k]
             prompt_len = len(prompt_ids)
             labels = [-100] * min(prompt_len, len(full_ids)) + full_ids[prompt_len:]
@@ -4624,8 +4404,7 @@ class Trainer:
             raise ValueError("No valid feedback samples after encoding")
 
         self._emit_progress(5, f"KTO: {len(pos_samples)} good, {len(neg_samples)} bad")
-        logger.info(f"KTO training: {len(pos_samples)} desirable, "
-                    f"{len(neg_samples)} undesirable, beta={beta}")
+        logger.info(f"KTO training: {len(pos_samples)} desirable, {len(neg_samples)} undesirable, beta={beta}")
 
         # Compute KL baseline from reference on desirable samples
         kl_baseline = torch.tensor(0.0, device=self.device)
@@ -4633,18 +4412,15 @@ class Trainer:
             with torch.no_grad():
                 kl_vals = []
                 for ids, labels, mask in pos_samples[:50]:  # cap for speed
-                    policy_lp = self._get_sequence_logps(
-                        self.model, ids, labels, attention_mask=mask)
+                    policy_lp = self._get_sequence_logps(self.model, ids, labels, attention_mask=mask)
                     if use_lora_ref:
                         self.model.eval()
                         self.model.disable_adapter_layers()
-                        ref_lp = self._get_sequence_logps(
-                            self.model, ids, labels, attention_mask=mask)
+                        ref_lp = self._get_sequence_logps(self.model, ids, labels, attention_mask=mask)
                         self.model.enable_adapter_layers()
                         self.model.train()
                     else:
-                        ref_lp = self._get_sequence_logps(
-                            ref_model, ids, labels, attention_mask=mask)
+                        ref_lp = self._get_sequence_logps(ref_model, ids, labels, attention_mask=mask)
                     kl_vals.append((policy_lp - ref_lp).mean())
                 kl_baseline = torch.stack(kl_vals).mean()
 
@@ -4662,29 +4438,24 @@ class Trainer:
                 if self._should_stop():
                     break
 
-                policy_lp = self._get_sequence_logps(
-                    self.model, ids, labels, attention_mask=mask)
+                policy_lp = self._get_sequence_logps(self.model, ids, labels, attention_mask=mask)
 
                 with torch.no_grad():
                     if use_lora_ref:
                         self.model.eval()
                         self.model.disable_adapter_layers()
-                        ref_lp = self._get_sequence_logps(
-                            self.model, ids, labels, attention_mask=mask)
+                        ref_lp = self._get_sequence_logps(self.model, ids, labels, attention_mask=mask)
                         self.model.enable_adapter_layers()
                         self.model.train()
                     else:
-                        ref_lp = self._get_sequence_logps(
-                            ref_model, ids, labels, attention_mask=mask)
+                        ref_lp = self._get_sequence_logps(ref_model, ids, labels, attention_mask=mask)
 
                 # KTO loss per sample
                 reward = beta * (policy_lp - ref_lp)
                 if is_desirable:
-                    loss = desirable_weight * (
-                        1 - _F.sigmoid(reward - kl_baseline))
+                    loss = desirable_weight * (1 - _F.sigmoid(reward - kl_baseline))
                 else:
-                    loss = undesirable_weight * (
-                        1 - _F.sigmoid(kl_baseline - reward))
+                    loss = undesirable_weight * (1 - _F.sigmoid(kl_baseline - reward))
 
                 loss = loss.mean()
                 accum = max(1, self.config.max_grad_accumulation)
@@ -4701,8 +4472,7 @@ class Trainer:
 
                 if (i + 1) % accum == 0:
                     if self.config.gradient_clip > 0:
-                        torch.nn.utils.clip_grad_norm_(
-                            self.model.parameters(), self.config.gradient_clip)
+                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.gradient_clip)
                     self.optimizer.step()
                     self.optimizer.zero_grad()
                     self.state.step += 1
@@ -4716,13 +4486,13 @@ class Trainer:
             if avg_loss < self.state.best_loss:
                 self.state.best_loss = avg_loss
                 self._epochs_without_improvement = 0
-                self._save_checkpoint(
-                    checkpoint_dir / f"{self._checkpoint_stem}_best.pt")
+                self._save_checkpoint(checkpoint_dir / f"{self._checkpoint_stem}_best.pt")
             else:
                 self._epochs_without_improvement += 1
-                if (self.config.early_stopping_patience > 0
-                        and self._epochs_without_improvement
-                        >= self.config.early_stopping_patience):
+                if (
+                    self.config.early_stopping_patience > 0
+                    and self._epochs_without_improvement >= self.config.early_stopping_patience
+                ):
                     break
 
         self._emit_progress(100, "KTO training complete")
@@ -4796,9 +4566,9 @@ class Trainer:
             rejected_ids = self.tokenizer.encode(rejected_text)
             prompt_len = len(self.tokenizer.encode(prompt_text))
 
-            max_len = getattr(self.model, "max_seq_len",
-                              getattr(getattr(self.model, "config", None),
-                                      "max_seq_len", 2048))
+            max_len = getattr(
+                self.model, "max_seq_len", getattr(getattr(self.model, "config", None), "max_seq_len", 2048)
+            )
 
             if len(chosen_ids) < prompt_len + 2 or len(rejected_ids) < prompt_len + 2:
                 continue
@@ -4806,11 +4576,13 @@ class Trainer:
             chosen_ids = chosen_ids[:max_len]
             rejected_ids = rejected_ids[:max_len]
 
-            pairs.append((
-                torch.tensor(chosen_ids, dtype=torch.long),
-                torch.tensor(rejected_ids, dtype=torch.long),
-                prompt_len,
-            ))
+            pairs.append(
+                (
+                    torch.tensor(chosen_ids, dtype=torch.long),
+                    torch.tensor(rejected_ids, dtype=torch.long),
+                    prompt_len,
+                )
+            )
 
         if not pairs:
             raise ValueError("No valid preference pairs after encoding")
@@ -4822,10 +4594,9 @@ class Trainer:
         checkpoint_dir = Path(self.config.checkpoint_dir)
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
-        scaler = torch.amp.GradScaler("cuda", enabled=(
-            self.config.use_amp and self.device.type == "cuda"
-            and self._amp_dtype != torch.bfloat16
-        ))
+        scaler = torch.amp.GradScaler(
+            "cuda", enabled=(self.config.use_amp and self.device.type == "cuda" and self._amp_dtype != torch.bfloat16)
+        )
 
         for epoch in range(self.config.epochs):
             if self._should_stop():
@@ -4842,17 +4613,17 @@ class Trainer:
                 rejected_ids = rejected_ids.unsqueeze(0).to(self.device)
 
                 with torch.amp.autocast(
-                    self.device.type, dtype=self._amp_dtype,
+                    self.device.type,
+                    dtype=self._amp_dtype,
                     enabled=self.config.use_amp,
                 ):
                     # Forward pass for chosen
                     chosen_logits = self.model(chosen_ids)
                     chosen_logps = _F.log_softmax(chosen_logits[:, :-1], dim=-1)
-                    chosen_logps = chosen_logps.gather(
-                        2, chosen_ids[:, 1:].unsqueeze(-1)).squeeze(-1)
+                    chosen_logps = chosen_logps.gather(2, chosen_ids[:, 1:].unsqueeze(-1)).squeeze(-1)
                     # Mask prompt tokens
                     resp_mask_c = torch.zeros_like(chosen_logps[0], dtype=torch.bool)
-                    resp_mask_c[max(0, prompt_len - 1):] = True
+                    resp_mask_c[max(0, prompt_len - 1) :] = True
                     chosen_resp_logps = chosen_logps[0][resp_mask_c]
 
                     # SFT loss on chosen (NLL)
@@ -4866,10 +4637,9 @@ class Trainer:
                     # Forward pass for rejected
                     rejected_logits = self.model(rejected_ids)
                     rejected_logps = _F.log_softmax(rejected_logits[:, :-1], dim=-1)
-                    rejected_logps = rejected_logps.gather(
-                        2, rejected_ids[:, 1:].unsqueeze(-1)).squeeze(-1)
+                    rejected_logps = rejected_logps.gather(2, rejected_ids[:, 1:].unsqueeze(-1)).squeeze(-1)
                     resp_mask_r = torch.zeros_like(rejected_logps[0], dtype=torch.bool)
-                    resp_mask_r[max(0, prompt_len - 1):] = True
+                    resp_mask_r[max(0, prompt_len - 1) :] = True
                     rejected_resp_logps = rejected_logps[0][resp_mask_r]
 
                     # Average log-probs ? log-odds
@@ -4894,8 +4664,7 @@ class Trainer:
                 if (i + 1) % accum == 0:
                     if self.config.gradient_clip > 0:
                         scaler.unscale_(self.optimizer)
-                        nn.utils.clip_grad_norm_(
-                            self.model.parameters(), self.config.gradient_clip)
+                        nn.utils.clip_grad_norm_(self.model.parameters(), self.config.gradient_clip)
                     scaler.step(self.optimizer)
                     scaler.update()
                     self.optimizer.zero_grad()
@@ -4904,9 +4673,8 @@ class Trainer:
 
                 epoch_loss += loss.item() * accum
 
-                pct = int(((epoch * len(pairs) + i + 1) /
-                           (self.config.epochs * len(pairs))) * 100)
-                self._emit_progress(pct, f"ORPO E{epoch+1} [{i+1}/{len(pairs)}]")
+                pct = int(((epoch * len(pairs) + i + 1) / (self.config.epochs * len(pairs))) * 100)
+                self._emit_progress(pct, f"ORPO E{epoch + 1} [{i + 1}/{len(pairs)}]")
 
             avg_loss = epoch_loss / max(len(pairs), 1)
             self.state.training_losses.append(avg_loss)
@@ -4917,13 +4685,13 @@ class Trainer:
             if avg_loss < self.state.best_loss:
                 self.state.best_loss = avg_loss
                 self._epochs_without_improvement = 0
-                self._save_checkpoint(
-                    checkpoint_dir / f"{self._checkpoint_stem}_best.pt")
+                self._save_checkpoint(checkpoint_dir / f"{self._checkpoint_stem}_best.pt")
             else:
                 self._epochs_without_improvement += 1
-                if (self.config.early_stopping_patience > 0
-                        and self._epochs_without_improvement
-                        >= self.config.early_stopping_patience):
+                if (
+                    self.config.early_stopping_patience > 0
+                    and self._epochs_without_improvement >= self.config.early_stopping_patience
+                ):
                     break
 
         self._emit_progress(100, "ORPO training complete")
@@ -4977,8 +4745,7 @@ class Trainer:
         # ── Validation ──────────────────────────────────────────────────
         if not hasattr(self.model, "vision_projection") or self.model.vision_projection is None:
             raise ValueError(
-                "Model does not have a vision projection layer. "
-                "Set vision_hidden_size in ForgeConfig to enable vision."
+                "Model does not have a vision projection layer. Set vision_hidden_size in ForgeConfig to enable vision."
             )
         if not data:
             raise ValueError("No training data provided for vision training.")
@@ -5018,14 +4785,13 @@ class Trainer:
         # Optionally unfreeze last N text transformer layers
         if unfreeze_text_layers > 0:
             n_layers = len(self.model.layers)
-            for layer in self.model.layers[max(0, n_layers - unfreeze_text_layers):]:
+            for layer in self.model.layers[max(0, n_layers - unfreeze_text_layers) :]:
                 for param in layer.parameters():
                     param.requires_grad = True
 
         # Vision encoder is fully trainable
         for param in vision_encoder.parameters():
             param.requires_grad = True
-
 
         # Re-freeze pretrained backbone if configured (the blanket unfreeze
         # above would otherwise override freeze_backbone from __init__)
@@ -5035,9 +4801,8 @@ class Trainer:
                 for param in backbone.parameters():
                     param.requires_grad = False
 
-        trainable_params = (
-            list(filter(lambda p: p.requires_grad, self.model.parameters()))
-            + list(filter(lambda p: p.requires_grad, vision_encoder.parameters()))
+        trainable_params = list(filter(lambda p: p.requires_grad, self.model.parameters())) + list(
+            filter(lambda p: p.requires_grad, vision_encoder.parameters())
         )
         optimizer = AdamW(
             trainable_params,
@@ -5047,29 +4812,22 @@ class Trainer:
             eps=self.config.adam_eps,
         )
 
-        scaler = torch.amp.GradScaler("cuda", enabled=(
-            self.config.use_amp and self.device.type == "cuda"
-            and self._amp_dtype != torch.bfloat16
-        ))
+        scaler = torch.amp.GradScaler(
+            "cuda", enabled=(self.config.use_amp and self.device.type == "cuda" and self._amp_dtype != torch.bfloat16)
+        )
 
         # Setup scheduler: SequentialLR(warmup + cosine decay)
         total_steps = len(data) * self.config.epochs  # 1 step per pair
         warmup = _effective_warmup(self.config.warmup_steps, total_steps)
         decay_steps = max(1, total_steps - warmup)
-        warmup_scheduler = LambdaLR(
-            optimizer,
-            lr_lambda=lambda step: min(1.0, (step + 1) / warmup))
+        warmup_scheduler = LambdaLR(optimizer, lr_lambda=lambda step: min(1.0, (step + 1) / warmup))
         cosine_scheduler = CosineAnnealingLR(
-            optimizer, T_max=decay_steps,
-            eta_min=(
-                self.config.learning_rate * self.config.min_lr_ratio))
-        scheduler = SequentialLR(
-            optimizer,
-            schedulers=[warmup_scheduler, cosine_scheduler],
-            milestones=[warmup])
+            optimizer, T_max=decay_steps, eta_min=(self.config.learning_rate * self.config.min_lr_ratio)
+        )
+        scheduler = SequentialLR(optimizer, schedulers=[warmup_scheduler, cosine_scheduler], milestones=[warmup])
 
-        image_size = getattr(getattr(vision_encoder, 'config', None), 'image_size', 224)
-        use_imagenet = getattr(getattr(vision_encoder, 'config', None), "use_pretrained", False)
+        image_size = getattr(getattr(vision_encoder, "config", None), "image_size", 224)
+        use_imagenet = getattr(getattr(vision_encoder, "config", None), "use_pretrained", False)
         # V-2: lazy preprocess. Store image refs (paths or PIL objects)
         # only - never preprocess/.to(device) eagerly. At LLaVA-Pretrain
         # scale (558K - 600 KB tensors) eager prep would OOM the GPU
@@ -5090,11 +4848,11 @@ class Trainer:
             if isinstance(image, (str, Path)):
                 try:
                     from PIL import Image as _PILImage
+
                     with _PILImage.open(str(image)) as _probe:
                         _probe.verify()
                 except Exception as exc:
-                    logger.warning(
-                        f"Skipping vision data item {i}: {exc}")
+                    logger.warning(f"Skipping vision data item {i}: {exc}")
                     continue
 
             # Encode text to token IDs
@@ -5118,25 +4876,23 @@ class Trainer:
                 v_image = item.get("image")
                 v_text = item.get("text", "")
                 if v_image is None or not v_text:
-                    logger.warning(
-                        f"Skipping vision val item {i}: missing image or text")
+                    logger.warning(f"Skipping vision val item {i}: missing image or text")
                     continue
                 if isinstance(v_image, (str, Path)):
                     try:
                         from PIL import Image as _PILImage
+
                         with _PILImage.open(str(v_image)) as _probe:
                             _probe.verify()
                     except Exception as exc:
-                        logger.warning(
-                            f"Skipping vision val item {i}: {exc}")
+                        logger.warning(f"Skipping vision val item {i}: {exc}")
                         continue
                 v_token_ids = self.tokenizer.encode(v_text)
                 if len(v_token_ids) < 2:
                     continue
                 val_pairs.append((v_image, v_token_ids))
             if val_pairs:
-                logger.info(
-                    f"Vision validation: {len(val_pairs)} held-out pairs")
+                logger.info(f"Vision validation: {len(val_pairs)} held-out pairs")
 
         self._emit_progress(5, f"Prepared {len(pairs)} image-text pairs")
         logger.info(f"Vision training: {len(pairs)} pairs, {self.config.epochs} epochs")
@@ -5188,10 +4944,7 @@ class Trainer:
                 with torch.no_grad():
                     for v_ref, v_ids in val_pairs:
                         if self._should_stop():
-                            logger.info(
-                                "Vision validation stopped by user "
-                                "request after %d sample(s)",
-                                len(losses))
+                            logger.info("Vision validation stopped by user request after %d sample(s)", len(losses))
                             break
                         try:
                             v_img = preprocess_image(
@@ -5200,19 +4953,17 @@ class Trainer:
                                 imagenet_normalize=use_imagenet,
                             ).to(self.device)
                         except Exception as exc:
-                            logger.debug(
-                                "Vision val: preprocess failed (%s); "
-                                "skipping", exc)
+                            logger.debug("Vision val: preprocess failed (%s); skipping", exc)
                             continue
                         with torch.amp.autocast(
                             "cuda",
                             dtype=self._amp_dtype,
-                            enabled=self.config.use_amp
-                            and self.device.type == "cuda",
+                            enabled=self.config.use_amp and self.device.type == "cuda",
                         ):
                             v_feats = vision_encoder(v_img)
                             v_text_tensor = torch.tensor(
-                                [v_ids], dtype=torch.long,
+                                [v_ids],
+                                dtype=torch.long,
                                 device=self.device,
                             )
                             v_logits = self.model.forward_multimodal(
@@ -5222,19 +4973,15 @@ class Trainer:
                             v_n_patches = v_feats.shape[1]
                             if v_n_patches >= v_logits.shape[1]:
                                 continue
-                            v_text_logits = v_logits[
-                                :, v_n_patches:-1, :]
+                            v_text_logits = v_logits[:, v_n_patches:-1, :]
                             v_text_targets = v_text_tensor[:, 1:]
-                            v_min_len = min(
-                                v_text_logits.shape[1],
-                                v_text_targets.shape[1])
+                            v_min_len = min(v_text_logits.shape[1], v_text_targets.shape[1])
                             if v_min_len < 1:
                                 continue
                             v_text_logits = v_text_logits[:, :v_min_len, :]
                             v_text_targets = v_text_targets[:, :v_min_len]
                             v_loss = nn.functional.cross_entropy(
-                                v_text_logits.reshape(
-                                    -1, v_text_logits.size(-1)),
+                                v_text_logits.reshape(-1, v_text_logits.size(-1)),
                                 v_text_targets.reshape(-1),
                             )
                         losses.append(v_loss.item())
@@ -5251,8 +4998,7 @@ class Trainer:
                 break
 
             # Time limit check
-            if (self.config.max_training_seconds > 0
-                    and (time.time() - start_time) > self.config.max_training_seconds):
+            if self.config.max_training_seconds > 0 and (time.time() - start_time) > self.config.max_training_seconds:
                 logger.info("Vision training: time limit reached")
                 break
 
@@ -5289,9 +5035,7 @@ class Trainer:
                         imagenet_normalize=use_imagenet,
                     ).to(self.device)
                 except Exception as exc:
-                    logger.warning(
-                        "Vision step %d: preprocess failed (%s); "
-                        "skipping sample", step, exc)
+                    logger.warning("Vision step %d: preprocess failed (%s); skipping sample", step, exc)
                     continue
 
                 # Training-time augmentation (random flip, color jitter)
@@ -5306,9 +5050,7 @@ class Trainer:
                     vision_features = vision_encoder(img_tensor)  # [1, patches, v_dim]
 
                     # Build text input: token IDs as target
-                    text_tensor = torch.tensor(
-                        [token_ids], dtype=torch.long, device=self.device
-                    )
+                    text_tensor = torch.tensor([token_ids], dtype=torch.long, device=self.device)
 
                     # Forward through model with vision features
                     # The model concatenates [vision_patches, text_tokens] internally
@@ -5323,11 +5065,11 @@ class Trainer:
                     n_patches = vision_features.shape[1]
                     if n_patches >= logits.shape[1]:
                         logger.warning(
-                            "Vision patches (%d) >= logits length (%d), "
-                            "skipping sample", n_patches, logits.shape[1])
+                            "Vision patches (%d) >= logits length (%d), skipping sample", n_patches, logits.shape[1]
+                        )
                         continue
                     text_logits = logits[:, n_patches:-1, :]  # predict next token
-                    text_targets = text_tensor[:, 1:]          # shift targets
+                    text_targets = text_tensor[:, 1:]  # shift targets
 
                     # Align lengths (in case of truncation)
                     min_len = min(text_logits.shape[1], text_targets.shape[1])
@@ -5342,7 +5084,8 @@ class Trainer:
                                 "loss after shift (need >=2 tokens) at "
                                 "epoch %d step %d. Further drops will be "
                                 "summed and reported at end of training.",
-                                epoch + 1, step,
+                                epoch + 1,
+                                step,
                             )
                         dropped_short_captions += 1
                         continue
@@ -5365,22 +5108,18 @@ class Trainer:
                     loss.backward()
 
                 accum_count += 1
-                is_boundary = (accum_count % accum_steps == 0)
+                is_boundary = accum_count % accum_steps == 0
 
                 if is_boundary:
                     if self.config.use_amp and self.device.type == "cuda":
                         if self.config.gradient_clip > 0:
                             scaler.unscale_(optimizer)
-                            torch.nn.utils.clip_grad_norm_(
-                                trainable_params, self.config.gradient_clip
-                            )
+                            torch.nn.utils.clip_grad_norm_(trainable_params, self.config.gradient_clip)
                         scaler.step(optimizer)
                         scaler.update()
                     else:
                         if self.config.gradient_clip > 0:
-                            torch.nn.utils.clip_grad_norm_(
-                                trainable_params, self.config.gradient_clip
-                            )
+                            torch.nn.utils.clip_grad_norm_(trainable_params, self.config.gradient_clip)
                         optimizer.step()
                     scheduler.step()
                     optimizer.zero_grad()
@@ -5392,9 +5131,7 @@ class Trainer:
                 if math.isnan(loss_val) or math.isinf(loss_val):
                     logger.error(f"Vision training: NaN/Inf loss at epoch {epoch + 1}, step {step}")
                     self._emit_progress(100, "Training aborted: NaN loss")
-                    self.state.abort_reason = (
-                        f"Vision NaN/Inf loss at epoch "
-                        f"{epoch + 1}, step {step}")
+                    self.state.abort_reason = f"Vision NaN/Inf loss at epoch {epoch + 1}, step {step}"
                     _emit_drop_summary()  # V-7 audit fix
                     self.model.eval()
                     return self.state
@@ -5403,9 +5140,7 @@ class Trainer:
                 if loss_val > self.config.max_loss:
                     logger.error(f"Vision training: loss {loss_val:.2f} exceeds max {self.config.max_loss}")
                     self._emit_progress(100, "Training aborted: loss too high")
-                    self.state.abort_reason = (
-                        f"Vision loss {loss_val:.2f} exceeded "
-                        f"max_loss {self.config.max_loss}")
+                    self.state.abort_reason = f"Vision loss {loss_val:.2f} exceeded max_loss {self.config.max_loss}"
                     _emit_drop_summary()  # V-7 audit fix
                     self.model.eval()
                     return self.state
@@ -5433,16 +5168,12 @@ class Trainer:
                 if self.config.use_amp and self.device.type == "cuda":
                     if self.config.gradient_clip > 0:
                         scaler.unscale_(optimizer)
-                        torch.nn.utils.clip_grad_norm_(
-                            trainable_params, self.config.gradient_clip
-                        )
+                        torch.nn.utils.clip_grad_norm_(trainable_params, self.config.gradient_clip)
                     scaler.step(optimizer)
                     scaler.update()
                 else:
                     if self.config.gradient_clip > 0:
-                        torch.nn.utils.clip_grad_norm_(
-                            trainable_params, self.config.gradient_clip
-                        )
+                        torch.nn.utils.clip_grad_norm_(trainable_params, self.config.gradient_clip)
                     optimizer.step()
                 scheduler.step()
                 optimizer.zero_grad()
@@ -5461,8 +5192,7 @@ class Trainer:
             val_loss = _run_validation()
             if val_loss is not None:
                 self.state.validation_losses.append(val_loss)
-                logger.info(
-                    f"Vision Epoch {epoch + 1}: val_loss={val_loss:.4f}")
+                logger.info(f"Vision Epoch {epoch + 1}: val_loss={val_loss:.4f}")
 
             if self.on_epoch_complete:
                 try:
@@ -5476,13 +5206,13 @@ class Trainer:
             if tracked_loss < self.state.best_loss:
                 self.state.best_loss = tracked_loss
                 self._epochs_without_improvement = 0
-                self._save_checkpoint(
-                    checkpoint_dir / f"{self._checkpoint_stem}_vision_best.pt")
+                self._save_checkpoint(checkpoint_dir / f"{self._checkpoint_stem}_vision_best.pt")
             else:
                 self._epochs_without_improvement += 1
-                if (self.config.early_stopping_patience > 0
-                        and self._epochs_without_improvement
-                        >= self.config.early_stopping_patience):
+                if (
+                    self.config.early_stopping_patience > 0
+                    and self._epochs_without_improvement >= self.config.early_stopping_patience
+                ):
                     logger.info("Vision training: early stopping triggered")
                     break
 
@@ -5490,10 +5220,8 @@ class Trainer:
             if self.config.save_every > 0 and (epoch + 1) % self.config.save_every == 0:
                 stem = self._checkpoint_stem
                 v_num = (epoch + 1) // self.config.save_every
-                self._save_checkpoint(
-                    checkpoint_dir / f"{stem}_vision{v_num}.pt")
-                self._cleanup_periodic_checkpoints(
-                    checkpoint_dir, f"{stem}_vision", keep=3)
+                self._save_checkpoint(checkpoint_dir / f"{stem}_vision{v_num}.pt")
+                self._cleanup_periodic_checkpoints(checkpoint_dir, f"{stem}_vision", keep=3)
 
         # ── Cleanup ─────────────────────────────────────────────────────
         self._emit_progress(100, "Vision training complete!")
@@ -5567,35 +5295,28 @@ class Trainer:
             set_training_seed(self.config.seed, deterministic=self.config.deterministic)
 
         self._stop_requested = False
-        logger.info(
-            "ReST: starting %d rounds (%d prompts, %d samples/prompt)",
-            rounds, len(prompts), n_samples)
+        logger.info("ReST: starting %d rounds (%d prompts, %d samples/prompt)", rounds, len(prompts), n_samples)
 
         for rnd in range(rounds):
             if self._should_stop():
                 logger.info("ReST: stop requested at round %d", rnd)
                 break
 
-            self._emit_progress(
-                int(rnd / rounds * 100),
-                f"ReST round {rnd + 1}/{rounds}: generating responses...")
+            self._emit_progress(int(rnd / rounds * 100), f"ReST round {rnd + 1}/{rounds}: generating responses...")
 
             # Generate and score responses
             pairs = self._generate_online_dpo_pairs(
-                prompts, reward_fn,
+                prompts,
+                reward_fn,
                 n_samples=n_samples,
                 max_new_tokens=max_new_tokens,
             )
 
             if not pairs:
-                logger.warning(
-                    "ReST round %d: no valid pairs generated, skipping",
-                    rnd + 1)
+                logger.warning("ReST round %d: no valid pairs generated, skipping", rnd + 1)
                 continue
 
-            logger.info(
-                "ReST round %d/%d: training on %d preference pairs",
-                rnd + 1, rounds, len(pairs))
+            logger.info("ReST round %d/%d: training on %d preference pairs", rnd + 1, rounds, len(pairs))
 
             # Train one DPO epoch on generated pairs
             saved_epochs = self.config.epochs
@@ -5656,8 +5377,7 @@ class Trainer:
         # -- Validation --
         if not hasattr(self.model, "audio_projection") or self.model.audio_projection is None:
             raise ValueError(
-                "Model does not have an audio projection layer. "
-                "Set audio_hidden_size in ForgeConfig to enable audio."
+                "Model does not have an audio projection layer. Set audio_hidden_size in ForgeConfig to enable audio."
             )
         if not data:
             raise ValueError("No training data provided for audio training.")
@@ -5693,7 +5413,7 @@ class Trainer:
         # Optionally unfreeze last N text transformer layers
         if unfreeze_text_layers > 0:
             n_layers = len(self.model.layers)
-            for layer in self.model.layers[max(0, n_layers - unfreeze_text_layers):]:
+            for layer in self.model.layers[max(0, n_layers - unfreeze_text_layers) :]:
                 for param in layer.parameters():
                     param.requires_grad = True
 
@@ -5701,9 +5421,8 @@ class Trainer:
         for param in audio_encoder.parameters():
             param.requires_grad = True
 
-        trainable_params = (
-            list(filter(lambda p: p.requires_grad, self.model.parameters()))
-            + list(filter(lambda p: p.requires_grad, audio_encoder.parameters()))
+        trainable_params = list(filter(lambda p: p.requires_grad, self.model.parameters())) + list(
+            filter(lambda p: p.requires_grad, audio_encoder.parameters())
         )
         optimizer = AdamW(
             trainable_params,
@@ -5713,26 +5432,19 @@ class Trainer:
             eps=self.config.adam_eps,
         )
 
-        scaler = torch.amp.GradScaler("cuda", enabled=(
-            self.config.use_amp and self.device.type == "cuda"
-            and self._amp_dtype != torch.bfloat16
-        ))
+        scaler = torch.amp.GradScaler(
+            "cuda", enabled=(self.config.use_amp and self.device.type == "cuda" and self._amp_dtype != torch.bfloat16)
+        )
 
         # Setup scheduler: SequentialLR(warmup + cosine decay)
         total_steps = len(data) * self.config.epochs  # 1 step per pair
         warmup = _effective_warmup(self.config.warmup_steps, total_steps)
         decay_steps = max(1, total_steps - warmup)
-        warmup_scheduler = LambdaLR(
-            optimizer,
-            lr_lambda=lambda step: min(1.0, (step + 1) / warmup))
+        warmup_scheduler = LambdaLR(optimizer, lr_lambda=lambda step: min(1.0, (step + 1) / warmup))
         cosine_scheduler = CosineAnnealingLR(
-            optimizer, T_max=decay_steps,
-            eta_min=(
-                self.config.learning_rate * self.config.min_lr_ratio))
-        scheduler = SequentialLR(
-            optimizer,
-            schedulers=[warmup_scheduler, cosine_scheduler],
-            milestones=[warmup])
+            optimizer, T_max=decay_steps, eta_min=(self.config.learning_rate * self.config.min_lr_ratio)
+        )
+        scheduler = SequentialLR(optimizer, schedulers=[warmup_scheduler, cosine_scheduler], milestones=[warmup])
 
         # -- Preprocess data --
         audio_config = getattr(audio_encoder, "config", None)
@@ -5771,8 +5483,7 @@ class Trainer:
                 v_audio = item.get("audio")
                 v_text = item.get("text", "")
                 if v_audio is None or not v_text:
-                    logger.warning(
-                        f"Skipping audio val item {i}: missing audio or text")
+                    logger.warning(f"Skipping audio val item {i}: missing audio or text")
                     continue
                 try:
                     v_mel = preprocess_audio(v_audio, config=audio_config)
@@ -5785,8 +5496,7 @@ class Trainer:
                     continue
                 val_pairs.append((v_mel, v_token_ids))
             if val_pairs:
-                logger.info(
-                    f"Audio validation: {len(val_pairs)} held-out pairs")
+                logger.info(f"Audio validation: {len(val_pairs)} held-out pairs")
 
         self._emit_progress(5, f"Prepared {len(pairs)} audio-text pairs")
         logger.info(f"Audio training: {len(pairs)} pairs, {self.config.epochs} epochs")
@@ -5816,23 +5526,20 @@ class Trainer:
                 with torch.no_grad():
                     for v_mel, v_ids in val_pairs:
                         if self._should_stop():
-                            logger.info(
-                                "Audio validation stopped by user "
-                                "request after %d sample(s)",
-                                len(losses))
+                            logger.info("Audio validation stopped by user request after %d sample(s)", len(losses))
                             break
                         try:
                             with torch.amp.autocast(
                                 "cuda",
                                 dtype=self._amp_dtype,
-                                enabled=self.config.use_amp
-                                and self.device.type == "cuda",
+                                enabled=self.config.use_amp and self.device.type == "cuda",
                             ):
                                 # No SpecAugment during validation —
                                 # eval the clean mel.
                                 v_feats = audio_encoder(v_mel)
                                 v_text_tensor = torch.tensor(
-                                    [v_ids], dtype=torch.long,
+                                    [v_ids],
+                                    dtype=torch.long,
                                     device=self.device,
                                 )
                                 v_logits = self.model.forward_multimodal(
@@ -5842,27 +5549,19 @@ class Trainer:
                                 v_n_audio = v_feats.shape[1]
                                 if v_n_audio >= v_logits.shape[1]:
                                     continue
-                                v_text_logits = v_logits[
-                                    :, v_n_audio:-1, :]
+                                v_text_logits = v_logits[:, v_n_audio:-1, :]
                                 v_text_targets = v_text_tensor[:, 1:]
-                                v_min_len = min(
-                                    v_text_logits.shape[1],
-                                    v_text_targets.shape[1])
+                                v_min_len = min(v_text_logits.shape[1], v_text_targets.shape[1])
                                 if v_min_len < 1:
                                     continue
-                                v_text_logits = v_text_logits[
-                                    :, :v_min_len, :]
-                                v_text_targets = v_text_targets[
-                                    :, :v_min_len]
+                                v_text_logits = v_text_logits[:, :v_min_len, :]
+                                v_text_targets = v_text_targets[:, :v_min_len]
                                 v_loss = nn.functional.cross_entropy(
-                                    v_text_logits.reshape(
-                                        -1, v_text_logits.size(-1)),
+                                    v_text_logits.reshape(-1, v_text_logits.size(-1)),
                                     v_text_targets.reshape(-1),
                                 )
                         except Exception as exc:
-                            logger.debug(
-                                "Audio val: forward failed (%s); "
-                                "skipping", exc)
+                            logger.debug("Audio val: forward failed (%s); skipping", exc)
                             continue
                         losses.append(v_loss.item())
             finally:
@@ -5877,8 +5576,7 @@ class Trainer:
                 logger.info("Audio training stopped by user request")
                 break
 
-            if (self.config.max_training_seconds > 0
-                    and (time.time() - start_time) > self.config.max_training_seconds):
+            if self.config.max_training_seconds > 0 and (time.time() - start_time) > self.config.max_training_seconds:
                 logger.info("Audio training: time limit reached")
                 break
 
@@ -5904,9 +5602,7 @@ class Trainer:
                     # Encode audio through audio encoder
                     audio_features = audio_encoder(augmented_mel)  # [1, T/2, a_dim]
 
-                    text_tensor = torch.tensor(
-                        [token_ids], dtype=torch.long, device=self.device
-                    )
+                    text_tensor = torch.tensor([token_ids], dtype=torch.long, device=self.device)
 
                     logits = self.model.forward_multimodal(
                         input_ids=text_tensor,
@@ -5934,17 +5630,13 @@ class Trainer:
                     scaler.scale(loss).backward()
                     if self.config.gradient_clip > 0:
                         scaler.unscale_(optimizer)
-                        torch.nn.utils.clip_grad_norm_(
-                            trainable_params, self.config.gradient_clip
-                        )
+                        torch.nn.utils.clip_grad_norm_(trainable_params, self.config.gradient_clip)
                     scaler.step(optimizer)
                     scaler.update()
                 else:
                     loss.backward()
                     if self.config.gradient_clip > 0:
-                        torch.nn.utils.clip_grad_norm_(
-                            trainable_params, self.config.gradient_clip
-                        )
+                        torch.nn.utils.clip_grad_norm_(trainable_params, self.config.gradient_clip)
                     optimizer.step()
 
                 scheduler.step()
@@ -5954,18 +5646,14 @@ class Trainer:
                 if math.isnan(loss_val) or math.isinf(loss_val):
                     logger.error(f"Audio training: NaN/Inf loss at epoch {epoch + 1}, step {step}")
                     self._emit_progress(100, "Training aborted: NaN loss")
-                    self.state.abort_reason = (
-                        f"Audio NaN/Inf loss at epoch "
-                        f"{epoch + 1}, step {step}")
+                    self.state.abort_reason = f"Audio NaN/Inf loss at epoch {epoch + 1}, step {step}"
                     self.model.eval()
                     return self.state
 
                 if loss_val > self.config.max_loss:
                     logger.error(f"Audio training: loss {loss_val:.2f} exceeds max {self.config.max_loss}")
                     self._emit_progress(100, "Training aborted: loss too high")
-                    self.state.abort_reason = (
-                        f"Audio loss {loss_val:.2f} exceeded "
-                        f"max_loss {self.config.max_loss}")
+                    self.state.abort_reason = f"Audio loss {loss_val:.2f} exceeded max_loss {self.config.max_loss}"
                     self.model.eval()
                     return self.state
 
@@ -5993,8 +5681,7 @@ class Trainer:
             val_loss = _run_audio_validation()
             if val_loss is not None:
                 self.state.validation_losses.append(val_loss)
-                logger.info(
-                    f"Audio Epoch {epoch + 1}: val_loss={val_loss:.4f}")
+                logger.info(f"Audio Epoch {epoch + 1}: val_loss={val_loss:.4f}")
 
             if self.on_epoch_complete:
                 try:
@@ -6008,23 +5695,21 @@ class Trainer:
             if tracked_loss < self.state.best_loss:
                 self.state.best_loss = tracked_loss
                 self._epochs_without_improvement = 0
-                self._save_checkpoint(
-                    checkpoint_dir / f"{self._checkpoint_stem}_audio_best.pt")
+                self._save_checkpoint(checkpoint_dir / f"{self._checkpoint_stem}_audio_best.pt")
             else:
                 self._epochs_without_improvement += 1
-                if (self.config.early_stopping_patience > 0
-                        and self._epochs_without_improvement
-                        >= self.config.early_stopping_patience):
+                if (
+                    self.config.early_stopping_patience > 0
+                    and self._epochs_without_improvement >= self.config.early_stopping_patience
+                ):
                     logger.info("Audio training: early stopping triggered")
                     break
 
             if self.config.save_every > 0 and (epoch + 1) % self.config.save_every == 0:
                 stem = self._checkpoint_stem
                 a_num = (epoch + 1) // self.config.save_every
-                self._save_checkpoint(
-                    checkpoint_dir / f"{stem}_audio{a_num}.pt")
-                self._cleanup_periodic_checkpoints(
-                    checkpoint_dir, f"{stem}_audio", keep=3)
+                self._save_checkpoint(checkpoint_dir / f"{stem}_audio{a_num}.pt")
+                self._cleanup_periodic_checkpoints(checkpoint_dir, f"{stem}_audio", keep=3)
 
         # -- Cleanup --
         self._emit_progress(100, "Audio training complete!")
@@ -6035,4 +5720,3 @@ class Trainer:
             param.requires_grad = True
 
         return self.state
-

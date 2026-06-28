@@ -46,6 +46,7 @@ _lazy_cache = {}
 
 def _lazy_load_model():
     from .model import MODEL_PRESETS, Enigma, ForgeConfig, create_model
+
     return Enigma, ForgeConfig, create_model, MODEL_PRESETS
 
 

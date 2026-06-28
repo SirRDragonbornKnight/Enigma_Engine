@@ -45,11 +45,10 @@ def _ensure_datasets() -> bool:
     """Check that the `datasets` library is installed."""
     try:
         import datasets  # noqa: F401
+
         return True
     except ImportError:
-        logger.error(
-            "The `datasets` library is required.\n"
-            "Install with: pip install datasets")
+        logger.error("The `datasets` library is required.\nInstall with: pip install datasets")
         return False
 
 
@@ -58,9 +57,7 @@ def _dedup_pairs(pairs: list[dict]) -> list[dict]:
     seen: set[bytes] = set()
     unique: list[dict] = []
     for item in pairs:
-        key = hashlib.sha256(
-            (item["image"] + "\x00" + item["text"]).encode("utf-8")
-        ).digest()[:16]
+        key = hashlib.sha256((item["image"] + "\x00" + item["text"]).encode("utf-8")).digest()[:16]
         if key not in seen:
             seen.add(key)
             unique.append(item)
@@ -77,6 +74,7 @@ def _write_jsonl(pairs: list[dict], path: Path) -> int:
 
 
 # ── LLaVA-Pretrain (V-5) ──────────────────────────────────────────
+
 
 def collect_llava_pretrain(
     max_samples: int = 100000,
@@ -133,8 +131,7 @@ def collect_llava_pretrain(
 
     from datasets import load_dataset
 
-    logger.info(
-        f"Downloading LLaVA-Pretrain captions (max {max_samples:,} samples)...")
+    logger.info(f"Downloading LLaVA-Pretrain captions (max {max_samples:,} samples)...")
     try:
         ds = load_dataset(
             "liuhaotian/LLaVA-Pretrain",
@@ -155,8 +152,7 @@ def collect_llava_pretrain(
 
         image_rel = item.get("image")
         conversations = item.get("conversations") or []
-        gpt_turn = next(
-            (t for t in conversations if t.get("from") == "gpt"), None)
+        gpt_turn = next((t for t in conversations if t.get("from") == "gpt"), None)
         if not image_rel or not gpt_turn:
             continue
 
@@ -169,22 +165,19 @@ def collect_llava_pretrain(
             skipped_missing += 1
             if skipped_missing <= 5:
                 logger.warning(
-                    "Image not found, skipping: %s "
-                    "(extract images.zip into --images-dir)", image_rel,
+                    "Image not found, skipping: %s (extract images.zip into --images-dir)",
+                    image_rel,
                 )
             elif skipped_missing == 6:
                 logger.warning(
-                    "Further missing-image warnings suppressed; total "
-                    "missing will be reported at end.",
+                    "Further missing-image warnings suppressed; total missing will be reported at end.",
                 )
             continue
 
         pairs.append({"image": str(img_path), "text": caption})
 
         if seen % 10000 == 0:
-            logger.info(
-                f"  LLaVA-Pretrain: {seen:,} processed, "
-                f"{len(pairs):,} kept, {skipped_missing:,} missing...")
+            logger.info(f"  LLaVA-Pretrain: {seen:,} processed, {len(pairs):,} kept, {skipped_missing:,} missing...")
 
     pairs = _dedup_pairs(pairs)
     if skipped_missing:
@@ -192,8 +185,7 @@ def collect_llava_pretrain(
             "LLaVA-Pretrain: %d rows skipped (image file not on disk)",
             skipped_missing,
         )
-    logger.info(
-        f"LLaVA-Pretrain: {len(pairs)} image-caption pairs extracted")
+    logger.info(f"LLaVA-Pretrain: {len(pairs)} image-caption pairs extracted")
     return pairs
 
 
@@ -222,32 +214,31 @@ def show_stats(output_dir: Path) -> None:
         return
     logger.info("Vision data summary (%s):", output_dir)
     for name, rows, size in rows_for:
-        logger.info(
-            "  %s: %d rows, %.1f MB", name, rows, size / 1024 / 1024)
-    logger.info(
-        "  TOTAL: %d rows, %.1f MB", total_rows, total_bytes / 1024 / 1024)
+        logger.info("  %s: %d rows, %.1f MB", name, rows, size / 1024 / 1024)
+    logger.info("  TOTAL: %d rows, %.1f MB", total_rows, total_bytes / 1024 / 1024)
 
 
 # ── CLI ───────────────────────────────────────────────────────────
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Collect vision training data for Enigma Engine")
+    parser = argparse.ArgumentParser(description="Collect vision training data for Enigma Engine")
     parser.add_argument(
-        "--llava-pretrain", type=int, nargs="?", const=100000,
-        help="Download LLaVA-Pretrain caption metadata "
-             "(default: 100K samples). Requires --images-dir.")
+        "--llava-pretrain",
+        type=int,
+        nargs="?",
+        const=100000,
+        help="Download LLaVA-Pretrain caption metadata (default: 100K samples). Requires --images-dir.",
+    )
     parser.add_argument(
-        "--images-dir", type=str, default=None,
+        "--images-dir",
+        type=str,
+        default=None,
         help="Path to extracted images.zip root. Required when "
-             "fetching any vision source that uses external image bytes.")
-    parser.add_argument(
-        "--output-dir", type=str, default=str(OUTPUT_DIR),
-        help="Output directory for JSONL files")
-    parser.add_argument(
-        "--stats", action="store_true",
-        help="Show collected vision data statistics")
+        "fetching any vision source that uses external image bytes.",
+    )
+    parser.add_argument("--output-dir", type=str, default=str(OUTPUT_DIR), help="Output directory for JSONL files")
+    parser.add_argument("--stats", action="store_true", help="Show collected vision data statistics")
 
     args = parser.parse_args()
     output_dir = Path(args.output_dir)
@@ -266,7 +257,8 @@ def main() -> None:
             "--images-dir is required for --llava-pretrain. Download "
             "images.zip from "
             "https://huggingface.co/datasets/liuhaotian/LLaVA-Pretrain "
-            "and pass its extracted root.")
+            "and pass its extracted root."
+        )
 
     start = time.monotonic()
     try:
@@ -281,8 +273,7 @@ def main() -> None:
         out = output_dir / "llava_pretrain.jsonl"
         _write_jsonl(pairs, out)
         elapsed = time.monotonic() - start
-        logger.info(
-            f"Saved {len(pairs):,} pairs → {out} ({elapsed:.1f}s)")
+        logger.info(f"Saved {len(pairs):,} pairs → {out} ({elapsed:.1f}s)")
     else:
         logger.warning("No pairs collected.")
 

@@ -11,6 +11,7 @@ That defense is one ``origins=`` kwarg on one line; a refactor could silently dr
 and nothing else would notice. This test exercises the REAL ``bus.serve()`` so it fails
 loudly if the gate ever regresses.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -35,9 +36,7 @@ async def _handshake_accepted(origin: str | None) -> bool:
     async with bus.serve(host="127.0.0.1", port=0) as server:
         port = server.sockets[0].getsockname()[1]
         try:
-            async with websockets.connect(
-                f"ws://127.0.0.1:{port}", origin=origin, open_timeout=3
-            ):
+            async with websockets.connect(f"ws://127.0.0.1:{port}", origin=origin, open_timeout=3):
                 return True
         except InvalidHandshake:
             return False
@@ -46,12 +45,12 @@ async def _handshake_accepted(origin: str | None) -> bool:
 @pytest.mark.parametrize(
     "origin,accepted",
     [
-        ("http://evil.example", False),       # a drive-by web page MUST be refused (CSWSH)
-        ("https://attacker.test", False),     # https is no safer than http here
-        ("http://127.0.0.1:7000", False),     # even a same-host web origin is still a browser
-        (None, True),                         # native client (overlay / say.py / avbus) sends no Origin
-        ("file://", True),                    # Electron's file-loaded page
-        ("null", True),                       # the opaque origin some browsers use for file pages
+        ("http://evil.example", False),  # a drive-by web page MUST be refused (CSWSH)
+        ("https://attacker.test", False),  # https is no safer than http here
+        ("http://127.0.0.1:7000", False),  # even a same-host web origin is still a browser
+        (None, True),  # native client (overlay / say.py / avbus) sends no Origin
+        ("file://", True),  # Electron's file-loaded page
+        ("null", True),  # the opaque origin some browsers use for file pages
     ],
 )
 def test_origin_gate(origin: str | None, accepted: bool) -> None:
@@ -60,7 +59,4 @@ def test_origin_gate(origin: str | None, accepted: bool) -> None:
 
 def test_allowlist_carries_no_web_origin() -> None:
     """A cheap structural backstop: the allow-list must never contain an http(s) origin."""
-    assert not any(
-        isinstance(o, str) and o.startswith(("http://", "https://"))
-        for o in bus.ALLOWED_ORIGINS
-    )
+    assert not any(isinstance(o, str) and o.startswith(("http://", "https://")) for o in bus.ALLOWED_ORIGINS)

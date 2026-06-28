@@ -46,6 +46,7 @@ try:
         prepare_model_for_kbit_training,
         TaskType,
     )
+
     PEFT_AVAILABLE = True
 except ImportError:
     logger.debug("PEFT not installed - install with: pip install peft")
@@ -53,12 +54,14 @@ except ImportError:
 try:
     import bitsandbytes as bnb  # noqa: F401
     from transformers import BitsAndBytesConfig
+
     BITSANDBYTES_AVAILABLE = True
 except ImportError:
     logger.debug("bitsandbytes not installed - install with: pip install bitsandbytes")
 
 try:
     from accelerate import Accelerator, dispatch_model, infer_auto_device_map  # noqa: F401
+
     ACCELERATE_AVAILABLE = True
 except ImportError:
     logger.debug("accelerate not installed - install with: pip install accelerate")
@@ -67,6 +70,7 @@ except ImportError:
 # =============================================================================
 # MEMORY MANAGEMENT
 # =============================================================================
+
 
 def clear_vram() -> None:
     """
@@ -107,10 +111,11 @@ def get_memory_info() -> Dict[str, float]:
     """
     try:
         import psutil
+
         ram = psutil.virtual_memory()
-        ram_total = ram.total / (1024 ** 3)
-        ram_available = ram.available / (1024 ** 3)
-        ram_used = ram.used / (1024 ** 3)
+        ram_total = ram.total / (1024**3)
+        ram_available = ram.available / (1024**3)
+        ram_used = ram.used / (1024**3)
     except ImportError:
         logger.debug("psutil not installed — RAM stats unavailable")
         ram_total = 0.0
@@ -118,12 +123,12 @@ def get_memory_info() -> Dict[str, float]:
         ram_used = 0.0
 
     info = {
-        'ram_total_gb': ram_total,
-        'ram_available_gb': ram_available,
-        'ram_used_gb': ram_used,
-        'vram_total_gb': 0.0,
-        'vram_used_gb': 0.0,
-        'vram_available_gb': 0.0,
+        "ram_total_gb": ram_total,
+        "ram_available_gb": ram_available,
+        "ram_used_gb": ram_used,
+        "vram_total_gb": 0.0,
+        "vram_used_gb": 0.0,
+        "vram_available_gb": 0.0,
     }
 
     # GPU VRAM (if available)
@@ -133,9 +138,9 @@ def get_memory_info() -> Dict[str, float]:
             device = torch.cuda.current_device()
             props = torch.cuda.get_device_properties(device)
 
-            info['vram_total_gb'] = props.total_memory / (1024 ** 3)
-            info['vram_used_gb'] = torch.cuda.memory_allocated(device) / (1024 ** 3)
-            info['vram_available_gb'] = info['vram_total_gb'] - info['vram_used_gb']
+            info["vram_total_gb"] = props.total_memory / (1024**3)
+            info["vram_used_gb"] = torch.cuda.memory_allocated(device) / (1024**3)
+            info["vram_available_gb"] = info["vram_total_gb"] - info["vram_used_gb"]
         except Exception as e:
             logger.debug(f"Could not get VRAM info: {e}")
 
@@ -211,22 +216,23 @@ def estimate_training_memory(
         activation_memory *= 0.3  # Checkpointing reduces by ~70%
 
     # Convert to GB
-    total_vram = (model_memory + gradient_memory + activation_memory) / (1024 ** 3)
-    optimizer_gb = optimizer_memory / (1024 ** 3)
+    total_vram = (model_memory + gradient_memory + activation_memory) / (1024**3)
+    optimizer_gb = optimizer_memory / (1024**3)
 
     return {
-        'model_memory_gb': model_memory / (1024 ** 3),
-        'optimizer_memory_gb': optimizer_gb,
-        'gradient_memory_gb': gradient_memory / (1024 ** 3),
-        'activation_memory_gb': activation_memory / (1024 ** 3),
-        'total_vram_gb': total_vram,
-        'recommended_ram_gb': optimizer_gb + 4,  # Optimizer + buffer
+        "model_memory_gb": model_memory / (1024**3),
+        "optimizer_memory_gb": optimizer_gb,
+        "gradient_memory_gb": gradient_memory / (1024**3),
+        "activation_memory_gb": activation_memory / (1024**3),
+        "total_vram_gb": total_vram,
+        "recommended_ram_gb": optimizer_gb + 4,  # Optimizer + buffer
     }
 
 
 # =============================================================================
 # LORA CONFIGURATION
 # =============================================================================
+
 
 @dataclass
 class LoraConfig:
@@ -252,6 +258,7 @@ class LoraConfig:
         config = LoraConfig(rank=16, alpha=32)  # Higher capacity
         config = LoraConfig(rank=4, alpha=8)    # Faster, less memory
     """
+
     rank: int = 8
     alpha: int = 16
     dropout: float = 0.1
@@ -281,11 +288,7 @@ class LoraConfig:
             lora_dropout=self.dropout,
             target_modules=self.target_modules,
             bias=self.bias,
-            task_type=(
-                TaskType.CAUSAL_LM
-                if self.task_type == "CAUSAL_LM"
-                else self.task_type
-            ),
+            task_type=(TaskType.CAUSAL_LM if self.task_type == "CAUSAL_LM" else self.task_type),
         )
         if self.use_dora:
             kwargs["use_dora"] = True
@@ -311,6 +314,7 @@ class QLoraConfig(LoraConfig):
     Example:
         config = QLoraConfig(rank=16)  # 4-bit base + 16-rank LoRA
     """
+
     load_in_4bit: bool = True
     bnb_4bit_quant_type: str = "nf4"
     bnb_4bit_compute_dtype: str = "bfloat16"
@@ -352,6 +356,7 @@ class OffloadConfig:
         # For 8GB VRAM GPU with 32GB RAM:
         config = OffloadConfig(max_memory_gpu=7, max_memory_cpu=24)
     """
+
     cpu_offload: bool = True
     offload_optimizer: bool = True
     gradient_checkpointing: bool = True
@@ -410,7 +415,7 @@ class DoRALinear(nn.Module):
 
         # LoRA A and B
         self.lora_a = nn.Parameter(torch.zeros(rank, in_features))
-        nn.init.kaiming_uniform_(self.lora_a, a=5 ** 0.5)
+        nn.init.kaiming_uniform_(self.lora_a, a=5**0.5)
         self.lora_b = nn.Parameter(torch.zeros(out_features, rank))
         nn.init.zeros_(self.lora_b)
 
@@ -472,8 +477,7 @@ def apply_dora(
         for p in parts[:-1]:
             parent = getattr(parent, p)
 
-        dora_layer = DoRALinear(
-            module, rank=rank, alpha=alpha, dropout=dropout)
+        dora_layer = DoRALinear(module, rank=rank, alpha=alpha, dropout=dropout)
         setattr(parent, parts[-1], dora_layer)
         replaced += 1
 
@@ -485,10 +489,8 @@ def apply_dora(
 # LORA MODEL CREATION
 # =============================================================================
 
-def create_lora_model(
-    model: nn.Module,
-    config: Optional[LoraConfig] = None
-) -> nn.Module:
+
+def create_lora_model(model: nn.Module, config: Optional[LoraConfig] = None) -> nn.Module:
     """
     Wrap a model with LoRA adapters.
 
@@ -524,10 +526,7 @@ def create_lora_model(
     return lora_model
 
 
-def create_qlora_model(
-    model: nn.Module,
-    config: Optional[QLoraConfig] = None
-) -> nn.Module:
+def create_qlora_model(model: nn.Module, config: Optional[QLoraConfig] = None) -> nn.Module:
     """
     Wrap a model with QLoRA (4-bit quantized LoRA).
 
@@ -575,6 +574,7 @@ def create_qlora_model(
 # LORA WEIGHT MANAGEMENT
 # =============================================================================
 
+
 def load_lora_weights(path: Union[str, Path]) -> Dict[str, torch.Tensor]:
     """
     Load LoRA adapter weights from file.
@@ -596,6 +596,7 @@ def load_lora_weights(path: Union[str, Path]) -> Dict[str, torch.Tensor]:
     if path.suffix == ".safetensors":
         try:
             from safetensors.torch import load_file
+
             weights = load_file(str(path))
         except ImportError:
             raise ImportError("safetensors required for .safetensors files") from None
@@ -607,10 +608,7 @@ def load_lora_weights(path: Union[str, Path]) -> Dict[str, torch.Tensor]:
 
 
 def apply_lora(
-    model: nn.Module,
-    lora_weights: Dict[str, torch.Tensor],
-    adapter_name: str = "default",
-    merge: bool = False
+    model: nn.Module, lora_weights: Dict[str, torch.Tensor], adapter_name: str = "default", merge: bool = False
 ) -> None:
     """
     Apply LoRA weights to a model.
@@ -630,7 +628,7 @@ def apply_lora(
         return
 
     # Apply without merging - keep as separate adapter
-    if not hasattr(model, '_lora_adapters'):
+    if not hasattr(model, "_lora_adapters"):
         model._lora_adapters = {}
 
     model._lora_adapters[adapter_name] = lora_weights
@@ -645,10 +643,7 @@ def apply_lora(
     logger.info(f"Applied LoRA adapter: {adapter_name}")
 
 
-def merge_lora_weights(
-    model: nn.Module,
-    lora_weights: Dict[str, torch.Tensor]
-) -> None:
+def merge_lora_weights(model: nn.Module, lora_weights: Dict[str, torch.Tensor]) -> None:
     """
     Permanently merge LoRA weights into base model.
 
@@ -679,7 +674,7 @@ def merge_lora_weights(
         merge_lora_weights(model, weights)  # Now permanent
     """
     # If model is a PEFT model, use built-in merge_and_unload
-    if hasattr(model, 'merge_and_unload'):
+    if hasattr(model, "merge_and_unload"):
         model.merge_and_unload()
         logger.info("Merged LoRA using PEFT merge_and_unload")
         return
@@ -723,20 +718,21 @@ def merge_lora_weights(
 
     if skipped:
         logger.warning(
-            "merge_lora_weights: %d/%d keys not in base state_dict "
-            "(merged %d). First skipped: %s",
-            len(skipped), len(lora_weights), matched, skipped[:3]
+            "merge_lora_weights: %d/%d keys not in base state_dict (merged %d). First skipped: %s",
+            len(skipped),
+            len(lora_weights),
+            matched,
+            skipped[:3],
         )
 
     model.load_state_dict(state_dict)
-    logger.info(
-        "Merged %d LoRA delta weight(s) into base model", matched
-    )
+    logger.info("Merged %d LoRA delta weight(s) into base model", matched)
 
 
 # =============================================================================
 # LORA TRAINER
 # =============================================================================
+
 
 class LoraTrainer:
     """
@@ -807,18 +803,14 @@ class LoraTrainer:
         self.batch_size = batch_size
         self.epochs = epochs
         if gradient_accumulation_steps < 1:
-            raise ValueError(
-                f"gradient_accumulation_steps must be >= 1, "
-                f"got {gradient_accumulation_steps}"
-            )
+            raise ValueError(f"gradient_accumulation_steps must be >= 1, got {gradient_accumulation_steps}")
         self.gradient_accumulation_steps = gradient_accumulation_steps
         self.weight_decay = weight_decay
         self.adam_beta1 = adam_beta1
         self.adam_beta2 = adam_beta2
         self.adam_eps = adam_eps
         if not 0.0 <= min_lr_ratio <= 1.0:
-            raise ValueError(
-                f"min_lr_ratio must be in [0.0, 1.0], got {min_lr_ratio}")
+            raise ValueError(f"min_lr_ratio must be in [0.0, 1.0], got {min_lr_ratio}")
         self.min_lr_ratio = min_lr_ratio
 
         # Apply LoRA to model
@@ -829,7 +821,7 @@ class LoraTrainer:
 
         # Enable gradient checkpointing if configured
         if self.offload_config.gradient_checkpointing:
-            if hasattr(self.model, 'gradient_checkpointing_enable'):
+            if hasattr(self.model, "gradient_checkpointing_enable"):
                 self.model.gradient_checkpointing_enable()
                 logger.info("Gradient checkpointing enabled")
 
@@ -844,8 +836,7 @@ class LoraTrainer:
         # Clear VRAM before training
         clear_vram()
 
-        logger.info(f"LoraTrainer initialized: rank={self.lora_config.rank}, "
-                   f"offload={self.offload_config.cpu_offload}")
+        logger.info(f"LoraTrainer initialized: rank={self.lora_config.rank}, offload={self.offload_config.cpu_offload}")
 
     def request_stop(self) -> None:
         """Request graceful stop of training."""
@@ -865,11 +856,7 @@ class LoraTrainer:
             except Exception:
                 pass
 
-    def train(
-        self,
-        data: Union[str, List[Dict[str, str]]],
-        max_length: int = 512
-    ) -> Dict[str, Any]:
+    def train(self, data: Union[str, List[Dict[str, str]]], max_length: int = 512) -> Dict[str, Any]:
         """
         Train LoRA adapter on data.
 
@@ -898,8 +885,10 @@ class LoraTrainer:
 
         # Check memory
         mem_info = get_memory_info()
-        logger.info(f"Starting training - VRAM: {mem_info['vram_available_gb']:.1f}GB, "
-                   f"RAM: {mem_info['ram_available_gb']:.1f}GB")
+        logger.info(
+            f"Starting training - VRAM: {mem_info['vram_available_gb']:.1f}GB, "
+            f"RAM: {mem_info['ram_available_gb']:.1f}GB"
+        )
 
         # Setup device (with CPU offload if needed)
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -922,12 +911,10 @@ class LoraTrainer:
 
         # Learning rate scheduler (cosine decay)
         from torch.optim.lr_scheduler import CosineAnnealingLR
+
         n_batches = len(self._create_batches(data, max_length))
         if n_batches == 0:
-            logger.warning(
-                "No valid training batches created — all items may be "
-                "too short (< 2 tokens) or empty."
-            )
+            logger.warning("No valid training batches created — all items may be too short (< 2 tokens) or empty.")
             self._emit_progress(100, "No valid batches — skipped.")
             return {
                 "total_loss": 0.0,
@@ -938,19 +925,18 @@ class LoraTrainer:
         steps_per_epoch = max(1, n_batches // self.gradient_accumulation_steps)
         total_steps = steps_per_epoch * self.epochs
         scheduler = CosineAnnealingLR(
-            optimizer,
-            T_max=max(1, total_steps),
-            eta_min=self.learning_rate * self.min_lr_ratio)
+            optimizer, T_max=max(1, total_steps), eta_min=self.learning_rate * self.min_lr_ratio
+        )
 
         # Training loop
         total_loss = 0.0
         epoch_loss = 0.0
         step = 0
-        pad_id = getattr(self.tokenizer, 'pad_token_id', 0) or 0
+        pad_id = getattr(self.tokenizer, "pad_token_id", 0) or 0
 
         # Get the forward-callable model (bypass PEFT outer wrapper)
         fwd_model = self.model
-        if hasattr(self.model, 'get_base_model'):
+        if hasattr(self.model, "get_base_model"):
             fwd_model = self.model.get_base_model()
 
         self._emit_progress(5, f"Training for {self.epochs} epochs...")
@@ -963,8 +949,7 @@ class LoraTrainer:
             oom_retries = 0
             optimizer.zero_grad()
 
-            for batch_idx, (input_ids, attention_mask) in enumerate(
-                    self._create_batches(data, max_length)):
+            for batch_idx, (input_ids, attention_mask) in enumerate(self._create_batches(data, max_length)):
                 if self._should_stop():
                     break
 
@@ -982,9 +967,8 @@ class LoraTrainer:
                     outputs = fwd_model(inputs, attention_mask=attn)
                     logits = outputs[0] if isinstance(outputs, tuple) else outputs
                     loss = F.cross_entropy(
-                        logits.reshape(-1, logits.size(-1)),
-                        targets.reshape(-1),
-                        ignore_index=pad_id)
+                        logits.reshape(-1, logits.size(-1)), targets.reshape(-1), ignore_index=pad_id
+                    )
                     oom_retries = 0  # Reset on success
                 except Exception as e:
                     # Handle OOM
@@ -1018,7 +1002,7 @@ class LoraTrainer:
 
                 # Progress update
                 progress = int(5 + 90 * (epoch * len(data) + batch_idx) / (self.epochs * len(data)))
-                self._emit_progress(progress, f"Epoch {epoch+1}/{self.epochs}, Loss: {batch_loss:.4f}")
+                self._emit_progress(progress, f"Epoch {epoch + 1}/{self.epochs}, Loss: {batch_loss:.4f}")
 
                 if self.on_loss:
                     self.on_loss(batch_loss)
@@ -1031,7 +1015,7 @@ class LoraTrainer:
                     scheduler.step()
 
             total_loss += epoch_loss
-            logger.info(f"Epoch {epoch+1}/{self.epochs} - Loss: {epoch_loss:.4f}")
+            logger.info(f"Epoch {epoch + 1}/{self.epochs} - Loss: {epoch_loss:.4f}")
 
         # Final cleanup
         clear_vram()
@@ -1042,7 +1026,7 @@ class LoraTrainer:
             "total_loss": total_loss,
             "epochs": self.epochs,
             "steps": step,
-            'final_loss': epoch_loss,
+            "final_loss": epoch_loss,
         }
 
     def _get_optimizer(self):
@@ -1055,7 +1039,7 @@ class LoraTrainer:
         """
         from torch.optim import AdamW
 
-        lam = getattr(self.lora_config, 'lora_plus_lambda', 1.0)
+        lam = getattr(self.lora_config, "lora_plus_lambda", 1.0)
 
         if lam != 1.0:
             # Split into A-matrix and B-matrix groups
@@ -1083,9 +1067,7 @@ class LoraTrainer:
                 param_groups.append({"params": group_other, "lr": self.learning_rate})
 
             if not param_groups:
-                raise ValueError(
-                    "No trainable LoRA parameters found. "
-                    "Check that LoRA layers are properly attached.")
+                raise ValueError("No trainable LoRA parameters found. Check that LoRA layers are properly attached.")
 
             return AdamW(
                 param_groups,
@@ -1105,11 +1087,7 @@ class LoraTrainer:
             eps=self.adam_eps,
         )
 
-    def _create_batches(
-        self,
-        data: List[Dict[str, str]],
-        max_length: int
-    ) -> List[tuple]:
+    def _create_batches(self, data: List[Dict[str, str]], max_length: int) -> List[tuple]:
         """Create padded batches from training data.
 
         Returns:
@@ -1135,10 +1113,10 @@ class LoraTrainer:
         # Sort by length for efficient padding
         encoded.sort(key=len, reverse=True)
 
-        pad_id = getattr(self.tokenizer, 'pad_token_id', 0) or 0
+        pad_id = getattr(self.tokenizer, "pad_token_id", 0) or 0
         batches = []
         for i in range(0, len(encoded), self.batch_size):
-            batch_tokens = encoded[i:i + self.batch_size]
+            batch_tokens = encoded[i : i + self.batch_size]
             max_len = max(len(t) for t in batch_tokens)
             padded = []
             masks = []
@@ -1146,10 +1124,12 @@ class LoraTrainer:
                 pad_len = max_len - len(tokens)
                 padded.append(tokens + [pad_id] * pad_len)
                 masks.append([1] * len(tokens) + [0] * pad_len)
-            batches.append((
-                torch.tensor(padded, dtype=torch.long),
-                torch.tensor(masks, dtype=torch.long),
-            ))
+            batches.append(
+                (
+                    torch.tensor(padded, dtype=torch.long),
+                    torch.tensor(masks, dtype=torch.long),
+                )
+            )
 
         return batches
 
@@ -1169,7 +1149,7 @@ class LoraTrainer:
             def __getitem__(self, idx):
                 item = self.data[idx]
                 text = item.get("prompt", "") + item.get("completion", "")
-                tokens = self.tokenizer.encode(text)[:self.max_length]
+                tokens = self.tokenizer.encode(text)[: self.max_length]
                 return torch.tensor(tokens)
 
         dataset = SimpleDataset(data, self.tokenizer, max_length)
@@ -1229,6 +1209,7 @@ class LoraTrainer:
 # =============================================================================
 # LORA ADAPTER MANAGER (FP-D) — per-task LoRA adapters
 # =============================================================================
+
 
 class LoRAAdapterManager:
     """Manage multiple LoRA adapters per task/skill.
@@ -1311,6 +1292,7 @@ class LoRAAdapterManager:
             "target_modules": config.target_modules,
         }
         from enigma_engine.core.safe_save import atomic_write_json
+
         atomic_write_json(self._meta_path(task), meta)
 
         # Save initial adapter (trainable params only)
@@ -1320,6 +1302,7 @@ class LoRAAdapterManager:
                 lora_weights[name] = param.data.cpu()
 
         from enigma_engine.core.safe_save import atomic_torch_save
+
         atomic_torch_save(lora_weights, wpath)
 
         logger.info("Created LoRA adapter '%s' (%d tensors)", task, len(lora_weights))
@@ -1340,6 +1323,7 @@ class LoRAAdapterManager:
                 lora_weights[name] = param.data.cpu()
 
         from enigma_engine.core.safe_save import atomic_torch_save
+
         atomic_torch_save(lora_weights, wpath)
 
         self._active_task = task
@@ -1362,9 +1346,7 @@ class LoRAAdapterManager:
 
         wpath = self._weights_path(task)
         if not wpath.exists():
-            raise FileNotFoundError(
-                f"No adapter for task '{task}'. "
-                f"Available: {self.list_tasks()}")
+            raise FileNotFoundError(f"No adapter for task '{task}'. Available: {self.list_tasks()}")
 
         weights = load_lora_weights(wpath)
         apply_lora(model, weights, adapter_name=task)
@@ -1376,6 +1358,7 @@ class LoRAAdapterManager:
         tdir = self._task_dir(task)
         if tdir.exists():
             import shutil
+
             shutil.rmtree(tdir)
             if self._active_task == task:
                 self._active_task = None

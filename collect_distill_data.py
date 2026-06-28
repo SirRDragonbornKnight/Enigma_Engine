@@ -89,12 +89,8 @@ _MAGPIE_TEMPLATES: dict[str, dict[str, str]] = {
         "assistant_end": "<|im_end|>",
     },
     "llama3": {
-        "prefix": (
-            "<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n"
-        ),
-        "user_end": (
-            "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
-        ),
+        "prefix": ("<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n"),
+        "user_end": ("<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"),
         "assistant_end": "<|eot_id|>",
     },
 }
@@ -121,25 +117,18 @@ def _resolve_magpie_template(
             ("--magpie-assistant-end", custom_assistant_end),
         ):
             if not value:
-                raise ValueError(
-                    f"--template custom requires {label} (got empty value)"
-                )
+                raise ValueError(f"--template custom requires {label} (got empty value)")
         return {
             "prefix": custom_prefix or "",
             "user_end": custom_user_end or "",
             "assistant_end": custom_assistant_end or "",
         }
     if name not in _MAGPIE_TEMPLATES:
-        raise ValueError(
-            f"unknown magpie template '{name}'. "
-            f"Choices: {sorted(_MAGPIE_TEMPLATES) + ['custom']}"
-        )
+        raise ValueError(f"unknown magpie template '{name}'. Choices: {sorted(_MAGPIE_TEMPLATES) + ['custom']}")
     return _MAGPIE_TEMPLATES[name]
 
 
-def _parse_magpie_completion(
-    raw: str, template: dict[str, str]
-) -> tuple[str, str]:
+def _parse_magpie_completion(raw: str, template: dict[str, str]) -> tuple[str, str]:
     """Split a raw Magpie completion into (instruction, answer).
 
     The model's completion starts at the position right after our
@@ -167,8 +156,7 @@ def _parse_magpie_completion(
     instruction = instr_part.strip()
     if not instruction:
         raise RuntimeError(
-            "magpie parse failed: empty user instruction "
-            "(model emitted assistant marker without content)"
+            "magpie parse failed: empty user instruction (model emitted assistant marker without content)"
         )
     if assistant_end and assistant_end in ans_part:
         ans_part = ans_part.split(assistant_end, 1)[0]
@@ -305,9 +293,7 @@ class TeacherClient:
                 payload = resp.read().decode("utf-8")
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")[:500]
-            raise RuntimeError(
-                f"teacher returned HTTP {exc.code}: {detail}"
-            ) from exc
+            raise RuntimeError(f"teacher returned HTTP {exc.code}: {detail}") from exc
         except urllib.error.URLError as exc:
             raise RuntimeError(f"teacher unreachable at {self._url}: {exc.reason}") from exc
         try:
@@ -317,9 +303,7 @@ class TeacherClient:
         try:
             return obj["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:
-            raise RuntimeError(
-                f"teacher response missing choices[0].message.content: {payload[:200]}"
-            ) from exc
+            raise RuntimeError(f"teacher response missing choices[0].message.content: {payload[:200]}") from exc
 
 
 class MagpieClient:
@@ -381,37 +365,25 @@ class MagpieClient:
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
-        req = urllib.request.Request(
-            self._url, data=data, headers=headers, method="POST"
-        )
+        req = urllib.request.Request(self._url, data=data, headers=headers, method="POST")
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                 payload = resp.read().decode("utf-8")
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")[:500]
-            raise RuntimeError(
-                f"magpie endpoint returned HTTP {exc.code}: {detail}"
-            ) from exc
+            raise RuntimeError(f"magpie endpoint returned HTTP {exc.code}: {detail}") from exc
         except urllib.error.URLError as exc:
-            raise RuntimeError(
-                f"magpie endpoint unreachable at {self._url}: {exc.reason}"
-            ) from exc
+            raise RuntimeError(f"magpie endpoint unreachable at {self._url}: {exc.reason}") from exc
         try:
             obj = json.loads(payload)
         except json.JSONDecodeError as exc:
-            raise RuntimeError(
-                f"magpie endpoint returned non-JSON body: {payload[:200]}"
-            ) from exc
+            raise RuntimeError(f"magpie endpoint returned non-JSON body: {payload[:200]}") from exc
         try:
             raw = obj["choices"][0]["text"]
         except (KeyError, IndexError, TypeError) as exc:
-            raise RuntimeError(
-                f"magpie response missing choices[0].text: {payload[:200]}"
-            ) from exc
+            raise RuntimeError(f"magpie response missing choices[0].text: {payload[:200]}") from exc
         if not isinstance(raw, str):
-            raise RuntimeError(
-                f"magpie response choices[0].text not a string: {type(raw).__name__}"
-            )
+            raise RuntimeError(f"magpie response choices[0].text not a string: {type(raw).__name__}")
         return _parse_magpie_completion(raw, self.template)
 
 
@@ -549,7 +521,12 @@ def collect(
             rate = ok / elapsed if elapsed > 0 else 0.0
             logger.info(
                 "[%d/%d] ok=%d failed=%d skipped=%d (%.2f rows/s)",
-                idx, len(prompts), ok, failed, skipped, rate,
+                idx,
+                len(prompts),
+                ok,
+                failed,
+                skipped,
+                rate,
             )
         if sleep_between > 0:
             time.sleep(sleep_between)
@@ -557,7 +534,12 @@ def collect(
     written = _rewrite_combined_text(jsonl_path, txt_path)
     logger.info(
         "done: requested=%d ok=%d failed=%d skipped=%d → %s (%d text blocks)",
-        len(prompts), ok, failed, skipped, txt_path, written,
+        len(prompts),
+        ok,
+        failed,
+        skipped,
+        txt_path,
+        written,
     )
     return {
         "requested": len(prompts),
@@ -634,7 +616,8 @@ def magpie_collect(
     if done:
         logger.info(
             "resume: %d instruction(s) already in %s, will skip duplicates",
-            len(done), jsonl_path,
+            len(done),
+            jsonl_path,
         )
 
     if client is None:
@@ -673,7 +656,12 @@ def magpie_collect(
             rate = ok / elapsed if elapsed > 0 else 0.0
             logger.info(
                 "[%d/%d] ok=%d failed=%d duplicate=%d (%.2f rows/s)",
-                idx, n, ok, failed, duplicate, rate,
+                idx,
+                n,
+                ok,
+                failed,
+                duplicate,
+                rate,
             )
         if sleep_between > 0:
             time.sleep(sleep_between)
@@ -682,13 +670,20 @@ def magpie_collect(
         logger.warning(
             "magpie failure rate %.0f%% (%d/%d) — wrong --template for model? "
             "expected template markers may not match the model's chat training",
-            100.0 * failed / n, failed, n,
+            100.0 * failed / n,
+            failed,
+            n,
         )
 
     written = _rewrite_combined_text(jsonl_path, txt_path)
     logger.info(
         "magpie done: requested=%d ok=%d failed=%d duplicate=%d → %s (%d text blocks)",
-        n, ok, failed, duplicate, txt_path, written,
+        n,
+        ok,
+        failed,
+        duplicate,
+        txt_path,
+        written,
     )
     return {
         "requested": n,
@@ -707,49 +702,72 @@ def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description="Collect distillation corpus from an external teacher AI.",
     )
-    p.add_argument("--endpoint", default=DEFAULT_ENDPOINT,
-                   help=f"OpenAI-compatible base URL (default: {DEFAULT_ENDPOINT})")
-    p.add_argument("--model", required=True,
-                   help="Model name on the teacher (e.g. 'qwen3:8b' for Ollama)")
-    p.add_argument("--prompts", type=Path, default=None,
-                   help="Path to a .jsonl ({\"prompt\":...}) or .txt (one per line) file. "
-                        "Required for the prompts-driven mode; ignored when --magpie is set.")
-    p.add_argument("--magpie", type=int, default=0, metavar="N",
-                   help="Magpie mode (arxiv:2406.08464): generate N instruction/answer pairs "
-                        "via empty-prefix completion. Mutually exclusive with --prompts.")
-    p.add_argument("--template", default="chatml",
-                   choices=sorted(_MAGPIE_TEMPLATES) + ["custom"],
-                   help="Magpie chat-template family (default: chatml — covers Qwen2/3, "
-                        "ChatGLM3+, and most ChatML-trained models). Use 'custom' to supply "
-                        "your own marker strings via --magpie-prefix / --magpie-user-end / "
-                        "--magpie-assistant-end.")
-    p.add_argument("--magpie-prefix", default=None,
-                   help="Custom raw-prefix string for --template custom (e.g. \"<|im_start|>user\\n\")")
-    p.add_argument("--magpie-user-end", default=None,
-                   help="Custom user→assistant marker for --template custom")
-    p.add_argument("--magpie-assistant-end", default=None,
-                   help="Custom assistant-end marker for --template custom (used as stop string)")
-    p.add_argument("--tag", default="external",
-                   help="Output filename tag — writes data/finetune/distill_<tag>.{jsonl,txt}")
+    p.add_argument(
+        "--endpoint", default=DEFAULT_ENDPOINT, help=f"OpenAI-compatible base URL (default: {DEFAULT_ENDPOINT})"
+    )
+    p.add_argument("--model", required=True, help="Model name on the teacher (e.g. 'qwen3:8b' for Ollama)")
+    p.add_argument(
+        "--prompts",
+        type=Path,
+        default=None,
+        help='Path to a .jsonl ({"prompt":...}) or .txt (one per line) file. '
+        "Required for the prompts-driven mode; ignored when --magpie is set.",
+    )
+    p.add_argument(
+        "--magpie",
+        type=int,
+        default=0,
+        metavar="N",
+        help="Magpie mode (arxiv:2406.08464): generate N instruction/answer pairs "
+        "via empty-prefix completion. Mutually exclusive with --prompts.",
+    )
+    p.add_argument(
+        "--template",
+        default="chatml",
+        choices=sorted(_MAGPIE_TEMPLATES) + ["custom"],
+        help="Magpie chat-template family (default: chatml — covers Qwen2/3, "
+        "ChatGLM3+, and most ChatML-trained models). Use 'custom' to supply "
+        "your own marker strings via --magpie-prefix / --magpie-user-end / "
+        "--magpie-assistant-end.",
+    )
+    p.add_argument(
+        "--magpie-prefix",
+        default=None,
+        help='Custom raw-prefix string for --template custom (e.g. "<|im_start|>user\\n")',
+    )
+    p.add_argument("--magpie-user-end", default=None, help="Custom user→assistant marker for --template custom")
+    p.add_argument(
+        "--magpie-assistant-end",
+        default=None,
+        help="Custom assistant-end marker for --template custom (used as stop string)",
+    )
+    p.add_argument(
+        "--tag", default="external", help="Output filename tag — writes data/finetune/distill_<tag>.{jsonl,txt}"
+    )
     p.add_argument("--max-tokens", type=int, default=512)
-    p.add_argument("--temperature", type=float, default=None,
-                   help="Sampling temperature. When unset, defaults to 0.7 in "
-                        "prompts mode and 1.0 in Magpie mode (per arxiv:2406.08464 "
-                        "empty-prefix-synthesis recommendation).")
+    p.add_argument(
+        "--temperature",
+        type=float,
+        default=None,
+        help="Sampling temperature. When unset, defaults to 0.7 in "
+        "prompts mode and 1.0 in Magpie mode (per arxiv:2406.08464 "
+        "empty-prefix-synthesis recommendation).",
+    )
     p.add_argument("--top-p", type=float, default=1.0)
-    p.add_argument("--system-prompt", default=None,
-                   help="Optional system message prepended to every chat request "
-                        "(prompts mode only — Magpie ignores this)")
-    p.add_argument("--api-key", default=None,
-                   help="Bearer token (only needed for cloud endpoints)")
-    p.add_argument("--timeout", type=float, default=120.0,
-                   help="Per-request timeout in seconds (default 120)")
-    p.add_argument("--resume", action="store_true",
-                   help="Skip prompts/instructions already present in the existing .jsonl output")
-    p.add_argument("--limit", type=int, default=0,
-                   help="(prompts mode) Stop after this many prompts (0 = no limit)")
-    p.add_argument("--sleep-between", type=float, default=0.0,
-                   help="Seconds to sleep between requests (rate-limit friendliness)")
+    p.add_argument(
+        "--system-prompt",
+        default=None,
+        help="Optional system message prepended to every chat request (prompts mode only — Magpie ignores this)",
+    )
+    p.add_argument("--api-key", default=None, help="Bearer token (only needed for cloud endpoints)")
+    p.add_argument("--timeout", type=float, default=120.0, help="Per-request timeout in seconds (default 120)")
+    p.add_argument(
+        "--resume", action="store_true", help="Skip prompts/instructions already present in the existing .jsonl output"
+    )
+    p.add_argument("--limit", type=int, default=0, help="(prompts mode) Stop after this many prompts (0 = no limit)")
+    p.add_argument(
+        "--sleep-between", type=float, default=0.0, help="Seconds to sleep between requests (rate-limit friendliness)"
+    )
     return p
 
 
@@ -758,13 +776,10 @@ def main(argv: list[str] | None = None) -> int:
     # Mutual exclusion: prompts-driven and Magpie are different data
     # collection paradigms. Asking for both is a misconfiguration.
     if args.magpie and args.prompts:
-        logger.error(
-            "--magpie and --prompts are mutually exclusive (Magpie generates "
-            "its own instructions). Drop one.")
+        logger.error("--magpie and --prompts are mutually exclusive (Magpie generates its own instructions). Drop one.")
         return 2
     if not args.magpie and not args.prompts:
-        logger.error(
-            "either --prompts <file> or --magpie <N> is required")
+        logger.error("either --prompts <file> or --magpie <N> is required")
         return 2
 
     if args.magpie:
@@ -774,9 +789,7 @@ def main(argv: list[str] | None = None) -> int:
         # --temperature explicitly still get their value through.
         if args.temperature is None:
             magpie_temperature = 1.0
-            logger.info(
-                "Magpie default temperature 1.0 (paper recommendation; "
-                "pass --temperature to override)")
+            logger.info("Magpie default temperature 1.0 (paper recommendation; pass --temperature to override)")
         else:
             magpie_temperature = args.temperature
         try:
@@ -802,8 +815,8 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         if summary["ok"] == 0:
             logger.error(
-                "no successful pairs written — check --template "
-                "matches model + endpoint supports /v1/completions")
+                "no successful pairs written — check --template matches model + endpoint supports /v1/completions"
+            )
             return 1
         return 0
 

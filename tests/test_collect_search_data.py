@@ -40,7 +40,8 @@ def test_validate_examples_rejects_positive_without_search_tag(
 ) -> None:
     """Positive that's missing the ``<search>`` tag → loud failure."""
     monkeypatch.setattr(
-        csd, "_POSITIVE_EXAMPLES",
+        csd,
+        "_POSITIVE_EXAMPLES",
         [("Where is Mars?", "Mars is the fourth planet.")],  # no <search>!
     )
     monkeypatch.setattr(csd, "_NEGATIVE_EXAMPLES", [])
@@ -54,7 +55,8 @@ def test_validate_examples_rejects_negative_with_search_tag(
     """Negative that wraps an answer in ``<search>`` → loud failure."""
     monkeypatch.setattr(csd, "_POSITIVE_EXAMPLES", [])
     monkeypatch.setattr(
-        csd, "_NEGATIVE_EXAMPLES",
+        csd,
+        "_NEGATIVE_EXAMPLES",
         [("What is 2+2?", "<search>2+2</search>")],  # poisoned!
     )
     with pytest.raises(RuntimeError, match="NEGATIVE contains"):
@@ -76,9 +78,7 @@ def test_build_corpus_default_mixes_both_classes() -> None:
     for item in pairs:
         assert set(item.keys()) == {"prompt", "completion"}
         assert isinstance(item["prompt"], str) and item["prompt"]
-        assert (
-            isinstance(item["completion"], str) and item["completion"]
-        )
+        assert isinstance(item["completion"], str) and item["completion"]
 
 
 def test_build_corpus_positive_only() -> None:
@@ -112,11 +112,7 @@ def test_main_writes_jsonl_and_text(tmp_path: Path) -> None:
     assert jsonl_path.exists() and text_path.exists()
 
     # JSONL: every line parses to a {prompt, completion} dict
-    rows = [
-        json.loads(line)
-        for line in jsonl_path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
+    rows = [json.loads(line) for line in jsonl_path.read_text(encoding="utf-8").splitlines() if line.strip()]
     assert len(rows) > 0
     for r in rows:
         assert {"prompt", "completion"} <= set(r.keys())
@@ -140,16 +136,19 @@ def test_main_positive_only_omits_negatives(tmp_path: Path) -> None:
     """Adversarial: ``--positive-only`` must NOT leak any negative
     rows into the JSONL output (regression guard against a future
     refactor that drops the gate inside ``build_corpus``)."""
-    rc = csd.main([
-        "--tag", "pos", "--positive-only",
-        "--output-dir", str(tmp_path),
-    ])
+    rc = csd.main(
+        [
+            "--tag",
+            "pos",
+            "--positive-only",
+            "--output-dir",
+            str(tmp_path),
+        ]
+    )
     assert rc == 0
     rows = [
         json.loads(line)
-        for line in (tmp_path / "synthetic_search_pos.jsonl")
-        .read_text(encoding="utf-8")
-        .splitlines()
+        for line in (tmp_path / "synthetic_search_pos.jsonl").read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
     assert len(rows) > 0
@@ -159,9 +158,15 @@ def test_main_positive_only_omits_negatives(tmp_path: Path) -> None:
 def test_main_mutex_flags_returns_error(tmp_path: Path) -> None:
     """Both ablation flags at once → main() returns non-zero, no
     files written."""
-    rc = csd.main([
-        "--tag", "bad", "--positive-only", "--negative-only",
-        "--output-dir", str(tmp_path),
-    ])
+    rc = csd.main(
+        [
+            "--tag",
+            "bad",
+            "--positive-only",
+            "--negative-only",
+            "--output-dir",
+            str(tmp_path),
+        ]
+    )
     assert rc == 2
     assert not (tmp_path / "synthetic_search_bad.jsonl").exists()

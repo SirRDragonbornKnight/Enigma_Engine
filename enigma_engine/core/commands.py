@@ -7,6 +7,7 @@ This module parses and executes them.
 Commands are registered by category (config, model, system, file, etc.)
 and can be executed by name. CLI-only - no GUI dependencies.
 """
+
 from __future__ import annotations
 
 import logging
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 # These could be used for injection if an AI-generated argument
 # reaches a subprocess or shell eval.
 SHELL_METACHARACTERS = frozenset(";|&`{}*?<>()[]")
+
 
 def sanitize_args(args: list[str]) -> list[str]:
     """Strip shell metacharacters from command arguments.
@@ -44,7 +46,8 @@ def sanitize_args(args: list[str]) -> list[str]:
                 continue
             logger.warning(
                 "Sanitized command arg: %r → %r (removed shell metacharacters)",
-                arg, stripped,
+                arg,
+                stripped,
             )
         cleaned.append(stripped)
     return cleaned
@@ -53,6 +56,7 @@ def sanitize_args(args: list[str]) -> list[str]:
 @dataclass
 class CommandResult:
     """Result of a command execution."""
+
     success: bool
     message: str
     data: Any = None
@@ -61,6 +65,7 @@ class CommandResult:
 @dataclass
 class Command:
     """A registered command."""
+
     name: str
     handler: Callable
     description: str
@@ -83,10 +88,7 @@ class CommandRegistry:
     def register(self, name: str, handler: Callable, description: str = "", usage: str = "") -> None:
         """Register a command."""
         self._commands[name] = Command(
-            name=name,
-            handler=handler,
-            description=description or f"Execute {name}",
-            usage=usage or name
+            name=name, handler=handler, description=description or f"Execute {name}", usage=usage or name
         )
 
     def set_context(self, key: str, value: Any) -> None:
@@ -186,9 +188,9 @@ def parse_commands(text: str) -> tuple:
     Returns:
         (clean_text, commands_list) - text without command blocks, list of commands
     """
-    commands = re.findall(r'\[CMD\](.*?)\[/CMD\]', text, re.DOTALL)
+    commands = re.findall(r"\[CMD\](.*?)\[/CMD\]", text, re.DOTALL)
     commands = [cmd.strip() for cmd in commands]
-    clean = re.sub(r'\[CMD\].*?\[/CMD\]', '', text, flags=re.DOTALL).strip()
+    clean = re.sub(r"\[CMD\].*?\[/CMD\]", "", text, flags=re.DOTALL).strip()
     return clean, commands
 
 
@@ -205,8 +207,10 @@ def get_registry() -> CommandRegistry:
             if _registry is None:
                 _registry = CommandRegistry()
                 from .builtin_commands import register_builtin_commands
+
                 register_builtin_commands(_registry)
                 # Load user plugins from plugins/ directory
                 from .plugin_loader import load_all_plugins
+
                 load_all_plugins(_registry)
     return _registry

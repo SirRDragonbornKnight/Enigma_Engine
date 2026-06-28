@@ -14,6 +14,7 @@ Usage:
     atomic_write_text(path, content)             # plain text files
     atomic_write_json(path, data)                # JSON files
 """
+
 from __future__ import annotations
 
 import logging
@@ -23,8 +24,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-def atomic_torch_save(data: dict, path: str | Path,
-                      rotate_to: str | Path | None = None) -> None:
+def atomic_torch_save(data: dict, path: str | Path, rotate_to: str | Path | None = None) -> None:
     """Save a PyTorch checkpoint atomically.
 
     Writes to ``<path>.tmp`` first, then replaces the target via
@@ -119,6 +119,7 @@ def atomic_write_text(path: str | Path, content: str) -> None:
             bak_path = path.with_suffix(path.suffix + ".bak")
             try:
                 import shutil
+
                 shutil.copy2(str(path), str(bak_path))
             except OSError as exc:
                 logger.warning("Backup copy failed for %s: %s", path, exc)

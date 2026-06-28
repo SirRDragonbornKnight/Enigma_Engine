@@ -23,8 +23,13 @@ logger = logging.getLogger(__name__)
 
 # ── Architecture fields that MUST match between merged models ──────
 _ARCH_FIELDS = (
-    "dim", "n_layers", "n_heads", "n_kv_heads", "hidden_dim",
-    "vocab_size", "max_seq_len",
+    "dim",
+    "n_layers",
+    "n_heads",
+    "n_kv_heads",
+    "hidden_dim",
+    "vocab_size",
+    "max_seq_len",
 )
 
 # Keys to skip during merging (runtime-only / recomputed)
@@ -32,6 +37,7 @@ _SKIP_KEYS = {"freqs_cis"}
 
 
 # ── Helpers ────────────────────────────────────────────────────────
+
 
 def _validate_compatible(configs: list[ForgeConfig]) -> None:
     """Raise if any architecture dimension differs."""
@@ -41,9 +47,7 @@ def _validate_compatible(configs: list[ForgeConfig]) -> None:
             v_base = getattr(base, field)
             v_other = getattr(cfg, field)
             if v_base != v_other:
-                raise ValueError(
-                    f"Architecture mismatch on '{field}': "
-                    f"model 0 has {v_base}, model {i} has {v_other}")
+                raise ValueError(f"Architecture mismatch on '{field}': model 0 has {v_base}, model {i} has {v_other}")
 
 
 def _load_checkpoint(path: str | Path, device: str = "cpu"):
@@ -52,10 +56,7 @@ def _load_checkpoint(path: str | Path, device: str = "cpu"):
     cfg_dict = ckpt.get("model_config", ckpt.get("config", {}))
     if isinstance(cfg_dict, dict) and "epochs" in cfg_dict:
         cfg_dict = ckpt.get("model_config", {})
-    config = ForgeConfig(**{
-        k: v for k, v in cfg_dict.items()
-        if k in ForgeConfig.__dataclass_fields__
-    })
+    config = ForgeConfig(**{k: v for k, v in cfg_dict.items() if k in ForgeConfig.__dataclass_fields__})
     sd = get_state_dict(ckpt)
     return sd, config
 
@@ -66,6 +67,7 @@ def _filter_keys(sd: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
 
 
 # ── SLERP ──────────────────────────────────────────────────────────
+
 
 def _slerp_tensor(a: torch.Tensor, b: torch.Tensor, t: float) -> torch.Tensor:
     """Spherical linear interpolation between flat tensors."""
@@ -146,6 +148,7 @@ def slerp_merge(
 
 # ── TIES ───────────────────────────────────────────────────────────
 
+
 def ties_merge(
     paths: Sequence[str | Path],
     base_path: str | Path | None = None,
@@ -198,8 +201,7 @@ def ties_merge(
         all_cfg.append(cfg)
     _validate_compatible(all_cfg)
 
-    keys = sorted(set(sd_base) & set.intersection(
-        *(set(sd) for sd in all_sd)))
+    keys = sorted(set(sd_base) & set.intersection(*(set(sd) for sd in all_sd)))
     merged = {}
     total = len(keys)
 
@@ -218,8 +220,7 @@ def ties_merge(
             k = max(1, int(density * flat.numel()))
             threshold = flat.abs().topk(k).values[-1]
             mask = flat.abs() >= threshold
-            trimmed.append(
-                (flat * mask.float()).reshape(delta.shape))
+            trimmed.append((flat * mask.float()).reshape(delta.shape))
 
         # Step 3: Elect sign — majority vote on sign per element
         stacked = torch.stack(trimmed)
@@ -239,11 +240,9 @@ def ties_merge(
         merged_delta = weighted_sum / safe_denom
         merged_delta *= (weight_total > 0).float()
 
-        merged[key] = (base_tensor + merged_delta).to(
-            sd_base[key].dtype)
+        merged[key] = (base_tensor + merged_delta).to(sd_base[key].dtype)
 
-        if on_progress and (ki % max(1, total // 20) == 0
-                            or ki == total - 1):
+        if on_progress and (ki % max(1, total // 20) == 0 or ki == total - 1):
             pct = int((ki + 1) / total * 100)
             on_progress(pct, f"TIES {pct}% ({ki + 1}/{total} tensors)")
 
@@ -260,6 +259,7 @@ def ties_merge(
 
 
 # ── Linear interpolation ──────────────────────────────────────────
+
 
 def linear_merge(
     path_a: str | Path,

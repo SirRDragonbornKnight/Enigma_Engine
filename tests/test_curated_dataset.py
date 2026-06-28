@@ -1,4 +1,5 @@
 """TC-9/TC-10: Tests for curated_dataset.py and dataset.py — JSONL workflow, text cleaning, corpus processing."""
+
 import json
 import sys
 from pathlib import Path
@@ -46,8 +47,14 @@ class TestDatasetEntry:
         assert "timestamp" in d
 
     def test_from_dict(self):
-        data = {"text": "hello", "source": "test", "status": "approved",
-                "timestamp": "2026-01-01", "stage": "basics", "metadata": {}}
+        data = {
+            "text": "hello",
+            "source": "test",
+            "status": "approved",
+            "timestamp": "2026-01-01",
+            "stage": "basics",
+            "metadata": {},
+        }
         e = DatasetEntry.from_dict(data)
         assert e.text == "hello"
         assert e.status == "approved"
@@ -270,9 +277,7 @@ class TestCuratedDatasetPersistence:
         """
         path = tmp_path / "bad.jsonl"
         path.write_text(
-            '{"text": "good", "status": "pending"}\n'
-            'not valid json\n'
-            '{"text": "also good", "status": "approved"}\n'
+            '{"text": "good", "status": "pending"}\nnot valid json\n{"text": "also good", "status": "approved"}\n'
         )
         ds = CuratedDataset(path)
         # Implementation logs error on malformed lines, may load 0
@@ -290,6 +295,7 @@ class TestCuratedDatasetThreadSafety:
     def test_concurrent_add_batch_no_duplicates(self, tmp_path):
         """Concurrent add_batch calls must not produce duplicate entries."""
         import threading
+
         ds = CuratedDataset(tmp_path / "ds.jsonl")
         barrier = threading.Barrier(4)
 
@@ -304,9 +310,7 @@ class TestCuratedDatasetThreadSafety:
             t.join()
 
         texts = [e.text for e in ds.entries]
-        assert len(texts) == len(set(texts)), (
-            f"Duplicates found: {[t for t in texts if texts.count(t) > 1]}"
-        )
+        assert len(texts) == len(set(texts)), f"Duplicates found: {[t for t in texts if texts.count(t) > 1]}"
         assert ds.count == 3  # only 3 unique texts
 
 
@@ -464,9 +468,7 @@ class TestProcessTextCorpus:
         (sub / "nested.txt").write_text("nested file", encoding="utf-8")
         result = process_text_corpus(tmp_path)
         assert "top level" in result
-        assert "nested file" in result, (
-            "_process_directory should recurse into subdirectories"
-        )
+        assert "nested file" in result, "_process_directory should recurse into subdirectories"
 
     def test_string_path(self, tmp_path):
         f = tmp_path / "data.txt"
@@ -507,16 +509,17 @@ class TestDownloadDataset:
 
     def test_creates_dest_dir(self, tmp_path):
         dest = tmp_path / "sub" / "dir"
-        with patch("huggingface_hub.snapshot_download",
-                    side_effect=RuntimeError("mocked")), pytest.raises(RuntimeError):
+        with (
+            patch("huggingface_hub.snapshot_download", side_effect=RuntimeError("mocked")),
+            pytest.raises(RuntimeError),
+        ):
             download_dataset("tinystories", dest)
         # dest dir should exist even if download fails
         assert dest.exists()
 
     def test_progress_fn_called(self, tmp_path):
         msgs = []
-        with patch("huggingface_hub.snapshot_download",
-                    return_value=str(tmp_path / "tinystories")):
+        with patch("huggingface_hub.snapshot_download", return_value=str(tmp_path / "tinystories")):
             download_dataset("tinystories", tmp_path, progress_fn=msgs.append)
         assert len(msgs) >= 1
         assert "TinyStories" in msgs[0]
@@ -544,6 +547,7 @@ class TestIterTextChunks:
         f.write_text("Hello", encoding="utf-8")
         result = iter_text_chunks(f)
         import types
+
         assert isinstance(result, types.GeneratorType)
 
     def test_yields_from_directory(self, tmp_path):

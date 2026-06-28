@@ -3,6 +3,7 @@ Example Plugin — rename to ``example.py`` to activate.
 
 Demonstrates how to add custom [CMD] commands to Enigma Engine.
 """
+
 from enigma_engine.core.commands import CommandResult
 
 
@@ -17,17 +18,20 @@ def register(registry):
     def roll_dice(args, ctx):
         """Roll a random number between 1 and N (default 6)."""
         import random
+
         sides = int(args[0]) if args else 6
         result = random.randint(1, sides)
         return CommandResult(True, f"[OK] Rolled a {result} (d{sides})")
 
     registry.register(
-        "example.greet", greet,
+        "example.greet",
+        greet,
         description="Greet someone by name",
         usage="example.greet [name]",
     )
     registry.register(
-        "example.roll", roll_dice,
+        "example.roll",
+        roll_dice,
         description="Roll a dice",
         usage="example.roll [sides]",
     )

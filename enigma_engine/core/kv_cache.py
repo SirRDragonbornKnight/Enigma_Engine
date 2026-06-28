@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class KVCacheConfig:
     """Configuration for KV-Cache."""
+
     max_seq_len: int = 2048
     dtype: Optional[torch.dtype] = None  # None = same as model
     quantize_to_int8: bool = False  # Use INT8 quantization for memory savings
@@ -104,36 +105,20 @@ class KVCache:
         if quantize_to_int8:
             # For INT8, we also need scale factors per channel group
             self._cache_k = torch.zeros(
-                (batch_size, max_seq_len, n_kv_heads, head_dim),
-                dtype=torch.int8, device=device
+                (batch_size, max_seq_len, n_kv_heads, head_dim), dtype=torch.int8, device=device
             )
             self._cache_v = torch.zeros(
-                (batch_size, max_seq_len, n_kv_heads, head_dim),
-                dtype=torch.int8, device=device
+                (batch_size, max_seq_len, n_kv_heads, head_dim), dtype=torch.int8, device=device
             )
             # Scale factors: [batch, max_seq_len, n_kv_heads, n_groups]
-            self._scale_k = torch.ones(
-                (batch_size, max_seq_len, n_kv_heads, self._quant_n_groups),
-                device=device)
-            self._scale_v = torch.ones(
-                (batch_size, max_seq_len, n_kv_heads, self._quant_n_groups),
-                device=device)
+            self._scale_k = torch.ones((batch_size, max_seq_len, n_kv_heads, self._quant_n_groups), device=device)
+            self._scale_v = torch.ones((batch_size, max_seq_len, n_kv_heads, self._quant_n_groups), device=device)
             # T3-5: Zero-point offsets for asymmetric quantization
-            self._zp_k = torch.zeros(
-                (batch_size, max_seq_len, n_kv_heads, self._quant_n_groups),
-                device=device)
-            self._zp_v = torch.zeros(
-                (batch_size, max_seq_len, n_kv_heads, self._quant_n_groups),
-                device=device)
+            self._zp_k = torch.zeros((batch_size, max_seq_len, n_kv_heads, self._quant_n_groups), device=device)
+            self._zp_v = torch.zeros((batch_size, max_seq_len, n_kv_heads, self._quant_n_groups), device=device)
         else:
-            self._cache_k = torch.zeros(
-                (batch_size, max_seq_len, n_kv_heads, head_dim),
-                dtype=dtype, device=device
-            )
-            self._cache_v = torch.zeros(
-                (batch_size, max_seq_len, n_kv_heads, head_dim),
-                dtype=dtype, device=device
-            )
+            self._cache_k = torch.zeros((batch_size, max_seq_len, n_kv_heads, head_dim), dtype=dtype, device=device)
+            self._cache_v = torch.zeros((batch_size, max_seq_len, n_kv_heads, head_dim), dtype=dtype, device=device)
             self._scale_k = None
             self._scale_v = None
             self._zp_k = None
@@ -205,12 +190,7 @@ class KVCache:
         result = grouped * scale.unsqueeze(-1) + zero_point.unsqueeze(-1)
         return result.view(*leading, D)
 
-    def update(
-        self,
-        k: torch.Tensor,
-        v: torch.Tensor,
-        position: Optional[int] = None
-    ) -> int:
+    def update(self, k: torch.Tensor, v: torch.Tensor, position: Optional[int] = None) -> int:
         """
         Update cache with new keys and values.
 
@@ -227,21 +207,20 @@ class KVCache:
 
         # Validate batch size
         if k.shape[0] != self.batch_size or v.shape[0] != self.batch_size:
-            raise ValueError(
-                f"KV cache batch mismatch: cache={self.batch_size}, "
-                f"k={k.shape[0]}, v={v.shape[0]}")
+            raise ValueError(f"KV cache batch mismatch: cache={self.batch_size}, k={k.shape[0]}, v={v.shape[0]}")
 
         seq_len = k.shape[1]
 
         # Truncate if single update exceeds cache capacity
         if seq_len > self.max_seq_len:
             logger.warning(
-                "KV cache: seq_len %d exceeds max_seq_len %d — "
-                "truncating to last %d positions",
-                seq_len, self.max_seq_len, self.max_seq_len,
+                "KV cache: seq_len %d exceeds max_seq_len %d — truncating to last %d positions",
+                seq_len,
+                self.max_seq_len,
+                self.max_seq_len,
             )
-            k = k[:, -self.max_seq_len:]
-            v = v[:, -self.max_seq_len:]
+            k = k[:, -self.max_seq_len :]
+            v = v[:, -self.max_seq_len :]
             seq_len = self.max_seq_len
             position = 0
 
@@ -250,9 +229,10 @@ class KVCache:
         # Warn on overflow
         if end_pos > self.max_seq_len:
             logger.warning(
-                "KV cache overflow: seq_len %d at pos %d exceeds "
-                "max_seq_len %d — shifting with sliding window",
-                seq_len, position, self.max_seq_len,
+                "KV cache overflow: seq_len %d at pos %d exceeds max_seq_len %d — shifting with sliding window",
+                seq_len,
+                position,
+                self.max_seq_len,
             )
             # Shift existing cache left to make room
             shift = end_pos - self.max_seq_len
@@ -289,10 +269,7 @@ class KVCache:
         self.current_pos = end_pos
         return self.current_pos
 
-    def get(
-        self,
-        up_to_position: Optional[int] = None
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    def get(self, up_to_position: Optional[int] = None) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Get cached keys and values up to a position.
 
@@ -388,7 +365,7 @@ class KVCache:
             self._cache_v[:, :prefix_len] = v
         self.current_pos = prefix_len
 
-    def clone(self) -> 'KVCache':
+    def clone(self) -> "KVCache":
         """Create a copy of this cache (for beam search, etc.)."""
         new_cache = KVCache(
             batch_size=self.batch_size,
@@ -434,7 +411,7 @@ class KVCacheManager:
         max_seq_len: int = 2048,
         device: torch.device = None,
         dtype: torch.dtype = torch.float32,
-        quantize: bool = False
+        quantize: bool = False,
     ):
         """
         Initialize the cache manager.
@@ -452,7 +429,7 @@ class KVCacheManager:
         self.n_kv_heads = n_kv_heads
         self.head_dim = head_dim
         self.max_seq_len = max_seq_len
-        self.device = device or torch.device('cpu')
+        self.device = device or torch.device("cpu")
         self.dtype = dtype
         self.quantize = quantize
 
@@ -602,8 +579,7 @@ class PrefixKVCache:
                 "Use build_from_manager() after a standard forward pass."
             )
             raise AttributeError(
-                "Model lacks forward_with_kv_capture. "
-                "Use build_from_manager() or build_from_layers() instead."
+                "Model lacks forward_with_kv_capture. Use build_from_manager() or build_from_layers() instead."
             )
 
         self._prefix_len = prefix_ids.shape[1]
@@ -612,8 +588,7 @@ class PrefixKVCache:
         if self._offload:
             self._to_cpu()
 
-        logger.info("PrefixKVCache: cached %d layers, %d tokens",
-                     len(self._keys), self._prefix_len)
+        logger.info("PrefixKVCache: cached %d layers, %d tokens", len(self._keys), self._prefix_len)
 
     def build_from_manager(self, manager: KVCacheManager) -> None:
         """Snapshot the *current* state of a ``KVCacheManager``."""
@@ -632,8 +607,7 @@ class PrefixKVCache:
         if self._offload:
             self._to_cpu()
 
-        logger.info("PrefixKVCache: snapshot %d layers, %d tokens from manager",
-                     len(self._keys), self._prefix_len)
+        logger.info("PrefixKVCache: snapshot %d layers, %d tokens from manager", len(self._keys), self._prefix_len)
 
     def get(self, layer_idx: int) -> tuple[torch.Tensor, torch.Tensor]:
         """Return frozen ``(K, V)`` for *layer_idx*.
@@ -674,8 +648,8 @@ class PrefixKVCache:
             kv = layer.attention._kv_cache
             if kv is None:
                 raise RuntimeError(
-                    "PrefixKVCache.build_from_layers: layer has no "
-                    "populated KV cache — run a forward pass first")
+                    "PrefixKVCache.build_from_layers: layer has no populated KV cache — run a forward pass first"
+                )
             k, v = kv.get()
             if prefix_len is not None:
                 k = k[:, :prefix_len]
@@ -692,8 +666,7 @@ class PrefixKVCache:
         if self._offload:
             self._to_cpu()
 
-        logger.info("PrefixKVCache: snapshot %d layers, %d tokens from layers",
-                     len(self._keys), self._prefix_len)
+        logger.info("PrefixKVCache: snapshot %d layers, %d tokens from layers", len(self._keys), self._prefix_len)
 
     # -- internal ----------------------------------------------------------
 
@@ -781,9 +754,9 @@ class H2OKVCache(KVCache):
         recent_idx = set(range(recent_start, self.current_pos))
 
         # Heavy hitters: top-k by cumulative attention (excluding recent)
-        scores = self._attn_scores[:, :self.current_pos].clone()
+        scores = self._attn_scores[:, : self.current_pos].clone()
         # Mask out recent window so they don't compete with HH slots
-        scores[:, recent_start:self.current_pos] = -float("inf")
+        scores[:, recent_start : self.current_pos] = -float("inf")
 
         # Top-k across all non-recent positions
         hh_k = min(self.heavy_hitter_count, recent_start)
@@ -800,33 +773,37 @@ class H2OKVCache(KVCache):
 
         # Compact the cache
         if self.quantize:
-            self._cache_k[:, :len(keep_idx)] = self._cache_k[:, keep_t]
-            self._cache_v[:, :len(keep_idx)] = self._cache_v[:, keep_t]
-            self._scale_k[:, :len(keep_idx)] = self._scale_k[:, keep_t]
-            self._scale_v[:, :len(keep_idx)] = self._scale_v[:, keep_t]
+            self._cache_k[:, : len(keep_idx)] = self._cache_k[:, keep_t]
+            self._cache_v[:, : len(keep_idx)] = self._cache_v[:, keep_t]
+            self._scale_k[:, : len(keep_idx)] = self._scale_k[:, keep_t]
+            self._scale_v[:, : len(keep_idx)] = self._scale_v[:, keep_t]
             # S739: compact zero-point tensors alongside scales
             if self._zp_k is not None:
-                self._zp_k[:, :len(keep_idx)] = self._zp_k[:, keep_t]
-                self._zp_v[:, :len(keep_idx)] = self._zp_v[:, keep_t]
+                self._zp_k[:, : len(keep_idx)] = self._zp_k[:, keep_t]
+                self._zp_v[:, : len(keep_idx)] = self._zp_v[:, keep_t]
         else:
-            self._cache_k[:, :len(keep_idx)] = self._cache_k[:, keep_t]
-            self._cache_v[:, :len(keep_idx)] = self._cache_v[:, keep_t]
+            self._cache_k[:, : len(keep_idx)] = self._cache_k[:, keep_t]
+            self._cache_v[:, : len(keep_idx)] = self._cache_v[:, keep_t]
 
         # Compact attention scores
         new_scores = torch.zeros_like(self._attn_scores)
-        new_scores[:, :len(keep_idx)] = self._attn_scores[:, keep_t]
+        new_scores[:, : len(keep_idx)] = self._attn_scores[:, keep_t]
         self._attn_scores = new_scores
 
         # Zero out evicted slots
         old_pos = self.current_pos
         self.current_pos = len(keep_idx)
         if not self.quantize:
-            self._cache_k[:, self.current_pos:old_pos].zero_()
-            self._cache_v[:, self.current_pos:old_pos].zero_()
+            self._cache_k[:, self.current_pos : old_pos].zero_()
+            self._cache_v[:, self.current_pos : old_pos].zero_()
 
-        logger.debug("H2O eviction: %d → %d tokens (HH=%d, recent=%d)",
-                      old_pos, self.current_pos,
-                      len(keep_idx) - len(recent_idx), len(recent_idx))
+        logger.debug(
+            "H2O eviction: %d → %d tokens (HH=%d, recent=%d)",
+            old_pos,
+            self.current_pos,
+            len(keep_idx) - len(recent_idx),
+            len(recent_idx),
+        )
 
     def clear(self) -> None:
         """Clear cache and attention scores."""
@@ -914,13 +891,11 @@ class TurboQuantKVCache(KVCache):
 
         # Head importance scores: cumulative attention entropy per head
         # Shape: (n_kv_heads,)
-        self._head_importance = torch.zeros(
-            self.n_kv_heads, device=self.device, dtype=torch.float32)
+        self._head_importance = torch.zeros(self.n_kv_heads, device=self.device, dtype=torch.float32)
 
         # Per-head quantization assignment: True = INT4, False = INT8
         n_int4 = max(0, int(self.n_kv_heads * self.int4_fraction))
-        self._is_int4 = torch.zeros(
-            self.n_kv_heads, device=self.device, dtype=torch.bool)
+        self._is_int4 = torch.zeros(self.n_kv_heads, device=self.device, dtype=torch.bool)
         if n_int4 > 0:
             # Start with arbitrary assignment; rebalance corrects it
             self._is_int4[:n_int4] = True
@@ -929,14 +904,14 @@ class TurboQuantKVCache(KVCache):
         # Only used for heads marked as INT4
         # Store alongside the main INT8 cache buffers from parent
         self._cache_k_int4 = torch.zeros(
-            (self.batch_size, self.max_seq_len, self.n_kv_heads,
-             self.head_dim // 2),
-            dtype=torch.int8, device=self.device,
+            (self.batch_size, self.max_seq_len, self.n_kv_heads, self.head_dim // 2),
+            dtype=torch.int8,
+            device=self.device,
         )
         self._cache_v_int4 = torch.zeros(
-            (self.batch_size, self.max_seq_len, self.n_kv_heads,
-             self.head_dim // 2),
-            dtype=torch.int8, device=self.device,
+            (self.batch_size, self.max_seq_len, self.n_kv_heads, self.head_dim // 2),
+            dtype=torch.int8,
+            device=self.device,
         )
         # INT4 scales: per-head per-token (same as INT8 scales)
         self._scale_k_int4 = torch.ones(
@@ -951,15 +926,15 @@ class TurboQuantKVCache(KVCache):
         self._update_count = 0
 
         logger.debug(
-            "TurboQuantKVCache: %d heads, %.0f%% INT4, "
-            "rebalance every %d tokens",
+            "TurboQuantKVCache: %d heads, %.0f%% INT4, rebalance every %d tokens",
             self.n_kv_heads,
             self.int4_fraction * 100,
             self.rebalance_interval,
         )
 
     def _quantize_int4(
-        self, tensor: torch.Tensor,
+        self,
+        tensor: torch.Tensor,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Quantize to INT4 with per-head scaling.
 
@@ -1012,7 +987,7 @@ class TurboQuantKVCache(KVCache):
         # Interleave back to full head_dim
         result = torch.stack([high_f, low_f], dim=-1).flatten(-2)
         # Truncate to original head_dim (drops padding)
-        result = result[..., :self.head_dim]
+        result = result[..., : self.head_dim]
         # Apply scale
         return result * scale.unsqueeze(-1)
 
@@ -1042,7 +1017,7 @@ class TurboQuantKVCache(KVCache):
             if groups > 0:
                 entropy = entropy.view(self.n_kv_heads, groups).mean(dim=1)
             else:
-                entropy = entropy[:self.n_kv_heads]
+                entropy = entropy[: self.n_kv_heads]
 
         self._head_importance += entropy.to(self.device)
 
@@ -1083,9 +1058,7 @@ class TurboQuantKVCache(KVCache):
 
         # Validate batch size
         if k.shape[0] != self.batch_size or v.shape[0] != self.batch_size:
-            raise ValueError(
-                f"KV cache batch mismatch: cache={self.batch_size}, "
-                f"k={k.shape[0]}, v={v.shape[0]}")
+            raise ValueError(f"KV cache batch mismatch: cache={self.batch_size}, k={k.shape[0]}, v={v.shape[0]}")
 
         seq_len = k.shape[1]
         end_pos = position + seq_len
@@ -1137,7 +1110,8 @@ class TurboQuantKVCache(KVCache):
         # Allocate output tensors
         k = torch.zeros(
             (self.batch_size, up_to_position, self.n_kv_heads, self.head_dim),
-            dtype=self.dtype, device=self.device,
+            dtype=self.dtype,
+            device=self.device,
         )
         v = torch.zeros_like(k)
 
@@ -1173,12 +1147,8 @@ class TurboQuantKVCache(KVCache):
         """Calculate memory usage including INT4 packed buffers."""
         base_mb = super().memory_usage_mb()
         # Add INT4 packed storage
-        int4_bytes = (
-            self._cache_k_int4.numel() + self._cache_v_int4.numel()
-        )  # INT8 elements (packed)
-        int4_scale_bytes = (
-            self._scale_k_int4.numel() + self._scale_v_int4.numel()
-        ) * 4  # float32 scales
+        int4_bytes = self._cache_k_int4.numel() + self._cache_v_int4.numel()  # INT8 elements (packed)
+        int4_scale_bytes = (self._scale_k_int4.numel() + self._scale_v_int4.numel()) * 4  # float32 scales
         return base_mb + (int4_bytes + int4_scale_bytes) / (1024 * 1024)
 
     def clear(self) -> None:
@@ -1236,9 +1206,10 @@ class StreamingLLMCache(KVCache):
         self._logical_pos = 0  # Total tokens seen (not bounded by max_seq_len)
 
         logger.debug(
-            "StreamingLLMCache: %d sink tokens, %d window size, "
-            "%d max_seq_len",
-            self.n_sink, self.window_size, self.max_seq_len,
+            "StreamingLLMCache: %d sink tokens, %d window size, %d max_seq_len",
+            self.n_sink,
+            self.window_size,
+            self.max_seq_len,
         )
 
     @property
@@ -1296,19 +1267,25 @@ class StreamingLLMCache(KVCache):
             if actual_keep > 0:
                 dst_start = self.n_sink
                 if self.quantize:
-                    self._cache_k[:, dst_start:dst_start + actual_keep] = \
-                        self._cache_k[:, src_start:src_start + actual_keep].clone()
-                    self._cache_v[:, dst_start:dst_start + actual_keep] = \
-                        self._cache_v[:, src_start:src_start + actual_keep].clone()
-                    self._scale_k[:, dst_start:dst_start + actual_keep] = \
-                        self._scale_k[:, src_start:src_start + actual_keep].clone()
-                    self._scale_v[:, dst_start:dst_start + actual_keep] = \
-                        self._scale_v[:, src_start:src_start + actual_keep].clone()
+                    self._cache_k[:, dst_start : dst_start + actual_keep] = self._cache_k[
+                        :, src_start : src_start + actual_keep
+                    ].clone()
+                    self._cache_v[:, dst_start : dst_start + actual_keep] = self._cache_v[
+                        :, src_start : src_start + actual_keep
+                    ].clone()
+                    self._scale_k[:, dst_start : dst_start + actual_keep] = self._scale_k[
+                        :, src_start : src_start + actual_keep
+                    ].clone()
+                    self._scale_v[:, dst_start : dst_start + actual_keep] = self._scale_v[
+                        :, src_start : src_start + actual_keep
+                    ].clone()
                 else:
-                    self._cache_k[:, dst_start:dst_start + actual_keep] = \
-                        self._cache_k[:, src_start:src_start + actual_keep].clone()
-                    self._cache_v[:, dst_start:dst_start + actual_keep] = \
-                        self._cache_v[:, src_start:src_start + actual_keep].clone()
+                    self._cache_k[:, dst_start : dst_start + actual_keep] = self._cache_k[
+                        :, src_start : src_start + actual_keep
+                    ].clone()
+                    self._cache_v[:, dst_start : dst_start + actual_keep] = self._cache_v[
+                        :, src_start : src_start + actual_keep
+                    ].clone()
 
         # 3. Write new tokens at the end of the window
         new_start = self.n_sink + keep_from_window

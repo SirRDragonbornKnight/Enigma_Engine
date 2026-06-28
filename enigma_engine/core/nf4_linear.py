@@ -25,13 +25,27 @@ logger = logging.getLogger(__name__)
 
 # Pre-computed NF4 lookup table: 16 quantiles of N(0,1) mapped to [-1, 1].
 # From Dettmers et al. 2023, "QLoRA: Efficient Finetuning of Quantized LLMs".
-NF4_TABLE = torch.tensor([
-    -1.0, -0.6961928009986877, -0.5250730514526367, -0.39491748809814453,
-    -0.28444138169288635, -0.18477343022823334, -0.09105003625154495, 0.0,
-    0.07958029955625534, 0.16093020141124725, 0.24611230194568634,
-    0.33791524171829224, 0.44070982933044434, 0.5626170039176941,
-    0.7229568362236023, 1.0,
-], dtype=torch.float32)
+NF4_TABLE = torch.tensor(
+    [
+        -1.0,
+        -0.6961928009986877,
+        -0.5250730514526367,
+        -0.39491748809814453,
+        -0.28444138169288635,
+        -0.18477343022823334,
+        -0.09105003625154495,
+        0.0,
+        0.07958029955625534,
+        0.16093020141124725,
+        0.24611230194568634,
+        0.33791524171829224,
+        0.44070982933044434,
+        0.5626170039176941,
+        0.7229568362236023,
+        1.0,
+    ],
+    dtype=torch.float32,
+)
 
 # Decision boundaries: midpoints between adjacent NF4 values.
 NF4_BOUNDARIES = (NF4_TABLE[:-1] + NF4_TABLE[1:]) / 2
@@ -55,8 +69,11 @@ class NF4Linear(nn.Module):
     """
 
     def __init__(
-        self, in_features: int, out_features: int,
-        bias: bool = False, block_size: int = 64,
+        self,
+        in_features: int,
+        out_features: int,
+        bias: bool = False,
+        block_size: int = 64,
     ) -> None:
         super().__init__()
         self.in_features = in_features
@@ -67,21 +84,23 @@ class NF4Linear(nn.Module):
         n_bytes = (n_elements + 1) // 2  # 2 indices per byte
         n_blocks = (n_elements + block_size - 1) // block_size
 
-        self.register_buffer('_packed', torch.zeros(n_bytes, dtype=torch.uint8))
-        self.register_buffer('_scales', torch.ones(n_blocks, dtype=torch.float32))
-        self.register_buffer('_nf4_table', NF4_TABLE.clone())
+        self.register_buffer("_packed", torch.zeros(n_bytes, dtype=torch.uint8))
+        self.register_buffer("_scales", torch.ones(n_blocks, dtype=torch.float32))
+        self.register_buffer("_nf4_table", NF4_TABLE.clone())
 
         if bias:
             self.bias = nn.Parameter(torch.zeros(out_features))
         else:
-            self.register_parameter('bias', None)
+            self.register_parameter("bias", None)
 
     @classmethod
-    def from_linear(cls, linear: nn.Linear, block_size: int = 64) -> 'NF4Linear':
+    def from_linear(cls, linear: nn.Linear, block_size: int = 64) -> "NF4Linear":
         """Quantize an existing ``nn.Linear`` to NF4."""
         nf4 = cls(
-            linear.in_features, linear.out_features,
-            bias=linear.bias is not None, block_size=block_size,
+            linear.in_features,
+            linear.out_features,
+            bias=linear.bias is not None,
+            block_size=block_size,
         )
         nf4._quantize(linear.weight.detach())
         if linear.bias is not None:
@@ -131,7 +150,7 @@ class NF4Linear(nn.Module):
         values = self._nf4_table[indices]
         n_blocks = self._scales.shape[0]
         padded = F.pad(values, (0, n_blocks * bs - n))
-        weight = (padded.reshape(n_blocks, bs) * self._scales.unsqueeze(1))
+        weight = padded.reshape(n_blocks, bs) * self._scales.unsqueeze(1)
         return weight.reshape(-1)[:n].reshape(self.out_features, self.in_features)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

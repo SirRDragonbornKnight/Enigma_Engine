@@ -18,6 +18,7 @@ Usage:
 
     improvement = before_metrics["perplexity"] - after_metrics["perplexity"]
 """
+
 from __future__ import annotations
 
 import logging
@@ -58,8 +59,7 @@ def evaluate_model(
     import torch.nn.functional as F
 
     if not test_prompts:
-        return {"perplexity": float("inf"), "loss": float("inf"),
-                "num_prompts": 0}
+        return {"perplexity": float("inf"), "loss": float("inf"), "num_prompts": 0}
 
     was_training = model.training
     model.eval()
@@ -99,8 +99,7 @@ def evaluate_model(
 
                     # Compute loss
                     targets = input_ids[:, 1:]
-                    logits_flat = (logits if logits.dim() == 2
-                                   else logits.reshape(-1, logits.size(-1)))
+                    logits_flat = logits if logits.dim() == 2 else logits.reshape(-1, logits.size(-1))
                     loss = F.cross_entropy(
                         logits_flat,
                         targets.reshape(-1),
@@ -116,8 +115,7 @@ def evaluate_model(
                     continue
 
         if total_tokens == 0:
-            return {"perplexity": float("inf"), "loss": float("inf"),
-                    "num_prompts": evaluated}
+            return {"perplexity": float("inf"), "loss": float("inf"), "num_prompts": evaluated}
 
         avg_loss = total_loss / total_tokens
 
@@ -325,14 +323,12 @@ def run_golden_eval(
                         else:
                             token_ids = tokens
                     else:
-                        token_ids = [
-                            tokenizer.token_to_id(c) for c in prompt]
+                        token_ids = [tokenizer.token_to_id(c) for c in prompt]
 
                     # Greedy generate
                     generated = list(token_ids)
                     for _ in range(max_gen):
-                        inp = torch.tensor(
-                            [generated], device=device)
+                        inp = torch.tensor([generated], device=device)
                         logits = model(inp)
                         if isinstance(logits, tuple):
                             logits = logits[0]
@@ -344,18 +340,15 @@ def run_golden_eval(
                         generated.append(next_id)
 
                     # Decode response (only the generated part)
-                    gen_ids = generated[len(token_ids):]
+                    gen_ids = generated[len(token_ids) :]
                     if hasattr(tokenizer, "decode"):
                         response = tokenizer.decode(gen_ids)
                     else:
-                        response = "".join(
-                            tokenizer.id_to_token(i) for i in gen_ids)
+                        response = "".join(tokenizer.id_to_token(i) for i in gen_ids)
 
                     # Check expected keywords
                     resp_lower = response.lower()
-                    found = [
-                        kw for kw in expected
-                        if kw.lower() in resp_lower]
+                    found = [kw for kw in expected if kw.lower() in resp_lower]
                     case_passed = len(found) == len(expected)
 
                 except Exception as exc:
@@ -367,13 +360,15 @@ def run_golden_eval(
                 if case_passed:
                     passed += 1
 
-                results.append({
-                    "prompt": prompt,
-                    "expected": expected,
-                    "found": found,
-                    "passed": case_passed,
-                    "response": response[:200],
-                })
+                results.append(
+                    {
+                        "prompt": prompt,
+                        "expected": expected,
+                        "found": found,
+                        "passed": case_passed,
+                        "response": response[:200],
+                    }
+                )
 
         total = len(results)
         return {
@@ -412,43 +407,56 @@ DEFAULT_GSM8K_PATH = Path("data") / "gsm8k_test.jsonl"
 # Canonical 8-shot CoT prompt (Wei et al. 2022, "Chain-of-Thought
 # Prompting Elicits Reasoning in Large Language Models", Table 20).
 GSM8K_FEWSHOT_EXAMPLES: list[tuple[str, str]] = [
-    ("There are 15 trees in the grove. Grove workers will plant trees in "
-     "the grove today. After they are done, there will be 21 trees. How "
-     "many trees did the grove workers plant today?",
-     "There are 15 trees originally. Then there were 21 trees after some "
-     "more were planted. So there must have been 21 - 15 = 6. #### 6"),
-    ("If there are 3 cars in the parking lot and 2 more cars arrive, how "
-     "many cars are in the parking lot?",
-     "There are originally 3 cars. 2 more cars arrive. 3 + 2 = 5. #### 5"),
-    ("Leah had 32 chocolates and her sister had 42. If they ate 35, how "
-     "many pieces do they have left in total?",
-     "Originally, Leah had 32 chocolates. Her sister had 42. So in total "
-     "they had 32 + 42 = 74. After eating 35, they had 74 - 35 = 39. "
-     "#### 39"),
-    ("Jason had 20 lollipops. He gave Denny some lollipops. Now Jason "
-     "has 12 lollipops. How many lollipops did Jason give to Denny?",
-     "Jason started with 20 lollipops. Then he had 12 after giving some "
-     "to Denny. So he gave Denny 20 - 12 = 8. #### 8"),
-    ("Shawn has five toys. For Christmas, he got two toys each from his "
-     "mom and dad. How many toys does he have now?",
-     "Shawn started with 5 toys. He got 2 toys from each of his parents, "
-     "so 2 * 2 = 4 more toys. Now he has 5 + 4 = 9 toys. #### 9"),
-    ("There were nine computers in the server room. Five more computers "
-     "were installed each day, from monday to thursday. How many "
-     "computers are now in the server room?",
-     "There were originally 9 computers. For each of 4 days, 5 more "
-     "computers were added. So 5 * 4 = 20 computers were added. "
-     "9 + 20 = 29. #### 29"),
-    ("Michael had 58 golf balls. On tuesday, he lost 23 golf balls. On "
-     "wednesday, he lost 2 more. How many golf balls did he have at the "
-     "end of wednesday?",
-     "Michael started with 58 golf balls. After losing 23 on tuesday, he "
-     "had 58 - 23 = 35. After losing 2 more, he had 35 - 2 = 33. #### 33"),
-    ("Olivia has $23. She bought five bagels for $3 each. How much money "
-     "does she have left?",
-     "Olivia had 23 dollars. She bought 5 bagels for 3 dollars each. So "
-     "she spent 5 * 3 = 15 dollars. She has 23 - 15 = 8 dollars left. "
-     "#### 8"),
+    (
+        "There are 15 trees in the grove. Grove workers will plant trees in "
+        "the grove today. After they are done, there will be 21 trees. How "
+        "many trees did the grove workers plant today?",
+        "There are 15 trees originally. Then there were 21 trees after some "
+        "more were planted. So there must have been 21 - 15 = 6. #### 6",
+    ),
+    (
+        "If there are 3 cars in the parking lot and 2 more cars arrive, how many cars are in the parking lot?",
+        "There are originally 3 cars. 2 more cars arrive. 3 + 2 = 5. #### 5",
+    ),
+    (
+        "Leah had 32 chocolates and her sister had 42. If they ate 35, how many pieces do they have left in total?",
+        "Originally, Leah had 32 chocolates. Her sister had 42. So in total "
+        "they had 32 + 42 = 74. After eating 35, they had 74 - 35 = 39. "
+        "#### 39",
+    ),
+    (
+        "Jason had 20 lollipops. He gave Denny some lollipops. Now Jason "
+        "has 12 lollipops. How many lollipops did Jason give to Denny?",
+        "Jason started with 20 lollipops. Then he had 12 after giving some "
+        "to Denny. So he gave Denny 20 - 12 = 8. #### 8",
+    ),
+    (
+        "Shawn has five toys. For Christmas, he got two toys each from his "
+        "mom and dad. How many toys does he have now?",
+        "Shawn started with 5 toys. He got 2 toys from each of his parents, "
+        "so 2 * 2 = 4 more toys. Now he has 5 + 4 = 9 toys. #### 9",
+    ),
+    (
+        "There were nine computers in the server room. Five more computers "
+        "were installed each day, from monday to thursday. How many "
+        "computers are now in the server room?",
+        "There were originally 9 computers. For each of 4 days, 5 more "
+        "computers were added. So 5 * 4 = 20 computers were added. "
+        "9 + 20 = 29. #### 29",
+    ),
+    (
+        "Michael had 58 golf balls. On tuesday, he lost 23 golf balls. On "
+        "wednesday, he lost 2 more. How many golf balls did he have at the "
+        "end of wednesday?",
+        "Michael started with 58 golf balls. After losing 23 on tuesday, he "
+        "had 58 - 23 = 35. After losing 2 more, he had 35 - 2 = 33. #### 33",
+    ),
+    (
+        "Olivia has $23. She bought five bagels for $3 each. How much money does she have left?",
+        "Olivia had 23 dollars. She bought 5 bagels for 3 dollars each. So "
+        "she spent 5 * 3 = 15 dollars. She has 23 - 15 = 8 dollars left. "
+        "#### 8",
+    ),
 ]
 
 
@@ -500,8 +508,7 @@ def parse_final_number(text: str) -> float | None:
         return None
 
 
-def load_gsm8k(path: Path | str | None = None,
-               n: int = -1) -> list[dict[str, str]]:
+def load_gsm8k(path: Path | str | None = None, n: int = -1) -> list[dict[str, str]]:
     """Load GSM8K examples from a local JSONL file.
 
     Args:
@@ -537,8 +544,7 @@ def load_gsm8k(path: Path | str | None = None,
             except _json.JSONDecodeError:
                 continue
             if isinstance(obj, dict) and "question" in obj and "answer" in obj:
-                items.append({"question": str(obj["question"]),
-                              "answer": str(obj["answer"])})
+                items.append({"question": str(obj["question"]), "answer": str(obj["answer"])})
             if n > 0 and len(items) >= n:
                 break
     return items
@@ -585,8 +591,7 @@ def run_gsm8k_benchmark(
 
         prompt = f"{prefix}Question: {question}\nAnswer:"
         try:
-            output = engine.generate(
-                prompt, max_gen=max_gen, temperature=temperature)
+            output = engine.generate(prompt, max_gen=max_gen, temperature=temperature)
             if not isinstance(output, str):
                 output = str(output)
         except Exception as exc:
@@ -594,21 +599,19 @@ def run_gsm8k_benchmark(
             output = ""
 
         pred_num = parse_final_number(output)
-        item_correct = (
-            gold_num is not None
-            and pred_num is not None
-            and abs(pred_num - gold_num) < 1e-6
-        )
+        item_correct = gold_num is not None and pred_num is not None and abs(pred_num - gold_num) < 1e-6
         if item_correct:
             correct += 1
 
-        results.append({
-            "question": question,
-            "gold": gold_num,
-            "predicted": pred_num,
-            "correct": item_correct,
-            "output": output[:200],
-        })
+        results.append(
+            {
+                "question": question,
+                "gold": gold_num,
+                "predicted": pred_num,
+                "correct": item_correct,
+                "output": output[:200],
+            }
+        )
 
         if on_progress is not None:
             try:
@@ -622,4 +625,3 @@ def run_gsm8k_benchmark(
         "accuracy": correct / total if total else 0.0,
         "results": results,
     }
-

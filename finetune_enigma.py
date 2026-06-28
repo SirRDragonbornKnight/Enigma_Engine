@@ -24,6 +24,7 @@ embedding + small noise. Checkpoints carry the pretrain regime (schedule lock,
 ``serve_enigma.py`` auto-detects instruct mode. Examples longer than --block
 are SKIPPED and counted (block stays 1024 until the length-extension anneal).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -50,6 +51,7 @@ IGNORE = -100  # ignore_index for the masked positions
 def load_examples(path: Path, tokenizer, block: int):
     """JSONL -> list of (ids, mask) conversations that fit in one block."""
     from enigma_engine.core.chat_format import render_training
+
     examples, skipped_long, bad = [], 0, 0
     with open(path, encoding="utf-8") as f:
         for line in f:
@@ -64,13 +66,11 @@ def load_examples(path: Path, tokenizer, block: int):
             msgs = rec.get("messages")
             if not msgs:
                 prompt = rec.get("prompt") or rec.get("question") or rec.get("instruction")
-                completion = (rec.get("completion") or rec.get("response")
-                              or rec.get("answer") or rec.get("output"))
+                completion = rec.get("completion") or rec.get("response") or rec.get("answer") or rec.get("output")
                 if not (prompt and completion):
                     bad += 1
                     continue
-                msgs = [{"role": "user", "content": prompt},
-                        {"role": "assistant", "content": completion}]
+                msgs = [{"role": "user", "content": prompt}, {"role": "assistant", "content": completion}]
             try:
                 ids, mask = render_training(tokenizer, msgs)
             except ValueError:
@@ -83,9 +83,11 @@ def load_examples(path: Path, tokenizer, block: int):
                 bad += 1
                 continue
             examples.append((ids, mask))
-    print(f"data: {len(examples)} usable conversations from {path} "
-          f"({skipped_long} skipped as longer than block {block}, {bad} malformed/empty)",
-          flush=True)
+    print(
+        f"data: {len(examples)} usable conversations from {path} "
+        f"({skipped_long} skipped as longer than block {block}, {bad} malformed/empty)",
+        flush=True,
+    )
     return examples
 
 
@@ -129,6 +131,7 @@ def reinit_chat_rows(model: torch.nn.Module) -> list[int]:
     embedding + small noise. Pretraining only ever pushed these rows DOWN
     (never targets), so they carry no usable signal. Tied head => one tensor."""
     from enigma_engine.core.chat_format import BASE_VOCAB, CHAT_TOKENS
+
     emb = model.tok_embeddings.weight
     with torch.no_grad():
         mean = emb[:BASE_VOCAB].mean(dim=0)
@@ -140,11 +143,17 @@ def reinit_chat_rows(model: torch.nn.Module) -> list[int]:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", required=True, help="chat JSONL (messages or prompt/completion)")
-    ap.add_argument("--init", default=str(ROOT / "models" / "enigma_pretrain_large" / "latest.pth"),
-                    help="BASE checkpoint to start the instruct pass from")
+    ap.add_argument(
+        "--init",
+        default=str(ROOT / "models" / "enigma_pretrain_large" / "latest.pth"),
+        help="BASE checkpoint to start the instruct pass from",
+    )
     ap.add_argument("--resume", default=None, help="resume a previous SFT run's latest.pth")
-    ap.add_argument("--override-schedule", action="store_true",
-                    help="on resume, let CLI schedule args override the recorded schedule")
+    ap.add_argument(
+        "--override-schedule",
+        action="store_true",
+        help="on resume, let CLI schedule args override the recorded schedule",
+    )
     ap.add_argument("--out", default=str(ROOT / "models" / "enigma_sft"))
     ap.add_argument("--block", type=int, default=1024)
     ap.add_argument("--epochs", type=int, default=2)
@@ -152,8 +161,9 @@ def main() -> None:
     ap.add_argument("--grad-accum", type=int, default=4)
     ap.add_argument("--lr", type=float, default=2e-5, help="~peak/30 of pretraining")
     ap.add_argument("--warmup", type=int, default=50)
-    ap.add_argument("--weight-decay", type=float, default=0.0,
-                    help="0 is the usual SFT choice; decay is for the long pretrain")
+    ap.add_argument(
+        "--weight-decay", type=float, default=0.0, help="0 is the usual SFT choice; decay is for the long pretrain"
+    )
     ap.add_argument("--grad-clip", type=float, default=1.0)
     ap.add_argument("--optimizer", choices=["adamw", "muon"], default="adamw")
     ap.add_argument("--schedule", choices=["cosine", "wsd"], default="cosine")
@@ -170,6 +180,7 @@ def main() -> None:
 
     from enigma_engine.core.chat_format import CHAT_FORMAT_NAME, attach_chat_tokens
     from enigma_engine.core.tokenizer import get_tokenizer
+
     tokenizer = attach_chat_tokens(get_tokenizer("bpe"))
 
     # Resume (an SFT run) or init (from a BASE checkpoint). Same early-load +
@@ -188,16 +199,17 @@ def main() -> None:
     else:
         src = Path(args.init)
         if not src.exists():
-            raise SystemExit(f"--init {src} not found — the instruct pass starts from a "
-                             f"pretrained checkpoint (her run is user-gated; see SUGGESTIONS.md)")
+            raise SystemExit(
+                f"--init {src} not found — the instruct pass starts from a "
+                f"pretrained checkpoint (her run is user-gated; see SUGGESTIONS.md)"
+            )
     ck = torch.load(src, map_location=device, weights_only=False)
     if not (isinstance(ck, dict) and "model_state_dict" in ck and "config" in ck):
         raise SystemExit(f"{src} is not an Enigma checkpoint")
 
     saved_sched = ck.get("schedule") if resuming else None
     if saved_sched:
-        diffs = {k: (v, getattr(args, k)) for k, v in saved_sched.items()
-                 if hasattr(args, k) and getattr(args, k) != v}
+        diffs = {k: (v, getattr(args, k)) for k, v in saved_sched.items() if hasattr(args, k) and getattr(args, k) != v}
         if args.override_schedule:
             for k, (ck_v, cli_v) in diffs.items():
                 print(f"resume: schedule[{k}] CLI {cli_v} OVERRIDES checkpoint {ck_v}", flush=True)
@@ -206,8 +218,7 @@ def main() -> None:
                 if hasattr(args, k):
                     setattr(args, k, v)
             for k, (ck_v, cli_v) in diffs.items():
-                print(f"resume: schedule[{k}] = {ck_v} from checkpoint (CLI {cli_v} ignored)",
-                      flush=True)
+                print(f"resume: schedule[{k}] = {ck_v} from checkpoint (CLI {cli_v} ignored)", flush=True)
 
     examples = load_examples(Path(args.data), tokenizer, args.block)
     if not examples:
@@ -219,11 +230,14 @@ def main() -> None:
     X, Y = pack_blocks(train_examples, args.block, seed=args.seed)
     if n_val:
         VX, VY = pack_blocks(val_examples, args.block, seed=args.seed)
-    print(f"packed: {X.shape[0]} train blocks"
-          + (f" / {VX.shape[0]} val blocks" if n_val else " (no val split)"), flush=True)
+    print(
+        f"packed: {X.shape[0]} train blocks" + (f" / {VX.shape[0]} val blocks" if n_val else " (no val split)"),
+        flush=True,
+    )
 
     from enigma_engine.core.model import Enigma
     from enigma_engine.core.model_presets import ForgeConfig
+
     config = ForgeConfig.from_dict(ck["config"])
     if args.block > config.max_seq_len:
         raise SystemExit(f"--block {args.block} > model max_seq_len {config.max_seq_len}")
@@ -238,10 +252,12 @@ def main() -> None:
     meta = dict(ck.get("meta") or {})
     if meta.get("chat_format") != CHAT_FORMAT_NAME:
         rows = reinit_chat_rows(raw_model)
-        print(f"init: chat-token embedding rows {rows} re-initialized (mean + noise) — "
-              f"first instruct pass over a base checkpoint", flush=True)
-        meta = {"chat_format": CHAT_FORMAT_NAME, "init_from": str(src),
-                "base_step": int(ck.get("step", 0))}
+        print(
+            f"init: chat-token embedding rows {rows} re-initialized (mean + noise) — "
+            f"first instruct pass over a base checkpoint",
+            flush=True,
+        )
+        meta = {"chat_format": CHAT_FORMAT_NAME, "init_from": str(src), "base_step": int(ck.get("step", 0))}
 
     optim = build_optimizer(raw_model, args.optimizer, args.lr, args.weight_decay)
     start_step = 0
@@ -249,8 +265,7 @@ def main() -> None:
         try:
             optim.load_state_dict(ck["optimizer"])
         except Exception as exc:
-            raise SystemExit(f"resume: optimizer state does not fit --optimizer "
-                             f"{args.optimizer} ({exc})") from None
+            raise SystemExit(f"resume: optimizer state does not fit --optimizer {args.optimizer} ({exc})") from None
         start_step = int(ck.get("step", 0))
     del ck
 
@@ -262,26 +277,44 @@ def main() -> None:
     steps_per_epoch = max(1, X.shape[0] // (args.micro_batch * args.grad_accum))
     total_steps = max(1, args.epochs * steps_per_epoch)
 
-    schedule = {k: getattr(args, k) for k in (
-        "data", "epochs", "lr", "warmup", "micro_batch", "grad_accum", "block",
-        "weight_decay", "grad_clip", "optimizer", "schedule", "wsd_decay_frac")}
+    schedule = {
+        k: getattr(args, k)
+        for k in (
+            "data",
+            "epochs",
+            "lr",
+            "warmup",
+            "micro_batch",
+            "grad_accum",
+            "block",
+            "weight_decay",
+            "grad_clip",
+            "optimizer",
+            "schedule",
+            "wsd_decay_frac",
+        )
+    }
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
 
     def save(tag: str, step: int):
         from enigma_engine.core.safe_save import atomic_torch_save
+
         rotate = (out / "prev.pth") if tag == "latest.pth" else None
-        atomic_torch_save({
-            "model_state_dict": raw_model.state_dict(),
-            "config": config.to_dict(),
-            "step": step,
-            "optimizer": optim.state_dict(),
-            "schedule": schedule,
-            "meta": meta,
-        }, str(out / tag), rotate_to=rotate)
-        (out / "config.json").write_text(json.dumps(config.to_dict(), indent=2),
-                                         encoding="utf-8")
+        atomic_torch_save(
+            {
+                "model_state_dict": raw_model.state_dict(),
+                "config": config.to_dict(),
+                "step": step,
+                "optimizer": optim.state_dict(),
+                "schedule": schedule,
+                "meta": meta,
+            },
+            str(out / tag),
+            rotate_to=rotate,
+        )
+        (out / "config.json").write_text(json.dumps(config.to_dict(), indent=2), encoding="utf-8")
 
     def batch_at(data_x, data_y, idx):
         bx = data_x[idx].to(device, non_blocking=True)
@@ -293,7 +326,7 @@ def main() -> None:
         raw_model.eval()
         losses = []
         for s in range(0, VX.shape[0], args.micro_batch):
-            bx, by = VX[s:s + args.micro_batch].to(device), VY[s:s + args.micro_batch].to(device)
+            bx, by = VX[s : s + args.micro_batch].to(device), VY[s : s + args.micro_batch].to(device)
             with torch.autocast(device_type="cuda", dtype=amp_dtype, enabled=(device == "cuda")):
                 _, loss = model(bx, targets=by, pad_token_id=IGNORE)
             losses.append(loss.item())
@@ -308,22 +341,26 @@ def main() -> None:
             _, loss = model(bx, targets=by, pad_token_id=IGNORE)
         loss.backward()
         n_train_tok = int((by != IGNORE).sum())
-        print(f"[sanity] batch={tuple(bx.shape)} loss={loss.item():.4f} "
-              f"({n_train_tok} assistant-target tokens) — pipeline OK", flush=True)
+        print(
+            f"[sanity] batch={tuple(bx.shape)} loss={loss.item():.4f} "
+            f"({n_train_tok} assistant-target tokens) — pipeline OK",
+            flush=True,
+        )
         return
 
-    print(f"sft: {total_steps} steps ({args.epochs} epochs x {steps_per_epoch}) | "
-          f"mb {args.micro_batch} x ga {args.grad_accum} x {args.block} | "
-          f"lr {args.lr} {args.schedule}/{args.optimizer} | amp={'bf16' if use_bf16 else 'fp16'}",
-          flush=True)
+    print(
+        f"sft: {total_steps} steps ({args.epochs} epochs x {steps_per_epoch}) | "
+        f"mb {args.micro_batch} x ga {args.grad_accum} x {args.block} | "
+        f"lr {args.lr} {args.schedule}/{args.optimizer} | amp={'bf16' if use_bf16 else 'fp16'}",
+        flush=True,
+    )
 
     raw_model.train()
     t0 = time.time()
     perm = torch.randperm(X.shape[0])
     cursor = 0
     for step in range(start_step, total_steps):
-        lr = get_lr(step, args.warmup, total_steps, args.lr,
-                    schedule=args.schedule, decay_frac=args.wsd_decay_frac)
+        lr = get_lr(step, args.warmup, total_steps, args.lr, schedule=args.schedule, decay_frac=args.wsd_decay_frac)
         for g in optim.param_groups:
             g["lr"] = lr
         optim.zero_grad(set_to_none=True)
@@ -332,7 +369,7 @@ def main() -> None:
             if cursor + args.micro_batch > X.shape[0]:
                 perm = torch.randperm(X.shape[0])
                 cursor = 0
-            idx = perm[cursor:cursor + args.micro_batch]
+            idx = perm[cursor : cursor + args.micro_batch]
             cursor += args.micro_batch
             bx, by = batch_at(X, Y, idx)
             with torch.autocast(device_type="cuda", dtype=amp_dtype, enabled=(device == "cuda")):
@@ -348,8 +385,11 @@ def main() -> None:
 
         if step % 10 == 0:
             dt = max(1e-9, time.time() - t0)
-            print(f"step {step}/{total_steps} loss {loss_acc:.4f} lr {lr:.2e} "
-                  f"({(step - start_step + 1) / dt:.2f} step/s)", flush=True)
+            print(
+                f"step {step}/{total_steps} loss {loss_acc:.4f} lr {lr:.2e} "
+                f"({(step - start_step + 1) / dt:.2f} step/s)",
+                flush=True,
+            )
         if n_val and step > start_step and step % args.eval_every == 0:
             print(f"  [val] step {step} loss {estimate_val():.4f}", flush=True)
         if step > start_step and step % args.save_every == 0 and math.isfinite(loss_acc):

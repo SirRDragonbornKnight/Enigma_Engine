@@ -1,4 +1,4 @@
-﻿"""
+"""
 Pre-Training Data Collector for Enigma Engine
 ==============================================
 Downloads and cleans text data from free, legal sources for pre-training.
@@ -94,10 +94,7 @@ PROGRESS_FILE = BASE_DIR / "progress.json"
 COMBINED_FILE = BASE_DIR / "combined.txt"
 
 # Wikipedia dump download
-WIKI_DUMP_URL = (
-    "https://dumps.wikimedia.org/enwiki/latest/"
-    "enwiki-latest-pages-articles.xml.bz2"
-)
+WIKI_DUMP_URL = "https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles.xml.bz2"
 WIKI_DUMP_FILE = BASE_DIR / "enwiki-latest-pages-articles.xml.bz2"
 
 # Wikipedia API
@@ -105,16 +102,16 @@ WIKI_API = "https://en.wikipedia.org/w/api.php"
 SIMPLE_WIKI_API = "https://simple.wikipedia.org/w/api.php"
 
 # Rate limiting - Wikipedia requires respectful access
-WIKI_DELAY = 3.0        # seconds between Wikipedia API calls
-GUTENBERG_DELAY = 1.0   # seconds between Gutenberg downloads
-WAYBACK_DELAY = 2.0     # seconds between Wayback Machine requests
-FANDOM_DELAY = 0.5      # seconds between Fandom API requests
-MAX_RETRIES = 8          # max retries before giving up on a source
+WIKI_DELAY = 3.0  # seconds between Wikipedia API calls
+GUTENBERG_DELAY = 1.0  # seconds between Gutenberg downloads
+WAYBACK_DELAY = 2.0  # seconds between Wayback Machine requests
+FANDOM_DELAY = 0.5  # seconds between Fandom API requests
+MAX_RETRIES = 8  # max retries before giving up on a source
 
 # Minimum quality thresholds
-MIN_ARTICLE_LENGTH = 500    # characters - skip stubs
-MIN_BOOK_LENGTH = 10000     # characters - skip fragments
-MIN_PARAGRAPH_LENGTH = 50   # characters - skip tiny paragraphs
+MIN_ARTICLE_LENGTH = 500  # characters - skip stubs
+MIN_BOOK_LENGTH = 10000  # characters - skip fragments
+MIN_PARAGRAPH_LENGTH = 50  # characters - skip tiny paragraphs
 
 # User agent (required by Wikipedia and Gutenberg policies)
 USER_AGENT = (
@@ -131,29 +128,30 @@ SESSION.headers.update({"User-Agent": USER_AGENT})
 # Text cleaning
 # ---------------------------------------------------------------------------
 
+
 def clean_wiki_text(text: str) -> str:
     """Clean Wikipedia article text for training."""
-    text = re.sub(r'\[\d+\]', '', text)
-    text = re.sub(r'\[citation needed\]', '', text, flags=re.IGNORECASE)
-    text = re.sub(r'\[.*?\]', '', text)
-    text = re.sub(r'https?://\S+', '', text)
-    text = re.sub(r'\[edit\]', '', text, flags=re.IGNORECASE)
-    text = re.sub(r'[ \t]+', ' ', text)
+    text = re.sub(r"\[\d+\]", "", text)
+    text = re.sub(r"\[citation needed\]", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\[.*?\]", "", text)
+    text = re.sub(r"https?://\S+", "", text)
+    text = re.sub(r"\[edit\]", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"[ \t]+", " ", text)
 
-    lines = text.split('\n')
+    lines = text.split("\n")
     cleaned = []
     for line in lines:
         line = line.strip()
         if not line:
-            if cleaned and cleaned[-1] != '':
-                cleaned.append('')
+            if cleaned and cleaned[-1] != "":
+                cleaned.append("")
             continue
-        if len(line) < 20 and line.endswith(':'):
+        if len(line) < 20 and line.endswith(":"):
             continue
         cleaned.append(line)
 
-    text = '\n'.join(cleaned)
-    text = re.sub(r'\n{3,}', '\n\n', text)
+    text = "\n".join(cleaned)
+    text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
 
 
@@ -164,77 +162,88 @@ def strip_wikitext(text: str) -> str:
     and other wiki syntax.  Not perfect but good enough for training data.
     """
     # HTML comments
-    text = re.sub(r'<!--.*?-->', '', text, flags=re.DOTALL)
+    text = re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
 
     # <ref>...</ref> and self-closing <ref ... />
-    text = re.sub(r'<ref[^>]*>.*?</ref>', '', text, flags=re.DOTALL)
-    text = re.sub(r'<ref[^>]*/>', '', text)
+    text = re.sub(r"<ref[^>]*>.*?</ref>", "", text, flags=re.DOTALL)
+    text = re.sub(r"<ref[^>]*/>", "", text)
 
     # Block-level tags whose content should be dropped
-    for tag in ('gallery', 'source', 'syntaxhighlight', 'pre', 'math',
-                'score', 'timeline', 'nowiki', 'imagemap', 'mapframe'):
-        text = re.sub(rf'<{tag}[^>]*>.*?</{tag}>', '', text,
-                       flags=re.DOTALL | re.IGNORECASE)
+    for tag in (
+        "gallery",
+        "source",
+        "syntaxhighlight",
+        "pre",
+        "math",
+        "score",
+        "timeline",
+        "nowiki",
+        "imagemap",
+        "mapframe",
+    ):
+        text = re.sub(rf"<{tag}[^>]*>.*?</{tag}>", "", text, flags=re.DOTALL | re.IGNORECASE)
 
     # Remaining HTML tags (keep content)
-    text = re.sub(r'<[^>]+/?>', '', text)
+    text = re.sub(r"<[^>]+/?>", "", text)
 
     # Tables  {| ... |}  (may be nested — iterate)
     for _ in range(5):
         prev = text
-        text = re.sub(r'\{\|[^{]*?\|\}', '', text, flags=re.DOTALL)
+        text = re.sub(r"\{\|[^{]*?\|\}", "", text, flags=re.DOTALL)
         if prev == text:
             break
     # Leftover table openers (broken markup)
-    text = re.sub(r'\{\|.*', '', text)
+    text = re.sub(r"\{\|.*", "", text)
 
     # Templates {{ ... }} (often deeply nested — iterate)
     for _ in range(15):
         prev = text
-        text = re.sub(r'\{\{[^{}]*\}\}', '', text)
+        text = re.sub(r"\{\{[^{}]*\}\}", "", text)
         if prev == text:
             break
 
     # File / Image / Category links
     text = re.sub(
-        r'\[\[(File|Image|Archivo|Fichier|Datei):[^\]]*\]\]', '',
-        text, flags=re.IGNORECASE,
+        r"\[\[(File|Image|Archivo|Fichier|Datei):[^\]]*\]\]",
+        "",
+        text,
+        flags=re.IGNORECASE,
     )
-    text = re.sub(r'\[\[Category:[^\]]*\]\]', '', text, flags=re.IGNORECASE)
+    text = re.sub(r"\[\[Category:[^\]]*\]\]", "", text, flags=re.IGNORECASE)
 
     # Piped links [[target|display]] → display
-    text = re.sub(r'\[\[[^\]|]*\|([^\]]*)\]\]', r'\1', text)
+    text = re.sub(r"\[\[[^\]|]*\|([^\]]*)\]\]", r"\1", text)
     # Plain links [[target]] → target
-    text = re.sub(r'\[\[([^\]]*)\]\]', r'\1', text)
+    text = re.sub(r"\[\[([^\]]*)\]\]", r"\1", text)
 
     # External links [url text] → text,  [url] → ''
-    text = re.sub(r'\[https?://\S+\s+([^\]]*)\]', r'\1', text)
-    text = re.sub(r'\[https?://[^\]]*\]', '', text)
+    text = re.sub(r"\[https?://\S+\s+([^\]]*)\]", r"\1", text)
+    text = re.sub(r"\[https?://[^\]]*\]", "", text)
 
     # Bold / italic
-    text = re.sub(r"'{2,5}", '', text)
+    text = re.sub(r"'{2,5}", "", text)
 
     # Section headings == title == → title
-    text = re.sub(r'^=+\s*(.*?)\s*=+\s*$', r'\1', text, flags=re.MULTILINE)
+    text = re.sub(r"^=+\s*(.*?)\s*=+\s*$", r"\1", text, flags=re.MULTILINE)
 
     # List / indent markers
-    text = re.sub(r'^[*#:;]+\s*', '', text, flags=re.MULTILINE)
+    text = re.sub(r"^[*#:;]+\s*", "", text, flags=re.MULTILINE)
 
     # Common HTML entities
-    text = re.sub(r'&nbsp;', ' ', text)
-    text = re.sub(r'&ndash;', '\u2013', text)
-    text = re.sub(r'&mdash;', '\u2014', text)
-    text = re.sub(r'&amp;', '&', text)
-    text = re.sub(r'&lt;', '<', text)
-    text = re.sub(r'&gt;', '>', text)
-    text = re.sub(r'&#\d+;', '', text)
+    text = re.sub(r"&nbsp;", " ", text)
+    text = re.sub(r"&ndash;", "\u2013", text)
+    text = re.sub(r"&mdash;", "\u2014", text)
+    text = re.sub(r"&amp;", "&", text)
+    text = re.sub(r"&lt;", "<", text)
+    text = re.sub(r"&gt;", ">", text)
+    text = re.sub(r"&#\d+;", "", text)
 
     # Magic words
-    text = re.sub(r'__[A-Z]+__', '', text)
+    text = re.sub(r"__[A-Z]+__", "", text)
 
     # Whitespace cleanup
-    text = re.sub(r'\n{3,}', '\n\n', text)
-    text = re.sub(r' {2,}', ' ', text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = re.sub(r" {2,}", " ", text)
 
     return text.strip()
 
@@ -257,7 +266,7 @@ def clean_gutenberg_text(text: str) -> str:
     for marker in start_markers:
         idx = text.find(marker)
         if idx != -1:
-            newline_idx = text.find('\n', idx)
+            newline_idx = text.find("\n", idx)
             if newline_idx != -1:
                 start_idx = newline_idx + 1
             break
@@ -270,8 +279,8 @@ def clean_gutenberg_text(text: str) -> str:
             break
 
     text = text[start_idx:end_idx]
-    text = re.sub(r'[ \t]+', ' ', text)
-    text = re.sub(r'\n{3,}', '\n\n', text)
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
 
 
@@ -282,7 +291,7 @@ def quality_filter(text: str, min_length: int) -> bool:
     alpha_ratio = sum(c.isalpha() for c in text) / max(len(text), 1)
     if alpha_ratio < 0.5:
         return False
-    sentence_endings = text.count('.') + text.count('?') + text.count('!')
+    sentence_endings = text.count(".") + text.count("?") + text.count("!")
     return sentence_endings >= 3
 
 
@@ -351,6 +360,7 @@ def detect_ai_content(text: str) -> bool:
 # Wikipedia dump download + extraction
 # ---------------------------------------------------------------------------
 
+
 def _download_wiki_dump(resume: bool = True) -> bool:
     """Download the English Wikipedia dump bzip2 file with resume support.
 
@@ -369,14 +379,12 @@ def _download_wiki_dump(resume: bool = True) -> bool:
             head.raise_for_status()
             expected = int(head.headers.get("Content-Length", 0))
             if expected > 0 and existing_size >= expected:
-                print(f"  [Wiki Dump] Already downloaded: "
-                      f"{existing_size / 1e9:.1f} GB (verified)")
+                print(f"  [Wiki Dump] Already downloaded: {existing_size / 1e9:.1f} GB (verified)")
                 return True
         except Exception:
             pass  # HEAD failed — fall through to resume attempt
         if resume:
-            print(f"  [Wiki Dump] Resuming download "
-                  f"({existing_size / 1e6:.0f} MB so far)...")
+            print(f"  [Wiki Dump] Resuming download ({existing_size / 1e6:.0f} MB so far)...")
         else:
             WIKI_DUMP_FILE.unlink()
 
@@ -432,11 +440,12 @@ def _download_wiki_dump(resume: bool = True) -> bool:
                             pct = downloaded / total * 100
                             remaining_bytes = total - downloaded
                             eta_min = remaining_bytes / max(speed * 1e6, 1) / 60
-                            print(f"  [Wiki Dump] {downloaded / 1e9:.1f}/{total / 1e9:.1f} GB "
-                                  f"({pct:.0f}%) @ {speed:.0f} MB/s — ~{eta_min:.0f} min left")
+                            print(
+                                f"  [Wiki Dump] {downloaded / 1e9:.1f}/{total / 1e9:.1f} GB "
+                                f"({pct:.0f}%) @ {speed:.0f} MB/s — ~{eta_min:.0f} min left"
+                            )
                         else:
-                            print(f"  [Wiki Dump] {downloaded / 1e9:.1f} GB downloaded "
-                                  f"@ {speed:.0f} MB/s...")
+                            print(f"  [Wiki Dump] {downloaded / 1e9:.1f} GB downloaded @ {speed:.0f} MB/s...")
                         last_print = downloaded
                         last_print_time = now
 
@@ -444,8 +453,7 @@ def _download_wiki_dump(resume: bool = True) -> bool:
         return True
 
     except KeyboardInterrupt:
-        print(f"\n  [Wiki Dump] Download interrupted at {downloaded / 1e9:.1f} GB. "
-              f"Run with --resume to continue.")
+        print(f"\n  [Wiki Dump] Download interrupted at {downloaded / 1e9:.1f} GB. Run with --resume to continue.")
         return False
     except requests.RequestException as e:
         print(f"  [Wiki Dump] Download error: {e}")
@@ -465,80 +473,80 @@ def _clean_wikitext(wikitext: str) -> str:
     # Remove nested templates {{ ... }} — iterate since they nest
     # Limit iterations to avoid pathological cases
     for _ in range(8):
-        result = re.sub(r'\{\{[^{}]*\}\}', '', text)
+        result = re.sub(r"\{\{[^{}]*\}\}", "", text)
         if result == text:
             break
         text = result
 
     # Remove leftover unclosed templates (greedy but bounded)
-    text = re.sub(r'\{\{[^}]{0,500}$', '', text, flags=re.MULTILINE)
+    text = re.sub(r"\{\{[^}]{0,500}$", "", text, flags=re.MULTILINE)
 
     # Remove tables {| ... |}
-    text = re.sub(r'\{\|.*?\|\}', '', text, flags=re.DOTALL)
+    text = re.sub(r"\{\|.*?\|\}", "", text, flags=re.DOTALL)
 
     # Remove <ref>...</ref> and <ref ... /> (citations)
-    text = re.sub(r'<ref[^>]*>.*?</ref>', '', text, flags=re.DOTALL | re.IGNORECASE)
-    text = re.sub(r'<ref[^>]*/>', '', text, flags=re.IGNORECASE)
+    text = re.sub(r"<ref[^>]*>.*?</ref>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<ref[^>]*/>", "", text, flags=re.IGNORECASE)
 
     # Remove HTML comments
-    text = re.sub(r'<!--.*?-->', '', text, flags=re.DOTALL)
+    text = re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
 
     # Remove all remaining HTML tags
-    text = re.sub(r'<[^>]+>', '', text)
+    text = re.sub(r"<[^>]+>", "", text)
 
     # Remove categories [[Category:...]]
-    text = re.sub(r'\[\[Category:[^\]]*\]\]', '', text, flags=re.IGNORECASE)
+    text = re.sub(r"\[\[Category:[^\]]*\]\]", "", text, flags=re.IGNORECASE)
 
     # Remove file/image embeds [[File:...]] [[Image:...]]
-    text = re.sub(r'\[\[(?:File|Image):[^\]]*\]\]', '', text, flags=re.IGNORECASE)
+    text = re.sub(r"\[\[(?:File|Image):[^\]]*\]\]", "", text, flags=re.IGNORECASE)
 
     # Convert wiki links [[target|display]] → display, [[target]] → target
-    text = re.sub(r'\[\[[^|\]]*\|([^\]]+)\]\]', r'\1', text)
-    text = re.sub(r'\[\[([^\]]+)\]\]', r'\1', text)
+    text = re.sub(r"\[\[[^|\]]*\|([^\]]+)\]\]", r"\1", text)
+    text = re.sub(r"\[\[([^\]]+)\]\]", r"\1", text)
 
     # Remove external links [http://... display] → display, [http://...] → ""
-    text = re.sub(r'\[https?://\S+\s+([^\]]+)\]', r'\1', text)
-    text = re.sub(r'\[https?://\S+\]', '', text)
-    text = re.sub(r'https?://\S+', '', text)
+    text = re.sub(r"\[https?://\S+\s+([^\]]+)\]", r"\1", text)
+    text = re.sub(r"\[https?://\S+\]", "", text)
+    text = re.sub(r"https?://\S+", "", text)
 
     # Remove bold/italic markers
-    text = re.sub(r"'{2,5}", '', text)
+    text = re.sub(r"'{2,5}", "", text)
 
     # Remove section headers == Header == → Header (keep text)
-    text = re.sub(r'^=+\s*(.*?)\s*=+\s*$', r'\1', text, flags=re.MULTILINE)
+    text = re.sub(r"^=+\s*(.*?)\s*=+\s*$", r"\1", text, flags=re.MULTILINE)
 
     # Remove magic words and behavior switches
-    text = re.sub(r'__[A-Z]+__', '', text)
+    text = re.sub(r"__[A-Z]+__", "", text)
 
     # Remove reference markers [1], [2], etc.
-    text = re.sub(r'\[\d+\]', '', text)
-    text = re.sub(r'\[citation needed\]', '', text, flags=re.IGNORECASE)
+    text = re.sub(r"\[\d+\]", "", text)
+    text = re.sub(r"\[citation needed\]", "", text, flags=re.IGNORECASE)
 
     # Remove leftover braces/brackets
-    text = re.sub(r'\{[^}]*\}', '', text)
+    text = re.sub(r"\{[^}]*\}", "", text)
 
     # Collapse whitespace
-    text = re.sub(r'[ \t]+', ' ', text)
-    text = re.sub(r'\n{3,}', '\n\n', text)
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
 
     # Clean up lines
-    lines = text.split('\n')
+    lines = text.split("\n")
     cleaned = []
     for line in lines:
         line = line.strip()
         if not line:
-            if cleaned and cleaned[-1] != '':
-                cleaned.append('')
+            if cleaned and cleaned[-1] != "":
+                cleaned.append("")
             continue
         # Skip lines that look like leftover markup artifacts
-        if len(line) < 30 and not line.endswith(('.', '!', '?', ':')):
+        if len(line) < 30 and not line.endswith((".", "!", "?", ":")):
             continue
         # Skip lines that are just bullets/numbers without content
-        if re.match(r'^[\*#;:]+\s*$', line):
+        if re.match(r"^[\*#;:]+\s*$", line):
             continue
         cleaned.append(line)
 
-    return '\n'.join(cleaned).strip()
+    return "\n".join(cleaned).strip()
 
 
 def _is_article_namespace(title: str) -> bool:
@@ -548,13 +556,33 @@ def _is_article_namespace(title: str) -> bool:
     """
     # MediaWiki namespace prefixes to skip
     skip_prefixes = (
-        "Talk:", "User:", "User talk:", "Wikipedia:", "Wikipedia talk:",
-        "File:", "File talk:", "MediaWiki:", "MediaWiki talk:",
-        "Template:", "Template talk:", "Help:", "Help talk:",
-        "Category:", "Category talk:", "Portal:", "Portal talk:",
-        "Draft:", "Draft talk:", "Module:", "Module talk:",
-        "TimedText:", "TimedText talk:", "Gadget:", "Gadget talk:",
-        "Gadget definition:", "Gadget definition talk:",
+        "Talk:",
+        "User:",
+        "User talk:",
+        "Wikipedia:",
+        "Wikipedia talk:",
+        "File:",
+        "File talk:",
+        "MediaWiki:",
+        "MediaWiki talk:",
+        "Template:",
+        "Template talk:",
+        "Help:",
+        "Help talk:",
+        "Category:",
+        "Category talk:",
+        "Portal:",
+        "Portal talk:",
+        "Draft:",
+        "Draft talk:",
+        "Module:",
+        "Module talk:",
+        "TimedText:",
+        "TimedText talk:",
+        "Gadget:",
+        "Gadget talk:",
+        "Gadget definition:",
+        "Gadget definition talk:",
     )
     return not title.startswith(skip_prefixes)
 
@@ -597,8 +625,7 @@ def process_wiki_dump(progress: dict) -> int:
     total_bytes_written = sum(f.stat().st_size for f in WIKI_DUMP_DIR.glob("*.txt"))
 
     if saved > 0:
-        print(f"  [Wiki Dump] Resuming: {saved} articles already extracted "
-              f"({total_bytes_written / 1e9:.2f} GB)")
+        print(f"  [Wiki Dump] Resuming: {saved} articles already extracted ({total_bytes_written / 1e9:.2f} GB)")
 
     print(f"  [Wiki Dump] Processing dump file ({WIKI_DUMP_FILE.stat().st_size / 1e9:.1f} GB)...")
     print("  [Wiki Dump] This takes 2-6 hours depending on CPU speed.")
@@ -613,33 +640,33 @@ def process_wiki_dump(progress: dict) -> int:
     try:
         # Stream decompress + parse — constant memory
         # Use start+end events so we can track root for memory cleanup
-        with bz2.open(str(WIKI_DUMP_FILE), 'rb') as f:
-            context = ET.iterparse(f, events=('start', 'end'))  # noqa: S314  -- parses the official Wikipedia dump (trusted source); use defusedxml if a source ever becomes untrusted
+        with bz2.open(str(WIKI_DUMP_FILE), "rb") as f:
+            context = ET.iterparse(f, events=("start", "end"))  # noqa: S314  -- parses the official Wikipedia dump (trusted source); use defusedxml if a source ever becomes untrusted
             root = None
 
             for event, elem in context:
-                if event == 'start':
+                if event == "start":
                     if root is None:
                         root = elem
                     continue
 
                 # Auto-detect namespace from the first element's tag
-                if ns is None and '}' in elem.tag:
-                    ns = elem.tag.split('}')[0].lstrip('{')
+                if ns is None and "}" in elem.tag:
+                    ns = elem.tag.split("}")[0].lstrip("{")
                     print(f"  [Wiki Dump] Detected XML namespace: {ns}")
 
-                tag = elem.tag.split('}')[-1] if '}' in elem.tag else elem.tag
+                tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
 
-                if tag != 'page':
+                if tag != "page":
                     continue
 
                 processed += 1
 
                 # Extract page data
-                title_elem = elem.find(f'{{{ns}}}title')
-                ns_elem = elem.find(f'{{{ns}}}ns')
-                redirect_elem = elem.find(f'{{{ns}}}redirect')
-                revision = elem.find(f'{{{ns}}}revision')
+                title_elem = elem.find(f"{{{ns}}}title")
+                ns_elem = elem.find(f"{{{ns}}}ns")
+                redirect_elem = elem.find(f"{{{ns}}}redirect")
+                revision = elem.find(f"{{{ns}}}revision")
 
                 title = title_elem.text if title_elem is not None and title_elem.text else ""
 
@@ -660,37 +687,36 @@ def process_wiki_dump(progress: dict) -> int:
                 # Get wikitext
                 wikitext = ""
                 if not skip:
-                    text_elem = (revision.find(f'{{{ns}}}text')
-                                 if revision is not None else None)
-                    wikitext = (text_elem.text
-                                if text_elem is not None and text_elem.text else "")
+                    text_elem = revision.find(f"{{{ns}}}text") if revision is not None else None
+                    wikitext = text_elem.text if text_elem is not None and text_elem.text else ""
 
                     # Skip redirect wikitext (some redirects don't have <redirect>)
-                    if wikitext.strip().lower().startswith('#redirect'):
+                    if wikitext.strip().lower().startswith("#redirect"):
                         skipped_redirect += 1
                         skip = True
 
                 # Skip disambiguation pages
                 title_lower = title.lower()
                 if not skip:
-                    if ('disambiguation' in title_lower
-                            or '(disambiguation)' in wikitext[:500].lower()
-                            or '{{disambiguation' in wikitext.lower()[:1000]):
+                    if (
+                        "disambiguation" in title_lower
+                        or "(disambiguation)" in wikitext[:500].lower()
+                        or "{{disambiguation" in wikitext.lower()[:1000]
+                    ):
                         skipped_quality += 1
                         skip = True
 
                 # Skip list articles
                 if not skip:
-                    if (title_lower.startswith('list of ')
-                            or title_lower.startswith('lists of ')):
+                    if title_lower.startswith("list of ") or title_lower.startswith("lists of "):
                         skipped_quality += 1
                         skip = True
 
                 # Make safe filename
                 safe_name = ""
                 if not skip:
-                    safe_name = re.sub(r'[^\w\s-]', '', title)[:80].strip()
-                    safe_name = re.sub(r'\s+', '_', safe_name)
+                    safe_name = re.sub(r"[^\w\s-]", "", title)[:80].strip()
+                    safe_name = re.sub(r"\s+", "_", safe_name)
                     if not safe_name:
                         skip = True
 
@@ -710,10 +736,10 @@ def process_wiki_dump(progress: dict) -> int:
                         skip = True
                     else:
                         filepath = WIKI_DUMP_DIR / f"{safe_name}.txt"
-                        filepath.write_text(cleaned, encoding='utf-8')
+                        filepath.write_text(cleaned, encoding="utf-8")
                         existing.add(safe_name)
                         saved += 1
-                        total_bytes_written += len(cleaned.encode('utf-8'))
+                        total_bytes_written += len(cleaned.encode("utf-8"))
 
                 # Free memory — clear element and remove from root
                 elem.clear()
@@ -752,21 +778,25 @@ def process_wiki_dump(progress: dict) -> int:
 
     except KeyboardInterrupt:
         elapsed_min = (time.monotonic() - start_time) / 60
-        print(f"\n  [Wiki Dump] Interrupted after {elapsed_min:.0f} min. "
-              f"{saved:,} articles saved ({total_bytes_written / 1e9:.2f} GB). "
-              f"Run with --resume to continue.")
+        print(
+            f"\n  [Wiki Dump] Interrupted after {elapsed_min:.0f} min. "
+            f"{saved:,} articles saved ({total_bytes_written / 1e9:.2f} GB). "
+            f"Run with --resume to continue."
+        )
     except ET.ParseError as e:
         print(f"  [Wiki Dump] XML parse error: {e}")
-        print("  [Wiki Dump] The dump file may be corrupted. "
-              "Delete it and re-download: --wiki-dump")
+        print("  [Wiki Dump] The dump file may be corrupted. Delete it and re-download: --wiki-dump")
 
     # Final stats
     elapsed_min = (time.monotonic() - start_time) / 60
-    print(f"\n  [Wiki Dump] Done: {saved:,} articles saved "
-          f"({total_bytes_written / 1e9:.2f} GB) in {elapsed_min:.0f} min.")
-    print(f"  [Wiki Dump] Skipped: {skipped_redirect:,} redirects, "
-          f"{skipped_namespace:,} non-article, "
-          f"{skipped_short:,} short, {skipped_quality:,} low-quality")
+    print(
+        f"\n  [Wiki Dump] Done: {saved:,} articles saved ({total_bytes_written / 1e9:.2f} GB) in {elapsed_min:.0f} min."
+    )
+    print(
+        f"  [Wiki Dump] Skipped: {skipped_redirect:,} redirects, "
+        f"{skipped_namespace:,} non-article, "
+        f"{skipped_short:,} short, {skipped_quality:,} low-quality"
+    )
 
     progress["wiki_dump"] = {
         "articles_saved": saved,
@@ -781,19 +811,20 @@ def process_wiki_dump(progress: dict) -> int:
 # Progress tracking (for --resume)
 # ---------------------------------------------------------------------------
 
+
 def load_progress() -> dict:
     """Load download progress from disk (tolerates corrupt files)."""
     if PROGRESS_FILE.exists():
         try:
-            text = PROGRESS_FILE.read_text(encoding='utf-8')
+            text = PROGRESS_FILE.read_text(encoding="utf-8")
             if text.strip():
                 return json.loads(text)
         except (json.JSONDecodeError, OSError) as e:
             # Corrupt progress file — check for backup
-            backup = PROGRESS_FILE.with_suffix('.json.bak')
+            backup = PROGRESS_FILE.with_suffix(".json.bak")
             if backup.exists():
                 try:
-                    return json.loads(backup.read_text(encoding='utf-8'))
+                    return json.loads(backup.read_text(encoding="utf-8"))
                 except (json.JSONDecodeError, OSError):
                     pass
             print(f"  WARNING: progress.json corrupt ({e}), starting fresh.")
@@ -803,12 +834,12 @@ def load_progress() -> dict:
 def save_progress(progress: dict) -> None:
     """Save download progress atomically (write temp, then rename)."""
     PROGRESS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    tmp = PROGRESS_FILE.with_suffix('.json.tmp')
+    tmp = PROGRESS_FILE.with_suffix(".json.tmp")
     try:
-        tmp.write_text(json.dumps(progress, indent=2), encoding='utf-8')
+        tmp.write_text(json.dumps(progress, indent=2), encoding="utf-8")
         # Keep one backup of the previous good state
         if PROGRESS_FILE.exists():
-            backup = PROGRESS_FILE.with_suffix('.json.bak')
+            backup = PROGRESS_FILE.with_suffix(".json.bak")
             try:
                 PROGRESS_FILE.replace(backup)
             except OSError:
@@ -822,8 +853,8 @@ def save_progress(progress: dict) -> None:
 # Wikipedia downloader (API with proper rate limiting)
 # ---------------------------------------------------------------------------
 
-def fetch_wikipedia_articles(api_url: str, output_dir: Path, max_articles: int,
-                             label: str, progress: dict) -> int:
+
+def fetch_wikipedia_articles(api_url: str, output_dir: Path, max_articles: int, label: str, progress: dict) -> int:
     """Download articles from Wikipedia or Simple Wikipedia.
 
     Uses the MediaWiki Action API with:
@@ -862,7 +893,7 @@ def fetch_wikipedia_articles(api_url: str, output_dir: Path, max_articles: int,
             "format": "json",
             "generator": "random",
             "grnlimit": 10,
-            "grnnamespace": 0,       # Main article namespace only
+            "grnnamespace": 0,  # Main article namespace only
             "prop": "extracts",
             "explaintext": True,
             "exsectionformat": "plain",
@@ -935,10 +966,12 @@ def fetch_wikipedia_articles(api_url: str, output_dir: Path, max_articles: int,
 
             # Skip disambiguation and list pages — poor training data
             title_lower = title.lower()
-            if ('disambiguation' in title_lower
-                    or title_lower.startswith('list of')
-                    or title_lower.startswith('lists of')
-                    or '(disambiguation)' in extract.lower()[:500]):
+            if (
+                "disambiguation" in title_lower
+                or title_lower.startswith("list of")
+                or title_lower.startswith("lists of")
+                or "(disambiguation)" in extract.lower()[:500]
+            ):
                 continue
 
             cleaned = clean_wiki_text(extract)
@@ -946,14 +979,14 @@ def fetch_wikipedia_articles(api_url: str, output_dir: Path, max_articles: int,
             if not quality_filter(cleaned, MIN_ARTICLE_LENGTH):
                 continue
 
-            safe_name = re.sub(r'[^\w\s-]', '', title)[:80].strip()
-            safe_name = re.sub(r'\s+', '_', safe_name)
+            safe_name = re.sub(r"[^\w\s-]", "", title)[:80].strip()
+            safe_name = re.sub(r"\s+", "_", safe_name)
 
             if not safe_name or safe_name in existing:
                 continue
 
             filepath = output_dir / f"{safe_name}.txt"
-            filepath.write_text(cleaned, encoding='utf-8')
+            filepath.write_text(cleaned, encoding="utf-8")
             existing.add(safe_name)
             downloaded += 1
 
@@ -961,8 +994,10 @@ def fetch_wikipedia_articles(api_url: str, output_dir: Path, max_articles: int,
         if downloaded - last_print >= 10 or batches_tried % 20 == 0:
             remaining = max_articles - downloaded
             est = (remaining / 5) * WIKI_DELAY / 60
-            print(f"  [{label}] {downloaded}/{max_articles} downloaded "
-                  f"(batch {batches_tried}, ~{est:.0f} min remaining)...")
+            print(
+                f"  [{label}] {downloaded}/{max_articles} downloaded "
+                f"(batch {batches_tried}, ~{est:.0f} min remaining)..."
+            )
             last_print = downloaded
             save_progress(progress)
 
@@ -982,320 +1017,313 @@ def fetch_wikipedia_articles(api_url: str, output_dir: Path, max_articles: int,
 # All English. All substantial length.
 GUTENBERG_CURATED = [
     # === Classic Fiction & Literature ===
-    1342,   # Pride and Prejudice - Austen
-    11,     # Alice in Wonderland - Carroll
-    1661,   # Sherlock Holmes - Doyle
-    84,     # Frankenstein - Shelley
-    98,     # A Tale of Two Cities - Dickens
-    74,     # Tom Sawyer - Twain
-    43,     # Jekyll and Hyde - Stevenson
-    76,     # Huckleberry Finn - Twain
-    2701,   # Moby Dick - Melville
-    1952,   # The Yellow Wallpaper - Gilman
-    345,    # Dracula - Stoker
-    1400,   # Great Expectations - Dickens
-    174,    # Dorian Gray - Wilde
+    1342,  # Pride and Prejudice - Austen
+    11,  # Alice in Wonderland - Carroll
+    1661,  # Sherlock Holmes - Doyle
+    84,  # Frankenstein - Shelley
+    98,  # A Tale of Two Cities - Dickens
+    74,  # Tom Sawyer - Twain
+    43,  # Jekyll and Hyde - Stevenson
+    76,  # Huckleberry Finn - Twain
+    2701,  # Moby Dick - Melville
+    1952,  # The Yellow Wallpaper - Gilman
+    345,  # Dracula - Stoker
+    1400,  # Great Expectations - Dickens
+    174,  # Dorian Gray - Wilde
     16328,  # Beowulf
-    1232,   # The Prince - Machiavelli
-    244,    # A Study in Scarlet - Doyle
-    2554,   # Crime and Punishment - Dostoevsky
-    2600,   # War and Peace - Tolstoy
-    1260,   # Jane Eyre - Bronte
-    135,    # Les Miserables - Hugo
-    514,    # Little Women - Alcott
-    768,    # Wuthering Heights - Bronte
-    35,     # The Time Machine - Wells
-    5200,   # Metamorphosis - Kafka
-    996,    # Don Quixote - Cervantes
-    55,     # Wizard of Oz - Baum
-    4300,   # Ulysses - Joyce
-    161,    # Sense and Sensibility - Austen
-    36,     # War of the Worlds - Wells
-    219,    # Heart of Darkness - Conrad
-    730,    # Oliver Twist - Dickens
+    1232,  # The Prince - Machiavelli
+    244,  # A Study in Scarlet - Doyle
+    2554,  # Crime and Punishment - Dostoevsky
+    2600,  # War and Peace - Tolstoy
+    1260,  # Jane Eyre - Bronte
+    135,  # Les Miserables - Hugo
+    514,  # Little Women - Alcott
+    768,  # Wuthering Heights - Bronte
+    35,  # The Time Machine - Wells
+    5200,  # Metamorphosis - Kafka
+    996,  # Don Quixote - Cervantes
+    55,  # Wizard of Oz - Baum
+    4300,  # Ulysses - Joyce
+    161,  # Sense and Sensibility - Austen
+    36,  # War of the Worlds - Wells
+    219,  # Heart of Darkness - Conrad
+    730,  # Oliver Twist - Dickens
     28054,  # Brothers Karamazov - Dostoevsky
-    2591,   # Grimm's Fairy Tales
-    1184,   # Count of Monte Cristo - Dumas
-    829,    # Gulliver's Travels - Swift
-    45,     # Anne of Green Gables - Montgomery
-    209,    # Turn of the Screw - James
-    2542,   # Hound of the Baskervilles - Doyle
-    1998,   # Thus Spoke Zarathustra - Nietzsche
-    408,    # Souls of Black Folk - Du Bois
-    158,    # Emma - Austen
-    1399,   # Anna Karenina - Tolstoy
-    521,    # Robinson Crusoe - Defoe
-    541,    # Age of Innocence - Wharton
-    940,    # The Scarlet Letter - Hawthorne
+    2591,  # Grimm's Fairy Tales
+    1184,  # Count of Monte Cristo - Dumas
+    829,  # Gulliver's Travels - Swift
+    45,  # Anne of Green Gables - Montgomery
+    209,  # Turn of the Screw - James
+    2542,  # Hound of the Baskervilles - Doyle
+    1998,  # Thus Spoke Zarathustra - Nietzsche
+    408,  # Souls of Black Folk - Du Bois
+    158,  # Emma - Austen
+    1399,  # Anna Karenina - Tolstoy
+    521,  # Robinson Crusoe - Defoe
+    541,  # Age of Innocence - Wharton
+    940,  # The Scarlet Letter - Hawthorne
     11030,  # The Secret Garden - Burnett
-    6593,   # Tom Jones - Fielding
+    6593,  # Tom Jones - Fielding
     37106,  # Little Lord Fauntleroy - Burnett
     19942,  # Candide - Voltaire
     25344,  # The Scarlet Pimpernel - Orczy
-    113,    # The Secret Agent - Conrad
-    1250,   # Tess of the d'Urbervilles - Hardy
-    120,    # Treasure Island - Stevenson
-    1727,   # The Odyssey - Homer
-    6130,   # The Iliad - Homer
-    2814,   # Dubliners - Joyce
-    4363,   # Beyond Good and Evil - Nietzsche
-    62,     # A Princess of Mars - Burroughs
-    26,     # Paradise Lost - Milton
-    5197,   # My Antonia - Cather
-    7849,   # The Awakening - Chopin
-
+    113,  # The Secret Agent - Conrad
+    1250,  # Tess of the d'Urbervilles - Hardy
+    120,  # Treasure Island - Stevenson
+    1727,  # The Odyssey - Homer
+    6130,  # The Iliad - Homer
+    2814,  # Dubliners - Joyce
+    4363,  # Beyond Good and Evil - Nietzsche
+    62,  # A Princess of Mars - Burroughs
+    26,  # Paradise Lost - Milton
+    5197,  # My Antonia - Cather
+    7849,  # The Awakening - Chopin
     # === Science, Philosophy & Non-Fiction ===
-    4993,   # A Christmas Carol - Dickens
+    4993,  # A Christmas Carol - Dickens
     22381,  # Calculus Made Easy - Thompson
     37134,  # The Elements - Euclid
-    4280,   # Critique of Pure Reason - Kant
-    5827,   # Problems of Philosophy - Russell
-    1228,   # On Liberty - Mill
+    4280,  # Critique of Pure Reason - Kant
+    5827,  # Problems of Philosophy - Russell
+    1228,  # On Liberty - Mill
     20203,  # Autobiography of Benjamin Franklin
-    4217,   # Portrait of the Artist - Joyce
-    910,    # White Fang - London
-    2131,   # Wealth of Nations - Smith
-    7370,   # Second Treatise of Government - Locke
+    4217,  # Portrait of the Artist - Joyce
+    910,  # White Fang - London
+    2131,  # Wealth of Nations - Smith
+    7370,  # Second Treatise of Government - Locke
     16457,  # The Federalist Papers
     29474,  # Elements of Style - Strunk
-    4705,   # Treatise of Human Nature - Hume
-    3600,   # Essays First Series - Emerson
-    7178,   # Meditations - Marcus Aurelius
+    4705,  # Treatise of Human Nature - Hume
+    3600,  # Essays First Series - Emerson
+    7178,  # Meditations - Marcus Aurelius
     25717,  # Narrative of Frederick Douglass
-    1497,   # The Republic - Plato
-    3296,   # Confessions - Augustine
+    1497,  # The Republic - Plato
+    3296,  # Confessions - Augustine
     28233,  # Origin of Species - Darwin
-    2680,   # Meditations - Descartes
+    2680,  # Meditations - Descartes
     49010,  # Interpretation of Dreams - Freud
     37090,  # Principles of Psychology - James
     38427,  # Descent of Man - Darwin
-    4078,   # Opticks - Newton
+    4078,  # Opticks - Newton
     26659,  # Origin of Species 6th ed - Darwin
     15776,  # Practice and Science of Drawing - Speed
-
     # === Drama & Poetry ===
-    1524,   # Hamlet - Shakespeare
-    1513,   # Romeo and Juliet - Shakespeare
-    1514,   # King Lear - Shakespeare
-    1515,   # The Tempest - Shakespeare
-    1533,   # Macbeth - Shakespeare
-    1041,   # Shakespeare Sonnets
-    1112,   # Taming of the Shrew - Shakespeare
-    2265,   # Midsummer Night's Dream - Shakespeare
+    1524,  # Hamlet - Shakespeare
+    1513,  # Romeo and Juliet - Shakespeare
+    1514,  # King Lear - Shakespeare
+    1515,  # The Tempest - Shakespeare
+    1533,  # Macbeth - Shakespeare
+    1041,  # Shakespeare Sonnets
+    1112,  # Taming of the Shrew - Shakespeare
+    2265,  # Midsummer Night's Dream - Shakespeare
     23042,  # Twelfth Night - Shakespeare
-    100,    # Complete Works of Shakespeare
+    100,  # Complete Works of Shakespeare
     27761,  # Othello - Shakespeare
-    2267,   # Much Ado About Nothing - Shakespeare
-    1519,   # Merchant of Venice - Shakespeare
-    2235,   # Importance of Being Earnest - Wilde
-    1790,   # Julius Caesar - Shakespeare
-    23,     # Narrative of Frederick Douglass
-    8492,   # Rime of the Ancient Mariner - Coleridge
+    2267,  # Much Ado About Nothing - Shakespeare
+    1519,  # Merchant of Venice - Shakespeare
+    2235,  # Importance of Being Earnest - Wilde
+    1790,  # Julius Caesar - Shakespeare
+    23,  # Narrative of Frederick Douglass
+    8492,  # Rime of the Ancient Mariner - Coleridge
     22120,  # As You Like It - Shakespeare
-
     # === Adventure & Travel ===
-    103,    # Around the World in 80 Days - Verne
-    164,    # Twenty Thousand Leagues - Verne
-    236,    # The Jungle Book - Kipling
-    215,    # Call of the Wild - London
-    2500,   # Siddhartha - Hesse
+    103,  # Around the World in 80 Days - Verne
+    164,  # Twenty Thousand Leagues - Verne
+    236,  # The Jungle Book - Kipling
+    215,  # Call of the Wild - London
+    2500,  # Siddhartha - Hesse
     47629,  # Mysterious Affair at Styles - Christie
-    1259,   # Twenty Years After - Dumas
-    3825,   # Meditations on First Philosophy - Descartes
-    1257,   # The Three Musketeers - Dumas
-    16,     # Peter Pan - Barrie
-    308,    # Three Men in a Boat - Jerome
-    600,    # Notes from Underground - Dostoevsky
-    41,     # Legend of Sleepy Hollow - Irving
-
+    1259,  # Twenty Years After - Dumas
+    3825,  # Meditations on First Philosophy - Descartes
+    1257,  # The Three Musketeers - Dumas
+    16,  # Peter Pan - Barrie
+    308,  # Three Men in a Boat - Jerome
+    600,  # Notes from Underground - Dostoevsky
+    41,  # Legend of Sleepy Hollow - Irving
     # === Philosophy & Political Theory ===
-    3300,   # Essay Concerning Human Understanding - Locke
+    3300,  # Essay Concerning Human Understanding - Locke
     10615,  # The Social Contract - Rousseau
-    3176,   # Emile - Rousseau
-    5740,   # Tractatus Logico-Philosophicus - Wittgenstein
-    2412,   # The Apology - Plato
-    1656,   # Phaedrus - Plato
+    3176,  # Emile - Rousseau
+    5740,  # Tractatus Logico-Philosophicus - Wittgenstein
+    2412,  # The Apology - Plato
+    1656,  # Phaedrus - Plato
     55201,  # Communist Manifesto - Marx/Engels
-    7416,   # Democracy in America vol 2 - Tocqueville
-    815,    # Democracy in America vol 1 - Tocqueville
-    2130,   # Utopia - More
+    7416,  # Democracy in America vol 2 - Tocqueville
+    815,  # Democracy in America vol 1 - Tocqueville
+    2130,  # Utopia - More
     36034,  # Art of Rhetoric - Aristotle
-    8438,   # Politics - Aristotle
-    3207,   # Leviathan - Hobbes
-    1080,   # A Modest Proposal - Swift
-
+    8438,  # Politics - Aristotle
+    3207,  # Leviathan - Hobbes
+    1080,  # A Modest Proposal - Swift
     # === More Fiction ===
-    5230,   # The Invisible Man - Wells
-    766,    # David Copperfield - Dickens
-    2097,   # Autobiography of an Ex-Colored Man - Johnson
-    32,     # Herland - Gilman
-    14,     # What Is Man - Twain
-    356,    # Vindication of the Rights of Woman - Wollstonecraft
-    7142,   # Northanger Abbey - Austen
-    141,    # Mansfield Park - Austen
-    805,    # This Side of Paradise - Fitzgerald
+    5230,  # The Invisible Man - Wells
+    766,  # David Copperfield - Dickens
+    2097,  # Autobiography of an Ex-Colored Man - Johnson
+    32,  # Herland - Gilman
+    14,  # What Is Man - Twain
+    356,  # Vindication of the Rights of Woman - Wollstonecraft
+    7142,  # Northanger Abbey - Austen
+    141,  # Mansfield Park - Austen
+    805,  # This Side of Paradise - Fitzgerald
     64317,  # The Great Gatsby - Fitzgerald
     21279,  # Flatland - Abbott
-    1064,   # Armadale - Collins
-    967,    # The Woman in White - Collins
-    779,    # The Moonstone - Collins
-    4085,   # Pinocchio - Collodi
-    159,    # Same Old Story - Goncharov
-    37,     # The Golden Age
-    145,    # Middlemarch - Eliot
+    1064,  # Armadale - Collins
+    967,  # The Woman in White - Collins
+    779,  # The Moonstone - Collins
+    4085,  # Pinocchio - Collodi
+    159,  # Same Old Story - Goncharov
+    37,  # The Golden Age
+    145,  # Middlemarch - Eliot
     11800,  # The Jungle - Sinclair
-    932,    # Fall of the House of Usher - Poe
-    2148,   # Works of Edgar Allan Poe vol 2
-
+    932,  # Fall of the House of Usher - Poe
+    2148,  # Works of Edgar Allan Poe vol 2
     # === History, Education & Reference ===
-    1,      # Declaration of Independence
-    2,      # United States Bill of Rights
-    5,      # US Constitution
-    1322,   # Leaves of Grass - Whitman
-    3608,   # On War - Clausewitz
-    2610,   # The Analects - Confucius
-    678,    # Twelve Years a Slave - Northup
-    73,     # A Tramp Abroad - Twain
-    1023,   # Bleak House - Dickens
-    580,    # Pickwick Papers - Dickens
-    132,    # The Art of War - Sun Tzu
-    2346,   # Phantom of the Opera - Leroux
+    1,  # Declaration of Independence
+    2,  # United States Bill of Rights
+    5,  # US Constitution
+    1322,  # Leaves of Grass - Whitman
+    3608,  # On War - Clausewitz
+    2610,  # The Analects - Confucius
+    678,  # Twelve Years a Slave - Northup
+    73,  # A Tramp Abroad - Twain
+    1023,  # Bleak House - Dickens
+    580,  # Pickwick Papers - Dickens
+    132,  # The Art of War - Sun Tzu
+    2346,  # Phantom of the Opera - Leroux
     24518,  # First Book in American History - Eggleston
     13846,  # Brief History of the United States
-    946,    # The Monster - Crane
-    10,     # King James Bible
+    946,  # The Monster - Crane
+    10,  # King James Bible
     16643,  # Walden - Thoreau
     15491,  # The Common Law - Holmes
     14838,  # Art of Money Getting - Barnum
-
     # === Expanded Fiction & Literature (batch 2) ===
-    1080,   # A Modest Proposal - Swift (if not above, dedup handles it)
+    1080,  # A Modest Proposal - Swift (if not above, dedup handles it)
     25305,  # Nicomachean Ethics - Aristotle
-    1497,   # The Republic - Plato (dedup backup)
-    6688,   # Metamorphoses - Ovid
+    1497,  # The Republic - Plato (dedup backup)
+    6688,  # Metamorphoses - Ovid
     10676,  # The Aeneid - Virgil
-    8800,   # Divine Comedy - Dante (Longfellow)
+    8800,  # Divine Comedy - Dante (Longfellow)
     15474,  # The Canterbury Tales - Chaucer
-    3207,   # Leviathan - Hobbes
-    4280,   # Critique of Pure Reason - Kant
-    7610,   # Enquiry Concerning Human Understanding - Hume
-    5740,   # Tractatus - Wittgenstein
+    3207,  # Leviathan - Hobbes
+    4280,  # Critique of Pure Reason - Kant
+    7610,  # Enquiry Concerning Human Understanding - Hume
+    5740,  # Tractatus - Wittgenstein
     34901,  # Phenomenology of Spirit - Hegel
     39955,  # The Age of Reason - Paine
     38427,  # Descent of Man - Darwin
-    4078,   # Opticks - Newton
+    4078,  # Opticks - Newton
     30155,  # History of the Peloponnesian War - Thucydides
-    2199,   # Book of the Thousand Nights and a Night v1 - Burton
-    2200,   # Book of the Thousand Nights and a Night v2 - Burton
-    1946,   # Symposium - Plato
-    2726,   # Phaedo - Plato
-    9296,   # Poetics - Aristotle
-    5684,   # The Decameron - Boccaccio
-    3608,   # On War - Clausewitz (dedup)
-    2981,   # Don Quixote Part 2 - Cervantes
-    2000,   # Confessions - Rousseau
-    3090,   # Gargantua and Pantagruel - Rabelais
-    3527,   # Kim - Kipling
+    2199,  # Book of the Thousand Nights and a Night v1 - Burton
+    2200,  # Book of the Thousand Nights and a Night v2 - Burton
+    1946,  # Symposium - Plato
+    2726,  # Phaedo - Plato
+    9296,  # Poetics - Aristotle
+    5684,  # The Decameron - Boccaccio
+    3608,  # On War - Clausewitz (dedup)
+    2981,  # Don Quixote Part 2 - Cervantes
+    2000,  # Confessions - Rousseau
+    3090,  # Gargantua and Pantagruel - Rabelais
+    3527,  # Kim - Kipling
     58585,  # Typee - Melville
-    2489,   # Moby Dick (alt) - Melville
+    2489,  # Moby Dick (alt) - Melville
     44881,  # A Room with a View - Forster
-    2641,   # A Room of One's Own - Woolf
-    144,    # Mrs Dalloway - Woolf
-    5670,   # To the Lighthouse - Woolf
-    4517,   # Ethan Frome - Wharton
-    541,    # Age of Innocence - Wharton (dedup)
-    1251,   # Le Morte d'Arthur Vol 1 - Malory
-    1252,   # Le Morte d'Arthur Vol 2 - Malory
-    7386,   # The Story of My Life - Keller
+    2641,  # A Room of One's Own - Woolf
+    144,  # Mrs Dalloway - Woolf
+    5670,  # To the Lighthouse - Woolf
+    4517,  # Ethan Frome - Wharton
+    541,  # Age of Innocence - Wharton (dedup)
+    1251,  # Le Morte d'Arthur Vol 1 - Malory
+    1252,  # Le Morte d'Arthur Vol 2 - Malory
+    7386,  # The Story of My Life - Keller
     16119,  # Up from Slavery - Washington
-    11,     # Alice in Wonderland (dedup)
-    12,     # Through the Looking Glass - Carroll
+    11,  # Alice in Wonderland (dedup)
+    12,  # Through the Looking Glass - Carroll
     19033,  # A Connecticut Yankee - Twain
-    86,     # The Prince and the Pauper - Twain
-    3186,   # Life on the Mississippi - Twain
-    76,     # Huckleberry Finn (dedup)
+    86,  # The Prince and the Pauper - Twain
+    3186,  # Life on the Mississippi - Twain
+    76,  # Huckleberry Finn (dedup)
     30254,  # Autobiography of Mark Twain
-    2852,   # The Hound of the Baskervilles (alt) - Doyle
-    108,    # The Return of Sherlock Holmes - Doyle
-    1661,   # Adventures of Sherlock Holmes (dedup)
-    834,    # The Memoirs of Sherlock Holmes - Doyle
-    2097,   # Autobiography of an Ex-Colored Man (dedup)
-    4583,   # The Waste Land - Eliot
-    402,    # Idylls of the King - Tennyson
-    1321,   # The Song of Hiawatha - Longfellow
+    2852,  # The Hound of the Baskervilles (alt) - Doyle
+    108,  # The Return of Sherlock Holmes - Doyle
+    1661,  # Adventures of Sherlock Holmes (dedup)
+    834,  # The Memoirs of Sherlock Holmes - Doyle
+    2097,  # Autobiography of an Ex-Colored Man (dedup)
+    4583,  # The Waste Land - Eliot
+    402,  # Idylls of the King - Tennyson
+    1321,  # The Song of Hiawatha - Longfellow
     30368,  # The Rubaiyat of Omar Khayyam - FitzGerald
-    271,    # Black Beauty - Sewell
-    514,    # Little Women (dedup)
-    767,    # Agnes Grey - Bronte
-    9182,   # The Tenant of Wildfell Hall - Bronte
-    969,    # The Mayor of Casterbridge - Hardy
-    153,    # Jude the Obscure - Hardy
-    110,    # Tess of the d'Urbervilles - Hardy (alt)
-    30,     # The Bible, Douay-Rheims
-    8164,   # Treasure Island (alt) - Stevenson
-    171,    # Kidnapped - Stevenson
-    307,    # The Black Arrow - Stevenson
-    1695,   # The Master of Ballantrae - Stevenson
+    271,  # Black Beauty - Sewell
+    514,  # Little Women (dedup)
+    767,  # Agnes Grey - Bronte
+    9182,  # The Tenant of Wildfell Hall - Bronte
+    969,  # The Mayor of Casterbridge - Hardy
+    153,  # Jude the Obscure - Hardy
+    110,  # Tess of the d'Urbervilles - Hardy (alt)
+    30,  # The Bible, Douay-Rheims
+    8164,  # Treasure Island (alt) - Stevenson
+    171,  # Kidnapped - Stevenson
+    307,  # The Black Arrow - Stevenson
+    1695,  # The Master of Ballantrae - Stevenson
     27827,  # The Kama Sutra
-    7370,   # Second Treatise (dedup)
-    1497,   # Republic (dedup)
-    3600,   # Essays First Series (dedup)
-    601,    # Autobiography of John Stuart Mill
-    46,     # A Christmas Carol (alt) - Dickens
-    700,    # The Old Curiosity Shop - Dickens
-    917,    # The Cricket on the Hearth - Dickens
-    821,    # Dombey and Son - Dickens
-    98,     # Tale of Two Cities (dedup)
-    564,    # The Jungle Books - Kipling
-    2226,   # Just So Stories - Kipling
-    1036,   # Captains Courageous - Kipling
-    236,    # Jungle Book (dedup)
-    33,     # The Scarlet Letter (alt) - Hawthorne
-    77,     # The House of the Seven Gables - Hawthorne
-    2081,   # Tanglewood Tales - Hawthorne
-    18,     # The Rime of the Ancient Mariner - Coleridge
-    8492,   # Rime (alt)
-    636,    # Lyrical Ballads - Wordsworth/Coleridge
-    2600,   # War and Peace (dedup)
-    7178,   # Meditations (dedup)
-    2680,   # Meditations - Descartes (dedup)
-    1399,   # Anna Karenina (dedup)
+    7370,  # Second Treatise (dedup)
+    1497,  # Republic (dedup)
+    3600,  # Essays First Series (dedup)
+    601,  # Autobiography of John Stuart Mill
+    46,  # A Christmas Carol (alt) - Dickens
+    700,  # The Old Curiosity Shop - Dickens
+    917,  # The Cricket on the Hearth - Dickens
+    821,  # Dombey and Son - Dickens
+    98,  # Tale of Two Cities (dedup)
+    564,  # The Jungle Books - Kipling
+    2226,  # Just So Stories - Kipling
+    1036,  # Captains Courageous - Kipling
+    236,  # Jungle Book (dedup)
+    33,  # The Scarlet Letter (alt) - Hawthorne
+    77,  # The House of the Seven Gables - Hawthorne
+    2081,  # Tanglewood Tales - Hawthorne
+    18,  # The Rime of the Ancient Mariner - Coleridge
+    8492,  # Rime (alt)
+    636,  # Lyrical Ballads - Wordsworth/Coleridge
+    2600,  # War and Peace (dedup)
+    7178,  # Meditations (dedup)
+    2680,  # Meditations - Descartes (dedup)
+    1399,  # Anna Karenina (dedup)
     28054,  # Brothers K (dedup)
-    600,    # Notes Underground (dedup)
-    2554,   # Crime and Punishment (dedup)
-    2197,   # The Gambler - Dostoevsky
-    1672,   # The Idiot - Dostoevsky
+    600,  # Notes Underground (dedup)
+    2554,  # Crime and Punishment (dedup)
+    2197,  # The Gambler - Dostoevsky
+    1672,  # The Idiot - Dostoevsky
     15823,  # Swann's Way - Proust
-    5881,   # Three Men in a Boat (alt) - Jerome
+    5881,  # Three Men in a Boat (alt) - Jerome
     11231,  # Don Juan - Byron
-    5131,   # Childe Harold's Pilgrimage - Byron
-    202,    # The Innocents Abroad - Twain
-    71,     # Adventures of Tom Sawyer (alt)
-    7771,   # The Cossacks - Tolstoy
-    985,    # The Kreutzer Sonata - Tolstoy
-    2142,   # Resurrection - Tolstoy
+    5131,  # Childe Harold's Pilgrimage - Byron
+    202,  # The Innocents Abroad - Twain
+    71,  # Adventures of Tom Sawyer (alt)
+    7771,  # The Cossacks - Tolstoy
+    985,  # The Kreutzer Sonata - Tolstoy
+    2142,  # Resurrection - Tolstoy
     38582,  # Hadji Murad - Tolstoy
-    1184,   # Monte Cristo (dedup)
-    965,    # The Count of Monte Cristo (alt) - Dumas
-    1258,   # The Vicomte de Bragelonne - Dumas
-    2759,   # The Man in the Iron Mask - Dumas
-    2707,   # Camille - Dumas fils
+    1184,  # Monte Cristo (dedup)
+    965,  # The Count of Monte Cristo (alt) - Dumas
+    1258,  # The Vicomte de Bragelonne - Dumas
+    2759,  # The Man in the Iron Mask - Dumas
+    2707,  # Camille - Dumas fils
     37332,  # Lost Illusions - Balzac
-    1237,   # Father Goriot - Balzac
-    1553,   # Eugenie Grandet - Balzac
-    135,    # Les Miserables (dedup)
+    1237,  # Father Goriot - Balzac
+    1553,  # Eugenie Grandet - Balzac
+    135,  # Les Miserables (dedup)
     17135,  # The Hunchback of Notre-Dame - Hugo
     36098,  # Toilers of the Sea - Hugo
-    2610,   # Analects (dedup)
-    132,    # Art of War (dedup)
-    2814,   # Dubliners (dedup)
-    4217,   # Portrait of the Artist (dedup)
-    4300,   # Ulysses (dedup)
-    4078,   # Opticks (dedup)
+    2610,  # Analects (dedup)
+    132,  # Art of War (dedup)
+    2814,  # Dubliners (dedup)
+    4217,  # Portrait of the Artist (dedup)
+    4300,  # Ulysses (dedup)
+    4078,  # Opticks (dedup)
     22381,  # Calculus Made Easy (dedup)
     37134,  # Elements (dedup)
-    26,     # Paradise Lost (dedup)
-    1268,   # The Voyage of the Beagle - Darwin
+    26,  # Paradise Lost (dedup)
+    1268,  # The Voyage of the Beagle - Darwin
 ]
 
 # Deduplicate while preserving order
@@ -1331,17 +1359,43 @@ def get_gutenberg_catalog(max_books: int) -> list[dict]:
     if max_books > len(books):
         # Query by topic — broad set of subjects
         subjects = [
-            "fiction", "science", "philosophy", "history", "adventure",
-            "education", "psychology", "mathematics", "biography", "poetry",
-            "drama", "politics", "religion", "art", "music", "law",
-            "medicine", "economics", "nature", "travel", "humor",
-            "essays", "mythology", "folklore", "sociology", "astronomy",
-            "chemistry", "physics", "geography", "engineering",
+            "fiction",
+            "science",
+            "philosophy",
+            "history",
+            "adventure",
+            "education",
+            "psychology",
+            "mathematics",
+            "biography",
+            "poetry",
+            "drama",
+            "politics",
+            "religion",
+            "art",
+            "music",
+            "law",
+            "medicine",
+            "economics",
+            "nature",
+            "travel",
+            "humor",
+            "essays",
+            "mythology",
+            "folklore",
+            "sociology",
+            "astronomy",
+            "chemistry",
+            "physics",
+            "geography",
+            "engineering",
         ]
         # Also query by popular bookshelves
         bookshelves = [
-            "Best Books Ever Listings", "Harvard Classics",
-            "Banned Books List", "Movie Books",
+            "Best Books Ever Listings",
+            "Harvard Classics",
+            "Banned Books List",
+            "Movie Books",
         ]
 
         gutendex_errors = 0
@@ -1381,11 +1435,13 @@ def get_gutenberg_catalog(max_books: int) -> list[dict]:
                         continue
                     seen_ids.add(bid)
                     text_url = f"https://www.gutenberg.org/cache/epub/{bid}/pg{bid}.txt"
-                    books.append({
-                        "id": bid,
-                        "title": item.get("title", f"Book {bid}"),
-                        "url": text_url,
-                    })
+                    books.append(
+                        {
+                            "id": bid,
+                            "title": item.get("title", f"Book {bid}"),
+                            "url": text_url,
+                        }
+                    )
                     if len(books) >= max_books:
                         break
 
@@ -1423,11 +1479,13 @@ def get_gutenberg_catalog(max_books: int) -> list[dict]:
                     if bid not in seen_ids:
                         seen_ids.add(bid)
                         text_url = f"https://www.gutenberg.org/cache/epub/{bid}/pg{bid}.txt"
-                        books.append({
-                            "id": bid,
-                            "title": item.get("title", f"Book {bid}"),
-                            "url": text_url,
-                        })
+                        books.append(
+                            {
+                                "id": bid,
+                                "title": item.get("title", f"Book {bid}"),
+                                "url": text_url,
+                            }
+                        )
                         if len(books) >= max_books:
                             break
                 time.sleep(1)
@@ -1455,11 +1513,13 @@ def get_gutenberg_catalog(max_books: int) -> list[dict]:
                     if bid not in seen_ids:
                         seen_ids.add(bid)
                         text_url = f"https://www.gutenberg.org/cache/epub/{bid}/pg{bid}.txt"
-                        books.append({
-                            "id": bid,
-                            "title": item.get("title", f"Book {bid}"),
-                            "url": text_url,
-                        })
+                        books.append(
+                            {
+                                "id": bid,
+                                "title": item.get("title", f"Book {bid}"),
+                                "url": text_url,
+                            }
+                        )
                         if len(books) >= max_books:
                             break
                 time.sleep(1)
@@ -1478,7 +1538,7 @@ def fetch_gutenberg_books(max_books: int, progress: dict) -> int:
     # Build set of book IDs already on disk (extract numeric prefix from filenames)
     existing_ids: set[str] = set()
     for f in GUTENBERG_DIR.glob("*.txt"):
-        m = re.match(r'^(\d+)', f.stem)
+        m = re.match(r"^(\d+)", f.stem)
         if m:
             existing_ids.add(m.group(1))
     downloaded = len(existing_ids)
@@ -1508,18 +1568,18 @@ def fetch_gutenberg_books(max_books: int, progress: dict) -> int:
             resp = SESSION.get(book["url"], timeout=60)
             resp.raise_for_status()
 
-            text = resp.content.decode('utf-8', errors='replace')
+            text = resp.content.decode("utf-8", errors="replace")
             cleaned = clean_gutenberg_text(text)
 
             if not quality_filter(cleaned, MIN_BOOK_LENGTH):
                 continue
 
-            safe_title = re.sub(r'[^\w\s-]', '', book["title"])[:80].strip()
-            safe_title = re.sub(r'\s+', '_', safe_title)
+            safe_title = re.sub(r"[^\w\s-]", "", book["title"])[:80].strip()
+            safe_title = re.sub(r"\s+", "_", safe_title)
             filename = f"{book_id}_{safe_title}" if safe_title else str(book_id)
 
             filepath = GUTENBERG_DIR / f"{filename}.txt"
-            filepath.write_text(cleaned, encoding='utf-8')
+            filepath.write_text(cleaned, encoding="utf-8")
 
             downloaded_ids.add(str(book_id))
             downloaded += 1
@@ -1543,6 +1603,7 @@ def fetch_gutenberg_books(max_books: int, progress: dict) -> int:
 # ---------------------------------------------------------------------------
 # FineWeb-Edu downloader (HuggingFace datasets, streaming)
 # ---------------------------------------------------------------------------
+
 
 def fetch_fineweb_edu(target_gb: float, progress: dict) -> int:
     """Download educational web pages from FineWeb-Edu via HuggingFace datasets.
@@ -1573,13 +1634,17 @@ def fetch_fineweb_edu(target_gb: float, progress: dict) -> int:
     target_bytes = int(target_gb * 1024 * 1024 * 1024)
 
     if existing_bytes >= target_bytes:
-        print(f"  [FineWeb-Edu] Already have {existing_bytes / 1e9:.2f} GB "
-              f"({saved} files), target is {target_gb:.1f} GB. Skipping.")
+        print(
+            f"  [FineWeb-Edu] Already have {existing_bytes / 1e9:.2f} GB "
+            f"({saved} files), target is {target_gb:.1f} GB. Skipping."
+        )
         return saved
 
     remaining_gb = (target_bytes - existing_bytes) / 1e9
-    print(f"  [FineWeb-Edu] Target: {target_gb:.1f} GB | Have: {existing_bytes / 1e9:.2f} GB "
-          f"({saved} files) | Need: {remaining_gb:.2f} GB")
+    print(
+        f"  [FineWeb-Edu] Target: {target_gb:.1f} GB | Have: {existing_bytes / 1e9:.2f} GB "
+        f"({saved} files) | Need: {remaining_gb:.2f} GB"
+    )
     print("  [FineWeb-Edu] Streaming from HuggingFace (sample-10BT subset)...")
     print("  [FineWeb-Edu] Safe to Ctrl+C and --resume later.")
 
@@ -1675,16 +1740,17 @@ def fetch_fineweb_edu(target_gb: float, progress: dict) -> int:
             saved += 1
             total_bytes += batch_size
         elapsed_min = (time.monotonic() - start_time) / 60
-        print(f"\n  [FineWeb-Edu] Interrupted after {elapsed_min:.0f} min. "
-              f"{saved} files saved ({total_bytes / 1e9:.2f} GB). "
-              f"Run with --resume to continue.")
+        print(
+            f"\n  [FineWeb-Edu] Interrupted after {elapsed_min:.0f} min. "
+            f"{saved} files saved ({total_bytes / 1e9:.2f} GB). "
+            f"Run with --resume to continue."
+        )
     except Exception as e:
         print(f"  [FineWeb-Edu] Error: {e}")
         print("  [FineWeb-Edu] Run with --resume to retry.")
 
     elapsed_min = (time.monotonic() - start_time) / 60
-    print(f"\n  [FineWeb-Edu] Done: {saved} files saved "
-          f"({total_bytes / 1e9:.2f} GB) in {elapsed_min:.0f} min.")
+    print(f"\n  [FineWeb-Edu] Done: {saved} files saved ({total_bytes / 1e9:.2f} GB) in {elapsed_min:.0f} min.")
 
     progress["fineweb_edu"] = {
         "files_saved": saved,
@@ -1701,28 +1767,28 @@ def fetch_fineweb_edu(target_gb: float, progress: dict) -> int:
 
 # High-quality SE sites worth downloading (not StackOverflow — it's 80+ GB)
 STACKEX_SITES = [
-    "english",          # English language & usage (~350 MB 7z)
-    "math",             # Mathematics (~800 MB 7z)
-    "physics",          # Physics (~400 MB 7z)
-    "philosophy",       # Philosophy (~50 MB 7z)
-    "history",          # History (~100 MB 7z)
-    "writing",          # Writers & writing (~50 MB 7z)
-    "worldbuilding",    # Worldbuilding (~200 MB 7z)
-    "scifi",            # Science Fiction & Fantasy (~200 MB 7z)
-    "literature",       # Literature (~30 MB 7z)
-    "cooking",          # Cooking (~100 MB 7z)
-    "travel",           # Travel (~100 MB 7z)
-    "music",            # Music (~80 MB 7z)
-    "biology",          # Biology (~150 MB 7z)
-    "chemistry",        # Chemistry (~150 MB 7z)
-    "astronomy",        # Astronomy (~60 MB 7z)
-    "psychology",       # Psychology (~30 MB 7z)
-    "law",              # Law (~100 MB 7z)
-    "economics",        # Economics (~50 MB 7z)
-    "politics",         # Politics (~80 MB 7z)
-    "linguistics",      # Linguistics (~50 MB 7z)
-    "cs",               # Computer Science (~200 MB 7z)
-    "stats",            # Cross Validated / Statistics (~400 MB 7z)
+    "english",  # English language & usage (~350 MB 7z)
+    "math",  # Mathematics (~800 MB 7z)
+    "physics",  # Physics (~400 MB 7z)
+    "philosophy",  # Philosophy (~50 MB 7z)
+    "history",  # History (~100 MB 7z)
+    "writing",  # Writers & writing (~50 MB 7z)
+    "worldbuilding",  # Worldbuilding (~200 MB 7z)
+    "scifi",  # Science Fiction & Fantasy (~200 MB 7z)
+    "literature",  # Literature (~30 MB 7z)
+    "cooking",  # Cooking (~100 MB 7z)
+    "travel",  # Travel (~100 MB 7z)
+    "music",  # Music (~80 MB 7z)
+    "biology",  # Biology (~150 MB 7z)
+    "chemistry",  # Chemistry (~150 MB 7z)
+    "astronomy",  # Astronomy (~60 MB 7z)
+    "psychology",  # Psychology (~30 MB 7z)
+    "law",  # Law (~100 MB 7z)
+    "economics",  # Economics (~50 MB 7z)
+    "politics",  # Politics (~80 MB 7z)
+    "linguistics",  # Linguistics (~50 MB 7z)
+    "cs",  # Computer Science (~200 MB 7z)
+    "stats",  # Cross Validated / Statistics (~400 MB 7z)
 ]
 
 
@@ -1731,18 +1797,17 @@ def _clean_html_body(html_body: str) -> str:
     # Unescape HTML entities
     text = html_mod.unescape(html_body)
     # Remove code blocks entirely (noisy for language training)
-    text = re.sub(r'<pre><code>.*?</code></pre>', '', text, flags=re.DOTALL)
-    text = re.sub(r'<code>.*?</code>', '', text, flags=re.DOTALL)
+    text = re.sub(r"<pre><code>.*?</code></pre>", "", text, flags=re.DOTALL)
+    text = re.sub(r"<code>.*?</code>", "", text, flags=re.DOTALL)
     # Remove all HTML tags
-    text = re.sub(r'<[^>]+>', ' ', text)
+    text = re.sub(r"<[^>]+>", " ", text)
     # Collapse whitespace
-    text = re.sub(r'[ \t]+', ' ', text)
-    text = re.sub(r'\n{3,}', '\n\n', text)
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
 
 
-def fetch_stackexchange(sites: list[str], min_score: int,
-                        progress: dict) -> int:
+def fetch_stackexchange(sites: list[str], min_score: int, progress: dict) -> int:
     """Download Stack Exchange data dumps from archive.org.
 
     Downloads 7z archives containing Posts.xml for each site, extracts
@@ -1777,10 +1842,7 @@ def fetch_stackexchange(sites: list[str], min_score: int,
             continue
 
         # Stack Exchange dumps are at archive.org
-        dump_url = (
-            f"https://archive.org/download/stackexchange/"
-            f"{site_name}.stackexchange.com.7z"
-        )
+        dump_url = f"https://archive.org/download/stackexchange/{site_name}.stackexchange.com.7z"
         archive_path = STACKEX_DIR / f"{site_name}.7z"
 
         print(f"\n  [StackExchange] Downloading {site_name}.stackexchange.com.7z...")
@@ -1811,8 +1873,7 @@ def fetch_stackexchange(sites: list[str], min_score: int,
                         if chunk:
                             f.write(chunk)
                             total_dl += len(chunk)
-                print(f"  [StackExchange] {site_name}: downloaded "
-                      f"({total_dl / 1e6:.0f} MB)")
+                print(f"  [StackExchange] {site_name}: downloaded ({total_dl / 1e6:.0f} MB)")
 
         except requests.RequestException as e:
             print(f"  [StackExchange] {site_name}: download error: {e}")
@@ -1825,7 +1886,7 @@ def fetch_stackexchange(sites: list[str], min_score: int,
         posts_xml_path = STACKEX_DIR / f"{site_name}_Posts.xml"
 
         try:
-            with py7zr.SevenZipFile(str(archive_path), mode='r') as z:
+            with py7zr.SevenZipFile(str(archive_path), mode="r") as z:
                 # Extract only Posts.xml
                 names = z.getnames()
                 posts_name = None
@@ -1851,22 +1912,22 @@ def fetch_stackexchange(sites: list[str], min_score: int,
         questions: dict[str, str] = {}  # id -> title, for context
 
         try:
-            for event, elem in ET.iterparse(str(posts_xml_path), events=('end',)):  # noqa: S314  -- parses a downloaded StackExchange data dump (trusted source); use defusedxml if untrusted
-                if elem.tag != 'row':
+            for event, elem in ET.iterparse(str(posts_xml_path), events=("end",)):  # noqa: S314  -- parses a downloaded StackExchange data dump (trusted source); use defusedxml if untrusted
+                if elem.tag != "row":
                     continue
 
-                post_type = elem.get('PostTypeId', '')
-                score = int(elem.get('Score', '0'))
-                body = elem.get('Body', '')
-                title = elem.get('Title', '')
-                post_id = elem.get('Id', '')
+                post_type = elem.get("PostTypeId", "")
+                score = int(elem.get("Score", "0"))
+                body = elem.get("Body", "")
+                title = elem.get("Title", "")
+                post_id = elem.get("Id", "")
 
                 # Track question titles for answer context
-                if post_type == '1' and title:
+                if post_type == "1" and title:
                     questions[post_id] = title
 
                 # Filter: only questions and answers with high scores
-                if post_type not in ('1', '2') or score < min_score:
+                if post_type not in ("1", "2") or score < min_score:
                     elem.clear()
                     continue
 
@@ -1881,11 +1942,11 @@ def fetch_stackexchange(sites: list[str], min_score: int,
                     continue
 
                 # Build text with context
-                if post_type == '1' and title:
+                if post_type == "1" and title:
                     text = f"Q: {title}\n\n{cleaned}"
-                elif post_type == '2':
-                    parent_id = elem.get('ParentId', '')
-                    parent_title = questions.get(parent_id, '')
+                elif post_type == "2":
+                    parent_id = elem.get("ParentId", "")
+                    parent_title = questions.get(parent_id, "")
                     if parent_title:
                         text = f"Q: {parent_title}\n\nA: {cleaned}"
                     else:
@@ -1894,7 +1955,7 @@ def fetch_stackexchange(sites: list[str], min_score: int,
                     text = cleaned
 
                 filepath = site_dir / f"{site_name}_{post_id}.txt"
-                filepath.write_text(text, encoding='utf-8')
+                filepath.write_text(text, encoding="utf-8")
                 saved += 1
 
                 if saved % 1000 == 0:
@@ -1921,8 +1982,7 @@ def fetch_stackexchange(sites: list[str], min_score: int,
         except OSError:
             pass
 
-    print(f"\n  [StackExchange] Total: {total_saved} posts saved across "
-          f"{len(completed_sites)} sites")
+    print(f"\n  [StackExchange] Total: {total_saved} posts saved across {len(completed_sites)} sites")
     return total_saved
 
 
@@ -1951,38 +2011,34 @@ WAYBACK_DOMAINS = [
 def _extract_text_from_html(html_content: str) -> str:
     """Extract readable text from HTML page content."""
     # Remove scripts and styles
-    text = re.sub(r'<script[^>]*>.*?</script>', '', html_content,
-                  flags=re.DOTALL | re.IGNORECASE)
-    text = re.sub(r'<style[^>]*>.*?</style>', '', text,
-                  flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<script[^>]*>.*?</script>", "", html_content, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL | re.IGNORECASE)
     # Remove nav, header, footer, sidebar elements
-    for tag in ['nav', 'header', 'footer', 'aside', 'menu']:
-        text = re.sub(rf'<{tag}[^>]*>.*?</{tag}>', '', text,
-                      flags=re.DOTALL | re.IGNORECASE)
+    for tag in ["nav", "header", "footer", "aside", "menu"]:
+        text = re.sub(rf"<{tag}[^>]*>.*?</{tag}>", "", text, flags=re.DOTALL | re.IGNORECASE)
     # Unescape HTML entities
     text = html_mod.unescape(text)
     # Remove remaining HTML tags
-    text = re.sub(r'<[^>]+>', ' ', text)
+    text = re.sub(r"<[^>]+>", " ", text)
     # Collapse whitespace
-    text = re.sub(r'[ \t]+', ' ', text)
-    text = re.sub(r'\n{3,}', '\n\n', text)
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
     # Clean up lines
-    lines = text.split('\n')
+    lines = text.split("\n")
     cleaned = []
     for line in lines:
         line = line.strip()
         if not line:
-            if cleaned and cleaned[-1] != '':
-                cleaned.append('')
+            if cleaned and cleaned[-1] != "":
+                cleaned.append("")
             continue
         if len(line) < 30:
             continue
         cleaned.append(line)
-    return '\n'.join(cleaned).strip()
+    return "\n".join(cleaned).strip()
 
 
-def fetch_wayback(domains: list[tuple[str, str]], max_pages: int,
-                  progress: dict) -> int:
+def fetch_wayback(domains: list[tuple[str, str]], max_pages: int, progress: dict) -> int:
     """Download pages from the Wayback Machine via CDX API.
 
     Uses the Internet Archive's CDX API to find archived versions of
@@ -2056,8 +2112,8 @@ def fetch_wayback(domains: list[tuple[str, str]], max_pages: int,
                 continue
             timestamp, original_url = row[0], row[1]
             # Create safe filename from URL
-            safe_name = re.sub(r'[^\w]', '_', original_url)[:120]
-            safe_name = re.sub(r'_+', '_', safe_name).strip('_')
+            safe_name = re.sub(r"[^\w]", "_", original_url)[:120]
+            safe_name = re.sub(r"_+", "_", safe_name).strip("_")
 
             if safe_name in existing:
                 skip_dup += 1
@@ -2079,8 +2135,7 @@ def fetch_wayback(domains: list[tuple[str, str]], max_pages: int,
                     consecutive_fails += 1
                     skip_http += 1
                     if consecutive_fails >= MAX_RETRIES:
-                        print(f"  [Wayback] {label}: rate-limited "
-                              f"{MAX_RETRIES} times, moving on")
+                        print(f"  [Wayback] {label}: rate-limited {MAX_RETRIES} times, moving on")
                         break
                     time.sleep(10)
                     continue
@@ -2107,7 +2162,7 @@ def fetch_wayback(domains: list[tuple[str, str]], max_pages: int,
                 continue
 
             filepath = WAYBACK_DIR / f"{safe_name}.txt"
-            filepath.write_text(text, encoding='utf-8')
+            filepath.write_text(text, encoding="utf-8")
             existing.add(safe_name)
             total_saved += 1
             domain_saved += 1
@@ -2117,18 +2172,22 @@ def fetch_wayback(domains: list[tuple[str, str]], max_pages: int,
 
             # Progress log every 100 attempts
             if domain_tried % 100 == 0:
-                print(f"  [Wayback] {label}: tried {domain_tried}/"
-                      f"{len(urls)} — saved {domain_saved}, "
-                      f"skip: dup={skip_dup} http={skip_http} "
-                      f"quality={skip_quality} ai={skip_ai}")
+                print(
+                    f"  [Wayback] {label}: tried {domain_tried}/"
+                    f"{len(urls)} — saved {domain_saved}, "
+                    f"skip: dup={skip_dup} http={skip_http} "
+                    f"quality={skip_quality} ai={skip_ai}"
+                )
 
         wayback_done.add(url_pattern)
         progress["wayback_done_domains"] = list(wayback_done)
         save_progress(progress)
-        print(f"  [Wayback] {label}: {domain_saved} pages saved "
-              f"(tried {domain_tried}, skip: dup={skip_dup} "
-              f"http={skip_http} quality={skip_quality} "
-              f"ai={skip_ai})")
+        print(
+            f"  [Wayback] {label}: {domain_saved} pages saved "
+            f"(tried {domain_tried}, skip: dup={skip_dup} "
+            f"http={skip_http} quality={skip_quality} "
+            f"ai={skip_ai})"
+        )
 
     print(f"\n  [Wayback] Total: {total_saved} pages saved")
     return total_saved
@@ -2144,70 +2203,228 @@ def fetch_wayback(domains: list[tuple[str, str]], max_pages: int,
 # content.
 _FANDOM_SEED_WIKIS = [
     # Games
-    "minecraft", "pokemon", "genshin-impact", "valorant", "fortnite",
-    "leagueoflegends", "overwatch", "terraria", "stardewvalley",
-    "animalcrossing", "roblox", "warframe", "borderlands", "cyberpunk",
-    "hollow-knight", "elden-ring", "baldursgate3", "palworld",
-    "subnautica", "satisfactory", "ark", "halo", "callofduty",
-    "battlefield", "residentevil", "silenthill", "metalgear",
-    "finalfantasy", "kingdomhearts", "persona", "fire-emblem",
-    "xenoblade", "splatoon", "kirby", "megaman", "castlevania", "doom",
-    "monsterhunter", "civilization", "starcraft", "diablo",
-    "worldofwarcraft", "runescape", "guildwars2", "dota2",
-    "apexlegends", "factorio", "rimworld", "stellaris",
-    "citiesskylines", "sims", "assassinscreed", "farcry",
-    "grandtheftauto", "reddeadredemption",
-    "godofwar", "horizon", "uncharted", "lastofus",
-    "ratchetandclank", "crash-bandicoot", "spyro", "sonic",
-    "donkeykong", "metroid", "smashbros", "bayonetta",
-    "devilmaycry", "nierautomata", "yakuza", "dragonquest",
-    "bioshock", "dishonored", "halflife", "portal",
-    "left4dead", "teamfortress", "counterstrike",
-    "deadbydaylight", "fnaf", "undertale", "deltarune",
-    "cuphead", "celeste", "no-mans-sky", "starfield",
-    "outerworlds", "fallout", "elderscrolls", "darksouls",
-    "bloodborne", "sekiro", "streetfighter", "tekken",
-    "mortal-kombat", "guilty-gear", "destiny", "lethal-company",
-    "wowwiki", "dnd5e", "forgottenrealms", "pathfinder",
-    "warhammer40k", "warhammer",
+    "minecraft",
+    "pokemon",
+    "genshin-impact",
+    "valorant",
+    "fortnite",
+    "leagueoflegends",
+    "overwatch",
+    "terraria",
+    "stardewvalley",
+    "animalcrossing",
+    "roblox",
+    "warframe",
+    "borderlands",
+    "cyberpunk",
+    "hollow-knight",
+    "elden-ring",
+    "baldursgate3",
+    "palworld",
+    "subnautica",
+    "satisfactory",
+    "ark",
+    "halo",
+    "callofduty",
+    "battlefield",
+    "residentevil",
+    "silenthill",
+    "metalgear",
+    "finalfantasy",
+    "kingdomhearts",
+    "persona",
+    "fire-emblem",
+    "xenoblade",
+    "splatoon",
+    "kirby",
+    "megaman",
+    "castlevania",
+    "doom",
+    "monsterhunter",
+    "civilization",
+    "starcraft",
+    "diablo",
+    "worldofwarcraft",
+    "runescape",
+    "guildwars2",
+    "dota2",
+    "apexlegends",
+    "factorio",
+    "rimworld",
+    "stellaris",
+    "citiesskylines",
+    "sims",
+    "assassinscreed",
+    "farcry",
+    "grandtheftauto",
+    "reddeadredemption",
+    "godofwar",
+    "horizon",
+    "uncharted",
+    "lastofus",
+    "ratchetandclank",
+    "crash-bandicoot",
+    "spyro",
+    "sonic",
+    "donkeykong",
+    "metroid",
+    "smashbros",
+    "bayonetta",
+    "devilmaycry",
+    "nierautomata",
+    "yakuza",
+    "dragonquest",
+    "bioshock",
+    "dishonored",
+    "halflife",
+    "portal",
+    "left4dead",
+    "teamfortress",
+    "counterstrike",
+    "deadbydaylight",
+    "fnaf",
+    "undertale",
+    "deltarune",
+    "cuphead",
+    "celeste",
+    "no-mans-sky",
+    "starfield",
+    "outerworlds",
+    "fallout",
+    "elderscrolls",
+    "darksouls",
+    "bloodborne",
+    "sekiro",
+    "streetfighter",
+    "tekken",
+    "mortal-kombat",
+    "guilty-gear",
+    "destiny",
+    "lethal-company",
+    "wowwiki",
+    "dnd5e",
+    "forgottenrealms",
+    "pathfinder",
+    "warhammer40k",
+    "warhammer",
     # Anime/Manga
-    "naruto", "onepiece", "dragonball", "bleach", "attackontitan",
-    "myheroacademia", "demonslayer", "jujutsukaisen", "hunterxhunter",
-    "fairytail", "souleater", "swordartonline", "tokyoghoul",
-    "deathnote", "fullmetalalchemist", "evangelion", "gundam",
-    "sailor-moon", "inuyasha", "cowboy-bebop", "steins-gate",
-    "konosuba", "re-zero", "one-punch-man", "vinland-saga",
-    "berserk", "spy-x-family", "chainsaw-man", "gintama",
-    "fate", "typemoon", "touhou", "digimon", "yugioh",
-    "haikyu", "detective-conan", "studio-ghibli", "arknights",
-    "honkaiimpact3", "honkai-star-rail", "azurlane",
+    "naruto",
+    "onepiece",
+    "dragonball",
+    "bleach",
+    "attackontitan",
+    "myheroacademia",
+    "demonslayer",
+    "jujutsukaisen",
+    "hunterxhunter",
+    "fairytail",
+    "souleater",
+    "swordartonline",
+    "tokyoghoul",
+    "deathnote",
+    "fullmetalalchemist",
+    "evangelion",
+    "gundam",
+    "sailor-moon",
+    "inuyasha",
+    "cowboy-bebop",
+    "steins-gate",
+    "konosuba",
+    "re-zero",
+    "one-punch-man",
+    "vinland-saga",
+    "berserk",
+    "spy-x-family",
+    "chainsaw-man",
+    "gintama",
+    "fate",
+    "typemoon",
+    "touhou",
+    "digimon",
+    "yugioh",
+    "haikyu",
+    "detective-conan",
+    "studio-ghibli",
+    "arknights",
+    "honkaiimpact3",
+    "honkai-star-rail",
+    "azurlane",
     # Movies/TV
-    "pixar", "disney", "mcu", "jurassicpark", "aliens",
-    "terminator", "matrix", "pirates",
-    "starwars", "startrek", "memory-alpha", "tardis",
-    "walkingdead", "strangerthings", "breakingbad",
-    "simpsons", "familyguy", "southpark", "rickandmorty",
-    "adventuretime", "steven-universe", "gravity-falls",
-    "avatar", "korra", "owl-house", "amphibia",
-    "transformers", "powerrangers", "buffy", "xfiles",
-    "supernatural", "gameofthrones", "lego", "spongebob",
+    "pixar",
+    "disney",
+    "mcu",
+    "jurassicpark",
+    "aliens",
+    "terminator",
+    "matrix",
+    "pirates",
+    "starwars",
+    "startrek",
+    "memory-alpha",
+    "tardis",
+    "walkingdead",
+    "strangerthings",
+    "breakingbad",
+    "simpsons",
+    "familyguy",
+    "southpark",
+    "rickandmorty",
+    "adventuretime",
+    "steven-universe",
+    "gravity-falls",
+    "avatar",
+    "korra",
+    "owl-house",
+    "amphibia",
+    "transformers",
+    "powerrangers",
+    "buffy",
+    "xfiles",
+    "supernatural",
+    "gameofthrones",
+    "lego",
+    "spongebob",
     # Comics
-    "marvel", "dc", "tmnt", "invincible", "the-boys",
+    "marvel",
+    "dc",
+    "tmnt",
+    "invincible",
+    "the-boys",
     "sonic-the-hedgehog",
     # Books
-    "harrypotter", "lotr", "asoiaf", "cosmere", "wot",
-    "percy-jackson", "warriors", "discworld", "dune",
-    "hunger-games", "shadowhunters", "narnia", "witcher",
-    "dragonage", "masseffect",
+    "harrypotter",
+    "lotr",
+    "asoiaf",
+    "cosmere",
+    "wot",
+    "percy-jackson",
+    "warriors",
+    "discworld",
+    "dune",
+    "hunger-games",
+    "shadowhunters",
+    "narnia",
+    "witcher",
+    "dragonage",
+    "masseffect",
     # Other
-    "kpop", "vocaloid", "mythology", "recipes",
-    "creepypasta", "scp", "backrooms",
+    "kpop",
+    "vocaloid",
+    "mythology",
+    "recipes",
+    "creepypasta",
+    "scp",
+    "backrooms",
 ]
 
 # Wikis to skip during discovery (meta wikis, duplicates, non-content)
 _FANDOM_SKIP = {
-    "community", "search", "scratchpad", "armchairgm",
-    "conworld", "future",  # user-generated fiction, not factual content
+    "community",
+    "search",
+    "scratchpad",
+    "armchairgm",
+    "conworld",
+    "future",  # user-generated fiction, not factual content
 }
 
 # Minimum articles for a wiki to be worth crawling
@@ -2229,14 +2446,19 @@ def discover_fandom_wikis() -> list[tuple[str, str]]:
     # 1. Get interwiki map from community wiki
     iw_wikis: set[str] = set()
     try:
-        r = SESSION.get("https://community.fandom.com/api.php", params={
-            "action": "query", "format": "json",
-            "meta": "siteinfo", "siprop": "interwikimap",
-        }, timeout=15)
+        r = SESSION.get(
+            "https://community.fandom.com/api.php",
+            params={
+                "action": "query",
+                "format": "json",
+                "meta": "siteinfo",
+                "siprop": "interwikimap",
+            },
+            timeout=15,
+        )
         if r.status_code == 200:
             for entry in r.json().get("query", {}).get("interwikimap", []):
-                m = re.match(r'https://([a-zA-Z0-9_-]+)\.fandom\.com',
-                             entry.get("url", ""))
+                m = re.match(r"https://([a-zA-Z0-9_-]+)\.fandom\.com", entry.get("url", ""))
                 if m:
                     iw_wikis.add(m.group(1).lower())
     except (requests.RequestException, json.JSONDecodeError):
@@ -2255,8 +2477,10 @@ def discover_fandom_wikis() -> list[tuple[str, str]]:
             r = SESSION.get(
                 f"https://{wiki_id}.fandom.com/api.php",
                 params={
-                    "action": "query", "format": "json",
-                    "meta": "siteinfo", "siprop": "statistics|general",
+                    "action": "query",
+                    "format": "json",
+                    "meta": "siteinfo",
+                    "siprop": "statistics|general",
                 },
                 timeout=8,
             )
@@ -2294,8 +2518,7 @@ def discover_fandom_wikis() -> list[tuple[str, str]]:
     return [(wid, name) for wid, name, _ in deduped]
 
 
-def fetch_fandom(wikis: list[tuple[str, str]], max_articles: int,
-                 progress: dict) -> int:
+def fetch_fandom(wikis: list[tuple[str, str]], max_articles: int, progress: dict) -> int:
     """Download articles from Fandom wikis via MediaWiki revisions API.
 
     Uses ``prop=revisions`` (not ``prop=extracts`` which Fandom disabled)
@@ -2390,14 +2613,18 @@ def fetch_fandom(wikis: list[tuple[str, str]], max_articles: int,
             # --- Step 2: fetch raw wikitext via revisions ---
             time.sleep(FANDOM_DELAY)
             try:
-                rev_resp = SESSION.get(api_url, params={
-                    "action": "query",
-                    "format": "json",
-                    "titles": "|".join(titles[:50]),
-                    "prop": "revisions",
-                    "rvprop": "content",
-                    "rvslots": "main",
-                }, timeout=30)
+                rev_resp = SESSION.get(
+                    api_url,
+                    params={
+                        "action": "query",
+                        "format": "json",
+                        "titles": "|".join(titles[:50]),
+                        "prop": "revisions",
+                        "rvprop": "content",
+                        "rvslots": "main",
+                    },
+                    timeout=30,
+                )
                 if rev_resp.status_code == 429:
                     consecutive_errors += 1
                     if consecutive_errors >= 5:
@@ -2428,8 +2655,7 @@ def fetch_fandom(wikis: list[tuple[str, str]], max_articles: int,
                 revisions = page_info.get("revisions", [])
                 if not revisions:
                     continue
-                wikitext = (revisions[0].get("slots", {})
-                            .get("main", {}).get("*", ""))
+                wikitext = revisions[0].get("slots", {}).get("main", {}).get("*", "")
                 if not wikitext or len(wikitext) < 200:
                     continue
 
@@ -2439,10 +2665,18 @@ def fetch_fandom(wikis: list[tuple[str, str]], max_articles: int,
 
                 # Skip list/category/disambiguation pages
                 title_lower = title.lower()
-                if any(skip in title_lower for skip in [
-                    'list of', 'lists of', 'category:', 'template:',
-                    'disambiguation', 'user:', 'talk:',
-                ]):
+                if any(
+                    skip in title_lower
+                    for skip in [
+                        "list of",
+                        "lists of",
+                        "category:",
+                        "template:",
+                        "disambiguation",
+                        "user:",
+                        "talk:",
+                    ]
+                ):
                     continue
 
                 # Wikitext → plain text
@@ -2456,10 +2690,10 @@ def fetch_fandom(wikis: list[tuple[str, str]], max_articles: int,
                     ai_rejected += 1
                     continue
 
-                title_clean = re.sub(r'[^\w\s-]', '', title)[:80].strip()
+                title_clean = re.sub(r"[^\w\s-]", "", title)[:80].strip()
                 if not title_clean:
                     continue
-                safe_name = re.sub(r'\s+', '_', f"{wiki_id}_{title_clean}")
+                safe_name = re.sub(r"\s+", "_", f"{wiki_id}_{title_clean}")
 
                 with lock:
                     if not safe_name or safe_name in shared["existing"]:
@@ -2468,7 +2702,7 @@ def fetch_fandom(wikis: list[tuple[str, str]], max_articles: int,
                     shared["total_saved"] += 1
 
                 filepath = FANDOM_DIR / f"{safe_name}.txt"
-                filepath.write_text(cleaned, encoding='utf-8')
+                filepath.write_text(cleaned, encoding="utf-8")
                 wiki_saved += 1
 
             if wiki_saved and wiki_saved % 200 == 0:
@@ -2491,10 +2725,7 @@ def fetch_fandom(wikis: list[tuple[str, str]], max_articles: int,
 
     # Fetch wikis concurrently — each is a different domain
     with ThreadPoolExecutor(max_workers=4) as executor:
-        futures = {
-            executor.submit(_fetch_wiki, wid, lab): (wid, lab)
-            for wid, lab in remaining
-        }
+        futures = {executor.submit(_fetch_wiki, wid, lab): (wid, lab) for wid, lab in remaining}
         for future in as_completed(futures):
             wid, lab = futures[future]
             try:
@@ -2512,6 +2743,7 @@ def fetch_fandom(wikis: list[tuple[str, str]], max_articles: int,
 # ---------------------------------------------------------------------------
 # Generic HuggingFace streaming fetcher
 # ---------------------------------------------------------------------------
+
 
 def _fetch_hf_streaming(
     dataset_name: str,
@@ -2561,13 +2793,17 @@ def _fetch_hf_streaming(
     target_bytes = int(target_gb * 1024 * 1024 * 1024)
 
     if existing_bytes >= target_bytes:
-        print(f"  [{label}] Already have {existing_bytes / 1e9:.2f} GB "
-              f"({saved} files), target is {target_gb:.1f} GB. Skipping.")
+        print(
+            f"  [{label}] Already have {existing_bytes / 1e9:.2f} GB "
+            f"({saved} files), target is {target_gb:.1f} GB. Skipping."
+        )
         return saved
 
     remaining_gb = (target_bytes - existing_bytes) / 1e9
-    print(f"  [{label}] Target: {target_gb:.1f} GB | Have: {existing_bytes / 1e9:.2f} GB "
-          f"({saved} files) | Need: {remaining_gb:.2f} GB")
+    print(
+        f"  [{label}] Target: {target_gb:.1f} GB | Have: {existing_bytes / 1e9:.2f} GB "
+        f"({saved} files) | Need: {remaining_gb:.2f} GB"
+    )
     print(f"  [{label}] Streaming from HuggingFace ({dataset_name})...")
     print(f"  [{label}] Safe to Ctrl+C and --resume later.")
 
@@ -2634,11 +2870,9 @@ def _fetch_hf_streaming(
                 now = time.monotonic()
                 if now - last_print >= 60:
                     elapsed_min = (now - start_time) / 60
-                    speed_mb = (total_bytes - existing_bytes) / max(
-                        now - start_time, 1) / 1e6
+                    speed_mb = (total_bytes - existing_bytes) / max(now - start_time, 1) / 1e6
                     remaining_bytes = target_bytes - total_bytes
-                    eta_min = (remaining_bytes / max(speed_mb * 1e6, 1)
-                               / 60) if speed_mb > 0 else 0
+                    eta_min = (remaining_bytes / max(speed_mb * 1e6, 1) / 60) if speed_mb > 0 else 0
                     print(
                         f"  [{label}] {total_bytes / 1e9:.2f}/{target_gb:.1f} GB "
                         f"({saved} files) | {speed_mb:.1f} MB/s | "
@@ -2668,16 +2902,17 @@ def _fetch_hf_streaming(
             saved += 1
             total_bytes += batch_size
         elapsed_min = (time.monotonic() - start_time) / 60
-        print(f"\n  [{label}] Interrupted after {elapsed_min:.0f} min. "
-              f"{saved} files ({total_bytes / 1e9:.2f} GB). "
-              f"Run with --resume to continue.")
+        print(
+            f"\n  [{label}] Interrupted after {elapsed_min:.0f} min. "
+            f"{saved} files ({total_bytes / 1e9:.2f} GB). "
+            f"Run with --resume to continue."
+        )
     except Exception as e:
         print(f"  [{label}] Error: {e}")
         print(f"  [{label}] Run with --resume to retry.")
 
     elapsed_min = (time.monotonic() - start_time) / 60
-    print(f"\n  [{label}] Done: {saved} files saved "
-          f"({total_bytes / 1e9:.2f} GB) in {elapsed_min:.0f} min.")
+    print(f"\n  [{label}] Done: {saved} files saved ({total_bytes / 1e9:.2f} GB) in {elapsed_min:.0f} min.")
     if ai_rejected:
         print(f"  [{label}] {ai_rejected} records rejected by AI content filter")
 
@@ -2796,13 +3031,32 @@ def fetch_finemath(target_gb: float, progress: dict) -> int:
 
 # Languages used by SmolLM3 — priority order (most useful first)
 _STACK_LANGUAGES = [
-    "python", "javascript", "typescript", "java", "c", "cpp",
-    "go", "rust", "ruby", "php", "shell", "sql",
-    "html", "css", "markdown", "json",
+    "python",
+    "javascript",
+    "typescript",
+    "java",
+    "c",
+    "cpp",
+    "go",
+    "rust",
+    "ruby",
+    "php",
+    "shell",
+    "sql",
+    "html",
+    "css",
+    "markdown",
+    "json",
 ]
 _STACK_PERMISSIVE = {
-    "mit", "apache-2.0", "bsd-2-clause", "bsd-3-clause",
-    "isc", "unlicense", "cc0-1.0", "0bsd",
+    "mit",
+    "apache-2.0",
+    "bsd-2-clause",
+    "bsd-3-clause",
+    "isc",
+    "unlicense",
+    "cc0-1.0",
+    "0bsd",
 }
 
 
@@ -2837,8 +3091,10 @@ def fetch_the_stack(target_gb: float, progress: dict) -> int:
     total_bytes = existing_bytes
 
     if existing_bytes >= target_bytes:
-        print(f"  [The Stack] Already have {existing_bytes / 1e9:.2f} GB "
-              f"({total_saved} files), target is {target_gb:.1f} GB. Skipping.")
+        print(
+            f"  [The Stack] Already have {existing_bytes / 1e9:.2f} GB "
+            f"({total_saved} files), target is {target_gb:.1f} GB. Skipping."
+        )
         return total_saved
 
     file_target = 5 * 1024 * 1024  # 5 MB per file
@@ -2886,9 +3142,7 @@ def fetch_the_stack(target_gb: float, progress: dict) -> int:
 
                 # License filter — permissive only
                 licenses = record.get("max_stars_repo_licenses", []) or []
-                if licenses and not any(
-                    lic.lower() in _STACK_PERMISSIVE for lic in licenses
-                ):
+                if licenses and not any(lic.lower() in _STACK_PERMISSIVE for lic in licenses):
                     continue
 
                 text = record.get("content", "")
@@ -2934,9 +3188,11 @@ def fetch_the_stack(target_gb: float, progress: dict) -> int:
             progress[lang_progress_key] = {"records_consumed": records_consumed}
             save_progress(progress)
             elapsed_min = (time.monotonic() - start_time) / 60
-            print(f"\n  [The Stack] Interrupted after {elapsed_min:.0f} min. "
-                  f"{total_saved} files ({total_bytes / 1e9:.2f} GB). "
-                  f"Run with --resume to continue.")
+            print(
+                f"\n  [The Stack] Interrupted after {elapsed_min:.0f} min. "
+                f"{total_saved} files ({total_bytes / 1e9:.2f} GB). "
+                f"Run with --resume to continue."
+            )
             return total_saved
         except Exception as e:
             print(f"  [The Stack/{lang}] Error: {e} — moving to next language")
@@ -2945,14 +3201,14 @@ def fetch_the_stack(target_gb: float, progress: dict) -> int:
         save_progress(progress)
 
     elapsed_min = (time.monotonic() - start_time) / 60
-    print(f"\n  [The Stack] Done: {total_saved} files saved "
-          f"({total_bytes / 1e9:.2f} GB) in {elapsed_min:.0f} min.")
+    print(f"\n  [The Stack] Done: {total_saved} files saved ({total_bytes / 1e9:.2f} GB) in {elapsed_min:.0f} min.")
     return total_saved
 
 
 # ---------------------------------------------------------------------------
 # Combine all sources
 # ---------------------------------------------------------------------------
+
 
 def combine_all_sources() -> None:
     """Merge all downloaded text files into one combined.txt for FORGE.
@@ -3000,10 +3256,10 @@ def combine_all_sources() -> None:
 
     # Write to temp file then rename — crash during multi-hour merge
     # must not truncate the previous combined.txt
-    tmp_file = COMBINED_FILE.with_suffix('.txt.tmp')
+    tmp_file = COMBINED_FILE.with_suffix(".txt.tmp")
 
     try:
-        with open(tmp_file, 'w', encoding='utf-8') as out:
+        with open(tmp_file, "w", encoding="utf-8") as out:
             for label, source_dir in source_dirs:
                 if not source_dir.exists():
                     continue
@@ -3015,19 +3271,18 @@ def combine_all_sources() -> None:
                         for entry in scanner:
                             if not entry.is_file(follow_symlinks=False):
                                 continue
-                            if not entry.name.endswith('.txt'):
+                            if not entry.name.endswith(".txt"):
                                 continue
 
                             try:
-                                text = Path(entry.path).read_text(
-                                    encoding='utf-8', errors='replace')
+                                text = Path(entry.path).read_text(encoding="utf-8", errors="replace")
                             except OSError:
                                 continue
                             if len(text.strip()) < MIN_PARAGRAPH_LENGTH:
                                 continue
 
                             # Paragraph-level dedup
-                            paragraphs = text.split('\n\n')
+                            paragraphs = text.split("\n\n")
                             unique_paras = []
                             for para in paragraphs:
                                 para = para.strip()
@@ -3036,8 +3291,7 @@ def combine_all_sources() -> None:
                                     continue
                                 # S789: Use raw digest (8 bytes, ~41B/entry)
                                 # instead of hexdigest (16 chars, ~65B/entry)
-                                h = hashlib.sha256(
-                                    para.encode('utf-8')).digest()[:8]
+                                h = hashlib.sha256(para.encode("utf-8")).digest()[:8]
                                 if h in seen_hashes:
                                     dupes_skipped += 1
                                     continue
@@ -3049,10 +3303,11 @@ def combine_all_sources() -> None:
                                         f"  WARNING: Dedup table at capacity "
                                         f"({MAX_DEDUP_ENTRIES:,} entries). "
                                         f"Later paragraphs won't be "
-                                        f"deduplicated.")
+                                        f"deduplicated."
+                                    )
                                 unique_paras.append(para)
 
-                            cleaned = '\n\n'.join(unique_paras).strip()
+                            cleaned = "\n\n".join(unique_paras).strip()
                             if len(cleaned) < MIN_PARAGRAPH_LENGTH:
                                 continue
 
@@ -3064,14 +3319,15 @@ def combine_all_sources() -> None:
 
                             # Progress for large dirs
                             if dir_files % 100_000 == 0:
-                                print(f"  [{label}] {dir_files:,} files processed "
-                                      f"({total_chars / 1024 / 1024 / 1024:.1f} GB)...")
+                                print(
+                                    f"  [{label}] {dir_files:,} files processed "
+                                    f"({total_chars / 1024 / 1024 / 1024:.1f} GB)..."
+                                )
                 except OSError:
                     continue
 
                 if dir_files > 0:
-                    print(f"  [{label}] {dir_files:,} files -> "
-                          f"{total_chars / 1024 / 1024 / 1024:.1f} GB cumulative")
+                    print(f"  [{label}] {dir_files:,} files -> {total_chars / 1024 / 1024 / 1024:.1f} GB cumulative")
 
         # Atomic replace — only overwrites combined.txt after full write succeeds
         tmp_file.replace(COMBINED_FILE)
@@ -3094,12 +3350,14 @@ def combine_all_sources() -> None:
 # Stats
 # ---------------------------------------------------------------------------
 
+
 def _count_dir(directory: Path, recursive: bool = False) -> tuple[int, int]:
     """Count .txt files and total size in a directory using os.scandir (fast).
 
     Returns (file_count, total_bytes).
     """
     import os
+
     count = 0
     total = 0
     try:
@@ -3137,7 +3395,7 @@ def print_stats() -> None:
         ("DCLM", DCLM_DIR, False),
         ("FineMath", FINEMATH_DIR, False),
         ("The Stack", STACK_DIR, False),
-        ("StackExchange", STACKEX_DIR, True),   # subdirs per site
+        ("StackExchange", STACKEX_DIR, True),  # subdirs per site
         ("Wayback", WAYBACK_DIR, False),
         ("Fandom", FANDOM_DIR, False),
     ]
@@ -3187,6 +3445,7 @@ def print_stats() -> None:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="Collect pre-training data for Enigma Engine models.",
@@ -3209,48 +3468,76 @@ Examples:
         """,
     )
 
-    parser.add_argument("--wiki", type=int, default=2000,
-                        help="Number of Wikipedia articles to download (default: 2000)")
-    parser.add_argument("--simple", type=int, default=200,
-                        help="Number of Simple Wikipedia articles (default: 200)")
-    parser.add_argument("--books", type=int, default=100,
-                        help="Number of Gutenberg books (default: 100)")
-    parser.add_argument("--wiki-dump", action="store_true",
-                        help="Download full English Wikipedia dump (~22 GB compressed, 15-20 GB clean text)")
-    parser.add_argument("--all-sources", action="store_true",
-                        help="Max defaults: all sources enabled with reasonable limits")
-    parser.add_argument("--books-only", action="store_true",
-                        help="Download only Gutenberg books (skip Wikipedia)")
-    parser.add_argument("--resume", action="store_true",
-                        help="Resume interrupted download (keeps existing files + progress)")
-    parser.add_argument("--stats", action="store_true",
-                        help="Show data stats and exit")
-    parser.add_argument("--combine-only", action="store_true",
-                        help="Only recombine existing files (skip downloading)")
-    parser.add_argument("--no-combine", action="store_true",
-                        help="Skip the combine step after downloading (run --combine-only later)")
-    parser.add_argument("--fineweb", type=float, default=0,
-                        help="Download N GB of FineWeb-Edu educational text (requires `pip install datasets`)")
-    parser.add_argument("--stackexchange", action="store_true",
-                        help="Download Stack Exchange Q&A dumps from archive.org (requires `pip install py7zr`)")
-    parser.add_argument("--stackexchange-score", type=int, default=5,
-                        help="Minimum post score for Stack Exchange (default: 5)")
-    parser.add_argument("--wayback", type=int, default=0,
-                        help="Max pages to download from Wayback Machine educational domains")
-    parser.add_argument("--fandom", type=int, default=0,
-                        help="Max articles from Fandom wikis (0 = unlimited/all)")
-    parser.add_argument("--fandom-all", action="store_true",
-                        help="Download ALL articles from every Fandom wiki (no cap)")
-    parser.add_argument("--openwebtext", type=float, default=0,
-                        help="Download N GB of OpenWebText web text (requires `pip install datasets`)")
-    parser.add_argument("--c4", type=float, default=0,
-                        help="Download N GB of C4 cleaned Common Crawl (requires `pip install datasets`)")
-    parser.add_argument("--dclm", type=float, default=0,
-                        help="Download N GB of DCLM-Baseline model-filtered web text (requires `pip install datasets`)")
-    parser.add_argument("--finemath", type=float, default=0,
-                        help="Download N GB of FineMath (4+ and InfiMM-WebMath, 50/50 split, requires `pip install datasets`)")
-    parser.add_argument("--code", type=float, default=0,
-                        help="Download N GB of code from The Stack v2 (requires `pip install datasets` + HuggingFace auth)")
+    parser.add_argument(
+        "--wiki", type=int, default=2000, help="Number of Wikipedia articles to download (default: 2000)"
+    )
+    parser.add_argument("--simple", type=int, default=200, help="Number of Simple Wikipedia articles (default: 200)")
+    parser.add_argument("--books", type=int, default=100, help="Number of Gutenberg books (default: 100)")
+    parser.add_argument(
+        "--wiki-dump",
+        action="store_true",
+        help="Download full English Wikipedia dump (~22 GB compressed, 15-20 GB clean text)",
+    )
+    parser.add_argument(
+        "--all-sources", action="store_true", help="Max defaults: all sources enabled with reasonable limits"
+    )
+    parser.add_argument("--books-only", action="store_true", help="Download only Gutenberg books (skip Wikipedia)")
+    parser.add_argument(
+        "--resume", action="store_true", help="Resume interrupted download (keeps existing files + progress)"
+    )
+    parser.add_argument("--stats", action="store_true", help="Show data stats and exit")
+    parser.add_argument("--combine-only", action="store_true", help="Only recombine existing files (skip downloading)")
+    parser.add_argument(
+        "--no-combine", action="store_true", help="Skip the combine step after downloading (run --combine-only later)"
+    )
+    parser.add_argument(
+        "--fineweb",
+        type=float,
+        default=0,
+        help="Download N GB of FineWeb-Edu educational text (requires `pip install datasets`)",
+    )
+    parser.add_argument(
+        "--stackexchange",
+        action="store_true",
+        help="Download Stack Exchange Q&A dumps from archive.org (requires `pip install py7zr`)",
+    )
+    parser.add_argument(
+        "--stackexchange-score", type=int, default=5, help="Minimum post score for Stack Exchange (default: 5)"
+    )
+    parser.add_argument(
+        "--wayback", type=int, default=0, help="Max pages to download from Wayback Machine educational domains"
+    )
+    parser.add_argument("--fandom", type=int, default=0, help="Max articles from Fandom wikis (0 = unlimited/all)")
+    parser.add_argument(
+        "--fandom-all", action="store_true", help="Download ALL articles from every Fandom wiki (no cap)"
+    )
+    parser.add_argument(
+        "--openwebtext",
+        type=float,
+        default=0,
+        help="Download N GB of OpenWebText web text (requires `pip install datasets`)",
+    )
+    parser.add_argument(
+        "--c4", type=float, default=0, help="Download N GB of C4 cleaned Common Crawl (requires `pip install datasets`)"
+    )
+    parser.add_argument(
+        "--dclm",
+        type=float,
+        default=0,
+        help="Download N GB of DCLM-Baseline model-filtered web text (requires `pip install datasets`)",
+    )
+    parser.add_argument(
+        "--finemath",
+        type=float,
+        default=0,
+        help="Download N GB of FineMath (4+ and InfiMM-WebMath, 50/50 split, requires `pip install datasets`)",
+    )
+    parser.add_argument(
+        "--code",
+        type=float,
+        default=0,
+        help="Download N GB of code from The Stack v2 (requires `pip install datasets` + HuggingFace auth)",
+    )
 
     args = parser.parse_args()
 
@@ -3294,7 +3581,7 @@ Examples:
         if GUTENBERG_DIR.exists():
             disk_ids = set()
             for f in GUTENBERG_DIR.glob("*.txt"):
-                m = re.match(r'^(\d+)', f.stem)
+                m = re.match(r"^(\d+)", f.stem)
                 if m:
                     disk_ids.add(m.group(1))
             saved_ids = set(progress.get("gutenberg_ids", []))
@@ -3323,7 +3610,7 @@ Examples:
         if args.wayback > 0:
             sources.append(f"{args.wayback} Wayback pages")
         if args.fandom > 0 or args.fandom_all:
-            cap = 'all' if args.fandom_all else str(args.fandom)
+            cap = "all" if args.fandom_all else str(args.fandom)
             sources.append(f"{cap} Fandom wiki articles")
         if args.openwebtext > 0:
             sources.append(f"{args.openwebtext:.0f} GB OpenWebText")
@@ -3354,18 +3641,14 @@ Examples:
         # 2. Simple Wikipedia (smaller wiki, rarely rate-limits)
         if args.simple > 0:
             print("\n--- Simple Wikipedia ---")
-            simple_count = fetch_wikipedia_articles(
-                SIMPLE_WIKI_API, SIMPLE_DIR, args.simple, "Simple Wiki", progress
-            )
+            simple_count = fetch_wikipedia_articles(SIMPLE_WIKI_API, SIMPLE_DIR, args.simple, "Simple Wiki", progress)
         else:
             simple_count = len(list(SIMPLE_DIR.glob("*.txt"))) if SIMPLE_DIR.exists() else 0
 
         # 3. English Wikipedia (largest but rate-limits - run last)
         if args.wiki > 0:
             print("\n--- Wikipedia (English) ---")
-            wiki_count = fetch_wikipedia_articles(
-                WIKI_API, WIKI_DIR, args.wiki, "Wikipedia", progress
-            )
+            wiki_count = fetch_wikipedia_articles(WIKI_API, WIKI_DIR, args.wiki, "Wikipedia", progress)
         else:
             wiki_count = len(list(WIKI_DIR.glob("*.txt"))) if WIKI_DIR.exists() else 0
 
@@ -3380,17 +3663,13 @@ Examples:
         stackex_count = 0
         if args.stackexchange:
             print("\n--- Stack Exchange ---")
-            stackex_count = fetch_stackexchange(
-                STACKEX_SITES, args.stackexchange_score, progress
-            )
+            stackex_count = fetch_stackexchange(STACKEX_SITES, args.stackexchange_score, progress)
 
         # 6. Wayback Machine (educational domains)
         wayback_count = 0
         if args.wayback > 0:
             print("\n--- Wayback Machine ---")
-            wayback_count = fetch_wayback(
-                WAYBACK_DOMAINS, args.wayback, progress
-            )
+            wayback_count = fetch_wayback(WAYBACK_DOMAINS, args.wayback, progress)
 
         # 7. Fandom wikis (games, movies, TV, books)
         fandom_count = 0
@@ -3398,9 +3677,7 @@ Examples:
             fandom_cap = 0 if args.fandom_all else args.fandom
             print("\n--- Fandom Wikis ---")
             fandom_wikis = discover_fandom_wikis()
-            fandom_count = fetch_fandom(
-                fandom_wikis, fandom_cap, progress
-            )
+            fandom_count = fetch_fandom(fandom_wikis, fandom_cap, progress)
 
         # 8. OpenWebText (general web text from HuggingFace)
         openwebtext_count = 0
@@ -3449,7 +3726,7 @@ Examples:
         save_progress(progress)
 
     # Combine everything (unless --no-combine)
-    if not getattr(args, 'no_combine', False):
+    if not getattr(args, "no_combine", False):
         combine_all_sources()
 
     # Print summary

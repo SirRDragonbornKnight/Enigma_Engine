@@ -348,9 +348,7 @@ def test_run_training_remax_routes_to_trainer(
     assert captured["n_responses"] == 5
 
 
-def test_run_training_materializes_jsonl_data_path(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_run_training_materializes_jsonl_data_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Dispatcher must accept raw dict with data: <path> and load the file."""
     captured: dict[str, object] = {}
 
@@ -381,14 +379,10 @@ def test_run_training_materializes_jsonl_data_path(
     )
 
     assert result == {"ok": True}
-    assert captured["preference_data"] == [
-        {"prompt": "p", "chosen": "c", "rejected": "r"}
-    ]
+    assert captured["preference_data"] == [{"prompt": "p", "chosen": "c", "rejected": "r"}]
 
 
-def test_run_training_materializes_prompt_text_path(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_run_training_materializes_prompt_text_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Dispatcher must split a .txt prompt list when mode expects list[str]."""
     captured: dict[str, object] = {}
 

@@ -3,6 +3,7 @@ Hardware Detection Module
 
 Detects hardware capabilities and recommends optimal model configurations.
 """
+
 import logging
 import platform
 import threading
@@ -15,6 +16,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class HardwareProfile:
     """Hardware profile with system capabilities."""
+
     device: str = "cpu"
     cpu_cores: int = 1
     cpu_threads: int = 1
@@ -42,6 +44,7 @@ class HardwareProfile:
     def to_dict(self) -> dict[str, Any]:
         """Convert profile to dictionary."""
         import dataclasses
+
         return dataclasses.asdict(self)
 
 
@@ -60,16 +63,18 @@ def detect_hardware() -> HardwareProfile:
 
     # CPU info
     import os
+
     profile.cpu_cores = os.cpu_count() or 1
     profile.cpu_threads = profile.cpu_cores
 
     # Check for ARM architecture
     machine = platform.machine().lower()
-    profile.is_arm = machine in ('arm64', 'aarch64', 'armv7l', 'armv8')
+    profile.is_arm = machine in ("arm64", "aarch64", "armv7l", "armv8")
 
     # RAM info
     try:
         import psutil
+
         mem = psutil.virtual_memory()
         profile.ram_gb = mem.total / (1024**3)
         profile.available_ram_gb = mem.available / (1024**3)
@@ -81,23 +86,24 @@ def detect_hardware() -> HardwareProfile:
 
     # Check for Raspberry Pi
     try:
-        with open('/proc/device-tree/model', 'r', encoding='utf-8') as f:
+        with open("/proc/device-tree/model", "r", encoding="utf-8") as f:
             model = f.read()
-            if 'Raspberry Pi' in model:
+            if "Raspberry Pi" in model:
                 profile.is_raspberry_pi = True
-                profile.pi_model = model.strip().rstrip('\x00')
+                profile.pi_model = model.strip().rstrip("\x00")
                 profile.hardware_type = "raspberry_pi"
     except (FileNotFoundError, OSError):
         pass
 
     # Check for Apple Silicon
-    if platform.system() == 'Darwin' and platform.machine() == 'arm64':
+    if platform.system() == "Darwin" and platform.machine() == "arm64":
         profile.is_apple_silicon = True
         profile.hardware_type = "apple_silicon"
 
     # GPU detection
     try:
         import torch
+
         if torch.cuda.is_available():
             profile.gpu_available = True
             profile.has_cuda = True
@@ -106,7 +112,7 @@ def detect_hardware() -> HardwareProfile:
             profile.gpu_vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
             profile.cuda_version = torch.version.cuda or ""
             profile.hardware_type = "desktop_gpu"
-        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
             profile.gpu_available = True
             profile.has_mps = True
             profile.device = "mps"
@@ -208,6 +214,7 @@ def get_optimal_config(profile: Optional[HardwareProfile] = None) -> dict[str, A
     if profile.gpu_available and profile.device == "cuda":
         try:
             import torch
+
             if torch.cuda.is_bf16_supported():
                 config["precision"] = "bfloat16"
             else:
@@ -226,10 +233,7 @@ def get_optimal_config(profile: Optional[HardwareProfile] = None) -> dict[str, A
 
 
 def estimate_memory_usage(
-    model_size: str,
-    batch_size: int = 1,
-    seq_len: int = 512,
-    use_half: bool = False
+    model_size: str, batch_size: int = 1, seq_len: int = 512, use_half: bool = False
 ) -> dict[str, float]:
     """
     Estimate memory usage for a given configuration.
@@ -246,6 +250,7 @@ def estimate_memory_usage(
     vocab_size: int = 32000
     try:
         from enigma_engine.core.model_presets import MODEL_PRESETS
+
         cfg = MODEL_PRESETS.get(model_size)
         if cfg is not None:
             dim = cfg.dim
@@ -258,8 +263,8 @@ def estimate_memory_usage(
     # embeddings + output + per-layer (QKV + out + FFN gate/up/down)
     ffn_dim = int(dim * 8 / 3)  # SwiGLU default
     per_layer = (
-        3 * dim * dim      # Q, K, V projections
-        + dim * dim         # output projection
+        3 * dim * dim  # Q, K, V projections
+        + dim * dim  # output projection
         + 3 * dim * ffn_dim  # gate + up + down
     )
     params = 2 * vocab_size * dim + n_layers * per_layer
@@ -352,17 +357,16 @@ class TrainingMemoryBudget:
         if self.ram_gb <= 0:
             try:
                 import psutil
-                self.ram_gb = psutil.virtual_memory().total / (1024 ** 3)
+
+                self.ram_gb = psutil.virtual_memory().total / (1024**3)
             except ImportError:
                 self.ram_gb = 8.0
         if self.vram_gb <= 0:
             try:
                 import torch
+
                 if torch.cuda.is_available():
-                    self.vram_gb = (
-                        torch.cuda.get_device_properties(0).total_memory
-                        / (1024 ** 3)
-                    )
+                    self.vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
                 else:
                     self.vram_gb = 0.0
             except ImportError:
@@ -436,7 +440,7 @@ class TrainingMemoryBudget:
         Scale: use up to 5% of total RAM for the table.
         Clamped to [1_000_000, 200_000_000].
         """
-        bytes_budget = self.ram_gb * (1024 ** 3) * 0.05
+        bytes_budget = self.ram_gb * (1024**3) * 0.05
         entries = int(bytes_budget / 41)
         return max(1_000_000, min(entries, 200_000_000))
 
@@ -499,17 +503,16 @@ class InferenceMemoryBudget:
         if self.ram_gb <= 0:
             try:
                 import psutil
-                self.ram_gb = psutil.virtual_memory().total / (1024 ** 3)
+
+                self.ram_gb = psutil.virtual_memory().total / (1024**3)
             except ImportError:
                 self.ram_gb = 8.0
         if self.vram_gb <= 0:
             try:
                 import torch
+
                 if torch.cuda.is_available():
-                    self.vram_gb = (
-                        torch.cuda.get_device_properties(0).total_memory
-                        / (1024 ** 3)
-                    )
+                    self.vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
                 else:
                     self.vram_gb = 0.0
             except ImportError:
@@ -665,15 +668,15 @@ class InferenceMemoryBudget:
 
 
 __all__ = [
-    'HardwareProfile',
-    'InferenceMemoryBudget',
-    'TrainingMemoryBudget',
-    'clear_cached_profile',
-    'detect_hardware',
-    'estimate_memory_usage',
-    'get_cached_profile',
-    'get_hardware',
-    'get_optimal_config',
-    'recommend_model_size',
-    'recommend_training_batch_size',
+    "HardwareProfile",
+    "InferenceMemoryBudget",
+    "TrainingMemoryBudget",
+    "clear_cached_profile",
+    "detect_hardware",
+    "estimate_memory_usage",
+    "get_cached_profile",
+    "get_hardware",
+    "get_optimal_config",
+    "recommend_model_size",
+    "recommend_training_batch_size",
 ]

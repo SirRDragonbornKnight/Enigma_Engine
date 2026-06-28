@@ -14,6 +14,7 @@ evaluates STUDENT ability. Together they let the training loop
 run autonomously from start to finish, adapting to the model's
 real skill level.
 """
+
 from __future__ import annotations
 
 import json
@@ -37,6 +38,7 @@ DIFFICULTY_LEVELS = ["simple", "medium", "advanced"]
 @dataclass
 class StageResult:
     """Results from one attempt at a training stage."""
+
     stage: str
     attempt: int
     difficulty: str = "simple"
@@ -56,8 +58,7 @@ class StageResult:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> StageResult:
         """Deserialize from dict."""
-        return cls(**{k: v for k, v in data.items()
-                      if k in cls.__dataclass_fields__})
+        return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
 
 @dataclass
@@ -67,6 +68,7 @@ class TrainingPlan:
     Tracks the full auto-chain pipeline: which stages have been
     completed, current progress, scores, and adaptive difficulty.
     """
+
     # Identity
     student_path: str = ""
     trainer_path: str = ""
@@ -116,8 +118,7 @@ class TrainingPlan:
     @property
     def is_complete(self) -> bool:
         """True if all stages passed or plan is done."""
-        return (self.status == "completed"
-                or self.current_stage_idx >= len(self.stages))
+        return self.status == "completed" or self.current_stage_idx >= len(self.stages)
 
     @property
     def current_attempt(self) -> int:
@@ -125,8 +126,7 @@ class TrainingPlan:
         stage = self.current_stage
         if stage is None:
             return 0
-        return sum(1 for r in self.stage_results
-                   if r.get("stage") == stage)
+        return sum(1 for r in self.stage_results if r.get("stage") == stage)
 
     def decide_action(self, avg_score: float) -> str:
         """Decide what to do after a Phase 3 test.
@@ -151,14 +151,12 @@ class TrainingPlan:
         if self.current_attempt < self.max_retries:
             # Escalate difficulty for next attempt
             try:
-                idx = DIFFICULTY_LEVELS.index(
-                    self.current_difficulty)
+                idx = DIFFICULTY_LEVELS.index(self.current_difficulty)
             except ValueError:
                 self.current_difficulty = DIFFICULTY_LEVELS[0]
                 idx = 0
             if idx + 1 < len(DIFFICULTY_LEVELS):
-                self.current_difficulty = (
-                    DIFFICULTY_LEVELS[idx + 1])
+                self.current_difficulty = DIFFICULTY_LEVELS[idx + 1]
             return "retry"
 
         # Max retries exhausted — advance anyway
@@ -195,6 +193,7 @@ class TrainingPlan:
     def save(self, path: str | Path) -> None:
         """Save plan to JSON file."""
         from enigma_engine.core.safe_save import atomic_write_text
+
         path = Path(path)
         data = asdict(self)
         atomic_write_text(path, json.dumps(data, indent=2, default=str))
@@ -209,9 +208,7 @@ class TrainingPlan:
         known = cls.__dataclass_fields__
         filtered = {k: v for k, v in data.items() if k in known}
         plan = cls(**filtered)
-        logger.info("Training plan loaded: %s (stage %d/%d)",
-                     path, plan.current_stage_idx + 1,
-                     len(plan.stages))
+        logger.info("Training plan loaded: %s (stage %d/%d)", path, plan.current_stage_idx + 1, len(plan.stages))
         return plan
 
     def summary(self) -> str:
@@ -219,8 +216,7 @@ class TrainingPlan:
         lines = [
             f"Training Plan: {self.student_name} ← {self.trainer_name}",
             f"Status: {self.status.upper()}",
-            f"Stage: {self.current_stage or 'DONE'} "
-            f"({self.current_stage_idx + 1}/{len(self.stages)})",
+            f"Stage: {self.current_stage or 'DONE'} ({self.current_stage_idx + 1}/{len(self.stages)})",
         ]
         if self.adaptive:
             lines.append(f"Difficulty: {self.current_difficulty}")
@@ -235,9 +231,7 @@ class TrainingPlan:
 
 # Path to the user-editable adaptive prompts file.
 # Shown in the DOCS page under TRAINER for easy editing.
-_ADAPTIVE_PROMPTS_FILE = (
-    Path(__file__).parent.parent.parent
-    / "information" / "trainer" / "adaptive_prompts.json")
+_ADAPTIVE_PROMPTS_FILE = Path(__file__).parent.parent.parent / "information" / "trainer" / "adaptive_prompts.json"
 
 # Cached prompts — loaded once per process, reloaded if file
 # modification time changes.
@@ -259,8 +253,7 @@ def _load_adaptive_prompts() -> dict:
                 mtime = _ADAPTIVE_PROMPTS_FILE.stat().st_mtime
                 if _cached_prompts is not None and mtime == _cached_prompts_mtime:
                     return _cached_prompts
-                data = json.loads(
-                    _ADAPTIVE_PROMPTS_FILE.read_text(encoding="utf-8"))
+                data = json.loads(_ADAPTIVE_PROMPTS_FILE.read_text(encoding="utf-8"))
                 if isinstance(data, dict):
                     _cached_prompts = data
                     _cached_prompts_mtime = mtime
@@ -426,6 +419,7 @@ def loss_to_proxy_score(loss: float) -> int:
         Integer score 1-8.
     """
     import math
+
     if not isinstance(loss, (int, float)):
         # Handle numpy scalar types
         try:
@@ -442,8 +436,7 @@ def loss_to_proxy_score(loss: float) -> int:
 # Stage-specific context for Phase 3 test question generation.
 _TEST_PROMPT_CONTEXT: dict[str, str] = {
     "basics": (
-        "Ask a simple knowledge or language question that tests "
-        "basic comprehension, vocabulary, or factual recall."
+        "Ask a simple knowledge or language question that tests basic comprehension, vocabulary, or factual recall."
     ),
     "conversation": (
         "Ask a conversational question that requires the AI to "
@@ -488,8 +481,7 @@ def build_test_prompt(
     Returns:
         Prompt string for the teacher to generate a test question.
     """
-    context = _TEST_PROMPT_CONTEXT.get(
-        stage, _TEST_PROMPT_CONTEXT["basics"])
+    context = _TEST_PROMPT_CONTEXT.get(stage, _TEST_PROMPT_CONTEXT["basics"])
     if stage not in _TEST_PROMPT_CONTEXT:
         logger.warning("Unknown adaptive stage '%s', using 'basics'", stage)
     return (
@@ -525,13 +517,11 @@ def clean_example(text: str) -> str:
     # Strip XML reasoning tags that leaked through
     text = re.sub(r"</?think>", "", text).strip()
     # Strip "The answer is..." prefix (with optional ellipsis)
-    text = re.sub(
-        r"^The answer is\.{0,3}\s*", "", text,
-        flags=re.IGNORECASE).strip()
+    text = re.sub(r"^The answer is\.{0,3}\s*", "", text, flags=re.IGNORECASE).strip()
     # Strip leading "Here is..." / "Here's a..." wrappers
     text = re.sub(
-        r"^(?:Here is|Here's) (?:a |an |the )?(?:training )?example[:\.\s]*",
-        "", text, flags=re.IGNORECASE).strip()
+        r"^(?:Here is|Here's) (?:a |an |the )?(?:training )?example[:\.\s]*", "", text, flags=re.IGNORECASE
+    ).strip()
     return text
 
 
@@ -551,7 +541,8 @@ def validate_example(text: str, stage: str) -> bool:
     # Reject if it still looks like leaked reasoning
     if re.search(
         r"^I should |^I need to |^Let me think|^The user needs",
-        text, re.IGNORECASE,
+        text,
+        re.IGNORECASE,
     ):
         return False
 
@@ -572,8 +563,7 @@ def validate_example(text: str, stage: str) -> bool:
             ("user:" in text_lower and "assistant:" in text_lower)
             or ("user:" in text_lower and "ai:" in text_lower)
             or ("q:" in text_lower and "a:" in text_lower)
-            or (text_lower.count("\n") >= 1
-                and len(text) >= 60)
+            or (text_lower.count("\n") >= 1 and len(text) >= 60)
         )
         if not has_turns:
             return False
@@ -646,8 +636,7 @@ def parse_score(judgment: str) -> int:
         return 5
 
     # Pattern 1: "SCORE: N" (with optional pipe separator)
-    m = re.search(
-        r"SCORE\s*:\s*(\d{1,2})", judgment, re.IGNORECASE)
+    m = re.search(r"SCORE\s*:\s*(\d{1,2})", judgment, re.IGNORECASE)
     if m:
         return max(1, min(10, int(m.group(1))))
 
@@ -658,16 +647,12 @@ def parse_score(judgment: str) -> int:
 
     # Pattern 3: "score N" or "score of N" or "rating: N"
     # Requires at least a space, colon, or "of" between keyword and number
-    m = re.search(
-        r"\b(?:score|rating)\s*(?:of\s+|:\s*|\s+)(\d{1,2})\b",
-        judgment, re.IGNORECASE)
+    m = re.search(r"\b(?:score|rating)\s*(?:of\s+|:\s*|\s+)(\d{1,2})\b", judgment, re.IGNORECASE)
     if m:
         return max(1, min(10, int(m.group(1))))
 
     # Pattern 4: "give (?:this|it) a N" or "rate (?:this|it) N"
-    m = re.search(
-        r"(?:give|rate)\s+(?:this|it)\s+(?:a\s+)?(\d{1,2})\b",
-        judgment, re.IGNORECASE)
+    m = re.search(r"(?:give|rate)\s+(?:this|it)\s+(?:a\s+)?(\d{1,2})\b", judgment, re.IGNORECASE)
     if m:
         return max(1, min(10, int(m.group(1))))
 

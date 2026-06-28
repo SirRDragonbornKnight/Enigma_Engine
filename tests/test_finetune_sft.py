@@ -28,10 +28,9 @@ def test_load_examples_accepts_both_schemas_and_skips_overlong(tok, tmp_path):
     p = tmp_path / "d.jsonl"
     recs = [
         {"prompt": "Hi", "completion": "Hello!"},
-        {"messages": [{"role": "user", "content": "a"},
-                      {"role": "assistant", "content": "b"}]},
+        {"messages": [{"role": "user", "content": "a"}, {"role": "assistant", "content": "b"}]},
         {"prompt": "long", "completion": "w " * 3000},  # > block -> skipped, counted
-        {"prompt": "no reply"},                          # malformed -> dropped
+        {"prompt": "no reply"},  # malformed -> dropped
     ]
     p.write_text("\n".join(json.dumps(r) for r in recs), encoding="utf-8")
     ex = ft.load_examples(p, tok, block=128)
@@ -41,8 +40,7 @@ def test_load_examples_accepts_both_schemas_and_skips_overlong(tok, tmp_path):
 
 
 def test_pack_blocks_target_alignment_and_pad_ignore(tok):
-    msgs = [{"role": "user", "content": "Say hi"},
-            {"role": "assistant", "content": "hi"}]
+    msgs = [{"role": "user", "content": "Say hi"}, {"role": "assistant", "content": "hi"}]
     ids, mask = render_training(tok, msgs)
     X, Y = ft.pack_blocks([(ids, mask)], block=64)
     assert X.shape == (1, 64) and Y.shape == (1, 64)
@@ -50,8 +48,8 @@ def test_pack_blocks_target_alignment_and_pad_ignore(tok):
     for i in range(64):
         if Y[0, i].item() != ft.IGNORE:
             assert Y[0, i].item() == padded[i + 1]  # teacher-forced next token
-    assert (Y[0, len(ids):] == ft.IGNORE).all()     # padding never trains
-    assert int((Y[0] != ft.IGNORE).sum()) > 0       # but the assistant span does
+    assert (Y[0, len(ids) :] == ft.IGNORE).all()  # padding never trains
+    assert int((Y[0] != ft.IGNORE).sum()) > 0  # but the assistant span does
 
 
 def test_reinit_chat_rows_touches_only_chat_rows():
@@ -67,8 +65,7 @@ def test_reinit_chat_rows_touches_only_chat_rows():
 
 def test_masked_loss_is_finite_and_backprops(tok):
     m = _nano4718().train()
-    msgs = [{"role": "user", "content": "Who are you?"},
-            {"role": "assistant", "content": "Enigma."}]
+    msgs = [{"role": "user", "content": "Who are you?"}, {"role": "assistant", "content": "Enigma."}]
     ids, mask = render_training(tok, msgs)
     X, Y = ft.pack_blocks([(ids, mask)], block=96)
     _, loss = m(X, targets=Y, pad_token_id=ft.IGNORE)

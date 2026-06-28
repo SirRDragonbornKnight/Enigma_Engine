@@ -16,6 +16,7 @@ Dataset is stored as a JSONL file where each line contains:
   - stage: training stage it belongs to
   - metadata: any additional fields
 """
+
 from __future__ import annotations
 
 import json
@@ -41,6 +42,7 @@ class DatasetEntry:
         stage: Training stage (basics, conversation, commands, web).
         metadata: Extra info dict (trainer_name, prompt, etc.).
     """
+
     text: str = ""
     source: str = ""
     timestamp: str = ""
@@ -270,20 +272,14 @@ class CuratedDataset:
     def save(self) -> None:
         """Save dataset to JSONL file."""
         with self._lock:
-            content = "".join(
-                json.dumps(entry.to_dict(), ensure_ascii=False) + "\n"
-                for entry in self._entries
-            )
-            approved = sum(
-                1 for e in self._entries if e.status == "approved")
-            pending = sum(
-                1 for e in self._entries if e.status == "pending")
+            content = "".join(json.dumps(entry.to_dict(), ensure_ascii=False) + "\n" for entry in self._entries)
+            approved = sum(1 for e in self._entries if e.status == "approved")
+            pending = sum(1 for e in self._entries if e.status == "pending")
             total = len(self._entries)
         from enigma_engine.core.safe_save import atomic_write_text
+
         atomic_write_text(self.path, content)
-        logger.info(
-            "Dataset saved: %d entries (%d approved, %d pending)",
-            total, approved, pending)
+        logger.info("Dataset saved: %d entries (%d approved, %d pending)", total, approved, pending)
 
     def load(self) -> None:
         """Load dataset from JSONL file."""
@@ -297,12 +293,9 @@ class CuratedDataset:
                         line = line.strip()
                         if line:
                             data = json.loads(line)
-                            loaded.append(
-                                DatasetEntry.from_dict(data))
+                            loaded.append(DatasetEntry.from_dict(data))
                 self._entries = loaded
-                logger.info(
-                    "Dataset loaded: %d entries from %s",
-                    len(self._entries), self.path)
+                logger.info("Dataset loaded: %d entries from %s", len(self._entries), self.path)
             except Exception as exc:
                 logger.error("Dataset load error: %s", exc)
 
@@ -312,12 +305,9 @@ class CuratedDataset:
         """Human-readable summary."""
         with self._lock:
             total = len(self._entries)
-            approved = sum(
-                1 for e in self._entries if e.status == "approved")
-            pending = sum(
-                1 for e in self._entries if e.status == "pending")
-            rejected = sum(
-                1 for e in self._entries if e.status == "rejected")
+            approved = sum(1 for e in self._entries if e.status == "approved")
+            pending = sum(1 for e in self._entries if e.status == "pending")
+            rejected = sum(1 for e in self._entries if e.status == "rejected")
             sources: dict[str, int] = {}
             for e in self._entries:
                 sources[e.source] = sources.get(e.source, 0) + 1

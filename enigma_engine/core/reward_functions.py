@@ -3,6 +3,7 @@
 These scorers are deterministic and avoid training a neural reward model
 in the loop for reasoning tasks.
 """
+
 from __future__ import annotations
 
 import ast
@@ -14,9 +15,7 @@ from pathlib import Path
 from typing import Callable
 
 
-_ARITH_EXPR_RE = re.compile(
-    r"(-?\d+(?:\.\d+)?(?:\s*[+\-*/]\s*-?\d+(?:\.\d+)?)+)"
-)
+_ARITH_EXPR_RE = re.compile(r"(-?\d+(?:\.\d+)?(?:\s*[+\-*/]\s*-?\d+(?:\.\d+)?)+)")
 _NUMBER_RE = re.compile(r"-?\d+(?:\.\d+)?(?:/\d+(?:\.\d+)?)?")
 _CODE_BLOCK_RE = re.compile(r"```(?:python)?\s*(.*?)```", re.IGNORECASE | re.DOTALL)
 
@@ -37,7 +36,7 @@ def _extract_answer_text(response: str) -> str:
 
     think_close = re.search(r"</think>", response, re.IGNORECASE)
     if think_close:
-        trailing = response[think_close.end():].strip()
+        trailing = response[think_close.end() :].strip()
         if trailing:
             return trailing
 
@@ -136,7 +135,7 @@ def format_reward(response: str) -> float:
         return 0.0
 
     has_answer_tag = bool(_extract_tag_content(response, "answer"))
-    trailing = response[think_close.end():].strip()
+    trailing = response[think_close.end() :].strip()
     answer_text = trailing if trailing else ""
     if not has_answer_tag and not answer_text:
         return 0.0

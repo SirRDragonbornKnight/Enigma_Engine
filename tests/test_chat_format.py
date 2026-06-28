@@ -40,14 +40,13 @@ def test_attach_is_idempotent_and_plain_text_is_untouched(tok):
 
 
 def test_render_chat_shape_and_generation_prompt(tok):
-    msgs = [{"role": "system", "content": "You are Enigma."},
-            {"role": "user", "content": "Hi!"}]
+    msgs = [{"role": "system", "content": "You are Enigma."}, {"role": "user", "content": "Hi!"}]
     ids = cf.render_chat(tok, msgs, add_generation_prompt=True)
     assert ids[0] == tok.bos_token_id
     assert ids[1] == cf.IM_START
-    assert ids.count(cf.IM_START) == 3      # system, user, generation prompt
-    assert ids.count(cf.IM_END) == 2        # system, user (assistant is hers)
-    assert ids[-1] != cf.IM_END             # ends mid-assistant-header
+    assert ids.count(cf.IM_START) == 3  # system, user, generation prompt
+    assert ids.count(cf.IM_END) == 2  # system, user (assistant is hers)
+    assert ids[-1] != cf.IM_END  # ends mid-assistant-header
     tail = tok.decode(ids[-6:], skip_special_tokens=True)
     assert "assistant" in tail
 
@@ -55,16 +54,17 @@ def test_render_chat_shape_and_generation_prompt(tok):
 def test_tool_call_render_parse_roundtrip(tok):
     msgs = [
         {"role": "user", "content": "Make her wave."},
-        {"role": "assistant", "content": "Done.",
-         "tool_calls": [{"name": "avatar_express",
-                         "arguments": {"emotion": "happy", "wave": True}}]},
+        {
+            "role": "assistant",
+            "content": "Done.",
+            "tool_calls": [{"name": "avatar_express", "arguments": {"emotion": "happy", "wave": True}}],
+        },
     ]
     ids, mask = cf.render_training(tok, msgs)
     trainable = [t for t, m in zip(ids, mask) if m]
     out = cf.parse_assistant_ids(tok, trainable)
     assert out["content"] == "Done."
-    assert out["tool_calls"] == [{"name": "avatar_express",
-                                  "arguments": {"emotion": "happy", "wave": True}}]
+    assert out["tool_calls"] == [{"name": "avatar_express", "arguments": {"emotion": "happy", "wave": True}}]
 
 
 def test_tool_result_role_is_wrapped(tok):
@@ -73,8 +73,7 @@ def test_tool_result_role_is_wrapped(tok):
 
 
 def test_think_span_extracted_via_native_tokens(tok):
-    msgs = [{"role": "user", "content": "hm?"},
-            {"role": "assistant", "content": "<think>plan it</think>Answer."}]
+    msgs = [{"role": "user", "content": "hm?"}, {"role": "assistant", "content": "<think>plan it</think>Answer."}]
     ids, mask = cf.render_training(tok, msgs)
     assert cf.THINK in ids and cf.THINK_END in ids
     out = cf.parse_assistant_ids(tok, [t for t, m in zip(ids, mask) if m])
@@ -83,15 +82,17 @@ def test_think_span_extracted_via_native_tokens(tok):
 
 
 def test_training_mask_covers_only_assistant_plus_stops(tok):
-    msgs = [{"role": "system", "content": "Be kind."},
-            {"role": "user", "content": "Hello there, who are you?"},
-            {"role": "assistant", "content": "I am Enigma."}]
+    msgs = [
+        {"role": "system", "content": "Be kind."},
+        {"role": "user", "content": "Hello there, who are you?"},
+        {"role": "assistant", "content": "I am Enigma."},
+    ]
     ids, mask = cf.render_training(tok, msgs)
     assert len(ids) == len(mask)
     trues = [t for t, m in zip(ids, mask) if m]
-    assert cf.IM_END in trues                       # she learns to close her turn
-    assert tok.eos_token_id in trues                # and to end the document
-    assert cf.IM_START not in trues                 # headers are given, not learned
+    assert cf.IM_END in trues  # she learns to close her turn
+    assert tok.eos_token_id in trues  # and to end the document
+    assert cf.IM_START not in trues  # headers are given, not learned
     # nothing before the assistant's start position is trainable
     a_start = len(ids) - 1 - ids[::-1].index(cf.IM_START)
     assert not any(mask[:a_start])
@@ -102,9 +103,11 @@ def test_training_mask_covers_only_assistant_plus_stops(tok):
 
 def test_trim_keeps_system_and_newest_turn(tok):
     long = "word " * 60
-    msgs = ([{"role": "system", "content": "SYS"}] +
-            [{"role": "user", "content": long}, {"role": "assistant", "content": long}] * 4 +
-            [{"role": "user", "content": "newest question"}])
+    msgs = (
+        [{"role": "system", "content": "SYS"}]
+        + [{"role": "user", "content": long}, {"role": "assistant", "content": long}] * 4
+        + [{"role": "user", "content": "newest question"}]
+    )
     ids = cf.render_chat(tok, msgs, add_generation_prompt=True, max_ids=160)
     assert len(ids) <= 160
     text = tok.decode(ids, skip_special_tokens=True)

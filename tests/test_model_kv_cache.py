@@ -104,8 +104,7 @@ def test_kv_cache_decode_matches_no_cache(use_rope: bool, differential: bool, de
             f"max|Δ|={(cached - ref).abs().max().item():.2e}"
         )
         assert cached.argmax() == ref.argmax(), (
-            f"argmax disagrees at step {step} on {device}/"
-            f"{'diff' if differential else 'std'}-attn"
+            f"argmax disagrees at step {step} on {device}/{'diff' if differential else 'std'}-attn"
         )
 
 
@@ -143,8 +142,6 @@ def test_generate_respects_stop_token(device: str):
     full = model.generate(prompt, max_new_tokens=12, temperature=1.0, top_k=1)
     first_gen = int(full[0, prompt.shape[1]].item())
 
-    stopped = model.generate(
-        prompt, max_new_tokens=12, temperature=1.0, top_k=1, stop_tokens=[first_gen]
-    )
+    stopped = model.generate(prompt, max_new_tokens=12, temperature=1.0, top_k=1, stop_tokens=[first_gen])
     assert stopped.shape[1] == prompt.shape[1] + 1, "did not stop on the stop token"
     assert int(stopped[0, -1].item()) == first_gen

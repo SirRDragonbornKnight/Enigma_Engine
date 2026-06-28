@@ -171,31 +171,21 @@ class TrainingJobConfig(BaseModel):
     @classmethod
     def _validate_preference_rows(cls, mode: str, rows: Any) -> None:
         if not isinstance(rows, list) or not rows:
-            raise ValueError(
-                f"mode '{mode}' expects 'data' to be a non-empty list of preference rows"
-            )
+            raise ValueError(f"mode '{mode}' expects 'data' to be a non-empty list of preference rows")
         for row in rows:
             if not isinstance(row, dict):
-                raise ValueError(
-                    f"mode '{mode}' preference rows must be dict objects"
-                )
+                raise ValueError(f"mode '{mode}' preference rows must be dict objects")
             cls._require_non_empty_string(row.get("prompt", ""), mode, "prompt")
             cls._require_non_empty_string(row.get("chosen", ""), mode, "chosen")
             cls._require_non_empty_string(row.get("rejected", ""), mode, "rejected")
 
     @classmethod
-    def _validate_multimodal_rows(
-        cls, mode: str, rows: Any, field_name: str = "data"
-    ) -> None:
+    def _validate_multimodal_rows(cls, mode: str, rows: Any, field_name: str = "data") -> None:
         if not isinstance(rows, list) or not rows:
-            raise ValueError(
-                f"mode '{mode}' expects '{field_name}' to be a non-empty list of rows"
-            )
+            raise ValueError(f"mode '{mode}' expects '{field_name}' to be a non-empty list of rows")
         for row in rows:
             if not isinstance(row, dict):
-                raise ValueError(
-                    f"mode '{mode}' rows must be dict objects"
-                )
+                raise ValueError(f"mode '{mode}' rows must be dict objects")
 
     @model_validator(mode="after")
     def _validate_mode_data(self) -> "TrainingJobConfig":
@@ -207,25 +197,18 @@ class TrainingJobConfig(BaseModel):
 
         if self.mode in {"grpo", "remax", "rest", "rlhf", "self_play"}:
             if not isinstance(self.data, list) or not self.data:
-                raise ValueError(
-                    f"mode '{self.mode}' expects 'data' to be a non-empty list of prompts"
-                )
+                raise ValueError(f"mode '{self.mode}' expects 'data' to be a non-empty list of prompts")
             for prompt in self.data:
                 if not isinstance(prompt, str) or not prompt.strip():
-                    raise ValueError(
-                        f"mode '{self.mode}' expects 'data' to be non-empty string prompts"
-                    )
+                    raise ValueError(f"mode '{self.mode}' expects 'data' to be non-empty string prompts")
 
         if self.mode in {"vision", "audio"}:
             if isinstance(self.data, dict):
                 train_rows = self.data.get("train")
-                self._validate_multimodal_rows(
-                    self.mode, train_rows, field_name="data.train")
+                self._validate_multimodal_rows(self.mode, train_rows, field_name="data.train")
                 val_rows = self.data.get("val")
                 if val_rows is not None and not isinstance(val_rows, list):
-                    raise ValueError(
-                        f"mode '{self.mode}' expects 'data.val' to be a list when provided"
-                    )
+                    raise ValueError(f"mode '{self.mode}' expects 'data.val' to be a list when provided")
             else:
                 self._validate_multimodal_rows(self.mode, self.data)
 
@@ -242,24 +225,18 @@ class TrainingJobConfig(BaseModel):
                         "completion",
                     )
             else:
-                raise ValueError(
-                    "mode 'lora' expects 'data' to be a non-empty string or list of rows"
-                )
+                raise ValueError("mode 'lora' expects 'data' to be a non-empty string or list of rows")
 
         if self.mode == "kto":
             if not isinstance(self.data, list) or not self.data:
-                raise ValueError(
-                    "mode 'kto' expects 'data' to be a non-empty list of feedback rows"
-                )
+                raise ValueError("mode 'kto' expects 'data' to be a non-empty list of feedback rows")
             for row in self.data:
                 if not isinstance(row, dict):
                     raise ValueError("mode 'kto' feedback rows must be dict objects")
                 for key in ("prompt", "response"):
                     value = row.get(key, "")
                     if not isinstance(value, str) or not value.strip():
-                        raise ValueError(
-                            f"mode 'kto' rows require non-empty '{key}'"
-                        )
+                        raise ValueError(f"mode 'kto' rows require non-empty '{key}'")
                 if not isinstance(row.get("desirable"), bool):
                     raise ValueError("mode 'kto' rows require boolean 'desirable'")
         return self

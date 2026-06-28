@@ -8,6 +8,7 @@ Provides tools for preparing text data for language model pre-training:
 - estimate_token_count: Quick token count estimate
 - download_dataset: Download known datasets via huggingface_hub
 """
+
 from __future__ import annotations
 
 import json
@@ -24,6 +25,7 @@ logger = logging.getLogger(__name__)
 # multi-language Common Crawl shards).
 MAX_FILE_SIZE: int = 100_000_000_000  # 100 GB
 
+
 # Files above this threshold are read in chunks instead of all at once.
 # This limits peak memory (avoids 2x file-size during clean_text) and
 # yields the GIL between chunks so the GUI event loop stays responsive.
@@ -32,10 +34,12 @@ def _get_stream_constants() -> tuple[int, int]:
     """Return (stream_threshold, chunk_chars) scaled to available RAM."""
     try:
         from .hardware_detection import InferenceMemoryBudget
+
         budget = InferenceMemoryBudget()
         return budget.dataset_stream_threshold, budget.dataset_chunk_chars
     except Exception:
         return 500_000_000, 200_000_000  # safe fallback
+
 
 _STREAM_THRESHOLD: int
 _CHUNK_READ_CHARS: int
@@ -48,20 +52,14 @@ _STREAM_THRESHOLD, _CHUNK_READ_CHARS = _get_stream_constants()
 KNOWN_DATASETS: dict[str, dict] = {
     "tinystories": {
         "name": "TinyStories",
-        "description": (
-            "Short children's stories (~500M tokens). "
-            "Good for initial pre-training validation."
-        ),
+        "description": ("Short children's stories (~500M tokens). Good for initial pre-training validation."),
         "repo_id": "roneneldan/TinyStories",
         "repo_type": "dataset",
         "size_estimate": "~2 GB uncompressed text",
     },
     "tinystories-instruct": {
         "name": "TinyStories Instruct",
-        "description": (
-            "Instruction-following version of TinyStories. "
-            "Stories with prompts and completions."
-        ),
+        "description": ("Instruction-following version of TinyStories. Stories with prompts and completions."),
         "repo_id": "roneneldan/TinyStories",
         "repo_type": "dataset",
         "size_estimate": "~2 GB uncompressed text",
@@ -72,6 +70,7 @@ KNOWN_DATASETS: dict[str, dict] = {
 # =========================================================================
 # Text cleaning
 # =========================================================================
+
 
 def clean_text(text: str) -> str:
     """Clean raw text for pre-training.
@@ -109,6 +108,7 @@ def clean_text(text: str) -> str:
 # Token count estimation
 # =========================================================================
 
+
 def estimate_token_count(text: str, chars_per_token: float = 4.0) -> int:
     """Estimate token count from text length.
 
@@ -130,6 +130,7 @@ def estimate_token_count(text: str, chars_per_token: float = 4.0) -> int:
 # =========================================================================
 # Text corpus processing
 # =========================================================================
+
 
 def process_text_corpus(
     source: Path | str,
@@ -171,7 +172,10 @@ def _process_file(path: Path, *, text_key: str = "text") -> str:
     if file_size > MAX_FILE_SIZE:
         logger.warning(
             "Skipping %s (%d MB) — exceeds MAX_FILE_SIZE (%d MB)",
-            path, file_size // 1_000_000, MAX_FILE_SIZE // 1_000_000)
+            path,
+            file_size // 1_000_000,
+            MAX_FILE_SIZE // 1_000_000,
+        )
         return ""
 
     suffix = path.suffix.lower()
@@ -213,6 +217,7 @@ def _chunked_read_text(
         List of cleaned text chunks (~200 MB each).
     """
     import time
+
     parts: list[str] = []
     file_size = path.stat().st_size
 
@@ -233,13 +238,13 @@ def _chunked_read_text(
             bytes_read = f.buffer.tell()
 
             # Split at last newline to avoid cutting mid-line
-            last_nl = raw.rfind('\n')
+            last_nl = raw.rfind("\n")
             if last_nl == -1:
                 remainder = raw
                 continue
 
-            chunk = raw[:last_nl + 1]
-            remainder = raw[last_nl + 1:]
+            chunk = raw[: last_nl + 1]
+            remainder = raw[last_nl + 1 :]
 
             cleaned = clean_text(chunk)
             if cleaned:
@@ -247,16 +252,12 @@ def _chunked_read_text(
 
             pct = min(100, int(bytes_read / max(1, file_size) * 100))
             logger.info(
-                "Reading %s: %d%% (%d MB / %d MB)",
-                path.name, pct,
-                bytes_read // 1_000_000,
-                file_size // 1_000_000)
+                "Reading %s: %d%% (%d MB / %d MB)", path.name, pct, bytes_read // 1_000_000, file_size // 1_000_000
+            )
             if on_progress is not None:
                 on_progress(
-                    pct,
-                    f"Reading {path.name}: {pct}% "
-                    f"({bytes_read // 1_000_000} / "
-                    f"{file_size // 1_000_000} MB)")
+                    pct, f"Reading {path.name}: {pct}% ({bytes_read // 1_000_000} / {file_size // 1_000_000} MB)"
+                )
 
             # Yield GIL so GUI thread can process events
             time.sleep(0)
@@ -293,9 +294,7 @@ def load_text_chunks(
         except OSError:
             file_size = 0
         if file_size > MAX_FILE_SIZE:
-            logger.warning(
-                "Skipping %s (%d MB) — exceeds MAX_FILE_SIZE",
-                source, file_size // 1_000_000)
+            logger.warning("Skipping %s (%d MB) — exceeds MAX_FILE_SIZE", source, file_size // 1_000_000)
             return []
         suffix = source.suffix.lower()
         if suffix not in (".jsonl", ".json") and file_size > _STREAM_THRESHOLD:
@@ -332,8 +331,7 @@ def iter_text_chunks(
     source = Path(source)
 
     if source.is_dir():
-        yield from _iter_directory(source, text_key=text_key,
-                                   on_progress=on_progress)
+        yield from _iter_directory(source, text_key=text_key, on_progress=on_progress)
         return
 
     if not source.is_file():
@@ -346,9 +344,7 @@ def iter_text_chunks(
         file_size = 0
 
     if file_size > MAX_FILE_SIZE:
-        logger.warning(
-            "Skipping %s (%d MB) — exceeds MAX_FILE_SIZE",
-            source, file_size // 1_000_000)
+        logger.warning("Skipping %s (%d MB) — exceeds MAX_FILE_SIZE", source, file_size // 1_000_000)
         return
 
     suffix = source.suffix.lower()
@@ -375,10 +371,7 @@ def _iter_directory(
     to merge into a single ``combined.txt`` first.
     """
     _TEXT_SUFFIXES = {".txt", ".jsonl", ".json"}
-    files: list[Path] = sorted(
-        f for f in dir_path.rglob("*")
-        if f.is_file() and f.suffix.lower() in _TEXT_SUFFIXES
-    )
+    files: list[Path] = sorted(f for f in dir_path.rglob("*") if f.is_file() and f.suffix.lower() in _TEXT_SUFFIXES)
     if not files:
         return
 
@@ -389,9 +382,7 @@ def _iter_directory(
         except OSError:
             continue
         if file_size > MAX_FILE_SIZE:
-            logger.warning(
-                "Skipping %s (%d MB) — exceeds MAX_FILE_SIZE",
-                f, file_size // 1_000_000)
+            logger.warning("Skipping %s (%d MB) — exceeds MAX_FILE_SIZE", f, file_size // 1_000_000)
             continue
 
         suffix = f.suffix.lower()
@@ -404,10 +395,7 @@ def _iter_directory(
 
         if on_progress is not None:
             pct = int((i + 1) / total * 100)
-            on_progress(
-                pct,
-                f"Loading files: {i + 1}/{total} "
-                f"({pct}%)")
+            on_progress(pct, f"Loading files: {i + 1}/{total} ({pct}%)")
 
 
 def _iter_chunked_read_text(
@@ -421,6 +409,7 @@ def _iter_chunked_read_text(
     of accumulating, so peak RAM stays at one chunk.
     """
     import time
+
     file_size = path.stat().st_size
 
     with open(path, encoding="utf-8", errors="replace") as f:
@@ -438,13 +427,13 @@ def _iter_chunked_read_text(
             raw = remainder + raw
             bytes_read = f.buffer.tell()
 
-            last_nl = raw.rfind('\n')
+            last_nl = raw.rfind("\n")
             if last_nl == -1:
                 remainder = raw
                 continue
 
-            chunk = raw[:last_nl + 1]
-            remainder = raw[last_nl + 1:]
+            chunk = raw[: last_nl + 1]
+            remainder = raw[last_nl + 1 :]
 
             cleaned = clean_text(chunk)
             if cleaned:
@@ -452,16 +441,12 @@ def _iter_chunked_read_text(
 
             pct = min(100, int(bytes_read / max(1, file_size) * 100))
             logger.info(
-                "Reading %s: %d%% (%d MB / %d MB)",
-                path.name, pct,
-                bytes_read // 1_000_000,
-                file_size // 1_000_000)
+                "Reading %s: %d%% (%d MB / %d MB)", path.name, pct, bytes_read // 1_000_000, file_size // 1_000_000
+            )
             if on_progress is not None:
                 on_progress(
-                    pct,
-                    f"Reading {path.name}: {pct}% "
-                    f"({bytes_read // 1_000_000} / "
-                    f"{file_size // 1_000_000} MB)")
+                    pct, f"Reading {path.name}: {pct}% ({bytes_read // 1_000_000} / {file_size // 1_000_000} MB)"
+                )
 
             time.sleep(0)
 
@@ -491,9 +476,10 @@ def _process_jsonl(path: Path, *, text_key: str = "text") -> str:
                         texts.append(val.strip())
                         if len(texts) >= _MAX_JSONL_ENTRIES:
                             logger.warning(
-                                "%s: hit %d entry cap at line %d — "
-                                "remaining lines skipped",
-                                path.name, _MAX_JSONL_ENTRIES, line_num,
+                                "%s: hit %d entry cap at line %d — remaining lines skipped",
+                                path.name,
+                                _MAX_JSONL_ENTRIES,
+                                line_num,
                             )
                             break
     except OSError as exc:
@@ -503,7 +489,9 @@ def _process_jsonl(path: Path, *, text_key: str = "text") -> str:
     if skipped:
         logger.warning(
             "%s: skipped %d malformed JSONL line(s) out of %d total",
-            path.name, skipped, skipped + len(texts),
+            path.name,
+            skipped,
+            skipped + len(texts),
         )
 
     return clean_text("\n\n".join(texts))
@@ -540,10 +528,7 @@ def _process_directory(
 
     # Collect and sort for deterministic order (recursive like _iter_directory)
     _TEXT_SUFFIXES = {".txt", ".jsonl", ".json"}
-    files = sorted(
-        f for f in dir_path.rglob("*")
-        if f.is_file() and f.suffix.lower() in _TEXT_SUFFIXES
-    )
+    files = sorted(f for f in dir_path.rglob("*") if f.is_file() and f.suffix.lower() in _TEXT_SUFFIXES)
     for f in files:
         suffix = f.suffix.lower()
         if suffix in _TEXT_SUFFIXES:
@@ -557,6 +542,7 @@ def _process_directory(
 # =========================================================================
 # Dataset download
 # =========================================================================
+
 
 def download_dataset(
     name: str,
@@ -584,8 +570,7 @@ def download_dataset(
     """
     if name not in KNOWN_DATASETS:
         available = ", ".join(KNOWN_DATASETS.keys())
-        raise ValueError(
-            f"Unknown dataset: {name}. Available: {available}")
+        raise ValueError(f"Unknown dataset: {name}. Available: {available}")
 
     info = KNOWN_DATASETS[name]
     dest_dir = Path(dest_dir)
@@ -598,8 +583,7 @@ def download_dataset(
         from huggingface_hub import snapshot_download
     except ImportError:
         raise ImportError(
-            "huggingface_hub is required for dataset download. "
-            "Install with: pip install huggingface-hub"
+            "huggingface_hub is required for dataset download. Install with: pip install huggingface-hub"
         ) from None
 
     try:
@@ -611,9 +595,7 @@ def download_dataset(
             ignore_patterns=["*.md", "*.py", ".gitattributes"],
         )
     except Exception as exc:
-        raise RuntimeError(
-            f"Failed to download {info['name']}: {exc}"
-        ) from exc
+        raise RuntimeError(f"Failed to download {info['name']}: {exc}") from exc
 
     if progress_fn:
         progress_fn(f"Downloaded {info['name']} to {local_dir}")

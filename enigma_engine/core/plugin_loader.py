@@ -26,6 +26,7 @@ Plugin discovery rules:
     * Each file is loaded at most once per registry initialisation.
     * Errors in one plugin are logged and do not prevent others from loading.
 """
+
 from __future__ import annotations
 
 import ast
@@ -45,20 +46,49 @@ _PLUGINS_DIR = Path(__file__).resolve().parent.parent.parent / "plugins"
 
 # Dangerous AST node / attribute patterns that plugins must not use.
 # If any of these appear in the AST the plugin is rejected before execution.
-_DANGEROUS_CALLS: frozenset[str] = frozenset({
-    "exec", "eval", "compile", "__import__",
-    "globals", "locals", "vars", "getattr", "delattr",
-})
-_DANGEROUS_ATTRS: frozenset[str] = frozenset({
-    "os.system", "os.popen", "os.exec", "os.execl", "os.execle",
-    "os.execlp", "os.execlpe", "os.execv", "os.execve", "os.execvp",
-    "os.execvpe", "os.spawn", "os.spawnl", "os.spawnle",
-    "subprocess.call", "subprocess.run", "subprocess.Popen",
-    "subprocess.check_output", "subprocess.check_call",
-    "subprocess.getoutput", "subprocess.getstatusoutput",
-    "shutil.rmtree",
-    "ctypes.cdll", "ctypes.windll", "ctypes.CDLL", "ctypes.WinDLL",
-})
+_DANGEROUS_CALLS: frozenset[str] = frozenset(
+    {
+        "exec",
+        "eval",
+        "compile",
+        "__import__",
+        "globals",
+        "locals",
+        "vars",
+        "getattr",
+        "delattr",
+    }
+)
+_DANGEROUS_ATTRS: frozenset[str] = frozenset(
+    {
+        "os.system",
+        "os.popen",
+        "os.exec",
+        "os.execl",
+        "os.execle",
+        "os.execlp",
+        "os.execlpe",
+        "os.execv",
+        "os.execve",
+        "os.execvp",
+        "os.execvpe",
+        "os.spawn",
+        "os.spawnl",
+        "os.spawnle",
+        "subprocess.call",
+        "subprocess.run",
+        "subprocess.Popen",
+        "subprocess.check_output",
+        "subprocess.check_call",
+        "subprocess.getoutput",
+        "subprocess.getstatusoutput",
+        "shutil.rmtree",
+        "ctypes.cdll",
+        "ctypes.windll",
+        "ctypes.CDLL",
+        "ctypes.WinDLL",
+    }
+)
 
 
 def discover_plugins(plugins_dir: Path | None = None) -> list[Path]:
@@ -69,10 +99,7 @@ def discover_plugins(plugins_dir: Path | None = None) -> list[Path]:
     folder = plugins_dir or _PLUGINS_DIR
     if not folder.is_dir():
         return []
-    return sorted(
-        p for p in folder.glob("*.py")
-        if p.is_file() and not p.stem.startswith("_")
-    )
+    return sorted(p for p in folder.glob("*.py") if p.is_file() and not p.stem.startswith("_"))
 
 
 def _has_register_def(source: str) -> bool:
@@ -106,18 +133,14 @@ def _ast_scan_dangers(source: str, filename: str) -> list[str]:
             func = node.func
             # Direct name call: exec(...)
             if isinstance(func, ast.Name) and func.id in _DANGEROUS_CALLS:
-                flags.append(
-                    f"line {node.lineno}: {func.id}() (dangerous builtin)"
-                )
+                flags.append(f"line {node.lineno}: {func.id}() (dangerous builtin)")
             # Attribute call: os.system(...)
             elif isinstance(func, ast.Attribute):
                 full = _resolve_attr(func)
                 if full:
                     for pattern in _DANGEROUS_ATTRS:
                         if full == pattern or full.endswith("." + pattern):
-                            flags.append(
-                                f"line {node.lineno}: {full}() (dangerous call)"
-                            )
+                            flags.append(f"line {node.lineno}: {full}() (dangerous call)")
                             break
 
         # Import of subprocess or os — flag for awareness
@@ -130,9 +153,7 @@ def _ast_scan_dangers(source: str, filename: str) -> list[str]:
                 names = [node.module]
             for name in names:
                 if name in ("subprocess", "ctypes"):
-                    flags.append(
-                        f"line {node.lineno}: import {name} (flagged module)"
-                    )
+                    flags.append(f"line {node.lineno}: import {name} (flagged module)")
 
     return flags
 
@@ -158,11 +179,11 @@ def _is_trusted(path: Path) -> bool:
     that appear in the list are accepted.
     """
     from enigma_engine import CONFIG
+
     trusted: list[str] = CONFIG.get("trusted_plugins", [])
     if not trusted:
         logger.warning(
-            "trusted_plugins list is empty — all plugins allowed. "
-            "Set trusted_plugins in config to restrict."
+            "trusted_plugins list is empty — all plugins allowed. Set trusted_plugins in config to restrict."
         )
         return True  # empty list = allow all
     return path.name in trusted
@@ -180,9 +201,7 @@ def load_plugin(path: Path, registry: "CommandRegistry") -> bool:
     """
     # --- 5A: trusted-plugins allowlist ---
     if not _is_trusted(path):
-        logger.warning(
-            "Plugin %s is not in trusted_plugins allowlist — skipped", path.name
-        )
+        logger.warning("Plugin %s is not in trusted_plugins allowlist — skipped", path.name)
         return False
 
     # Read source once for pre-scan checks
@@ -194,9 +213,7 @@ def load_plugin(path: Path, registry: "CommandRegistry") -> bool:
 
     # --- 5E: pre-scan for def register ---
     if not _has_register_def(source):
-        logger.warning(
-            "Plugin %s has no 'def register' in source — skipped", path.name
-        )
+        logger.warning("Plugin %s has no 'def register' in source — skipped", path.name)
         return False
 
     # --- 5F: AST danger scan ---
@@ -206,7 +223,8 @@ def load_plugin(path: Path, registry: "CommandRegistry") -> bool:
             logger.warning("Plugin %s — %s", path.name, flag)
         logger.warning(
             "Plugin %s rejected: %d dangerous pattern(s) found",
-            path.name, len(dangers),
+            path.name,
+            len(dangers),
         )
         return False
 
@@ -227,16 +245,14 @@ def load_plugin(path: Path, registry: "CommandRegistry") -> bool:
 
     register_fn = getattr(module, "register", None)
     if not callable(register_fn):
-        logger.warning(
-            "Plugin %s has no callable 'register' — skipped", path.name)
+        logger.warning("Plugin %s has no callable 'register' — skipped", path.name)
         sys.modules.pop(module_name, None)
         return False
 
     try:
         register_fn(registry)
     except Exception as exc:
-        logger.warning(
-            "Plugin %s register() raised: %s", path.name, exc)
+        logger.warning("Plugin %s register() raised: %s", path.name, exc)
         return False
 
     logger.info("Loaded plugin: %s", path.name)

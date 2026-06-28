@@ -30,13 +30,14 @@ Nothing here touches the vocab file or the BPE tables: ``attach_chat_tokens``
 registers the strings on the tokenizer INSTANCE only (encode's special-token
 splitter re.escapes, so the ``|`` characters are safe).
 """
+
 from __future__ import annotations
 
 import json
 from typing import Any
 
-BASE_VOCAB = 4718        # real BPE vocab (IDs 0..4717)
-PADDED_VOCAB = 4736      # embedding rows in the live checkpoints
+BASE_VOCAB = 4718  # real BPE vocab (IDs 0..4717)
+PADDED_VOCAB = 4736  # embedding rows in the live checkpoints
 
 IM_START = 4718
 IM_END = 4719
@@ -44,7 +45,7 @@ TOOL_CALL = 4720
 TOOL_CALL_END = 4721
 TOOL_RESULT = 4722
 TOOL_RESULT_END = 4723
-THINK = 4                # native tokenizer IDs, already trained-format
+THINK = 4  # native tokenizer IDs, already trained-format
 THINK_END = 5
 
 CHAT_TOKENS = {
@@ -59,8 +60,9 @@ CHAT_TOKENS = {
 CHAT_FORMAT_NAME = "enigma-chat-v1"  # stamped into SFT checkpoints' meta
 ROLES = ("system", "user", "assistant", "tool")
 
-TOOL_SYNTAX = ('Call a tool by writing <|tool_call|>{"name": "...", "arguments": '
-               '{...}}<|/tool_call|> and wait for the result.')
+TOOL_SYNTAX = (
+    'Call a tool by writing <|tool_call|>{"name": "...", "arguments": {...}}<|/tool_call|> and wait for the result.'
+)
 
 
 def render_tools_system(tools) -> str:
@@ -70,10 +72,16 @@ def render_tools_system(tools) -> str:
     specs = []
     for t in tools or []:
         fn = t.get("function", t)  # accept OpenAI nesting or flat specs
-        specs.append(json.dumps({"name": fn.get("name"),
-                                 "description": fn.get("description", ""),
-                                 "parameters": fn.get("parameters", {})},
-                                ensure_ascii=False))
+        specs.append(
+            json.dumps(
+                {
+                    "name": fn.get("name"),
+                    "description": fn.get("description", ""),
+                    "parameters": fn.get("parameters", {}),
+                },
+                ensure_ascii=False,
+            )
+        )
     if not specs:
         return ""
     return "Available tools:\n" + "\n".join(specs) + "\n" + TOOL_SYNTAX
@@ -120,9 +128,7 @@ def _message_chunks(tokenizer, messages: list[dict[str, Any]]):
         if role == "assistant":
             for call in m.get("tool_calls") or []:
                 fn = call.get("function", call)  # accept OpenAI nesting or flat
-                payload = json.dumps(
-                    {"name": fn.get("name"), "arguments": fn.get("arguments", {})},
-                    ensure_ascii=False)
+                payload = json.dumps({"name": fn.get("name"), "arguments": fn.get("arguments", {})}, ensure_ascii=False)
                 body += [TOOL_CALL] + _enc(tokenizer, payload) + [TOOL_CALL_END]
         tail = _enc(tokenizer, "\n")
         ids = header + body + [IM_END] + tail
@@ -133,22 +139,26 @@ def _message_chunks(tokenizer, messages: list[dict[str, Any]]):
     return chunks
 
 
-def render_chat(tokenizer, messages: list[dict[str, Any]],
-                add_generation_prompt: bool = True,
-                max_ids: int | None = None) -> list[int]:
+def render_chat(
+    tokenizer, messages: list[dict[str, Any]], add_generation_prompt: bool = True, max_ids: int | None = None
+) -> list[int]:
     """Messages -> token IDs, ready for the model. BOS-prefixed, NO trailing
     EOS (she continues from here). With ``max_ids``, the oldest non-system
     turns are dropped first; the system message and the newest turn survive,
     and as a last resort the newest turn's own ids are left-truncated."""
-    ids, _ = render_training(tokenizer, messages,
-                             add_generation_prompt=add_generation_prompt,
-                             add_eos=False, max_ids=max_ids)
+    ids, _ = render_training(
+        tokenizer, messages, add_generation_prompt=add_generation_prompt, add_eos=False, max_ids=max_ids
+    )
     return ids
 
 
-def render_training(tokenizer, messages: list[dict[str, Any]],
-                    add_generation_prompt: bool = False, add_eos: bool = True,
-                    max_ids: int | None = None) -> tuple[list[int], list[bool]]:
+def render_training(
+    tokenizer,
+    messages: list[dict[str, Any]],
+    add_generation_prompt: bool = False,
+    add_eos: bool = True,
+    max_ids: int | None = None,
+) -> tuple[list[int], list[bool]]:
     """The full renderer: returns (ids, trainable_mask), both BOS-prefixed.
 
     Training: ``add_eos=True`` appends the document EOS after a final
@@ -219,8 +229,7 @@ def parse_assistant_ids(tokenizer, ids: list[int]) -> dict[str, Any]:
                     raw = tokenizer.decode(span, skip_special_tokens=True).strip()
                     try:
                         call = json.loads(raw)
-                        tool_calls.append({"name": call.get("name"),
-                                           "arguments": call.get("arguments", {})})
+                        tool_calls.append({"name": call.get("name"), "arguments": call.get("arguments", {})})
                     except (json.JSONDecodeError, AttributeError):
                         tool_calls.append({"name": None, "raw": raw})
             span = None
@@ -231,6 +240,5 @@ def parse_assistant_ids(tokenizer, ids: list[int]) -> dict[str, Any]:
     return {
         "content": tokenizer.decode(content_ids, skip_special_tokens=True).strip(),
         "tool_calls": tool_calls,
-        "thinking": (tokenizer.decode(think_ids, skip_special_tokens=True).strip()
-                     or None),
+        "thinking": (tokenizer.decode(think_ids, skip_special_tokens=True).strip() or None),
     }

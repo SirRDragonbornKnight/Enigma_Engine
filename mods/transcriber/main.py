@@ -43,9 +43,7 @@ class TranscriberMod(ModClient):
         try:
             from faster_whisper import WhisperModel
         except ImportError:
-            logger.error(
-                "faster-whisper not installed. pip install faster-whisper"
-            )
+            logger.error("faster-whisper not installed. pip install faster-whisper")
             return False
 
         settings = self.config.get("settings", {})
@@ -62,13 +60,17 @@ class TranscriberMod(ModClient):
             )
             logger.info(
                 "faster-whisper loaded: model=%s device=%s compute_type=%s",
-                model_name, device, compute_type,
+                model_name,
+                device,
+                compute_type,
             )
             return True
         except Exception as exc:
             logger.error(
                 "faster-whisper failed to load model %r on device %r: %s",
-                model_name, device, exc,
+                model_name,
+                device,
+                exc,
             )
             self._model = None
             return False
@@ -84,6 +86,7 @@ class TranscriberMod(ModClient):
         # auto
         try:
             import torch
+
             if torch.cuda.is_available():
                 return "cuda", "float16"
         except ImportError:
@@ -157,10 +160,7 @@ class TranscriberMod(ModClient):
             import sounddevice as sd
             import numpy as np
         except ImportError:
-            logger.error(
-                "Live transcription requires sounddevice + numpy. "
-                "pip install sounddevice numpy"
-            )
+            logger.error("Live transcription requires sounddevice + numpy. pip install sounddevice numpy")
             self._listening = False
             return
 
@@ -189,10 +189,12 @@ class TranscriberMod(ModClient):
                 segments, _info = self._model.transcribe(audio, language=lang)
                 text = "".join(seg.text for seg in segments).strip()
                 if text:
-                    self.send_message({
-                        "type": "output",
-                        "text": f"[Transcribed] {text}",
-                    })
+                    self.send_message(
+                        {
+                            "type": "output",
+                            "text": f"[Transcribed] {text}",
+                        }
+                    )
             except Exception as exc:
                 logger.debug("Listen error: %s", exc)
                 continue

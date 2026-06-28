@@ -4,6 +4,7 @@ Utility functions and global model registry for Enigma Engine.
 Contains sampling helpers, hardware detection utilities, and the
 thread-safe global model registry.
 """
+
 from __future__ import annotations
 
 import logging
@@ -68,6 +69,7 @@ def get_model(name: str) -> Optional[Enigma]:
 # 🔄 REPETITION PENALTY HELPER - Efficient penalty application
 # =============================================================================
 
+
 def apply_repetition_penalty(
     logits: torch.Tensor,
     generated_tokens: torch.Tensor,
@@ -94,8 +96,8 @@ def apply_repetition_penalty(
 
     if penalty < 1.0:
         logger.warning(
-            "Repetition penalty %.3f < 1.0 amplifies repeated tokens "
-            "instead of suppressing them", penalty,
+            "Repetition penalty %.3f < 1.0 amplifies repeated tokens instead of suppressing them",
+            penalty,
         )
 
     # Clone to avoid in-place mutation (important for beam search, speculative decoding)
@@ -121,8 +123,7 @@ def apply_repetition_penalty(
                     logits[token_id] = score / penalty if score > 0 else score * penalty
                 else:
                     scores = logits[..., token_id]
-                    logits[..., token_id] = torch.where(
-                        scores > 0, scores / penalty, scores * penalty)
+                    logits[..., token_id] = torch.where(scores > 0, scores / penalty, scores * penalty)
     else:
         # Bincount for longer sequences (better vectorization)
         flat_tokens = tokens.view(-1)
@@ -132,12 +133,10 @@ def apply_repetition_penalty(
         appeared_mask = token_counts > 0
         if logits.dim() == 1:
             scores = logits[appeared_mask]
-            logits[appeared_mask] = torch.where(
-                scores > 0, scores / penalty, scores * penalty)
+            logits[appeared_mask] = torch.where(scores > 0, scores / penalty, scores * penalty)
         else:
             scores = logits[..., appeared_mask]
-            logits[..., appeared_mask] = torch.where(
-                scores > 0, scores / penalty, scores * penalty)
+            logits[..., appeared_mask] = torch.where(scores > 0, scores / penalty, scores * penalty)
 
     return logits
 
@@ -176,9 +175,7 @@ def sample_next_token(
 
     # --- Repetition penalty on raw logits first (order matters) ---
     if repetition_penalty != 1.0:
-        logits = apply_repetition_penalty(
-            logits, generated_tokens, repetition_penalty
-        )
+        logits = apply_repetition_penalty(logits, generated_tokens, repetition_penalty)
 
     next_logits = logits / temperature
 
@@ -189,13 +186,12 @@ def sample_next_token(
     if min_p > 0.0:
         probs_for_filter = F.softmax(next_logits, dim=-1)
         max_prob = probs_for_filter.max(dim=-1, keepdim=True).values
-        next_logits = next_logits.masked_fill(
-            probs_for_filter < min_p * max_prob, float('-inf'))
+        next_logits = next_logits.masked_fill(probs_for_filter < min_p * max_prob, float("-inf"))
 
     # --- Top-k filtering ---
     if top_k > 0:
         v, _ = torch.topk(next_logits, min(top_k, next_logits.size(-1)))
-        next_logits[next_logits < v[:, [-1]]] = float('-inf')
+        next_logits[next_logits < v[:, [-1]]] = float("-inf")
 
     # --- Top-p (nucleus) filtering ---
     if top_p < 1.0:
@@ -205,7 +201,7 @@ def sample_next_token(
         mask[:, 1:] = mask[:, :-1].clone()
         mask[:, 0] = False
         indices_to_remove = mask.scatter(1, sorted_idx, mask)
-        next_logits[indices_to_remove] = float('-inf')
+        next_logits[indices_to_remove] = float("-inf")
 
     # --- Sample ---
     probs = F.softmax(next_logits, dim=-1)
@@ -224,6 +220,7 @@ def sample_next_token(
 # 🔧 HARDWARE DETECTION HELPERS
 # =============================================================================
 
+
 def detect_hardware() -> dict[str, Any]:
     """
     Detect hardware capabilities for model configuration.
@@ -233,16 +230,17 @@ def detect_hardware() -> dict[str, Any]:
     try:
         import dataclasses
         from .hardware_detection import detect_hardware as _detect
+
         profile = _detect()
         return dataclasses.asdict(profile)
     except ImportError:
         # Fallback basic detection
-        ram_gb = os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES') / (1024**3) if hasattr(os, 'sysconf') else 4.0
+        ram_gb = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / (1024**3) if hasattr(os, "sysconf") else 4.0
         return {
             "total_ram_gb": ram_gb,
             "is_raspberry_pi": False,
             "has_cuda": torch.cuda.is_available(),
-            "recommended_model_size": "small"
+            "recommended_model_size": "small",
         }
 
 
@@ -275,6 +273,7 @@ def estimate_memory_usage(size: str, quantization: str = "none") -> dict[str, fl
     """
     try:
         from .hardware_detection import estimate_memory_usage as _estimate
+
         use_half = quantization in ("dynamic", "int8", "int4")
         result = _estimate(size, use_half=use_half)
         # Apply quantization scaling to model_memory
@@ -291,17 +290,21 @@ def estimate_memory_usage(size: str, quantization: str = "none") -> dict[str, fl
     except ImportError:
         # Fallback estimation
         param_counts = {
-            "pi_zero": 0.5, "pi_4": 3, "pi_5": 8, "nano": 1, "micro": 2,
-            "tiny": 5, "mini": 10, "small": 27, "medium": 85, "large": 200
+            "pi_zero": 0.5,
+            "pi_4": 3,
+            "pi_5": 8,
+            "nano": 1,
+            "micro": 2,
+            "tiny": 5,
+            "mini": 10,
+            "small": 27,
+            "medium": 85,
+            "large": 200,
         }
         params_m = param_counts.get(size, 27)
         multiplier = {"none": 4, "dynamic": 1.5, "int8": 1, "int4": 0.5}.get(quantization, 4)
         model_mb = params_m * multiplier
-        return {
-            "model_size_mb": model_mb,
-            "inference_ram_mb": model_mb * 2.5,
-            "training_ram_mb": model_mb * 5
-        }
+        return {"model_size_mb": model_mb, "inference_ram_mb": model_mb * 2.5, "training_ram_mb": model_mb * 5}
 
 
 # ─────────────────────────────────────────────────────────────────────────────

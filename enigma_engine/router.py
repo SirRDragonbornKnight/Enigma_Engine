@@ -28,9 +28,7 @@ logger = logging.getLogger(__name__)
 # rehearsal is on by default for production users without a hand-edit.
 # Resolved relative to this file (enigma_engine/router.py → repo root)
 # so it works regardless of CWD.
-_DEFAULT_ANCHOR_PATH = (
-    Path(__file__).resolve().parent.parent / "data" / "anchor_examples.jsonl"
-)
+_DEFAULT_ANCHOR_PATH = Path(__file__).resolve().parent.parent / "data" / "anchor_examples.jsonl"
 
 # TEACH-1c (Pass 156z9bj): repo-default corrections JSONL path written
 # by the GUI FIX button (`_record_correction_for_last_exchange` in
@@ -39,13 +37,12 @@ _DEFAULT_ANCHOR_PATH = (
 # a positive SFT example through the existing replay path. Same boot
 # pattern as anchors: ModRouter auto-resolves the path when the file
 # exists, otherwise None keeps the feature off without warn noise.
-_DEFAULT_CORRECTIONS_PATH = (
-    Path(__file__).resolve().parent.parent / "data" / "corrections.jsonl"
-)
+_DEFAULT_CORRECTIONS_PATH = Path(__file__).resolve().parent.parent / "data" / "corrections.jsonl"
 
 # Deferred torch import — loaded on first use to avoid 540 MB idle RAM
 _torch = None
 _torch_lock = threading.Lock()
+
 
 def _ensure_torch() -> Any:
     """Import torch on first use."""
@@ -54,6 +51,7 @@ def _ensure_torch() -> Any:
         with _torch_lock:
             if _torch is None:
                 import torch
+
                 _torch = torch
     return _torch
 
@@ -62,9 +60,11 @@ def _ensure_torch() -> Any:
 # DATA CLASSES
 # =============================================================================
 
+
 @dataclass
 class ModConnection:
     """Represents a connected mod."""
+
     mod_id: str
     name: str
     socket: socket.socket
@@ -77,6 +77,7 @@ class ModConnection:
 @dataclass
 class TrainingExample:
     """A single training example collected from conversations."""
+
     prompt: str
     response: str
     score: float = 1.0
@@ -87,6 +88,7 @@ class TrainingExample:
 # =============================================================================
 # TRAINING THREAD
 # =============================================================================
+
 
 class BackgroundTrainer(threading.Thread):
     """
@@ -197,9 +199,7 @@ class BackgroundTrainer(threading.Thread):
         # skills absent from recent chat. Loaded lazily on first
         # replay; missing/unreadable file logs WARNING and falls back
         # to recent-only behaviour.
-        self.anchor_data_path: Path | None = (
-            Path(anchor_data_path) if anchor_data_path else None
-        )
+        self.anchor_data_path: Path | None = Path(anchor_data_path) if anchor_data_path else None
         self._anchor_examples: list[TrainingExample] | None = None
         self._anchor_load_attempted: bool = False
 
@@ -214,8 +214,7 @@ class BackgroundTrainer(threading.Thread):
         # 0 / negative inputs collapse to None defensively.
         self.anchor_idle_interval_seconds: float | None = (
             float(anchor_idle_interval_seconds)
-            if anchor_idle_interval_seconds
-            and float(anchor_idle_interval_seconds) > 0
+            if anchor_idle_interval_seconds and float(anchor_idle_interval_seconds) > 0
             else None
         )
         self._last_anchor_replay_at: float = time.monotonic()
@@ -235,9 +234,7 @@ class BackgroundTrainer(threading.Thread):
         # `self.dpo_pairs`. `_maybe_train_dpo_pairs()` consumes this
         # list in thresholded batches and calls Trainer.train_dpo().
         # None disables file ingestion.
-        self.corrections_path: Path | None = (
-            Path(corrections_path) if corrections_path else None
-        )
+        self.corrections_path: Path | None = Path(corrections_path) if corrections_path else None
         self._corrections_offset: int = 0
 
         # Ensure checkpoint directory exists
@@ -268,12 +265,7 @@ class BackgroundTrainer(threading.Thread):
         All examples are queued for training and stored in the
         replay buffer (capped by recency).
         """
-        example = TrainingExample(
-            prompt=prompt,
-            response=response,
-            score=score,
-            source=source
-        )
+        example = TrainingExample(prompt=prompt, response=response, score=score, source=source)
 
         # Add to training queue
         self.example_queue.put(example)
@@ -283,9 +275,8 @@ class BackgroundTrainer(threading.Thread):
             self.replay_buffer.append(example)
 
         logger.debug(
-            "Added training example (queue=%d, replay=%d)",
-            self.example_queue.qsize(),
-            len(self.replay_buffer))
+            "Added training example (queue=%d, replay=%d)", self.example_queue.qsize(), len(self.replay_buffer)
+        )
 
     def _inference_busy(self) -> bool:
         """Return True when inference is currently active.
@@ -376,11 +367,10 @@ class BackgroundTrainer(threading.Thread):
                 # an elapsed-time gate. Off by default; opt-in via
                 # `anchor_idle_interval_seconds` constructor kwarg.
                 if self._should_run_anchor_idle_replay():
-                    elapsed = (
-                        time.monotonic() - self._last_anchor_replay_at)
+                    elapsed = time.monotonic() - self._last_anchor_replay_at
                     logger.info(
-                        "BackgroundTrainer: idle anchor rehearsal "
-                        "(%.0fs since last replay)", elapsed,
+                        "BackgroundTrainer: idle anchor rehearsal (%.0fs since last replay)",
+                        elapsed,
                     )
                     self._retrain_on_replay()
                 continue
@@ -423,7 +413,7 @@ class BackgroundTrainer(threading.Thread):
                             text = f"User: {example.prompt}\n\nAssistant: {example.response}"
 
                         # Tokenize
-                        if hasattr(self.tokenizer, 'encode'):
+                        if hasattr(self.tokenizer, "encode"):
                             tokens = self.tokenizer.encode(text)
                         else:
                             tokens = self.tokenizer(text)
@@ -435,19 +425,17 @@ class BackgroundTrainer(threading.Thread):
                         # — protects GPU from oversized inputs.
                         if len(tokens) > self.max_token_length:
                             logger.debug(
-                                "BackgroundTrainer: skipping oversize example "
-                                "(%d tokens > cap %d)",
-                                len(tokens), self.max_token_length,
+                                "BackgroundTrainer: skipping oversize example (%d tokens > cap %d)",
+                                len(tokens),
+                                self.max_token_length,
                             )
                             continue
 
                         # Convert to tensor
                         torch = _ensure_torch()
                         device = next(self.model.parameters()).device
-                        input_ids = torch.tensor(
-                            [tokens[:-1]], dtype=torch.long, device=device)
-                        target_ids = torch.tensor(
-                            [tokens[1:]], dtype=torch.long, device=device)
+                        input_ids = torch.tensor([tokens[:-1]], dtype=torch.long, device=device)
+                        target_ids = torch.tensor([tokens[1:]], dtype=torch.long, device=device)
 
                         # Forward pass
                         output = self.model(input_ids)
@@ -456,8 +444,7 @@ class BackgroundTrainer(threading.Thread):
 
                         # Calculate loss
                         loss = _ensure_torch().nn.functional.cross_entropy(
-                            logits.reshape(-1, logits.size(-1)),
-                            target_ids.reshape(-1)
+                            logits.reshape(-1, logits.size(-1)), target_ids.reshape(-1)
                         )
 
                         # Continuous-1 (Pass 156i4): silent-drift guard.
@@ -472,7 +459,8 @@ class BackgroundTrainer(threading.Thread):
                                 "BackgroundTrainer: non-finite loss (%s) on "
                                 "example from source=%s — skipping backward; "
                                 "check input quality",
-                                loss.item(), example.source,
+                                loss.item(),
+                                example.source,
                             )
                             continue
 
@@ -484,8 +472,7 @@ class BackgroundTrainer(threading.Thread):
 
                     # Single optimizer step after all examples
                     if valid_count > 0:
-                        _ensure_torch().nn.utils.clip_grad_norm_(
-                            self.model.parameters(), 1.0)
+                        _ensure_torch().nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
                         self.optimizer.step()
                 finally:
                     # Always restore eval mode — even on exception — so
@@ -506,20 +493,19 @@ class BackgroundTrainer(threading.Thread):
                 self._save_checkpoint()
 
             # Periodic retrain on replay buffer (BT-D)
-            if (self.retrain_interval > 0
-                    and self.examples_processed % self.retrain_interval == 0
-                    and len(self.replay_buffer) >= self.batch_size):
+            if (
+                self.retrain_interval > 0
+                and self.examples_processed % self.retrain_interval == 0
+                and len(self.replay_buffer) >= self.batch_size
+            ):
                 self._retrain_on_replay()
 
             logger.debug(
-                "Trained batch: %d examples, "
-                "loss=%.4f, total=%d",
-                len(batch),
-                avg_loss, self.examples_processed)
+                "Trained batch: %d examples, loss=%.4f, total=%d", len(batch), avg_loss, self.examples_processed
+            )
 
         except Exception as e:
-            logger.error("Training batch error: %s\n%s", e,
-                         traceback.format_exc())
+            logger.error("Training batch error: %s\n%s", e, traceback.format_exc())
 
     def _load_anchor_examples(self) -> list[TrainingExample]:
         """Load and cache anchor examples from JSONL on first call.
@@ -561,20 +547,25 @@ class BackgroundTrainer(threading.Thread):
                         score = float(row.get("score", 1.0))
                     except (json.JSONDecodeError, ValueError, TypeError) as exc:
                         logger.debug(
-                            "anchor JSONL line %d skipped: %s", line_no, exc,
+                            "anchor JSONL line %d skipped: %s",
+                            line_no,
+                            exc,
                         )
                         continue
                     if prompt and response:
-                        examples.append(TrainingExample(
-                            prompt=prompt,
-                            response=response,
-                            score=score,
-                            source="anchor",
-                        ))
+                        examples.append(
+                            TrainingExample(
+                                prompt=prompt,
+                                response=response,
+                                score=score,
+                                source="anchor",
+                            )
+                        )
             if examples:
                 logger.info(
                     "BackgroundTrainer: loaded %d anchor example(s) from %s",
-                    len(examples), self.anchor_data_path,
+                    len(examples),
+                    self.anchor_data_path,
                 )
             else:
                 # Continuous-2a (Pass 156i6): file-present-zero-yield is
@@ -587,8 +578,8 @@ class BackgroundTrainer(threading.Thread):
                 )
         except OSError as exc:
             logger.warning(
-                "BackgroundTrainer anchor set: unreadable (%s) — "
-                "falling back to recent-only replay", exc,
+                "BackgroundTrainer anchor set: unreadable (%s) — falling back to recent-only replay",
+                exc,
             )
 
         self._anchor_examples = examples
@@ -666,11 +657,13 @@ class BackgroundTrainer(threading.Thread):
                 wrong = str(row.get("wrong_response", "")).strip()
                 if wrong:
                     with self._replay_lock:
-                        self.dpo_pairs.append({
-                            "prompt": prompt,
-                            "chosen": right,
-                            "rejected": wrong,
-                        })
+                        self.dpo_pairs.append(
+                            {
+                                "prompt": prompt,
+                                "chosen": right,
+                                "rejected": wrong,
+                            }
+                        )
                     dpo_added += 1
                 added += 1
 
@@ -678,21 +671,24 @@ class BackgroundTrainer(threading.Thread):
         except OSError as exc:
             logger.warning(
                 "BackgroundTrainer: corrections file %s unreadable (%s)",
-                target, exc,
+                target,
+                exc,
             )
             return 0
 
         if added:
             logger.info(
-                "BackgroundTrainer: ingested %d correction(s) + %d "
-                "DPO pair(s) from %s (skipped %d malformed)",
-                added, dpo_added, target, bad_rows,
+                "BackgroundTrainer: ingested %d correction(s) + %d DPO pair(s) from %s (skipped %d malformed)",
+                added,
+                dpo_added,
+                target,
+                bad_rows,
             )
         elif bad_rows:
             logger.warning(
-                "BackgroundTrainer: %d malformed row(s) in %s, no "
-                "valid corrections ingested this tick",
-                bad_rows, target,
+                "BackgroundTrainer: %d malformed row(s) in %s, no valid corrections ingested this tick",
+                bad_rows,
+                target,
             )
         return added
 
@@ -772,7 +768,8 @@ class BackgroundTrainer(threading.Thread):
             self.ingest_corrections_file()
         except Exception as exc:
             logger.warning(
-                "BackgroundTrainer: ingest_corrections_file failed: %s", exc,
+                "BackgroundTrainer: ingest_corrections_file failed: %s",
+                exc,
             )
 
         # TEACH-1d (Pass 156z9bk): correction-derived DPO replay.
@@ -794,8 +791,7 @@ class BackgroundTrainer(threading.Thread):
 
         with self._replay_lock:
             # Sort by score (descending) so we retrain on the best examples
-            sorted_buf = sorted(
-                self.replay_buffer, key=lambda x: x.score, reverse=True)
+            sorted_buf = sorted(self.replay_buffer, key=lambda x: x.score, reverse=True)
             top_k = min(len(sorted_buf), self.replay_buffer_size // 2)
             replay_batch = list(sorted_buf[:top_k])
 
@@ -811,15 +807,14 @@ class BackgroundTrainer(threading.Thread):
             logger.debug(
                 "Replay batch: %d recent + %d anchor = %d total",
                 len(replay_batch) - len(anchor_examples),
-                len(anchor_examples), len(replay_batch),
+                len(anchor_examples),
+                len(replay_batch),
             )
 
         if not replay_batch:
             return
 
-        logger.info(
-            "BackgroundTrainer: retraining on %d replay examples",
-            len(replay_batch))
+        logger.info("BackgroundTrainer: retraining on %d replay examples", len(replay_batch))
 
         try:
             with self._train_lock:
@@ -840,11 +835,10 @@ class BackgroundTrainer(threading.Thread):
                             text = (
                                 f"System: {self.system_prompt}\n\n"
                                 f"User: {example.prompt}\n\n"
-                                f"Assistant: {example.response}")
+                                f"Assistant: {example.response}"
+                            )
                         else:
-                            text = (
-                                f"User: {example.prompt}\n\n"
-                                f"Assistant: {example.response}")
+                            text = f"User: {example.prompt}\n\nAssistant: {example.response}"
 
                         if hasattr(self.tokenizer, "encode"):
                             tokens = self.tokenizer.encode(text)
@@ -858,25 +852,22 @@ class BackgroundTrainer(threading.Thread):
                         # _train_batch — keep the two paths in sync.
                         if len(tokens) > self.max_token_length:
                             logger.debug(
-                                "BackgroundTrainer replay: skipping oversize "
-                                "example (%d tokens > cap %d)",
-                                len(tokens), self.max_token_length,
+                                "BackgroundTrainer replay: skipping oversize example (%d tokens > cap %d)",
+                                len(tokens),
+                                self.max_token_length,
                             )
                             continue
 
                         torch = _ensure_torch()
                         device = next(self.model.parameters()).device
-                        input_ids = torch.tensor(
-                            [tokens[:-1]], dtype=torch.long, device=device)
-                        target_ids = torch.tensor(
-                            [tokens[1:]], dtype=torch.long, device=device)
+                        input_ids = torch.tensor([tokens[:-1]], dtype=torch.long, device=device)
+                        target_ids = torch.tensor([tokens[1:]], dtype=torch.long, device=device)
 
                         output = self.model(input_ids)
-                        logits = (output[0] if isinstance(output, tuple)
-                                  else output)
+                        logits = output[0] if isinstance(output, tuple) else output
                         loss = torch.nn.functional.cross_entropy(
-                            logits.reshape(-1, logits.size(-1)),
-                            target_ids.reshape(-1))
+                            logits.reshape(-1, logits.size(-1)), target_ids.reshape(-1)
+                        )
 
                         # Continuous-1 (Pass 156i4): silent-drift guard
                         # mirrors _train_batch — NaN/Inf loss skips the
@@ -888,7 +879,8 @@ class BackgroundTrainer(threading.Thread):
                                 "BackgroundTrainer replay: non-finite loss "
                                 "(%s) on example from source=%s — skipping "
                                 "backward",
-                                loss.item(), example.source,
+                                loss.item(),
+                                example.source,
                             )
                             continue
 
@@ -896,28 +888,25 @@ class BackgroundTrainer(threading.Thread):
                         valid_count += 1
 
                     if valid_count > 0:
-                        torch.nn.utils.clip_grad_norm_(
-                            self.model.parameters(), 1.0)
+                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
                         self.optimizer.step()
                 finally:
                     # Restore original LR and eval mode
                     if len(orig_lrs) != len(self.optimizer.param_groups):
                         logger.warning(
-                            "Param group count changed during replay "
-                            "(%d -> %d), skipping LR restore",
+                            "Param group count changed during replay (%d -> %d), skipping LR restore",
                             len(orig_lrs),
-                            len(self.optimizer.param_groups))
+                            len(self.optimizer.param_groups),
+                        )
                     else:
-                        for pg, lr in zip(self.optimizer.param_groups,
-                                          orig_lrs):
+                        for pg, lr in zip(self.optimizer.param_groups, orig_lrs):
                             pg["lr"] = lr
                     self.model.eval()
 
             logger.info("BackgroundTrainer: replay retrain complete")
 
         except Exception as e:
-            logger.error("Replay retrain error: %s\n%s", e,
-                         traceback.format_exc())
+            logger.error("Replay retrain error: %s\n%s", e, traceback.format_exc())
 
     def _save_checkpoint(self) -> None:
         """Save a training checkpoint."""
@@ -928,18 +917,21 @@ class BackgroundTrainer(threading.Thread):
 
         try:
             from enigma_engine.core.safe_save import atomic_torch_save
+
             save_data = {
-                'model_state_dict': self.model.state_dict(),
-                'optimizer_state_dict': self.optimizer.state_dict() if self.optimizer else None,
-                'examples_processed': self.examples_processed,
-                'total_loss': self.total_loss,
-                'replay_buffer_size': len(self.replay_buffer),
+                "model_state_dict": self.model.state_dict(),
+                "optimizer_state_dict": self.optimizer.state_dict() if self.optimizer else None,
+                "examples_processed": self.examples_processed,
+                "total_loss": self.total_loss,
+                "replay_buffer_size": len(self.replay_buffer),
             }
-            if hasattr(self.model, 'config'):
+            if hasattr(self.model, "config"):
                 c = self.model.config
                 cfg_dict = {
-                    "vocab_size": c.vocab_size, "dim": c.dim,
-                    "n_layers": c.n_layers, "n_heads": c.n_heads,
+                    "vocab_size": c.vocab_size,
+                    "dim": c.dim,
+                    "n_layers": c.n_layers,
+                    "n_heads": c.n_heads,
                     "n_kv_heads": c.n_kv_heads,
                     "hidden_dim": c.hidden_dim,
                     "max_seq_len": c.max_seq_len,
@@ -947,8 +939,8 @@ class BackgroundTrainer(threading.Thread):
                     "use_rope": c.use_rope,
                     "use_moe": c.use_moe,
                 }
-                save_data['model_config'] = cfg_dict
-                save_data['config'] = cfg_dict
+                save_data["model_config"] = cfg_dict
+                save_data["config"] = cfg_dict
             atomic_torch_save(save_data, checkpoint_path)
 
             logger.info(f"Saved checkpoint: {checkpoint_path}")
@@ -957,8 +949,7 @@ class BackgroundTrainer(threading.Thread):
                 self.on_checkpoint(str(checkpoint_path))
 
         except Exception as e:
-            logger.error("Failed to save checkpoint: %s\n%s", e,
-                         traceback.format_exc())
+            logger.error("Failed to save checkpoint: %s\n%s", e, traceback.format_exc())
 
     def pause(self) -> None:
         """Pause training."""
@@ -977,15 +968,15 @@ class BackgroundTrainer(threading.Thread):
     def get_stats(self) -> dict:
         """Get training statistics."""
         return {
-            'running': self.running,
-            'paused': self.paused,
-            'examples_processed': self.examples_processed,
-            'queue_size': self.example_queue.qsize(),
-            'average_loss': self.total_loss,
-            'has_model': self.model is not None,
-            'replay_buffer_size': len(self.replay_buffer),
-            'replay_buffer_max': self.replay_buffer_size,
-            'dpo_pairs': len(self.dpo_pairs),
+            "running": self.running,
+            "paused": self.paused,
+            "examples_processed": self.examples_processed,
+            "queue_size": self.example_queue.qsize(),
+            "average_loss": self.total_loss,
+            "has_model": self.model is not None,
+            "replay_buffer_size": len(self.replay_buffer),
+            "replay_buffer_max": self.replay_buffer_size,
+            "dpo_pairs": len(self.dpo_pairs),
         }
 
     @property
@@ -1002,6 +993,7 @@ class BackgroundTrainer(threading.Thread):
 # =============================================================================
 # MOD ROUTER
 # =============================================================================
+
 
 class ModRouter:
     """
@@ -1033,9 +1025,7 @@ class ModRouter:
         # caller value wins; otherwise auto-pick the repo default if it
         # exists; otherwise None (recent-only replay, no warn noise).
         if anchor_data_path is None:
-            anchor_data_path = (
-                _DEFAULT_ANCHOR_PATH if _DEFAULT_ANCHOR_PATH.exists() else None
-            )
+            anchor_data_path = _DEFAULT_ANCHOR_PATH if _DEFAULT_ANCHOR_PATH.exists() else None
         self.anchor_data_path: str | Path | None = anchor_data_path
 
         # Server state
@@ -1075,11 +1065,7 @@ class ModRouter:
         # when the file exists. Same boot pattern as anchor_data_path —
         # library default stays None (test isolation, explicit opt-in)
         # while the production boot site auto-resolves.
-        corrections_path = (
-            _DEFAULT_CORRECTIONS_PATH
-            if _DEFAULT_CORRECTIONS_PATH.exists()
-            else None
-        )
+        corrections_path = _DEFAULT_CORRECTIONS_PATH if _DEFAULT_CORRECTIONS_PATH.exists() else None
         trainer = BackgroundTrainer(
             anchor_data_path=self.anchor_data_path,
             corrections_path=corrections_path,
@@ -1112,9 +1098,7 @@ class ModRouter:
                 self.trainer.start()
 
             # Start heartbeat thread
-            self._heartbeat_thread = threading.Thread(
-                target=self._heartbeat_loop, daemon=True
-            )
+            self._heartbeat_thread = threading.Thread(target=self._heartbeat_loop, daemon=True)
             self._heartbeat_thread.start()
 
             logger.info(f"Router started on {self.host}:{self.port}")
@@ -1203,11 +1187,7 @@ class ModRouter:
                 logger.info(f"New connection from {address}")
 
                 # Start handler thread
-                handler = threading.Thread(
-                    target=self._handle_mod,
-                    args=(client_socket, address),
-                    daemon=True
-                )
+                handler = threading.Thread(target=self._handle_mod, args=(client_socket, address), daemon=True)
                 handler.start()
 
             except socket.timeout:
@@ -1230,20 +1210,20 @@ class ModRouter:
                 client_socket.close()
                 return
 
-            if data.get('type') != 'register':
+            if data.get("type") != "register":
                 logger.warning(f"Expected register, got {data.get('type')}")
                 client_socket.close()
                 return
 
             # Create mod connection
-            mod_id = data.get('mod_id', f"mod_{time.time()}")
+            mod_id = data.get("mod_id", f"mod_{time.time()}")
 
             mod = ModConnection(
                 mod_id=mod_id,
-                name=data.get('name', 'Unknown Mod'),
+                name=data.get("name", "Unknown Mod"),
                 socket=client_socket,
                 address=address,
-                capabilities=data.get('capabilities', [])
+                capabilities=data.get("capabilities", []),
             )
 
             # Store mod
@@ -1251,11 +1231,7 @@ class ModRouter:
                 self.mods[mod_id] = mod
 
             # Send acknowledgment
-            self._send_message(client_socket, {
-                'type': 'registered',
-                'mod_id': mod_id,
-                'status': 'ok'
-            })
+            self._send_message(client_socket, {"type": "registered", "mod_id": mod_id, "status": "ok"})
 
             logger.info(f"Mod registered: {mod.name} ({mod_id})")
 
@@ -1297,7 +1273,7 @@ class ModRouter:
 
     def _handle_message(self, mod_id: str, data: dict) -> None:
         """Handle a message from a mod."""
-        msg_type = data.get('type', 'unknown')
+        msg_type = data.get("type", "unknown")
 
         # Check for registered handler
         if msg_type in self.message_handlers:
@@ -1308,25 +1284,25 @@ class ModRouter:
             return
 
         # Default handling
-        if msg_type == 'response':
+        if msg_type == "response":
             # Mod completed a task
-            prompt = data.get('prompt', '')
-            response = data.get('response', '')
-            score = data.get('score', 1.0)
+            prompt = data.get("prompt", "")
+            response = data.get("response", "")
+            score = data.get("score", 1.0)
 
             # Add to training queue
             if self.trainer and prompt and response:
                 self.trainer.add_example(prompt, response, score, source=f"mod:{mod_id}")
 
-        elif msg_type == 'ping':
+        elif msg_type == "ping":
             # Respond to ping
             with self.mod_lock:
                 mod = self.mods.get(mod_id)
             if mod:
                 mod.last_seen = time.time()
-                self._send_message(mod.socket, {'type': 'pong'})
+                self._send_message(mod.socket, {"type": "pong"})
 
-        elif msg_type == 'pong':
+        elif msg_type == "pong":
             # Heartbeat reply — update last_seen
             with self.mod_lock:
                 mod = self.mods.get(mod_id)
@@ -1343,7 +1319,7 @@ class ModRouter:
             deadline = time.monotonic() + 30.0  # aggregate timeout
 
             # Read length prefix (4 bytes)
-            length_data = b''
+            length_data = b""
             while len(length_data) < 4:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
@@ -1355,20 +1331,18 @@ class ModRouter:
                     return None
                 length_data += chunk
 
-            length = int.from_bytes(length_data, 'big')
+            length = int.from_bytes(length_data, "big")
 
             if length > 1_000_000:  # 1MB max
                 try:
                     client_ip = sock.getpeername()[0]
                 except Exception:
                     client_ip = "unknown"
-                logger.warning(
-                    "Message too large from %s: %d bytes",
-                    client_ip, length)
+                logger.warning("Message too large from %s: %d bytes", client_ip, length)
                 return None
 
             # Read message
-            data = b''
+            data = b""
             while len(data) < length:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
@@ -1380,7 +1354,7 @@ class ModRouter:
                     return None
                 data += chunk
 
-            return json.loads(data.decode('utf-8'))
+            return json.loads(data.decode("utf-8"))
 
         except json.JSONDecodeError as e:
             logger.error(f"Invalid JSON: {e}")
@@ -1392,8 +1366,8 @@ class ModRouter:
     def _send_message(self, sock: socket.socket, data: dict) -> bool:
         """Send a JSON message."""
         try:
-            msg = json.dumps(data).encode('utf-8')
-            length = len(msg).to_bytes(4, 'big')
+            msg = json.dumps(data).encode("utf-8")
+            length = len(msg).to_bytes(4, "big")
             sock.sendall(length + msg)
             return True
         except Exception as e:
@@ -1416,10 +1390,7 @@ class ModRouter:
         """Broadcast a message to all connected mods."""
         exclude_set = set(exclude or [])
         with self.mod_lock:
-            targets = [
-                (mod_id, mod) for mod_id, mod in self.mods.items()
-                if mod_id not in exclude_set
-            ]
+            targets = [(mod_id, mod) for mod_id, mod in self.mods.items() if mod_id not in exclude_set]
         for _mod_id, mod in targets:
             self._send_message(mod.socket, message)
 
@@ -1428,11 +1399,11 @@ class ModRouter:
         with self.mod_lock:
             return [
                 {
-                    'mod_id': mod.mod_id,
-                    'name': mod.name,
-                    'capabilities': mod.capabilities,
-                    'connected_at': mod.connected_at,
-                    'uptime': time.time() - mod.connected_at,
+                    "mod_id": mod.mod_id,
+                    "name": mod.name,
+                    "capabilities": mod.capabilities,
+                    "connected_at": mod.connected_at,
+                    "uptime": time.time() - mod.connected_at,
                 }
                 for mod in self.mods.values()
             ]
@@ -1459,9 +1430,7 @@ class ModRouter:
             self.trainer = None
         trainer.stop()
 
-    def set_inference_idle_check(
-        self, checker: Callable[[], bool] | None
-    ) -> None:
+    def set_inference_idle_check(self, checker: Callable[[], bool] | None) -> None:
         """Set a callback that reports whether inference is idle.
 
         Callback should return True when inference is idle/safe for training,
@@ -1489,7 +1458,7 @@ class ModRouter:
         """Get training statistics."""
         if self.trainer:
             return self.trainer.get_stats()
-        return {'enabled': False}
+        return {"enabled": False}
 
     def get_train_lock(self) -> threading.Lock | None:
         """Return the training lock for inference coordination.
@@ -1523,12 +1492,12 @@ class ModRouter:
     def get_status(self) -> dict:
         """Get full router status."""
         return {
-            'running': self.running,
-            'host': self.host,
-            'port': self.port,
-            'connected_mods': len(self.mods),
-            'mods': self.get_connected_mods(),
-            'training': self.get_training_stats(),
+            "running": self.running,
+            "host": self.host,
+            "port": self.port,
+            "connected_mods": len(self.mods),
+            "mods": self.get_connected_mods(),
+            "training": self.get_training_stats(),
         }
 
     def get_prompt(self, purpose: str) -> str:

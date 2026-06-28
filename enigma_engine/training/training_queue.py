@@ -14,6 +14,7 @@ Each job tracks its own mode, data, config, and results.
 The queue runs in a background thread and emits progress
 via callbacks for GUI integration.
 """
+
 from __future__ import annotations
 
 import json
@@ -31,6 +32,7 @@ logger = logging.getLogger(__name__)
 # ================================================================
 # Training Job — one unit of work in the queue
 # ================================================================
+
 
 @dataclass
 class TrainingJob:
@@ -55,6 +57,7 @@ class TrainingJob:
         started_at: ISO timestamp when job started running.
         completed_at: ISO timestamp when job finished.
     """
+
     job_id: int = 0
     mode: str = "Solo"
     model_path: str = ""
@@ -92,6 +95,7 @@ class TrainingJob:
 # ================================================================
 # Training Queue — manages sequential job execution (TS-B)
 # ================================================================
+
 
 class TrainingQueue:
     """Sequential training job queue.
@@ -205,15 +209,11 @@ class TrainingQueue:
 
                 # Find position among remaining pending jobs
                 # (computed AFTER pop so indices are correct)
-                pending_positions = [
-                    i for i, j in enumerate(self._jobs)
-                    if j.status == "pending"
-                ]
+                pending_positions = [i for i, j in enumerate(self._jobs) if j.status == "pending"]
                 if new_position >= len(pending_positions):
                     self._jobs.append(job)
                 elif pending_positions:
-                    insert_at = pending_positions[
-                        min(new_position, len(pending_positions) - 1)]
+                    insert_at = pending_positions[min(new_position, len(pending_positions) - 1)]
                     self._jobs.insert(insert_at, job)
                 else:
                     self._jobs.append(job)
@@ -226,9 +226,7 @@ class TrainingQueue:
         """Remove all completed/failed/cancelled jobs. Returns count removed."""
         with self._lock:
             before = len(self._jobs)
-            self._jobs = [
-                j for j in self._jobs
-                if j.status in ("pending", "running")]
+            self._jobs = [j for j in self._jobs if j.status in ("pending", "running")]
             removed = before - len(self._jobs)
         if removed:
             self._save_state()
@@ -275,9 +273,7 @@ class TrainingQueue:
             self._running = True
             self._paused = False
             self._stop_requested = False
-        self._thread = threading.Thread(
-            target=self._run_loop, name="TrainingQueue",
-            daemon=True)
+        self._thread = threading.Thread(target=self._run_loop, name="TrainingQueue", daemon=True)
         self._thread.start()
         logger.info("Training queue started")
 
@@ -339,9 +335,8 @@ class TrainingQueue:
             logger.info("Training queue finished")
         except Exception as exc:
             import traceback
-            logger.error(
-                "Training queue loop error: %s\n%s",
-                exc, traceback.format_exc())
+
+            logger.error("Training queue loop error: %s\n%s", exc, traceback.format_exc())
             self._running = False
 
     def _next_pending(self) -> TrainingJob | None:
@@ -374,9 +369,7 @@ class TrainingQueue:
                 job.progress = 100
                 job.completed_at = datetime.now().isoformat()
 
-            logger.info(
-                "Queue: job #%d completed (loss=%.4f)",
-                job.job_id, best_loss)
+            logger.info("Queue: job #%d completed (loss=%.4f)", job.job_id, best_loss)
 
             if self.on_job_complete:
                 try:
@@ -387,14 +380,14 @@ class TrainingQueue:
         except Exception as exc:
             err_msg = str(exc)
             import traceback
+
             tb = traceback.format_exc()
             with self._lock:
                 job.status = "failed"
                 job.error = err_msg
                 job.completed_at = datetime.now().isoformat()
 
-            logger.error(
-                "Queue: job #%d failed: %s\n%s", job.job_id, err_msg, tb)
+            logger.error("Queue: job #%d failed: %s\n%s", job.job_id, err_msg, tb)
 
             if self.on_job_failed:
                 try:
@@ -420,6 +413,7 @@ class TrainingQueue:
                     "saved_at": datetime.now().isoformat(),
                 }
             from enigma_engine.core.safe_save import atomic_write_json
+
             atomic_write_json(self.save_path, data, default=str)
         except Exception as exc:
             logger.warning("Queue save error: %s", exc)
@@ -433,8 +427,7 @@ class TrainingQueue:
         if self.save_path is None or not self.save_path.exists():
             return False
         try:
-            data = json.loads(
-                self.save_path.read_text(encoding="utf-8"))
+            data = json.loads(self.save_path.read_text(encoding="utf-8"))
             self._next_id = int(data.get("next_id", 1))
             self._jobs = []
             for jd in data.get("jobs", []):
@@ -445,9 +438,7 @@ class TrainingQueue:
                     job.progress = 0
                     job.message = "Resuming after interruption"
                 self._jobs.append(job)
-            logger.info(
-                "Queue loaded: %d jobs (%d pending)",
-                len(self._jobs), self.pending_count)
+            logger.info("Queue loaded: %d jobs (%d pending)", len(self._jobs), self.pending_count)
             return True
         except Exception as exc:
             logger.error("Queue load error: %s", exc)
@@ -471,9 +462,7 @@ class TrainingQueue:
 
         if current:
             j = current
-            lines.append(
-                f"  Current: #{j.job_id} {j.mode} "
-                f"({j.progress}% - {j.message})")
+            lines.append(f"  Current: #{j.job_id} {j.mode} ({j.progress}% - {j.message})")
 
         for job in jobs_snapshot:
             icon = {
@@ -483,12 +472,8 @@ class TrainingQueue:
                 "failed": "✗",
                 "cancelled": "—",
             }.get(job.status, "?")
-            loss_str = (
-                f" loss={job.best_loss:.4f}"
-                if job.best_loss < float("inf") else "")
-            lines.append(
-                f"  {icon} #{job.job_id} {job.mode} "
-                f"[{job.status}]{loss_str}")
+            loss_str = f" loss={job.best_loss:.4f}" if job.best_loss < float("inf") else ""
+            lines.append(f"  {icon} #{job.job_id} {job.mode} [{job.status}]{loss_str}")
 
         return "\n".join(lines)
 
@@ -496,6 +481,7 @@ class TrainingQueue:
 # ================================================================
 # Overnight Plan — full training schedule (TS-C)
 # ================================================================
+
 
 @dataclass
 class OvernightPlan:
@@ -517,6 +503,7 @@ class OvernightPlan:
         started_at: When execution began.
         completed_at: When execution finished.
     """
+
     name: str = "Overnight Training"
     jobs: list[dict[str, Any]] = field(default_factory=list)
     auto_checkpoint: bool = True
@@ -538,8 +525,7 @@ class OvernightPlan:
         """True if all jobs have been processed."""
         if not self.jobs:
             return False
-        return (self.status == "completed"
-                or self.current_job_idx >= len(self.jobs))
+        return self.status == "completed" or self.current_job_idx >= len(self.jobs)
 
     @property
     def total_jobs(self) -> int:
@@ -547,13 +533,11 @@ class OvernightPlan:
 
     @property
     def completed_jobs(self) -> int:
-        return sum(1 for r in self.results
-                   if r.get("status") == "completed")
+        return sum(1 for r in self.results if r.get("status") == "completed")
 
     @property
     def failed_jobs(self) -> int:
-        return sum(1 for r in self.results
-                   if r.get("status") == "failed")
+        return sum(1 for r in self.results if r.get("status") == "failed")
 
     def add_job_config(
         self,
@@ -567,16 +551,18 @@ class OvernightPlan:
         **extra: Any,
     ) -> None:
         """Add a job configuration to the plan."""
-        self.jobs.append({
-            "mode": mode,
-            "model_path": model_path,
-            "data_path": data_path,
-            "stage": stage,
-            "epochs": epochs,
-            "learning_rate": learning_rate,
-            "batch_size": batch_size,
-            **extra,
-        })
+        self.jobs.append(
+            {
+                "mode": mode,
+                "model_path": model_path,
+                "data_path": data_path,
+                "stage": stage,
+                "epochs": epochs,
+                "learning_rate": learning_rate,
+                "batch_size": batch_size,
+                **extra,
+            }
+        )
 
     def record_result(
         self,
@@ -586,13 +572,15 @@ class OvernightPlan:
         error: str = "",
     ) -> None:
         """Record the result of a completed job."""
-        self.results.append({
-            "mode": job_config.get("mode", "?"),
-            "status": status,
-            "best_loss": best_loss,
-            "error": error,
-            "completed_at": datetime.now().isoformat(),
-        })
+        self.results.append(
+            {
+                "mode": job_config.get("mode", "?"),
+                "status": status,
+                "best_loss": best_loss,
+                "error": error,
+                "completed_at": datetime.now().isoformat(),
+            }
+        )
         self.current_job_idx += 1
         if self.current_job_idx >= len(self.jobs):
             self.status = "completed"
@@ -603,6 +591,7 @@ class OvernightPlan:
         path = Path(path)
         data = asdict(self)
         from enigma_engine.core.safe_save import atomic_write_json
+
         atomic_write_json(path, data, default=str)
         logger.info("Overnight plan saved: %s", path)
 
@@ -614,9 +603,7 @@ class OvernightPlan:
         known = cls.__dataclass_fields__
         filtered = {k: v for k, v in data.items() if k in known}
         plan = cls(**filtered)
-        logger.info(
-            "Overnight plan loaded: %s (%d/%d jobs done)",
-            path, plan.current_job_idx, plan.total_jobs)
+        logger.info("Overnight plan loaded: %s (%d/%d jobs done)", path, plan.current_job_idx, plan.total_jobs)
         return plan
 
     def summary(self) -> str:
@@ -627,15 +614,10 @@ class OvernightPlan:
             f"Progress: {self.current_job_idx}/{self.total_jobs} jobs",
         ]
         if self.results:
-            total_loss = [
-                r["best_loss"] for r in self.results
-                if r.get("best_loss", float("inf")) < float("inf")]
+            total_loss = [r["best_loss"] for r in self.results if r.get("best_loss", float("inf")) < float("inf")]
             if total_loss:
-                lines.append(
-                    f"Avg loss: {sum(total_loss) / len(total_loss):.4f}")
-            lines.append(
-                f"Completed: {self.completed_jobs}, "
-                f"Failed: {self.failed_jobs}")
+                lines.append(f"Avg loss: {sum(total_loss) / len(total_loss):.4f}")
+            lines.append(f"Completed: {self.completed_jobs}, Failed: {self.failed_jobs}")
 
         for i, job in enumerate(self.jobs):
             if i < len(self.results):
@@ -644,17 +626,11 @@ class OvernightPlan:
                 loss = r.get("best_loss", float("inf"))
                 loss_str = f" loss={loss:.4f}" if loss < float("inf") else ""
                 icon = "✓" if status == "completed" else "✗"
-                lines.append(
-                    f"  {icon} {job['mode']} "
-                    f"({job.get('epochs', '?')} epochs){loss_str}")
+                lines.append(f"  {icon} {job['mode']} ({job.get('epochs', '?')} epochs){loss_str}")
             elif i == self.current_job_idx and self.status == "running":
-                lines.append(
-                    f"  ● {job['mode']} "
-                    f"({job.get('epochs', '?')} epochs) [RUNNING]")
+                lines.append(f"  ● {job['mode']} ({job.get('epochs', '?')} epochs) [RUNNING]")
             else:
-                lines.append(
-                    f"  ○ {job['mode']} "
-                    f"({job.get('epochs', '?')} epochs)")
+                lines.append(f"  ○ {job['mode']} ({job.get('epochs', '?')} epochs)")
 
         return "\n".join(lines)
 
@@ -672,10 +648,7 @@ class OvernightPlan:
                 epochs=jc.get("epochs", 10),
                 learning_rate=jc.get("learning_rate", 1e-4),
                 batch_size=jc.get("batch_size", 4),
-                extra_config={
-                    k: v for k, v in jc.items()
-                    if k not in TrainingJob.__dataclass_fields__
-                },
+                extra_config={k: v for k, v in jc.items() if k not in TrainingJob.__dataclass_fields__},
             )
             result.append(job)
         return result

@@ -17,17 +17,34 @@ import pytest
 DATA_PATH = Path(__file__).resolve().parents[1] / "mods" / "avatar" / "bone_limits.json"
 
 EXPECTED_BONES = {
-    "head", "neck", "spine", "chest", "hips",
-    "left_shoulder", "left_arm", "left_forearm", "left_hand",
-    "right_shoulder", "right_arm", "right_forearm", "right_hand",
-    "left_leg", "left_shin", "left_foot",
-    "right_leg", "right_shin", "right_foot",
+    "head",
+    "neck",
+    "spine",
+    "chest",
+    "hips",
+    "left_shoulder",
+    "left_arm",
+    "left_forearm",
+    "left_hand",
+    "right_shoulder",
+    "right_arm",
+    "right_forearm",
+    "right_hand",
+    "left_leg",
+    "left_shin",
+    "left_foot",
+    "right_leg",
+    "right_shin",
+    "right_foot",
 }
 
 ANGLE_FIELDS = (
-    "pitch_min", "pitch_max",
-    "yaw_min", "yaw_max",
-    "roll_min", "roll_max",
+    "pitch_min",
+    "pitch_max",
+    "yaw_min",
+    "yaw_max",
+    "roll_min",
+    "roll_max",
 )
 
 
@@ -66,18 +83,10 @@ def test_every_bone_has_valid_ranges(payload: dict) -> None:
     for name, limits in payload["bones"].items():
         for field in ANGLE_FIELDS:
             assert field in limits, f"{name} missing {field}"
-            assert isinstance(limits[field], (int, float)), (
-                f"{name}.{field} not numeric: {limits[field]!r}"
-            )
-        assert limits["pitch_min"] <= limits["pitch_max"], (
-            f"{name} pitch range inverted"
-        )
-        assert limits["yaw_min"] <= limits["yaw_max"], (
-            f"{name} yaw range inverted"
-        )
-        assert limits["roll_min"] <= limits["roll_max"], (
-            f"{name} roll range inverted"
-        )
+            assert isinstance(limits[field], (int, float)), f"{name}.{field} not numeric: {limits[field]!r}"
+        assert limits["pitch_min"] <= limits["pitch_max"], f"{name} pitch range inverted"
+        assert limits["yaw_min"] <= limits["yaw_max"], f"{name} yaw range inverted"
+        assert limits["roll_min"] <= limits["roll_max"], f"{name} roll range inverted"
         assert limits["speed_limit"] > 0, f"{name} speed_limit not positive"
 
 
@@ -87,15 +96,11 @@ def test_anatomical_invariants(payload: dict) -> None:
 
     # Knees only flex backward (shin pitch range entirely <= 0).
     for shin in ("left_shin", "right_shin"):
-        assert bones[shin]["pitch_max"] <= 0, (
-            f"{shin} pitch_max > 0 implies hyperextension"
-        )
+        assert bones[shin]["pitch_max"] <= 0, f"{shin} pitch_max > 0 implies hyperextension"
 
     # Elbows only flex forward (forearm pitch range entirely >= 0).
     for forearm in ("left_forearm", "right_forearm"):
-        assert bones[forearm]["pitch_min"] >= 0, (
-            f"{forearm} pitch_min < 0 implies hyperextension"
-        )
+        assert bones[forearm]["pitch_min"] >= 0, f"{forearm} pitch_min < 0 implies hyperextension"
 
     # Hands mirror on yaw (left thumb-side vs right thumb-side).
     assert bones["left_hand"]["yaw_max"] == -bones["right_hand"]["yaw_min"]
